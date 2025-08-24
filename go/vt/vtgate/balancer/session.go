@@ -57,7 +57,7 @@ type SessionBalancer struct {
 }
 
 // NewSessionBalancer creates a new session balancer.
-func NewSessionBalancer(ctx context.Context, localCell string, topoServer srvtopo.Server, hc discovery.HealthCheck) TabletBalancer {
+func NewSessionBalancer(ctx context.Context, localCell string, topoServer srvtopo.Server, hc discovery.HealthCheck) (TabletBalancer, error) {
 	b := &SessionBalancer{
 		localCell:     localCell,
 		hc:            hc,
@@ -68,7 +68,24 @@ func NewSessionBalancer(ctx context.Context, localCell string, topoServer srvtop
 	// Set up health check subscription
 	go b.watchHealthCheck(ctx, topoServer)
 
-	return b
+	// Build initial hash rings
+
+	// Find all the targets we're watching
+	targets, _, err := srvtopo.FindAllTargetsAndKeyspaces(ctx, topoServer, b.localCell, discovery.KeyspacesToWatch, tabletTypesToWatch)
+	if err != nil {
+		log.Errorf("session balancer: failed to find all targets and keyspaces: %q", err)
+		return nil, err
+	}
+
+	// Add each tablet to the hash ring
+	for _, target := range targets {
+		tablets := b.hc.GetHealthyTabletStats(target)
+		for _, tablet := range tablets {
+			b.onTabletHealthChange(tablet)
+		}
+	}
+
+	return b, nil
 }
 
 // Pick is the main entry point to the balancer.
@@ -113,23 +130,6 @@ func (b *SessionBalancer) DebugHandler(w http.ResponseWriter, r *http.Request) {
 
 // watchHealthCheck watches the health check channel for tablet health changes, and updates hash rings accordingly.
 func (b *SessionBalancer) watchHealthCheck(ctx context.Context, topoServer srvtopo.Server) {
-	// Build initial hash rings
-
-	// Find all the targets we're watching
-	targets, _, err := srvtopo.FindAllTargetsAndKeyspaces(ctx, topoServer, b.localCell, discovery.KeyspacesToWatch, tabletTypesToWatch)
-	if err != nil {
-		log.Errorf("session balancer: failed to find all targets and keyspaces: %q", err)
-		return
-	}
-
-	// Add each tablet to the hash ring
-	for _, target := range targets {
-		tablets := b.hc.GetHealthyTabletStats(target)
-		for _, tablet := range tablets {
-			b.onTabletHealthChange(tablet)
-		}
-	}
-
 	// Start watching health check channel for future tablet health changes
 	hcChan := b.hc.Subscribe("SessionBalancer")
 	for {

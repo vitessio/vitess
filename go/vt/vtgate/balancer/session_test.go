@@ -37,7 +37,7 @@ func newSessionBalancer(t *testing.T) (*SessionBalancer, chan *discovery.TabletH
 
 	ch := make(chan *discovery.TabletHealth, 10)
 	hc := discovery.NewFakeHealthCheck(ch)
-	b := NewSessionBalancer(ctx, "local", &fakesrvtopo.FakeSrvTopo{}, hc)
+	b, _ := NewSessionBalancer(ctx, "local", &fakesrvtopo.FakeSrvTopo{}, hc)
 	sb := b.(*SessionBalancer)
 
 	return sb, ch
