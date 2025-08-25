@@ -241,7 +241,7 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, re
 			return nil, "", "", vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", reservedID, err)
 		}
 		// Update conn timeout.
-		timeout := tp.getTransactionTimeout(options)
+		timeout := getTransactionTimeout(options, tp.env.Config(), options.GetWorkload())
 		conn.SetTimeout(timeout)
 	} else {
 		immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
@@ -277,8 +277,8 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, re
 
 // getTransactionTimeout gets the smaller transaction timeout of either the timeout set in the options
 // or the one configured for the current workload.
-func (tp *TxPool) getTransactionTimeout(options *querypb.ExecuteOptions) time.Duration {
-	workloadTimeout := tp.env.Config().TxTimeoutForWorkload(options.GetWorkload())
+func getTransactionTimeout(options *querypb.ExecuteOptions, config *tabletenv.TabletConfig, workload querypb.ExecuteOptions_Workload) time.Duration {
+	workloadTimeout := config.TxTimeoutForWorkload(workload)
 
 	if options != nil && options.TransactionTimeout != nil {
 		sessionTimeout := time.Duration(options.GetTransactionTimeout()) * time.Millisecond
