@@ -411,7 +411,7 @@ func (gw *TabletGateway) getBalancerTablet(target *querypb.Target, invalidTablet
 			})
 		}
 
-		tablet = gw.balancer.Pick(target, tablets, nil, nil)
+		tablet = gw.balancer.Pick(target, tablets, nil)
 	}
 
 	if tablet != nil {

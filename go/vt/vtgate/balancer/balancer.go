@@ -90,7 +90,7 @@ converge on the desired balanced query load.
 type TabletBalancer interface {
 	// Pick is the main entry point to the balancer. Returns the best tablet out of the list
 	// for a given query to maintain the desired balanced allocation over multiple executions.
-	Pick(target *querypb.Target, tablets []*discovery.TabletHealth, invalidTablets map[string]bool, opts *PickOpts) *discovery.TabletHealth
+	Pick(target *querypb.Target, tablets []*discovery.TabletHealth, opts *PickOpts) *discovery.TabletHealth
 
 	// DebugHandler provides a summary of tablet balancer state
 	DebugHandler(w http.ResponseWriter, r *http.Request)
@@ -98,6 +98,9 @@ type TabletBalancer interface {
 
 // PickOpts are balancer options that are passed into Pick.
 type PickOpts struct {
+	// InvalidTablets is a set of tablets that should not be picked.
+	InvalidTablets map[string]bool
+
 	// SessionUUID is the hash of the current session UUID.
 	SessionUUID *string
 }
@@ -173,7 +176,7 @@ func (b *tabletBalancer) DebugHandler(w http.ResponseWriter, _ *http.Request) {
 // Given the total allocation for the set of tablets, choose the best target
 // by a weighted random sample so that over time the system will achieve the
 // desired balanced allocation.
-func (b *tabletBalancer) Pick(target *querypb.Target, tablets []*discovery.TabletHealth, _ map[string]bool, _ *PickOpts) *discovery.TabletHealth {
+func (b *tabletBalancer) Pick(target *querypb.Target, tablets []*discovery.TabletHealth, _ *PickOpts) *discovery.TabletHealth {
 	numTablets := len(tablets)
 	if numTablets == 0 {
 		return nil
