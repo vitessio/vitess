@@ -376,6 +376,9 @@ message ExecuteOptions {
 
   // in_dml_execution indicates that the query is being executed as part of a DML execution.
   bool in_dml_execution = 19;
+
+  // transaction_timeout specifies the transaction timeout in milliseconds. If not set, the default timeout is used.
+  optional int64 transaction_timeout = 20;
 }
 
 // Field describes a single column returned by a query
