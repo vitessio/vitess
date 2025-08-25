@@ -30,10 +30,10 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 
+	"vitess.io/vitess/go/vt/grpcclient"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
-	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vtctl/grpcclientcommon"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 )
@@ -509,5 +509,3 @@ func TestOriginalDialBehaviorPreserved(t *testing.T) {
 		// in the default case (no TLS configuration provided)
 	})
 }
-
-
