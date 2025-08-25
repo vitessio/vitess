@@ -64,7 +64,7 @@ func TestPickNoTablets(t *testing.T) {
 		Cell:       "local",
 	}
 
-	opts := sessionHash(12345)
+	opts := buildOpts("a")
 	result := b.Pick(target, nil, nil, opts)
 	require.Nil(t, result)
 }
@@ -122,7 +122,7 @@ func TestPickLocalOnly(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Pick for a specific session hash
-	opts := sessionHash(12345)
+	opts := buildOpts("a")
 	picked1 := b.Pick(target, nil, nil, opts)
 	require.NotNil(t, picked1)
 
@@ -131,7 +131,7 @@ func TestPickLocalOnly(t *testing.T) {
 	require.Equal(t, picked1, picked2, fmt.Sprintf("expected %s, got %s", tabletAlias(picked1), tabletAlias(picked2)))
 
 	// Pick with different session hash, empirically know that it should return tablet2
-	opts = sessionHash(5018141287610575993)
+	opts = buildOpts("c")
 	picked3 := b.Pick(target, nil, nil, opts)
 	require.NotNil(t, picked3)
 	require.NotEqual(t, picked2, picked3, fmt.Sprintf("expected different tablets, got %s", tabletAlias(picked3)))
@@ -209,7 +209,7 @@ func TestPickPreferLocal(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Pick should prefer local cell
-	opts := sessionHash(5018141287610575993)
+	opts := buildOpts("a")
 	picked1 := b.Pick(target, nil, nil, opts)
 	require.NotNil(t, picked1)
 	require.Equal(t, "local", picked1.Target.Cell)
@@ -268,7 +268,7 @@ func TestPickNoLocal(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Pick should return external cell since there are no local cells
-	opts := sessionHash(12345)
+	opts := buildOpts("a")
 	picked1 := b.Pick(target, nil, nil, opts)
 	require.NotNil(t, picked1)
 	require.Equal(t, "external", picked1.Target.Cell)
@@ -325,7 +325,7 @@ func TestTabletNotServing(t *testing.T) {
 	// Give a moment for the worker to process the tablets
 	time.Sleep(10 * time.Millisecond)
 
-	opts := sessionHash(5018141287610575993)
+	opts := buildOpts("a")
 	picked1 := b.Pick(target, nil, nil, opts)
 	require.NotNil(t, picked1)
 
@@ -372,7 +372,7 @@ func TestNewLocalTablet(t *testing.T) {
 
 	time.Sleep(10 * time.Millisecond)
 
-	opts := sessionHash(5018141287610575993)
+	opts := buildOpts("a")
 	picked1 := b.Pick(target, nil, nil, opts)
 	require.NotNil(t, picked1)
 
@@ -434,7 +434,7 @@ func TestNewExternalTablet(t *testing.T) {
 
 	time.Sleep(10 * time.Millisecond)
 
-	opts := sessionHash(5018141287610575993)
+	opts := buildOpts("a")
 	picked1 := b.Pick(target, nil, nil, opts)
 	require.NotNil(t, picked1)
 
@@ -512,8 +512,8 @@ func TestPickNoSessionHash(t *testing.T) {
 	result := b.Pick(target, nil, nil, nil)
 	require.Nil(t, result)
 
-	// Test with opts but nil session hash
-	optsNoHash := &PickOpts{sessionHash: nil}
+	// Test with opts but nil session uuid
+	optsNoHash := &PickOpts{SessionUUID: nil}
 	result = b.Pick(target, nil, nil, optsNoHash)
 	require.Nil(t, result)
 }
@@ -571,7 +571,7 @@ func TestPickInvalidTablets(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Get a tablet regularly
-	opts := sessionHash(5018141287610575993)
+	opts := buildOpts("a")
 	tablet := b.Pick(target, nil, nil, opts)
 	require.NotNil(t, tablet)
 
@@ -586,6 +586,6 @@ func TestPickInvalidTablets(t *testing.T) {
 	require.Nil(t, tablet3)
 }
 
-func sessionHash(i uint64) *PickOpts {
-	return &PickOpts{sessionHash: &i}
+func buildOpts(uuid string) *PickOpts {
+	return &PickOpts{SessionUUID: &uuid}
 }

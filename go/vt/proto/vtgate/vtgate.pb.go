@@ -226,11 +226,8 @@ type Session struct {
 	// MigrationContext
 	MigrationContext   string `protobuf:"bytes,27,opt,name=migration_context,json=migrationContext,proto3" json:"migration_context,omitempty"`
 	ErrorUntilRollback bool   `protobuf:"varint,28,opt,name=error_until_rollback,json=errorUntilRollback,proto3" json:"error_until_rollback,omitempty"`
-	// SessionHash is the xxhash of the Session UUID. Used to route sessions to the same
-	// tablet.
-	SessionHash   *uint64 `protobuf:"varint,29,opt,name=SessionHash,proto3,oneof" json:"SessionHash,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *Session) Reset() {
@@ -450,13 +447,6 @@ func (x *Session) GetErrorUntilRollback() bool {
 		return x.ErrorUntilRollback
 	}
 	return false
-}
-
-func (x *Session) GetSessionHash() uint64 {
-	if x != nil && x.SessionHash != nil {
-		return *x.SessionHash
-	}
-	return 0
 }
 
 // PrepareData keeps the prepared statement and other information related for execution of it.
@@ -1916,7 +1906,7 @@ var File_vtgate_proto protoreflect.FileDescriptor
 
 const file_vtgate_proto_rawDesc = "" +
 	"\n" +
-	"\fvtgate.proto\x12\x06vtgate\x1a\x10binlogdata.proto\x1a\vquery.proto\x1a\x0etopodata.proto\x1a\vvtrpc.proto\"\x85\x10\n" +
+	"\fvtgate.proto\x12\x06vtgate\x1a\x10binlogdata.proto\x1a\vquery.proto\x1a\x0etopodata.proto\x1a\vvtrpc.proto\"\xce\x0f\n" +
 	"\aSession\x12%\n" +
 	"\x0ein_transaction\x18\x01 \x01(\bR\rinTransaction\x12C\n" +
 	"\x0eshard_sessions\x18\x02 \x03(\v2\x1c.vtgate.Session.ShardSessionR\rshardSessions\x12\x1e\n" +
@@ -1950,8 +1940,7 @@ const file_vtgate_proto_rawDesc = "" +
 	"\rquery_timeout\x18\x19 \x01(\x03R\fqueryTimeout\x12R\n" +
 	"\x11prepare_statement\x18\x1a \x03(\v2%.vtgate.Session.PrepareStatementEntryR\x10prepareStatement\x12+\n" +
 	"\x11migration_context\x18\x1b \x01(\tR\x10migrationContext\x120\n" +
-	"\x14error_until_rollback\x18\x1c \x01(\bR\x12errorUntilRollback\x12%\n" +
-	"\vSessionHash\x18\x1d \x01(\x04H\x00R\vSessionHash\x88\x01\x01\x1a\xf9\x01\n" +
+	"\x14error_until_rollback\x18\x1c \x01(\bR\x12errorUntilRollback\x1a\xf9\x01\n" +
 	"\fShardSession\x12%\n" +
 	"\x06target\x18\x01 \x01(\v2\r.query.TargetR\x06target\x12%\n" +
 	"\x0etransaction_id\x18\x02 \x01(\x03R\rtransactionId\x128\n" +
@@ -1971,8 +1960,7 @@ const file_vtgate_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\x1aX\n" +
 	"\x15PrepareStatementEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12)\n" +
-	"\x05value\x18\x02 \x01(\v2\x13.vtgate.PrepareDataR\x05value:\x028\x01B\x0e\n" +
-	"\f_SessionHashJ\x04\b\x03\x10\x04\"]\n" +
+	"\x05value\x18\x02 \x01(\v2\x13.vtgate.PrepareDataR\x05value:\x028\x01J\x04\b\x03\x10\x04\"]\n" +
 	"\vPrepareData\x12+\n" +
 	"\x11prepare_statement\x18\x01 \x01(\tR\x10prepareStatement\x12!\n" +
 	"\fparams_count\x18\x02 \x01(\x05R\vparamsCount\"\xac\x01\n" +
@@ -2207,7 +2195,6 @@ func file_vtgate_proto_init() {
 	if File_vtgate_proto != nil {
 		return
 	}
-	file_vtgate_proto_msgTypes[0].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

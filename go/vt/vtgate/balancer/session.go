@@ -93,25 +93,25 @@ func NewSessionBalancer(ctx context.Context, localCell string, topoServer srvtop
 // For a given session, it will return the same tablet for its duration, with preference to tablets
 // in the local cell.
 func (b *SessionBalancer) Pick(target *querypb.Target, _ []*discovery.TabletHealth, invalidTablets map[string]bool, opts *PickOpts) *discovery.TabletHealth {
-	if opts == nil || opts.sessionHash == nil {
+	if opts == nil || opts.SessionUUID == nil {
 		// No session hash. Returning nil here will allow the gateway to select a random
 		// tablet instead.
 		return nil
 	}
 
-	sessionHash := *opts.sessionHash
+	sessionUUID := *opts.SessionUUID
 
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
 	// Try to find a tablet in the local cell first
-	tablet := getFromRing(b.localRings, target, invalidTablets, sessionHash)
+	tablet := getFromRing(b.localRings, target, invalidTablets, sessionUUID)
 	if tablet != nil {
 		return tablet
 	}
 
 	// If we didn't find a tablet in the local cell, try external cells
-	tablet = getFromRing(b.externalRings, target, invalidTablets, sessionHash)
+	tablet = getFromRing(b.externalRings, target, invalidTablets, sessionUUID)
 	return tablet
 }
 
@@ -214,7 +214,7 @@ func (b *SessionBalancer) print() string {
 }
 
 // getFromRing gets a tablet from the respective ring for the given target and session hash.
-func getFromRing(rings map[discovery.KeyspaceShardTabletType]*hashRing, target *querypb.Target, invalidTablets map[string]bool, sessionHash uint64) *discovery.TabletHealth {
+func getFromRing(rings map[discovery.KeyspaceShardTabletType]*hashRing, target *querypb.Target, invalidTablets map[string]bool, sessionUUID string) *discovery.TabletHealth {
 	key := discovery.KeyFromTarget(target)
 
 	ring, exists := rings[key]
@@ -222,5 +222,5 @@ func getFromRing(rings map[discovery.KeyspaceShardTabletType]*hashRing, target *
 		return nil
 	}
 
-	return ring.getHashed(sessionHash, invalidTablets)
+	return ring.get(sessionUUID, invalidTablets)
 }

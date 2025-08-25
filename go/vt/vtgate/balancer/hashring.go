@@ -118,18 +118,6 @@ func (r *hashRing) get(key string, invalidTablets map[string]bool) *discovery.Ta
 	}
 
 	hash := xxhash.Sum64String(key)
-	tablet := r.getHashed(hash, invalidTablets)
-	return tablet
-}
-
-// getHashed returns the tablet for the given hash, ignoring invalid tablets.
-func (r *hashRing) getHashed(hash uint64, invalidTablets map[string]bool) *discovery.TabletHealth {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	if len(r.nodes) == 0 {
-		return nil
-	}
 
 	// Find the first node greater than or equal to this hash, and isn't invalid
 	i := sort.Search(len(r.nodes), func(i int) bool {

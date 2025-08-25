@@ -519,7 +519,6 @@ func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 	session, _ := c.ClientData.(*vtgatepb.Session)
 	if session == nil {
 		u, _ := uuid.NewUUID()
-		sessionHash := xxhash.Sum64String(u.String())
 		session = &vtgatepb.Session{
 			Options: &querypb.ExecuteOptions{
 				IncludedFields: querypb.ExecuteOptions_ALL,
@@ -531,7 +530,6 @@ func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 			DDLStrategy:          defaultDDLStrategy,
 			MigrationContext:     "",
 			SessionUUID:          u.String(),
-			SessionHash:          &sessionHash,
 			EnableSystemSettings: sysVarSetEnabled,
 		}
 		if c.Capabilities&mysql.CapabilityClientFoundRows != 0 {

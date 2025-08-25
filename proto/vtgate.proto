@@ -162,10 +162,6 @@ message Session {
   string migration_context = 27;
 
   bool error_until_rollback = 28;
-
-  // SessionHash is the xxhash of the Session UUID. Used to route sessions to the same
-  // tablet.
-  optional uint64 SessionHash = 29;
 }
 
 // PrepareData keeps the prepared statement and other information related for execution of it.

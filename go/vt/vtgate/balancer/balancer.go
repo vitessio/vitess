@@ -98,8 +98,8 @@ type TabletBalancer interface {
 
 // PickOpts are balancer options that are passed into Pick.
 type PickOpts struct {
-	// sessionHash is the hash of the current session UUID.
-	sessionHash *uint64
+	// SessionUUID is the hash of the current session UUID.
+	SessionUUID *string
 }
 
 func NewTabletBalancer(localCell string, vtGateCells []string) TabletBalancer {
