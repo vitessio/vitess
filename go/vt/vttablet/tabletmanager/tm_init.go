@@ -1074,22 +1074,3 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 
 	return primaryStatus.Position, nil
 }
-
-// convertMysqlDaemonError converts an *sqlerror.SQLError to a vterrors-style
-// error or returns the original error unchanged.
-func convertMysqlDaemonError(err error) error {
-	if sqlErr, ok := err.(*sqlerror.SQLError); ok {
-		err = vterrors.Errorf(sqlErr.VtRpcErrorCode(), "%s (errno %d) (sqlstate %s)", sqlErr.Message, sqlErr.Number(), sqlErr.SQLState())
-	}
-	return err
-}
-
-// wrapMysqlDaemonError handles a MysqlDaemon error and wraps it with the
-// provided message.
-func wrapMysqlDaemonError(err error, format string, args ...any) error {
-	message := format
-	if len(args) > 0 {
-		message = fmt.Sprintf(format, args...)
-	}
-	return vterrors.Wrap(convertMysqlDaemonError(err), message)
-}
