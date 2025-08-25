@@ -125,8 +125,7 @@ type stateManager struct {
 	ddle        onlineDDLExecutor
 	throttler   lagThrottler
 	iqThrottler incomingQueryThrottler
-
-	tableGC tableGarbageCollector
+	tableGC     tableGarbageCollector
 
 	// hcticks starts on initialization and runs forever.
 	hcticks *timer.Timer

@@ -1004,7 +1004,6 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 }
 
 func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
-	// UBER SPECIFIC Implementation of incoming query throttler.
 	if reqThrottledErr := tsv.incomingQueryThrottler.EnforceThrottlingIfNodeOverloaded(ctx, target.GetTabletType(), sql, transactionID, options); reqThrottledErr != nil {
 		return reqThrottledErr
 	}
