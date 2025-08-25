@@ -40,7 +40,7 @@ jobs:
           go mod tidy
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v4
+        uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.CREATE_PR_VITESS_BOT }}
           branch: "upgrade-go-deps-on-main"
