@@ -33,7 +33,7 @@ const (
 	mysql80 mysqlVersion = "mysql80"
 	mysql84 mysqlVersion = "mysql84"
 
-	defaultMySQLVersion = mysql80
+	defaultMySQLVersion = mysql84
 )
 
 type mysqlVersions []mysqlVersion
@@ -121,7 +121,7 @@ var (
 		"vtgate_foreignkey_stress",
 		"vtorc",
 		"xb_recovery",
-		"mysql80",
+		"mysql84",
 		"vreplication_across_db_versions",
 		"vreplication_mariadb_to_mysql",
 		"vreplication_basic",

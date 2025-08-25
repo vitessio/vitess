@@ -42,7 +42,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestUnsharded(t *testing.T) {
-	dockerImages := []string{vttestserverMysql57image, vttestserverMysql80image}
+	dockerImages := []string{vttestserverMysql80image, vttestserverMysql84image}
 	for _, image := range dockerImages {
 		t.Run(image, func(t *testing.T) {
 			vtest := newVttestserver(image, []string{"unsharded_ks"}, []int{1}, 1000, 33574)
@@ -71,7 +71,7 @@ func TestUnsharded(t *testing.T) {
 }
 
 func TestSharded(t *testing.T) {
-	dockerImages := []string{vttestserverMysql57image, vttestserverMysql80image}
+	dockerImages := []string{vttestserverMysql80image, vttestserverMysql84image}
 	for _, image := range dockerImages {
 		t.Run(image, func(t *testing.T) {
 			vtest := newVttestserver(image, []string{"ks"}, []int{2}, 1000, 33574)
@@ -101,7 +101,7 @@ func TestSharded(t *testing.T) {
 }
 
 func TestMysqlMaxCons(t *testing.T) {
-	dockerImages := []string{vttestserverMysql57image, vttestserverMysql80image}
+	dockerImages := []string{vttestserverMysql80image, vttestserverMysql84image}
 	for _, image := range dockerImages {
 		t.Run(image, func(t *testing.T) {
 			vtest := newVttestserver(image, []string{"ks"}, []int{2}, 100000, 33574)
@@ -128,7 +128,7 @@ func TestMysqlMaxCons(t *testing.T) {
 
 // TestVtctldCommands tests that vtctld commands can be run with the docker image.
 func TestVtctldCommands(t *testing.T) {
-	dockerImages := []string{vttestserverMysql57image, vttestserverMysql80image}
+	dockerImages := []string{vttestserverMysql80image, vttestserverMysql84image}
 	for _, image := range dockerImages {
 		t.Run(image, func(t *testing.T) {
 			vtest := newVttestserver(image, []string{"long_ks_name"}, []int{2}, 100, 33574)
@@ -150,7 +150,7 @@ func TestVtctldCommands(t *testing.T) {
 }
 
 func TestLargeNumberOfKeyspaces(t *testing.T) {
-	dockerImages := []string{vttestserverMysql57image, vttestserverMysql80image}
+	dockerImages := []string{vttestserverMysql80image, vttestserverMysql84image}
 	for _, image := range dockerImages {
 		t.Run(image, func(t *testing.T) {
 			var keyspaces []string

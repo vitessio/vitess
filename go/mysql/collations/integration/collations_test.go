@@ -45,7 +45,7 @@ var collationEnv *collations.Environment
 
 func init() {
 	// We require MySQL 8.0 collations for the comparisons in the tests
-	collationEnv = collations.NewEnvironment("8.0.40")
+	collationEnv = collations.NewEnvironment("8.4.6")
 }
 
 func getSQLQueries(t *testing.T, testfile string) []string {

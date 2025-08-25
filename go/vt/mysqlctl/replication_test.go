@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -287,6 +288,7 @@ func TestPrimaryStatus(t *testing.T) {
 
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
 	db.AddQuery("SHOW MASTER STATUS", sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field", "varchar"), "test_status"))
+	db.AddQuery("SHOW BINARY LOG STATUS", sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field", "varchar"), "test_status"))
 	db.AddQuery("SELECT @@global.server_uuid", sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field", "varchar"), "test_uuid"))
 
 	testMysqld := NewMysqld(dbc)
@@ -299,6 +301,7 @@ func TestPrimaryStatus(t *testing.T) {
 	assert.EqualValues(t, "test_uuid", res.ServerUUID)
 
 	db.AddQuery("SHOW MASTER STATUS", &sqltypes.Result{})
+	db.AddQuery("SHOW BINARY LOG STATUS", &sqltypes.Result{})
 	_, err = testMysqld.PrimaryStatus(ctx)
 	assert.ErrorContains(t, err, "no master status")
 }
@@ -379,6 +382,7 @@ func TestSetReplicationPosition(t *testing.T) {
 
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
 	db.AddQuery("RESET MASTER", &sqltypes.Result{})
+	db.AddQuery("RESET BINARY LOGS AND GTIDS", &sqltypes.Result{})
 
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
@@ -409,6 +413,7 @@ func TestSetReplicationSource(t *testing.T) {
 
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
 	db.AddQuery("RESET MASTER", &sqltypes.Result{})
+	db.AddQuery("RESET BINARY LOGS AND GTIDS", &sqltypes.Result{})
 	db.AddQuery("STOP REPLICA", &sqltypes.Result{})
 
 	testMysqld := NewMysqld(dbc)
@@ -445,10 +450,12 @@ func TestResetReplication(t *testing.T) {
 	// We expect this query to be executed
 	db.AddQuery("RESET REPLICA ALL", &sqltypes.Result{})
 	err = testMysqld.ResetReplication(ctx)
-	assert.ErrorContains(t, err, "RESET MASTER")
+	require.Error(t, err)
+	require.True(t, strings.Contains(err.Error(), "RESET MASTER") || strings.Contains(err.Error(), "RESET BINARY LOGS AND GTIDS"))
 
 	// We expect this query to be executed
 	db.AddQuery("RESET MASTER", &sqltypes.Result{})
+	db.AddQuery("RESET BINARY LOGS AND GTIDS", &sqltypes.Result{})
 	err = testMysqld.ResetReplication(ctx)
 	assert.NoError(t, err)
 }
