@@ -48,7 +48,7 @@ type connectResult struct {
 // FIXME(alainjobart) once we have more of a server side, add test cases
 // to cover all failure scenarios.
 func Connect(ctx context.Context, params *ConnParams) (*Conn, error) {
-	return ConnectWithAttributes(ctx, params, nil)
+	return ConnectWithAttributes(ctx, params, ConnectionAttributes{})
 }
 
 // ConnectWithAttributes creates a connection to a server with connection attributes.
@@ -305,7 +305,7 @@ func (c *Conn) clientHandshake(params *ConnParams, attributes ConnectionAttribut
 	}
 
 	// Connection attributes.
-	if capabilities&CapabilityClientConnAttr != 0 && attributes != nil && len(attributes) > 0 {
+	if capabilities&CapabilityClientConnAttr != 0 && len(attributes) > 0 {
 		c.Capabilities |= CapabilityClientConnAttr
 	}
 
@@ -581,7 +581,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 	// If the server supports CapabilityClientConnAttr and there are attributes to be
 	// sent, then indicate
 	var attrLength int
-	if capabilities&CapabilityClientConnAttr != 0 && attributes != nil && len(attributes) > 0 {
+	if capabilities&CapabilityClientConnAttr != 0 && len(attributes) > 0 {
 		capabilityFlags |= CapabilityClientConnAttr
 		for key, value := range attributes {
 			// 1 byte for key len + key + 1 byte for val len + val
