@@ -70,6 +70,8 @@ func (tm *TabletManager) HandleRPCPanic(ctx context.Context, name string, args, 
 		// error case
 		rootCause := vterrors.RootCause(*err)
 		if sqlErr, ok := rootCause.(*sqlerror.SQLError); ok {
+			// flatten the error and add appropriate error code because
+			// *sqlerror.SQLError does not have an .ErrorCode() method.
 			*err = vterrors.New(sqlErr.VtRpcErrorCode(), (*err).Error())
 		}
 
