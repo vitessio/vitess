@@ -547,7 +547,7 @@ func TestConnAttrs(t *testing.T) {
 	clientConn.Close()
 	assert.True(t, clientConn.IsClosed(), "IsClosed should be true on Close-d connection.")
 
-	// Attributes more than 255 bytes are not supported
+	// Test long attributes more than 255 bytes
 	params = &ConnParams{
 		Host:  host,
 		Port:  port,
@@ -555,12 +555,21 @@ func TestConnAttrs(t *testing.T) {
 		Pass:  "password1",
 	}
 
-	tooLongAttributes := ConnectionAttributes{
-		"tooLongKey": strings.Repeat("a", 256),
+	longAttributes := ConnectionAttributes{
+		"short":  strings.Repeat("a", 10),
+		"long":   strings.Repeat("b", 256),
+		"longer": strings.Repeat("c", 1024*1024),
 	}
 
-	_, err = ConnectWithAttributes(ctx, params, tooLongAttributes)
-	require.Error(t, err, "writeHandshakeResponse41: attribute key or value is too long")
+	clientConn, err = ConnectWithAttributes(ctx, params, longAttributes)
+	require.NoError(t, err, "Connect failed")
+
+	serverConn = th.LastConn()
+	assert.Equal(t, uint32(CapabilityClientConnAttr), clientConn.Capabilities&CapabilityClientConnAttr, "ConnAttr flag: %x, bit must be set", th.LastConn().Capabilities)
+	assert.Equal(t, serverConn.Attributes, longAttributes, "attributes should be sent and parsed")
+
+	clientConn.Close()
+	assert.True(t, clientConn.IsClosed(), "IsClosed should be true on Close-d connection.")
 
 }
 

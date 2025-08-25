@@ -840,12 +840,12 @@ func parseConnAttrs(data []byte, pos int) (ConnectionAttributes, int, error) {
 	attrs := make(map[string]string)
 
 	for attrLenRead < attrLen {
-		var keyLen byte
-		keyLen, pos, ok = readByte(data, pos)
+		var keyLen uint64
+		keyLen, pos, ok = readLenEncInt(data, pos)
 		if !ok {
 			return nil, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read connection attribute key length")
 		}
-		attrLenRead += uint64(keyLen) + 1
+		attrLenRead += uint64(keyLen) + uint64(lenEncIntSize(uint64(keyLen)))
 
 		var connAttrKey []byte
 		connAttrKey, pos, ok = readBytes(data, pos, int(keyLen))
@@ -853,12 +853,12 @@ func parseConnAttrs(data []byte, pos int) (ConnectionAttributes, int, error) {
 			return nil, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read connection attribute key")
 		}
 
-		var valLen byte
-		valLen, pos, ok = readByte(data, pos)
+		var valLen uint64
+		valLen, pos, ok = readLenEncInt(data, pos)
 		if !ok {
 			return nil, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read connection attribute value length")
 		}
-		attrLenRead += uint64(valLen) + 1
+		attrLenRead += uint64(valLen) + uint64(lenEncIntSize(uint64(valLen)))
 
 		var connAttrVal []byte
 		connAttrVal, pos, ok = readBytes(data, pos, int(valLen))

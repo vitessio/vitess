@@ -579,13 +579,12 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 	}
 
 	// If the server supports CapabilityClientConnAttr and there are attributes to be
-	// sent, then indicate
+	// sent, then calculate the length of the attributes and include it in the overall length.
 	var attrLength int
 	if capabilities&CapabilityClientConnAttr != 0 && len(attributes) > 0 {
 		capabilityFlags |= CapabilityClientConnAttr
 		for key, value := range attributes {
-			// 1 byte for key len + key + 1 byte for val len + val
-			attrLength += 1 + len(key) + 1 + len(value)
+			attrLength += lenEncIntSize(uint64(len(key))) + len(key) + lenEncIntSize(uint64(len(value))) + len(value)
 		}
 		length += lenEncIntSize(uint64(attrLength)) + attrLength
 	}
@@ -631,13 +630,9 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 		pos = writeLenEncInt(data, pos, uint64(attrLength))
 
 		for key, value := range attributes {
-			if len(key) > 255 || len(value) > 255 {
-				return sqlerror.NewSQLErrorf(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "writeHandshakeResponse41: attribute key or value is too long")
-			}
-
-			pos = writeByte(data, pos, byte(len(key)))
+			pos = writeLenEncInt(data, pos, uint64(len(key)))
 			pos += copy(data[pos:], key)
-			pos = writeByte(data, pos, byte(len(value)))
+			pos = writeLenEncInt(data, pos, uint64(len(value)))
 			pos += copy(data[pos:], value)
 		}
 	}
