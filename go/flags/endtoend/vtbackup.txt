@@ -183,7 +183,7 @@ Flags:
       --mycnf-socket-file string                                    mysql socket file
       --mycnf-tmp-dir string                                        mysql tmp directory
       --mysql-port int                                              MySQL port (default 3306)
-      --mysql-server-version string                                 MySQL server version to advertise. (default "8.0.40-Vitess")
+      --mysql-server-version string                                 MySQL server version to advertise. (default "8.4.6-Vitess")
       --mysql-shell-backup-location string                          location where the backup will be stored
       --mysql-shell-dump-flags string                               flags to pass to mysql shell dump utility. This should be a JSON string and will be saved in the MANIFEST (default "{\"threads\": 4}")
       --mysql-shell-flags string                                    execution flags to pass to mysqlsh binary to be used during dump/load (default "--defaults-file=/dev/null --js -h localhost")

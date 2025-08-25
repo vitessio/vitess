@@ -1,9 +1,9 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Cluster (vtorc)
+name: Cluster (mysql84)
 on: [push, pull_request]
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vtorc)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (mysql84)')
   cancel-in-progress: true
 
 permissions: read-all
@@ -16,7 +16,7 @@ env:
 jobs:
   build:
     timeout-minutes: 60
-    name: Run endtoend tests on Cluster (vtorc)
+    name: Run endtoend tests on Cluster (mysql84)
     runs-on: ubuntu-24.04
 
     steps:
@@ -43,15 +43,6 @@ jobs:
           "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}")
         draft=$(echo "$PR_DATA" | jq .draft -r)
         echo "is_draft=${draft}" >> $GITHUB_OUTPUT
-
-    - name: Check Memory
-      run: |
-        totalMem=$(free -g | awk 'NR==2 {print $2}')
-        echo "total memory $totalMem GB"
-        if [[ "$totalMem" -lt 15 ]]; then 
-          echo "Less memory than required"
-          exit 1
-        fi
 
     - name: Check out code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
@@ -80,7 +71,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
-            - '.github/workflows/cluster_endtoend_vtorc.yml'
+            - '.github/workflows/cluster_endtoend_mysql84.yml'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -161,7 +152,7 @@ jobs:
         # Some of these tests require specific locales to be installed.
         # See https://github.com/cncf/automation/commit/49f2ad7a791a62ff7d038002bbb2b1f074eed5d5
         # run the tests however you normally do, then produce a JUnit XML file
-        eatmydata -- go run test.go -docker=false -follow -shard vtorc | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        eatmydata -- go run test.go -docker=false -follow -shard mysql84 | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Print test output and Record test result in launchable if PR is not a draft
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && always()
