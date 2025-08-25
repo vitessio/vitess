@@ -150,11 +150,11 @@ jobs:
 
         set -exo pipefail
 
-        cat <<-EOF>>./config/mycnf/mysql8026.cnf
+        cat <<-EOF>>./config/mycnf/mysql84.cnf
         binlog-transaction-compression=ON
         EOF
         
-        cat <<-EOF>>./config/mycnf/mysql8026.cnf
+        cat <<-EOF>>./config/mycnf/mysql84.cnf
         binlog-row-value-options=PARTIAL_JSON
         EOF
         

@@ -213,7 +213,7 @@ jobs:
         {{if .LimitResourceUsage}}
         # Increase our open file descriptor limit as we could hit this
         ulimit -n 65536
-        cat <<-EOF>>./config/mycnf/mysql8026.cnf
+        cat <<-EOF>>./config/mycnf/mysql84.cnf
         innodb_buffer_pool_dump_at_shutdown=OFF
         innodb_buffer_pool_in_core_file=OFF
         innodb_buffer_pool_load_at_startup=OFF
@@ -231,13 +231,13 @@ jobs:
         {{end}}
 
         {{if .EnableBinlogTransactionCompression}}
-        cat <<-EOF>>./config/mycnf/mysql8026.cnf
+        cat <<-EOF>>./config/mycnf/mysql84.cnf
         binlog-transaction-compression=ON
         EOF
         {{end}}
 
         {{if .EnablePartialJSON}}
-        cat <<-EOF>>./config/mycnf/mysql8026.cnf
+        cat <<-EOF>>./config/mycnf/mysql84.cnf
         binlog-row-value-options=PARTIAL_JSON
         EOF
         {{end}}
