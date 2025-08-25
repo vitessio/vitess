@@ -26,6 +26,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/spf13/pflag"
 
@@ -48,11 +49,12 @@ var (
 )
 
 var (
-	redactDebugUIQueries bool
-	queryLogFilterTag    string
-	queryLogRowThreshold uint64
-	queryLogFormat       = "text"
-	queryLogSampleRate   float64
+	redactDebugUIQueries  bool
+	queryLogFilterTag     string
+	queryLogRowThreshold  uint64
+	queryLogTimeThreshold time.Duration
+	queryLogFormat        = "text"
+	queryLogSampleRate    float64
 )
 
 func GetRedactDebugUIQueries() bool {
@@ -69,6 +71,10 @@ func SetQueryLogFilterTag(newQueryLogFilterTag string) {
 
 func SetQueryLogRowThreshold(newQueryLogRowThreshold uint64) {
 	queryLogRowThreshold = newQueryLogRowThreshold
+}
+
+func SetQueryLogTimeThreshold(newQueryLogTimeThreshold time.Duration) {
+	queryLogTimeThreshold = newQueryLogTimeThreshold
 }
 
 func SetQueryLogSampleRate(sampleRate float64) {
@@ -101,6 +107,9 @@ func registerStreamLogFlags(fs *pflag.FlagSet) {
 
 	// QueryLogRowThreshold only log queries returning or affecting this many rows
 	fs.Uint64Var(&queryLogRowThreshold, "querylog-row-threshold", queryLogRowThreshold, "Number of rows a query has to return or affect before being logged; not useful for streaming queries. 0 means all queries will be logged.")
+
+	// QueryLogTimeThreshold only log queries with execution time over the time duration threshold
+	fs.DurationVar(&queryLogTimeThreshold, "querylog-time-threshold", queryLogTimeThreshold, "Execution time duration a query needs to run over before being logged; time duration expressed in the form recognized by time.ParseDuration; not useful for streaming queries.")
 
 	// QueryLogSampleRate causes a sample of queries to be logged
 	fs.Float64Var(&queryLogSampleRate, "querylog-sample-rate", queryLogSampleRate, "Sample rate for logging queries. Value must be between 0.0 (no logging) and 1.0 (all queries)")
@@ -269,11 +278,14 @@ func shouldSampleQuery() bool {
 
 // ShouldEmitLog returns whether the log with the given SQL query
 // should be emitted or filtered
-func ShouldEmitLog(sql string, rowsAffected, rowsReturned uint64) bool {
+func ShouldEmitLog(sql string, rowsAffected, rowsReturned uint64, totalTime time.Duration) bool {
 	if shouldSampleQuery() {
 		return true
 	}
 	if queryLogRowThreshold > max(rowsAffected, rowsReturned) && queryLogFilterTag == "" {
+		return false
+	}
+	if queryLogTimeThreshold > totalTime && queryLogTimeThreshold > 0 && queryLogFilterTag == "" {
 		return false
 	}
 	if queryLogFilterTag != "" {

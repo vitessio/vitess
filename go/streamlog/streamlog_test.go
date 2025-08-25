@@ -293,67 +293,103 @@ func TestShouldEmitLog(t *testing.T) {
 	}()
 
 	tests := []struct {
-		sql              string
-		qLogFilterTag    string
-		qLogRowThreshold uint64
-		qLogSampleRate   float64
-		rowsAffected     uint64
-		rowsReturned     uint64
-		ok               bool
+		sql               string
+		qLogFilterTag     string
+		qLogRowThreshold  uint64
+		qLogTimeThreshold time.Duration
+		qLogSampleRate    float64
+		rowsAffected      uint64
+		rowsReturned      uint64
+		totalTime         time.Duration
+		ok                bool
 	}{
 		{
-			sql:              "queryLogThreshold smaller than affected and returned",
-			qLogFilterTag:    "",
-			qLogRowThreshold: 2,
-			qLogSampleRate:   0.0,
-			rowsAffected:     7,
-			rowsReturned:     7,
-			ok:               true,
+			sql:               "queryLogRowThreshold smaller than affected and returned",
+			qLogFilterTag:     "",
+			qLogRowThreshold:  2,
+			qLogTimeThreshold: 0,
+			qLogSampleRate:    0.0,
+			rowsAffected:      7,
+			rowsReturned:      7,
+			totalTime:         1000,
+			ok:                true,
 		},
 		{
-			sql:              "queryLogThreshold greater than affected and returned",
-			qLogFilterTag:    "",
-			qLogRowThreshold: 27,
-			qLogSampleRate:   0.0,
-			rowsAffected:     7,
-			rowsReturned:     17,
-			ok:               false,
+			sql:               "queryLogRowThreshold greater than affected and returned",
+			qLogFilterTag:     "",
+			qLogRowThreshold:  27,
+			qLogTimeThreshold: 0,
+			qLogSampleRate:    0.0,
+			rowsAffected:      7,
+			rowsReturned:      17,
+			totalTime:         1000,
+			ok:                false,
 		},
 		{
-			sql:              "this doesn't contains queryFilterTag: TAG",
-			qLogFilterTag:    "special tag",
-			qLogRowThreshold: 10,
-			qLogSampleRate:   0.0,
-			rowsAffected:     7,
-			rowsReturned:     17,
-			ok:               false,
+			sql:               "queryLogTimeThreshold smaller than total time and returned",
+			qLogFilterTag:     "",
+			qLogRowThreshold:  0,
+			qLogTimeThreshold: 10,
+			qLogSampleRate:    0.0,
+			rowsAffected:      7,
+			rowsReturned:      7,
+			totalTime:         1000,
+			ok:                true,
 		},
 		{
-			sql:              "this contains queryFilterTag: TAG",
-			qLogFilterTag:    "TAG",
-			qLogRowThreshold: 0,
-			qLogSampleRate:   0.0,
-			rowsAffected:     7,
-			rowsReturned:     17,
-			ok:               true,
+			sql:               "queryLogTimeThreshold greater than total time and returned",
+			qLogFilterTag:     "",
+			qLogRowThreshold:  0,
+			qLogTimeThreshold: 10000,
+			qLogSampleRate:    0.0,
+			rowsAffected:      7,
+			rowsReturned:      17,
+			totalTime:         1000,
+			ok:                false,
 		},
 		{
-			sql:              "this contains querySampleRate: 1.0",
-			qLogFilterTag:    "",
-			qLogRowThreshold: 0,
-			qLogSampleRate:   1.0,
-			rowsAffected:     7,
-			rowsReturned:     17,
-			ok:               true,
+			sql:               "this doesn't contains queryFilterTag: TAG",
+			qLogFilterTag:     "special tag",
+			qLogRowThreshold:  10,
+			qLogTimeThreshold: 0,
+			qLogSampleRate:    0.0,
+			rowsAffected:      7,
+			rowsReturned:      17,
+			totalTime:         1000,
+			ok:                false,
 		},
 		{
-			sql:              "this contains querySampleRate: 1.0 without expected queryFilterTag",
-			qLogFilterTag:    "TAG",
-			qLogRowThreshold: 0,
-			qLogSampleRate:   1.0,
-			rowsAffected:     7,
-			rowsReturned:     17,
-			ok:               true,
+			sql:               "this contains queryFilterTag: TAG",
+			qLogFilterTag:     "TAG",
+			qLogRowThreshold:  0,
+			qLogTimeThreshold: 0,
+			qLogSampleRate:    0.0,
+			rowsAffected:      7,
+			rowsReturned:      17,
+			totalTime:         1000,
+			ok:                true,
+		},
+		{
+			sql:               "this contains querySampleRate: 1.0",
+			qLogFilterTag:     "",
+			qLogRowThreshold:  0,
+			qLogTimeThreshold: 0,
+			qLogSampleRate:    1.0,
+			rowsAffected:      7,
+			rowsReturned:      17,
+			totalTime:         1000,
+			ok:                true,
+		},
+		{
+			sql:               "this contains querySampleRate: 1.0 without expected queryFilterTag",
+			qLogFilterTag:     "TAG",
+			qLogRowThreshold:  0,
+			qLogTimeThreshold: 0,
+			qLogSampleRate:    1.0,
+			rowsAffected:      7,
+			rowsReturned:      17,
+			totalTime:         1000,
+			ok:                true,
 		},
 	}
 
@@ -361,9 +397,10 @@ func TestShouldEmitLog(t *testing.T) {
 		t.Run(tt.sql, func(t *testing.T) {
 			SetQueryLogFilterTag(tt.qLogFilterTag)
 			SetQueryLogRowThreshold(tt.qLogRowThreshold)
+			SetQueryLogTimeThreshold(tt.qLogTimeThreshold)
 			SetQueryLogSampleRate(tt.qLogSampleRate)
 
-			require.Equal(t, tt.ok, ShouldEmitLog(tt.sql, tt.rowsAffected, tt.rowsReturned))
+			require.Equal(t, tt.ok, ShouldEmitLog(tt.sql, tt.rowsAffected, tt.rowsReturned, tt.totalTime))
 		})
 	}
 }
@@ -372,7 +409,7 @@ func BenchmarkShouldEmitLog(b *testing.B) {
 	b.Run("default", func(b *testing.B) {
 		SetQueryLogSampleRate(0.0)
 		for i := 0; i < b.N; i++ {
-			ShouldEmitLog("select * from test where user='someone'", 0, 123)
+			ShouldEmitLog("select * from test where user='someone'", 0, 123, 0)
 		}
 	})
 	b.Run("filter_tag", func(b *testing.B) {
@@ -380,14 +417,14 @@ func BenchmarkShouldEmitLog(b *testing.B) {
 		SetQueryLogFilterTag("LOG_QUERY")
 		defer SetQueryLogFilterTag("")
 		for i := 0; i < b.N; i++ {
-			ShouldEmitLog("select /* LOG_QUERY=1 */ * from test where user='someone'", 0, 123)
+			ShouldEmitLog("select /* LOG_QUERY=1 */ * from test where user='someone'", 0, 123, 0)
 		}
 	})
 	b.Run("50%_sample_rate", func(b *testing.B) {
 		SetQueryLogSampleRate(0.5)
 		defer SetQueryLogSampleRate(0.0)
 		for i := 0; i < b.N; i++ {
-			ShouldEmitLog("select * from test where user='someone'", 0, 123)
+			ShouldEmitLog("select * from test where user='someone'", 0, 123, 0)
 		}
 	})
 }
