@@ -18,6 +18,60 @@ linters:
           deny:
             - pkg: math/rand$
               desc: Please use math/rand/v2
+        mysql_package_restrictions:
+          list-mode: lax
+          files:
+            - "**/go/mysql/**"
+            - "!**/go/mysql/collations/integration/**"
+            - "!**/go/mysql/collations/tools/**"
+          deny:
+            - pkg: vitess.io/vitess/go/vt/servenv
+              desc: "mysql package should not depend on servenv - this component should be usable as a library without server infrastructure dependencies"
+            - pkg: github.com/spf13/pflag
+              desc: "mysql package should not depend on pflag - this component should be usable as a library with explicit configuration, not global flags"
+            - pkg: vitess.io/vitess/go/vt/dbconfigs
+              desc: "mysql package should not depend on dbconfigs - creates servenv dependency"
+        sqlparser_package_restrictions:
+          list-mode: lax
+          files:
+            - "**/go/vt/sqlparser/**"
+            - "!**/go/vt/sqlparser/goyacc/**"
+          deny:
+            - pkg: github.com/spf13/pflag
+              desc: "sqlparser package should not depend on pflag except in goyacc subpackage - this component should be usable as a library with explicit configuration, not global flags"
+            - pkg: vitess.io/vitess/go/vt/servenv
+              desc: "sqlparser should not depend on servenv - this component should be usable as a library without server infrastructure dependencies"
+        schemadiff_package_restrictions:
+          list-mode: lax
+          files:
+            - "**/go/vt/schemadiff/**"
+          deny:
+            - pkg: github.com/spf13/pflag
+              desc: "schemadiff package should not depend on pflag - this component should be usable as a library with explicit configuration, not global flags"
+            - pkg: vitess.io/vitess/go/vt/servenv
+              desc: "schemadiff should not depend on servenv - this component should be usable as a library without server infrastructure dependencies"
+        collations_package_restrictions:
+          list-mode: lax
+          files:
+            - "**/go/mysql/collations/**"
+            - "!**/go/mysql/collations/integration/**"
+            - "!**/go/mysql/collations/tools/**"
+          deny:
+            - pkg: vitess.io/vitess/go/vt/servenv
+              desc: "collations package should not depend on servenv - this component should be usable as a library without server infrastructure dependencies"
+            - pkg: github.com/spf13/pflag
+              desc: "collations package should not depend on pflag - this component should be usable as a library with explicit configuration, not global flags"
+        vindexes_package_restrictions:
+          list-mode: lax
+          files:
+            - "**/go/vt/vtgate/vindexes/**"
+          deny:
+            - pkg: vitess.io/vitess/go/vt/topotools
+              desc: "vindexes package should not depend on topotools - creates unnecessary dependency tree"
+            - pkg: github.com/spf13/pflag
+              desc: "vindexes package should not depend on pflag - this component should be usable as a library with explicit configuration, not global flags"
+            - pkg: vitess.io/vitess/go/vt/servenv
+              desc: "vindexes should not depend on servenv - this component should be usable as a library without server infrastructure dependencies"
     errcheck:
       exclude-functions:
         - flag.Set

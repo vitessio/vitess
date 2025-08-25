@@ -119,6 +119,7 @@ const (
 	RefOfCreateTableTableSpec
 	RefOfCreateTableOptLike
 	RefOfCreateTableComments
+	RefOfCreateTableSelect
 	RefOfCreateViewViewName
 	RefOfCreateViewDefiner
 	RefOfCreateViewColumns
@@ -799,6 +800,8 @@ func (s ASTStep) DebugString() string {
 		return "(*CreateTable).OptLike"
 	case RefOfCreateTableComments:
 		return "(*CreateTable).Comments"
+	case RefOfCreateTableSelect:
+		return "(*CreateTable).Select"
 	case RefOfCreateViewViewName:
 		return "(*CreateView).ViewName"
 	case RefOfCreateViewDefiner:
@@ -1981,6 +1984,8 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*CreateTable).OptLike
 		case RefOfCreateTableComments:
 			node = node.(*CreateTable).Comments
+		case RefOfCreateTableSelect:
+			node = node.(*CreateTable).Select
 		case RefOfCreateViewViewName:
 			node = node.(*CreateView).ViewName
 		case RefOfCreateViewDefiner:

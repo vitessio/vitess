@@ -2584,6 +2584,10 @@ var (
 	}, {
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' complete",
 	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' complete vitess_shards '-40'",
+	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' complete vitess_shards '-40,40-80'",
+	}, {
 		input: "alter vitess_migration complete all",
 	}, {
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' postpone complete",
@@ -6180,6 +6184,117 @@ func TestCreateTableLike(t *testing.T) {
 	}
 }
 
+func TestCreateTableSelect(t *testing.T) {
+	testCases := []struct {
+		input  string
+		output string
+	}{
+		{
+			"create table t2 select * from t1",
+			"create table t2 as select * from t1",
+		},
+		{
+			"create table t2 as select * from t1",
+			"create table t2 as select * from t1",
+		},
+		{
+			"create table t2(id int) select * from t1",
+			"create table t2 (\n\tid int\n) as select * from t1",
+		},
+		{
+			"create table t2(id int) as select * from t1",
+			"create table t2 (\n\tid int\n) as select * from t1",
+		},
+		{
+			"create table t2(id int) (select * from t1)",
+			"create table t2 (\n\tid int\n) as select * from t1",
+		},
+		{
+			"create table t2(id int) as (select * from t1)",
+			"create table t2 (\n\tid int\n) as select * from t1",
+		},
+		{
+			"create table t2(id int auto_increment, name varchar(255), primary key(id), unique key by_name(name)) select * from t1",
+			"create table t2 (\n\tid int auto_increment,\n\t`name` varchar(255),\n\tprimary key (id),\n\tunique key by_name (`name`)\n) as select * from t1",
+		},
+		{
+			"create table ks.t2 as select id, name from unsharded_ks.t1",
+			"create table ks.t2 as select id, `name` from unsharded_ks.t1",
+		},
+		{
+			"create table ks.t2(id int, name varchar(255)) select id, name from unsharded_ks.t1",
+			"create table ks.t2 (\n\tid int,\n\t`name` varchar(255)\n) as select id, `name` from unsharded_ks.t1",
+		},
+		{
+			"create table if not exists t2(id int) select * from t1",
+			"create table if not exists t2 (\n\tid int\n) as select * from t1",
+		},
+		{
+			"create table t2 as select id, count(*) as count from t1 group by id having count >= 1",
+			"create table t2 as select id, count(*) as `count` from t1 group by id having `count` >= 1",
+		},
+		{
+			"create table t3 as select t1.id, t2.name from t1 join t2 on t1.id = t2.id where t1.id > 10 order by t1.id limit 10",
+			"create table t3 as select t1.id, t2.`name` from t1 join t2 on t1.id = t2.id where t1.id > 10 order by t1.id asc limit 10",
+		},
+		// temporary table
+		{
+			"create temporary table t2 select id from t1",
+			"create temporary table t2 as select id from t1",
+		},
+		{
+			"create temporary table t2 as select id from t1",
+			"create temporary table t2 as select id from t1",
+		},
+		{
+			"create temporary table t2(id int) select id from t1",
+			"create temporary table t2 (\n\tid int\n) as select id from t1",
+		},
+		{
+			"create temporary table t2(id int) as select id from t1",
+			"create temporary table t2 (\n\tid int\n) as select id from t1",
+		},
+		// with table_options and partition_options
+		{
+			`create table t2(id int) engine=innodb default charset=utf8mb4 collate=utf8mb4_bin 
+partition by range (id) (partition p0 values less than (100), partition p1 values less than (200), partition p2 values less than (300), partition p3 values less than maxvalue) 
+as select * from t1`,
+			`create table t2 (
+	id int
+) engine innodb,
+  charset utf8mb4,
+  collate utf8mb4_bin
+partition by range (id)
+(partition p0 values less than (100),
+ partition p1 values less than (200),
+ partition p2 values less than (300),
+ partition p3 values less than maxvalue) as select * from t1`,
+		},
+		// with ignore or replace
+		{
+			"create table t2(id int unique key) ignore as select * from t1",
+			"create table t2 (\n\tid int unique key\n) ignore as select * from t1",
+		},
+		{
+			"create table t2 replace select * from t1",
+			"create table t2 replace as select * from t1",
+		},
+	}
+	parser := NewTestParser()
+	for _, tcase := range testCases {
+		tree, err := parser.ParseStrictDDL(tcase.input)
+		if err != nil {
+			t.Errorf("input: %s, err: %v", tcase.input, err)
+			continue
+		}
+		assert.True(t, tree.(*CreateTable).FullyParsed)
+		assert.NotNil(t, tree.(*CreateTable).Select, "Select field should not be nil")
+		if got, want := String(tree.(*CreateTable)), tcase.output; got != want {
+			t.Errorf("Parse(%s):\n%s, want\n%s", tcase.input, got, want)
+		}
+	}
+}
+
 func TestCreateTableEscaped(t *testing.T) {
 	testCases := []struct {
 		input  string
@@ -6683,8 +6798,8 @@ func TestParseMultipleEdgeCases(t *testing.T) {
 		want:  []string{"set charset ';'", "select 1 from a"},
 	}, {
 		name:    "Partial DDL",
-		input:   "create table a ignore me this is garbage; select 1 from a",
-		wantErr: "syntax error at position 22 near 'ignore'",
+		input:   "create table a disregard me this is garbage; select 1 from a",
+		wantErr: "syntax error at position 25 near 'disregard'",
 	}}
 	parser := NewTestParser()
 	for _, test := range tests {

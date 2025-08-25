@@ -129,9 +129,6 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 	if err != nil {
 		return nil, err
 	}
-	// TODO(shlomi): we use ExecuteFetchMulti for backwards compatibility. In v20 we will not accept
-	// multi statement queries in ExecuteFetchAsDBA. This will be rewritten as:
-	//  (in v20): result, err := ExecuteFetch(uq, int(req.MaxRows), true /*wantFields*/)
 	results := make([]*querypb.QueryResult, 0, len(queries))
 	result, more, err := conn.ExecuteFetchMulti(uq, maxRows, true /*wantFields*/)
 	if err == nil {
@@ -185,14 +182,11 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanag
 		req.DisableBinlogs,
 		req.DisableForeignKeyChecks,
 		func(queries []string, countCreate int) error {
-			// Up to v19, we allow multi-statement SQL in ExecuteFetchAsDba, but only for the specific case
-			// where all statements are CREATE TABLE or CREATE VIEW. This is to support `ApplySchema --batch-size`.
-			// In v20, we still support multi-statement SQL, but again only if all statements are CREATE TABLE or CREATE VIEW.
-			// We then also add ExecuteMultiFetchAsDba for future use of multiple statements.
-			// In v21 we will not tolerate multi-statement SQL in ExecuteFetchAsDba at all, and
+			// As of v23 we do not allow multi-statement SQL in ExecuteFetchAsDba at all, and
 			// ExecuteMultiFetchAsDba will be the only way to execute multiple statements.
-			if len(queries) > 1 && len(queries) != countCreate {
-				return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "multi statement queries are not supported in ExecuteFetchAsDba unless all are CREATE TABLE or CREATE VIEW")
+			// See https://github.com/vitessio/vitess/issues/15505
+			if len(queries) > 1 {
+				return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "multi statement queries are not supported in ExecuteFetchAsDba")
 			}
 			return nil
 		},

@@ -207,6 +207,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
   txAccessModes []TxAccessMode
   txAccessMode TxAccessMode
   killType KillType
+  ignoreOrReplaceType IgnoreOrReplaceType
 
   columnStorage ColumnStorage
   columnFormat ColumnFormat
@@ -271,6 +272,14 @@ func markBindVariable(yylex yyLexer, bvar string) {
 // Adding no precedence also works, since shifting is the default, but it reports some conflicts
 // We need to add a lower precedence to reducing the select_options_opt rule than shifting.
 %nonassoc <str> SELECT_OPTIONS
+// EMPTY_PARTITION_DEFINITIONS is used to resolve shift-reduce conflicts occurring due to '(' in CREATE TABLE ... SELECT statements with partition options.
+// When we see '(', we can either reduce partition_definitions_opt to empty or shift '(' to parse partition definitions.
+// We want shifting to take precedence, so we add lower precedence to the reduce rule.
+%nonassoc EMPTY_PARTITION_DEFINITIONS
+// EMPTY_IGNORE_OR_REPLACE is used to resolve shift-reduce conflicts occurring due to '(' in CREATE TABLE ... SELECT statements.
+// When we see '(', we can either reduce ignore_or_replace_opt to empty or shift '(' to parse table_spec.
+// We want shifting to take precedence, so we add lower precedence to the reduce rule.
+%nonassoc EMPTY_IGNORE_OR_REPLACE
 
 %token LEX_ERROR
 %left <str> UNION
@@ -592,6 +601,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <str> for_from from_or_on
 %type <str> default_opt value_or_values
 %type <ignore> ignore_opt
+%type <ignoreOrReplaceType> ignore_or_replace_opt
 %type <str> columns_or_fields extended_opt storage_opt
 %type <showFilter> like_or_where_opt like_opt
 %type <boolean> exists_opt not_exists_opt enforced enforced_opt temp_opt full_opt
@@ -1488,6 +1498,21 @@ create_statement:
   {
     // Create table [name] like [name]
     $1.OptLike = $2
+    $1.FullyParsed = true
+    $$ = $1
+  }
+| create_table_prefix ignore_or_replace_opt as_opt select_statement
+  {
+    $1.IgnoreOrReplace = $2
+    $1.Select = $4
+    $1.FullyParsed = true
+    $$ = $1
+  }
+| create_table_prefix table_spec ignore_or_replace_opt as_opt select_statement
+  {
+    $1.TableSpec = $2
+    $1.IgnoreOrReplace = $3
+    $1.Select = $5
     $1.FullyParsed = true
     $$ = $1
   }
@@ -3721,6 +3746,14 @@ alter_statement:
       UUID: string($4),
     }
   }
+| ALTER comment_opt VITESS_MIGRATION STRING COMPLETE VITESS_SHARDS STRING
+  {
+    $$ = &AlterMigration{
+      Type: CompleteMigrationType,
+      UUID: string($4),
+      Shards: string($7),
+    }
+  }
 | ALTER comment_opt VITESS_MIGRATION COMPLETE ALL
   {
     $$ = &AlterMigration{
@@ -3875,6 +3908,7 @@ subpartition_opt:
   }
 
 partition_definitions_opt:
+  %prec EMPTY_PARTITION_DEFINITIONS
   {
     $$ = nil
   }
@@ -8480,6 +8514,14 @@ ignore_opt:
   { $$ = false }
 | IGNORE
   { $$ = true }
+
+ignore_or_replace_opt:
+  %prec EMPTY_IGNORE_OR_REPLACE
+  { $$ = NoIgnoreOrReplace }
+| IGNORE
+  { $$ = IgnoreType }
+| REPLACE
+  { $$ = ReplaceType }
 
 to_opt:
   { $$ = struct{}{} }
