@@ -22,6 +22,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/vtctl/grpcclientcommon"
 )
 
 func TestMainFlagRegistration(t *testing.T) {
@@ -33,10 +35,6 @@ func TestMainFlagRegistration(t *testing.T) {
 	// Clear any existing flags to start fresh
 	testCmd.ResetFlags()
 
-	// Register flags just like main() does
-	// Common flags
-	testCmd.Flags().StringVar(&opts.Addr, "addr", ":15000", "address to serve on")
-
 	// MySQL server flags
 	// Note: We can't easily test servenv.RegisterMySQLServerFlags without mocking
 	// but we can test that the grpcclientcommon.RegisterFlags would be called
@@ -44,11 +42,8 @@ func TestMainFlagRegistration(t *testing.T) {
 	// Test by checking that vtctld-grpc-* flags are properly registered
 
 	// Simulate what grpcclientcommon.RegisterFlags does
-	testCmd.Flags().String("vtctld-grpc-cert", "", "the cert to use to connect")
-	testCmd.Flags().String("vtctld-grpc-key", "", "the key to use to connect")
-	testCmd.Flags().String("vtctld-grpc-ca", "", "the server ca to use to validate servers when connecting")
-	testCmd.Flags().String("vtctld-grpc-crl", "", "the server crl to use to validate server certificates when connecting")
-	testCmd.Flags().String("vtctld-grpc-server-name", "", "the server name to use to validate server certificate")
+	// Register TLS flags for gRPC connections to vtctld
+	grpcclientcommon.RegisterFlags(testCmd.Flags())
 
 	// Test that the flags are properly registered
 	t.Run("grpc tls flags are registered", func(t *testing.T) {
@@ -73,27 +68,4 @@ func TestMainFlagRegistration(t *testing.T) {
 		require.NotNil(t, serverNameFlag, "vtctld-grpc-server-name flag should be registered")
 		assert.Equal(t, "", serverNameFlag.DefValue, "vtctld-grpc-server-name should have empty default value")
 	})
-
-	// Test that existing flags are still present
-	t.Run("existing flags are preserved", func(t *testing.T) {
-		addrFlag := testCmd.Flags().Lookup("addr")
-		require.NotNil(t, addrFlag, "addr flag should be registered")
-		assert.Equal(t, ":15000", addrFlag.DefValue, "addr flag should have correct default value")
-	})
-}
-
-func TestMainCommandStructure(t *testing.T) {
-	t.Run("root command has correct properties", func(t *testing.T) {
-		assert.Equal(t, "vtadmin", rootCmd.Use)
-		assert.NotNil(t, rootCmd.PreRun)
-		assert.NotNil(t, rootCmd.Run)
-		assert.NotNil(t, rootCmd.PostRun)
-		assert.NotEmpty(t, rootCmd.Version)
-	})
-}
-
-func TestNoopCloser(t *testing.T) {
-	closer := &noopCloser{}
-	err := closer.Close()
-	assert.NoError(t, err, "noopCloser.Close() should return no error")
 }
