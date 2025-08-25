@@ -698,7 +698,7 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, ch
 }
 
 // parseClientHandshakePacket parses the handshake sent by the client.
-// Returns the username, auth method, auth data, error.
+// Returns the username, auth method, auth data, connection attributes, error.
 // The original data is not pointed at, and can be freed.
 func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []byte) (string, AuthMethodDescription, []byte, error) {
 	pos := 0
@@ -816,15 +816,18 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 
 	// Decode connection attributes send by the client
 	if clientFlags&CapabilityClientConnAttr != 0 {
-		if _, _, err := parseConnAttrs(data, pos); err != nil {
+		clientAttributes, _, err := parseConnAttrs(data, pos)
+		if err != nil {
 			log.Warningf("Decode connection attributes send by the client: %v", err)
 		}
+
+		c.Attributes = clientAttributes
 	}
 
 	return username, AuthMethodDescription(authMethod), authResponse, nil
 }
 
-func parseConnAttrs(data []byte, pos int) (map[string]string, int, error) {
+func parseConnAttrs(data []byte, pos int) (ConnectionAttributes, int, error) {
 	var attrLen uint64
 
 	attrLen, pos, ok := readLenEncInt(data, pos)
