@@ -171,6 +171,11 @@ func (sn *VTGateSession) Prepare(ctx context.Context, query string) ([]*querypb.
 	return fields, paramsCount, err
 }
 
+// CloseSession closes the session provided by rolling back any active transaction.
+func (sn *VTGateSession) CloseSession(ctx context.Context) error {
+	return sn.impl.CloseSession(ctx, sn.session)
+}
+
 //
 // The rest of this file is for the protocol implementations.
 //
