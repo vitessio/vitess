@@ -124,7 +124,9 @@ type stateManager struct {
 	messager    subComponent
 	ddle        onlineDDLExecutor
 	throttler   lagThrottler
-	tableGC     tableGarbageCollector
+	iqThrottler incomingQueryThrottler
+
+	tableGC tableGarbageCollector
 
 	// hcticks starts on initialization and runs forever.
 	hcticks *timer.Timer
@@ -190,6 +192,11 @@ type (
 	}
 
 	tableGarbageCollector interface {
+		Open() error
+		Close()
+	}
+
+	incomingQueryThrottler interface {
 		Open() error
 		Close()
 	}
@@ -467,6 +474,7 @@ func (sm *stateManager) servePrimary() error {
 	sm.te.AcceptReadWrite()
 	sm.messager.Open()
 	sm.throttler.Open()
+	sm.iqThrottler.Open()
 	sm.tableGC.Open()
 	sm.ddle.Open()
 	sm.setState(topodatapb.TabletType_PRIMARY, StateServing)
@@ -562,6 +570,8 @@ func (sm *stateManager) unserveCommon() {
 	log.Infof("Finished table garbage collector close. Started lag throttler close")
 	sm.throttler.Close()
 	log.Infof("Finished lag throttler close. Started messager close")
+	sm.iqThrottler.Close()
+	log.Infof("Finished incoming query throttler close. Started incoming query throttler close")
 	sm.messager.Close()
 	log.Infof("Finished messager close. Started txEngine close")
 	sm.te.Close()

@@ -32,6 +32,8 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/incomingquerythrottler"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
@@ -118,6 +120,7 @@ type TabletServer struct {
 	messager     *messager.Engine
 	hs           *healthStreamer
 	lagThrottler *throttle.Throttler
+	iqThrottler  *throttle.Throttler
 	tableGC      *gc.TableGC
 
 	// sm manages state transitions.
@@ -131,6 +134,8 @@ type TabletServer struct {
 	checkMysqlGaugeFunc *stats.GaugeFunc
 
 	env *vtenv.Environment
+
+	incomingQueryThrottler *incomingquerythrottler.IncomingQueryThrottler
 }
 
 var _ queryservice.QueryService = (*TabletServer)(nil)
@@ -178,6 +183,9 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	tsv.hs = newHealthStreamer(tsv, alias, tsv.se)
 	tsv.rt = repltracker.NewReplTracker(tsv, alias)
 	tsv.lagThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias, tsv.rt.HeartbeatWriter(), tabletTypeFunc)
+	tsv.iqThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias, tsv.rt.HeartbeatWriter(), tabletTypeFunc)
+	tsv.incomingQueryThrottler = incomingquerythrottler.NewIncomingQueryThrottler(ctx, tsv.iqThrottler, incomingquerythrottler.NewFileBasedConfigLoader(), tsv)
+
 	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, tsv.lagThrottler, alias.Cell)
 	tsv.tracker = schema.NewTracker(tsv, tsv.vstreamer, tsv.se)
 	tsv.watcher = NewBinlogWatcher(tsv, tsv.vstreamer, tsv.config)
@@ -205,6 +213,7 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 		messager:          tsv.messager,
 		ddle:              tsv.onlineDDLExecutor,
 		throttler:         tsv.lagThrottler,
+		iqThrottler:       tsv.iqThrottler,
 		tableGC:           tsv.tableGC,
 		rw:                newRequestsWaiter(),
 		diskHealthMonitor: newDiskHealthMonitor(ctx),
@@ -300,6 +309,7 @@ func (tsv *TabletServer) InitDBConfig(target *querypb.Target, dbcfgs *dbconfigs.
 	tsv.hs.InitDBConfig(target)
 	tsv.onlineDDLExecutor.InitDBConfig(target.Keyspace, target.Shard, dbcfgs.DBName)
 	tsv.lagThrottler.InitDBConfig(target.Keyspace, target.Shard)
+	tsv.iqThrottler.InitDBConfig(target.Keyspace, target.Shard)
 	tsv.tableGC.InitDBConfig(target.Keyspace, target.Shard, dbcfgs.DBName)
 	return nil
 }
@@ -890,6 +900,14 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 }
 
 func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
+	targetType, err := tsv.resolveTargetType(ctx, target)
+	if err != nil {
+		return nil, err
+	}
+	if reqThrottledErr := tsv.incomingQueryThrottler.EnforceThrottlingIfNodeOverloaded(ctx, targetType, sql, transactionID, options); reqThrottledErr != nil {
+		return nil, reqThrottledErr
+	}
+
 	allowOnShutdown := transactionID != 0
 	timeout := tsv.loadQueryTimeoutWithTxAndOptions(transactionID, options)
 	err = tsv.execRequest(
@@ -923,10 +941,6 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 				if err != nil {
 					return err
 				}
-			}
-			targetType, err := tsv.resolveTargetType(ctx, target)
-			if err != nil {
-				return err
 			}
 			qre := &QueryExecutor{
 				query:            query,
@@ -990,6 +1004,11 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 }
 
 func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+	// UBER SPECIFIC Implementation of incoming query throttler.
+	if reqThrottledErr := tsv.incomingQueryThrottler.EnforceThrottlingIfNodeOverloaded(ctx, target.GetTabletType(), sql, transactionID, options); reqThrottledErr != nil {
+		return reqThrottledErr
+	}
+
 	allowOnShutdown := false
 	var timeout time.Duration
 	if transactionID != 0 {
