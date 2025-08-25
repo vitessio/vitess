@@ -3,9 +3,9 @@ package incomingquerythrottler
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -18,36 +18,46 @@ import (
 )
 
 type IncomingQueryThrottler struct {
-	ctx            context.Context
 	throttleClient *throttle.Client
 	tabletConfig   *tabletenv.TabletConfig
-	mu             sync.RWMutex
-	// cfg holds the current configuration for the throttler.
-	cfg Config
-	// cfgLoader is responsible for loading the configuration.
-	cfgLoader ConfigLoader
-	// strategy is the current throttling strategy handler.
+
+	// Cached enabled state for hot path performance
+	enabledCache atomic.Bool
+
+	// Cached current strategy for hot path performance
+	mu       sync.RWMutex
 	strategy registry.ThrottlingStrategyHandler
+
+	// Current strategy name for change detection
+	currentStrategyName registry.ThrottlingStrategy
+
+	// Last config refresh time to avoid excessive Viper calls
+	lastRefresh atomic.Value // stores time.Time
 }
 
 // NewIncomingQueryThrottler creates a new incoming query throttler.
-func NewIncomingQueryThrottler(ctx context.Context, throttler *throttle.Throttler, cfgLoader ConfigLoader, env tabletenv.Env) *IncomingQueryThrottler {
+func NewIncomingQueryThrottler(ctx context.Context, throttler *throttle.Throttler, env tabletenv.Env) *IncomingQueryThrottler {
 	client := throttle.NewBackgroundClient(throttler, throttlerapp.IncomingQueryThrottlerName, base.UndefinedScope)
 
+	// Initialize strategy based on current configuration
+	currentConfig := GetCurrentConfig()
+	strategy := selectThrottlingStrategy(currentConfig, client, env.Config())
+
 	i := &IncomingQueryThrottler{
-		ctx:            ctx,
-		throttleClient: client,
-		tabletConfig:   env.Config(),
-		cfg:            Config{},
-		cfgLoader:      cfgLoader,
-		strategy:       &registry.NoOpStrategy{}, // default strategy until config is loaded
+		throttleClient:      client,
+		tabletConfig:        env.Config(),
+		strategy:            strategy,
+		currentStrategyName: currentConfig.Strategy,
 	}
+
+	// Set initial enabled cache
+	i.enabledCache.Store(currentConfig.Enabled)
+
+	// Initialize last refresh time
+	i.lastRefresh.Store(time.Now())
 
 	// Start the initial strategy
 	i.strategy.Start()
-
-	// starting the loop which will be responsible for refreshing the config.
-	i.startConfigRefreshLoop()
 
 	return i
 }
@@ -66,22 +76,23 @@ func (i *IncomingQueryThrottler) Shutdown() {
 
 // EnforceThrottlingIfNodeOverloaded checks if the tablet is under heavy load
 // and enforces throttling by rejecting the incoming request if necessary.
-// Note: This method performs lock-free reads of config and strategy for optimal performance.
-// Config updates are rare (default: every 1 minute) compared to query frequency,
-// so the tiny risk of reading slightly stale data during config updates is acceptable
-// for the significant performance improvement of avoiding mutex contention.
+// Optimized for hot path performance with cached values.
 func (i *IncomingQueryThrottler) EnforceThrottlingIfNodeOverloaded(ctx context.Context, tabletType topodatapb.TabletType, sql string, transactionID int64, options *querypb.ExecuteOptions) error {
-	// Lock-free read: for maximum performance in the hot path as cfg and strategy are updated rarely (default once per minute).
-	// They are word-sized and safe for atomic reads; stale data for one query is acceptable and avoids mutex contention in the hot path.
-	tCfg := i.cfg
-	tStrategy := i.strategy
-
-	if !tCfg.Enabled {
+	// Fast path: check cached enabled state (atomic read, no Viper call)
+	if !i.enabledCache.Load() {
 		return nil
 	}
 
+	// Periodically update cache and strategy (less frequent than every query)
+	i.refreshConfigIfNeeded()
+
+	// Lock-free strategy read - safe for hot path
+	i.mu.RLock()
+	currentStrategy := i.strategy
+	i.mu.RUnlock()
+
 	// Evaluate the throttling decision
-	decision := tStrategy.Evaluate(ctx, tabletType, sql, transactionID, options)
+	decision := currentStrategy.Evaluate(ctx, tabletType, sql, transactionID, options)
 
 	// If no throttling is needed, allow the query
 	if !decision.Throttle {
@@ -101,45 +112,54 @@ func selectThrottlingStrategy(cfg Config, client *throttle.Client, tabletConfig 
 	return registry.CreateStrategy(cfg, deps)
 }
 
-// startConfigRefreshLoop launches a background goroutine that refreshes the throttler's configuration
-// at the interval specified by IncomingQueryThrottlerConfigRefreshInterval.
-func (i *IncomingQueryThrottler) startConfigRefreshLoop() {
-	go func() {
-		refreshInterval := i.tabletConfig.IncomingQueryThrottlerConfigRefreshInterval
-		configRefreshTicker := time.NewTicker(refreshInterval)
-		defer configRefreshTicker.Stop()
+const configRefreshInterval = 5 * time.Second // Check config changes every 5 seconds
 
-		for {
-			select {
-			case <-i.ctx.Done():
-				return
-			case <-configRefreshTicker.C:
-				newCfg, err := i.cfgLoader.Load(i.ctx)
-				if err != nil {
-					log.Errorf("Error loading config: %v", err)
-					continue
-				}
+// refreshConfigIfNeeded periodically checks for configuration changes and updates caches.
+// This avoids calling Viper on every query while still providing reasonable responsiveness.
+func (i *IncomingQueryThrottler) refreshConfigIfNeeded() {
+	now := time.Now()
+	lastRefresh := i.lastRefresh.Load().(time.Time)
 
-				// Only restart strategy if the strategy type has changed
-				if i.cfg.Strategy != newCfg.Strategy {
-					// Stop the current strategy before switching to a new one
-					if i.strategy != nil {
-						i.strategy.Stop()
-					}
+	// Only check for config changes every few seconds, not on every query
+	if now.Sub(lastRefresh) < configRefreshInterval {
+		return
+	}
 
-					newStrategy := selectThrottlingStrategy(newCfg, i.throttleClient, i.tabletConfig)
-					// Update strategy and start the new one
-					i.strategy = newStrategy
-					if i.strategy != nil {
-						i.strategy.Start()
-					}
-				}
+	// Get current config from Viper
+	currentConfig := GetCurrentConfig()
 
-				// Always update the configuration
-				i.mu.Lock()
-				i.cfg = newCfg
-				i.mu.Unlock()
-			}
-		}
-	}()
+	// Update enabled cache (atomic write)
+	i.enabledCache.Store(currentConfig.Enabled)
+
+	// Check if strategy changed
+	if currentConfig.Strategy != i.currentStrategyName {
+		i.updateStrategy(currentConfig)
+	}
+
+	// Update last refresh time
+	i.lastRefresh.Store(now)
+}
+
+// updateStrategy switches to a new throttling strategy
+func (i *IncomingQueryThrottler) updateStrategy(config Config) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+
+	// Double-check strategy name to avoid race conditions
+	if config.Strategy == i.currentStrategyName {
+		return
+	}
+
+	// Stop the current strategy before switching
+	if i.strategy != nil {
+		i.strategy.Stop()
+	}
+
+	// Create and start the new strategy
+	i.strategy = selectThrottlingStrategy(config, i.throttleClient, i.tabletConfig)
+	i.currentStrategyName = config.Strategy
+
+	if i.strategy != nil {
+		i.strategy.Start()
+	}
 }

@@ -5,48 +5,32 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/incomingquerythrottler/registry"
-
-	"vitess.io/vitess/go/vt/vtenv"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/incomingquerythrottler/registry"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 )
 
-func TestNewIncomingQueryThrottler_ConfigRefresh(t *testing.T) {
+func TestNewIncomingQueryThrottler_ViperConfig(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	config := &tabletenv.TabletConfig{
-		IncomingQueryThrottlerConfigRefreshInterval: 10 * time.Millisecond,
-	}
+	config := &tabletenv.TabletConfig{}
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), config, "TestThrottler")
 
 	throttler := &throttle.Throttler{} // use mock if needed
-	iqt := NewIncomingQueryThrottler(ctx, throttler, newFakeConfigLoader(Config{
-		Enabled:  true,
-		Strategy: registry.ThrottlingStrategyTabletThrottler,
-	}), env)
+	iqt := NewIncomingQueryThrottler(ctx, throttler, env)
 
-	// Assert initial state (should be NoOpStrategy)
+	// Assert initial state
 	require.NotNil(t, iqt)
-	require.IsType(t, &registry.NoOpStrategy{}, iqt.strategy)
+	require.NotNil(t, iqt.strategy)
 
-	require.Eventually(t, func() bool {
-		iqt.mu.RLock()
-		defer iqt.mu.RUnlock()
-
-		// Assert updated cfg and strategy after config refresh
-		if !iqt.cfg.Enabled {
-			return false
-		}
-		if iqt.cfg.Strategy != registry.ThrottlingStrategyTabletThrottler {
-			return false
-		}
-		return true
-	}, 1*time.Second, 10*time.Millisecond, "Config should be refreshed and strategy should be updated")
+	// Should have initialized with Viper defaults
+	currentConfig := GetCurrentConfig()
+	require.False(t, currentConfig.Enabled) // Default is disabled
+	require.Equal(t, registry.ThrottlingStrategyUnknown, currentConfig.Strategy)
 }
 
 func TestSelectThrottlingStrategy(t *testing.T) {
@@ -84,17 +68,12 @@ func TestIncomingQueryThrottler_StrategyLifecycleManagement(t *testing.T) {
 	defer cancel()
 
 	throttler := &throttle.Throttler{}
-	config := &tabletenv.TabletConfig{
-		IncomingQueryThrottlerConfigRefreshInterval: 10 * time.Millisecond,
-	}
+	config := &tabletenv.TabletConfig{}
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), config, "TestThrottler")
 
-	iqt := NewIncomingQueryThrottler(ctx, throttler, newFakeConfigLoader(Config{
-		Enabled:  true,
-		Strategy: registry.ThrottlingStrategyTabletThrottler,
-	}), env)
+	iqt := NewIncomingQueryThrottler(ctx, throttler, env)
 
-	// Verify initial strategy was started (NoOpStrategy in this case)
+	// Verify initial strategy was started
 	require.NotNil(t, iqt.strategy)
 
 	// Test Shutdown properly stops the strategy
@@ -110,16 +89,11 @@ func TestIncomingQueryThrottler_Shutdown(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	config := &tabletenv.TabletConfig{
-		IncomingQueryThrottlerConfigRefreshInterval: 10 * time.Millisecond,
-	}
+	config := &tabletenv.TabletConfig{}
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), config, "TestThrottler")
 
 	throttler := &throttle.Throttler{}
-	iqt := NewIncomingQueryThrottler(ctx, throttler, newFakeConfigLoader(Config{
-		Enabled:  false,
-		Strategy: registry.ThrottlingStrategyTabletThrottler,
-	}), env)
+	iqt := NewIncomingQueryThrottler(ctx, throttler, env)
 
 	// Should not panic when called multiple times
 	iqt.Shutdown()
@@ -130,4 +104,35 @@ func TestIncomingQueryThrottler_Shutdown(t *testing.T) {
 	strategy := iqt.strategy
 	iqt.mu.RUnlock()
 	require.NotNil(t, strategy)
+}
+
+// TestIncomingQueryThrottler_UpdateStrategyIfChanged tests strategy switching functionality.
+func TestIncomingQueryThrottler_UpdateStrategyIfChanged(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	config := &tabletenv.TabletConfig{}
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), config, "TestThrottler")
+
+	throttler := &throttle.Throttler{}
+	iqt := NewIncomingQueryThrottler(ctx, throttler, env)
+
+	// Initial strategy should be NoOp (due to Unknown strategy)
+	require.IsType(t, &registry.NoOpStrategy{}, iqt.strategy)
+
+	// Test that the strategy update logic works
+	originalStrategy := iqt.strategy
+
+	// Update with same strategy should not change anything
+	testConfig := Config{
+		Enabled:  false,
+		Strategy: registry.ThrottlingStrategyUnknown,
+	}
+	iqt.updateStrategy(testConfig)
+	require.Same(t, originalStrategy, iqt.strategy)
+
+	// Test strategy change (falls back to NoOp since TabletThrottler isn't registered)
+	testConfig.Strategy = registry.ThrottlingStrategyTabletThrottler
+	iqt.updateStrategy(testConfig)
+	require.IsType(t, &registry.NoOpStrategy{}, iqt.strategy) // Falls back to NoOp for unregistered strategies
 }
