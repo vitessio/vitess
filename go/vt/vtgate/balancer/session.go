@@ -93,25 +93,21 @@ func NewSessionBalancer(ctx context.Context, localCell string, topoServer srvtop
 // For a given session, it will return the same tablet for its duration, with preference to tablets
 // in the local cell.
 func (b *SessionBalancer) Pick(target *querypb.Target, _ []*discovery.TabletHealth, opts *PickOpts) *discovery.TabletHealth {
-	if opts == nil || opts.SessionUUID == nil {
-		// No session hash. Returning nil here will allow the gateway to select a random
-		// tablet instead.
+	if opts == nil {
 		return nil
 	}
-
-	sessionUUID := *opts.SessionUUID
 
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
 	// Try to find a tablet in the local cell first
-	tablet := getFromRing(b.localRings, target, opts.InvalidTablets, sessionUUID)
+	tablet := getFromRing(b.localRings, target, opts.InvalidTablets, opts.SessionUUID)
 	if tablet != nil {
 		return tablet
 	}
 
 	// If we didn't find a tablet in the local cell, try external cells
-	tablet = getFromRing(b.externalRings, target, opts.InvalidTablets, sessionUUID)
+	tablet = getFromRing(b.externalRings, target, opts.InvalidTablets, opts.SessionUUID)
 	return tablet
 }
 

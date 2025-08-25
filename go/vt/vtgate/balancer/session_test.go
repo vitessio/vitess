@@ -475,7 +475,7 @@ func TestDebugHandler(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 }
 
-func TestPickNoSessionHash(t *testing.T) {
+func TestPickNoOpts(t *testing.T) {
 	b, hcChan := newSessionBalancer(t)
 
 	target := &querypb.Target{
@@ -510,11 +510,6 @@ func TestPickNoSessionHash(t *testing.T) {
 
 	// Test with nil opts
 	result := b.Pick(target, nil, nil)
-	require.Nil(t, result)
-
-	// Test with opts but nil session uuid
-	optsNoHash := &PickOpts{SessionUUID: nil}
-	result = b.Pick(target, nil, optsNoHash)
 	require.Nil(t, result)
 }
 
@@ -587,5 +582,5 @@ func TestPickInvalidTablets(t *testing.T) {
 }
 
 func buildOpts(uuid string) *PickOpts {
-	return &PickOpts{SessionUUID: &uuid}
+	return &PickOpts{SessionUUID: uuid}
 }

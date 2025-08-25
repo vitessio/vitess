@@ -101,8 +101,8 @@ type PickOpts struct {
 	// InvalidTablets is a set of tablets that should not be picked.
 	InvalidTablets map[string]bool
 
-	// SessionUUID is the hash of the current session UUID.
-	SessionUUID *string
+	// SessionUUID is the the current session UUID.
+	SessionUUID string
 }
 
 func NewTabletBalancer(localCell string, vtGateCells []string) TabletBalancer {
