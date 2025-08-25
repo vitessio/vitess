@@ -30,6 +30,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -104,13 +105,13 @@ func TestMain(m *testing.M) {
 			SchemaSQL: schemaSQL,
 			VSchema:   vSchema,
 		}
-		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, []string{"--health_check_interval", "1s"}...)
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, []string{utils.GetFlagVariantForTests("--health-check-interval"), "1s"}...)
 		err = clusterInstance.StartKeyspace(*keyspace, shards, 1, false)
 		if err != nil {
 			return 1
 		}
 
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, []string{"--tablet_refresh_interval", tabletRefreshInterval.String()}...)
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, []string{utils.GetFlagVariantForTests("--tablet-refresh-interval"), tabletRefreshInterval.String()}...)
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1
@@ -158,7 +159,7 @@ func TestHealthCheckCacheWithTabletChurn(t *testing.T) {
 		deleteTablet(t, tablet)
 		expectedTabletHCcacheEntries--
 
-		// We need to sleep for at least vtgate's --tablet_refresh_interval to be sure we
+		// We need to sleep for at least vtgate's --tablet-refresh-interval to be sure we
 		// have resynchronized the healthcheck cache with the topo server via the topology
 		// watcher and pruned the deleted tablet from the healthcheck cache.
 		time.Sleep(tabletRefreshInterval)

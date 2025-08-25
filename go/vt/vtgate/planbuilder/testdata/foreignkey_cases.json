@@ -2,7 +2,7 @@
   {
     "comment": "Insertion in a table with cross-shard foreign keys disallowed",
     "query": "insert into tbl3 (col3, coly) values (1, 3)",
-    "plan": "VT12002: unsupported: cross-shard foreign keys"
+    "plan": "VT12002: unsupported: cross-shard foreign keys between table 'sharded_fk_allow.tbl3' and 'sharded_fk_allow.tbl1'"
   },
   {
     "comment": "Insertion in a table with shard-scoped foreign keys is allowed",
@@ -55,12 +55,12 @@
   {
     "comment": "Delete in a table with cross-shard foreign keys disallowed",
     "query": "delete from tbl1",
-    "plan": "VT12002: unsupported: cross-shard foreign keys"
+    "plan": "VT12002: unsupported: cross-shard foreign keys between table 'tbl1' and 'sharded_fk_allow.tbl3'"
   },
   {
     "comment": "Delete in a table with not all column shard-scoped foreign keys - disallowed",
     "query": "delete from tbl7",
-    "plan": "VT12002: unsupported: cross-shard foreign keys"
+    "plan": "VT12002: unsupported: cross-shard foreign keys between table 'tbl7' and 'sharded_fk_allow.tbl6'"
   },
   {
     "comment": "Delete in a table with shard-scoped multiple column foreign key with cascade",
@@ -364,7 +364,7 @@
   {
     "comment": "Update in a table with cross-shard foreign keys disallowed",
     "query": "update tbl1 set t1col1 = 'foo' where col1 = 1",
-    "plan": "VT12002: unsupported: cross-shard foreign keys"
+    "plan": "VT12002: unsupported: cross-shard foreign keys between table 'sharded_fk_allow.tbl1' and 'sharded_fk_allow.tbl3'"
   },
   {
     "comment": "Update in a table with cross-shard foreign keys, column not in update expression - allowed",
@@ -390,7 +390,7 @@
   {
     "comment": "Update in a table with column modified not shard-scoped foreign key whereas other column referencing same table is - disallowed",
     "query": "update tbl7 set t7col7 = 'foo', t7col72 = 42",
-    "plan": "VT12002: unsupported: cross-shard foreign keys"
+    "plan": "VT12002: unsupported: cross-shard foreign keys between table 'sharded_fk_allow.tbl7' and 'sharded_fk_allow.tbl6'"
   },
   {
     "comment": "Update in a table with shard-scoped foreign keys with cascade",
@@ -448,7 +448,7 @@
   {
     "comment": "Insertion in a table with 2 foreign keys constraint with same table on different columns - both are not shard scoped - disallowed",
     "query": "insert into tbl6 (col6, t6col6) values (100, 'foo')",
-    "plan": "VT12002: unsupported: cross-shard foreign keys"
+    "plan": "VT12002: unsupported: cross-shard foreign keys between table 'sharded_fk_allow.tbl6' and 'sharded_fk_allow.tbl7'"
   },
   {
     "comment": "Update a table with parent and child foreign keys - shard scoped",
@@ -1795,7 +1795,7 @@
   {
     "comment": "Insert with unsharded table having fk reference in sharded table",
     "query": "insert into u_tbl (id, col) values (1, 2)",
-    "plan": "VT12002: unsupported: cross-shard foreign keys"
+    "plan": "VT12002: unsupported: cross-shard foreign keys between table 'unsharded_fk_allow.u_tbl' and 'sharded_fk_allow.s_tbl'"
   },
   {
     "comment": "replace into with table having primary key",

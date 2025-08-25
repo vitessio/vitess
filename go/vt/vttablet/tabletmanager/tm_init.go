@@ -70,6 +70,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -101,14 +102,14 @@ var (
 )
 
 func registerInitFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&tabletHostname, "tablet_hostname", tabletHostname, "if not empty, this hostname will be assumed instead of trying to resolve it")
-	fs.StringVar(&initKeyspace, "init_keyspace", initKeyspace, "(init parameter) keyspace to use for this tablet")
-	fs.StringVar(&initShard, "init_shard", initShard, "(init parameter) shard to use for this tablet")
-	fs.StringVar(&initTabletType, "init_tablet_type", initTabletType, "(init parameter) the tablet type to use for this tablet.")
-	fs.StringVar(&initDbNameOverride, "init_db_name_override", initDbNameOverride, "(init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>")
-	fs.StringVar(&skipBuildInfoTags, "vttablet_skip_buildinfo_tags", skipBuildInfoTags, "comma-separated list of buildinfo tags to skip from merging with --init_tags. each tag is either an exact match or a regular expression of the form '/regexp/'.")
-	fs.Var(&initTags, "init_tags", "(init parameter) comma separated list of key:value pairs used to tag the tablet")
-	fs.DurationVar(&initTimeout, "init_timeout", initTimeout, "(init parameter) timeout to use for the init phase.")
+	utils.SetFlagStringVar(fs, &tabletHostname, "tablet-hostname", tabletHostname, "if not empty, this hostname will be assumed instead of trying to resolve it")
+	utils.SetFlagStringVar(fs, &initKeyspace, "init-keyspace", initKeyspace, "(init parameter) keyspace to use for this tablet")
+	utils.SetFlagStringVar(fs, &initShard, "init-shard", initShard, "(init parameter) shard to use for this tablet")
+	utils.SetFlagStringVar(fs, &initTabletType, "init-tablet-type", initTabletType, "(init parameter) tablet type to use for this tablet. Valid values are: PRIMARY, REPLICA, SPARE, and RDONLY. The default is REPLICA.")
+	utils.SetFlagStringVar(fs, &initDbNameOverride, "init-db-name-override", initDbNameOverride, "(init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>")
+	utils.SetFlagStringVar(fs, &skipBuildInfoTags, "vttablet-skip-buildinfo-tags", skipBuildInfoTags, "comma-separated list of buildinfo tags to skip from merging with --init-tags. each tag is either an exact match or a regular expression of the form '/regexp/'.")
+	utils.SetFlagVar(fs, &initTags, "init-tags", "(init parameter) comma separated list of key:value pairs used to tag the tablet")
+	utils.SetFlagDurationVar(fs, &initTimeout, "init-timeout", initTimeout, "(init parameter) timeout to use for the init phase.")
 	fs.DurationVar(&mysqlShutdownTimeout, "mysql-shutdown-timeout", mysqlShutdownTimeout, "Timeout to use when MySQL is being shut down.")
 }
 
@@ -232,13 +233,13 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 		if err != nil {
 			return nil, err
 		}
-		log.Infof("Using detected machine hostname: %v, to change this, fix your machine network configuration or override it with --tablet_hostname. Tablet %s", hostname, alias.String())
+		log.Infof("Using detected machine hostname: %v, to change this, fix your machine network configuration or override it with --tablet-hostname. Tablet %s", hostname, alias.String())
 	} else {
-		log.Infof("Using hostname: %v from --tablet_hostname flag. Tablet %s", hostname, alias.String())
+		log.Infof("Using hostname: %v from --tablet-hostname flag. Tablet %s", hostname, alias.String())
 	}
 
 	if initKeyspace == "" || initShard == "" {
-		return nil, fmt.Errorf("init_keyspace and init_shard must be specified")
+		return nil, fmt.Errorf("init-keyspace and init-shard must be specified")
 	}
 
 	// parse and validate shard name
@@ -254,7 +255,7 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 	switch tabletType {
 	case topodatapb.TabletType_SPARE, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
 	default:
-		return nil, fmt.Errorf("invalid init_tablet_type %v; can only be REPLICA, RDONLY or SPARE", tabletType)
+		return nil, fmt.Errorf("invalid init-tablet-type %v; can only be REPLICA, RDONLY or SPARE", tabletType)
 	}
 
 	buildTags, err := getBuildTags(servenv.AppVersion.ToStringMap(), skipBuildInfoTags)
@@ -923,7 +924,7 @@ func (tm *TabletManager) exportStats() {
 // withRetry will exponentially back off and retry a function upon
 // failure, until the context is Done(), or the function returned with
 // no error. We use this at startup with a context timeout set to the
-// value of the init_timeout flag, so we can try to modify the
+// value of the init-timeout flag, so we can try to modify the
 // topology over a longer period instead of dying right away.
 func (tm *TabletManager) withRetry(ctx context.Context, description string, work func() error) error {
 	backoff := 1 * time.Second

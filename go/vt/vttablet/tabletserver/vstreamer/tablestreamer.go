@@ -118,6 +118,8 @@ func (ts *tableStreamer) Stream() error {
 	if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_write_timeout = %v", ts.config.NetWriteTimeout), 1, false); err != nil {
 		return err
 	}
+	log.Infof("TableStreamer Stream() started with net read_timeout: %v, net write_timeout: %v",
+		ts.config.NetReadTimeout, ts.config.NetWriteTimeout)
 
 	rs, err := conn.ExecuteFetch("show full tables", -1, true)
 	if err != nil {
@@ -139,6 +141,7 @@ func (ts *tableStreamer) Stream() error {
 	for _, tableName := range ts.tables {
 		log.Infof("Streaming table %s", tableName)
 		if err := ts.streamTable(ts.ctx, tableName); err != nil {
+			log.Errorf("Streaming table %s failed: %v", tableName, err)
 			return err
 		}
 		log.Infof("Finished streaming table %s", tableName)
@@ -196,7 +199,8 @@ func (ts *tableStreamer) streamTable(ctx context.Context, tableName string) erro
 	}
 	defer cancel()
 
-	if rs.Stream() != nil {
+	err = rs.Stream()
+	if err != nil {
 		return err
 	}
 	rs.vse.tableStreamerNumTables.Add(int64(1))

@@ -392,11 +392,13 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 	heartbeatTicker := time.NewTicker(rowStreamertHeartbeatInterval)
 	defer heartbeatTicker.Stop()
 	go func() {
-		select {
-		case <-rs.ctx.Done():
-			return
-		case <-heartbeatTicker.C:
-			safeSend(&binlogdatapb.VStreamRowsResponse{Heartbeat: true})
+		for {
+			select {
+			case <-rs.ctx.Done():
+				return
+			case <-heartbeatTicker.C:
+				safeSend(&binlogdatapb.VStreamRowsResponse{Heartbeat: true})
+			}
 		}
 	}()
 
@@ -407,7 +409,6 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 		mysqlrow []sqltypes.Value
 	)
 
-	filtered := make([]sqltypes.Value, len(rs.plan.ColExprs))
 	lastpk := make([]sqltypes.Value, len(rs.pkColumns))
 	byteCount := 0
 	logger := logutil.NewThrottledLogger(rs.vse.GetTabletInfo(), throttledLoggerInterval)
@@ -441,12 +442,17 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 		for i, pk := range rs.pkColumns {
 			lastpk[i] = mysqlrow[pk]
 		}
-		// Reuse the vstreamer's filter.
-		ok, err := rs.plan.filter(mysqlrow, filtered, charsets)
+
+		// verify that the row should be sent
+		ok, _, err := rs.plan.shouldFilter(mysqlrow, charsets)
 		if err != nil {
 			return err
 		}
 		if ok {
+			filtered, err := rs.plan.mapValues(mysqlrow)
+			if err != nil {
+				return err
+			}
 			if rowCount >= len(rows) {
 				rows = append(rows, &querypb.Row{})
 			}

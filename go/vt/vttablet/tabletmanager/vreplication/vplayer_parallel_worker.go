@@ -526,10 +526,7 @@ func (w *parallelWorker) updateFKCheck(ctx context.Context, flags2 uint32) error
 	if !mustUpdate {
 		return nil
 	}
-	dbForeignKeyChecksEnabled := true
-	if flags2&NoForeignKeyCheckFlagBitmask == NoForeignKeyCheckFlagBitmask {
-		dbForeignKeyChecksEnabled = false
-	}
+	dbForeignKeyChecksEnabled := flags2&NoForeignKeyCheckFlagBitmask != NoForeignKeyCheckFlagBitmask
 
 	if w.foreignKeyChecksStateInitialized /* already set earlier */ &&
 		dbForeignKeyChecksEnabled == w.foreignKeyChecksEnabled /* no change in the state, no need to update */ {

@@ -456,6 +456,10 @@ func (node *AlterMigration) FormatFast(buf *TrackedBuffer) {
 		alterType = "complete"
 	case CompleteAllMigrationType:
 		alterType = "complete all"
+	case PostponeCompleteMigrationType:
+		alterType = "postpone complete"
+	case PostponeCompleteAllMigrationType:
+		alterType = "postpone complete all"
 	case CancelMigrationType:
 		alterType = "cancel"
 	case CancelAllMigrationType:
@@ -1560,7 +1564,7 @@ func (node *Commit) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (node *Begin) FormatFast(buf *TrackedBuffer) {
-	if node.TxAccessModes == nil {
+	if node.Type == BeginStmt {
 		buf.WriteString("begin")
 		return
 	}
@@ -3177,6 +3181,17 @@ func (node *CreateTable) FormatFast(buf *TrackedBuffer) {
 	if node.TableSpec != nil {
 		buf.WriteByte(' ')
 		node.TableSpec.FormatFast(buf)
+	}
+	if node.Select != nil {
+		switch node.IgnoreOrReplace {
+		case IgnoreType:
+			buf.WriteString(" ignore")
+		case ReplaceType:
+			buf.WriteString(" replace")
+		}
+		buf.WriteString(" as")
+		buf.WriteByte(' ')
+		node.Select.FormatFast(buf)
 	}
 }
 

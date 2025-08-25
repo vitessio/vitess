@@ -572,15 +572,20 @@ type (
 		IfExists bool
 	}
 
+	// IgnoreOrReplaceType represents conflict handling mode for CREATE TABLE ... SELECT
+	IgnoreOrReplaceType int8
+
 	// CreateTable represents a CREATE TABLE statement.
 	CreateTable struct {
-		Temp        bool
-		Table       TableName
-		IfNotExists bool
-		TableSpec   *TableSpec
-		OptLike     *OptLike
-		Comments    *ParsedComments
-		FullyParsed bool
+		Temp            bool
+		Table           TableName
+		IfNotExists     bool
+		TableSpec       *TableSpec
+		OptLike         *OptLike
+		Comments        *ParsedComments
+		IgnoreOrReplace IgnoreOrReplaceType
+		Select          TableStatement
+		FullyParsed     bool
 	}
 
 	// CreateView represents a CREATE VIEW query
@@ -640,8 +645,15 @@ type (
 	// TxAccessMode is an enum for Transaction Access Mode
 	TxAccessMode int8
 
+	// BeginType is an enum for the type of BEGIN statement.
+	BeginType int8
+
 	// Begin represents a Begin statement.
 	Begin struct {
+		// We need to differentiate between BEGIN and START TRANSACTION statements
+		// because inside a stored procedure the former is considered part of a BEGIN...END statement,
+		// while the latter starts a transaction.
+		Type          BeginType
 		TxAccessModes []TxAccessMode
 	}
 

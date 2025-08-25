@@ -342,9 +342,23 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 		case opcode.AggregateUDF:
 			message := fmt.Sprintf("Aggregate UDF '%s' must be pushed down to MySQL", sqlparser.String(aggr.Original.Expr))
 			return nil, vterrors.VT12001(message)
+		case opcode.AggregateConstant:
+			// For AnyValue aggregations (literals, parameters), translate to evalengine
+			// This allows evaluation even when no input rows are present (empty result sets)
+			cfg := &evalengine.Config{
+				Collation:     ctx.VSchema.ConnCollation(),
+				Environment:   ctx.VSchema.Environment(),
+				ResolveColumn: func(name *sqlparser.ColName) (int, error) { return aggr.ColOffset, nil },
+			}
+			expr, err := evalengine.Translate(aggr.Original.Expr, cfg)
+			if err != nil {
+				return nil, err
+			}
+			aggregates = append(aggregates, engine.NewAggregateParam(aggr.OpCode, aggr.ColOffset, expr, aggr.Alias, ctx.VSchema.Environment().CollationEnv()))
+			continue
 		}
 
-		aggrParam := engine.NewAggregateParam(aggr.OpCode, aggr.ColOffset, aggr.Alias, ctx.VSchema.Environment().CollationEnv())
+		aggrParam := engine.NewAggregateParam(aggr.OpCode, aggr.ColOffset, nil, aggr.Alias, ctx.VSchema.Environment().CollationEnv())
 		aggrParam.Func = aggr.Func
 		if gcFunc, isGc := aggrParam.Func.(*sqlparser.GroupConcatExpr); isGc && gcFunc.Separator == "" {
 			gcFunc.Separator = sqlparser.GroupConcatDefaultSeparator
@@ -755,6 +769,10 @@ func buildUpdatePrimitive(
 	upd := dmlOp.(*operators.Update)
 	var vindexes []*vindexes.ColumnVindex
 	vQuery := ""
+	if rb.Routing.OpCode() == engine.None {
+		// reset as no modification will happen for an impossible query.
+		upd.ChangedVindexValues = nil
+	}
 	if len(upd.ChangedVindexValues) > 0 {
 		upd.OwnedVindexQuery.From = stmt.GetFrom()
 		upd.OwnedVindexQuery.Where = stmt.Where
@@ -805,7 +823,12 @@ func createDMLPrimitive(ctx *plancontext.PlanningContext, rb *operators.Route, h
 		FetchLastInsertID: ctx.SemTable.ShouldFetchLastInsertID(),
 	}
 
-	if rb.Routing.OpCode() != engine.Unsharded && vindexQuery != "" {
+	if rb.Routing.OpCode() == engine.None {
+		// reset as no modification will happen for an impossible query.
+		edml.OwnedVindexQuery = ""
+		edml.Vindex = nil
+		edml.Values = nil
+	} else if rb.Routing.OpCode() != engine.Unsharded && vindexQuery != "" {
 		primary := vTbl.ColumnVindexes[0]
 		edml.KsidVindex = primary.Vindex
 		edml.KsidLength = len(primary.Columns)

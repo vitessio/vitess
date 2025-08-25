@@ -82,12 +82,14 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
+			// TODO: Replace flag with dashed version in v25
 			"--schema_change_dir", schemaChangeDirectory,
 			"--schema_change_controller", "local",
 			"--schema_change_check_interval", "1s",
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
+			// TODO: Replace flag with dashed version in v25
 			"--heartbeat_interval", "250ms",
 			"--heartbeat_on_demand_duration", "5s",
 			"--migration_check_interval", "5s",

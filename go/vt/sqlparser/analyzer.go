@@ -19,6 +19,7 @@ package sqlparser
 // analyzer.go contains utility analysis functions.
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"unicode"
@@ -30,7 +31,8 @@ type StatementType int
 // These constants are used to identify the SQL statement type.
 // Changing this list will require reviewing all calls to Preview.
 const (
-	StmtSelect StatementType = iota
+	StmtUnknown StatementType = iota
+	StmtSelect
 	StmtStream
 	StmtInsert
 	StmtReplace
@@ -45,7 +47,6 @@ const (
 	StmtUse
 	StmtOther
 	StmtAnalyze
-	StmtUnknown
 	StmtComment
 	StmtPriv
 	StmtExplain
@@ -379,6 +380,20 @@ func IsColName(node Expr) bool {
 	return ok
 }
 
+var errNotStatic = errors.New("not static")
+
+// IsConstant returns true if the Expr can be evaluated without input or access to tables.
+func IsConstant(node Expr) bool {
+	err := Walk(func(node SQLNode) (kontinue bool, err error) {
+		switch node.(type) {
+		case *ColName, *Subquery:
+			return false, errNotStatic
+		}
+		return true, nil
+	}, node)
+	return err == nil
+}
+
 // IsValue returns true if the Expr is a string, integral or value arg.
 // NULL is not considered to be a value.
 func IsValue(node Expr) bool {
@@ -421,9 +436,10 @@ func IsSimpleTuple(node Expr) bool {
 	return false
 }
 
-func SupportsOptimizerHint(stmt StatementType) bool {
+// IsReadStatement returns true if the statement is a read statement.
+func (stmt StatementType) IsReadStatement() bool {
 	switch stmt {
-	case StmtSelect, StmtInsert, StmtUpdate, StmtDelete, StmtStream, StmtVStream:
+	case StmtSelect, StmtShow:
 		return true
 	default:
 		return false

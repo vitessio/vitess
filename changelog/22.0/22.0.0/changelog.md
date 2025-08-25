@@ -167,6 +167,9 @@
  * VReplication: Restore previous minimal e2e test behavior [#17016](https://github.com/vitessio/vitess/pull/17016) 
 #### VTAdmin
  * Update to latest Nodejs LTS and NPM [#17606](https://github.com/vitessio/vitess/pull/17606)
+### Compatibility Bug 
+#### Query Serving
+ * Partially revert the binary encoding logic for safer upgrade [#18200](https://github.com/vitessio/vitess/pull/18200)
 ### Dependencies 
 #### Build/CI
  * Bump golang.org/x/crypto from 0.29.0 to 0.31.0 [#17376](https://github.com/vitessio/vitess/pull/17376)
@@ -179,7 +182,8 @@
  * Bump golang.org/x/net from 0.31.0 to 0.33.0 [#17416](https://github.com/vitessio/vitess/pull/17416)
  * CVE Fix: Update glog to v1.2.4 [#17524](https://github.com/vitessio/vitess/pull/17524)
  * Upgrade the Golang Dependencies [#17695](https://github.com/vitessio/vitess/pull/17695)
- * Upgrade the Golang Dependencies [#17803](https://github.com/vitessio/vitess/pull/17803) 
+ * Upgrade the Golang Dependencies [#17803](https://github.com/vitessio/vitess/pull/17803)
+ * [release-22.0] Bump golang.org/x/net from 0.37.0 to 0.38.0 (#18177) [#18189](https://github.com/vitessio/vitess/pull/18189) 
 #### Java
  * Bump commons-io:commons-io from 2.7 to 2.14.0 in /java [#16889](https://github.com/vitessio/vitess/pull/16889)
  * java package updates for grpc and protobuf and release plugins [#17100](https://github.com/vitessio/vitess/pull/17100)
@@ -192,7 +196,8 @@
  * Bump nanoid from 3.3.7 to 3.3.8 in /web/vtadmin [#17375](https://github.com/vitessio/vitess/pull/17375)
 ### Documentation 
 #### Documentation
- * Add missing changelog for PR #16852 [#17002](https://github.com/vitessio/vitess/pull/17002) 
+ * Add missing changelog for PR #16852 [#17002](https://github.com/vitessio/vitess/pull/17002)
+ * [release-22.0] copy edit release notes to prepare for v22 GA (#18186) [#18192](https://github.com/vitessio/vitess/pull/18192) 
 #### General
  * Reorganize the `v22.0.0` release notes [#18052](https://github.com/vitessio/vitess/pull/18052) 
 #### Governance
@@ -505,7 +510,9 @@
  * Fix the release workflow [#16964](https://github.com/vitessio/vitess/pull/16964)
  * v19 EOL: Remove v19 from Golang Update Version CI workflow [#17932](https://github.com/vitessio/vitess/pull/17932) 
 #### Documentation
- * Update the EOL documentation [#17215](https://github.com/vitessio/vitess/pull/17215) 
+ * Update the EOL documentation [#17215](https://github.com/vitessio/vitess/pull/17215)
+ * [release-22.0] Update release notes with proper upgrade path [#18197](https://github.com/vitessio/vitess/pull/18197)
+ * [release-22.0] Narrow down affected users by new v22 migration path [#18199](https://github.com/vitessio/vitess/pull/18199) 
 #### General
  * Bump to `v22.0.0-SNAPSHOT` after the `v21.0.0-RC1` release [#16913](https://github.com/vitessio/vitess/pull/16913)
  * [main] Copy `v21.0.0-RC1` release notes [#16954](https://github.com/vitessio/vitess/pull/16954)
@@ -527,6 +534,10 @@
  * Bump to `v23.0.0-SNAPSHOT` after the `v22.0.0-RC1` release [#18088](https://github.com/vitessio/vitess/pull/18088)
  * [release-22.0] Release of `v22.0.0-RC1` [#18128](https://github.com/vitessio/vitess/pull/18128)
  * [release-22.0] Bump to `v22.0.0-SNAPSHOT` after the `v22.0.0-RC1` release [#18134](https://github.com/vitessio/vitess/pull/18134)
+ * [release-22.0] Release of `v22.0.0-RC2` [#18168](https://github.com/vitessio/vitess/pull/18168)
+ * [release-22.0] Bump to `v22.0.0-SNAPSHOT` after the `v22.0.0-RC2` release [#18170](https://github.com/vitessio/vitess/pull/18170)
+ * [release-22.0] Release of `v22.0.0-RC3` [#18204](https://github.com/vitessio/vitess/pull/18204)
+ * [release-22.0] Bump to `v22.0.0-SNAPSHOT` after the `v22.0.0-RC3` release [#18206](https://github.com/vitessio/vitess/pull/18206)
 ### Testing 
 #### Backup and Restore
  * fix flaky test on mysqlshell backup engine [#17037](https://github.com/vitessio/vitess/pull/17037)

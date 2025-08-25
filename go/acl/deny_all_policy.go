@@ -21,7 +21,7 @@ import (
 	"net/http"
 )
 
-var errDenyAll = errors.New("not allowed: deny-all security_policy enforced")
+var errDenyAll = errors.New("not allowed: deny-all security-policy enforced")
 
 // denyAllPolicy rejects all access.
 type denyAllPolicy struct{}

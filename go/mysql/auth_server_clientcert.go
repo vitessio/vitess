@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/spf13/pflag"
-
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -32,9 +30,9 @@ type AuthServerClientCert struct {
 }
 
 // InitAuthServerClientCert is public so it can be called from plugin_auth_clientcert.go (go/cmd/vtgate)
-func InitAuthServerClientCert(clientcertAuthMethod string) {
-	if pflag.CommandLine.Lookup("mysql_server_ssl_ca").Value.String() == "" {
-		log.Info("Not configuring AuthServerClientCert because mysql_server_ssl_ca is empty")
+func InitAuthServerClientCert(clientcertAuthMethod string, caValue string) {
+	if caValue == "" {
+		log.Info("Not configuring AuthServerClientCert because mysql-server-ssl-ca is empty")
 		return
 	}
 	if clientcertAuthMethod != string(MysqlClearPassword) && clientcertAuthMethod != string(MysqlDialog) {

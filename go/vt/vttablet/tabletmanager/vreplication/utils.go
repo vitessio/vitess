@@ -52,6 +52,8 @@ const (
 	LogMessage = "Message"
 	// LogCopyStart is used when the copy phase is started.
 	LogCopyStart = "Started Copy Phase"
+	// LogCopyRestart is used when the copy phase is restarted.
+	LogCopyRestart = "Restarted Copy Phase"
 	// LogCopyEnd is used when the copy phase is done.
 	LogCopyEnd = "Ended Copy Phase"
 	// LogStateChange is used when the state of the stream changes.

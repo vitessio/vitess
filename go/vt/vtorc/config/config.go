@@ -192,6 +192,15 @@ var (
 		},
 	)
 
+	allowRecovery = viperutil.Configure(
+		"allow-recovery",
+		viperutil.Options[bool]{
+			FlagName: "allow-recovery",
+			Default:  true,
+			Dynamic:  true,
+		},
+	)
+
 	convertTabletsWithErrantGTIDs = viperutil.Configure(
 		"change-tablets-with-errant-gtid-to-drained",
 		viperutil.Options[bool]{
@@ -234,6 +243,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.Duration("topo-information-refresh-duration", topoInformationRefreshDuration.Default(), "Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topology server")
 	fs.Duration("recovery-poll-duration", recoveryPollDuration.Default(), "Timer duration on which VTOrc polls its database to run a recovery")
 	fs.Bool("allow-emergency-reparent", ersEnabled.Default(), "Whether VTOrc should be allowed to run emergency reparent operation when it detects a dead primary")
+	fs.Bool("allow-recovery", allowRecovery.Default(), "Whether VTOrc should be allowed to run recovery actions")
 	fs.Bool("change-tablets-with-errant-gtid-to-drained", convertTabletsWithErrantGTIDs.Default(), "Whether VTOrc should be changing the type of tablets with errant GTIDs to DRAINED")
 	fs.Bool("enable-primary-disk-stalled-recovery", enablePrimaryDiskStalledRecovery.Default(), "Whether VTOrc should detect a stalled disk on the primary and failover")
 
@@ -255,6 +265,7 @@ func registerFlags(fs *pflag.FlagSet) {
 		topoInformationRefreshDuration,
 		recoveryPollDuration,
 		ersEnabled,
+		allowRecovery,
 		convertTabletsWithErrantGTIDs,
 		enablePrimaryDiskStalledRecovery,
 	)
@@ -378,6 +389,11 @@ func ERSEnabled() bool {
 // SetERSEnabled sets the value for the ersEnabled variable. This should only be used from tests.
 func SetERSEnabled(val bool) {
 	ersEnabled.Set(val)
+}
+
+// GetAllowRecovery is a getter function.
+func GetAllowRecovery() bool {
+	return allowRecovery.Get()
 }
 
 // ConvertTabletWithErrantGTIDs reports whether VTOrc is allowed to change the tablet type of tablets with errant GTIDs to DRAINED.

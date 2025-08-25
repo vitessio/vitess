@@ -919,6 +919,12 @@ func (vrh *vcopierCopyTaskResultHooks) notify(ctx context.Context, result *vcopi
 //	}()
 func (vrh *vcopierCopyTaskResultHooks) sendTo(ch chan<- *vcopierCopyTaskResult) {
 	vrh.do(func(ctx context.Context, result *vcopierCopyTaskResult) {
+		defer func() {
+			// This recover prevents panics when sending to a potentially closed channel.
+			if err := recover(); err != nil {
+				log.Errorf("uncaught panic, vcopier copy task result: %v, error: %+v", result, err)
+			}
+		}()
 		select {
 		case ch <- result:
 		case <-ctx.Done():

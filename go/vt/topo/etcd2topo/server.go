@@ -34,6 +34,7 @@ We follow these conventions within this package:
 package etcd2topo
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"strings"
@@ -47,6 +48,7 @@ import (
 
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -87,9 +89,19 @@ func init() {
 }
 
 func registerEtcd2TopoFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&clientCertPath, "topo_etcd_tls_cert", clientCertPath, "path to the client cert to use to connect to the etcd topo server, requires topo_etcd_tls_key, enables TLS")
-	fs.StringVar(&clientKeyPath, "topo_etcd_tls_key", clientKeyPath, "path to the client key to use to connect to the etcd topo server, enables TLS")
-	fs.StringVar(&serverCaPath, "topo_etcd_tls_ca", serverCaPath, "path to the ca to use to validate the server cert when connecting to the etcd topo server")
+	utils.SetFlagStringVar(fs, &clientCertPath, "topo-etcd-tls-cert", clientCertPath, "path to the client cert to use to connect to the etcd topo server, requires topo-etcd-tls-key, enables TLS")
+	utils.SetFlagStringVar(fs, &clientKeyPath, "topo-etcd-tls-key", clientKeyPath, "path to the client key to use to connect to the etcd topo server, enables TLS")
+	utils.SetFlagStringVar(fs, &serverCaPath, "topo-etcd-tls-ca", serverCaPath, "path to the ca to use to validate the server cert when connecting to the etcd topo server")
+}
+
+// checkClosed returns context.Canceled if the server has been closed.
+// This mimics the pattern used for context cancellation which gets converted
+// to topo.Interrupted by convertError().
+func (s *Server) checkClosed() error {
+	if s.cli == nil {
+		return context.Canceled
+	}
+	return nil
 }
 
 // Close implements topo.Server.Close.

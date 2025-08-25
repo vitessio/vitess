@@ -96,6 +96,16 @@ func (fra *fakeRPCTM) UpdateVReplicationWorkflows(ctx context.Context, req *tabl
 	panic("implement me")
 }
 
+func (fra *fakeRPCTM) UpdateSequenceTables(ctx context.Context, req *tabletmanagerdatapb.UpdateSequenceTablesRequest) (*tabletmanagerdatapb.UpdateSequenceTablesResponse, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (fra *fakeRPCTM) GetMaxValueForSequences(ctx context.Context, req *tabletmanagerdatapb.GetMaxValueForSequencesRequest) (*tabletmanagerdatapb.GetMaxValueForSequencesResponse, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (fra *fakeRPCTM) ResetSequences(ctx context.Context, tables []string) error {
 	// TODO implement me
 	panic("implement me")

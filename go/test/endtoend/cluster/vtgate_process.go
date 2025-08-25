@@ -33,6 +33,7 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
+
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
@@ -148,6 +149,7 @@ const defaultVtGatePlannerVersion = planbuilder.Gen4
 // Setup starts Vtgate process with required arguements
 func (vtgate *VtgateProcess) Setup() (err error) {
 	args := []string{
+		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--topo_implementation", vtgate.TopoImplementation,
 		"--topo_global_server_address", vtgate.TopoGlobalAddress,
 		"--topo_global_root", vtgate.TopoGlobalRoot,
@@ -166,11 +168,13 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"--bind-address", "127.0.0.1",
 		"--grpc_bind_address", "127.0.0.1",
 	}
+
 	// If no explicit mysql_server_version has been specified then we autodetect
 	// the MySQL version that will be used for the test and base the vtgate's
 	// mysql server version on that.
 	msvflag := false
 	for _, f := range vtgate.ExtraArgs {
+		// TODO: Replace flag with dashed version in v25
 		if strings.Contains(f, "mysql_server_version") {
 			msvflag = true
 			break
@@ -199,6 +203,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 			return err
 		}
 		mysqlvers := fmt.Sprintf("%d.%d.%d-vitess", vers.Major, vers.Minor, vers.Patch)
+		// TODO: Replace flag with dashed version in v25
 		args = append(args, "--mysql_server_version", mysqlvers)
 	}
 	if vtgate.PlannerVersion > 0 {

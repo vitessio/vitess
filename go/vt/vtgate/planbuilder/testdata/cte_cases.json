@@ -396,7 +396,7 @@
                   {
                     "OperatorType": "Aggregate",
                     "Variant": "Scalar",
-                    "Aggregates": "any_value(0) AS id, sum_count_star(1) AS count(*), any_value(2)",
+                    "Aggregates": "any_value(0) AS id, sum_count_star(1) AS count(*), constant_aggr(1) AS 1",
                     "Inputs": [
                       {
                         "OperatorType": "Route",
@@ -1815,8 +1815,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select dt.c0 as id, dt.c1 as foo, weight_string(dt.c0), weight_string(dt.c1) from (select id, foo from (select id, foo from `user` where 1 != 1) as x where 1 != 1 union select id, foo from (select id, foo from `user` where 1 != 1) as x where 1 != 1) as dt(c0, c1) where 1 != 1",
-            "Query": "select dt.c0 as id, dt.c1 as foo, weight_string(dt.c0), weight_string(dt.c1) from (select id, foo from (select id, foo from `user`) as x union select id, foo from (select id, foo from `user`) as x) as dt(c0, c1)"
+            "FieldQuery": "select id, foo, weight_string(id), weight_string(foo) from (select id, foo from `user` where 1 != 1) as x where 1 != 1 union select id, foo, weight_string(id), weight_string(foo) from (select id, foo from `user` where 1 != 1) as x where 1 != 1",
+            "Query": "select id, foo, weight_string(id), weight_string(foo) from (select id, foo from `user`) as x union select id, foo, weight_string(id), weight_string(foo) from (select id, foo from `user`) as x"
           }
         ]
       },
@@ -1862,7 +1862,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select 'count_a' as tab, num from count_a where 1 != 1 union select 'count_b' as tab, num from count_b where 1 != 1",
+        "FieldQuery": "with count_a as (select count(id) as num from unsharded_a where 1 != 1) , count_b as (select count(id) as num from unsharded_b where 1 != 1) select 'count_a' as tab, num from count_a where 1 != 1 union select 'count_b' as tab, num from count_b where 1 != 1",
         "Query": "with count_a as (select count(id) as num from unsharded_a) , count_b as (select count(id) as num from unsharded_b) select 'count_a' as tab, num from count_a union select 'count_b' as tab, num from count_b"
       },
       "TablesUsed": [
@@ -1977,7 +1977,7 @@
                   {
                     "OperatorType": "Aggregate",
                     "Variant": "Scalar",
-                    "Aggregates": "any_value(0), sum(1) AS sum(num)",
+                    "Aggregates": "constant_aggr(1000) AS 1000, sum(1) AS sum(num)",
                     "Inputs": [
                       {
                         "OperatorType": "Projection",

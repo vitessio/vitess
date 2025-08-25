@@ -53,6 +53,7 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 	_ = createDirectory(path.Join(vtctld.Directory, "backups"), 0700)
 	vtctld.proc = exec.Command(
 		vtctld.Binary,
+		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--topo_implementation", vtctld.TopoImplementation,
 		"--topo_global_server_address", vtctld.TopoGlobalAddress,
 		"--topo_global_root", vtctld.TopoGlobalRoot,

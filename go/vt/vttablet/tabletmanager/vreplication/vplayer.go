@@ -169,10 +169,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		}
 		vr.dbClient.maxBatchSize = maxAllowedPacket
 	}
-	parallelMode := false
-	if len(copyState) == 0 && vr.workflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerParallel != 0 {
-		parallelMode = true
-	}
+	parallelMode := len(copyState) == 0 && vr.workflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerParallel != 0
 
 	return &vplayer{
 		vr:               vr,

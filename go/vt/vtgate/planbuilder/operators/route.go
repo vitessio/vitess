@@ -372,10 +372,15 @@ func findVSchemaTableAndCreateRoute(
 		err          error
 	)
 
-	if ctx.IsMirrored() {
+	vschemaTable, _, _, tabletType, target, err = ctx.VSchema.FindTableOrVindex(tableName)
+
+	// If we're processing the target-side of a mirror operator, look up the
+	// mirror target table by using FindTable, which bypasses routing rules.
+	//
+	// Exclude dual tables, which do not get a mirror rule, and are not known to
+	// the VSchema.
+	if ctx.IsMirrored() && !(vschemaTable.Type == vindexes.TypeReference && vschemaTable.Name.String() == "dual") {
 		vschemaTable, _, tabletType, target, err = ctx.VSchema.FindTable(tableName)
-	} else {
-		vschemaTable, _, _, tabletType, target, err = ctx.VSchema.FindTableOrVindex(tableName)
 	}
 
 	if err != nil {
@@ -692,6 +697,16 @@ func addWSColumnToInput(ctx *plancontext.PlanningContext, source Operator, offse
 		return true, op.AddWSColumn(ctx, offset, true)
 	case *Aggregator:
 		return true, op.AddWSColumn(ctx, offset, true)
+	case *Union:
+		cloned := slice.Map(op.Sources, func(src Operator) Operator {
+			return Clone(src)
+		})
+		wsOffset, err := op.addWeightStringToOffset(ctx, offset)
+		if err != nil {
+			op.Sources = cloned
+			return false, -1
+		}
+		return true, wsOffset
 	}
 	return false, -1
 }

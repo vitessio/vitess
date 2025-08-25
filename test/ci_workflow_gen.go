@@ -47,9 +47,9 @@ var (
 )
 
 const (
-	oracleCloudRunner = "oracle-16cpu-64gb-x86-64"
+	oracleCloudRunner = "oracle-vm-16cpu-64gb-x86-64"
 	githubRunner      = "gh-hosted-runners-16cores-1-24.04"
-	cores16RunnerName = githubRunner
+	cores16RunnerName = oracleCloudRunner
 	defaultRunnerName = "ubuntu-24.04"
 )
 
@@ -132,7 +132,8 @@ var (
 		"vreplication_partial_movetables_and_materialize",
 		"vreplication_foreign_key_stress",
 		"vreplication_migrate",
-		"vreplication_vtctldclient_vdiff2_movetables_tz",
+		"vreplication_vtctldclient_movetables_tz",
+		"vreplication_vdiff2",
 		"vreplication_multi_tenant",
 		"schemadiff_vrepl",
 		"topo_connection_cache",

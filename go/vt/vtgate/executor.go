@@ -75,6 +75,7 @@ var (
 	queryExecutions        = stats.NewCountersWithMultiLabels("QueryExecutions", "Counts queries executed at VTGate by query type, plan type, and tablet type.", []string{"Query", "Plan", "Tablet"})
 	queryRoutes            = stats.NewCountersWithMultiLabels("QueryRoutes", "Counts queries routed from VTGate to VTTablet by query type, plan type, and tablet type.", []string{"Query", "Plan", "Tablet"})
 	queryExecutionsByTable = stats.NewCountersWithMultiLabels("QueryExecutionsByTable", "Counts queries executed at VTGate per table by query type and table.", []string{"Query", "Table"})
+	txProcessed            = stats.NewCountersWithMultiLabels("TransactionsProcessed", "Counts transactions processed at VTGate by shard distribution (single or cross), transaction type (read write or read only)", []string{"Shard", "Type"})
 
 	// commitMode records the timing of the commit phase of a transaction.
 	// It also tracks between different transaction mode i.e. Single, Multi and TwoPC
@@ -1722,7 +1723,7 @@ func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.P
 		return nil
 	}
 
-	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "plan includes scatter, which is disallowed using the `no_scatter` command line argument")
+	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "plan includes scatter, which is disallowed using the `no-scatter` command line argument")
 }
 
 // getTabletThrottlerStatus uses HTTP to get the throttler status

@@ -60,6 +60,7 @@ import (
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -139,21 +140,21 @@ func init() {
 }
 
 func registerMySQLDFlags(fs *pflag.FlagSet) {
-	fs.DurationVar(&PoolDynamicHostnameResolution, "pool_hostname_resolve_interval", PoolDynamicHostnameResolution, "if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)")
-	fs.StringVar(&mycnfTemplateFile, "mysqlctl_mycnf_template", mycnfTemplateFile, "template file to use for generating the my.cnf file during server init")
-	fs.StringVar(&socketFile, "mysqlctl_socket", socketFile, "socket file to use for remote mysqlctl actions (empty for local actions)")
-	fs.DurationVar(&replicationConnectRetry, "replication_connect_retry", replicationConnectRetry, "how long to wait in between replica reconnect attempts. Only precise to the second.")
+	utils.SetFlagDurationVar(fs, &PoolDynamicHostnameResolution, "pool-hostname-resolve-interval", PoolDynamicHostnameResolution, "if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)")
+	utils.SetFlagStringVar(fs, &mycnfTemplateFile, "mysqlctl-mycnf-template", mycnfTemplateFile, "template file to use for generating the my.cnf file during server init")
+	utils.SetFlagStringVar(fs, &socketFile, "mysqlctl-socket", socketFile, "socket file to use for remote mysqlctl actions (empty for local actions)")
+	utils.SetFlagDurationVar(fs, &replicationConnectRetry, "replication-connect-retry", replicationConnectRetry, "how long to wait in between replica reconnect attempts. Only precise to the second.")
 }
 
 func registerReparentFlags(fs *pflag.FlagSet) {
-	fs.BoolVar(&DisableActiveReparents, "disable_active_reparents", DisableActiveReparents, "if set, do not allow active reparents. Use this to protect a cluster using external reparents.")
+	utils.SetFlagBoolVar(fs, &DisableActiveReparents, "disable-active-reparents", DisableActiveReparents, "if set, do not allow active reparents. Use this to protect a cluster using external reparents.")
 }
 
 func registerPoolFlags(fs *pflag.FlagSet) {
-	fs.IntVar(&dbaPoolSize, "dba_pool_size", dbaPoolSize, "Size of the connection pool for dba connections")
-	fs.DurationVar(&DbaIdleTimeout, "dba_idle_timeout", DbaIdleTimeout, "Idle timeout for dba connections")
-	fs.DurationVar(&appIdleTimeout, "app_idle_timeout", appIdleTimeout, "Idle timeout for app connections")
-	fs.IntVar(&appPoolSize, "app_pool_size", appPoolSize, "Size of the connection pool for app connections")
+	utils.SetFlagIntVar(fs, &dbaPoolSize, "dba-pool-size", dbaPoolSize, "Size of the connection pool for dba connections")
+	utils.SetFlagDurationVar(fs, &DbaIdleTimeout, "dba-idle-timeout", DbaIdleTimeout, "Idle timeout for dba connections")
+	utils.SetFlagDurationVar(fs, &appIdleTimeout, "app-idle-timeout", appIdleTimeout, "Idle timeout for app connections")
+	utils.SetFlagIntVar(fs, &appPoolSize, "app-pool-size", appPoolSize, "Size of the connection pool for app connections")
 }
 
 // NewMysqld creates a Mysqld object based on the provided configuration
@@ -921,7 +922,7 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 	if mycnfTemplateFile != "" {
 		data, err := os.ReadFile(mycnfTemplateFile)
 		if err != nil {
-			log.Fatalf("template file specified by -mysqlctl_mycnf_template could not be read: %v", mycnfTemplateFile)
+			log.Fatalf("template file specified by -mysqlctl-mycnf-template could not be read: %v", mycnfTemplateFile)
 		}
 		return string(data) // use only specified template
 	}
@@ -953,6 +954,8 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 			} else {
 				versionConfig = config.MycnfMySQL80
 			}
+		case 9:
+			versionConfig = config.MycnfMySQL90
 		default:
 			log.Infof("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version)
 		}
@@ -1261,9 +1264,11 @@ func (mysqld *Mysqld) OnTerm(f func()) {
 }
 
 func buildLdPaths() ([]string, error) {
+	baseEnv := os.Environ()
+
 	vtMysqlRoot, err := vtenv.VtMysqlRoot()
 	if err != nil {
-		return []string{}, err
+		return baseEnv, err
 	}
 
 	ldPaths := []string{
@@ -1271,7 +1276,7 @@ func buildLdPaths() ([]string, error) {
 		os.ExpandEnv("LD_PRELOAD=$LD_PRELOAD"),
 	}
 
-	return ldPaths, nil
+	return append(baseEnv, ldPaths...), nil
 }
 
 // GetVersionString is part of the MysqlExecutor interface.

@@ -893,6 +893,71 @@ func createFkDefinition(childCols []string, parentTableName string, parentCols [
 	}
 }
 
+// TestForeignKeyRoutingRules tests that foreign keys respect routing rules and do not create cross-keyspace relationships
+func TestForeignKeyRoutingRules(t *testing.T) {
+	vm := &VSchemaManager{}
+	var vs *vindexes.VSchema
+	vm.subscriber = func(vschema *vindexes.VSchema, _ *VSchemaStats) {
+		vs = vschema
+		vs.ResetCreated()
+	}
+
+	vm.schema = &fakeSchema{
+		tables: map[string]map[string]*vindexes.TableInfo{
+			"sourceKs": {"t1": createTableInfo(), "t2": createTableInfoWithFK("t1")},
+			"targetKs": {"t1": createTableInfo(), "t2": createTableInfoWithFK("t1")},
+		},
+	}
+
+	// Create SrvVSchema with routing rules
+	srvVSchema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sourceKs": {ForeignKeyMode: vschemapb.Keyspace_managed, Tables: map[string]*vschemapb.Table{
+				"t1": {Columns: []*vschemapb.Column{{Name: "id", Type: querypb.Type_INT64}}},
+				"t2": {Columns: []*vschemapb.Column{{Name: "parent_id", Type: querypb.Type_INT64}}},
+			}},
+			"targetKs": {ForeignKeyMode: vschemapb.Keyspace_managed, Tables: map[string]*vschemapb.Table{
+				"t1": {Columns: []*vschemapb.Column{{Name: "id", Type: querypb.Type_INT64}}},
+				"t2": {Columns: []*vschemapb.Column{{Name: "parent_id", Type: querypb.Type_INT64}}},
+			}},
+		},
+		RoutingRules: &vschemapb.RoutingRules{Rules: []*vschemapb.RoutingRule{
+			{FromTable: "sourceKs.t1", ToTables: []string{"targetKs.t1"}},
+			{FromTable: "sourceKs.t2", ToTables: []string{"targetKs.t2"}},
+		}},
+	}
+	vm.VSchemaUpdate(srvVSchema, nil)
+	require.NotNil(t, vs)
+
+	// Routed tables should have no FK relationships
+	sourceTables := vs.Keyspaces["sourceKs"].Tables
+	assert.Empty(t, sourceTables["t1"].ChildForeignKeys, "routed parent table should have no child FKs")
+	assert.Empty(t, sourceTables["t2"].ParentForeignKeys, "routed child table should have no parent FKs")
+
+	// Target keyspace should preserve FK relationships
+	targetTables := vs.Keyspaces["targetKs"].Tables
+	assert.Len(t, targetTables["t1"].ChildForeignKeys, 1, "target parent table should have child FK")
+	assert.Equal(t, "targetKs.t2", targetTables["t1"].ChildForeignKeys[0].Table.String())
+	assert.Len(t, targetTables["t2"].ParentForeignKeys, 1, "target child table should have parent FK")
+	assert.Equal(t, "targetKs.t1", targetTables["t2"].ParentForeignKeys[0].Table.String())
+
+}
+
+func createTableInfoWithFK(fkTarget string) *vindexes.TableInfo {
+	return &vindexes.TableInfo{
+		Columns: []vindexes.Column{{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64}},
+		ForeignKeys: []*sqlparser.ForeignKeyDefinition{
+			createFkDefinition([]string{"parent_id"}, fkTarget, []string{"id"}, sqlparser.RESTRICT, sqlparser.RESTRICT),
+		},
+	}
+}
+
+func createTableInfo() *vindexes.TableInfo {
+	return &vindexes.TableInfo{
+		Columns: []vindexes.Column{{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64}},
+	}
+}
+
 func makeTestVSchema(ks string, sharded bool, tbls map[string]*vindexes.BaseTable) *vindexes.VSchema {
 	keyspaceSchema := &vindexes.KeyspaceSchema{
 		Keyspace: &vindexes.Keyspace{
@@ -931,18 +996,36 @@ func makeTestSrvVSchema(ks string, sharded bool, tbls map[string]*vschemapb.Tabl
 }
 
 type fakeSchema struct {
+	// Single keyspace (backward compatibility)
 	t    map[string]*vindexes.TableInfo
 	v    map[string]sqlparser.TableStatement
 	udfs []string
+
+	// Multi-keyspace
+	tables            map[string]map[string]*vindexes.TableInfo
+	views             map[string]map[string]sqlparser.TableStatement
+	multiKeyspaceUDFs map[string][]string
 }
 
-func (f *fakeSchema) Tables(string) map[string]*vindexes.TableInfo {
-	return f.t
+func (f *fakeSchema) Tables(ks string) map[string]*vindexes.TableInfo {
+	if f.tables != nil {
+		return f.tables[ks] // Multi-keyspace mode
+	}
+	return f.t // Single keyspace mode (backward compatibility)
 }
 
-func (f *fakeSchema) Views(string) map[string]sqlparser.TableStatement {
-	return f.v
+func (f *fakeSchema) Views(ks string) map[string]sqlparser.TableStatement {
+	if f.views != nil {
+		return f.views[ks] // Multi-keyspace mode
+	}
+	return f.v // Single keyspace mode (backward compatibility)
 }
-func (f *fakeSchema) UDFs(string) []string { return f.udfs }
+
+func (f *fakeSchema) UDFs(ks string) []string {
+	if f.multiKeyspaceUDFs != nil {
+		return f.multiKeyspaceUDFs[ks] // Multi-keyspace mode
+	}
+	return f.udfs // Single keyspace mode (backward compatibility)
+}
 
 var _ SchemaInfo = (*fakeSchema)(nil)

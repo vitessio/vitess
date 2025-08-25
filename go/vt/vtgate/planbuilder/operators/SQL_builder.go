@@ -429,6 +429,7 @@ func stripDownQuery(from, to sqlparser.TableStatement) {
 		stripDownQuery(node.Left, toNode.Left)
 		stripDownQuery(node.Right, toNode.Right)
 		toNode.OrderBy = node.OrderBy
+		toNode.Limit = node.Limit
 	default:
 		panic(vterrors.VT13001(fmt.Sprintf("this should not happen - we have covered all implementations of SelectStatement %T", from)))
 	}

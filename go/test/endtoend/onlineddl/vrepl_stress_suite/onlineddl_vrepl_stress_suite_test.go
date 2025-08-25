@@ -51,6 +51,7 @@ import (
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 type testcase struct {
@@ -420,23 +421,23 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
-			"--schema_change_dir", schemaChangeDirectory,
-			"--schema_change_controller", "local",
-			"--schema_change_check_interval", "1s",
+			"--schema-change-dir", schemaChangeDirectory,
+			"--schema-change-controller", "local",
+			"--schema-change-check-interval", "1s",
 		}
 
 		// --vstream_packet_size is set to a small value that ensures we get multiple stream iterations,
 		// thereby examining lastPK on vcopier side. We will be iterating tables using non-PK order throughout
 		// this test suite, and so the low setting ensures we hit the more interesting code paths.
 		clusterInstance.VtTabletExtraArgs = []string{
-			"--heartbeat_interval", "250ms",
-			"--heartbeat_on_demand_duration", "5s",
-			"--migration_check_interval", "5s",
-			"--vstream_packet_size", "4096", // Keep this value small and below 10k to ensure multilple vstream iterations
-			"--watch_replication_stream",
+			utils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
+			utils.GetFlagVariantForTests("--heartbeat-on-demand-duration"), "5s",
+			utils.GetFlagVariantForTests("--migration-check-interval"), "5s",
+			"--vstream-packet-size", "4096", // Keep this value small and below 10k to ensure multilple vstream iterations
+			utils.GetFlagVariantForTests("--watch-replication-stream"),
 		}
 		clusterInstance.VtGateExtraArgs = []string{
-			"--ddl_strategy", "online",
+			utils.GetFlagVariantForTests("--ddl-strategy"), "online",
 		}
 
 		if err := clusterInstance.StartTopo(); err != nil {

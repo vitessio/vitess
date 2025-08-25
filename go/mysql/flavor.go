@@ -50,6 +50,9 @@ const (
 	// mysql8VersionPrefix is the prefix for 8.x mysql version, such as 8.0.19,
 	// but also newer ones like 8.4.0.
 	mysql8VersionPrefix = "8."
+	// mysql9VersionPrefix is the prefix for 9.x mysql version, such as 9.0.0,
+	// 9.1.0, 9.2.0, etc.
+	mysql9VersionPrefix = "9."
 )
 
 // flavor is the abstract interface for a flavor.
@@ -200,6 +203,8 @@ func GetFlavor(serverVersion string, flavorFunc func(serverVersion string) flavo
 		} else {
 			f = mysqlFlavor8Legacy{mysqlFlavorLegacy{mysqlFlavor{serverVersion: serverVersion}}}
 		}
+	case strings.HasPrefix(serverVersion, mysql9VersionPrefix):
+		f = mysqlFlavor9{mysqlFlavor{serverVersion: serverVersion}}
 	default:
 		// If unknown, return the most basic flavor: MySQL 57.
 		f = mysqlFlavor57{mysqlFlavorLegacy{mysqlFlavor{serverVersion: serverVersion}}}
