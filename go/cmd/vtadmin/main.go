@@ -36,6 +36,7 @@ import (
 	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
 	"vitess.io/vitess/go/vt/vtadmin/http/debug"
 	"vitess.io/vitess/go/vt/vtadmin/rbac"
+	"vitess.io/vitess/go/vt/vtctl/grpcclientcommon"
 	"vitess.io/vitess/go/vt/vtenv"
 )
 
@@ -217,6 +218,9 @@ func main() {
 	rootCmd.Flags().AddGoFlag(flag.Lookup("log_dir"))
 
 	servenv.RegisterMySQLServerFlags(rootCmd.Flags())
+
+	// Register TLS flags for gRPC connections to vtctld
+	grpcclientcommon.RegisterFlags(rootCmd.Flags())
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)
