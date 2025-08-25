@@ -519,7 +519,7 @@ func TestConnAttrs(t *testing.T) {
 	go l.Accept()
 	defer cleanupListener(ctx, l, params)
 
-	clientConn, err := ConnectWithAttributes(ctx, params, &attributes)
+	clientConn, err := ConnectWithAttributes(ctx, params, attributes)
 	require.NoError(t, err, "Connect failed")
 
 	serverConn := th.LastConn()
@@ -559,7 +559,7 @@ func TestConnAttrs(t *testing.T) {
 		"tooLongKey": strings.Repeat("a", 256),
 	}
 
-	_, err = ConnectWithAttributes(ctx, params, &tooLongAttributes)
+	_, err = ConnectWithAttributes(ctx, params, tooLongAttributes)
 	require.Error(t, err, "writeHandshakeResponse41: attribute key or value is too long")
 
 }
