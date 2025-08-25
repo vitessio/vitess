@@ -19,6 +19,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -84,7 +85,7 @@ func TestDeleteEqual(t *testing.T) {
 	_, err := del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		fmt.Sprintf(`ResolveDestinations ks [%v] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`, sqltypes.Int64BindVariable(1)),
 		`ExecuteMultiShard ks.-20: dummy_delete {} true true`,
 	})
 
@@ -153,8 +154,8 @@ func TestDeleteEqualNoRoute(t *testing.T) {
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		// This lookup query will return no rows. So, the DML will not be sent anywhere.
-		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:{type:INT64 value:"1"} false`,
-		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationNone()`,
+		fmt.Sprintf(`Execute select from, toc from lkp where from in ::from from: %v false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_INT64, Value: []byte("1")}}}),
+		fmt.Sprintf(`ResolveDestinations ks [%v] Destinations:DestinationNone()`, sqltypes.Int64BindVariable(1)),
 	})
 }
 
@@ -219,13 +220,13 @@ func TestDeleteOwnedVindex(t *testing.T) {
 	_, err := del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations sharded [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		fmt.Sprintf(`ResolveDestinations sharded [%v] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`, sqltypes.Int64BindVariable(1)),
 		// ResolveDestinations is hard-coded to return -20.
 		// It gets used to perform the subquery to fetch the changing column values.
 		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
 		// Those values are returned as 4,5 for twocol and 6 for onecol.
-		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"4" from2: type:INT64 value:"5" toc: type:VARBINARY value:"\x16k@\xb4J\xbaK\xd6" true`,
-		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\x16k@\xb4J\xbaK\xd6" true`,
+		fmt.Sprintf(`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: %v from2: %v toc: %v true`, sqltypes.Int64BindVariable(4), sqltypes.Int64BindVariable(5), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")}),
+		fmt.Sprintf(`Execute delete from lkp1 where from = :from and toc = :toc from: %v toc: %v true`, sqltypes.Int64BindVariable(6), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")}),
 		// Finally, the actual delete, which is also sent to -20, same route as the subquery.
 		`ExecuteMultiShard sharded.-20: dummy_delete {} true true`,
 	})
@@ -235,7 +236,7 @@ func TestDeleteOwnedVindex(t *testing.T) {
 	_, err = del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations sharded [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		fmt.Sprintf(`ResolveDestinations sharded [%v] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`, sqltypes.Int64BindVariable(1)),
 		// ResolveDestinations is hard-coded to return -20.
 		// It gets used to perform the subquery to fetch the changing column values.
 		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
@@ -258,16 +259,16 @@ func TestDeleteOwnedVindex(t *testing.T) {
 	_, err = del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations sharded [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		fmt.Sprintf(`ResolveDestinations sharded [%v] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`, sqltypes.Int64BindVariable(1)),
 		// ResolveDestinations is hard-coded to return -20.
 		// It gets used to perform the subquery to fetch the changing column values.
 		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
 		// Delete 4,5 and 7,8 from lkp2.
 		// Delete 6 and 8 from lkp1.
-		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"4" from2: type:INT64 value:"5" toc: type:VARBINARY value:"\x16k@\xb4J\xbaK\xd6" true`,
-		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\x16k@\xb4J\xbaK\xd6" true`,
-		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"7" from2: type:INT64 value:"8" toc: type:VARBINARY value:"\x16k@\xb4J\xbaK\xd6" true`,
-		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"9" toc: type:VARBINARY value:"\x16k@\xb4J\xbaK\xd6" true`,
+		fmt.Sprintf(`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: %v from2: %v toc: %v true`, sqltypes.Int64BindVariable(4), sqltypes.Int64BindVariable(5), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")}),
+		fmt.Sprintf(`Execute delete from lkp1 where from = :from and toc = :toc from: %v toc: %v true`, sqltypes.Int64BindVariable(6), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")}),
+		fmt.Sprintf(`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: %v from2: %v toc: %v true`, sqltypes.Int64BindVariable(7), sqltypes.Int64BindVariable(8), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")}),
+		fmt.Sprintf(`Execute delete from lkp1 where from = :from and toc = :toc from: %v toc: %v true`, sqltypes.Int64BindVariable(9), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")}),
 		// Send the DML.
 		`ExecuteMultiShard sharded.-20: dummy_delete {} true true`,
 	})
@@ -311,7 +312,7 @@ func TestDeleteOwnedVindexMultiCol(t *testing.T) {
 		// It gets used to perform the subquery to fetch the changing column values.
 		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
 		// 4 returned for lkp_rg.
-		`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: type:INT64 value:"4" toc: type:VARBINARY value:"\x01\x06\xe7\xea\"Βp\x8f" true`,
+		fmt.Sprintf(`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: %v toc: %v true`, sqltypes.Int64BindVariable(4), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x01\x06\xe7\xea\"Βp\x8f")}),
 		// Finally, the actual delete, which is also sent to -20, same route as the subquery.
 		`ExecuteMultiShard sharded.-20: dummy_delete {} true true`,
 	})
@@ -350,8 +351,8 @@ func TestDeleteOwnedVindexMultiCol(t *testing.T) {
 		// It gets used to perform the subquery to fetch the changing column values.
 		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
 		// Delete 4 and 6 from lkp_rg.
-		`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: type:INT64 value:"4" toc: type:VARBINARY value:"\x01\x06\xe7\xea\"Βp\x8f" true`,
-		`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\x01\x06\xe7\xea\"Βp\x8f" true`,
+		fmt.Sprintf(`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: %v toc: %v true`, sqltypes.Int64BindVariable(4), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x01\x06\xe7\xea\"Βp\x8f")}),
+		fmt.Sprintf(`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: %v toc: %v true`, sqltypes.Int64BindVariable(6), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x01\x06\xe7\xea\"Βp\x8f")}),
 		// Send the DML.
 		`ExecuteMultiShard sharded.-20: dummy_delete {} true true`,
 	})
@@ -446,8 +447,8 @@ func TestDeleteScatterOwnedVindex(t *testing.T) {
 		// It gets used to perform the subquery to fetch the changing column values.
 		`ExecuteMultiShard sharded.-20: dummy_subquery {} sharded.20-: dummy_subquery {} false false`,
 		// Those values are returned as 4,5 for twocol and 6 for onecol.
-		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"4" from2: type:INT64 value:"5" toc: type:VARBINARY value:"\x16k@\xb4J\xbaK\xd6" true`,
-		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\x16k@\xb4J\xbaK\xd6" true`,
+		fmt.Sprintf(`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: %v from2: %v toc: %v true`, sqltypes.Int64BindVariable(4), sqltypes.Int64BindVariable(5), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")}),
+		fmt.Sprintf(`Execute delete from lkp1 where from = :from and toc = :toc from: %v toc: %v true`, sqltypes.Int64BindVariable(6), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")}),
 		// Finally, the actual delete, which is also sent to -20, same route as the subquery.
 		`ExecuteMultiShard sharded.-20: dummy_delete {} sharded.20-: dummy_delete {} true false`,
 	})
@@ -487,10 +488,10 @@ func TestDeleteScatterOwnedVindex(t *testing.T) {
 		`ExecuteMultiShard sharded.-20: dummy_subquery {} sharded.20-: dummy_subquery {} false false`,
 		// Delete 4,5 and 7,8 from lkp2.
 		// Delete 6 and 8 from lkp1.
-		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"4" from2: type:INT64 value:"5" toc: type:VARBINARY value:"\x16k@\xb4J\xbaK\xd6" true`,
-		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\x16k@\xb4J\xbaK\xd6" true`,
-		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"7" from2: type:INT64 value:"8" toc: type:VARBINARY value:"\x16k@\xb4J\xbaK\xd6" true`,
-		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"9" toc: type:VARBINARY value:"\x16k@\xb4J\xbaK\xd6" true`,
+		fmt.Sprintf(`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: %v from2: %v toc: %v true`, sqltypes.Int64BindVariable(4), sqltypes.Int64BindVariable(5), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")}),
+		fmt.Sprintf(`Execute delete from lkp1 where from = :from and toc = :toc from: %v toc: %v true`, sqltypes.Int64BindVariable(6), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")}),
+		fmt.Sprintf(`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: %v from2: %v toc: %v true`, sqltypes.Int64BindVariable(7), sqltypes.Int64BindVariable(8), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")}),
+		fmt.Sprintf(`Execute delete from lkp1 where from = :from and toc = :toc from: %v toc: %v true`, sqltypes.Int64BindVariable(9), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")}),
 		// Send the DML.
 		`ExecuteMultiShard sharded.-20: dummy_delete {} sharded.20-: dummy_delete {} true false`,
 	})
@@ -539,12 +540,12 @@ func TestDeleteInChangedVindexMultiCol(t *testing.T) {
 		// It gets used to perform the subquery to fetch the changing column values.
 		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
 		// Those values are returned as 4,5,6 and 7 for colc
-		`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: type:INT64 value:"4" toc: type:VARBINARY value:"\x01N\xb1\x90ɢ\xfa\x16\x9c" true`,
-		`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: type:INT64 value:"5" toc: type:VARBINARY value:"\x02N\xb1\x90ɢ\xfa\x16\x9c" true`,
-		`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\x01N\xb1\x90ɢ\xfa\x16\x9c" true`,
-		`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: type:INT64 value:"7" toc: type:VARBINARY value:"\x02N\xb1\x90ɢ\xfa\x16\x9c" true`,
+		fmt.Sprintf(`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: %v toc: %v true`, sqltypes.Int64BindVariable(4), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x01N\xb1\x90ɢ\xfa\x16\x9c")}),
+		fmt.Sprintf(`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: %v toc: %v true`, sqltypes.Int64BindVariable(5), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x02N\xb1\x90ɢ\xfa\x16\x9c")}),
+		fmt.Sprintf(`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: %v toc: %v true`, sqltypes.Int64BindVariable(6), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x01N\xb1\x90ɢ\xfa\x16\x9c")}),
+		fmt.Sprintf(`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: %v toc: %v true`, sqltypes.Int64BindVariable(7), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x02N\xb1\x90ɢ\xfa\x16\x9c")}),
 		// Finally, the actual delete, which is also sent to -20, same route as the subquery.
-		`ExecuteMultiShard sharded.-20: dummy_update {__vals0: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"}} true true`,
+		fmt.Sprintf(`ExecuteMultiShard sharded.-20: dummy_update {__vals0: %v} true true`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_INT64, Value: []byte("1")}, {Type: querypb.Type_INT64, Value: []byte("2")}}}),
 	})
 }
 
@@ -607,7 +608,7 @@ func TestDeleteMultiEqual(t *testing.T) {
 	_, err := del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations sharded [type:INT64 value:"1" type:INT64 value:"5"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(70bb023c810ca87a)`,
+		fmt.Sprintf(`ResolveDestinations sharded [%v %v] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(70bb023c810ca87a)`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(5)),
 		`ExecuteMultiShard sharded.-20: dummy_delete {} sharded.20-: dummy_delete {} true false`,
 	})
 }
@@ -640,7 +641,7 @@ func TestDeleteInUnique(t *testing.T) {
 	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{"__vals": tupleBV}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations sharded [type:INT64 value:"1" type:INT64 value:"2" type:INT64 value:"4"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(d2fd8867d50d2dfe)`,
-		`ExecuteMultiShard sharded.-20: delete t where id in ::__vals {__vals: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"4"}} sharded.20-: delete t where id in ::__vals {__vals: type:TUPLE values:{type:INT64 value:"2"}} true false`,
+		fmt.Sprintf(`ResolveDestinations sharded [%v %v %v] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(d2fd8867d50d2dfe)`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(2), sqltypes.Int64BindVariable(4)),
+		fmt.Sprintf(`ExecuteMultiShard sharded.-20: delete t where id in ::__vals {__vals: %v} sharded.20-: delete t where id in ::__vals {__vals: %v} true false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_INT64, Value: []byte("1")}, {Type: querypb.Type_INT64, Value: []byte("4")}}}, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_INT64, Value: []byte("2")}}}),
 	})
 }
