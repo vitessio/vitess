@@ -1264,19 +1264,23 @@ func (mysqld *Mysqld) OnTerm(f func()) {
 }
 
 func buildLdPaths() ([]string, error) {
-	baseEnv := os.Environ()
-
 	vtMysqlRoot, err := vtenv.VtMysqlRoot()
 	if err != nil {
-		return baseEnv, err
+		return nil, fmt.Errorf("failed to get VtMysqlRoot: %w", err)
+	}
+
+	// Validate that the MySQL lib directory exists
+	libPath := fmt.Sprintf("%s/lib/mysql", vtMysqlRoot)
+	if _, err := os.Stat(libPath); err != nil {
+		return nil, fmt.Errorf("MySQL library path does not exist: %s", libPath)
 	}
 
 	ldPaths := []string{
-		fmt.Sprintf("LD_LIBRARY_PATH=%s/lib/mysql", vtMysqlRoot),
+		fmt.Sprintf("LD_LIBRARY_PATH=%s", libPath),
 		os.ExpandEnv("LD_PRELOAD=$LD_PRELOAD"),
 	}
 
-	return append(baseEnv, ldPaths...), nil
+	return ldPaths, nil
 }
 
 // GetVersionString is part of the MysqlExecutor interface.
