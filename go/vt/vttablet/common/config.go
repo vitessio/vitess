@@ -178,14 +178,14 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 			} else {
 				c.MaxTimeToRetryError = value
 			}
-		case "relay_log_max_size":
+		case "relay-log-max-size":
 			value, err := strconv.Atoi(v)
 			if err != nil {
 				errors = append(errors, getError(k, v))
 			} else {
 				c.RelayLogMaxSize = value
 			}
-		case "relay_log_max_items":
+		case "relay-log-max-items":
 			value, err := strconv.Atoi(v)
 			if err != nil {
 				errors = append(errors, getError(k, v))
@@ -265,8 +265,8 @@ func (c VReplicationConfig) Map() map[string]string {
 		"vreplication-copy-phase-duration":        c.CopyPhaseDuration.String(),
 		"vreplication-retry-delay":                c.RetryDelay.String(),
 		"vreplication-max-time-to-retry-on-error": c.MaxTimeToRetryError.String(),
-		"relay_log_max_size":                      strconv.Itoa(c.RelayLogMaxSize),
-		"relay_log_max_items":                     strconv.Itoa(c.RelayLogMaxItems),
+		"relay-log-max-size":                      strconv.Itoa(c.RelayLogMaxSize),
+		"relay-log-max-items":                     strconv.Itoa(c.RelayLogMaxItems),
 		"vreplication-replica-lag-tolerance":      c.ReplicaLagTolerance.String(),
 		"vreplication-heartbeat-update-interval":  strconv.Itoa(c.HeartbeatUpdateInterval),
 		"vreplication-store-compressed-gtid":      strconv.FormatBool(c.StoreCompressedGTID),
