@@ -73,8 +73,8 @@ func createCluster(t *testing.T, vttabletArgs ...string) func() {
 	mysqlParams = conn
 
 	return func() {
-		defer clusterInstance.Teardown()
-		defer closer()
+		clusterInstance.Teardown()
+		closer()
 	}
 }
 
@@ -118,7 +118,7 @@ func TestTransactionTimeout(t *testing.T) {
 	// Sleeping outside of query will allow the transaction killer to kill the transaction
 	utils.Exec(t, mcmp.VtConn, "begin")
 	utils.Exec(t, mcmp.VtConn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
-	time.Sleep(1 * time.Second)
+	time.Sleep(3 * time.Second)
 	_, err := utils.ExecAllowError(t, mcmp.VtConn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
 	require.ErrorContains(t, err, "Aborted")
 
@@ -127,6 +127,19 @@ func TestTransactionTimeout(t *testing.T) {
 	utils.Exec(t, mcmp.VtConn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
 	_, err = utils.ExecAllowError(t, mcmp.VtConn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(sleep(0.5))")
 	require.ErrorContains(t, err, "Query execution was interrupted")
+
+	// Get new connection
+	mcmp, closer = start(t)
+	defer closer()
+
+	// Set session transaction timeout to 0
+	utils.Exec(t, mcmp.VtConn, "set transaction_timeout=0")
+
+	// Should time out using tablet transaction timeout
+	utils.Exec(t, mcmp.VtConn, "begin")
+	utils.Exec(t, mcmp.VtConn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
+	utils.Exec(t, mcmp.VtConn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(sleep(2))")
+	utils.Exec(t, mcmp.VtConn, "commit")
 }
 
 func TestSmallerTimeout(t *testing.T) {
