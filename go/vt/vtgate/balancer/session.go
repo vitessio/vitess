@@ -25,11 +25,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/DataDog/appsec-internal-go/log"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 // tabletTypesToWatch are the tablet types that will be included in the hash rings.
@@ -54,6 +55,9 @@ type SessionBalancer struct {
 	// externalRings are the hash rings created for each target. It contains only tablets
 	// external to localCell.
 	externalRings map[discovery.KeyspaceShardTabletType]*hashRing
+
+	// tabletMap is a map of all the tablets by alias currently in any of the hash rings.
+	tabletMap map[string]*discovery.TabletHealth
 }
 
 // NewSessionBalancer creates a new session balancer.
@@ -63,6 +67,7 @@ func NewSessionBalancer(ctx context.Context, localCell string, topoServer srvtop
 		hc:            hc,
 		localRings:    make(map[discovery.KeyspaceShardTabletType]*hashRing),
 		externalRings: make(map[discovery.KeyspaceShardTabletType]*hashRing),
+		tabletMap:     make(map[string]*discovery.TabletHealth),
 	}
 
 	// Set up health check subscription
@@ -150,18 +155,49 @@ func (b *SessionBalancer) onTabletHealthChange(tablet *discovery.TabletHealth) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	var ring *hashRing
-	if tablet.Target.Cell == b.localCell {
-		ring = getOrCreateRing(b.localRings, tablet)
-	} else {
-		ring = getOrCreateRing(b.externalRings, tablet)
+	// Remove this tablet from other ring in case the target has changed. This can happen in
+	// a reparent for example, where the same tablet of target REPLICA now has a target of
+	// PRIMARY, and vice versa.
+	oldTablet, exists := b.tabletMap[topoproto.TabletAliasString(tablet.Tablet.Alias)]
+	if exists {
+		oldTarget := discovery.KeyFromTarget(oldTablet.Target)
+		newTarget := discovery.KeyFromTarget(tablet.Target)
+
+		if oldTarget != newTarget {
+			b.removeFromRing(oldTablet)
+		}
 	}
 
 	if tablet.Serving {
-		ring.add(tablet)
+		b.addToRing(tablet)
 	} else {
-		ring.remove(tablet)
+		b.removeFromRing(tablet)
 	}
+}
+
+// addToRing adds a tablet to the appropriate (local or external) ring.
+func (b *SessionBalancer) addToRing(tablet *discovery.TabletHealth) {
+	ring := b.getRing(tablet)
+
+	ring.add(tablet)
+	b.tabletMap[topoproto.TabletAliasString(tablet.Tablet.Alias)] = tablet
+}
+
+// removeFromRing removes a tablet from the appropriate (local or external) ring.
+func (b *SessionBalancer) removeFromRing(tablet *discovery.TabletHealth) {
+	ring := b.getRing(tablet)
+
+	ring.remove(tablet)
+	delete(b.tabletMap, topoproto.TabletAliasString(tablet.Tablet.Alias))
+}
+
+// getRing gets the appropriate (local or external) ring for the tablet.
+func (b *SessionBalancer) getRing(tablet *discovery.TabletHealth) *hashRing {
+	if tablet.Target.Cell == b.localCell {
+		return getOrCreateRing(b.localRings, tablet)
+	}
+
+	return getOrCreateRing(b.externalRings, tablet)
 }
 
 // getOrCreateRing gets or creates a new ring for the given tablet.
