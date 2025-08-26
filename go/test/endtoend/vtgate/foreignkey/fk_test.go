@@ -1504,3 +1504,14 @@ create table temp2(id bigint auto_increment primary key, col varchar(20) not nul
 	mcmp.Exec(`insert into temp1(col) values('a') `)
 	mcmp.ExecAllowAndCompareError(`insert into temp1(col) values('d') `, utils.CompareOptions{})
 }
+
+// TestRestrictFkOnNonStandardKey verifies that restrict_fk_on_non_standard_key is set to off
+func TestRestrictFkOnNonStandardKey(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	// Check the setting on the MySQL side - this verifies that our extra_my.cnf is being applied
+	result := utils.Exec(t, mcmp.MySQLConn, `SHOW VARIABLES LIKE 'restrict_fk_on_non_standard_key'`)
+	require.Equal(t, 1, len(result.Rows), "Expected exactly one row for restrict_fk_on_non_standard_key variable")
+	require.Equal(t, "OFF", result.Rows[0][1].ToString(), "Expected restrict_fk_on_non_standard_key to be OFF")
+}

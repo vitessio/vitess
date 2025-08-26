@@ -101,11 +101,18 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
+		// Setup EXTRA_MY_CNF for foreign key tests
+		err := setupExtraMyConfig()
+		if err != nil {
+			fmt.Printf("Failed to setup extra MySQL config: %v\n", err)
+			return 1
+		}
+
 		clusterInstance = cluster.NewCluster(Cell, "localhost")
 		defer clusterInstance.Teardown()
 
 		// Start topo server
-		err := clusterInstance.StartTopo()
+		err = clusterInstance.StartTopo()
 		if err != nil {
 			return 1
 		}
@@ -231,4 +238,18 @@ func clearOutAllData(t testing.TB, vtConn *mysql.Conn, mysqlConn *mysql.Conn) {
 			_, _ = utils.ExecAllowError(t, mysqlConn, "delete /*+ SET_VAR(foreign_key_checks=OFF) */ from "+table)
 		}
 	}
+}
+
+// setupExtraMyConfig sets the EXTRA_MY_CNF environment variable to point to our static config file
+func setupExtraMyConfig() error {
+	// Get the absolute path to the config file in the same directory as this test
+	configPath := "go/test/endtoend/vtgate/foreignkey/extra_my.cnf"
+
+	// Set the environment variable
+	err := os.Setenv("EXTRA_MY_CNF", configPath)
+	if err != nil {
+		return fmt.Errorf("failed to set EXTRA_MY_CNF environment variable: %v", err)
+	}
+
+	return nil
 }
