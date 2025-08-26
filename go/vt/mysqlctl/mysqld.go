@@ -1243,6 +1243,11 @@ func (mysqld *Mysqld) GetAllPrivsConnection(ctx context.Context) (*dbconnpool.DB
 	return dbconnpool.NewDBConnection(ctx, mysqld.dbcfgs.AllPrivsWithDB())
 }
 
+// GetAllPrivsConnection creates a new DBConnection.
+func (mysqld *Mysqld) GetFilteredConnection(ctx context.Context) (*dbconnpool.DBConnection, error) {
+	return dbconnpool.NewDBConnection(ctx, mysqld.dbcfgs.FilteredWithDB())
+}
+
 // Close will close this instance of Mysqld. It will wait for all dba
 // queries to be finished.
 func (mysqld *Mysqld) Close() {

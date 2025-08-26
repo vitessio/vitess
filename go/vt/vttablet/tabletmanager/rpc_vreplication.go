@@ -910,7 +910,7 @@ func (tm *TabletManager) ValidateVReplicationPermissionsOld(ctx context.Context,
 func (tm *TabletManager) ValidateVReplicationPermissions(ctx context.Context, req *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (*tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, error) {
 	log.Infof("Validating VReplication permissions on sidecar db %s", tm.tabletAlias)
 
-	conn, err := tm.MysqlDaemon.GetAllPrivsConnection(ctx)
+	conn, err := tm.MysqlDaemon.GetFilteredConnection(ctx)
 	if err != nil {
 		return nil, err
 	}
