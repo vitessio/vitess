@@ -60,7 +60,7 @@ func TestFileLog(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		time.Sleep(10 * time.Millisecond)
 
-		want := "\t\t\t''\t''\t0001-01-01 00:00:00.000000\t0001-01-01 00:00:00.000000\t0.000000\t\t\"test 1\"\tmap[]\t1\t\"test 1 PII\"\tmysql\t0.000000\t0.000000\t0\t0\t0\t\"\"\t\n\t\t\t''\t''\t0001-01-01 00:00:00.000000\t0001-01-01 00:00:00.000000\t0.000000\t\t\"test 2\"\tmap[]\t1\t\"test 2 PII\"\tmysql\t0.000000\t0.000000\t0\t0\t0\t\"\"\t\n"
+		want := "\t\t\t''\t''\t0001-01-01 00:00:00.000000\t0001-01-01 00:00:00.000000\t0.000000\t\t\"test 1\"\tmap[]\t1\t\"test 1 PII\"\tmysql\t0.000000\t0.000000\t0\t0\t0\t\"\"\t\"\"\t\n\t\t\t''\t''\t0001-01-01 00:00:00.000000\t0001-01-01 00:00:00.000000\t0.000000\t\t\"test 2\"\tmap[]\t1\t\"test 2 PII\"\tmysql\t0.000000\t0.000000\t0\t0\t0\t\"\"\t\"\"\t\n"
 		contents, _ := os.ReadFile(logPath)
 		got := string(contents)
 		if want == got {
@@ -110,7 +110,7 @@ func TestFileLogRedacted(t *testing.T) {
 	// Allow time for propagation
 	time.Sleep(10 * time.Millisecond)
 
-	want := "\t\t\t''\t''\t0001-01-01 00:00:00.000000\t0001-01-01 00:00:00.000000\t0.000000\t\t\"test 1\"\t\"[REDACTED]\"\t1\t\"[REDACTED]\"\tmysql\t0.000000\t0.000000\t0\t0\t0\t\"\"\t\n\t\t\t''\t''\t0001-01-01 00:00:00.000000\t0001-01-01 00:00:00.000000\t0.000000\t\t\"test 2\"\t\"[REDACTED]\"\t1\t\"[REDACTED]\"\tmysql\t0.000000\t0.000000\t0\t0\t0\t\"\"\t\n"
+	want := "\t\t\t''\t''\t0001-01-01 00:00:00.000000\t0001-01-01 00:00:00.000000\t0.000000\t\t\"test 1\"\t\"[REDACTED]\"\t1\t\"[REDACTED]\"\tmysql\t0.000000\t0.000000\t0\t0\t0\t\"\"\t\"\"\t\n\t\t\t''\t''\t0001-01-01 00:00:00.000000\t0001-01-01 00:00:00.000000\t0.000000\t\t\"test 2\"\t\"[REDACTED]\"\t1\t\"[REDACTED]\"\tmysql\t0.000000\t0.000000\t0\t0\t0\t\"\"\t\"\"\t\n"
 	contents, _ := os.ReadFile(logPath)
 	got := string(contents)
 	if want != string(got) {

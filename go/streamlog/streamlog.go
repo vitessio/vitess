@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -49,12 +50,13 @@ var (
 )
 
 var (
-	redactDebugUIQueries  bool
-	queryLogFilterTag     string
-	queryLogRowThreshold  uint64
-	queryLogTimeThreshold time.Duration
-	queryLogFormat        = "text"
-	queryLogSampleRate    float64
+	redactDebugUIQueries          bool
+	queryLogFilterTag             string
+	queryLogRowThreshold          uint64
+	queryLogTimeThreshold         time.Duration
+	queryLogFormat                = "text"
+	queryLogSampleRate            float64
+	queryLogEmitOnAnyConditionMet bool
 )
 
 func GetRedactDebugUIQueries() bool {
@@ -79,6 +81,10 @@ func SetQueryLogTimeThreshold(newQueryLogTimeThreshold time.Duration) {
 
 func SetQueryLogSampleRate(sampleRate float64) {
 	queryLogSampleRate = sampleRate
+}
+
+func SetQueryLogEmitOnAnyConditionMet(newQueryLogEmitOnAnyConditionMet bool) {
+	queryLogEmitOnAnyConditionMet = newQueryLogEmitOnAnyConditionMet
 }
 
 func GetQueryLogFormat() string {
@@ -113,6 +119,9 @@ func registerStreamLogFlags(fs *pflag.FlagSet) {
 
 	// QueryLogSampleRate causes a sample of queries to be logged
 	fs.Float64Var(&queryLogSampleRate, "querylog-sample-rate", queryLogSampleRate, "Sample rate for logging queries. Value must be between 0.0 (no logging) and 1.0 (all queries)")
+
+	// EmitOnAnyConditionMet logs queries on any condition met (time/row/filtertag)
+	fs.BoolVar(&queryLogEmitOnAnyConditionMet, "querylog-emit-on-any-condition-met", queryLogEmitOnAnyConditionMet, "Emit to query log when any of the conditions (row-threshold, time-threshold, filter-tag) is met (default false)")
 }
 
 const (
@@ -143,6 +152,17 @@ func New[T any](name string, size int) *StreamLogger[T] {
 		name:       name,
 		size:       size,
 		subscribed: make(map[chan T]string),
+	}
+}
+
+// helper function to compose both aCond and its reason and aggregate the result inal allMatches and reasons variable
+func shouldEmitLogOnCondition(aCond bool, aReason string, allMatches bool, reasons []string) (bool, string, bool, []string) {
+	allMatches = allMatches || aCond
+	if aCond {
+		reasons = append(reasons, aReason)
+		return aCond, aReason, allMatches, reasons
+	} else {
+		return aCond, "", allMatches, reasons
 	}
 }
 
@@ -278,18 +298,45 @@ func shouldSampleQuery() bool {
 
 // ShouldEmitLog returns whether the log with the given SQL query
 // should be emitted or filtered
-func ShouldEmitLog(sql string, rowsAffected, rowsReturned uint64, totalTime time.Duration) bool {
-	if shouldSampleQuery() {
-		return true
+// It also returns an EmitReason which is a comma-separated-string to indicate all the conditions triggered for log emit.
+// If both TimeThreshold and FilterTag condition are met, EmitReason will be time,filtertag
+func ShouldEmitLog(sql string, rowsAffected, rowsReturned uint64, totalTime time.Duration) (bool, string) {
+	var aMatch, allMatches bool
+	var aReason string
+	reasons := []string{}
+
+	aMatch, aReason, allMatches, reasons = shouldEmitLogOnCondition(shouldSampleQuery(), "sample", allMatches, reasons)
+	if aMatch && !queryLogEmitOnAnyConditionMet {
+		return aMatch, aReason
 	}
-	if queryLogRowThreshold > max(rowsAffected, rowsReturned) && queryLogFilterTag == "" {
-		return false
+
+	if queryLogRowThreshold > 0 {
+		aMatch, _, allMatches, reasons = shouldEmitLogOnCondition(queryLogRowThreshold <= max(rowsAffected, rowsReturned), "row", allMatches, reasons)
+		if !aMatch && !queryLogEmitOnAnyConditionMet && queryLogFilterTag == "" {
+			return false, ""
+		}
 	}
-	if queryLogTimeThreshold > totalTime && queryLogTimeThreshold > 0 && queryLogFilterTag == "" {
-		return false
+
+	if queryLogTimeThreshold > 0 {
+		aMatch, _, allMatches, reasons = shouldEmitLogOnCondition(queryLogTimeThreshold <= totalTime, "time", allMatches, reasons)
+		if !aMatch && !queryLogEmitOnAnyConditionMet && queryLogFilterTag == "" {
+			return false, ""
+		}
 	}
+
 	if queryLogFilterTag != "" {
-		return strings.Contains(sql, queryLogFilterTag)
+		aMatch, aReason, allMatches, reasons = shouldEmitLogOnCondition(strings.Contains(sql, queryLogFilterTag), "filtertag", allMatches, reasons)
+		if !queryLogEmitOnAnyConditionMet {
+			return aMatch, aReason
+		}
 	}
-	return true
+
+	// sort the array to make the reason string content deterministic
+	sort.Strings(reasons)
+	reasonStr := strings.Join(reasons, ",")
+	if queryLogEmitOnAnyConditionMet {
+		return allMatches, reasonStr
+	} else {
+		return true, reasonStr
+	}
 }
