@@ -25,7 +25,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/DataDog/appsec-internal-go/log"
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
@@ -33,7 +32,7 @@ import (
 )
 
 // tabletTypesToWatch are the tablet types that will be included in the hash rings.
-var tabletTypesToWatch = []topodata.TabletType{topodata.TabletType_PRIMARY, topodata.TabletType_REPLICA, topodata.TabletType_BATCH}
+var tabletTypesToWatch = map[topodata.TabletType]struct{}{topodata.TabletType_REPLICA: {}, topodata.TabletType_RDONLY: {}}
 
 // SessionBalancer implements the TabletBalancer interface. For a given session,
 // it will return the same tablet for its duration, with preference to tablets in
@@ -71,7 +70,7 @@ func NewSessionBalancer(ctx context.Context, localCell string, topoServer srvtop
 	// Build initial hash rings
 
 	// Find all the targets we're watching
-	targets, _, err := srvtopo.FindAllTargetsAndKeyspaces(ctx, topoServer, b.localCell, discovery.KeyspacesToWatch, tabletTypesToWatch)
+	targets, _, err := srvtopo.FindAllTargetsAndKeyspaces(ctx, topoServer, b.localCell, discovery.KeyspacesToWatch, slices.Collect(maps.Keys(tabletTypesToWatch)))
 	if err != nil {
 		return nil, fmt.Errorf("session balancer: failed to find all targets and keyspaces: %w", err)
 	}
@@ -85,7 +84,7 @@ func NewSessionBalancer(ctx context.Context, localCell string, topoServer srvtop
 	}
 
 	// Start watcher to keep track of tablet health
-	go b.watchHealthCheck(ctx, topoServer, hcChan)
+	go b.watchHealthCheck(ctx, hcChan)
 
 	return b, nil
 }
@@ -127,7 +126,7 @@ func (b *SessionBalancer) DebugHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // watchHealthCheck watches the health check channel for tablet health changes, and updates hash rings accordingly.
-func (b *SessionBalancer) watchHealthCheck(ctx context.Context, topoServer srvtopo.Server, hcChan chan *discovery.TabletHealth) {
+func (b *SessionBalancer) watchHealthCheck(ctx context.Context, hcChan chan *discovery.TabletHealth) {
 	// Start watching health check channel for future tablet health changes
 	for {
 		select {
@@ -136,6 +135,11 @@ func (b *SessionBalancer) watchHealthCheck(ctx context.Context, topoServer srvto
 			return
 		case tablet := <-hcChan:
 			if tablet == nil {
+				return
+			}
+
+			// Ignore tablets we aren't supposed to watch
+			if _, ok := tabletTypesToWatch[tablet.Target.TabletType]; !ok {
 				return
 			}
 

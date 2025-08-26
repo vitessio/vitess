@@ -581,6 +581,106 @@ func TestPickInvalidTablets(t *testing.T) {
 	require.Nil(t, tablet3)
 }
 
+func TestTabletTypesToWatch(t *testing.T) {
+	b, hcChan := newSessionBalancer(t)
+
+	// Valid tablet type
+	localTablet := &discovery.TabletHealth{
+		Tablet: &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "local",
+				Uid:  100,
+			},
+			Keyspace: "keyspace",
+			Shard:    "0",
+		},
+		Target: &querypb.Target{
+			Keyspace:   "keyspace",
+			Shard:      "0",
+			TabletType: topodatapb.TabletType_REPLICA,
+			Cell:       "local",
+		},
+		Serving: true,
+	}
+
+	// Valid tablet type
+	localTablet2 := &discovery.TabletHealth{
+		Tablet: &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "local",
+				Uid:  101,
+			},
+			Keyspace: "keyspace",
+			Shard:    "0",
+		},
+		Target: &querypb.Target{
+			Keyspace:   "keyspace",
+			Shard:      "0",
+			TabletType: topodatapb.TabletType_RDONLY,
+			Cell:       "local",
+		},
+		Serving: true,
+	}
+
+	// Invalid tablet type
+	localTablet3 := &discovery.TabletHealth{
+		Tablet: &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "local",
+				Uid:  101,
+			},
+			Keyspace: "keyspace",
+			Shard:    "0",
+		},
+		Target: &querypb.Target{
+			Keyspace:   "keyspace",
+			Shard:      "0",
+			TabletType: topodatapb.TabletType_PRIMARY,
+			Cell:       "local",
+		},
+		Serving: true,
+	}
+
+	// Invalid tablet type
+	localTablet4 := &discovery.TabletHealth{
+		Tablet: &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "local",
+				Uid:  101,
+			},
+			Keyspace: "keyspace",
+			Shard:    "0",
+		},
+		Target: &querypb.Target{
+			Keyspace:   "keyspace",
+			Shard:      "0",
+			TabletType: topodatapb.TabletType_BACKUP,
+			Cell:       "local",
+		},
+		Serving: true,
+	}
+
+	hcChan <- localTablet
+	hcChan <- localTablet2
+	hcChan <- localTablet3
+	hcChan <- localTablet4
+
+	// Give a moment for the worker to process the tablets
+	time.Sleep(100 * time.Millisecond)
+
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	require.Len(t, b.localRings, 2)
+	require.Len(t, b.externalRings, 0)
+
+	for _, ring := range b.localRings {
+		for _, tablet := range ring.nodeMap {
+			require.Contains(t, tabletTypesToWatch, tablet.Target.TabletType)
+		}
+	}
+}
+
 func buildOpts(uuid string) *PickOpts {
 	return &PickOpts{SessionUUID: uuid}
 }
