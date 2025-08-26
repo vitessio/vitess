@@ -920,7 +920,10 @@ func (tm *TabletManager) ValidateVReplicationPermissions(ctx context.Context, re
 		return nil, vterrors.Wrap(err, "failed to start transaction for permission testing")
 	}
 	defer func() {
-		conn.ExecuteFetch("ROLLBACK", 1, false)
+		_, err := conn.ExecuteFetch("ROLLBACK", 1, false)
+		if err != nil {
+			log.Warningf("failed to rollback transaction after permission testing: %v", err)
+		}
 	}()
 
 	// Create a unique test workflow name to avoid conflicts using timestamp and random component
