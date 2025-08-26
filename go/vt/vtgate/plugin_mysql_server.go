@@ -29,7 +29,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cespare/xxhash/v2"
 	"github.com/google/uuid"
 	"github.com/spf13/pflag"
 
