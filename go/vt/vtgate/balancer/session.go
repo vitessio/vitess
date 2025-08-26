@@ -26,7 +26,6 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -71,15 +70,14 @@ func NewSessionBalancer(ctx context.Context, localCell string, topoServer srvtop
 	}
 
 	// Set up health check subscription
-	go b.watchHealthCheck(ctx, topoServer)
+	hcChan := b.hc.Subscribe("SessionBalancer")
 
 	// Build initial hash rings
 
 	// Find all the targets we're watching
 	targets, _, err := srvtopo.FindAllTargetsAndKeyspaces(ctx, topoServer, b.localCell, discovery.KeyspacesToWatch, tabletTypesToWatch)
 	if err != nil {
-		log.Errorf("session balancer: failed to find all targets and keyspaces: %q", err)
-		return nil, err
+		return nil, fmt.Errorf("session balancer: failed to find all targets and keyspaces: %w", err)
 	}
 
 	// Add each tablet to the hash ring
@@ -89,6 +87,9 @@ func NewSessionBalancer(ctx context.Context, localCell string, topoServer srvtop
 			b.onTabletHealthChange(tablet)
 		}
 	}
+
+	// Start watcher to keep track of tablet health
+	go b.watchHealthCheck(ctx, topoServer, hcChan)
 
 	return b, nil
 }
@@ -130,9 +131,8 @@ func (b *SessionBalancer) DebugHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // watchHealthCheck watches the health check channel for tablet health changes, and updates hash rings accordingly.
-func (b *SessionBalancer) watchHealthCheck(ctx context.Context, topoServer srvtopo.Server) {
+func (b *SessionBalancer) watchHealthCheck(ctx context.Context, topoServer srvtopo.Server, hcChan chan *discovery.TabletHealth) {
 	// Start watching health check channel for future tablet health changes
-	hcChan := b.hc.Subscribe("SessionBalancer")
 	for {
 		select {
 		case <-ctx.Done():
