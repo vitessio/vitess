@@ -584,7 +584,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 	if capabilities&CapabilityClientConnAttr != 0 && len(attributes) > 0 {
 		capabilityFlags |= CapabilityClientConnAttr
 		for key, value := range attributes {
-			attrLength += lenEncIntSize(uint64(len(key))) + len(key) + lenEncIntSize(uint64(len(value))) + len(value)
+			attrLength += lenEncStringSize(key) + lenEncStringSize(value)
 		}
 		length += lenEncIntSize(uint64(attrLength)) + attrLength
 	}
@@ -630,10 +630,8 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 		pos = writeLenEncInt(data, pos, uint64(attrLength))
 
 		for key, value := range attributes {
-			pos = writeLenEncInt(data, pos, uint64(len(key)))
-			pos += copy(data[pos:], key)
-			pos = writeLenEncInt(data, pos, uint64(len(value)))
-			pos += copy(data[pos:], value)
+			pos = writeLenEncString(data, pos, key)
+			pos = writeLenEncString(data, pos, value)
 		}
 	}
 
