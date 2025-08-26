@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/log"
 )
 
 var (
@@ -243,13 +244,25 @@ func clearOutAllData(t testing.TB, vtConn *mysql.Conn, mysqlConn *mysql.Conn) {
 // setupExtraMyConfig sets the EXTRA_MY_CNF environment variable to point to our static config file
 func setupExtraMyConfig() error {
 	// Get the absolute path to the config file in the same directory as this test
-	configPath := "go/test/endtoend/vtgate/foreignkey/extra_my.cnf"
+	wd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get working directory: %v", err)
+	}
+
+	// The config file is in the same directory as this test file
+	configPath := fmt.Sprintf("%s/extra_my.cnf", wd)
+
+	// Verify the file exists
+	if _, err := os.Stat(configPath); err != nil {
+		return fmt.Errorf("config file does not exist at %s: %v", configPath, err)
+	}
 
 	// Set the environment variable
-	err := os.Setenv("EXTRA_MY_CNF", configPath)
+	err = os.Setenv("EXTRA_MY_CNF", configPath)
 	if err != nil {
 		return fmt.Errorf("failed to set EXTRA_MY_CNF environment variable: %v", err)
 	}
 
+	log.Infof("Set EXTRA_MY_CNF to: %s", configPath)
 	return nil
 }
