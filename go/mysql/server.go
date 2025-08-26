@@ -828,49 +828,31 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 }
 
 func parseConnAttrs(data []byte, pos int) (ConnectionAttributes, int, error) {
-	var attrLen uint64
+	attrs := make(map[string]string)
 
 	attrLen, pos, ok := readLenEncInt(data, pos)
 	if !ok {
 		return nil, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read connection attributes variable length")
 	}
 
-	var attrLenRead uint64
+	addrEndPos := pos + int(attrLen)
 
-	attrs := make(map[string]string)
-
-	for attrLenRead < attrLen {
-		var keyLen uint64
-		keyLen, pos, ok = readLenEncInt(data, pos)
-		if !ok {
-			return nil, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read connection attribute key length")
-		}
-		attrLenRead += uint64(keyLen) + uint64(lenEncIntSize(uint64(keyLen)))
-
-		var connAttrKey []byte
-		connAttrKey, pos, ok = readBytes(data, pos, int(keyLen))
+	var key, value string
+	for pos < addrEndPos {
+		key, pos, ok = readLenEncString(data, pos)
 		if !ok {
 			return nil, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read connection attribute key")
 		}
 
-		var valLen uint64
-		valLen, pos, ok = readLenEncInt(data, pos)
-		if !ok {
-			return nil, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read connection attribute value length")
-		}
-		attrLenRead += uint64(valLen) + uint64(lenEncIntSize(uint64(valLen)))
-
-		var connAttrVal []byte
-		connAttrVal, pos, ok = readBytes(data, pos, int(valLen))
+		value, pos, ok = readLenEncString(data, pos)
 		if !ok {
 			return nil, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read connection attribute value")
 		}
 
-		attrs[string(connAttrKey[:])] = string(connAttrVal[:])
+		attrs[key] = value
 	}
 
 	return attrs, pos, nil
-
 }
 
 // writeAuthSwitchRequest writes an auth switch request packet.
