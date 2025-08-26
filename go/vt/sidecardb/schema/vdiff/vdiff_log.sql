@@ -20,5 +20,6 @@ CREATE TABLE IF NOT EXISTS vdiff_log
     `vdiff_id`   int(11)   NOT NULL,
     `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `message`    text      NOT NULL,
-    PRIMARY KEY (`id`)
+    PRIMARY KEY (`id`),
+    KEY `vdiff_id_idx` (`vdiff_id`)
 ) ENGINE = InnoDB CHARSET = utf8mb4
