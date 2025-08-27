@@ -161,7 +161,7 @@ func run(cmd *cobra.Command, args []string) {
 	}
 }
 
-func main() {
+func registerFlags() {
 	// Common flags
 	rootCmd.Flags().StringVar(&opts.Addr, "addr", ":15000", "address to serve on")
 	rootCmd.Flags().DurationVar(&opts.CMuxReadTimeout, "lmux-read-timeout", time.Second, "how long to spend connection muxing")
@@ -221,6 +221,11 @@ func main() {
 
 	// Register TLS flags for gRPC connections to vtctld
 	grpcclientcommon.RegisterFlags(rootCmd.Flags())
+
+}
+
+func main() {
+	registerFlags()
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)
