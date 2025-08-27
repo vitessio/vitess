@@ -127,6 +127,10 @@ type Conn struct {
 	// It is set during the initial handshake.
 	UserData Getter
 
+	// ConnectionAttributes stores arbitrary client-supplied attributes sent in the
+	// connection handshake.
+	Attributes ConnectionAttributes
+
 	bufferedReader *bufio.Reader
 	flushTimer     *time.Timer
 	flushDelay     time.Duration
