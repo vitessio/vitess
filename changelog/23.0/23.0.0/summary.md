@@ -37,7 +37,7 @@ VTGate also advertises MySQL version `8.4.6` by default instead of `8.0.40`. If 
 > 1. Add `innodb_fast_shutdown=0` to your extra cnf in your YAML file.
 > 2. Apply this file.
 > 3. Wait for all the pods to be healthy.
-> 4. Then change your YAML file to use the new Docker Images (`vitess/lite:v22.0.0`).
+> 4. Then change your YAML file to use the new Docker Images (`vitess/lite:v23.0.0`).
 > 5. Remove `innodb_fast_shutdown=0` from your extra cnf in your YAML file.
 > 6. Apply this file.
 >
