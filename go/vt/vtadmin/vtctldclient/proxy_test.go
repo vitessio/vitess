@@ -29,7 +29,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
-	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 	"vitess.io/vitess/go/vt/vtctl/grpcclientcommon"
@@ -255,10 +254,6 @@ func TestDialSecureDialOptionError(t *testing.T) {
 	require.NoError(t, err)
 	tmpKey.Close()
 
-	// Test that grpcclient.SecureDialOption fails with these files
-	_, err = grpcclient.SecureDialOption(tmpCert.Name(), tmpKey.Name(), "", "", "")
-	assert.Error(t, err, "SecureDialOption should fail with invalid cert/key files")
-
 	// Now test by using command line arguments to trigger the same error in proxy.dial()
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
@@ -304,7 +299,4 @@ func TestDialSecureDialOptionError(t *testing.T) {
 
 	// The error should be from certificate parsing
 	assert.Contains(t, err.Error(), "tls")
-
-	t.Log("Successfully executed the error path on line 116 in proxy.go")
-	t.Log("Error from line 116:", err.Error())
 }
