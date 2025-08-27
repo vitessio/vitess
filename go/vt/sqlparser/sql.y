@@ -714,6 +714,7 @@ view_select_statement:
 | openb view_select_statement closeb
   {
     // Unwrap parentheses recursively for CREATE VIEW MySQL compatibility
+    // Issue: https://github.com/dolthub/dolt/issues/9738
     $$ = $2.(SelectStatement)
   }
 
