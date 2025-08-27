@@ -137,11 +137,9 @@ func (q *resilientQuery) getCurrentValue(ctx context.Context, wkey fmt.Stringer,
 					log.Errorf("ResilientQuery(%v, %v) failed: %v (request timeout), (keeping cached value: %v)", ctx, wkey, err, entry.value)
 				} else if entry.value != nil && time.Since(entry.insertionTime) < q.cacheTTL {
 					q.counts.Add(cachedCategory, 1)
-					log.Warningf("ResilientQuery(%v, %v) failed: %v (keeping cached value: %v)", ctx, wkey, err, entry.value)
+					log.Warningf("ResilientQuery(%v, %v) failed: %v (cached value still considered valid: %v)", ctx, wkey, err, entry.value)
 				} else {
 					log.Errorf("ResilientQuery(%v, %v) failed: %v (cached value expired)", ctx, wkey, err)
-					entry.insertionTime = time.Time{}
-					entry.value = nil
 				}
 			}
 
@@ -171,9 +169,9 @@ func (q *resilientQuery) getCurrentValue(ctx context.Context, wkey fmt.Stringer,
 	}
 	entry.mutex.Lock()
 
-	if entry.value != nil {
-		return entry.value, nil
+	if entry.lastError != nil {
+		return nil, entry.lastError
 	}
 
-	return nil, entry.lastError
+	return entry.value, nil
 }

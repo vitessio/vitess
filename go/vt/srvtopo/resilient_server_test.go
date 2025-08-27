@@ -608,7 +608,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 	// info, we'll get it.
 	_, err = rs.GetSrvKeyspaceNames(ctx, "test_cell", true)
 	if err != nil {
-		t.Fatalf("expected no error if asking for stale cache data")
+		t.Fatalf("expected no error if asking for stale cache data, got: %v", err)
 	}
 
 	// Now, wait long enough that with a stale ask, we'll get an error
