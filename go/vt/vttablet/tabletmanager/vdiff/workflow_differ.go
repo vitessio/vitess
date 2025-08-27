@@ -177,8 +177,10 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 		dr.ExtraRowsSource -= matchedDiffs
 		dr.ExtraRowsTarget -= matchedDiffs
 		dr.MatchingRows += matchedDiffs
-		dr.MismatchedRows -= matchedDiffs
-		dr.ProcessedRows += matchedDiffs
+
+		// We do not update `ProcessedRows` here, because any extra target or source rows are already included in it.
+		// We do not update `MismatchedRows`, because extra target or source rows are not counted as mismatches.
+
 		log.Infof("Reconciled extra rows for table %s in vdiff %s, matching rows %d, extra source rows %d, extra target rows %d. Max compared rows %d",
 			dr.TableName, wd.ct.uuid, matchedDiffs, dr.ExtraRowsSource, dr.ExtraRowsTarget, maxRows)
 	}
