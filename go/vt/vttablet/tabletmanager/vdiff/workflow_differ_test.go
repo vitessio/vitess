@@ -54,13 +54,6 @@ func TestReconcileExtraRows(t *testing.T) {
 	wd, err := newWorkflowDiffer(ct, vdiffenv.opts, collations.MySQL8())
 	require.NoError(t, err)
 
-	dr := &DiffReport{
-		TableName:            "t1",
-		ExtraRowsSourceDiffs: []*RowDiff{},
-		ExtraRowsTargetDiffs: []*RowDiff{},
-		MismatchedRowsDiffs:  nil,
-	}
-
 	type testCase struct {
 		name             string
 		maxExtras        int64
@@ -175,20 +168,25 @@ func TestReconcileExtraRows(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			dr := &DiffReport{
+				TableName:            "t1",
+				ExtraRowsSourceDiffs: tc.extraDiffsSource,
+				ExtraRowsTargetDiffs: tc.extraDiffsTarget,
+				MismatchedRowsDiffs:  nil,
+				ExtraRowsSource:      int64(len(tc.extraDiffsSource)),
+				ExtraRowsTarget:      int64(len(tc.extraDiffsTarget)),
+
+				MatchingRows:   0,
+				MismatchedRows: int64(len(tc.extraDiffsSource)),
+				ProcessedRows:  0,
+			}
+
 			maxExtras := int64(10)
 			if tc.maxExtras != 0 {
 				maxExtras = tc.maxExtras
 			}
 
-			dr.ExtraRowsSourceDiffs = tc.extraDiffsSource
-			dr.ExtraRowsTargetDiffs = tc.extraDiffsTarget
-			dr.ExtraRowsSource = int64(len(tc.extraDiffsSource))
-			dr.ExtraRowsTarget = int64(len(tc.extraDiffsTarget))
 			origExtraRowsSource := dr.ExtraRowsSource
-
-			dr.MatchingRows = 0
-			dr.MismatchedRows = dr.ExtraRowsSource
-			dr.ProcessedRows = 0
 
 			require.NoError(t, wd.doReconcileExtraRows(dr, maxExtras, maxExtras))
 
@@ -204,6 +202,58 @@ func TestReconcileExtraRows(t *testing.T) {
 			require.EqualValues(t, dr.ExtraRowsTargetDiffs, tc.wantExtraTarget)
 		})
 	}
+
+	t.Run("with `ExtraRowsSource` larger than `extraDiffsSource`", func(t *testing.T) {
+		dr := &DiffReport{
+			TableName: "t1",
+			ExtraRowsSourceDiffs: []*RowDiff{
+				{Row: map[string]string{"1": "c1"}},
+				{Row: map[string]string{"3a": "c3a"}},
+				{Row: map[string]string{"2": "c2"}},
+				{Row: map[string]string{"3b": "c3b"}},
+			},
+			ExtraRowsTargetDiffs: []*RowDiff{
+				{Row: map[string]string{"2": "c2"}},
+				{Row: map[string]string{"4a": "c4a"}},
+				{Row: map[string]string{"4b": "c4b"}},
+				{Row: map[string]string{"1": "c1"}},
+			},
+			MismatchedRowsDiffs: nil,
+
+			// Simulate having hit `maxExtraRowsToCompare`
+			ExtraRowsSource: 6,
+			ExtraRowsTarget: 4,
+		}
+
+		maxExtras := int64(4)
+		require.NoError(t, wd.doReconcileExtraRows(dr, maxExtras, maxExtras))
+	})
+
+	t.Run("with `ExtraRowsTarget` larger than `extraDiffsTarget`", func(t *testing.T) {
+		dr := &DiffReport{
+			TableName: "t1",
+			ExtraRowsSourceDiffs: []*RowDiff{
+				{Row: map[string]string{"1": "c1"}},
+				{Row: map[string]string{"3a": "c3a"}},
+				{Row: map[string]string{"2": "c2"}},
+				{Row: map[string]string{"3b": "c3b"}},
+			},
+			ExtraRowsTargetDiffs: []*RowDiff{
+				{Row: map[string]string{"2": "c2"}},
+				{Row: map[string]string{"4a": "c4a"}},
+				{Row: map[string]string{"4b": "c4b"}},
+				{Row: map[string]string{"1": "c1"}},
+			},
+			MismatchedRowsDiffs: nil,
+
+			ExtraRowsSource: 4,
+			// Simulate having hit `maxExtraRowsToCompare`
+			ExtraRowsTarget: 6,
+		}
+
+		maxExtras := int64(4)
+		require.NoError(t, wd.doReconcileExtraRows(dr, maxExtras, maxExtras))
+	})
 }
 
 func TestBuildPlanSuccess(t *testing.T) {
