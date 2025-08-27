@@ -84,18 +84,16 @@ func (q *resilientQuery) getCurrentValue(ctx context.Context, wkey fmt.Stringer,
 	}
 	shouldRefresh := time.Since(entry.lastQueryTime) > q.cacheRefreshInterval
 
-	// If it is not time to check again, then return either the cached
-	// value or the cached error but don't ask topo again.
+	// If it is not time to check again and we have a valid cached value,
+	// return it without asking topo again. For expired cached values or
+	// cached errors, fall through to wait for fresh results.
 	// Here we have to be careful with the part where we haven't gotten even the first result.
 	// In that case, a refresh is already in progress, but the cache is empty! So, we can't use the cache.
 	// We have to wait for the query's results.
 	// We know the query has run at least once if the insertionTime is non-zero, or if we have an error.
 	queryRanAtLeastOnce := !entry.insertionTime.IsZero() || entry.lastError != nil
-	if !shouldRefresh && queryRanAtLeastOnce {
-		if cacheValid {
-			return entry.value, nil
-		}
-		return nil, entry.lastError
+	if !shouldRefresh && queryRanAtLeastOnce && cacheValid {
+		return entry.value, nil
 	}
 
 	// Refresh the state in a background goroutine if no refresh is already
