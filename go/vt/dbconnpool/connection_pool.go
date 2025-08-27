@@ -47,7 +47,11 @@ func NewConnectionPool(name string, stats *servenv.Exporter, capacity int, idleT
 		MaxLifetime:     maxLifetime,
 		RefreshInterval: dnsResolutionFrequency,
 	}
-	return &ConnectionPool{ConnPool: smartconnpool.NewPool(&config)}
+	pool := &ConnectionPool{ConnPool: smartconnpool.NewPool(&config)}
+	if stats != nil && name != "" {
+		pool.ConnPool.RegisterStats(stats, name)
+	}
+	return pool
 }
 
 // Open must be called before starting to use the pool.
