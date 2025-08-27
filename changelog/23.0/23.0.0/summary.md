@@ -2,6 +2,9 @@
 
 ### Table of Contents
 
+- **[Major Changes](#major-changes)**
+    - **[New default versions](#new-default-versions)**
+        - [Upgrade to MySQL 8.4](#upgrade-to-mysql-8.4)
 - **[Minor Changes](#minor-changes)**
     - **[Deletions](#deletions)**
         - [Metrics](#deleted-metrics)
@@ -13,7 +16,32 @@
         - [Recovery stats to include keyspace/shard](#recoveries-stats-keyspace-shard)
     - **[VTTablet](#minor-changes-vttablet)**
         - [CLI Flags](#flags-vttablet)
-        - [Managed MySQL configuration defaults to caching-sha2-password](#mysql-caching-sha2-password)
+        - [Managed MySQL configuration defaults to caching-sha2-password](#mysql-caching-sha2-password) 
+        - [MySQL timezone environment propagation](#mysql-timezone-env)
+
+## <a id="major-changes"/>Major Changes</a>
+
+### <a id="new-default-versions"/>New default versions</a>
+
+#### <a id="upgrade-to-mysql-8.4"/>Upgrade to MySQL 8.4</a>
+
+The default major MySQL version used by our `vitess/lite:latest` image is going from `8.0.40` to `8.4.6`.
+This change was merged in [#18569](https://github.com/vitessio/vitess/pull/18569).
+
+VTGate also advertises MySQL version `8.4.6` by default instead of `8.0.40`. If that is not what you are running, you can set the `mysql_server_version` flag to advertise the desired version.
+
+>  ⚠️ Upgrading to this release with vitess-operator:
+>
+> If you are using the `vitess-operator`, considering that we are bumping the MySQL version from `8.0.40` to `8.4.6`, you will have to manually upgrade:
+>
+> 1. Add `innodb_fast_shutdown=0` to your extra cnf in your YAML file.
+> 2. Apply this file.
+> 3. Wait for all the pods to be healthy.
+> 4. Then change your YAML file to use the new Docker Images (`vitess/lite:v22.0.0`).
+> 5. Remove `innodb_fast_shutdown=0` from your extra cnf in your YAML file.
+> 6. Apply this file.
+>
+> This is only needed once when going from the latest `8.0.x` to `8.4.x`. Once you're on `8.4.x`, it is possible to upgrade and downgrade between `8.4.x` versions without needing to run `innodb_fast_shutdown=0`.
 
 ## <a id="minor-changes"/>Minor Changes</a>
 

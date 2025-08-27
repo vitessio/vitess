@@ -750,12 +750,12 @@
 			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_query_serving_schema"]
 		},
-		"vtgate_mysql80": {
+		"vtgate_mysql84": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/mysql80"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/mysql84"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "mysql80",
+			"Shard": "mysql84",
 			"RetryMax": 1,
 			"Tags": []
 		},

@@ -978,6 +978,7 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 				log.Infof("could not open config file for mycnf: %v", path)
 				continue
 			}
+			log.Infof("loaded extra MySQL config from: %s", path)
 			myTemplateSource.WriteString("## " + path + "\n")
 			myTemplateSource.Write(data)
 		}
