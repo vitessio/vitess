@@ -23,9 +23,9 @@
 
 #### <a id="deprecated-metrics"/>Metrics</a>
 
-| Component |        Metric Name        |                     Deprecation PR                      |
-|:---------:|:-------------------------:|:-------------------------------------------------------:|
-| `vtorc`   | `DiscoverInstanceTimings` | [#18406](https://github.com/vitessio/vitess/pull/18406) |
+| Component |        Metric Name        | Notes                                  |                     Deprecation PR                      |
+|:---------:|:-------------------------:|:--------------------------------------:|:-------------------------------------------------------:|
+| `vtorc`   | `DiscoverInstanceTimings` | Replaced by `DiscoveryInstanceTimings` | [#18406](https://github.com/vitessio/vitess/pull/18406) |
 
 ### <a id="deletions"/>Deletions</a>
 
