@@ -508,8 +508,8 @@ func TestPickNoOpts(t *testing.T) {
 	// Give a moment for the worker to process the tablets
 	time.Sleep(10 * time.Millisecond)
 
-	// Test with nil opts
-	result := b.Pick(target, nil, nil)
+	// Test with empty opts
+	result := b.Pick(target, nil, PickOpts{})
 	require.Nil(t, result)
 }
 
@@ -681,6 +681,6 @@ func TestTabletTypesToWatch(t *testing.T) {
 	}
 }
 
-func buildOpts(uuid string) *PickOpts {
-	return &PickOpts{SessionUUID: uuid}
+func buildOpts(uuid string) PickOpts {
+	return PickOpts{SessionUUID: uuid}
 }

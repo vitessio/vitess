@@ -93,8 +93,8 @@ func NewSessionBalancer(ctx context.Context, localCell string, topoServer srvtop
 //
 // For a given session, it will return the same tablet for its duration, with preference to tablets
 // in the local cell.
-func (b *SessionBalancer) Pick(target *querypb.Target, _ []*discovery.TabletHealth, opts *PickOpts) *discovery.TabletHealth {
-	if opts == nil {
+func (b *SessionBalancer) Pick(target *querypb.Target, _ []*discovery.TabletHealth, opts PickOpts) *discovery.TabletHealth {
+	if opts.SessionUUID == "" {
 		return nil
 	}
 
