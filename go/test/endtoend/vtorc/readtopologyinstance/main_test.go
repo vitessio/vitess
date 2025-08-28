@@ -26,7 +26,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
-
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	vtutils "vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/inst"
@@ -82,7 +82,13 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 		}
 	}
 
-	primaryInstance, err := inst.ReadTopologyInstanceBufferable(primary.Alias, nil)
+	primaryAlias, err := topoproto.ParseTabletAlias(primary.Alias)
+	require.NoError(t, err)
+
+	replicaAlias, err := topoproto.ParseTabletAlias(replica.Alias)
+	require.NoError(t, err)
+
+	primaryInstance, err := inst.ReadTopologyInstanceBufferable(primaryAlias, nil)
 	require.NoError(t, err)
 	require.NotNil(t, primaryInstance)
 	assert.Equal(t, utils.Hostname, primaryInstance.Hostname)
@@ -134,7 +140,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	err = logic.EnableRecovery()
 	require.NoError(t, err)
 
-	replicaInstance, err := inst.ReadTopologyInstanceBufferable(replica.Alias, nil)
+	replicaInstance, err := inst.ReadTopologyInstanceBufferable(replicaAlias, nil)
 	require.NoError(t, err)
 	require.NotNil(t, replicaInstance)
 	assert.Equal(t, utils.Hostname, replicaInstance.Hostname)
