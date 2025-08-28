@@ -952,19 +952,10 @@ func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 		err = ts.changeShardsAccess(ctx, ts.SourceKeyspaceName(), ts.SourceShards(), disallowWrites)
 	}
 	if err != nil {
-		log.Warningf("Error: %s", err)
+		ts.Logger().Warningf("Error stopping writes on migration sources: %v", err)
 		return err
 	}
-	return ts.ForAllSources(func(source *MigrationSource) error {
-		var err error
-		source.Position, err = ts.TabletManagerClient().PrimaryPosition(ctx, source.GetPrimary().Tablet)
-		log.Infof("Stopped Source Writes. Position for source %v:%v: %v",
-			ts.SourceKeyspaceName(), source.GetShard().ShardName(), source.Position)
-		if err != nil {
-			log.Warningf("Error: %s", err)
-		}
-		return err
-	})
+	return nil
 }
 
 func (ts *trafficSwitcher) changeTableSourceWrites(ctx context.Context, access accessType) error {
@@ -1220,6 +1211,24 @@ func (ts *trafficSwitcher) gatherPositions(ctx context.Context) error {
 		target.Position, err = ts.ws.tmc.PrimaryPosition(ctx, target.GetPrimary().Tablet)
 		ts.Logger().Infof("Position for target %v:%v: %v", ts.TargetKeyspaceName(), target.GetShard().ShardName(), target.Position)
 		return err
+	})
+}
+
+// gatherSourcePositions will get the current replication position for all
+// migration sources.
+func (ts *trafficSwitcher) gatherSourcePositions(ctx context.Context) error {
+	return ts.ForAllSources(func(source *MigrationSource) error {
+		var err error
+		tablet := source.GetPrimary().Tablet
+		tabletAlias := topoproto.TabletAliasString(tablet.Alias)
+		source.Position, err = ts.TabletManagerClient().PrimaryPosition(ctx, tablet)
+		if err != nil {
+			ts.Logger().Errorf("Error getting migration source position on %s: %s", tabletAlias, err)
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get position on migration source %s: %v",
+				tabletAlias, err)
+		}
+		ts.Logger().Infof("Position on migration source %s after having stopped writes: %s", tabletAlias, source.Position)
+		return nil
 	})
 }
 

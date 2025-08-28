@@ -17,10 +17,17 @@ limitations under the License.
 package workflow
 
 import (
+	"context"
+	"fmt"
+	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -55,4 +62,73 @@ func TestReverseWorkflowName(t *testing.T) {
 		got := ReverseWorkflowName(test.in)
 		assert.Equal(t, test.out, got)
 	}
+}
+
+// TestSwitchTrafficPositionHandling confirms that if any writes are somehow
+// executed against the source between the stop source writes and wait for
+// catchup steps, that we have the correct position and do not lose the write(s).
+func TestTrafficSwitchPositionHandling(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	workflowName := "wf1"
+	tableName := "t1"
+	sourceKeyspaceName := "sourceks"
+	targetKeyspaceName := "targetks"
+
+	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
+		tableName: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   tableName,
+					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+				},
+			},
+		},
+	}
+
+	sourceKeyspace := &testKeyspace{
+		KeyspaceName: sourceKeyspaceName,
+		ShardNames:   []string{"0"},
+	}
+	targetKeyspace := &testKeyspace{
+		KeyspaceName: targetKeyspaceName,
+		ShardNames:   []string{"0"},
+	}
+
+	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer env.close()
+	env.tmc.schema = schema
+
+	ts, _, err := env.ws.getWorkflowState(ctx, targetKeyspaceName, workflowName)
+	require.NoError(t, err)
+	sw := &switcher{ts: ts, s: env.ws}
+
+	lockCtx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "test")
+	require.NoError(t, lockErr)
+	ctx = lockCtx
+	defer sourceUnlock(&err)
+	lockCtx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "test")
+	require.NoError(t, lockErr)
+	ctx = lockCtx
+	defer targetUnlock(&err)
+
+	err = ts.stopSourceWrites(ctx)
+	require.NoError(t, err)
+
+	// Now we simulate a write on the source.
+	newPosition := position[:strings.LastIndex(position, "-")+1]
+	oldSeqNo, err := strconv.Atoi(position[strings.LastIndex(position, "-")+1:])
+	require.NoError(t, err)
+	newPosition = fmt.Sprintf("%s%d", newPosition, oldSeqNo+1)
+	env.tmc.setPrimaryPosition(env.tablets[sourceKeyspaceName][startingSourceTabletUID], newPosition)
+
+	// And confirm that we picked up the new position.
+	err = ts.gatherSourcePositions(ctx)
+	require.NoError(t, err)
+	err = ts.ForAllSources(func(ms *MigrationSource) error {
+		require.Equal(t, newPosition, ms.Position)
+		return nil
+	})
+	require.NoError(t, err)
 }

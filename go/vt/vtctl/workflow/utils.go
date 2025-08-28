@@ -636,7 +636,7 @@ func areTabletsAvailableToStreamFrom(ctx context.Context, req *vtctldatapb.Workf
 
 	wg.Wait()
 	if allErrors.HasErrors() {
-		log.Errorf("%s", allErrors.Error())
+		ts.Logger().Errorf("%s", allErrors.Error())
 		return allErrors.Error()
 	}
 	return nil
