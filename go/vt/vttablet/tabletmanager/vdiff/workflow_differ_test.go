@@ -224,7 +224,8 @@ func TestReconcileExtraRows(t *testing.T) {
 		dr := &DiffReport{
 			TableName: "t1",
 
-			ProcessedRows: 4,
+			// The max number of rows loaded on the source or the target
+			ProcessedRows: 6,
 
 			MismatchedRows:      0,
 			MismatchedRowsDiffs: nil,
@@ -250,8 +251,8 @@ func TestReconcileExtraRows(t *testing.T) {
 		maxExtras := int64(4)
 		require.NoError(t, wd.doReconcileExtraRows(dr, maxExtras, maxExtras))
 
-		require.Equal(t, int64(4), dr.ProcessedRows)
-
+		// Verify that reconciliation does not change the number of processed or mismatched rows
+		require.Equal(t, int64(6), dr.ProcessedRows)
 		require.Equal(t, int64(0), dr.MismatchedRows)
 
 		require.Equal(t, int64(4), dr.ExtraRowsSource)
@@ -259,12 +260,12 @@ func TestReconcileExtraRows(t *testing.T) {
 
 		require.Equal(t, int64(2), dr.MatchingRows)
 	})
-
 	t.Run("with `ExtraRowsTarget` larger than `extraDiffsTarget`", func(t *testing.T) {
 		dr := &DiffReport{
 			TableName: "t1",
 
-			ProcessedRows: 4,
+			// The max number of rows loaded on the source or the target
+			ProcessedRows: 6,
 
 			MismatchedRows:      0,
 			MismatchedRowsDiffs: nil,
@@ -290,8 +291,8 @@ func TestReconcileExtraRows(t *testing.T) {
 		maxExtras := int64(4)
 		require.NoError(t, wd.doReconcileExtraRows(dr, maxExtras, maxExtras))
 
-		require.Equal(t, int64(4), dr.ProcessedRows)
-
+		// Verify that reconciliation does not change the number of processed or mismatched rows
+		require.Equal(t, int64(6), dr.ProcessedRows)
 		require.Equal(t, int64(0), dr.MismatchedRows)
 
 		require.Equal(t, int64(2), dr.ExtraRowsSource)
