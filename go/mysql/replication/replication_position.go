@@ -97,6 +97,22 @@ func (rp Position) IsZero() bool {
 	return rp.GTIDSet == nil || rp.GTIDSet.Empty()
 }
 
+// ComparePositions compares two Positions, returning:
+// 0 if both a anb b are equal positions.
+// 1 if a is > than b.
+// -1 if a is < than b.
+// This can be used as a sort function via
+// slices.SortFunc and slices.SortFuncStable.
+func ComparePositions(a, b Position) int {
+	if a.Equal(b) {
+		return 0
+	}
+	if a.AtLeast(b) {
+		return -1
+	}
+	return 1
+}
+
 // AppendGTID returns a new Position that represents the position
 // after the given GTID is replicated.
 func AppendGTID(rp Position, gtid GTID) Position {
