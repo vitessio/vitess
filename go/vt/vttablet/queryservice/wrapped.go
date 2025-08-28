@@ -40,7 +40,7 @@ type WrapperFunc func(ctx context.Context, target *querypb.Target, conn QuerySer
 type WrapOpts struct {
 	InTransaction bool
 
-	Options querypb.ExecuteOptions
+	Options *querypb.ExecuteOptions
 }
 
 // Wrap returns a wrapped version of the original QueryService implementation.
