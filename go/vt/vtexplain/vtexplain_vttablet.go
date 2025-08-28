@@ -127,7 +127,7 @@ func (vte *VTExplain) newTablet(ctx context.Context, env *vtenv.Environment, opt
 
 	tablet.QueryService = queryservice.Wrap(
 		nil,
-		func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService, name string, inTransaction bool, inner func(context.Context, *querypb.Target, queryservice.QueryService) (bool, error)) error {
+		func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService, name string, opts *queryservice.WrapOpts, inner func(context.Context, *querypb.Target, queryservice.QueryService) (bool, error)) error {
 			return fmt.Errorf("explainTablet does not implement %s", name)
 		},
 	)
@@ -408,7 +408,6 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options, collatio
 			Rows: [][]sqltypes.Value{},
 		},
 		"create table if not exists `_vt`.dt_participant(\n  dtid varbinary(512),\n\tid bigint,\n\tkeyspace varchar(256),\n\tshard varchar(256),\n  primary key(dtid, id)\n\t) engine=InnoDB": {
-
 			Fields: []*querypb.Field{{
 				Type:    sqltypes.Uint64,
 				Charset: collations.CollationBinaryID,

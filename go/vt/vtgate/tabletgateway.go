@@ -460,7 +460,7 @@ func (gw *TabletGateway) getBalancerTablet(target *querypb.Target, tablets []*di
 
 // withShardError adds shard information to errors returned from the inner QueryService.
 func (gw *TabletGateway) withShardError(ctx context.Context, target *querypb.Target, conn queryservice.QueryService,
-	_ string, _ bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error),
+	_ string, _ *queryservice.WrapOpts, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error),
 ) error {
 	_, err := inner(ctx, target, conn)
 	return NewShardError(err, target)
