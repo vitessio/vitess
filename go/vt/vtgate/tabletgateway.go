@@ -304,7 +304,7 @@ func (gw *TabletGateway) DebugBalancerHandler(w http.ResponseWriter, r *http.Req
 // withRetry also adds shard information to errors returned from the inner QueryService, so
 // withShardError should not be combined with withRetry.
 func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, _ queryservice.QueryService,
-	_ string, opts *queryservice.WrapOpts, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error),
+	_ string, opts queryservice.WrapOpts, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error),
 ) error {
 	// for transactions, we connect to a specific tablet instead of letting gateway choose one
 	if opts.InTransaction && target.TabletType != topodatapb.TabletType_PRIMARY {
@@ -418,7 +418,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 
 // getBalancerTablet selects a tablet for the given query target, using the configured balancer if enabled. Otherwise, it will
 // select a random tablet, with preference to the local cell.
-func (gw *TabletGateway) getBalancerTablet(target *querypb.Target, tablets []*discovery.TabletHealth, invalidTablets map[string]bool, opts *queryservice.WrapOpts) *discovery.TabletHealth {
+func (gw *TabletGateway) getBalancerTablet(target *querypb.Target, tablets []*discovery.TabletHealth, invalidTablets map[string]bool, opts queryservice.WrapOpts) *discovery.TabletHealth {
 	var tablet *discovery.TabletHealth
 
 	useBalancer := balancerEnabled
@@ -460,7 +460,7 @@ func (gw *TabletGateway) getBalancerTablet(target *querypb.Target, tablets []*di
 
 // withShardError adds shard information to errors returned from the inner QueryService.
 func (gw *TabletGateway) withShardError(ctx context.Context, target *querypb.Target, conn queryservice.QueryService,
-	_ string, _ *queryservice.WrapOpts, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error),
+	_ string, _ queryservice.WrapOpts, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error),
 ) error {
 	_, err := inner(ctx, target, conn)
 	return NewShardError(err, target)
