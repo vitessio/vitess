@@ -2059,6 +2059,13 @@ var (
 			output: "create view a as select current_timestamp(0)",
 		},
 		{
+			input:  "CREATE VIEW a AS (SELECT current_timestamp())",
+			output: "create view a as (select current_timestamp(0))",
+		},
+		{
+			input:  "CREATE OR REPLACE VIEW v_tasks AS (SELECT id, task, CONCAT('database_', db_id) AS database_qualified_id, started_at, ended_at, CAST(duration AS DOUBLE) / 1000 AS duration_seconds, task_details AS details FROM task_history)",
+			output: "create or replace view v_tasks as (select id, task, CONCAT('database_', db_id) as database_qualified_id, started_at, ended_at, CAST(duration as DOUBLE) / 1000 as duration_seconds, task_details as details from task_history)",
+		}, {
 			input:  "CREATE VIEW IF NOT EXISTS a AS SELECT 1",
 			output: "create view if not exists a as select 1",
 		},

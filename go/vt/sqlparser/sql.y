@@ -1301,6 +1301,29 @@ create_statement:
       },
     }
   }
+| CREATE view_opts VIEW not_exists_opt table_name ins_column_list_opt AS lexer_position special_comment_mode openb select_statement_with_no_trailing_into closeb lexer_position opt_with_check_option
+  {
+    // Accept parenthesized SELECT for MySQL compatibility (single level only)
+    viewName := $5.(TableName)
+    $2.(*ViewSpec).ViewName = viewName.ToViewName()
+    $2.(*ViewSpec).ViewExpr = &ParenSelect{Select: $11.(SelectStatement)}
+    $2.(*ViewSpec).Columns = $6.(Columns)
+    $2.(*ViewSpec).CheckOption = $14.(ViewCheckOption)
+    $$ = &DDL{
+      Action: CreateStr,
+      ViewSpec: $2.(*ViewSpec),
+      IfNotExists: $4.(int) != 0,
+      SpecialCommentMode: $9.(bool),
+      // Capture inner SELECT span, not parentheses
+      SubStatementPositionStart: $8.(int),
+      SubStatementPositionEnd: $13.(int) - 1,
+      Auth: AuthInformation{
+        AuthType: AuthType_CREATE_VIEW,
+        TargetType: AuthTargetType_DatabaseIdentifiers,
+        TargetNames: []string{viewName.DbQualifier.String()},
+      },
+    }
+  }
 | CREATE OR REPLACE view_opts VIEW table_name ins_column_list_opt AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position opt_with_check_option
   {
     viewName := $6.(TableName)
@@ -1314,6 +1337,29 @@ create_statement:
       SpecialCommentMode: $10.(bool),
       SubStatementPositionStart: $9.(int),
       SubStatementPositionEnd: $12.(int) - 1,
+      OrReplace: true,
+      Auth: AuthInformation{
+        AuthType: AuthType_CREATE_VIEW,
+        TargetType: AuthTargetType_DatabaseIdentifiers,
+        TargetNames: []string{viewName.DbQualifier.String()},
+      },
+    }
+  }
+| CREATE OR REPLACE view_opts VIEW table_name ins_column_list_opt AS lexer_position special_comment_mode openb select_statement_with_no_trailing_into closeb lexer_position opt_with_check_option
+  {
+    // Accept parenthesized SELECT for MySQL compatibility (single level only)
+    viewName := $6.(TableName)
+    $4.(*ViewSpec).ViewName = viewName.ToViewName()
+    $4.(*ViewSpec).ViewExpr = &ParenSelect{Select: $12.(SelectStatement)}
+    $4.(*ViewSpec).Columns = $7.(Columns)
+    $4.(*ViewSpec).CheckOption = $15.(ViewCheckOption)
+    $$ = &DDL{
+      Action: CreateStr,
+      ViewSpec: $4.(*ViewSpec),
+      SpecialCommentMode: $10.(bool),
+      // Capture inner SELECT span, not parentheses
+      SubStatementPositionStart: $9.(int),
+      SubStatementPositionEnd: $14.(int) - 1,
       OrReplace: true,
       Auth: AuthInformation{
         AuthType: AuthType_CREATE_VIEW,
