@@ -19,6 +19,8 @@ package reparentutil
 import (
 	"context"
 	"fmt"
+	"math"
+	"slices"
 	"sync"
 	"time"
 
@@ -83,7 +85,7 @@ func ElectNewPrimary(
 		mu sync.Mutex
 		// tablets that are possible candidates to be the new primary and their positions
 		validTablets    []*topodatapb.Tablet
-		tabletPositions []replication.Position
+		tabletPositions []*RelayLogPositions
 	)
 
 	// candidates are the list of tablets that can be potentially promoted after filtering out based on preliminary checks.
@@ -152,10 +154,10 @@ func ElectNewPrimary(
 	return validTablets[0].Alias, nil
 }
 
-// findTabletPositionLagBackupStatus processes the replication position and lag for a single tablet and
+// findTabletPositionLagBackupStatus processes the replication positions and lag for a single tablet and
 // returns it. It is safe to call from multiple goroutines.
-func findTabletPositionLagBackupStatus(ctx context.Context, tablet *topodatapb.Tablet, logger logutil.Logger, tmc tmclient.TabletManagerClient, waitTimeout time.Duration) (replication.Position, time.Duration, bool, error) {
-	logger.Infof("getting replication position from %v", topoproto.TabletAliasString(tablet.Alias))
+func findTabletPositionLagBackupStatus(ctx context.Context, tablet *topodatapb.Tablet, logger logutil.Logger, tmc tmclient.TabletManagerClient, waitTimeout time.Duration) (*RelayLogPositions, time.Duration, bool, error) {
+	rlp := &RelayLogPositions{}
 
 	ctx, cancel := context.WithTimeout(ctx, waitTimeout)
 	defer cancel()
@@ -165,24 +167,25 @@ func findTabletPositionLagBackupStatus(ctx context.Context, tablet *topodatapb.T
 		sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
 		if isSQLErr && sqlErr != nil && sqlErr.Number() == sqlerror.ERNotReplica {
 			logger.Warningf("no replication statue from %v, using empty gtid set", topoproto.TabletAliasString(tablet.Alias))
-			return replication.Position{}, 0, false, nil
+			return rlp, 0, false, nil
 		}
 		logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", topoproto.TabletAliasString(tablet.Alias), err)
-		return replication.Position{}, 0, false, err
+		return rlp, 0, false, err
 	}
 
-	// Use the relay log position if available, otherwise use the executed GTID set (binary log position).
-	positionString := status.Position
-	if status.RelayLogPosition != "" {
-		positionString = status.RelayLogPosition
-	}
-	pos, err := replication.DecodePosition(positionString)
+	rlp.Executed, err = replication.DecodePosition(status.Position)
 	if err != nil {
-		logger.Warningf("cannot decode replica position %v for tablet %v, ignoring tablet: %v", positionString, topoproto.TabletAliasString(tablet.Alias), err)
-		return replication.Position{}, 0, status.BackupRunning, err
+		logger.Warningf("cannot decode replica position %v for tablet %v, ignoring tablet: %v", status.Position, topoproto.TabletAliasString(tablet.Alias), err)
+		return rlp, 0, status.BackupRunning, err
 	}
 
-	return pos, time.Second * time.Duration(status.ReplicationLagSeconds), status.BackupRunning, nil
+	rlp.Combined, err = replication.DecodePosition(status.RelayLogPosition)
+	if err != nil {
+		logger.Warningf("cannot decode replica position %v for tablet %v, ignoring tablet: %v", status.RelayLogPosition, topoproto.TabletAliasString(tablet.Alias), err)
+		return rlp, 0, status.BackupRunning, err
+	}
+
+	return rlp, time.Second * time.Duration(status.ReplicationLagSeconds), status.BackupRunning, nil
 }
 
 // FindCurrentPrimary returns the current primary tablet of a shard, if any. The
@@ -284,9 +287,9 @@ func ShardReplicationStatuses(ctx context.Context, ts *topo.Server, tmc tmclient
 }
 
 // getValidCandidatesAndPositionsAsList converts the valid candidates from a map to a list of tablets, making it easier to sort
-func getValidCandidatesAndPositionsAsList(validCandidates map[string]replication.Position, tabletMap map[string]*topo.TabletInfo) ([]*topodatapb.Tablet, []replication.Position, error) {
+func getValidCandidatesAndPositionsAsList(validCandidates map[string]*RelayLogPositions, tabletMap map[string]*topo.TabletInfo) ([]*topodatapb.Tablet, []*RelayLogPositions, error) {
 	var validTablets []*topodatapb.Tablet
-	var tabletPositions []replication.Position
+	var tabletPositions []*RelayLogPositions
 	for tabletAlias, position := range validCandidates {
 		tablet, isFound := tabletMap[tabletAlias]
 		if !isFound {
@@ -298,9 +301,20 @@ func getValidCandidatesAndPositionsAsList(validCandidates map[string]replication
 	return validTablets, tabletPositions, nil
 }
 
+// getValidCandidatesMajorityCount returns a number equal to a majority of candidates. If
+// there are fewer than 3 candidates, all provided candidates are the majority.
+func getValidCandidatesMajorityCount(validCandidates map[string]*RelayLogPositions) int {
+	totalCandidates := len(validCandidates)
+	if totalCandidates < 3 {
+		return totalCandidates
+	}
+	return int(math.Floor(float64(totalCandidates)/2) + 1)
+}
+
 // restrictValidCandidates is used to restrict some candidates from being considered eligible for becoming the intermediate source or the final promotion candidate
-func restrictValidCandidates(validCandidates map[string]replication.Position, tabletMap map[string]*topo.TabletInfo) (map[string]replication.Position, error) {
-	restrictedValidCandidates := make(map[string]replication.Position)
+func restrictValidCandidates(validCandidates map[string]*RelayLogPositions, tabletMap map[string]*topo.TabletInfo, logger logutil.Logger) (map[string]*RelayLogPositions, error) {
+	restrictedValidCandidates := make(map[string]*RelayLogPositions)
+	validPositions := make([]*RelayLogPositions, 0, len(validCandidates))
 	for candidate, position := range validCandidates {
 		candidateInfo, ok := tabletMap[candidate]
 		if !ok {
@@ -311,6 +325,21 @@ func restrictValidCandidates(validCandidates map[string]replication.Position, ta
 			continue
 		}
 		restrictedValidCandidates[candidate] = position
+		validPositions = append(validPositions, position)
+	}
+
+	// sort by replication positions with greatest GTID set first, then remove
+	// replicas that are not part of a majority of the most-advanced replicas.
+	validPositions = sortRelayLogPositions(validPositions)
+	majorityCandidatesCount := getValidCandidatesMajorityCount(restrictedValidCandidates)
+	validPositions = validPositions[:majorityCandidatesCount]
+	for tabletAlias, position := range restrictedValidCandidates {
+		if !slices.ContainsFunc(validPositions, func(rlp *RelayLogPositions) bool {
+			return position.Equal(rlp)
+		}) {
+			logger.Infof("Ignoring least-advanced tablet as a candidate: %s", tabletAlias)
+			delete(restrictedValidCandidates, tabletAlias)
+		}
 	}
 	return restrictedValidCandidates, nil
 }

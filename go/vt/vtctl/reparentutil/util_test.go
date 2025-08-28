@@ -916,6 +916,7 @@ func TestFindPositionForTablet(t *testing.T) {
 					"zone1-0000000100": {
 						Position: &replicationdatapb.Status{
 							Position:              "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+							RelayLogPosition:      "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
 							ReplicationLagSeconds: 201,
 						},
 					},
@@ -939,6 +940,7 @@ func TestFindPositionForTablet(t *testing.T) {
 					"zone1-0000000100": {
 						Position: &replicationdatapb.Status{
 							Position:              "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+							RelayLogPosition:      "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
 							ReplicationLagSeconds: 201,
 						},
 					},
@@ -983,7 +985,7 @@ func TestFindPositionForTablet(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						Position: &replicationdatapb.Status{
-							Position:              "unused",
+							Position:              "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-2",
 							RelayLogPosition:      "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
 							ReplicationLagSeconds: 291,
 						},
@@ -1030,7 +1032,7 @@ func TestFindPositionForTablet(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			posString := replication.EncodePosition(pos)
+			posString := replication.EncodePosition(pos.Combined)
 			require.Equal(t, test.expectedPosition, posString)
 			require.Equal(t, test.expectedLag, lag)
 			require.Equal(t, test.expectedTakingBackup, takingBackup)
@@ -1223,30 +1225,53 @@ func TestGetValidCandidatesAndPositionsAsList(t *testing.T) {
 		Sequence: 11,
 	}
 
-	positionMostAdvanced := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
-	positionMostAdvanced.GTIDSet = positionMostAdvanced.GTIDSet.AddGTID(mysqlGTID1)
-	positionMostAdvanced.GTIDSet = positionMostAdvanced.GTIDSet.AddGTID(mysqlGTID2)
-	positionMostAdvanced.GTIDSet = positionMostAdvanced.GTIDSet.AddGTID(mysqlGTID3)
+	positionMostAdvanced := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	positionMostAdvanced.Combined.GTIDSet = positionMostAdvanced.Combined.GTIDSet.AddGTID(mysqlGTID1)
+	positionMostAdvanced.Combined.GTIDSet = positionMostAdvanced.Combined.GTIDSet.AddGTID(mysqlGTID2)
+	positionMostAdvanced.Combined.GTIDSet = positionMostAdvanced.Combined.GTIDSet.AddGTID(mysqlGTID3)
+	positionMostAdvanced.Executed.GTIDSet = positionMostAdvanced.Executed.GTIDSet.AddGTID(mysqlGTID1)
+	positionMostAdvanced.Executed.GTIDSet = positionMostAdvanced.Executed.GTIDSet.AddGTID(mysqlGTID2)
 
-	positionIntermediate1 := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
-	positionIntermediate1.GTIDSet = positionIntermediate1.GTIDSet.AddGTID(mysqlGTID1)
+	positionAlmostMostAdvanced := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	positionAlmostMostAdvanced.Combined.GTIDSet = positionAlmostMostAdvanced.Combined.GTIDSet.AddGTID(mysqlGTID1)
+	positionAlmostMostAdvanced.Combined.GTIDSet = positionAlmostMostAdvanced.Combined.GTIDSet.AddGTID(mysqlGTID2)
+	positionAlmostMostAdvanced.Combined.GTIDSet = positionAlmostMostAdvanced.Combined.GTIDSet.AddGTID(mysqlGTID3)
+	positionAlmostMostAdvanced.Executed.GTIDSet = positionAlmostMostAdvanced.Executed.GTIDSet.AddGTID(mysqlGTID1)
 
-	positionIntermediate2 := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
-	positionIntermediate2.GTIDSet = positionIntermediate2.GTIDSet.AddGTID(mysqlGTID1)
-	positionIntermediate2.GTIDSet = positionIntermediate2.GTIDSet.AddGTID(mysqlGTID2)
+	positionIntermediate1 := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	positionIntermediate1.Combined.GTIDSet = positionIntermediate1.Combined.GTIDSet.AddGTID(mysqlGTID1)
+	positionIntermediate1.Executed.GTIDSet = positionIntermediate1.Executed.GTIDSet.AddGTID(mysqlGTID1)
+
+	positionIntermediate2 := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	positionIntermediate2.Combined.GTIDSet = positionIntermediate2.Combined.GTIDSet.AddGTID(mysqlGTID1)
+	positionIntermediate2.Combined.GTIDSet = positionIntermediate2.Combined.GTIDSet.AddGTID(mysqlGTID2)
+	positionIntermediate2.Executed.GTIDSet = positionIntermediate2.Executed.GTIDSet.AddGTID(mysqlGTID2)
 
 	tests := []struct {
 		name            string
-		validCandidates map[string]replication.Position
+		validCandidates map[string]*RelayLogPositions
 		tabletMap       map[string]*topo.TabletInfo
 		tabletRes       []*topodatapb.Tablet
 	}{
 		{
 			name: "test conversion",
-			validCandidates: map[string]replication.Position{
+			validCandidates: map[string]*RelayLogPositions{
 				"zone1-0000000100": positionMostAdvanced,
 				"zone1-0000000101": positionIntermediate1,
 				"zone1-0000000102": positionIntermediate2,
+				"zone1-0000000103": positionAlmostMostAdvanced,
 			},
 			tabletMap: map[string]*topo.TabletInfo{
 				"zone1-0000000100": {
@@ -1275,6 +1300,15 @@ func TestGetValidCandidatesAndPositionsAsList(t *testing.T) {
 						Hostname: "requires force start",
 					},
 				},
+				"zone1-0000000103": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+						Hostname: "2nd primary-elect",
+					},
+				},
 				"zone1-0000000404": {
 					Tablet: &topodatapb.Tablet{
 						Alias: &topodatapb.TabletAlias{
@@ -1292,6 +1326,12 @@ func TestGetValidCandidatesAndPositionsAsList(t *testing.T) {
 						Uid:  100,
 					},
 					Hostname: "primary-elect",
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  103,
+					},
+					Hostname: "2nd primary-elect",
 				}, {
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
@@ -1439,21 +1479,47 @@ func TestWaitForCatchUp(t *testing.T) {
 }
 
 func TestRestrictValidCandidates(t *testing.T) {
+	gtidSet1, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")
+	gtidSet2, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
+	gtidSet3, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-3")
+	gtidSet4, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-2")
 	tests := []struct {
 		name            string
-		validCandidates map[string]replication.Position
+		validCandidates map[string]*RelayLogPositions
 		tabletMap       map[string]*topo.TabletInfo
-		result          map[string]replication.Position
+		result          map[string]*RelayLogPositions
 	}{
 		{
 			name: "remove invalid tablets",
-			validCandidates: map[string]replication.Position{
-				"zone1-0000000100": {},
-				"zone1-0000000101": {},
-				"zone1-0000000102": {},
-				"zone1-0000000103": {},
-				"zone1-0000000104": {},
-				"zone1-0000000105": {},
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {
+					Combined: replication.Position{GTIDSet: gtidSet1},
+					Executed: replication.Position{GTIDSet: gtidSet2},
+				},
+				"zone1-0000000101": {
+					Combined: replication.Position{GTIDSet: gtidSet2},
+					Executed: replication.Position{GTIDSet: gtidSet3},
+				},
+				"zone1-0000000102": {
+					Combined: replication.Position{GTIDSet: gtidSet2},
+					Executed: replication.Position{GTIDSet: gtidSet3},
+				},
+				"zone1-0000000103": {
+					Combined: replication.Position{GTIDSet: gtidSet3},
+					Executed: replication.Position{GTIDSet: gtidSet4},
+				},
+				"zone1-0000000104": {
+					Combined: replication.Position{GTIDSet: gtidSet3},
+					Executed: replication.Position{GTIDSet: gtidSet4},
+				},
+				"zone1-0000000105": {
+					Combined: replication.Position{GTIDSet: gtidSet4},
+					Executed: replication.Position{GTIDSet: gtidSet4},
+				},
+				"zone1-0000000106": {
+					Combined: replication.Position{GTIDSet: gtidSet2}, // == to zone1-0000000101
+					Executed: replication.Position{GTIDSet: gtidSet4}, // == to zone1-0000000101 + 1
+				},
 			},
 			tabletMap: map[string]*topo.TabletInfo{
 				"zone1-0000000100": {
@@ -1505,23 +1571,42 @@ func TestRestrictValidCandidates(t *testing.T) {
 					Tablet: &topodatapb.Tablet{
 						Alias: &topodatapb.TabletAlias{
 							Cell: "zone1",
-							Uid:  103,
+							Uid:  105,
 						},
 						Type: topodatapb.TabletType_BACKUP,
 					},
 				},
+				"zone1-0000000106": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  106,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
 			},
-			result: map[string]replication.Position{
-				"zone1-0000000100": {},
-				"zone1-0000000101": {},
-				"zone1-0000000104": {},
+			result: map[string]*RelayLogPositions{
+				"zone1-0000000100": {
+					Combined: replication.Position{GTIDSet: gtidSet1},
+					Executed: replication.Position{GTIDSet: gtidSet2},
+				},
+				"zone1-0000000101": {
+					Combined: replication.Position{GTIDSet: gtidSet2},
+					Executed: replication.Position{GTIDSet: gtidSet3},
+				},
+				"zone1-0000000106": {
+					Combined: replication.Position{GTIDSet: gtidSet2},
+					Executed: replication.Position{GTIDSet: gtidSet4},
+				},
 			},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			res, err := restrictValidCandidates(test.validCandidates, test.tabletMap)
+			logger := logutil.NewMemoryLogger()
+			res, err := restrictValidCandidates(test.validCandidates, test.tabletMap, logger)
 			assert.NoError(t, err)
 			assert.Equal(t, res, test.result)
 		})
@@ -1790,4 +1875,19 @@ func TestGetBackupCandidates(t *testing.T) {
 			require.EqualValues(t, tt.expected, res)
 		})
 	}
+}
+
+func TestGetValidCandidatesMajorityCount(t *testing.T) {
+	buildCandidatesFunc := func(length int) map[string]*RelayLogPositions {
+		candidates := make(map[string]*RelayLogPositions, length)
+		for i := 1; i <= length; i++ {
+			candidates[fmt.Sprintf("candidate-%d", i)] = &RelayLogPositions{}
+		}
+		return candidates
+	}
+	require.Equal(t, 1, getValidCandidatesMajorityCount(buildCandidatesFunc(1)))
+	require.Equal(t, 2, getValidCandidatesMajorityCount(buildCandidatesFunc(2)))
+	require.Equal(t, 2, getValidCandidatesMajorityCount(buildCandidatesFunc(3)))
+	require.Equal(t, 3, getValidCandidatesMajorityCount(buildCandidatesFunc(5)))
+	require.Equal(t, 5, getValidCandidatesMajorityCount(buildCandidatesFunc(9)))
 }

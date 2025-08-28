@@ -18,6 +18,7 @@ package reparentutil
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"time"
 
@@ -39,15 +40,82 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
-// FindValidEmergencyReparentCandidates will find candidates for an emergency
+// RelayLogPositions contains the positions of the relay log.
+type RelayLogPositions struct {
+	// Combined represents the entire range of the relay
+	// log with the retrieved + executed GTID sets
+	// combined.
+	Combined replication.Position
+
+	// Executed represents the executed GTID set of the
+	// relay log/SQL thread.
+	Executed replication.Position
+}
+
+// AtLeast returns true if the RelayLogPositions object contains at
+// least the positions provided as pos.
+func (rlp *RelayLogPositions) AtLeast(pos *RelayLogPositions) bool {
+	if pos == nil {
+		return false
+	}
+
+	// if two combined GTID sets are equal, sort by the executed GTID
+	// set so we pick a position with the most advanced SQL thread.
+	if rlp.Combined.Equal(pos.Combined) {
+		return rlp.Executed.AtLeast(pos.Executed)
+	}
+
+	return rlp.Combined.AtLeast(pos.Combined)
+}
+
+// Equal returns true if the RelayLogPositions object is equal to
+// the positions provided as pos.
+func (rlp *RelayLogPositions) Equal(pos *RelayLogPositions) bool {
+	if pos == nil {
+		return false
+	}
+	return rlp.Combined.Equal(pos.Combined) && rlp.Executed.Equal(pos.Executed)
+}
+
+// IsZero returns true if the RelayLogPositions is zero.
+func (rlp *RelayLogPositions) IsZero() bool {
+	return rlp.Combined.IsZero()
+}
+
+// CompareRelayLogPositions compares two RelayLogPositions, returning:
+// 0 if both a anb b are equal positions.
+// 1 if a is > than b.
+// -1 if a is < than b.
+// This can be used as a sort function via
+// slices.SortFunc and slices.SortFuncStable.
+func CompareRelayLogPositions(a, b *RelayLogPositions) int {
+	if a.Equal(b) {
+		return 0
+	}
+	if a.AtLeast(b) && !b.AtLeast(a) {
+		return -1
+	}
+	return 1
+}
+
+// sortRelayLogPositions sorts RelayLogPositions using replication positions.
+func sortRelayLogPositions(p []*RelayLogPositions) []*RelayLogPositions {
+	positions := p
+	slices.SortFunc(positions, func(a, b *RelayLogPositions) int {
+		return CompareRelayLogPositions(a, b)
+	})
+	return positions
+}
+
+// FindPositionsOfAllCandidates will find candidates for an emergency
 // reparent, and, if successful, return a mapping of those tablet aliases (as
 // raw strings) to their replication positions for later comparison.
 func FindValidEmergencyReparentCandidates(
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
 	primaryStatusMap map[string]*replicationdatapb.PrimaryStatus,
-) (map[string]replication.Position, error) {
+) (map[string]*RelayLogPositions, error) {
 	replicationStatusMap := make(map[string]*replication.ReplicationStatus, len(statusMap))
-	positionMap := make(map[string]replication.Position)
+	positionMap := make(map[string]*RelayLogPositions)
 
 	// Build out replication status list from proto types.
 	for alias, statuspb := range statusMap {
@@ -92,7 +160,7 @@ func FindValidEmergencyReparentCandidates(
 		// If we're not GTID-based, no need to search for errant GTIDs, so just
 		// add the position to the map and continue.
 		if !isGTIDBased {
-			positionMap[alias] = status.Position
+			positionMap[alias] = &RelayLogPositions{Combined: status.Position}
 
 			continue
 		}
@@ -128,7 +196,10 @@ func FindValidEmergencyReparentCandidates(
 		}
 
 		pos := replication.Position{GTIDSet: relayLogGTIDSet}
-		positionMap[alias] = pos
+		positionMap[alias] = &RelayLogPositions{
+			Combined: pos,
+			Executed: status.Position,
+		}
 	}
 
 	for alias, primaryStatus := range primaryStatusMap {
@@ -137,7 +208,7 @@ func FindValidEmergencyReparentCandidates(
 			return nil, vterrors.Wrapf(err, "could not decode a primary status executed position for tablet %v: %v", alias, err)
 		}
 
-		positionMap[alias] = executedPosition
+		positionMap[alias] = &RelayLogPositions{Combined: executedPosition}
 	}
 
 	return positionMap, nil
