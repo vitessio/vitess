@@ -61,6 +61,7 @@ var (
 	balancerEnabled     bool
 	balancerVtgateCells []string
 	balancerKeyspaces   []string
+	balancerType        string
 
 	logCollations = logutil.NewThrottledLogger("CollationInconsistent", 1*time.Minute)
 )
@@ -73,6 +74,7 @@ func init() {
 		fs.BoolVar(&balancerEnabled, "enable-balancer", false, "Enable the tablet balancer to evenly spread query load for a given tablet type")
 		fs.StringSliceVar(&balancerVtgateCells, "balancer-vtgate-cells", []string{}, "When in balanced mode, a comma-separated list of cells that contain vtgates (required)")
 		fs.StringSliceVar(&balancerKeyspaces, "balancer-keyspaces", []string{}, "When in balanced mode, a comma-separated list of keyspaces for which to use the balancer (optional)")
+		fs.StringVar(&balancerType, "balancer-type", "balanced", `When in balanced mode, selects the type of balancer to use. "balanced" balances connections evenly, "session" pins a connection to a given tablet for its duration. (default: "balanced") (optional)`)
 	})
 }
 
@@ -109,7 +111,7 @@ func createHealthCheck(ctx context.Context, retryDelay, timeout time.Duration, t
 }
 
 // NewTabletGateway creates and returns a new TabletGateway
-func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, localCell string) *TabletGateway {
+func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, localCell string) (*TabletGateway, error) {
 	// hack to accommodate various users of gateway + tests
 	if hc == nil {
 		var topoServer *topo.Server
@@ -130,11 +132,16 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 		statusAggregators: make(map[string]*TabletStatusAggregator),
 	}
 	gw.setupBuffering(ctx)
+
 	if balancerEnabled {
-		gw.setupBalancer(ctx)
+		err := gw.setupBalancer(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("tablet gateway: failed to set up balancer: %w", err)
+		}
 	}
+
 	gw.QueryService = queryservice.Wrap(nil, gw.withRetry)
-	return gw
+	return gw, nil
 }
 
 func (gw *TabletGateway) setupBuffering(ctx context.Context) {
@@ -166,11 +173,29 @@ func (gw *TabletGateway) setupBuffering(ctx context.Context) {
 	}(bufferCtx, ksChan, gw.buffer)
 }
 
-func (gw *TabletGateway) setupBalancer(ctx context.Context) {
+func (gw *TabletGateway) setupBalancer(ctx context.Context) error {
 	if len(balancerVtgateCells) == 0 {
 		log.Exitf("balancer-vtgate-cells is required for balanced mode")
 	}
-	gw.balancer = balancer.NewTabletBalancer(gw.localCell, balancerVtgateCells)
+
+	switch balancerType {
+	case "session":
+		balancer, err := balancer.NewSessionBalancer(ctx, gw.localCell, gw.srvTopoServer, gw.hc)
+		if err != nil {
+			return fmt.Errorf("failed to create session balancer: %w", err)
+		}
+
+		gw.balancer = balancer
+	default:
+		if balancerType != "balanced" {
+			log.Warningf("Unrecognized balancer type %q, using default \"balanced\"", balancerType)
+		}
+
+		balancerType = "balanced"
+		gw.balancer = balancer.NewTabletBalancer(gw.localCell, balancerVtgateCells)
+	}
+
+	return nil
 }
 
 // QueryServiceByAlias satisfies the Gateway interface
@@ -279,10 +304,10 @@ func (gw *TabletGateway) DebugBalancerHandler(w http.ResponseWriter, r *http.Req
 // withRetry also adds shard information to errors returned from the inner QueryService, so
 // withShardError should not be combined with withRetry.
 func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, _ queryservice.QueryService,
-	_ string, inTransaction bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error),
+	_ string, opts *queryservice.WrapOpts, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error),
 ) error {
 	// for transactions, we connect to a specific tablet instead of letting gateway choose one
-	if inTransaction && target.TabletType != topodatapb.TabletType_PRIMARY {
+	if opts.InTransaction && target.TabletType != topodatapb.TabletType_PRIMARY {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "tabletGateway's query service can only be used for non-transactional queries on replicas")
 	}
 	var tabletLastUsed *topodatapb.Tablet
@@ -308,7 +333,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		// Note: We only buffer once and only "!inTransaction" queries i.e.
 		// a) no transaction is necessary (e.g. critical reads) or
 		// b) no transaction was created yet.
-		if gw.buffer != nil && !bufferedOnce && !inTransaction && target.TabletType == topodatapb.TabletType_PRIMARY {
+		if gw.buffer != nil && !bufferedOnce && !opts.InTransaction && target.TabletType == topodatapb.TabletType_PRIMARY {
 			// The next call blocks if we should buffer during a failover.
 			retryDone, bufferErr := gw.buffer.WaitForFailoverEnd(ctx, target.Keyspace, target.Shard, gw.kev, err)
 
@@ -359,7 +384,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			break
 		}
 
-		th := gw.getBalancerTablet(target, invalidTablets, tablets)
+		th := gw.getBalancerTablet(target, tablets, invalidTablets, opts)
 		if th == nil {
 			// do not override error from last attempt.
 			if err == nil {
@@ -393,7 +418,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 
 // getBalancerTablet selects a tablet for the given query target, using the configured balancer if enabled. Otherwise, it will
 // select a random tablet, with preference to the local cell.
-func (gw *TabletGateway) getBalancerTablet(target *querypb.Target, invalidTablets map[string]bool, tablets []*discovery.TabletHealth) *discovery.TabletHealth {
+func (gw *TabletGateway) getBalancerTablet(target *querypb.Target, tablets []*discovery.TabletHealth, invalidTablets map[string]bool, opts *queryservice.WrapOpts) *discovery.TabletHealth {
 	var tablet *discovery.TabletHealth
 
 	useBalancer := balancerEnabled
@@ -411,7 +436,8 @@ func (gw *TabletGateway) getBalancerTablet(target *querypb.Target, invalidTablet
 			})
 		}
 
-		tablet = gw.balancer.Pick(target, tablets, nil)
+		opts := &balancer.PickOpts{SessionUUID: opts.Options.SessionUUID, InvalidTablets: invalidTablets}
+		tablet = gw.balancer.Pick(target, tablets, opts)
 	}
 
 	if tablet != nil {

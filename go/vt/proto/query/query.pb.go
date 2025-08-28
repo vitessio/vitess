@@ -1402,8 +1402,10 @@ type ExecuteOptions struct {
 	FetchLastInsertId bool `protobuf:"varint,18,opt,name=fetch_last_insert_id,json=fetchLastInsertId,proto3" json:"fetch_last_insert_id,omitempty"`
 	// in_dml_execution indicates that the query is being executed as part of a DML execution.
 	InDmlExecution bool `protobuf:"varint,19,opt,name=in_dml_execution,json=inDmlExecution,proto3" json:"in_dml_execution,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// SessionUUID is the UUID of the current session.
+	SessionUUID   string `protobuf:"bytes,20,opt,name=SessionUUID,proto3" json:"SessionUUID,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ExecuteOptions) Reset() {
@@ -1548,6 +1550,13 @@ func (x *ExecuteOptions) GetInDmlExecution() bool {
 		return x.InDmlExecution
 	}
 	return false
+}
+
+func (x *ExecuteOptions) GetSessionUUID() string {
+	if x != nil {
+		return x.SessionUUID
+	}
+	return ""
 }
 
 type isExecuteOptions_Timeout interface {
@@ -5817,7 +5826,7 @@ const file_query_proto_rawDesc = "" +
 	"\x0ebind_variables\x18\x02 \x03(\v2$.query.BoundQuery.BindVariablesEntryR\rbindVariables\x1aU\n" +
 	"\x12BindVariablesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12)\n" +
-	"\x05value\x18\x02 \x01(\v2\x13.query.BindVariableR\x05value:\x028\x01\"\xb5\f\n" +
+	"\x05value\x18\x02 \x01(\v2\x13.query.BindVariableR\x05value:\x028\x01\"\xd7\f\n" +
 	"\x0eExecuteOptions\x12M\n" +
 	"\x0fincluded_fields\x18\x04 \x01(\x0e2$.query.ExecuteOptions.IncludedFieldsR\x0eincludedFields\x12*\n" +
 	"\x11client_found_rows\x18\x05 \x01(\bR\x0fclientFoundRows\x12:\n" +
@@ -5834,7 +5843,8 @@ const file_query_proto_rawDesc = "" +
 	"\bpriority\x18\x10 \x01(\tR\bpriority\x125\n" +
 	"\x15authoritative_timeout\x18\x11 \x01(\x03H\x00R\x14authoritativeTimeout\x12/\n" +
 	"\x14fetch_last_insert_id\x18\x12 \x01(\bR\x11fetchLastInsertId\x12(\n" +
-	"\x10in_dml_execution\x18\x13 \x01(\bR\x0einDmlExecution\";\n" +
+	"\x10in_dml_execution\x18\x13 \x01(\bR\x0einDmlExecution\x12 \n" +
+	"\vSessionUUID\x18\x14 \x01(\tR\vSessionUUID\";\n" +
 	"\x0eIncludedFields\x12\x11\n" +
 	"\rTYPE_AND_NAME\x10\x00\x12\r\n" +
 	"\tTYPE_ONLY\x10\x01\x12\a\n" +
