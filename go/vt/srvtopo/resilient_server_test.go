@@ -702,9 +702,7 @@ func TestGetSrvKeyspaceNamesCachedErrorRecovery(t *testing.T) {
 		t.Fatalf("Initial GetSrvKeyspaceNames failed: %v", err)
 	}
 	expectedNames := []string{"test_ks1", "test_ks2"}
-	if !reflect.DeepEqual(names, expectedNames) {
-		t.Fatalf("Initial query returned wrong names: got %v, want %v", names, expectedNames)
-	}
+	require.ElementsMatch(t, names, expectedNames, "Initial GetSrvKeyspaceNames returned wrong names")
 
 	// Phase 2: Force an error to get it cached
 	testErr := fmt.Errorf("test error - service unavailable")
@@ -716,9 +714,7 @@ func TestGetSrvKeyspaceNamesCachedErrorRecovery(t *testing.T) {
 
 	// This query should fail and cache the error
 	_, err = rs.GetSrvKeyspaceNames(ctx, "test_cell", false)
-	if err == nil {
-		t.Fatal("Expected error but got success")
-	}
+	require.Error(t, err, "GetSrvKeyspaceNames with stale allowed should return error")
 
 	// Phase 3: Service recovers - this is the critical test
 	// Clear the error to simulate service recovery
@@ -766,15 +762,8 @@ func TestGetSrvKeyspaceNamesCachedErrorRecovery(t *testing.T) {
 	}
 
 	// All requests should have succeeded
-	if errorCount > 0 {
-		t.Fatalf("Got %d errors out of %d requests after service recovery. ", errorCount, numGoroutines)
-	}
-
-	if successCount != numGoroutines {
-		t.Fatalf("Only %d/%d requests succeeded", successCount, numGoroutines)
-	}
-
-	counts.Counts()
+	assert.Greaterf(t, successCount, int32(0), "Expected successful requests after service recovery, got %d errors out of %d requests", errorCount, numGoroutines)
+	assert.EqualValuesf(t, successCount, numGoroutines, "Not all requests succeeded after service recovery: %d/%d", successCount, numGoroutines)
 }
 
 type watched struct {

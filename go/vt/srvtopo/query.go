@@ -139,7 +139,7 @@ func (q *resilientQuery) getCurrentValue(ctx context.Context, wkey fmt.Stringer,
 					q.counts.Add(cachedCategory, 1)
 					log.Warningf("ResilientQuery(%v, %v) failed: %v (cached value still considered valid: %v)", ctx, wkey, err, entry.value)
 				} else {
-					log.Errorf("ResilientQuery(%v, %v) failed: %v (cached value expired)", ctx, wkey, err)
+					log.Errorf("ResilientQuery(%v, %v) failed: %v (cached value expired, keeping cached value)", ctx, wkey, err)
 				}
 			}
 
