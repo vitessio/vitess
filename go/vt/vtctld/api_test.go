@@ -341,7 +341,7 @@ func TestAPI(t *testing.T) {
 		}`, http.StatusOK},
 		{"POST", "vtctl/", `["GetKeyspace","ks3"]`, `{
 		   "Error": "",
-		   "Output": "{\n  \"keyspace_type\": 1,\n  \"base_keyspace\": \"ks1\",\n  \"snapshot_time\": {\n    \"seconds\": \"1136214245\",\n    \"nanoseconds\": 0\n  },\n  \"durability_policy\": \"none\",\n  \"throttler_config\": null,\n  \"sidecar_db_name\": \"_vt\",\n  \"vtorc\": {\n    \"disable_emergency_reparent\": false\n  }\n}\n\n"
+		   "Output": "{\n  \"keyspace_type\": 1,\n  \"base_keyspace\": \"ks1\",\n  \"snapshot_time\": {\n    \"seconds\": \"1136214245\",\n    \"nanoseconds\": 0\n  },\n  \"durability_policy\": \"none\",\n  \"throttler_config\": null,\n  \"sidecar_db_name\": \"_vt\",\n  \"vtorc\": null\n}\n\n"
 		}`, http.StatusOK},
 		{"POST", "vtctl/", `["GetVSchema","ks3"]`, `{
 		   "Error": "",
