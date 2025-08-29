@@ -4010,10 +4010,10 @@ func (s *VtctldServer) SetVtorcEmergencyReparent(ctx context.Context, req *vtctl
 	// ERS-disabled on the keyspace record.
 	if req.Shard != "" && req.Shard != "0" && req.Shard != "-" {
 		_, err := s.ts.UpdateShardFields(ctx, req.Keyspace, req.Shard, func(si *topo.ShardInfo) error {
-			if si.Vtorc != nil {
-				si.Vtorc.DisableEmergencyReparent = req.Disable
+			if si.VtorcState != nil {
+				si.VtorcState.DisableEmergencyReparent = req.Disable
 			} else if req.Disable {
-				si.Vtorc = &vtorcdatapb.Shard{
+				si.VtorcState = &vtorcdatapb.Shard{
 					DisableEmergencyReparent: req.Disable,
 				}
 			}
@@ -4028,10 +4028,10 @@ func (s *VtctldServer) SetVtorcEmergencyReparent(ctx context.Context, req *vtctl
 			return nil, err
 		}
 
-		if ki.Vtorc != nil {
-			ki.Vtorc.DisableEmergencyReparent = req.Disable
+		if ki.VtorcState != nil {
+			ki.VtorcState.DisableEmergencyReparent = req.Disable
 		} else if req.Disable {
-			ki.Vtorc = &vtorcdatapb.Keyspace{
+			ki.VtorcState = &vtorcdatapb.Keyspace{
 				DisableEmergencyReparent: req.Disable,
 			}
 		}

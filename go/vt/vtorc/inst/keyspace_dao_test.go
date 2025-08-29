@@ -55,7 +55,7 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 			keyspaceWanted: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 				DurabilityPolicy: policy.DurabilitySemiSync,
-				Vtorc:            vtorcconfig.DefaultKeyspaceTopoConfig,
+				VtorcState:       vtorcconfig.DefaultKeyspaceTopoConfig,
 			},
 			semiSyncAckersWanted: 1,
 		}, {
@@ -66,7 +66,7 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 			},
 			keyspaceWanted: &topodatapb.Keyspace{
 				KeyspaceType: topodatapb.KeyspaceType_NORMAL,
-				Vtorc:        vtorcconfig.DefaultKeyspaceTopoConfig,
+				VtorcState:   vtorcconfig.DefaultKeyspaceTopoConfig,
 			},
 			errInDurabilityPolicy: "durability policy  not found",
 		}, {
@@ -77,7 +77,7 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 			},
 			keyspaceWanted: &topodatapb.Keyspace{
 				KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT,
-				Vtorc:        vtorcconfig.DefaultKeyspaceTopoConfig,
+				VtorcState:   vtorcconfig.DefaultKeyspaceTopoConfig,
 			},
 		}, {
 			name:         "Success with fields that are not stored",
@@ -90,7 +90,7 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 			keyspaceWanted: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 				DurabilityPolicy: policy.DurabilityNone,
-				Vtorc:            vtorcconfig.DefaultKeyspaceTopoConfig,
+				VtorcState:       vtorcconfig.DefaultKeyspaceTopoConfig,
 			},
 			semiSyncAckersWanted: 0,
 		}, {
@@ -99,14 +99,14 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 			keyspace: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 				DurabilityPolicy: policy.DurabilityNone,
-				Vtorc: &vtorcdatapb.Keyspace{
+				VtorcState: &vtorcdatapb.Keyspace{
 					DisableEmergencyReparent: true,
 				},
 			},
 			keyspaceWanted: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 				DurabilityPolicy: policy.DurabilityNone,
-				Vtorc: &vtorcdatapb.Keyspace{
+				VtorcState: &vtorcdatapb.Keyspace{
 					DisableEmergencyReparent: true,
 				},
 			},

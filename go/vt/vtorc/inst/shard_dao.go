@@ -121,7 +121,7 @@ func ReadKeyspaceShardStats() ([]ShardStats, error) {
 // SaveShard saves the shard record against the shard name.
 func SaveShard(shard *topo.ShardInfo) error {
 	var disableEmergencyReparent int
-	if shard.Vtorc != nil && shard.Vtorc.DisableEmergencyReparent {
+	if shard.VtorcState != nil && shard.VtorcState.DisableEmergencyReparent {
 		disableEmergencyReparent = 1
 	}
 	_, err := db.ExecVTOrc(`

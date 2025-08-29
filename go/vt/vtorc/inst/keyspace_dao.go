@@ -52,7 +52,7 @@ func ReadKeyspace(keyspaceName string) (*topo.KeyspaceInfo, error) {
 	err := db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
 		keyspace.KeyspaceType = topodatapb.KeyspaceType(row.GetInt32("keyspace_type"))
 		keyspace.DurabilityPolicy = row.GetString("durability_policy")
-		keyspace.Vtorc = &vtorcdatapb.Keyspace{
+		keyspace.VtorcState = &vtorcdatapb.Keyspace{
 			DisableEmergencyReparent: row.GetBool("disable_emergency_reparent"),
 		}
 		keyspace.SetKeyspaceName(keyspaceName)
@@ -70,7 +70,7 @@ func ReadKeyspace(keyspaceName string) (*topo.KeyspaceInfo, error) {
 // SaveKeyspace saves the keyspace record against the keyspace name.
 func SaveKeyspace(keyspace *topo.KeyspaceInfo) error {
 	var disableEmergencyReparent int
-	if keyspace.Vtorc != nil && keyspace.Vtorc.DisableEmergencyReparent {
+	if keyspace.VtorcState != nil && keyspace.VtorcState.DisableEmergencyReparent {
 		disableEmergencyReparent = 1
 	}
 	_, err := db.ExecVTOrc(`
