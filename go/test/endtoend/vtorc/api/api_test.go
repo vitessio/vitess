@@ -116,7 +116,6 @@ func TestAPIEndpoints(t *testing.T) {
 		utils.CheckVarExists(t, vtorc, "DiscoveriesInstancePollSecondsExceeded")
 		utils.CheckVarExists(t, vtorc, "DiscoveriesQueueLength")
 		utils.CheckVarExists(t, vtorc, "DiscoveriesRecentCount")
-		utils.CheckVarExists(t, vtorc, "EmergencyReparentShardDisabled")
 		utils.CheckVarExists(t, vtorc, "InstanceRead")
 		utils.CheckVarExists(t, vtorc, "InstanceReadTopology")
 
@@ -128,7 +127,6 @@ func TestAPIEndpoints(t *testing.T) {
 		utils.CheckMetricExists(t, vtorc, "vtorc_discoveries_instance_poll_seconds_exceeded")
 		utils.CheckMetricExists(t, vtorc, "vtorc_discoveries_queue_length")
 		utils.CheckMetricExists(t, vtorc, "vtorc_discoveries_recent_count")
-		utils.CheckMetricExists(t, vtorc, "vtorc_emergency_reparent_shard_disabled")
 		utils.CheckMetricExists(t, vtorc, "vtorc_instance_read")
 		utils.CheckMetricExists(t, vtorc, "vtorc_instance_read_topology")
 	})
