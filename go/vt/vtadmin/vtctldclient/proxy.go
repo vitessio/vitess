@@ -21,8 +21,6 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/grpc/credentials/insecure"
-
 	"google.golang.org/grpc"
 	grpcresolver "google.golang.org/grpc/resolver"
 
@@ -32,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 	"vitess.io/vitess/go/vt/vtadmin/debug"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
+	"vitess.io/vitess/go/vt/vtctl/grpcclientcommon"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
@@ -111,12 +110,13 @@ func (vtctld *ClientProxy) dial(ctx context.Context) error {
 	vtadminproto.AnnotateClusterSpan(vtctld.cluster, span)
 	span.Annotate("is_using_credentials", vtctld.creds != nil)
 
-	opts := []grpc.DialOption{
-		// TODO: make configurable. right now, omitting this and attempting
-		// to not use TLS results in:
-		//		grpc: no transport security set (use grpc.WithInsecure() explicitly or set credentials)
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	// Get TLS configuration from command-line flags
+	tlsOpt, err := grpcclientcommon.SecureDialOption()
+	if err != nil {
+		return err
 	}
+
+	opts := []grpc.DialOption{tlsOpt}
 
 	if vtctld.creds != nil {
 		opts = append(opts, grpc.WithPerRPCCredentials(vtctld.creds))
