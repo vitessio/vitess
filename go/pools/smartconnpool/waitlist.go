@@ -50,11 +50,17 @@ type waitlist[C Connection] struct {
 // The returned connection may _not_ have the requested Setting. This function can
 // also return a `nil` connection even if our context has expired, if the pool has
 // forced an expiration of all waiters in the waitlist.
-func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting) (*Pooled[C], error) {
+func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, isClosed func() bool) (*Pooled[C], error) {
 	elem := wl.nodes.Get().(*list.Element[waiter[C]])
 	elem.Value = waiter[C]{setting: setting, conn: nil, ctx: ctx}
 
 	wl.mu.Lock()
+	if isClosed() {
+		// if the pool is closed, we can't wait for a connection, so return an error
+		wl.nodes.Put(elem)
+		wl.mu.Unlock()
+		return nil, ErrConnPoolClosed
+	}
 	// add ourselves as a waiter at the end of the waitlist
 	wl.list.PushBackValue(elem)
 	wl.mu.Unlock()
