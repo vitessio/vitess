@@ -256,8 +256,8 @@ message Shard {
   // OBSOLETE cells (5)
   reserved 5;
 
-  // Vtorc is the vtorc config/state for the shard.
-  vtorcdata.Shard vtorc = 9;
+  // VtorcState is the vtorc config/state for the shard.
+  vtorcdata.Shard vtorc_state = 9;
 }
 
 // A Keyspace contains data about a keyspace.
@@ -304,7 +304,7 @@ message Keyspace {
   string sidecar_db_name = 10;
 
   // Vtorc is the vtorc keyspace config/state for the keyspace.
-  vtorcdata.Keyspace vtorc = 11;
+  vtorcdata.Keyspace vtorc_state = 11;
 }
 
 // ShardReplication describes the MySQL replication relationships

@@ -18569,8 +18569,8 @@ export namespace topodata {
         /** Shard is_primary_serving */
         is_primary_serving?: (boolean|null);
 
-        /** Shard vtorc */
-        vtorc?: (vtorcdata.IShard|null);
+        /** Shard vtorc_state */
+        vtorc_state?: (vtorcdata.IShard|null);
     }
 
     /** Represents a Shard. */
@@ -18600,8 +18600,8 @@ export namespace topodata {
         /** Shard is_primary_serving. */
         public is_primary_serving: boolean;
 
-        /** Shard vtorc. */
-        public vtorc?: (vtorcdata.IShard|null);
+        /** Shard vtorc_state. */
+        public vtorc_state?: (vtorcdata.IShard|null);
 
         /**
          * Creates a new Shard instance using the specified properties.
@@ -18941,8 +18941,8 @@ export namespace topodata {
         /** Keyspace sidecar_db_name */
         sidecar_db_name?: (string|null);
 
-        /** Keyspace vtorc */
-        vtorc?: (vtorcdata.IKeyspace|null);
+        /** Keyspace vtorc_state */
+        vtorc_state?: (vtorcdata.IKeyspace|null);
     }
 
     /** Represents a Keyspace. */
@@ -18972,8 +18972,8 @@ export namespace topodata {
         /** Keyspace sidecar_db_name. */
         public sidecar_db_name: string;
 
-        /** Keyspace vtorc. */
-        public vtorc?: (vtorcdata.IKeyspace|null);
+        /** Keyspace vtorc_state. */
+        public vtorc_state?: (vtorcdata.IKeyspace|null);
 
         /**
          * Creates a new Keyspace instance using the specified properties.
@@ -57342,9 +57342,6 @@ export namespace vtctldata {
 
         /** CreateKeyspaceRequest sidecar_db_name */
         sidecar_db_name?: (string|null);
-
-        /** CreateKeyspaceRequest vtorc */
-        vtorc?: (vtorcdata.IKeyspace|null);
     }
 
     /** Represents a CreateKeyspaceRequest. */
@@ -57379,9 +57376,6 @@ export namespace vtctldata {
 
         /** CreateKeyspaceRequest sidecar_db_name. */
         public sidecar_db_name: string;
-
-        /** CreateKeyspaceRequest vtorc. */
-        public vtorc?: (vtorcdata.IKeyspace|null);
 
         /**
          * Creates a new CreateKeyspaceRequest instance using the specified properties.
@@ -57572,9 +57566,6 @@ export namespace vtctldata {
 
         /** CreateShardRequest include_parent */
         include_parent?: (boolean|null);
-
-        /** CreateShardRequest vtorc */
-        vtorc?: (vtorcdata.IShard|null);
     }
 
     /** Represents a CreateShardRequest. */
@@ -57597,9 +57588,6 @@ export namespace vtctldata {
 
         /** CreateShardRequest include_parent. */
         public include_parent: boolean;
-
-        /** CreateShardRequest vtorc. */
-        public vtorc?: (vtorcdata.IShard|null);
 
         /**
          * Creates a new CreateShardRequest instance using the specified properties.
