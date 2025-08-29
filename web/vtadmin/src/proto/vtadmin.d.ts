@@ -41695,6 +41695,9 @@ export namespace query {
 
         /** ExecuteOptions in_dml_execution */
         in_dml_execution?: (boolean|null);
+
+        /** ExecuteOptions transaction_timeout */
+        transaction_timeout?: (number|Long|null);
     }
 
     /** Represents an ExecuteOptions. */
@@ -41750,6 +41753,9 @@ export namespace query {
 
         /** ExecuteOptions in_dml_execution. */
         public in_dml_execution: boolean;
+
+        /** ExecuteOptions transaction_timeout. */
+        public transaction_timeout?: (number|Long|null);
 
         /** ExecuteOptions timeout. */
         public timeout?: "authoritative_timeout";
