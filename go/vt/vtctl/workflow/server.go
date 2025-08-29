@@ -3278,28 +3278,47 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 	if err := confirmKeyspaceLocksHeld(); err != nil {
 		return handleError("locks were lost", err)
 	}
+	ts.logger.Infof("Creating journals for workflow %s.%s", ts.targetKeyspace, ts.workflow)
 	if err := sw.createJournals(ctx, sourceWorkflows); err != nil {
 		return handleError("failed to create the journal", err)
 	}
+	ts.logger.Infof("Created journals for workflow %s.%s", ts.targetKeyspace, ts.workflow)
+
+	ts.logger.Infof("Allowing writes on target for workflow %s.%s", ts.targetKeyspace, ts.workflow)
 	if err := sw.allowTargetWrites(ctx); err != nil {
 		return handleError(fmt.Sprintf("failed to allow writes in the %s keyspace", ts.TargetKeyspaceName()), err)
 	}
+	ts.logger.Infof("Writes allowed on target for workflow %s.%s", ts.targetKeyspace, ts.workflow)
+
+	ts.logger.Infof("Updating routing rules for workflow %s.%s", ts.targetKeyspace, ts.workflow)
 	if err := sw.changeRouting(ctx); err != nil {
 		return handleError("failed to update the routing rules", err)
 	}
+	ts.logger.Infof("Updated routing rules for workflow %s.%s", ts.targetKeyspace, ts.workflow)
+
+	ts.logger.Infof("Finalizing stream migrations for workflow %s.%s", ts.targetKeyspace, ts.workflow)
 	if err := sw.streamMigraterfinalize(ctx, ts, sourceWorkflows); err != nil {
 		return handleError("failed to finalize the traffic switch", err)
 	}
+	ts.logger.Infof("Finalized stream migrations for workflow %s.%s", ts.targetKeyspace, ts.workflow)
+
 	if req.EnableReverseReplication {
+		ts.logger.Infof("Starting reverse workflow %s.%s", ts.sourceKeyspace, ts.reverseWorkflow)
 		if err := sw.startReverseVReplication(ctx); err != nil {
 			return handleError("failed to start the reverse workflow", err)
 		}
+		ts.logger.Infof("Started reverse workflow %s.%s", ts.sourceKeyspace, ts.reverseWorkflow)
+	} else {
+		ts.logger.Infof("Reverse workflow not requested, skipping for %s.%s", ts.targetKeyspace, ts.workflow)
 	}
 
+	ts.logger.Infof("Marking workflow frozen %s.%s", ts.targetKeyspace, ts.workflow)
 	if err := sw.freezeTargetVReplication(ctx); err != nil {
 		return handleError(fmt.Sprintf("failed to freeze the workflow in the %s keyspace", ts.TargetKeyspaceName()), err)
 	}
+	ts.logger.Infof("Marked workflow frozen %s.%s", ts.targetKeyspace, ts.workflow)
 
+	ts.logger.Infof("Switch writes completed for workflow %s.%s", ts.targetKeyspace, ts.workflow)
 	return ts.id, sw.logs(), nil
 }
 
