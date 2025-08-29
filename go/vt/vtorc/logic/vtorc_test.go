@@ -79,7 +79,7 @@ func TestRefreshAllInformation(t *testing.T) {
 
 	// Create a memory topo-server and create the keyspace and shard records
 	ts = memorytopo.NewServer(context.Background(), cell1)
-	_, err := ts.GetOrCreateShard(context.Background(), keyspace, shard, nil)
+	_, err := ts.GetOrCreateShard(context.Background(), keyspace, shard)
 	require.NoError(t, err)
 
 	// Test error

@@ -98,7 +98,7 @@ func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.M
 	sourceShardsMap := make(map[string]any)
 	for _, shard := range sourceShards {
 		sourceShardsMap[shard] = nil
-		require.NoError(t, topoServ.CreateShard(ctx, ms.SourceKeyspace, shard, nil))
+		require.NoError(t, topoServ.CreateShard(ctx, ms.SourceKeyspace, shard))
 		_ = env.addTablet(t, tabletID, env.ms.SourceKeyspace, shard, topodatapb.TabletType_PRIMARY)
 		tabletID += tabletUIDStep
 	}
@@ -112,7 +112,7 @@ func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.M
 				continue
 			}
 		}
-		require.NoError(t, topoServ.CreateShard(ctx, ms.TargetKeyspace, shard, nil))
+		require.NoError(t, topoServ.CreateShard(ctx, ms.TargetKeyspace, shard))
 		_ = env.addTablet(t, tabletID, env.ms.TargetKeyspace, shard, topodatapb.TabletType_PRIMARY)
 		tabletID += tabletUIDStep
 	}

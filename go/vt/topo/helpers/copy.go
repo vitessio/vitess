@@ -95,7 +95,7 @@ func CopyShards(ctx context.Context, fromTS, toTS *topo.Server) error {
 				return fmt.Errorf("GetShard(%v, %v): %w", keyspace, shard, err)
 			}
 
-			if err := toTS.CreateShard(ctx, keyspace, shard, si.Vtorc); err != nil {
+			if err := toTS.CreateShard(ctx, keyspace, shard); err != nil {
 				if topo.IsErrType(err, topo.NodeExists) {
 					log.Warningf("shard %v/%v already exists", keyspace, shard)
 				} else {

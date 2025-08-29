@@ -526,7 +526,7 @@ func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardIn
 	var shardInfo *topo.ShardInfo
 	if err := tm.withRetry(ctx, "creating keyspace and shard", func() error {
 		var err error
-		shardInfo, err = tm.TopoServer.GetOrCreateShard(ctx, tablet.Keyspace, tablet.Shard, nil)
+		shardInfo, err = tm.TopoServer.GetOrCreateShard(ctx, tablet.Keyspace, tablet.Shard)
 		return err
 	}); err != nil {
 		return nil, vterrors.Wrap(err, "createKeyspaceShard: cannot GetOrCreateShard shard")

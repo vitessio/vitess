@@ -42,9 +42,9 @@ func TestTopoShardLock(t *testing.T) {
 	ks := "ks"
 	shard1 := "80-"
 	shard2 := "-80"
-	_, err := ts.GetOrCreateShard(ctx, ks, shard1, nil)
+	_, err := ts.GetOrCreateShard(ctx, ks, shard1)
 	require.NoError(t, err)
-	_, err = ts.GetOrCreateShard(ctx, ks, shard2, nil)
+	_, err = ts.GetOrCreateShard(ctx, ks, shard2)
 	require.NoError(t, err)
 
 	origCtx := ctx

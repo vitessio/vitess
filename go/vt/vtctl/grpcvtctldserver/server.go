@@ -920,7 +920,6 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 	span.Annotate("force", req.Force)
 	span.Annotate("allow_empty_vschema", req.AllowEmptyVSchema)
 	span.Annotate("durability_policy", req.DurabilityPolicy)
-	span.Annotate("vtorc_config", req.Vtorc)
 
 	switch req.Type {
 	case topodatapb.KeyspaceType_NORMAL:
@@ -947,7 +946,6 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 		SnapshotTime:     req.SnapshotTime,
 		DurabilityPolicy: req.DurabilityPolicy,
 		SidecarDbName:    req.SidecarDbName,
-		Vtorc:            req.Vtorc,
 	}
 
 	err = s.ts.CreateKeyspace(ctx, req.Name, ki)
@@ -1033,7 +1031,6 @@ func (s *VtctldServer) CreateShard(ctx context.Context, req *vtctldatapb.CreateS
 	span.Annotate("shard", req.ShardName)
 	span.Annotate("force", req.Force)
 	span.Annotate("include_parent", req.IncludeParent)
-	span.Annotate("vtorc_config", req.Vtorc)
 
 	if req.IncludeParent {
 		log.Infof("Creating empty keyspace for %s", req.Keyspace)
@@ -1049,7 +1046,7 @@ func (s *VtctldServer) CreateShard(ctx context.Context, req *vtctldatapb.CreateS
 
 	shardExists := false
 
-	if err = s.ts.CreateShard(ctx, req.Keyspace, req.ShardName, req.Vtorc); err != nil {
+	if err = s.ts.CreateShard(ctx, req.Keyspace, req.ShardName); err != nil {
 		if req.Force && topo.IsErrType(err, topo.NodeExists) {
 			log.Infof("shard %v/%v already exists; ignoring error because Force = true", req.Keyspace, req.ShardName)
 			shardExists = true

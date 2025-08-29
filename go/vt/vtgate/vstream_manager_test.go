@@ -2052,7 +2052,7 @@ func getSandboxTopo(ctx context.Context, cell string, keyspace string, shards []
 	ts.CreateCellInfo(ctx, cell, &topodatapb.CellInfo{})
 	ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{})
 	for _, shard := range shards {
-		ts.CreateShard(ctx, keyspace, shard, nil)
+		ts.CreateShard(ctx, keyspace, shard)
 	}
 	return st
 }
@@ -2068,7 +2068,7 @@ func getSandboxTopoMultiCell(ctx context.Context, cells []string, keyspace strin
 	ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{})
 
 	for _, shard := range shards {
-		ts.CreateShard(ctx, keyspace, shard, nil)
+		ts.CreateShard(ctx, keyspace, shard)
 	}
 	return st
 }

@@ -523,7 +523,7 @@ func TestLoadTablets(t *testing.T) {
 		Shard:    "shard",
 	}
 	for _, ks := range testKeyspacesToWatch {
-		_, err := ts.GetOrCreateShard(ctx, ks, "shard", nil)
+		_, err := ts.GetOrCreateShard(ctx, ks, "shard")
 		require.NoError(t, err)
 	}
 	require.NoError(t, ts.CreateTablet(ctx, tablet1))

@@ -334,7 +334,7 @@ func CreateKs(
 	// iterate through the shards
 	for _, spb := range kpb.Shards {
 		shard := spb.Name
-		if err := ts.CreateShard(ctx, keyspace, shard, nil); err != nil {
+		if err := ts.CreateShard(ctx, keyspace, shard); err != nil {
 			return 0, fmt.Errorf("CreateShard(%v:%v) failed: %v", keyspace, shard, err)
 		}
 

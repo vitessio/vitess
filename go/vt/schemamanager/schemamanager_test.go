@@ -312,7 +312,7 @@ func newFakeTopo(t *testing.T) *topo.Server {
 	require.NoError(t, err)
 
 	for i, shard := range []string{"0", "1", "2"} {
-		err = ts.CreateShard(ctx, "test_keyspace", shard, nil)
+		err = ts.CreateShard(ctx, "test_keyspace", shard)
 		require.NoError(t, err)
 
 		tablet := &topodatapb.Tablet{
@@ -337,7 +337,7 @@ func newFakeTopo(t *testing.T) *topo.Server {
 	err = ts.CreateKeyspace(ctx, "unsharded_keyspace", &topodatapb.Keyspace{})
 	require.NoError(t, err)
 
-	err = ts.CreateShard(ctx, "unsharded_keyspace", "0", nil)
+	err = ts.CreateShard(ctx, "unsharded_keyspace", "0")
 	require.NoError(t, err)
 
 	tablet := &topodatapb.Tablet{

@@ -82,7 +82,7 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 		err := ts.CreateKeyspace(ctx, keyspaceNames[i], keyspace)
 		require.NoError(t, err)
 		for idx, shardName := range []string{"-80", "80-"} {
-			err = ts.CreateShard(ctx, keyspaceNames[i], shardName, nil)
+			err = ts.CreateShard(ctx, keyspaceNames[i], shardName)
 			require.NoError(t, err)
 			_, err = ts.UpdateShardFields(ctx, keyspaceNames[i], shardName, func(si *topo.ShardInfo) error {
 				si.PrimaryAlias = &topodatapb.TabletAlias{
@@ -297,7 +297,7 @@ func TestRefreshShard(t *testing.T) {
 
 			ts = memorytopo.NewServer(ctx, "zone1")
 			if tt.shard != nil {
-				_, err := ts.GetOrCreateShard(context.Background(), tt.keyspaceName, tt.shardName, nil)
+				_, err := ts.GetOrCreateShard(context.Background(), tt.keyspaceName, tt.shardName)
 				require.NoError(t, err)
 				_, err = ts.UpdateShardFields(context.Background(), tt.keyspaceName, tt.shardName, func(info *topo.ShardInfo) error {
 					info.PrimaryAlias = tt.shard.PrimaryAlias
@@ -344,7 +344,7 @@ func TestRefreshAllShards(t *testing.T) {
 	require.NoError(t, ts.CreateKeyspace(ctx, "ks1", keyspaceDurabilityNone))
 	shards := []string{"-40", "40-80", "80-c0", "c0-"}
 	for _, shard := range shards {
-		require.NoError(t, ts.CreateShard(ctx, "ks1", shard, nil))
+		require.NoError(t, ts.CreateShard(ctx, "ks1", shard))
 	}
 
 	// test shard refresh
