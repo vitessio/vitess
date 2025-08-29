@@ -290,8 +290,7 @@ func (w *wrapping) Cause() error  { return w.cause }
 
 func (w *wrapping) Format(s fmt.State, verb rune) {
 	if rune('v') == verb {
-		panicIfError(fmt.Fprintf(s, "%v\n", w.Cause()))
-		panicIfError(io.WriteString(s, w.msg))
+		panicIfError(fmt.Fprintf(s, "%v :: %v\n", w.msg, w.Cause()))
 		if getLogErrStacks() {
 			w.stack.Format(s, verb)
 		}
