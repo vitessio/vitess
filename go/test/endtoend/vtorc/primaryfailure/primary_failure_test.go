@@ -118,7 +118,7 @@ func TestDownPrimary(t *testing.T) {
 // confirm no ERS occurs.
 func TestDownPrimary_ERSDisabledTopo(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{}, 0, policy.DurabilityNone)
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{fmt.Sprintf("%s=10s", vtutils.GetFlagVariantForTests("--remote-operation-timeout")), "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{}, 1, policy.DurabilityNone)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
