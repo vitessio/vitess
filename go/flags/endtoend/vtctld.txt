@@ -166,6 +166,8 @@ Flags:
       --topo-global-root string                                          the path of the global topology data in the global topology server
       --topo-global-server-address string                                the address of the global topology server
       --topo-implementation string                                       the topology implementation to use
+      --topo-mysql-election-ttl int                                      election TTL in seconds for MySQL topo (default 30)
+      --topo-mysql-lock-ttl int                                          lock TTL in seconds for MySQL topo (default 30)
       --topo-read-concurrency int                                        Maximum concurrency of topo reads per global or local cell. (default 32)
       --topo-zk-auth-file string                                         auth to use when connecting to the zk topo server, file contents should be <scheme>:<auth>, e.g., digest:user:pass
       --topo-zk-base-timeout duration                                    zk base timeout (see zk.Connect) (default 30s)
