@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -67,9 +66,15 @@ func init() {
 	)
 	stats.NewGaugesFuncWithMultiLabels(
 		"TabletsWatchedByShard",
-		"Number of tablets watched and EmergencyReparentShard status by keyspace/shard",
-		[]string{"Keyspace", "Shard", "ErsDisabled"},
+		"Number of tablets watched by keyspace/shard",
+		[]string{"Keyspace", "Shard"},
 		getTabletsWatchedByShardStats,
+	)
+	stats.NewGaugesFuncWithMultiLabels(
+		"EmergencyReparentShardDisabled",
+		"Shards with EmergencyReparentShard disabled by keyspace/shard (1 = disabled)",
+		[]string{"Keyspace", "Shard"},
+		getEmergencyReparentShardDisabledStats,
 	)
 }
 
@@ -90,10 +95,24 @@ func getTabletsWatchedByShardStats() map[string]int64 {
 		log.Errorf("Failed to read tablet counts by shard: %+v", err)
 	}
 	for _, s := range statsByKS {
-		labels := s.Keyspace + "." + s.Shard + "." + strconv.FormatBool(s.DisableEmergencyReparent)
-		tabletsWatchedByShard[labels] = s.TabletCount
+		tabletsWatchedByShard[s.Keyspace+"."+s.Shard] = s.TabletCount
 	}
 	return tabletsWatchedByShard
+}
+
+// getEmergencyReparentShardDisabledStats returns the number of shards with EmergencyReparentShard disabled in stats format.
+func getEmergencyReparentShardDisabledStats() map[string]int64 {
+	disabledShards := make(map[string]int64)
+	statsByKS, err := inst.ReadKeyspaceShardStats()
+	if err != nil {
+		log.Errorf("Failed to read tablet counts by shard: %+v", err)
+	}
+	for _, s := range statsByKS {
+		if s.DisableEmergencyReparent {
+			disabledShards[s.Keyspace+"."+s.Shard] = 1
+		}
+	}
+	return disabledShards
 }
 
 // RegisterFlags registers the flags required by VTOrc
