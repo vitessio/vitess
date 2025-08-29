@@ -236,7 +236,10 @@ func (s *planTestSuite) setFks(vschema *vindexes.VSchema) {
 		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", []sqlparser.Expr{sqlparser.NewColName("bar"), sqlparser.NewColName("col9")})
 		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl8", []sqlparser.Expr{sqlparser.NewColName("col8")})
 
-		s.addPKs(vschema, "unsharded_fk_allow", []string{"u_tbl1", "u_tbl2", "u_tbl3", "u_tbl4", "u_tbl5", "u_tbl6", "u_tbl7", "u_tbl8", "u_tbl9", "u_tbl10", "u_tbl11",
+		// FK from u_tbl12 that is self-referential.
+		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl12", createFkDefinition([]string{"parent_id"}, "u_tbl12", []string{"id"}, sqlparser.Restrict, sqlparser.Restrict))
+
+		s.addPKs(vschema, "unsharded_fk_allow", []string{"u_tbl1", "u_tbl2", "u_tbl3", "u_tbl4", "u_tbl5", "u_tbl6", "u_tbl7", "u_tbl8", "u_tbl9", "u_tbl10", "u_tbl11", "u_tbl12",
 			"u_multicol_tbl1", "u_multicol_tbl2", "u_multicol_tbl3"})
 	}
 }
