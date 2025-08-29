@@ -986,8 +986,9 @@ func (ts *trafficSwitcher) changeTableSourceWrites(ctx context.Context, access a
 
 // cancelMigration attempts to revert all changes made during the migration so that we can get back to the
 // state when traffic switching (or reversing) was initiated.
-func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *StreamMigrator) {
+func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *StreamMigrator) error {
 	var err error
+	cancelErrs := &concurrency.AllErrorRecorder{}
 
 	if ctx.Err() != nil {
 		// Even though we create a new context later on we still record any context error:
@@ -996,9 +997,13 @@ func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *StreamMigrat
 	}
 
 	// We create a new context while canceling the migration, so that we are independent of the original
-	// context being cancelled prior to or during the cancel operation.
-	cmTimeout := 60 * time.Second
-	cmCtx, cmCancel := context.WithTimeout(context.Background(), cmTimeout)
+	// context being canceled prior to or during the cancel operation itself.
+	// First we create a copy of the parent context, so that we maintain the locks, but which cannot be
+	// canceled by the parent context.
+	wcCtx := context.WithoutCancel(ctx)
+	// Now we create a child context from that which has a timeout.
+	cmTimeout := 2 * time.Minute
+	cmCtx, cmCancel := context.WithTimeout(wcCtx, cmTimeout)
 	defer cmCancel()
 
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
@@ -1007,10 +1012,14 @@ func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *StreamMigrat
 		err = ts.changeShardsAccess(cmCtx, ts.SourceKeyspaceName(), ts.SourceShards(), allowWrites)
 	}
 	if err != nil {
+		cancelErrs.RecordError(fmt.Errorf("could not revert denied tables / shard access: %v", err))
 		ts.Logger().Errorf("Cancel migration failed: could not revert denied tables / shard access: %v", err)
 	}
 
-	sm.CancelStreamMigrations(cmCtx)
+	if err := sm.CancelStreamMigrations(cmCtx); err != nil {
+		cancelErrs.RecordError(fmt.Errorf("could not cancel stream migrations: %v", err))
+		ts.Logger().Errorf("Cancel migration failed: could not cancel stream migrations: %v", err)
+	}
 
 	err = ts.ForAllTargets(func(target *MigrationTarget) error {
 		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='' where db_name=%s and workflow=%s",
@@ -1019,13 +1028,19 @@ func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *StreamMigrat
 		return err
 	})
 	if err != nil {
+		cancelErrs.RecordError(fmt.Errorf("could not restart vreplication: %v", err))
 		ts.Logger().Errorf("Cancel migration failed: could not restart vreplication: %v", err)
 	}
 
-	err = ts.deleteReverseVReplication(cmCtx)
-	if err != nil {
-		ts.Logger().Errorf("Cancel migration failed: could not delete revers vreplication entries: %v", err)
+	if err := ts.deleteReverseVReplication(cmCtx); err != nil {
+		cancelErrs.RecordError(fmt.Errorf("could not delete reverse vreplication streams: %v", err))
+		ts.Logger().Errorf("Cancel migration failed: could not delete reverse vreplication streams: %v", err)
 	}
+
+	if cancelErrs.HasErrors() {
+		return vterrors.Wrap(cancelErrs.AggrError(vterrors.Aggregate), "cancel migration failed, manual cleanup work may be necessary")
+	}
+	return nil
 }
 
 func (ts *trafficSwitcher) freezeTargetVReplication(ctx context.Context) error {

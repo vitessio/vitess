@@ -25,7 +25,7 @@ import (
 
 type iswitcher interface {
 	lockKeyspace(ctx context.Context, keyspace, action string) (context.Context, func(*error), error)
-	cancelMigration(ctx context.Context, sm *StreamMigrator)
+	cancelMigration(ctx context.Context, sm *StreamMigrator) error
 	stopStreams(ctx context.Context, sm *StreamMigrator) ([]string, error)
 	stopSourceWrites(ctx context.Context) error
 	waitForCatchup(ctx context.Context, filteredReplicationWaitTime time.Duration) error
