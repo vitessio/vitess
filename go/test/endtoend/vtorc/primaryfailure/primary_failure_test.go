@@ -116,7 +116,7 @@ func TestDownPrimary(t *testing.T) {
 
 // bring down primary, with keyspace-level ERS disabled via SetVtorcEmergencyReparent --disable.
 // confirm no ERS occurs.
-func TestDownPrimary_ERSDisabledTopo(t *testing.T) {
+func TestDownPrimary_KeyspaceEmergencyReparentDisabled(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{fmt.Sprintf("%s=10s", vtutils.GetFlagVariantForTests("--remote-operation-timeout")), "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{}, 1, policy.DurabilityNone)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
@@ -153,7 +153,7 @@ func TestDownPrimary_ERSDisabledTopo(t *testing.T) {
 	assert.NoError(t, err)
 	utils.CheckERSDisabledState(t, vtOrcProcess, keyspace.Name, shard0.Name, true)
 
-	// Make the current primary vttablet unavailable
+	// make the current primary vttablet unavailable
 	err = curPrimary.VttabletProcess.TearDown()
 	require.NoError(t, err)
 	err = curPrimary.MysqlctlProcess.Stop()
@@ -163,17 +163,39 @@ func TestDownPrimary_ERSDisabledTopo(t *testing.T) {
 		utils.PermanentlyRemoveVttablet(clusterInfo, curPrimary)
 	}()
 
-	// check that the primary remains the same
-	utils.CheckPrimaryTablet(t, clusterInfo, curPrimary, true)
+	// check that the shard primary remains the same because ERS is disabled on the keyspace
+	origPrimary := curPrimary
+	curPrimary = utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	require.NotNil(t, curPrimary)
+	require.Equal(t, origPrimary.Alias, curPrimary.Alias)
 
 	// check ERS did not occur
-	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name, 0)
 	utils.WaitForSuccessfulERSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 0)
+	utils.CheckVarExists(t, vtOrcProcess, "EmergencyReparentShardDisabled")
+	utils.CheckMetricExists(t, vtOrcProcess, "vtorc_emergency_reparent_shard_disabled")
+
+	// enable ERS on the keyspace via SetVtorcEmergencyReparent --enable
+	_, err = clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetVtorcEmergencyReparent", "--enable", keyspace.Name)
+	assert.NoError(t, err)
+	utils.CheckERSDisabledState(t, vtOrcProcess, keyspace.Name, shard0.Name, false)
+
+	// check that the replica gets promoted by vtorc
+	utils.CheckPrimaryTablet(t, clusterInfo, replica, true)
+
+	// also check that the replication is working correctly after failover
+	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{rdonly}, 10*time.Second)
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+	utils.WaitForSuccessfulERSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
 	t.Run("Check ERS and PRS Vars and Metrics", func(t *testing.T) {
-		utils.CheckVarExists(t, vtOrcProcess, "EmergencyReparentShardDisabled")
+		utils.CheckVarExists(t, vtOrcProcess, "EmergencyReparentCounts")
+		utils.CheckVarExists(t, vtOrcProcess, "PlannedReparentCounts")
+		utils.CheckVarExists(t, vtOrcProcess, "ReparentShardOperationTimings")
 
 		// Metrics registered in prometheus
-		utils.CheckMetricExists(t, vtOrcProcess, "vtorc_emergency_reparent_shard_disabled")
+		utils.CheckMetricExists(t, vtOrcProcess, "vtorc_emergency_reparent_counts")
+		utils.CheckMetricExists(t, vtOrcProcess, "vtorc_planned_reparent_counts")
+		utils.CheckMetricExists(t, vtOrcProcess, "vtorc_reparent_shard_operation_timings_bucket")
 	})
 }
 
