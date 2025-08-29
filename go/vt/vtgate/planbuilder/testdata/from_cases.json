@@ -5092,7 +5092,8 @@
         "FieldQuery": "select `user`.col, `user`.id, weight_string(`user`.id) from `user` where 1 != 1",
         "OrderBy": "(1|2) ASC",
         "Query": "select `user`.col, `user`.id, weight_string(`user`.id) from `user` order by `user`.id asc",
-        "ResultColumns": 1
+        "ResultColumns": 1,
+        "Table": "`user`"
       },
       "TablesUsed": [
         "user.user"
@@ -5114,7 +5115,8 @@
           "Sharded": false
         },
         "FieldQuery": "select information_schema.`table`.col from information_schema.`table` where 1 != 1",
-        "Query": "select information_schema.`table`.col from information_schema.`table` order by information_schema.`table`.`name` asc"
+        "Query": "select information_schema.`table`.col from information_schema.`table` order by information_schema.`table`.`name` asc",
+        "Table": "information_schema.`table`"
       }
     }
   }
