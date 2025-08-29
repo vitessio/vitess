@@ -28,6 +28,13 @@ var (
 			FlagName: "datadog-agent-port",
 		},
 	)
+	dataDogTraceDebugMode = viperutil.Configure(
+		dataDogConfigKey("trace_debug_mode"),
+		viperutil.Options[bool]{
+			FlagName: "datadog-trace-debug-mode",
+			Default:  false,
+		},
+	)
 )
 
 func init() {
@@ -36,8 +43,9 @@ func init() {
 	pluginFlags = append(pluginFlags, func(fs *pflag.FlagSet) {
 		fs.String("datadog-agent-host", "", "host to send spans to. if empty, no tracing will be done")
 		fs.String("datadog-agent-port", "", "port to send spans to. if empty, no tracing will be done")
+		fs.Bool("datadog-trace-debug-mode", false, "enable debug mode for datadog tracing")
 
-		viperutil.BindFlags(fs, dataDogHost, dataDogPort)
+		viperutil.BindFlags(fs, dataDogHost, dataDogPort, dataDogTraceDebugMode)
 	})
 }
 
@@ -50,7 +58,7 @@ func newDatadogTracer(serviceName string) (tracingService, io.Closer, error) {
 	opts := []ddtracer.StartOption{
 		ddtracer.WithAgentAddr(net.JoinHostPort(host, port)),
 		ddtracer.WithServiceName(serviceName),
-		ddtracer.WithDebugMode(true),
+		ddtracer.WithDebugMode(dataDogTraceDebugMode.Get()),
 		ddtracer.WithSampler(ddtracer.NewRateSampler(samplingRate.Get())),
 	}
 

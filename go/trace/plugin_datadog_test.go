@@ -20,7 +20,10 @@ import (
 	"testing"
 
 	"github.com/opentracing/opentracing-go"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/utils"
 )
 
 func TestGetOpenTracingTracer(t *testing.T) {
@@ -36,4 +39,47 @@ func TestNewDataDogTracerHostAndPortNotSet(t *testing.T) {
 	require.ErrorContains(t, err, expectedErr)
 	require.Nil(t, tracingSvc)
 	require.Nil(t, closer)
+}
+
+func TestDataDogTraceDebugModeFlag(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 23, "vttablet")
+	utils.SkipIfBinaryIsBelowVersion(t, 23, "vtgate")
+	// Test that the debug mode flag is properly registered
+	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+
+	// Get the plugin flag function from init()
+	require.Greater(t, len(pluginFlags), 0, "pluginFlags should contain at least one function")
+
+	// Apply all plugin flags to ensure we get the datadog ones
+	for _, pluginFlag := range pluginFlags {
+		pluginFlag(fs)
+	}
+
+	// Verify the debug mode flag exists
+	debugFlag := fs.Lookup("datadog-trace-debug-mode")
+	require.NotNil(t, debugFlag, "datadog-trace-debug-mode flag should be registered")
+	require.Equal(t, "false", debugFlag.DefValue, "default value should be false")
+
+	// Also verify other datadog flags exist
+	hostFlag := fs.Lookup("datadog-agent-host")
+	require.NotNil(t, hostFlag, "datadog-agent-host flag should be registered")
+
+	portFlag := fs.Lookup("datadog-agent-port")
+	require.NotNil(t, portFlag, "datadog-agent-port flag should be registered")
+}
+
+func TestDataDogTraceDebugModeConfiguration(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 23, "vttablet")
+	utils.SkipIfBinaryIsBelowVersion(t, 23, "vtgate")
+	// Save original value to restore later
+	originalValue := dataDogTraceDebugMode.Get()
+	defer dataDogTraceDebugMode.Set(originalValue)
+
+	// Test setting to true
+	dataDogTraceDebugMode.Set(true)
+	require.True(t, dataDogTraceDebugMode.Get(), "debug mode should be true when set to true")
+
+	// Test setting to false
+	dataDogTraceDebugMode.Set(false)
+	require.False(t, dataDogTraceDebugMode.Get(), "debug mode should be false when set to false")
 }
