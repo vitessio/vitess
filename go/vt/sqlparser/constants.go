@@ -1134,3 +1134,10 @@ const (
 	IndexTypeSpatial
 	IndexTypeFullText
 )
+
+// Constant for Enum Type - IgnoreOrReplaceType
+const (
+	NoIgnoreOrReplace IgnoreOrReplaceType = iota
+	IgnoreType
+	ReplaceType
+)

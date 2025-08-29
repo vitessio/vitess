@@ -1,0 +1,20 @@
+{
+  "rules": [
+    {
+      "from_table": "sks.t1",
+      "to_tables": ["tks.t1"]
+    },
+    {
+      "from_table": "sks.t2", 
+      "to_tables": ["tks.t2"]
+    },
+    {
+      "from_table": "sks.t3",
+      "to_tables": ["tks.t3"]
+    },
+    {
+      "from_table": "sks.t4",
+      "to_tables": ["tks.t4"]
+    }
+  ]
+}

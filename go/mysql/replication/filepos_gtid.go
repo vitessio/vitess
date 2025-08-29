@@ -69,6 +69,10 @@ func (gtid FilePosGTID) Flavor() string {
 	return FilePosFlavorID
 }
 
+func (gtid FilePosGTID) Empty() bool {
+	return gtid.File == ""
+}
+
 // SequenceDomain implements GTID.SequenceDomain().
 func (gtid FilePosGTID) SequenceDomain() any {
 	return nil
@@ -137,6 +141,11 @@ func (gtid FilePosGTID) AddGTID(other GTID) GTIDSet {
 	return filePosOther
 }
 
+// AddGTIDInPlace implements GTIDSet.AddGTIDInPlace().
+func (gtid FilePosGTID) AddGTIDInPlace(other GTID) GTIDSet {
+	return gtid.AddGTID(other)
+}
+
 // Union implements GTIDSet.Union().
 func (gtid FilePosGTID) Union(other GTIDSet) GTIDSet {
 	filePosOther, ok := other.(FilePosGTID)
@@ -145,6 +154,13 @@ func (gtid FilePosGTID) Union(other GTIDSet) GTIDSet {
 	}
 
 	return filePosOther
+}
+
+// Union implements GTIDSet.Union().
+func (gtid FilePosGTID) UnionInPlace(other GTIDSet) GTIDSet {
+	gtid = gtid.Union(other).(FilePosGTID)
+
+	return gtid
 }
 
 // Last returns last filePosition

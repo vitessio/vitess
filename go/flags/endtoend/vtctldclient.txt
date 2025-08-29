@@ -140,7 +140,7 @@ Flags:
       --log_link string                          If non-empty, add symbolic links in this directory to the log files
       --logbuflevel int                          Buffer log messages logged at this level or lower (-1 means don't buffer; 0 means buffer INFO only; ...). Has limited applicability on non-prod platforms.
       --logtostderr                              log to standard error instead of files
-      --mysql-server-version string              MySQL server version to advertise. (default "8.0.40-Vitess")
+      --mysql-server-version string              MySQL server version to advertise. (default "8.4.6-Vitess")
       --purge-logs-interval duration             how often try to remove old logs (default 1h0m0s)
       --security-policy string                   the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --server string                            server to use for the connection (required)

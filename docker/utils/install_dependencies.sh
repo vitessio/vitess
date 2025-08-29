@@ -73,7 +73,7 @@ apt-get install -y --no-install-recommends "${BASE_PACKAGES[@]}"
 case "${FLAVOR}" in
 mysql80)
     if [ -z "$VERSION" ]; then
-        VERSION=8.0.40
+        VERSION=8.0.43
     fi
     do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-common_${VERSION}-1debian12_amd64.deb /tmp/mysql-common_${VERSION}-1debian12_amd64.deb
     do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/libmysqlclient21_${VERSION}-1debian12_amd64.deb /tmp/libmysqlclient21_${VERSION}-1debian12_amd64.deb
@@ -100,7 +100,7 @@ mysql80)
     ;;
 mysql84)
     if [ -z "$VERSION" ]; then
-        VERSION=8.4.3
+        VERSION=8.4.6
     fi
     do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-common_${VERSION}-1debian12_amd64.deb /tmp/mysql-common_${VERSION}-1debian12_amd64.deb
     do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/libmysqlclient24_${VERSION}-1debian12_amd64.deb /tmp/libmysqlclient24_${VERSION}-1debian12_amd64.deb

@@ -33754,6 +33754,9 @@ export namespace tabletmanagerdata {
 
         /** ValidateVReplicationPermissionsResponse ok */
         ok?: (boolean|null);
+
+        /** ValidateVReplicationPermissionsResponse error */
+        error?: (string|null);
     }
 
     /** Represents a ValidateVReplicationPermissionsResponse. */
@@ -33770,6 +33773,9 @@ export namespace tabletmanagerdata {
 
         /** ValidateVReplicationPermissionsResponse ok. */
         public ok: boolean;
+
+        /** ValidateVReplicationPermissionsResponse error. */
+        public error: string;
 
         /**
          * Creates a new ValidateVReplicationPermissionsResponse instance using the specified properties.
@@ -38508,7 +38514,8 @@ export namespace binlogdata {
         VERSION = 17,
         LASTPK = 18,
         SAVEPOINT = 19,
-        COPY_COMPLETED = 20
+        COPY_COMPLETED = 20,
+        PREVIOUS_GTIDS = 21
     }
 
     /** Properties of a RowChange. */
@@ -39487,6 +39494,15 @@ export namespace binlogdata {
 
         /** VEvent throttled_reason */
         throttled_reason?: (string|null);
+
+        /** VEvent commit_parent */
+        commit_parent?: (number|Long|null);
+
+        /** VEvent sequence_number */
+        sequence_number?: (number|Long|null);
+
+        /** VEvent event_gtid */
+        event_gtid?: (string|null);
     }
 
     /** Represents a VEvent. */
@@ -39542,6 +39558,15 @@ export namespace binlogdata {
 
         /** VEvent throttled_reason. */
         public throttled_reason: string;
+
+        /** VEvent commit_parent. */
+        public commit_parent: (number|Long);
+
+        /** VEvent sequence_number. */
+        public sequence_number: (number|Long);
+
+        /** VEvent event_gtid. */
+        public event_gtid: string;
 
         /**
          * Creates a new VEvent instance using the specified properties.

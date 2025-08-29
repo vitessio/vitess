@@ -30,8 +30,8 @@ import (
 )
 
 const (
-	vttestserverMysql57image = "vttestserver-e2etest/mysql57"
 	vttestserverMysql80image = "vttestserver-e2etest/mysql80"
+	vttestserverMysql84image = "vttestserver-e2etest/mysql84"
 )
 
 type vttestserver struct {
@@ -135,31 +135,31 @@ func convertToStringSlice(intSlice []int) []string {
 	return stringSlice
 }
 
-// makeVttestserverDockerImages creates the vttestserver docker images for both MySQL57 and MySQL80
+// makeVttestserverDockerImages creates the vttestserver docker images for both MySQL80 and MySQL84
 func makeVttestserverDockerImages() error {
 	mainVitessPath := path.Join(os.Getenv("PWD"), "../../../..")
-	dockerFilePath := path.Join(mainVitessPath, "docker/vttestserver/Dockerfile.mysql57")
-	cmd57 := exec.Command("docker", "build", "-f", dockerFilePath, "-t", vttestserverMysql57image, ".")
-	cmd57.Dir = mainVitessPath
-	err := cmd57.Start()
-	if err != nil {
-		return err
-	}
-
-	dockerFilePath = path.Join(mainVitessPath, "docker/vttestserver/Dockerfile.mysql80")
+	dockerFilePath := path.Join(mainVitessPath, "docker/vttestserver/Dockerfile.mysql80")
 	cmd80 := exec.Command("docker", "build", "-f", dockerFilePath, "-t", vttestserverMysql80image, ".")
 	cmd80.Dir = mainVitessPath
-	err = cmd80.Start()
+	err := cmd80.Start()
 	if err != nil {
 		return err
 	}
 
-	err = cmd57.Wait()
+	dockerFilePath = path.Join(mainVitessPath, "docker/vttestserver/Dockerfile.mysql84")
+	cmd84 := exec.Command("docker", "build", "-f", dockerFilePath, "-t", vttestserverMysql84image, ".")
+	cmd84.Dir = mainVitessPath
+	err = cmd84.Start()
 	if err != nil {
 		return err
 	}
 
 	err = cmd80.Wait()
+	if err != nil {
+		return err
+	}
+
+	err = cmd84.Wait()
 	if err != nil {
 		return err
 	}

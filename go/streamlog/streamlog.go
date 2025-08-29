@@ -24,8 +24,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/spf13/pflag"
 
@@ -62,12 +64,14 @@ const (
 )
 
 type QueryLogConfig struct {
-	RedactDebugUIQueries bool
-	FilterTag            string
-	Format               string
-	Mode                 string
-	RowThreshold         uint64
-	sampleRate           float64
+	RedactDebugUIQueries  bool
+	FilterTag             string
+	Format                string
+	Mode                  string
+	RowThreshold          uint64
+	TimeThreshold         time.Duration
+	sampleRate            float64
+	EmitOnAnyConditionMet bool
 }
 
 var queryLogConfigInstance = QueryLogConfig{
@@ -104,11 +108,17 @@ func registerStreamLogFlags(fs *pflag.FlagSet) {
 	// QueryLogRowThreshold only log queries returning or affecting this many rows
 	fs.Uint64Var(&queryLogConfigInstance.RowThreshold, "querylog-row-threshold", queryLogConfigInstance.RowThreshold, "Number of rows a query has to return or affect before being logged; not useful for streaming queries. 0 means all queries will be logged.")
 
+	// QueryLogTimeThreshold only log queries with execution time over the time duration threshold
+	fs.DurationVar(&queryLogConfigInstance.TimeThreshold, "querylog-time-threshold", queryLogConfigInstance.TimeThreshold, "Execution time duration a query needs to run over before being logged; time duration expressed in the form recognized by time.ParseDuration; not useful for streaming queries.")
+
 	// QueryLogSampleRate causes a sample of queries to be logged
 	fs.Float64Var(&queryLogConfigInstance.sampleRate, "querylog-sample-rate", queryLogConfigInstance.sampleRate, "Sample rate for logging queries. Value must be between 0.0 (no logging) and 1.0 (all queries)")
 
 	// QueryLogMode controls the mode for logging queries (all or error)
 	fs.StringVar(&queryLogConfigInstance.Mode, "querylog-mode", queryLogConfigInstance.Mode, `Mode for logging queries. "error" will only log queries that return an error. Otherwise all queries will be logged.`)
+
+	// EmitOnAnyConditionMet logs queries on any condition met (time/row/filtertag)
+	fs.BoolVar(&queryLogConfigInstance.EmitOnAnyConditionMet, "querylog-emit-on-any-condition-met", queryLogConfigInstance.EmitOnAnyConditionMet, "Emit to query log when any of the conditions (row-threshold, time-threshold, filter-tag) is met (default false)")
 }
 
 // StreamLogger is a non-blocking broadcaster of messages.
@@ -131,6 +141,17 @@ func New[T any](name string, size int) *StreamLogger[T] {
 		name:       name,
 		size:       size,
 		subscribed: make(map[chan T]string),
+	}
+}
+
+// helper function to compose both aCond and its reason and aggregate the result inal allMatches and reasons variable
+func shouldEmitLogOnCondition(aCond bool, aReason string, allMatches bool, reasons []string) (bool, string, bool, []string) {
+	allMatches = allMatches || aCond
+	if aCond {
+		reasons = append(reasons, aReason)
+		return aCond, aReason, allMatches, reasons
+	} else {
+		return aCond, "", allMatches, reasons
 	}
 }
 
@@ -266,18 +287,52 @@ func (qlConfig QueryLogConfig) shouldSampleQuery() bool {
 
 // ShouldEmitLog returns whether the log with the given SQL query
 // should be emitted or filtered
-func (qlConfig QueryLogConfig) ShouldEmitLog(sql string, rowsAffected, rowsReturned uint64, hasError bool) bool {
-	if qlConfig.shouldSampleQuery() {
-		return true
+// It also returns an EmitReason which is a comma-separated-string to indicate all the conditions triggered for log emit.
+// If both TimeThreshold and FilterTag condition are met, EmitReason will be time,filtertag
+func (qlConfig QueryLogConfig) ShouldEmitLog(sql string, rowsAffected, rowsReturned uint64, totalTime time.Duration, hasError bool) (bool, string) {
+	var aMatch, allMatches bool
+	var aReason string
+	reasons := []string{}
+
+	aMatch, aReason, allMatches, reasons = shouldEmitLogOnCondition(qlConfig.shouldSampleQuery(), "sample", allMatches, reasons)
+	if aMatch && !qlConfig.EmitOnAnyConditionMet {
+		return aMatch, aReason
 	}
-	if qlConfig.RowThreshold > max(rowsAffected, rowsReturned) && qlConfig.FilterTag == "" {
-		return false
+
+	if qlConfig.RowThreshold > 0 {
+		aMatch, _, allMatches, reasons = shouldEmitLogOnCondition(qlConfig.RowThreshold <= max(rowsAffected, rowsReturned), "row", allMatches, reasons)
+		if !aMatch && !qlConfig.EmitOnAnyConditionMet && qlConfig.FilterTag == "" {
+			return false, ""
+		}
 	}
+
+	if qlConfig.TimeThreshold > 0 {
+		aMatch, _, allMatches, reasons = shouldEmitLogOnCondition(qlConfig.TimeThreshold <= totalTime, "time", allMatches, reasons)
+		if !aMatch && !qlConfig.EmitOnAnyConditionMet && qlConfig.FilterTag == "" {
+			return false, ""
+		}
+	}
+
 	if qlConfig.FilterTag != "" {
-		return strings.Contains(sql, qlConfig.FilterTag)
+		aMatch, aReason, allMatches, reasons = shouldEmitLogOnCondition(strings.Contains(sql, qlConfig.FilterTag), "filtertag", allMatches, reasons)
+		if !qlConfig.EmitOnAnyConditionMet {
+			return aMatch, aReason
+		}
 	}
+
 	if qlConfig.Mode == QueryLogModeError {
-		return hasError
+		aMatch, aReason, allMatches, reasons = shouldEmitLogOnCondition(hasError, "error", allMatches, reasons)
+		if !qlConfig.EmitOnAnyConditionMet {
+			return aMatch, aReason
+		}
 	}
-	return true
+
+	// sort the array to make the reason string content deterministic
+	sort.Strings(reasons)
+	reasonStr := strings.Join(reasons, ",")
+	if qlConfig.EmitOnAnyConditionMet {
+		return allMatches, reasonStr
+	} else {
+		return true, reasonStr
+	}
 }
