@@ -152,6 +152,8 @@ func TestDownPrimary_KeyspaceEmergencyReparentDisabled(t *testing.T) {
 	_, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetVtorcEmergencyReparent", "--disable", keyspace.Name)
 	assert.NoError(t, err)
 	utils.CheckERSDisabledState(t, vtOrcProcess, keyspace.Name, shard0.Name, true)
+	utils.CheckVarExists(t, vtOrcProcess, "EmergencyReparentShardDisabled")
+	utils.CheckMetricExists(t, vtOrcProcess, "vtorc_emergency_reparent_shard_disabled")
 
 	// make the current primary vttablet unavailable
 	err = curPrimary.VttabletProcess.TearDown()
@@ -172,8 +174,6 @@ func TestDownPrimary_KeyspaceEmergencyReparentDisabled(t *testing.T) {
 	// check ERS did not occur
 	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name, 0)
 	utils.WaitForSuccessfulERSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 0)
-	utils.CheckVarExists(t, vtOrcProcess, "EmergencyReparentShardDisabled")
-	utils.CheckMetricExists(t, vtOrcProcess, "vtorc_emergency_reparent_shard_disabled")
 
 	// enable ERS on the keyspace via SetVtorcEmergencyReparent --enable
 	_, err = clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetVtorcEmergencyReparent", "--enable", keyspace.Name)
