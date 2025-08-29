@@ -2969,6 +2969,44 @@
     }
   },
   {
+    "comment": "Self-referential foreign key",
+    "query": "UPDATE u_tbl12 SET parent_id = CASE WHEN (parent_id = 1) THEN NULL ELSE NULL END WHERE id IN (1)",
+    "plan": {
+      "Instructions": {
+        "Inputs": [
+          {
+            "FieldQuery": "select 1 from u_tbl12 as child left join u_tbl12 as parent on parent.id = case when child.parent_id = 1 then null else null end where 1 != 1",
+            "InputName": "VerifyParent-1",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "OperatorType": "Route",
+            "Query": "select 1 from u_tbl12 as child left join u_tbl12 as parent on parent.id = case when child.parent_id = 1 then null else null end where parent.id is null and case when child.parent_id = 1 then null else null end is not null and not (child.parent_id) <=> (case when child.parent_id = 1 then null else null end) and child.id in (1) limit 1 for share",
+            "Variant": "Unsharded"
+          },
+          {
+            "InputName": "PostVerify",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "OperatorType": "Update",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl12 set parent_id = case when parent_id = 1 then null else null end where id in (1)",
+            "Variant": "Unsharded"
+          }
+        ],
+        "OperatorType": "FKVerify"
+      },
+      "Original": "UPDATE u_tbl12 SET parent_id = CASE WHEN (parent_id = 1) THEN NULL ELSE NULL END WHERE id IN (1)",
+      "QueryType": "UPDATE",
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl12"
+      ],
+      "Type": "ForeignKey"
+    }
+  },
+  {
     "comment": "Multi table delete with using",
     "query": "delete u_tbl10 from u_tbl10 join u_tbl11 using (id) where id = 5",
     "plan": {
