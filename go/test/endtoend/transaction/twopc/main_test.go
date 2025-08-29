@@ -82,7 +82,7 @@ func TestMain(m *testing.M) {
 			vtutils.GetFlagVariantForTests("--grpc-use-effective-callerid"),
 		)
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-			"--twopc_abandon_age", "1",
+			vtutils.GetFlagVariantForTests("--twopc-abandon-age"), "1",
 			"--queryserver-config-transaction-cap", "3",
 			"--queryserver-config-transaction-timeout", "400s",
 			"--queryserver-config-query-timeout", "9000s",

@@ -88,7 +88,7 @@ func SetupShardedReparentCluster(t *testing.T, durability string, extraVttabletF
 		utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
 		// Fast health checks help find corner cases.
 		utils.GetFlagVariantForTests("--health-check-interval"), "1s",
-		"--track_schema_versions=true",
+		utils.GetFlagVariantForTests("--track-schema-versions")+"=true",
 		utils.GetFlagVariantForTests("--queryserver-enable-online-ddl")+"=false")
 
 	if len(extraVttabletFlags) > 0 {

@@ -105,7 +105,7 @@ type Config struct {
 	// PersistentMode can be set so that MySQL data directory is not cleaned up
 	// when LocalCluster.TearDown() is called. This is useful for running
 	// vttestserver as a database container in local developer environments. Note
-	// that db and vschema migration files (-schema_dir option) and seeding of
+	// that db and vschema migration files (-schema-dir option) and seeding of
 	// random data (-initialize-with-random-data option) will only run during
 	// cluster startup if the data directory does not already exist.
 	PersistentMode bool
