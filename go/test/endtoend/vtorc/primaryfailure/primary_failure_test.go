@@ -155,9 +155,9 @@ func TestDownPrimary_KeyspaceEmergencyReparentDisabled(t *testing.T) {
 
 	// make the current primary vttablet unavailable
 	err = curPrimary.VttabletProcess.TearDown()
-	require.NoError(t, err)
+	assert.NoError(t, err)
 	err = curPrimary.MysqlctlProcess.Stop()
-	require.NoError(t, err)
+	assert.NoError(t, err)
 	defer func() {
 		// we remove the tablet from our global list
 		utils.PermanentlyRemoveVttablet(clusterInfo, curPrimary)
@@ -166,8 +166,8 @@ func TestDownPrimary_KeyspaceEmergencyReparentDisabled(t *testing.T) {
 	// check that the shard primary remains the same because ERS is disabled on the keyspace
 	origPrimary := curPrimary
 	curPrimary = utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
-	require.NotNil(t, curPrimary)
-	require.Equal(t, origPrimary.Alias, curPrimary.Alias)
+	assert.NotNil(t, curPrimary)
+	assert.Equal(t, origPrimary.Alias, curPrimary.Alias)
 
 	// check ERS did not occur
 	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name, 0)
