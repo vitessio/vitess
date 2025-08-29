@@ -118,12 +118,7 @@ func TestDownPrimary(t *testing.T) {
 // confirm no ERS occurs.
 func TestDownPrimary_ERSDisabledTopo(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	// We specify the --wait-replicas-timeout to a small value because we spawn a cross-cell replica later in the test.
-	// If that replica is more advanced than the same-cell-replica, then we try to promote the cross-cell replica as an intermediate source.
-	// If we don't specify a small value of --wait-replicas-timeout, then we would end up waiting for 30 seconds for the dead-primary to respond, failing this test.
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{fmt.Sprintf("%s=10s", vtutils.GetFlagVariantForTests("--remote-operation-timeout")), "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{
-		PreventCrossCellFailover: true,
-	}, 1, policy.DurabilitySemiSync)
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{}, 0, policy.DurabilityNone)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
