@@ -90,7 +90,8 @@ func TestGRPCErrorCode_UNAVAILABLE(t *testing.T) {
 	err = tablet.MysqlctlProcess.Stop()
 	require.NoError(t, err)
 
-	// confirm we get vtrpcpb.Code_UNAVAILABLE
+	// confirm we get vtrpcpb.Code_UNAVAILABLE when calling FullStatus,
+	// because this will try and fail to connect to mysql
 	tmClient := tmc.NewClient()
 	vttablet := getTablet(tablet.GrpcPort)
 	_, err = tmClient.FullStatus(context.Background(), vttablet)
