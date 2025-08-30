@@ -158,7 +158,7 @@ func (b *SessionBalancer) onTabletHealthChange(tablet *discovery.TabletHealth) {
 	defer b.mu.Unlock()
 
 	var ring *hashRing
-	if tablet.Target.Cell == b.localCell {
+	if tablet.Tablet.Alias.Cell == b.localCell {
 		ring = getOrCreateRing(b.localRings, tablet)
 	} else {
 		ring = getOrCreateRing(b.externalRings, tablet)
