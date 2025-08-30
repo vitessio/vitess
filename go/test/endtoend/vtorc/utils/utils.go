@@ -1051,8 +1051,8 @@ func WaitForSuccessfulERSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 	assert.EqualValues(t, countExpected, successCount)
 }
 
-// CheckERSKeyspaceShardDisabledState checks if the keyspace/shard has ERS disabled in the topo.
-func CheckERSKeyspaceShardDisabledState(t *testing.T, vtorcInstance *cluster.VTOrcProcess, keyspace, shard string, stateExpected bool) {
+// CheckKeyspaceShardERSDisabledState checks if the keyspace/shard has ERS disabled in the topo.
+func CheckKeyspaceShardERSDisabledState(t *testing.T, vtorcInstance *cluster.VTOrcProcess, keyspace, shard string, stateExpected bool) {
 	t.Helper()
 	var expectedValue int
 	if stateExpected {
