@@ -320,7 +320,11 @@ func Init(
 	// Start with the gateway. If we can't reach the topology service,
 	// we can't go on much further, so we log.Fatal out.
 	// TabletGateway can create it's own healthcheck
-	gw := NewTabletGateway(ctx, hc, serv, cell)
+	gw, err := NewTabletGateway(ctx, hc, serv, cell)
+	if err != nil {
+		log.Fatalf("vtgate: failed to initalize tablet gateway: %w", err)
+	}
+
 	gw.RegisterStats()
 	if err := gw.WaitForTablets(ctx, tabletTypesToWait); err != nil {
 		log.Fatalf("tabletGateway.WaitForTablets failed: %v", err)

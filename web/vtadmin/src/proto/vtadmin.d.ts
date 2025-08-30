@@ -41695,6 +41695,9 @@ export namespace query {
 
         /** ExecuteOptions in_dml_execution */
         in_dml_execution?: (boolean|null);
+
+        /** ExecuteOptions SessionUUID */
+        SessionUUID?: (string|null);
     }
 
     /** Represents an ExecuteOptions. */
@@ -41750,6 +41753,9 @@ export namespace query {
 
         /** ExecuteOptions in_dml_execution. */
         public in_dml_execution: boolean;
+
+        /** ExecuteOptions SessionUUID. */
+        public SessionUUID: string;
 
         /** ExecuteOptions timeout. */
         public timeout?: "authoritative_timeout";
