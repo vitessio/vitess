@@ -821,8 +821,7 @@ func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, upda
 	var parentTblAlias *sqlparser.AliasedTableExpr
 	var parentTbl sqlparser.TableName
 
-	origParentTable := pFK.Table.GetTableName()
-	if sqlparser.Equals.IdentifierCS(childTbl.Name, origParentTable.Name) {
+	if pFK.Table == updatedTable {
 		// Is this a self-referential foreign key? If yes, we need to introduce aliases
 		// so the table names don't clash. We add both child and parent aliases potentially
 		// using the same name for the parent alias as the child table.
@@ -839,7 +838,7 @@ func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, upda
 		}
 	} else {
 		parentTblAlias = sqlparser.NewAliasedTableExpr(pFK.Table.GetTableName(), "")
-		parentTbl = origParentTable
+		parentTbl = pFK.Table.GetTableName()
 	}
 
 	var whereCond sqlparser.Expr
