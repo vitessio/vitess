@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -92,9 +93,11 @@ func TestGRPCErrorCode_UNAVAILABLE(t *testing.T) {
 
 	// confirm we get vtrpcpb.Code_UNAVAILABLE when calling FullStatus,
 	// because this will try and fail to connect to mysql
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
 	tmClient := tmc.NewClient()
 	vttablet := getTablet(tablet.GrpcPort)
-	_, err = tmClient.FullStatus(context.Background(), vttablet)
+	_, err = tmClient.FullStatus(ctx, vttablet)
 	err = vterrors.FromGRPC(err)
 	assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
 }
