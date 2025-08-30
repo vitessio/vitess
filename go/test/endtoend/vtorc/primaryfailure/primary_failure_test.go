@@ -146,12 +146,12 @@ func TestDownPrimary_KeyspaceEmergencyReparentDisabled(t *testing.T) {
 	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{rdonly, replica}, 10*time.Second)
 
 	// check before ERS disabled state is false
-	utils.CheckERSDisabledState(t, vtOrcProcess, keyspace.Name, shard0.Name, false)
+	utils.CheckERSKeyspaceShardDisabledState(t, vtOrcProcess, keyspace.Name, shard0.Name, false)
 
 	// disable ERS on the keyspace via SetVtorcEmergencyReparent --disable
 	_, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetVtorcEmergencyReparent", "--disable", keyspace.Name)
 	assert.NoError(t, err)
-	utils.CheckERSDisabledState(t, vtOrcProcess, keyspace.Name, shard0.Name, true)
+	utils.CheckERSKeyspaceShardDisabledState(t, vtOrcProcess, keyspace.Name, shard0.Name, true)
 	utils.CheckVarExists(t, vtOrcProcess, "EmergencyReparentShardDisabled")
 	utils.CheckMetricExists(t, vtOrcProcess, "vtorc_emergency_reparent_shard_disabled")
 
@@ -178,7 +178,7 @@ func TestDownPrimary_KeyspaceEmergencyReparentDisabled(t *testing.T) {
 	// enable ERS on the keyspace via SetVtorcEmergencyReparent --enable
 	_, err = clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetVtorcEmergencyReparent", "--enable", keyspace.Name)
 	assert.NoError(t, err)
-	utils.CheckERSDisabledState(t, vtOrcProcess, keyspace.Name, shard0.Name, false)
+	utils.CheckERSKeyspaceShardDisabledState(t, vtOrcProcess, keyspace.Name, shard0.Name, false)
 
 	// check that the replica gets promoted by vtorc
 	utils.CheckPrimaryTablet(t, clusterInfo, replica, true)
