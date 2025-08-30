@@ -1009,7 +1009,7 @@ func (qre *QueryExecutor) execAlterMigration() (*sqltypes.Result, error) {
 	case sqlparser.LaunchAllMigrationType:
 		return qre.tsv.onlineDDLExecutor.LaunchMigrations(qre.ctx)
 	case sqlparser.CompleteMigrationType:
-		return qre.tsv.onlineDDLExecutor.CompleteMigration(qre.ctx, alterMigration.UUID)
+		return qre.tsv.onlineDDLExecutor.CompleteMigration(qre.ctx, alterMigration.UUID, alterMigration.Shards)
 	case sqlparser.CompleteAllMigrationType:
 		return qre.tsv.onlineDDLExecutor.CompletePendingMigrations(qre.ctx)
 	case sqlparser.PostponeCompleteMigrationType:
@@ -1321,11 +1321,21 @@ func (qre *QueryExecutor) recordUserQuery(queryType string, duration int64) {
 func (qre *QueryExecutor) GetSchemaDefinitions(tableType querypb.SchemaTableType, tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
 	switch tableType {
 	case querypb.SchemaTableType_VIEWS:
-		return qre.getViewDefinitions(tableNames, callback)
+		// Only fetch view definitions if views are enabled in the configuration.
+		// When views are disabled, return nil (empty result).
+		if qre.tsv.config.EnableViews {
+			return qre.getViewDefinitions(tableNames, callback)
+		}
+		return nil
 	case querypb.SchemaTableType_TABLES:
 		return qre.getTableDefinitions(tableNames, callback)
 	case querypb.SchemaTableType_ALL:
-		return qre.getAllDefinitions(tableNames, callback)
+		// When requesting all schema definitions, only include views if they are enabled.
+		// If views are disabled, fall back to returning only table definitions.
+		if qre.tsv.config.EnableViews {
+			return qre.getAllDefinitions(tableNames, callback)
+		}
+		return qre.getTableDefinitions(tableNames, callback)
 	case querypb.SchemaTableType_UDFS:
 		return qre.getUDFs(callback)
 	}

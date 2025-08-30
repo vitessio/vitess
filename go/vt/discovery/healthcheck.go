@@ -359,9 +359,10 @@ func NewVTGateHealthCheckFilters() (filters TabletFilters, err error) {
 //
 // filters.
 //
-//	Is one or more filters to apply when determining what tablets we want to stream healthchecks from.
+//	Is an optional filter (implementing the TabletFilter interface) to apply when determining
+//	what tablets we want to stream healthchecks from. If nil, no filtering is performed.
 func NewHealthCheck(
-	ctx context.Context, retryDelay, healthCheckTimeout time.Duration, topoServer *topo.Server, localCell, cellsToWatch string, filters TabletFilter, opts ...Option,
+	ctx context.Context, retryDelay, healthCheckTimeout time.Duration, topoServer *topo.Server, localCell, cellsToWatch string, filter TabletFilter, opts ...Option,
 ) *HealthCheckImpl {
 	hc := &HealthCheckImpl{
 		ts:                 topoServer,
@@ -390,7 +391,7 @@ func NewHealthCheck(
 		if c == "" {
 			continue
 		}
-		topoWatchers = append(topoWatchers, NewTopologyWatcher(ctx, topoServer, hc, filters, c, refreshInterval, refreshKnownTablets, opts...))
+		topoWatchers = append(topoWatchers, NewTopologyWatcher(ctx, topoServer, hc, filter, c, refreshInterval, refreshKnownTablets, opts...))
 	}
 
 	hc.topoWatchers = topoWatchers

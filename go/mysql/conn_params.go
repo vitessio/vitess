@@ -65,6 +65,8 @@ type ConnParams struct {
 	FlushDelay time.Duration
 
 	TruncateErrLen int
+
+	MultiQuery bool
 }
 
 // EnableSSL will set the right flag on the parameters.

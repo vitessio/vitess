@@ -79,6 +79,7 @@ var (
 	mysqlDrainOnTerm         bool
 
 	mysqlServerFlushDelay = 100 * time.Millisecond
+	mysqlServerMultiQuery = false
 )
 
 func registerPluginFlags(fs *pflag.FlagSet) {
@@ -105,6 +106,7 @@ func registerPluginFlags(fs *pflag.FlagSet) {
 	utils.SetFlagDurationVar(fs, &mysqlServerFlushDelay, "mysql-server-flush-delay", mysqlServerFlushDelay, "Delay after which buffered response will be flushed to the client.")
 	utils.SetFlagStringVar(fs, &mysqlDefaultWorkloadName, "mysql-default-workload", mysqlDefaultWorkloadName, "Default session workload (OLTP, OLAP, DBA)")
 	fs.BoolVar(&mysqlDrainOnTerm, "mysql-server-drain-onterm", mysqlDrainOnTerm, "If set, the server waits for --onterm-timeout for already connected clients to complete their in flight work")
+	utils.SetFlagBoolVar(fs, &mysqlServerMultiQuery, "mysql-server-multi-query-protocol", mysqlServerMultiQuery, "If set, the server will use the new implementation of handling queries where-in multiple queries are sent together.")
 }
 
 // vtgateHandler implements the Listener interface.
@@ -621,6 +623,7 @@ func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 			mysqlConnBufferPooling,
 			mysqlKeepAlivePeriod,
 			mysqlServerFlushDelay,
+			mysqlServerMultiQuery,
 		)
 		if err != nil {
 			log.Exitf("mysql.NewListener failed: %v", err)
@@ -666,6 +669,7 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 		mysqlConnBufferPooling,
 		mysqlKeepAlivePeriod,
 		mysqlServerFlushDelay,
+		mysqlServerMultiQuery,
 	)
 
 	switch err := err.(type) {
@@ -699,6 +703,7 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 			mysqlConnBufferPooling,
 			mysqlKeepAlivePeriod,
 			mysqlServerFlushDelay,
+			mysqlServerMultiQuery,
 		)
 		return listener, listenerErr
 	default:
@@ -802,6 +807,11 @@ func mysqlSocketPath() string {
 		return ""
 	}
 	return mysqlServerSocketPath
+}
+
+// GetMysqlServerSSLCA returns the current value of the mysql-server-ssl-ca flag
+func GetMysqlServerSSLCA() string {
+	return mysqlSslCa
 }
 
 func init() {

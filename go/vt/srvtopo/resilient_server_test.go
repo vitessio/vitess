@@ -608,7 +608,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 	// info, we'll get it.
 	_, err = rs.GetSrvKeyspaceNames(ctx, "test_cell", true)
 	if err != nil {
-		t.Fatalf("expected no error if asking for stale cache data")
+		t.Fatalf("expected no error if asking for stale cache data, got: %v", err)
 	}
 
 	// Now, wait long enough that with a stale ask, we'll get an error
@@ -666,6 +666,104 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 		t.Errorf("expected error '%v', got '%v'", context.DeadlineExceeded, err.Error())
 	}
 	factory.Unlock()
+}
+
+// TestGetSrvKeyspaceNamesCachedErrorRecovery tests that when an error is cached,
+// the system will still recover and return fresh data when the underlying service
+// becomes available again, even within the refresh interval.
+// This specifically tests the fix for the issue where cached errors were being
+// returned immediately without attempting to get fresh data.
+func TestGetSrvKeyspaceNamesCachedErrorRecovery(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts, factory := memorytopo.NewServerAndFactory(ctx, "test_cell")
+
+	// Use short intervals for faster testing
+	srvTopoCacheTTL = 200 * time.Millisecond
+	srvTopoCacheRefresh = 80 * time.Millisecond
+	defer func() {
+		srvTopoCacheTTL = 1 * time.Second
+		srvTopoCacheRefresh = 1 * time.Second
+	}()
+
+	counts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	rs := NewResilientServer(ctx, ts, counts)
+
+	// Phase 1: Setup initial successful state
+	// Create keyspaces in topology
+	err := ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks1", &topodatapb.SrvKeyspace{})
+	require.NoError(t, err, "UpdateSrvKeyspace failed")
+	err = ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks2", &topodatapb.SrvKeyspace{})
+	require.NoError(t, err, "UpdateSrvKeyspace failed")
+
+	// Make initial successful query to cache the value
+	names, err := rs.GetSrvKeyspaceNames(ctx, "test_cell", false)
+	if err != nil {
+		t.Fatalf("Initial GetSrvKeyspaceNames failed: %v", err)
+	}
+	expectedNames := []string{"test_ks1", "test_ks2"}
+	require.ElementsMatch(t, names, expectedNames, "Initial GetSrvKeyspaceNames returned wrong names")
+
+	// Phase 2: Force an error to get it cached
+	testErr := fmt.Errorf("test error - service unavailable")
+	factory.SetError(testErr)
+
+	// Wait for the cache TTL to expire so the cached value is no longer valid
+	// This ensures the next query will get an error (not the cached value)
+	time.Sleep(srvTopoCacheTTL + 10*time.Millisecond)
+
+	// This query should fail and cache the error
+	_, err = rs.GetSrvKeyspaceNames(ctx, "test_cell", false)
+	require.Error(t, err, "GetSrvKeyspaceNames with stale allowed should return error")
+
+	// Phase 3: Service recovers - this is the critical test
+	// Clear the error to simulate service recovery
+	factory.SetError(nil)
+
+	// We're still within the refresh interval from the error query above
+	// we should wait for a fresh query and return success
+
+	// Launch multiple concurrent requests to verify they all succeed
+	// This tests that the fix properly handles concurrent access
+	const numGoroutines = 10
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	successCount := int32(0)
+	errorCount := int32(0)
+
+	startTime := time.Now()
+	for i := 0; i < numGoroutines; i++ {
+		go func(id int) {
+			defer wg.Done()
+
+			// Each goroutine tries to get the keyspace names
+			names, err := rs.GetSrvKeyspaceNames(ctx, "test_cell", false)
+
+			if err != nil {
+				atomic.AddInt32(&errorCount, 1)
+				t.Errorf("Goroutine %d got error after service recovery: %v", id, err)
+			} else if !reflect.DeepEqual(names, expectedNames) {
+				t.Errorf("Goroutine %d got wrong names: %v", id, names)
+			} else {
+				atomic.AddInt32(&successCount, 1)
+			}
+		}(i)
+	}
+
+	// Wait for all goroutines to complete
+	wg.Wait()
+	elapsed := time.Since(startTime)
+
+	// Verify timing - we should still be within or just past the refresh interval
+	// This confirms we're testing the right condition
+	if elapsed > srvTopoCacheRefresh*2 {
+		t.Logf("Warning: Test took longer than expected (%v), might not be testing the exact scenario", elapsed)
+	}
+
+	// All requests should have succeeded
+	assert.Greaterf(t, successCount, int32(0), "Expected successful requests after service recovery, got %d errors out of %d requests", errorCount, numGoroutines)
+	assert.EqualValuesf(t, successCount, numGoroutines, "Not all requests succeeded after service recovery: %d/%d", successCount, numGoroutines)
 }
 
 type watched struct {

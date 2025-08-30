@@ -122,6 +122,7 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 					aggregates = append(aggregates, engine.NewAggregateParam(
 						/*opcode*/ opcode.AggregateSum,
 						/*offset*/ sourceSelect.GetColumnCount()-1,
+						nil,
 						/*alias*/ "", collationEnv),
 					)
 				}

@@ -350,3 +350,12 @@ func TestGetMycnfTemplateMySQL9(t *testing.T) {
 	assert.Contains(t, template, "# This file is auto-included when MySQL 9.0 or later is detected.")
 	assert.NotContains(t, template, "mysql_native_password = ON")
 }
+
+func TestBuildLdPathsTZ(t *testing.T) {
+	os.Setenv("TZ", "Europe/Berlin")
+	defer os.Unsetenv("TZ")
+
+	env, err := buildLdPaths()
+	assert.NoError(t, err)
+	assert.Contains(t, env, "TZ=Europe/Berlin")
+}

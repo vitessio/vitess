@@ -31,6 +31,7 @@ import (
 func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs Operator) *Route {
 	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(ctx, lhs, rhs)
 	if lhsRoute == nil {
+		debugNoRewrite("apply join merge blocked: LHS or RHS is not a Route")
 		return nil
 	}
 
@@ -48,6 +49,7 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 		}
 
 		if !(jm.joinType.IsInner() || newRouting.OpCode().IsSingleShard()) {
+			debugNoRewrite("apply join merge blocked: dual routing with non-inner join type %s and multi-shard routing %s", jm.joinType.ToString(), newRouting.OpCode().String())
 			return nil
 		}
 		return jm.merge(ctx, lhsRoute, rhsRoute, newRouting)
@@ -75,13 +77,27 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 
 	// infoSchema routing is complex, so we handle it in a separate method
 	case a == infoSchema && b == infoSchema:
-		return tryMergeInfoSchemaRoutings(ctx, routingA, routingB, jm, lhsRoute, rhsRoute)
+		result := tryMergeInfoSchemaRoutings(ctx, routingA, routingB, jm, lhsRoute, rhsRoute)
+		if result == nil {
+			debugNoRewrite("apply join merge blocked: info schema routing merge failed")
+		}
+		return result
 
 	// sharded routing is complex, so we handle it in a separate method
 	case a == sharded && b == sharded:
-		return tryMergeShardedRouting(ctx, lhsRoute, rhsRoute, jm, jm.predicates)
+		result := tryMergeShardedRouting(ctx, lhsRoute, rhsRoute, jm, jm.predicates)
+		if result == nil {
+			debugNoRewrite("apply join merge blocked: sharded routing merge failed (different keyspaces or incompatible vindex predicates)")
+		}
+		return result
 
 	default:
+		if !sameKeyspace {
+			debugNoRewrite("apply join merge blocked: routes target different keyspaces (LHS: %s %s, RHS: %s %s)",
+				a.String(), getKeyspaceName(routingA), b.String(), getKeyspaceName(routingB))
+		} else {
+			debugNoRewrite("apply join merge blocked: incompatible routing types (LHS: %s, RHS: %s)", a.String(), b.String())
+		}
 		return nil
 	}
 }
@@ -236,6 +252,13 @@ func mergeShardedRouting(r1 *ShardedRouting, r2 *ShardedRouting) *ShardedRouting
 		tr.PickBestAvailableVindex()
 	}
 	return tr
+}
+
+func getKeyspaceName(routing Routing) string {
+	if ks := routing.Keyspace(); ks != nil {
+		return ks.Name
+	}
+	return "<unknown>"
 }
 
 func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing, conditions ...engine.Condition) *Route {

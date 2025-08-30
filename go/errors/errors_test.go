@@ -73,7 +73,7 @@ func TestUnwrap(t *testing.T) {
 		{
 			name:              "double wrapped",
 			err:               errors.Join(errors.Join(err1)),
-			expectUnwrap:      []error{errors.Join(err1)},
+			expectUnwrap:      []error{err1},
 			expectUnwrapAll:   []error{err1},
 			expectUnwrapFirst: err1,
 		},

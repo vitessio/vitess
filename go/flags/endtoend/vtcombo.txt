@@ -236,7 +236,7 @@ Flags:
       --mysql-server-ssl-key string                                      Path to ssl key for mysql server plugin SSL
       --mysql-server-ssl-server-ca string                                path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients
       --mysql-server-tls-min-version string                              Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
-      --mysql-server-version string                                      MySQL server version to advertise. (default "8.0.40-Vitess")
+      --mysql-server-version string                                      MySQL server version to advertise. (default "8.4.6-Vitess")
       --mysql-server-write-timeout duration                              connection write timeout
       --mysql-shell-backup-location string                               location where the backup will be stored
       --mysql-shell-dump-flags string                                    flags to pass to mysql shell dump utility. This should be a JSON string and will be saved in the MANIFEST (default "{\"threads\": 4}")
@@ -267,11 +267,13 @@ Flags:
       --query-log-stream-handler string                                  URL handler for streaming queries log (default "/debug/querylog")
       --query-timeout int                                                Sets the default query timeout (in ms). Can be overridden by session variable (query_timeout) or comment directive (QUERY_TIMEOUT_MS)
       --querylog-buffer-size int                                         Maximum number of buffered query logs before throttling log output (default 10)
+      --querylog-emit-on-any-condition-met                               Emit to query log when any of the conditions (row-threshold, time-threshold, filter-tag) is met (default false)
       --querylog-filter-tag string                                       string that must be present in the query for it to be logged; if using a value as the tag, you need to disable query normalization
       --querylog-format string                                           format for query logs ("text" or "json") (default "text")
       --querylog-mode string                                             Mode for logging queries. "error" will only log queries that return an error. Otherwise all queries will be logged. (default "all")
       --querylog-row-threshold uint                                      Number of rows a query has to return or affect before being logged; not useful for streaming queries. 0 means all queries will be logged.
       --querylog-sample-rate float                                       Sample rate for logging queries. Value must be between 0.0 (no logging) and 1.0 (all queries)
+      --querylog-time-threshold duration                                 Execution time duration a query needs to run over before being logged; time duration expressed in the form recognized by time.ParseDuration; not useful for streaming queries.
       --queryserver-config-acl-exempt-acl string                         an acl that exempt from table acl checking (this acl is free to access any vitess tables).
       --queryserver-config-annotate-queries                              prefix queries to MySQL backend with comment indicating vtgate principal (user) and target tablet type
       --queryserver-config-enable-table-acl-dry-run                      If this flag is enabled, tabletserver will emit monitoring metrics and let the request pass regardless of table acl check results
@@ -407,8 +409,8 @@ Flags:
   -v, --version                                                          print binary version
       --vmodule vModuleFlag                                              comma-separated list of pattern=N settings for file-filtered logging
       --vreplication-copy-phase-duration duration                        Duration for each copy phase loop (before running the next catchup: default 1h) (default 1h0m0s)
-      --vreplication-copy-phase-max-innodb-history-list-length int       The maximum InnoDB transaction history that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet. (default 1000000)
-      --vreplication-copy-phase-max-mysql-replication-lag int            The maximum MySQL replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet. (default 43200)
+      --vreplication-copy-phase-max-innodb-history-list-length int       The maximum InnoDB transaction history that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet (default 10000000)
+      --vreplication-copy-phase-max-mysql-replication-lag int            The maximum MySQL replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet (default 43200)
       --vreplication-enable-http-log                                     Enable the /debug/vrlog HTTP endpoint, which will produce a log of the events replicated on primary tablets in the target keyspace by all VReplication workflows that are in the running/replicating phase.
       --vreplication-experimental-flags int                              (Bitmask) of experimental features in vreplication to enable (default 7)
       --vreplication-heartbeat-update-interval int                       Frequency (in seconds, default 1, max 60) at which the time_updated column of a vreplication stream when idling (default 1)
@@ -444,6 +446,7 @@ Flags:
       --xtrabackup-backup-flags string                                   Flags to pass to backup command. These should be space separated and will be added to the end of the command
       --xtrabackup-prepare-flags string                                  Flags to pass to prepare command. These should be space separated and will be added to the end of the command
       --xtrabackup-root-path string                                      Directory location of the xtrabackup and xbstream executables, e.g., /usr/bin
+      --xtrabackup-should-drain                                          Decide if we should drain while taking a backup or continue to serving traffic
       --xtrabackup-stream-mode string                                    Which mode to use if streaming, valid values are tar and xbstream. Please note that tar is not supported in XtraBackup 8.0 (default "tar")
       --xtrabackup-stripe-block-size uint                                Size in bytes of each block that gets sent to a given stripe before rotating to the next stripe (default 102400)
       --xtrabackup-stripes uint                                          If greater than 0, use data striping across this many destination files to parallelize data transfer and decompression

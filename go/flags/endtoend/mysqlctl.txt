@@ -71,7 +71,7 @@ Flags:
       --logtostderr                                                 log to standard error instead of files
       --max-stack-size int                                          configure the maximum stack size in bytes (default 67108864)
       --mysql-port int                                              MySQL port. (default 3306)
-      --mysql-server-version string                                 MySQL server version to advertise. (default "8.0.40-Vitess")
+      --mysql-server-version string                                 MySQL server version to advertise. (default "8.4.6-Vitess")
       --mysql-socket string                                         Path to the mysqld socket file.
       --mysqlctl-mycnf-template string                              template file to use for generating the my.cnf file during server init
       --mysqlctl-socket string                                      socket file to use for remote mysqlctl actions (empty for local actions)

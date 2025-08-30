@@ -236,3 +236,78 @@ func TestGetSchemaRPC(t *testing.T) {
 		})
 	}
 }
+
+// TestGetSchemaRPCWithViewsDisabled tests GetSchemaDefinitions when EnableViews is false.
+// This test verifies that when views are disabled in the configuration:
+// 1. SchemaTableType_VIEWS returns empty results
+// 2. SchemaTableType_ALL returns only tables, excluding views
+// This ensures that view-related schema operations are safely skipped.
+func TestGetSchemaRPCWithViewsDisabled(t *testing.T) {
+	// Save the original EnableViews setting and temporarily disable it
+	originalEnableViews := framework.Server.Config().EnableViews
+	framework.Server.Config().EnableViews = false
+	defer func() {
+		framework.Server.Config().EnableViews = originalEnableViews
+	}()
+
+	client := framework.NewClient()
+	client.UpdateContext(callerid.NewContext(
+		context.Background(),
+		&vtrpcpb.CallerID{},
+		&querypb.VTGateCallerID{Username: "dev"}))
+
+	// Create a view for testing (using vitess_view which is already in ACL)
+	_, err := client.Execute("create view vitess_view as select id from vitess_a", nil)
+	require.NoError(t, err)
+	defer func() {
+		_, err := client.Execute("drop view vitess_view", nil)
+		require.NoError(t, err)
+	}()
+
+	// Test case 1: SchemaTableType_VIEWS should return empty when views disabled
+	schemaDefs, udfs, err := client.GetSchema(querypb.SchemaTableType_VIEWS)
+	require.NoError(t, err)
+	require.Empty(t, udfs)
+	require.Empty(t, schemaDefs) // Should be empty when views are disabled
+
+	// Test case 2: SchemaTableType_ALL should only return tables when views disabled
+	// Create a test table to ensure tables still work (using temp which is already in ACL)
+	_, err = client.Execute("create table temp (id int)", nil)
+	require.NoError(t, err)
+	defer func() {
+		_, err := client.Execute("drop table temp", nil)
+		require.NoError(t, err)
+	}()
+
+	// Wait for schema tracking to catch up
+	timeout := 30 * time.Second
+	wait := time.After(timeout)
+	for {
+		select {
+		case <-wait:
+			t.Errorf("Schema tracking hasn't caught up")
+			return
+		case <-time.After(100 * time.Millisecond):
+			schemaDefs, udfs, err := client.GetSchema(querypb.SchemaTableType_ALL)
+			require.NoError(t, err)
+			require.Empty(t, udfs)
+
+			// Should contain the test table but not the view
+			tableFound := false
+			viewFound := false
+			for tableName := range schemaDefs {
+				if tableName == "temp" {
+					tableFound = true
+				}
+				if tableName == "vitess_view" {
+					viewFound = true
+				}
+			}
+
+			if tableFound && !viewFound {
+				// Success: table found, view not found (as expected when views disabled)
+				return
+			}
+		}
+	}
+}

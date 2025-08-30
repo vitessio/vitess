@@ -54,7 +54,7 @@ Flags:
       --log_dir string                                                   If non-empty, write log files in this directory
       --logtostderr                                                      log to standard error instead of files
       --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
-      --mysql-server-version string                                      MySQL server version to advertise. (default "8.0.40-Vitess")
+      --mysql-server-version string                                      MySQL server version to advertise. (default "8.4.6-Vitess")
       --onclose-timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)
       --onterm-timeout duration                                          wait no more than this for OnTermSync handlers before stopping (default 10s)
       --pid-file string                                                  If set, the process will write its pid to the named file, and delete it on graceful shutdown.

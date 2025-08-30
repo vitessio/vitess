@@ -84,18 +84,16 @@ func (q *resilientQuery) getCurrentValue(ctx context.Context, wkey fmt.Stringer,
 	}
 	shouldRefresh := time.Since(entry.lastQueryTime) > q.cacheRefreshInterval
 
-	// If it is not time to check again, then return either the cached
-	// value or the cached error but don't ask topo again.
+	// If it is not time to check again and we have a valid cached value,
+	// return it without asking topo again. For expired cached values or
+	// cached errors, fall through to wait for fresh results.
 	// Here we have to be careful with the part where we haven't gotten even the first result.
 	// In that case, a refresh is already in progress, but the cache is empty! So, we can't use the cache.
 	// We have to wait for the query's results.
 	// We know the query has run at least once if the insertionTime is non-zero, or if we have an error.
 	queryRanAtLeastOnce := !entry.insertionTime.IsZero() || entry.lastError != nil
-	if !shouldRefresh && queryRanAtLeastOnce {
-		if cacheValid {
-			return entry.value, nil
-		}
-		return nil, entry.lastError
+	if !shouldRefresh && queryRanAtLeastOnce && cacheValid {
+		return entry.value, nil
 	}
 
 	// Refresh the state in a background goroutine if no refresh is already
@@ -139,11 +137,9 @@ func (q *resilientQuery) getCurrentValue(ctx context.Context, wkey fmt.Stringer,
 					log.Errorf("ResilientQuery(%v, %v) failed: %v (request timeout), (keeping cached value: %v)", ctx, wkey, err, entry.value)
 				} else if entry.value != nil && time.Since(entry.insertionTime) < q.cacheTTL {
 					q.counts.Add(cachedCategory, 1)
-					log.Warningf("ResilientQuery(%v, %v) failed: %v (keeping cached value: %v)", ctx, wkey, err, entry.value)
+					log.Warningf("ResilientQuery(%v, %v) failed: %v (cached value still considered valid: %v)", ctx, wkey, err, entry.value)
 				} else {
-					log.Errorf("ResilientQuery(%v, %v) failed: %v (cached value expired)", ctx, wkey, err)
-					entry.insertionTime = time.Time{}
-					entry.value = nil
+					log.Errorf("ResilientQuery(%v, %v) failed: %v (cached value expired, keeping cached value)", ctx, wkey, err)
 				}
 			}
 
@@ -173,9 +169,9 @@ func (q *resilientQuery) getCurrentValue(ctx context.Context, wkey fmt.Stringer,
 	}
 	entry.mutex.Lock()
 
-	if entry.value != nil {
-		return entry.value, nil
+	if entry.lastError != nil {
+		return nil, entry.lastError
 	}
 
-	return nil, entry.lastError
+	return entry.value, nil
 }

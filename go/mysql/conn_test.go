@@ -804,14 +804,10 @@ func TestIsEOFPacket(t *testing.T) {
 }
 
 func TestMultiStatementStopsOnError(t *testing.T) {
-	origMysqlMultiQuery := mysqlMultiQuery
-	defer func() {
-		mysqlMultiQuery = origMysqlMultiQuery
-	}()
 	for _, b := range []bool{true, false} {
 		t.Run(fmt.Sprintf("MultiQueryProtocol: %v", b), func(t *testing.T) {
-			mysqlMultiQuery = b
 			listener, sConn, cConn := createSocketPair(t)
+			sConn.multiQuery = b
 			sConn.Capabilities |= CapabilityClientMultiStatements
 			defer func() {
 				listener.Close()
@@ -839,14 +835,10 @@ func TestMultiStatementStopsOnError(t *testing.T) {
 }
 
 func TestEmptyQuery(t *testing.T) {
-	origMysqlMultiQuery := mysqlMultiQuery
-	defer func() {
-		mysqlMultiQuery = origMysqlMultiQuery
-	}()
 	for _, b := range []bool{true, false} {
 		t.Run(fmt.Sprintf("MultiQueryProtocol: %v", b), func(t *testing.T) {
-			mysqlMultiQuery = b
 			listener, sConn, cConn := createSocketPair(t)
+			sConn.multiQuery = b
 			sConn.Capabilities |= CapabilityClientMultiStatements
 			defer func() {
 				listener.Close()
@@ -873,14 +865,10 @@ func TestEmptyQuery(t *testing.T) {
 }
 
 func TestMultiStatement(t *testing.T) {
-	origMysqlMultiQuery := mysqlMultiQuery
-	defer func() {
-		mysqlMultiQuery = origMysqlMultiQuery
-	}()
 	for _, b := range []bool{true, false} {
 		t.Run(fmt.Sprintf("MultiQueryProtocol: %v", b), func(t *testing.T) {
-			mysqlMultiQuery = b
 			listener, sConn, cConn := createSocketPair(t)
+			sConn.multiQuery = b
 			sConn.Capabilities |= CapabilityClientMultiStatements
 			defer func() {
 				listener.Close()
@@ -930,14 +918,10 @@ func TestMultiStatement(t *testing.T) {
 }
 
 func TestMultiStatementOnSplitError(t *testing.T) {
-	origMysqlMultiQuery := mysqlMultiQuery
-	defer func() {
-		mysqlMultiQuery = origMysqlMultiQuery
-	}()
 	for _, b := range []bool{true, false} {
 		t.Run(fmt.Sprintf("MultiQueryProtocol: %v", b), func(t *testing.T) {
-			mysqlMultiQuery = b
 			listener, sConn, cConn := createSocketPair(t)
+			sConn.multiQuery = b
 			sConn.Capabilities |= CapabilityClientMultiStatements
 			defer func() {
 				listener.Close()
@@ -990,13 +974,8 @@ func TestInitDbAgainstWrongDbDoesNotDropConnection(t *testing.T) {
 }
 
 func TestConnectionErrorWhileWritingComQuery(t *testing.T) {
-	origMysqlMultiQuery := mysqlMultiQuery
-	defer func() {
-		mysqlMultiQuery = origMysqlMultiQuery
-	}()
 	for _, b := range []bool{true, false} {
 		t.Run(fmt.Sprintf("MultiQueryProtocol: %v", b), func(t *testing.T) {
-			mysqlMultiQuery = b
 			// Set the conn for the server connection to the simulated connection which always returns an error on writing
 			sConn := newConn(testConn{
 				writeToPass: []bool{false, true},

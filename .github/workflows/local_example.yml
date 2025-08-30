@@ -5,10 +5,10 @@ jobs:
 
   build:
     name: Local example using ${{ matrix.topo }} on Ubuntu
-    runs-on: gh-hosted-runners-16cores-1-24.04
+    runs-on: oracle-vm-16cpu-64gb-x86-64
     strategy:
       matrix:
-        topo: [consul,etcd,zk2]
+        topo: [etcd,zk2]
 
     steps:
     - name: Skip CI

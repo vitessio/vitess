@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -696,10 +697,10 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	return infSchema
 }
 
-// getInfoSchema80 returns a map of all information_schema tables and their columns with types
+// getInfoSchema8 returns a map of all information_schema tables and their columns with types
 // To recreate this information from MySQL, you can run the test in info_schema_gen_test.go
-func getInfoSchema80() map[string][]vindexes.Column {
-	parser, err := sqlparser.New(sqlparser.Options{MySQLServerVersion: "8.0.40"})
+func getInfoSchema8() map[string][]vindexes.Column {
+	parser, err := sqlparser.New(sqlparser.Options{MySQLServerVersion: config.DefaultMySQLVersion})
 	if err != nil {
 		panic(err)
 	}
@@ -1610,7 +1611,7 @@ var _ SchemaInformation = (*infoSchemaWithColumns)(nil)
 // We cache this information, since these are maps that are not changed
 var (
 	infoSchema57 = getInfoSchema57()
-	infoSchema80 = getInfoSchema80()
+	infoSchema8  = getInfoSchema8()
 )
 
 // newSchemaInfo returns a SchemaInformation that has the column information for all info_schema tables
@@ -1623,7 +1624,7 @@ func loadSchemaInfo(version string) map[string][]vindexes.Column {
 		return infoSchema57
 	}
 
-	return infoSchema80
+	return infoSchema8
 }
 
 // FindTableOrVindex implements the SchemaInformation interface

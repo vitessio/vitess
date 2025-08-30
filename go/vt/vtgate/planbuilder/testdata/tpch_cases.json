@@ -1503,7 +1503,7 @@
               {
                 "OperatorType": "Aggregate",
                 "Variant": "Scalar",
-                "Aggregates": "sum(0) AS sum(ps_supplycost * ps_availqty), any_value(1)",
+                "Aggregates": "sum(0) AS sum(ps_supplycost * ps_availqty), constant_aggr(0.00001000000) AS 0.00001000000",
                 "Inputs": [
                   {
                     "OperatorType": "Projection",
@@ -1905,7 +1905,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "any_value(0), sum(1) AS sum(case when p_type like 'PROMO%' then l_extendedprice * (1 - l_discount) else 0 end), sum(2) AS sum(l_extendedprice * (1 - l_discount))",
+            "Aggregates": "constant_aggr(100.00) AS 100.00, sum(1) AS sum(case when p_type like 'PROMO%' then l_extendedprice * (1 - l_discount) else 0 end), sum(2) AS sum(l_extendedprice * (1 - l_discount))",
             "Inputs": [
               {
                 "OperatorType": "Projection",

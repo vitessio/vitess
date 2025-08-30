@@ -135,6 +135,16 @@ func TestStripeRoundTrip(t *testing.T) {
 func TestShouldDrainForBackupXtrabackup(t *testing.T) {
 	be := &XtrabackupEngine{}
 
+	// Test default behavior (should not drain)
+	originalValue := xtrabackupShouldDrain
+	defer func() { xtrabackupShouldDrain = originalValue }()
+
+	xtrabackupShouldDrain = false
 	assert.False(t, be.ShouldDrainForBackup(nil))
 	assert.False(t, be.ShouldDrainForBackup(&tabletmanagerdatapb.BackupRequest{}))
+
+	// Test configurable behavior (should drain when flag is set)
+	xtrabackupShouldDrain = true
+	assert.True(t, be.ShouldDrainForBackup(nil))
+	assert.True(t, be.ShouldDrainForBackup(&tabletmanagerdatapb.BackupRequest{}))
 }

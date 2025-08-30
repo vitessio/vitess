@@ -119,8 +119,8 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 	if dr.ExtraRowsSource == 0 || dr.ExtraRowsTarget == 0 {
 		return nil
 	}
-	matchedSourceDiffs := make([]bool, int(dr.ExtraRowsSource))
-	matchedTargetDiffs := make([]bool, int(dr.ExtraRowsTarget))
+	matchedSourceDiffs := make([]bool, len(dr.ExtraRowsSourceDiffs))
+	matchedTargetDiffs := make([]bool, len(dr.ExtraRowsTargetDiffs))
 	matchedDiffs := int64(0)
 
 	maxRows := int(dr.ExtraRowsSource)
@@ -131,8 +131,8 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 		dr.TableName, wd.ct.uuid, dr.ExtraRowsSource, dr.ExtraRowsTarget, maxRows)
 
 	// Find the matching extra rows
-	for i := 0; i < maxRows; i++ {
-		for j := 0; j < int(dr.ExtraRowsTarget); j++ {
+	for i := 0; i < len(dr.ExtraRowsSourceDiffs); i++ {
+		for j := 0; j < len(dr.ExtraRowsTargetDiffs); j++ {
 			if matchedTargetDiffs[j] {
 				// previously matched
 				continue
@@ -151,9 +151,8 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 			dr.TableName, maxRows, wd.ct.uuid)
 	} else {
 		// Now remove the matching extra rows
-		newExtraRowsSourceDiffs := make([]*RowDiff, 0, dr.ExtraRowsSource-matchedDiffs)
-		newExtraRowsTargetDiffs := make([]*RowDiff, 0, dr.ExtraRowsTarget-matchedDiffs)
-		for i := 0; i < int(dr.ExtraRowsSource); i++ {
+		newExtraRowsSourceDiffs := make([]*RowDiff, 0, int64(len(dr.ExtraRowsSourceDiffs))-matchedDiffs)
+		for i := 0; i < len(dr.ExtraRowsSourceDiffs); i++ {
 			if !matchedSourceDiffs[i] {
 				newExtraRowsSourceDiffs = append(newExtraRowsSourceDiffs, dr.ExtraRowsSourceDiffs[i])
 			}
@@ -161,7 +160,9 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 				break
 			}
 		}
-		for i := 0; i < int(dr.ExtraRowsTarget); i++ {
+
+		newExtraRowsTargetDiffs := make([]*RowDiff, 0, int64(len(dr.ExtraRowsTargetDiffs))-matchedDiffs)
+		for i := 0; i < len(dr.ExtraRowsTargetDiffs); i++ {
 			if !matchedTargetDiffs[i] {
 				newExtraRowsTargetDiffs = append(newExtraRowsTargetDiffs, dr.ExtraRowsTargetDiffs[i])
 			}
@@ -173,11 +174,13 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 		dr.ExtraRowsTargetDiffs = newExtraRowsTargetDiffs
 
 		// Update the counts
-		dr.ExtraRowsSource = int64(len(dr.ExtraRowsSourceDiffs))
-		dr.ExtraRowsTarget = int64(len(dr.ExtraRowsTargetDiffs))
+		dr.ExtraRowsSource -= matchedDiffs
+		dr.ExtraRowsTarget -= matchedDiffs
 		dr.MatchingRows += matchedDiffs
-		dr.MismatchedRows -= matchedDiffs
-		dr.ProcessedRows += matchedDiffs
+
+		// We do not update `ProcessedRows` here, because any extra target or source rows are already included in it.
+		// We do not update `MismatchedRows`, because extra target or source rows are not counted as mismatches.
+
 		log.Infof("Reconciled extra rows for table %s in vdiff %s, matching rows %d, extra source rows %d, extra target rows %d. Max compared rows %d",
 			dr.TableName, wd.ct.uuid, matchedDiffs, dr.ExtraRowsSource, dr.ExtraRowsTarget, maxRows)
 	}

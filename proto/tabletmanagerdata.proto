@@ -711,6 +711,8 @@ message ValidateVReplicationPermissionsResponse {
   // Does the user have the minimum privileges needed to manage
   // vreplication metadata.
   bool ok = 2;
+  // The error has to be passed from the tablet since the sidecar name is tablet-specific
+  string error = 3;
 }
 
 message VDiffRequest {

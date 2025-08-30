@@ -161,7 +161,7 @@ func checkAndCreateInsertOperator(ctx *plancontext.PlanningContext, ins *sqlpars
 	parentFKs := ctx.SemTable.GetParentForeignKeysList()
 	childFks := ctx.SemTable.GetChildForeignKeysList()
 	if len(parentFKs) > 0 {
-		panic(vterrors.VT12002())
+		panic(vterrors.VT12002(vTbl.String(), parentFKs[0].Table.String()))
 	}
 	if len(childFks) > 0 {
 		if ins.Action == sqlparser.ReplaceAct {

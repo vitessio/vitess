@@ -29,7 +29,11 @@ func (cached *AggregateParams) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(112)
+		size += int64(128)
+	}
+	// field EExpr vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	if cc, ok := cached.EExpr.(cachedObject); ok {
+		size += cc.CachedSize(true)
 	}
 	// field Type vitess.io/vitess/go/vt/vtgate/evalengine.Type
 	size += cached.Type.CachedSize(false)

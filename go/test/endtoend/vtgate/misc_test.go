@@ -1008,6 +1008,38 @@ func TestQueryProcessedMetric(t *testing.T) {
 	}
 }
 
+// TestQueryProcessedMetric verifies that query metrics are correctly published.
+func TestMetricForExplain(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	initialQP := getQPMetric(t, "QueryExecutions")
+	initialQT := getQPMetric(t, "QueryExecutionsByTable")
+	t.Run("explain t1", func(t *testing.T) {
+		utils.Exec(t, conn, "explain t1")
+		updatedQP := getQPMetric(t, "QueryExecutions")
+		updatedQT := getQPMetric(t, "QueryExecutionsByTable")
+		assert.EqualValuesf(t, 1, getValue(updatedQP, "EXPLAIN.Passthrough.PRIMARY")-getValue(initialQP, "EXPLAIN.Passthrough.PRIMARY"), "queryExecutions metric: %s", "explain")
+		assert.EqualValuesf(t, 1, getValue(updatedQT, "EXPLAIN.ks_t1")-getValue(initialQT, "EXPLAIN.ks_t1"), "queryExecutionsByTable metric: %s", "asdasd")
+	})
+
+	t.Run("explain `select id1, id2 from t1`", func(t *testing.T) {
+		utils.ExecAllowError(t, conn, "explain `select id1, id2 from t1`")
+		updatedQP := getQPMetric(t, "QueryExecutions")
+		updatedQT := getQPMetric(t, "QueryExecutionsByTable")
+		assert.EqualValuesf(t, 1, getValue(updatedQP, "EXPLAIN.Passthrough.PRIMARY")-getValue(initialQP, "EXPLAIN.Passthrough.PRIMARY"), "queryExecutions metric: %s", "explain")
+		assert.EqualValuesf(t, 1, getValue(updatedQT, "EXPLAIN.ks_t1")-getValue(initialQT, "EXPLAIN.ks_t1"), "queryExecutionsByTable metric: %s", "asdasd")
+	})
+
+	t.Run("explain select id1, id2 from t1", func(t *testing.T) {
+		utils.Exec(t, conn, "explain select id1, id2 from t1")
+		updatedQP := getQPMetric(t, "QueryExecutions")
+		updatedQT := getQPMetric(t, "QueryExecutionsByTable")
+		assert.EqualValuesf(t, 2, getValue(updatedQP, "EXPLAIN.Passthrough.PRIMARY")-getValue(initialQP, "EXPLAIN.Passthrough.PRIMARY"), "queryExecutions metric: %s", "explain")
+		assert.EqualValuesf(t, 2, getValue(updatedQT, "EXPLAIN.ks_t1")-getValue(initialQT, "EXPLAIN.ks_t1"), "queryExecutionsByTable metric: %s", "asdasd")
+	})
+}
+
 func getQPMetric(t *testing.T, metric string) map[string]any {
 	t.Helper()
 

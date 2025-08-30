@@ -64,6 +64,12 @@ func Rewrote(message string) *ApplyResult {
 	return &ApplyResult{Transformations: []Rewrite{{Message: message}}}
 }
 
+func debugNoRewrite(reason string, args ...interface{}) {
+	if DebugOperatorTree {
+		fmt.Printf("NoRewrite: "+reason+"\n", args...)
+	}
+}
+
 func (ar *ApplyResult) Merge(other *ApplyResult) *ApplyResult {
 	if ar == nil {
 		return other

@@ -33,7 +33,7 @@ const (
 	mysql80 mysqlVersion = "mysql80"
 	mysql84 mysqlVersion = "mysql84"
 
-	defaultMySQLVersion = mysql80
+	defaultMySQLVersion = mysql84
 )
 
 type mysqlVersions []mysqlVersion
@@ -47,9 +47,9 @@ var (
 )
 
 const (
-	oracleCloudRunner = "oracle-16cpu-64gb-x86-64"
+	oracleCloudRunner = "oracle-vm-16cpu-64gb-x86-64"
 	githubRunner      = "gh-hosted-runners-16cores-1-24.04"
-	cores16RunnerName = githubRunner
+	cores16RunnerName = oracleCloudRunner
 	defaultRunnerName = "ubuntu-24.04"
 )
 
@@ -121,7 +121,7 @@ var (
 		"vtgate_foreignkey_stress",
 		"vtorc",
 		"xb_recovery",
-		"mysql80",
+		"mysql84",
 		"vreplication_across_db_versions",
 		"vreplication_mariadb_to_mysql",
 		"vreplication_basic",

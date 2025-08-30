@@ -80,6 +80,9 @@ func TestAggrWithLimit(t *testing.T) {
 		mcmp.Exec(fmt.Sprintf("insert into aggr_test(id, val1, val2) values(%d, 'a', %d)", i, r))
 	}
 	mcmp.Exec("select val2, count(*) from aggr_test group by val2 order by count(*), val2 limit 10")
+	if utils.BinaryIsAtLeastAtVersion(23, "vtgate") {
+		mcmp.Exec("SELECT 1 AS `id`, COUNT(*) FROM (SELECT `id` FROM aggr_test WHERE val1 = 1 LIMIT 100) `t`")
+	}
 }
 
 func TestAggregateTypes(t *testing.T) {

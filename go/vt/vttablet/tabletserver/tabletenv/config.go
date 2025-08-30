@@ -211,8 +211,8 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	utils.SetFlagBoolVar(fs, &currentConfig.EnableOnlineDDL, "queryserver-enable-online-ddl", true, "Enable online DDL.")
 	fs.BoolVar(&currentConfig.SanitizeLogMessages, "sanitize_log_messages", false, "Remove potentially sensitive information in tablet INFO, WARNING, and ERROR log messages such as query parameters.")
 
-	utils.SetFlagInt64Var(fs, &currentConfig.RowStreamer.MaxInnoDBTrxHistLen, "vreplication-copy-phase-max-innodb-history-list-length", 1000000, "The maximum InnoDB transaction history that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet.")
-	utils.SetFlagInt64Var(fs, &currentConfig.RowStreamer.MaxMySQLReplLagSecs, "vreplication-copy-phase-max-mysql-replication-lag", 43200, "The maximum MySQL replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet.")
+	utils.SetFlagInt64Var(fs, &currentConfig.RowStreamer.MaxInnoDBTrxHistLen, "vreplication-copy-phase-max-innodb-history-list-length", 10000000, "The maximum InnoDB transaction history that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet")
+	utils.SetFlagInt64Var(fs, &currentConfig.RowStreamer.MaxMySQLReplLagSecs, "vreplication-copy-phase-max-mysql-replication-lag", 43200, "The maximum MySQL replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet")
 
 	fs.BoolVar(&currentConfig.EnableViews, "queryserver-enable-views", false, "Enable views support in vttablet.")
 
@@ -933,7 +933,7 @@ func (c *TabletConfig) verifyUnmanagedTabletConfig() error {
 	}
 	if c.DB.App.Password == "" {
 		_, pass, err := dbconfigs.GetCredentialsServer().GetUserAndPassword(c.DB.App.User)
-		if err == nil && pass != "" {
+		if err == nil {
 			c.DB.App.Password = pass
 		} else {
 			return errors.New("database app user password not specified")
@@ -1112,7 +1112,7 @@ var defaultConfig = TabletConfig{
 	EnableTableGC:            true,
 
 	RowStreamer: RowStreamerConfig{
-		MaxInnoDBTrxHistLen: 1000000,
+		MaxInnoDBTrxHistLen: 10000000,
 		MaxMySQLReplLagSecs: 43200,
 	},
 

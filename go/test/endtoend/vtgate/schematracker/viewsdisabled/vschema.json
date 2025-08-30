@@ -1,0 +1,69 @@
+{
+    "sharded": false,
+    "tables": {
+        "users": {
+            "columns": [
+                {
+                    "name": "id", 
+                    "type": "INT64"
+                },
+                {
+                    "name": "name", 
+                    "type": "VARCHAR"
+                },
+                {
+                    "name": "email", 
+                    "type": "VARCHAR"
+                },
+                {
+                    "name": "status", 
+                    "type": "ENUM"
+                }
+            ]
+        },
+        "products": {
+            "columns": [
+                {
+                    "name": "id", 
+                    "type": "INT64"
+                },
+                {
+                    "name": "name", 
+                    "type": "VARCHAR"
+                },
+                {
+                    "name": "price", 
+                    "type": "DECIMAL"
+                },
+                {
+                    "name": "category", 
+                    "type": "VARCHAR"
+                }
+            ]
+        },
+        "orders": {
+            "columns": [
+                {
+                    "name": "id", 
+                    "type": "INT64"
+                },
+                {
+                    "name": "user_id", 
+                    "type": "INT64"
+                },
+                {
+                    "name": "product_id", 
+                    "type": "INT64"
+                },
+                {
+                    "name": "quantity", 
+                    "type": "INT32"
+                },
+                {
+                    "name": "order_date", 
+                    "type": "TIMESTAMP"
+                }
+            ]
+        }
+    }
+}

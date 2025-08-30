@@ -305,8 +305,8 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		// it's a FAILED_PRECONDITION vterror, OR we cannot identify this as
 		// non-recoverable BUT it has persisted beyond the retry limit
 		// (maxTimeToRetryError). In addition, we cannot restart a workflow
-		// started with AtomicCopy which has _any_ error.
-		if (err != nil && vr.WorkflowSubType == int32(binlogdatapb.VReplicationWorkflowSubType_AtomicCopy)) ||
+		// started with AtomicCopy which has _any_ error during copy phase.
+		if (err != nil && vr.WorkflowSubType == int32(binlogdatapb.VReplicationWorkflowSubType_AtomicCopy) && vr.state == binlogdatapb.VReplicationWorkflowState_Copying) ||
 			isUnrecoverableError(err) ||
 			!ct.lastWorkflowError.ShouldRetry() {
 			err = vterrors.Wrapf(err, TerminalErrorIndicator)

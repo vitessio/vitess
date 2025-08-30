@@ -179,8 +179,11 @@ func (u *Union) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool,
 	case *sqlparser.ColName:
 		cols := u.GetColumns(ctx)
 		// here we deal with pure column access on top of the union
-		offset := slices.IndexFunc(cols, func(expr *sqlparser.AliasedExpr) bool {
-			return e.Name.EqualString(expr.ColumnName())
+		offset := slices.IndexFunc(cols, func(column *sqlparser.AliasedExpr) bool {
+			if column.ColumnName() == expr.ColumnName() {
+				return true
+			}
+			return e.Name.EqualString(column.ColumnName())
 		})
 		if offset == -1 {
 			panic(vterrors.VT13001(fmt.Sprintf("could not find the column '%s' on the UNION", sqlparser.String(e))))

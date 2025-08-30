@@ -153,8 +153,8 @@ func testExecuteAsDba(t *testing.T) {
 			result: "",
 		},
 		{
-			query:  "create table if not exists t(id int); create table if not exists t(id int);",
-			result: "",
+			query:     "create table if not exists t(id int); create table if not exists t(id int);",
+			expectErr: true,
 		},
 		{
 			query:     "create table if not exists t(id int); create table if not exists t(id int); SELECT 1 AS a",

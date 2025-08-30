@@ -474,7 +474,8 @@ func confirmTablesHaveSecondaryKeys(t *testing.T, tablets []*cluster.VttabletPro
 		}
 		select {
 		case <-timer.C:
-			require.FailNow(t, "The following table(s) do not have any secondary keys: %s", strings.Join(tablesWithoutSecondaryKeys, ", "))
+			failureMessage := fmt.Sprintf("The following table(s) do not have any secondary keys: %s", strings.Join(tablesWithoutSecondaryKeys, ", "))
+			require.FailNow(t, failureMessage)
 		default:
 			time.Sleep(defaultTick)
 		}

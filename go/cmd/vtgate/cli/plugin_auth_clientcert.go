@@ -28,5 +28,7 @@ var clientcertAuthMethod string
 func init() {
 	Main.Flags().StringVar(&clientcertAuthMethod, "mysql_clientcert_auth_method", string(mysql.MysqlClearPassword), "client-side authentication method to use. Supported values: mysql_clear_password, dialog.")
 
-	vtgate.RegisterPluginInitializer(func() { mysql.InitAuthServerClientCert(clientcertAuthMethod) })
+	vtgate.RegisterPluginInitializer(func() {
+		mysql.InitAuthServerClientCert(clientcertAuthMethod, vtgate.GetMysqlServerSSLCA())
+	})
 }

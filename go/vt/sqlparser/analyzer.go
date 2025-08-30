@@ -19,6 +19,7 @@ package sqlparser
 // analyzer.go contains utility analysis functions.
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"unicode"
@@ -377,6 +378,20 @@ func GetTableName(node SimpleTableExpr) IdentifierCS {
 func IsColName(node Expr) bool {
 	_, ok := node.(*ColName)
 	return ok
+}
+
+var errNotStatic = errors.New("not static")
+
+// IsConstant returns true if the Expr can be evaluated without input or access to tables.
+func IsConstant(node Expr) bool {
+	err := Walk(func(node SQLNode) (kontinue bool, err error) {
+		switch node.(type) {
+		case *ColName, *Subquery:
+			return false, errNotStatic
+		}
+		return true, nil
+	}, node)
+	return err == nil
 }
 
 // IsValue returns true if the Expr is a string, integral or value arg.

@@ -66,7 +66,7 @@ jobs:
 
       - name: Create Pull Request
         if: steps.detect-and-update.outputs.create-pr == 'true'
-        uses: peter-evans/create-pull-request@v4
+        uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.CREATE_PR_VITESS_BOT }}
           branch: "upgrade-go-to-${{steps.detect-and-update.outputs.go-version}}-on-${{ matrix.branch }}"

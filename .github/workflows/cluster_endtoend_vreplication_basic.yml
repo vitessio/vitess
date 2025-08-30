@@ -17,7 +17,7 @@ jobs:
   build:
     timeout-minutes: 60
     name: Run endtoend tests on Cluster (vreplication_basic)
-    runs-on: gh-hosted-runners-16cores-1-24.04
+    runs-on: oracle-vm-16cpu-64gb-x86-64
 
     steps:
     - name: Skip CI
@@ -100,9 +100,9 @@ jobs:
         
         # Get key to latest MySQL repo
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
-        # Setup MySQL 8.0
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.33-1_all.deb
-        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
+        # Setup MySQL 8.4
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.34-1_all.deb
+        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.4-lts | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get -qq update
 
@@ -151,7 +151,7 @@ jobs:
 
         # Increase our open file descriptor limit as we could hit this
         ulimit -n 65536
-        cat <<-EOF>>./config/mycnf/mysql8026.cnf
+        cat <<-EOF>>./config/mycnf/mysql84.cnf
         innodb_buffer_pool_dump_at_shutdown=OFF
         innodb_buffer_pool_in_core_file=OFF
         innodb_buffer_pool_load_at_startup=OFF
@@ -167,11 +167,11 @@ jobs:
         slow-query-log=OFF
         EOF
         
-        cat <<-EOF>>./config/mycnf/mysql8026.cnf
+        cat <<-EOF>>./config/mycnf/mysql84.cnf
         binlog-transaction-compression=ON
         EOF
         
-        cat <<-EOF>>./config/mycnf/mysql8026.cnf
+        cat <<-EOF>>./config/mycnf/mysql84.cnf
         binlog-row-value-options=PARTIAL_JSON
         EOF
         
