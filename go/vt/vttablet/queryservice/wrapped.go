@@ -117,7 +117,7 @@ type wrappedService struct {
 }
 
 func (ws *wrappedService) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (state TransactionState, err error) {
-	opts := WrapOpts{InTransaction: false}
+	opts := WrapOpts{InTransaction: false, Options: options}
 	err = ws.wrapper(ctx, target, ws.impl, "Begin", opts, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		var innerErr error
 		state, innerErr = conn.Begin(ctx, target, options)
@@ -240,7 +240,7 @@ func (ws *wrappedService) UnresolvedTransactions(ctx context.Context, target *qu
 
 func (ws *wrappedService) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (qr *sqltypes.Result, err error) {
 	inDedicatedConn := transactionID != 0 || reservedID != 0
-	opts := WrapOpts{InTransaction: inDedicatedConn}
+	opts := WrapOpts{InTransaction: inDedicatedConn, Options: options}
 	err = ws.wrapper(ctx, target, ws.impl, "Execute", opts, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		var innerErr error
 		qr, innerErr = conn.Execute(ctx, target, query, bindVars, transactionID, reservedID, options)
@@ -254,7 +254,7 @@ func (ws *wrappedService) Execute(ctx context.Context, target *querypb.Target, q
 // StreamExecute implements the QueryService interface
 func (ws *wrappedService) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	inDedicatedConn := transactionID != 0 || reservedID != 0
-	opts := WrapOpts{InTransaction: inDedicatedConn}
+	opts := WrapOpts{InTransaction: inDedicatedConn, Options: options}
 	err := ws.wrapper(ctx, target, ws.impl, "StreamExecute", opts, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		streamingStarted := false
 		innerErr := conn.StreamExecute(ctx, target, query, bindVars, transactionID, reservedID, options, func(qr *sqltypes.Result) error {
@@ -270,7 +270,7 @@ func (ws *wrappedService) StreamExecute(ctx context.Context, target *querypb.Tar
 
 func (ws *wrappedService) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (state TransactionState, qr *sqltypes.Result, err error) {
 	inDedicatedConn := reservedID != 0
-	opts := WrapOpts{InTransaction: inDedicatedConn}
+	opts := WrapOpts{InTransaction: inDedicatedConn, Options: options}
 	err = ws.wrapper(ctx, target, ws.impl, "BeginExecute", opts, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		var innerErr error
 		state, qr, innerErr = conn.BeginExecute(ctx, target, preQueries, query, bindVars, reservedID, options)
@@ -282,7 +282,7 @@ func (ws *wrappedService) BeginExecute(ctx context.Context, target *querypb.Targ
 // BeginStreamExecute implements the QueryService interface
 func (ws *wrappedService) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (state TransactionState, err error) {
 	inDedicatedConn := reservedID != 0
-	opts := WrapOpts{InTransaction: inDedicatedConn}
+	opts := WrapOpts{InTransaction: inDedicatedConn, Options: options}
 	err = ws.wrapper(ctx, target, ws.impl, "BeginStreamExecute", opts, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		var innerErr error
 		state, innerErr = conn.BeginStreamExecute(ctx, target, preQueries, query, bindVars, reservedID, options, callback)
@@ -355,7 +355,7 @@ func (ws *wrappedService) HandlePanic(err *error) {
 
 // ReserveBeginExecute implements the QueryService interface
 func (ws *wrappedService) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (state ReservedTransactionState, res *sqltypes.Result, err error) {
-	opts := WrapOpts{InTransaction: false}
+	opts := WrapOpts{InTransaction: false, Options: options}
 	err = ws.wrapper(ctx, target, ws.impl, "ReserveBeginExecute", opts, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		var err error
 		state, res, err = conn.ReserveBeginExecute(ctx, target, preQueries, postBeginQueries, sql, bindVariables, options)
@@ -367,7 +367,7 @@ func (ws *wrappedService) ReserveBeginExecute(ctx context.Context, target *query
 
 // ReserveBeginStreamExecute implements the QueryService interface
 func (ws *wrappedService) ReserveBeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (state ReservedTransactionState, err error) {
-	opts := WrapOpts{InTransaction: false}
+	opts := WrapOpts{InTransaction: false, Options: options}
 	err = ws.wrapper(ctx, target, ws.impl, "ReserveBeginStreamExecute", opts, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		var innerErr error
 		state, innerErr = conn.ReserveBeginStreamExecute(ctx, target, preQueries, postBeginQueries, sql, bindVariables, options, callback)
@@ -379,7 +379,7 @@ func (ws *wrappedService) ReserveBeginStreamExecute(ctx context.Context, target 
 // ReserveExecute implements the QueryService interface
 func (ws *wrappedService) ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (state ReservedState, res *sqltypes.Result, err error) {
 	inDedicatedConn := transactionID != 0
-	opts := WrapOpts{InTransaction: inDedicatedConn}
+	opts := WrapOpts{InTransaction: inDedicatedConn, Options: options}
 	err = ws.wrapper(ctx, target, ws.impl, "ReserveExecute", opts, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		var err error
 		state, res, err = conn.ReserveExecute(ctx, target, preQueries, sql, bindVariables, transactionID, options)
@@ -392,7 +392,7 @@ func (ws *wrappedService) ReserveExecute(ctx context.Context, target *querypb.Ta
 // ReserveStreamExecute implements the QueryService interface
 func (ws *wrappedService) ReserveStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (state ReservedState, err error) {
 	inDedicatedConn := transactionID != 0
-	opts := WrapOpts{InTransaction: inDedicatedConn}
+	opts := WrapOpts{InTransaction: inDedicatedConn, Options: options}
 	err = ws.wrapper(ctx, target, ws.impl, "ReserveStreamExecute", opts, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		var innerErr error
 		state, innerErr = conn.ReserveStreamExecute(ctx, target, preQueries, sql, bindVariables, transactionID, options, callback)

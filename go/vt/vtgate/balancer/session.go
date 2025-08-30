@@ -26,6 +26,7 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -57,6 +58,8 @@ type SessionBalancer struct {
 
 // NewSessionBalancer creates a new session balancer.
 func NewSessionBalancer(ctx context.Context, localCell string, topoServer srvtopo.Server, hc discovery.HealthCheck) (TabletBalancer, error) {
+	log.Info("session balancer: creating new session balancer")
+
 	b := &SessionBalancer{
 		localCell:     localCell,
 		hc:            hc,
@@ -127,7 +130,6 @@ func (b *SessionBalancer) DebugHandler(w http.ResponseWriter, r *http.Request) {
 
 // watchHealthCheck watches the health check channel for tablet health changes, and updates hash rings accordingly.
 func (b *SessionBalancer) watchHealthCheck(ctx context.Context, hcChan chan *discovery.TabletHealth) {
-	// Start watching health check channel for future tablet health changes
 	for {
 		select {
 		case <-ctx.Done():
@@ -135,12 +137,12 @@ func (b *SessionBalancer) watchHealthCheck(ctx context.Context, hcChan chan *dis
 			return
 		case tablet := <-hcChan:
 			if tablet == nil {
-				return
+				continue
 			}
 
 			// Ignore tablets we aren't supposed to watch
 			if _, ok := tabletTypesToWatch[tablet.Target.TabletType]; !ok {
-				return
+				continue
 			}
 
 			b.onTabletHealthChange(tablet)
@@ -184,9 +186,6 @@ func getOrCreateRing(rings map[discovery.KeyspaceShardTabletType]*hashRing, tabl
 
 // print returns a string representation of the session balancer state for debugging.
 func (b *SessionBalancer) print() string {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-
 	sb := strings.Builder{}
 
 	sb.WriteString("Local rings:\n")
