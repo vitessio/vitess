@@ -86,13 +86,15 @@ type ReplicationAnalysisHints struct {
 
 // ReplicationAnalysis notes analysis on replication chain status, per instance
 type ReplicationAnalysis struct {
-	AnalyzedInstanceAlias        string
-	AnalyzedInstancePrimaryAlias string
-	TabletType                   topodatapb.TabletType
-	CurrentTabletType            topodatapb.TabletType
-	PrimaryTimeStamp             time.Time
-	AnalyzedKeyspace             string
-	AnalyzedShard                string
+	AnalyzedInstanceAlias                     string
+	AnalyzedInstancePrimaryAlias              string
+	TabletType                                topodatapb.TabletType
+	CurrentTabletType                         topodatapb.TabletType
+	PrimaryTimeStamp                          time.Time
+	AnalyzedKeyspace                          string
+	AnalyzedShard                             string
+	AnalyzedKeyspaceEmergencyReparentDisabled bool
+	AnalyzedShardEmergencyReparentDisabled    bool
 	// ShardPrimaryTermTimestamp is the primary term start time stored in the shard record.
 	ShardPrimaryTermTimestamp                 time.Time
 	AnalyzedInstanceBinlogCoordinates         BinlogCoordinates

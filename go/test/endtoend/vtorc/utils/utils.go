@@ -1051,6 +1051,31 @@ func WaitForSuccessfulERSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 	assert.EqualValues(t, countExpected, successCount)
 }
 
+// CheckKeyspaceShardERSDisabledState checks if the keyspace/shard has ERS disabled in the topo.
+func CheckKeyspaceShardERSDisabledState(t *testing.T, vtorcInstance *cluster.VTOrcProcess, keyspace, shard string, stateExpected bool) {
+	t.Helper()
+	var expectedValue int
+	if stateExpected {
+		expectedValue = 1
+	}
+	timeout := 15 * time.Second
+	startTime := time.Now()
+	mapKey := fmt.Sprintf("%v.%v", keyspace, shard)
+	for time.Since(startTime) < timeout {
+		vars := vtorcInstance.GetVars()
+		ersDisabledMap := vars["EmergencyReparentShardDisabled"].(map[string]interface{})
+		disabledValue := GetIntFromValue(ersDisabledMap[mapKey])
+		if disabledValue == expectedValue {
+			return
+		}
+		time.Sleep(time.Second)
+	}
+	vars := vtorcInstance.GetVars()
+	ersDisabledMap := vars["EmergencyReparentShardDisabled"].(map[string]interface{})
+	disabledValue := GetIntFromValue(ersDisabledMap[mapKey])
+	assert.EqualValues(t, expectedValue, disabledValue)
+}
+
 // CheckVarExists checks whether the given metric exists or not in /debug/vars.
 func CheckVarExists(t *testing.T, vtorcInstance *cluster.VTOrcProcess, metricName string) {
 	t.Helper()

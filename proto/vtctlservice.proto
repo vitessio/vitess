@@ -295,6 +295,8 @@ service Vtctld {
   // Reshard. See the documentation on SetShardTabletControlRequest for more
   // information about the different update modes.
   rpc SetShardTabletControl(vtctldata.SetShardTabletControlRequest) returns (vtctldata.SetShardTabletControlResponse) {};
+  // SetVtorcEmergencyReparent enables or disables the use of EmergencyReparentShard in VTOrc recoveries for a given keyspace or keyspace/shard.
+  rpc SetVtorcEmergencyReparent(vtctldata.SetVtorcEmergencyReparentRequest) returns (vtctldata.SetVtorcEmergencyReparentResponse) {};
   // SetWritable sets a tablet as read-write (writable=true) or read-only (writable=false).
   rpc SetWritable(vtctldata.SetWritableRequest) returns (vtctldata.SetWritableResponse) {};
   // ShardReplicationAdd adds an entry to a topodata.ShardReplication object.
