@@ -18,6 +18,7 @@
         - [CLI Flags](#flags-vttablet)
         - [Managed MySQL configuration defaults to caching-sha2-password](#mysql-caching-sha2-password) 
         - [MySQL timezone environment propagation](#mysql-timezone-env)
+    - **[Docker](#docker)**
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -105,3 +106,9 @@ In future Vitess versions, the `mysql_native_password` authentication plugin wil
 Fixed a bug where environment variables like `TZ` were not propagated from mysqlctl to the mysqld process.
 As a result, timezone settings from the environment were previously ignored. Now mysqld correctly inherits environment variables.
 ⚠️ Deployments that relied on the old behavior and explicitly set a non-UTC timezone may see changes in how DATETIME values are interpreted. To preserve compatibility, set `TZ=UTC` explicitly in MySQL pods.
+
+### <a id="docker"/>Docker</a>
+
+[Bullseye went EOL 1 year ago](https://www.debian.org/releases/), so starting from v23, we will no longer build or publish images based on debian:bullseye.
+
+Builds will continue for Debian Bookworm, and add the recently released Debian Trixie. v23 explicitly does not change the default Debian tag to Trixie.
