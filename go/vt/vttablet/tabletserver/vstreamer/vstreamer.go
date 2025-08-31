@@ -491,7 +491,9 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 				SequenceNumber: sequenceNumber,
 			})
 		}
-		vs.pos = replication.AppendGTIDInPlace(vs.pos, gtid)
+		vs.se.MutexProtected(func() {
+			vs.pos = replication.AppendGTIDInPlace(vs.pos, gtid)
+		})
 		vs.commitParent = commitParent
 		vs.sequenceNumber = sequenceNumber
 		vs.eventGTID = gtid

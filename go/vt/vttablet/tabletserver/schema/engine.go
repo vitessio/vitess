@@ -413,6 +413,12 @@ func (se *Engine) ReloadAtEx(ctx context.Context, pos replication.Position, incl
 	return nil
 }
 
+func (se *Engine) MutexProtected(f func()) {
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	f()
+}
+
 func populateInnoDBStats(ctx context.Context, conn *connpool.Conn) (map[string]*Table, error) {
 	innodbTableSizesQuery := conn.BaseShowInnodbTableSizes()
 	if innodbTableSizesQuery == "" {
