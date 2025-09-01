@@ -1452,6 +1452,9 @@ var (
 		input:  "set names utf8 collate 'foo'",
 		output: "set names 'utf8'",
 	}, {
+		input:  "set names binary",
+		output: "set names 'binary'",
+	}, {
 		input:  "set character set utf8",
 		output: "set charset 'utf8'",
 	}, {
