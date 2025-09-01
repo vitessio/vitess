@@ -85,7 +85,7 @@ Previous to this release, only the recovery "type" was included in labels.
 
 #### <a id="replication-analysis-api-deprecation"/>`/api/replication-analysis` HTTP API deprecation</a>
 
-The `/api/replication-analysis` HTTP API endpoint is deprecated and is replaced with `/api/detection-analysis`, which currently returns the same response format.
+The `/api/replication-analysis` HTTP API endpoint is now deprecated and is replaced with `/api/detection-analysis`, which currently returns the same response format.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
