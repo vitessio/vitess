@@ -46,7 +46,7 @@ const (
 	disableGlobalRecoveriesAPI    = "/api/disable-global-recoveries"
 	enableGlobalRecoveriesAPI     = "/api/enable-global-recoveries"
 	detectionAnalysisAPI          = "/api/detection-analysis"
-	replicationAnalysisAPI        = "/api/replication-analysis"
+	replicationAnalysisAPI        = "/api/replication-analysis" // TODO: remove in v24+
 	databaseStateAPI              = "/api/database-state"
 	configAPI                     = "/api/config"
 	healthAPI                     = "/debug/health"
@@ -64,6 +64,7 @@ var (
 		disableGlobalRecoveriesAPI,
 		enableGlobalRecoveriesAPI,
 		detectionAnalysisAPI,
+		replicationAnalysisAPI,
 		databaseStateAPI,
 		configAPI,
 		healthAPI,
