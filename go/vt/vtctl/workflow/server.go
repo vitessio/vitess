@@ -3042,8 +3042,8 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 
 	// Consistently handle errors by logging and returning them.
 	handleError := func(message string, err error) (int64, *[]string, error) {
+		ts.Logger().Errorf("%s: %v", message, err)
 		werr := vterrors.Wrap(err, message)
-		ts.Logger().Error(werr)
 		return 0, nil, werr
 	}
 
@@ -3288,7 +3288,7 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 	if err := sw.allowTargetWrites(ctx); err != nil {
 		return handleError(fmt.Sprintf("failed to allow writes in the %s keyspace", ts.TargetKeyspaceName()), err)
 	}
-	ts.logger.Infof("Writes allowed on target for workflow %s.%s", ts.targetKeyspace, ts.workflow)
+	ts.logger.Infof("Allowed writes on target for workflow %s.%s", ts.targetKeyspace, ts.workflow)
 
 	ts.logger.Infof("Updating routing rules for workflow %s.%s", ts.targetKeyspace, ts.workflow)
 	if err := sw.changeRouting(ctx); err != nil {
@@ -3303,13 +3303,14 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 	ts.logger.Infof("Finalized stream migrations for workflow %s.%s", ts.targetKeyspace, ts.workflow)
 
 	if req.EnableReverseReplication {
-		ts.logger.Infof("Starting reverse workflow %s.%s", ts.sourceKeyspace, ts.reverseWorkflow)
+		ts.logger.Infof("Starting reverse workflow %s on keyspace %s", ts.reverseWorkflow, ts.sourceKeyspace)
 		if err := sw.startReverseVReplication(ctx); err != nil {
 			return handleError("failed to start the reverse workflow", err)
 		}
-		ts.logger.Infof("Started reverse workflow %s.%s", ts.sourceKeyspace, ts.reverseWorkflow)
+		ts.logger.Infof("Started reverse workflow %s on keyspace %s", ts.reverseWorkflow, ts.sourceKeyspace)
 	} else {
-		ts.logger.Infof("Reverse workflow not requested, skipping for %s.%s", ts.targetKeyspace, ts.workflow)
+		ts.logger.Infof("Reverse replication not requested, not creating reverse workflow %s on keyspace %s",
+			ts.reverseWorkflow, ts.sourceKeyspace)
 	}
 
 	ts.logger.Infof("Marking workflow frozen %s.%s", ts.targetKeyspace, ts.workflow)
