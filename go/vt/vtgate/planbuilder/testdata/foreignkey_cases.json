@@ -2969,7 +2969,7 @@
     }
   },
   {
-    "comment": "Self-referential foreign key",
+    "comment": "Self-referential foreign key without table alias introduces new aliases",
     "query": "UPDATE u_tbl12 SET parent_id = CASE WHEN (parent_id = 1) THEN NULL ELSE NULL END WHERE id IN (1)",
     "plan": {
       "Instructions": {
@@ -2999,6 +2999,44 @@
         "OperatorType": "FKVerify"
       },
       "Original": "UPDATE u_tbl12 SET parent_id = CASE WHEN (parent_id = 1) THEN NULL ELSE NULL END WHERE id IN (1)",
+      "QueryType": "UPDATE",
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl12"
+      ],
+      "Type": "ForeignKey"
+    }
+  },
+  {
+    "comment": "Self-referential foreign key with table alias does not introduce new aliases",
+    "query": "UPDATE u_tbl12 as foobar SET parent_id = CASE WHEN (parent_id = 1) THEN NULL ELSE NULL END WHERE id IN (1)",
+    "plan": {
+      "Instructions": {
+        "Inputs": [
+          {
+            "FieldQuery": "select 1 from u_tbl12 as foobar left join u_tbl12 on u_tbl12.id = case when foobar.parent_id = 1 then null else null end where 1 != 1",
+            "InputName": "VerifyParent-1",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "OperatorType": "Route",
+            "Query": "select 1 from u_tbl12 as foobar left join u_tbl12 on u_tbl12.id = case when foobar.parent_id = 1 then null else null end where u_tbl12.id is null and case when foobar.parent_id = 1 then null else null end is not null and not (foobar.parent_id) <=> (case when foobar.parent_id = 1 then null else null end) and foobar.id in (1) limit 1 for share",
+            "Variant": "Unsharded"
+          },
+          {
+            "InputName": "PostVerify",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "OperatorType": "Update",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl12 as foobar set parent_id = case when parent_id = 1 then null else null end where id in (1)",
+            "Variant": "Unsharded"
+          }
+        ],
+        "OperatorType": "FKVerify"
+      },
+      "Original": "UPDATE u_tbl12 as foobar SET parent_id = CASE WHEN (parent_id = 1) THEN NULL ELSE NULL END WHERE id IN (1)",
       "QueryType": "UPDATE",
       "TablesUsed": [
         "unsharded_fk_allow.u_tbl12"
