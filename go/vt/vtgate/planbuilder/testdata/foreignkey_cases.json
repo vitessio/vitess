@@ -2969,20 +2969,20 @@
     }
   },
   {
-    "comment": "Self-referential foreign key without table alias introduces new aliases",
-    "query": "UPDATE u_tbl12 SET parent_id = CASE WHEN (parent_id = 1) THEN NULL ELSE NULL END WHERE id IN (1)",
+    "comment": "Self-referential foreign key update (parent reference column) without table alias introduces new aliases",
+    "query": "UPDATE u_tbl12 SET parent_id = CASE WHEN (parent_id = 1) THEN 1 ELSE 2 END WHERE id IN (1)",
     "plan": {
       "Instructions": {
         "Inputs": [
           {
-            "FieldQuery": "select 1 from u_tbl12 as child left join u_tbl12 as parent on parent.id = case when child.parent_id = 1 then null else null end where 1 != 1",
+            "FieldQuery": "select 1 from u_tbl12 as child left join u_tbl12 as parent on parent.id = case when child.parent_id = 1 then 1 else 2 end where 1 != 1",
             "InputName": "VerifyParent-1",
             "Keyspace": {
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
             "OperatorType": "Route",
-            "Query": "select 1 from u_tbl12 as child left join u_tbl12 as parent on parent.id = case when child.parent_id = 1 then null else null end where parent.id is null and case when child.parent_id = 1 then null else null end is not null and not (child.parent_id) <=> (case when child.parent_id = 1 then null else null end) and child.id in (1) limit 1 for share",
+            "Query": "select 1 from u_tbl12 as child left join u_tbl12 as parent on parent.id = case when child.parent_id = 1 then 1 else 2 end where parent.id is null and case when child.parent_id = 1 then 1 else 2 end is not null and not (child.parent_id) <=> (case when child.parent_id = 1 then 1 else 2 end) and child.id in (1) limit 1 for share",
             "Variant": "Unsharded"
           },
           {
@@ -2992,13 +2992,13 @@
               "Sharded": false
             },
             "OperatorType": "Update",
-            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl12 set parent_id = case when parent_id = 1 then null else null end where id in (1)",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl12 set parent_id = case when parent_id = 1 then 1 else 2 end where id in (1)",
             "Variant": "Unsharded"
           }
         ],
         "OperatorType": "FKVerify"
       },
-      "Original": "UPDATE u_tbl12 SET parent_id = CASE WHEN (parent_id = 1) THEN NULL ELSE NULL END WHERE id IN (1)",
+      "Original": "UPDATE u_tbl12 SET parent_id = CASE WHEN (parent_id = 1) THEN 1 ELSE 2 END WHERE id IN (1)",
       "QueryType": "UPDATE",
       "TablesUsed": [
         "unsharded_fk_allow.u_tbl12"
@@ -3007,20 +3007,20 @@
     }
   },
   {
-    "comment": "Self-referential foreign key with table alias does not introduce new aliases",
-    "query": "UPDATE u_tbl12 as foobar SET parent_id = CASE WHEN (parent_id = 1) THEN NULL ELSE NULL END WHERE id IN (1)",
+    "comment": "Self-referential foreign key update (parent reference column) with table alias does not introduce new aliases",
+    "query": "UPDATE u_tbl12 as foobar SET parent_id = CASE WHEN (parent_id = 1) THEN 1 ELSE 2 END WHERE id IN (1)",
     "plan": {
       "Instructions": {
         "Inputs": [
           {
-            "FieldQuery": "select 1 from u_tbl12 as foobar left join u_tbl12 on u_tbl12.id = case when foobar.parent_id = 1 then null else null end where 1 != 1",
+            "FieldQuery": "select 1 from u_tbl12 as foobar left join u_tbl12 on u_tbl12.id = case when foobar.parent_id = 1 then 1 else 2 end where 1 != 1",
             "InputName": "VerifyParent-1",
             "Keyspace": {
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
             "OperatorType": "Route",
-            "Query": "select 1 from u_tbl12 as foobar left join u_tbl12 on u_tbl12.id = case when foobar.parent_id = 1 then null else null end where u_tbl12.id is null and case when foobar.parent_id = 1 then null else null end is not null and not (foobar.parent_id) <=> (case when foobar.parent_id = 1 then null else null end) and foobar.id in (1) limit 1 for share",
+            "Query": "select 1 from u_tbl12 as foobar left join u_tbl12 on u_tbl12.id = case when foobar.parent_id = 1 then 1 else 2 end where u_tbl12.id is null and case when foobar.parent_id = 1 then 1 else 2 end is not null and not (foobar.parent_id) <=> (case when foobar.parent_id = 1 then 1 else 2 end) and foobar.id in (1) limit 1 for share",
             "Variant": "Unsharded"
           },
           {
@@ -3030,18 +3030,56 @@
               "Sharded": false
             },
             "OperatorType": "Update",
-            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl12 as foobar set parent_id = case when parent_id = 1 then null else null end where id in (1)",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl12 as foobar set parent_id = case when parent_id = 1 then 1 else 2 end where id in (1)",
             "Variant": "Unsharded"
           }
         ],
         "OperatorType": "FKVerify"
       },
-      "Original": "UPDATE u_tbl12 as foobar SET parent_id = CASE WHEN (parent_id = 1) THEN NULL ELSE NULL END WHERE id IN (1)",
+      "Original": "UPDATE u_tbl12 as foobar SET parent_id = CASE WHEN (parent_id = 1) THEN 1 ELSE 2 END WHERE id IN (1)",
       "QueryType": "UPDATE",
       "TablesUsed": [
         "unsharded_fk_allow.u_tbl12"
       ],
       "Type": "ForeignKey"
+    }
+  },
+  {
+    "comment": "self-referential foreign key update (child side column) without table aliases introduces new aliases",
+    "query": "UPDATE u_tbl12 SET id = CASE WHEN (parent_id = 1) THEN 1 ELSE 2 END WHERE id IN (1)",
+    "plan": {
+      "Type": "ForeignKey",
+      "QueryType": "UPDATE",
+      "Original": "UPDATE u_tbl12 SET id = CASE WHEN (parent_id = 1) THEN 1 ELSE 2 END WHERE id IN (1)",
+      "Instructions": {
+        "OperatorType": "FKVerify",
+        "Inputs": [
+          {
+            "InputName": "VerifyChild-1",
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 from u_tbl12 as parent, u_tbl12 as child where 1 != 1",
+            "Query": "select 1 from u_tbl12 as parent, u_tbl12 as child where parent.id = child.parent_id and parent.id in (1) and (case when parent.parent_id = 1 then 1 else 2 end is null or (child.parent_id) not in ((case when parent.parent_id = 1 then 1 else 2 end))) limit 1 for share"
+          },
+          {
+            "InputName": "PostVerify",
+            "OperatorType": "Update",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl12 set id = case when parent_id = 1 then 1 else 2 end where id in (1)"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl12"
+      ]
     }
   },
   {
