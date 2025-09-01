@@ -17,7 +17,9 @@ limitations under the License.
 package wrangler
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"slices"
@@ -102,15 +104,31 @@ func TestMigrateTables(t *testing.T) {
 	require.NoError(t, err)
 	vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
 	require.NoError(t, err)
-	got := fmt.Sprintf("%v", vschema)
-	want := []string{
-		`keyspaces:{key:"sourceks" value:{}} keyspaces:{key:"targetks" value:{tables:{key:"t1" value:{}}}}`,
-		`rules:{from_table:"t1" to_tables:"sourceks.t1"}`,
-		`rules:{from_table:"targetks.t1" to_tables:"sourceks.t1"}`,
+
+	requireExpectedVSchema(t, vschema, "sourceks", "targetks")
+}
+
+func requireExpectedVSchema(t *testing.T, vschema *vschemapb.SrvVSchema, sourceKeyspace, targetKeyspace string) {
+	t.Helper()
+
+	require.Equal(t, vschema.Keyspaces[sourceKeyspace], &vschemapb.Keyspace{})
+	require.Equal(t, vschema.Keyspaces[targetKeyspace], &vschemapb.Keyspace{
+		Tables: map[string]*vschemapb.Table{
+			"t1": {},
+		},
+	})
+
+	foundA, foundB := false, false
+	for _, r := range vschema.RoutingRules.Rules {
+		if r.FromTable == "t1" && len(r.ToTables) == 1 && r.ToTables[0] == fmt.Sprintf("%s.t1", sourceKeyspace) {
+			foundA = true
+		}
+		if r.FromTable == fmt.Sprintf("%s.t1", targetKeyspace) && len(r.ToTables) == 1 && r.ToTables[0] == fmt.Sprintf("%s.t1", sourceKeyspace) {
+			foundB = true
+		}
 	}
-	for _, wantstr := range want {
-		require.Contains(t, got, wantstr)
-	}
+	require.True(t, foundA, fmt.Sprintf("expected routing rule: t1 → %s.t1", sourceKeyspace))
+	require.True(t, foundB, fmt.Sprintf("expected routing rule: %s.t1 → %s.t1", targetKeyspace, sourceKeyspace))
 }
 
 func TestMissingTables(t *testing.T) {
@@ -254,15 +272,8 @@ func TestMigrateVSchema(t *testing.T) {
 	require.NoError(t, err)
 	vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
 	require.NoError(t, err)
-	got := fmt.Sprintf("%v", vschema)
-	want := []string{`keyspaces:{key:"sourceks" value:{}}`,
-		`keyspaces:{key:"sourceks" value:{}} keyspaces:{key:"targetks" value:{tables:{key:"t1" value:{}}}}`,
-		`rules:{from_table:"t1" to_tables:"sourceks.t1"}`,
-		`rules:{from_table:"targetks.t1" to_tables:"sourceks.t1"}`,
-	}
-	for _, wantstr := range want {
-		require.Contains(t, got, wantstr)
-	}
+
+	requireExpectedVSchema(t, vschema, "sourceks", "targetks")
 }
 
 func TestCreateLookupVindexFull(t *testing.T) {
@@ -1967,19 +1978,23 @@ func TestMaterializerOneToOne(t *testing.T) {
 	env, ctx := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
+	rawQuery := `\(` +
+		`'workflow', ` +
+		(`'keyspace:"sourceks" shard:"0" ` +
+			`filter:{` +
+			`rules:{match:"t1" filter:"select.*t1"} ` +
+			`rules:{match:"t2" filter:"select.*t3"} ` +
+			`rules:{match:"t4"}` +
+			`}', `) +
+		`'', [0-9]*, [0-9]*, 'zone1', 'primary,rdonly', [0-9]*, 0, 'Stopped', 'vt_targetks', 0, 0, false, '{}'` +
+		`\)` + eol
+	var buf bytes.Buffer
+	json.Compact(&buf, []byte(rawQuery))
+	query := buf.String()
+
 	env.tmc.expectVRQuery(
 		200,
-		insertPrefix+
-			`\(`+
-			`'workflow', `+
-			(`'keyspace:"sourceks" shard:"0" `+
-				`filter:{`+
-				`rules:{match:"t1" filter:"select.*t1"} `+
-				`rules:{match:"t2" filter:"select.*t3"} `+
-				`rules:{match:"t4"}`+
-				`}', `)+
-			`'', [0-9]*, [0-9]*, 'zone1', 'primary,rdonly', [0-9]*, 0, 'Stopped', 'vt_targetks', 0, 0, false, '{}'`+
-			`\)`+eol,
+		insertPrefix+query,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
@@ -2008,13 +2023,22 @@ func TestMaterializerManyToOne(t *testing.T) {
 	env, ctx := newTestMaterializerEnv(t, ms, []string{"-80", "80-"}, []string{"0"})
 
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
+	rawQuery := `\(` +
+		`'workflow', ` +
+		(`'keyspace:"sourceks" shard:"-80" ` +
+			`filter:{` +
+			`rules:{match:"t1" filter:"select.*t1"} ` +
+			`rules:{match:"t2" filter:"select.*t3"} ` +
+			`}', `) +
+		`'', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks', 0, 0, false, '{}'` +
+		`\)` + eol
+	var buf bytes.Buffer
+	json.Compact(&buf, []byte(rawQuery))
+	query := buf.String()
+
 	env.tmc.expectVRQuery(
 		200,
-		insertPrefix+
-			`\('workflow', 'keyspace:"sourceks" shard:"-80" filter:{rules:{match:"t1" filter:"select.*t1"} rules:{match:"t2" filter:"select.*t3"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks', 0, 0, false, '{}'\)`+
-			`, `+
-			`\('workflow', 'keyspace:"sourceks" shard:"80-" filter:{rules:{match:"t1" filter:"select.*t1"} rules:{match:"t2" filter:"select.*t3"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks', 0, 0, false, '{}'\)`+
-			eol,
+		insertPrefix+query,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
