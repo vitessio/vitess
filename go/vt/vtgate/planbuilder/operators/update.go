@@ -812,35 +812,18 @@ func createFKVerifyOp(
 // and Child.c2 is not null and not ((Child.c1) <=> (Child.c2 + 1))
 // limit 1
 func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, updatedTable *vindexes.BaseTable, updStmt *sqlparser.Update, pFK vindexes.ParentFKInfo) Operator {
-	childTblExpr := updStmt.TableExprs[0].(*sqlparser.AliasedTableExpr)
-	childTbl, err := childTblExpr.TableName()
+	// Alias the foreign key's parent table name
+	parentTblExpr := sqlparser.NewAliasedTableExpr(pFK.Table.GetTableName(), "parent")
+	parentTbl, err := parentTblExpr.TableName()
 	if err != nil {
 		panic(err)
 	}
 
-	var parentTblExpr *sqlparser.AliasedTableExpr
-	var parentTbl sqlparser.TableName
-
-	// If the table name (or table alias if one is given) matches
-	// the parent foreign key's table name, we need to introduce aliases
-	// to make sure there's no ambiguity.
-	if pFK.Table.Name == childTbl.Name {
-		// Alias the foreign key's parent table name
-		parentTblExpr = sqlparser.NewAliasedTableExpr(pFK.Table.GetTableName(), "parent")
-		parentTbl, err = parentTblExpr.TableName()
-		if err != nil {
-			panic(err)
-		}
-
-		// Alias the foreign key's child table name
-		childTblExpr = sqlparser.NewAliasedTableExpr(childTblExpr.Expr.(sqlparser.TableName), "child")
-		childTbl, err = childTblExpr.TableName()
-		if err != nil {
-			panic(err)
-		}
-	} else {
-		parentTblExpr = sqlparser.NewAliasedTableExpr(pFK.Table.GetTableName(), "")
-		parentTbl = pFK.Table.GetTableName()
+	// Alias the foreign key's child table name
+	childTblExpr := sqlparser.NewAliasedTableExpr(updatedTable.GetTableName(), "child")
+	childTbl, err := childTblExpr.TableName()
+	if err != nil {
+		panic(err)
 	}
 
 	var whereCond sqlparser.Expr
@@ -957,31 +940,17 @@ func createFkVerifyOpForChildFKForUpdate(ctx *plancontext.PlanningContext, updat
 		panic(vterrors.VT12002(updatedTable.String(), cFk.Table.String()))
 	}
 
-	parentTblExpr := updStmt.TableExprs[0].(*sqlparser.AliasedTableExpr)
+	parentTblExpr := sqlparser.NewAliasedTableExpr(updatedTable.GetTableName(), "parent")
 	parentTbl, err := parentTblExpr.TableName()
 	if err != nil {
 		panic(err)
 	}
 
-	var childTblExpr *sqlparser.AliasedTableExpr
-	var childTbl sqlparser.TableName
-	if cFk.Table.Name == parentTbl.Name {
-
-		parentTblExpr = sqlparser.NewAliasedTableExpr(parentTblExpr.Expr.(sqlparser.TableName), "parent")
-		parentTbl, err = parentTblExpr.TableName()
-		if err != nil {
-			panic(err)
-		}
-
-		// Alias the foreign key's child table name
-		childTblExpr = sqlparser.NewAliasedTableExpr(cFk.Table.GetTableName(), "child")
-		childTbl, err = childTblExpr.TableName()
-		if err != nil {
-			panic(err)
-		}
-	} else {
-		childTbl = cFk.Table.GetTableName()
-		childTblExpr = sqlparser.NewAliasedTableExpr(childTbl, "")
+	// Alias the foreign key's child table name
+	childTblExpr := sqlparser.NewAliasedTableExpr(cFk.Table.GetTableName(), "child")
+	childTbl, err := childTblExpr.TableName()
+	if err != nil {
+		panic(err)
 	}
 
 	var joinCond sqlparser.Expr
