@@ -250,14 +250,14 @@ func replicationAnalysisAPIHandler(response http.ResponseWriter, request *http.R
 		http.Error(response, shardWithoutKeyspaceFilteringErrorStr, http.StatusBadRequest)
 		return
 	}
-	analysis, err := inst.GetReplicationAnalysis(keyspace, shard, &inst.ReplicationAnalysisHints{})
+	analysis, err := inst.GetDetectionAnalysis(keyspace, shard, &inst.DetectionAnalysisHints{})
 	if err != nil {
 		http.Error(response, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	// TODO: We can also add filtering for a specific instance too based on the tablet alias.
-	// Currently inst.ReplicationAnalysis doesn't store the tablet alias, but once it does we can filter on that too
+	// Currently inst.DetectionAnalysis doesn't store the tablet alias, but once it does we can filter on that too
 	returnAsJSON(response, http.StatusOK, analysis)
 }
 

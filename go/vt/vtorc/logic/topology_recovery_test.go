@@ -108,7 +108,7 @@ func TestAnalysisEntriesHaveSameRecovery(t *testing.T) {
 	t.Parallel()
 	for _, tt := range tests {
 		t.Run(string(tt.prevAnalysisCode)+","+string(tt.newAnalysisCode), func(t *testing.T) {
-			res := analysisEntriesHaveSameRecovery(&inst.ReplicationAnalysis{Analysis: tt.prevAnalysisCode}, &inst.ReplicationAnalysis{Analysis: tt.newAnalysisCode})
+			res := analysisEntriesHaveSameRecovery(&inst.DetectionAnalysis{Analysis: tt.prevAnalysisCode}, &inst.DetectionAnalysis{Analysis: tt.newAnalysisCode})
 			require.Equal(t, tt.shouldBeEqual, res)
 		})
 	}
@@ -138,7 +138,7 @@ func TestElectNewPrimaryPanic(t *testing.T) {
 	}
 	err = inst.SaveTablet(tablet)
 	require.NoError(t, err)
-	analysisEntry := &inst.ReplicationAnalysis{
+	analysisEntry := &inst.DetectionAnalysis{
 		AnalyzedInstanceAlias: topoproto.TabletAliasString(tablet.Alias),
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -188,11 +188,11 @@ func TestRecoveryRegistration(t *testing.T) {
 	require.NoError(t, err)
 	err = inst.SaveTablet(replica)
 	require.NoError(t, err)
-	primaryAnalysisEntry := inst.ReplicationAnalysis{
+	primaryAnalysisEntry := inst.DetectionAnalysis{
 		AnalyzedInstanceAlias: topoproto.TabletAliasString(primary.Alias),
 		Analysis:              inst.ReplicationStopped,
 	}
-	replicaAnalysisEntry := inst.ReplicationAnalysis{
+	replicaAnalysisEntry := inst.DetectionAnalysis{
 		AnalyzedInstanceAlias: topoproto.TabletAliasString(replica.Alias),
 		Analysis:              inst.DeadPrimary,
 	}
@@ -400,7 +400,7 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 			// set replication analysis in Vtorc DB.
 			db.Db = test.NewTestDB([][]sqlutils.RowMap{rowMaps})
 
-			err := recheckPrimaryHealth(&inst.ReplicationAnalysis{
+			err := recheckPrimaryHealth(&inst.DetectionAnalysis{
 				AnalyzedInstanceAlias: "zon1-0000000100",
 				Analysis:              inst.ReplicationStopped,
 				AnalyzedKeyspace:      "ks",
