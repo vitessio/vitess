@@ -114,9 +114,9 @@ type TopologyRecovery struct {
 	DetectionID            int64
 }
 
-func NewTopologyRecovery(replicationAnalysis inst.DetectionAnalysis) *TopologyRecovery {
+func NewTopologyRecovery(detectionAnalysis inst.DetectionAnalysis) *TopologyRecovery {
 	topologyRecovery := &TopologyRecovery{}
-	topologyRecovery.AnalysisEntry = replicationAnalysis
+	topologyRecovery.AnalysisEntry = detectionAnalysis
 	topologyRecovery.AllErrors = []string{}
 	return topologyRecovery
 }
@@ -733,7 +733,7 @@ func checkIfAlreadyFixed(analysisEntry *inst.DetectionAnalysis) (bool, error) {
 // CheckAndRecover is the main entry point for the recovery mechanism
 func CheckAndRecover() {
 	// Allow the analysis to run even if we don't want to recover
-	replicationAnalysis, err := inst.GetDetectionAnalysis("", "", &inst.DetectionAnalysisHints{AuditAnalysis: true})
+	detectionAnalysis, err := inst.GetDetectionAnalysis("", "", &inst.DetectionAnalysisHints{AuditAnalysis: true})
 	if err != nil {
 		log.Error(err)
 		return
@@ -743,7 +743,7 @@ func CheckAndRecover() {
 	// issues, we use a map of labels and set a counter to `1` for each problem
 	// then we reset any counter that is not present in the current analysis.
 	active := make(map[string]struct{})
-	for _, e := range replicationAnalysis {
+	for _, e := range detectionAnalysis {
 		if e.Analysis != inst.NoProblem {
 			names := [...]string{
 				string(e.Analysis),
@@ -766,8 +766,8 @@ func CheckAndRecover() {
 	}
 
 	// intentionally iterating entries in random order
-	for _, j := range rand.Perm(len(replicationAnalysis)) {
-		analysisEntry := replicationAnalysis[j]
+	for _, j := range rand.Perm(len(detectionAnalysis)) {
+		analysisEntry := detectionAnalysis[j]
 
 		go func() {
 			if err := executeCheckAndRecoverFunction(analysisEntry); err != nil {

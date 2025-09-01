@@ -45,6 +45,7 @@ const (
 	errantGTIDsAPI                = "/api/errant-gtids"
 	disableGlobalRecoveriesAPI    = "/api/disable-global-recoveries"
 	enableGlobalRecoveriesAPI     = "/api/enable-global-recoveries"
+	detectionAnalysisAPI          = "/api/detection-analysis"
 	replicationAnalysisAPI        = "/api/replication-analysis"
 	databaseStateAPI              = "/api/database-state"
 	configAPI                     = "/api/config"
@@ -62,7 +63,7 @@ var (
 		errantGTIDsAPI,
 		disableGlobalRecoveriesAPI,
 		enableGlobalRecoveriesAPI,
-		replicationAnalysisAPI,
+		detectionAnalysisAPI,
 		databaseStateAPI,
 		configAPI,
 		healthAPI,
@@ -89,8 +90,8 @@ func (v *vtorcAPI) ServeHTTP(response http.ResponseWriter, request *http.Request
 		problemsAPIHandler(response, request)
 	case errantGTIDsAPI:
 		errantGTIDsAPIHandler(response, request)
-	case replicationAnalysisAPI:
-		replicationAnalysisAPIHandler(response, request)
+	case detectionAnalysisAPI, replicationAnalysisAPI:
+		detectionAnalysisAPIHandler(response, request)
 	case databaseStateAPI:
 		databaseStateAPIHandler(response)
 	case configAPI:
@@ -111,7 +112,7 @@ func getACLPermissionLevelForAPI(apiEndpoint string) string {
 		return acl.MONITORING
 	case disableGlobalRecoveriesAPI, enableGlobalRecoveriesAPI:
 		return acl.ADMIN
-	case replicationAnalysisAPI, configAPI:
+	case detectionAnalysisAPI, replicationAnalysisAPI, configAPI:
 		return acl.MONITORING
 	case healthAPI, databaseStateAPI:
 		return acl.MONITORING
@@ -241,8 +242,8 @@ func enableGlobalRecoveriesAPIHandler(response http.ResponseWriter) {
 	writePlainTextResponse(response, "Global recoveries enabled", http.StatusOK)
 }
 
-// replicationAnalysisAPIHandler is the handler for the replicationAnalysisAPI endpoint
-func replicationAnalysisAPIHandler(response http.ResponseWriter, request *http.Request) {
+// detectionAnalysisAPIHandler is the handler for the detectionAnalysisAPI endpoint
+func detectionAnalysisAPIHandler(response http.ResponseWriter, request *http.Request) {
 	// This api also supports filtering by shard and keyspace provided.
 	shard := request.URL.Query().Get("shard")
 	keyspace := request.URL.Query().Get("keyspace")

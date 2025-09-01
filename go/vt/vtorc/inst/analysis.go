@@ -84,7 +84,7 @@ type DetectionAnalysisHints struct {
 	AuditAnalysis bool
 }
 
-// DetectionAnalysis notes analysis on replication chain status, per instance
+// DetectionAnalysis represents an analysis of a detected problem.
 type DetectionAnalysis struct {
 	AnalyzedInstanceAlias        string
 	AnalyzedInstancePrimaryAlias string
@@ -136,11 +136,11 @@ type DetectionAnalysis struct {
 	IsDiskStalled                             bool
 }
 
-func (replicationAnalysis *DetectionAnalysis) MarshalJSON() ([]byte, error) {
+func (detectionAnalysis *DetectionAnalysis) MarshalJSON() ([]byte, error) {
 	i := struct {
 		DetectionAnalysis
 	}{}
-	i.DetectionAnalysis = *replicationAnalysis
+	i.DetectionAnalysis = *detectionAnalysis
 
 	return json.Marshal(i)
 }
