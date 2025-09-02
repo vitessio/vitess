@@ -79,6 +79,9 @@ var (
 	// recoveriesFailureCounter counts the number of failed recoveries that VTOrc has performed
 	recoveriesFailureCounter = stats.NewCountersWithMultiLabels("FailedRecoveries", "Count of the different failed recoveries performed", recoveriesCounterLabels)
 
+	// recoveriesSkippedCounter counts the number of skipped recoveries that VTOrc has performed
+	recoveriesSkippedCounter = stats.NewCountersWithMultiLabels("SkippedRecoveries", "Count of the different skipped recoveries performed", recoveriesCounterLabels)
+
 	// shardLockTimings measures the timing of LockShard operations.
 	shardLockTimingsActions = []string{"Lock", "Unlock"}
 	shardLockTimings        = stats.NewTimings("ShardLockTimings", "Timings of global shard locks", "Action", shardLockTimingsActions...)
@@ -360,6 +363,14 @@ func isERSEnabled(analysisEntry *inst.ReplicationAnalysis) bool {
 	return true
 }
 
+// handleSkippedRecovery updates metrics for a skipped recoveries and returns the noRecoveryFunc.
+func handleSkippedRecovery(analysisEntry *inst.ReplicationAnalysis, skippedRecoveryFunc recoveryFunction) recoveryFunction {
+	skippedRecoveryName := getRecoverFunctionName(skippedRecoveryFunc)
+	recoveryLabels := []string{skippedRecoveryName, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard}
+	recoveriesSkippedCounter.Add(recoveryLabels, 1)
+	return noRecoveryFunc
+}
+
 // getCheckAndRecoverFunctionCode gets the recovery function code to use for the given analysis.
 func getCheckAndRecoverFunctionCode(analysisEntry *inst.ReplicationAnalysis) recoveryFunction {
 	analysisCode := analysisEntry.Analysis
@@ -368,21 +379,21 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.ReplicationAnalysis) rec
 	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas, inst.PrimaryDiskStalled, inst.PrimarySemiSyncBlocked:
 		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
 		if !isERSEnabled(analysisEntry) {
-			log.Infof("VTOrc not configured to run ERS, skipping recovering %v", analysisCode)
-			return noRecoveryFunc
+			log.Infof("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode)
+			return handleSkippedRecovery(analysisEntry, recoverDeadPrimaryFunc)
 		}
 		return recoverDeadPrimaryFunc
 	case inst.PrimaryTabletDeleted:
 		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
 		if !isERSEnabled(analysisEntry) {
-			log.Infof("VTOrc not configured to run ERS, skipping recovering %v", analysisCode)
-			return noRecoveryFunc
+			log.Infof("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode)
+			return handleSkippedRecovery(analysisEntry, recoverPrimaryTabletDeletedFunc)
 		}
 		return recoverPrimaryTabletDeletedFunc
 	case inst.ErrantGTIDDetected:
 		if !config.ConvertTabletWithErrantGTIDs() {
 			log.Infof("VTOrc not configured to do anything on detecting errant GTIDs, skipping recovering %v", analysisCode)
-			return noRecoveryFunc
+			return handleSkippedRecovery(analysisEntry, recoverErrantGTIDDetectedFunc)
 		}
 		return recoverErrantGTIDDetectedFunc
 	case inst.PrimaryHasPrimary:

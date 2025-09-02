@@ -91,8 +91,8 @@ func ReadKeyspaceShardStats() ([]ShardStats, error) {
                 vt.keyspace AS keyspace,
                 vt.shard AS shard,
                 COUNT() AS tablet_count,
-                vk.disable_emergency_reparent AS ksERSDisabled,
-                vs.disable_emergency_reparent AS shardERSDisabled
+                MIN(vk.disable_emergency_reparent) AS ks_ers_disabled,
+                MIN(vs.disable_emergency_reparent) AS shard_ers_disabled
         FROM
                 vitess_tablet vt
         LEFT JOIN
@@ -111,7 +111,7 @@ func ReadKeyspaceShardStats() ([]ShardStats, error) {
 			Keyspace:                 row.GetString("keyspace"),
 			Shard:                    row.GetString("shard"),
 			TabletCount:              row.GetInt64("tablet_count"),
-			DisableEmergencyReparent: row.GetBool("ksERSDisabled") || row.GetBool("shardERSDisabled"),
+			DisableEmergencyReparent: row.GetBool("ks_ers_disabled") || row.GetBool("shard_ers_disabled"),
 		})
 		return nil
 	})

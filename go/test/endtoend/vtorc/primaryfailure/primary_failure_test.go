@@ -146,12 +146,12 @@ func TestDownPrimary_KeyspaceEmergencyReparentDisabled(t *testing.T) {
 	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{rdonly, replica}, 10*time.Second)
 
 	// check before ERS disabled state is false
-	utils.CheckKeyspaceShardERSDisabledState(t, vtOrcProcess, keyspace.Name, shard0.Name, false)
+	utils.WaitForShardERSDisabledState(t, vtOrcProcess, keyspace.Name, shard0.Name, false)
 
 	// disable ERS on the keyspace via SetVtorcEmergencyReparent --disable
 	_, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetVtorcEmergencyReparent", "--disable", keyspace.Name)
 	assert.NoError(t, err)
-	utils.CheckKeyspaceShardERSDisabledState(t, vtOrcProcess, keyspace.Name, shard0.Name, true)
+	utils.WaitForShardERSDisabledState(t, vtOrcProcess, keyspace.Name, shard0.Name, true)
 	utils.CheckVarExists(t, vtOrcProcess, "EmergencyReparentShardDisabled")
 	utils.CheckMetricExists(t, vtOrcProcess, "vtorc_emergency_reparent_shard_disabled")
 
@@ -171,7 +171,8 @@ func TestDownPrimary_KeyspaceEmergencyReparentDisabled(t *testing.T) {
 	assert.NotNil(t, curPrimary)
 	assert.Equal(t, origPrimary.Alias, curPrimary.Alias)
 
-	// check ERS did not occur
+	// check ERS did not occur. For the RecoverDeadPrimary recovery, expect 1 skipped recovery, 0 successful recoveries and 0 ERS operations.
+	utils.WaitForSkippedRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
 	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name, 0)
 	utils.WaitForSuccessfulERSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 0)
 

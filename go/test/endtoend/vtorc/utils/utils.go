@@ -1009,6 +1009,27 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 	assert.EqualValues(t, countExpected, successCount)
 }
 
+// WaitForSkippedRecoveryCount waits until the given recovery name's count of skipped runs matches the count expected
+func WaitForSkippedRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, recoveryName, keyspace, shard string, countExpected int) {
+	t.Helper()
+	timeout := 15 * time.Second
+	startTime := time.Now()
+	mapKey := fmt.Sprintf("%s.%s.%s", recoveryName, keyspace, shard)
+	for time.Since(startTime) < timeout {
+		vars := vtorcInstance.GetVars()
+		skippedRecoveriesMap := vars["SkippedRecoveries"].(map[string]interface{})
+		skippedCount := GetIntFromValue(skippedRecoveriesMap[mapKey])
+		if skippedCount == countExpected {
+			return
+		}
+		time.Sleep(time.Second)
+	}
+	vars := vtorcInstance.GetVars()
+	skippedRecoveriesMap := vars["SkippedRecoveries"].(map[string]interface{})
+	skippedCount := GetIntFromValue(skippedRecoveriesMap[recoveryName])
+	assert.EqualValues(t, countExpected, skippedCount)
+}
+
 // WaitForSuccessfulPRSCount waits until the given keyspace-shard's count of successful prs runs matches the count expected.
 func WaitForSuccessfulPRSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, keyspace, shard string, countExpected int) {
 	t.Helper()
@@ -1049,6 +1070,31 @@ func WaitForSuccessfulERSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 	ersCountsMap := vars["EmergencyReparentCounts"].(map[string]interface{})
 	successCount := GetIntFromValue(ersCountsMap[mapKey])
 	assert.EqualValues(t, countExpected, successCount)
+}
+
+// WaitForShardERSDisabledState waits until the keyspace/shard has an ERS-disabled state in the topo.
+func WaitForShardERSDisabledState(t *testing.T, vtorcInstance *cluster.VTOrcProcess, keyspace, shard string, stateExpected bool) {
+	t.Helper()
+	var expectedValue int
+	if stateExpected {
+		expectedValue = 1
+	}
+	timeout := 15 * time.Second
+	startTime := time.Now()
+	mapKey := fmt.Sprintf("%v.%v", keyspace, shard)
+	for time.Since(startTime) < timeout {
+		vars := vtorcInstance.GetVars()
+		ersDisabledMap := vars["EmergencyReparentShardDisabled"].(map[string]interface{})
+		disabledValue := GetIntFromValue(ersDisabledMap[mapKey])
+		if disabledValue == expectedValue {
+			return
+		}
+		time.Sleep(time.Second)
+	}
+	vars := vtorcInstance.GetVars()
+	ersDisabledMap := vars["EmergencyReparentShardDisabled"].(map[string]interface{})
+	disabledValue := GetIntFromValue(ersDisabledMap[mapKey])
+	assert.EqualValues(t, expectedValue, disabledValue)
 }
 
 // CheckKeyspaceShardERSDisabledState checks if the keyspace/shard has ERS disabled in the topo.
