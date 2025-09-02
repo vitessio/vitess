@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
@@ -152,6 +153,10 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		qre.logStats.RowsAffected = int(reply.RowsAffected)
 		qre.logStats.Rows = reply.Rows
 		qre.tsv.Stats().ResultHistogram.Add(int64(len(reply.Rows)))
+		if stats.GetStatsBackend() == "" {
+			qre.tsv.Stats().QueryTimingsSummary.Observe(float64(duration.Nanoseconds()))
+			qre.tsv.Stats().MySQLTimingsSummary.Observe(float64(mysqlTime.Nanoseconds()))
+		}
 	}(time.Now())
 
 	if err = qre.checkPermissions(); err != nil {

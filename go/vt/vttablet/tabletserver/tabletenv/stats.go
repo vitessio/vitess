@@ -55,13 +55,13 @@ type Stats struct {
 	CommitPreparedFail *stats.CountersWithSingleLabel
 	RedoPreparedFail   *stats.CountersWithSingleLabel
 
-	QueryTimingsSummary *prometheus.Summary // P99 and median vttablet query timings
-	MySQLTimingsSummary *prometheus.Summary // P99 and median MySQL query timings
+	QueryTimingsSummary prometheus.Summary // P99 and median vttablet query timings
+	MySQLTimingsSummary prometheus.Summary // P99 and median MySQL query timings
 }
 
 // NewStats instantiates a new set of stats scoped by exporter.
 func NewStats(exporter *servenv.Exporter) *Stats {
-	stats := &Stats{
+	s := &Stats{
 		MySQLTimings: exporter.NewTimings("Mysql", "MySQl query time", "operation"),
 		QueryTimings: exporter.NewTimings("Queries", "MySQL query timings", "plan_type"),
 		WaitTimings:  exporter.NewTimings("Waits", "Wait operations", "type"),
@@ -110,20 +110,24 @@ func NewStats(exporter *servenv.Exporter) *Stats {
 		CommitPreparedFail: exporter.NewCountersWithSingleLabel("CommitPreparedFail", "failed prepared transactions commit", "FailureType"),
 		RedoPreparedFail:   exporter.NewCountersWithSingleLabel("RedoPreparedFail", "failed prepared transactions on redo", "FailureType"),
 	}
-	stats.QPSRates = exporter.NewRates("QPS", stats.QueryTimings, 15*60/5, 5*time.Second)
-	stats.QueryTimingsSummary = exporter.NewPromSummary("total_query_time",
-		prometheus.SummaryOpts{
-			Name:       "total_query_time",
-			Help:       "Distributions of total time for vttablet queries.",
-			Objectives: map[float64]float64{0.5: 0.05, 0.99: 0.001},
-			MaxAge:     time.Minute})
-	stats.MySQLTimingsSummary = exporter.NewPromSummary("mysql_query_time",
-		prometheus.SummaryOpts{
-			Name:       "mysql_query_time",
-			Help:       "Distributions of time querying MySQL for vttablet queries.",
-			Objectives: map[float64]float64{0.5: 0.05, 0.99: 0.001},
-			MaxAge:     time.Minute})
-	return stats
+	s.QPSRates = exporter.NewRates("QPS", s.QueryTimings, 15*60/5, 5*time.Second)
+
+	// Only create prometheus Summary metrics when no backend; other backends may not support Summaries
+	if stats.GetStatsBackend() == "" {
+		s.QueryTimingsSummary = exporter.NewPromSummary("total_query_time",
+			prometheus.SummaryOpts{
+				Name:       "total_query_time",
+				Help:       "Distributions of total time for vttablet queries.",
+				Objectives: map[float64]float64{0.5: 0.05, 0.99: 0.001},
+				MaxAge:     time.Minute})
+		s.MySQLTimingsSummary = exporter.NewPromSummary("mysql_query_time",
+			prometheus.SummaryOpts{
+				Name:       "mysql_query_time",
+				Help:       "Distributions of time querying MySQL for vttablet queries.",
+				Objectives: map[float64]float64{0.5: 0.05, 0.99: 0.001},
+				MaxAge:     time.Minute})
+	}
+	return s
 }
 
 func (st *Stats) Stop() {

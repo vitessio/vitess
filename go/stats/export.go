@@ -64,6 +64,10 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringSliceVar(fs, &CommonTags, "stats-common-tags", CommonTags, `Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2`)
 }
 
+func GetStatsBackend() string {
+	return statsBackend
+}
+
 // StatsAllStr is the consolidated name if a dimension gets combined.
 const StatsAllStr = "all"
 

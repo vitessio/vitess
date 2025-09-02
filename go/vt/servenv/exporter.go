@@ -553,11 +553,11 @@ func (w *promSummaryWrapper) String() string {
 	return "prometheus.Summary"
 }
 
-func (e *Exporter) NewPromSummary(name string, opts prometheus.SummaryOpts) *prometheus.Summary {
+func (e *Exporter) NewPromSummary(name string, opts prometheus.SummaryOpts) prometheus.Summary {
 	summary := prometheus.NewSummary(opts)
 	summaryWrapper := &promSummaryWrapper{Summary: summary}
 	stats.Publish(name, summaryWrapper)
-	return &summary
+	return summary
 }
 
 // Publish creates a name-spaced equivalent for stats.Publish.
