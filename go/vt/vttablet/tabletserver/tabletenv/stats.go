@@ -19,6 +19,7 @@ package tabletenv
 import (
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"vitess.io/vitess/go/stats"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
@@ -53,6 +54,9 @@ type Stats struct {
 	Unresolved         *stats.GaugesWithSingleLabel
 	CommitPreparedFail *stats.CountersWithSingleLabel
 	RedoPreparedFail   *stats.CountersWithSingleLabel
+
+	QueryTimingsSummary *prometheus.Summary // P99 and median vttablet query timings
+	MySQLTimingsSummary *prometheus.Summary // P99 and median MySQL query timings
 }
 
 // NewStats instantiates a new set of stats scoped by exporter.
@@ -107,6 +111,18 @@ func NewStats(exporter *servenv.Exporter) *Stats {
 		RedoPreparedFail:   exporter.NewCountersWithSingleLabel("RedoPreparedFail", "failed prepared transactions on redo", "FailureType"),
 	}
 	stats.QPSRates = exporter.NewRates("QPS", stats.QueryTimings, 15*60/5, 5*time.Second)
+	stats.QueryTimingsSummary = exporter.NewPromSummary("total_query_time",
+		prometheus.SummaryOpts{
+			Name:       "total_query_time",
+			Help:       "Distributions of total time for vttablet queries.",
+			Objectives: map[float64]float64{0.5: 0.05, 0.99: 0.001},
+			MaxAge:     time.Minute})
+	stats.MySQLTimingsSummary = exporter.NewPromSummary("mysql_query_time",
+		prometheus.SummaryOpts{
+			Name:       "mysql_query_time",
+			Help:       "Distributions of time querying MySQL for vttablet queries.",
+			Objectives: map[float64]float64{0.5: 0.05, 0.99: 0.001},
+			MaxAge:     time.Minute})
 	return stats
 }
 

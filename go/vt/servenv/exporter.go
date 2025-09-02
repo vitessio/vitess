@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"vitess.io/vitess/go/stats"
 )
 
@@ -541,6 +542,22 @@ func (e *Exporter) NewHistogram(name, help string, cutoffs []int64) *stats.Histo
 	hist := stats.NewHistogram("", help, cutoffs)
 	e.addToOtherVars(name, hist)
 	return hist
+}
+
+// Implements expvar.Var in order to be published
+type promSummaryWrapper struct {
+	prometheus.Summary
+}
+
+func (w *promSummaryWrapper) String() string {
+	return "prometheus.Summary"
+}
+
+func (e *Exporter) NewPromSummary(name string, opts prometheus.SummaryOpts) *prometheus.Summary {
+	summary := prometheus.NewSummary(opts)
+	summaryWrapper := &promSummaryWrapper{Summary: summary}
+	stats.Publish(name, summaryWrapper)
+	return &summary
 }
 
 // Publish creates a name-spaced equivalent for stats.Publish.
