@@ -545,17 +545,17 @@ func (e *Exporter) NewHistogram(name, help string, cutoffs []int64) *stats.Histo
 }
 
 // Implements expvar.Var in order to be published
-type promSummaryWrapper struct {
+type PromSummaryWrapper struct {
 	prometheus.Summary
 }
 
-func (w *promSummaryWrapper) String() string {
+func (w *PromSummaryWrapper) String() string {
 	return "prometheus.Summary"
 }
 
 func (e *Exporter) NewPromSummary(name string, opts prometheus.SummaryOpts) prometheus.Summary {
 	summary := prometheus.NewSummary(opts)
-	summaryWrapper := &promSummaryWrapper{Summary: summary}
+	summaryWrapper := &PromSummaryWrapper{Summary: summary}
 	stats.Publish(name, summaryWrapper)
 	return summary
 }
