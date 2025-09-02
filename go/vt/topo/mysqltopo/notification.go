@@ -377,10 +377,7 @@ func (ns *notificationSystem) run() {
 			}
 
 			// Calculate exponential backoff delay
-			delay := time.Duration(1<<uint(retryCount-1)) * baseRetryDelay
-			if delay > maxRetryDelay {
-				delay = maxRetryDelay
-			}
+			delay := min(time.Duration(1<<uint(retryCount-1))*baseRetryDelay, maxRetryDelay)
 
 			log.Warningf("Failed to start binlog dump (attempt %d/%d): %v, retrying in %v", retryCount, maxRetries, err, delay)
 
