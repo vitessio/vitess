@@ -179,7 +179,7 @@ func TestDownPrimary_KeyspaceEmergencyReparentDisabled(t *testing.T) {
 	// enable ERS on the keyspace via SetVtorcEmergencyReparent --enable
 	_, err = clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetVtorcEmergencyReparent", "--enable", keyspace.Name)
 	assert.NoError(t, err)
-	utils.CheckKeyspaceShardERSDisabledState(t, vtOrcProcess, keyspace.Name, shard0.Name, false)
+	utils.WaitForShardERSDisabledState(t, vtOrcProcess, keyspace.Name, shard0.Name, false)
 
 	// check that the replica gets promoted by vtorc
 	utils.CheckPrimaryTablet(t, clusterInfo, replica, true)
