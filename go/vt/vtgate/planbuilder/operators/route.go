@@ -372,10 +372,15 @@ func findVSchemaTableAndCreateRoute(
 		err          error
 	)
 
-	if ctx.IsMirrored() {
+	vschemaTable, _, _, tabletType, target, err = ctx.VSchema.FindTableOrVindex(tableName)
+
+	// If we're processing the target-side of a mirror operator, look up the
+	// mirror target table by using FindTable, which bypasses routing rules.
+	//
+	// Exclude dual tables, which do not get a mirror rule, and are not known to
+	// the VSchema.
+	if ctx.IsMirrored() && !(vschemaTable.Type == vindexes.TypeReference && vschemaTable.Name.String() == "dual") {
 		vschemaTable, _, tabletType, target, err = ctx.VSchema.FindTable(tableName)
-	} else {
-		vschemaTable, _, _, tabletType, target, err = ctx.VSchema.FindTableOrVindex(tableName)
 	}
 
 	if err != nil {
@@ -567,8 +572,6 @@ func createProjection(ctx *plancontext.PlanningContext, src Operator, derivedNam
 }
 
 func (r *Route) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
-	removeKeyspaceFromSelectExpr(expr)
-
 	if reuse {
 		offset := r.FindCol(ctx, expr.Expr, true)
 		if offset != -1 {

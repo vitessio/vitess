@@ -939,7 +939,7 @@ func (c *TabletConfig) verifyUnmanagedTabletConfig() error {
 	}
 	if c.DB.App.Password == "" {
 		_, pass, err := dbconfigs.GetCredentialsServer().GetUserAndPassword(c.DB.App.User)
-		if err == nil && pass != "" {
+		if err == nil {
 			c.DB.App.Password = pass
 		} else {
 			return errors.New("database app user password not specified")

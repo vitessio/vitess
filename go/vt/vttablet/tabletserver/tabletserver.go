@@ -225,9 +225,19 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 
 	// TabletServerState exports the same information as the above two stats (TabletState / TabletStateName),
 	// but exported with TabletStateName as a label for Prometheus, which doesn't support exporting strings as stat values.
-	tsv.exporter.NewGaugesFuncWithMultiLabels("TabletServerState", "Tablet server state labeled by state name", []string{"name"}, func() map[string]int64 {
-		return map[string]int64{tsv.sm.IsServingString(): 1}
+	tsv.exporter.NewGaugesFuncWithMultiLabels("TabletServerState", "Tablet server state with dimensions", []string{"name", "type", "keyspace", "shard"}, func() map[string]int64 {
+		target := tsv.sm.Target()
+		tabletServerState := strings.Join([]string{
+			tsv.sm.IsServingString(),
+			target.TabletType.String(),
+			target.Keyspace,
+			target.Shard,
+		}, ".")
+		return map[string]int64{
+			tabletServerState: 1,
+		}
 	})
+
 	tsv.exporter.NewGaugeDurationFunc("QueryTimeout", "Tablet server query timeout", func() time.Duration {
 		return time.Duration(tsv.QueryTimeout.Load())
 	})
@@ -394,7 +404,7 @@ func (tsv *TabletServer) InitACL(tableACLConfigFile string, reloadACLConfigFileI
 			if err != nil {
 				log.Errorf("Error reloading ACL config file %s in SIGHUP handler: %v", tableACLConfigFile, err)
 			} else {
-				log.Info("Successfully reloaded ACL file %s in SIGHUP handler", tableACLConfigFile)
+				log.Infof("Successfully reloaded ACL file %s in SIGHUP handler", tableACLConfigFile)
 			}
 		}
 	}()

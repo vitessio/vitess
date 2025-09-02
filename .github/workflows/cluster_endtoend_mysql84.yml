@@ -1,9 +1,9 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Cluster (mysql80)
+name: Cluster (mysql84)
 on: [push, pull_request]
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (mysql80)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (mysql84)')
   cancel-in-progress: true
 
 permissions: read-all
@@ -16,7 +16,7 @@ env:
 jobs:
   build:
     timeout-minutes: 60
-    name: Run endtoend tests on Cluster (mysql80)
+    name: Run endtoend tests on Cluster (mysql84)
     runs-on: ubuntu-24.04
 
     steps:
@@ -71,7 +71,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
-            - '.github/workflows/cluster_endtoend_mysql80.yml'
+            - '.github/workflows/cluster_endtoend_mysql84.yml'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -100,9 +100,9 @@ jobs:
         
         # Get key to latest MySQL repo
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
-        # Setup MySQL 8.0
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.33-1_all.deb
-        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
+        # Setup MySQL 8.4
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.34-1_all.deb
+        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.4-lts | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get -qq update
 
@@ -152,7 +152,7 @@ jobs:
         # Some of these tests require specific locales to be installed.
         # See https://github.com/cncf/automation/commit/49f2ad7a791a62ff7d038002bbb2b1f074eed5d5
         # run the tests however you normally do, then produce a JUnit XML file
-        eatmydata -- go run test.go -docker=false -follow -shard mysql80 | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        eatmydata -- go run test.go -docker=false -follow -shard mysql84 | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Print test output and Record test result in launchable if PR is not a draft
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && always()

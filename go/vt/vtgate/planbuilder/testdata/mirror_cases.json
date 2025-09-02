@@ -40,6 +40,47 @@
     }
   },
   {
+    "comment": "select unsharded, qualified, table mirrored to unsharded table ifnull dual",
+    "query": "select ifnull((select t1.id from unsharded_src1.t1 where t1.id = 1), 0)",
+    "plan": {
+      "Instructions": {
+        "Inputs": [
+          {
+            "FieldQuery": "select ifnull((select t1.id from t1 where 1 != 1), 0) as `ifnull((select t1.id from unsharded_src1.t1 where t1.id = 1), 0)` from dual where 1 != 1",
+            "Keyspace": {
+              "Name": "unsharded_src1",
+              "Sharded": false
+            },
+            "OperatorType": "Route",
+            "Query": "select ifnull((select t1.id from t1 where t1.id = 1), 0) as `ifnull((select t1.id from unsharded_src1.t1 where t1.id = 1), 0)` from dual",
+            "Variant": "Unsharded"
+          },
+          {
+            "FieldQuery": "select ifnull((select t1.id from t1 where 1 != 1), 0) from dual where 1 != 1",
+            "Keyspace": {
+              "Name": "unsharded_dst1",
+              "Sharded": false
+            },
+            "OperatorType": "Route",
+            "Query": "select ifnull((select t1.id from t1 where t1.id = 1), 0) from dual",
+            "Variant": "Unsharded"
+          }
+        ],
+        "OperatorType": "Mirror",
+        "Percent": 1,
+        "Variant": "PercentBased"
+      },
+      "Original": "select ifnull((select t1.id from unsharded_src1.t1 where t1.id = 1), 0)",
+      "QueryType": "SELECT",
+      "TablesUsed": [
+        "main.dual",
+        "unsharded_dst1.t1",
+        "unsharded_src1.t1"
+      ],
+      "Type": "Complex"
+    }
+  },
+  {
     "comment": "select from source of unsharded, unqualified, table mirrored to unsharded table with routing rules",
     "query": "select t4.id from t4 where t4.id = 1",
     "plan": {

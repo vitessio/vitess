@@ -978,6 +978,7 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 				log.Infof("could not open config file for mycnf: %v", path)
 				continue
 			}
+			log.Infof("loaded extra MySQL config from: %s", path)
 			myTemplateSource.WriteString("## " + path + "\n")
 			myTemplateSource.Write(data)
 		}
@@ -1264,9 +1265,11 @@ func (mysqld *Mysqld) OnTerm(f func()) {
 }
 
 func buildLdPaths() ([]string, error) {
+	baseEnv := os.Environ()
+
 	vtMysqlRoot, err := vtenv.VtMysqlRoot()
 	if err != nil {
-		return []string{}, err
+		return baseEnv, err
 	}
 
 	ldPaths := []string{
@@ -1274,7 +1277,7 @@ func buildLdPaths() ([]string, error) {
 		os.ExpandEnv("LD_PRELOAD=$LD_PRELOAD"),
 	}
 
-	return ldPaths, nil
+	return append(baseEnv, ldPaths...), nil
 }
 
 // GetVersionString is part of the MysqlExecutor interface.
