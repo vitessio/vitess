@@ -17,6 +17,7 @@ limitations under the License.
 package servenv
 
 import (
+	"encoding/json"
 	"expvar"
 	"net/http"
 	"net/url"
@@ -24,6 +25,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"vitess.io/vitess/go/stats"
 )
 
@@ -544,13 +546,30 @@ func (e *Exporter) NewHistogram(name, help string, cutoffs []int64) *stats.Histo
 	return hist
 }
 
-// Implements expvar.Var in order to be published
 type PromSummaryWrapper struct {
 	prometheus.Summary
 }
 
 func (w *PromSummaryWrapper) String() string {
-	return "prometheus.Summary"
+	dtoMetric := &dto.Metric{}
+	err := w.Summary.Write(dtoMetric)
+	if err != nil {
+		return "{}"
+	}
+	median := dtoMetric.Summary.GetQuantile()[0].GetValue()
+	ninetyNinth := dtoMetric.Summary.GetQuantile()[1].GetValue()
+
+	result := map[string]float64{
+		"median":      median,
+		"ninetyNinth": ninetyNinth,
+	}
+
+	b, err := json.MarshalIndent(result, "", " ")
+	if err != nil {
+		return "{}"
+	} else {
+		return string(b)
+	}
 }
 
 func (e *Exporter) NewPromSummary(name string, opts prometheus.SummaryOpts) prometheus.Summary {
