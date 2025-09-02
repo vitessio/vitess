@@ -10,6 +10,7 @@
         - [Metrics](#deleted-metrics)
     - **[New Metrics](#new-metrics)**
         - [VTGate](#new-vtgate-metrics)
+        - [VTOrc](#new-vtorc-metrics)
     - **[Topology](#minor-changes-topo)**
         - [`--consul_auth_static_file` requires 1 or more credentials](#consul_auth_static_file-check-creds)
     - **[VTOrc](#minor-changes-vtorc)**
@@ -64,6 +65,12 @@ VTGate also advertises MySQL version `8.4.6` by default instead of `8.0.40`. If 
 |          Name           |   Dimensions    |                                     Description                                     |                           PR                            |
 |:-----------------------:|:---------------:|:-----------------------------------------------------------------------------------:|:-------------------------------------------------------:|
 | `TransactionsProcessed` | `Shard`, `Type` | Counts transactions processed at VTGate by shard distribution and transaction type. | [#18171](https://github.com/vitessio/vitess/pull/18171) |
+
+#### <a id="new-vtorc-metrics"/>VTOrc
+
+|          Name       |   Dimensions                        |                  Description                        |                           PR                            |
+|:-------------------:|:-----------------------------------:|:---------------------------------------------------:|:-------------------------------------------------------:|
+| `SkippedRecoveries` | `RecoveryName`, `Keyspace`, `Shard` | ount of the different skipped recoveries performed. | [#17985](https://github.com/vitessio/vitess/pull/17985) |
 
 ### <a id="minor-changes-topo"/>Topology</a>
 
