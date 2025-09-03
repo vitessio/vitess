@@ -169,6 +169,7 @@ Flags:
       --hot-row-protection-concurrent-transactions int                   Number of concurrent transactions let through to the txpool/MySQL for the same hot row. Should be > 1 to have enough 'ready' transactions in MySQL and benefit from a pipelining effect. (default 5)
       --hot-row-protection-max-global-queue-size int                     Global queue limit across all row (ranges). Useful to prevent that the queue can grow unbounded. (default 1000)
       --hot-row-protection-max-queue-size int                            Maximum number of BeginExecute RPCs which will be queued for the same row (range). (default 20)
+      --incoming-query-throttler-config-refresh-interval duration        How frequently to refresh configuration for the incoming query throttler (default 1m0s)
       --init-db-name-override string                                     (init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>
       --init-keyspace string                                             (init parameter) keyspace to use for this tablet
       --init-shard string                                                (init parameter) shard to use for this tablet
