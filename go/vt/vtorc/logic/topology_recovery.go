@@ -363,16 +363,9 @@ func isERSEnabled(analysisEntry *inst.ReplicationAnalysis) bool {
 	return true
 }
 
-// handleSkippedRecovery updates metrics for a skipped recoveries and returns the noRecoveryFunc.
-func handleSkippedRecovery(analysisEntry *inst.ReplicationAnalysis, skippedRecoveryFunc recoveryFunction) recoveryFunction {
-	skippedRecoveryName := getRecoverFunctionName(skippedRecoveryFunc)
-	recoveryLabels := []string{skippedRecoveryName, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard}
-	recoveriesSkippedCounter.Add(recoveryLabels, 1)
-	return noRecoveryFunc
-}
-
 // getCheckAndRecoverFunctionCode gets the recovery function code to use for the given analysis.
-func getCheckAndRecoverFunctionCode(analysisEntry *inst.ReplicationAnalysis) recoveryFunction {
+func getCheckAndRecoverFunctionCode(analysisEntry *inst.ReplicationAnalysis) (recoveryFunc recoveryFunction, skipRecovery bool) {
+	recoveryFunc = noRecoveryFunc
 	analysisCode := analysisEntry.Analysis
 	switch analysisCode {
 	// primary
@@ -380,52 +373,54 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.ReplicationAnalysis) rec
 		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
 		if !isERSEnabled(analysisEntry) {
 			log.Infof("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode)
-			return handleSkippedRecovery(analysisEntry, recoverDeadPrimaryFunc)
+			skipRecovery = true
 		}
-		return recoverDeadPrimaryFunc
+		recoveryFunc = recoverDeadPrimaryFunc
 	case inst.PrimaryTabletDeleted:
 		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
 		if !isERSEnabled(analysisEntry) {
 			log.Infof("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode)
-			return handleSkippedRecovery(analysisEntry, recoverPrimaryTabletDeletedFunc)
+			skipRecovery = true
 		}
-		return recoverPrimaryTabletDeletedFunc
+		recoveryFunc = recoverPrimaryTabletDeletedFunc
 	case inst.ErrantGTIDDetected:
 		if !config.ConvertTabletWithErrantGTIDs() {
 			log.Infof("VTOrc not configured to do anything on detecting errant GTIDs, skipping recovering %v", analysisCode)
-			return handleSkippedRecovery(analysisEntry, recoverErrantGTIDDetectedFunc)
+			skipRecovery = true
 		}
-		return recoverErrantGTIDDetectedFunc
+		recoveryFunc = recoverErrantGTIDDetectedFunc
 	case inst.PrimaryHasPrimary:
-		return recoverPrimaryHasPrimaryFunc
+		recoveryFunc = recoverPrimaryHasPrimaryFunc
 	case inst.LockedSemiSyncPrimary:
-		return recoverLockedSemiSyncPrimaryFunc
+		recoveryFunc = recoverLockedSemiSyncPrimaryFunc
 	case inst.ClusterHasNoPrimary:
-		return electNewPrimaryFunc
+		recoveryFunc = electNewPrimaryFunc
 	case inst.PrimaryIsReadOnly, inst.PrimarySemiSyncMustBeSet, inst.PrimarySemiSyncMustNotBeSet, inst.PrimaryCurrentTypeMismatch:
-		return fixPrimaryFunc
+		recoveryFunc = fixPrimaryFunc
 	// replica
 	case inst.NotConnectedToPrimary, inst.ConnectedToWrongPrimary, inst.ReplicationStopped, inst.ReplicaIsWritable,
 		inst.ReplicaSemiSyncMustBeSet, inst.ReplicaSemiSyncMustNotBeSet, inst.ReplicaMisconfigured:
-		return fixReplicaFunc
+		recoveryFunc = fixReplicaFunc
 	// primary, non actionable
 	case inst.DeadPrimaryAndReplicas:
-		return recoverGenericProblemFunc
+		recoveryFunc = recoverGenericProblemFunc
 	case inst.UnreachablePrimary:
-		return recoverGenericProblemFunc
+		recoveryFunc = recoverGenericProblemFunc
 	case inst.UnreachablePrimaryWithLaggingReplicas:
-		return recoverGenericProblemFunc
+		recoveryFunc = recoverGenericProblemFunc
 	case inst.AllPrimaryReplicasNotReplicating:
-		return recoverGenericProblemFunc
+		recoveryFunc = recoverGenericProblemFunc
 	case inst.AllPrimaryReplicasNotReplicatingOrDead:
-		return recoverGenericProblemFunc
+		recoveryFunc = recoverGenericProblemFunc
+	default:
+		skipRecovery = true
 	}
 	// Right now this is mostly causing noise with no clear action.
 	// Will revisit this in the future.
 	// case inst.AllPrimaryReplicasStale:
-	//   return recoverGenericProblemFunc
+	//   recoveryFunc = recoverGenericProblemFunc
 
-	return noRecoveryFunc
+	return recoveryFunc, skipRecovery
 }
 
 // hasActionableRecovery tells if a recoveryFunction has an actionable recovery or not
@@ -527,9 +522,9 @@ func isShardWideRecovery(recoveryFunctionCode recoveryFunction) bool {
 
 // analysisEntriesHaveSameRecovery tells whether the two analysis entries have the same recovery function or not
 func analysisEntriesHaveSameRecovery(prevAnalysis, newAnalysis *inst.ReplicationAnalysis) bool {
-	prevRecoveryFunctionCode := getCheckAndRecoverFunctionCode(prevAnalysis)
-	newRecoveryFunctionCode := getCheckAndRecoverFunctionCode(newAnalysis)
-	return prevRecoveryFunctionCode == newRecoveryFunctionCode
+	prevRecoveryFunctionCode, prevSkipRecovery := getCheckAndRecoverFunctionCode(prevAnalysis)
+	newRecoveryFunctionCode, newSkipRecovery := getCheckAndRecoverFunctionCode(newAnalysis)
+	return (prevRecoveryFunctionCode == newRecoveryFunctionCode) && (prevSkipRecovery == newSkipRecovery)
 }
 
 // executeCheckAndRecoverFunction will choose the correct check & recovery function based on analysis.
@@ -541,12 +536,15 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 	logger := log.NewPrefixedLogger(fmt.Sprintf("Recovery for %s on %s/%s", analysisEntry.Analysis, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard))
 	logger.Info("Starting checkAndRecover")
 
-	checkAndRecoverFunctionCode := getCheckAndRecoverFunctionCode(analysisEntry)
+	checkAndRecoverFunctionCode, skipRecovery := getCheckAndRecoverFunctionCode(analysisEntry)
+	recoveryName := getRecoverFunctionName(checkAndRecoverFunctionCode)
+	recoveryLabels := []string{recoveryName, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard}
 	isActionableRecovery := hasActionableRecovery(checkAndRecoverFunctionCode)
 	analysisEntry.IsActionableRecovery = isActionableRecovery
 
-	if checkAndRecoverFunctionCode == noRecoveryFunc {
-		logger.Warning("No recovery strategies for problem, aborting recovery")
+	if skipRecovery {
+		logger.Warningf("Skipping recovery for problem: %+v, recovery: %+v, aborting recovery", analysisEntry.Analysis, recoveryName)
+		recoveriesSkippedCounter.Add(recoveryLabels, 1)
 		// Unhandled problem type
 		if analysisEntry.Analysis != inst.NoProblem {
 			if util.ClearToLog("executeCheckAndRecoverFunction", analysisEntry.AnalyzedInstanceAlias) {
@@ -680,8 +678,6 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 		logger.Errorf("Recovery not attempted: %+v", err)
 		return err
 	}
-	recoveryName := getRecoverFunctionName(checkAndRecoverFunctionCode)
-	recoveryLabels := []string{recoveryName, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard}
 	recoveriesCounter.Add(recoveryLabels, 1)
 	if err != nil {
 		logger.Errorf("Failed to recover: %+v", err)
