@@ -283,20 +283,20 @@ func TestGetChildForeignKeysList(t *testing.T) {
 			semTable: &SemTable{
 				childForeignKeysInvolved: map[TableSet][]vindexes.ChildFKInfo{
 					SingleTableSet(0): {
-						ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
-						ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
+						ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict, sqlparser.Restrict),
+						ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull, sqlparser.SetNull),
 					},
 					SingleTableSet(1): {
-						ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
-						ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
+						ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade, sqlparser.Cascade),
+						ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict, sqlparser.Restrict),
 					},
 				},
 			},
 			childFksWanted: []vindexes.ChildFKInfo{
-				ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
-				ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
-				ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
-				ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
+				ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict, sqlparser.Restrict),
+				ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull, sqlparser.SetNull),
+				ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade, sqlparser.Cascade),
+				ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict, sqlparser.Restrict),
 			},
 		},
 		{
@@ -531,15 +531,15 @@ func TestRemoveNonRequiredForeignKeys(t *testing.T) {
 			semTable: &SemTable{
 				childForeignKeysInvolved: map[TableSet][]vindexes.ChildFKInfo{
 					SingleTableSet(0): {
-						ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
-						ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
-						ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
-						ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
+						ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict, sqlparser.Restrict),
+						ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull, sqlparser.SetNull),
+						ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade, sqlparser.Cascade),
+						ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict, sqlparser.Restrict),
 					},
 					SingleTableSet(1): {
-						ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
-						ckInfo(nil, []string{"colc", "colx"}, []string{"child_colc", "child_colx"}, sqlparser.SetNull),
-						ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
+						ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict, sqlparser.Restrict),
+						ckInfo(nil, []string{"colc", "colx"}, []string{"child_colc", "child_colx"}, sqlparser.SetNull, sqlparser.SetNull),
+						ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade, sqlparser.Cascade),
 					},
 				},
 				parentForeignKeysInvolved: map[TableSet][]vindexes.ParentFKInfo{
@@ -555,15 +555,15 @@ func TestRemoveNonRequiredForeignKeys(t *testing.T) {
 			},
 			childFkWanted: map[TableSet][]vindexes.ChildFKInfo{
 				SingleTableSet(0): {
-					ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
-					ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
-					ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
-					ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
+					ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict, sqlparser.Restrict),
+					ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull, sqlparser.SetNull),
+					ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade, sqlparser.Cascade),
+					ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict, sqlparser.Restrict),
 				},
 				SingleTableSet(1): {
-					ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
-					ckInfo(nil, []string{"colc", "colx"}, []string{"child_colc", "child_colx"}, sqlparser.SetNull),
-					ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
+					ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict, sqlparser.Restrict),
+					ckInfo(nil, []string{"colc", "colx"}, []string{"child_colc", "child_colx"}, sqlparser.SetNull, sqlparser.SetNull),
+					ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade, sqlparser.Cascade),
 				},
 			},
 			parentFkWanted: map[TableSet][]vindexes.ParentFKInfo{
@@ -650,20 +650,20 @@ func TestRemoveNonRequiredForeignKeys(t *testing.T) {
 				},
 				childForeignKeysInvolved: map[TableSet][]vindexes.ChildFKInfo{
 					SingleTableSet(0): {
-						ckInfo(t3Table, []string{"cola", "colx"}, []string{"cola", "colx"}, sqlparser.Restrict),
+						ckInfo(t3Table, []string{"cola", "colx"}, []string{"cola", "colx"}, sqlparser.Restrict, sqlparser.Restrict),
 					},
 					SingleTableSet(1): {
-						ckInfo(t3Table, []string{"colc", "colx"}, []string{"colc", "colx"}, sqlparser.Cascade),
+						ckInfo(t3Table, []string{"colc", "colx"}, []string{"colc", "colx"}, sqlparser.Cascade, sqlparser.Cascade),
 					},
 				},
 				parentForeignKeysInvolved: map[TableSet][]vindexes.ParentFKInfo{},
 			},
 			childFkWanted: map[TableSet][]vindexes.ChildFKInfo{
 				SingleTableSet(0): {
-					ckInfo(t3Table, []string{"cola", "colx"}, []string{"cola", "colx"}, sqlparser.Restrict),
+					ckInfo(t3Table, []string{"cola", "colx"}, []string{"cola", "colx"}, sqlparser.Restrict, sqlparser.Restrict),
 				},
 				SingleTableSet(1): {
-					ckInfo(t3Table, []string{"colc", "colx"}, []string{"colc", "colx"}, sqlparser.Cascade),
+					ckInfo(t3Table, []string{"colc", "colx"}, []string{"colc", "colx"}, sqlparser.Cascade, sqlparser.Cascade),
 				},
 			},
 			parentFkWanted: map[TableSet][]vindexes.ParentFKInfo{},
@@ -681,21 +681,21 @@ func TestRemoveNonRequiredForeignKeys(t *testing.T) {
 				},
 				childForeignKeysInvolved: map[TableSet][]vindexes.ChildFKInfo{
 					SingleTableSet(0): {
-						ckInfo(t4Table, []string{"cola", "colx"}, []string{"cola", "colx"}, sqlparser.Restrict),
-						ckInfo(t4Table, []string{"cola", "coly"}, []string{"cola", "coly"}, sqlparser.Cascade),
+						ckInfo(t4Table, []string{"cola", "colx"}, []string{"cola", "colx"}, sqlparser.Restrict, sqlparser.Restrict),
+						ckInfo(t4Table, []string{"cola", "coly"}, []string{"cola", "coly"}, sqlparser.Cascade, sqlparser.Cascade),
 					},
 					SingleTableSet(1): {
-						ckInfo(t4Table, []string{"colc", "colx"}, []string{"colc", "colx"}, sqlparser.Restrict),
+						ckInfo(t4Table, []string{"colc", "colx"}, []string{"colc", "colx"}, sqlparser.Restrict, sqlparser.Restrict),
 					},
 				},
 				parentForeignKeysInvolved: map[TableSet][]vindexes.ParentFKInfo{},
 			},
 			childFkWanted: map[TableSet][]vindexes.ChildFKInfo{
 				SingleTableSet(0): {
-					ckInfo(t4Table, []string{"cola", "coly"}, []string{"cola", "coly"}, sqlparser.Cascade),
+					ckInfo(t4Table, []string{"cola", "coly"}, []string{"cola", "coly"}, sqlparser.Cascade, sqlparser.Cascade),
 				},
 				SingleTableSet(1): {
-					ckInfo(t4Table, []string{"colc", "colx"}, []string{"colc", "colx"}, sqlparser.Restrict),
+					ckInfo(t4Table, []string{"colc", "colx"}, []string{"colc", "colx"}, sqlparser.Restrict, sqlparser.Restrict),
 				},
 			},
 			parentFkWanted: map[TableSet][]vindexes.ParentFKInfo{},
@@ -774,7 +774,7 @@ func TestIsFkDependentColumnUpdated(t *testing.T) {
 						Name:     sqlparser.NewIdentifierCS("t1"),
 						Keyspace: &vindexes.Keyspace{Name: keyspaceName},
 						ChildForeignKeys: []vindexes.ChildFKInfo{
-							ckInfo(t3Table, []string{"col"}, []string{"col"}, sqlparser.Cascade),
+							ckInfo(t3Table, []string{"col"}, []string{"col"}, sqlparser.Cascade, sqlparser.Cascade),
 						},
 					},
 				},
@@ -891,7 +891,7 @@ func TestHasNonLiteralForeignKeyUpdate(t *testing.T) {
 						Name:     sqlparser.NewIdentifierCS("t1"),
 						Keyspace: &vindexes.Keyspace{Name: keyspaceName},
 						ChildForeignKeys: []vindexes.ChildFKInfo{
-							ckInfo(t3Table, []string{"col"}, []string{"col"}, sqlparser.Cascade),
+							ckInfo(t3Table, []string{"col"}, []string{"col"}, sqlparser.Cascade, sqlparser.Cascade),
 						},
 					},
 				},
@@ -914,7 +914,7 @@ func TestHasNonLiteralForeignKeyUpdate(t *testing.T) {
 					},
 				},
 			},
-			hasNonLiteral: true,
+			hasNonLiteral: false,
 		}, {
 			name:  "literal updates only",
 			query: "update t1 set col = 1 where foo = 3",
@@ -950,7 +950,7 @@ func TestHasNonLiteralForeignKeyUpdate(t *testing.T) {
 					},
 				},
 			},
-			hasNonLiteral: true,
+			hasNonLiteral: false,
 		}, {
 			name:  "no foreign keys",
 			query: "update t1 set col = id + 1 where foo = 3",
