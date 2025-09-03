@@ -992,84 +992,52 @@ func WaitForReadOnlyValue(t *testing.T, curPrimary *cluster.Vttablet, expectValu
 func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, recoveryName, keyspace, shard string, countExpected int) {
 	t.Helper()
 	timeout := 15 * time.Second
-	startTime := time.Now()
 	mapKey := fmt.Sprintf("%s.%s.%s", recoveryName, keyspace, shard)
-	for time.Since(startTime) < timeout {
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		vars := vtorcInstance.GetVars()
 		successfulRecoveriesMap := vars["SuccessfulRecoveries"].(map[string]interface{})
 		successCount := GetIntFromValue(successfulRecoveriesMap[mapKey])
-		if successCount == countExpected {
-			return
-		}
-		time.Sleep(time.Second)
-	}
-	vars := vtorcInstance.GetVars()
-	successfulRecoveriesMap := vars["SuccessfulRecoveries"].(map[string]interface{})
-	successCount := GetIntFromValue(successfulRecoveriesMap[recoveryName])
-	assert.EqualValues(t, countExpected, successCount)
+		assert.EqualValues(c, countExpected, successCount)
+	}, timeout, time.Second, "timed out waiting for successful recovery count")
 }
 
 // WaitForSkippedRecoveryCount waits until the given recovery name's count of skipped runs matches the count expected
 func WaitForSkippedRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, recoveryName, keyspace, shard string, countExpected int) {
 	t.Helper()
 	timeout := 15 * time.Second
-	startTime := time.Now()
 	mapKey := fmt.Sprintf("%s.%s.%s", recoveryName, keyspace, shard)
-	for time.Since(startTime) < timeout {
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		vars := vtorcInstance.GetVars()
 		skippedRecoveriesMap := vars["SkippedRecoveries"].(map[string]interface{})
 		skippedCount := GetIntFromValue(skippedRecoveriesMap[mapKey])
-		if skippedCount == countExpected {
-			return
-		}
-		time.Sleep(time.Second)
-	}
-	vars := vtorcInstance.GetVars()
-	skippedRecoveriesMap := vars["SkippedRecoveries"].(map[string]interface{})
-	skippedCount := GetIntFromValue(skippedRecoveriesMap[recoveryName])
-	assert.EqualValues(t, countExpected, skippedCount)
+		assert.EqualValues(c, countExpected, skippedCount)
+	}, timeout, time.Second, "timeout waiting for skipped recoveries")
 }
 
 // WaitForSuccessfulPRSCount waits until the given keyspace-shard's count of successful prs runs matches the count expected.
 func WaitForSuccessfulPRSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, keyspace, shard string, countExpected int) {
 	t.Helper()
 	timeout := 15 * time.Second
-	startTime := time.Now()
 	mapKey := fmt.Sprintf("%v.%v.success", keyspace, shard)
-	for time.Since(startTime) < timeout {
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		vars := vtorcInstance.GetVars()
 		prsCountsMap := vars["PlannedReparentCounts"].(map[string]interface{})
 		successCount := GetIntFromValue(prsCountsMap[mapKey])
-		if successCount == countExpected {
-			return
-		}
-		time.Sleep(time.Second)
-	}
-	vars := vtorcInstance.GetVars()
-	prsCountsMap := vars["PlannedReparentCounts"].(map[string]interface{})
-	successCount := GetIntFromValue(prsCountsMap[mapKey])
-	assert.EqualValues(t, countExpected, successCount)
+		assert.EqualValues(c, countExpected, successCount)
+	}, timeout, time.Second, "timed out waiting for successful PRS count")
 }
 
 // WaitForSuccessfulERSCount waits until the given keyspace-shard's count of successful ers runs matches the count expected.
 func WaitForSuccessfulERSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, keyspace, shard string, countExpected int) {
 	t.Helper()
 	timeout := 15 * time.Second
-	startTime := time.Now()
 	mapKey := fmt.Sprintf("%v.%v.success", keyspace, shard)
-	for time.Since(startTime) < timeout {
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		vars := vtorcInstance.GetVars()
 		ersCountsMap := vars["EmergencyReparentCounts"].(map[string]interface{})
 		successCount := GetIntFromValue(ersCountsMap[mapKey])
-		if successCount == countExpected {
-			return
-		}
-		time.Sleep(time.Second)
-	}
-	vars := vtorcInstance.GetVars()
-	ersCountsMap := vars["EmergencyReparentCounts"].(map[string]interface{})
-	successCount := GetIntFromValue(ersCountsMap[mapKey])
-	assert.EqualValues(t, countExpected, successCount)
+		assert.EqualValues(t, countExpected, successCount)
+	}, timeout, time.Second, "timed out waiting for successful ERS count")
 }
 
 // WaitForShardERSDisabledState waits until the keyspace/shard has an ERS-disabled state in the topo.
@@ -1080,21 +1048,13 @@ func WaitForShardERSDisabledState(t *testing.T, vtorcInstance *cluster.VTOrcProc
 		expectedValue = 1
 	}
 	timeout := 15 * time.Second
-	startTime := time.Now()
 	mapKey := fmt.Sprintf("%v.%v", keyspace, shard)
-	for time.Since(startTime) < timeout {
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		vars := vtorcInstance.GetVars()
 		ersDisabledMap := vars["EmergencyReparentShardDisabled"].(map[string]interface{})
 		disabledValue := GetIntFromValue(ersDisabledMap[mapKey])
-		if disabledValue == expectedValue {
-			return
-		}
-		time.Sleep(time.Second)
-	}
-	vars := vtorcInstance.GetVars()
-	ersDisabledMap := vars["EmergencyReparentShardDisabled"].(map[string]interface{})
-	disabledValue := GetIntFromValue(ersDisabledMap[mapKey])
-	assert.EqualValues(t, expectedValue, disabledValue)
+		assert.EqualValues(t, expectedValue, disabledValue)
+	}, timeout, time.Second, "timed out waiting for shard ERS-disabled state")
 }
 
 // CheckVarExists checks whether the given metric exists or not in /debug/vars.
@@ -1131,33 +1091,21 @@ func WaitForDetectedProblems(t *testing.T, vtorcInstance *cluster.VTOrcProcess, 
 	t.Helper()
 	key := strings.Join([]string{code, alias, ks, shard}, ".")
 	timeout := 15 * time.Second
-	startTime := time.Now()
-
-	for time.Since(startTime) < timeout {
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		vars := vtorcInstance.GetVars()
 		problems := vars["DetectedProblems"].(map[string]interface{})
-		actual := GetIntFromValue(problems[key])
-		if actual == expect {
-			return
-		}
-		time.Sleep(time.Second)
-	}
-
-	vars := vtorcInstance.GetVars()
-	problems := vars["DetectedProblems"].(map[string]interface{})
-	actual, ok := problems[key]
-	actual = GetIntFromValue(actual)
-
-	assert.True(t, ok,
-		"The metric DetectedProblems[%s] should exist but does not (all problems: %+v)",
-		key, problems,
-	)
-
-	assert.EqualValues(t, expect, actual,
-		"The metric DetectedProblems[%s] should be %v but is %v (all problems: %+v)",
-		key, expect, actual,
-		problems,
-	)
+		actual, ok := problems[key]
+		actual = GetIntFromValue(actual)
+		assert.True(c, ok,
+			"The metric DetectedProblems[%s] should exist but does not (all problems: %+v)",
+			key, problems,
+		)
+		assert.EqualValues(c, expect, actual,
+			"The metric DetectedProblems[%s] should be %v but is %v (all problems: %+v)",
+			key, expect, actual,
+			problems,
+		)
+	}, timeout, time.Second, "timed out waiting for detected problem(s)")
 }
 
 // WaitForTabletType waits for the tablet to reach a certain type.
@@ -1253,27 +1201,14 @@ func SemiSyncExtensionLoaded(t *testing.T, tablet *cluster.Vttablet) (mysql.Semi
 // WaitForDrainedTabletInVTOrc waits for VTOrc to see the specified number of drained tablet.
 func WaitForDrainedTabletInVTOrc(t *testing.T, vtorcInstance *cluster.VTOrcProcess, count int) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			t.Errorf("timed out waiting for drained tablet in VTOrc")
-			return
-		case <-ticker.C:
-			statusCode, res, err := vtorcInstance.MakeAPICall("api/database-state")
-			if err != nil || statusCode != 200 {
-				continue
-			}
-			found := strings.Count(res, fmt.Sprintf(`"tablet_type": "%d"`, topodatapb.TabletType_DRAINED))
-			// There are two tables that store the tablet type, the database_instance and vitess_tablet table.
-			// Both of them should agree in the stable state.
-			if found == count*2 {
-				return
-			}
-		}
-	}
+	timeout := 15 * time.Second
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		statusCode, res, err := vtorcInstance.MakeAPICall("api/database-state")
+		assert.NoError(c, err)
+		assert.Equal(c, 200, statusCode)
+		found := strings.Count(res, fmt.Sprintf(`"tablet_type": "%d"`, topodatapb.TabletType_DRAINED))
+		// There are two tables that store the tablet type, the database_instance and vitess_tablet table.
+		// Both of them should agree in the stable state.
+		assert.Equal(c, found, count*2)
+	}, timeout, time.Second, "timed out waiting for drained tablet in VTOrc")
 }

@@ -225,6 +225,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		convertTabletWithErrantGTIDs bool
 		analysisEntry                *inst.ReplicationAnalysis
 		wantRecoveryFunction         recoveryFunction
+		wantSkipRecovery             bool
 	}{
 		{
 			name:       "DeadPrimary with ERS enabled",
@@ -243,7 +244,8 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
 			},
-			wantRecoveryFunction: noRecoveryFunc,
+			wantRecoveryFunction: recoverDeadPrimaryFunc,
+			wantSkipRecovery:     true,
 		}, {
 			name:       "StalledDiskPrimary with ERS enabled",
 			ersEnabled: true,
@@ -261,7 +263,8 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
 			},
-			wantRecoveryFunction: noRecoveryFunc,
+			wantRecoveryFunction: recoverDeadPrimaryFunc,
+			wantSkipRecovery:     true,
 		}, {
 			name:       "PrimarySemiSyncBlocked with ERS enabled",
 			ersEnabled: true,
@@ -279,7 +282,8 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
 			},
-			wantRecoveryFunction: noRecoveryFunc,
+			wantRecoveryFunction: recoverDeadPrimaryFunc,
+			wantSkipRecovery:     true,
 		}, {
 			name:       "PrimaryTabletDeleted with ERS enabled",
 			ersEnabled: true,
@@ -297,7 +301,8 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
 			},
-			wantRecoveryFunction: noRecoveryFunc,
+			wantRecoveryFunction: recoverPrimaryTabletDeletedFunc,
+			wantSkipRecovery:     true,
 		}, {
 			name:       "PrimaryHasPrimary",
 			ersEnabled: false,
@@ -353,7 +358,8 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
 			},
-			wantRecoveryFunction: noRecoveryFunc,
+			wantRecoveryFunction: recoverErrantGTIDDetectedFunc,
+			wantSkipRecovery:     true,
 		}, {
 			name:       "DeadPrimary with global ERS enabled and keyspace ERS disabled",
 			ersEnabled: true,
@@ -363,7 +369,8 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedShard:    shard,
 				AnalyzedKeyspaceEmergencyReparentDisabled: true,
 			},
-			wantRecoveryFunction: noRecoveryFunc,
+			wantRecoveryFunction: recoverDeadPrimaryFunc,
+			wantSkipRecovery:     true,
 		}, {
 			name:       "DeadPrimary with global+keyspace ERS enabled and shard ERS disabled",
 			ersEnabled: true,
@@ -373,7 +380,8 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedShard:                          shard,
 				AnalyzedShardEmergencyReparentDisabled: true,
 			},
-			wantRecoveryFunction: noRecoveryFunc,
+			wantRecoveryFunction: recoverDeadPrimaryFunc,
+			wantSkipRecovery:     true,
 		},
 	}
 
@@ -387,8 +395,9 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			config.SetConvertTabletWithErrantGTIDs(tt.convertTabletWithErrantGTIDs)
 			defer config.SetConvertTabletWithErrantGTIDs(convertErrantVal)
 
-			gotFunc := getCheckAndRecoverFunctionCode(tt.analysisEntry)
+			gotFunc, skipRecovery := getCheckAndRecoverFunctionCode(tt.analysisEntry)
 			require.EqualValues(t, tt.wantRecoveryFunction, gotFunc)
+			require.EqualValues(t, tt.wantSkipRecovery, skipRecovery)
 		})
 	}
 }
