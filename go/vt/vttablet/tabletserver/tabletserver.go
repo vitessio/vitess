@@ -95,6 +95,12 @@ var logComputeRowSerializerKey = logutil.NewThrottledLogger("ComputeRowSerialize
 // perform one-time initializations and must be idempotent.
 // Open and Close can be called repeatedly during the lifetime of
 // a subcomponent. These should also be idempotent.
+
+const (
+	throttlerPoolName   = "ThrottlerPool"
+	iqThrottlerPoolName = "IncomingQueryThrottlerPool"
+)
+
 type TabletServer struct {
 	exporter               *servenv.Exporter
 	config                 *tabletenv.TabletConfig
@@ -182,8 +188,8 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	tsv.se = schema.NewEngine(tsv)
 	tsv.hs = newHealthStreamer(tsv, alias, tsv.se)
 	tsv.rt = repltracker.NewReplTracker(tsv, alias)
-	tsv.lagThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias, tsv.rt.HeartbeatWriter(), tabletTypeFunc)
-	tsv.iqThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias, tsv.rt.HeartbeatWriter(), tabletTypeFunc)
+	tsv.lagThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias, tsv.rt.HeartbeatWriter(), tabletTypeFunc, throttlerPoolName)
+	tsv.iqThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias, tsv.rt.HeartbeatWriter(), tabletTypeFunc, iqThrottlerPoolName)
 	tsv.incomingQueryThrottler = incomingquerythrottler.NewIncomingQueryThrottler(ctx, tsv.iqThrottler, incomingquerythrottler.NewFileBasedConfigLoader(), tsv)
 
 	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, tsv.lagThrottler, alias.Cell)

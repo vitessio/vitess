@@ -216,7 +216,7 @@ type ThrottlerStatus struct {
 }
 
 // NewThrottler creates a Throttler
-func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, heartbeatWriter heartbeat.HeartbeatWriter, tabletTypeFunc func() topodatapb.TabletType) *Throttler {
+func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, heartbeatWriter heartbeat.HeartbeatWriter, tabletTypeFunc func() topodatapb.TabletType, connectionPoolName string) *Throttler {
 	throttler := &Throttler{
 		tabletAlias:     tabletAlias,
 		env:             env,
@@ -224,7 +224,7 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 		srvTopoServer:   srvTopoServer,
 		ts:              ts,
 		heartbeatWriter: heartbeatWriter,
-		pool: connpool.NewPool(env, "ThrottlerPool", tabletenv.ConnPoolConfig{
+		pool: connpool.NewPool(env, connectionPoolName, tabletenv.ConnPoolConfig{
 			Size:        2,
 			IdleTimeout: env.Config().OltpReadPool.IdleTimeout,
 		}),
