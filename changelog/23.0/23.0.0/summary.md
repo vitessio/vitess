@@ -10,6 +10,7 @@
     - **[Topology](#minor-changes-topo)**
         - [`--consul_auth_static_file` requires 1 or more credentials](#consul_auth_static_file-check-creds)
     - **[VTOrc](#minor-changes-vtorc)**
+        - [CLI Flags](#flags-vtorc)
         - [Recovery stats to include keyspace/shard](#recoveries-stats-keyspace-shard)
     - **[VTTablet](#minor-changes-vttablet)**
         - [CLI Flags](#flags-vttablet)
@@ -43,6 +44,10 @@
 The `--consul_auth_static_file` flag used in several components now requires that 1 or more credentials can be loaded from the provided json file.
 
 ### <a id="minor-changes-vtorc"/>VTOrc</a>
+
+#### <a id="flags-vtorc"/>CLI Flags</a>
+
+- `discovery-collection-metrics-ttl` flag if set, overrides the default _(`120s`)_ time-to-live for collection metrics.
 
 #### <a id="recoveries-stats-keyspace-shard">Recovery stats to include keyspace/shard</a>
 
