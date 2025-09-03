@@ -34,7 +34,6 @@ const (
 	StaleInstanceCoordinatesExpireSeconds = 60
 	DiscoveryQueueCapacity                = 100000
 	DiscoveryQueueMaxStatisticsSize       = 120
-	DiscoveryCollectionRetentionSeconds   = 120
 	UnseenInstanceForgetHours             = 240 // Number of hours after which an unseen instance is forgotten
 )
 
@@ -218,6 +217,15 @@ var (
 			Dynamic:  true,
 		},
 	)
+
+	discoveryCollectionMetricsTTL = viperutil.Configure(
+		"discovery-collection-metrics-ttl",
+		viperutil.Options[time.Duration]{
+			FlagName: "discovery-collection-metrics-ttl",
+			Default:  120 * time.Second,
+			Dynamic:  true,
+		},
+	)
 )
 
 func init() {
@@ -246,6 +254,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.Bool("allow-recovery", allowRecovery.Default(), "Whether VTOrc should be allowed to run recovery actions")
 	fs.Bool("change-tablets-with-errant-gtid-to-drained", convertTabletsWithErrantGTIDs.Default(), "Whether VTOrc should be changing the type of tablets with errant GTIDs to DRAINED")
 	fs.Bool("enable-primary-disk-stalled-recovery", enablePrimaryDiskStalledRecovery.Default(), "Whether VTOrc should detect a stalled disk on the primary and failover")
+	fs.Duration("discovery-collection-metrics-ttl", discoveryCollectionMetricsTTL.Default(), "The time-to-live for discovery collection metrics")
 
 	viperutil.BindFlags(fs,
 		instancePollTime,
@@ -268,6 +277,7 @@ func registerFlags(fs *pflag.FlagSet) {
 		allowRecovery,
 		convertTabletsWithErrantGTIDs,
 		enablePrimaryDiskStalledRecovery,
+		discoveryCollectionMetricsTTL,
 	)
 }
 
@@ -379,6 +389,11 @@ func GetTopoInformationRefreshDuration() time.Duration {
 // GetRecoveryPollDuration is a getter function.
 func GetRecoveryPollDuration() time.Duration {
 	return recoveryPollDuration.Get()
+}
+
+// GetDiscoveryCollectionMetricsTTL is a getter function.
+func GetDiscoveryCollectionMetricsTTL() time.Duration {
+	return discoveryCollectionMetricsTTL.Get()
 }
 
 // ERSEnabled reports whether VTOrc is allowed to run ERS or not.
