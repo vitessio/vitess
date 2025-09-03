@@ -54,7 +54,7 @@ type MysqlctlProcess struct {
 // InitDb executes mysqlctl command to add cell info
 func (mysqlctl *MysqlctlProcess) InitDb() (err error) {
 	args := []string{"--log_dir", mysqlctl.LogDirectory,
-		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+		//todo: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
 		"--mysql_port", fmt.Sprintf("%d", mysqlctl.MySQLPort),
 		"init",
