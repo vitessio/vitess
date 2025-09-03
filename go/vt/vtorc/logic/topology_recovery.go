@@ -79,6 +79,9 @@ var (
 	// recoveriesFailureCounter counts the number of failed recoveries that VTOrc has performed
 	recoveriesFailureCounter = stats.NewCountersWithMultiLabels("FailedRecoveries", "Count of the different failed recoveries performed", recoveriesCounterLabels)
 
+	// recoveriesSkippedCounter counts the number of skipped recoveries that VTOrc has performed
+	recoveriesSkippedCounter = stats.NewCountersWithMultiLabels("SkippedRecoveries", "Count of the different skipped recoveries performed", recoveriesCounterLabels)
+
 	// shardLockTimings measures the timing of LockShard operations.
 	shardLockTimingsActions = []string{"Lock", "Unlock"}
 	shardLockTimings        = stats.NewTimings("ShardLockTimings", "Timings of global shard locks", "Action", shardLockTimingsActions...)
@@ -337,60 +340,87 @@ func checkAndRecoverGenericProblem(ctx context.Context, analysisEntry *inst.Repl
 	return false, nil, nil
 }
 
+// isERSEnabled returns true if ERS can be used globally or for the given keyspace.
+func isERSEnabled(analysisEntry *inst.ReplicationAnalysis) bool {
+	// If ERS is disabled globally we have no way of repairing the cluster.
+	if !config.ERSEnabled() {
+		log.Infof("VTOrc not configured to run ERS, skipping recovering %v", analysisEntry.Analysis)
+		return false
+	}
+
+	// Return false if ERS is disabled on the keyspace.
+	if analysisEntry.AnalyzedKeyspaceEmergencyReparentDisabled {
+		log.Infof("ERS is disabled on keyspace %s, skipping recovering %v", analysisEntry.AnalyzedKeyspace, analysisEntry.Analysis)
+		return false
+	}
+
+	// Return false if ERS is disabled on the shard.
+	if analysisEntry.AnalyzedShardEmergencyReparentDisabled {
+		log.Infof("ERS is disabled on keyspace/shard %s, skipping recovering %v", topoproto.KeyspaceShardString(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard), analysisEntry.Analysis)
+		return false
+	}
+
+	return true
+}
+
 // getCheckAndRecoverFunctionCode gets the recovery function code to use for the given analysis.
-func getCheckAndRecoverFunctionCode(analysisCode inst.AnalysisCode, tabletAlias string) recoveryFunction {
+func getCheckAndRecoverFunctionCode(analysisEntry *inst.ReplicationAnalysis) (recoveryFunc recoveryFunction, skipRecovery bool) {
+	recoveryFunc = noRecoveryFunc
+	analysisCode := analysisEntry.Analysis
 	switch analysisCode {
 	// primary
 	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas, inst.PrimaryDiskStalled, inst.PrimarySemiSyncBlocked:
-		// If ERS is disabled, we have no way of repairing the cluster.
-		if !config.ERSEnabled() {
-			log.Infof("VTOrc not configured to run ERS, skipping recovering %v", analysisCode)
-			return noRecoveryFunc
+		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
+		if !isERSEnabled(analysisEntry) {
+			log.Infof("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode)
+			skipRecovery = true
 		}
-		return recoverDeadPrimaryFunc
+		recoveryFunc = recoverDeadPrimaryFunc
 	case inst.PrimaryTabletDeleted:
-		// If ERS is disabled, we have no way of repairing the cluster.
-		if !config.ERSEnabled() {
-			log.Infof("VTOrc not configured to run ERS, skipping recovering %v", analysisCode)
-			return noRecoveryFunc
+		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
+		if !isERSEnabled(analysisEntry) {
+			log.Infof("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode)
+			skipRecovery = true
 		}
-		return recoverPrimaryTabletDeletedFunc
+		recoveryFunc = recoverPrimaryTabletDeletedFunc
 	case inst.ErrantGTIDDetected:
 		if !config.ConvertTabletWithErrantGTIDs() {
 			log.Infof("VTOrc not configured to do anything on detecting errant GTIDs, skipping recovering %v", analysisCode)
-			return noRecoveryFunc
+			skipRecovery = true
 		}
-		return recoverErrantGTIDDetectedFunc
+		recoveryFunc = recoverErrantGTIDDetectedFunc
 	case inst.PrimaryHasPrimary:
-		return recoverPrimaryHasPrimaryFunc
+		recoveryFunc = recoverPrimaryHasPrimaryFunc
 	case inst.LockedSemiSyncPrimary:
-		return recoverLockedSemiSyncPrimaryFunc
+		recoveryFunc = recoverLockedSemiSyncPrimaryFunc
 	case inst.ClusterHasNoPrimary:
-		return electNewPrimaryFunc
+		recoveryFunc = electNewPrimaryFunc
 	case inst.PrimaryIsReadOnly, inst.PrimarySemiSyncMustBeSet, inst.PrimarySemiSyncMustNotBeSet, inst.PrimaryCurrentTypeMismatch:
-		return fixPrimaryFunc
+		recoveryFunc = fixPrimaryFunc
 	// replica
 	case inst.NotConnectedToPrimary, inst.ConnectedToWrongPrimary, inst.ReplicationStopped, inst.ReplicaIsWritable,
 		inst.ReplicaSemiSyncMustBeSet, inst.ReplicaSemiSyncMustNotBeSet, inst.ReplicaMisconfigured:
-		return fixReplicaFunc
+		recoveryFunc = fixReplicaFunc
 	// primary, non actionable
 	case inst.DeadPrimaryAndReplicas:
-		return recoverGenericProblemFunc
+		recoveryFunc = recoverGenericProblemFunc
 	case inst.UnreachablePrimary:
-		return recoverGenericProblemFunc
+		recoveryFunc = recoverGenericProblemFunc
 	case inst.UnreachablePrimaryWithLaggingReplicas:
-		return recoverGenericProblemFunc
+		recoveryFunc = recoverGenericProblemFunc
 	case inst.AllPrimaryReplicasNotReplicating:
-		return recoverGenericProblemFunc
+		recoveryFunc = recoverGenericProblemFunc
 	case inst.AllPrimaryReplicasNotReplicatingOrDead:
-		return recoverGenericProblemFunc
+		recoveryFunc = recoverGenericProblemFunc
+	default:
+		skipRecovery = true
 	}
 	// Right now this is mostly causing noise with no clear action.
 	// Will revisit this in the future.
 	// case inst.AllPrimaryReplicasStale:
-	//   return recoverGenericProblemFunc
+	//   recoveryFunc = recoverGenericProblemFunc
 
-	return noRecoveryFunc
+	return recoveryFunc, skipRecovery
 }
 
 // hasActionableRecovery tells if a recoveryFunction has an actionable recovery or not
@@ -492,9 +522,9 @@ func isShardWideRecovery(recoveryFunctionCode recoveryFunction) bool {
 
 // analysisEntriesHaveSameRecovery tells whether the two analysis entries have the same recovery function or not
 func analysisEntriesHaveSameRecovery(prevAnalysis, newAnalysis *inst.ReplicationAnalysis) bool {
-	prevRecoveryFunctionCode := getCheckAndRecoverFunctionCode(prevAnalysis.Analysis, prevAnalysis.AnalyzedInstanceAlias)
-	newRecoveryFunctionCode := getCheckAndRecoverFunctionCode(newAnalysis.Analysis, newAnalysis.AnalyzedInstanceAlias)
-	return prevRecoveryFunctionCode == newRecoveryFunctionCode
+	prevRecoveryFunctionCode, prevSkipRecovery := getCheckAndRecoverFunctionCode(prevAnalysis)
+	newRecoveryFunctionCode, newSkipRecovery := getCheckAndRecoverFunctionCode(newAnalysis)
+	return (prevRecoveryFunctionCode == newRecoveryFunctionCode) && (prevSkipRecovery == newSkipRecovery)
 }
 
 // executeCheckAndRecoverFunction will choose the correct check & recovery function based on analysis.
@@ -506,12 +536,15 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 	logger := log.NewPrefixedLogger(fmt.Sprintf("Recovery for %s on %s/%s", analysisEntry.Analysis, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard))
 	logger.Info("Starting checkAndRecover")
 
-	checkAndRecoverFunctionCode := getCheckAndRecoverFunctionCode(analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
+	checkAndRecoverFunctionCode, skipRecovery := getCheckAndRecoverFunctionCode(analysisEntry)
+	recoveryName := getRecoverFunctionName(checkAndRecoverFunctionCode)
+	recoveryLabels := []string{recoveryName, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard}
 	isActionableRecovery := hasActionableRecovery(checkAndRecoverFunctionCode)
 	analysisEntry.IsActionableRecovery = isActionableRecovery
 
-	if checkAndRecoverFunctionCode == noRecoveryFunc {
-		logger.Warning("No recovery strategies for problem, aborting recovery")
+	if skipRecovery {
+		logger.Warningf("Skipping recovery for problem: %+v, recovery: %+v, aborting recovery", analysisEntry.Analysis, recoveryName)
+		recoveriesSkippedCounter.Add(recoveryLabels, 1)
 		// Unhandled problem type
 		if analysisEntry.Analysis != inst.NoProblem {
 			if util.ClearToLog("executeCheckAndRecoverFunction", analysisEntry.AnalyzedInstanceAlias) {
@@ -645,8 +678,6 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 		logger.Errorf("Recovery not attempted: %+v", err)
 		return err
 	}
-	recoveryName := getRecoverFunctionName(checkAndRecoverFunctionCode)
-	recoveryLabels := []string{recoveryName, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard}
 	recoveriesCounter.Add(recoveryLabels, 1)
 	if err != nil {
 		logger.Errorf("Failed to recover: %+v", err)

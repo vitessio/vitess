@@ -21,6 +21,7 @@ import (
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtorcdatapb "vitess.io/vitess/go/vt/proto/vtorcdata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/db"
@@ -35,21 +36,25 @@ func ReadKeyspace(keyspaceName string) (*topo.KeyspaceInfo, error) {
 		return nil, err
 	}
 
-	query := `
-		select
+	query := `select
 			keyspace_type,
-			durability_policy
+			durability_policy,
+			disable_emergency_reparent
 		from
 			vitess_keyspace
-		where keyspace=?
-		`
+		where
+			keyspace = ?`
 	args := sqlutils.Args(keyspaceName)
+
 	keyspace := &topo.KeyspaceInfo{
 		Keyspace: &topodatapb.Keyspace{},
 	}
 	err := db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
 		keyspace.KeyspaceType = topodatapb.KeyspaceType(row.GetInt32("keyspace_type"))
 		keyspace.DurabilityPolicy = row.GetString("durability_policy")
+		keyspace.VtorcState = &vtorcdatapb.Keyspace{
+			DisableEmergencyReparent: row.GetBool("disable_emergency_reparent"),
+		}
 		keyspace.SetKeyspaceName(keyspaceName)
 		return nil
 	})
@@ -64,17 +69,20 @@ func ReadKeyspace(keyspaceName string) (*topo.KeyspaceInfo, error) {
 
 // SaveKeyspace saves the keyspace record against the keyspace name.
 func SaveKeyspace(keyspace *topo.KeyspaceInfo) error {
+	var disableEmergencyReparent int
+	if keyspace.VtorcState != nil && keyspace.VtorcState.DisableEmergencyReparent {
+		disableEmergencyReparent = 1
+	}
 	_, err := db.ExecVTOrc(`
-		replace
-			into vitess_keyspace (
-				keyspace, keyspace_type, durability_policy
-			) values (
-				?, ?, ?
-			)
-		`,
+		replace	into vitess_keyspace (
+			keyspace, keyspace_type, durability_policy, disable_emergency_reparent
+		) values (
+			?, ?, ?, ?
+		)`,
 		keyspace.KeyspaceName(),
 		int(keyspace.KeyspaceType),
 		keyspace.GetDurabilityPolicy(),
+		disableEmergencyReparent,
 	)
 	return err
 }
