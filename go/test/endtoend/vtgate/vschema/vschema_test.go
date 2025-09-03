@@ -74,6 +74,11 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
+		vtgateVer, err := cluster.GetMajorVersion("vtgate")
+		if err != nil {
+			return 1, err
+		}
+
 		// List of users authorized to execute vschema ddl operations
 		if utils.BinaryIsAtLeastAtVersion(22, "vtgate") {
 			timeNow := time.Now().Unix()
@@ -86,9 +91,9 @@ func TestMain(m *testing.M) {
 			}
 			defer os.Remove(configFile)
 
-			clusterInstance.VtGateExtraArgs = []string{fmt.Sprintf("--config-file=%s", configFile), vtutils.GetFlagVariantForTests("--schema-change-signal") + "=false"}
+			clusterInstance.VtGateExtraArgs = []string{fmt.Sprintf("--config-file=%s", configFile), vtutils.GetFlagVariantForTestsByVersion("--schema-change-signal", vtgateVer) + "=false"}
 		} else {
-			clusterInstance.VtGateExtraArgs = []string{"--vschema_ddl_authorized_users=%", vtutils.GetFlagVariantForTests("--schema-change-signal") + "=false"}
+			clusterInstance.VtGateExtraArgs = []string{"--vschema_ddl_authorized_users=%", "--schema_change_signal=false"}
 		}
 
 		// Start keyspace
