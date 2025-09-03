@@ -129,7 +129,9 @@ func (i *IncomingQueryThrottler) startConfigRefreshLoop() {
 
 					newStrategy := selectThrottlingStrategy(newCfg, i.throttleClient, i.tabletConfig)
 					// Update strategy and start the new one
+					i.mu.Lock()
 					i.strategy = newStrategy
+					i.mu.Unlock()
 					if i.strategy != nil {
 						i.strategy.Start()
 					}
