@@ -572,8 +572,6 @@ func createProjection(ctx *plancontext.PlanningContext, src Operator, derivedNam
 }
 
 func (r *Route) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
-	removeKeyspaceFromSelectExpr(expr)
-
 	if reuse {
 		offset := r.FindCol(ctx, expr.Expr, true)
 		if offset != -1 {

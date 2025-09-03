@@ -296,6 +296,7 @@ CREATE TABLE vitess_keyspace (
 	keyspace varchar(128) NOT NULL,
 	keyspace_type smallint(5) NOT NULL,
 	durability_policy varchar(512) NOT NULL,
+	disable_emergency_reparent tinyint NOT NULL,
 	PRIMARY KEY (keyspace)
 )`,
 	`
@@ -307,6 +308,7 @@ CREATE TABLE vitess_shard (
 	shard varchar(128) NOT NULL,
 	primary_alias varchar(512) NOT NULL,
 	primary_timestamp varchar(512) NOT NULL,
+	disable_emergency_reparent tinyint NOT NULL,
 	PRIMARY KEY (keyspace, shard)
 )`,
 	`

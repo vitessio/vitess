@@ -236,7 +236,7 @@ Flags:
       --mysql-server-ssl-key string                                      Path to ssl key for mysql server plugin SSL
       --mysql-server-ssl-server-ca string                                path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients
       --mysql-server-tls-min-version string                              Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
-      --mysql-server-version string                                      MySQL server version to advertise. (default "8.0.40-Vitess")
+      --mysql-server-version string                                      MySQL server version to advertise. (default "8.4.6-Vitess")
       --mysql-server-write-timeout duration                              connection write timeout
       --mysql-shell-backup-location string                               location where the backup will be stored
       --mysql-shell-dump-flags string                                    flags to pass to mysql shell dump utility. This should be a JSON string and will be saved in the MANIFEST (default "{\"threads\": 4}")
@@ -267,6 +267,7 @@ Flags:
       --query-log-stream-handler string                                  URL handler for streaming queries log (default "/debug/querylog")
       --query-timeout int                                                Sets the default query timeout (in ms). Can be overridden by session variable (query_timeout) or comment directive (QUERY_TIMEOUT_MS)
       --querylog-buffer-size int                                         Maximum number of buffered query logs before throttling log output (default 10)
+      --querylog-emit-on-any-condition-met                               Emit to query log when any of the conditions (row-threshold, time-threshold, filter-tag) is met (default false)
       --querylog-filter-tag string                                       string that must be present in the query for it to be logged; if using a value as the tag, you need to disable query normalization
       --querylog-format string                                           format for query logs ("text" or "json") (default "text")
       --querylog-mode string                                             Mode for logging queries. "error" will only log queries that return an error. Otherwise all queries will be logged. (default "all")

@@ -75,20 +75,66 @@ func ReadShardPrimaryInformation(keyspaceName, shardName string) (primaryAlias s
 	return primaryAlias, primaryTimestamp, err
 }
 
+// ShardStats represents stats for a single shard watched by VTOrc.
+type ShardStats struct {
+	Keyspace                 string
+	Shard                    string
+	DisableEmergencyReparent bool
+	TabletCount              int64
+}
+
+// ReadKeyspaceShardStats returns stats such as # of tablets watched by keyspace/shard and ERS-disabled state.
+// The backend query uses an index by "keyspace, shard": ks_idx_vitess_tablet.
+func ReadKeyspaceShardStats() ([]ShardStats, error) {
+	ksShardStats := make([]ShardStats, 0)
+	query := `SELECT
+                vt.keyspace AS keyspace,
+                vt.shard AS shard,
+                COUNT() AS tablet_count,
+                MIN(vk.disable_emergency_reparent) AS ks_ers_disabled,
+                MIN(vs.disable_emergency_reparent) AS shard_ers_disabled
+        FROM
+                vitess_tablet vt
+        LEFT JOIN
+                vitess_keyspace vk
+                ON
+                vk.keyspace = vt.keyspace
+        LEFT JOIN
+                vitess_shard vs
+                ON
+                (vs.keyspace = vt.keyspace AND vs.shard = vt.shard)
+        GROUP BY
+                vt.keyspace,
+                vt.shard`
+	err := db.QueryVTOrc(query, nil, func(row sqlutils.RowMap) error {
+		ksShardStats = append(ksShardStats, ShardStats{
+			Keyspace:                 row.GetString("keyspace"),
+			Shard:                    row.GetString("shard"),
+			TabletCount:              row.GetInt64("tablet_count"),
+			DisableEmergencyReparent: row.GetBool("ks_ers_disabled") || row.GetBool("shard_ers_disabled"),
+		})
+		return nil
+	})
+	return ksShardStats, err
+}
+
 // SaveShard saves the shard record against the shard name.
 func SaveShard(shard *topo.ShardInfo) error {
+	var disableEmergencyReparent int
+	if shard.VtorcState != nil && shard.VtorcState.DisableEmergencyReparent {
+		disableEmergencyReparent = 1
+	}
 	_, err := db.ExecVTOrc(`
-		replace
-			into vitess_shard (
-				keyspace, shard, primary_alias, primary_timestamp
-			) values (
-				?, ?, ?, ?
-			)
-		`,
+		replace	into vitess_shard (
+			keyspace, shard, primary_alias, primary_timestamp, disable_emergency_reparent
+		) values (
+			?, ?, ?, ?, ?
+		)`,
 		shard.Keyspace(),
 		shard.ShardName(),
 		getShardPrimaryAliasString(shard),
 		getShardPrimaryTermStartTime(shard),
+		disableEmergencyReparent,
 	)
 	return err
 }

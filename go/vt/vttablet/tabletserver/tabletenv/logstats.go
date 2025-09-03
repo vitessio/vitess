@@ -180,7 +180,8 @@ func (stats *LogStats) CallInfo() (string, string) {
 // Logf formats the log record to the given writer, either as
 // tab-separated list of logged fields or as JSON.
 func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
-	if !stats.Config.ShouldEmitLog(stats.OriginalSQL, uint64(stats.RowsAffected), uint64(len(stats.Rows)), stats.TotalTime(), stats.Error != nil) {
+	shouldEmit, emitReason := stats.Config.ShouldEmitLog(stats.OriginalSQL, uint64(stats.RowsAffected), uint64(len(stats.Rows)), stats.TotalTime(), stats.Error != nil)
+	if !shouldEmit {
 		return nil
 	}
 
@@ -238,6 +239,8 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 	log.Int(int64(stats.SizeOfResponse()))
 	log.Key("Error")
 	log.String(stats.ErrorStr())
+	log.Key("EmitReason")
+	log.String(emitReason)
 
 	// logstats from the vttablet are always tab-terminated; keep this for backwards
 	// compatibility for existing parsers

@@ -38,7 +38,7 @@ func (fk *ParentFKInfo) MarshalJSON() ([]byte, error) {
 		ParentColumns sqlparser.Columns `json:"parent_columns"`
 		ChildColumns  sqlparser.Columns `json:"child_columns"`
 	}{
-		Name:          fk.Table.Name.String(),
+		Name:          fk.Table.String(),
 		ChildColumns:  fk.ChildColumns,
 		ParentColumns: fk.ParentColumns,
 	})
@@ -83,7 +83,7 @@ func (fk *ChildFKInfo) MarshalJSON() ([]byte, error) {
 		ChildColumns  sqlparser.Columns `json:"child_columns"`
 		ParentColumns sqlparser.Columns `json:"parent_columns"`
 	}{
-		Name:          fk.Table.Name.String(),
+		Name:          fk.Table.String(),
 		ChildColumns:  fk.ChildColumns,
 		ParentColumns: fk.ParentColumns,
 	})

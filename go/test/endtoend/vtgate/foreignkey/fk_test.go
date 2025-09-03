@@ -89,7 +89,7 @@ func TestDeleteWithFK(t *testing.T) {
 
 	// table's child foreign key has cross shard fk, so query will fail at vtgate.
 	_, err = utils.ExecAllowError(t, conn, `delete from t1 where id = 42`)
-	assert.ErrorContains(t, err, "VT12002: unsupported: cross-shard foreign keys (errno 1235) (sqlstate 42000)")
+	assert.ErrorContains(t, err, "VT12002: unsupported: cross-shard foreign keys between table 't1' and 'ks.t3' (errno 1235) (sqlstate 42000)")
 
 	// child foreign key is cascade, so this should work as expected.
 	qr = utils.Exec(t, conn, `delete from multicol_tbl1 where cola = 100`)
@@ -1503,4 +1503,26 @@ create table temp2(id bigint auto_increment primary key, col varchar(20) not nul
 	mcmp.Exec(`insert into temp2(col) values('a'), ('b'), ('c') `)
 	mcmp.Exec(`insert into temp1(col) values('a') `)
 	mcmp.ExecAllowAndCompareError(`insert into temp1(col) values('d') `, utils.CompareOptions{})
+}
+
+// TestRestrictFkOnNonStandardKey verifies that restrict_fk_on_non_standard_key is set to off
+func TestRestrictFkOnNonStandardKey(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	// First check MySQL version to ensure we're on 8.4+
+	versionResult := utils.Exec(t, mcmp.MySQLConn, `SELECT VERSION()`)
+	require.Equal(t, 1, len(versionResult.Rows), "Expected exactly one row for VERSION()")
+	version := versionResult.Rows[0][0].ToString()
+	t.Logf("MySQL version: %s", version)
+
+	// Check if we're on MySQL 8.4+
+	if !strings.HasPrefix(version, "8.4") && !strings.Contains(version, "8.4") {
+		t.Skipf("Skipping test - restrict_fk_on_non_standard_key is only available in MySQL 8.4+, current version: %s", version)
+	}
+
+	// Check the setting on the MySQL side - this verifies that our extra_my.cnf is being applied
+	result := utils.Exec(t, mcmp.MySQLConn, `SHOW VARIABLES LIKE 'restrict_fk_on_non_standard_key'`)
+	require.Equal(t, 1, len(result.Rows), "Expected exactly one row for restrict_fk_on_non_standard_key variable")
+	require.Equal(t, "OFF", result.Rows[0][1].ToString(), "Expected restrict_fk_on_non_standard_key to be OFF")
 }

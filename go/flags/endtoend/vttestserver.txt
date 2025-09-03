@@ -89,7 +89,7 @@ Flags:
       --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
       --max_table_shard_size int                                         The maximum number of initial rows in a table shard. Ignored if--initialize-with-random-data is false. The actual number is chosen randomly (default 10000)
       --min_table_shard_size int                                         The minimum number of initial rows in a table shard. Ignored if--initialize-with-random-data is false. The actual number is chosen randomly. (default 1000)
-      --mysql-server-version string                                      MySQL server version to advertise. (default "8.0.40-Vitess")
+      --mysql-server-version string                                      MySQL server version to advertise. (default "8.4.6-Vitess")
       --mysql-shell-backup-location string                               location where the backup will be stored
       --mysql-shell-dump-flags string                                    flags to pass to mysql shell dump utility. This should be a JSON string and will be saved in the MANIFEST (default "{\"threads\": 4}")
       --mysql-shell-flags string                                         execution flags to pass to mysqlsh binary to be used during dump/load (default "--defaults-file=/dev/null --js -h localhost")
