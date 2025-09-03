@@ -419,14 +419,13 @@ func (st *SemTable) HasNonLiteralForeignKeyUpdate(updExprs sqlparser.UpdateExprs
 		if sqlparser.IsLiteral(updateExpr.Expr) {
 			continue
 		}
-		parentFks := st.parentForeignKeysInvolved[st.RecursiveDeps(updateExpr.Name)]
-		for _, parentFk := range parentFks {
-			if parentFk.ChildColumns.FindColumn(updateExpr.Name.Name) >= 0 {
-				return true
-			}
-		}
+
 		childFks := st.childForeignKeysInvolved[st.RecursiveDeps(updateExpr.Name)]
 		for _, childFk := range childFks {
+			if childFk.OnUpdate.IsRestrict() {
+				continue
+			}
+
 			if childFk.ParentColumns.FindColumn(updateExpr.Name.Name) >= 0 {
 				return true
 			}

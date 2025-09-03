@@ -330,7 +330,7 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl2 set col2 = 'bar' where id = 1"
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = 'bar' where id = 1"
           }
         ]
       },
@@ -364,7 +364,81 @@
   {
     "comment": "Update in a table with cross-shard foreign keys disallowed",
     "query": "update tbl1 set t1col1 = 'foo' where col1 = 1",
-    "plan": "VT12002: unsupported: cross-shard foreign keys between table 'sharded_fk_allow.tbl1' and 'sharded_fk_allow.tbl3'"
+    "plan": {
+      "Type": "ForeignKey",
+      "QueryType": "UPDATE",
+      "Original": "update tbl1 set t1col1 = 'foo' where col1 = 1",
+      "Instructions": {
+        "OperatorType": "FKVerify",
+        "Inputs": [
+          {
+            "InputName": "VerifyChild-1",
+            "OperatorType": "Limit",
+            "Count": "1",
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0",
+                "JoinVars": {
+                  "parent_t1col1": 1
+                },
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "sharded_fk_allow",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1, parent.t1col1 from tbl1 as parent where 1 != 1",
+                    "Query": "select 1, parent.t1col1 from tbl1 as parent where parent.col1 = 1 for share",
+                    "Values": [
+                      "1"
+                    ],
+                    "Vindex": "hash_vin"
+                  },
+                  {
+                    "OperatorType": "Limit",
+                    "Count": "1",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "sharded_fk_allow",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select 1 from tbl3 as child where 1 != 1",
+                        "Query": "select 1 from tbl3 as child where (child.coly) not in (('foo')) and child.coly = :parent_t1col1 limit 1 for share"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "InputName": "PostVerify",
+            "OperatorType": "Update",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "sharded_fk_allow",
+              "Sharded": true
+            },
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ tbl1 set t1col1 = 'foo' where col1 = 1",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "hash_vin"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "sharded_fk_allow.tbl1",
+        "sharded_fk_allow.tbl3"
+      ]
+    }
   },
   {
     "comment": "Update in a table with cross-shard foreign keys, column not in update expression - allowed",
@@ -390,7 +464,116 @@
   {
     "comment": "Update in a table with column modified not shard-scoped foreign key whereas other column referencing same table is - disallowed",
     "query": "update tbl7 set t7col7 = 'foo', t7col72 = 42",
-    "plan": "VT12002: unsupported: cross-shard foreign keys between table 'sharded_fk_allow.tbl7' and 'sharded_fk_allow.tbl6'"
+    "plan": {
+      "Type": "ForeignKey",
+      "QueryType": "UPDATE",
+      "Original": "update tbl7 set t7col7 = 'foo', t7col72 = 42",
+      "Instructions": {
+        "OperatorType": "FKVerify",
+        "Inputs": [
+          {
+            "InputName": "VerifyChild-1",
+            "OperatorType": "Limit",
+            "Count": "1",
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0",
+                "JoinVars": {
+                  "parent_t7col7": 1
+                },
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "sharded_fk_allow",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1, parent.t7col7 from tbl7 as parent where 1 != 1",
+                    "Query": "select 1, parent.t7col7 from tbl7 as parent for share"
+                  },
+                  {
+                    "OperatorType": "Limit",
+                    "Count": "1",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "sharded_fk_allow",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select 1 from tbl6 as child where 1 != 1",
+                        "Query": "select 1 from tbl6 as child where (child.t6col6) not in (('foo')) and child.t6col6 = :parent_t7col7 limit 1 for share"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "InputName": "VerifyChild-2",
+            "OperatorType": "Limit",
+            "Count": "1",
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0",
+                "JoinVars": {
+                  "parent_t7col72": 1
+                },
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "sharded_fk_allow",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1, parent.t7col72 from tbl7 as parent where 1 != 1",
+                    "Query": "select 1, parent.t7col72 from tbl7 as parent for share"
+                  },
+                  {
+                    "OperatorType": "Limit",
+                    "Count": "1",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "sharded_fk_allow",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select 1 from tbl6 as child where 1 != 1",
+                        "Query": "select 1 from tbl6 as child where (child.t6col62) not in ((42)) and child.t6col62 = :parent_t7col72 limit 1 for share"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "InputName": "PostVerify",
+            "OperatorType": "Update",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "sharded_fk_allow",
+              "Sharded": true
+            },
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ tbl7 set t7col7 = 'foo', t7col72 = 42"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "sharded_fk_allow.tbl6",
+        "sharded_fk_allow.tbl7"
+      ]
+    }
   },
   {
     "comment": "Update in a table with shard-scoped foreign keys with cascade",
@@ -435,7 +618,7 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ tbl5 set t5col5 = 'foo'"
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ tbl5 set t5col5 = 'foo'"
           }
         ]
       },
@@ -537,7 +720,7 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ tbl10 set col = 'foo'"
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ tbl10 set col = 'foo'"
           }
         ]
       },
@@ -732,7 +915,7 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl1 set col1 = 'foo'"
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl1 set col1 = 'foo'"
           }
         ]
       },
@@ -804,7 +987,7 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl2 set col2 = 'bar' where u_tbl2.id in ::dml_vals"
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = 'bar' where u_tbl2.id in ::dml_vals"
               }
             ]
           }
@@ -1083,7 +1266,7 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl2 set m = col1 + 'bar', col2 = 2 where id = 1"
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set m = col1 + 'bar', col2 = 2 where id = 1"
           }
         ]
       },
@@ -1212,7 +1395,7 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl1 set m = x + 'bar', col1 = 2 where id = 1"
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl1 set m = x + 'bar', col1 = 2 where id = 1"
           }
         ]
       },
@@ -1446,7 +1629,7 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ tbl3 set coly = 20 where coly = 10"
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ tbl3 set coly = 20 where coly = 10"
           }
         ]
       },
@@ -1516,7 +1699,7 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl6 set col6 = 'foo'"
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl6 set col6 = 'foo'"
           }
         ]
       },
@@ -1598,7 +1781,7 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl7 set col7 = 'foo'"
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl7 set col7 = 'foo'"
           }
         ]
       },
@@ -1681,7 +1864,7 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl7 set col7 = :v1"
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl7 set col7 = :v1"
           }
         ]
       },
@@ -2044,7 +2227,7 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_multicol_tbl1 set cola = 1, colb = 2 where id = 3"
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl1 set cola = 1, colb = 2 where id = 3"
           }
         ]
       },
@@ -2131,7 +2314,7 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_multicol_tbl1 set cola = :v1, colb = :v2 where id = :v3"
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl1 set cola = :v1, colb = :v2 where id = :v3"
           }
         ]
       },

@@ -278,7 +278,7 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ tbl5 set t5col5 = 'foo'"
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ tbl5 set t5col5 = 'foo'"
           }
         ]
       },

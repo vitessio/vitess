@@ -57,6 +57,11 @@ func gen4UpdateStmtPlanner(
 	if err != nil {
 		return nil, err
 	}
+
+	// If there's any foreign keys that need to be handled on the vtgate side,
+	// we need to disable foreign key checks.
+	ctx.VerifyAllFKs = ctx.VerifyAllFKs || (len(ctx.SemTable.GetParentForeignKeysList())+len(ctx.SemTable.GetChildForeignKeysList())) > 0
+
 	if ks, tables := ctx.SemTable.SingleUnshardedKeyspace(); ks != nil {
 		if !ctx.SemTable.ForeignKeysPresent() {
 			plan := updateUnshardedShortcut(updStmt, ks, tables)
