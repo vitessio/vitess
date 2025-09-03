@@ -64,7 +64,7 @@ func (mysqlctl *MysqlctlProcess) InitDb() (err error) {
 	}
 
 	//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-	args = append(args, "--init_db_sql_file", mysqlctl.InitDBFile)
+	args = append(args, "--init-db-sql-file", mysqlctl.InitDBFile)
 	if *isCoverage {
 		args = append([]string{"--test.coverprofile=" + getCoveragePath("mysql-initdb.out"), "--test.v"}, args...)
 	}
