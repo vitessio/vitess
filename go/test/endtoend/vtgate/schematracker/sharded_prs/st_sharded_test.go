@@ -144,7 +144,7 @@ func TestMain(m *testing.M) {
 			sidecarDBName = sidecar.DefaultName
 		}
 
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, vtutils.GetFlagVariantForTests("--schema-change-signal"))
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, vtutils.GetFlagVariantForTestsByVersion("--schema-change-signal", vtgateVer))
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-config-schema-change-signal")
 
 		// Start topo server
