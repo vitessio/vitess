@@ -518,6 +518,7 @@ func (sm *stateManager) serveNonPrimary(wantTabletType topodatapb.TabletType) er
 	sm.rt.MakeNonPrimary()
 	sm.watcher.Open()
 	sm.throttler.Open()
+	sm.iqThrottler.Open()
 	sm.setState(wantTabletType, StateServing)
 	return nil
 }
