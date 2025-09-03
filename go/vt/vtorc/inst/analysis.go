@@ -86,13 +86,15 @@ type DetectionAnalysisHints struct {
 
 // DetectionAnalysis represents an analysis of a detected problem.
 type DetectionAnalysis struct {
-	AnalyzedInstanceAlias        string
-	AnalyzedInstancePrimaryAlias string
-	TabletType                   topodatapb.TabletType
-	CurrentTabletType            topodatapb.TabletType
-	PrimaryTimeStamp             time.Time
-	AnalyzedKeyspace             string
-	AnalyzedShard                string
+	AnalyzedInstanceAlias                     string
+	AnalyzedInstancePrimaryAlias              string
+	TabletType                                topodatapb.TabletType
+	CurrentTabletType                         topodatapb.TabletType
+	PrimaryTimeStamp                          time.Time
+	AnalyzedKeyspace                          string
+	AnalyzedShard                             string
+	AnalyzedKeyspaceEmergencyReparentDisabled bool
+	AnalyzedShardEmergencyReparentDisabled    bool
 	// ShardPrimaryTermTimestamp is the primary term start time stored in the shard record.
 	ShardPrimaryTermTimestamp                 time.Time
 	AnalyzedInstanceBinlogCoordinates         BinlogCoordinates

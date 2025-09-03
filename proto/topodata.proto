@@ -26,6 +26,7 @@ option java_package="io.vitess.proto";
 
 package topodata;
 
+import "vtorcdata.proto";
 import "vttime.proto";
 
 // KeyRange describes a range of sharding keys, when range-based
@@ -254,6 +255,9 @@ message Shard {
 
   // OBSOLETE cells (5)
   reserved 5;
+
+  // VtorcState is the vtorc config/state for the shard.
+  vtorcdata.Shard vtorc_state = 9;
 }
 
 // A Keyspace contains data about a keyspace.
@@ -298,6 +302,9 @@ message Keyspace {
   // used for various system metadata that is stored in each
   // tablet's mysqld instance.
   string sidecar_db_name = 10;
+
+  // Vtorc is the vtorc keyspace config/state for the keyspace.
+  vtorcdata.Keyspace vtorc_state = 11;
 }
 
 // ShardReplication describes the MySQL replication relationships

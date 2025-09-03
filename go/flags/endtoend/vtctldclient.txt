@@ -90,6 +90,7 @@ Available Commands:
   SetKeyspaceDurabilityPolicy Sets the durability-policy used by the specified keyspace.
   SetShardIsPrimaryServing    Add or remove a shard from serving. This is meant as an emergency function. It does not rebuild any serving graphs; i.e. it does not run `RebuildKeyspaceGraph`.
   SetShardTabletControl       Sets the TabletControl record for a shard and tablet type. Only use this for an emergency fix or after a finished MoveTables.
+  SetVtorcEmergencyReparent   Enable/disables the use of EmergencyReparentShard in VTOrc recoveries for a given keyspace or keyspace/shard.
   SetWritable                 Sets the specified tablet as writable or read-only.
   ShardReplicationFix         Walks through a ShardReplication object and fixes the first error encountered.
   ShardReplicationPositions   
