@@ -1053,7 +1053,7 @@ func WaitForShardERSDisabledState(t *testing.T, vtorcInstance *cluster.VTOrcProc
 		vars := vtorcInstance.GetVars()
 		ersDisabledMap := vars["EmergencyReparentShardDisabled"].(map[string]interface{})
 		disabledValue := GetIntFromValue(ersDisabledMap[mapKey])
-		assert.EqualValues(t, expectedValue, disabledValue)
+		assert.EqualValues(c, expectedValue, disabledValue)
 	}, timeout, time.Second, "timed out waiting for shard ERS-disabled state")
 }
 
