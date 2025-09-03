@@ -721,6 +721,11 @@ func (fmd *FakeMysqlDaemon) GetAllPrivsConnection(ctx context.Context) (*dbconnp
 	return dbconnpool.NewDBConnection(ctx, dbconfigs.New(fmd.db.ConnParams()))
 }
 
+// GetFilteredConnection is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) GetFilteredConnection(ctx context.Context) (*dbconnpool.DBConnection, error) {
+	return dbconnpool.NewDBConnection(ctx, dbconfigs.New(fmd.db.ConnParams()))
+}
+
 // SetSemiSyncEnabled is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) SetSemiSyncEnabled(ctx context.Context, primary, replica bool) error {
 	fmd.SemiSyncPrimaryEnabled = primary
