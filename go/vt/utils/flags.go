@@ -142,3 +142,11 @@ func GetFlagVariantForTests(flagName string) string {
 	// fmt.Print("Using flag variant: ", dashed, "\n")
 	return dashed
 }
+
+func GetFlagVariantForTestsByVersion(flagName string, majorVersion int) string {
+	underscored, dashed := flagVariants(flagName)
+	if majorVersion > 22 {
+		return dashed
+	}
+	return underscored
+}

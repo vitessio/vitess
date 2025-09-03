@@ -84,7 +84,7 @@ func TestMain(m *testing.M) {
 			SidecarDBName: sidecarDBName,
 		}
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-			vtutils.GetFlagVariantForTests("--schema-change-signal"),
+			vtutils.GetFlagVariantForTestsByVersion("--schema-change-signal", vtgateVer),
 			"--vschema_ddl_authorized_users", "%")
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-config-schema-change-signal")
 
