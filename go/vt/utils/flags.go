@@ -23,6 +23,8 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/flagutil"
 	// "vitess.io/vitess/go/vt/log"
 )
 
@@ -81,6 +83,10 @@ func SetFlagDurationVar(fs *pflag.FlagSet, p *time.Duration, name string, def ti
 	setFlagVar(fs, p, name, def, usage, (*pflag.FlagSet).DurationVar)
 }
 
+func SetFlagFloatDurationVar(fs *pflag.FlagSet, p *time.Duration, name string, def time.Duration, usage string) {
+	setFlagVar(fs, p, name, def, usage, flagutil.FloatDuration)
+}
+
 func SetFlagUint32Var(fs *pflag.FlagSet, p *uint32, name string, def uint32, usage string) {
 	setFlagVar(fs, p, name, def, usage, (*pflag.FlagSet).Uint32Var)
 }
@@ -135,4 +141,12 @@ func GetFlagVariantForTests(flagName string) string {
 	}
 	// fmt.Print("Using flag variant: ", dashed, "\n")
 	return dashed
+}
+
+func GetFlagVariantForTestsByVersion(flagName string, majorVersion int) string {
+	underscored, dashed := flagVariants(flagName)
+	if majorVersion > 22 {
+		return dashed
+	}
+	return underscored
 }

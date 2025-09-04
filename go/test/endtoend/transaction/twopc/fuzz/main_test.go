@@ -71,7 +71,7 @@ func TestMain(m *testing.M) {
 			vtutils.GetFlagVariantForTests("--tablet-refresh-interval"), "2s",
 		)
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-			"--twopc_abandon_age", "1",
+			"--twopc-abandon-age", "1",
 			vtutils.GetFlagVariantForTests("--migration-check-interval"), "2s",
 		)
 
