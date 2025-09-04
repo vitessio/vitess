@@ -16,6 +16,7 @@
     - **[VTOrc](#minor-changes-vtorc)**
         - [Dynamic control of `EmergencyReparentShard`-based recoveries](#vtorc-dynamic-ers-disabled)
         - [Recovery stats to include keyspace/shard](#recoveries-stats-keyspace-shard)
+        - [`/api/replication-analysis` HTTP API deprecation](#replication-analysis-api-deprecation)
     - **[VTTablet](#minor-changes-vttablet)**
         - [CLI Flags](#flags-vttablet)
         - [Managed MySQL configuration defaults to caching-sha2-password](#mysql-caching-sha2-password) 
@@ -98,6 +99,10 @@ The following recovery-related stats now include labels for keyspaces and shards
 4. `SuccessfulRecoveries`
 
 Previous to this release, only the recovery "type" was included in labels.
+
+#### <a id="replication-analysis-api-deprecation"/>`/api/replication-analysis` HTTP API deprecation</a>
+
+The `/api/replication-analysis` HTTP API endpoint is now deprecated and is replaced with `/api/detection-analysis`, which currently returns the same response format.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
