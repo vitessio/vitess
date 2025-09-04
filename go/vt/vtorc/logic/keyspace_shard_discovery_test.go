@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
+	vtorcconfig "vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 )
@@ -38,17 +39,21 @@ var (
 	keyspaceDurabilityNone = &topodatapb.Keyspace{
 		KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 		DurabilityPolicy: policy.DurabilityNone,
+		VtorcState:       vtorcconfig.DefaultKeyspaceTopoConfig,
 	}
 	keyspaceDurabilitySemiSync = &topodatapb.Keyspace{
 		KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 		DurabilityPolicy: policy.DurabilitySemiSync,
+		VtorcState:       vtorcconfig.DefaultKeyspaceTopoConfig,
 	}
 	keyspaceDurabilityTest = &topodatapb.Keyspace{
 		KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 		DurabilityPolicy: policy.DurabilityTest,
+		VtorcState:       vtorcconfig.DefaultKeyspaceTopoConfig,
 	}
 	keyspaceSnapshot = &topodatapb.Keyspace{
 		KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT,
+		VtorcState:   vtorcconfig.DefaultKeyspaceTopoConfig,
 	}
 )
 
@@ -150,24 +155,34 @@ func TestRefreshKeyspace(t *testing.T) {
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 				DurabilityPolicy: policy.DurabilitySemiSync,
 			},
-			keyspaceWanted: nil,
-			err:            "",
+			keyspaceWanted: &topodatapb.Keyspace{
+				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
+				DurabilityPolicy: policy.DurabilitySemiSync,
+				VtorcState:       vtorcconfig.DefaultKeyspaceTopoConfig,
+			},
+			err: "",
 		}, {
 			name:         "Success with keyspaceType and no durability",
 			keyspaceName: "ks2",
 			keyspace: &topodatapb.Keyspace{
 				KeyspaceType: topodatapb.KeyspaceType_NORMAL,
 			},
-			keyspaceWanted: nil,
-			err:            "",
+			keyspaceWanted: &topodatapb.Keyspace{
+				KeyspaceType: topodatapb.KeyspaceType_NORMAL,
+				VtorcState:   vtorcconfig.DefaultKeyspaceTopoConfig,
+			},
+			err: "",
 		}, {
 			name:         "Success with snapshot keyspaceType",
 			keyspaceName: "ks3",
 			keyspace: &topodatapb.Keyspace{
 				KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT,
 			},
-			keyspaceWanted: nil,
-			err:            "",
+			keyspaceWanted: &topodatapb.Keyspace{
+				KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT,
+				VtorcState:   vtorcconfig.DefaultKeyspaceTopoConfig,
+			},
+			err: "",
 		}, {
 			name:         "Success with fields that are not stored",
 			keyspaceName: "ks4",
@@ -179,6 +194,7 @@ func TestRefreshKeyspace(t *testing.T) {
 			keyspaceWanted: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 				DurabilityPolicy: policy.DurabilityNone,
+				VtorcState:       vtorcconfig.DefaultKeyspaceTopoConfig,
 			},
 			err: "",
 		}, {
