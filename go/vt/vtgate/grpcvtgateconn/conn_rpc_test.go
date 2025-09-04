@@ -57,6 +57,7 @@ func TestGRPCVTGateConn(t *testing.T) {
 	// run the test suite
 	RunTests(t, client, service)
 	RunErrorTests(t, service)
+	RunSessionTests(t, client, service)
 
 	// and clean up
 	client.Close()
