@@ -802,15 +802,15 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 	// else, user specified an init db file
 	sqlFile, err := os.Open(initDBSQLFile)
 	if err != nil {
-		return fmt.Errorf("can't open init_db_sql_file (%v): %v", initDBSQLFile, err)
+		return fmt.Errorf("can't open init-db-sql-file (%v): %v", initDBSQLFile, err)
 	}
 	defer sqlFile.Close()
 	script, err := io.ReadAll(sqlFile)
 	if err != nil {
-		return fmt.Errorf("can't read init_db_sql_file (%v): %v", initDBSQLFile, err)
+		return fmt.Errorf("can't read init-db-sql-file (%v): %v", initDBSQLFile, err)
 	}
 	if err := mysqld.executeMysqlScript(ctx, params, string(script)); err != nil {
-		return fmt.Errorf("can't run init_db_sql_file (%v): %v", initDBSQLFile, err)
+		return fmt.Errorf("can't run init-db-sql-file (%v): %v", initDBSQLFile, err)
 	}
 	return nil
 }
