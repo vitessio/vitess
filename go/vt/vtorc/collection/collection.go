@@ -45,7 +45,7 @@ data which is suitable for easy collection by monitoring systems.
 
 Expiry is triggered by default if the collection is created via
 CreateOrReturnCollection() and uses an expiry period of
-DiscoveryCollectionRetentionSeconds. It can also be enabled by
+config.GetDiscoveryCollectionMetricsTTL(). It can also be enabled by
 calling StartAutoExpiration() after setting the required expire
 period with SetExpirePeriod().
 
@@ -54,7 +54,7 @@ of metrics which have passed the time specified. Not enabling expiry
 will mean data is collected but never freed which will make
 vtorc run out of memory eventually.
 
-Current code uses DiscoveryCollectionRetentionSeconds as the
+Current code uses config.GetDiscoveryCollectionMetricsTTL() as the
 time to keep metric data.
 */
 package collection
@@ -111,7 +111,7 @@ func CreateOrReturnCollection(name string) *Collection {
 		collection: nil,
 		done:       make(chan struct{}),
 		// WARNING: use a different configuration name
-		expirePeriod: time.Duration(config.DiscoveryCollectionRetentionSeconds) * time.Second,
+		expirePeriod: config.GetDiscoveryCollectionMetricsTTL(),
 	}
 	go qmc.StartAutoExpiration()
 

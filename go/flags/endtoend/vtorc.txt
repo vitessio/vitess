@@ -35,6 +35,7 @@ Flags:
       --config-persistence-min-interval duration                    minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                          Config file type (omit to infer config type from file extension).
       --consul-auth-static-file string                              JSON File to read the topos/tokens from.
+      --discovery-collection-metrics-ttl duration                   The time-to-live for discovery collection metrics (default 2m0s)
       --discovery-workers int                                       Number of workers used for tablet discovery (default 300)
       --emit-stats                                                  If set, emit stats to push-based monitoring and stats backends
       --enable-primary-disk-stalled-recovery                        Whether VTOrc should detect a stalled disk on the primary and failover
