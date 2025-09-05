@@ -4803,5 +4803,48 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "order by and project pushed under route having database qualifier - it should be removed in final query",
+    "query": "select user.user.col from user.user order by user.user.id",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select user.user.col from user.user order by user.user.id",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col, `user`.id, weight_string(`user`.id) from `user` where 1 != 1",
+        "OrderBy": "(1|2) ASC",
+        "Query": "select `user`.col, `user`.id, weight_string(`user`.id) from `user` order by `user`.id asc",
+        "ResultColumns": 1
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "order by and project pushed under route having information_schema database qualifier - it should not be removed in final query",
+    "query": "select information_schema.table.col from information_schema.table order by information_schema.table.name",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select information_schema.table.col from information_schema.table order by information_schema.table.name",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select information_schema.`table`.col from information_schema.`table` where 1 != 1",
+        "Query": "select information_schema.`table`.col from information_schema.`table` order by information_schema.`table`.`name` asc"
+      }
+    }
   }
 ]

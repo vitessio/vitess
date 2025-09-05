@@ -24,7 +24,9 @@ import (
 
 	"vitess.io/vitess/go/protoutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtorcdatapb "vitess.io/vitess/go/vt/proto/vtorcdata"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/db"
 )
 
@@ -114,4 +116,147 @@ func TestSaveReadAndDeleteShard(t *testing.T) {
 			require.EqualError(t, err, ErrShardNotFound.Error())
 		})
 	}
+}
+
+func TestReadKeyspaceShardStats(t *testing.T) {
+	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
+	defer func() {
+		db.ClearVTOrcDatabase()
+	}()
+
+	var uid uint32
+	for _, shard := range []string{"-40", "40-80", "80-c0", "c0-"} {
+		for i := 0; i < 100; i++ {
+			require.NoError(t, SaveTablet(&topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "cell1",
+					Uid:  uid,
+				},
+				Keyspace: "test",
+				Shard:    shard,
+			}))
+			uid++
+		}
+	}
+
+	t.Run("no_ers_disabled", func(t *testing.T) {
+		shardStats, err := ReadKeyspaceShardStats()
+		require.NoError(t, err)
+		require.Equal(t, []ShardStats{
+			{
+				Keyspace:                 "test",
+				Shard:                    "-40",
+				TabletCount:              100,
+				DisableEmergencyReparent: false,
+			},
+			{
+				Keyspace:                 "test",
+				Shard:                    "40-80",
+				TabletCount:              100,
+				DisableEmergencyReparent: false,
+			},
+			{
+				Keyspace:                 "test",
+				Shard:                    "80-c0",
+				TabletCount:              100,
+				DisableEmergencyReparent: false,
+			},
+			{
+				Keyspace:                 "test",
+				Shard:                    "c0-",
+				TabletCount:              100,
+				DisableEmergencyReparent: false,
+			},
+		}, shardStats)
+	})
+
+	t.Run("single_shard_ers_disabled", func(t *testing.T) {
+		keyspaceInfo := &topo.KeyspaceInfo{
+			Keyspace: &topodatapb.Keyspace{
+				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
+				DurabilityPolicy: policy.DurabilityNone,
+			},
+		}
+		keyspaceInfo.SetKeyspaceName("test")
+		require.NoError(t, SaveKeyspace(keyspaceInfo))
+
+		shardInfo := topo.NewShardInfo("test", "-40", &topodatapb.Shard{
+			VtorcState: &vtorcdatapb.Shard{
+				DisableEmergencyReparent: true,
+			},
+		}, nil)
+		require.NoError(t, SaveShard(shardInfo))
+
+		shardStats, err := ReadKeyspaceShardStats()
+		require.NoError(t, err)
+		require.Equal(t, []ShardStats{
+			{
+				Keyspace:                 "test",
+				Shard:                    "-40",
+				TabletCount:              100,
+				DisableEmergencyReparent: true,
+			},
+			{
+				Keyspace:                 "test",
+				Shard:                    "40-80",
+				TabletCount:              100,
+				DisableEmergencyReparent: false,
+			},
+			{
+				Keyspace:                 "test",
+				Shard:                    "80-c0",
+				TabletCount:              100,
+				DisableEmergencyReparent: false,
+			},
+			{
+				Keyspace:                 "test",
+				Shard:                    "c0-",
+				TabletCount:              100,
+				DisableEmergencyReparent: false,
+			},
+		}, shardStats)
+	})
+
+	t.Run("full_keyspace_ers_disabled", func(t *testing.T) {
+		keyspaceInfo := &topo.KeyspaceInfo{
+			Keyspace: &topodatapb.Keyspace{
+				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
+				DurabilityPolicy: policy.DurabilityNone,
+				VtorcState: &vtorcdatapb.Keyspace{
+					DisableEmergencyReparent: true,
+				},
+			},
+		}
+		keyspaceInfo.SetKeyspaceName("test")
+		require.NoError(t, SaveKeyspace(keyspaceInfo))
+
+		shardStats, err := ReadKeyspaceShardStats()
+		require.NoError(t, err)
+		require.Equal(t, []ShardStats{
+			{
+				Keyspace:                 "test",
+				Shard:                    "-40",
+				TabletCount:              100,
+				DisableEmergencyReparent: true,
+			},
+			{
+				Keyspace:                 "test",
+				Shard:                    "40-80",
+				TabletCount:              100,
+				DisableEmergencyReparent: true,
+			},
+			{
+				Keyspace:                 "test",
+				Shard:                    "80-c0",
+				TabletCount:              100,
+				DisableEmergencyReparent: true,
+			},
+			{
+				Keyspace:                 "test",
+				Shard:                    "c0-",
+				TabletCount:              100,
+				DisableEmergencyReparent: true,
+			},
+		}, shardStats)
+	})
 }

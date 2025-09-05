@@ -2262,3 +2262,12 @@ message WorkflowMirrorTrafficResponse {
   string start_state = 2;
   string current_state = 3;
 }
+
+message SetVtorcEmergencyReparentRequest {
+  string keyspace = 1;
+  string shard = 2;
+  bool disable = 3;
+}
+
+message SetVtorcEmergencyReparentResponse {
+}

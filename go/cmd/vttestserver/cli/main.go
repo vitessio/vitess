@@ -120,7 +120,7 @@ func New() (cmd *cobra.Command) {
 		"Define the fake cluster topology as a compact text format encoded"+
 			" vttest proto. See vttest.proto for more information.")
 
-	cmd.Flags().StringVar(&config.SchemaDir, "schema_dir", "",
+	utils.SetFlagStringVar(cmd.Flags(), &config.SchemaDir, "schema-dir", "",
 		"Directory for initial schema files. Within this dir,"+
 			" there should be a subdir for each keyspace. Within"+
 			" each keyspace dir, each file is executed as SQL"+
@@ -130,7 +130,7 @@ func New() (cmd *cobra.Command) {
 
 	cmd.Flags().StringVar(&config.DefaultSchemaDir, "default_schema_dir", "",
 		"Default directory for initial schema files. If no schema is found"+
-			" in schema_dir, default to this location.")
+			" in schema-dir, default to this location.")
 
 	cmd.Flags().StringVar(&config.DataDir, "data_dir", "",
 		"Directory where the data files will be placed, defaults to a random "+
@@ -146,7 +146,7 @@ func New() (cmd *cobra.Command) {
 		"If this flag is set, the MySQL data directory is not cleaned up"+
 			" when LocalCluster.TearDown() is called. This is useful for running"+
 			" vttestserver as a database container in local developer environments. Note"+
-			" that db migration files (--schema_dir option) and seeding of"+
+			" that db migration files (--schema-dir option) and seeding of"+
 			" random data (--initialize-with-random-data option) will only run during"+
 			" cluster startup if the data directory does not already exist. "+
 			" Changes to VSchema are persisted across cluster restarts using a simple"+

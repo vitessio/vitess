@@ -113,6 +113,10 @@ func getDirs(curDir dir) (dir, error) {
 
 	for _, entry := range entries {
 		if entry.IsDir() {
+			// Skip the tooling directory which contains automation tools
+			if entry.Name() == "tooling" {
+				continue
+			}
 			subDir, err := getDirs(dir{
 				Name: entry.Name(),
 				Path: path.Join(curDir.Path, entry.Name()),

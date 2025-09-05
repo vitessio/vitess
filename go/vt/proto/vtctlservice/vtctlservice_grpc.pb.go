@@ -394,6 +394,8 @@ type VtctldClient interface {
 	// Reshard. See the documentation on SetShardTabletControlRequest for more
 	// information about the different update modes.
 	SetShardTabletControl(ctx context.Context, in *vtctldata.SetShardTabletControlRequest, opts ...grpc.CallOption) (*vtctldata.SetShardTabletControlResponse, error)
+	// SetVtorcEmergencyReparent enables or disables the use of EmergencyReparentShard in VTOrc recoveries for a given keyspace or keyspace/shard.
+	SetVtorcEmergencyReparent(ctx context.Context, in *vtctldata.SetVtorcEmergencyReparentRequest, opts ...grpc.CallOption) (*vtctldata.SetVtorcEmergencyReparentResponse, error)
 	// SetWritable sets a tablet as read-write (writable=true) or read-only (writable=false).
 	SetWritable(ctx context.Context, in *vtctldata.SetWritableRequest, opts ...grpc.CallOption) (*vtctldata.SetWritableResponse, error)
 	// ShardReplicationAdd adds an entry to a topodata.ShardReplication object.
@@ -1426,6 +1428,15 @@ func (c *vtctldClient) SetShardTabletControl(ctx context.Context, in *vtctldata.
 	return out, nil
 }
 
+func (c *vtctldClient) SetVtorcEmergencyReparent(ctx context.Context, in *vtctldata.SetVtorcEmergencyReparentRequest, opts ...grpc.CallOption) (*vtctldata.SetVtorcEmergencyReparentResponse, error) {
+	out := new(vtctldata.SetVtorcEmergencyReparentResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/SetVtorcEmergencyReparent", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) SetWritable(ctx context.Context, in *vtctldata.SetWritableRequest, opts ...grpc.CallOption) (*vtctldata.SetWritableResponse, error) {
 	out := new(vtctldata.SetWritableResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/SetWritable", in, out, opts...)
@@ -1976,6 +1987,8 @@ type VtctldServer interface {
 	// Reshard. See the documentation on SetShardTabletControlRequest for more
 	// information about the different update modes.
 	SetShardTabletControl(context.Context, *vtctldata.SetShardTabletControlRequest) (*vtctldata.SetShardTabletControlResponse, error)
+	// SetVtorcEmergencyReparent enables or disables the use of EmergencyReparentShard in VTOrc recoveries for a given keyspace or keyspace/shard.
+	SetVtorcEmergencyReparent(context.Context, *vtctldata.SetVtorcEmergencyReparentRequest) (*vtctldata.SetVtorcEmergencyReparentResponse, error)
 	// SetWritable sets a tablet as read-write (writable=true) or read-only (writable=false).
 	SetWritable(context.Context, *vtctldata.SetWritableRequest) (*vtctldata.SetWritableResponse, error)
 	// ShardReplicationAdd adds an entry to a topodata.ShardReplication object.
@@ -2359,6 +2372,9 @@ func (UnimplementedVtctldServer) SetShardIsPrimaryServing(context.Context, *vtct
 }
 func (UnimplementedVtctldServer) SetShardTabletControl(context.Context, *vtctldata.SetShardTabletControlRequest) (*vtctldata.SetShardTabletControlResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetShardTabletControl not implemented")
+}
+func (UnimplementedVtctldServer) SetVtorcEmergencyReparent(context.Context, *vtctldata.SetVtorcEmergencyReparentRequest) (*vtctldata.SetVtorcEmergencyReparentResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetVtorcEmergencyReparent not implemented")
 }
 func (UnimplementedVtctldServer) SetWritable(context.Context, *vtctldata.SetWritableRequest) (*vtctldata.SetWritableResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetWritable not implemented")
@@ -4206,6 +4222,24 @@ func _Vtctld_SetShardTabletControl_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_SetVtorcEmergencyReparent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.SetVtorcEmergencyReparentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).SetVtorcEmergencyReparent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/SetVtorcEmergencyReparent",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).SetVtorcEmergencyReparent(ctx, req.(*vtctldata.SetVtorcEmergencyReparentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_SetWritable_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.SetWritableRequest)
 	if err := dec(in); err != nil {
@@ -5160,6 +5194,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetShardTabletControl",
 			Handler:    _Vtctld_SetShardTabletControl_Handler,
+		},
+		{
+			MethodName: "SetVtorcEmergencyReparent",
+			Handler:    _Vtctld_SetVtorcEmergencyReparent_Handler,
 		},
 		{
 			MethodName: "SetWritable",

@@ -65,7 +65,7 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 
 		//initDBfile is required to run vtbackup
 		"--mysql-port":       fmt.Sprintf("%d", vtbackup.MysqlPort),
-		"--init_db_sql_file": vtbackup.initDBfile,
+		"--init-db-sql-file": vtbackup.initDBfile,
 		"--init-keyspace":    vtbackup.Keyspace,
 		"--init-shard":       vtbackup.Shard,
 
@@ -78,6 +78,7 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 	utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", vtbackup.TopoGlobalAddress)
 	utils.SetFlagVariantsForTests(flags, "--topo-global-root", vtbackup.TopoGlobalRoot)
 	utils.SetFlagVariantsForTests(flags, "--mysql-port", fmt.Sprintf("%d", vtbackup.MysqlPort))
+	utils.SetFlagVariantsForTests(flags, "--init-db-sql-file", vtbackup.initDBfile)
 	utils.SetFlagVariantsForTests(flags, "--init-keyspace", vtbackup.Keyspace)
 	utils.SetFlagVariantsForTests(flags, "--init-shard", vtbackup.Shard)
 	utils.SetFlagVariantsForTests(flags, "--backup-storage-implementation", vtbackup.BackupStorageImplementation)

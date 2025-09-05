@@ -114,6 +114,92 @@ func TestDownPrimary(t *testing.T) {
 	})
 }
 
+// bring down primary, with keyspace-level ERS disabled via SetVtorcEmergencyReparent --disable.
+// confirm no ERS occurs.
+func TestDownPrimary_KeyspaceEmergencyReparentDisabled(t *testing.T) {
+	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{fmt.Sprintf("%s=10s", vtutils.GetFlagVariantForTests("--remote-operation-timeout")), "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{}, 1, policy.DurabilityNone)
+	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+	// find primary from topo
+	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	assert.NotNil(t, curPrimary, "should have elected a primary")
+	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+	utils.WaitForSuccessfulPRSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
+
+	// find the replica and rdonly tablets
+	var replica, rdonly *cluster.Vttablet
+	for _, tablet := range shard0.Vttablets {
+		// we know we have only two replcia tablets, so the one not the primary must be the other replica
+		if tablet.Alias != curPrimary.Alias && tablet.Type == "replica" {
+			replica = tablet
+		}
+		if tablet.Type == "rdonly" {
+			rdonly = tablet
+		}
+	}
+	assert.NotNil(t, replica, "could not find replica tablet")
+	assert.NotNil(t, rdonly, "could not find rdonly tablet")
+
+	// check that the replication is setup correctly before we failover
+	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{rdonly, replica}, 10*time.Second)
+
+	// check before ERS disabled state is false
+	utils.WaitForShardERSDisabledState(t, vtOrcProcess, keyspace.Name, shard0.Name, false)
+
+	// disable ERS on the keyspace via SetVtorcEmergencyReparent --disable
+	_, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetVtorcEmergencyReparent", "--disable", keyspace.Name)
+	assert.NoError(t, err)
+	utils.WaitForShardERSDisabledState(t, vtOrcProcess, keyspace.Name, shard0.Name, true)
+	utils.CheckVarExists(t, vtOrcProcess, "EmergencyReparentShardDisabled")
+	utils.CheckMetricExists(t, vtOrcProcess, "vtorc_emergency_reparent_shard_disabled")
+
+	// make the current primary vttablet unavailable
+	err = curPrimary.VttabletProcess.TearDown()
+	assert.NoError(t, err)
+	err = curPrimary.MysqlctlProcess.Stop()
+	assert.NoError(t, err)
+	defer func() {
+		// we remove the tablet from our global list
+		utils.PermanentlyRemoveVttablet(clusterInfo, curPrimary)
+	}()
+
+	// check ERS did not occur. For the RecoverDeadPrimary recovery, expect 1 skipped recovery, 0 successful recoveries and 0 ERS operations.
+	utils.WaitForSkippedRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name, 0)
+	utils.WaitForSuccessfulERSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 0)
+
+	// check that the shard primary remains the same because ERS is disabled on the keyspace
+	origPrimary := curPrimary
+	curPrimary = utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	assert.NotNil(t, curPrimary)
+	assert.Equal(t, origPrimary.Alias, curPrimary.Alias)
+
+	// enable ERS on the keyspace via SetVtorcEmergencyReparent --enable
+	_, err = clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetVtorcEmergencyReparent", "--enable", keyspace.Name)
+	assert.NoError(t, err)
+	utils.WaitForShardERSDisabledState(t, vtOrcProcess, keyspace.Name, shard0.Name, false)
+
+	// check that the replica gets promoted by vtorc
+	utils.CheckPrimaryTablet(t, clusterInfo, replica, true)
+
+	// also check that the replication is working correctly after failover
+	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{rdonly}, 10*time.Second)
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+	utils.WaitForSuccessfulERSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
+	t.Run("Check ERS and PRS Vars and Metrics", func(t *testing.T) {
+		utils.CheckVarExists(t, vtOrcProcess, "EmergencyReparentCounts")
+		utils.CheckVarExists(t, vtOrcProcess, "PlannedReparentCounts")
+		utils.CheckVarExists(t, vtOrcProcess, "ReparentShardOperationTimings")
+
+		// Metrics registered in prometheus
+		utils.CheckMetricExists(t, vtOrcProcess, "vtorc_emergency_reparent_counts")
+		utils.CheckMetricExists(t, vtOrcProcess, "vtorc_planned_reparent_counts")
+		utils.CheckMetricExists(t, vtOrcProcess, "vtorc_reparent_shard_operation_timings_bucket")
+	})
+}
+
 // bring down primary before VTOrc has started, let vtorc repair.
 func TestDownPrimaryBeforeVTOrc(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
