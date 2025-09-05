@@ -2,69 +2,69 @@
   "binary_stats": {
     "vtbackup": {
       "total_flags": 208,
-      "underscore_flags": 11,
-      "dash_flags": 188,
-      "completion_percentage": 90.4
+      "underscore_flags": 2,
+      "dash_flags": 197,
+      "completion_percentage": 94.7
     },
     "vtctld": {
       "total_flags": 158,
-      "underscore_flags": 4,
-      "dash_flags": 145,
-      "completion_percentage": 91.8
+      "underscore_flags": 2,
+      "dash_flags": 147,
+      "completion_percentage": 93.0
     },
     "vtctldclient": {
       "total_flags": 43,
-      "underscore_flags": 4,
-      "dash_flags": 31,
-      "completion_percentage": 72.1
+      "underscore_flags": 3,
+      "dash_flags": 32,
+      "completion_percentage": 74.4
     },
     "mysqlctl": {
       "total_flags": 73,
-      "underscore_flags": 3,
-      "dash_flags": 64,
-      "completion_percentage": 87.7
+      "underscore_flags": 2,
+      "dash_flags": 65,
+      "completion_percentage": 89.0
     },
     "vtgate": {
       "total_flags": 225,
-      "underscore_flags": 33,
-      "dash_flags": 183,
-      "completion_percentage": 81.3
+      "underscore_flags": 6,
+      "dash_flags": 210,
+      "completion_percentage": 93.3
     },
     "vtcombo": {
       "total_flags": 437,
-      "underscore_flags": 10,
-      "dash_flags": 417,
-      "completion_percentage": 95.4
+      "underscore_flags": 2,
+      "dash_flags": 425,
+      "completion_percentage": 97.3
     },
     "vtorc": {
       "total_flags": 97,
-      "underscore_flags": 4,
-      "dash_flags": 86,
-      "completion_percentage": 88.7
+      "underscore_flags": 2,
+      "dash_flags": 88,
+      "completion_percentage": 90.7
     },
     "vtclient": {
       "total_flags": 57,
-      "underscore_flags": 7,
-      "dash_flags": 35,
-      "completion_percentage": 61.4
+      "underscore_flags": 2,
+      "dash_flags": 40,
+      "completion_percentage": 70.2
     },
     "vtbench": {
       "total_flags": 54,
-      "underscore_flags": 3,
-      "dash_flags": 36,
-      "completion_percentage": 66.7
+      "underscore_flags": 2,
+      "dash_flags": 37,
+      "completion_percentage": 68.5
     },
     "vttestserver": {
       "total_flags": 168,
-      "underscore_flags": 24,
-      "dash_flags": 134,
-      "completion_percentage": 79.8
+      "underscore_flags": 2,
+      "dash_flags": 156,
+      "completion_percentage": 92.9
     },
     "vttablet": {
       "total_flags": 393,
-      "underscore_flags": 15,
-      "dash_flags": 368,
-      "completion_percentage": 93.6
+      "underscore_flags": 2,
+      "dash_flags": 381,
+      "completion_percentage": 96.9
     },
     "mysqlctld": {
       "total_flags": 104,
@@ -74,196 +74,45 @@
     }
   },
   "unique_underscore_flags": [
-    "discovery_low_replication_lag",
-    "max_sequence_id",
-    "mysql_auth_vault_ttl",
-    "gateway_initial_tablet_timeout",
-    "max_table_shard_size",
-    "data_dir",
-    "bind_variables",
-    "cells_to_watch",
-    "enable_direct_ddl",
-    "min_retention_time",
-    "mysql_ldap_auth_config_file",
-    "mysql_auth_vault_timeout",
-    "external_topo_global_server_address",
-    "clusters_to_watch",
-    "mysql_timeout",
-    "mysql_auth_vault_role_secretidfile",
-    "legacy_replication_lag_algorithm",
-    "allow_first_backup",
-    "use_random_sequence",
-    "binlog_player_grpc_crl",
-    "vtgate_protocol",
-    "mysql_auth_vault_addr",
-    "mysql_ldap_auth_config_string",
-    "mysql_ldap_auth_method",
-    "mysql_clientcert_auth_method",
     "log_dir",
     "log_link",
-    "enable_system_settings",
-    "log_queries",
-    "min_sequence_id",
-    "rng_seed",
-    "min_table_shard_size",
-    "replica_count",
-    "statsd_sample_rate",
-    "enable_buffer",
-    "min_backup_interval",
-    "mysql_auth_server_static_string",
-    "topocustomrule_path",
-    "binlog_player_grpc_cert",
-    "extra_my_cnf",
-    "vschema_ddl_authorized_users",
-    "null_probability",
-    "mysql_auth_vault_tls_ca",
-    "statsd_address",
-    "persistent_mode",
-    "initial_backup",
-    "action_timeout",
-    "mysql_auth_vault_path",
-    "mysql_auth_vault_roleid",
-    "shutdown_wait_time",
-    "external_topo_implementation",
-    "snapshot_file",
-    "mysql_auth_server_static_file",
-    "filecustomrules_watch",
-    "mysql_auth_vault_tokenfile",
-    "incremental_from_pos",
-    "default_tablet_type",
-    "min_retention_count",
     "mysql_auth_static_reload_interval",
     "log_backtrace_at",
-    "file_backup_storage_root",
-    "restart_before_backup",
-    "mysql_bind_host",
-    "rdonly_count",
-    "external_topo_global_root",
-    "discovery_high_replication_lag_minimum_serving",
-    "enable_online_ddl",
-    "num_shards",
-    "default_schema_dir",
-    "transaction_mode",
-    "unix_socket",
-    "mysql_only",
-    "binlog_player_grpc_server_name",
-    "mysql_auth_vault_role_mountpoint",
-    "binlog_player_grpc_ca",
-    "min_number_serving_vttablets",
-    "mysqlctl_client_protocol",
-    "topocustomrule_cell",
-    "tablet_config",
-    "binlog_player_grpc_key"
+    "mysql_auth_server_static_file",
+    "vschema_ddl_authorized_users",
+    "mysql_auth_server_static_string"
   ],
   "flag_to_binaries": {
-    "allow_first_backup": [
-      "vtbackup"
-    ],
-    "file_backup_storage_root": [
-      "vtctld",
-      "vttablet",
-      "vtbackup"
-    ],
-    "incremental_from_pos": [
-      "vtbackup"
-    ],
-    "initial_backup": [
-      "vtbackup"
-    ],
     "log_backtrace_at": [
-      "vtorc",
-      "vtclient",
-      "vttablet",
-      "mysqlctld",
-      "vtbackup",
-      "vttestserver",
-      "vtctld",
-      "vtcombo",
       "vtctldclient",
-      "vtgate",
+      "vtcombo",
+      "vttestserver",
+      "vtclient",
+      "vtctld",
       "vtbench",
+      "vttablet",
+      "vtorc",
+      "mysqlctld",
+      "vtgate",
+      "vtbackup",
       "mysqlctl"
     ],
     "log_dir": [
-      "vtorc",
-      "vtclient",
-      "vttablet",
-      "mysqlctld",
-      "vtbackup",
-      "vttestserver",
-      "vtctld",
-      "vtcombo",
       "vtctldclient",
-      "vtgate",
-      "vtbench",
-      "mysqlctl"
-    ],
-    "min_backup_interval": [
-      "vtbackup"
-    ],
-    "min_retention_count": [
-      "vtbackup"
-    ],
-    "min_retention_time": [
-      "vtbackup"
-    ],
-    "mysql_timeout": [
-      "vtbackup"
-    ],
-    "restart_before_backup": [
-      "vtbackup"
-    ],
-    "action_timeout": [
-      "vtctld",
       "vtcombo",
-      "vtctldclient"
+      "vttestserver",
+      "vtclient",
+      "vtctld",
+      "vtbench",
+      "vttablet",
+      "vtorc",
+      "mysqlctld",
+      "vtgate",
+      "vtbackup",
+      "mysqlctl"
     ],
     "log_link": [
       "vtctldclient"
-    ],
-    "mysqlctl_client_protocol": [
-      "mysqlctl"
-    ],
-    "cells_to_watch": [
-      "vtgate"
-    ],
-    "default_tablet_type": [
-      "vtcombo",
-      "vtgate"
-    ],
-    "discovery_high_replication_lag_minimum_serving": [
-      "vtgate"
-    ],
-    "discovery_low_replication_lag": [
-      "vtgate"
-    ],
-    "enable_buffer": [
-      "vtcombo",
-      "vtgate"
-    ],
-    "enable_direct_ddl": [
-      "vtcombo",
-      "vttestserver",
-      "vtgate"
-    ],
-    "enable_online_ddl": [
-      "vtcombo",
-      "vttestserver",
-      "vtgate"
-    ],
-    "enable_system_settings": [
-      "vtcombo",
-      "vttestserver",
-      "vtgate"
-    ],
-    "gateway_initial_tablet_timeout": [
-      "vtgate"
-    ],
-    "legacy_replication_lag_algorithm": [
-      "vtgate"
-    ],
-    "min_number_serving_vttablets": [
-      "vtgate"
     ],
     "mysql_auth_server_static_file": [
       "vtgate"
@@ -274,167 +123,8 @@
     "mysql_auth_static_reload_interval": [
       "vtgate"
     ],
-    "mysql_auth_vault_addr": [
-      "vtgate"
-    ],
-    "mysql_auth_vault_path": [
-      "vtgate"
-    ],
-    "mysql_auth_vault_role_mountpoint": [
-      "vtgate"
-    ],
-    "mysql_auth_vault_role_secretidfile": [
-      "vtgate"
-    ],
-    "mysql_auth_vault_roleid": [
-      "vtgate"
-    ],
-    "mysql_auth_vault_timeout": [
-      "vtgate"
-    ],
-    "mysql_auth_vault_tls_ca": [
-      "vtgate"
-    ],
-    "mysql_auth_vault_tokenfile": [
-      "vtgate"
-    ],
-    "mysql_auth_vault_ttl": [
-      "vtgate"
-    ],
-    "mysql_clientcert_auth_method": [
-      "vtgate"
-    ],
-    "mysql_ldap_auth_config_file": [
-      "vtgate"
-    ],
-    "mysql_ldap_auth_config_string": [
-      "vtgate"
-    ],
-    "mysql_ldap_auth_method": [
-      "vtgate"
-    ],
-    "statsd_address": [
-      "vttablet",
-      "vtgate"
-    ],
-    "statsd_sample_rate": [
-      "vttablet",
-      "vtgate"
-    ],
-    "transaction_mode": [
-      "vtcombo",
-      "vttestserver",
-      "vtgate"
-    ],
     "vschema_ddl_authorized_users": [
-      "vtcombo",
-      "vttestserver",
       "vtgate"
-    ],
-    "clusters_to_watch": [
-      "vtorc"
-    ],
-    "shutdown_wait_time": [
-      "vtorc"
-    ],
-    "bind_variables": [
-      "vtclient"
-    ],
-    "max_sequence_id": [
-      "vtclient"
-    ],
-    "min_sequence_id": [
-      "vtclient"
-    ],
-    "use_random_sequence": [
-      "vtclient"
-    ],
-    "vtgate_protocol": [
-      "vtclient"
-    ],
-    "unix_socket": [
-      "vtbench"
-    ],
-    "data_dir": [
-      "vttestserver"
-    ],
-    "default_schema_dir": [
-      "vttestserver"
-    ],
-    "external_topo_global_root": [
-      "vttestserver"
-    ],
-    "external_topo_global_server_address": [
-      "vttestserver"
-    ],
-    "external_topo_implementation": [
-      "vttestserver"
-    ],
-    "extra_my_cnf": [
-      "vttestserver"
-    ],
-    "max_table_shard_size": [
-      "vttestserver"
-    ],
-    "min_table_shard_size": [
-      "vttestserver"
-    ],
-    "mysql_bind_host": [
-      "vttestserver"
-    ],
-    "mysql_only": [
-      "vttestserver"
-    ],
-    "null_probability": [
-      "vttestserver"
-    ],
-    "num_shards": [
-      "vttestserver"
-    ],
-    "persistent_mode": [
-      "vttestserver"
-    ],
-    "rdonly_count": [
-      "vttestserver"
-    ],
-    "replica_count": [
-      "vttestserver"
-    ],
-    "rng_seed": [
-      "vttestserver"
-    ],
-    "snapshot_file": [
-      "vttestserver"
-    ],
-    "binlog_player_grpc_ca": [
-      "vttablet"
-    ],
-    "binlog_player_grpc_cert": [
-      "vttablet"
-    ],
-    "binlog_player_grpc_crl": [
-      "vttablet"
-    ],
-    "binlog_player_grpc_key": [
-      "vttablet"
-    ],
-    "binlog_player_grpc_server_name": [
-      "vttablet"
-    ],
-    "filecustomrules_watch": [
-      "vttablet"
-    ],
-    "log_queries": [
-      "vttablet"
-    ],
-    "tablet_config": [
-      "vttablet"
-    ],
-    "topocustomrule_cell": [
-      "vttablet"
-    ],
-    "topocustomrule_path": [
-      "vttablet"
     ]
   }
 }
