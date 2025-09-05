@@ -287,6 +287,78 @@ func (st *SemTable) RemoveParentForeignKey(fkToIgnore string) error {
 	return nil
 }
 
+// Determine if we need to emulate foreign key checks on the vtgate side.
+//
+// We need to do this if:
+// * Any of the foreign keys (parent or child) are cross shard.
+// * Any of the foreign keys (parent or child) are cross keyspace.
+// * Any of the child foreign keys have an action other than RESTRICT or NO ACTION.
+func (st *SemTable) RequiresForeignKeyEmulation(updExprs sqlparser.UpdateExprs) bool {
+	emulateForeignKeyChecks := false
+
+	if !st.ForeignKeysPresent() {
+		return false
+	}
+
+	for _, updateExpr := range updExprs {
+		deps := st.RecursiveDeps(updateExpr.Name)
+
+		parentFks := st.parentForeignKeysInvolved[deps]
+		for _, parentFk := range parentFks {
+			parentTable := parentFk.Table
+			childTable := st.Tables[deps.TableOffset()].GetVindexTable()
+
+			// Cross-keyspace foreign keys require verification.
+			if parentTable.Keyspace.Name != childTable.Keyspace.Name {
+				emulateForeignKeyChecks = true
+				break
+			}
+
+			// Non shard-scoped foreign keys require verification.
+			if !isShardScoped(parentTable, childTable, parentFk.ParentColumns, parentFk.ChildColumns) {
+				emulateForeignKeyChecks = true
+				break
+			}
+		}
+
+		childFks := st.childForeignKeysInvolved[deps]
+		for _, childFk := range childFks {
+			parentTable := st.Tables[deps.TableOffset()].GetVindexTable()
+			childTable := childFk.Table
+
+			// Cross-keyspace foreign keys require verification.
+			if parentTable.Keyspace.Name != childTable.Keyspace.Name {
+				emulateForeignKeyChecks = true
+				break
+			}
+
+			// Non shard-scoped foreign keys require verification.
+			if !isShardScoped(parentTable, childTable, childFk.ParentColumns, childFk.ChildColumns) {
+				emulateForeignKeyChecks = true
+				break
+			}
+
+			// If the action is other than RESTRICT / NO ACTION / DEFAULT, we need to verify.
+			if !childFk.OnUpdate.IsRestrict() {
+				emulateForeignKeyChecks = true
+				break
+			}
+		}
+	}
+
+	return emulateForeignKeyChecks
+}
+
+func (st *SemTable) ClearForeignKeys() {
+	for ts := range st.childForeignKeysInvolved {
+		delete(st.childForeignKeysInvolved, ts)
+	}
+
+	for ts := range st.parentForeignKeysInvolved {
+		delete(st.parentForeignKeysInvolved, ts)
+	}
+}
+
 // RemoveNonRequiredForeignKeys prunes the list of foreign keys that the query involves.
 // This function considers whether VTGate needs to validate all foreign keys
 // or can delegate some of the responsibility to MySQL.

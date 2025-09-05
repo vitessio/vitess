@@ -295,46 +295,64 @@
       "QueryType": "UPDATE",
       "Original": "update u_tbl2 set col2 = 'bar' where id = 1",
       "Instructions": {
-        "OperatorType": "FkCascade",
+        "OperatorType": "FKVerify",
         "Inputs": [
           {
-            "InputName": "Selection",
+            "InputName": "VerifyParent-1",
             "OperatorType": "Route",
             "Variant": "Unsharded",
             "Keyspace": {
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
-            "Query": "select u_tbl2.col2 from u_tbl2 where id = 1 for update"
+            "FieldQuery": "select 1 from u_tbl2 as child left join u_tbl1 as parent on parent.col1 = cast('bar' as CHAR) where 1 != 1",
+            "Query": "select 1 from u_tbl2 as child left join u_tbl1 as parent on parent.col1 = cast('bar' as CHAR) where parent.col1 is null and not (child.col2) <=> (cast('bar' as CHAR)) and child.id = 1 limit 1 for share"
           },
           {
-            "InputName": "CascadeChild-1",
-            "OperatorType": "Update",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "unsharded_fk_allow",
-              "Sharded": false
-            },
-            "BvName": "fkc_vals",
-            "Cols": [
-              0
-            ],
-            "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in ((cast('bar' as CHAR)))"
-          },
-          {
-            "InputName": "Parent",
-            "OperatorType": "Update",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "unsharded_fk_allow",
-              "Sharded": false
-            },
-            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = 'bar' where id = 1"
+            "InputName": "PostVerify",
+            "OperatorType": "FkCascade",
+            "Inputs": [
+              {
+                "InputName": "Selection",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
+                "Query": "select u_tbl2.col2 from u_tbl2 where id = 1 for update"
+              },
+              {
+                "InputName": "CascadeChild-1",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "BvName": "fkc_vals",
+                "Cols": [
+                  0
+                ],
+                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in ((cast('bar' as CHAR)))"
+              },
+              {
+                "InputName": "Parent",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = 'bar' where id = 1"
+              }
+            ]
           }
         ]
       },
       "TablesUsed": [
+        "unsharded_fk_allow.u_tbl1",
         "unsharded_fk_allow.u_tbl2",
         "unsharded_fk_allow.u_tbl3"
       ]
@@ -670,6 +688,23 @@
             "Count": "1",
             "Inputs": [
               {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "sharded_fk_allow",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from tbl10 as child left join tbl2 as parent on parent.col2 = child.sk and parent.col = 'foo' where 1 != 1",
+                "Query": "select 1 from tbl10 as child left join tbl2 as parent on parent.col2 = child.sk and parent.col = 'foo' where child.sk is not null and not (child.col) <=> ('foo') and parent.col is null and parent.col2 is null limit 1 for share"
+              }
+            ]
+          },
+          {
+            "InputName": "VerifyParent-2",
+            "OperatorType": "Limit",
+            "Count": "1",
+            "Inputs": [
+              {
                 "OperatorType": "Projection",
                 "Expressions": [
                   "1 as 1"
@@ -726,6 +761,7 @@
       },
       "TablesUsed": [
         "sharded_fk_allow.tbl10",
+        "sharded_fk_allow.tbl2",
         "sharded_fk_allow.tbl3"
       ]
     }
@@ -1160,46 +1196,64 @@
       "QueryType": "UPDATE",
       "Original": "update u_tbl2 set m = col1 + 'bar', col2 = 2 where id = 1",
       "Instructions": {
-        "OperatorType": "FkCascade",
+        "OperatorType": "FKVerify",
         "Inputs": [
           {
-            "InputName": "Selection",
+            "InputName": "VerifyParent-1",
             "OperatorType": "Route",
             "Variant": "Unsharded",
             "Keyspace": {
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
-            "Query": "select u_tbl2.col2 from u_tbl2 where id = 1 for update"
+            "FieldQuery": "select 1 from u_tbl2 as child left join u_tbl1 as parent on parent.col1 = cast(2 as CHAR) where 1 != 1",
+            "Query": "select 1 from u_tbl2 as child left join u_tbl1 as parent on parent.col1 = cast(2 as CHAR) where parent.col1 is null and not (child.col2) <=> (cast(2 as CHAR)) and child.id = 1 limit 1 for share"
           },
           {
-            "InputName": "CascadeChild-1",
-            "OperatorType": "Update",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "unsharded_fk_allow",
-              "Sharded": false
-            },
-            "BvName": "fkc_vals",
-            "Cols": [
-              0
-            ],
-            "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in ((cast(2 as CHAR)))"
-          },
-          {
-            "InputName": "Parent",
-            "OperatorType": "Update",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "unsharded_fk_allow",
-              "Sharded": false
-            },
-            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set m = col1 + 'bar', col2 = 2 where id = 1"
+            "InputName": "PostVerify",
+            "OperatorType": "FkCascade",
+            "Inputs": [
+              {
+                "InputName": "Selection",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
+                "Query": "select u_tbl2.col2 from u_tbl2 where id = 1 for update"
+              },
+              {
+                "InputName": "CascadeChild-1",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "BvName": "fkc_vals",
+                "Cols": [
+                  0
+                ],
+                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in ((cast(2 as CHAR)))"
+              },
+              {
+                "InputName": "Parent",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set m = col1 + 'bar', col2 = 2 where id = 1"
+              }
+            ]
           }
         ]
       },
       "TablesUsed": [
+        "unsharded_fk_allow.u_tbl1",
         "unsharded_fk_allow.u_tbl2",
         "unsharded_fk_allow.u_tbl3"
       ]
@@ -1576,63 +1630,81 @@
       "QueryType": "UPDATE",
       "Original": "update u_tbl6 set col6 = 'foo'",
       "Instructions": {
-        "OperatorType": "FkCascade",
+        "OperatorType": "FKVerify",
         "Inputs": [
           {
-            "InputName": "Selection",
+            "InputName": "VerifyParent-1",
             "OperatorType": "Route",
             "Variant": "Unsharded",
             "Keyspace": {
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select u_tbl6.col6 from u_tbl6 where 1 != 1",
-            "Query": "select u_tbl6.col6 from u_tbl6 for update"
+            "FieldQuery": "select 1 from u_tbl6 as child left join u_tbl5 as parent on parent.col5 = cast('foo' as CHAR) where 1 != 1",
+            "Query": "select 1 from u_tbl6 as child left join u_tbl5 as parent on parent.col5 = cast('foo' as CHAR) where parent.col5 is null and not (child.col6) <=> (cast('foo' as CHAR)) limit 1 for share"
           },
           {
-            "InputName": "CascadeChild-1",
-            "OperatorType": "FKVerify",
-            "BvName": "fkc_vals",
-            "Cols": [
-              0
-            ],
+            "InputName": "PostVerify",
+            "OperatorType": "FkCascade",
             "Inputs": [
               {
-                "InputName": "VerifyParent-1",
+                "InputName": "Selection",
                 "OperatorType": "Route",
                 "Variant": "Unsharded",
                 "Keyspace": {
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select 1 from u_tbl8 as child left join u_tbl9 as parent on parent.col9 = cast('foo' as CHAR) where 1 != 1",
-                "Query": "select 1 from u_tbl8 as child left join u_tbl9 as parent on parent.col9 = cast('foo' as CHAR) where parent.col9 is null and not (child.col8) <=> (cast('foo' as CHAR)) and (child.col8) in ::fkc_vals limit 1 for share nowait"
+                "FieldQuery": "select u_tbl6.col6 from u_tbl6 where 1 != 1",
+                "Query": "select u_tbl6.col6 from u_tbl6 for update"
               },
               {
-                "InputName": "PostVerify",
+                "InputName": "CascadeChild-1",
+                "OperatorType": "FKVerify",
+                "BvName": "fkc_vals",
+                "Cols": [
+                  0
+                ],
+                "Inputs": [
+                  {
+                    "InputName": "VerifyParent-1",
+                    "OperatorType": "Route",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select 1 from u_tbl8 as child left join u_tbl9 as parent on parent.col9 = cast('foo' as CHAR) where 1 != 1",
+                    "Query": "select 1 from u_tbl8 as child left join u_tbl9 as parent on parent.col9 = cast('foo' as CHAR) where parent.col9 is null and not (child.col8) <=> (cast('foo' as CHAR)) and (child.col8) in ::fkc_vals limit 1 for share nowait"
+                  },
+                  {
+                    "InputName": "PostVerify",
+                    "OperatorType": "Update",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl8 set col8 = 'foo' where (col8) in ::fkc_vals"
+                  }
+                ]
+              },
+              {
+                "InputName": "Parent",
                 "OperatorType": "Update",
                 "Variant": "Unsharded",
                 "Keyspace": {
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl8 set col8 = 'foo' where (col8) in ::fkc_vals"
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl6 set col6 = 'foo'"
               }
             ]
-          },
-          {
-            "InputName": "Parent",
-            "OperatorType": "Update",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "unsharded_fk_allow",
-              "Sharded": false
-            },
-            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl6 set col6 = 'foo'"
           }
         ]
       },
       "TablesUsed": [
+        "unsharded_fk_allow.u_tbl5",
         "unsharded_fk_allow.u_tbl6",
         "unsharded_fk_allow.u_tbl8",
         "unsharded_fk_allow.u_tbl9"
@@ -3860,48 +3932,66 @@
             "Query": "select u_tbl2.id from u_tbl2 limit 2 for update"
           },
           {
-            "OperatorType": "FkCascade",
+            "OperatorType": "FKVerify",
             "Inputs": [
               {
-                "InputName": "Selection",
+                "InputName": "VerifyParent-1",
                 "OperatorType": "Route",
                 "Variant": "Unsharded",
                 "Keyspace": {
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
-                "Query": "select u_tbl2.col2 from u_tbl2 where u_tbl2.id in ::dml_vals for update"
+                "FieldQuery": "select 1 from u_tbl2 as child left join u_tbl1 as parent on parent.col1 = cast('bar' as CHAR) where 1 != 1",
+                "Query": "select 1 from u_tbl2 as child left join u_tbl1 as parent on parent.col1 = cast('bar' as CHAR) where parent.col1 is null and not (child.col2) <=> (cast('bar' as CHAR)) and child.id in ::dml_vals limit 1 for share"
               },
               {
-                "InputName": "CascadeChild-1",
-                "OperatorType": "Update",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "unsharded_fk_allow",
-                  "Sharded": false
-                },
-                "BvName": "fkc_vals",
-                "Cols": [
-                  0
-                ],
-                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in ((cast('bar' as CHAR)))"
-              },
-              {
-                "InputName": "Parent",
-                "OperatorType": "Update",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "unsharded_fk_allow",
-                  "Sharded": false
-                },
-                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = 'bar' where u_tbl2.id in ::dml_vals"
+                "InputName": "PostVerify",
+                "OperatorType": "FkCascade",
+                "Inputs": [
+                  {
+                    "InputName": "Selection",
+                    "OperatorType": "Route",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
+                    "Query": "select u_tbl2.col2 from u_tbl2 where u_tbl2.id in ::dml_vals for update"
+                  },
+                  {
+                    "InputName": "CascadeChild-1",
+                    "OperatorType": "Update",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "BvName": "fkc_vals",
+                    "Cols": [
+                      0
+                    ],
+                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in ((cast('bar' as CHAR)))"
+                  },
+                  {
+                    "InputName": "Parent",
+                    "OperatorType": "Update",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = 'bar' where u_tbl2.id in ::dml_vals"
+                  }
+                ]
               }
             ]
           }
         ]
       },
       "TablesUsed": [
+        "unsharded_fk_allow.u_tbl1",
         "unsharded_fk_allow.u_tbl2",
         "unsharded_fk_allow.u_tbl3"
       ]
@@ -4011,59 +4101,76 @@
       "QueryType": "UPDATE",
       "Original": "update u_tbl6 u join u_tbl5 m on u.col = m.col set u.col6 = 'foo' where u.col2 = 4 and m.col3 = 6",
       "Instructions": {
-        "OperatorType": "FkCascade",
+        "OperatorType": "FKVerify",
         "Inputs": [
           {
-            "InputName": "Selection",
+            "InputName": "VerifyParent-1",
             "OperatorType": "Route",
             "Variant": "Unsharded",
             "Keyspace": {
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select u.col6 from u_tbl6 as u, u_tbl5 as m where 1 != 1",
-            "Query": "select u.col6 from u_tbl6 as u, u_tbl5 as m where u.col = m.col and u.col2 = 4 and m.col3 = 6 for update"
+            "FieldQuery": "select 1 from u_tbl6 as child left join u_tbl5 as parent on parent.col5 = cast('foo' as CHAR) where 1 != 1",
+            "Query": "select 1 from u_tbl6 as child left join u_tbl5 as parent on parent.col5 = cast('foo' as CHAR) where parent.col5 is null and not (child.col6) <=> (cast('foo' as CHAR)) and child.col2 = 4 and child.col3 = 6 limit 1 for share"
           },
           {
-            "InputName": "CascadeChild-1",
-            "OperatorType": "FKVerify",
-            "BvName": "fkc_vals",
-            "Cols": [
-              0
-            ],
+            "InputName": "PostVerify",
+            "OperatorType": "FkCascade",
             "Inputs": [
               {
-                "InputName": "VerifyParent-1",
+                "InputName": "Selection",
                 "OperatorType": "Route",
                 "Variant": "Unsharded",
                 "Keyspace": {
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select 1 from u_tbl8 as child left join u_tbl9 as parent on parent.col9 = cast('foo' as CHAR) where 1 != 1",
-                "Query": "select 1 from u_tbl8 as child left join u_tbl9 as parent on parent.col9 = cast('foo' as CHAR) where parent.col9 is null and not (child.col8) <=> (cast('foo' as CHAR)) and (child.col8) in ::fkc_vals limit 1 for share nowait"
+                "FieldQuery": "select u.col6 from u_tbl6 as u, u_tbl5 as m where 1 != 1",
+                "Query": "select u.col6 from u_tbl6 as u, u_tbl5 as m where u.col = m.col and u.col2 = 4 and m.col3 = 6 for update"
               },
               {
-                "InputName": "PostVerify",
+                "InputName": "CascadeChild-1",
+                "OperatorType": "FKVerify",
+                "BvName": "fkc_vals",
+                "Cols": [
+                  0
+                ],
+                "Inputs": [
+                  {
+                    "InputName": "VerifyParent-1",
+                    "OperatorType": "Route",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select 1 from u_tbl8 as child left join u_tbl9 as parent on parent.col9 = cast('foo' as CHAR) where 1 != 1",
+                    "Query": "select 1 from u_tbl8 as child left join u_tbl9 as parent on parent.col9 = cast('foo' as CHAR) where parent.col9 is null and not (child.col8) <=> (cast('foo' as CHAR)) and (child.col8) in ::fkc_vals limit 1 for share nowait"
+                  },
+                  {
+                    "InputName": "PostVerify",
+                    "OperatorType": "Update",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl8 set col8 = 'foo' where (col8) in ::fkc_vals"
+                  }
+                ]
+              },
+              {
+                "InputName": "Parent",
                 "OperatorType": "Update",
                 "Variant": "Unsharded",
                 "Keyspace": {
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl8 set col8 = 'foo' where (col8) in ::fkc_vals"
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl6 as u, u_tbl5 as m set u.col6 = 'foo' where u.col2 = 4 and m.col3 = 6 and u.col = m.col"
               }
             ]
-          },
-          {
-            "InputName": "Parent",
-            "OperatorType": "Update",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "unsharded_fk_allow",
-              "Sharded": false
-            },
-            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl6 as u, u_tbl5 as m set u.col6 = 'foo' where u.col2 = 4 and m.col3 = 6 and u.col = m.col"
           }
         ]
       },
