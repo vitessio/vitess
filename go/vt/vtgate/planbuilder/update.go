@@ -46,17 +46,26 @@ func gen4UpdateStmtPlanner(
 		return nil, err
 	}
 
-	// If there are non-literal foreign key updates, we have to run the query with foreign key checks off.
-	if ctx.SemTable.HasNonLiteralForeignKeyUpdate(updStmt.Exprs) {
-		// Since we are running the query with foreign key checks off, we have to verify all the foreign keys validity on vtgate.
-		ctx.VerifyAllFKs = true
+	if !ctx.SemTable.RequiresForeignKeyEmulation(updStmt.Exprs) {
+		ctx.SemTable.ClearForeignKeys()
+	} else {
+		//If there are non-literal foreign key updates, we have to run the query with foreign key checks off.
+		if ctx.SemTable.HasNonLiteralForeignKeyUpdate(updStmt.Exprs) {
+			// Since we are running the query with foreign key checks off, we have to verify all the foreign keys validity on vtgate.
+			ctx.VerifyAllFKs = true
+		} else {
+			// Remove all the foreign keys that don't require any handling.
+			err = ctx.SemTable.RemoveNonRequiredForeignKeys(ctx.VerifyAllFKs, vindexes.UpdateAction)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 
-	// Remove all the foreign keys that don't require any handling.
-	err = ctx.SemTable.RemoveNonRequiredForeignKeys(ctx.VerifyAllFKs, vindexes.UpdateAction)
-	if err != nil {
-		return nil, err
-	}
+	// If there's any foreign keys that need to be handled on the vtgate side,
+	// we need to disable foreign key checks.
+	//ctx.VerifyAllFKs = ctx.VerifyAllFKs || (len(ctx.SemTable.GetParentForeignKeysList())+len(ctx.SemTable.GetChildForeignKeysList())) > 0
+
 	if ks, tables := ctx.SemTable.SingleUnshardedKeyspace(); ks != nil {
 		if !ctx.SemTable.ForeignKeysPresent() {
 			plan := updateUnshardedShortcut(updStmt, ks, tables)
