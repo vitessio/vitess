@@ -53,6 +53,7 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -93,7 +94,7 @@ const (
 
 func init() {
 	registerTabletTypeFlag := func(fs *pflag.FlagSet) {
-		fs.Var((*topoproto.TabletTypeFlag)(&defaultTabletType), "default_tablet_type", "The default tablet type to set for queries, when one is not explicitly selected.")
+		utils.SetFlagVar(fs, (*topoproto.TabletTypeFlag)(&defaultTabletType), "default-tablet-type", "The default tablet type to set for queries, when one is not explicitly selected.")
 	}
 
 	servenv.OnParseFor("vtgate", registerTabletTypeFlag)
