@@ -28,11 +28,11 @@ import (
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
-	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
