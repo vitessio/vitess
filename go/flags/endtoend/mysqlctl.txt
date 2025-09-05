@@ -73,9 +73,9 @@ Flags:
       --mysql-port int                                              MySQL port. (default 3306)
       --mysql-server-version string                                 MySQL server version to advertise. (default "8.4.6-Vitess")
       --mysql-socket string                                         Path to the mysqld socket file.
+      --mysqlctl-client-protocol string                             the protocol to use to talk to the mysqlctl server (default "grpc")
       --mysqlctl-mycnf-template string                              template file to use for generating the my.cnf file during server init
       --mysqlctl-socket string                                      socket file to use for remote mysqlctl actions (empty for local actions)
-      --mysqlctl_client_protocol string                             the protocol to use to talk to the mysqlctl server (default "grpc")
       --onclose-timeout duration                                    wait no more than this for OnClose handlers before stopping (default 10s)
       --onterm-timeout duration                                     wait no more than this for OnTermSync handlers before stopping (default 10s)
       --pid-file string                                             If set, the process will write its pid to the named file, and delete it on graceful shutdown.
