@@ -32,7 +32,10 @@ func TestNewIncomingQueryThrottler_ConfigRefresh(t *testing.T) {
 
 	// Assert initial state (should be NoOpStrategy)
 	require.NotNil(t, iqt)
-	require.IsType(t, &registry.NoOpStrategy{}, iqt.strategy)
+	iqt.mu.RLock()
+	initialStrategy := iqt.strategy
+	iqt.mu.RUnlock()
+	require.IsType(t, &registry.NoOpStrategy{}, initialStrategy)
 
 	require.Eventually(t, func() bool {
 		iqt.mu.RLock()
