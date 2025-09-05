@@ -211,16 +211,16 @@ func New() (cmd *cobra.Command) {
 
 	utils.SetFlagStringVar(cmd.Flags(), &config.TabletHostName, "tablet-hostname", "localhost", "The hostname to use for the tablet otherwise it will be derived from OS' hostname")
 
-	cmd.Flags().StringVar(&config.VSchemaDDLAuthorizedUsers, "vschema_ddl_authorized_users", "", "Comma separated list of users authorized to execute vschema ddl operations via vtgate")
+	utils.SetFlagStringVar(cmd.Flags(), &config.VSchemaDDLAuthorizedUsers, "vschema-ddl-authorized-users", "", "Comma separated list of users authorized to execute vschema ddl operations via vtgate")
 
 	utils.SetFlagStringVar(cmd.Flags(), &config.ForeignKeyMode, "foreign-key-mode", "allow", "This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow")
-	cmd.Flags().BoolVar(&config.EnableOnlineDDL, "enable_online_ddl", true, "Allow users to submit, review and control Online DDL")
-	cmd.Flags().BoolVar(&config.EnableDirectDDL, "enable_direct_ddl", true, "Allow users to submit direct DDL statements")
+	utils.SetFlagBoolVar(cmd.Flags(), &config.EnableOnlineDDL, "enable-online-ddl", true, "Allow users to submit, review and control Online DDL")
+	utils.SetFlagBoolVar(cmd.Flags(), &config.EnableDirectDDL, "enable-direct-ddl", true, "Allow users to submit direct DDL statements")
 
 	// flags for using an actual topo implementation for vtcombo instead of in-memory topo. useful for test setup where an external topo server is shared across multiple vtcombo processes or other components
-	cmd.Flags().StringVar(&config.ExternalTopoImplementation, "external_topo_implementation", "", "the topology implementation to use for vtcombo process")
-	cmd.Flags().StringVar(&config.ExternalTopoGlobalServerAddress, "external_topo_global_server_address", "", "the address of the global topology server for vtcombo process")
-	cmd.Flags().StringVar(&config.ExternalTopoGlobalRoot, "external_topo_global_root", "", "the path of the global topology data in the global topology server for vtcombo process")
+	utils.SetFlagStringVar(cmd.Flags(), &config.ExternalTopoImplementation, "external-topo-implementation", "", "the topology implementation to use for vtcombo process")
+	utils.SetFlagStringVar(cmd.Flags(), &config.ExternalTopoGlobalServerAddress, "external-topo-global-server-address", "", "the address of the global topology server for vtcombo process")
+	utils.SetFlagStringVar(cmd.Flags(), &config.ExternalTopoGlobalRoot, "external-topo-global-root", "", "the path of the global topology data in the global topology server for vtcombo process")
 
 	utils.SetFlagDurationVar(cmd.Flags(), &config.VtgateTabletRefreshInterval, "tablet-refresh-interval", 10*time.Second, "Interval at which vtgate refreshes tablet information from topology server.")
 
