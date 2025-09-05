@@ -1,11 +1,11 @@
-package incomingquerythrottler
+package querythrottler
 
 import (
 	"context"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/incomingquerythrottler/registry"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler/registry"
 
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -20,12 +20,12 @@ func TestNewIncomingQueryThrottler_ConfigRefresh(t *testing.T) {
 	defer cancel()
 
 	config := &tabletenv.TabletConfig{
-		IncomingQueryThrottlerConfigRefreshInterval: 10 * time.Millisecond,
+		QueryThrottlerConfigRefreshInterval: 10 * time.Millisecond,
 	}
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), config, "TestThrottler")
 
 	throttler := &throttle.Throttler{} // use mock if needed
-	iqt := NewIncomingQueryThrottler(ctx, throttler, newFakeConfigLoader(Config{
+	iqt := NewQueryThrottler(ctx, throttler, newFakeConfigLoader(Config{
 		Enabled:  true,
 		Strategy: registry.ThrottlingStrategyTabletThrottler,
 	}), env)
@@ -70,7 +70,7 @@ func TestSelectThrottlingStrategy(t *testing.T) {
 			mockClient := &throttle.Client{}
 
 			config := &tabletenv.TabletConfig{
-				IncomingQueryThrottlerConfigRefreshInterval: 10 * time.Millisecond,
+				QueryThrottlerConfigRefreshInterval: 10 * time.Millisecond,
 			}
 
 			strategy := selectThrottlingStrategy(Config{Enabled: true, Strategy: tt.giveThrottlingStrategy}, mockClient, config)
@@ -88,11 +88,11 @@ func TestIncomingQueryThrottler_StrategyLifecycleManagement(t *testing.T) {
 
 	throttler := &throttle.Throttler{}
 	config := &tabletenv.TabletConfig{
-		IncomingQueryThrottlerConfigRefreshInterval: 10 * time.Millisecond,
+		QueryThrottlerConfigRefreshInterval: 10 * time.Millisecond,
 	}
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), config, "TestThrottler")
 
-	iqt := NewIncomingQueryThrottler(ctx, throttler, newFakeConfigLoader(Config{
+	iqt := NewQueryThrottler(ctx, throttler, newFakeConfigLoader(Config{
 		Enabled:  true,
 		Strategy: registry.ThrottlingStrategyTabletThrottler,
 	}), env)
@@ -114,12 +114,12 @@ func TestIncomingQueryThrottler_Shutdown(t *testing.T) {
 	defer cancel()
 
 	config := &tabletenv.TabletConfig{
-		IncomingQueryThrottlerConfigRefreshInterval: 10 * time.Millisecond,
+		QueryThrottlerConfigRefreshInterval: 10 * time.Millisecond,
 	}
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), config, "TestThrottler")
 
 	throttler := &throttle.Throttler{}
-	iqt := NewIncomingQueryThrottler(ctx, throttler, newFakeConfigLoader(Config{
+	iqt := NewQueryThrottler(ctx, throttler, newFakeConfigLoader(Config{
 		Enabled:  false,
 		Strategy: registry.ThrottlingStrategyTabletThrottler,
 	}), env)

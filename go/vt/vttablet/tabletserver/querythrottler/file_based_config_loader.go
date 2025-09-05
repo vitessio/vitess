@@ -1,4 +1,4 @@
-package incomingquerythrottler
+package querythrottler
 
 import (
 	"context"

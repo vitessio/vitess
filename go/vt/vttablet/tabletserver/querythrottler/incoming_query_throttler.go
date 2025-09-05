@@ -1,4 +1,4 @@
-package incomingquerythrottler
+package querythrottler
 
 import (
 	"context"
@@ -10,14 +10,14 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/incomingquerythrottler/registry"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler/registry"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
-type IncomingQueryThrottler struct {
+type QueryThrottler struct {
 	ctx            context.Context
 	throttleClient *throttle.Client
 	tabletConfig   *tabletenv.TabletConfig
@@ -30,11 +30,11 @@ type IncomingQueryThrottler struct {
 	strategy registry.ThrottlingStrategyHandler
 }
 
-// NewIncomingQueryThrottler creates a new incoming query throttler.
-func NewIncomingQueryThrottler(ctx context.Context, throttler *throttle.Throttler, cfgLoader ConfigLoader, env tabletenv.Env) *IncomingQueryThrottler {
-	client := throttle.NewBackgroundClient(throttler, throttlerapp.IncomingQueryThrottlerName, base.UndefinedScope)
+// NewQueryThrottler creates a new incoming query throttler.
+func NewQueryThrottler(ctx context.Context, throttler *throttle.Throttler, cfgLoader ConfigLoader, env tabletenv.Env) *QueryThrottler {
+	client := throttle.NewBackgroundClient(throttler, throttlerapp.QueryThrottlerName, base.UndefinedScope)
 
-	i := &IncomingQueryThrottler{
+	i := &QueryThrottler{
 		ctx:            ctx,
 		throttleClient: client,
 		tabletConfig:   env.Config(),
@@ -53,8 +53,8 @@ func NewIncomingQueryThrottler(ctx context.Context, throttler *throttle.Throttle
 }
 
 // Shutdown gracefully stops the throttler and cleans up resources.
-// This should be called when the IncomingQueryThrottler is no longer needed.
-func (i *IncomingQueryThrottler) Shutdown() {
+// This should be called when the QueryThrottler is no longer needed.
+func (i *QueryThrottler) Shutdown() {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 
@@ -70,7 +70,7 @@ func (i *IncomingQueryThrottler) Shutdown() {
 // Config updates are rare (default: every 1 minute) compared to query frequency,
 // so the tiny risk of reading slightly stale data during config updates is acceptable
 // for the significant performance improvement of avoiding mutex contention.
-func (i *IncomingQueryThrottler) EnforceThrottlingIfNodeOverloaded(ctx context.Context, tabletType topodatapb.TabletType, sql string, transactionID int64, options *querypb.ExecuteOptions) error {
+func (i *QueryThrottler) EnforceThrottlingIfNodeOverloaded(ctx context.Context, tabletType topodatapb.TabletType, sql string, transactionID int64, options *querypb.ExecuteOptions) error {
 	// Lock-free read: for maximum performance in the hot path as cfg and strategy are updated rarely (default once per minute).
 	// They are word-sized and safe for atomic reads; stale data for one query is acceptable and avoids mutex contention in the hot path.
 	tCfg := i.cfg
@@ -102,10 +102,10 @@ func selectThrottlingStrategy(cfg Config, client *throttle.Client, tabletConfig 
 }
 
 // startConfigRefreshLoop launches a background goroutine that refreshes the throttler's configuration
-// at the interval specified by IncomingQueryThrottlerConfigRefreshInterval.
-func (i *IncomingQueryThrottler) startConfigRefreshLoop() {
+// at the interval specified by QueryThrottlerConfigRefreshInterval.
+func (i *QueryThrottler) startConfigRefreshLoop() {
 	go func() {
-		refreshInterval := i.tabletConfig.IncomingQueryThrottlerConfigRefreshInterval
+		refreshInterval := i.tabletConfig.QueryThrottlerConfigRefreshInterval
 		configRefreshTicker := time.NewTicker(refreshInterval)
 		defer configRefreshTicker.Stop()
 

@@ -1,4 +1,4 @@
-package incomingquerythrottler
+package querythrottler
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"errors"
 	"testing"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/incomingquerythrottler/registry"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler/registry"
 
 	"github.com/stretchr/testify/require"
 )

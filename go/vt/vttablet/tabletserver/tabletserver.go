@@ -32,7 +32,7 @@ import (
 	"syscall"
 	"time"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/incomingquerythrottler"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -97,8 +97,8 @@ var logComputeRowSerializerKey = logutil.NewThrottledLogger("ComputeRowSerialize
 // a subcomponent. These should also be idempotent.
 
 const (
-	throttlerPoolName   = "ThrottlerPool"
-	iqThrottlerPoolName = "IncomingQueryThrottlerPool"
+	throttlerPoolName      = "ThrottlerPool"
+	queryThrottlerPoolName = "QueryThrottlerPool"
 )
 
 type TabletServer struct {
@@ -141,7 +141,7 @@ type TabletServer struct {
 
 	env *vtenv.Environment
 
-	incomingQueryThrottler *incomingquerythrottler.IncomingQueryThrottler
+	queryThrottler *querythrottler.QueryThrottler
 }
 
 var _ queryservice.QueryService = (*TabletServer)(nil)
@@ -189,8 +189,8 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	tsv.hs = newHealthStreamer(tsv, alias, tsv.se)
 	tsv.rt = repltracker.NewReplTracker(tsv, alias)
 	tsv.lagThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias, tsv.rt.HeartbeatWriter(), tabletTypeFunc, throttlerPoolName)
-	tsv.iqThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias, tsv.rt.HeartbeatWriter(), tabletTypeFunc, iqThrottlerPoolName)
-	tsv.incomingQueryThrottler = incomingquerythrottler.NewIncomingQueryThrottler(ctx, tsv.iqThrottler, incomingquerythrottler.NewFileBasedConfigLoader(), tsv)
+	tsv.iqThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias, tsv.rt.HeartbeatWriter(), tabletTypeFunc, queryThrottlerPoolName)
+	tsv.queryThrottler = querythrottler.NewQueryThrottler(ctx, tsv.iqThrottler, querythrottler.NewFileBasedConfigLoader(), tsv)
 
 	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, tsv.lagThrottler, alias.Cell)
 	tsv.tracker = schema.NewTracker(tsv, tsv.vstreamer, tsv.se)
@@ -920,7 +920,7 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 	if err != nil {
 		return nil, err
 	}
-	if reqThrottledErr := tsv.incomingQueryThrottler.EnforceThrottlingIfNodeOverloaded(ctx, targetType, sql, transactionID, options); reqThrottledErr != nil {
+	if reqThrottledErr := tsv.queryThrottler.EnforceThrottlingIfNodeOverloaded(ctx, targetType, sql, transactionID, options); reqThrottledErr != nil {
 		return nil, reqThrottledErr
 	}
 
@@ -1020,7 +1020,7 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 }
 
 func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
-	if reqThrottledErr := tsv.incomingQueryThrottler.EnforceThrottlingIfNodeOverloaded(ctx, target.GetTabletType(), sql, transactionID, options); reqThrottledErr != nil {
+	if reqThrottledErr := tsv.queryThrottler.EnforceThrottlingIfNodeOverloaded(ctx, target.GetTabletType(), sql, transactionID, options); reqThrottledErr != nil {
 		return reqThrottledErr
 	}
 

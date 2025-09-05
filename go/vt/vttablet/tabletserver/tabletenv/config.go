@@ -68,20 +68,20 @@ var (
 	StatsLogger = streamlog.New[*LogStats]("TabletServer", 50)
 
 	// The following vars are used for custom initialization of Tabletconfig.
-	enableHotRowProtection                      bool
-	enableHotRowProtectionDryRun                bool
-	enableConsolidator                          bool
-	enableConsolidatorReplicas                  bool
-	enableHeartbeat                             bool
-	heartbeatInterval                           time.Duration
-	heartbeatOnDemandDuration                   time.Duration
-	healthCheckInterval                         time.Duration
-	semiSyncMonitorInterval                     time.Duration
-	degradedThreshold                           time.Duration
-	unhealthyThreshold                          time.Duration
-	transitionGracePeriod                       time.Duration
-	enableReplicationReporter                   bool
-	incomingQueryThrottlerConfigRefreshInterval time.Duration
+	enableHotRowProtection              bool
+	enableHotRowProtectionDryRun        bool
+	enableConsolidator                  bool
+	enableConsolidatorReplicas          bool
+	enableHeartbeat                     bool
+	heartbeatInterval                   time.Duration
+	heartbeatOnDemandDuration           time.Duration
+	healthCheckInterval                 time.Duration
+	semiSyncMonitorInterval             time.Duration
+	degradedThreshold                   time.Duration
+	unhealthyThreshold                  time.Duration
+	transitionGracePeriod               time.Duration
+	enableReplicationReporter           bool
+	queryThrottlerConfigRefreshInterval time.Duration
 )
 
 func init() {
@@ -220,7 +220,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&currentConfig.EnablePerWorkloadTableMetrics, "enable-per-workload-table-metrics", defaultConfig.EnablePerWorkloadTableMetrics, "If true, query counts and query error metrics include a label that identifies the workload")
 	fs.BoolVar(&currentConfig.SkipUserMetrics, "skip-user-metrics", defaultConfig.SkipUserMetrics, "If true, user based stats are not recorded.")
 
-	fs.DurationVar(&incomingQueryThrottlerConfigRefreshInterval, "incoming-query-throttler-config-refresh-interval", time.Minute, "How frequently to refresh configuration for the incoming query throttler")
+	fs.DurationVar(&queryThrottlerConfigRefreshInterval, "incoming-query-throttler-config-refresh-interval", time.Minute, "How frequently to refresh configuration for the incoming query throttler")
 
 	fs.BoolVar(&currentConfig.Unmanaged, "unmanaged", false, "Indicates an unmanaged tablet, i.e. using an external mysql-compatible database")
 }
@@ -285,7 +285,7 @@ func Init() {
 	currentConfig.GracePeriods.Transition = transitionGracePeriod
 	currentConfig.SemiSyncMonitor.Interval = semiSyncMonitorInterval
 
-	currentConfig.IncomingQueryThrottlerConfigRefreshInterval = incomingQueryThrottlerConfigRefreshInterval
+	currentConfig.QueryThrottlerConfigRefreshInterval = queryThrottlerConfigRefreshInterval
 
 	logFormat := streamlog.GetQueryLogConfig().Format
 	switch logFormat {
@@ -376,9 +376,9 @@ type TabletConfig struct {
 
 	EnableViews bool `json:"-"`
 
-	EnablePerWorkloadTableMetrics               bool          `json:"-"`
-	SkipUserMetrics                             bool          `json:"-"`
-	IncomingQueryThrottlerConfigRefreshInterval time.Duration `json:"-"`
+	EnablePerWorkloadTableMetrics       bool          `json:"-"`
+	SkipUserMetrics                     bool          `json:"-"`
+	QueryThrottlerConfigRefreshInterval time.Duration `json:"-"`
 }
 
 func (cfg *TabletConfig) MarshalJSON() ([]byte, error) {
@@ -1126,7 +1126,7 @@ var defaultConfig = TabletConfig{
 
 	TwoPCAbandonAge: 15 * time.Minute,
 
-	IncomingQueryThrottlerConfigRefreshInterval: time.Minute,
+	QueryThrottlerConfigRefreshInterval: time.Minute,
 }
 
 // defaultTxThrottlerConfig returns the default TxThrottlerConfigFlag object based on

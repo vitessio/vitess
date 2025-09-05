@@ -1,11 +1,11 @@
-package incomingquerythrottler
+package querythrottler
 
-import "vitess.io/vitess/go/vt/vttablet/tabletserver/incomingquerythrottler/registry"
+import "vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler/registry"
 
 // Compile-time interface compliance check
 var _ registry.StrategyConfig = (*Config)(nil)
 
-// Config defines the runtime configuration for the IncomingQueryThrottler.
+// Config defines the runtime configuration for the QueryThrottler.
 // It specifies whether throttling is enabled and which strategy to use.
 type Config struct {
 	// Enabled indicates whether the throttler should actively apply throttling logic.

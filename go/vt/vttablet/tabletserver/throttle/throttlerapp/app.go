@@ -79,7 +79,7 @@ const (
 
 	TestingName                Name = "test"
 	TestingAlwaysThrottledName Name = "always-throttled-app"
-	IncomingQueryThrottlerName Name = "incoming-query-throttler-app"
+	QueryThrottlerName         Name = "query-throttler-app"
 )
 
 var (

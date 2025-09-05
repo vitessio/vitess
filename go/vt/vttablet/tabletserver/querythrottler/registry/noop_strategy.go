@@ -1,7 +1,7 @@
 package registry
 
 // NoOpStrategy sits in the registry sub-package because registry must produce a safe fallback without importing its parent.
-// Moving it up would create a circular dependency (incomingquerythrottler imports registry, and registry would then have to import incomingquerythrottler), which Go prohibits
+// Moving it up would create a circular dependency (querythrottler imports registry, and registry would then have to import querythrottler), which Go prohibits
 import (
 	"context"
 
