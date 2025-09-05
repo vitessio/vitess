@@ -28,7 +28,6 @@ import (
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/utils"

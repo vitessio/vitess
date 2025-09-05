@@ -13,11 +13,7 @@ def find_flag_definitions():
     """Find all flag definitions with underscores in Go files."""
     
     # Load the flags we identified from help text
-    vtroot = os.environ.get('VTROOT')
-    if not vtroot:
-        print("Error: VTROOT environment variable is not set. Please set it to the Vitess root directory.")
-        exit(1)
-    with open(f'{vtroot}/go/flags/endtoend/flags_analysis.json', 'r') as f:
+    with open('/Users/rohit/vitess/go/flags/endtoend/flags_analysis.json', 'r') as f:
         analysis = json.load(f)
     
     underscore_flags = analysis['unique_underscore_flags']
@@ -48,7 +44,7 @@ def find_flag_definitions():
             continue
             
         # Try to find the definition
-        cmd = f'grep -r "\\"{flag}\\"" {vtroot}/go --include="*.go" -n | head -5'
+        cmd = f'grep -r "\\"{flag}\\"" /Users/rohit/vitess/go --include="*.go" -n | head -5'
         try:
             result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=5)
             if result.stdout:
@@ -86,10 +82,6 @@ def find_flag_definitions():
 
 def print_migration_plan():
     """Print a structured migration plan."""
-    vtroot = os.environ.get('VTROOT')
-    if not vtroot:
-        print("Error: VTROOT environment variable is not set. Please set it to the Vitess root directory.")
-        exit(1)
     flag_groups, flag_definitions, flag_to_binaries = find_flag_definitions()
     
     print("=" * 80)
@@ -147,7 +139,7 @@ def print_migration_plan():
         'total_flags': total_flags
     }
     
-    with open(f'{vtroot}/go/flags/endtoend/migration_plan.json', 'w') as f:
+    with open('/Users/rohit/vitess/go/flags/endtoend/migration_plan.json', 'w') as f:
         json.dump(migration_plan, f, indent=2)
     
     print("=" * 80)
