@@ -53,13 +53,13 @@ func initializeAnalysisDaoPostConfiguration() {
 type clusterAnalysis struct {
 	hasShardWideAction bool
 	totalTablets       int
-	primaryAlias       string
+	primaryAlias       *topodatapb.TabletAlias
 	durability         policy.Durabler
 }
 
 // GetReplicationAnalysis will check for replication problems (dead primary; unreachable primary; etc)
 func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAnalysisHints) ([]*ReplicationAnalysis, error) {
-	var result []*ReplicationAnalysis
+	result := make([]*ReplicationAnalysis, 0)
 	appendAnalysis := func(analysis *ReplicationAnalysis) {
 		if analysis.Analysis == NoProblem && len(analysis.StructureAnalysis) == 0 {
 			return
@@ -319,8 +319,8 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 
 		a.ShardPrimaryTermTimestamp = m.GetTime("shard_primary_term_timestamp")
 		a.IsPrimary = m.GetBool("is_primary")
-		a.AnalyzedInstanceAlias = topoproto.TabletAliasString(tablet.Alias)
-		a.AnalyzedInstancePrimaryAlias = topoproto.TabletAliasString(primaryTablet.Alias)
+		a.AnalyzedInstanceAlias = tablet.Alias
+		a.AnalyzedInstancePrimaryAlias = primaryTablet.Alias
 		a.AnalyzedInstanceBinlogCoordinates = BinlogCoordinates{
 			LogFile: m.GetString("binary_log_file"),
 			LogPos:  m.GetUint64("binary_log_pos"),
@@ -369,7 +369,17 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 
 		if !a.LastCheckValid {
 			analysisMessage := fmt.Sprintf("analysis: Alias: %+v, Keyspace: %+v, Shard: %+v, IsPrimary: %+v, LastCheckValid: %+v, LastCheckPartialSuccess: %+v, CountReplicas: %+v, CountValidReplicas: %+v, CountValidReplicatingReplicas: %+v, CountLaggingReplicas: %+v, CountDelayedReplicas: %+v",
-				a.AnalyzedInstanceAlias, a.AnalyzedKeyspace, a.AnalyzedShard, a.IsPrimary, a.LastCheckValid, a.LastCheckPartialSuccess, a.CountReplicas, a.CountValidReplicas, a.CountValidReplicatingReplicas, a.CountLaggingReplicas, a.CountDelayedReplicas,
+				topoproto.TabletAliasString(a.AnalyzedInstanceAlias),
+				a.AnalyzedKeyspace,
+				a.AnalyzedShard,
+				a.IsPrimary,
+				a.LastCheckValid,
+				a.LastCheckPartialSuccess,
+				a.CountReplicas,
+				a.CountValidReplicas,
+				a.CountValidReplicatingReplicas,
+				a.CountLaggingReplicas,
+				a.CountDelayedReplicas,
 			)
 			if util.ClearToLog("analysis_dao", analysisMessage) {
 				log.Infof(analysisMessage)
@@ -406,117 +416,104 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			// We failed to load the durability policy, so we shouldn't run any analysis
 			return nil
 		}
+
 		isInvalid := m.GetBool("is_invalid")
-		if a.IsClusterPrimary && isInvalid {
+
+		switch {
+		case a.IsClusterPrimary && isInvalid:
 			a.Analysis = InvalidPrimary
 			a.Description = "VTOrc hasn't been able to reach the primary even once since restart/shutdown"
-		} else if isInvalid {
+		case isInvalid:
 			a.Analysis = InvalidReplica
 			a.Description = "VTOrc hasn't been able to reach the replica even once since restart/shutdown"
-		} else if a.IsClusterPrimary && !a.LastCheckValid && a.IsDiskStalled {
+		case a.IsClusterPrimary && !a.LastCheckValid && a.IsDiskStalled:
 			a.Analysis = PrimaryDiskStalled
 			a.Description = "Primary has a stalled disk"
 			ca.hasShardWideAction = true
-		} else if a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas == 0 {
+		case a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas == 0:
 			a.Analysis = DeadPrimaryWithoutReplicas
 			a.Description = "Primary cannot be reached by vtorc and has no replica"
 			ca.hasShardWideAction = true
-			//
-		} else if a.IsClusterPrimary && !a.LastCheckValid && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
+		case a.IsClusterPrimary && !a.LastCheckValid && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0:
 			a.Analysis = DeadPrimary
 			a.Description = "Primary cannot be reached by vtorc and none of its replicas is replicating"
 			ca.hasShardWideAction = true
-			//
-		} else if a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicas == 0 && a.CountValidReplicatingReplicas == 0 {
+		case a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicas == 0 && a.CountValidReplicatingReplicas == 0:
 			a.Analysis = DeadPrimaryAndReplicas
 			a.Description = "Primary cannot be reached by vtorc and none of its replicas is replicating"
 			ca.hasShardWideAction = true
-			//
-		} else if a.IsClusterPrimary && !a.LastCheckValid && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0 {
+		case a.IsClusterPrimary && !a.LastCheckValid && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0:
 			a.Analysis = DeadPrimaryAndSomeReplicas
 			a.Description = "Primary cannot be reached by vtorc; some of its replicas are unreachable and none of its reachable replicas is replicating"
 			ca.hasShardWideAction = true
-			//
-		} else if a.IsClusterPrimary && !a.IsPrimary {
+		case a.IsClusterPrimary && !a.IsPrimary:
 			a.Analysis = PrimaryHasPrimary
 			a.Description = "Primary is replicating from somewhere else"
 			ca.hasShardWideAction = true
-			//
-		} else if a.IsClusterPrimary && a.IsReadOnly {
+		case a.IsClusterPrimary && a.IsReadOnly:
 			a.Analysis = PrimaryIsReadOnly
 			a.Description = "Primary is read-only"
-			//
-		} else if a.IsClusterPrimary && policy.SemiSyncAckers(ca.durability, tablet) != 0 && !a.SemiSyncPrimaryEnabled {
+		case a.IsClusterPrimary && policy.SemiSyncAckers(ca.durability, tablet) != 0 && !a.SemiSyncPrimaryEnabled:
 			a.Analysis = PrimarySemiSyncMustBeSet
 			a.Description = "Primary semi-sync must be set"
-			//
-		} else if a.IsClusterPrimary && policy.SemiSyncAckers(ca.durability, tablet) == 0 && a.SemiSyncPrimaryEnabled {
+		case a.IsClusterPrimary && policy.SemiSyncAckers(ca.durability, tablet) == 0 && a.SemiSyncPrimaryEnabled:
 			a.Analysis = PrimarySemiSyncMustNotBeSet
 			a.Description = "Primary semi-sync must not be set"
-			//
-		} else if a.IsClusterPrimary && a.CurrentTabletType != topodatapb.TabletType_UNKNOWN && a.CurrentTabletType != topodatapb.TabletType_PRIMARY {
+		case a.IsClusterPrimary && a.CurrentTabletType != topodatapb.TabletType_UNKNOWN && a.CurrentTabletType != topodatapb.TabletType_PRIMARY:
 			a.Analysis = PrimaryCurrentTypeMismatch
 			a.Description = "Primary tablet's current type is not PRIMARY"
-		} else if topo.IsReplicaType(a.TabletType) && a.ErrantGTID != "" {
+		case topo.IsReplicaType(a.TabletType) && a.ErrantGTID != "":
 			a.Analysis = ErrantGTIDDetected
 			a.Description = "Tablet has errant GTIDs"
-		} else if topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && a.ShardPrimaryTermTimestamp.IsZero() {
+		case topo.IsReplicaType(a.TabletType) && ca.primaryAlias == nil && a.ShardPrimaryTermTimestamp.IsZero():
 			// ClusterHasNoPrimary should only be detected when the shard record doesn't have any primary term start time specified either.
 			a.Analysis = ClusterHasNoPrimary
 			a.Description = "Cluster has no primary"
 			ca.hasShardWideAction = true
-		} else if topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && !a.ShardPrimaryTermTimestamp.IsZero() {
+		case topo.IsReplicaType(a.TabletType) && ca.primaryAlias == nil && !a.ShardPrimaryTermTimestamp.IsZero():
 			// If there are no primary tablets, but the shard primary start time isn't empty, then we know
 			// the primary tablet was deleted.
 			a.Analysis = PrimaryTabletDeleted
 			a.Description = "Primary tablet has been deleted"
 			ca.hasShardWideAction = true
-		} else if a.IsPrimary && a.SemiSyncBlocked && a.CountSemiSyncReplicasEnabled >= a.SemiSyncPrimaryWaitForReplicaCount {
+		case a.IsPrimary && a.SemiSyncBlocked && a.CountSemiSyncReplicasEnabled >= a.SemiSyncPrimaryWaitForReplicaCount:
 			// The primary is reporting that semi-sync monitor is blocked on writes.
 			// There are enough replicas configured to send semi-sync ACKs such that the primary shouldn't be blocked.
 			// There is some network diruption in progress. We should run an ERS.
 			a.Analysis = PrimarySemiSyncBlocked
 			a.Description = "Writes seem to be blocked on semi-sync acks on the primary, even though sufficient replicas are configured to send ACKs"
 			ca.hasShardWideAction = true
-		} else if topo.IsReplicaType(a.TabletType) && !a.IsReadOnly {
+		case topo.IsReplicaType(a.TabletType) && !a.IsReadOnly:
 			a.Analysis = ReplicaIsWritable
 			a.Description = "Replica is writable"
-			//
-		} else if topo.IsReplicaType(a.TabletType) && a.IsPrimary {
+		case topo.IsReplicaType(a.TabletType) && a.IsPrimary:
 			a.Analysis = NotConnectedToPrimary
 			a.Description = "Not connected to the primary"
-			//
-		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && math.Round(a.HeartbeatInterval*2) != float64(a.ReplicaNetTimeout) {
+		case topo.IsReplicaType(a.TabletType) && !a.IsPrimary && math.Round(a.HeartbeatInterval*2) != float64(a.ReplicaNetTimeout):
 			a.Analysis = ReplicaMisconfigured
 			a.Description = "Replica has been misconfigured"
-			//
-		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && ca.primaryAlias != "" && a.AnalyzedInstancePrimaryAlias != ca.primaryAlias {
+		case topo.IsReplicaType(a.TabletType) && !a.IsPrimary && ca.primaryAlias != nil && !topoproto.TabletAliasEqual(a.AnalyzedInstancePrimaryAlias, ca.primaryAlias):
 			a.Analysis = ConnectedToWrongPrimary
 			a.Description = "Connected to wrong primary"
-			//
-		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && a.ReplicationStopped {
+		case topo.IsReplicaType(a.TabletType) && !a.IsPrimary && a.ReplicationStopped:
 			a.Analysis = ReplicationStopped
 			a.Description = "Replication is stopped"
-			//
-		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && policy.IsReplicaSemiSync(ca.durability, primaryTablet, tablet) && !a.SemiSyncReplicaEnabled {
+		case topo.IsReplicaType(a.TabletType) && !a.IsPrimary && policy.IsReplicaSemiSync(ca.durability, primaryTablet, tablet) && !a.SemiSyncReplicaEnabled:
 			a.Analysis = ReplicaSemiSyncMustBeSet
 			a.Description = "Replica semi-sync must be set"
-			//
-		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && !policy.IsReplicaSemiSync(ca.durability, primaryTablet, tablet) && a.SemiSyncReplicaEnabled {
+		case topo.IsReplicaType(a.TabletType) && !a.IsPrimary && !policy.IsReplicaSemiSync(ca.durability, primaryTablet, tablet) && a.SemiSyncReplicaEnabled:
 			a.Analysis = ReplicaSemiSyncMustNotBeSet
 			a.Description = "Replica semi-sync must not be set"
 			//
 			// TODO(sougou): Events below here are either ignored or not possible.
-		} else if a.IsPrimary && !a.LastCheckValid && a.CountLaggingReplicas == a.CountReplicas && a.CountDelayedReplicas < a.CountReplicas && a.CountValidReplicatingReplicas > 0 {
+		case a.IsPrimary && !a.LastCheckValid && a.CountLaggingReplicas == a.CountReplicas && a.CountDelayedReplicas < a.CountReplicas && a.CountValidReplicatingReplicas > 0:
 			a.Analysis = UnreachablePrimaryWithLaggingReplicas
 			a.Description = "Primary cannot be reached by vtorc and all of its replicas are lagging"
-			//
-		} else if a.IsPrimary && !a.LastCheckValid && !a.LastCheckPartialSuccess && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas > 0 {
+		case a.IsPrimary && !a.LastCheckValid && !a.LastCheckPartialSuccess && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas > 0:
 			// partial success is here to reduce noise
 			a.Analysis = UnreachablePrimary
 			a.Description = "Primary cannot be reached by vtorc but it has replicating replicas; possibly a network/host issue"
-			//
-		} else if a.IsPrimary && a.SemiSyncPrimaryEnabled && a.SemiSyncPrimaryStatus && a.SemiSyncPrimaryWaitForReplicaCount > 0 && a.SemiSyncPrimaryClients < a.SemiSyncPrimaryWaitForReplicaCount {
+		case a.IsPrimary && a.SemiSyncPrimaryEnabled && a.SemiSyncPrimaryStatus && a.SemiSyncPrimaryWaitForReplicaCount > 0 && a.SemiSyncPrimaryClients < a.SemiSyncPrimaryWaitForReplicaCount:
 			if isStaleBinlogCoordinates {
 				a.Analysis = LockedSemiSyncPrimary
 				a.Description = "Semi sync primary is locked since it doesn't get enough replica acknowledgements"
@@ -524,27 +521,22 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 				a.Analysis = LockedSemiSyncPrimaryHypothesis
 				a.Description = "Semi sync primary seems to be locked, more samplings needed to validate"
 			}
-			//
-		} else if a.IsPrimary && a.LastCheckValid && a.CountReplicas == 1 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
+		case a.IsPrimary && a.LastCheckValid && a.CountReplicas == 1 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0:
 			a.Analysis = PrimarySingleReplicaNotReplicating
 			a.Description = "Primary is reachable but its single replica is not replicating"
-		} else if a.IsPrimary && a.LastCheckValid && a.CountReplicas == 1 && a.CountValidReplicas == 0 {
+		case a.IsPrimary && a.LastCheckValid && a.CountReplicas == 1 && a.CountValidReplicas == 0:
 			a.Analysis = PrimarySingleReplicaDead
 			a.Description = "Primary is reachable but its single replica is dead"
-			//
-		} else if a.IsPrimary && a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
+		case a.IsPrimary && a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0:
 			a.Analysis = AllPrimaryReplicasNotReplicating
 			a.Description = "Primary is reachable but none of its replicas is replicating"
-			//
-		} else if a.IsPrimary && a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0 {
+		case a.IsPrimary && a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0:
 			a.Analysis = AllPrimaryReplicasNotReplicatingOrDead
 			a.Description = "Primary is reachable but none of its replicas is replicating"
-			//
+			// case a.IsPrimary && a.CountReplicas == 0:
+			//	a.Analysis = PrimaryWithoutReplicas
+			//	a.Description = "Primary has no replicas"
 		}
-		//		 else if a.IsPrimary && a.CountReplicas == 0 {
-		//			a.Analysis = PrimaryWithoutReplicas
-		//			a.Description = "Primary has no replicas"
-		//		}
 
 		{
 			// Moving on to structure analysis
@@ -653,12 +645,13 @@ func postProcessAnalyses(result []*ReplicationAnalysis, clusters map[string]*clu
 // auditInstanceAnalysisInChangelog will write down an instance's analysis in the database_instance_analysis_changelog table.
 // To not repeat recurring analysis code, the database_instance_last_analysis table is used, so that only changes to
 // analysis codes are written.
-func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisCode) error {
-	if lastWrittenAnalysis, found := recentInstantAnalysis.Get(tabletAlias); found {
+func auditInstanceAnalysisInChangelog(tabletAlias *topodatapb.TabletAlias, analysisCode AnalysisCode) error {
+	tabletAliasString := topoproto.TabletAliasString(tabletAlias)
+	if lastWrittenAnalysis, found := recentInstantAnalysis.Get(tabletAliasString); found {
 		if lastWrittenAnalysis == analysisCode {
 			// Surely nothing new.
 			// And let's expand the timeout
-			recentInstantAnalysis.Set(tabletAlias, analysisCode, cache.DefaultExpiration)
+			recentInstantAnalysis.Set(tabletAliasString, analysisCode, cache.DefaultExpiration)
 			return nil
 		}
 	}
@@ -674,7 +667,9 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 				alias = ?
 				AND analysis != ?
 			`,
-			string(analysisCode), tabletAlias, string(analysisCode),
+			string(analysisCode),
+			tabletAliasString,
+			string(analysisCode),
 		)
 		if err != nil {
 			log.Error(err)
@@ -703,7 +698,8 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 				DATETIME('now'),
 				?
 			)`,
-			tabletAlias, string(analysisCode),
+			tabletAliasString,
+			string(analysisCode),
 		)
 		if err != nil {
 			log.Error(err)
@@ -716,7 +712,7 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 		}
 		firstInsertion = rows > 0
 	}
-	recentInstantAnalysis.Set(tabletAlias, analysisCode, cache.DefaultExpiration)
+	recentInstantAnalysis.Set(tabletAliasString, analysisCode, cache.DefaultExpiration)
 	// If the analysis has changed or if it is the first insertion, we need to make sure we write this change to the database.
 	if !lastAnalysisChanged && !firstInsertion {
 		return nil
@@ -732,7 +728,8 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 			DATETIME('now'),
 			?
 		)`,
-		tabletAlias, string(analysisCode),
+		tabletAliasString,
+		string(analysisCode),
 	)
 	if err == nil {
 		analysisChangeWriteCounter.Add(1)

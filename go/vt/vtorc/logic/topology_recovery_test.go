@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
@@ -139,7 +138,7 @@ func TestElectNewPrimaryPanic(t *testing.T) {
 	err = inst.SaveTablet(tablet)
 	require.NoError(t, err)
 	analysisEntry := &inst.ReplicationAnalysis{
-		AnalyzedInstanceAlias: topoproto.TabletAliasString(tablet.Alias),
+		AnalyzedInstanceAlias: tablet.Alias,
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -189,11 +188,11 @@ func TestRecoveryRegistration(t *testing.T) {
 	err = inst.SaveTablet(replica)
 	require.NoError(t, err)
 	primaryAnalysisEntry := inst.ReplicationAnalysis{
-		AnalyzedInstanceAlias: topoproto.TabletAliasString(primary.Alias),
+		AnalyzedInstanceAlias: primary.Alias,
 		Analysis:              inst.ReplicationStopped,
 	}
 	replicaAnalysisEntry := inst.ReplicationAnalysis{
-		AnalyzedInstanceAlias: topoproto.TabletAliasString(replica.Alias),
+		AnalyzedInstanceAlias: replica.Alias,
 		Analysis:              inst.DeadPrimary,
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -412,7 +411,7 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 			name: "analysis change",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -432,7 +431,7 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 			name: "analysis did not change",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -451,7 +450,7 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 			}, {
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -461,7 +460,7 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 				},
 				DurabilityPolicy: policy.DurabilityNone,
 				PrimaryTabletInfo: &topodatapb.Tablet{
-					Alias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 				},
 				LastCheckValid:     1,
 				ReadOnly:           1,
@@ -488,11 +487,11 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 			db.Db = test.NewTestDB([][]sqlutils.RowMap{rowMaps})
 
 			err := recheckPrimaryHealth(&inst.ReplicationAnalysis{
-				AnalyzedInstanceAlias: "zon1-0000000100",
+				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 				Analysis:              inst.ReplicationStopped,
 				AnalyzedKeyspace:      "ks",
 				AnalyzedShard:         "0",
-			}, func(s string, b bool) {
+			}, func(*topodatapb.TabletAlias, bool) {
 				// the implementation for DiscoverInstance is not required because we are mocking the db response.
 			})
 
