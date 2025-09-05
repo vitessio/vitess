@@ -124,9 +124,6 @@ Flags:
       --min-number-serving-vttablets int                                 The minimum number of vttablets for each replicating tablet_type (e.g. replica, rdonly) that will be continue to be used even with replication lag above discovery_low_replication_lag, but still below discovery_high_replication_lag_minimum_serving. (default 2)
       --mysql-allow-clear-text-without-tls                               If set, the server will allow the use of a clear text password over non-SSL connections.
       --mysql-auth-server-impl string                                    Which auth server implementation to use. Options: none, ldap, clientcert, static, vault. (default "static")
-      --mysql-auth-server-static-file string                             JSON File to read the users/passwords from.
-      --mysql-auth-server-static-string string                           JSON representation of the users/passwords config.
-      --mysql-auth-static-reload-interval duration                       Ticker to reload credentials
       --mysql-auth-vault-addr string                                     URL to Vault server
       --mysql-auth-vault-path string                                     Vault path to vtgate credentials JSON blob, e.g.: secret/data/prod/vtgatecreds
       --mysql-auth-vault-role-mountpoint string                          Vault AppRole mountpoint; can also be passed using VAULT_MOUNTPOINT environment variable (default "approle")
@@ -136,11 +133,7 @@ Flags:
       --mysql-auth-vault-tls-ca string                                   Path to CA PEM for validating Vault server certificate
       --mysql-auth-vault-tokenfile string                                Path to file containing Vault auth token; token can also be passed using VAULT_TOKEN environment variable
       --mysql-auth-vault-ttl duration                                    How long to cache vtgate credentials from the Vault server (default 30m0s)
-      --mysql-clientcert-auth-method string                              client-side authentication method to use. Supported values: mysql_clear_password, dialog. (default "mysql_clear_password")
       --mysql-default-workload string                                    Default session workload (OLTP, OLAP, DBA) (default "OLTP")
-      --mysql-ldap-auth-config-file string                               JSON File from which to read LDAP server config.
-      --mysql-ldap-auth-config-string string                             JSON representation of LDAP server config.
-      --mysql-ldap-auth-method string                                    client-side authentication method to use. Supported values: mysql_clear_password, dialog. (default "mysql_clear_password")
       --mysql-server-bind-address string                                 Binds on this address when listening to MySQL binary protocol. Useful to restrict listening to 'localhost' only for instance.
       --mysql-server-drain-onterm                                        If set, the server waits for --onterm-timeout for already connected clients to complete their in flight work
       --mysql-server-flush-delay duration                                Delay after which buffered response will be flushed to the client. (default 100ms)
@@ -162,6 +155,13 @@ Flags:
       --mysql-server-write-timeout duration                              connection write timeout
       --mysql-slow-connect-warn-threshold duration                       Warn if it takes more than the given threshold for a mysql connection to establish
       --mysql-tcp-version string                                         Select tcp, tcp4, or tcp6 to control the socket type. (default "tcp")
+      --mysql_auth_server_static_file string                             JSON File to read the users/passwords from.
+      --mysql_auth_server_static_string string                           JSON representation of the users/passwords config.
+      --mysql_auth_static_reload_interval duration                       Ticker to reload credentials
+      --mysql_clientcert_auth_method string                              client-side authentication method to use. Supported values: mysql_clear_password, dialog. (default "mysql_clear_password")
+      --mysql_ldap_auth_config_file string                               JSON File from which to read LDAP server config.
+      --mysql_ldap_auth_config_string string                             JSON representation of LDAP server config.
+      --mysql_ldap_auth_method string                                    client-side authentication method to use. Supported values: mysql_clear_password, dialog. (default "mysql_clear_password")
       --no-scatter                                                       when set to true, the planner will fail instead of producing a plan that includes scatter queries
       --normalize-queries                                                Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars. (default true)
       --onclose-timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)
@@ -244,7 +244,7 @@ Flags:
       --v Level                                                          log level for V logs
   -v, --version                                                          print binary version
       --vmodule vModuleFlag                                              comma-separated list of pattern=N settings for file-filtered logging
-      --vschema-ddl-authorized-users string                              List of users authorized to execute vschema ddl operations, or '%' to allow all users.
+      --vschema_ddl_authorized_users string                              List of users authorized to execute vschema ddl operations, or '%' to allow all users.
       --vtgate-config-terse-errors                                       prevent bind vars from escaping in returned errors
       --warming-reads-concurrency int                                    Number of concurrent warming reads allowed (default 500)
       --warming-reads-percent int                                        Percentage of reads on the primary to forward to replicas. Useful for keeping buffer pools warm
