@@ -133,7 +133,11 @@ Flags:
       --mysql-auth-vault-tls-ca string                                   Path to CA PEM for validating Vault server certificate
       --mysql-auth-vault-tokenfile string                                Path to file containing Vault auth token; token can also be passed using VAULT_TOKEN environment variable
       --mysql-auth-vault-ttl duration                                    How long to cache vtgate credentials from the Vault server (default 30m0s)
+      --mysql-clientcert-auth-method string                              client-side authentication method to use. Supported values: mysql_clear_password, dialog. (default "mysql_clear_password")
       --mysql-default-workload string                                    Default session workload (OLTP, OLAP, DBA) (default "OLTP")
+      --mysql-ldap-auth-config-file string                               JSON File from which to read LDAP server config.
+      --mysql-ldap-auth-config-string string                             JSON representation of LDAP server config.
+      --mysql-ldap-auth-method string                                    client-side authentication method to use. Supported values: mysql_clear_password, dialog. (default "mysql_clear_password")
       --mysql-server-bind-address string                                 Binds on this address when listening to MySQL binary protocol. Useful to restrict listening to 'localhost' only for instance.
       --mysql-server-drain-onterm                                        If set, the server waits for --onterm-timeout for already connected clients to complete their in flight work
       --mysql-server-flush-delay duration                                Delay after which buffered response will be flushed to the client. (default 100ms)
@@ -158,10 +162,6 @@ Flags:
       --mysql_auth_server_static_file string                             JSON File to read the users/passwords from.
       --mysql_auth_server_static_string string                           JSON representation of the users/passwords config.
       --mysql_auth_static_reload_interval duration                       Ticker to reload credentials
-      --mysql_clientcert_auth_method string                              client-side authentication method to use. Supported values: mysql_clear_password, dialog. (default "mysql_clear_password")
-      --mysql_ldap_auth_config_file string                               JSON File from which to read LDAP server config.
-      --mysql_ldap_auth_config_string string                             JSON representation of LDAP server config.
-      --mysql_ldap_auth_method string                                    client-side authentication method to use. Supported values: mysql_clear_password, dialog. (default "mysql_clear_password")
       --no-scatter                                                       when set to true, the planner will fail instead of producing a plan that includes scatter queries
       --normalize-queries                                                Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars. (default true)
       --onclose-timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)

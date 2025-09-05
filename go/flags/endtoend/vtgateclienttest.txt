@@ -69,4 +69,4 @@ Flags:
       --v Level                                                          log level for V logs
   -v, --version                                                          print binary version
       --vmodule vModuleFlag                                              comma-separated list of pattern=N settings for file-filtered logging
-      --vschema_ddl_authorized_users string                              List of users authorized to execute vschema ddl operations, or '%' to allow all users.
+      --vschema-ddl-authorized-users string                              List of users authorized to execute vschema ddl operations, or '%' to allow all users.
