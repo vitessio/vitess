@@ -85,7 +85,7 @@ func TestMain(m *testing.M) {
 		}
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
 			vtutils.GetFlagVariantForTestsByVersion("--schema-change-signal", vtgateVer),
-			"--vschema_ddl_authorized_users", "%")
+			"--vschema-ddl-authorized-users", "%")
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-config-schema-change-signal")
 
 		if vtgateVer >= 16 && vttabletVer >= 16 {
