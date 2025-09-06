@@ -18,9 +18,9 @@ Flags:
       --do-shard-replications                                       copies the shard replication information
       --do-shards                                                   copies the shard information
       --do-tablets                                                  copies the tablet information
-      --from_implementation string                                  topology implementation to copy data from
-      --from_root string                                            topology server root to copy data from
-      --from_server string                                          topology server address to copy data from
+      --from-implementation string                                  topology implementation to copy data from
+      --from-root string                                            topology server root to copy data from
+      --from-server string                                          topology server address to copy data from
       --grpc-enable-tracing                                         Enable gRPC tracing.
       --grpc-max-message-size int                                   Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'. (default 16777216)
       --grpc-prometheus                                             Enable gRPC monitoring with Prometheus.
@@ -37,9 +37,9 @@ Flags:
       --purge-logs-interval duration                                how often try to remove old logs (default 1h0m0s)
       --security-policy string                                      the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --stderrthreshold severityFlag                                logs at or above this threshold go to stderr (default 1)
-      --to_implementation string                                    topology implementation to copy data to
-      --to_root string                                              topology server root to copy data to
-      --to_server string                                            topology server address to copy data to
+      --to-implementation string                                    topology implementation to copy data to
+      --to-root string                                              topology server root to copy data to
+      --to-server string                                            topology server address to copy data to
       --v Level                                                     log level for V logs
   -v, --version                                                     print binary version
       --vmodule vModuleFlag                                         comma-separated list of pattern=N settings for file-filtered logging

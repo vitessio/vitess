@@ -14,6 +14,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -22,8 +23,8 @@ var (
 )
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&statsdAddress, "statsd_address", statsdAddress, "Address for statsd client")
-	fs.Float64Var(&statsdSampleRate, "statsd_sample_rate", statsdSampleRate, "Sample rate for statsd metrics")
+	utils.SetFlagStringVar(fs, &statsdAddress, "statsd-address", statsdAddress, "Address for statsd client")
+	utils.SetFlagFloat64Var(fs, &statsdSampleRate, "statsd-sample-rate", statsdSampleRate, "Sample rate for statsd metrics")
 }
 
 func init() {

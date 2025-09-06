@@ -44,7 +44,7 @@ var (
 )
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.BoolVar(&bufferEnabled, "enable_buffer", false, "Enable buffering (stalling) of primary traffic during failovers.")
+	utils.SetFlagBoolVar(fs, &bufferEnabled, "enable-buffer", false, "Enable buffering (stalling) of primary traffic during failovers.")
 	utils.SetFlagBoolVar(fs, &bufferEnabledDryRun, "enable-buffer-dry-run", false, "Detect and log failover events, but do not actually buffer requests.")
 
 	utils.SetFlagDurationVar(fs, &bufferWindow, "buffer-window", 10*time.Second, "Duration for how long a request should be buffered at most.")
