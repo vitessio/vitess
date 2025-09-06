@@ -168,7 +168,7 @@ func LoadConfig() (context.CancelFunc, error) {
 			switch configFileNotFoundHandling.Get() {
 			case WarnOnConfigFileNotFound:
 				msg += ". This is optional, and can be ignored if you are not using config files. For a detailed explanation, see https://github.com/vitessio/vitess/blob/main/doc/viper/viper.md#config-files."
-				log.WARN(msg, registry.Static.ConfigFileUsed(), err.Error())
+				// log.WARN(msg, registry.Static.ConfigFileUsed(), err.Error())
 				fallthrough // after warning, ignore the error
 			case IgnoreConfigFileNotFound:
 				return func() {}, nil
