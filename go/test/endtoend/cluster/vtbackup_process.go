@@ -71,7 +71,7 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 
 		//Backup Arguments are not optional
 		"--backup-storage-implementation": vtbackup.BackupStorageImplementation,
-		"--file_backup_storage_root":      vtbackup.FileBackupStorageRoot,
+		"--file-backup-storage-root":      vtbackup.FileBackupStorageRoot,
 	}
 
 	utils.SetFlagVariantsForTests(flags, "--topo-implementation", vtbackup.TopoImplementation)
