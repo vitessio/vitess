@@ -99,9 +99,9 @@ rm -rf $VTDATAROOT/$tablet_dir/{mysql.sock,mysql.sock.lock}
 if [[ $tablet_role != "externalprimary" ]]; then
   echo "Initing mysql for tablet: $uid role: $role external: $external.. "
   $VTROOT/bin/mysqlctld \
-  --init_db_sql_file=$init_db_sql_file \
+  --init-db-sql-file=$init_db_sql_file \
   --logtostderr=true \
-  --tablet_uid=$uid \
+  --tablet-uid=$uid \
   &
 fi
 
@@ -114,33 +114,33 @@ $VTROOT/bin/vtctldclient --server vtctld:$GRPC_PORT AddCellInfo --root vitess/$C
 #Populate external db conditional args
 if [ $tablet_role = "externalprimary" ]; then
     echo "Setting external db args for primary: $DB_NAME"
-    external_db_args="--db_host $DB_HOST \
-                      --db_port $DB_PORT \
-                      --init_db_name_override $DB_NAME \
-                      --init_tablet_type $tablet_type \
-                      --mycnf_server_id $uid \
-                      --db_app_user $DB_USER \
-                      --db_app_password $DB_PASS \
-                      --db_allprivs_user $DB_USER \
-                      --db_allprivs_password $DB_PASS \
-                      --db_appdebug_user $DB_USER \
-                      --db_appdebug_password $DB_PASS \
-                      --db_dba_user $DB_USER \
-                      --db_dba_password $DB_PASS \
-                      --db_filtered_user $DB_USER \
-                      --db_filtered_password $DB_PASS \
-                      --db_repl_user $DB_USER \
-                      --db_repl_password $DB_PASS \
-                      --enable_replication_reporter=false \
-                      --enforce_strict_trans_tables=false \
-                      --track_schema_versions=true \
-                      --vreplication_tablet_type=primary \
-                      --watch_replication_stream=true"
+    external_db_args="--db-host $DB_HOST \
+                      --db-port $DB_PORT \
+                      --init-db-name-override $DB_NAME \
+                      --init-tablet-type $tablet_type \
+                      --mycnf-server-id $uid \
+                      --db-app-user $DB_USER \
+                      --db-app-password $DB_PASS \
+                      --db-allprivs-user $DB_USER \
+                      --db-allprivs-password $DB_PASS \
+                      --db-appdebug-user $DB_USER \
+                      --db-appdebug-password $DB_PASS \
+                      --db-dba-user $DB_USER \
+                      --db-dba-password $DB_PASS \
+                      --db-filtered-user $DB_USER \
+                      --db-filtered-password $DB_PASS \
+                      --db-repl-user $DB_USER \
+                      --db-repl-password $DB_PASS \
+                      --enable-replication-reporter=false \
+                      --enforce-strict-trans-tables=false \
+                      --track-schema-versions=true \
+                      --vreplication-tablet-type=primary \
+                      --watch-replication-stream=true"
 else
-    external_db_args="--init_db_name_override $DB_NAME \
-                      --init_tablet_type $tablet_type \
-                      --enable_replication_reporter=true \
-                      --restore_from_backup"
+    external_db_args="--init-db-name-override $DB_NAME \
+                      --init-tablet-type $tablet_type \
+                      --enable-replication-reporter=true \
+                      --restore-from-backup"
 fi
 
 #TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
@@ -149,14 +149,14 @@ exec $VTROOT/bin/vttablet \
   $TOPOLOGY_FLAGS \
   --logtostderr=true \
   --tablet-path $alias \
-  --tablet_hostname "$vthost" \
-  --health_check_interval 5s \
+  --tablet-hostname "$vthost" \
+  --health-check-interval 5s \
   --port $web_port \
-  --grpc_port $grpc_port \
-  --service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
-  --init_keyspace $keyspace \
-  --init_shard $shard \
-  --backup_storage_implementation file \
-  --file_backup_storage_root $VTDATAROOT/backups \
+  --grpc-port $grpc_port \
+  --service-map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
+  --init-keyspace $keyspace \
+  --init-shard $shard \
+  --backup-storage-implementation file \
+  --file-backup-storage-root $VTDATAROOT/backups \
   --queryserver-config-schema-reload-time 60s \
   $external_db_args
