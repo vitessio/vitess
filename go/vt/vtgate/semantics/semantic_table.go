@@ -294,59 +294,51 @@ func (st *SemTable) RemoveParentForeignKey(fkToIgnore string) error {
 // * Any of the foreign keys (parent or child) are cross keyspace.
 // * Any of the child foreign keys have an action other than RESTRICT or NO ACTION.
 func (st *SemTable) RequiresForeignKeyEmulation(updExprs sqlparser.UpdateExprs) bool {
-	emulateForeignKeyChecks := false
-
 	if !st.ForeignKeysPresent() {
 		return false
 	}
 
 	for _, updateExpr := range updExprs {
 		deps := st.RecursiveDeps(updateExpr.Name)
+		updatedTable := st.Tables[deps.TableOffset()].GetVindexTable()
 
 		parentFks := st.parentForeignKeysInvolved[deps]
 		for _, parentFk := range parentFks {
 			parentTable := parentFk.Table
-			childTable := st.Tables[deps.TableOffset()].GetVindexTable()
 
 			// Cross-keyspace foreign keys require verification.
-			if parentTable.Keyspace.Name != childTable.Keyspace.Name {
-				emulateForeignKeyChecks = true
-				break
+			if parentTable.Keyspace.Name != updatedTable.Keyspace.Name {
+				return true
 			}
 
 			// Non shard-scoped foreign keys require verification.
-			if !isShardScoped(parentTable, childTable, parentFk.ParentColumns, parentFk.ChildColumns) {
-				emulateForeignKeyChecks = true
-				break
+			if !isShardScoped(parentTable, updatedTable, parentFk.ParentColumns, parentFk.ChildColumns) {
+				return true
 			}
 		}
 
 		childFks := st.childForeignKeysInvolved[deps]
 		for _, childFk := range childFks {
-			parentTable := st.Tables[deps.TableOffset()].GetVindexTable()
 			childTable := childFk.Table
 
 			// Cross-keyspace foreign keys require verification.
-			if parentTable.Keyspace.Name != childTable.Keyspace.Name {
-				emulateForeignKeyChecks = true
-				break
+			if updatedTable.Keyspace.Name != childTable.Keyspace.Name {
+				return true
 			}
 
 			// Non shard-scoped foreign keys require verification.
-			if !isShardScoped(parentTable, childTable, childFk.ParentColumns, childFk.ChildColumns) {
-				emulateForeignKeyChecks = true
-				break
+			if !isShardScoped(updatedTable, childTable, childFk.ParentColumns, childFk.ChildColumns) {
+				return true
 			}
 
 			// If the action is other than RESTRICT / NO ACTION / DEFAULT, we need to verify.
 			if !childFk.OnUpdate.IsRestrict() {
-				emulateForeignKeyChecks = true
-				break
+				return true
 			}
 		}
 	}
 
-	return emulateForeignKeyChecks
+	return false
 }
 
 func (st *SemTable) ClearForeignKeys() {
