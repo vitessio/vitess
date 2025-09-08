@@ -43,7 +43,11 @@ def parse_help_file(filepath):
 
 def analyze_all_binaries():
     """Analyze all binary help files and generate comprehensive report."""
-    flags_dir = '/Users/rohit/vitess/go/flags/endtoend'
+    vtroot = os.environ.get('VTROOT')
+    if not vtroot:
+        print("Error: VTROOT environment variable is not set. Please set it to the Vitess root directory.")
+        exit(1)
+    flags_dir = f'{vtroot}/go/flags/endtoend'
     
     # Target binaries we care about
     target_binaries = [
@@ -86,6 +90,10 @@ def analyze_all_binaries():
 
 def generate_report():
     """Generate comprehensive migration report."""
+    vtroot = os.environ.get('VTROOT')
+    if not vtroot:
+        print("Error: VTROOT environment variable is not set. Please set it to the Vitess root directory.")
+        exit(1)
     all_flags, binary_stats, flag_to_binaries = analyze_all_binaries()
     
     print("=" * 80)
@@ -152,7 +160,7 @@ def generate_report():
         'flag_to_binaries': {k: list(v) for k, v in flag_to_binaries.items() if '_' in k}
     }
     
-    with open('/Users/rohit/vitess/go/flags/endtoend/flags_analysis.json', 'w') as f:
+    with open(f'{vtroot}/go/flags/endtoend/flags_analysis.json', 'w') as f:
         json.dump(detailed_data, f, indent=2)
     
     print()

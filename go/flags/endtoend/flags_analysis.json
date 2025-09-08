@@ -26,9 +26,9 @@
     },
     "vtgate": {
       "total_flags": 225,
-      "underscore_flags": 6,
-      "dash_flags": 210,
-      "completion_percentage": 93.3
+      "underscore_flags": 2,
+      "dash_flags": 214,
+      "completion_percentage": 95.1
     },
     "vtcombo": {
       "total_flags": 437,
@@ -74,57 +74,41 @@
     }
   },
   "unique_underscore_flags": [
-    "log_dir",
-    "log_link",
-    "mysql_auth_static_reload_interval",
     "log_backtrace_at",
-    "mysql_auth_server_static_file",
-    "vschema_ddl_authorized_users",
-    "mysql_auth_server_static_string"
+    "log_link",
+    "log_dir"
   ],
   "flag_to_binaries": {
     "log_backtrace_at": [
-      "vtctldclient",
-      "vtcombo",
-      "vttestserver",
-      "vtclient",
-      "vtctld",
-      "vtbench",
-      "vttablet",
-      "vtorc",
-      "mysqlctld",
+      "mysqlctl",
       "vtgate",
+      "vtbench",
+      "vtorc",
+      "vtctldclient",
+      "vtctld",
+      "vtclient",
       "vtbackup",
-      "mysqlctl"
+      "vttestserver",
+      "vttablet",
+      "mysqlctld",
+      "vtcombo"
     ],
     "log_dir": [
-      "vtctldclient",
-      "vtcombo",
-      "vttestserver",
-      "vtclient",
-      "vtctld",
-      "vtbench",
-      "vttablet",
-      "vtorc",
-      "mysqlctld",
+      "mysqlctl",
       "vtgate",
+      "vtbench",
+      "vtorc",
+      "vtctldclient",
+      "vtctld",
+      "vtclient",
       "vtbackup",
-      "mysqlctl"
+      "vttestserver",
+      "vttablet",
+      "mysqlctld",
+      "vtcombo"
     ],
     "log_link": [
       "vtctldclient"
-    ],
-    "mysql_auth_server_static_file": [
-      "vtgate"
-    ],
-    "mysql_auth_server_static_string": [
-      "vtgate"
-    ],
-    "mysql_auth_static_reload_interval": [
-      "vtgate"
-    ],
-    "vschema_ddl_authorized_users": [
-      "vtgate"
     ]
   }
 }
