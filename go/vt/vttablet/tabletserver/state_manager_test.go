@@ -88,7 +88,7 @@ func TestStateManagerServePrimary(t *testing.T) {
 	verifySubcomponent(t, 8, sm.te, testStatePrimary)
 	verifySubcomponent(t, 9, sm.messager, testStateOpen)
 	verifySubcomponent(t, 10, sm.throttler, testStateOpen)
-	verifySubcomponent(t, 11, sm.iqThrottler, testStateOpen)
+	verifySubcomponent(t, 11, sm.qThrottler, testStateOpen)
 	verifySubcomponent(t, 12, sm.tableGC, testStateOpen)
 	verifySubcomponent(t, 13, sm.ddle, testStateOpen)
 
@@ -133,7 +133,7 @@ func TestStateManagerUnservePrimary(t *testing.T) {
 	verifySubcomponent(t, 1, sm.ddle, testStateClosed)
 	verifySubcomponent(t, 2, sm.tableGC, testStateClosed)
 	verifySubcomponent(t, 3, sm.throttler, testStateClosed)
-	verifySubcomponent(t, 4, sm.iqThrottler, testStateClosed)
+	verifySubcomponent(t, 4, sm.qThrottler, testStateClosed)
 	verifySubcomponent(t, 5, sm.messager, testStateClosed)
 	verifySubcomponent(t, 6, sm.te, testStateClosed)
 
@@ -191,7 +191,7 @@ func TestStateManagerUnserveNonPrimary(t *testing.T) {
 	verifySubcomponent(t, 1, sm.ddle, testStateClosed)
 	verifySubcomponent(t, 2, sm.tableGC, testStateClosed)
 	verifySubcomponent(t, 3, sm.throttler, testStateClosed)
-	verifySubcomponent(t, 4, sm.iqThrottler, testStateClosed)
+	verifySubcomponent(t, 4, sm.qThrottler, testStateClosed)
 	verifySubcomponent(t, 5, sm.messager, testStateClosed)
 	verifySubcomponent(t, 6, sm.te, testStateClosed)
 
@@ -219,7 +219,7 @@ func TestStateManagerClose(t *testing.T) {
 	verifySubcomponent(t, 1, sm.ddle, testStateClosed)
 	verifySubcomponent(t, 2, sm.tableGC, testStateClosed)
 	verifySubcomponent(t, 3, sm.throttler, testStateClosed)
-	verifySubcomponent(t, 4, sm.iqThrottler, testStateClosed)
+	verifySubcomponent(t, 4, sm.qThrottler, testStateClosed)
 	verifySubcomponent(t, 5, sm.messager, testStateClosed)
 	verifySubcomponent(t, 6, sm.te, testStateClosed)
 	verifySubcomponent(t, 7, sm.tracker, testStateClosed)
@@ -827,7 +827,7 @@ func newTestStateManager() *stateManager {
 		ddle:              &testOnlineDDLExecutor{},
 		diskHealthMonitor: newNoopDiskHealthMonitor(),
 		throttler:         &testLagThrottler{},
-		iqThrottler:       &testIncomingQueryThrottler{},
+		qThrottler:        &testQueryThrottler{},
 		tableGC:           &testTableGC{},
 		rw:                newRequestsWaiter(),
 	}
@@ -1026,17 +1026,17 @@ func (te *testOnlineDDLExecutor) Close() {
 	te.state = testStateClosed
 }
 
-type testIncomingQueryThrottler struct {
+type testQueryThrottler struct {
 	testOrderState
 }
 
-func (te *testIncomingQueryThrottler) Open() error {
+func (te *testQueryThrottler) Open() error {
 	te.order = order.Add(1)
 	te.state = testStateOpen
 	return nil
 }
 
-func (te *testIncomingQueryThrottler) Close() {
+func (te *testQueryThrottler) Close() {
 	te.order = order.Add(1)
 	te.state = testStateClosed
 }

@@ -126,7 +126,7 @@ type TabletServer struct {
 	messager     *messager.Engine
 	hs           *healthStreamer
 	lagThrottler *throttle.Throttler
-	iqThrottler  *throttle.Throttler
+	qThrottler   *throttle.Throttler
 	tableGC      *gc.TableGC
 
 	// sm manages state transitions.
@@ -189,8 +189,8 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	tsv.hs = newHealthStreamer(tsv, alias, tsv.se)
 	tsv.rt = repltracker.NewReplTracker(tsv, alias)
 	tsv.lagThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias, tsv.rt.HeartbeatWriter(), tabletTypeFunc, throttlerPoolName)
-	tsv.iqThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias, tsv.rt.HeartbeatWriter(), tabletTypeFunc, queryThrottlerPoolName)
-	tsv.queryThrottler = querythrottler.NewQueryThrottler(ctx, tsv.iqThrottler, querythrottler.NewFileBasedConfigLoader(), tsv)
+	tsv.qThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias, tsv.rt.HeartbeatWriter(), tabletTypeFunc, queryThrottlerPoolName)
+	tsv.queryThrottler = querythrottler.NewQueryThrottler(ctx, tsv.qThrottler, querythrottler.NewFileBasedConfigLoader(), tsv)
 
 	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, tsv.lagThrottler, alias.Cell)
 	tsv.tracker = schema.NewTracker(tsv, tsv.vstreamer, tsv.se)
@@ -219,7 +219,7 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 		messager:          tsv.messager,
 		ddle:              tsv.onlineDDLExecutor,
 		throttler:         tsv.lagThrottler,
-		iqThrottler:       tsv.iqThrottler,
+		qThrottler:        tsv.qThrottler,
 		tableGC:           tsv.tableGC,
 		rw:                newRequestsWaiter(),
 		diskHealthMonitor: newDiskHealthMonitor(ctx),
@@ -325,7 +325,7 @@ func (tsv *TabletServer) InitDBConfig(target *querypb.Target, dbcfgs *dbconfigs.
 	tsv.hs.InitDBConfig(target)
 	tsv.onlineDDLExecutor.InitDBConfig(target.Keyspace, target.Shard, dbcfgs.DBName)
 	tsv.lagThrottler.InitDBConfig(target.Keyspace, target.Shard)
-	tsv.iqThrottler.InitDBConfig(target.Keyspace, target.Shard)
+	tsv.qThrottler.InitDBConfig(target.Keyspace, target.Shard)
 	tsv.tableGC.InitDBConfig(target.Keyspace, target.Shard, dbcfgs.DBName)
 	return nil
 }

@@ -15,7 +15,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 )
 
-func TestNewIncomingQueryThrottler_ConfigRefresh(t *testing.T) {
+func TestNewQueryThrottler_ConfigRefresh(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -80,8 +80,8 @@ func TestSelectThrottlingStrategy(t *testing.T) {
 	}
 }
 
-// TestIncomingQueryThrottler_StrategyLifecycleManagement tests that strategies are properly started and stopped.
-func TestIncomingQueryThrottler_StrategyLifecycleManagement(t *testing.T) {
+// TestQueryThrottler_StrategyLifecycleManagement tests that strategies are properly started and stopped.
+func TestQueryThrottler_StrategyLifecycleManagement(t *testing.T) {
 	// Test that initial strategy is started
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -108,8 +108,8 @@ func TestIncomingQueryThrottler_StrategyLifecycleManagement(t *testing.T) {
 	require.NotNil(t, iqt.strategy) // Strategy reference should still exist but be stopped
 }
 
-// TestIncomingQueryThrottler_Shutdown tests the Shutdown method.
-func TestIncomingQueryThrottler_Shutdown(t *testing.T) {
+// TestQueryThrottler_Shutdown tests the Shutdown method.
+func TestQueryThrottler_Shutdown(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

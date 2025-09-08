@@ -30,7 +30,7 @@ type QueryThrottler struct {
 	strategy registry.ThrottlingStrategyHandler
 }
 
-// NewQueryThrottler creates a new incoming query throttler.
+// NewQueryThrottler creates a new  query throttler.
 func NewQueryThrottler(ctx context.Context, throttler *throttle.Throttler, cfgLoader ConfigLoader, env tabletenv.Env) *QueryThrottler {
 	client := throttle.NewBackgroundClient(throttler, throttlerapp.QueryThrottlerName, base.UndefinedScope)
 
