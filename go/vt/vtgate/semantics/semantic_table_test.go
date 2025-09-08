@@ -914,7 +914,7 @@ func TestHasNonLiteralForeignKeyUpdate(t *testing.T) {
 					},
 				},
 			},
-			hasNonLiteral: false,
+			hasNonLiteral: true,
 		}, {
 			name:  "literal updates only",
 			query: "update t1 set col = 1 where foo = 3",
@@ -950,7 +950,7 @@ func TestHasNonLiteralForeignKeyUpdate(t *testing.T) {
 					},
 				},
 			},
-			hasNonLiteral: false,
+			hasNonLiteral: true,
 		}, {
 			name:  "no foreign keys",
 			query: "update t1 set col = id + 1 where foo = 3",
