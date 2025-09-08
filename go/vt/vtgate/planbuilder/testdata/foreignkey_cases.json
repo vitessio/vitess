@@ -1299,7 +1299,7 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "Query": "update tbl3 set coly = colx + 10 where coly = 10"
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ tbl3 set coly = colx + 10 where coly = 10"
           }
         ]
       },
