@@ -43,7 +43,8 @@ import (
 
 const (
 	CheckAndRecoverGenericProblemRecoveryName        string = "CheckAndRecoverGenericProblem"
-	RestartDirectReplicasRecoveryName                string = "RestartDirectReplicas"
+	RestartArbitraryDirectReplicaRecoveryName        string = "RestartArbitraryDirectReplica"
+	RestartAllDirectReplicasRecoveryName             string = "RestartAllDirectReplicas"
 	RecoverDeadPrimaryRecoveryName                   string = "RecoverDeadPrimary"
 	RecoverPrimaryTabletDeletedRecoveryName          string = "RecoverPrimaryTabletDeleted"
 	RecoverPrimaryHasPrimaryRecoveryName             string = "RecoverPrimaryHasPrimary"
@@ -104,7 +105,8 @@ type recoveryFunction int
 const (
 	noRecoveryFunc recoveryFunction = iota
 	recoverGenericProblemFunc
-	restartDirectReplicasFunc
+	restartArbitraryDirectReplicaFunc
+	restartAllDirectReplicasFunc
 	recoverDeadPrimaryFunc
 	recoverPrimaryTabletDeletedFunc
 	recoverPrimaryHasPrimaryFunc
@@ -351,8 +353,16 @@ func checkAndRecoverGenericProblem(ctx context.Context, analysisEntry *inst.Repl
 	return false, nil, nil
 }
 
+func restartArbitraryDirectReplica(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, logger *log.PrefixedLogger) (bool, *TopologyRecovery, error) {
+	return restartDirectReplicas(ctx, analysisEntry, 1, logger)
+}
+
+func restartAllDirectReplicas(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, logger *log.PrefixedLogger) (bool, *TopologyRecovery, error) {
+	return restartDirectReplicas(ctx, analysisEntry, 0, logger)
+}
+
 // restartDirectReplicas restarts replication on direct replicas of an unreachable primary
-func restartDirectReplicas(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, logger *log.PrefixedLogger) (bool, *TopologyRecovery, error) {
+func restartDirectReplicas(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, maxReplicas int, logger *log.PrefixedLogger) (bool, *TopologyRecovery, error) {
 	topologyRecovery, err := AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
 		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another restartDirectReplicas.", analysisEntry.AnalyzedInstanceAlias)
@@ -399,8 +409,14 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.ReplicationA
 	eg, _ := errgroup.WithContext(ctx)
 	var restartExpected int
 	var restartPerformed atomic.Int64
-	// Iterate through all tablets and find direct replicas of the primary
-	for _, tabletInfo := range tablets {
+	// Iterate through all tablets and find direct replicas of the primary.
+	// We intentionally shuffle tablet order. When maxReplicas is non-zero, we want to
+	// randomly pick which replicas to restart, to avoid biasing towards replicas.
+	for i, tabletIndex := range rand.Perm(len(tablets)) {
+		if maxReplicas > 0 && i >= maxReplicas {
+			break
+		}
+		tabletInfo := tablets[tabletIndex]
 		tablet := tabletInfo.Tablet
 		tabletAlias := topoproto.TabletAliasString(tablet.Alias)
 
@@ -524,7 +540,9 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.ReplicationAnalysis) (re
 	case inst.DeadPrimaryAndReplicas:
 		recoveryFunc = recoverGenericProblemFunc
 	case inst.UnreachablePrimary:
-		recoveryFunc = restartDirectReplicasFunc
+		recoveryFunc = restartArbitraryDirectReplicaFunc
+	case inst.UnreachablePrimaryWithBrokenReplicas:
+		recoveryFunc = restartAllDirectReplicasFunc
 	case inst.UnreachablePrimaryWithLaggingReplicas:
 		recoveryFunc = recoverGenericProblemFunc
 	case inst.AllPrimaryReplicasNotReplicating:
@@ -549,7 +567,9 @@ func hasActionableRecovery(recoveryFunctionCode recoveryFunction) bool {
 		return false
 	case recoverGenericProblemFunc:
 		return false
-	case restartDirectReplicasFunc:
+	case restartArbitraryDirectReplicaFunc:
+		return true
+	case restartAllDirectReplicasFunc:
 		return true
 	case recoverDeadPrimaryFunc:
 		return true
@@ -581,8 +601,10 @@ func getCheckAndRecoverFunction(recoveryFunctionCode recoveryFunction) (
 		return nil
 	case recoverGenericProblemFunc:
 		return checkAndRecoverGenericProblem
-	case restartDirectReplicasFunc:
-		return restartDirectReplicas
+	case restartArbitraryDirectReplicaFunc:
+		return restartArbitraryDirectReplica
+	case restartAllDirectReplicasFunc:
+		return restartAllDirectReplicas
 	case recoverDeadPrimaryFunc:
 		return recoverDeadPrimary
 	case recoverPrimaryTabletDeletedFunc:
@@ -612,8 +634,10 @@ func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
 		return ""
 	case recoverGenericProblemFunc:
 		return CheckAndRecoverGenericProblemRecoveryName
-	case restartDirectReplicasFunc:
-		return RestartDirectReplicasRecoveryName
+	case restartArbitraryDirectReplicaFunc:
+		return RestartArbitraryDirectReplicaRecoveryName
+	case restartAllDirectReplicasFunc:
+		return RestartAllDirectReplicasRecoveryName
 	case recoverDeadPrimaryFunc:
 		return RecoverDeadPrimaryRecoveryName
 	case recoverPrimaryTabletDeletedFunc:
