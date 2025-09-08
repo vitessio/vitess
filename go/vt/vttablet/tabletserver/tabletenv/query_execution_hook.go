@@ -4,14 +4,14 @@ type QueryExecutionHook interface {
 	OnQueryCompleted(logStats *LogStats)
 }
 
-var queryExecutionHook QueryExecutionHook = nil
+var queryExecutionHooks = []QueryExecutionHook{}
 
-func SetQueryExecutionHook(hook QueryExecutionHook) {
-	queryExecutionHook = hook
+func RegisterQueryExecutionHook(hook QueryExecutionHook) {
+	queryExecutionHooks = append(queryExecutionHooks, hook)
 }
 
-func ProcessQueryCompleted(logStats *LogStats) {
-	if queryExecutionHook != nil {
-		queryExecutionHook.OnQueryCompleted(logStats)
+func RunQueryExecutionHooks(logStats *LogStats) {
+	for _, hook := range queryExecutionHooks {
+		hook.OnQueryCompleted(logStats)
 	}
 }
