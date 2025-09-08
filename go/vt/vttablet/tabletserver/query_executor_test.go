@@ -1504,6 +1504,38 @@ func TestGetConnectionLogStats(t *testing.T) {
 	assert.True(t, qre.logStats.WaitingForConnection > 0)
 }
 
+// mockQueryExecutionHook is a test implementation of QueryExecutionHook
+type mockQueryExecutionHook struct {
+	callCount int
+}
+
+func (m *mockQueryExecutionHook) OnQueryCompleted(logStats *tabletenv.LogStats) {
+	m.callCount++
+}
+
+func TestRunQueryExecutionHooks(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+
+	db.AddQuery("select * from test_table limit 1", &sqltypes.Result{
+		Fields: getTestTableFields(),
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewInt32(1), sqltypes.NewInt32(2), sqltypes.NewInt32(3)},
+		},
+	})
+
+	hook := &mockQueryExecutionHook{}
+	tabletenv.RegisterQueryExecutionHook(hook)
+
+	ctx := context.Background()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	input := "select * from test_table limit 1"
+
+	qre := newTestQueryExecutor(ctx, tsv, input, 0)
+	qre.Execute()
+
+	assert.Equal(t, 1, hook.callCount)
+}
+
 type executorFlags int64
 
 const (
