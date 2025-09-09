@@ -799,7 +799,7 @@ func TestGTIDCount(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gtidSet, _ := ParseMysql56GTIDSet(tt.gtidStr)
-			require.EqualValues(t, tt.wantCount, gtidSet.GTIDCount())
+			require.EqualValues(t, tt.wantCount, gtidSet.Count())
 		})
 	}
 }

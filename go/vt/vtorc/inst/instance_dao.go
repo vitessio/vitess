@@ -452,7 +452,7 @@ func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error
 			gtidErrantGtidSet := redactedExecutedGtidSet.Difference(redactedPrimaryExecutedGtidSet)
 			if !gtidErrantGtidSet.Empty() {
 				instance.GtidErrant = gtidErrantGtidSet.String()
-				currentErrantGTIDCount.Set(instance.InstanceAlias, gtidErrantGtidSet.GTIDCount())
+				currentErrantGTIDCount.Set(instance.InstanceAlias, gtidErrantGtidSet.Count())
 			}
 		}
 	}

@@ -752,8 +752,8 @@ func (set Mysql56GTIDSet) Difference(other Mysql56GTIDSet) Mysql56GTIDSet {
 	return differenceSet
 }
 
-// GTIDCount returns the number of GTIDs in a GTID set.
-func (set Mysql56GTIDSet) GTIDCount() (count int64) {
+// Count returns the number of GTIDs in a GTID set.
+func (set Mysql56GTIDSet) Count() (count int64) {
 	for _, intervals := range set {
 		for _, intvl := range intervals {
 			count += intvl.end - intvl.start + 1
