@@ -431,27 +431,27 @@ func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error
 		// This is because vtorc may pool primary and replica at an inconvenient timing,
 		// such that the replica may _seems_ to have more entries than the primary, when in fact
 		// it's just that the primary's probing is stale.
-		redactedExecutedGtidSet, _ := NewOracleGtidSet(instance.ExecutedGtidSet)
+		redactedExecutedGtidSet, _ := replication.ParseMysql56GTIDSet(instance.ExecutedGtidSet)
 		for _, uuid := range strings.Split(instance.AncestryUUID, ",") {
+			uuidSID, _ := replication.ParseSID(uuid)
 			if uuid != instance.ServerUUID {
-				redactedExecutedGtidSet.RemoveUUID(uuid)
+				redactedExecutedGtidSet = redactedExecutedGtidSet.RemoveUUID(uuidSID)
 			}
 			if instance.IsCoPrimary && uuid == instance.ServerUUID {
 				// If this is a co-primary, then this server is likely to show its own generated GTIDs as errant,
 				// because its co-primary has not applied them yet
-				redactedExecutedGtidSet.RemoveUUID(uuid)
+				redactedExecutedGtidSet = redactedExecutedGtidSet.RemoveUUID(uuidSID)
 			}
 		}
-		// Avoid querying the database if there's no point:
-		if !redactedExecutedGtidSet.IsEmpty() {
-			redactedPrimaryExecutedGtidSet, _ := NewOracleGtidSet(instance.primaryExecutedGtidSet)
-			redactedPrimaryExecutedGtidSet.RemoveUUID(instance.SourceUUID)
+		if !redactedExecutedGtidSet.Empty() {
+			redactedPrimaryExecutedGtidSet, _ := replication.ParseMysql56GTIDSet(instance.primaryExecutedGtidSet)
+			sourceSID, _ := replication.ParseSID(instance.SourceUUID)
+			redactedPrimaryExecutedGtidSet = redactedPrimaryExecutedGtidSet.RemoveUUID(sourceSID)
 
-			instance.GtidErrant, err = replication.Subtract(redactedExecutedGtidSet.String(), redactedPrimaryExecutedGtidSet.String())
-			if err == nil {
-				var gtidCount int64
-				gtidCount, err = replication.GTIDCount(instance.GtidErrant)
-				currentErrantGTIDCount.Set(instance.InstanceAlias, gtidCount)
+			gtidErrantGtidSet := redactedExecutedGtidSet.Difference(redactedPrimaryExecutedGtidSet)
+			if !gtidErrantGtidSet.Empty() {
+				instance.GtidErrant = gtidErrantGtidSet.String()
+				currentErrantGTIDCount.Set(instance.InstanceAlias, gtidErrantGtidSet.GTIDCount())
 			}
 		}
 	}
