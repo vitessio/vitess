@@ -152,8 +152,6 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		qre.logStats.RowsAffected = int(reply.RowsAffected)
 		qre.logStats.Rows = reply.Rows
 		qre.tsv.Stats().ResultHistogram.Add(int64(len(reply.Rows)))
-		// RunQueryExecutionHooks is used to run arbitrary data processing on logStats
-		// See mockQueryExecutionHook in query_executor_test.go as a very simple example
 		tabletenv.RunQueryExecutionHooks(qre.logStats)
 	}(time.Now())
 

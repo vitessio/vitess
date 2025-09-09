@@ -1,5 +1,8 @@
 package tabletenv
 
+// QueryExecutionHook is used to run arbitrary data processing on logStats
+// RunQueryExecutionHooks is run in query_executor.go/Execute
+// See mockQueryExecutionHook in query_executor_test.go for a very simple example
 type QueryExecutionHook interface {
 	OnQueryCompleted(logStats *LogStats)
 }
