@@ -450,3 +450,47 @@ func GenerateShardRanges(shards int) ([]string, error) {
 
 	return shardRanges, nil
 }
+
+func GenerateShardRangesWithGranularity(shards int, hexChars int) ([]string, error) {
+	maxShards := math.Pow(16, float64(hexChars))
+
+	if shards <= 0 {
+		return nil, errors.New("shards must be greater than zero")
+	}
+	if shards > int(maxShards) {
+		return nil, fmt.Errorf("the given number of shards %d is too high for the given number of characters to use %d", shards, hexChars)
+	}
+
+	format := fmt.Sprintf("%%0%dx", hexChars)
+
+	rangeFormatter := func(start, end int) string {
+		var (
+			startKid string
+			endKid   string
+		)
+
+		if start != 0 {
+			startKid = fmt.Sprintf(format, start)
+		}
+
+		if end != int(maxShards) {
+			endKid = fmt.Sprintf(format, end)
+		}
+
+		return fmt.Sprintf("%s-%s", startKid, endKid)
+	}
+
+	boundaries := make([]int, 0, shards+1)
+	for i := 0; i < shards; i++ {
+		boundaries = append(boundaries, int(float64(i)*maxShards/float64(shards)))
+	}
+
+	shardRanges := make([]string, 0, shards)
+	shardRanges = append(shardRanges, rangeFormatter(0, boundaries[1])) // first shard
+	for i := 1; i < shards-1; i++ {
+		shardRanges = append(shardRanges, rangeFormatter(boundaries[i], boundaries[i+1]))
+	}
+	shardRanges = append(shardRanges, rangeFormatter(boundaries[shards-1], int(maxShards))) // last shard
+
+	return shardRanges, nil
+}

@@ -1596,6 +1596,35 @@ func TestShardCalculatorForShardsGreaterThan512(t *testing.T) {
 	assert.Equal(t, want, got[511], "Invalid mapping for a 512-shard keyspace. Expected %v, got %v", want, got[511])
 }
 
+func TestGenerateShardRangesWithGranularity(t *testing.T) {
+	{
+		ranges, err := GenerateShardRanges(7)
+
+		assert.NoError(t, err)
+
+		assert.EqualValues(t, 7, len(ranges))
+		assert.EqualValues(t, []string{"-24", "24-49", "49-6d", "6d-92", "92-b6", "b6-db", "db-"}, ranges)
+	}
+
+	{
+		ranges, err := GenerateShardRangesWithGranularity(7, 3)
+
+		assert.NoError(t, err)
+
+		assert.EqualValues(t, 7, len(ranges))
+		assert.EqualValues(t, []string{"-249", "249-492", "492-6db", "6db-924", "924-b6d", "b6d-db6", "db6-"}, ranges)
+	}
+
+	{
+		ranges, err := GenerateShardRangesWithGranularity(7, 4)
+
+		assert.NoError(t, err)
+
+		assert.EqualValues(t, 7, len(ranges))
+		assert.EqualValues(t, []string{"-2492", "2492-4924", "4924-6db6", "6db6-9249", "9249-b6db", "b6db-db6d", "db6d-"}, ranges)
+	}
+}
+
 func stringToKeyRange(spec string) *topodatapb.KeyRange {
 	if spec == "" {
 		return nil
