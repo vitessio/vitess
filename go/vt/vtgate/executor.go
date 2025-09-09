@@ -145,6 +145,8 @@ type (
 
 		vConfig   econtext.VCursorConfig
 		ddlConfig dynamicconfig.DDL
+
+		appendCallerID bool
 	}
 
 	Metrics struct {
@@ -195,6 +197,7 @@ func NewExecutor(
 		plans:               plans,
 		warmingReadsChannel: make(chan bool, warmingReadsConcurrency),
 		ddlConfig:           ddlConfig,
+		appendCallerID:      appendCallerID,
 	}
 	// setting the vcursor config.
 	e.initVConfig(warnOnShardedOnly, pv)
