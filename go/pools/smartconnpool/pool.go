@@ -288,12 +288,6 @@ func (pool *ConnPool[C]) CloseWithContext(ctx context.Context) error {
 
 	// close connections until we're under capacity
 	for pool.active.Load() > 0 {
-		if err := ctx.Err(); err != nil {
-			return vterrors.Errorf(vtrpcpb.Code_ABORTED,
-				"timed out while waiting for connections to be returned to the pool (capacity=%d, active=%d, borrowed=%d)",
-				pool.capacity.Load(), pool.active.Load(), pool.borrowed.Load())
-		}
-
 		// if we're closing down the pool, make sure there's no clients waiting
 		// for connections because they won't be returned in the future
 		pool.wait.expire(true)
