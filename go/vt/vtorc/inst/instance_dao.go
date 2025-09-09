@@ -448,6 +448,7 @@ func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error
 			sourceSID, _ := replication.ParseSID(instance.SourceUUID)
 			redactedPrimaryExecutedGtidSet = redactedPrimaryExecutedGtidSet.RemoveUUID(sourceSID)
 
+			// find errant gtid positions
 			gtidErrantGtidSet := redactedExecutedGtidSet.Difference(redactedPrimaryExecutedGtidSet)
 			if !gtidErrantGtidSet.Empty() {
 				instance.GtidErrant = gtidErrantGtidSet.String()
