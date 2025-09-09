@@ -16,7 +16,7 @@ limitations under the License.
 
 CREATE TABLE IF NOT EXISTS vdiff_table
 (
-    `vdiff_id`      varchar(64)    NOT NULL,
+    `vdiff_id`      bigint(20)     NOT NULL,
     `table_name`    varbinary(128) NOT NULL,
     `state`         varbinary(64)           DEFAULT NULL,
     `lastpk`        varbinary(2000)         DEFAULT NULL,
