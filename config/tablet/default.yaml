@@ -79,11 +79,11 @@ oltp:
 healthcheck:
   intervalSeconds: 20             # health-check-interval
   degradedThresholdSeconds: 30    # degraded-threshold
-  unhealthyThresholdSeconds: 7200 # unhealthy_threshold
+  unhealthyThresholdSeconds: 7200 # unhealthy-threshold
 
 gracePeriods:
-  shutdownSeconds:   0 # shutdown_grace_period
-  transitionSeconds: 0 # serving_state_grace_period
+  shutdownSeconds:   0 # shutdown-grace-period
+  transitionSeconds: 0 # serving-state-grace-period
 
 replicationTracker:
   mode: disable                    # enable-replication-reporter

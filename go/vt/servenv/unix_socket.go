@@ -23,6 +23,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -59,6 +60,6 @@ func serveSocketFile() {
 // to a socket. This needs to be called before flags are parsed.
 func RegisterDefaultSocketFileFlags() {
 	OnParse(func(fs *pflag.FlagSet) {
-		fs.StringVar(&socketFile, "socket_file", socketFile, "Local unix socket file to listen on")
+		utils.SetFlagStringVar(fs, &socketFile, "socket-file", socketFile, "Local unix socket file to listen on")
 	})
 }

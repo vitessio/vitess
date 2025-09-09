@@ -137,7 +137,7 @@ func TestForeignKeysAndDDLModes(t *testing.T) {
 	conf := config
 	defer resetConfig(conf)
 
-	cluster, err := startCluster("--foreign-key-mode=allow", "--enable_online_ddl=true", "--enable_direct_ddl=true")
+	cluster, err := startCluster("--foreign-key-mode=allow", "--enable-online-ddl=true", "--enable-direct-ddl=true")
 	require.NoError(t, err)
 	defer cluster.TearDown()
 
@@ -163,7 +163,7 @@ func TestForeignKeysAndDDLModes(t *testing.T) {
 	assert.NoError(t, err)
 
 	cluster.TearDown()
-	cluster, err = startCluster("--foreign-key-mode=disallow", "--enable_online_ddl=false", "--enable_direct_ddl=false")
+	cluster, err = startCluster("--foreign-key-mode=disallow", "--enable-online-ddl=false", "--enable-direct-ddl=false")
 	require.NoError(t, err)
 	defer cluster.TearDown()
 
@@ -271,8 +271,8 @@ func TestExternalTopoServerConsul(t *testing.T) {
 		}
 	}()
 
-	cluster, err := startCluster("--external_topo_implementation=consul",
-		fmt.Sprintf("--external_topo_global_server_address=%s", serverAddr), "--external_topo_global_root=consul_test/global")
+	cluster, err := startCluster("--external-topo-implementation=consul",
+		fmt.Sprintf("--external-topo-global-server-address=%s", serverAddr), "--external-topo-global-root=consul_test/global")
 	require.NoError(t, err)
 	defer cluster.TearDown()
 
@@ -300,7 +300,7 @@ func TestMtlsAuth(t *testing.T) {
 	clientCert := path.Join(root, "client-cert.pem")
 	clientKey := path.Join(root, "client-key.pem")
 
-	// When cluster starts it will apply SQL and VSchema migrations in the configured schema_dir folder
+	// When cluster starts it will apply SQL and VSchema migrations in the configured schema-dir folder
 	// With mtls authorization enabled, the authorized CN must match the certificate's CN
 	cluster, err := startCluster(
 		utils.GetFlagVariantForTests("--grpc-auth-mode")+"=mtls",
@@ -341,7 +341,7 @@ func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 	clientCert := path.Join(root, "client-cert.pem")
 	clientKey := path.Join(root, "client-key.pem")
 
-	// When cluster starts it will apply SQL and VSchema migrations in the configured schema_dir folder
+	// When cluster starts it will apply SQL and VSchema migrations in the configured schema-dir folder
 	// For mtls authorization failure by providing a client certificate with different CN thant the
 	// authorized in the configuration
 	cluster, err := startCluster(
@@ -361,10 +361,10 @@ func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 
 func startPersistentCluster(dir string, flags ...string) (vttest.LocalCluster, error) {
 	flags = append(flags, []string{
-		"--persistent_mode",
+		"--persistent-mode",
 		// FIXME: if port is not provided, data_dir is not respected
 		fmt.Sprintf("--port=%d", randomPort()),
-		fmt.Sprintf("--data_dir=%s", dir),
+		fmt.Sprintf("--data-dir=%s", dir),
 	}...)
 	return startCluster(flags...)
 }
@@ -376,11 +376,11 @@ var clusterKeyspaces = []string{
 
 func startCluster(flags ...string) (cluster vttest.LocalCluster, err error) {
 	args := []string{"vttestserver"}
-	schemaDirArg := "--schema_dir=data/schema"
+	schemaDirArg := utils.GetFlagVariantForTests("--schema-dir") + "=data/schema"
 	tabletHostname := fmt.Sprintf("%s=localhost", utils.GetFlagVariantForTests("--tablet-hostname"))
 	keyspaceArg := "--keyspaces=" + strings.Join(clusterKeyspaces, ",")
-	numShardsArg := "--num_shards=2,2"
-	vschemaDDLAuthorizedUsers := "--vschema_ddl_authorized_users=%"
+	numShardsArg := "--num-shards=2,2"
+	vschemaDDLAuthorizedUsers := "--vschema-ddl-authorized-users=%"
 	alsoLogToStderr := "--alsologtostderr" // better debugging
 	args = append(args, []string{schemaDirArg, keyspaceArg, numShardsArg, tabletHostname, vschemaDDLAuthorizedUsers, alsoLogToStderr}...)
 	args = append(args, flags...)

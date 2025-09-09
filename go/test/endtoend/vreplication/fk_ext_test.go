@@ -91,7 +91,7 @@ func TestFKExt(t *testing.T) {
 		"--vstream_packet_size=256",
 		"--queryserver-config-schema-change-signal",
 		parallelInsertWorkers)
-	extraVTGateArgs = append(extraVTGateArgs, "--schema_change_signal=true", "--planner-version", "Gen4")
+	extraVTGateArgs = append(extraVTGateArgs, utils.GetFlagVariantForTests("--schema-change-signal")+"=true", "--planner-version", "Gen4")
 	defer func() { extraVTTabletArgs = nil }()
 	initFKExtConfig(t)
 

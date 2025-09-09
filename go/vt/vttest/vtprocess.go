@@ -232,22 +232,22 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	protoTopo, _ := prototext.Marshal(args.Topology)
 	vt.ExtraArgs = append(vt.ExtraArgs, []string{
 		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--db_charset", charset,
-		"--db_app_user", user,
-		"--db_app_password", pass,
-		"--db_dba_user", user,
-		"--db_dba_password", pass,
-		"--proto_topo", string(protoTopo),
+		"--db-charset", charset,
+		"--db-app-user", user,
+		"--db-app-password", pass,
+		"--db-dba-user", user,
+		"--db-dba-password", pass,
+		"--proto-topo", string(protoTopo),
 		"--mycnf-server-id", "1",
 		"--mycnf-socket-file", socket,
-		"--normalize_queries",
-		"--dbddl_plugin", "vttest",
-		"--foreign_key_mode", args.ForeignKeyMode,
+		"--normalize-queries",
+		"--dbddl-plugin", "vttest",
+		"--foreign-key-mode", args.ForeignKeyMode,
 		"--planner-version", args.PlannerVersion,
-		fmt.Sprintf("--enable_online_ddl=%t", args.EnableOnlineDDL),
-		fmt.Sprintf("--enable_direct_ddl=%t", args.EnableDirectDDL),
-		fmt.Sprintf("--enable_system_settings=%t", args.EnableSystemSettings),
-		fmt.Sprintf("--no_scatter=%t", args.NoScatter),
+		fmt.Sprintf("--enable-online-ddl=%t", args.EnableOnlineDDL),
+		fmt.Sprintf("--enable-direct-ddl=%t", args.EnableDirectDDL),
+		fmt.Sprintf("--enable-system-settings=%t", args.EnableSystemSettings),
+		fmt.Sprintf("--no-scatter=%t", args.NoScatter),
 	}...)
 
 	// If topo tablet refresh interval is not defined then we will give it value of 10s. Please note
@@ -262,14 +262,15 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	vt.ExtraArgs = append(vt.ExtraArgs, QueryServerArgs...)
 	vt.ExtraArgs = append(vt.ExtraArgs, environment.VtcomboArguments()...)
 
+	//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 	if args.SchemaDir != "" {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--schema_dir", args.SchemaDir}...)
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--schema-dir", args.SchemaDir}...)
 	}
 	if args.PersistentMode && args.DataDir != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--vschema-persistence-dir", path.Join(args.DataDir, "vschema_data")}...)
 	}
 	if args.TransactionMode != "" {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--transaction_mode", args.TransactionMode}...)
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--transaction-mode", args.TransactionMode}...)
 	}
 	if args.TransactionTimeout != 0 {
 		vt.ExtraArgs = append(vt.ExtraArgs, "--queryserver-config-transaction-timeout", fmt.Sprintf("%v", args.TransactionTimeout))
@@ -281,7 +282,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--grpc-auth-mode", servenv.GRPCAuth(), "--grpc-key", servenv.GRPCKey(), "--grpc-cert", servenv.GRPCCert(), "--grpc-ca", servenv.GRPCCertificateAuthority(), "--grpc-auth-mtls-allowed-substrings", servenv.ClientCertSubstrings()}...)
 	}
 	if args.VSchemaDDLAuthorizedUsers != "" {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--vschema_ddl_authorized_users", args.VSchemaDDLAuthorizedUsers}...)
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--vschema-ddl-authorized-users", args.VSchemaDDLAuthorizedUsers}...)
 	}
 	vt.ExtraArgs = append(vt.ExtraArgs, "--mysql-server-version", servenv.MySQLServerVersion())
 	if socket != "" {

@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/helpers"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -60,12 +61,12 @@ It can also be used to compare data between two topologies.`,
 func init() {
 	servenv.MoveFlagsToCobraCommand(Main)
 
-	Main.Flags().StringVar(&fromImplementation, "from_implementation", fromImplementation, "topology implementation to copy data from")
-	Main.Flags().StringVar(&fromServerAddress, "from_server", fromServerAddress, "topology server address to copy data from")
-	Main.Flags().StringVar(&fromRoot, "from_root", fromRoot, "topology server root to copy data from")
-	Main.Flags().StringVar(&toImplementation, "to_implementation", toImplementation, "topology implementation to copy data to")
-	Main.Flags().StringVar(&toServerAddress, "to_server", toServerAddress, "topology server address to copy data to")
-	Main.Flags().StringVar(&toRoot, "to_root", toRoot, "topology server root to copy data to")
+	utils.SetFlagStringVar(Main.Flags(), &fromImplementation, "from-implementation", fromImplementation, "topology implementation to copy data from")
+	utils.SetFlagStringVar(Main.Flags(), &fromServerAddress, "from-server", fromServerAddress, "topology server address to copy data from")
+	utils.SetFlagStringVar(Main.Flags(), &fromRoot, "from-root", fromRoot, "topology server root to copy data from")
+	utils.SetFlagStringVar(Main.Flags(), &toImplementation, "to-implementation", toImplementation, "topology implementation to copy data to")
+	utils.SetFlagStringVar(Main.Flags(), &toServerAddress, "to-server", toServerAddress, "topology server address to copy data to")
+	utils.SetFlagStringVar(Main.Flags(), &toRoot, "to-root", toRoot, "topology server root to copy data to")
 	Main.Flags().BoolVar(&compare, "compare", compare, "compares data between topologies")
 	Main.Flags().BoolVar(&doKeyspaces, "do-keyspaces", doKeyspaces, "copies the keyspace information")
 	Main.Flags().BoolVar(&doShards, "do-shards", doShards, "copies the shard information")

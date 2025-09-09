@@ -21,7 +21,7 @@ vtctld \
 	--grpc-port 15999
 
 Flags:
-      --action_timeout duration                                          time to wait for an action before resorting to force (default 1m0s)
+      --action-timeout duration                                          time to wait for an action before resorting to force (default 1m0s)
       --alsologtostderr                                                  log to standard error as well as files
       --azblob-backup-account-key-file string                            Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path).
       --azblob-backup-account-name string                                Azure Storage Account name for backups; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_NAME will be used.
@@ -54,7 +54,7 @@ Flags:
       --datadog-agent-port string                                        port to send spans to. if empty, no tracing will be done
       --disable-active-reparents                                         if set, do not allow active reparents. Use this to protect a cluster using external reparents.
       --emit-stats                                                       If set, emit stats to push-based monitoring and stats backends
-      --file_backup_storage_root string                                  Root directory for the file backup storage.
+      --file-backup-storage-root string                                  Root directory for the file backup storage.
       --gcs-backup-storage-bucket string                                 Google Cloud Storage bucket to use for backups.
       --gcs-backup-storage-root string                                   Root prefix for all backup-related object names.
       --grpc-auth-mode string                                            Which auth plugin implementation to use (eg: static)
