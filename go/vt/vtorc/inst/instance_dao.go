@@ -433,7 +433,10 @@ func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error
 		// it's just that the primary's probing is stale.
 		redactedExecutedGtidSet, _ := replication.ParseMysql56GTIDSet(instance.ExecutedGtidSet)
 		for _, uuid := range strings.Split(instance.AncestryUUID, ",") {
-			uuidSID, _ := replication.ParseSID(uuid)
+			uuidSID, err := replication.ParseSID(uuid)
+			if err != nil {
+				continue
+			}
 			if uuid != instance.ServerUUID {
 				redactedExecutedGtidSet = redactedExecutedGtidSet.RemoveUUID(uuidSID)
 			}
@@ -445,8 +448,9 @@ func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error
 		}
 		if !redactedExecutedGtidSet.Empty() {
 			redactedPrimaryExecutedGtidSet, _ := replication.ParseMysql56GTIDSet(instance.primaryExecutedGtidSet)
-			sourceSID, _ := replication.ParseSID(instance.SourceUUID)
-			redactedPrimaryExecutedGtidSet = redactedPrimaryExecutedGtidSet.RemoveUUID(sourceSID)
+			if sourceSID, err := replication.ParseSID(instance.SourceUUID); err == nil {
+				redactedPrimaryExecutedGtidSet = redactedPrimaryExecutedGtidSet.RemoveUUID(sourceSID)
+			}
 
 			// find errant gtid positions
 			gtidErrantGtidSet := redactedExecutedGtidSet.Difference(redactedPrimaryExecutedGtidSet)
