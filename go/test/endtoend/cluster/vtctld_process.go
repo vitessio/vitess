@@ -25,6 +25,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	vtutils "vitess.io/vitess/go/vt/utils"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -49,6 +50,10 @@ type VtctldProcess struct {
 
 // Setup starts vtctld process with required arguements
 func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error) {
+	vtctldVer, err := GetMajorVersion(vtctld.Binary)
+	if err != nil {
+		return err
+	}
 	_ = createDirectory(vtctld.LogDir, 0700)
 	_ = createDirectory(path.Join(vtctld.Directory, "backups"), 0700)
 	vtctld.proc = exec.Command(
@@ -60,7 +65,7 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 		"--cell", cell,
 		"--service_map", vtctld.ServiceMap,
 		"--backup_storage_implementation", vtctld.BackupStorageImplementation,
-		"--file-backup-storage-root", vtctld.FileBackupStorageRoot,
+		vtutils.GetFlagVariantForTestsByVersion("--file-backup-storage-root", vtctldVer), vtctld.FileBackupStorageRoot,
 		"--log_dir", vtctld.LogDir,
 		"--port", fmt.Sprintf("%d", vtctld.Port),
 		"--grpc_port", fmt.Sprintf("%d", vtctld.GrpcPort),
