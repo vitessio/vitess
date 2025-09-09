@@ -25,6 +25,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
 	vtutils "vitess.io/vitess/go/vt/utils"
 
 	"vitess.io/vitess/go/vt/log"

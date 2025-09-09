@@ -35,6 +35,7 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
 	vtutils "vitess.io/vitess/go/vt/utils"
 
 	"github.com/stretchr/testify/require"
