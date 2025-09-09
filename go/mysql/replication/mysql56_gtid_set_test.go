@@ -768,7 +768,7 @@ func BenchmarkMySQL56GTIDParsing(b *testing.B) {
 	}
 }
 
-func TestGTIDCount(t *testing.T) {
+func TestMySQL56GTIDSetCount(t *testing.T) {
 	tests := []struct {
 		name      string
 		gtidStr   string
