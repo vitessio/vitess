@@ -29,6 +29,7 @@ import (
 	binlogservicepb "vitess.io/vitess/go/vt/proto/binlogservice"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var cert, key, ca, crl, name string
@@ -39,11 +40,11 @@ func init() {
 }
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&cert, "binlog_player_grpc_cert", cert, "the cert to use to connect")
-	fs.StringVar(&key, "binlog_player_grpc_key", key, "the key to use to connect")
-	fs.StringVar(&ca, "binlog_player_grpc_ca", ca, "the server ca to use to validate servers when connecting")
-	fs.StringVar(&crl, "binlog_player_grpc_crl", crl, "the server crl to use to validate server certificates when connecting")
-	fs.StringVar(&name, "binlog_player_grpc_server_name", name, "the server name to use to validate server certificate")
+	utils.SetFlagStringVar(fs, &cert, "binlog-player-grpc-cert", cert, "the cert to use to connect")
+	utils.SetFlagStringVar(fs, &key, "binlog-player-grpc-key", key, "the key to use to connect")
+	utils.SetFlagStringVar(fs, &ca, "binlog-player-grpc-ca", ca, "the server ca to use to validate servers when connecting")
+	utils.SetFlagStringVar(fs, &crl, "binlog-player-grpc-crl", crl, "the server crl to use to validate server certificates when connecting")
+	utils.SetFlagStringVar(fs, &name, "binlog-player-grpc-server-name", name, "the server name to use to validate server certificate")
 }
 
 // client implements a Client over go rpc

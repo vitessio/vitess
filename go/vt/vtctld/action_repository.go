@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -60,7 +61,7 @@ func init() {
 }
 
 func registerActionRepositoryFlags(fs *pflag.FlagSet) {
-	fs.DurationVar(&actionTimeout, "action_timeout", actionTimeout, "time to wait for an action before resorting to force")
+	utils.SetFlagDurationVar(fs, &actionTimeout, "action-timeout", actionTimeout, "time to wait for an action before resorting to force")
 }
 
 // action{Keyspace,Shard,Tablet}Method is a function that performs

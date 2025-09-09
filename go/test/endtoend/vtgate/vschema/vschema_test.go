@@ -93,7 +93,7 @@ func TestMain(m *testing.M) {
 
 			clusterInstance.VtGateExtraArgs = []string{fmt.Sprintf("--config-file=%s", configFile), vtutils.GetFlagVariantForTestsByVersion("--schema-change-signal", vtgateVer) + "=false"}
 		} else {
-			clusterInstance.VtGateExtraArgs = []string{"--vschema_ddl_authorized_users=%", "--schema_change_signal=false"}
+			clusterInstance.VtGateExtraArgs = []string{"--vschema-ddl-authorized-users=%", "--schema-change-signal=false"}
 		}
 
 		// Start keyspace

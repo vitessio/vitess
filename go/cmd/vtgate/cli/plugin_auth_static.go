@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtgate"
 )
 
@@ -32,9 +33,9 @@ var (
 )
 
 func init() {
-	Main.Flags().StringVar(&mysqlAuthServerStaticFile, "mysql_auth_server_static_file", "", "JSON File to read the users/passwords from.")
-	Main.Flags().StringVar(&mysqlAuthServerStaticString, "mysql_auth_server_static_string", "", "JSON representation of the users/passwords config.")
-	Main.Flags().DurationVar(&mysqlAuthServerStaticReloadInterval, "mysql_auth_static_reload_interval", 0, "Ticker to reload credentials")
+	utils.SetFlagStringVar(Main.Flags(), &mysqlAuthServerStaticFile, "mysql-auth-server-static-file", "", "JSON File to read the users/passwords from.")
+	utils.SetFlagStringVar(Main.Flags(), &mysqlAuthServerStaticString, "mysql-auth-server-static-string", "", "JSON representation of the users/passwords config.")
+	utils.SetFlagDurationVar(Main.Flags(), &mysqlAuthServerStaticReloadInterval, "mysql-auth-static-reload-interval", 0, "Ticker to reload credentials")
 
 	vtgate.RegisterPluginInitializer(func() {
 		mysql.InitAuthServerStatic(mysqlAuthServerStaticFile, mysqlAuthServerStaticString, mysqlAuthServerStaticReloadInterval)
