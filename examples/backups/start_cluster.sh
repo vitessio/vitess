@@ -17,6 +17,7 @@
 # this script brings up new tablets for the two new shards that we will
 # be creating in the customer keyspace and copies the schema
 
+echo "=============================== This is version 23 main ==============================="
 source ../common/env.sh
 
 # start topo server
