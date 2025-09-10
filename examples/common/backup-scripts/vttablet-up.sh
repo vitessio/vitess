@@ -33,10 +33,14 @@ if [[ "${uid: -1}" -gt 1 ]]; then
  tablet_type=rdonly
 fi
 
-echo "Starting v23 backup vttablet for $alias..."
-echo "Topology flags inherited at start of v23 backup vttablet: $TOPOLOGY_FLAGS"
+# Additional logging and explicit topology flags for vttablet for the backup local example
+# to ensure it uses the underscored topology flags that are required for older vttablet versions.
+// TODO: in v25 we can start using the local example env.sh and common scripts and delete the extra
+// ones created for backup upgrade/downgrade tests to work.
+echo "Starting backup vttablet for $alias..."
+echo "Topology flags inherited at start of backup vttablet: $TOPOLOGY_FLAGS"
 export TOPOLOGY_FLAGS="--topo_implementation etcd2 --topo_global_server_address $ETCD_SERVER --topo_global_root /vitess/global"
-echo "Topology flags at start of v23 backup vttablet, after explicitly setting: $TOPOLOGY_FLAGS"
+echo "Topology flags at start of backup vttablet, after explicitly setting: $TOPOLOGY_FLAGS"
 
 
 # shellcheck disable=SC2086
@@ -68,14 +72,6 @@ for i in $(seq 0 300); do
  curl -I "http://$hostname:$port/debug/status" >/dev/null 2>&1 && break
  sleep 0.1
 done
-
-
-echo "======================= vttablet.out start ======================="
-cat $VTDATAROOT/$tablet_dir/vttablet.out
-echo "======================= vttablet.out end ======================="
-echo "======================= vttablet logs start ======================="
-cat $VTDATAROOT/tmp/*vttablet*
-echo "======================= vttablet logs end ======================="
 
 # check one last time
 curl -I "http://$hostname:$port/debug/status" || fail "tablet could not be started!"
