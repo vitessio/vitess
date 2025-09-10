@@ -34,7 +34,7 @@ type QueryThrottler struct {
 func NewQueryThrottler(ctx context.Context, throttler *throttle.Throttler, cfgLoader ConfigLoader, env tabletenv.Env) *QueryThrottler {
 	client := throttle.NewBackgroundClient(throttler, throttlerapp.QueryThrottlerName, base.UndefinedScope)
 
-	i := &QueryThrottler{
+	qt := &QueryThrottler{
 		ctx:            ctx,
 		throttleClient: client,
 		tabletConfig:   env.Config(),
@@ -44,37 +44,37 @@ func NewQueryThrottler(ctx context.Context, throttler *throttle.Throttler, cfgLo
 	}
 
 	// Start the initial strategy
-	i.strategy.Start()
+	qt.strategy.Start()
 
 	// starting the loop which will be responsible for refreshing the config.
-	i.startConfigRefreshLoop()
+	qt.startConfigRefreshLoop()
 
-	return i
+	return qt
 }
 
 // Shutdown gracefully stops the throttler and cleans up resources.
 // This should be called when the QueryThrottler is no longer needed.
-func (i *QueryThrottler) Shutdown() {
-	i.mu.Lock()
-	defer i.mu.Unlock()
+func (qt *QueryThrottler) Shutdown() {
+	qt.mu.Lock()
+	defer qt.mu.Unlock()
 
 	// Stop the current strategy to clean up any background processes
-	if i.strategy != nil {
-		i.strategy.Stop()
+	if qt.strategy != nil {
+		qt.strategy.Stop()
 	}
 }
 
-// EnforceThrottlingIfNodeOverloaded checks if the tablet is under heavy load
+// Throttle checks if the tablet is under heavy load
 // and enforces throttling by rejecting the incoming request if necessary.
 // Note: This method performs lock-free reads of config and strategy for optimal performance.
 // Config updates are rare (default: every 1 minute) compared to query frequency,
 // so the tiny risk of reading slightly stale data during config updates is acceptable
 // for the significant performance improvement of avoiding mutex contention.
-func (i *QueryThrottler) EnforceThrottlingIfNodeOverloaded(ctx context.Context, tabletType topodatapb.TabletType, sql string, transactionID int64, options *querypb.ExecuteOptions) error {
+func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.TabletType, sql string, transactionID int64, options *querypb.ExecuteOptions) error {
 	// Lock-free read: for maximum performance in the hot path as cfg and strategy are updated rarely (default once per minute).
 	// They are word-sized and safe for atomic reads; stale data for one query is acceptable and avoids mutex contention in the hot path.
-	tCfg := i.cfg
-	tStrategy := i.strategy
+	tCfg := qt.cfg
+	tStrategy := qt.strategy
 
 	if !tCfg.Enabled {
 		return nil
@@ -103,44 +103,44 @@ func selectThrottlingStrategy(cfg Config, client *throttle.Client, tabletConfig 
 
 // startConfigRefreshLoop launches a background goroutine that refreshes the throttler's configuration
 // at the interval specified by QueryThrottlerConfigRefreshInterval.
-func (i *QueryThrottler) startConfigRefreshLoop() {
+func (qt *QueryThrottler) startConfigRefreshLoop() {
 	go func() {
-		refreshInterval := i.tabletConfig.QueryThrottlerConfigRefreshInterval
+		refreshInterval := qt.tabletConfig.QueryThrottlerConfigRefreshInterval
 		configRefreshTicker := time.NewTicker(refreshInterval)
 		defer configRefreshTicker.Stop()
 
 		for {
 			select {
-			case <-i.ctx.Done():
+			case <-qt.ctx.Done():
 				return
 			case <-configRefreshTicker.C:
-				newCfg, err := i.cfgLoader.Load(i.ctx)
+				newCfg, err := qt.cfgLoader.Load(qt.ctx)
 				if err != nil {
 					log.Errorf("Error loading config: %v", err)
 					continue
 				}
 
 				// Only restart strategy if the strategy type has changed
-				if i.cfg.Strategy != newCfg.Strategy {
+				if qt.cfg.Strategy != newCfg.Strategy {
 					// Stop the current strategy before switching to a new one
-					if i.strategy != nil {
-						i.strategy.Stop()
+					if qt.strategy != nil {
+						qt.strategy.Stop()
 					}
 
-					newStrategy := selectThrottlingStrategy(newCfg, i.throttleClient, i.tabletConfig)
+					newStrategy := selectThrottlingStrategy(newCfg, qt.throttleClient, qt.tabletConfig)
 					// Update strategy and start the new one
-					i.mu.Lock()
-					i.strategy = newStrategy
-					i.mu.Unlock()
-					if i.strategy != nil {
-						i.strategy.Start()
+					qt.mu.Lock()
+					qt.strategy = newStrategy
+					qt.mu.Unlock()
+					if qt.strategy != nil {
+						qt.strategy.Start()
 					}
 				}
 
 				// Always update the configuration
-				i.mu.Lock()
-				i.cfg = newCfg
-				i.mu.Unlock()
+				qt.mu.Lock()
+				qt.cfg = newCfg
+				qt.mu.Unlock()
 			}
 		}
 	}()

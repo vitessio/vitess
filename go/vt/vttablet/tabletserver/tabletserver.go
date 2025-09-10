@@ -920,7 +920,7 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 	if err != nil {
 		return nil, err
 	}
-	if reqThrottledErr := tsv.queryThrottler.EnforceThrottlingIfNodeOverloaded(ctx, targetType, sql, transactionID, options); reqThrottledErr != nil {
+	if reqThrottledErr := tsv.queryThrottler.Throttle(ctx, targetType, sql, transactionID, options); reqThrottledErr != nil {
 		return nil, reqThrottledErr
 	}
 
@@ -940,6 +940,7 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 			if err != nil {
 				return err
 			}
+
 			if err = plan.IsValid(reservedID != 0, len(settings) > 0); err != nil {
 				return err
 			}
@@ -1020,7 +1021,7 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 }
 
 func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
-	if reqThrottledErr := tsv.queryThrottler.EnforceThrottlingIfNodeOverloaded(ctx, target.GetTabletType(), sql, transactionID, options); reqThrottledErr != nil {
+	if reqThrottledErr := tsv.queryThrottler.Throttle(ctx, target.GetTabletType(), sql, transactionID, options); reqThrottledErr != nil {
 		return reqThrottledErr
 	}
 
