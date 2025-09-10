@@ -25,9 +25,9 @@ for tablet in 100 200 300; do
     for i in 0 1 2; do
       uid=$(($tablet + $i))
       echo "Shutting down tablet zone1-$uid"
-      CELL=zone1 TABLET_UID=$uid ../common/scripts/vttablet-down.sh
+      CELL=zone1 TABLET_UID=$uid ../common/backup-scripts/vttablet-down.sh
       echo "Shutting down mysql zone1-$uid"
-      CELL=zone1 TABLET_UID=$uid ../common/scripts/mysqlctl-down.sh
+      CELL=zone1 TABLET_UID=$uid ../common/backup-scripts/mysqlctl-down.sh
       echo "Removing tablet directory zone1-$uid"
       vtctldclient DeleteTablets --allow-primary zone1-$uid
 

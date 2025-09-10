@@ -21,21 +21,21 @@ source ../common/env.sh
 
 # start topo server
 if [ "${TOPO}" = "zk2" ]; then
-	CELL=zone1 ../common/scripts/zk-up.sh
+	CELL=zone1 ../common/backup-scripts/zk-up.sh
 else
-	CELL=zone1 ../common/scripts/etcd-up.sh
+	CELL=zone1 ../common/backup-scripts/etcd-up.sh
 fi
 
 # start vtctld
-CELL=zone1 ../common/scripts/vtctld-up.sh
+CELL=zone1 ../common/backup-scripts/vtctld-up.sh
 
 # Create keyspace and set the semi_sync durability policy.
 vtctldclient CreateKeyspace --durability-policy=semi_sync commerce || fail "Failed to create and configure the commerce keyspace"
 
 # start vttablets for keyspace commerce
 for i in 100 101 102; do
-	CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-up.sh
-	CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ../common/scripts/vttablet-up.sh
+	CELL=zone1 TABLET_UID=$i ../common/backup-scripts/mysqlctl-up.sh
+	CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ../common/backup-scripts/vttablet-up.sh
 done
 
 # set one of the replicas to primary
@@ -50,12 +50,12 @@ vtctldclient CreateKeyspace --durability-policy=semi_sync customer || fail "Fail
 
 # start vttablets for keyspace customer
 for i in 200 201 202; do
-	CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-up.sh
-	SHARD=-80 CELL=zone1 KEYSPACE=customer TABLET_UID=$i ../common/scripts/vttablet-up.sh
+	CELL=zone1 TABLET_UID=$i ../common/backup-scripts/mysqlctl-up.sh
+	SHARD=-80 CELL=zone1 KEYSPACE=customer TABLET_UID=$i ../common/backup-scripts/vttablet-up.sh
 done
 for i in 300 301 302; do
-	CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-up.sh
-	SHARD=80- CELL=zone1 KEYSPACE=customer TABLET_UID=$i ../common/scripts/vttablet-up.sh
+	CELL=zone1 TABLET_UID=$i ../common/backup-scripts/mysqlctl-up.sh
+	SHARD=80- CELL=zone1 KEYSPACE=customer TABLET_UID=$i ../common/backup-scripts/vttablet-up.sh
 done
 
 # set one of the replicas to primary
@@ -72,7 +72,7 @@ vtctldclient ApplyVSchema --vschema-file ../local/vschema_customer_sharded.json 
 
 
 # start vtgate
-CELL=zone1 ../common/scripts/vtgate-up.sh
+CELL=zone1 ../common/backup-scripts/vtgate-up.sh
 
 sleep 5
 
