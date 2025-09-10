@@ -920,9 +920,6 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 	if err != nil {
 		return nil, err
 	}
-	if reqThrottledErr := tsv.queryThrottler.Throttle(ctx, targetType, sql, transactionID, options); reqThrottledErr != nil {
-		return nil, reqThrottledErr
-	}
 
 	allowOnShutdown := transactionID != 0
 	timeout := tsv.loadQueryTimeoutWithTxAndOptions(transactionID, options)
@@ -1021,10 +1018,6 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 }
 
 func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
-	if reqThrottledErr := tsv.queryThrottler.Throttle(ctx, target.GetTabletType(), sql, transactionID, options); reqThrottledErr != nil {
-		return reqThrottledErr
-	}
-
 	allowOnShutdown := false
 	var timeout time.Duration
 	if transactionID != 0 {

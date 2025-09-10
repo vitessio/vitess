@@ -2,6 +2,7 @@ package registry
 
 import (
 	"context"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -29,7 +30,7 @@ type ThrottlingStrategyHandler interface {
 	// Evaluate determines whether a query should be throttled and returns detailed information about the decision.
 	// This method separates the decision-making logic from the enforcement action, enabling features like dry-run mode.
 	// It returns a ThrottleDecision struct containing all relevant information about the throttling decision.
-	Evaluate(ctx context.Context, targetTabletType topodatapb.TabletType, sql string, transactionID int64, options *querypb.ExecuteOptions) ThrottleDecision
+	Evaluate(ctx context.Context, targetTabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, transactionID int64, options *querypb.ExecuteOptions) ThrottleDecision
 
 	// Start initializes and starts the throttling strategy.
 	// This method should be called when the strategy becomes active.

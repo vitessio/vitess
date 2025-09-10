@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"time"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -70,7 +71,7 @@ func (qt *QueryThrottler) Shutdown() {
 // Config updates are rare (default: every 1 minute) compared to query frequency,
 // so the tiny risk of reading slightly stale data during config updates is acceptable
 // for the significant performance improvement of avoiding mutex contention.
-func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.TabletType, sql string, transactionID int64, options *querypb.ExecuteOptions) error {
+func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, transactionID int64, options *querypb.ExecuteOptions) error {
 	// Lock-free read: for maximum performance in the hot path as cfg and strategy are updated rarely (default once per minute).
 	// They are word-sized and safe for atomic reads; stale data for one query is acceptable and avoids mutex contention in the hot path.
 	tCfg := qt.cfg
@@ -81,7 +82,7 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 	}
 
 	// Evaluate the throttling decision
-	decision := tStrategy.Evaluate(ctx, tabletType, sql, transactionID, options)
+	decision := tStrategy.Evaluate(ctx, tabletType, parsedQuery, transactionID, options)
 
 	// If no throttling is needed, allow the query
 	if !decision.Throttle {
