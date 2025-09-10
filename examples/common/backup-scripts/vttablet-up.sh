@@ -33,7 +33,7 @@ if [[ "${uid: -1}" -gt 1 ]]; then
  tablet_type=rdonly
 fi
 
-echo "Starting vttablet for $alias..."
+echo "Starting v23 backup vttablet for $alias..."
 
 # shellcheck disable=SC2086
 vttablet \

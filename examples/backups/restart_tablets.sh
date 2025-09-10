@@ -19,6 +19,7 @@
 
 source ../common/env.sh
 
+echo "=============================== This is version 23 restart tablets ==============================="
 for i in 100 101 102; do
   CELL=zone1 TABLET_UID=$i ../common/backup-scripts/mysqlctl-up.sh
   CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ../common/backup-scripts/vttablet-up.sh
