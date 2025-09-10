@@ -34,6 +34,10 @@ if [[ "${uid: -1}" -gt 1 ]]; then
 fi
 
 echo "Starting v23 backup vttablet for $alias..."
+echo "Topology flags inherited at start of v23 backup vttablet: $TOPOLOGY_FLAGS"
+export TOPOLOGY_FLAGS="--topo_implementation etcd2 --topo_global_server_address $ETCD_SERVER --topo_global_root /vitess/global"
+echo "Topology flags at start of v23 backup vttablet, after explicitly setting: $TOPOLOGY_FLAGS"
+
 
 # shellcheck disable=SC2086
 vttablet \
