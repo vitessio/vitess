@@ -66,12 +66,12 @@ for i in $(seq 0 300); do
 done
 
 
-echo "=======================" vttablet.out start ======================="
+echo "======================= vttablet.out start ======================="
 cat $VTDATAROOT/$tablet_dir/vttablet.out
-echo "=======================" vttablet.out end ======================="
-echo "=======================" vttablet logs start ======================="
+echo "======================= vttablet.out end ======================="
+echo "======================= vttablet logs start ======================="
 cat $VTDATAROOT/tmp/*vttablet*
-echo "=======================" vttablet logs end ======================="
+echo "======================= vttablet logs end ======================="
 
 # check one last time
 curl -I "http://$hostname:$port/debug/status" || fail "tablet could not be started!"
