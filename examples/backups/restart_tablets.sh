@@ -17,7 +17,7 @@
 # this script brings up new tablets for the two new shards that we will
 # be creating in the customer keyspace and copies the schema
 
-source ../common/env.sh
+source ../common/backup-env.sh
 
 echo "=============================== This is version 23 restart tablets ==============================="
 for i in 100 101 102; do

@@ -17,7 +17,7 @@
 # this script brings up new tablets for the two new shards that we will
 # be creating in the customer keyspace and copies the schema
 
-source ../common/env.sh
+source ../common/backup-env.sh
 
 for tablet in 100 200 300; do
   if vtctldclient --action-timeout 1s --server localhost:15999 GetTablet zone1-$tablet >/dev/null 2>&1; then

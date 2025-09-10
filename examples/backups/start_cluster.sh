@@ -18,7 +18,7 @@
 # be creating in the customer keyspace and copies the schema
 
 echo "=============================== This is version 23 main ==============================="
-source ../common/env.sh
+source ../common/backup-env.sh
 
 # start topo server
 if [ "${TOPO}" = "zk2" ]; then

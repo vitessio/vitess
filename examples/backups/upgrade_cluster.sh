@@ -17,7 +17,7 @@
 # this script brings up new tablets for the two new shards that we will
 # be creating in the customer keyspace and copies the schema
 
-source ../common/env.sh
+source ../common/backup-env.sh
 
 # Restart the replica tablets so that they come up with new vttablet versions
 for i in 101 102; do
