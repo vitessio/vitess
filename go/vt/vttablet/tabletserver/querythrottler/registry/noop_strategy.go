@@ -1,9 +1,26 @@
+/*
+Copyright 2025 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package registry
 
 // NoOpStrategy sits in the registry sub-package because registry must produce a safe fallback without importing its parent.
 // Moving it up would create a circular dependency (querythrottler imports registry, and registry would then have to import querythrottler), which Go prohibits
 import (
 	"context"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
