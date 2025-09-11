@@ -22,9 +22,6 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // MetricResult is what we expect our probes to return. This can be a numeric result, or
@@ -65,12 +62,11 @@ func IsDialTCPError(err error) bool {
 		return false
 	}
 
-	switch vterrors.Code(err) {
-	case vtrpcpb.Code_UNAVAILABLE, vtrpcpb.Code_DEADLINE_EXCEEDED:
-		return true
+	if s, ok := status.FromError(err); ok {
+		return s.Code() == codes.Unavailable || s.Code() == codes.DeadlineExceeded
 	}
 
-	switch err := vterrors.RootCause(err).(type) {
+	switch err := err.(type) {
 	case *net.OpError:
 		return err.Op == "dial" && err.Net == "tcp"
 	}
