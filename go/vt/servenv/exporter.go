@@ -17,12 +17,15 @@ limitations under the License.
 package servenv
 
 import (
+	"encoding/json"
 	"expvar"
 	"net/http"
 	"net/url"
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"vitess.io/vitess/go/stats"
 )
 
@@ -541,6 +544,39 @@ func (e *Exporter) NewHistogram(name, help string, cutoffs []int64) *stats.Histo
 	hist := stats.NewHistogram("", help, cutoffs)
 	e.addToOtherVars(name, hist)
 	return hist
+}
+
+type PromSummaryWrapper struct {
+	prometheus.Summary
+}
+
+func (w *PromSummaryWrapper) String() string {
+	dtoMetric := &dto.Metric{}
+	err := w.Summary.Write(dtoMetric)
+	if err != nil {
+		return "{}"
+	}
+	median := dtoMetric.Summary.GetQuantile()[0].GetValue()
+	ninetyNinth := dtoMetric.Summary.GetQuantile()[1].GetValue()
+
+	result := map[string]float64{
+		"median":      median,
+		"ninetyNinth": ninetyNinth,
+	}
+
+	b, err := json.MarshalIndent(result, "", " ")
+	if err != nil {
+		return "{}"
+	} else {
+		return string(b)
+	}
+}
+
+func (e *Exporter) NewPromSummary(name string, opts prometheus.SummaryOpts) prometheus.Summary {
+	summary := prometheus.NewSummary(opts)
+	summaryWrapper := &PromSummaryWrapper{Summary: summary}
+	stats.Publish(name, summaryWrapper)
+	return summary
 }
 
 // Publish creates a name-spaced equivalent for stats.Publish.
