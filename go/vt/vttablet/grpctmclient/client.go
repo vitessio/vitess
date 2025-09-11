@@ -393,10 +393,11 @@ func (client *Client) ChangeTags(ctx context.Context, tablet *topodatapb.Tablet,
 		return nil, err
 	}
 	defer closer.Close()
-	return c.ChangeTags(ctx, &tabletmanagerdatapb.ChangeTagsRequest{
+	res, err := c.ChangeTags(ctx, &tabletmanagerdatapb.ChangeTagsRequest{
 		Tags:    tabletTags,
 		Replace: replace,
 	})
+	return res, vterrors.FromGRPC(err)
 }
 
 // ChangeType is part of the tmclient.TabletManagerClient interface.
@@ -1030,7 +1031,8 @@ func (client *Client) VReplicationWaitForPos(ctx context.Context, tablet *topoda
 		return err
 	}
 	defer closer.Close()
-	if _, err = c.VReplicationWaitForPos(ctx, &tabletmanagerdatapb.VReplicationWaitForPosRequest{Id: id, Position: pos}); err != nil {
+	_, err = c.VReplicationWaitForPos(ctx, &tabletmanagerdatapb.VReplicationWaitForPosRequest{Id: id, Position: pos})
+	if err != nil {
 		return vterrors.FromGRPC(err)
 	}
 	return nil
@@ -1068,7 +1070,8 @@ func (client *Client) GetMaxValueForSequences(ctx context.Context, tablet *topod
 		return nil, err
 	}
 	defer closer.Close()
-	return c.GetMaxValueForSequences(ctx, request)
+	res, err := c.GetMaxValueForSequences(ctx, request)
+	return res, vterrors.FromGRPC(err)
 }
 
 func (client *Client) UpdateSequenceTables(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.UpdateSequenceTablesRequest) (*tabletmanagerdatapb.UpdateSequenceTablesResponse, error) {
@@ -1077,7 +1080,8 @@ func (client *Client) UpdateSequenceTables(ctx context.Context, tablet *topodata
 		return nil, err
 	}
 	defer closer.Close()
-	return c.UpdateSequenceTables(ctx, request)
+	res, err := c.UpdateSequenceTables(ctx, request)
+	return res, vterrors.FromGRPC(err)
 }
 
 // VDiff is part of the tmclient.TabletManagerClient interface.
