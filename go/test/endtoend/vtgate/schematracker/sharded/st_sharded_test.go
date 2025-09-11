@@ -84,7 +84,7 @@ func TestMain(m *testing.M) {
 		}
 		if vtgateVer >= 22 {
 			clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-				"--schema-change-signal",
+				"--schema_change_signal",
 				"--vschema-ddl-authorized-users", "%")
 		} else {
 			clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
