@@ -14,16 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This is an example script that stops the mysqld and vttablet instances
-# created by vttablet-up.sh
+# This is an example script that stops the ZooKeeper servers started by zk-up.sh.
 
 source "$(dirname "${BASH_SOURCE[0]:-$0}")/../env.sh"
 
-cell=${CELL:-'test'}
-uid=$TABLET_UID
-printf -v alias '%s-%010d' $cell $uid
-echo "Shutting down MySQL for tablet $alias..."
-
- #TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-mysqlctl --tablet-uid $uid shutdown
+# Stop ZooKeeper servers.
+echo "Stopping zk servers..."
+for zkid in $zkids; do
+  zkctl --zk.myid $zkid --zk.cfg $zkcfg --log_dir $VTDATAROOT/tmp shutdown
+done
 

@@ -38,8 +38,8 @@ fi
 #TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 mysqlctl \
  --log_dir $VTDATAROOT/tmp \
- --tablet_uid $uid \
- --mysql_port $mysql_port \
+ --tablet-uid $uid \
+ --mysql-port $mysql_port \
  $action
 
 echo -e "MySQL for tablet $alias is running!"

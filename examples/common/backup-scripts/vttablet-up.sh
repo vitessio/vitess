@@ -33,27 +33,35 @@ if [[ "${uid: -1}" -gt 1 ]]; then
  tablet_type=rdonly
 fi
 
-echo "Starting backup script for vttablet for $alias..."
+# Additional logging and explicit topology flags for vttablet for the backup local example
+# to ensure it uses the underscored topology flags that are required for older vttablet versions.
+// TODO: in v25 we can start using the local example env.sh and common scripts and delete the extra
+// ones created for backup upgrade/downgrade tests to work.
+echo "Starting backup vttablet for $alias..."
+echo "Topology flags inherited at start of backup vttablet: $TOPOLOGY_FLAGS"
+export TOPOLOGY_FLAGS="--topo_implementation etcd2 --topo_global_server_address $ETCD_SERVER --topo_global_root /vitess/global"
+echo "Topology flags at start of backup vttablet, after explicitly setting: $TOPOLOGY_FLAGS"
+
 
 # shellcheck disable=SC2086
 vttablet \
  $TOPOLOGY_FLAGS \
  --log_dir $VTDATAROOT/tmp \
- --log-queries-to-file $VTDATAROOT/tmp/$tablet_logfile \
+ --log_queries_to_file $VTDATAROOT/tmp/$tablet_logfile \
  --tablet-path $alias \
- --tablet-hostname "$tablet_hostname" \
- --init-keyspace $keyspace \
- --init-shard $shard \
- --init-tablet-type $tablet_type \
- --health-check-interval 5s \
- --backup-storage-implementation file \
- --file-backup-storage-root $VTDATAROOT/backups \
- --restore-from-backup \
+ --tablet_hostname "$tablet_hostname" \
+ --init_keyspace $keyspace \
+ --init_shard $shard \
+ --init_tablet_type $tablet_type \
+ --health_check_interval 5s \
+ --backup_storage_implementation file \
+ --file_backup_storage_root $VTDATAROOT/backups \
+ --restore_from_backup \
  --port $port \
- --grpc-port $grpc_port \
- --service-map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
- --pid-file $VTDATAROOT/$tablet_dir/vttablet.pid \
- --heartbeat-on-demand-duration=5s \
+ --grpc_port $grpc_port \
+ --service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
+ --pid_file $VTDATAROOT/$tablet_dir/vttablet.pid \
+ --heartbeat_on_demand_duration=5s \
  --pprof-http \
  > $VTDATAROOT/$tablet_dir/vttablet.out 2>&1 &
 

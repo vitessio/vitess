@@ -14,16 +14,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This is an example script that stops the mysqld and vttablet instances
-# created by vttablet-up.sh
+# This is an example script that creates a single shard vttablet deployment.
 
 source "$(dirname "${BASH_SOURCE[0]:-$0}")/../env.sh"
 
 cell=${CELL:-'test'}
 uid=$TABLET_UID
+mysql_port=$[17000 + $uid]
 printf -v alias '%s-%010d' $cell $uid
-echo "Shutting down MySQL for tablet $alias..."
+printf -v tablet_dir 'vt_%010d' $uid
 
- #TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-mysqlctl --tablet-uid $uid shutdown
+mkdir -p $VTDATAROOT/backups
 
+echo "Starting MySQL for tablet $alias..."
+action="init"
+
+if [ -d $VTDATAROOT/$tablet_dir ]; then
+ echo "Resuming from existing vttablet dir:"
+ echo "    $VTDATAROOT/$tablet_dir"
+ action='start'
+fi
+
+mysqlctl \
+ --log_dir $VTDATAROOT/tmp \
+ --tablet_uid $uid \
+ --mysql_port $mysql_port \
+ $action
+
+echo -e "MySQL for tablet $alias is running!"

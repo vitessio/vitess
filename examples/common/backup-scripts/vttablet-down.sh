@@ -19,11 +19,7 @@
 
 source "$(dirname "${BASH_SOURCE[0]:-$0}")/../env.sh"
 
-cell=${CELL:-'test'}
-uid=$TABLET_UID
-printf -v alias '%s-%010d' $cell $uid
-echo "Shutting down MySQL for tablet $alias..."
+printf -v tablet_dir 'vt_%010d' "$TABLET_UID"
 
- #TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-mysqlctl --tablet-uid $uid shutdown
+stop_process "vttablet" "$VTDATAROOT/$tablet_dir/vttablet.pid"
 

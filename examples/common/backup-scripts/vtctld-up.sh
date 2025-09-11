@@ -23,17 +23,16 @@ grpc_port=15999
 
 echo "Starting vtctld..."
 # shellcheck disable=SC2086
-#TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 vtctld \
  $TOPOLOGY_FLAGS \
  --cell $cell \
- --service-map 'grpc-vtctl,grpc-vtctld' \
- --backup-storage-implementation file \
- --file-backup-storage-root $VTDATAROOT/backups \
+ --service_map 'grpc-vtctl,grpc-vtctld' \
+ --backup_storage_implementation file \
+ --file_backup_storage_root $VTDATAROOT/backups \
  --log_dir $VTDATAROOT/tmp \
  --port $vtctld_web_port \
- --grpc-port $grpc_port \
- --pid-file $VTDATAROOT/tmp/vtctld.pid \
+ --grpc_port $grpc_port \
+ --pid_file $VTDATAROOT/tmp/vtctld.pid \
  --pprof-http \
   > $VTDATAROOT/tmp/vtctld.out 2>&1 &
 
