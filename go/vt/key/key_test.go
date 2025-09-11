@@ -18,6 +18,7 @@ package key
 
 import (
 	"encoding/hex"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -1541,6 +1542,29 @@ func TestGenerateShardRanges(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Equal(t, got, tt.want)
+		})
+	}
+}
+
+func TestGenerateShardRangesForManyShards(t *testing.T) {
+	for i := 1; i <= 1024; i++ {
+		t.Run(fmt.Sprintf("shards=%d", i), func(t *testing.T) {
+			ranges, err := GenerateShardRanges(i)
+
+			require.NoError(t, err)
+			require.Len(t, ranges, i)
+
+			// verify that the shards are contiguous and non-overlapping
+			for j := 1; j < len(ranges); j++ {
+				prevEnd := ranges[j-1][strings.Index(ranges[j-1], "-")+1:]
+				currStart := ranges[j][:strings.Index(ranges[j], "-")]
+
+				require.Equal(t, prevEnd, currStart, "Shards %d and %d are not contiguous: %s != %s", j-1, j, prevEnd, currStart)
+			}
+
+			// verify that the shards cover the full keyspace
+			require.True(t, strings.HasPrefix(ranges[0], "-"), "First shard does not start with a hyphen: %s", ranges[0])
+			require.True(t, strings.HasSuffix(ranges[len(ranges)-1], "-"), "Last shard does not end with a hyphen: %s", ranges[len(ranges)-1])
 		})
 	}
 }
