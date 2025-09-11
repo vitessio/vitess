@@ -382,6 +382,28 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			},
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
 			wantSkipRecovery:     true,
+		}, {
+			name:       "UnreachablePrimary",
+			ersEnabled: true,
+			analysisEntry: &inst.ReplicationAnalysis{
+				Analysis:                               inst.UnreachablePrimary,
+				AnalyzedKeyspace:                       keyspace,
+				AnalyzedShard:                          shard,
+				AnalyzedShardEmergencyReparentDisabled: true,
+			},
+			wantRecoveryFunction: restartArbitraryDirectReplicaFunc,
+			wantSkipRecovery:     false,
+		}, {
+			name:       "UnreachablePrimaryWithBrokenReplicas",
+			ersEnabled: true,
+			analysisEntry: &inst.ReplicationAnalysis{
+				Analysis:                               inst.UnreachablePrimaryWithBrokenReplicas,
+				AnalyzedKeyspace:                       keyspace,
+				AnalyzedShard:                          shard,
+				AnalyzedShardEmergencyReparentDisabled: true,
+			},
+			wantRecoveryFunction: restartAllDirectReplicasFunc,
+			wantSkipRecovery:     false,
 		},
 	}
 
