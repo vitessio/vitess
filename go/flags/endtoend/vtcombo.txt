@@ -16,6 +16,7 @@ Flags:
       --alsologtostderr                                                  log to standard error as well as files
       --app-idle-timeout duration                                        Idle timeout for app connections (default 1m0s)
       --app-pool-size int                                                Size of the connection pool for app connections (default 40)
+      --append-caller-id-to-queries                                      Appends immediate CallerId username into trailing comment of every query through to MySQL
       --backup-engine-implementation string                              Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup. (default "builtin")
       --backup-storage-block-size int                                    if backup-storage-compress is true, backup-storage-block-size sets the byte size for each block while compressing (default is 250000). (default 250000)
       --backup-storage-compress                                          if set, the backup files will be compressed. (default true)
