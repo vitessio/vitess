@@ -188,6 +188,10 @@ func (m *ExecuteOptions) CloneVT() *ExecuteOptions {
 			CloneVT() isExecuteOptions_Timeout
 		}).CloneVT()
 	}
+	if rhs := m.TransactionTimeout; rhs != nil {
+		tmpVal := *rhs
+		r.TransactionTimeout = &tmpVal
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -1895,6 +1899,13 @@ func (m *ExecuteOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 			return 0, err
 		}
 		i -= size
+	}
+	if m.TransactionTimeout != nil {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(*m.TransactionTimeout))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xa0
 	}
 	if m.InDmlExecution {
 		i--
@@ -6212,6 +6223,9 @@ func (m *ExecuteOptions) SizeVT() (n int) {
 	if m.InDmlExecution {
 		n += 3
 	}
+	if m.TransactionTimeout != nil {
+		n += 2 + protohelpers.SizeOfVarint(uint64(*m.TransactionTimeout))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -9000,6 +9014,26 @@ func (m *ExecuteOptions) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.InDmlExecution = bool(v != 0)
+		case 20:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TransactionTimeout", wireType)
+			}
+			var v int64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.TransactionTimeout = &v
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
