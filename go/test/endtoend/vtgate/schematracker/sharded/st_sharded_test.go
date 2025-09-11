@@ -82,9 +82,15 @@ func TestMain(m *testing.M) {
 			VSchema:       VSchema,
 			SidecarDBName: sidecarDBName,
 		}
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-			"--schema_change_signal",
-			"--vschema_ddl_authorized_users", "%")
+		if vtgateVer >= 22 {
+			clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
+				"--schema-change-signal",
+				"--vschema-ddl-authorized-users", "%")
+		} else {
+			clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
+				"--schema_change_signal",
+				"--vschema_ddl_authorized_users", "%")
+		}
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-config-schema-change-signal")
 
 		if vtgateVer >= 16 && vttabletVer >= 16 {
