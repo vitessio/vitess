@@ -112,7 +112,7 @@ func TestTabletGatewayShuffleTablets(t *testing.T) {
 
 	hc := discovery.NewFakeHealthCheck(nil)
 	ts := &econtext.FakeTopoServer{}
-	tg := NewTabletGateway(ctx, hc, ts, "local")
+	tg, _ := NewTabletGateway(ctx, hc, ts, "local")
 	defer tg.Close(ctx)
 
 	ts1 := &discovery.TabletHealth{
@@ -186,7 +186,7 @@ func TestTabletGatewayReplicaTransactionError(t *testing.T) {
 	}
 	hc := discovery.NewFakeHealthCheck(nil)
 	ts := &econtext.FakeTopoServer{}
-	tg := NewTabletGateway(ctx, hc, ts, "cell")
+	tg, _ := NewTabletGateway(ctx, hc, ts, "cell")
 	defer tg.Close(ctx)
 
 	_ = hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
@@ -221,7 +221,7 @@ func testTabletGatewayGenericHelper(t *testing.T, ctx context.Context, f func(ct
 	}
 	hc := discovery.NewFakeHealthCheck(nil)
 	ts := &econtext.FakeTopoServer{}
-	tg := NewTabletGateway(ctx, hc, ts, "cell")
+	tg, _ := NewTabletGateway(ctx, hc, ts, "cell")
 	defer tg.Close(ctx)
 	// no tablet
 	want := []string{"target: ks.0.replica", `no healthy tablet available for 'keyspace:"ks" shard:"0" tablet_type:REPLICA`}
@@ -309,7 +309,7 @@ func testTabletGatewayTransact(t *testing.T, ctx context.Context, f func(ctx con
 	}
 	hc := discovery.NewFakeHealthCheck(nil)
 	ts := &econtext.FakeTopoServer{}
-	tg := NewTabletGateway(ctx, hc, ts, "cell")
+	tg, _ := NewTabletGateway(ctx, hc, ts, "cell")
 	defer tg.Close(ctx)
 
 	// retry error - no retry
@@ -350,7 +350,7 @@ func verifyShardErrors(t *testing.T, err error, wantErrors []string, wantCode vt
 // TestWithRetry tests the functionality of withRetry function in different circumstances.
 func TestWithRetry(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	tg := NewTabletGateway(ctx, discovery.NewFakeHealthCheck(nil), &econtext.FakeTopoServer{}, "cell")
+	tg, _ := NewTabletGateway(ctx, discovery.NewFakeHealthCheck(nil), &econtext.FakeTopoServer{}, "cell")
 	tg.kev = discovery.NewKeyspaceEventWatcher(ctx, tg.srvTopoServer, tg.hc, tg.localCell)
 	defer func() {
 		cancel()
@@ -392,7 +392,7 @@ func TestWithRetry(t *testing.T) {
 	}
 	for _, tt := range testcases {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tg.withRetry(ctx, tt.target, nil, "", tt.inTransaction, tt.inner)
+			err := tg.withRetry(ctx, tt.target, nil, "", queryservice.WrapOpts{InTransaction: tt.inTransaction}, tt.inner)
 			if tt.expectedErr == "" {
 				require.NoError(t, err)
 			} else {

@@ -376,6 +376,9 @@ message ExecuteOptions {
 
   // in_dml_execution indicates that the query is being executed as part of a DML execution.
   bool in_dml_execution = 19;
+
+  // SessionUUID is the UUID of the current session.
+  string SessionUUID = 20;
 }
 
 // Field describes a single column returned by a query
