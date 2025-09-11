@@ -108,6 +108,8 @@ type RPCTM interface {
 
 	StartReplication(ctx context.Context, semiSync bool) error
 
+	RestartReplication(ctx context.Context, semiSync bool) error
+
 	StartReplicationUntilAfter(ctx context.Context, position string, waitTime time.Duration) error
 
 	GetReplicas(ctx context.Context) ([]string, error)

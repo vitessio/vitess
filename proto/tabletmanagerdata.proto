@@ -405,6 +405,13 @@ message StartReplicationRequest {
 message StartReplicationResponse {
 }
 
+message RestartReplicationRequest {
+  bool semiSync = 1;
+}
+
+message RestartReplicationResponse {
+}
+
 message StartReplicationUntilAfterRequest {
   string position = 1;
   int64 wait_timeout = 2;

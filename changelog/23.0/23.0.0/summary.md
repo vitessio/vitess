@@ -17,6 +17,7 @@
         - [Dynamic control of `EmergencyReparentShard`-based recoveries](#vtorc-dynamic-ers-disabled)
         - [Recovery stats to include keyspace/shard](#recoveries-stats-keyspace-shard)
     - **[VTTablet](#minor-changes-vttablet)**
+        - [API Changes](#api-changes)
         - [CLI Flags](#flags-vttablet)
         - [Managed MySQL configuration defaults to caching-sha2-password](#mysql-caching-sha2-password) 
         - [MySQL timezone environment propagation](#mysql-timezone-env)
@@ -100,6 +101,10 @@ The following recovery-related stats now include labels for keyspaces and shards
 Previous to this release, only the recovery "type" was included in labels.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
+
+#### <a id="api-changes"/>API Changes</a>
+
+- Added `RestartReplication` method to `TabletManagerClient` interface. This new RPC allows stopping and restarting MySQL replication with semi-sync configuration in a single call, providing a convenient alternative to separate `StopReplication` and `StartReplication` calls.
 
 #### <a id="flags-vttablet"/>CLI Flags</a>
 
