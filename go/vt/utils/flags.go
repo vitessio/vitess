@@ -157,7 +157,7 @@ var (
 
 // Translate flag names from underscores to dashes and print a deprecation warning.
 func NormalizeUnderscoresToDashes(f *pflag.FlagSet, name string) pflag.NormalizedName {
-	if strings.Contains(name, "_") {
+	if strings.Contains(name, "_") && !strings.Contains(name, "-") {
 		normalizedName := strings.ReplaceAll(name, "_", "-")
 
 		// Only emit a warning if we haven't emitted one yet
@@ -166,7 +166,7 @@ func NormalizeUnderscoresToDashes(f *pflag.FlagSet, name string) pflag.Normalize
 			fmt.Printf("Flag --%s has been deprecated, use --%s instead \n", name, normalizedName)
 		}
 
-		return pflag.NormalizedName(strings.ReplaceAll(name, "_", "-"))
+		return pflag.NormalizedName(normalizedName)
 	}
 
 	return pflag.NormalizedName(name)
