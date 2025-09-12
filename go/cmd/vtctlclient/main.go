@@ -52,6 +52,8 @@ func init() {
 		fs.StringVar(&server, "server", server, "server to use for connection")
 
 		acl.RegisterFlags(fs)
+
+		fs.SetNormalizeFunc(utils.NormalizeUnderscoresToDashes)
 	})
 }
 

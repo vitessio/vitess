@@ -17,7 +17,6 @@ limitations under the License.
 package utils
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/spf13/pflag"
@@ -51,51 +50,27 @@ func testFlagVar[T any](t *testing.T, name string, def T, usage string, setter f
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	var value T
 	setter(fs, &value, name, def, usage)
-	underscored, dashed := flagVariants(name)
 
 	// Verify the primary (dashed) flag.
-	fDashed := fs.Lookup(dashed)
-	if fDashed == nil {
-		t.Fatalf("Expected flag %q to be registered", dashed)
+	flag := fs.Lookup(name)
+	if flag == nil {
+		t.Fatalf("Expected flag %q to be registered", name)
 	} else {
-		if fDashed.Usage != usage {
-			t.Errorf("Expected usage %q for flag %q, got %q", usage, dashed, fDashed.Usage)
+		if flag.Usage != usage {
+			t.Errorf("Expected usage %q for flag %q, got %q", usage, name, flag.Usage)
 		}
-		if fDashed.Hidden {
-			t.Errorf("Flag %q should not be hidden", dashed)
+		if flag.Hidden {
+			t.Errorf("Flag %q should not be hidden", name)
 		}
 	}
-
-	// Verify the (deprecated )alias (underscored) flag.
-	fUnderscored := fs.Lookup(underscored)
-	if fUnderscored == nil {
-		t.Fatalf("Expected flag %q to be registered", underscored)
-	} else {
-		if fUnderscored.Usage != "" {
-			t.Errorf("Expected empty usage for flag %q, got %q", underscored, fUnderscored.Usage)
-		}
-		if !fUnderscored.Hidden {
-			t.Errorf("Flag %q should be hidden", underscored)
-		}
-		expectedDep := fmt.Sprintf("use %s instead", dashed)
-		if fUnderscored.Deprecated != expectedDep {
-			t.Errorf("Expected deprecated message %q for flag %q, got %q", expectedDep, underscored, fUnderscored.Deprecated)
-		}
-	}
-}
-
-func testFlagVars[T any](t *testing.T, name string, def T, usage string, setter func(fs *pflag.FlagSet, p *T, name string, def T, usage string)) {
-	underscored, dashed := flagVariants(name)
-	testFlagVar(t, dashed, def, usage, setter)
-	testFlagVar(t, underscored, def, "", setter)
 }
 
 func TestSetFlagIntVar(t *testing.T) {
-	testFlagVars(t, "int-flag", 42, "an integer flag", SetFlagIntVar)
+	testFlagVar(t, "int-flag", 42, "an integer flag", SetFlagIntVar)
 }
 
 func TestSetFlagBoolVar(t *testing.T) {
-	testFlagVars(t, "bool-flag", true, "a boolean flag", SetFlagBoolVar)
+	testFlagVar(t, "bool-flag", true, "a boolean flag", SetFlagBoolVar)
 }
 
 func TestSetFlagVariantsForTests(t *testing.T) {

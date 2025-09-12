@@ -22,11 +22,13 @@ import (
 	"vitess.io/vitess/go/cmd/vttlstest/cli"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 func main() {
 	defer exit.Recover()
 	defer logutil.Flush()
 
+	cli.Root.SetGlobalNormalizationFunc(utils.NormalizeUnderscoresToDashes)
 	cobra.CheckErr(cli.Root.Execute())
 }
