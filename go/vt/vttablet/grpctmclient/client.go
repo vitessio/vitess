@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/utils"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
@@ -181,7 +182,7 @@ func (client *grpcClient) dialPool(ctx context.Context, tablet *topodatapb.Table
 	addr := netutil.JoinHostPort(tablet.Hostname, int32(tablet.PortMap["grpc"]))
 	opt, err := grpcclient.SecureDialOption(cert, key, ca, crl, name)
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 
 	client.mu.Lock()
@@ -197,7 +198,7 @@ func (client *grpcClient) dialPool(ctx context.Context, tablet *topodatapb.Table
 		for i := 0; i < cap(c); i++ {
 			tm, err := client.createTmc(ctx, addr, opt)
 			if err != nil {
-				return nil, err
+				return nil, vterrors.FromGRPC(err)
 			}
 			c <- tm
 		}
@@ -272,7 +273,7 @@ func (client *Client) Ping(ctx context.Context, tablet *topodatapb.Tablet) error
 		Payload: "payload",
 	})
 	if err != nil {
-		return err
+		return vterrors.FromGRPC(err)
 	}
 	if result.Payload != "payload" {
 		return fmt.Errorf("bad ping result: %v", result.Payload)
@@ -290,7 +291,7 @@ func (client *Client) Sleep(ctx context.Context, tablet *topodatapb.Tablet, dura
 	_, err = c.Sleep(ctx, &tabletmanagerdatapb.SleepRequest{
 		Duration: int64(duration),
 	})
-	return err
+	return vterrors.FromGRPC(err)
 }
 
 // ExecuteHook is part of the tmclient.TabletManagerClient interface.
@@ -306,7 +307,7 @@ func (client *Client) ExecuteHook(ctx context.Context, tablet *topodatapb.Tablet
 		ExtraEnv:   hk.ExtraEnv,
 	})
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return &hook.HookResult{
 		ExitStatus: int(hr.ExitStatus),
@@ -324,7 +325,7 @@ func (client *Client) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, 
 	defer closer.Close()
 	response, err := c.GetSchema(ctx, request)
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response.SchemaDefinition, nil
 }
@@ -338,7 +339,7 @@ func (client *Client) GetPermissions(ctx context.Context, tablet *topodatapb.Tab
 	defer closer.Close()
 	response, err := c.GetPermissions(ctx, &tabletmanagerdatapb.GetPermissionsRequest{})
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response.Permissions, nil
 }
@@ -354,7 +355,7 @@ func (client *Client) GetGlobalStatusVars(ctx context.Context, tablet *topodatap
 		Variables: variables,
 	})
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response.GetStatusValues(), nil
 }
@@ -371,7 +372,7 @@ func (client *Client) SetReadOnly(ctx context.Context, tablet *topodatapb.Tablet
 	}
 	defer closer.Close()
 	_, err = c.SetReadOnly(ctx, &tabletmanagerdatapb.SetReadOnlyRequest{})
-	return err
+	return vterrors.FromGRPC(err)
 }
 
 // SetReadWrite is part of the tmclient.TabletManagerClient interface.
@@ -382,7 +383,7 @@ func (client *Client) SetReadWrite(ctx context.Context, tablet *topodatapb.Table
 	}
 	defer closer.Close()
 	_, err = c.SetReadWrite(ctx, &tabletmanagerdatapb.SetReadWriteRequest{})
-	return err
+	return vterrors.FromGRPC(err)
 }
 
 // ChangeTags is part of the tmclient.TabletManagerClient interface.
@@ -392,10 +393,11 @@ func (client *Client) ChangeTags(ctx context.Context, tablet *topodatapb.Tablet,
 		return nil, err
 	}
 	defer closer.Close()
-	return c.ChangeTags(ctx, &tabletmanagerdatapb.ChangeTagsRequest{
+	res, err := c.ChangeTags(ctx, &tabletmanagerdatapb.ChangeTagsRequest{
 		Tags:    tabletTags,
 		Replace: replace,
 	})
+	return res, vterrors.FromGRPC(err)
 }
 
 // ChangeType is part of the tmclient.TabletManagerClient interface.
@@ -409,7 +411,7 @@ func (client *Client) ChangeType(ctx context.Context, tablet *topodatapb.Tablet,
 		TabletType: dbType,
 		SemiSync:   semiSync,
 	})
-	return err
+	return vterrors.FromGRPC(err)
 }
 
 // RefreshState is part of the tmclient.TabletManagerClient interface.
@@ -420,7 +422,7 @@ func (client *Client) RefreshState(ctx context.Context, tablet *topodatapb.Table
 	}
 	defer closer.Close()
 	_, err = c.RefreshState(ctx, &tabletmanagerdatapb.RefreshStateRequest{})
-	return err
+	return vterrors.FromGRPC(err)
 }
 
 // RunHealthCheck is part of the tmclient.TabletManagerClient interface.
@@ -431,7 +433,7 @@ func (client *Client) RunHealthCheck(ctx context.Context, tablet *topodatapb.Tab
 	}
 	defer closer.Close()
 	_, err = c.RunHealthCheck(ctx, &tabletmanagerdatapb.RunHealthCheckRequest{})
-	return err
+	return vterrors.FromGRPC(err)
 }
 
 // ReloadSchema is part of the tmclient.TabletManagerClient interface.
@@ -444,7 +446,7 @@ func (client *Client) ReloadSchema(ctx context.Context, tablet *topodatapb.Table
 	_, err = c.ReloadSchema(ctx, &tabletmanagerdatapb.ReloadSchemaRequest{
 		WaitPosition: waitPosition,
 	})
-	return err
+	return vterrors.FromGRPC(err)
 }
 
 func (client *Client) ResetSequences(ctx context.Context, tablet *topodatapb.Tablet, tables []string) error {
@@ -456,7 +458,7 @@ func (client *Client) ResetSequences(ctx context.Context, tablet *topodatapb.Tab
 	_, err = c.ResetSequences(ctx, &tabletmanagerdatapb.ResetSequencesRequest{
 		Tables: tables,
 	})
-	return err
+	return vterrors.FromGRPC(err)
 }
 
 // PreflightSchema is part of the tmclient.TabletManagerClient interface.
@@ -471,7 +473,7 @@ func (client *Client) PreflightSchema(ctx context.Context, tablet *topodatapb.Ta
 		Changes: changes,
 	})
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 
 	return response.ChangeResults, nil
@@ -494,7 +496,7 @@ func (client *Client) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet
 		DisableForeignKeyChecks: change.DisableForeignKeyChecks,
 	})
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return &tabletmanagerdatapb.SchemaChangeResult{
 		BeforeSchema: response.BeforeSchema,
@@ -511,7 +513,7 @@ func (client *Client) LockTables(ctx context.Context, tablet *topodatapb.Tablet)
 	defer closer.Close()
 
 	_, err = c.LockTables(ctx, &tabletmanagerdatapb.LockTablesRequest{})
-	return err
+	return vterrors.FromGRPC(err)
 }
 
 // UnlockTables is part of the tmclient.TabletManagerClient interface.
@@ -523,7 +525,7 @@ func (client *Client) UnlockTables(ctx context.Context, tablet *topodatapb.Table
 	defer closer.Close()
 
 	_, err = c.UnlockTables(ctx, &tabletmanagerdatapb.UnlockTablesRequest{})
-	return err
+	return vterrors.FromGRPC(err)
 }
 
 // ExecuteQuery is part of the tmclient.TabletManagerClient interface.
@@ -546,7 +548,7 @@ func (client *Client) ExecuteQuery(ctx context.Context, tablet *topodatapb.Table
 		CallerId: cid,
 	})
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response.Result, nil
 }
@@ -582,7 +584,7 @@ func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.
 		DisableForeignKeyChecks: req.DisableForeignKeyChecks,
 	})
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response.Result, nil
 }
@@ -618,9 +620,9 @@ func (client *Client) ExecuteMultiFetchAsDba(ctx context.Context, tablet *topoda
 		DisableForeignKeyChecks: req.DisableForeignKeyChecks,
 	})
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
-	return response.Results, err
+	return response.Results, nil
 }
 
 // ExecuteFetchAsAllPrivs is part of the tmclient.TabletManagerClient interface.
@@ -638,7 +640,7 @@ func (client *Client) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topoda
 		ReloadSchema: req.ReloadSchema,
 	})
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response.Result, nil
 }
@@ -667,7 +669,7 @@ func (client *Client) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.
 
 	response, err := c.ExecuteFetchAsApp(ctx, req)
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response.Result, nil
 }
@@ -684,7 +686,7 @@ func (client *Client) GetUnresolvedTransactions(ctx context.Context, tablet *top
 		AbandonAge: abandonAge,
 	})
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response.Transactions, nil
 }
@@ -701,7 +703,7 @@ func (client *Client) ConcludeTransaction(ctx context.Context, tablet *topodatap
 		Dtid: dtid,
 		Mm:   mm,
 	})
-	return err
+	return vterrors.FromGRPC(err)
 }
 
 func (client *Client) MysqlHostMetrics(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.MysqlHostMetricsRequest) (*tabletmanagerdatapb.MysqlHostMetricsResponse, error) {
@@ -713,7 +715,7 @@ func (client *Client) MysqlHostMetrics(ctx context.Context, tablet *topodatapb.T
 
 	resp, err := c.MysqlHostMetrics(ctx, req)
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return resp, nil
 }
@@ -730,7 +732,7 @@ func (client *Client) ReadTransaction(ctx context.Context, tablet *topodatapb.Ta
 		Dtid: dtid,
 	})
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return resp.Transaction, nil
 }
@@ -747,7 +749,7 @@ func (client *Client) GetTransactionInfo(ctx context.Context, tablet *topodatapb
 		Dtid: dtid,
 	})
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return resp, nil
 }
@@ -765,7 +767,7 @@ func (client *Client) ReplicationStatus(ctx context.Context, tablet *topodatapb.
 	defer closer.Close()
 	response, err := c.ReplicationStatus(ctx, &tabletmanagerdatapb.ReplicationStatusRequest{})
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response.Status, nil
 }
@@ -799,7 +801,7 @@ func (client *Client) FullStatus(ctx context.Context, tablet *topodatapb.Tablet)
 		if invalidator != nil {
 			invalidator()
 		}
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response.Status, nil
 }
@@ -813,7 +815,7 @@ func (client *Client) PrimaryStatus(ctx context.Context, tablet *topodatapb.Tabl
 	defer closer.Close()
 	response, err := c.PrimaryStatus(ctx, &tabletmanagerdatapb.PrimaryStatusRequest{})
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response.Status, nil
 }
@@ -827,7 +829,7 @@ func (client *Client) PrimaryPosition(ctx context.Context, tablet *topodatapb.Ta
 	defer closer.Close()
 	response, err := c.PrimaryPosition(ctx, &tabletmanagerdatapb.PrimaryPositionRequest{})
 	if err != nil {
-		return "", err
+		return "", vterrors.FromGRPC(err)
 	}
 	return response.Position, nil
 }
@@ -840,7 +842,7 @@ func (client *Client) WaitForPosition(ctx context.Context, tablet *topodatapb.Ta
 	}
 	defer closer.Close()
 	_, err = c.WaitForPosition(ctx, &tabletmanagerdatapb.WaitForPositionRequest{Position: pos})
-	return err
+	return vterrors.FromGRPC(err)
 }
 
 // StopReplication is part of the tmclient.TabletManagerClient interface.
@@ -851,7 +853,7 @@ func (client *Client) StopReplication(ctx context.Context, tablet *topodatapb.Ta
 	}
 	defer closer.Close()
 	_, err = c.StopReplication(ctx, &tabletmanagerdatapb.StopReplicationRequest{})
-	return err
+	return vterrors.FromGRPC(err)
 }
 
 // StopReplicationMinimum is part of the tmclient.TabletManagerClient interface.
@@ -867,7 +869,7 @@ func (client *Client) StopReplicationMinimum(ctx context.Context, tablet *topoda
 		WaitTimeout: int64(waitTime),
 	})
 	if err != nil {
-		return "", err
+		return "", vterrors.FromGRPC(err)
 	}
 	return response.Position, nil
 }
@@ -882,7 +884,7 @@ func (client *Client) StartReplication(ctx context.Context, tablet *topodatapb.T
 	_, err = c.StartReplication(ctx, &tabletmanagerdatapb.StartReplicationRequest{
 		SemiSync: semiSync,
 	})
-	return err
+	return vterrors.FromGRPC(err)
 }
 
 // StartReplicationUntilAfter is part of the tmclient.TabletManagerClient interface.
@@ -896,7 +898,7 @@ func (client *Client) StartReplicationUntilAfter(ctx context.Context, tablet *to
 		Position:    position,
 		WaitTimeout: int64(waitTime),
 	})
-	return err
+	return vterrors.FromGRPC(err)
 }
 
 // GetReplicas is part of the tmclient.TabletManagerClient interface.
@@ -908,7 +910,7 @@ func (client *Client) GetReplicas(ctx context.Context, tablet *topodatapb.Tablet
 	defer closer.Close()
 	response, err := c.GetReplicas(ctx, &tabletmanagerdatapb.GetReplicasRequest{})
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response.Addrs, nil
 }
@@ -925,7 +927,7 @@ func (client *Client) CreateVReplicationWorkflow(ctx context.Context, tablet *to
 	defer closer.Close()
 	response, err := c.CreateVReplicationWorkflow(ctx, request)
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response, nil
 }
@@ -938,7 +940,7 @@ func (client *Client) DeleteTableData(ctx context.Context, tablet *topodatapb.Ta
 	defer closer.Close()
 	response, err := c.DeleteTableData(ctx, request)
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response, nil
 }
@@ -951,7 +953,7 @@ func (client *Client) DeleteVReplicationWorkflow(ctx context.Context, tablet *to
 	defer closer.Close()
 	response, err := c.DeleteVReplicationWorkflow(ctx, request)
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response, nil
 }
@@ -964,7 +966,7 @@ func (client *Client) HasVReplicationWorkflows(ctx context.Context, tablet *topo
 	defer closer.Close()
 	response, err := c.HasVReplicationWorkflows(ctx, request)
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response, nil
 }
@@ -977,7 +979,7 @@ func (client *Client) ReadVReplicationWorkflows(ctx context.Context, tablet *top
 	defer closer.Close()
 	response, err := c.ReadVReplicationWorkflows(ctx, request)
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response, nil
 }
@@ -990,7 +992,7 @@ func (client *Client) ReadVReplicationWorkflow(ctx context.Context, tablet *topo
 	defer closer.Close()
 	response, err := c.ReadVReplicationWorkflow(ctx, request)
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response, nil
 }
@@ -1003,7 +1005,7 @@ func (client *Client) ValidateVReplicationPermissions(ctx context.Context, table
 	defer closer.Close()
 	response, err := c.ValidateVReplicationPermissions(ctx, request)
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response, nil
 }
@@ -1017,7 +1019,7 @@ func (client *Client) VReplicationExec(ctx context.Context, tablet *topodatapb.T
 	defer closer.Close()
 	response, err := c.VReplicationExec(ctx, &tabletmanagerdatapb.VReplicationExecRequest{Query: query})
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response.Result, nil
 }
@@ -1029,8 +1031,9 @@ func (client *Client) VReplicationWaitForPos(ctx context.Context, tablet *topoda
 		return err
 	}
 	defer closer.Close()
-	if _, err = c.VReplicationWaitForPos(ctx, &tabletmanagerdatapb.VReplicationWaitForPosRequest{Id: id, Position: pos}); err != nil {
-		return err
+	_, err = c.VReplicationWaitForPos(ctx, &tabletmanagerdatapb.VReplicationWaitForPosRequest{Id: id, Position: pos})
+	if err != nil {
+		return vterrors.FromGRPC(err)
 	}
 	return nil
 }
@@ -1043,7 +1046,7 @@ func (client *Client) UpdateVReplicationWorkflow(ctx context.Context, tablet *to
 	defer closer.Close()
 	response, err := c.UpdateVReplicationWorkflow(ctx, request)
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response, nil
 }
@@ -1056,7 +1059,7 @@ func (client *Client) UpdateVReplicationWorkflows(ctx context.Context, tablet *t
 	defer closer.Close()
 	response, err := c.UpdateVReplicationWorkflows(ctx, request)
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response, nil
 }
@@ -1067,7 +1070,8 @@ func (client *Client) GetMaxValueForSequences(ctx context.Context, tablet *topod
 		return nil, err
 	}
 	defer closer.Close()
-	return c.GetMaxValueForSequences(ctx, request)
+	res, err := c.GetMaxValueForSequences(ctx, request)
+	return res, vterrors.FromGRPC(err)
 }
 
 func (client *Client) UpdateSequenceTables(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.UpdateSequenceTablesRequest) (*tabletmanagerdatapb.UpdateSequenceTablesResponse, error) {
@@ -1076,7 +1080,8 @@ func (client *Client) UpdateSequenceTables(ctx context.Context, tablet *topodata
 		return nil, err
 	}
 	defer closer.Close()
-	return c.UpdateSequenceTables(ctx, request)
+	res, err := c.UpdateSequenceTables(ctx, request)
+	return res, vterrors.FromGRPC(err)
 }
 
 // VDiff is part of the tmclient.TabletManagerClient interface.
@@ -1089,7 +1094,7 @@ func (client *Client) VDiff(ctx context.Context, tablet *topodatapb.Tablet, req 
 	defer closer.Close()
 	response, err := c.VDiff(ctx, req)
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response, nil
 }
@@ -1106,7 +1111,7 @@ func (client *Client) ResetReplication(ctx context.Context, tablet *topodatapb.T
 	}
 	defer closer.Close()
 	_, err = c.ResetReplication(ctx, &tabletmanagerdatapb.ResetReplicationRequest{})
-	return err
+	return vterrors.FromGRPC(err)
 }
 
 // InitPrimary is part of the tmclient.TabletManagerClient interface.
@@ -1121,7 +1126,7 @@ func (client *Client) InitPrimary(ctx context.Context, tablet *topodatapb.Tablet
 		SemiSync: semiSync,
 	})
 	if err != nil {
-		return "", err
+		return "", vterrors.FromGRPC(err)
 	}
 	return response.Position, nil
 }
@@ -1139,7 +1144,7 @@ func (client *Client) PopulateReparentJournal(ctx context.Context, tablet *topod
 		PrimaryAlias:        tabletAlias,
 		ReplicationPosition: pos,
 	})
-	return err
+	return vterrors.FromGRPC(err)
 }
 
 // ReadReparentJournalInfo is part of the tmclient.TabletManagerClient interface.
@@ -1151,7 +1156,7 @@ func (client *Client) ReadReparentJournalInfo(ctx context.Context, tablet *topod
 	defer closer.Close()
 	resp, err := c.ReadReparentJournalInfo(ctx, &tabletmanagerdatapb.ReadReparentJournalInfoRequest{})
 	if err != nil {
-		return 0, err
+		return 0, vterrors.FromGRPC(err)
 	}
 	return resp.Length, nil
 }
@@ -1169,7 +1174,7 @@ func (client *Client) InitReplica(ctx context.Context, tablet *topodatapb.Tablet
 		TimeCreatedNs:       timeCreatedNS,
 		SemiSync:            semiSync,
 	})
-	return err
+	return vterrors.FromGRPC(err)
 }
 
 // DemotePrimary is part of the tmclient.TabletManagerClient interface.
@@ -1181,7 +1186,7 @@ func (client *Client) DemotePrimary(ctx context.Context, tablet *topodatapb.Tabl
 	defer closer.Close()
 	response, err := c.DemotePrimary(ctx, &tabletmanagerdatapb.DemotePrimaryRequest{})
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response.PrimaryStatus, nil
 }
@@ -1196,7 +1201,7 @@ func (client *Client) UndoDemotePrimary(ctx context.Context, tablet *topodatapb.
 	_, err = c.UndoDemotePrimary(ctx, &tabletmanagerdatapb.UndoDemotePrimaryRequest{
 		SemiSync: semiSync,
 	})
-	return err
+	return vterrors.FromGRPC(err)
 }
 
 // ReplicaWasPromoted is part of the tmclient.TabletManagerClient interface.
@@ -1207,7 +1212,7 @@ func (client *Client) ReplicaWasPromoted(ctx context.Context, tablet *topodatapb
 	}
 	defer closer.Close()
 	_, err = c.ReplicaWasPromoted(ctx, &tabletmanagerdatapb.ReplicaWasPromotedRequest{})
-	return err
+	return vterrors.FromGRPC(err)
 }
 
 // ResetReplicationParameters is part of the tmclient.TabletManagerClient interface.
@@ -1218,7 +1223,7 @@ func (client *Client) ResetReplicationParameters(ctx context.Context, tablet *to
 	}
 	defer closer.Close()
 	_, err = c.ResetReplicationParameters(ctx, &tabletmanagerdatapb.ResetReplicationParametersRequest{})
-	return err
+	return vterrors.FromGRPC(err)
 }
 
 // SetReplicationSource is part of the tmclient.TabletManagerClient interface.
@@ -1237,7 +1242,7 @@ func (client *Client) SetReplicationSource(ctx context.Context, tablet *topodata
 		SemiSync:              semiSync,
 		HeartbeatInterval:     heartbeatInterval,
 	})
-	return err
+	return vterrors.FromGRPC(err)
 }
 
 // ReplicaWasRestarted is part of the tmclient.TabletManagerClient interface.
@@ -1250,7 +1255,7 @@ func (client *Client) ReplicaWasRestarted(ctx context.Context, tablet *topodatap
 	_, err = c.ReplicaWasRestarted(ctx, &tabletmanagerdatapb.ReplicaWasRestartedRequest{
 		Parent: parent,
 	})
-	return err
+	return vterrors.FromGRPC(err)
 }
 
 // StopReplicationAndGetStatus is part of the tmclient.TabletManagerClient interface.
@@ -1264,7 +1269,7 @@ func (client *Client) StopReplicationAndGetStatus(ctx context.Context, tablet *t
 		StopReplicationMode: stopReplicationMode,
 	})
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return &replicationdatapb.StopReplicationStatus{ // nolint
 		Before: response.Status.Before,
@@ -1284,7 +1289,7 @@ func (client *Client) PromoteReplica(ctx context.Context, tablet *topodatapb.Tab
 		SemiSync: semiSync,
 	})
 	if err != nil {
-		return "", err
+		return "", vterrors.FromGRPC(err)
 	}
 	return response.Position, nil
 }
@@ -1299,7 +1304,7 @@ func (e *backupStreamAdapter) Recv() (*logutilpb.Event, error) {
 	br, err := e.stream.Recv()
 	if err != nil {
 		e.closer.Close()
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return br.Event, nil
 }
@@ -1314,7 +1319,7 @@ func (client *Client) Backup(ctx context.Context, tablet *topodatapb.Tablet, req
 	stream, err := c.Backup(ctx, req)
 	if err != nil {
 		closer.Close()
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return &backupStreamAdapter{
 		stream: stream,
@@ -1352,7 +1357,7 @@ func (client *Client) CheckThrottler(ctx context.Context, tablet *topodatapb.Tab
 		if invalidator != nil {
 			invalidator()
 		}
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response, nil
 }
@@ -1370,7 +1375,7 @@ func (client *Client) GetThrottlerStatus(ctx context.Context, tablet *topodatapb
 	defer closer.Close()
 	response, err := c.GetThrottlerStatus(ctx, req)
 	if err != nil {
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response, nil
 }
@@ -1384,7 +1389,7 @@ func (e *restoreFromBackupStreamAdapter) Recv() (*logutilpb.Event, error) {
 	br, err := e.stream.Recv()
 	if err != nil {
 		e.closer.Close()
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return br.Event, nil
 }
@@ -1399,7 +1404,7 @@ func (client *Client) RestoreFromBackup(ctx context.Context, tablet *topodatapb.
 	stream, err := c.RestoreFromBackup(ctx, req)
 	if err != nil {
 		closer.Close()
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	return &restoreFromBackupStreamAdapter{
 		stream: stream,
