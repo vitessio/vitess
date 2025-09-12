@@ -27,7 +27,6 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
 
-	vtutils "vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/logic"
@@ -57,10 +56,6 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 		"--topo-implementation":        clusterInfo.ClusterInstance.VtctldClientProcess.TopoImplementation,
 		"--topo-global-root":           clusterInfo.ClusterInstance.VtctldClientProcess.TopoGlobalRoot,
 	}
-
-	vtutils.SetFlagVariantsForTests(args, "--topo-global-server-address", clusterInfo.ClusterInstance.VtctldClientProcess.TopoGlobalAddress)
-	vtutils.SetFlagVariantsForTests(args, "--topo-implementation", clusterInfo.ClusterInstance.VtctldClientProcess.TopoImplementation)
-	vtutils.SetFlagVariantsForTests(args, "--topo-global-root", clusterInfo.ClusterInstance.VtctldClientProcess.TopoGlobalRoot)
 
 	os.Args = []string{"vtorc"}
 	for k, v := range args {
