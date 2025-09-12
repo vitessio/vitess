@@ -357,10 +357,10 @@ func moveFlags(name string, fs *pflag.FlagSet) {
 	// glog flags, no better way to do this
 	_flag.PreventGlogVFlagFromClobberingVersionFlagShorthand(fs)
 	fs.AddGoFlag(flag.Lookup("logtostderr"))
-	fs.AddGoFlag(flag.Lookup("log-backtrace-at"))
+	fs.AddGoFlag(flag.Lookup("log_backtrace_at"))
 	fs.AddGoFlag(flag.Lookup("alsologtostderr"))
 	fs.AddGoFlag(flag.Lookup("stderrthreshold"))
-	fs.AddGoFlag(flag.Lookup("log-dir"))
+	fs.AddGoFlag(flag.Lookup("log_dir"))
 	fs.AddGoFlag(flag.Lookup("vmodule"))
 
 	pflag.CommandLine = fs

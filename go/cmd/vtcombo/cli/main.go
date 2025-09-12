@@ -177,7 +177,7 @@ func run(cmd *cobra.Command, args []string) (err error) {
 
 	// vtctld UI requires the cell flag
 	cmd.Flags().Set("cell", tpb.Cells[0])
-	if f := cmd.Flags().Lookup("log-dir"); f != nil && !f.Changed {
+	if f := cmd.Flags().Lookup("log_dir"); f != nil && !f.Changed {
 		cmd.Flags().Set("log-dir", "$VTDATAROOT/tmp")
 	}
 
