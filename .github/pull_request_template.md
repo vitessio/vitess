@@ -24,10 +24,6 @@
 -   [ ] Did the new or modified tests pass consistently locally and on CI?
 -   [ ] Documentation was added or is not required
 
-## Deployment Notes
-
-<!-- Notes regarding deployment of the contained body of work. These should note any db migrations, etc. -->
-
 ### AI Disclosure
 
 <!-- 
