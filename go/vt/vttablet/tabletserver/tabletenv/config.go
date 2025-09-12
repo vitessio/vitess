@@ -161,8 +161,8 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	utils.SetFlagBoolVar(fs, &currentConfig.TrackSchemaVersions, "track-schema-versions", false, "When enabled, vttablet will store versions of schemas at each position that a DDL is applied and allow retrieval of the schema corresponding to a position")
 	fs.Int64Var(&currentConfig.SchemaVersionMaxAgeSeconds, "schema-version-max-age-seconds", 0, "max age of schema version records to kept in memory by the vreplication historian")
 
-	_ = fs.Bool("twopc_enable", true, "TwoPC is enabled")
-	_ = fs.MarkDeprecated("twopc_enable", "TwoPC is always enabled, the transaction abandon age can be configured")
+	_ = fs.Bool("twopc-enable", true, "TwoPC is enabled")
+	_ = fs.MarkDeprecated("twopc-enable", "TwoPC is always enabled, the transaction abandon age can be configured")
 	utils.SetFlagFloatDurationVar(fs, &currentConfig.TwoPCAbandonAge, "twopc-abandon-age", defaultConfig.TwoPCAbandonAge,
 		"Any unresolved transaction older than this time will be sent to the coordinator to be resolved. NOTE: Providing time as seconds (float64) is deprecated. Use time.Duration format (e.g., '1s', '2m', '1h').")
 
