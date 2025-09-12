@@ -19,6 +19,7 @@ package utils
 import (
 	"fmt"
 	"math/rand/v2"
+	"os"
 	"strings"
 	"time"
 
@@ -164,7 +165,7 @@ func NormalizeUnderscoresToDashes(f *pflag.FlagSet, name string) pflag.Normalize
 		// Only emit a warning if we haven't emitted one yet
 		if !deprecationWarningsEmitted[normalizedName] {
 			deprecationWarningsEmitted[normalizedName] = true
-			fmt.Printf("Flag --%s has been deprecated, use --%s instead \n", name, normalizedName)
+			fmt.Fprintf(os.Stderr, "Flag --%s has been deprecated, use --%s instead \n", name, normalizedName)
 		}
 
 		return pflag.NormalizedName(normalizedName)
