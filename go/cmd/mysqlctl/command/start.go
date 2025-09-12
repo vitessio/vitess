@@ -62,7 +62,7 @@ func commandStart(cmd *cobra.Command, args []string) error {
 
 func init() {
 	utils.SetFlagDurationVar(Start.Flags(), &startArgs.WaitTime, "wait-time", startArgs.WaitTime, "How long to wait for mysqld startup.")
-	Start.Flags().Var(&startArgs.MySQLdArgs, "mysqld_args", "List of comma-separated flags to pass additionally to mysqld.")
+	Start.Flags().Var(&startArgs.MySQLdArgs, "mysqld-args", "List of comma-separated flags to pass additionally to mysqld.")
 
 	Root.AddCommand(Start)
 }
