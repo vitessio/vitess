@@ -24,6 +24,10 @@
 -   [ ] Did the new or modified tests pass consistently locally and on CI?
 -   [ ] Documentation was added or is not required
 
-## Deployment Notes
+### AI Disclosure
 
-<!-- Notes regarding deployment of the contained body of work. These should note any db migrations, etc. -->
+<!-- 
+  A sentence or two describing whether AI was used to author any of the code in this pull request
+  Example: "This PR was written primarily by Claude Code" or "Tests written by GPT-5"
+  For more information: https://github.com/vitessio/enhancements/blob/main/veps/vep-7.md
+-->
