@@ -140,13 +140,12 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 	grpcclient.RegisterFlags(fs)
 
 	grpcclient.ResetStaticAuth()
-	authStaticClientCredsFlag = utils.GetFlagVariantForTests("--grpc-auth-static-client-creds")
 	err = fs.Parse([]string{
-		authStaticClientCredsFlag,
+		"--grpc-auth-static-client-creds",
 		f.Name(),
 	})
 
-	require.NoError(t, err, "failed to set `%s=%s`", authStaticClientCredsFlag, f.Name())
+	require.NoError(t, err, "failed to set `%s=%s`", "--grpc-auth-static-client-creds", f.Name())
 
 	client, err = dial(ctx, listener.Addr().String())
 	if err != nil {
