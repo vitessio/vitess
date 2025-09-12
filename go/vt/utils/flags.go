@@ -52,15 +52,15 @@ func flagVariants(name string) (underscored, dashed string) {
 func setFlagVar[T any](fs *pflag.FlagSet, p *T, name string, def T, usage string,
 	setFunc func(fs *pflag.FlagSet, p *T, name string, def T, usage string)) {
 
-	underscored, dashed := flagVariants(name)
-	if name == underscored {
+	// underscored, dashed := flagVariants(name)
+	if strings.Contains(name, "_") {
 		fmt.Printf("[WARNING] Please use flag names with dashes instead of underscores, preparing for deprecation of underscores in flag names")
 	}
 
-	setFunc(fs, p, dashed, def, usage)
-	setFunc(fs, p, underscored, def, "")
-	_ = fs.MarkHidden(underscored)
-	_ = fs.MarkDeprecated(underscored, fmt.Sprintf("use %s instead", dashed))
+	setFunc(fs, p, name, def, usage)
+	// setFunc(fs, p, underscored, def, "")
+	// _ = fs.MarkHidden(underscored)
+	// _ = fs.MarkDeprecated(underscored, fmt.Sprintf("use %s instead", dashed))
 }
 
 func SetFlagIntVar(fs *pflag.FlagSet, p *int, name string, def int, usage string) {
@@ -111,14 +111,14 @@ func SetFlagFloat64Var(fs *pflag.FlagSet, p *float64, name string, def float64, 
 // using both the dashed and underscored versions of the flag name.
 // The underscored version is hidden and marked as deprecated.
 func SetFlagVar(fs *pflag.FlagSet, value pflag.Value, name, usage string) {
-	underscored, dashed := flagVariants(name)
-	if name == underscored {
+	// underscored, dashed := flagVariants(name)
+	if strings.Contains(name, "_") {
 		fmt.Printf("[WARNING] Please use flag names with dashes instead of underscores, preparing for deprecation of underscores in flag names")
 	}
-	fs.Var(value, dashed, usage)
-	fs.Var(value, underscored, "")
-	_ = fs.MarkHidden(underscored)
-	_ = fs.MarkDeprecated(underscored, fmt.Sprintf("use %s instead", dashed))
+	fs.Var(value, name, usage)
+	// fs.Var(value, underscored, "")
+	// _ = fs.MarkHidden(underscored)
+	// _ = fs.MarkDeprecated(underscored, fmt.Sprintf("use %s instead", dashed))
 }
 
 // SetFlagVariantsForTests randomly assigns either the underscored or dashed version of the flag name to the map.
@@ -149,4 +149,25 @@ func GetFlagVariantForTestsByVersion(flagName string, majorVersion int) string {
 		return dashed
 	}
 	return underscored
+}
+
+var (
+	deprecationWarningsEmitted = make(map[string]bool)
+)
+
+// Translate flag names from underscores to dashes and print a deprecation warning.
+func NormalizeUnderscoresToDashes(f *pflag.FlagSet, name string) pflag.NormalizedName {
+	if strings.Contains(name, "_") {
+		normalizedName := strings.ReplaceAll(name, "_", "-")
+
+		// Only emit a warning if we haven't emitted one yet
+		if !deprecationWarningsEmitted[normalizedName] {
+			deprecationWarningsEmitted[normalizedName] = true
+			fmt.Printf("Flag --%s has been deprecated, use --%s instead \n", name, normalizedName)
+		}
+
+		return pflag.NormalizedName(strings.ReplaceAll(name, "_", "-"))
+	}
+
+	return pflag.NormalizedName(name)
 }
