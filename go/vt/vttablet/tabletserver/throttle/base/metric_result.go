@@ -65,7 +65,8 @@ func IsDialTCPError(err error) bool {
 		return false
 	}
 
-	// match vterror/vtrpc-style errors (v23+)
+	// match vterror/vtrpc-style errors (v23+).
+	// v22 (and below) tablets will return vtrpcpb.Code_UNKNOWN
 	switch vterrors.Code(err) {
 	case vtrpcpb.Code_UNAVAILABLE, vtrpcpb.Code_DEADLINE_EXCEEDED:
 		return true
