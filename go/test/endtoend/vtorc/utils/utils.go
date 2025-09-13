@@ -1002,10 +1002,10 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 }
 
 // WaitForSkippedRecoveryCount waits until the given recovery name's count of skipped runs matches the count expected
-func WaitForSkippedRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, recoveryName, keyspace, shard string, countExpected int) {
+func WaitForSkippedRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, recoveryName, keyspace, shard, reason string, countExpected int) {
 	t.Helper()
 	timeout := 15 * time.Second
-	mapKey := fmt.Sprintf("%s.%s.%s", recoveryName, keyspace, shard)
+	mapKey := fmt.Sprintf("%s.%s.%s.%s", recoveryName, keyspace, shard, reason)
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		vars := vtorcInstance.GetVars()
 		skippedRecoveriesMap := vars["SkippedRecoveries"].(map[string]interface{})

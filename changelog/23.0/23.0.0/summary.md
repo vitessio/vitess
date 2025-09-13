@@ -70,9 +70,9 @@ VTGate also advertises MySQL version `8.4.6` by default instead of `8.0.40`. If 
 
 #### <a id="new-vtorc-metrics"/>VTOrc
 
-|          Name       |   Dimensions                        |                   Description                        |                           PR                            |
-|:-------------------:|:-----------------------------------:|:----------------------------------------------------:|:-------------------------------------------------------:|
-| `SkippedRecoveries` | `RecoveryName`, `Keyspace`, `Shard` | Count of the different skipped recoveries performed. | [#17985](https://github.com/vitessio/vitess/pull/17985) |
+|          Name       |   Dimensions                                  |                   Description                        |                           PR                            |
+|:-------------------:|:---------------------------------------------:|:----------------------------------------------------:|:-------------------------------------------------------:|
+| `SkippedRecoveries` | `RecoveryName`, `Keyspace`, `Shard`, `Reason` | Count of the different skipped recoveries processed. | [#17985](https://github.com/vitessio/vitess/pull/17985) |
 
 ### <a id="minor-changes-topo"/>Topology</a>
 

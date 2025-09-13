@@ -51,6 +51,14 @@ const (
 )
 
 var (
+	RecoverySkippedReasonNoRecoveryAction string = "NoRecoveryAction"
+	RecoverySkippedReasonGlobalDisabled   string = "GlobalRecoveriesDisabled"
+	RecoverySkippedReasonERSDisabled      string = "EmergencyReparentShardDisabled"
+	RecoverySkippedReasonStaleAnalysis    string = "StaleAnalysis"
+	RecoverySkippedReasonPrimaryRecovery  string = "PrimaryRecovery"
+)
+
+var (
 	countPendingRecoveries = stats.NewGauge("PendingRecoveries", "Count of the number of pending recoveries")
 
 	// detectedProblems is used to track the number of detected problems.
@@ -80,7 +88,7 @@ var (
 	recoveriesFailureCounter = stats.NewCountersWithMultiLabels("FailedRecoveries", "Count of the different failed recoveries performed", recoveriesCounterLabels)
 
 	// recoveriesSkippedCounter counts the number of skipped recoveries that VTOrc has performed
-	recoveriesSkippedCounter = stats.NewCountersWithMultiLabels("SkippedRecoveries", "Count of the different skipped recoveries performed", recoveriesCounterLabels)
+	recoveriesSkippedCounter = stats.NewCountersWithMultiLabels("SkippedRecoveries", "Count of the different skipped recoveries performed", append(recoveriesCounterLabels, "Reason"))
 
 	// shardLockTimings measures the timing of LockShard operations.
 	shardLockTimingsActions = []string{"Lock", "Unlock"}
@@ -364,7 +372,7 @@ func isERSEnabled(analysisEntry *inst.ReplicationAnalysis) bool {
 }
 
 // getCheckAndRecoverFunctionCode gets the recovery function code to use for the given analysis.
-func getCheckAndRecoverFunctionCode(analysisEntry *inst.ReplicationAnalysis) (recoveryFunc recoveryFunction, skipRecovery bool) {
+func getCheckAndRecoverFunctionCode(analysisEntry *inst.ReplicationAnalysis) (recoveryFunc recoveryFunction, skipRecoveryReason *string) {
 	recoveryFunc = noRecoveryFunc
 	analysisCode := analysisEntry.Analysis
 	switch analysisCode {
@@ -373,20 +381,20 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.ReplicationAnalysis) (re
 		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
 		if !isERSEnabled(analysisEntry) {
 			log.Infof("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode)
-			skipRecovery = true
+			skipRecoveryReason = &RecoverySkippedReasonERSDisabled
 		}
 		recoveryFunc = recoverDeadPrimaryFunc
 	case inst.PrimaryTabletDeleted:
 		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
 		if !isERSEnabled(analysisEntry) {
 			log.Infof("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode)
-			skipRecovery = true
+			skipRecoveryReason = &RecoverySkippedReasonERSDisabled
 		}
 		recoveryFunc = recoverPrimaryTabletDeletedFunc
 	case inst.ErrantGTIDDetected:
 		if !config.ConvertTabletWithErrantGTIDs() {
 			log.Infof("VTOrc not configured to do anything on detecting errant GTIDs, skipping recovering %v", analysisCode)
-			skipRecovery = true
+			skipRecoveryReason = &RecoverySkippedReasonNoRecoveryAction
 		}
 		recoveryFunc = recoverErrantGTIDDetectedFunc
 	case inst.PrimaryHasPrimary:
@@ -413,14 +421,14 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.ReplicationAnalysis) (re
 	case inst.AllPrimaryReplicasNotReplicatingOrDead:
 		recoveryFunc = recoverGenericProblemFunc
 	default:
-		skipRecovery = true
+		skipRecoveryReason = &RecoverySkippedReasonNoRecoveryAction
 	}
 	// Right now this is mostly causing noise with no clear action.
 	// Will revisit this in the future.
 	// case inst.AllPrimaryReplicasStale:
 	//   recoveryFunc = recoverGenericProblemFunc
 
-	return recoveryFunc, skipRecovery
+	return recoveryFunc, skipRecoveryReason
 }
 
 // hasActionableRecovery tells if a recoveryFunction has an actionable recovery or not
@@ -536,15 +544,15 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 	logger := log.NewPrefixedLogger(fmt.Sprintf("Recovery for %s on %s/%s", analysisEntry.Analysis, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard))
 	logger.Info("Starting checkAndRecover")
 
-	checkAndRecoverFunctionCode, skipRecovery := getCheckAndRecoverFunctionCode(analysisEntry)
+	checkAndRecoverFunctionCode, skipRecoveryReason := getCheckAndRecoverFunctionCode(analysisEntry)
 	recoveryName := getRecoverFunctionName(checkAndRecoverFunctionCode)
 	recoveryLabels := []string{recoveryName, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard}
 	isActionableRecovery := hasActionableRecovery(checkAndRecoverFunctionCode)
 	analysisEntry.IsActionableRecovery = isActionableRecovery
 
-	if skipRecovery {
+	if skipRecoveryReason != nil {
 		logger.Warningf("Skipping recovery for problem: %+v, recovery: %+v, aborting recovery", analysisEntry.Analysis, recoveryName)
-		recoveriesSkippedCounter.Add(recoveryLabels, 1)
+		recoveriesSkippedCounter.Add(append(recoveryLabels, *skipRecoveryReason), 1)
 		// Unhandled problem type
 		if analysisEntry.Analysis != inst.NoProblem {
 			if util.ClearToLog("executeCheckAndRecoverFunction", analysisEntry.AnalyzedInstanceAlias) {
@@ -575,6 +583,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 	} else if recoveryDisabledGlobally {
 		logger.Infof("CheckAndRecover: Tablet: %+v: NOT Recovering host (disabled globally)",
 			analysisEntry.AnalyzedInstanceAlias)
+		recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkippedReasonGlobalDisabled), 1)
 
 		return err
 	}
@@ -588,7 +597,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 	// is not dead, then we will proceed with the fix for the replica. Essentially, we are trading off speed in replica recoveries (by doing an additional primary tablet reload)
 	// for speed in shard-wide recoveries (by not holding the shard lock before reloading the primary tablet information).
 	if !isShardWideRecovery(checkAndRecoverFunctionCode) {
-		if err = recheckPrimaryHealth(analysisEntry, DiscoverInstance); err != nil {
+		if err = recheckPrimaryHealth(analysisEntry, recoveryLabels, DiscoverInstance); err != nil {
 			return err
 		}
 	}
@@ -665,6 +674,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 		}
 		if alreadyFixed {
 			logger.Infof("Analysis: %v on tablet %v - No longer valid, some other agent must have fixed the problem.", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
+			recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkippedReasonStaleAnalysis), 1)
 			return nil
 		}
 	}
@@ -715,7 +725,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 // recheckPrimaryHealth check the health of the primary node.
 // It then checks whether, given the re-discovered primary health, the original recovery is still valid.
 // If not valid then it will abort the current analysis.
-func recheckPrimaryHealth(analysisEntry *inst.ReplicationAnalysis, discoveryFunc func(string, bool)) error {
+func recheckPrimaryHealth(analysisEntry *inst.ReplicationAnalysis, recoveryLabels []string, discoveryFunc func(string, bool)) error {
 	originalAnalysisEntry := analysisEntry.Analysis
 	primaryTabletAlias := analysisEntry.AnalyzedInstancePrimaryAlias
 
@@ -735,6 +745,7 @@ func recheckPrimaryHealth(analysisEntry *inst.ReplicationAnalysis, discoveryFunc
 	// In either case, the original analysis is stale which can be safely aborted.
 	if recoveryRequired {
 		log.Infof("recheckPrimaryHealth: Primary recovery is required, Tablet alias: %v", primaryTabletAlias)
+		recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkippedReasonPrimaryRecovery), 1)
 		// original analysis is stale, abort.
 		return fmt.Errorf("aborting %s, primary mitigation is required", originalAnalysisEntry)
 	}
