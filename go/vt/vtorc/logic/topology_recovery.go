@@ -573,8 +573,9 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 	analysisEntry.IsActionableRecovery = isActionableRecovery
 
 	if recoverySkipCode != RecoverySkipCodeNone {
-		logger.Warningf("Skipping recovery for problem: %+v, recovery: %+v, aborting recovery", analysisEntry.Analysis, recoveryName)
-		recoveriesSkippedCounter.Add(append(recoveryLabels, GetRecoverySkipReason(recoverySkipCode)), 1)
+		skipReason := GetRecoverySkipReason(recoverySkipCode)
+		logger.Warningf("Skipping recovery for problem: %+v, recovery: %+v, reason: %+v, aborting recovery", analysisEntry.Analysis, skipReason, recoveryName)
+		recoveriesSkippedCounter.Add(append(recoveryLabels, skipReason), 1)
 		// Unhandled problem type
 		if analysisEntry.Analysis != inst.NoProblem {
 			if util.ClearToLog("executeCheckAndRecoverFunction", analysisEntry.AnalyzedInstanceAlias) {
