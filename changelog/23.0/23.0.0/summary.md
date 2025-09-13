@@ -20,6 +20,7 @@
         - [CLI Flags](#flags-vttablet)
         - [Managed MySQL configuration defaults to caching-sha2-password](#mysql-caching-sha2-password) 
         - [MySQL timezone environment propagation](#mysql-timezone-env)
+        - [gRPC `tabletmanager` client error changes](#grpctmclient-err-changes)
     - **[Docker](#docker)**
 
 ## <a id="major-changes"/>Major Changes</a>
@@ -122,6 +123,10 @@ In future Vitess versions, the `mysql_native_password` authentication plugin wil
 Fixed a bug where environment variables like `TZ` were not propagated from mysqlctl to the mysqld process.
 As a result, timezone settings from the environment were previously ignored. Now mysqld correctly inherits environment variables.
 ⚠️ Deployments that relied on the old behavior and explicitly set a non-UTC timezone may see changes in how DATETIME values are interpreted. To preserve compatibility, set `TZ=UTC` explicitly in MySQL pods.
+
+#### <a id="grpctmclient-err-changes"/>gRPC `tabletmanager` client error changes</a>
+
+The `vttablet` gRPC `tabletmanager` client now returns errors wrapped by the internal `go/vt/vterrors` package. External automation relying on google-gRPC error codes should now use `vterrors.Code(err)` to inspect the code of an error, which returns `vtrpcpb.Code`s defined in [the `proto/vtrpc.proto` protobuf](https://github.com/vitessio/vitess/blob/main/proto/vtrpc.proto#L60).
 
 ### <a id="docker"/>Docker</a>
 
