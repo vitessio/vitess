@@ -225,7 +225,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		convertTabletWithErrantGTIDs bool
 		analysisEntry                *inst.ReplicationAnalysis
 		wantRecoveryFunction         recoveryFunction
-		wantSkipRecoveryReason       *string
+		wantSkipRecoveryCode         RecoverySkipCode
 	}{
 		{
 			name:       "DeadPrimary with ERS enabled",
@@ -244,8 +244,8 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
 			},
-			wantRecoveryFunction:   recoverDeadPrimaryFunc,
-			wantSkipRecoveryReason: &RecoverySkippedReasonERSDisabled,
+			wantRecoveryFunction: recoverDeadPrimaryFunc,
+			wantSkipRecoveryCode: RecoverySkipCodeERSDisabled,
 		}, {
 			name:       "StalledDiskPrimary with ERS enabled",
 			ersEnabled: true,
@@ -263,8 +263,8 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
 			},
-			wantRecoveryFunction:   recoverDeadPrimaryFunc,
-			wantSkipRecoveryReason: &RecoverySkippedReasonERSDisabled,
+			wantRecoveryFunction: recoverDeadPrimaryFunc,
+			wantSkipRecoveryCode: RecoverySkipCodeERSDisabled,
 		}, {
 			name:       "PrimarySemiSyncBlocked with ERS enabled",
 			ersEnabled: true,
@@ -282,8 +282,8 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
 			},
-			wantRecoveryFunction:   recoverDeadPrimaryFunc,
-			wantSkipRecoveryReason: &RecoverySkippedReasonERSDisabled,
+			wantRecoveryFunction: recoverDeadPrimaryFunc,
+			wantSkipRecoveryCode: RecoverySkipCodeERSDisabled,
 		}, {
 			name:       "PrimaryTabletDeleted with ERS enabled",
 			ersEnabled: true,
@@ -301,8 +301,8 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
 			},
-			wantRecoveryFunction:   recoverPrimaryTabletDeletedFunc,
-			wantSkipRecoveryReason: &RecoverySkippedReasonERSDisabled,
+			wantRecoveryFunction: recoverPrimaryTabletDeletedFunc,
+			wantSkipRecoveryCode: RecoverySkipCodeERSDisabled,
 		}, {
 			name:       "PrimaryHasPrimary",
 			ersEnabled: false,
@@ -358,8 +358,8 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
 			},
-			wantRecoveryFunction:   recoverErrantGTIDDetectedFunc,
-			wantSkipRecoveryReason: &RecoverySkippedReasonNoRecoveryAction,
+			wantRecoveryFunction: recoverErrantGTIDDetectedFunc,
+			wantSkipRecoveryCode: RecoverySkipCodeNoRecoveryAction,
 		}, {
 			name:       "DeadPrimary with global ERS enabled and keyspace ERS disabled",
 			ersEnabled: true,
@@ -369,8 +369,8 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedShard:    shard,
 				AnalyzedKeyspaceEmergencyReparentDisabled: true,
 			},
-			wantRecoveryFunction:   recoverDeadPrimaryFunc,
-			wantSkipRecoveryReason: &RecoverySkippedReasonERSDisabled,
+			wantRecoveryFunction: recoverDeadPrimaryFunc,
+			wantSkipRecoveryCode: RecoverySkipCodeERSDisabled,
 		}, {
 			name:       "DeadPrimary with global+keyspace ERS enabled and shard ERS disabled",
 			ersEnabled: true,
@@ -380,8 +380,8 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedShard:                          shard,
 				AnalyzedShardEmergencyReparentDisabled: true,
 			},
-			wantRecoveryFunction:   recoverDeadPrimaryFunc,
-			wantSkipRecoveryReason: &RecoverySkippedReasonERSDisabled,
+			wantRecoveryFunction: recoverDeadPrimaryFunc,
+			wantSkipRecoveryCode: RecoverySkipCodeERSDisabled,
 		},
 	}
 
@@ -395,12 +395,9 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			config.SetConvertTabletWithErrantGTIDs(tt.convertTabletWithErrantGTIDs)
 			defer config.SetConvertTabletWithErrantGTIDs(convertErrantVal)
 
-			gotFunc, skipRecoveryReason := getCheckAndRecoverFunctionCode(tt.analysisEntry)
+			gotFunc, skipRecoveryCode := getCheckAndRecoverFunctionCode(tt.analysisEntry)
 			require.EqualValues(t, tt.wantRecoveryFunction, gotFunc)
-			if tt.wantSkipRecoveryReason != nil {
-				require.NotNil(t, *skipRecoveryReason)
-				require.EqualValues(t, *tt.wantSkipRecoveryReason, *skipRecoveryReason)
-			}
+			require.EqualValues(t, tt.wantSkipRecoveryCode, skipRecoveryCode)
 		})
 	}
 }
