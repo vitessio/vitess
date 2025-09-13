@@ -158,7 +158,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return nil, err
 	}
 
-	if reqThrottledErr := qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.logStats.TransactionID, qre.options); reqThrottledErr != nil {
+	if reqThrottledErr := qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.connID, qre.options); reqThrottledErr != nil {
 		return nil, reqThrottledErr
 	}
 
@@ -354,7 +354,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		return err
 	}
 
-	if reqThrottledErr := qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.logStats.TransactionID, qre.options); reqThrottledErr != nil {
+	if reqThrottledErr := qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.connID, qre.options); reqThrottledErr != nil {
 		return reqThrottledErr
 	}
 
