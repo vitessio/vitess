@@ -20,6 +20,9 @@ import (
 	"errors"
 	"net"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -62,9 +65,16 @@ func IsDialTCPError(err error) bool {
 		return false
 	}
 
+	// match vterror/vtrpc-style errors (v23+)
 	switch vterrors.Code(err) {
 	case vtrpcpb.Code_UNAVAILABLE, vtrpcpb.Code_DEADLINE_EXCEEDED:
 		return true
+	}
+
+	// match google grpc errors (v22 and below)
+	// TODO: remove after v24+
+	if s, ok := status.FromError(err); ok {
+		return s.Code() == codes.Unavailable || s.Code() == codes.DeadlineExceeded
 	}
 
 	switch err := err.(type) {
