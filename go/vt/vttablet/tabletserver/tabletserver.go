@@ -32,6 +32,8 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
@@ -93,6 +95,12 @@ var logComputeRowSerializerKey = logutil.NewThrottledLogger("ComputeRowSerialize
 // perform one-time initializations and must be idempotent.
 // Open and Close can be called repeatedly during the lifetime of
 // a subcomponent. These should also be idempotent.
+
+const (
+	throttlerPoolName      = "ThrottlerPool"
+	queryThrottlerPoolName = "QueryThrottlerPool"
+)
+
 type TabletServer struct {
 	exporter               *servenv.Exporter
 	config                 *tabletenv.TabletConfig
@@ -118,6 +126,7 @@ type TabletServer struct {
 	messager     *messager.Engine
 	hs           *healthStreamer
 	lagThrottler *throttle.Throttler
+	qThrottler   *throttle.Throttler
 	tableGC      *gc.TableGC
 
 	// sm manages state transitions.
@@ -131,6 +140,8 @@ type TabletServer struct {
 	checkMysqlGaugeFunc *stats.GaugeFunc
 
 	env *vtenv.Environment
+
+	queryThrottler *querythrottler.QueryThrottler
 }
 
 var _ queryservice.QueryService = (*TabletServer)(nil)
@@ -177,7 +188,10 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	tsv.se = schema.NewEngine(tsv)
 	tsv.hs = newHealthStreamer(tsv, alias, tsv.se)
 	tsv.rt = repltracker.NewReplTracker(tsv, alias)
-	tsv.lagThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias, tsv.rt.HeartbeatWriter(), tabletTypeFunc)
+	tsv.lagThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias, tsv.rt.HeartbeatWriter(), tabletTypeFunc, throttlerPoolName)
+	tsv.qThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias, tsv.rt.HeartbeatWriter(), tabletTypeFunc, queryThrottlerPoolName)
+	tsv.queryThrottler = querythrottler.NewQueryThrottler(ctx, tsv.qThrottler, querythrottler.NewFileBasedConfigLoader(), tsv)
+
 	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, tsv.lagThrottler, alias.Cell)
 	tsv.tracker = schema.NewTracker(tsv, tsv.vstreamer, tsv.se)
 	tsv.watcher = NewBinlogWatcher(tsv, tsv.vstreamer, tsv.config)
@@ -205,6 +219,7 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 		messager:          tsv.messager,
 		ddle:              tsv.onlineDDLExecutor,
 		throttler:         tsv.lagThrottler,
+		qThrottler:        tsv.qThrottler,
 		tableGC:           tsv.tableGC,
 		rw:                newRequestsWaiter(),
 		diskHealthMonitor: newDiskHealthMonitor(ctx),
@@ -310,6 +325,7 @@ func (tsv *TabletServer) InitDBConfig(target *querypb.Target, dbcfgs *dbconfigs.
 	tsv.hs.InitDBConfig(target)
 	tsv.onlineDDLExecutor.InitDBConfig(target.Keyspace, target.Shard, dbcfgs.DBName)
 	tsv.lagThrottler.InitDBConfig(target.Keyspace, target.Shard)
+	tsv.qThrottler.InitDBConfig(target.Keyspace, target.Shard)
 	tsv.tableGC.InitDBConfig(target.Keyspace, target.Shard, dbcfgs.DBName)
 	return nil
 }
@@ -900,6 +916,11 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 }
 
 func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
+	targetType, err := tsv.resolveTargetType(ctx, target)
+	if err != nil {
+		return nil, err
+	}
+
 	allowOnShutdown := transactionID != 0
 	timeout := tsv.loadQueryTimeoutWithTxAndOptions(transactionID, options)
 	err = tsv.execRequest(
@@ -916,6 +937,7 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 			if err != nil {
 				return err
 			}
+
 			if err = plan.IsValid(reservedID != 0, len(settings) > 0); err != nil {
 				return err
 			}
@@ -933,10 +955,6 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 				if err != nil {
 					return err
 				}
-			}
-			targetType, err := tsv.resolveTargetType(ctx, target)
-			if err != nil {
-				return err
 			}
 			qre := &QueryExecutor{
 				query:            query,
