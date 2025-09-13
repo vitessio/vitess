@@ -1699,70 +1699,10 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 }
 
 func convertErrorCode(err error) vtrpcpb.Code {
-	errCode := vterrors.Code(err)
-	sqlErr, ok := err.(*sqlerror.SQLError)
-	if !ok {
-		return errCode
+	if sqlErr, ok := err.(*sqlerror.SQLError); ok {
+		return sqlErr.VtRpcErrorCode()
 	}
-
-	switch sqlErr.Number() {
-	case sqlerror.ERNotSupportedYet:
-		errCode = vtrpcpb.Code_UNIMPLEMENTED
-	case sqlerror.ERDiskFull, sqlerror.EROutOfMemory, sqlerror.EROutOfSortMemory, sqlerror.ERConCount, sqlerror.EROutOfResources, sqlerror.ERRecordFileFull, sqlerror.ERHostIsBlocked,
-		sqlerror.ERCantCreateThread, sqlerror.ERTooManyDelayedThreads, sqlerror.ERNetPacketTooLarge, sqlerror.ERTooManyUserConnections, sqlerror.ERLockTableFull, sqlerror.ERUserLimitReached:
-		errCode = vtrpcpb.Code_RESOURCE_EXHAUSTED
-	case sqlerror.ERLockWaitTimeout:
-		errCode = vtrpcpb.Code_DEADLINE_EXCEEDED
-	case sqlerror.CRServerGone, sqlerror.ERServerShutdown, sqlerror.ERServerIsntAvailable, sqlerror.CRConnectionError, sqlerror.CRConnHostError:
-		errCode = vtrpcpb.Code_UNAVAILABLE
-	case sqlerror.ERFormNotFound, sqlerror.ERKeyNotFound, sqlerror.ERBadFieldError, sqlerror.ERNoSuchThread, sqlerror.ERUnknownTable, sqlerror.ERCantFindUDF, sqlerror.ERNonExistingGrant,
-		sqlerror.ERNoSuchTable, sqlerror.ERNonExistingTableGrant, sqlerror.ERKeyDoesNotExist:
-		errCode = vtrpcpb.Code_NOT_FOUND
-	case sqlerror.ERDBAccessDenied, sqlerror.ERAccessDeniedError, sqlerror.ERKillDenied, sqlerror.ERNoPermissionToCreateUsers:
-		errCode = vtrpcpb.Code_PERMISSION_DENIED
-	case sqlerror.ERNoDb, sqlerror.ERNoSuchIndex, sqlerror.ERCantDropFieldOrKey, sqlerror.ERTableNotLockedForWrite, sqlerror.ERTableNotLocked, sqlerror.ERTooBigSelect, sqlerror.ERNotAllowedCommand,
-		sqlerror.ERTooLongString, sqlerror.ERDelayedInsertTableLocked, sqlerror.ERDupUnique, sqlerror.ERRequiresPrimaryKey, sqlerror.ERCantDoThisDuringAnTransaction, sqlerror.ERReadOnlyTransaction,
-		sqlerror.ERCannotAddForeign, sqlerror.ERNoReferencedRow, sqlerror.ERRowIsReferenced, sqlerror.ERCantUpdateWithReadLock, sqlerror.ERNoDefault, sqlerror.EROperandColumns,
-		sqlerror.ERSubqueryNo1Row, sqlerror.ERNonUpdateableTable, sqlerror.ERFeatureDisabled, sqlerror.ERDuplicatedValueInType, sqlerror.ERRowIsReferenced2,
-		sqlerror.ErNoReferencedRow2, sqlerror.ERWarnDataOutOfRange, sqlerror.ERInnodbIndexCorrupt:
-		errCode = vtrpcpb.Code_FAILED_PRECONDITION
-	case sqlerror.EROptionPreventsStatement:
-		errCode = vtrpcpb.Code_CLUSTER_EVENT
-	case sqlerror.ERTableExists, sqlerror.ERDupEntry, sqlerror.ERFileExists, sqlerror.ERUDFExists:
-		errCode = vtrpcpb.Code_ALREADY_EXISTS
-	case sqlerror.ERGotSignal, sqlerror.ERForcingClose, sqlerror.ERAbortingConnection, sqlerror.ERLockDeadlock:
-		// For ERLockDeadlock, a deadlock rolls back the transaction.
-		errCode = vtrpcpb.Code_ABORTED
-	case sqlerror.ERUnknownComError, sqlerror.ERBadNullError, sqlerror.ERBadDb, sqlerror.ERBadTable, sqlerror.ERNonUniq, sqlerror.ERWrongFieldWithGroup, sqlerror.ERWrongGroupField,
-		sqlerror.ERWrongSumSelect, sqlerror.ERWrongValueCount, sqlerror.ERTooLongIdent, sqlerror.ERDupFieldName, sqlerror.ERDupKeyName, sqlerror.ERWrongFieldSpec, sqlerror.ERParseError,
-		sqlerror.EREmptyQuery, sqlerror.ERNonUniqTable, sqlerror.ERInvalidDefault, sqlerror.ERMultiplePriKey, sqlerror.ERTooManyKeys, sqlerror.ERTooManyKeyParts, sqlerror.ERTooLongKey,
-		sqlerror.ERKeyColumnDoesNotExist, sqlerror.ERBlobUsedAsKey, sqlerror.ERTooBigFieldLength, sqlerror.ERWrongAutoKey, sqlerror.ERWrongFieldTerminators, sqlerror.ERBlobsAndNoTerminated,
-		sqlerror.ERTextFileNotReadable, sqlerror.ERWrongSubKey, sqlerror.ERCantRemoveAllFields, sqlerror.ERUpdateTableUsed, sqlerror.ERNoTablesUsed, sqlerror.ERTooBigSet,
-		sqlerror.ERBlobCantHaveDefault, sqlerror.ERWrongDbName, sqlerror.ERWrongTableName, sqlerror.ERUnknownProcedure, sqlerror.ERWrongParamCountToProcedure,
-		sqlerror.ERWrongParametersToProcedure, sqlerror.ERFieldSpecifiedTwice, sqlerror.ERInvalidGroupFuncUse, sqlerror.ERTableMustHaveColumns, sqlerror.ERUnknownCharacterSet,
-		sqlerror.ERTooManyTables, sqlerror.ERTooManyFields, sqlerror.ERTooBigRowSize, sqlerror.ERWrongOuterJoin, sqlerror.ERNullColumnInIndex, sqlerror.ERFunctionNotDefined,
-		sqlerror.ERWrongValueCountOnRow, sqlerror.ERInvalidUseOfNull, sqlerror.ERRegexpError, sqlerror.ERMixOfGroupFuncAndFields, sqlerror.ERIllegalGrantForTable, sqlerror.ERSyntaxError,
-		sqlerror.ERWrongColumnName, sqlerror.ERWrongKeyColumn, sqlerror.ERBlobKeyWithoutLength, sqlerror.ERPrimaryCantHaveNull, sqlerror.ERTooManyRows, sqlerror.ERUnknownSystemVariable,
-		sqlerror.ERSetConstantsOnly, sqlerror.ERWrongArguments, sqlerror.ERWrongUsage, sqlerror.ERWrongNumberOfColumnsInSelect, sqlerror.ERDupArgument, sqlerror.ERLocalVariable,
-		sqlerror.ERGlobalVariable, sqlerror.ERWrongValueForVar, sqlerror.ERWrongTypeForVar, sqlerror.ERVarCantBeRead, sqlerror.ERCantUseOptionHere, sqlerror.ERIncorrectGlobalLocalVar,
-		sqlerror.ERWrongFKDef, sqlerror.ERKeyRefDoNotMatchTableRef, sqlerror.ERCyclicReference, sqlerror.ERCollationCharsetMismatch, sqlerror.ERCantAggregate2Collations,
-		sqlerror.ERCantAggregate3Collations, sqlerror.ERCantAggregateNCollations, sqlerror.ERVariableIsNotStruct, sqlerror.ERUnknownCollation, sqlerror.ERWrongNameForIndex,
-		sqlerror.ERWrongNameForCatalog, sqlerror.ERBadFTColumn, sqlerror.ERTruncatedWrongValue, sqlerror.ERTooMuchAutoTimestampCols, sqlerror.ERInvalidOnUpdate, sqlerror.ERUnknownTimeZone,
-		sqlerror.ERInvalidCharacterString, sqlerror.ERIllegalReference, sqlerror.ERDerivedMustHaveAlias, sqlerror.ERTableNameNotAllowedHere, sqlerror.ERDataTooLong, sqlerror.ERDataOutOfRange,
-		sqlerror.ERTruncatedWrongValueForField, sqlerror.ERIllegalValueForType, sqlerror.ERWrongValue, sqlerror.ERWrongParamcountToNativeFct:
-		errCode = vtrpcpb.Code_INVALID_ARGUMENT
-	case sqlerror.ERSpecifiedAccessDenied:
-		errCode = vtrpcpb.Code_PERMISSION_DENIED
-		// This code is also utilized for Google internal failover error code.
-		if strings.Contains(err.Error(), "failover in progress") {
-			errCode = vtrpcpb.Code_FAILED_PRECONDITION
-		}
-	case sqlerror.CRServerLost:
-		// Query was killed.
-		errCode = vtrpcpb.Code_CANCELED
-	}
-
-	return errCode
+	return vterrors.Code(err)
 }
 
 // StreamHealth streams the health status to callback.
