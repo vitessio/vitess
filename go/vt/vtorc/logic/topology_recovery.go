@@ -54,26 +54,26 @@ const (
 type RecoverySkipCode int
 
 const (
-	RecoverySkipCodeNone RecoverySkipCode = iota
-	RecoverySkipCodeNoRecoveryAction
-	RecoverySkipCodeGlobalDisabled
-	RecoverySkipCodeERSDisabled
-	RecoverySkipCodeStaleAnalysis
-	RecoverySkipCodePrimaryRecovery
+	RecoverySkipNone RecoverySkipCode = iota
+	RecoverySkipNoRecoveryAction
+	RecoverySkipGlobalDisabled
+	RecoverySkipERSDisabled
+	RecoverySkipStaleAnalysis
+	RecoverySkipPrimaryRecovery
 )
 
-// String represents a RecoverySkipCode as a string.
+// String represents a RecoverySkip as a string.
 func (rsc RecoverySkipCode) String() string {
 	switch rsc {
-	case RecoverySkipCodeNoRecoveryAction:
+	case RecoverySkipNoRecoveryAction:
 		return "NoRecoveryAction"
-	case RecoverySkipCodeGlobalDisabled:
+	case RecoverySkipGlobalDisabled:
 		return "GlobalRecoveriesDisabled"
-	case RecoverySkipCodeERSDisabled:
+	case RecoverySkipERSDisabled:
 		return "EmergencyReparentShardDisabled"
-	case RecoverySkipCodeStaleAnalysis:
+	case RecoverySkipStaleAnalysis:
 		return "StaleAnalysis"
-	case RecoverySkipCodePrimaryRecovery:
+	case RecoverySkipPrimaryRecovery:
 		return "PrimaryRecovery"
 	default:
 		return "None"
@@ -403,20 +403,20 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.ReplicationAnalysis) (re
 		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
 		if !isERSEnabled(analysisEntry) {
 			log.Infof("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode)
-			recoverySkipCode = RecoverySkipCodeERSDisabled
+			recoverySkipCode = RecoverySkipERSDisabled
 		}
 		recoveryFunc = recoverDeadPrimaryFunc
 	case inst.PrimaryTabletDeleted:
 		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
 		if !isERSEnabled(analysisEntry) {
 			log.Infof("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode)
-			recoverySkipCode = RecoverySkipCodeERSDisabled
+			recoverySkipCode = RecoverySkipERSDisabled
 		}
 		recoveryFunc = recoverPrimaryTabletDeletedFunc
 	case inst.ErrantGTIDDetected:
 		if !config.ConvertTabletWithErrantGTIDs() {
 			log.Infof("VTOrc not configured to do anything on detecting errant GTIDs, skipping recovering %v", analysisCode)
-			recoverySkipCode = RecoverySkipCodeNoRecoveryAction
+			recoverySkipCode = RecoverySkipNoRecoveryAction
 		}
 		recoveryFunc = recoverErrantGTIDDetectedFunc
 	case inst.PrimaryHasPrimary:
@@ -443,7 +443,7 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.ReplicationAnalysis) (re
 	case inst.AllPrimaryReplicasNotReplicatingOrDead:
 		recoveryFunc = recoverGenericProblemFunc
 	default:
-		recoverySkipCode = RecoverySkipCodeNoRecoveryAction
+		recoverySkipCode = RecoverySkipNoRecoveryAction
 	}
 	// Right now this is mostly causing noise with no clear action.
 	// Will revisit this in the future.
@@ -572,7 +572,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 	isActionableRecovery := hasActionableRecovery(checkAndRecoverFunctionCode)
 	analysisEntry.IsActionableRecovery = isActionableRecovery
 
-	if recoverySkipCode != RecoverySkipCodeNone {
+	if recoverySkipCode != RecoverySkipNone {
 		skipReason := recoverySkipCode.String()
 		logger.Warningf("Skipping recovery for problem: %+v, recovery: %+v, reason: %+v, aborting recovery", analysisEntry.Analysis, skipReason, recoveryName)
 		recoveriesSkippedCounter.Add(append(recoveryLabels, skipReason), 1)
@@ -606,7 +606,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 	} else if recoveryDisabledGlobally {
 		logger.Infof("CheckAndRecover: Tablet: %+v: NOT Recovering host (disabled globally)",
 			analysisEntry.AnalyzedInstanceAlias)
-		recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCodeGlobalDisabled.String()), 1)
+		recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipGlobalDisabled.String()), 1)
 
 		return err
 	}
@@ -697,7 +697,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 		}
 		if alreadyFixed {
 			logger.Infof("Analysis: %v on tablet %v - No longer valid, some other agent must have fixed the problem.", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
-			recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCodeStaleAnalysis.String()), 1)
+			recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipStaleAnalysis.String()), 1)
 			return nil
 		}
 	}
@@ -768,7 +768,7 @@ func recheckPrimaryHealth(analysisEntry *inst.ReplicationAnalysis, recoveryLabel
 	// In either case, the original analysis is stale which can be safely aborted.
 	if recoveryRequired {
 		log.Infof("recheckPrimaryHealth: Primary recovery is required, Tablet alias: %v", primaryTabletAlias)
-		recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCodePrimaryRecovery.String()), 1)
+		recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipPrimaryRecovery.String()), 1)
 		// original analysis is stale, abort.
 		return fmt.Errorf("aborting %s, primary mitigation is required", originalAnalysisEntry)
 	}

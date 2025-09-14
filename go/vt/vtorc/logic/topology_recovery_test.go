@@ -245,7 +245,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedShard:    shard,
 			},
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
-			wantRecoverySkipCode: RecoverySkipCodeERSDisabled,
+			wantRecoverySkipCode: RecoverySkipERSDisabled,
 		}, {
 			name:       "StalledDiskPrimary with ERS enabled",
 			ersEnabled: true,
@@ -264,7 +264,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedShard:    shard,
 			},
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
-			wantRecoverySkipCode: RecoverySkipCodeERSDisabled,
+			wantRecoverySkipCode: RecoverySkipERSDisabled,
 		}, {
 			name:       "PrimarySemiSyncBlocked with ERS enabled",
 			ersEnabled: true,
@@ -283,7 +283,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedShard:    shard,
 			},
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
-			wantRecoverySkipCode: RecoverySkipCodeERSDisabled,
+			wantRecoverySkipCode: RecoverySkipERSDisabled,
 		}, {
 			name:       "PrimaryTabletDeleted with ERS enabled",
 			ersEnabled: true,
@@ -302,7 +302,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedShard:    shard,
 			},
 			wantRecoveryFunction: recoverPrimaryTabletDeletedFunc,
-			wantRecoverySkipCode: RecoverySkipCodeERSDisabled,
+			wantRecoverySkipCode: RecoverySkipERSDisabled,
 		}, {
 			name:       "PrimaryHasPrimary",
 			ersEnabled: false,
@@ -359,7 +359,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedShard:    shard,
 			},
 			wantRecoveryFunction: recoverErrantGTIDDetectedFunc,
-			wantRecoverySkipCode: RecoverySkipCodeNoRecoveryAction,
+			wantRecoverySkipCode: RecoverySkipNoRecoveryAction,
 		}, {
 			name:       "DeadPrimary with global ERS enabled and keyspace ERS disabled",
 			ersEnabled: true,
@@ -370,7 +370,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedKeyspaceEmergencyReparentDisabled: true,
 			},
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
-			wantRecoverySkipCode: RecoverySkipCodeERSDisabled,
+			wantRecoverySkipCode: RecoverySkipERSDisabled,
 		}, {
 			name:       "DeadPrimary with global+keyspace ERS enabled and shard ERS disabled",
 			ersEnabled: true,
@@ -381,7 +381,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedShardEmergencyReparentDisabled: true,
 			},
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
-			wantRecoverySkipCode: RecoverySkipCodeERSDisabled,
+			wantRecoverySkipCode: RecoverySkipERSDisabled,
 		},
 	}
 
