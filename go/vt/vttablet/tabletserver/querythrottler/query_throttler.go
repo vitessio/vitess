@@ -91,8 +91,6 @@ func (qt *QueryThrottler) Shutdown() {
 func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, transactionID int64, options *querypb.ExecuteOptions) error {
 	// Lock-free read: for maximum performance in the hot path as cfg and strategy are updated rarely (default once per minute).
 	// They are word-sized and safe for atomic reads; stale data for one query is acceptable and avoids mutex contention in the hot path.
-	// Lock-free read: for maximum performance in the hot path as cfg and strategy are updated rarely (default once per minute).
-	// They are word-sized and safe for atomic reads; stale data for one query is acceptable and avoids mutex contention in the hot path.
 	if !qt.cfg.Enabled {
 		return nil
 	}
