@@ -62,9 +62,9 @@ const (
 	RecoverySkipCodePrimaryRecovery
 )
 
-// GetRecoverySkipReason represents a RecoverySkipCode as a string.
-func GetRecoverySkipReason(skipCode RecoverySkipCode) string {
-	switch skipCode {
+// String represents a RecoverySkipCode as a string.
+func (rsc RecoverySkipCode) String() string {
+	switch rsc {
 	case RecoverySkipCodeNoRecoveryAction:
 		return "NoRecoveryAction"
 	case RecoverySkipCodeGlobalDisabled:
@@ -573,7 +573,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 	analysisEntry.IsActionableRecovery = isActionableRecovery
 
 	if recoverySkipCode != RecoverySkipCodeNone {
-		skipReason := GetRecoverySkipReason(recoverySkipCode)
+		skipReason := recoverySkipCode.String()
 		logger.Warningf("Skipping recovery for problem: %+v, recovery: %+v, reason: %+v, aborting recovery", analysisEntry.Analysis, skipReason, recoveryName)
 		recoveriesSkippedCounter.Add(append(recoveryLabels, skipReason), 1)
 		// Unhandled problem type
@@ -606,7 +606,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 	} else if recoveryDisabledGlobally {
 		logger.Infof("CheckAndRecover: Tablet: %+v: NOT Recovering host (disabled globally)",
 			analysisEntry.AnalyzedInstanceAlias)
-		recoveriesSkippedCounter.Add(append(recoveryLabels, GetRecoverySkipReason(RecoverySkipCodeGlobalDisabled)), 1)
+		recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCodeGlobalDisabled.String()), 1)
 
 		return err
 	}
@@ -697,7 +697,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 		}
 		if alreadyFixed {
 			logger.Infof("Analysis: %v on tablet %v - No longer valid, some other agent must have fixed the problem.", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
-			recoveriesSkippedCounter.Add(append(recoveryLabels, GetRecoverySkipReason(RecoverySkipCodeStaleAnalysis)), 1)
+			recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCodeStaleAnalysis.String()), 1)
 			return nil
 		}
 	}
@@ -768,7 +768,7 @@ func recheckPrimaryHealth(analysisEntry *inst.ReplicationAnalysis, recoveryLabel
 	// In either case, the original analysis is stale which can be safely aborted.
 	if recoveryRequired {
 		log.Infof("recheckPrimaryHealth: Primary recovery is required, Tablet alias: %v", primaryTabletAlias)
-		recoveriesSkippedCounter.Add(append(recoveryLabels, GetRecoverySkipReason(RecoverySkipCodePrimaryRecovery)), 1)
+		recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCodePrimaryRecovery.String()), 1)
 		// original analysis is stale, abort.
 		return fmt.Errorf("aborting %s, primary mitigation is required", originalAnalysisEntry)
 	}

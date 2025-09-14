@@ -397,7 +397,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 
 			gotFunc, recoverySkipCode := getCheckAndRecoverFunctionCode(tt.analysisEntry)
 			require.EqualValues(t, tt.wantRecoveryFunction, gotFunc)
-			require.EqualValues(t, tt.wantRecoverySkipCode, recoverySkipCode)
+			require.EqualValues(t, tt.wantRecoverySkipCode.String(), recoverySkipCode.String())
 		})
 	}
 }
