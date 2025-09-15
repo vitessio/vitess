@@ -293,6 +293,7 @@ var stateToMysqlCode = map[vterrors.State]mysqlCode{
 	vterrors.OperandColumns:                      {num: EROperandColumns, state: SSWrongNumberOfColumns},
 	vterrors.WrongValueCountOnRow:                {num: ERWrongValueCountOnRow, state: SSWrongValueCountOnRow},
 	vterrors.WrongArguments:                      {num: ERWrongArguments, state: SSUnknownSQLState},
+	vterrors.NonWhereClause:                      {num: ERNonWhereClause, state: SSUnknownSQLState},
 	vterrors.ViewWrongList:                       {num: ERViewWrongList, state: SSUnknownSQLState},
 	vterrors.UnknownStmtHandler:                  {num: ERUnknownStmtHandler, state: SSUnknownSQLState},
 	vterrors.KeyDoesNotExist:                     {num: ERKeyDoesNotExist, state: SSClientError},

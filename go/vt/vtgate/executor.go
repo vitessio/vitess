@@ -1467,6 +1467,38 @@ func isValidPayloadSize(query string) bool {
 	return true
 }
 
+// IsValidDeleteOrUpdateQuery validation delete/update request if there is a where clause,
+// with the where returns true, no returns false
+func isValidDeleteOrUpdateQuery(stmt sqlparser.Statement) bool {
+	types := sqlparser.ASTToStatementType(stmt)
+	if types == sqlparser.StmtDelete {
+		var flag = false
+		_ = sqlparser.VisitSQLNode(stmt, func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			switch node.(type) {
+			case *sqlparser.Where:
+				flag = true
+				return false, nil
+			}
+			return true, nil
+		})
+		return flag
+	}
+
+	if types == sqlparser.StmtUpdate {
+		var flag = false
+		_ = sqlparser.VisitSQLNode(stmt, func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			switch node.(type) {
+			case *sqlparser.Where:
+				flag = true
+				return false, nil
+			}
+			return true, nil
+		})
+		return flag
+	}
+	return true
+}
+
 // Prepare executes a prepare statements.
 func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econtext.SafeSession, sql string) (fld []*querypb.Field, paramsCount uint16, err error) {
 	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
@@ -1641,6 +1673,10 @@ func parseAndValidateQuery(query string, parser *sqlparser.Parser) (sqlparser.St
 	}
 	if !sqlparser.IgnoreMaxPayloadSizeDirective(stmt) && !isValidPayloadSize(query) {
 		return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "query payload size above threshold")
+	}
+
+	if safeUpdate && !isValidDeleteOrUpdateQuery(stmt) {
+		return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonWhereClause, "DELETE/UPDATE queries without a where clause")
 	}
 	return stmt, sqlparser.NewReservedVars("vtg", reserved), nil
 }
