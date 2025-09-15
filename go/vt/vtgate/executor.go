@@ -1676,7 +1676,7 @@ func parseAndValidateQuery(query string, parser *sqlparser.Parser) (sqlparser.St
 	}
 
 	if safeUpdate && !isValidDeleteOrUpdateQuery(stmt) {
-		return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonWhereClause, "DELETE/UPDATE queries without a where clause")
+		return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonWhereClause, "You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column.")
 	}
 	return stmt, sqlparser.NewReservedVars("vtg", reserved), nil
 }
