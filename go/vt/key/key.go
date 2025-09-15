@@ -425,13 +425,15 @@ func GenerateShardRanges(shards int) ([]string, error) {
 	realEnd := float64(0)
 	shardRanges := make([]string, 0, shards)
 
-	for i := 1; i <= shards; i++ {
+	for i := 1; i < shards; i++ {
 		realEnd = float64(i) * size
 
 		end = int(realEnd)
 		shardRanges = append(shardRanges, rangeFormatter(start, end))
 		start = end
 	}
+
+	shardRanges = append(shardRanges, rangeFormatter(start, maxShards))
 
 	return shardRanges, nil
 }
