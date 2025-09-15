@@ -144,14 +144,15 @@ jobs:
           i=$((i+1))
         done
 
-    - name: Print test output and Record test result in launchable if PR is not a draft
+    - name: Record test result in launchable if PR is not a draft
+      if: github.event.pull_request.draft == 'false' && steps.changes.outputs.unit_tests == 'true' && github.base_ref == 'main'
+      run: |
+        # send recorded tests to launchable
+        launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
+
+    - name: Print test output
       if: steps.changes.outputs.end_to_end == 'true' && always()
       run: |
-        if [[ "${{github.event.pull_request.draft}}" ==  "false" ]]; then
-          # send recorded tests to launchable
-          launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
-        fi
-
         # print test output
         cat report*.xml
 
