@@ -26,13 +26,6 @@ jobs:
           fi
           echo Skip ${skip}
           echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
-          
-          PR_DATA=$(curl -s\
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}")
-          draft=$(echo "$PR_DATA" | jq .draft -r)
-          echo "is_draft=${draft}" >> $GITHUB_OUTPUT
 
       - name: Check out code
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
