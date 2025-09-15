@@ -33,16 +33,6 @@ jobs:
           exit 1
         fi
 
-    - name: Check if workflow needs to be skipped
-      id: skip-workflow
-      run: |
-        PR_DATA=$(curl -s\
-          -H "{{"Authorization: token ${{ secrets.GITHUB_TOKEN }}"}}" \
-          -H "Accept: application/vnd.github.v3+json" \
-          "{{"https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}"}}")
-        draft=$(echo "$PR_DATA" | jq .draft -r)
-        echo "is_draft=${draft}" >> $GITHUB_OUTPUT
-
     {{if .MemoryCheck}}
 
     - name: Check Memory
@@ -185,7 +175,7 @@ jobs:
     {{end}}
 
     - name: Setup launchable dependencies
-      if: steps.skip-workflow.outputs.is_draft == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main'
+      if: github.event.pull_request.draft == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main'
       run: |
         # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
         pip3 install --user launchable~=1.0 > /dev/null
@@ -247,7 +237,7 @@ jobs:
     - name: Print test output and Record test result in launchable if PR is not a draft
       if: steps.changes.outputs.end_to_end == 'true' && always()
       run: |
-        if [[ "{{"${{steps.skip-workflow.outputs.is_draft}}"}}" ==  "false" ]]; then
+        if [[ "{{"${{github.event.pull_request.draft}}"}}" ==  "false" ]]; then
           # send recorded tests to launchable
           launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
         fi
