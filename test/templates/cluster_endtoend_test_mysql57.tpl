@@ -171,7 +171,7 @@ jobs:
     {{end}}
 
     - name: Setup launchable dependencies
-      if: github.event.pull_request.draft == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main'
+      if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main'
       run: |
         # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
         pip3 install --user launchable~=1.0 > /dev/null
@@ -218,7 +218,7 @@ jobs:
         eatmydata -- go run test.go -docker={{if .Docker}}true -flavor={{.Platform}}{{else}}false{{end}} -follow -shard {{.Shard}}{{if .PartialKeyspace}} -partial-keyspace=true {{end}} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Record test result in launchable if PR is not a draft
-      if: github.event.pull_request.draft == 'false' && steps.changes.outputs.unit_tests == 'true' && github.base_ref == 'main'
+      if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main' && always()
       run: |
         # send recorded tests to launchable
         launchable record tests --build "$GITHUB_RUN_ID" go-test . || true

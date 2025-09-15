@@ -103,7 +103,7 @@ jobs:
         make tools
 
     - name: Setup launchable dependencies
-      if: github.event.pull_request.draft == 'false' && steps.changes.outputs.unit_tests == 'true' && github.base_ref == 'main'
+      if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.unit_tests == 'true' && github.base_ref == 'main'
       run: |
         # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
         pip3 install --user launchable~=1.0 > /dev/null
@@ -126,14 +126,15 @@ jobs:
 
         eatmydata -- make unit_test_race | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
-    - name: Print test output and Record test result in launchable if PR is not a draft
+    - name: Record test results in launchable if PR is not a draft
+      if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.unit_tests == 'true' && github.base_ref == 'main' && always()
+      run: |
+        # send recorded tests to launchable
+        launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
+
+    - name: Print test output
       if: steps.changes.outputs.unit_tests == 'true' && always()
       run: |
-        if [[ "${{github.event.pull_request.draft}}" ==  "false" ]]; then
-          # send recorded tests to launchable
-          launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
-        fi
-
         # print test output
         cat output.txt
         
