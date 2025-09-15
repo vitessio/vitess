@@ -20,6 +20,8 @@ import (
 	"testing"
 
 	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFlagVariants(t *testing.T) {
@@ -53,16 +55,9 @@ func testFlagVar[T any](t *testing.T, name string, def T, usage string, setter f
 
 	// Verify the primary (dashed) flag.
 	flag := fs.Lookup(name)
-	if flag == nil {
-		t.Fatalf("Expected flag %q to be registered", name)
-	} else {
-		if flag.Usage != usage {
-			t.Errorf("Expected usage %q for flag %q, got %q", usage, name, flag.Usage)
-		}
-		if flag.Hidden {
-			t.Errorf("Flag %q should not be hidden", name)
-		}
-	}
+	require.NotNilf(t, flag, "Expected flag %q to be registered", name)
+	assert.Equal(t, usage, flag.Usage)
+	assert.Falsef(t, flag.Hidden, "Flag %q should not be hidden", name)
 }
 
 func TestSetFlagIntVar(t *testing.T) {
