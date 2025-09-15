@@ -151,7 +151,7 @@ jobs:
         
         eatmydata -- make unit_test | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
-    - name: Record test result in launchable if PR is not a draft
+    - name: Record test results in launchable if PR is not a draft
       if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.unit_tests == 'true' && github.base_ref == 'main' && always()
       run: |
         # send recorded tests to launchable

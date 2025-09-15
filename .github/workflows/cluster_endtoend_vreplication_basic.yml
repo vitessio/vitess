@@ -168,7 +168,7 @@ jobs:
         # run the tests however you normally do, then produce a JUnit XML file
         eatmydata -- go run test.go -docker=false -follow -shard vreplication_basic | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
-    - name: Record test result in launchable if PR is not a draft
+    - name: Record test results in launchable if PR is not a draft
       if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main' && always()
       run: |
         # send recorded tests to launchable
