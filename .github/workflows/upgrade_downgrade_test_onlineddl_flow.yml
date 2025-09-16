@@ -1,7 +1,12 @@
 name: Online DDL flow - Upgrade Downgrade Testing
 on:
   push:
+    branches:
+      - "main"
+      - "release-[0-9]+.[0-9]"
+    tags: '**'
   pull_request:
+    branches: '**'
 
 concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing Online DDL flow')
@@ -27,25 +32,13 @@ jobs:
           exit 1
         fi
 
-    - name: Check if workflow needs to be skipped
-      id: skip-workflow
-      run: |
-        skip='false'
-        if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
-          skip='true'
-        fi
-        echo Skip ${skip}
-        echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
-
     - name: Check out commit's code
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         fetch-depth: 0
         persist-credentials: 'false'
 
     - name: Check for changes in relevant files
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: dorny/paths-filter@ebc4d7e9ebcb0b1eb21480bb8f43113e996ac77a # v3.0.1
       id: changes
       with:
@@ -68,14 +61,12 @@ jobs:
 
     - name: Set output with latest release branch
       id: output-previous-release-ref
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       run: |
         previous_release_ref=$(./tools/get_previous_release.sh ${{github.base_ref}} ${{github.ref}})
         echo $previous_release_ref
         echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
 
     - name: Set output with next release branch
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       id: output-next-release-ref
       run: |
         next_release_ref=$(./tools/get_next_release.sh ${{github.base_ref}} ${{github.ref}})
@@ -83,23 +74,23 @@ jobs:
         echo "next_release_ref=${next_release_ref}" >> $GITHUB_OUTPUT
 
     - name: Set up Go
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
       with:
         go-version: 1.22.12
 
     - name: Set up python
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
 
     - name: Tune the OS
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
 
     - name: Get base dependencies
       timeout-minutes: 10
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         sudo DEBIAN_FRONTEND="noninteractive" apt-get update
         # Uninstall any previously installed MySQL first
@@ -130,19 +121,19 @@ jobs:
 
     # Checkout to the last release of Vitess
     - name: Check out last version's code (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         ref: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
         persist-credentials: 'false'
 
     - name: Get dependencies for the last release
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         go mod download
 
     - name: Building last release's binaries
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
         echo "building last release: $(git rev-parse HEAD)"
@@ -154,19 +145,19 @@ jobs:
 
     # Checkout to the next release of Vitess
     - name: Check out next version's code (${{ steps.output-next-release-ref.outputs.next_release_ref }})
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         ref: ${{ steps.output-next-release-ref.outputs.next_release_ref }}
         persist-credentials: 'false'
 
     - name: Get dependencies for the next release
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         go mod download
 
     - name: Building next release's binaries
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
         echo "building next release: $(git rev-parse HEAD)"
@@ -178,18 +169,18 @@ jobs:
 
     # Checkout to this build's commit
     - name: Check out commit's code
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         persist-credentials: 'false'
 
     - name: Get dependencies for this commit
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         go mod download
 
     - name: Building the binaries for this commit
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
         echo "building this SHA: $(git rev-parse HEAD)"
@@ -200,7 +191,7 @@ jobs:
 
     # Copy vttablet and related binaries under new names
     - name: Use current version Vtctl, and other version VTTablet
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env
 
@@ -216,7 +207,7 @@ jobs:
 
     # Running a test with primary tablet at version n (current SHA) and replica vttablet at version n-1
     - name: Run Online DDL tests (primary=N, replica=N-1)
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
@@ -228,7 +219,7 @@ jobs:
 
     # Running a test with primary tablet at version n-1  and replica vttablet at version n (current SHA)
     - name: Run Online DDL tests (primary=N-1, replica=N)
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
@@ -240,7 +231,7 @@ jobs:
 
     # Running a test with primary tablet at version n+1 and replica vttablet at version n (current SHA)
     - name: Run Online DDL tests (primary=N+1, replica=N)
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
@@ -252,7 +243,7 @@ jobs:
 
     # Running a test with primary tablet at version n (current SHA) and replica vttablet at version n+1
     - name: Run Online DDL tests (primary=N, replica=N+1)
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
