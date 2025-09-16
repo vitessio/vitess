@@ -18,8 +18,13 @@ package querythrottler
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
+	"vitess.io/vitess/go/vt/log"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler/registry"
 
@@ -149,4 +154,182 @@ func TestQueryThrottler_Shutdown(t *testing.T) {
 	strategy := iqt.strategy
 	iqt.mu.RUnlock()
 	require.NotNil(t, strategy)
+}
+
+// TestIncomingQueryThrottler_DryRunMode tests that dry-run mode logs decisions but doesn't throttle queries.
+func TestIncomingQueryThrottler_DryRunMode(t *testing.T) {
+	tests := []struct {
+		name             string
+		enabled          bool
+		dryRun           bool
+		throttleDecision registry.ThrottleDecision
+		expectError      bool
+		expectDryRunLog  bool
+		expectedLogMsg   string
+	}{
+		{
+			name:    "Disabled throttler - no checks performed",
+			enabled: false,
+			dryRun:  false,
+			throttleDecision: registry.ThrottleDecision{
+				Throttle: true,
+				Message:  "Should not be evaluated",
+			},
+			expectError:     false,
+			expectDryRunLog: false,
+		},
+		{
+			name:    "Disabled throttler with dry-run - no checks performed",
+			enabled: false,
+			dryRun:  true,
+			throttleDecision: registry.ThrottleDecision{
+				Throttle: true,
+				Message:  "Should not be evaluated",
+			},
+			expectError:     false,
+			expectDryRunLog: false,
+		},
+		{
+			name:    "Normal mode - query allowed",
+			enabled: true,
+			dryRun:  false,
+			throttleDecision: registry.ThrottleDecision{
+				Throttle: false,
+				Message:  "Query allowed",
+			},
+			expectError:     false,
+			expectDryRunLog: false,
+		},
+		{
+			name:    "Normal mode - query throttled",
+			enabled: true,
+			dryRun:  false,
+			throttleDecision: registry.ThrottleDecision{
+				Throttle:           true,
+				Message:            "Query throttled: metric=cpu value=90.0 threshold=80.0",
+				MetricName:         "cpu",
+				MetricValue:        90.0,
+				Threshold:          80.0,
+				ThrottlePercentage: 1.0,
+			},
+			expectError:     true,
+			expectDryRunLog: false,
+		},
+		{
+			name:    "Dry-run mode - query would be throttled but allowed",
+			enabled: true,
+			dryRun:  true,
+			throttleDecision: registry.ThrottleDecision{
+				Throttle:           true,
+				Message:            "Query throttled: metric=cpu value=95.0 threshold=80.0",
+				MetricName:         "cpu",
+				MetricValue:        95.0,
+				Threshold:          80.0,
+				ThrottlePercentage: 1.0,
+			},
+			expectError:     false,
+			expectDryRunLog: true,
+			expectedLogMsg:  "[DRY-RUN] Query throttled: metric=cpu value=95.0 threshold=80.0",
+		},
+		{
+			name:    "Dry-run mode - query allowed normally",
+			enabled: true,
+			dryRun:  true,
+			throttleDecision: registry.ThrottleDecision{
+				Throttle: false,
+				Message:  "Query allowed",
+			},
+			expectError:     false,
+			expectDryRunLog: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a mock strategy with controlled decision
+			mockStrategy := &mockThrottlingStrategy{
+				decision: tt.throttleDecision,
+			}
+
+			// Create throttler with controlled config
+			iqt := &QueryThrottler{
+				ctx: context.Background(),
+				cfg: Config{
+					Enabled: tt.enabled,
+					DryRun:  tt.dryRun,
+				},
+				strategy: mockStrategy,
+			}
+
+			// Capture log output
+			logCapture := &testLogCapture{}
+			originalLogWarningf := log.Warningf
+			defer func() {
+				// Restore original logging function
+				log.Warningf = originalLogWarningf
+			}()
+
+			// Mock log.Warningf to capture output
+			log.Warningf = logCapture.captureLog
+
+			// Test the enforcement
+			err := iqt.Throttle(
+				context.Background(),
+				topodatapb.TabletType_REPLICA,
+				&sqlparser.ParsedQuery{Query: "SELECT * FROM test_table WHERE id = 1"},
+				12345,
+				&querypb.ExecuteOptions{
+					WorkloadName: "test-workload",
+					Priority:     "50",
+				},
+			)
+
+			// Verify error expectation
+			if tt.expectError {
+				require.EqualError(t, err, tt.throttleDecision.Message, "Error should match the throttle message exactly")
+			} else {
+				require.NoError(t, err, "Expected no throttling error")
+			}
+
+			// Verify log expectation
+			if tt.expectDryRunLog {
+				require.Len(t, logCapture.logs, 1, "Expected exactly one log message")
+				require.Equal(t, tt.expectedLogMsg, logCapture.logs[0], "Log message should match expected")
+			} else {
+				require.Empty(t, logCapture.logs, "Expected no log messages")
+			}
+		})
+	}
+}
+
+// mockThrottlingStrategy is a test strategy that allows us to control throttling decisions
+type mockThrottlingStrategy struct {
+	decision registry.ThrottleDecision
+	started  bool
+	stopped  bool
+}
+
+func (m *mockThrottlingStrategy) Evaluate(ctx context.Context, targetTabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, transactionID int64, options *querypb.ExecuteOptions) registry.ThrottleDecision {
+	return m.decision
+}
+
+func (m *mockThrottlingStrategy) Start() {
+	m.started = true
+}
+
+func (m *mockThrottlingStrategy) Stop() {
+	m.stopped = true
+}
+
+func (m *mockThrottlingStrategy) GetStrategyName() string {
+	return "MockStrategy"
+}
+
+// testLogCapture captures log output for testing
+type testLogCapture struct {
+	logs []string
+}
+
+func (lc *testLogCapture) captureLog(msg string, args ...interface{}) {
+	lc.logs = append(lc.logs, fmt.Sprintf(msg, args...))
 }
