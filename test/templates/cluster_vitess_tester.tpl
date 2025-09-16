@@ -1,5 +1,12 @@
 name: {{.Name}}
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - "main"
+      - "release-[0-9]+.[0-9]"
+    tags: '**'
+  pull_request:
+    branches: '**'
 concurrency:
   group: format('{0}-{1}', ${{"{{"}} github.ref {{"}}"}}, '{{.Name}}')
   cancel-in-progress: true
@@ -25,24 +32,12 @@ jobs:
           exit 1
         fi
 
-    - name: Check if workflow needs to be skipped
-      id: skip-workflow
-      run: |
-        skip='false'
-        if [[ "{{"${{github.event.pull_request}}"}}" ==  "" ]] && [[ "{{"${{github.ref}}"}}" != "refs/heads/main" ]] && [[ ! "{{"${{github.ref}}"}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "{{"${{github.ref}}"}}" =~ "refs/tags/.*" ]]; then
-          skip='true'
-        fi
-        echo Skip ${skip}
-        echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
-
     - name: Check out code
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         persist-credentials: 'false'
 
     - name: Check for changes in relevant files
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: dorny/paths-filter@ebc4d7e9ebcb0b1eb21480bb8f43113e996ac77a # v3.0.1
       id: changes
       with:
@@ -65,23 +60,23 @@ jobs:
             - '.github/workflows/{{.FileName}}'
 
     - name: Set up Go
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
       with:
         go-version-file: go.mod
 
 {{if .GoPrivate}}
     - name: Setup GitHub access token
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       run: git config --global url.https://${{`{{ secrets.GH_ACCESS_TOKEN }}`}}@github.com/.insteadOf https://github.com/
 {{end}}
 
     - name: Set up python
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
 
     - name: Tune the OS
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         # Limit local port range to not use ports that overlap with server side
         # ports that we listen on.
@@ -91,7 +86,7 @@ jobs:
         sudo sysctl -p /etc/sysctl.conf
 
     - name: Get dependencies
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         # Get key to latest MySQL repo
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
@@ -116,7 +111,7 @@ jobs:
         go install github.com/vitessio/vt/go/vt@e43009309f599378504905d4b804460f47822ac5
 
     - name: Setup launchable dependencies
-      if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main'
+      if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main'
       run: |
         # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
         pip3 install --user launchable~=1.0 > /dev/null
@@ -128,7 +123,7 @@ jobs:
         launchable record build --name "$GITHUB_RUN_ID" --no-commit-collection --source .
 
     - name: Run cluster endtoend test
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 45
       run: |
         # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
@@ -155,19 +150,19 @@ jobs:
         done
 
     - name: Record test results in launchable if PR is not a draft
-      if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main' && always()
+      if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main' && always()
       run: |
         # send recorded tests to launchable
         launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
 
     - name: Print test output
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && always()
+      if: steps.changes.outputs.end_to_end == 'true' && always()
       run: |
         # print test output
         cat report*.xml
 
     - name: Test Summary
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && always()
+      if: steps.changes.outputs.end_to_end == 'true' && always()
       uses: test-summary/action@31493c76ec9e7aa675f1585d3ed6f1da69269a86 # v2.4
       with:
         paths: "report*.xml"
