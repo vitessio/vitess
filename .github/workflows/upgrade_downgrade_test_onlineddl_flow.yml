@@ -122,6 +122,12 @@ jobs:
         ref: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
         persist-credentials: 'false'
 
+    - name: Set up Go for the last release
+      if: steps.changes.outputs.end_to_end == 'true'
+      uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+      with:
+        go-version-file: go.mod
+
     - name: Get dependencies for the last release
       if: steps.changes.outputs.end_to_end == 'true'
       run: |
