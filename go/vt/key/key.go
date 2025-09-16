@@ -379,32 +379,27 @@ func EvenShardsKeyRange(i, n int) (*topodatapb.KeyRange, error) {
 }
 
 // GenerateShardRanges returns shard ranges assuming a keyspace with N shards.
-func GenerateShardRanges(shards int) ([]string, error) {
+func GenerateShardRanges(shards int, hexChars int) ([]string, error) {
 	switch {
 	case shards <= 0:
-		return GenerateShardRangesWithGranularity(shards, 0)
+		return nil, errors.New("shards must be greater than zero")
 	case shards == 1:
-		return GenerateShardRangesWithGranularity(shards, 1)
+		return []string{"-"}, nil
 	case shards <= 256:
-		return GenerateShardRangesWithGranularity(shards, 2)
+		if hexChars == 0 {
+			hexChars = 2
+		}
 	case shards <= 65536:
-		return GenerateShardRangesWithGranularity(shards, 4)
+		if hexChars == 0 {
+			hexChars = 4
+		}
 	default:
 		return nil, errors.New("this function does not support more than 65336 shards in a single keyspace")
 	}
-}
 
-func GenerateShardRangesWithGranularity(shards int, hexChars int) ([]string, error) {
 	maxShards := math.Pow(16, float64(hexChars))
-
-	if shards <= 0 {
-		return nil, errors.New("shards must be greater than zero")
-	}
-	if shards == 1 {
-		return []string{"-"}, nil
-	}
 	if shards > int(maxShards) {
-		return nil, fmt.Errorf("the given number of shards %d is too high for the given number of characters to use %d", shards, hexChars)
+		return nil, fmt.Errorf("the given number of shards (%d) is too high for the given number of characters to use (%d)", shards, hexChars)
 	}
 
 	format := fmt.Sprintf("%%0%dx", hexChars)

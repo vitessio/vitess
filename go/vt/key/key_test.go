@@ -1552,7 +1552,7 @@ func TestGenerateShardRanges(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := GenerateShardRanges(tt.args.shards)
+			got, err := GenerateShardRanges(tt.args.shards, 0)
 			if tt.wantErr {
 				assert.Error(t, err)
 				return
@@ -1567,7 +1567,7 @@ func TestGenerateShardRanges(t *testing.T) {
 func TestGenerateShardRangesForManyShards(t *testing.T) {
 	for i := 1; i <= 1024; i++ {
 		t.Run(fmt.Sprintf("shards=%d", i), func(t *testing.T) {
-			ranges, err := GenerateShardRanges(i)
+			ranges, err := GenerateShardRanges(i, 0)
 
 			require.NoError(t, err)
 			require.Len(t, ranges, i)
@@ -1587,41 +1587,48 @@ func TestGenerateShardRangesForManyShards(t *testing.T) {
 	}
 }
 
-func TestShardCalculatorForShardsGreaterThan512(t *testing.T) {
-	got, err := GenerateShardRanges(512)
-	assert.NoError(t, err)
-
-	want := "ff80-"
-
-	assert.Equal(t, want, got[511], "Invalid mapping for a 512-shard keyspace. Expected %v, got %v", want, got[511])
-}
-
-func TestGenerateShardRangesWithGranularity(t *testing.T) {
+func TestGenerateShardRangesWithHexCharacterCount(t *testing.T) {
 	{
-		ranges, err := GenerateShardRanges(7)
+		ranges, err := GenerateShardRanges(7, 1)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
-		assert.EqualValues(t, 7, len(ranges))
-		assert.EqualValues(t, []string{"-24", "24-49", "49-6d", "6d-92", "92-b6", "b6-db", "db-"}, ranges)
+		require.EqualValues(t, 7, len(ranges))
+		require.EqualValues(t, []string{"-2", "2-4", "4-6", "6-9", "9-b", "b-d", "d-"}, ranges)
 	}
 
 	{
-		ranges, err := GenerateShardRangesWithGranularity(7, 3)
+		ranges, err := GenerateShardRanges(7, 2)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
-		assert.EqualValues(t, 7, len(ranges))
-		assert.EqualValues(t, []string{"-249", "249-492", "492-6db", "6db-924", "924-b6d", "b6d-db6", "db6-"}, ranges)
+		require.EqualValues(t, 7, len(ranges))
+		require.EqualValues(t, []string{"-24", "24-49", "49-6d", "6d-92", "92-b6", "b6-db", "db-"}, ranges)
 	}
 
 	{
-		ranges, err := GenerateShardRangesWithGranularity(7, 4)
+		ranges, err := GenerateShardRanges(7, 3)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
-		assert.EqualValues(t, 7, len(ranges))
-		assert.EqualValues(t, []string{"-2492", "2492-4924", "4924-6db6", "6db6-9249", "9249-b6db", "b6db-db6d", "db6d-"}, ranges)
+		require.EqualValues(t, 7, len(ranges))
+		require.EqualValues(t, []string{"-249", "249-492", "492-6db", "6db-924", "924-b6d", "b6d-db6", "db6-"}, ranges)
+	}
+
+	{
+		ranges, err := GenerateShardRanges(7, 4)
+
+		require.NoError(t, err)
+
+		require.EqualValues(t, 7, len(ranges))
+		require.EqualValues(t, []string{"-2492", "2492-4924", "4924-6db6", "6db6-9249", "9249-b6db", "b6db-db6d", "db6d-"}, ranges)
+	}
+
+	{
+		_, err := GenerateShardRanges(32, 1)
+
+		require.Error(t, err)
+		require.ErrorContains(t, err, "the given number of shards (32) is too high for the given number of characters to use (1)")
 	}
 }
 
