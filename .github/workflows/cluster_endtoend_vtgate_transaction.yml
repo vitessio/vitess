@@ -143,19 +143,19 @@ jobs:
         eatmydata -- go run test.go -docker=false -follow -shard vtgate_transaction -build-tag=debug2PC  | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Record test results in launchable if PR is not a draft
-      if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main' && always()
+      if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main' && !cancelled()
       run: |
         # send recorded tests to launchable
         launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
 
     - name: Print test output
-      if: steps.changes.outputs.end_to_end == 'true' && always()
+      if: steps.changes.outputs.end_to_end == 'true' && !cancelled()
       run: |
         # print test output
         cat output.txt
 
     - name: Test Summary
-      if: steps.changes.outputs.end_to_end == 'true' && always()
+      if: steps.changes.outputs.end_to_end == 'true' && !cancelled()
       uses: test-summary/action@31493c76ec9e7aa675f1585d3ed6f1da69269a86 # v2.4
       with:
         paths: "report.xml"
