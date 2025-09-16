@@ -1076,6 +1076,10 @@ func (itmc *internalTabletManagerClient) StartReplication(context.Context, *topo
 	return fmt.Errorf("not implemented in vtcombo")
 }
 
+func (itmc *internalTabletManagerClient) RestartReplication(context.Context, *topodatapb.Tablet, bool) error {
+	return fmt.Errorf("not implemented in vtcombo")
+}
+
 func (itmc *internalTabletManagerClient) StartReplicationUntilAfter(context.Context, *topodatapb.Tablet, string, time.Duration) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }
