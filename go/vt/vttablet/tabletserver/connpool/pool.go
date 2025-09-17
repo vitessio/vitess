@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"net"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/netutil"
@@ -48,7 +49,11 @@ type PooledConn = smartconnpool.Pooled[*Conn]
 // Other than the connection type, ConnPool maintains an additional
 // pool of dba connections that are used to kill connections.
 type Pool struct {
-	*smartconnpool.ConnPool[*Conn]
+	ConnPool atomic.Pointer[smartconnpool.ConnPool[*Conn]]
+
+	config        smartconnpool.Config[*Conn]
+	statsExporter *smartconnpool.StatsExporter[*Conn]
+
 	dbaPool *dbconnpool.ConnectionPool
 
 	timeout time.Duration
@@ -74,18 +79,20 @@ func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool
 		RefreshInterval: mysqlctl.PoolDynamicHostnameResolution,
 	}
 
+	cp.config = config
+
+	cp.ConnPool.Store(smartconnpool.NewPool(&config))
+
+	cp.dbaPool = dbconnpool.NewConnectionPool("", env.Exporter(), 1, config.IdleTimeout, config.MaxLifetime, 0)
+
 	if name != "" {
 		config.LogWait = func(start time.Time) {
 			env.Stats().WaitTimings.Record(name+"ResourceWaitTime", start)
 		}
 
 		cp.getConnTime = env.Exporter().NewTimings(name+"GetConnTime", "Tracks the amount of time it takes to get a connection", "Settings")
+		cp.statsExporter = smartconnpool.NewStatsExporter[*Conn](env.Exporter(), name)
 	}
-
-	cp.ConnPool = smartconnpool.NewPool(&config)
-	cp.ConnPool.RegisterStats(env.Exporter(), name)
-
-	cp.dbaPool = dbconnpool.NewConnectionPool("", env.Exporter(), 1, config.IdleTimeout, config.MaxLifetime, 0)
 
 	return cp
 }
@@ -103,14 +110,24 @@ func (cp *Pool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 		return newPooledConn(ctx, cp, appParams)
 	}
 
-	cp.ConnPool.Open(connect, refresh)
+	pool := cp.ConnPool.Load()
+	pool.Open(connect, refresh)
+	if cp.statsExporter != nil {
+		// statsExporter only exists when a name is given and stats are exported
+		pool := cp.ConnPool.Load()
+		cp.statsExporter.SetPool(pool)
+	}
+
 	cp.dbaPool.Open(dbaParams)
 }
 
 // Close will close the pool and wait for connections to be returned before
 // exiting.
 func (cp *Pool) Close() {
-	cp.ConnPool.Close()
+	pool := cp.ConnPool.Load()
+	pool.Close()
+	cp.ConnPool.Store(smartconnpool.NewPool(&cp.config))
+
 	cp.dbaPool.Close()
 }
 
@@ -127,10 +144,11 @@ func (cp *Pool) Get(ctx context.Context, setting *smartconnpool.Setting) (*Poole
 		}
 		return &smartconnpool.Pooled[*Conn]{Conn: conn}, nil
 	}
-	span.Annotate("capacity", cp.Capacity())
-	span.Annotate("in_use", cp.InUse())
-	span.Annotate("available", cp.Available())
-	span.Annotate("active", cp.Active())
+	pool := cp.ConnPool.Load()
+	span.Annotate("capacity", pool.Capacity())
+	span.Annotate("in_use", pool.InUse())
+	span.Annotate("available", pool.Available())
+	span.Annotate("active", pool.Active())
 
 	if cp.timeout != 0 {
 		var cancel context.CancelFunc
@@ -139,7 +157,7 @@ func (cp *Pool) Get(ctx context.Context, setting *smartconnpool.Setting) (*Poole
 	}
 
 	start := time.Now()
-	conn, err := cp.ConnPool.Get(ctx, setting)
+	conn, err := pool.Get(ctx, setting)
 	if err != nil {
 		return nil, err
 	}
@@ -155,20 +173,67 @@ func (cp *Pool) Get(ctx context.Context, setting *smartconnpool.Setting) (*Poole
 
 // SetIdleTimeout sets the idleTimeout on the pool.
 func (cp *Pool) SetIdleTimeout(idleTimeout time.Duration) {
-	cp.ConnPool.SetIdleTimeout(idleTimeout)
+	pool := cp.ConnPool.Load()
+	pool.SetIdleTimeout(idleTimeout)
 	cp.dbaPool.SetIdleTimeout(idleTimeout)
 }
 
 // StatsJSON returns the pool stats as a JSON object.
 func (cp *Pool) StatsJSON() string {
-	if !cp.ConnPool.IsOpen() {
+	pool := cp.ConnPool.Load()
+	if !pool.IsOpen() {
 		return "{}"
 	}
 
 	var buf strings.Builder
 	enc := json.NewEncoder(&buf)
-	_ = enc.Encode(cp.ConnPool.StatsJSON())
+	_ = enc.Encode(pool.StatsJSON())
 	return buf.String()
+}
+
+func (cp *Pool) Capacity() int64 {
+	pool := cp.ConnPool.Load()
+	return pool.Capacity()
+}
+
+func (cp *Pool) SetCapacity(ctx context.Context, newcap int64) error {
+	pool := cp.ConnPool.Load()
+	return pool.SetCapacity(ctx, newcap)
+}
+
+func (cp *Pool) Available() int64 {
+	pool := cp.ConnPool.Load()
+	return pool.Available()
+}
+
+func (cp *Pool) Active() int64 {
+	pool := cp.ConnPool.Load()
+	return pool.Active()
+}
+
+func (cp *Pool) InUse() int64 {
+	pool := cp.ConnPool.Load()
+	return pool.InUse()
+}
+
+func (cp *Pool) IdleCount() int64 {
+	pool := cp.ConnPool.Load()
+	return pool.IdleCount()
+}
+
+func (cp *Pool) IdleTimeout() time.Duration {
+	pool := cp.ConnPool.Load()
+	return pool.IdleTimeout()
+}
+
+func (cp *Pool) IsOpen() bool {
+	pool := cp.ConnPool.Load()
+	return pool.IsOpen()
+}
+
+func (cp *Pool) Metrics() *smartconnpool.Metrics {
+	pool := cp.ConnPool.Load()
+	return &pool.Metrics
 }
 
 func (cp *Pool) isCallerIDAppDebug(ctx context.Context) bool {
