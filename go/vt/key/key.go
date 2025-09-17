@@ -394,7 +394,7 @@ func GenerateShardRanges(shards int, hexChars int) ([]string, error) {
 			hexChars = 4
 		}
 	default:
-		return nil, errors.New("this function does not support more than 65336 shards in a single keyspace")
+		return nil, errors.New("this function does not support more than 65536 shards in a single keyspace")
 	}
 
 	maxShards := math.Pow(16, float64(hexChars))
