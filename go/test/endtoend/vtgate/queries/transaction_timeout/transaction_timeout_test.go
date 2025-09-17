@@ -102,6 +102,7 @@ func TestTransactionTimeout(t *testing.T) {
 
 	// Get new connection
 	conn, err = mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
 
 	// Set session transaction timeout to 0
 	utils.Exec(t, conn, "set transaction_timeout=0")
