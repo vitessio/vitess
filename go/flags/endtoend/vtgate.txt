@@ -28,6 +28,7 @@ Flags:
       --allow-kill-statement                                             Allows the execution of kill statement
       --allowed-tablet-types strings                                     Specifies the tablet types this vtgate is allowed to route queries to. Should be provided as a comma-separated set of tablet types.
       --alsologtostderr                                                  log to standard error as well as files
+      --append-caller-id-to-queries                                      Appends immediate CallerId username into trailing comment of every query through to MySQL
       --balancer-keyspaces strings                                       When in balanced mode, a comma-separated list of keyspaces for which to use the balancer (optional)
       --balancer-vtgate-cells strings                                    When in balanced mode, a comma-separated list of cells that contain vtgates (required)
       --bind-address string                                              Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.

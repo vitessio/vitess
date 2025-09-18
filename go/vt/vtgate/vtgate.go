@@ -97,6 +97,8 @@ var (
 	lockHeartbeatTime = 5 * time.Second
 	warnShardedOnly   bool
 
+	appendCallerID bool
+
 	// ddl related flags
 	foreignKeyMode     = "allow"
 	dbDDLPlugin        = "fail"
@@ -205,6 +207,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&warmingReadsPercent, "warming-reads-percent", 0, "Percentage of reads on the primary to forward to replicas. Useful for keeping buffer pools warm")
 	fs.IntVar(&warmingReadsConcurrency, "warming-reads-concurrency", 500, "Number of concurrent warming reads allowed")
 	fs.DurationVar(&warmingReadsQueryTimeout, "warming-reads-query-timeout", 5*time.Second, "Timeout of warming read queries")
+	fs.BoolVar(&appendCallerID, "append-caller-id-to-queries", appendCallerID, "Appends immediate CallerId username into trailing comment of every query through to MySQL")
 
 	viperutil.BindFlags(fs,
 		enableOnlineDDL,
