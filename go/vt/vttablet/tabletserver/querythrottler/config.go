@@ -27,6 +27,11 @@ type Config struct {
 	// Enabled indicates whether the throttler should actively apply throttling logic.
 	Enabled bool `json:"enabled"`
 
+	// DryRun indicates whether throttling decisions should be logged but not enforced.
+	// When true, queries that would be throttled are allowed to proceed, but the
+	// throttling decision is logged for observability.
+	DryRun bool `json:"dry_run"`
+
 	// Strategy selects which throttling strategy should be used.
 	Strategy registry.ThrottlingStrategy `json:"strategy"`
 }
