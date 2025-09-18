@@ -307,6 +307,11 @@ func GetSQLiteDataFile() string {
 	return sqliteDataFile.Get()
 }
 
+// SetSQLiteDataFile is a Setter function.
+func SetSQLiteDataFile(dataFile string) {
+	sqliteDataFile.Set(dataFile)
+}
+
 // GetReasonableReplicationLagSeconds gets the reasonable replication lag but in seconds.
 func GetReasonableReplicationLagSeconds() int64 {
 	return int64(reasonableReplicationLag.Get() / time.Second)
