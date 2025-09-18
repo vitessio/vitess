@@ -621,7 +621,7 @@ func newTestScatterConn(ctx context.Context, hc discovery.HealthCheck, serv srvt
 	// The topo.Server is used to start watching the cells described
 	// in '-cells_to_watch' command line parameter, which is
 	// empty by default. So it's unused in this test, set to nil.
-	gw := NewTabletGateway(ctx, hc, serv, cell)
+	gw, _ := NewTabletGateway(ctx, hc, serv, cell)
 	tc := NewTxConn(gw, &StaticConfig{
 		TxMode: vtgatepb.TransactionMode_MULTI,
 	})
