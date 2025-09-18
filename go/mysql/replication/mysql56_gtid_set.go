@@ -752,6 +752,16 @@ func (set Mysql56GTIDSet) Difference(other Mysql56GTIDSet) Mysql56GTIDSet {
 	return differenceSet
 }
 
+// Count returns the number of GTIDs in a GTID set.
+func (set Mysql56GTIDSet) Count() (count int64) {
+	for _, intervals := range set {
+		for _, intvl := range intervals {
+			count += intvl.end - intvl.start + 1
+		}
+	}
+	return count
+}
+
 // NewMysql56GTIDSetFromSIDBlock builds a Mysql56GTIDSet from parsing a SID Block.
 // This is the reverse of the SIDBlock method.
 //
@@ -828,35 +838,4 @@ func init() {
 	gtidSetParsers[Mysql56FlavorID] = func(s string) (GTIDSet, error) {
 		return ParseMysql56GTIDSet(s)
 	}
-}
-
-// Subtract takes in two Mysql56GTIDSets as strings and subtracts the second from the first
-// The result is also a string.
-// An error is thrown if parsing is not possible for either GTIDSets
-func Subtract(lhs, rhs string) (string, error) {
-	lhsSet, err := ParseMysql56GTIDSet(lhs)
-	if err != nil {
-		return "", err
-	}
-	rhsSet, err := ParseMysql56GTIDSet(rhs)
-	if err != nil {
-		return "", err
-	}
-	diffSet := lhsSet.Difference(rhsSet)
-	return diffSet.String(), nil
-}
-
-// GTIDCount returns the number of GTIDs in a GTID set.
-func GTIDCount(gtidStr string) (int64, error) {
-	gtidSet, err := ParseMysql56GTIDSet(gtidStr)
-	if err != nil {
-		return 0, err
-	}
-	var count int64
-	for _, intervals := range gtidSet {
-		for _, intvl := range intervals {
-			count = count + intvl.end - intvl.start + 1
-		}
-	}
-	return count, nil
 }
