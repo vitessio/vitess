@@ -54,7 +54,7 @@ var (
 		utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
 		utils.GetFlagVariantForTests("--watch-replication-stream"),
 		utils.GetFlagVariantForTests("--enable-replication-reporter"),
-		"--serving_state_grace_period", "1s",
+		utils.GetFlagVariantForTests("--serving-state-grace-period"), "1s",
 		utils.GetFlagVariantForTests("--binlog-player-protocol"), "grpc",
 	}
 	vSchema = `

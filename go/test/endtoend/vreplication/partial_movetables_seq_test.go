@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/utils"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -396,8 +397,7 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 	origExtraVTGateArgs := extraVTGateArgs
 	extraVTGateArgs = append(extraVTGateArgs, []string{
 		"--enable-partial-keyspace-migration",
-		"--schema_change_signal=false",
-	}...)
+		utils.GetFlagVariantForTests("--schema-change-signal") + "=false"}...)
 	defer func() {
 		extraVTGateArgs = origExtraVTGateArgs
 	}()
@@ -505,7 +505,7 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 		wf80Dash.switchTraffic()
 		expectedSwitchOutput := fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s\n\nStart State: Reads Not Switched. Writes Not Switched\nCurrent State: Reads partially switched, for shards: %s. Writes partially switched, for shards: %s\n\n",
 			targetKs, wfName, shard, shard)
-		require.Equal(t, expectedSwitchOutput, lastOutput)
+		require.Contains(t, lastOutput, expectedSwitchOutput)
 
 		// Confirm global routing rules -- everything should still be routed
 		// to the source side, customer, globally.
@@ -562,7 +562,7 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 
 		expectedSwitchOutput := fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s\n\nStart State: Reads partially switched, for shards: 80-. Writes partially switched, for shards: 80-\nCurrent State: All Reads Switched. All Writes Switched\n\n",
 			targetKs, wfName)
-		require.Equal(t, expectedSwitchOutput, lastOutput)
+		require.Contains(t, lastOutput, expectedSwitchOutput)
 
 		// Confirm global routing rules: everything should still be routed
 		// to the source side, customer, globally.

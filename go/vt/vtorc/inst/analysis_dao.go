@@ -512,10 +512,15 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			a.Analysis = UnreachablePrimaryWithLaggingReplicas
 			a.Description = "Primary cannot be reached by vtorc and all of its replicas are lagging"
 			//
-		case a.IsPrimary && !a.LastCheckValid && !a.LastCheckPartialSuccess && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas > 0:
+		case a.IsPrimary && !a.LastCheckValid && !a.LastCheckPartialSuccess && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == a.CountValidReplicas:
 			// partial success is here to reduce noise
 			a.Analysis = UnreachablePrimary
-			a.Description = "Primary cannot be reached by vtorc but it has replicating replicas; possibly a network/host issue"
+			a.Description = "Primary cannot be reached by vtorc but all of its replicas seem to be replicating; possibly a network/host issue"
+			//
+		case a.IsPrimary && !a.LastCheckValid && !a.LastCheckPartialSuccess && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas > 0 && a.CountValidReplicatingReplicas < a.CountValidReplicas:
+			// partial success is here to reduce noise
+			a.Analysis = UnreachablePrimaryWithBrokenReplicas
+			a.Description = "Primary cannot be reached by vtorc but it has (some, but not all) replicating replicas; possibly a network/host issue"
 			//
 		case a.IsPrimary && a.SemiSyncPrimaryEnabled && a.SemiSyncPrimaryStatus && a.SemiSyncPrimaryWaitForReplicaCount > 0 && a.SemiSyncPrimaryClients < a.SemiSyncPrimaryWaitForReplicaCount:
 			if isStaleBinlogCoordinates {

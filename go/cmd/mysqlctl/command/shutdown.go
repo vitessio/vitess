@@ -24,13 +24,14 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var Shutdown = &cobra.Command{
 	Use:   "shutdown",
 	Short: "Shuts down mysqld, without removing any files.",
 	Long: "Stop a `mysqld` instance that was previously started with `init` or `start`.\n\n" +
-		"For large `mysqld` instances, you may need to extend the `wait_time` to shutdown cleanly.",
+		"For large `mysqld` instances, you may need to extend the `wait-time` to shutdown cleanly.",
 	Example: `mysqlctl --tablet-uid 101 --alsologtostderr shutdown`,
 	Args:    cobra.NoArgs,
 	RunE:    commandShutdown,
@@ -59,7 +60,7 @@ func commandShutdown(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	Shutdown.Flags().DurationVar(&shutdownArgs.WaitTime, "wait_time", shutdownArgs.WaitTime, "How long to wait for mysqld shutdown.")
+	utils.SetFlagDurationVar(Shutdown.Flags(), &shutdownArgs.WaitTime, "wait-time", shutdownArgs.WaitTime, "How long to wait for mysqld shutdown.")
 
 	Root.AddCommand(Shutdown)
 }

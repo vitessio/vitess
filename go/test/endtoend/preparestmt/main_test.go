@@ -163,9 +163,9 @@ func TestMain(m *testing.M) {
 		// add extra arguments
 		vtgateInstance.ExtraArgs = []string{
 			utils.GetFlagVariantForTests("--mysql-server-query-timeout"), "1s",
-			"--mysql_auth_server_static_file", clusterInstance.TmpDirectory + "/" + mysqlAuthServerStatic,
+			"--mysql-auth-server-static-file", clusterInstance.TmpDirectory + "/" + mysqlAuthServerStatic,
 			"--pprof-http",
-			"--schema_change_signal=false",
+			utils.GetFlagVariantForTests("--schema-change-signal") + "=false",
 		}
 
 		// Start vtgate

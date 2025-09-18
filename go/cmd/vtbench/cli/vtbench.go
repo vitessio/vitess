@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vtbench"
 
 	// Import and register the gRPC vtgateconn client
@@ -139,7 +140,7 @@ func init() {
 
 	Main.Flags().StringVar(&host, "host", host, "VTGate host(s) in the form 'host1,host2,...'")
 	Main.Flags().IntVar(&port, "port", port, "VTGate port")
-	Main.Flags().StringVar(&unixSocket, "unix_socket", unixSocket, "VTGate unix socket")
+	utils.SetFlagStringVar(Main.Flags(), &unixSocket, "unix-socket", unixSocket, "VTGate unix socket")
 	Main.Flags().StringVar(&protocol, "protocol", protocol, "Client protocol, either mysql (default), grpc-vtgate, or grpc-vttablet")
 	Main.Flags().StringVar(&user, "user", user, "Username to connect using mysql (password comes from the db-credentials-file)")
 	Main.Flags().StringVar(&db, "db", db, "Database name to use when connecting / running the queries (e.g. @replica, keyspace, keyspace/shard etc)")
