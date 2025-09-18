@@ -39,7 +39,7 @@ func TestTopologyRecovery(t *testing.T) {
 		require.NoError(t, err)
 	}()
 
-	replicationAnalysis := inst.ReplicationAnalysis{
+	detectionAnalysis := inst.DetectionAnalysis{
 		AnalyzedInstanceAlias: "zone1-0000000101",
 		TabletType:            tab101.Type,
 		AnalyzedKeyspace:      keyspace,
@@ -47,7 +47,7 @@ func TestTopologyRecovery(t *testing.T) {
 		Analysis:              inst.ReplicaIsWritable,
 		IsReadOnly:            false,
 	}
-	topologyRecovery := NewTopologyRecovery(replicationAnalysis)
+	topologyRecovery := NewTopologyRecovery(detectionAnalysis)
 
 	t.Run("writing to topology recovery", func(t *testing.T) {
 		topologyRecovery, err = writeTopologyRecovery(topologyRecovery)
@@ -138,7 +138,7 @@ func TestInsertRecoveryDetection(t *testing.T) {
 	defer func() {
 		db.ClearVTOrcDatabase()
 	}()
-	ra := &inst.ReplicationAnalysis{
+	ra := &inst.DetectionAnalysis{
 		AnalyzedInstanceAlias: "alias-1",
 		AnalyzedKeyspace:      keyspace,
 		AnalyzedShard:         shard,
