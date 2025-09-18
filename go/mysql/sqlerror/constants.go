@@ -203,6 +203,7 @@ const (
 	ERBlobKeyWithoutLength         = ErrorCode(1170)
 	ERPrimaryCantHaveNull          = ErrorCode(1171)
 	ERTooManyRows                  = ErrorCode(1172)
+	ERNonWhereClause               = ErrorCode(1175)
 	ERErrorDuringCommit            = ErrorCode(1180)
 	ERLockOrActiveTransaction      = ErrorCode(1192)
 	ERUnknownSystemVariable        = ErrorCode(1193)

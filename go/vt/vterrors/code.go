@@ -60,6 +60,7 @@ var (
 	VT03031 = errorWithoutState("VT03031", vtrpcpb.Code_INVALID_ARGUMENT, "EXPLAIN is only supported for single keyspace", "EXPLAIN has to be sent down as a single query to the underlying MySQL, and this is not possible if it uses tables from multiple keyspaces")
 	VT03032 = errorWithState("VT03032", vtrpcpb.Code_INVALID_ARGUMENT, NonUpdateableTable, "the target table %s of the UPDATE is not updatable", "You cannot update a table that is not a real MySQL table.")
 	VT03033 = errorWithState("VT03033", vtrpcpb.Code_INVALID_ARGUMENT, ViewWrongList, "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts", "The table column list and derived column list have different column counts.")
+	VT03034 = errorWithState("VT03034", vtrpcpb.Code_INVALID_ARGUMENT, NonWhereClause, "UPDATE and DELETE statements that do not use a key in the WHERE clause produce an error", "You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column.")
 
 	VT05001 = errorWithState("VT05001", vtrpcpb.Code_NOT_FOUND, DbDropExists, "cannot drop database '%s'; database does not exists", "The given database does not exist; Vitess cannot drop it.")
 	VT05002 = errorWithState("VT05002", vtrpcpb.Code_NOT_FOUND, BadDb, "cannot alter database '%s'; unknown database", "The given database does not exist; Vitess cannot alter it.")

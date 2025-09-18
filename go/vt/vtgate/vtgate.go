@@ -168,6 +168,9 @@ var (
 	warmingReadsPercent      = 0
 	warmingReadsQueryTimeout = 5 * time.Second
 	warmingReadsConcurrency  = 500
+
+	// safe-Update mode
+	safeUpdate = false
 )
 
 func registerFlags(fs *pflag.FlagSet) {
@@ -205,6 +208,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&warmingReadsPercent, "warming-reads-percent", 0, "Percentage of reads on the primary to forward to replicas. Useful for keeping buffer pools warm")
 	fs.IntVar(&warmingReadsConcurrency, "warming-reads-concurrency", 500, "Number of concurrent warming reads allowed")
 	fs.DurationVar(&warmingReadsQueryTimeout, "warming-reads-query-timeout", 5*time.Second, "Timeout of warming read queries")
+	fs.BoolVar(&safeUpdate, "safe-update", safeUpdate, "use the safe-update mode")
 
 	viperutil.BindFlags(fs,
 		enableOnlineDDL,

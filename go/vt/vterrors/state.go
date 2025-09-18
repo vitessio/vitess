@@ -50,6 +50,7 @@ const (
 	BadNullError
 	InvalidGroupFuncUse
 	ViewWrongList
+	NonWhereClause
 
 	// failed precondition
 	NoDB
