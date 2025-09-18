@@ -61,6 +61,10 @@ jobs:
         run: |
           echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
 
+          # Don't waste a bunch of time processing man-db triggers
+          echo "set man-db/auto-update false" | sudo debconf-communicate
+          sudo dpkg-reconfigure man-db
+
       - name: Get dependencies
         if: steps.changes.outputs.end_to_end == 'true'
         run: |
