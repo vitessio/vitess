@@ -25,6 +25,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/patrickmn/go-cache"
+	"golang.org/x/sync/errgroup"
+
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -40,6 +43,8 @@ import (
 
 const (
 	CheckAndRecoverGenericProblemRecoveryName        string = "CheckAndRecoverGenericProblem"
+	RestartArbitraryDirectReplicaRecoveryName        string = "RestartArbitraryDirectReplica"
+	RestartAllDirectReplicasRecoveryName             string = "RestartAllDirectReplicas"
 	RecoverDeadPrimaryRecoveryName                   string = "RecoverDeadPrimary"
 	RecoverPrimaryTabletDeletedRecoveryName          string = "RecoverPrimaryTabletDeleted"
 	RecoverPrimaryHasPrimaryRecoveryName             string = "RecoverPrimaryHasPrimary"
@@ -52,6 +57,11 @@ const (
 
 var (
 	countPendingRecoveries = stats.NewGauge("PendingRecoveries", "Count of the number of pending recoveries")
+
+	// urgentOperations helps rate limiting some operations on replicas, such as restarting replication
+	// in an UnreachablePrimary scenario.
+	urgentOperations         *cache.Cache // key: tablet alias. value: arbitrary (we don't care)
+	urgentOperationsInterval = 1 * time.Minute
 
 	// detectedProblems is used to track the number of detected problems.
 	//
@@ -95,6 +105,8 @@ type recoveryFunction int
 const (
 	noRecoveryFunc recoveryFunction = iota
 	recoverGenericProblemFunc
+	restartArbitraryDirectReplicaFunc
+	restartAllDirectReplicasFunc
 	recoverDeadPrimaryFunc
 	recoverPrimaryTabletDeletedFunc
 	recoverPrimaryHasPrimaryFunc
@@ -156,6 +168,7 @@ func init() {
 	stats.NewGaugeFunc("ShardLocksActive", "Number of actively-held shard locks", func() int64 {
 		return atomic.LoadInt64(&shardsLockCounter)
 	})
+	urgentOperations = cache.New(urgentOperationsInterval, 2*urgentOperationsInterval)
 	go initializeTopologyRecoveryPostConfiguration()
 }
 
@@ -340,6 +353,128 @@ func checkAndRecoverGenericProblem(ctx context.Context, analysisEntry *inst.Repl
 	return false, nil, nil
 }
 
+func restartArbitraryDirectReplica(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, logger *log.PrefixedLogger) (bool, *TopologyRecovery, error) {
+	return restartDirectReplicas(ctx, analysisEntry, 1, logger)
+}
+
+func restartAllDirectReplicas(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, logger *log.PrefixedLogger) (bool, *TopologyRecovery, error) {
+	return restartDirectReplicas(ctx, analysisEntry, 0, logger)
+}
+
+// restartDirectReplicas restarts replication on direct replicas of an unreachable primary
+func restartDirectReplicas(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, maxReplicas int, logger *log.PrefixedLogger) (bool, *TopologyRecovery, error) {
+	topologyRecovery, err := AttemptRecoveryRegistration(analysisEntry)
+	if topologyRecovery == nil {
+		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another restartDirectReplicas.", analysisEntry.AnalyzedInstanceAlias)
+		logger.Warning(message)
+		_ = AuditTopologyRecovery(topologyRecovery, message)
+		return false, nil, err
+	}
+	logger.Infof("Analysis: %v, will restart direct replicas of unreachable primary %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
+
+	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
+	defer func() {
+		_ = resolveRecovery(topologyRecovery, nil)
+	}()
+
+	// Get durability policy for the keyspace to determine semi-sync settings
+	durabilityPolicy, err := inst.GetDurabilityPolicy(analysisEntry.AnalyzedKeyspace)
+	if err != nil {
+		logger.Errorf("Error getting durability policy for keyspace %v: %v", analysisEntry.AnalyzedKeyspace, err)
+		return false, topologyRecovery, err
+	}
+
+	// Get all tablets in the shard
+	tablets, err := ts.GetTabletsByShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+	if err != nil {
+		logger.Errorf("Error fetching tablets for keyspace/shard %v/%v: %v", analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, err)
+		return false, topologyRecovery, err
+	}
+
+	// Find the primary tablet for semi-sync policy determination
+	var primaryTablet *topodatapb.Tablet
+	for _, tabletInfo := range tablets {
+		tabletAlias := topoproto.TabletAliasString(tabletInfo.Tablet.Alias)
+		if tabletAlias == analysisEntry.AnalyzedInstanceAlias {
+			primaryTablet = tabletInfo.Tablet
+			break
+		}
+	}
+
+	if primaryTablet == nil {
+		logger.Errorf("Could not find primary tablet %s", analysisEntry.AnalyzedInstanceAlias)
+		return false, topologyRecovery, fmt.Errorf("could not find primary tablet %s", analysisEntry.AnalyzedInstanceAlias)
+	}
+
+	eg, _ := errgroup.WithContext(ctx)
+	var restartExpected int
+	var restartPerformed atomic.Int64
+	// Iterate through all tablets and find direct replicas of the primary.
+	// We intentionally shuffle tablet order. When maxReplicas is non-zero, we want to
+	// randomly pick which replicas to restart, to avoid biasing towards replicas.
+	for i, tabletIndex := range rand.Perm(len(tablets)) {
+		if maxReplicas > 0 && i >= maxReplicas {
+			break
+		}
+		tabletInfo := tablets[tabletIndex]
+		tablet := tabletInfo.Tablet
+		tabletAlias := topoproto.TabletAliasString(tablet.Alias)
+
+		// Skip the primary itself
+		if tabletAlias == analysisEntry.AnalyzedInstanceAlias {
+			continue
+		}
+
+		if err := urgentOperations.Add(tabletAlias, true, cache.DefaultExpiration); err != nil {
+			// Rate limit interval has not passed yet
+			continue
+		}
+
+		// Read the instance to check replication source
+		instance, found, err := inst.ReadInstance(tabletAlias)
+		if err != nil || !found {
+			logger.Warningf("Could not read instance information for %s: %v", tabletAlias, err)
+			continue
+		}
+		if instance.ReplicationDepth != 1 {
+			// Not a direct replica of the primary
+			continue
+		}
+
+		restartExpected++
+		eg.Go(func() error {
+			logger.Infof("Restarting replication on direct replica %s", tabletAlias)
+			_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Restarting replication on direct replica %s", tabletAlias))
+
+			if err := tmc.StopReplication(ctx, tablet); err != nil {
+				logger.Errorf("Failed to stop replication on %s: %v", tabletAlias, err)
+				return err
+			}
+
+			// Determine if this replica should use semi-sync based on the durability policy
+			semiSync := policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, tablet)
+
+			if err := tmc.StartReplication(ctx, tablet, semiSync); err != nil {
+				logger.Errorf("Failed to start replication on %s: %v", tabletAlias, err)
+				return err
+			}
+			logger.Infof("Successfully restarted replication on %s", tabletAlias)
+			restartPerformed.Add(1)
+			return nil
+		})
+	}
+	err = eg.Wait()
+	message := fmt.Sprintf("Completed restart of %d/%d direct replicas for unreachable primary %+v. err=%+v", restartPerformed.Load(), restartExpected, analysisEntry.AnalyzedInstanceAlias, err)
+	logger.Infof(message)
+	_ = AuditTopologyRecovery(topologyRecovery, message)
+
+	if err != nil {
+		return true, topologyRecovery, err
+	}
+
+	return true, topologyRecovery, nil
+}
+
 // isERSEnabled returns true if ERS can be used globally or for the given keyspace.
 func isERSEnabled(analysisEntry *inst.ReplicationAnalysis) bool {
 	// If ERS is disabled globally we have no way of repairing the cluster.
@@ -405,7 +540,9 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.ReplicationAnalysis) (re
 	case inst.DeadPrimaryAndReplicas:
 		recoveryFunc = recoverGenericProblemFunc
 	case inst.UnreachablePrimary:
-		recoveryFunc = recoverGenericProblemFunc
+		recoveryFunc = restartArbitraryDirectReplicaFunc
+	case inst.UnreachablePrimaryWithBrokenReplicas:
+		recoveryFunc = restartAllDirectReplicasFunc
 	case inst.UnreachablePrimaryWithLaggingReplicas:
 		recoveryFunc = recoverGenericProblemFunc
 	case inst.AllPrimaryReplicasNotReplicating:
@@ -430,6 +567,10 @@ func hasActionableRecovery(recoveryFunctionCode recoveryFunction) bool {
 		return false
 	case recoverGenericProblemFunc:
 		return false
+	case restartArbitraryDirectReplicaFunc:
+		return true
+	case restartAllDirectReplicasFunc:
+		return true
 	case recoverDeadPrimaryFunc:
 		return true
 	case recoverPrimaryTabletDeletedFunc:
@@ -460,6 +601,10 @@ func getCheckAndRecoverFunction(recoveryFunctionCode recoveryFunction) (
 		return nil
 	case recoverGenericProblemFunc:
 		return checkAndRecoverGenericProblem
+	case restartArbitraryDirectReplicaFunc:
+		return restartArbitraryDirectReplica
+	case restartAllDirectReplicasFunc:
+		return restartAllDirectReplicas
 	case recoverDeadPrimaryFunc:
 		return recoverDeadPrimary
 	case recoverPrimaryTabletDeletedFunc:
@@ -489,6 +634,10 @@ func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
 		return ""
 	case recoverGenericProblemFunc:
 		return CheckAndRecoverGenericProblemRecoveryName
+	case restartArbitraryDirectReplicaFunc:
+		return RestartArbitraryDirectReplicaRecoveryName
+	case restartAllDirectReplicasFunc:
+		return RestartAllDirectReplicasRecoveryName
 	case recoverDeadPrimaryFunc:
 		return RecoverDeadPrimaryRecoveryName
 	case recoverPrimaryTabletDeletedFunc:
