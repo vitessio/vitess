@@ -53,6 +53,13 @@ func TestReparentSorter(t *testing.T) {
 		},
 		Type: topodatapb.TabletType_REPLICA,
 	}
+	tabletReplica3_103 := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: cell1,
+			Uid:  103,
+		},
+		Type: topodatapb.TabletType_REPLICA,
+	}
 	tabletRdonly1_102 := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: cell1,
@@ -74,65 +81,90 @@ func TestReparentSorter(t *testing.T) {
 		Sequence: 11,
 	}
 
-	positionMostAdvanced := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
-	positionMostAdvanced.GTIDSet = positionMostAdvanced.GTIDSet.AddGTID(mysqlGTID1)
-	positionMostAdvanced.GTIDSet = positionMostAdvanced.GTIDSet.AddGTID(mysqlGTID2)
-	positionMostAdvanced.GTIDSet = positionMostAdvanced.GTIDSet.AddGTID(mysqlGTID3)
+	positionMostAdvanced := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	positionMostAdvanced.Combined.GTIDSet = positionMostAdvanced.Combined.GTIDSet.AddGTID(mysqlGTID1)
+	positionMostAdvanced.Combined.GTIDSet = positionMostAdvanced.Combined.GTIDSet.AddGTID(mysqlGTID2)
+	positionMostAdvanced.Combined.GTIDSet = positionMostAdvanced.Combined.GTIDSet.AddGTID(mysqlGTID3)
+	positionMostAdvanced.Executed.GTIDSet = positionMostAdvanced.Executed.GTIDSet.AddGTID(mysqlGTID1)
+	positionMostAdvanced.Executed.GTIDSet = positionMostAdvanced.Executed.GTIDSet.AddGTID(mysqlGTID2)
 
-	positionEmpty := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
+	positionAlmostMostAdvanced := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	positionAlmostMostAdvanced.Combined.GTIDSet = positionAlmostMostAdvanced.Combined.GTIDSet.AddGTID(mysqlGTID1)
+	positionAlmostMostAdvanced.Combined.GTIDSet = positionAlmostMostAdvanced.Combined.GTIDSet.AddGTID(mysqlGTID2)
+	positionAlmostMostAdvanced.Combined.GTIDSet = positionAlmostMostAdvanced.Combined.GTIDSet.AddGTID(mysqlGTID3)
+	positionAlmostMostAdvanced.Executed.GTIDSet = positionAlmostMostAdvanced.Executed.GTIDSet.AddGTID(mysqlGTID1)
 
-	positionIntermediate1 := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
-	positionIntermediate1.GTIDSet = positionIntermediate1.GTIDSet.AddGTID(mysqlGTID1)
+	positionEmpty := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
 
-	positionIntermediate2 := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
-	positionIntermediate2.GTIDSet = positionIntermediate2.GTIDSet.AddGTID(mysqlGTID1)
-	positionIntermediate2.GTIDSet = positionIntermediate2.GTIDSet.AddGTID(mysqlGTID2)
+	positionIntermediate1 := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	positionIntermediate1.Combined.GTIDSet = positionIntermediate1.Combined.GTIDSet.AddGTID(mysqlGTID1)
+	positionIntermediate1.Executed.GTIDSet = positionIntermediate1.Executed.GTIDSet.AddGTID(mysqlGTID1)
+
+	positionIntermediate2 := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	positionIntermediate2.Combined.GTIDSet = positionIntermediate2.Combined.GTIDSet.AddGTID(mysqlGTID1)
+	positionIntermediate2.Combined.GTIDSet = positionIntermediate2.Combined.GTIDSet.AddGTID(mysqlGTID2)
+	positionIntermediate2.Executed.GTIDSet = positionIntermediate2.Executed.GTIDSet.AddGTID(mysqlGTID1)
 
 	testcases := []struct {
 		name             string
 		tablets          []*topodatapb.Tablet
 		innodbBufferPool []int
-		positions        []replication.Position
+		positions        []*RelayLogPositions
 		containsErr      string
 		sortedTablets    []*topodatapb.Tablet
 	}{
 		{
 			name:          "all advanced, sort via promotion rules",
 			tablets:       []*topodatapb.Tablet{nil, tabletReplica1_100, tabletRdonly1_102},
-			positions:     []replication.Position{positionMostAdvanced, positionMostAdvanced, positionMostAdvanced},
+			positions:     []*RelayLogPositions{positionMostAdvanced, positionMostAdvanced, positionMostAdvanced},
 			sortedTablets: []*topodatapb.Tablet{tabletReplica1_100, tabletRdonly1_102, nil},
 		}, {
 			name:             "all advanced, sort via innodb buffer pool",
 			tablets:          []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100, tabletReplica1_100},
-			positions:        []replication.Position{positionMostAdvanced, positionMostAdvanced, positionMostAdvanced},
+			positions:        []*RelayLogPositions{positionMostAdvanced, positionMostAdvanced, positionMostAdvanced},
 			innodbBufferPool: []int{10, 40, 25},
 			sortedTablets:    []*topodatapb.Tablet{tabletReplica2_100, tabletReplica1_100, tabletReplica1_101},
 		}, {
 			name:          "ordering by position",
-			tablets:       []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100, tabletReplica1_100, tabletRdonly1_102},
-			positions:     []replication.Position{positionEmpty, positionIntermediate1, positionIntermediate2, positionMostAdvanced},
-			sortedTablets: []*topodatapb.Tablet{tabletRdonly1_102, tabletReplica1_100, tabletReplica2_100, tabletReplica1_101},
+			tablets:       []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100, tabletReplica1_100, tabletRdonly1_102, tabletReplica3_103},
+			positions:     []*RelayLogPositions{positionEmpty, positionIntermediate1, positionIntermediate2, positionMostAdvanced, positionAlmostMostAdvanced},
+			sortedTablets: []*topodatapb.Tablet{tabletRdonly1_102, tabletReplica3_103, tabletReplica1_100, tabletReplica2_100, tabletReplica1_101},
 		}, {
 			name:        "tablets and positions count error",
 			tablets:     []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100},
-			positions:   []replication.Position{positionEmpty, positionIntermediate1, positionMostAdvanced},
+			positions:   []*RelayLogPositions{positionEmpty, positionIntermediate1, positionMostAdvanced},
 			containsErr: "unequal number of tablets and positions",
 		}, {
 			name:          "promotion rule check",
 			tablets:       []*topodatapb.Tablet{tabletReplica1_101, tabletRdonly1_102},
-			positions:     []replication.Position{positionMostAdvanced, positionMostAdvanced},
+			positions:     []*RelayLogPositions{positionMostAdvanced, positionMostAdvanced},
 			sortedTablets: []*topodatapb.Tablet{tabletReplica1_101, tabletRdonly1_102},
 		}, {
 			name:          "mixed",
-			tablets:       []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100, tabletReplica1_100, tabletRdonly1_102},
-			positions:     []replication.Position{positionEmpty, positionIntermediate1, positionMostAdvanced, positionIntermediate1},
-			sortedTablets: []*topodatapb.Tablet{tabletReplica1_100, tabletReplica2_100, tabletRdonly1_102, tabletReplica1_101},
+			tablets:       []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100, tabletReplica1_100, tabletRdonly1_102, tabletReplica3_103},
+			positions:     []*RelayLogPositions{positionEmpty, positionIntermediate1, positionMostAdvanced, positionIntermediate1, positionAlmostMostAdvanced},
+			sortedTablets: []*topodatapb.Tablet{tabletReplica1_100, tabletReplica3_103, tabletReplica2_100, tabletRdonly1_102, tabletReplica1_101},
 		}, {
 			name:             "mixed - another",
-			tablets:          []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100, tabletReplica1_100, tabletRdonly1_102},
-			positions:        []replication.Position{positionIntermediate1, positionIntermediate1, positionMostAdvanced, positionIntermediate1},
-			innodbBufferPool: []int{100, 200, 0, 200},
-			sortedTablets:    []*topodatapb.Tablet{tabletReplica1_100, tabletReplica2_100, tabletReplica1_101, tabletRdonly1_102},
+			tablets:          []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100, tabletReplica1_100, tabletRdonly1_102, tabletReplica3_103},
+			positions:        []*RelayLogPositions{positionIntermediate1, positionIntermediate1, positionMostAdvanced, positionIntermediate1, positionAlmostMostAdvanced},
+			innodbBufferPool: []int{100, 200, 0, 200, 200},
+			sortedTablets:    []*topodatapb.Tablet{tabletReplica1_100, tabletReplica3_103, tabletReplica2_100, tabletReplica1_101, tabletRdonly1_102},
 		},
 	}
 
