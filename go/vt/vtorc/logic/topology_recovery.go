@@ -353,16 +353,16 @@ func checkAndRecoverGenericProblem(ctx context.Context, analysisEntry *inst.Dete
 	return false, nil, nil
 }
 
-func restartArbitraryDirectReplica(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, logger *log.PrefixedLogger) (bool, *TopologyRecovery, error) {
+func restartArbitraryDirectReplica(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (bool, *TopologyRecovery, error) {
 	return restartDirectReplicas(ctx, analysisEntry, 1, logger)
 }
 
-func restartAllDirectReplicas(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, logger *log.PrefixedLogger) (bool, *TopologyRecovery, error) {
+func restartAllDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (bool, *TopologyRecovery, error) {
 	return restartDirectReplicas(ctx, analysisEntry, 0, logger)
 }
 
 // restartDirectReplicas restarts replication on direct replicas of an unreachable primary
-func restartDirectReplicas(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, maxReplicas int, logger *log.PrefixedLogger) (bool, *TopologyRecovery, error) {
+func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAnalysis, maxReplicas int, logger *log.PrefixedLogger) (bool, *TopologyRecovery, error) {
 	topologyRecovery, err := AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
 		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another restartDirectReplicas.", analysisEntry.AnalyzedInstanceAlias)

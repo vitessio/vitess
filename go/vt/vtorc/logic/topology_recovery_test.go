@@ -385,7 +385,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		}, {
 			name:       "UnreachablePrimary",
 			ersEnabled: true,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:                               inst.UnreachablePrimary,
 				AnalyzedKeyspace:                       keyspace,
 				AnalyzedShard:                          shard,
@@ -396,7 +396,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		}, {
 			name:       "UnreachablePrimaryWithBrokenReplicas",
 			ersEnabled: true,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:                               inst.UnreachablePrimaryWithBrokenReplicas,
 				AnalyzedKeyspace:                       keyspace,
 				AnalyzedShard:                          shard,
