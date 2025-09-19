@@ -14,6 +14,7 @@
     - **[Topology](#minor-changes-topo)**
         - [`--consul_auth_static_file` requires 1 or more credentials](#consul_auth_static_file-check-creds)
     - **[VTOrc](#minor-changes-vtorc)**
+        - [Aggregated Discovery Metrics HTTP API removed](#aggregated-discovery-metrics-api-removed)
         - [Dynamic control of `EmergencyReparentShard`-based recoveries](#vtorc-dynamic-ers-disabled)
         - [Recovery stats to include keyspace/shard](#recoveries-stats-keyspace-shard)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -81,6 +82,10 @@ VTGate also advertises MySQL version `8.4.6` by default instead of `8.0.40`. If 
 The `--consul_auth_static_file` flag used in several components now requires that 1 or more credentials can be loaded from the provided json file.
 
 ### <a id="minor-changes-vtorc"/>VTOrc</a>
+
+#### <a id="aggregated-discovery-metrics-api-removed"/>Aggregated Discovery Metrics HTTP API removed</a>
+
+VTOrc's undocumented `/api/aggregated-discovery-metrics` HTTP API endpoint was removed. We recommend using the standard VTOrc metrics to gather the same metrics. If you find that a metric is missing in standard metrics, please open an issue or PR to address this.
 
 #### <a id="vtorc-dynamic-ers-disabled"/>Dynamic control of `EmergencyReparentShard`-based recoveries</a>
 
