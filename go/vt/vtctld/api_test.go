@@ -269,6 +269,9 @@ func TestAPI(t *testing.T) {
 		DurabilityPolicy: policy.DurabilitySemiSync,
 		ThrottlerConfig:  nil,
 		SidecarDbName:    "_vt_sidecar_ks1",
+		VtorcState: &vtorcdatapb.Keyspace{
+			DisableEmergencyReparent: true,
+		},
 	}
 
 	expectedKeyspace2 := &topodatapb.Keyspace{
@@ -290,6 +293,7 @@ func TestAPI(t *testing.T) {
 		SourceShards:     []*topodatapb.Shard_SourceShard{},
 		TabletControls:   []*topodatapb.Shard_TabletControl{},
 		IsPrimaryServing: true,
+		VtorcState:       nil,
 	}
 
 	// Test cases with proto-based expectations
@@ -379,47 +383,6 @@ func TestAPI(t *testing.T) {
 		},
 
 		// Keyspaces
-		{"GET", "keyspaces", "", `["ks1", "ks3"]`, http.StatusOK},
-		{"GET", "keyspaces/ks1", "", `{
-				"keyspace_type":0,
-				"base_keyspace":"",
-				"snapshot_time":null,
-				"durability_policy":"semi_sync",
-				"throttler_config": null,
-				"sidecar_db_name":"_vt_sidecar_ks1",
-				"vtorc_state": {
-					"disable_emergency_reparent": true
-				}
-			}`, http.StatusOK},
-		{"GET", "keyspaces/nonexistent", "", "404 page not found", http.StatusNotFound},
-		{"POST", "keyspaces/ks1?action=TestKeyspaceAction", "", `{
-				"Name": "TestKeyspaceAction",
-				"Parameters": "ks1",
-				"Output": "TestKeyspaceAction Result",
-				"Error": false
-			}`, http.StatusOK},
-
-		// Shards
-		{"GET", "shards/ks1/", "", `["-80","80-"]`, http.StatusOK},
-		{"GET", "shards/ks1/-80", "", `{
-				"primary_alias": null,
-				"primary_term_start_time":null,
-				"key_range": {
-					"start": "",
-					"end":"gA=="
-				},
-				"source_shards": [],
-				"tablet_controls": [],
-				"is_primary_serving": true,
-				"vtorc_state": null
-			}`, http.StatusOK},
-		{"GET", "shards/ks1/-DEAD", "", "404 page not found", http.StatusNotFound},
-		{"POST", "shards/ks1/-80?action=TestShardAction", "", `{
-				"Name": "TestShardAction",
-				"Parameters": "ks1/-80",
-				"Output": "TestShardAction Result",
-				"Error": false
-			}`, http.StatusOK},
 		{
 			method:         "GET",
 			path:           "keyspaces",
@@ -528,23 +491,6 @@ func TestAPI(t *testing.T) {
 		},
 
 		// vtctl RunCommand
-		{"POST", "vtctl/", `["GetKeyspace","ks1"]`, `{
-		   "Error": "",
-		   "Output": "{\n  \"keyspace_type\": 0,\n  \"base_keyspace\": \"\",\n  \"snapshot_time\": null,\n  \"durability_policy\": \"semi_sync\",\n  \"throttler_config\": null,\n  \"sidecar_db_name\": \"_vt_sidecar_ks1\",\n  \"vtorc_state\": {\n    \"disable_emergency_reparent\": true\n  }\n}\n\n"
-		}`, http.StatusOK},
-		{"POST", "vtctl/", `["GetKeyspace","ks3"]`, `{
-		   "Error": "",
-		   "Output": "{\n  \"keyspace_type\": 1,\n  \"base_keyspace\": \"ks1\",\n  \"snapshot_time\": {\n    \"seconds\": \"1136214245\",\n    \"nanoseconds\": 0\n  },\n  \"durability_policy\": \"none\",\n  \"throttler_config\": null,\n  \"sidecar_db_name\": \"_vt\",\n  \"vtorc_state\": null\n}\n\n"
-		}`, http.StatusOK},
-		{"POST", "vtctl/", `["GetVSchema","ks3"]`, `{
-		   "Error": "",
-		   "Output": "{\n  \"sharded\": true,\n  \"vindexes\": {\n    \"name1\": {\n      \"type\": \"hash\"\n    }\n  },\n  \"tables\": {\n    \"table1\": {\n      \"columnVindexes\": [\n        {\n          \"column\": \"column1\",\n          \"name\": \"name1\"\n        }\n      ]\n    }\n  },\n  \"requireExplicitRouting\": true\n}\n\n"
-		}`, http.StatusOK},
-		{"POST", "vtctl/", `["GetKeyspace","does_not_exist"]`, `{
-			"Error": "node doesn't exist: keyspaces/does_not_exist/Keyspace",
-		   "Output": ""
-		}`, http.StatusOK},
-		{"POST", "vtctl/", `["Panic"]`, `uncaught panic: this command panics on purpose`, http.StatusInternalServerError},
 		{
 			method:              "POST",
 			path:                "vtctl/",
