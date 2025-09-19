@@ -35,7 +35,6 @@ require (
 	github.com/klauspost/pgzip v1.2.6
 	github.com/krishicks/yaml-patch v0.0.10
 	github.com/minio/minio-go v0.0.0-20190131015406-c8a261de75c1
-	github.com/montanaflynn/stats v0.7.1
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/opentracing-contrib/go-grpc v0.1.2
 	github.com/opentracing/opentracing-go v1.2.0

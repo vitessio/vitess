@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package discovery
+package logic
 
 import (
 	"strconv"
@@ -23,8 +23,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestQueue(t *testing.T) {
-	q := NewQueue()
+func TestDiscoveryQueue(t *testing.T) {
+	q := NewDiscoveryQueue()
 	require.Zero(t, q.QueueLen())
 
 	// Push
@@ -50,19 +50,19 @@ func TestQueue(t *testing.T) {
 	require.False(t, found)
 }
 
-type testQueue interface {
+type testDiscoveryQueue interface {
 	QueueLen() int
 	Push(string)
 	Consume() string
 	Release(string)
 }
 
-func BenchmarkQueues(b *testing.B) {
+func BenchmarkDiscoveryQueues(b *testing.B) {
 	tests := []struct {
 		name  string
-		queue testQueue
+		queue testDiscoveryQueue
 	}{
-		{"Current", NewQueue()},
+		{"Current", NewDiscoveryQueue()},
 	}
 	for _, test := range tests {
 		q := test.queue

@@ -16,14 +16,14 @@
 
 /*
 
-package discovery manages a queue of discovery requests: an ordered
+DiscoveryQueue manages a queue of discovery requests: an ordered
 queue with no duplicates.
 
 push() operation never blocks while pop() blocks on an empty queue.
 
 */
 
-package discovery
+package logic
 
 import (
 	"sync"
@@ -33,22 +33,22 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/config"
 )
 
-// queueItem represents an item in the discovery.Queue.
+// queueItem represents an item in the DiscoveryQueue.
 type queueItem struct {
 	Key      string
 	PushedAt time.Time
 }
 
-// Queue is an ordered queue with deduplication.
-type Queue struct {
+// DiscoveryQueue is an ordered queue with deduplication.
+type DiscoveryQueue struct {
 	mu       sync.Mutex
 	enqueued map[string]struct{}
 	queue    chan queueItem
 }
 
-// NewQueue creates a new queue.
-func NewQueue() *Queue {
-	return &Queue{
+// NewDiscoveryQueue creates a new queue.
+func NewDiscoveryQueue() *DiscoveryQueue {
+	return &DiscoveryQueue{
 		enqueued: make(map[string]struct{}),
 		queue:    make(chan queueItem, config.DiscoveryQueueCapacity),
 	}
@@ -56,7 +56,7 @@ func NewQueue() *Queue {
 
 // setKeyCheckEnqueued returns true if a key is already enqueued, if
 // not the key will be marked as enqueued and false is returned.
-func (q *Queue) setKeyCheckEnqueued(key string) (alreadyEnqueued bool) {
+func (q *DiscoveryQueue) setKeyCheckEnqueued(key string) (alreadyEnqueued bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
@@ -68,7 +68,7 @@ func (q *Queue) setKeyCheckEnqueued(key string) (alreadyEnqueued bool) {
 }
 
 // QueueLen returns the length of the queue.
-func (q *Queue) QueueLen() int {
+func (q *DiscoveryQueue) QueueLen() int {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
@@ -77,7 +77,7 @@ func (q *Queue) QueueLen() int {
 
 // Push enqueues a key if it is not on a queue and is not being
 // processed; silently returns otherwise.
-func (q *Queue) Push(key string) {
+func (q *DiscoveryQueue) Push(key string) {
 	if q.setKeyCheckEnqueued(key) {
 		return
 	}
@@ -89,7 +89,7 @@ func (q *Queue) Push(key string) {
 
 // Consume fetches a key to process; blocks if queue is empty.
 // Release must be called once after Consume.
-func (q *Queue) Consume() string {
+func (q *DiscoveryQueue) Consume() string {
 	item := <-q.queue
 
 	timeOnQueue := time.Since(item.PushedAt)
@@ -102,7 +102,7 @@ func (q *Queue) Consume() string {
 
 // Release removes a key from a list of being processed keys
 // which allows that key to be pushed into the queue again.
-func (q *Queue) Release(key string) {
+func (q *DiscoveryQueue) Release(key string) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
