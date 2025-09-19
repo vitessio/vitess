@@ -33,7 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/config"
 )
 
-// queueItem represents an item in the discovery.DiscoveryQueue.
+// queueItem represents an item in the DiscoveryQueue.
 type queueItem struct {
 	Key      string
 	PushedAt time.Time
