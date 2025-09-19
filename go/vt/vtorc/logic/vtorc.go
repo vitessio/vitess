@@ -30,17 +30,15 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtorc/config"
-	"vitess.io/vitess/go/vt/vtorc/discovery"
 	"vitess.io/vitess/go/vt/vtorc/inst"
-	ometrics "vitess.io/vitess/go/vt/vtorc/metrics"
 	"vitess.io/vitess/go/vt/vtorc/process"
 	"vitess.io/vitess/go/vt/vtorc/util"
 )
 
-// discoveryQueue is a channel of deduplicated instanceKey-s
-// that were requested for discovery.  It can be continuously updated
+// discoveryQueue is a channel of deduplicated tablets that were
+// requested for discovery. It can be continuously updated
 // as discovery process progresses.
-var discoveryQueue *discovery.Queue
+var discoveryQueue *DiscoveryQueue
 var snapshotDiscoveryKeys chan string
 var snapshotDiscoveryKeysMutex sync.Mutex
 var hasReceivedSIGTERM int32
@@ -63,10 +61,10 @@ var recentDiscoveryOperationKeys *cache.Cache
 func init() {
 	snapshotDiscoveryKeys = make(chan string, 10)
 
-	ometrics.OnMetricsTick(func() {
+	OnMetricsTick(func() {
 		discoveryQueueLengthGauge.Set(int64(discoveryQueue.QueueLen()))
 	})
-	ometrics.OnMetricsTick(func() {
+	OnMetricsTick(func() {
 		if recentDiscoveryOperationKeys == nil {
 			return
 		}
@@ -108,7 +106,7 @@ func waitForLocksRelease() {
 // handleDiscoveryRequests iterates the discoveryQueue channel and calls upon
 // instance discovery per entry.
 func handleDiscoveryRequests() {
-	discoveryQueue = discovery.NewQueue()
+	discoveryQueue = NewDiscoveryQueue()
 	// create a pool of discovery workers
 	for i := uint(0); i < config.GetDiscoveryWorkers(); i++ {
 		discoveryWorkersGauge.Add(1)
@@ -264,7 +262,7 @@ func ContinuousDiscovery() {
 	}
 
 	go func() {
-		_ = ometrics.InitMetrics()
+		_ = InitMetrics()
 	}()
 	// On termination of the server, we should close VTOrc cleanly
 	servenv.OnTermSync(closeVTOrc)

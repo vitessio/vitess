@@ -14,7 +14,7 @@
    limitations under the License.
 */
 
-package metrics
+package logic
 
 import (
 	"time"
@@ -22,14 +22,14 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/config"
 )
 
-var matricTickCallbacks [](func())
+var metricTickCallbacks [](func())
 
 // InitMetrics is called once in the lifetime of the app, after config has been loaded
 func InitMetrics() error {
 	go func() {
 		metricsCallbackTick := time.Tick(time.Duration(config.DebugMetricsIntervalSeconds) * time.Second)
 		for range metricsCallbackTick {
-			for _, f := range matricTickCallbacks {
+			for _, f := range metricTickCallbacks {
 				go f()
 			}
 		}
@@ -39,5 +39,5 @@ func InitMetrics() error {
 }
 
 func OnMetricsTick(f func()) {
-	matricTickCallbacks = append(matricTickCallbacks, f)
+	metricTickCallbacks = append(metricTickCallbacks, f)
 }
