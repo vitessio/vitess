@@ -960,6 +960,12 @@ func (tm *TabletManager) ValidateVReplicationPermissions(ctx context.Context, re
 
 		log.Infof("Testing %s permission using query: %s", test.permission, query)
 		if _, err := conn.ExecuteFetch(query, 1, false); err != nil {
+			// Check if we got `ERDBAccessDenied` or `ERAccessDeniedError` error codes from MySQL
+			sqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
+			if !ok || (sqlErr.Num != sqlerror.ERDBAccessDenied && sqlErr.Num != sqlerror.ERAccessDeniedError) {
+				return nil, vterrors.Wrapf(err, "error executing %s permission test query", test.permission)
+			}
+
 			return &tabletmanagerdatapb.ValidateVReplicationPermissionsResponse{
 				User: tm.DBConfigs.Filtered.User,
 				Ok:   false,
