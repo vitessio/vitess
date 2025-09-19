@@ -27,3 +27,11 @@
 ## Deployment Notes
 
 <!-- Notes regarding deployment of the contained body of work. These should note any db migrations, etc. -->
+
+### AI Disclosure
+
+<!-- 
+  A sentence or two describing whether AI was used to author any of the code in this pull request
+  Example: "This PR was written primarily by Claude Code" or "Tests written by GPT-5"
+  For more information: https://github.com/vitessio/enhancements/blob/main/veps/vep-7.md
+-->

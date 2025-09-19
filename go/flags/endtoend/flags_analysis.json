@@ -1,0 +1,114 @@
+{
+  "binary_stats": {
+    "vtbackup": {
+      "total_flags": 208,
+      "underscore_flags": 2,
+      "dash_flags": 197,
+      "completion_percentage": 94.7
+    },
+    "vtctld": {
+      "total_flags": 158,
+      "underscore_flags": 2,
+      "dash_flags": 147,
+      "completion_percentage": 93.0
+    },
+    "vtctldclient": {
+      "total_flags": 43,
+      "underscore_flags": 3,
+      "dash_flags": 32,
+      "completion_percentage": 74.4
+    },
+    "mysqlctl": {
+      "total_flags": 73,
+      "underscore_flags": 2,
+      "dash_flags": 65,
+      "completion_percentage": 89.0
+    },
+    "vtgate": {
+      "total_flags": 225,
+      "underscore_flags": 2,
+      "dash_flags": 214,
+      "completion_percentage": 95.1
+    },
+    "vtcombo": {
+      "total_flags": 437,
+      "underscore_flags": 2,
+      "dash_flags": 425,
+      "completion_percentage": 97.3
+    },
+    "vtorc": {
+      "total_flags": 97,
+      "underscore_flags": 2,
+      "dash_flags": 88,
+      "completion_percentage": 90.7
+    },
+    "vtclient": {
+      "total_flags": 57,
+      "underscore_flags": 2,
+      "dash_flags": 40,
+      "completion_percentage": 70.2
+    },
+    "vtbench": {
+      "total_flags": 54,
+      "underscore_flags": 2,
+      "dash_flags": 37,
+      "completion_percentage": 68.5
+    },
+    "vttestserver": {
+      "total_flags": 168,
+      "underscore_flags": 2,
+      "dash_flags": 156,
+      "completion_percentage": 92.9
+    },
+    "vttablet": {
+      "total_flags": 393,
+      "underscore_flags": 2,
+      "dash_flags": 381,
+      "completion_percentage": 96.9
+    },
+    "mysqlctld": {
+      "total_flags": 104,
+      "underscore_flags": 2,
+      "dash_flags": 95,
+      "completion_percentage": 91.3
+    }
+  },
+  "unique_underscore_flags": [
+    "log_backtrace_at",
+    "log_link",
+    "log_dir"
+  ],
+  "flag_to_binaries": {
+    "log_backtrace_at": [
+      "mysqlctl",
+      "vtgate",
+      "vtbench",
+      "vtorc",
+      "vtctldclient",
+      "vtctld",
+      "vtclient",
+      "vtbackup",
+      "vttestserver",
+      "vttablet",
+      "mysqlctld",
+      "vtcombo"
+    ],
+    "log_dir": [
+      "mysqlctl",
+      "vtgate",
+      "vtbench",
+      "vtorc",
+      "vtctldclient",
+      "vtctld",
+      "vtclient",
+      "vtbackup",
+      "vttestserver",
+      "vttablet",
+      "mysqlctld",
+      "vtcombo"
+    ],
+    "log_link": [
+      "vtctldclient"
+    ]
+  }
+}

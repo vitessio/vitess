@@ -14,8 +14,11 @@ templatize_help_text() {
 
 export -f templatize_help_text
 
-while read -r testfile; do
+find "${DIR}" -iname '*.txt' \
+  | xargs -n1 -P"$(nproc)" bash -c '
+    testfile="$0"
     base="${testfile##*/}"
     binary="${base%.*}"
-    templatize_help_text "${binary}" > "${testfile}"
-done < <(find "${DIR}" -iname '*.txt')
+    templatize_help_text "$binary" > "$testfile"
+    echo "done: $testfile"
+  '

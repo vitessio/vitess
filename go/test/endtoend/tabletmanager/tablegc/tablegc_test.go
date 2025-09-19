@@ -104,7 +104,7 @@ func TestMain(m *testing.M) {
 			utils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
 			utils.GetFlagVariantForTests("--gc-check-interval"), gcCheckInterval.String(),
 			utils.GetFlagVariantForTests("--gc-purge-check-interval"), gcPurgeCheckInterval.String(),
-			"--table_gc_lifecycle", "hold,purge,evac,drop",
+			utils.GetFlagVariantForTests("--table-gc-lifecycle"), "hold,purge,evac,drop",
 		}
 
 		// Start keyspace

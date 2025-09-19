@@ -67,7 +67,7 @@ func (ctl *Mysqlctl) Setup() error {
 		"--tablet-uid", fmt.Sprintf("%d", ctl.UID),
 		"--mysql-port", fmt.Sprintf("%d", ctl.Port),
 		"init",
-		"--init_db_sql_file", ctl.InitFile,
+		"--init-db-sql-file", ctl.InitFile,
 	)
 
 	myCnf := strings.Join(ctl.MyCnf, ":")

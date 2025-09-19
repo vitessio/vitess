@@ -83,8 +83,8 @@ func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagDurationVar(fs, &vreplicationRetryDelay, "vreplication-retry-delay", vreplicationRetryDelay, "delay before retrying a failed workflow event in the replication phase")
 	utils.SetFlagDurationVar(fs, &vreplicationMaxTimeToRetryError, "vreplication-max-time-to-retry-on-error", vreplicationMaxTimeToRetryError, "stop automatically retrying when we've had consecutive failures with the same error for this long after the first occurrence")
 
-	fs.IntVar(&vreplicationRelayLogMaxSize, "relay_log_max_size", vreplicationRelayLogMaxSize, "Maximum buffer size (in bytes) for vreplication target buffering. If single rows are larger than this, a single row is buffered at a time.")
-	fs.IntVar(&vreplicationRelayLogMaxItems, "relay_log_max_items", vreplicationRelayLogMaxItems, "Maximum number of rows for vreplication target buffering.")
+	utils.SetFlagIntVar(fs, &vreplicationRelayLogMaxSize, "relay-log-max-size", vreplicationRelayLogMaxSize, "Maximum buffer size (in bytes) for vreplication target buffering. If single rows are larger than this, a single row is buffered at a time.")
+	utils.SetFlagIntVar(fs, &vreplicationRelayLogMaxItems, "relay-log-max-items", vreplicationRelayLogMaxItems, "Maximum number of rows for vreplication target buffering.")
 
 	utils.SetFlagDurationVar(fs, &vreplicationReplicaLagTolerance, "vreplication-replica-lag-tolerance", vreplicationReplicaLagTolerance, "Replica lag threshold duration: once lag is below this we switch from copy phase to the replication (streaming) phase")
 

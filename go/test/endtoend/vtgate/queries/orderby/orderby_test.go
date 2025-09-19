@@ -53,6 +53,15 @@ func TestSimpleOrderBy(t *testing.T) {
 	mcmp.AssertMatches(`SELECT id2 FROM t1 ORDER BY id2 ASC`, `[[INT64(5)] [INT64(6)] [INT64(7)] [INT64(8)] [INT64(9)] [INT64(10)]]`)
 }
 
+// TestQueryWithDBQualifier tests that we remove the db qualifier in the plan output that is sent down to the database.
+func TestQueryWithDBQualifier(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(id1, id2) values (0,10),(1,9),(2,8),(3,7),(4,6),(5,5)")
+	mcmp.Exec(`SELECT ks_orderby.t1.id1, ks_orderby.t1.id2 FROM ks_orderby.t1 ORDER BY ks_orderby.t1.id2 ASC, ks_orderby.t1.id1 desc`)
+}
+
 func TestOrderBy(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()

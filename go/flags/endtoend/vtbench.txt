@@ -70,7 +70,7 @@ Flags:
       --log_backtrace_at traceLocations                             when logging hits line file:N, emit a stack trace
       --log_dir string                                              If non-empty, write log files in this directory
       --logtostderr                                                 log to standard error instead of files
-      --mysql-server-version string                                 MySQL server version to advertise. (default "8.0.40-Vitess")
+      --mysql-server-version string                                 MySQL server version to advertise. (default "8.4.6-Vitess")
       --port int                                                    VTGate port
       --pprof strings                                               enable profiling
       --pprof-http                                                  enable pprof http endpoints
@@ -87,7 +87,7 @@ Flags:
       --tablet-grpc-key string                                      the key to use to connect
       --tablet-grpc-server-name string                              the server name to use to validate server certificate
       --threads int                                                 Number of parallel threads to run (default 2)
-      --unix_socket string                                          VTGate unix socket
+      --unix-socket string                                          VTGate unix socket
       --user string                                                 Username to connect using mysql (password comes from the db-credentials-file)
       --v Level                                                     log level for V logs
   -v, --version                                                     print binary version

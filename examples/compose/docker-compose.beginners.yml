@@ -68,7 +68,7 @@ services:
         --cell $CELL \
         --service-map 'grpc-vtctl,grpc-vtctld' \
         --backup-storage-implementation file \
-        --file_backup_storage_root /vt/vtdataroot/backups \
+        --file-backup-storage-root /vt/vtdataroot/backups \
         --logtostderr=true \
         --port $WEB_PORT \
         --grpc-port $GRPC_PORT
@@ -98,10 +98,10 @@ services:
         --mysql-server-port $MYSQL_PORT \
         --mysql-auth-server-impl none \
         --cell $CELL \
-        --cells_to_watch $CELL \
+        --cells-to-watch $CELL \
         --tablet-types-to-wait PRIMARY,REPLICA \
         --service-map 'grpc-vtgateservice' \
-        --enable_system_settings=true \
+        --enable-system-settings=true \
         "]
     volumes:
       - ".:/script"

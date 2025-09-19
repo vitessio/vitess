@@ -158,6 +158,10 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return nil, err
 	}
 
+	if reqThrottledErr := qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.connID, qre.options); reqThrottledErr != nil {
+		return nil, reqThrottledErr
+	}
+
 	if qre.plan.PlanID == p.PlanNextval {
 		return qre.execNextval()
 	}
@@ -348,6 +352,10 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 
 	if err := qre.checkPermissions(); err != nil {
 		return err
+	}
+
+	if reqThrottledErr := qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.connID, qre.options); reqThrottledErr != nil {
+		return reqThrottledErr
 	}
 
 	switch qre.plan.PlanID {

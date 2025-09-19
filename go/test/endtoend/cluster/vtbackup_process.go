@@ -56,7 +56,10 @@ type VtbackupProcess struct {
 
 // Setup starts vtbackup process with required arguements
 func (vtbackup *VtbackupProcess) Setup() (err error) {
-
+	vtbackupVer, err := GetMajorVersion(vtbackup.Binary)
+	if err != nil {
+		return err
+	}
 	flags := map[string]string{
 		"--topo-implementation":        vtbackup.TopoImplementation,
 		"--topo-global-server-address": vtbackup.TopoGlobalAddress,
@@ -65,19 +68,20 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 
 		//initDBfile is required to run vtbackup
 		"--mysql-port":       fmt.Sprintf("%d", vtbackup.MysqlPort),
-		"--init_db_sql_file": vtbackup.initDBfile,
+		"--init-db-sql-file": vtbackup.initDBfile,
 		"--init-keyspace":    vtbackup.Keyspace,
 		"--init-shard":       vtbackup.Shard,
 
 		//Backup Arguments are not optional
-		"--backup-storage-implementation": vtbackup.BackupStorageImplementation,
-		"--file_backup_storage_root":      vtbackup.FileBackupStorageRoot,
+		utils.GetFlagVariantForTestsByVersion("--file-backup-storage-root", vtbackupVer): vtbackup.BackupStorageImplementation,
+		"--file-backup-storage-root": vtbackup.FileBackupStorageRoot,
 	}
 
 	utils.SetFlagVariantsForTests(flags, "--topo-implementation", vtbackup.TopoImplementation)
 	utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", vtbackup.TopoGlobalAddress)
 	utils.SetFlagVariantsForTests(flags, "--topo-global-root", vtbackup.TopoGlobalRoot)
 	utils.SetFlagVariantsForTests(flags, "--mysql-port", fmt.Sprintf("%d", vtbackup.MysqlPort))
+	utils.SetFlagVariantsForTests(flags, "--init-db-sql-file", vtbackup.initDBfile)
 	utils.SetFlagVariantsForTests(flags, "--init-keyspace", vtbackup.Keyspace)
 	utils.SetFlagVariantsForTests(flags, "--init-shard", vtbackup.Shard)
 	utils.SetFlagVariantsForTests(flags, "--backup-storage-implementation", vtbackup.BackupStorageImplementation)

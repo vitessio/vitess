@@ -21,6 +21,7 @@ package cli
 import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/ldapauthserver"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtgate"
 )
 
@@ -31,9 +32,9 @@ var (
 )
 
 func init() {
-	Main.Flags().StringVar(&ldapAuthConfigFile, "mysql_ldap_auth_config_file", "", "JSON File from which to read LDAP server config.")
-	Main.Flags().StringVar(&ldapAuthConfigString, "mysql_ldap_auth_config_string", "", "JSON representation of LDAP server config.")
-	Main.Flags().StringVar(&ldapAuthMethod, "mysql_ldap_auth_method", string(mysql.MysqlClearPassword), "client-side authentication method to use. Supported values: mysql_clear_password, dialog.")
+	utils.SetFlagStringVar(Main.Flags(), &ldapAuthConfigFile, "mysql-ldap-auth-config-file", "", "JSON File from which to read LDAP server config.")
+	utils.SetFlagStringVar(Main.Flags(), &ldapAuthConfigString, "mysql-ldap-auth-config-string", "", "JSON representation of LDAP server config.")
+	utils.SetFlagStringVar(Main.Flags(), &ldapAuthMethod, "mysql-ldap-auth-method", string(mysql.MysqlClearPassword), "client-side authentication method to use. Supported values: mysql_clear_password, dialog.")
 
 	vtgate.RegisterPluginInitializer(func() { ldapauthserver.Init(ldapAuthConfigFile, ldapAuthConfigString, ldapAuthMethod) })
 }

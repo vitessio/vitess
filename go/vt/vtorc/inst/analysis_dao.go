@@ -77,7 +77,9 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		vitess_keyspace.keyspace AS keyspace,
 		vitess_keyspace.keyspace_type AS keyspace_type,
 		vitess_keyspace.durability_policy AS durability_policy,
+		vitess_keyspace.disable_emergency_reparent AS keyspace_disable_emergency_reparent,
 		vitess_shard.primary_timestamp AS shard_primary_term_timestamp,
+		vitess_shard.disable_emergency_reparent AS shard_disable_emergency_reparent,
 		primary_instance.read_only AS read_only,
 		MIN(primary_instance.gtid_errant) AS gtid_errant,
 		MIN(primary_instance.alias) IS NULL AS is_invalid,
@@ -306,6 +308,8 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		a.CurrentTabletType = topodatapb.TabletType(m.GetInt("current_tablet_type"))
 		a.AnalyzedKeyspace = m.GetString("keyspace")
 		a.AnalyzedShard = m.GetString("shard")
+		a.AnalyzedKeyspaceEmergencyReparentDisabled = m.GetBool("keyspace_disable_emergency_reparent")
+		a.AnalyzedShardEmergencyReparentDisabled = m.GetBool("shard_disable_emergency_reparent")
 		a.PrimaryTimeStamp = m.GetTime("primary_timestamp")
 
 		if keyspaceType := topodatapb.KeyspaceType(m.GetInt32("keyspace_type")); keyspaceType == topodatapb.KeyspaceType_SNAPSHOT {
@@ -507,10 +511,15 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			a.Analysis = UnreachablePrimaryWithLaggingReplicas
 			a.Description = "Primary cannot be reached by vtorc and all of its replicas are lagging"
 			//
-		} else if a.IsPrimary && !a.LastCheckValid && !a.LastCheckPartialSuccess && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas > 0 {
+		} else if a.IsPrimary && !a.LastCheckValid && !a.LastCheckPartialSuccess && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == a.CountValidReplicas {
 			// partial success is here to reduce noise
 			a.Analysis = UnreachablePrimary
-			a.Description = "Primary cannot be reached by vtorc but it has replicating replicas; possibly a network/host issue"
+			a.Description = "Primary cannot be reached by vtorc but all of its replicas seem to be replicating; possibly a network/host issue"
+			//
+		} else if a.IsPrimary && !a.LastCheckValid && !a.LastCheckPartialSuccess && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas > 0 && a.CountValidReplicatingReplicas < a.CountValidReplicas {
+			// partial success is here to reduce noise
+			a.Analysis = UnreachablePrimaryWithBrokenReplicas
+			a.Description = "Primary cannot be reached by vtorc but it has (some, but not all) replicating replicas; possibly a network/host issue"
 			//
 		} else if a.IsPrimary && a.SemiSyncPrimaryEnabled && a.SemiSyncPrimaryStatus && a.SemiSyncPrimaryWaitForReplicaCount > 0 && a.SemiSyncPrimaryClients < a.SemiSyncPrimaryWaitForReplicaCount {
 			if isStaleBinlogCoordinates {

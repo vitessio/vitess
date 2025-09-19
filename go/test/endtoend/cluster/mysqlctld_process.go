@@ -80,6 +80,7 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 		"--mysql_port", fmt.Sprintf("%d", mysqlctld.MySQLPort),
 	}
 	if mysqlctld.SocketFile != "" {
+		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		args = append(args, "--socket_file", mysqlctld.SocketFile)
 	}
 	tempProcess := exec.Command(
@@ -91,6 +92,7 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 
 	if mysqlctld.InitMysql {
 		tempProcess.Args = append(tempProcess.Args,
+			//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 			"--init_db_sql_file", mysqlctld.InitDBFile)
 	}
 
