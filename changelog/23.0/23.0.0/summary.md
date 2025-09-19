@@ -85,7 +85,9 @@ The `--consul_auth_static_file` flag used in several components now requires tha
 
 #### <a id="aggregated-discovery-metrics-api-removed"/>Aggregated Discovery Metrics HTTP API removed</a>
 
-VTOrc's undocumented `/api/aggregated-discovery-metrics` HTTP API endpoint was removed. We recommend using the standard VTOrc metrics to gather the same metrics. If you find that a metric is missing in standard metrics, please open an issue or PR to address this.
+VTOrc's undocumented `/api/aggregated-discovery-metrics` HTTP API endpoint was removed. The list of documented VTOrc APIs can be found [here](https://vitess.io/docs/current/reference/vtorc/ui_api_metrics/#apis).
+
+We recommend using the standard VTOrc metrics to gather the same metrics. If you find that a metric is missing in standard metrics, please open an issue or PR to address this.
 
 #### <a id="vtorc-dynamic-ers-disabled"/>Dynamic control of `EmergencyReparentShard`-based recoveries</a>
 
