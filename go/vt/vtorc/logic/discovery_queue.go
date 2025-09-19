@@ -92,9 +92,9 @@ func (q *DiscoveryQueue) Push(key string) {
 func (q *DiscoveryQueue) Consume() string {
 	item := <-q.queue
 
-	timeOnDiscoveryQueue := time.Since(item.PushedAt)
-	if timeOnDiscoveryQueue > config.GetInstancePollTime() {
-		log.Warningf("key %v spent %.4fs waiting on a discovery queue", item.Key, timeOnDiscoveryQueue.Seconds())
+	timeOnQueue := time.Since(item.PushedAt)
+	if timeOnQueue > config.GetInstancePollTime() {
+		log.Warningf("key %v spent %.4fs waiting on a discovery queue", item.Key, timeOnQueue.Seconds())
 	}
 
 	return item.Key
