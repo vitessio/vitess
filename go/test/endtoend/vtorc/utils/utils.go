@@ -1034,7 +1034,7 @@ func WaitForSuccessfulERSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 		vars := vtorcInstance.GetVars()
 		ersCountsMap := vars["EmergencyReparentCounts"].(map[string]interface{})
 		successCount := GetIntFromValue(ersCountsMap[mapKey])
-		assert.EqualValues(t, countExpected, successCount)
+		assert.EqualValues(c, countExpected, successCount)
 	}, timeout, time.Second, "timed out waiting for successful ERS count")
 }
 
