@@ -24,8 +24,8 @@ import (
 
 var metricTickCallbacks [](func())
 
-// InitMetrics is called once in the lifetime of the app, after config has been loaded
-func InitMetrics() error {
+// initMetrics is called once in the lifetime of the app, after config has been loaded
+func initMetrics() error {
 	go func() {
 		metricsCallbackTick := time.Tick(time.Duration(config.DebugMetricsIntervalSeconds) * time.Second)
 		for range metricsCallbackTick {
@@ -38,6 +38,6 @@ func InitMetrics() error {
 	return nil
 }
 
-func OnMetricsTick(f func()) {
+func onMetricsTick(f func()) {
 	metricTickCallbacks = append(metricTickCallbacks, f)
 }

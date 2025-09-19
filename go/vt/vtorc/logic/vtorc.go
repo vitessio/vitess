@@ -61,10 +61,10 @@ var recentDiscoveryOperationKeys *cache.Cache
 func init() {
 	snapshotDiscoveryKeys = make(chan string, 10)
 
-	OnMetricsTick(func() {
+	onMetricsTick(func() {
 		discoveryQueueLengthGauge.Set(int64(discoveryQueue.QueueLen()))
 	})
-	OnMetricsTick(func() {
+	onMetricsTick(func() {
 		if recentDiscoveryOperationKeys == nil {
 			return
 		}
@@ -262,7 +262,7 @@ func ContinuousDiscovery() {
 	}
 
 	go func() {
-		_ = InitMetrics()
+		_ = initMetrics()
 	}()
 	// On termination of the server, we should close VTOrc cleanly
 	servenv.OnTermSync(closeVTOrc)
