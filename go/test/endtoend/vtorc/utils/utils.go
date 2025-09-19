@@ -18,14 +18,12 @@ package utils
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math"
 	"os"
 	"os/exec"
 	"path"
 	"reflect"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -1115,35 +1113,26 @@ func WaitForTabletType(t *testing.T, tablet *cluster.Vttablet, expectedTabletTyp
 	require.NoError(t, err)
 }
 
-// WaitForInstancePollSecondsExceededCount waits for 30 seconds and then queries api/aggregated-discovery-metrics.
-// It expects to find minimum occurrence or exact count of `keyName` provided.
-func WaitForInstancePollSecondsExceededCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, keyName string, minCountExpected float64, enforceEquality bool) {
+// WaitForInstancePollSecondsExceededCount waits to find minimum occurrence or exact count for the DiscoveriesInstancePollSecondsExceeded metric.
+func WaitForInstancePollSecondsExceededCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, minCountExpected int, enforceEquality bool) {
 	t.Helper()
-	var sinceInSeconds = 30
-	duration := time.Duration(sinceInSeconds)
-	time.Sleep(duration * time.Second)
-
-	statusCode, res, err := vtorcInstance.MakeAPICall("api/aggregated-discovery-metrics?seconds=" + strconv.Itoa(sinceInSeconds))
-	if err != nil {
-		assert.Fail(t, "Not able to call api/aggregated-discovery-metrics")
-	}
-	if statusCode == 200 {
-		resultMap := make(map[string]any)
-		err := json.Unmarshal([]byte(res), &resultMap)
-		if err != nil {
-			assert.Fail(t, "invalid response from api/aggregated-discovery-metrics")
-		}
-		successCount := resultMap[keyName]
-		if iSuccessCount, ok := successCount.(float64); ok {
-			if enforceEquality {
-				assert.Equal(t, iSuccessCount, minCountExpected)
-			} else {
-				assert.GreaterOrEqual(t, iSuccessCount, minCountExpected)
+	timeout := time.Second * 30
+	assert.EventuallyWithTf(t, func(c *assert.CollectT) {
+		vars := vtorcInstance.GetVars()
+		exceeded := GetIntFromValue(vars["DiscoveriesInstancePollSecondsExceeded"])
+		if enforceEquality {
+			ok := assert.EqualValues(c, minCountExpected, exceeded,
+				"The metric DiscoveriesInstancePollSecondsExceeded should be %v but is %v",
+				minCountExpected, exceeded,
+			)
+			// fail early if we wanted 0 and don't find it
+			if minCountExpected == 0 && !ok {
+				c.FailNow()
 			}
-			return
+		} else {
+			assert.GreaterOrEqual(c, exceeded, minCountExpected)
 		}
-	}
-	assert.Fail(t, "invalid response from api/aggregated-discovery-metrics")
+	}, timeout, time.Second, "timed out waiting for DiscoveriesInstancePollSecondsExceeded value >= %+v", minCountExpected)
 }
 
 // PrintVTOrcLogsOnFailure prints the VTOrc logs on failure of the test.
