@@ -74,9 +74,14 @@ jobs:
         # Limit local port range to not use ports that overlap with server side
         # ports that we listen on.
         sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
+
         # Increase the asynchronous non-blocking I/O. More information at https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_use_native_aio
         echo "fs.aio-max-nr = 1048576" | sudo tee -a /etc/sysctl.conf
         sudo sysctl -p /etc/sysctl.conf
+
+        # Don't waste a bunch of time processing man-db triggers
+        echo "set man-db/auto-update false" | sudo debconf-communicate
+        sudo dpkg-reconfigure man-db
 
     - name: Get dependencies
       if: steps.changes.outputs.end_to_end == 'true'
