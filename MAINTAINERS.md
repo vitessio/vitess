@@ -9,7 +9,6 @@ The following is the full list, alphabetically ordered.
 * Florent Poinsard ([frouioui](https://github.com/frouioui)) florent@planetscale.com
 * Frances Thai ([notfelineit](https://github.com/notfelineit)) notfelineit@gmail.com
 * Harshit Gangal ([harshit-gangal](https://github.com/harshit-gangal)) harshit.gangal@gmail.com
-* Manan Gupta ([GuptaManan100](https://github.com/GuptaManan100)) guptamanan100@gmail.com
 * Matt Lord ([mattlord](https://github.com/mattlord)) mattalord@gmail.com
 * Rohit Nayak ([rohit-nayak-ps](https://github.com/rohit-nayak-ps)) rohit@planetscale.com
 * Shlomi Noach ([shlomi-noach](https://github.com/shlomi-noach)) shlomi@planetscale.com
@@ -21,34 +20,34 @@ The following is the full list, alphabetically ordered.
 mattlord, derekperkins
 
 ### Builds
-shlomi-noach, GuptaManan100, frouioui
+shlomi-noach, frouioui
 
 ### Resharding
 rohit-nayak-ps, mattlord
 
 ### Parser
-systay, harshit-gangal, vmg, GuptaManan100, dbussink
+systay, harshit-gangal, vmg, dbussink
 
 ### Evaluation Engine
 dbussink, systay
 
 ### Planner
-systay, harshit-gangal, GuptaManan100, frouioui 
+systay, harshit-gangal, frouioui 
 
 ### Query Serving
-systay, harshit-gangal, GuptaManan100, frouioui, dbussink
+systay, harshit-gangal, frouioui, dbussink
 
 ### Online DDL
 shlomi-noach, dbussink
 
 ### Cluster Management
-GuptaManan100, dbussink
+dbussink
 
 ### Java
 harshit-gangal
 
 ### Kubernetes
-derekperkins, GuptaManan100, frouioui
+derekperkins, frouioui
 
 ### VTAdmin
 notfelineit, rohit-nayak-ps
@@ -69,6 +68,7 @@ We thank the following past maintainers for their contributions.
 * Jon Tirsen ([tirsen](https://github.com/tirsen))
 * Leo X. Lin ([leoxlin](https://github.com/leoxlin))
 * Mali Akmanalp ([makmanalp](https://github.com/makmanalp)
+* Manan Gupta ([GuptaManan100](https://github.com/GuptaManan100))
 * Michael Berlin ([michael-berlin](https://github.com/michael-berlin))
 * Michael Demmer ([demmer](https://github.com/demmer))
 * Michael Pawliszyn ([mpawliszyn](https://github.com/mpawliszyn))
