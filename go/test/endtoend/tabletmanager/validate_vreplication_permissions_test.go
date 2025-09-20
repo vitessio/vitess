@@ -42,7 +42,7 @@ func TestValidateVReplicationPermissions_FailsWithoutSelectPermissions(t *testin
 func TestValidateVReplicationPermissions_FailsWithoutInsertPermissions(t *testing.T) {
 	tablet := getTablet(primaryTablet.GrpcPort)
 
-	// Revoke SELECT permission on the _vt.vreplication table
+	// Revoke INSERT permission on the _vt.vreplication table
 	conn, err := mysql.Connect(t.Context(), &primaryTabletParams)
 	require.NoError(t, err)
 	t.Cleanup(func() { conn.Close() })
@@ -64,7 +64,7 @@ func TestValidateVReplicationPermissions_FailsWithoutInsertPermissions(t *testin
 func TestValidateVReplicationPermissions_FailsWithoutUpdatePermissions(t *testing.T) {
 	tablet := getTablet(primaryTablet.GrpcPort)
 
-	// Revoke SELECT permission on the _vt.vreplication table
+	// Revoke UPDATE permission on the _vt.vreplication table
 	conn, err := mysql.Connect(t.Context(), &primaryTabletParams)
 	require.NoError(t, err)
 	t.Cleanup(func() { conn.Close() })
@@ -86,7 +86,7 @@ func TestValidateVReplicationPermissions_FailsWithoutUpdatePermissions(t *testin
 func TestValidateVReplicationPermissions_FailsWithoutDeletePermissions(t *testing.T) {
 	tablet := getTablet(primaryTablet.GrpcPort)
 
-	// Revoke SELECT permission on the _vt.vreplication table
+	// Revoke DELETE permission on the _vt.vreplication table
 	conn, err := mysql.Connect(t.Context(), &primaryTabletParams)
 	require.NoError(t, err)
 	t.Cleanup(func() { conn.Close() })
@@ -103,4 +103,28 @@ func TestValidateVReplicationPermissions_FailsWithoutDeletePermissions(t *testin
 	res, err := tmClient.ValidateVReplicationPermissions(t.Context(), tablet, req)
 	require.NoError(t, err)
 	require.False(t, res.Ok)
+}
+
+func TestValidateVReplicationPermissions_FailsIfUserCantLogin(t *testing.T) {
+	tablet := getTablet(primaryTablet.GrpcPort)
+
+	// Lock the user account to simulate some other error
+	conn, err := mysql.Connect(t.Context(), &primaryTabletParams)
+	require.NoError(t, err)
+	t.Cleanup(func() { conn.Close() })
+
+	_, err = conn.ExecuteFetch("alter user 'vt_filtered'@'localhost' account lock", 0, false)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		// Restore the permission for other tests
+		_, err = conn.ExecuteFetch("alter user 'vt_filtered'@'localhost' account unlock", 0, false)
+		require.NoError(t, err)
+	})
+
+	req := &tmdatapb.ValidateVReplicationPermissionsRequest{}
+	_, err = tmClient.ValidateVReplicationPermissions(t.Context(), tablet, req)
+
+	// This is an unexpected error, so we receive an error back
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Access denied for user 'vt_filtered'@'localhost'")
 }
