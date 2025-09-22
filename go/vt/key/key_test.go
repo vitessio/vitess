@@ -1631,6 +1631,15 @@ func TestGenerateShardRangesWithHexCharacterCount(t *testing.T) {
 	}
 
 	{
+		ranges, err := GenerateShardRanges(8, 4)
+
+		require.NoError(t, err)
+
+		require.EqualValues(t, 8, len(ranges))
+		require.EqualValues(t, []string{"-2000", "2000-4000", "4000-6000", "6000-8000", "8000-a000", "a000-c000", "c000-e000", "e000-"}, ranges)
+	}
+
+	{
 		_, err := GenerateShardRanges(32, 1)
 
 		require.Error(t, err)
