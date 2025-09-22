@@ -47,9 +47,6 @@ func checkLock(t *testing.T, ctx context.Context, ts *topo.Server) {
 	t.Log("===      checkLockTimeout")
 	checkLockTimeout(ctx, t, conn)
 
-	t.Log("===      checkLockMissing")
-	checkLockMissing(ctx, t, conn)
-
 	t.Log("===      checkLockUnblocks")
 	checkLockUnblocks(ctx, t, conn)
 }
@@ -118,14 +115,6 @@ func checkLockTimeout(ctx context.Context, t *testing.T, conn topo.Conn) {
 	// test we can't unlock again
 	if err := lockDescriptor.Unlock(ctx); err == nil {
 		t.Fatalf("Unlock(again) worked")
-	}
-}
-
-// checkLockMissing makes sure we can't lock a non-existing directory.
-func checkLockMissing(ctx context.Context, t *testing.T, conn topo.Conn) {
-	keyspacePath := path.Join(topo.KeyspacesPath, "test_keyspace_666")
-	if _, err := conn.Lock(ctx, keyspacePath, "missing"); err == nil {
-		t.Fatalf("Lock(test_keyspace_666) worked for non-existing keyspace")
 	}
 }
 

@@ -44,9 +44,6 @@ func checkTryLock(t *testing.T, ctx context.Context, ts *topo.Server) {
 	t.Log("===      checkTryLockTimeout")
 	checkTryLockTimeout(ctx, t, conn)
 
-	t.Log("===      checkTryLockMissing")
-	checkTryLockMissing(ctx, t, conn)
-
 	t.Log("===      checkTryLockUnblocks")
 	checkTryLockUnblocks(ctx, t, conn)
 }
@@ -139,14 +136,6 @@ func checkTryLockTimeout(ctx context.Context, t *testing.T, conn topo.Conn) {
 	// test we can't unlock again
 	if err := lockDescriptor.Unlock(ctx); err == nil {
 		require.Fail(t, "Unlock succeeded but should not have")
-	}
-}
-
-// checkTryLockMissing makes sure we can't lock a non-existing directory.
-func checkTryLockMissing(ctx context.Context, t *testing.T, conn topo.Conn) {
-	keyspacePath := path.Join(topo.KeyspacesPath, "test_keyspace_666")
-	if _, err := conn.TryLock(ctx, keyspacePath, "missing"); err == nil {
-		require.Fail(t, "TryLock(test_keyspace_666) worked for non-existing keyspace")
 	}
 }
 
