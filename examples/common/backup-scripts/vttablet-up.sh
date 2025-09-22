@@ -35,8 +35,6 @@ fi
 
 # Additional logging and explicit topology flags for vttablet for the backup local example
 # to ensure it uses the underscored topology flags that are required for older vttablet versions.
-// TODO: in v25 we can start using the local example env.sh and common scripts and delete the extra
-// ones created for backup upgrade/downgrade tests to work.
 echo "Starting backup vttablet for $alias..."
 echo "Topology flags inherited at start of backup vttablet: $TOPOLOGY_FLAGS"
 export TOPOLOGY_FLAGS="--topo_implementation etcd2 --topo_global_server_address $ETCD_SERVER --topo_global_root /vitess/global"
