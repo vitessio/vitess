@@ -91,6 +91,23 @@ func TestFileBasedConfigLoader_Load(t *testing.T) {
 			expectedErrorNotNil: true,
 		},
 		{
+			name:       "successful config load with dry run as enabled",
+			configPath: "/config/throttler-config.json",
+			mockReadFile: func(filename string) ([]byte, error) {
+				require.Equal(t, "/config/throttler-config.json", filename)
+				return []byte(`{"enabled": true, "strategy": "TabletThrottler", "dry_run": true}`), nil
+			},
+			mockJsonUnmarshal: func(data []byte, v interface{}) error {
+				return json.Unmarshal(data, v)
+			},
+			expectedConfig: Config{
+				Enabled:  true,
+				Strategy: registry.ThrottlingStrategyTabletThrottler,
+				DryRun:   true,
+			},
+			expectedErrorNotNil: false,
+		},
+		{
 			name:       "file read error - permission denied",
 			configPath: "/config/throttler-config.json",
 			mockReadFile: func(filename string) ([]byte, error) {
