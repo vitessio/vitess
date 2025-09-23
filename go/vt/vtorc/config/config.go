@@ -39,8 +39,6 @@ const (
 	DebugMetricsIntervalSeconds           = 10
 	StaleInstanceCoordinatesExpireSeconds = 60
 	DiscoveryQueueCapacity                = 100000
-	DiscoveryQueueMaxStatisticsSize       = 120
-	DiscoveryCollectionRetentionSeconds   = 120
 	UnseenInstanceForgetHours             = 240 // Number of hours after which an unseen instance is forgotten
 )
 

@@ -21,14 +21,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
-	"time"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/viperutil/debug"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vtorc/collection"
-	"vitess.io/vitess/go/vt/vtorc/discovery"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/logic"
 	"vitess.io/vitess/go/vt/vtorc/process"
@@ -41,16 +37,15 @@ import (
 type vtorcAPI struct{}
 
 const (
-	problemsAPI                   = "/api/problems"
-	errantGTIDsAPI                = "/api/errant-gtids"
-	disableGlobalRecoveriesAPI    = "/api/disable-global-recoveries"
-	enableGlobalRecoveriesAPI     = "/api/enable-global-recoveries"
-	detectionAnalysisAPI          = "/api/detection-analysis"
-	replicationAnalysisAPI        = "/api/replication-analysis" // TODO: remove in v24+
-	databaseStateAPI              = "/api/database-state"
-	configAPI                     = "/api/config"
-	healthAPI                     = "/debug/health"
-	AggregatedDiscoveryMetricsAPI = "/api/aggregated-discovery-metrics"
+	problemsAPI                = "/api/problems"
+	errantGTIDsAPI             = "/api/errant-gtids"
+	disableGlobalRecoveriesAPI = "/api/disable-global-recoveries"
+	enableGlobalRecoveriesAPI  = "/api/enable-global-recoveries"
+	detectionAnalysisAPI       = "/api/detection-analysis"
+	replicationAnalysisAPI     = "/api/replication-analysis" // TODO: remove in v24+
+	databaseStateAPI           = "/api/database-state"
+	configAPI                  = "/api/config"
+	healthAPI                  = "/debug/health"
 
 	shardWithoutKeyspaceFilteringErrorStr = "Filtering by shard without keyspace isn't supported"
 	notAValidValueForSeconds              = "Invalid value for seconds"
@@ -68,7 +63,6 @@ var (
 		databaseStateAPI,
 		configAPI,
 		healthAPI,
-		AggregatedDiscoveryMetricsAPI,
 	}
 )
 
@@ -97,8 +91,6 @@ func (v *vtorcAPI) ServeHTTP(response http.ResponseWriter, request *http.Request
 		databaseStateAPIHandler(response)
 	case configAPI:
 		configAPIHandler(response)
-	case AggregatedDiscoveryMetricsAPI:
-		AggregatedDiscoveryMetricsAPIHandler(response, request)
 	default:
 		// This should be unreachable. Any endpoint which isn't registered is automatically redirected to /debug/status.
 		// This code will only be reachable if we register an API but don't handle it here. That will be a bug.
@@ -196,31 +188,6 @@ func configAPIHandler(response http.ResponseWriter) {
 		return
 	}
 	writePlainTextResponse(response, string(jsonOut), http.StatusOK)
-}
-
-// AggregatedDiscoveryMetricsAPIHandler is the handler for the discovery metrics endpoint
-func AggregatedDiscoveryMetricsAPIHandler(response http.ResponseWriter, request *http.Request) {
-	// return metrics for last x seconds
-	qSeconds := request.URL.Query().Get("seconds")
-	// default to 60 seconds
-	seconds := 60
-	var err error
-	if qSeconds != "" {
-		seconds, err = strconv.Atoi(qSeconds)
-		if err != nil {
-			http.Error(response, notAValidValueForSeconds, http.StatusBadRequest)
-			return
-		}
-	}
-	c := collection.CreateOrReturnCollection(logic.DiscoveryMetricsName)
-	now := time.Now()
-	then := now.Add(time.Duration(-1*seconds) * time.Second)
-	metric, err := discovery.AggregatedSince(c, then)
-	if err != nil {
-		http.Error(response, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	returnAsJSON(response, http.StatusOK, metric)
 }
 
 // disableGlobalRecoveriesAPIHandler is the handler for the disableGlobalRecoveriesAPI endpoint

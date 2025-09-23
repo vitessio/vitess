@@ -103,6 +103,12 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 		return nil
 	}
 
+	// If dry-run mode is enabled, log the decision but don't throttle
+	if qt.cfg.DryRun {
+		log.Warningf("[DRY-RUN] %s", decision.Message)
+		return nil
+	}
+
 	// Normal throttling: return an error to reject the query
 	return vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, decision.Message)
 }
