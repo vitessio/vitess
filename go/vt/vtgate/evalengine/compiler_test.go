@@ -78,21 +78,14 @@ func (s *Tracker) Add(name string, supported, total int) {
 }
 
 func (s *Tracker) String() string {
-	s.tbl.SetBorder(false)
-	s.tbl.SetColumnAlignment([]int{
-		tablewriter.ALIGN_LEFT,
-		tablewriter.ALIGN_RIGHT,
-		tablewriter.ALIGN_RIGHT,
-		tablewriter.ALIGN_RIGHT,
-	})
-	s.tbl.SetFooterAlignment(tablewriter.ALIGN_RIGHT)
-	s.tbl.SetFooter([]string{
+	// Add footer as a regular row since SetFooter is no longer available
+	s.tbl.Footer(
 		"",
 		strconv.Itoa(s.supported),
 		strconv.Itoa(s.total),
 		fmt.Sprintf("%.02f%%", 100*float64(s.supported)/float64(s.total)),
-	})
-	s.tbl.Render()
+	)
+	_ = s.tbl.Render() // Ignore render error as this is output formatting
 	return s.buf.String()
 }
 
