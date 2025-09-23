@@ -6,6 +6,8 @@
     - **[New default versions](#new-default-versions)**
         - [Upgrade to MySQL 8.4](#upgrade-to-mysql-8.4)
 - **[Minor Changes](#minor-changes)**
+    - **[Deprecations](#deprecations)**
+        - [Metrics](#deprecated-metrics)
     - **[Deletions](#deletions)**
         - [Metrics](#deleted-metrics)
     - **[New Metrics](#new-metrics)**
@@ -49,6 +51,14 @@ VTGate also advertises MySQL version `8.4.6` by default instead of `8.0.40`. If 
 > This is only needed once when going from the latest `8.0.x` to `8.4.x`. Once you're on `8.4.x`, it is possible to upgrade and downgrade between `8.4.x` versions without needing to run `innodb_fast_shutdown=0`.
 
 ## <a id="minor-changes"/>Minor Changes</a>
+
+### <a id="deprecations"/>Deprecations</a>
+
+#### <a id="deprecated-metrics"/>Metrics</a>
+
+| Component |        Metric Name        | Notes                                  |                     Deprecation PR                      |
+|:---------:|:-------------------------:|:--------------------------------------:|:-------------------------------------------------------:|
+| `vtorc`   | `DiscoverInstanceTimings` | Replaced by `DiscoveryInstanceTimings` | [#18406](https://github.com/vitessio/vitess/pull/18406) |
 
 ### <a id="deletions"/>Deletions</a>
 

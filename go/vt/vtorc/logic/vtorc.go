@@ -52,8 +52,10 @@ var (
 	discoveryWorkersGauge              = stats.NewGauge("DiscoveryWorkers", "Number of discovery workers")
 	discoveryWorkersActiveGauge        = stats.NewGauge("DiscoveryWorkersActive", "Number of discovery workers actively discovering tablets")
 
-	discoverInstanceTimingsActions = []string{"Backend", "Instance", "Other"}
-	discoverInstanceTimings        = stats.NewTimings("DiscoverInstanceTimings", "Timings for instance discovery actions", "Action", discoverInstanceTimingsActions...)
+	discoveryInstanceTimingsActions = []string{"Backend", "Instance", "Other"}
+	discoveryInstanceTimings        = stats.NewTimings("DiscoveryInstanceTimings", "Timings for instance discovery actions", "Action", discoveryInstanceTimingsActions...)
+	// TODO: deprecate in v24
+	discoverInstanceTimings = stats.NewTimings("DiscoverInstanceTimings", "Timings for instance discovery actions", "Action", discoveryInstanceTimingsActions...)
 )
 
 var recentDiscoveryOperationKeys *cache.Cache
@@ -183,9 +185,14 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 	instanceLatency := latency.Elapsed("instance")
 	otherLatency := totalLatency - (backendLatency + instanceLatency)
 
+	// TODO: deprecate in v24
 	discoverInstanceTimings.Add("Backend", backendLatency)
 	discoverInstanceTimings.Add("Instance", instanceLatency)
 	discoverInstanceTimings.Add("Other", otherLatency)
+
+	discoveryInstanceTimings.Add("Backend", backendLatency)
+	discoveryInstanceTimings.Add("Instance", instanceLatency)
+	discoveryInstanceTimings.Add("Other", otherLatency)
 
 	if forceDiscovery {
 		log.Infof("Force discovered - %+v, err - %v", instance, err)
