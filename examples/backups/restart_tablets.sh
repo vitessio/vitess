@@ -17,21 +17,21 @@
 # this script brings up new tablets for the two new shards that we will
 # be creating in the customer keyspace and copies the schema
 
-source ../common/env.sh
+source ../common/backup-env.sh
 
 for i in 100 101 102; do
-  CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-up.sh
-  CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ../common/scripts/vttablet-up.sh
+  CELL=zone1 TABLET_UID=$i ../common/backup-scripts/mysqlctl-up.sh
+  CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ../common/backup-scripts/vttablet-up.sh
 done
 
 for i in 200 201 202; do
-  CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-up.sh
-  SHARD=-80 CELL=zone1 KEYSPACE=customer TABLET_UID=$i ../common/scripts/vttablet-up.sh
+  CELL=zone1 TABLET_UID=$i ../common/backup-scripts/mysqlctl-up.sh
+  SHARD=-80 CELL=zone1 KEYSPACE=customer TABLET_UID=$i ../common/backup-scripts/vttablet-up.sh
 done
 
 for i in 300 301 302; do
-  CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-up.sh
-  SHARD=80- CELL=zone1 KEYSPACE=customer TABLET_UID=$i ../common/scripts/vttablet-up.sh
+  CELL=zone1 TABLET_UID=$i ../common/backup-scripts/mysqlctl-up.sh
+  SHARD=80- CELL=zone1 KEYSPACE=customer TABLET_UID=$i ../common/backup-scripts/vttablet-up.sh
 done
 sleep 5
 

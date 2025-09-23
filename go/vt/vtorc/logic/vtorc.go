@@ -29,23 +29,16 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vtorc/collection"
 	"vitess.io/vitess/go/vt/vtorc/config"
-	"vitess.io/vitess/go/vt/vtorc/discovery"
 	"vitess.io/vitess/go/vt/vtorc/inst"
-	ometrics "vitess.io/vitess/go/vt/vtorc/metrics"
 	"vitess.io/vitess/go/vt/vtorc/process"
 	"vitess.io/vitess/go/vt/vtorc/util"
 )
 
-const (
-	DiscoveryMetricsName = "DISCOVERY_METRICS"
-)
-
-// discoveryQueue is a channel of deduplicated instanceKey-s
-// that were requested for discovery.  It can be continuously updated
+// discoveryQueue is a channel of deduplicated tablets that were
+// requested for discovery. It can be continuously updated
 // as discovery process progresses.
-var discoveryQueue *discovery.Queue
+var discoveryQueue *DiscoveryQueue
 var snapshotDiscoveryKeys chan string
 var snapshotDiscoveryKeysMutex sync.Mutex
 var hasReceivedSIGTERM int32
@@ -63,17 +56,15 @@ var (
 	discoverInstanceTimings        = stats.NewTimings("DiscoverInstanceTimings", "Timings for instance discovery actions", "Action", discoverInstanceTimingsActions...)
 )
 
-var discoveryMetrics = collection.CreateOrReturnCollection(DiscoveryMetricsName)
-
 var recentDiscoveryOperationKeys *cache.Cache
 
 func init() {
 	snapshotDiscoveryKeys = make(chan string, 10)
 
-	ometrics.OnMetricsTick(func() {
+	onMetricsTick(func() {
 		discoveryQueueLengthGauge.Set(int64(discoveryQueue.QueueLen()))
 	})
-	ometrics.OnMetricsTick(func() {
+	onMetricsTick(func() {
 		if recentDiscoveryOperationKeys == nil {
 			return
 		}
@@ -85,7 +76,6 @@ func init() {
 func closeVTOrc() {
 	log.Infof("Starting VTOrc shutdown")
 	atomic.StoreInt32(&hasReceivedSIGTERM, 1)
-	discoveryMetrics.StopAutoExpiration()
 	// Poke other go routines to stop cleanly here ...
 	_ = inst.AuditOperation("shutdown", "", "Triggered via SIGTERM")
 	// wait for the locks to be released
@@ -116,7 +106,7 @@ func waitForLocksRelease() {
 // handleDiscoveryRequests iterates the discoveryQueue channel and calls upon
 // instance discovery per entry.
 func handleDiscoveryRequests() {
-	discoveryQueue = discovery.NewQueue()
+	discoveryQueue = NewDiscoveryQueue()
 	// create a pool of discovery workers
 	for i := uint(0); i < config.GetDiscoveryWorkers(); i++ {
 		discoveryWorkersGauge.Add(1)
@@ -153,16 +143,12 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 		"instance",
 		"total"})
 	latency.Start("total") // start the total stopwatch (not changed anywhere else)
-	var metric *discovery.Metric
 	defer func() {
 		latency.Stop("total")
 		discoveryTime := latency.Elapsed("total")
 		if discoveryTime > config.GetInstancePollTime() {
 			instancePollSecondsExceededCounter.Add(1)
 			log.Warningf("discoverInstance exceeded InstancePollSeconds for %+v, took %.4fs", tabletAlias, discoveryTime.Seconds())
-			if metric != nil {
-				metric.InstancePollSecondsDurationCount = 1
-			}
 		}
 	}()
 
@@ -207,15 +193,6 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 
 	if instance == nil {
 		failedDiscoveriesCounter.Add(1)
-		metric = &discovery.Metric{
-			Timestamp:       time.Now(),
-			TabletAlias:     tabletAlias,
-			TotalLatency:    totalLatency,
-			BackendLatency:  backendLatency,
-			InstanceLatency: instanceLatency,
-			Err:             err,
-		}
-		_ = discoveryMetrics.Append(metric)
 		if util.ClearToLog("discoverInstance", tabletAlias) {
 			log.Warningf(" DiscoverInstance(%+v) instance is nil in %.3fs (Backend: %.3fs, Instance: %.3fs), error=%+v",
 				tabletAlias,
@@ -226,16 +203,6 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 		}
 		return
 	}
-
-	metric = &discovery.Metric{
-		Timestamp:       time.Now(),
-		TabletAlias:     tabletAlias,
-		TotalLatency:    totalLatency,
-		BackendLatency:  backendLatency,
-		InstanceLatency: instanceLatency,
-		Err:             nil,
-	}
-	_ = discoveryMetrics.Append(metric)
 }
 
 // onHealthTick handles the actions to take to discover/poll instances
@@ -295,7 +262,7 @@ func ContinuousDiscovery() {
 	}
 
 	go func() {
-		_ = ometrics.InitMetrics()
+		_ = initMetrics()
 	}()
 	// On termination of the server, we should close VTOrc cleanly
 	servenv.OnTermSync(closeVTOrc)
