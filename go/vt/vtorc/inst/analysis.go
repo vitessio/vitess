@@ -81,12 +81,12 @@ const (
 // Key of this map is a InstanceAnalysis.String()
 type PeerAnalysisMap map[string]int
 
-type ReplicationAnalysisHints struct {
+type DetectionAnalysisHints struct {
 	AuditAnalysis bool
 }
 
-// ReplicationAnalysis notes analysis on replication chain status, per instance
-type ReplicationAnalysis struct {
+// DetectionAnalysis represents an analysis of a detected problem.
+type DetectionAnalysis struct {
 	AnalyzedInstanceAlias                     string
 	AnalyzedInstancePrimaryAlias              string
 	TabletType                                topodatapb.TabletType
@@ -139,11 +139,11 @@ type ReplicationAnalysis struct {
 	IsDiskStalled                             bool
 }
 
-func (replicationAnalysis *ReplicationAnalysis) MarshalJSON() ([]byte, error) {
+func (detectionAnalysis *DetectionAnalysis) MarshalJSON() ([]byte, error) {
 	i := struct {
-		ReplicationAnalysis
+		DetectionAnalysis
 	}{}
-	i.ReplicationAnalysis = *replicationAnalysis
+	i.DetectionAnalysis = *detectionAnalysis
 
 	return json.Marshal(i)
 }
