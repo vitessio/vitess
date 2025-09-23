@@ -115,7 +115,6 @@ require (
 
 require (
 	github.com/DataDog/datadog-agent/comp/core/tagger/origindetection v0.70.2 // indirect
-	github.com/DataDog/datadog-agent/pkg/opentelemetry-mapping-go/otlp/attributes v0.72.0-devel // indirect
 	github.com/DataDog/datadog-agent/pkg/proto v0.70.2 // indirect
 	github.com/DataDog/datadog-agent/pkg/trace v0.70.2 // indirect
 	github.com/DataDog/datadog-agent/pkg/util/log v0.70.2 // indirect
@@ -145,6 +144,7 @@ require (
 	github.com/puzpuzpuz/xsync/v3 v3.5.1 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	go.opentelemetry.io/collector/component v1.42.0 // indirect
+	go.opentelemetry.io/collector/component/componenttest v0.133.0 // indirect
 	go.opentelemetry.io/collector/featuregate v1.42.0 // indirect
 	go.opentelemetry.io/collector/internal/telemetry v0.136.0 // indirect
 	go.opentelemetry.io/collector/pdata v1.42.0 // indirect

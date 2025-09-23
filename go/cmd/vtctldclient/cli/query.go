@@ -32,23 +32,25 @@ func WriteQueryResultTable(w io.Writer, qr *sqltypes.Result) {
 	}
 
 	table := tablewriter.NewWriter(w)
-	table.SetAutoFormatHeaders(false)
 
-	header := make([]string, 0, len(qr.Fields))
+	header := make([]any, 0, len(qr.Fields))
 	for _, field := range qr.Fields {
 		header = append(header, field.Name)
 	}
 
-	table.SetHeader(header)
+	table.Header(header...)
 
 	for _, row := range qr.Rows {
-		vals := make([]string, 0, len(row))
+		vals := make([]any, 0, len(row))
 		for _, val := range row {
 			vals = append(vals, val.ToString())
 		}
 
-		table.Append(vals)
+		if err := table.Append(vals...); err != nil {
+			// If append fails, we can't continue building the table
+			return
+		}
 	}
 
-	table.Render()
+	_ = table.Render() // Ignore render error as this is output formatting
 }
