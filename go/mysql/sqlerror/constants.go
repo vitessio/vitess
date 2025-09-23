@@ -97,6 +97,7 @@ const (
 	ERTableNotLockedForWrite        = ErrorCode(1099)
 	ERTableNotLocked                = ErrorCode(1100)
 	ERTooBigSelect                  = ErrorCode(1104)
+	ERTableAccessDenied             = ErrorCode(1142)
 	ERNotAllowedCommand             = ErrorCode(1148)
 	ERTooLongString                 = ErrorCode(1162)
 	ERDelayedInsertTableLocked      = ErrorCode(1165)

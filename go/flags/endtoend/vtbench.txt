@@ -87,7 +87,7 @@ Flags:
       --tablet-grpc-key string                                      the key to use to connect
       --tablet-grpc-server-name string                              the server name to use to validate server certificate
       --threads int                                                 Number of parallel threads to run (default 2)
-      --unix_socket string                                          VTGate unix socket
+      --unix-socket string                                          VTGate unix socket
       --user string                                                 Username to connect using mysql (password comes from the db-credentials-file)
       --v Level                                                     log level for V logs
   -v, --version                                                     print binary version

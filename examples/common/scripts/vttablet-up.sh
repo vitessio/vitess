@@ -33,27 +33,27 @@ if [[ "${uid: -1}" -gt 1 ]]; then
  tablet_type=rdonly
 fi
 
-echo "Starting vttablet for $alias..."
+echo "Starting backup script for vttablet for $alias..."
 
 # shellcheck disable=SC2086
 vttablet \
  $TOPOLOGY_FLAGS \
  --log_dir $VTDATAROOT/tmp \
- --log_queries_to_file $VTDATAROOT/tmp/$tablet_logfile \
+ --log-queries-to-file $VTDATAROOT/tmp/$tablet_logfile \
  --tablet-path $alias \
- --tablet_hostname "$tablet_hostname" \
- --init_keyspace $keyspace \
- --init_shard $shard \
- --init_tablet_type $tablet_type \
- --health_check_interval 5s \
- --backup_storage_implementation file \
- --file_backup_storage_root $VTDATAROOT/backups \
- --restore_from_backup \
+ --tablet-hostname "$tablet_hostname" \
+ --init-keyspace $keyspace \
+ --init-shard $shard \
+ --init-tablet-type $tablet_type \
+ --health-check-interval 5s \
+ --backup-storage-implementation file \
+ --file-backup-storage-root $VTDATAROOT/backups \
+ --restore-from-backup \
  --port $port \
- --grpc_port $grpc_port \
- --service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
- --pid_file $VTDATAROOT/$tablet_dir/vttablet.pid \
- --heartbeat_on_demand_duration=5s \
+ --grpc-port $grpc_port \
+ --service-map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
+ --pid-file $VTDATAROOT/$tablet_dir/vttablet.pid \
+ --heartbeat-on-demand-duration=5s \
  --pprof-http \
  > $VTDATAROOT/$tablet_dir/vttablet.out 2>&1 &
 

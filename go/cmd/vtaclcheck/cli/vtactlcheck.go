@@ -22,6 +22,7 @@ import (
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtaclcheck"
 )
 
@@ -58,6 +59,8 @@ func run(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
+	Main.SetGlobalNormalizationFunc(utils.NormalizeUnderscoresToDashes)
+
 	servenv.MoveFlagsToCobraCommand(Main)
 
 	Main.Flags().StringVar(&aclFile, "acl-file", aclFile, "The path of the JSON ACL file to check")

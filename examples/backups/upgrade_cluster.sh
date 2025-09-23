@@ -17,46 +17,46 @@
 # this script brings up new tablets for the two new shards that we will
 # be creating in the customer keyspace and copies the schema
 
-source ../common/env.sh
+source ../common/backup-env.sh
 
 # Restart the replica tablets so that they come up with new vttablet versions
 for i in 101 102; do
   echo "Shutting down tablet zone1-$i"
-  CELL=zone1 TABLET_UID=$i ../common/scripts/vttablet-down.sh
+  CELL=zone1 TABLET_UID=$i ../common/backup-scripts/vttablet-down.sh
   echo "Shutting down mysql zone1-$i"
-  CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-down.sh
+  CELL=zone1 TABLET_UID=$i ../common/backup-scripts/mysqlctl-down.sh
   echo "Removing tablet directory zone1-$i"
   vtctldclient DeleteTablets --allow-primary zone1-$i
   rm -Rf $VTDATAROOT/vt_0000000$i
   echo "Starting tablet zone1-$i again"
-  CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-up.sh
-  CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ../common/scripts/vttablet-up.sh
+  CELL=zone1 TABLET_UID=$i ../common/backup-scripts/mysqlctl-up.sh
+  CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ../common/backup-scripts/vttablet-up.sh
 done
 
 for i in 201 202; do
   echo "Shutting down tablet zone1-$i"
-  CELL=zone1 TABLET_UID=$i ../common/scripts/vttablet-down.sh
+  CELL=zone1 TABLET_UID=$i ../common/backup-scripts/vttablet-down.sh
   echo "Shutting down mysql zone1-$i"
-  CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-down.sh
+  CELL=zone1 TABLET_UID=$i ../common/backup-scripts/mysqlctl-down.sh
   echo "Removing tablet directory zone1-$i"
   vtctldclient DeleteTablets --allow-primary zone1-$i
   rm -Rf $VTDATAROOT/vt_0000000$i
   echo "Starting tablet zone1-$i again"
-  CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-up.sh
-  SHARD=-80 CELL=zone1 KEYSPACE=customer TABLET_UID=$i ../common/scripts/vttablet-up.sh
+  CELL=zone1 TABLET_UID=$i ../common/backup-scripts/mysqlctl-up.sh
+  SHARD=-80 CELL=zone1 KEYSPACE=customer TABLET_UID=$i ../common/backup-scripts/vttablet-up.sh
 done
 
 for i in 301 302; do
   echo "Shutting down tablet zone1-$i"
-  CELL=zone1 TABLET_UID=$i ../common/scripts/vttablet-down.sh
+  CELL=zone1 TABLET_UID=$i ../common/backup-scripts/vttablet-down.sh
   echo "Shutting down mysql zone1-$i"
-  CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-down.sh
+  CELL=zone1 TABLET_UID=$i ../common/backup-scripts/mysqlctl-down.sh
   echo "Removing tablet directory zone1-$i"
   vtctldclient DeleteTablets --allow-primary zone1-$i
   rm -Rf $VTDATAROOT/vt_0000000$i
   echo "Starting tablet zone1-$i again"
-  CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-up.sh
-  SHARD=80- CELL=zone1 KEYSPACE=customer TABLET_UID=$i ../common/scripts/vttablet-up.sh
+  CELL=zone1 TABLET_UID=$i ../common/backup-scripts/mysqlctl-up.sh
+  SHARD=80- CELL=zone1 KEYSPACE=customer TABLET_UID=$i ../common/backup-scripts/vttablet-up.sh
 done
 
 # Wait for all the replica tablets to be in the serving state before reparenting to them.
@@ -85,13 +85,13 @@ vtctldclient PlannedReparentShard customer/80- --new-primary "zone1-301"
 
 # Restart the old primary tablets so that they are on the latest version of vttablet too.
 echo "Restarting tablet zone1-100"
-CELL=zone1 TABLET_UID=100 ../common/scripts/vttablet-down.sh
-CELL=zone1 KEYSPACE=commerce TABLET_UID=100 ../common/scripts/vttablet-up.sh
+CELL=zone1 TABLET_UID=100 ../common/backup-scripts/vttablet-down.sh
+CELL=zone1 KEYSPACE=commerce TABLET_UID=100 ../common/backup-scripts/vttablet-up.sh
 
 echo "Restarting tablet zone1-200"
-CELL=zone1 TABLET_UID=200 ../common/scripts/vttablet-down.sh
-SHARD=-80 CELL=zone1 KEYSPACE=customer TABLET_UID=200 ../common/scripts/vttablet-up.sh
+CELL=zone1 TABLET_UID=200 ../common/backup-scripts/vttablet-down.sh
+SHARD=-80 CELL=zone1 KEYSPACE=customer TABLET_UID=200 ../common/backup-scripts/vttablet-up.sh
 
 echo "Restarting tablet zone1-300"
-CELL=zone1 TABLET_UID=300 ../common/scripts/vttablet-down.sh
-SHARD=80- CELL=zone1 KEYSPACE=customer TABLET_UID=300 ../common/scripts/vttablet-up.sh
+CELL=zone1 TABLET_UID=300 ../common/backup-scripts/vttablet-down.sh
+SHARD=80- CELL=zone1 KEYSPACE=customer TABLET_UID=300 ../common/backup-scripts/vttablet-up.sh

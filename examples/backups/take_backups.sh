@@ -17,7 +17,7 @@
 # this script brings up new tablets for the two new shards that we will
 # be creating in the customer keyspace and copies the schema
 
-source ../common/env.sh
+source ../common/backup-env.sh
 
 for shard in "customer/-80" "customer/80-" "commerce/0"; do
 	vtctldclient BackupShard "${shard}" || fail "Failed to backup shard: ${shard}"

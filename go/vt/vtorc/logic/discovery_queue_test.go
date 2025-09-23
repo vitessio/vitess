@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package discovery
+package logic
 
 import (
 	"testing"
@@ -24,8 +24,8 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-func TestQueue(t *testing.T) {
-	q := NewQueue()
+func TestDiscoveryQueue(t *testing.T) {
+	q := NewDiscoveryQueue()
 	require.Zero(t, q.QueueLen())
 
 	tabletAlias := &topodatapb.TabletAlias{
@@ -56,19 +56,19 @@ func TestQueue(t *testing.T) {
 	require.False(t, found)
 }
 
-type testQueue interface {
+type testDiscoveryQueue interface {
 	QueueLen() int
 	Push(*topodatapb.TabletAlias)
 	Consume() *topodatapb.TabletAlias
 	Release(*topodatapb.TabletAlias)
 }
 
-func BenchmarkQueues(b *testing.B) {
+func BenchmarkDiscoveryQueues(b *testing.B) {
 	tests := []struct {
 		name  string
-		queue testQueue
+		queue testDiscoveryQueue
 	}{
-		{"Current", NewQueue()},
+		{"Current", NewDiscoveryQueue()},
 	}
 	for _, test := range tests {
 		q := test.queue

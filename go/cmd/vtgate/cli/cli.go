@@ -213,7 +213,5 @@ func init() {
 	Main.Flags().StringVar(&plannerName, "planner-version", plannerName, "Sets the default planner to use when the session has not changed it. Valid values are: Gen4, Gen4Greedy, Gen4Left2Right")
 
 	// Support both variants until v25
-	// Main.MarkFlagRequired("tablet-types-to-wait")
-	Main.MarkFlagsOneRequired("tablet-types-to-wait", "tablet_types_to_wait")
-
+	Main.MarkFlagsOneRequired("tablet-types-to-wait")
 }

@@ -1,5 +1,5 @@
 Usage of vtctlclient:
-      --action_timeout duration                                     timeout for the total command (default 1h0m0s)
+      --action-timeout duration                                     timeout for the total command (default 1h0m0s)
       --alsologtostderr                                             log to standard error as well as files
       --config-file string                                          Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
       --config-file-not-found-handling ConfigFileNotFoundHandling   Behavior when a config file is not found. (Options: error, exit, ignore, warn) (default warn)

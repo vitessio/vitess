@@ -34,6 +34,7 @@ func init() {
 	servenv.OnParseFor("vttestserver", RegisterFlags)
 	servenv.OnParseFor("vtctlclient", RegisterFlags)
 	servenv.OnParseFor("vtctldclient", RegisterFlags)
+	servenv.OnParseFor("vtadmin", RegisterFlags)
 }
 
 func RegisterFlags(fs *pflag.FlagSet) {

@@ -379,22 +379,30 @@ func EvenShardsKeyRange(i, n int) (*topodatapb.KeyRange, error) {
 }
 
 // GenerateShardRanges returns shard ranges assuming a keyspace with N shards.
-func GenerateShardRanges(shards int) ([]string, error) {
-	var format string
-	var maxShards int
-
+func GenerateShardRanges(shards int, hexWidth int) ([]string, error) {
 	switch {
 	case shards <= 0:
 		return nil, errors.New("shards must be greater than zero")
+	case shards == 1:
+		return []string{"-"}, nil
 	case shards <= 256:
-		format = "%02x"
-		maxShards = 256
+		if hexWidth == 0 {
+			hexWidth = 2
+		}
 	case shards <= 65536:
-		format = "%04x"
-		maxShards = 65536
+		if hexWidth == 0 {
+			hexWidth = 4
+		}
 	default:
-		return nil, errors.New("this function does not support more than 65336 shards in a single keyspace")
+		return nil, errors.New("this function does not support more than 65536 shards in a single keyspace")
 	}
+
+	maxShards := math.Pow(16, float64(hexWidth))
+	if shards > int(maxShards) {
+		return nil, fmt.Errorf("the given number of shards (%d) is too high for the given number of characters to use (%d)", shards, hexWidth)
+	}
+
+	format := fmt.Sprintf("%%0%dx", hexWidth)
 
 	rangeFormatter := func(start, end int) string {
 		var (
@@ -406,45 +414,24 @@ func GenerateShardRanges(shards int) ([]string, error) {
 			startKid = fmt.Sprintf(format, start)
 		}
 
-		if end != maxShards {
+		if end != int(maxShards) {
 			endKid = fmt.Sprintf(format, end)
 		}
 
 		return fmt.Sprintf("%s-%s", startKid, endKid)
 	}
 
-	start := 0
-	end := 0
-
-	// If shards does not divide evenly into maxShards, then there is some lossiness,
-	// where each shard is smaller than it should technically be (if, for example, size == 25.6).
-	// If we choose to keep everything in ints, then we have two choices:
-	// 	- Have every shard in #numshards be a uniform size, tack on an additional shard
-	//	  at the end of the range to account for the loss. This is bad because if you ask for
-	//	  7 shards, you'll actually get 7 uniform shards with 1 small shard, for 8 total shards.
-	//	  It's also bad because one shard will have much different data distribution than the rest.
-	//	- Expand the final shard to include whatever is left in the keyrange. This will give the
-	//	  correct number of shards, which is good, but depending on how lossy each individual shard is,
-	//	  you could end with that final shard being significantly larger than the rest of the shards,
-	//	  so this doesn't solve the data distribution problem.
-	//
-	// By tracking the "real" end (both in the real number sense, and in the truthfulness of the value sense),
-	// we can re-truncate the integer end on each iteration, which spreads the lossiness more
-	// evenly across the shards.
-	//
-	// This implementation has no impact on shard numbers that are powers of 2, even at large numbers,
-	// which you can see in the tests.
-	size := float64(maxShards) / float64(shards)
-	realEnd := float64(0)
-	shardRanges := make([]string, 0, shards)
-
-	for i := 1; i <= shards; i++ {
-		realEnd = float64(i) * size
-
-		end = int(realEnd)
-		shardRanges = append(shardRanges, rangeFormatter(start, end))
-		start = end
+	boundaries := make([]int, 0, shards+1)
+	for i := 0; i < shards; i++ {
+		boundaries = append(boundaries, int(float64(i)*maxShards/float64(shards)))
 	}
+
+	shardRanges := make([]string, 0, shards)
+	shardRanges = append(shardRanges, rangeFormatter(0, boundaries[1])) // first shard
+	for i := 1; i < shards-1; i++ {
+		shardRanges = append(shardRanges, rangeFormatter(boundaries[i], boundaries[i+1]))
+	}
+	shardRanges = append(shardRanges, rangeFormatter(boundaries[shards-1], int(maxShards))) // last shard
 
 	return shardRanges, nil
 }

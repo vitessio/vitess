@@ -30,7 +30,7 @@ import (
 )
 
 // InsertRecoveryDetection inserts the recovery analysis that has been detected.
-func InsertRecoveryDetection(analysisEntry *inst.ReplicationAnalysis) error {
+func InsertRecoveryDetection(analysisEntry *inst.DetectionAnalysis) error {
 	sqlResult, err := db.ExecVTOrc(`INSERT OR IGNORE
 		INTO recovery_detection (
 			alias,
@@ -110,7 +110,7 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 }
 
 // AttemptRecoveryRegistration tries to add a recovery entry; if this fails that means recovery is already in place.
-func AttemptRecoveryRegistration(analysisEntry *inst.ReplicationAnalysis) (*TopologyRecovery, error) {
+func AttemptRecoveryRegistration(analysisEntry *inst.DetectionAnalysis) (*TopologyRecovery, error) {
 	// Check if there is an active recovery in progress for the cluster of the given instance.
 	recoveries, err := ReadActiveClusterRecoveries(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 	if err != nil {
@@ -175,19 +175,19 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 			topology_recovery
 		%s
 		ORDER BY recovery_id DESC
-		%s
-		`,
+		%s`,
 		whereCondition,
 		limit,
 	)
-	err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) (err error) {
-		topologyRecovery := *NewTopologyRecovery(inst.ReplicationAnalysis{})
+	err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
+		topologyRecovery := *NewTopologyRecovery(inst.DetectionAnalysis{})
 		topologyRecovery.ID = m.GetInt64("recovery_id")
 
 		topologyRecovery.RecoveryStartTimestamp = m.GetString("start_recovery")
 		topologyRecovery.RecoveryEndTimestamp = m.GetString("end_recovery")
 		topologyRecovery.IsSuccessful = m.GetBool("is_successful")
 
+		var err error
 		topologyRecovery.AnalysisEntry.AnalyzedInstanceAlias, err = topoproto.ParseTabletAlias(m.GetString("alias"))
 		if err != nil {
 			return err

@@ -56,7 +56,7 @@ that shard.`,
 	// GenerateShardRanges outputs a set of shard ranges assuming a (mostly)
 	// equal distribution of N shards.
 	GenerateShardRanges = &cobra.Command{
-		Use:                   "GenerateShardRanges <num_shards>",
+		Use:                   "GenerateShardRanges <num_shards> [--hex-width=w]",
 		Short:                 "Print a set of shard ranges assuming a keyspace with N shards.",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
@@ -68,7 +68,7 @@ that shard.`,
 
 			cli.FinishedParsing(cmd)
 
-			shards, err := key.GenerateShardRanges(n)
+			shards, err := key.GenerateShardRanges(n, generateShardRangesOptions.HexWidth)
 			if err != nil {
 				return err
 			}
@@ -208,6 +208,10 @@ Use ctrl-C to interrupt the command and see partial results if needed.`,
 var createShardOptions = struct {
 	Force         bool
 	IncludeParent bool
+}{}
+
+var generateShardRangesOptions = struct {
+	HexWidth int
 }{}
 
 func commandCreateShard(cmd *cobra.Command, args []string) error {
@@ -663,6 +667,8 @@ func init() {
 
 	Root.AddCommand(GetShard)
 	Root.AddCommand(GetShardReplication)
+
+	GenerateShardRanges.Flags().IntVar(&generateShardRangesOptions.HexWidth, "hex-width", 0, "The number of hex characters to use for the shard range start and end. If not set or set to 0, it will be automatically computed based on the number of requested shards.")
 	Root.AddCommand(GenerateShardRanges)
 
 	RemoveShardCell.Flags().BoolVarP(&removeShardCellOptions.Force, "force", "f", false, "Proceed even if the cell's topology server cannot be reached. The assumption is that you turned down the entire cell, and just need to update the global topo data.")

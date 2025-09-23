@@ -41,7 +41,7 @@ func TestTopologyRecovery(t *testing.T) {
 		require.NoError(t, err)
 	}()
 
-	replicationAnalysis := inst.ReplicationAnalysis{
+	detectionAnalysis := inst.DetectionAnalysis{
 		AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 		TabletType:            tab101.Type,
 		AnalyzedKeyspace:      keyspace,
@@ -49,7 +49,7 @@ func TestTopologyRecovery(t *testing.T) {
 		Analysis:              inst.ReplicaIsWritable,
 		IsReadOnly:            false,
 	}
-	topologyRecovery := NewTopologyRecovery(replicationAnalysis)
+	topologyRecovery := NewTopologyRecovery(detectionAnalysis)
 
 	t.Run("writing to topology recovery", func(t *testing.T) {
 		topologyRecovery, err = writeTopologyRecovery(topologyRecovery)
@@ -140,15 +140,15 @@ func TestInsertRecoveryDetection(t *testing.T) {
 	defer func() {
 		db.ClearVTOrcDatabase()
 	}()
-	ra := &inst.ReplicationAnalysis{
+	da := &inst.DetectionAnalysis{
 		AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 1},
 		AnalyzedKeyspace:      keyspace,
 		AnalyzedShard:         shard,
 		Analysis:              inst.ClusterHasNoPrimary,
 	}
-	err := InsertRecoveryDetection(ra)
+	err := InsertRecoveryDetection(da)
 	require.NoError(t, err)
-	require.NotEqual(t, 0, ra.RecoveryId)
+	require.NotEqual(t, 0, da.RecoveryId)
 
 	var rows []map[string]sqlutils.CellData
 	err = db.QueryVTOrc("select * from recovery_detection", nil, func(rowMap sqlutils.RowMap) error {
@@ -159,10 +159,10 @@ func TestInsertRecoveryDetection(t *testing.T) {
 	require.Len(t, rows, 1)
 	tabletAlias, err := topoproto.ParseTabletAlias(rows[0]["alias"].String)
 	require.NoError(t, err)
-	require.EqualValues(t, ra.AnalyzedInstanceAlias, tabletAlias)
-	require.EqualValues(t, ra.Analysis, rows[0]["analysis"].String)
+	require.EqualValues(t, da.AnalyzedInstanceAlias, tabletAlias)
+	require.EqualValues(t, da.Analysis, rows[0]["analysis"].String)
 	require.EqualValues(t, keyspace, rows[0]["keyspace"].String)
 	require.EqualValues(t, shard, rows[0]["shard"].String)
-	require.EqualValues(t, strconv.Itoa(int(ra.RecoveryId)), rows[0]["detection_id"].String)
+	require.EqualValues(t, strconv.Itoa(int(da.RecoveryId)), rows[0]["detection_id"].String)
 	require.NotEqual(t, "", rows[0]["detection_timestamp"].String)
 }

@@ -25,7 +25,6 @@ import (
 
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/utils"
 )
 
 // TestRunFailsToStartTabletManager tests the code path in 'run' where we fail to start the TabletManager
@@ -43,15 +42,16 @@ func TestRunFailsToStartTabletManager(t *testing.T) {
 		os.Args = append([]string{}, args...)
 	})
 
-	flags := make(map[string]string)
-	utils.SetFlagVariantsForTests(flags, "--topo-implementation", "test")
-	utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", "localhost")
-	utils.SetFlagVariantsForTests(flags, "--topo-global-root", "cell")
-	utils.SetFlagVariantsForTests(flags, "--db-host", "localhost")
-	utils.SetFlagVariantsForTests(flags, "--db-port", "3306")
-	utils.SetFlagVariantsForTests(flags, "--init-keyspace", "ks")
-	utils.SetFlagVariantsForTests(flags, "--init-shard", "0")
-	utils.SetFlagVariantsForTests(flags, "--init-tablet-type", "replica")
+	flags := map[string]string{
+		"--topo-implementation":        "test",
+		"--topo-global-server-address": "localhost",
+		"--topo-global-root":           "cell",
+		"--db-host":                    "localhost",
+		"--db-port":                    "3306",
+		"--init-keyspace":              "ks",
+		"--init-shard":                 "0",
+		"--init-tablet-type":           "replica",
+	}
 
 	var flagArgs []string
 	for flag, value := range flags {

@@ -6,6 +6,8 @@
     - **[New default versions](#new-default-versions)**
         - [Upgrade to MySQL 8.4](#upgrade-to-mysql-8.4)
 - **[Minor Changes](#minor-changes)**
+    - **[Deprecations](#deprecations)**
+        - [Metrics](#deprecated-metrics)
     - **[Deletions](#deletions)**
         - [Metrics](#deleted-metrics)
     - **[New Metrics](#new-metrics)**
@@ -14,12 +16,15 @@
     - **[Topology](#minor-changes-topo)**
         - [`--consul_auth_static_file` requires 1 or more credentials](#consul_auth_static_file-check-creds)
     - **[VTOrc](#minor-changes-vtorc)**
+        - [Aggregated Discovery Metrics HTTP API removed](#aggregated-discovery-metrics-api-removed)
         - [Dynamic control of `EmergencyReparentShard`-based recoveries](#vtorc-dynamic-ers-disabled)
         - [Recovery stats to include keyspace/shard](#recoveries-stats-keyspace-shard)
+        - [`/api/replication-analysis` HTTP API deprecation](#replication-analysis-api-deprecation)
     - **[VTTablet](#minor-changes-vttablet)**
         - [CLI Flags](#flags-vttablet)
         - [Managed MySQL configuration defaults to caching-sha2-password](#mysql-caching-sha2-password) 
         - [MySQL timezone environment propagation](#mysql-timezone-env)
+        - [gRPC `tabletmanager` client error changes](#grpctmclient-err-changes)
     - **[Docker](#docker)**
 
 ## <a id="major-changes"/>Major Changes</a>
@@ -47,6 +52,14 @@ VTGate also advertises MySQL version `8.4.6` by default instead of `8.0.40`. If 
 > This is only needed once when going from the latest `8.0.x` to `8.4.x`. Once you're on `8.4.x`, it is possible to upgrade and downgrade between `8.4.x` versions without needing to run `innodb_fast_shutdown=0`.
 
 ## <a id="minor-changes"/>Minor Changes</a>
+
+### <a id="deprecations"/>Deprecations</a>
+
+#### <a id="deprecated-metrics"/>Metrics</a>
+
+| Component |        Metric Name        | Notes                                  |                     Deprecation PR                      |
+|:---------:|:-------------------------:|:--------------------------------------:|:-------------------------------------------------------:|
+| `vtorc`   | `DiscoverInstanceTimings` | Replaced by `DiscoveryInstanceTimings` | [#18406](https://github.com/vitessio/vitess/pull/18406) |
 
 ### <a id="deletions"/>Deletions</a>
 
@@ -81,6 +94,12 @@ The `--consul_auth_static_file` flag used in several components now requires tha
 
 ### <a id="minor-changes-vtorc"/>VTOrc</a>
 
+#### <a id="aggregated-discovery-metrics-api-removed"/>Aggregated Discovery Metrics HTTP API removed</a>
+
+VTOrc's undocumented `/api/aggregated-discovery-metrics` HTTP API endpoint was removed. The list of documented VTOrc APIs can be found [here](https://vitess.io/docs/current/reference/vtorc/ui_api_metrics/#apis).
+
+We recommend using the standard VTOrc metrics to gather the same metrics. If you find that a metric is missing in standard metrics, please open an issue or PR to address this.
+
 #### <a id="vtorc-dynamic-ers-disabled"/>Dynamic control of `EmergencyReparentShard`-based recoveries</a>
 
 **Note: disabling `EmergencyReparentShard`-based recoveries introduces availability risks; please use with extreme caution! If you rely on this functionality often, for example in automation, this may be signs of an anti-pattern. If so, please open an issue to discuss supporting your use case natively in VTOrc.**
@@ -98,6 +117,10 @@ The following recovery-related stats now include labels for keyspaces and shards
 4. `SuccessfulRecoveries`
 
 Previous to this release, only the recovery "type" was included in labels.
+
+#### <a id="replication-analysis-api-deprecation"/>`/api/replication-analysis` HTTP API deprecation</a>
+
+The `/api/replication-analysis` HTTP API endpoint is now deprecated and is replaced with `/api/detection-analysis`, which currently returns the same response format.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
@@ -122,6 +145,10 @@ In future Vitess versions, the `mysql_native_password` authentication plugin wil
 Fixed a bug where environment variables like `TZ` were not propagated from mysqlctl to the mysqld process.
 As a result, timezone settings from the environment were previously ignored. Now mysqld correctly inherits environment variables.
 ⚠️ Deployments that relied on the old behavior and explicitly set a non-UTC timezone may see changes in how DATETIME values are interpreted. To preserve compatibility, set `TZ=UTC` explicitly in MySQL pods.
+
+#### <a id="grpctmclient-err-changes"/>gRPC `tabletmanager` client error changes</a>
+
+The `vttablet` gRPC `tabletmanager` client now returns errors wrapped by the internal `go/vt/vterrors` package. External automation relying on google-gRPC error codes should now use `vterrors.Code(err)` to inspect the code of an error, which returns `vtrpcpb.Code`s defined in [the `proto/vtrpc.proto` protobuf](https://github.com/vitessio/vitess/blob/main/proto/vtrpc.proto#L60).
 
 ### <a id="docker"/>Docker</a>
 

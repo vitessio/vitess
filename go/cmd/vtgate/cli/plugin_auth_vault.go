@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/vault"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtgate"
 )
 
@@ -38,15 +39,15 @@ var (
 )
 
 func init() {
-	Main.Flags().StringVar(&vaultAddr, "mysql_auth_vault_addr", "", "URL to Vault server")
-	Main.Flags().DurationVar(&vaultTimeout, "mysql_auth_vault_timeout", 10*time.Second, "Timeout for vault API operations")
-	Main.Flags().StringVar(&vaultCACert, "mysql_auth_vault_tls_ca", "", "Path to CA PEM for validating Vault server certificate")
-	Main.Flags().StringVar(&vaultPath, "mysql_auth_vault_path", "", "Vault path to vtgate credentials JSON blob, e.g.: secret/data/prod/vtgatecreds")
-	Main.Flags().DurationVar(&vaultCacheTTL, "mysql_auth_vault_ttl", 30*time.Minute, "How long to cache vtgate credentials from the Vault server")
-	Main.Flags().StringVar(&vaultTokenFile, "mysql_auth_vault_tokenfile", "", "Path to file containing Vault auth token; token can also be passed using VAULT_TOKEN environment variable")
-	Main.Flags().StringVar(&vaultRoleID, "mysql_auth_vault_roleid", "", "Vault AppRole id; can also be passed using VAULT_ROLEID environment variable")
-	Main.Flags().StringVar(&vaultRoleSecretIDFile, "mysql_auth_vault_role_secretidfile", "", "Path to file containing Vault AppRole secret_id; can also be passed using VAULT_SECRETID environment variable")
-	Main.Flags().StringVar(&vaultRoleMountPoint, "mysql_auth_vault_role_mountpoint", "approle", "Vault AppRole mountpoint; can also be passed using VAULT_MOUNTPOINT environment variable")
+	utils.SetFlagStringVar(Main.Flags(), &vaultAddr, "mysql-auth-vault-addr", "", "URL to Vault server")
+	utils.SetFlagDurationVar(Main.Flags(), &vaultTimeout, "mysql-auth-vault-timeout", 10*time.Second, "Timeout for vault API operations")
+	utils.SetFlagStringVar(Main.Flags(), &vaultCACert, "mysql-auth-vault-tls-ca", "", "Path to CA PEM for validating Vault server certificate")
+	utils.SetFlagStringVar(Main.Flags(), &vaultPath, "mysql-auth-vault-path", "", "Vault path to vtgate credentials JSON blob, e.g.: secret/data/prod/vtgatecreds")
+	utils.SetFlagDurationVar(Main.Flags(), &vaultCacheTTL, "mysql-auth-vault-ttl", 30*time.Minute, "How long to cache vtgate credentials from the Vault server")
+	utils.SetFlagStringVar(Main.Flags(), &vaultTokenFile, "mysql-auth-vault-tokenfile", "", "Path to file containing Vault auth token; token can also be passed using VAULT_TOKEN environment variable")
+	utils.SetFlagStringVar(Main.Flags(), &vaultRoleID, "mysql-auth-vault-roleid", "", "Vault AppRole id; can also be passed using VAULT_ROLEID environment variable")
+	utils.SetFlagStringVar(Main.Flags(), &vaultRoleSecretIDFile, "mysql-auth-vault-role-secretidfile", "", "Path to file containing Vault AppRole secret_id; can also be passed using VAULT_SECRETID environment variable")
+	utils.SetFlagStringVar(Main.Flags(), &vaultRoleMountPoint, "mysql-auth-vault-role-mountpoint", "approle", "Vault AppRole mountpoint; can also be passed using VAULT_MOUNTPOINT environment variable")
 
 	vtgate.RegisterPluginInitializer(func() {
 		vault.InitAuthServerVault(vaultAddr, vaultTimeout, vaultCACert, vaultPath, vaultCacheTTL, vaultTokenFile, vaultRoleID, vaultRoleSecretIDFile, vaultRoleMountPoint)

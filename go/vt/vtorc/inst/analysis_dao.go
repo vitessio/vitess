@@ -57,17 +57,17 @@ type clusterAnalysis struct {
 	durability         policy.Durabler
 }
 
-// GetReplicationAnalysis will check for replication problems (dead primary; unreachable primary; etc)
-func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAnalysisHints) ([]*ReplicationAnalysis, error) {
-	result := make([]*ReplicationAnalysis, 0)
-	appendAnalysis := func(analysis *ReplicationAnalysis) {
+// GetDetectionAnalysis will check for detected problems (dead primary; unreachable primary; etc)
+func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysisHints) ([]*DetectionAnalysis, error) {
+	var result []*DetectionAnalysis
+	appendAnalysis := func(analysis *DetectionAnalysis) {
 		if analysis.Analysis == NoProblem && len(analysis.StructureAnalysis) == 0 {
 			return
 		}
 		result = append(result, analysis)
 	}
 
-	// TODO(sougou); deprecate ReduceReplicationAnalysisCount
+	// TODO(sougou); deprecate ReduceDetectionAnalysisCount
 	args := sqlutils.Args(config.GetReasonableReplicationLagSeconds(), ValidSecondsFromSeenToLastAttemptedCheck(), config.GetReasonableReplicationLagSeconds(), keyspace, shard)
 	query := `SELECT
 		vitess_tablet.info AS tablet_info,
@@ -280,7 +280,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 
 	clusters := make(map[string]*clusterAnalysis)
 	err := db.Db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
-		a := &ReplicationAnalysis{
+		a := &DetectionAnalysis{
 			Analysis: NoProblem,
 		}
 
@@ -369,17 +369,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 
 		if !a.LastCheckValid {
 			analysisMessage := fmt.Sprintf("analysis: Alias: %+v, Keyspace: %+v, Shard: %+v, IsPrimary: %+v, LastCheckValid: %+v, LastCheckPartialSuccess: %+v, CountReplicas: %+v, CountValidReplicas: %+v, CountValidReplicatingReplicas: %+v, CountLaggingReplicas: %+v, CountDelayedReplicas: %+v",
-				topoproto.TabletAliasString(a.AnalyzedInstanceAlias),
-				a.AnalyzedKeyspace,
-				a.AnalyzedShard,
-				a.IsPrimary,
-				a.LastCheckValid,
-				a.LastCheckPartialSuccess,
-				a.CountReplicas,
-				a.CountValidReplicas,
-				a.CountValidReplicatingReplicas,
-				a.CountLaggingReplicas,
-				a.CountDelayedReplicas,
+				a.AnalyzedInstanceAlias, a.AnalyzedKeyspace, a.AnalyzedShard, a.IsPrimary, a.LastCheckValid, a.LastCheckPartialSuccess, a.CountReplicas, a.CountValidReplicas, a.CountValidReplicatingReplicas, a.CountLaggingReplicas, a.CountDelayedReplicas,
 			)
 			if util.ClearToLog("analysis_dao", analysisMessage) {
 				log.Infof(analysisMessage)
@@ -416,9 +406,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			// We failed to load the durability policy, so we shouldn't run any analysis
 			return nil
 		}
-
 		isInvalid := m.GetBool("is_invalid")
-
 		switch {
 		case a.IsClusterPrimary && isInvalid:
 			a.Analysis = InvalidPrimary
@@ -434,31 +422,39 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			a.Analysis = DeadPrimaryWithoutReplicas
 			a.Description = "Primary cannot be reached by vtorc and has no replica"
 			ca.hasShardWideAction = true
+			//
 		case a.IsClusterPrimary && !a.LastCheckValid && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0:
 			a.Analysis = DeadPrimary
 			a.Description = "Primary cannot be reached by vtorc and none of its replicas is replicating"
 			ca.hasShardWideAction = true
+			//
 		case a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicas == 0 && a.CountValidReplicatingReplicas == 0:
 			a.Analysis = DeadPrimaryAndReplicas
 			a.Description = "Primary cannot be reached by vtorc and none of its replicas is replicating"
 			ca.hasShardWideAction = true
+			//
 		case a.IsClusterPrimary && !a.LastCheckValid && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0:
 			a.Analysis = DeadPrimaryAndSomeReplicas
 			a.Description = "Primary cannot be reached by vtorc; some of its replicas are unreachable and none of its reachable replicas is replicating"
 			ca.hasShardWideAction = true
+			//
 		case a.IsClusterPrimary && !a.IsPrimary:
 			a.Analysis = PrimaryHasPrimary
 			a.Description = "Primary is replicating from somewhere else"
 			ca.hasShardWideAction = true
+			//
 		case a.IsClusterPrimary && a.IsReadOnly:
 			a.Analysis = PrimaryIsReadOnly
 			a.Description = "Primary is read-only"
+			//
 		case a.IsClusterPrimary && policy.SemiSyncAckers(ca.durability, tablet) != 0 && !a.SemiSyncPrimaryEnabled:
 			a.Analysis = PrimarySemiSyncMustBeSet
 			a.Description = "Primary semi-sync must be set"
+			//
 		case a.IsClusterPrimary && policy.SemiSyncAckers(ca.durability, tablet) == 0 && a.SemiSyncPrimaryEnabled:
 			a.Analysis = PrimarySemiSyncMustNotBeSet
 			a.Description = "Primary semi-sync must not be set"
+			//
 		case a.IsClusterPrimary && a.CurrentTabletType != topodatapb.TabletType_UNKNOWN && a.CurrentTabletType != topodatapb.TabletType_PRIMARY:
 			a.Analysis = PrimaryCurrentTypeMismatch
 			a.Description = "Primary tablet's current type is not PRIMARY"
@@ -486,21 +482,27 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		case topo.IsReplicaType(a.TabletType) && !a.IsReadOnly:
 			a.Analysis = ReplicaIsWritable
 			a.Description = "Replica is writable"
+			//
 		case topo.IsReplicaType(a.TabletType) && a.IsPrimary:
 			a.Analysis = NotConnectedToPrimary
 			a.Description = "Not connected to the primary"
+			//
 		case topo.IsReplicaType(a.TabletType) && !a.IsPrimary && math.Round(a.HeartbeatInterval*2) != float64(a.ReplicaNetTimeout):
 			a.Analysis = ReplicaMisconfigured
 			a.Description = "Replica has been misconfigured"
+			//
 		case topo.IsReplicaType(a.TabletType) && !a.IsPrimary && ca.primaryAlias != nil && !topoproto.TabletAliasEqual(a.AnalyzedInstancePrimaryAlias, ca.primaryAlias):
 			a.Analysis = ConnectedToWrongPrimary
 			a.Description = "Connected to wrong primary"
+			//
 		case topo.IsReplicaType(a.TabletType) && !a.IsPrimary && a.ReplicationStopped:
 			a.Analysis = ReplicationStopped
 			a.Description = "Replication is stopped"
+			//
 		case topo.IsReplicaType(a.TabletType) && !a.IsPrimary && policy.IsReplicaSemiSync(ca.durability, primaryTablet, tablet) && !a.SemiSyncReplicaEnabled:
 			a.Analysis = ReplicaSemiSyncMustBeSet
 			a.Description = "Replica semi-sync must be set"
+			//
 		case topo.IsReplicaType(a.TabletType) && !a.IsPrimary && !policy.IsReplicaSemiSync(ca.durability, primaryTablet, tablet) && a.SemiSyncReplicaEnabled:
 			a.Analysis = ReplicaSemiSyncMustNotBeSet
 			a.Description = "Replica semi-sync must not be set"
@@ -509,10 +511,17 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		case a.IsPrimary && !a.LastCheckValid && a.CountLaggingReplicas == a.CountReplicas && a.CountDelayedReplicas < a.CountReplicas && a.CountValidReplicatingReplicas > 0:
 			a.Analysis = UnreachablePrimaryWithLaggingReplicas
 			a.Description = "Primary cannot be reached by vtorc and all of its replicas are lagging"
-		case a.IsPrimary && !a.LastCheckValid && !a.LastCheckPartialSuccess && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas > 0:
+			//
+		case a.IsPrimary && !a.LastCheckValid && !a.LastCheckPartialSuccess && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == a.CountValidReplicas:
 			// partial success is here to reduce noise
 			a.Analysis = UnreachablePrimary
-			a.Description = "Primary cannot be reached by vtorc but it has replicating replicas; possibly a network/host issue"
+			a.Description = "Primary cannot be reached by vtorc but all of its replicas seem to be replicating; possibly a network/host issue"
+			//
+		case a.IsPrimary && !a.LastCheckValid && !a.LastCheckPartialSuccess && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas > 0 && a.CountValidReplicatingReplicas < a.CountValidReplicas:
+			// partial success is here to reduce noise
+			a.Analysis = UnreachablePrimaryWithBrokenReplicas
+			a.Description = "Primary cannot be reached by vtorc but it has (some, but not all) replicating replicas; possibly a network/host issue"
+			//
 		case a.IsPrimary && a.SemiSyncPrimaryEnabled && a.SemiSyncPrimaryStatus && a.SemiSyncPrimaryWaitForReplicaCount > 0 && a.SemiSyncPrimaryClients < a.SemiSyncPrimaryWaitForReplicaCount:
 			if isStaleBinlogCoordinates {
 				a.Analysis = LockedSemiSyncPrimary
@@ -521,21 +530,26 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 				a.Analysis = LockedSemiSyncPrimaryHypothesis
 				a.Description = "Semi sync primary seems to be locked, more samplings needed to validate"
 			}
+			//
 		case a.IsPrimary && a.LastCheckValid && a.CountReplicas == 1 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0:
 			a.Analysis = PrimarySingleReplicaNotReplicating
 			a.Description = "Primary is reachable but its single replica is not replicating"
 		case a.IsPrimary && a.LastCheckValid && a.CountReplicas == 1 && a.CountValidReplicas == 0:
 			a.Analysis = PrimarySingleReplicaDead
 			a.Description = "Primary is reachable but its single replica is dead"
+			//
 		case a.IsPrimary && a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0:
 			a.Analysis = AllPrimaryReplicasNotReplicating
 			a.Description = "Primary is reachable but none of its replicas is replicating"
+			//
 		case a.IsPrimary && a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0:
 			a.Analysis = AllPrimaryReplicasNotReplicatingOrDead
 			a.Description = "Primary is reachable but none of its replicas is replicating"
+			//
 			// case a.IsPrimary && a.CountReplicas == 0:
 			//	a.Analysis = PrimaryWithoutReplicas
 			//	a.Description = "Primary has no replicas"
+			// }
 		}
 
 		{
@@ -593,12 +607,12 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 	if err != nil {
 		log.Error(err)
 	}
-	// TODO: result, err = getConcensusReplicationAnalysis(result)
+	// TODO: result, err = getConcensusDetectionAnalysis(result)
 	return result, err
 }
 
 // postProcessAnalyses is used to update different analyses based on the information gleaned from looking at all the analyses together instead of individual data.
-func postProcessAnalyses(result []*ReplicationAnalysis, clusters map[string]*clusterAnalysis) []*ReplicationAnalysis {
+func postProcessAnalyses(result []*DetectionAnalysis, clusters map[string]*clusterAnalysis) []*DetectionAnalysis {
 	for {
 		// Store whether we have changed the result of replication analysis or not.
 		resultChanged := false
