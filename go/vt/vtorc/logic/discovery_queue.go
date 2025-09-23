@@ -44,14 +44,14 @@ type queueItem struct {
 // DiscoveryQueue is an ordered queue with deduplication.
 type DiscoveryQueue struct {
 	mu       sync.Mutex
-	enqueued map[*topodatapb.TabletAlias]struct{}
+	enqueued map[string]struct{}
 	queue    chan queueItem
 }
 
 // NewDiscoveryQueue creates a new queue.
 func NewDiscoveryQueue() *DiscoveryQueue {
 	return &DiscoveryQueue{
-		enqueued: make(map[*topodatapb.TabletAlias]struct{}),
+		enqueued: make(map[string]struct{}),
 		queue:    make(chan queueItem, config.DiscoveryQueueCapacity),
 	}
 }
@@ -62,9 +62,10 @@ func (q *DiscoveryQueue) setKeyCheckEnqueued(tabletAlias *topodatapb.TabletAlias
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	_, alreadyEnqueued = q.enqueued[tabletAlias]
+	tabletAliasString := topoproto.TabletAliasString(tabletAlias)
+	_, alreadyEnqueued = q.enqueued[tabletAliasString]
 	if !alreadyEnqueued {
-		q.enqueued[tabletAlias] = struct{}{}
+		q.enqueued[tabletAliasString] = struct{}{}
 	}
 	return alreadyEnqueued
 }
@@ -111,5 +112,5 @@ func (q *DiscoveryQueue) Release(tabletAlias *topodatapb.TabletAlias) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	delete(q.enqueued, tabletAlias)
+	delete(q.enqueued, topoproto.TabletAliasString(tabletAlias))
 }
