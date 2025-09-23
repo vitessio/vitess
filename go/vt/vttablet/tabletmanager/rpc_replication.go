@@ -309,6 +309,35 @@ func (tm *TabletManager) StartReplication(ctx context.Context, semiSync bool) er
 	return tm.MysqlDaemon.StartReplication(ctx, tm.hookExtraEnv())
 }
 
+// RestartReplication will stop replication and then start it again
+func (tm *TabletManager) RestartReplication(ctx context.Context, semiSync bool) error {
+	log.Infof("RestartReplication")
+	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
+		return err
+	}
+	if err := tm.lock(ctx); err != nil {
+		return err
+	}
+	defer tm.unlock()
+
+	// Stop replication first
+	if err := tm.stopReplicationLocked(ctx); err != nil {
+		return err
+	}
+
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
+	if err != nil {
+		return err
+	}
+
+	if err := tm.fixSemiSync(ctx, tm.Tablet().Type, semiSyncAction); err != nil {
+		return err
+	}
+
+	// Start replication
+	return tm.MysqlDaemon.StartReplication(ctx, tm.hookExtraEnv())
+}
+
 // StartReplicationUntilAfter will start the replication and let it catch up
 // until and including the transactions in `position`
 func (tm *TabletManager) StartReplicationUntilAfter(ctx context.Context, position string, waitTime time.Duration) error {

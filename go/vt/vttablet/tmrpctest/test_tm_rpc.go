@@ -1039,6 +1039,26 @@ func (fra *fakeRPCTM) StartReplication(ctx context.Context, semiSync bool) error
 	return nil
 }
 
+var testRestartReplicationCalled = false
+
+func (fra *fakeRPCTM) RestartReplication(ctx context.Context, semiSync bool) error {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	testRestartReplicationCalled = true
+	return nil
+}
+
+func tmRPCTestRestartReplication(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	err := client.RestartReplication(ctx, tablet, false)
+	compareError(t, "RestartReplication", err, true, testRestartReplicationCalled)
+}
+
+func tmRPCTestRestartReplicationPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	err := client.RestartReplication(ctx, tablet, false)
+	expectHandleRPCPanic(t, "RestartReplication", true /*verbose*/, err)
+}
+
 func tmRPCTestStartReplication(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.StartReplication(ctx, tablet, false)
 	compareError(t, "StartReplication", err, true, testStartReplicationCalled)
@@ -1580,6 +1600,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestStopReplication(ctx, t, client, tablet)
 	tmRPCTestStopReplicationMinimum(ctx, t, client, tablet)
 	tmRPCTestStartReplication(ctx, t, client, tablet)
+	tmRPCTestRestartReplication(ctx, t, client, tablet)
 	tmRPCTestStartReplicationUntilAfter(ctx, t, client, tablet)
 	tmRPCTestGetReplicas(ctx, t, client, tablet)
 
@@ -1643,6 +1664,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestStopReplicationPanic(ctx, t, client, tablet)
 	tmRPCTestStopReplicationMinimumPanic(ctx, t, client, tablet)
 	tmRPCTestStartReplicationPanic(ctx, t, client, tablet)
+	tmRPCTestRestartReplicationPanic(ctx, t, client, tablet)
 	tmRPCTestGetReplicasPanic(ctx, t, client, tablet)
 	// VReplication methods
 	tmRPCTestVReplicationExecPanic(ctx, t, client, tablet)

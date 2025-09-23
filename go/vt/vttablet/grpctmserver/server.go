@@ -427,6 +427,13 @@ func (s *server) StartReplication(ctx context.Context, request *tabletmanagerdat
 	return response, s.tm.StartReplication(ctx, request.GetSemiSync())
 }
 
+func (s *server) RestartReplication(ctx context.Context, request *tabletmanagerdatapb.RestartReplicationRequest) (response *tabletmanagerdatapb.RestartReplicationResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "RestartReplication", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.RestartReplicationResponse{}
+	return response, s.tm.RestartReplication(ctx, request.GetSemiSync())
+}
+
 func (s *server) StartReplicationUntilAfter(ctx context.Context, request *tabletmanagerdatapb.StartReplicationUntilAfterRequest) (response *tabletmanagerdatapb.StartReplicationUntilAfterResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "StartReplication", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)

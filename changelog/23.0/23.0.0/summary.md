@@ -21,6 +21,7 @@
         - [Recovery stats to include keyspace/shard](#recoveries-stats-keyspace-shard)
         - [`/api/replication-analysis` HTTP API deprecation](#replication-analysis-api-deprecation)
     - **[VTTablet](#minor-changes-vttablet)**
+        - [API Changes](#api-changes)
         - [CLI Flags](#flags-vttablet)
         - [Managed MySQL configuration defaults to caching-sha2-password](#mysql-caching-sha2-password) 
         - [MySQL timezone environment propagation](#mysql-timezone-env)
@@ -123,6 +124,10 @@ Previous to this release, only the recovery "type" was included in labels.
 The `/api/replication-analysis` HTTP API endpoint is now deprecated and is replaced with `/api/detection-analysis`, which currently returns the same response format.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
+
+#### <a id="api-changes"/>API Changes</a>
+
+- Added `RestartReplication` method to `TabletManagerClient` interface. This new RPC allows stopping and restarting MySQL replication with semi-sync configuration in a single call, providing a convenient alternative to separate `StopReplication` and `StartReplication` calls.
 
 #### <a id="flags-vttablet"/>CLI Flags</a>
 
