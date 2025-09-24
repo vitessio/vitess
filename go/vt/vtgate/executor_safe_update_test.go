@@ -172,46 +172,38 @@ func TestSafeUpdateWithoutPrepare(t *testing.T) {
 		expected bool
 	}{
 		{
-			name:     "UPDATE statement without WHERE clause",
-			sql:      "UPDATE users SET name='John'",
-			expected: false,
+			name: "UPDATE statement without WHERE clause",
+			sql:  "UPDATE users SET name='John'",
 		},
 		// Multi-table UPDATE test cases
 		{
-			name:     "Multi-table UPDATE without WHERE clause",
-			sql:      "UPDATE users u, orders o SET u.name='John', o.status='processed'",
-			expected: false,
+			name: "Multi-table UPDATE without WHERE clause",
+			sql:  "UPDATE users u, orders o SET u.name='John', o.status='processed'",
 		},
 		{
-			name:     "JOIN multi-table UPDATE without WHERE clause",
-			sql:      "UPDATE users u JOIN orders o ON u.id=o.user_id SET u.name='John'",
-			expected: false,
+			name: "JOIN multi-table UPDATE without WHERE clause",
+			sql:  "UPDATE users u JOIN orders o ON u.id=o.user_id SET u.name='John'",
 		},
 		{
-			name:     "JOIN multi-table UPDATE without WHERE clause",
-			sql:      "UPDATE users u JOIN orders o USING(id) SET u.name='John'",
-			expected: false,
+			name: "JOIN multi-table UPDATE without WHERE clause",
+			sql:  "UPDATE users u JOIN orders o USING(id) SET u.name='John'",
 		},
 		// Multi-table DELETE test cases
 		{
-			name:     "Multi-table DELETE without WHERE clause",
-			sql:      "DELETE u, o FROM users u, orders o",
-			expected: false,
+			name: "Multi-table DELETE without WHERE clause",
+			sql:  "DELETE u, o FROM users u, orders o",
 		},
 		{
-			name:     "JOIN multi-table DELETE without WHERE clause",
-			sql:      "DELETE u, o FROM users u JOIN orders o ON u.id=o.user_id",
-			expected: false,
+			name: "JOIN multi-table DELETE without WHERE clause",
+			sql:  "DELETE u, o FROM users u JOIN orders o ON u.id=o.user_id",
 		},
 		{
-			name:     "JOIN multi-table DELETE without WHERE clause",
-			sql:      "DELETE u, o FROM users u join orders o USING(id);",
-			expected: false,
+			name: "JOIN multi-table DELETE without WHERE clause",
+			sql:  "DELETE u, o FROM users u join orders o USING(id);",
 		},
 		{
-			name:     "Single table DELETE without WHERE clause",
-			sql:      "DELETE FROM users",
-			expected: false,
+			name: "Single table DELETE without WHERE clause",
+			sql:  "DELETE FROM users",
 		},
 	}
 
@@ -277,46 +269,38 @@ func TestSafeUpdateWithPrepare(t *testing.T) {
 		expected bool
 	}{
 		{
-			name:     "UPDATE statement without WHERE clause",
-			sql:      "UPDATE users SET name='John'",
-			expected: false,
+			name: "UPDATE statement without WHERE clause",
+			sql:  "UPDATE users SET name='John'",
 		},
 		// Multi-table UPDATE test cases
 		{
-			name:     "Multi-table UPDATE without WHERE clause",
-			sql:      "UPDATE users u, orders o SET u.name='John', o.status='processed'",
-			expected: false,
+			name: "Multi-table UPDATE without WHERE clause",
+			sql:  "UPDATE users u, orders o SET u.name='John', o.status='processed'",
 		},
 		{
-			name:     "JOIN multi-table UPDATE without WHERE clause",
-			sql:      "UPDATE users u JOIN orders o ON u.id=o.user_id SET u.name='John'",
-			expected: false,
+			name: "JOIN multi-table UPDATE without WHERE clause",
+			sql:  "UPDATE users u JOIN orders o ON u.id=o.user_id SET u.name='John'",
 		},
 		{
-			name:     "JOIN multi-table UPDATE without WHERE clause",
-			sql:      "UPDATE users u JOIN orders o USING(id) SET u.name='John'",
-			expected: false,
+			name: "JOIN multi-table UPDATE without WHERE clause",
+			sql:  "UPDATE users u JOIN orders o USING(id) SET u.name='John'",
 		},
 		// Multi-table DELETE test cases
 		{
-			name:     "Multi-table DELETE without WHERE clause",
-			sql:      "DELETE u, o FROM users u, orders o",
-			expected: false,
+			name: "Multi-table DELETE without WHERE clause",
+			sql:  "DELETE u, o FROM users u, orders o",
 		},
 		{
-			name:     "JOIN multi-table DELETE without WHERE clause",
-			sql:      "DELETE u, o FROM users u JOIN orders o ON u.id=o.user_id",
-			expected: false,
+			name: "JOIN multi-table DELETE without WHERE clause",
+			sql:  "DELETE u, o FROM users u JOIN orders o ON u.id=o.user_id",
 		},
 		{
-			name:     "JOIN multi-table DELETE without WHERE clause",
-			sql:      "DELETE u, o FROM users u join orders o USING(id);",
-			expected: false,
+			name: "JOIN multi-table DELETE without WHERE clause",
+			sql:  "DELETE u, o FROM users u join orders o USING(id);",
 		},
 		{
-			name:     "Single table DELETE without WHERE clause",
-			sql:      "DELETE FROM users",
-			expected: false,
+			name: "Single table DELETE without WHERE clause",
+			sql:  "DELETE FROM users",
 		},
 	}
 
