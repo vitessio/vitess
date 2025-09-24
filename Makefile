@@ -322,7 +322,7 @@ define build_docker_image
 	fi
 endef
 
-DOCKER_LITE_SUFFIX = mysql84 percona80
+DOCKER_LITE_SUFFIX = mysql80 percona80
 DOCKER_LITE_TARGETS = $(addprefix docker_lite_,$(DOCKER_LITE_SUFFIX))
 $(DOCKER_LITE_TARGETS): docker_lite_%:
 	${call build_docker_image,docker/lite/Dockerfile.$*,vitess/lite:$*}
