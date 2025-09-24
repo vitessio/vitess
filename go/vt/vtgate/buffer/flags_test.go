@@ -21,8 +21,6 @@ import (
 	"testing"
 
 	"github.com/spf13/pflag"
-
-	"vitess.io/vitess/go/vt/utils"
 )
 
 func TestVerifyFlags(t *testing.T) {
@@ -42,16 +40,16 @@ func TestVerifyFlags(t *testing.T) {
 	// Verify that the non-allowed (non-trivial) flag combinations are caught.
 	defer resetFlagsForTesting()
 
-	parse([]string{utils.GetFlagVariantForTests("--buffer-keyspace-shards"), "ks1/0"})
+	parse([]string{"--buffer-keyspace-shards", "ks1/0"})
 	if err := verifyFlags(); err == nil || !strings.Contains(err.Error(), "also requires that") {
-		t.Fatalf("List of shards requires --enable_buffer. err: %v", err)
+		t.Fatalf("List of shards requires --enable-buffer. err: %v", err)
 	}
 
 	resetFlagsForTesting()
 
 	parse([]string{
-		"--enable_buffer",
-		utils.GetFlagVariantForTests("--enable-buffer-dry-run"),
+		"--enable-buffer",
+		"--enable-buffer-dry-run",
 	})
 	if err := verifyFlags(); err == nil || !strings.Contains(err.Error(), "To avoid ambiguity") {
 		t.Fatalf("Dry-run and non-dry-run mode together require an explicit list of shards for actual buffering. err: %v", err)
@@ -60,8 +58,8 @@ func TestVerifyFlags(t *testing.T) {
 	resetFlagsForTesting()
 
 	parse([]string{
-		"--enable_buffer",
-		utils.GetFlagVariantForTests("--buffer-keyspace-shards"), "ks1//0",
+		"--enable-buffer",
+		"--buffer-keyspace-shards", "ks1//0",
 	})
 	if err := verifyFlags(); err == nil || !strings.Contains(err.Error(), "invalid shard path") {
 		t.Fatalf("Invalid shard names are not allowed. err: %v", err)
@@ -70,8 +68,8 @@ func TestVerifyFlags(t *testing.T) {
 	resetFlagsForTesting()
 
 	parse([]string{
-		"--enable_buffer",
-		utils.GetFlagVariantForTests("--buffer-keyspace-shards"), "ks1,ks1/0",
+		"--enable-buffer",
+		"--buffer-keyspace-shards", "ks1,ks1/0",
 	})
 	if err := verifyFlags(); err == nil || !strings.Contains(err.Error(), "has overlapping entries") {
 		t.Fatalf("Listed keyspaces and shards must not overlap. err: %v", err)

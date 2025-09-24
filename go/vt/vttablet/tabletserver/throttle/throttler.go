@@ -66,6 +66,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/utils"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/heartbeat"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -76,6 +77,7 @@ import (
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -217,7 +219,7 @@ type ThrottlerStatus struct {
 }
 
 // NewThrottler creates a Throttler
-func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, heartbeatWriter heartbeat.HeartbeatWriter, tabletTypeFunc func() topodatapb.TabletType) *Throttler {
+func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, heartbeatWriter heartbeat.HeartbeatWriter, tabletTypeFunc func() topodatapb.TabletType, connectionPoolName string) *Throttler {
 	throttler := &Throttler{
 		tabletAlias:     tabletAlias,
 		env:             env,
@@ -225,7 +227,7 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 		srvTopoServer:   srvTopoServer,
 		ts:              ts,
 		heartbeatWriter: heartbeatWriter,
-		pool: connpool.NewPool(env, "ThrottlerPool", tabletenv.ConnPoolConfig{
+		pool: connpool.NewPool(env, connectionPoolName, tabletenv.ConnPoolConfig{
 			Size:        2,
 			IdleTimeout: env.Config().OltpReadPool.IdleTimeout,
 		}),
@@ -905,7 +907,13 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, probe 
 		req := &tabletmanagerdatapb.CheckThrottlerRequest{} // We leave AppName empty; it will default to VitessName anyway, and we can save some proto space
 		resp, gRPCErr := tmClient.CheckThrottler(ctx, probe.Tablet, req)
 		if gRPCErr != nil {
-			return metricsWithError(fmt.Errorf("gRPC error accessing tablet %v. Err=%w", probe.Alias, gRPCErr))
+			if vtErrCode := vterrors.Code(gRPCErr); vtErrCode != vtrpcpb.Code_UNKNOWN {
+				gRPCErr = vterrors.Errorf(vtErrCode, "gRPC error accessing tablet %v. Err=%s", probe.Alias, gRPCErr.Error())
+			} else {
+				// TODO: remove after v24+ when all errors are vterrors/vtrpc-based
+				gRPCErr = fmt.Errorf("gRPC error accessing tablet %v. Err=%w", probe.Alias, gRPCErr)
+			}
+			return metricsWithError(gRPCErr)
 		}
 		throttleMetric.Value = resp.Value
 		if resp.ResponseCode == tabletmanagerdatapb.CheckThrottlerResponseCode_INTERNAL_ERROR {

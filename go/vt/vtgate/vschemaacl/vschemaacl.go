@@ -64,7 +64,7 @@ var (
 	AuthorizedDDLUsers = viperutil.Configure(
 		"vschema_ddl_authorized_users",
 		viperutil.Options[*authorizedDDLUsers]{
-			FlagName: "vschema_ddl_authorized_users",
+			FlagName: "vschema-ddl-authorized-users",
 			Default:  &authorizedDDLUsers{},
 			Dynamic:  true,
 			GetFunc: func(v *viper.Viper) func(key string) *authorizedDDLUsers {
@@ -87,7 +87,7 @@ var (
 // calls this function, or call this function directly before parsing
 // command-line arguments.
 func RegisterSchemaACLFlags(fs *pflag.FlagSet) {
-	fs.String("vschema_ddl_authorized_users", "", "List of users authorized to execute vschema ddl operations, or '%' to allow all users.")
+	fs.String("vschema-ddl-authorized-users", "", "List of users authorized to execute vschema ddl operations, or '%' to allow all users.")
 	viperutil.BindFlags(fs, AuthorizedDDLUsers)
 }
 

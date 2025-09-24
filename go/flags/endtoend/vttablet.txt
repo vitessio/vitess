@@ -57,12 +57,12 @@ Flags:
       --backup-storage-number-blocks int                                 if backup-storage-compress is true, backup-storage-number-blocks sets the number of blocks that can be processed, in parallel, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
       --bind-address string                                              Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
       --binlog-in-memory-decompressor-max-size uint                      This value sets the uncompressed transaction payload size at which we switch from in-memory buffer based decompression to the slower streaming mode. (default 134217728)
+      --binlog-player-grpc-ca string                                     the server ca to use to validate servers when connecting
+      --binlog-player-grpc-cert string                                   the cert to use to connect
+      --binlog-player-grpc-crl string                                    the server crl to use to validate server certificates when connecting
+      --binlog-player-grpc-key string                                    the key to use to connect
+      --binlog-player-grpc-server-name string                            the server name to use to validate server certificate
       --binlog-player-protocol string                                    the protocol to download binlogs from a vttablet (default "grpc")
-      --binlog_player_grpc_ca string                                     the server ca to use to validate servers when connecting
-      --binlog_player_grpc_cert string                                   the cert to use to connect
-      --binlog_player_grpc_crl string                                    the server crl to use to validate server certificates when connecting
-      --binlog_player_grpc_key string                                    the key to use to connect
-      --binlog_player_grpc_server_name string                            the server name to use to validate server certificate
       --builtinbackup-file-read-buffer-size uint                         read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.
       --builtinbackup-file-write-buffer-size uint                        write files using an IO buffer of this many bytes. Golang defaults are used when set to 0. (default 2097152)
       --builtinbackup-incremental-restore-path string                    the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.
@@ -152,9 +152,9 @@ Flags:
       --external-compressor string                                       command with arguments to use when compressing a backup.
       --external-compressor-extension string                             extension to use when using an external compressor.
       --external-decompressor string                                     command with arguments to use when decompressing a backup.
-      --file_backup_storage_root string                                  Root directory for the file backup storage.
+      --file-backup-storage-root string                                  Root directory for the file backup storage.
       --filecustomrules string                                           file based custom rule path
-      --filecustomrules_watch                                            set up a watch on the target file and reload query rules when it changes
+      --filecustomrules-watch                                            set up a watch on the target file and reload query rules when it changes
       --gc-check-interval duration                                       Interval between garbage collection checks (default 1h0m0s)
       --gc-purge-check-interval duration                                 Interval between purge discovery checks (default 1m0s)
       --gcs-backup-storage-bucket string                                 Google Cloud Storage bucket to use for backups.
@@ -210,11 +210,11 @@ Flags:
       --lock-tables-timeout duration                                     How long to keep the table locked before timing out (default 1m0s)
       --lock-timeout duration                                            Maximum time to wait when attempting to acquire a lock from the topo server (default 45s)
       --log-err-stacks                                                   log stack traces for errors
+      --log-queries                                                      Enable query logging to syslog.
       --log-queries-to-file string                                       Enable query logging to the specified file
       --log-rotate-max-size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --log_backtrace_at traceLocations                                  when logging hits line file:N, emit a stack trace
       --log_dir string                                                   If non-empty, write log files in this directory
-      --log_queries                                                      Enable query logging to syslog.
       --logtostderr                                                      log to standard error instead of files
       --manifest-external-decompressor string                            command with arguments to store in the backup manifest when compressing a backup with an external compression engine.
       --max-concurrent-online-ddl int                                    Maximum number of online DDL changes that may run concurrently (default 256)
@@ -259,6 +259,7 @@ Flags:
       --publish-retry-interval duration                                  how long vttablet waits to retry publishing the tablet record (default 30s)
       --purge-logs-interval duration                                     how often try to remove old logs (default 1h0m0s)
       --query-log-stream-handler string                                  URL handler for streaming queries log (default "/debug/querylog")
+      --query-throttler-config-refresh-interval duration                 How frequently to refresh configuration for the query throttler (default 1m0s)
       --querylog-emit-on-any-condition-met                               Emit to query log when any of the conditions (row-threshold, time-threshold, filter-tag) is met (default false)
       --querylog-filter-tag string                                       string that must be present in the query for it to be logged; if using a value as the tag, you need to disable query normalization
       --querylog-format string                                           format for query logs ("text" or "json") (default "text")
@@ -338,14 +339,15 @@ Flags:
       --stats-common-tags strings                                        Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
       --stats-drop-variables string                                      Variables to be dropped from the list of exported variables.
       --stats-emit-period duration                                       Interval between emitting stats to all registered backends (default 1m0s)
-      --statsd_address string                                            Address for statsd client
-      --statsd_sample_rate float                                         Sample rate for statsd metrics (default 1)
+      --statsd-address string                                            Address for statsd client
+      --statsd-sample-rate float                                         Sample rate for statsd metrics (default 1)
       --stderrthreshold severityFlag                                     logs at or above this threshold go to stderr (default 1)
       --stream-health-buffer-size uint                                   max streaming health entries to buffer per streaming health client (default 20)
       --table-acl-config string                                          path to table access checker config file; send SIGHUP to reload this file
       --table-acl-config-reload-interval duration                        Ticker to reload ACLs. Duration flag, format e.g.: 30s. Default: do not reload
       --table-gc-lifecycle string                                        States for a DROP TABLE garbage collection cycle. Default is 'hold,purge,evac,drop', use any subset ('drop' implicitly always included) (default "hold,purge,evac,drop")
       --table-refresh-interval int                                       interval in milliseconds to refresh tables in status page with refreshRequired class
+      --tablet-config string                                             YAML file config for tablet
       --tablet-dir string                                                The directory within the vtdataroot to store vttablet/mysql files. Defaults to being generated by the tablet uid.
       --tablet-grpc-ca string                                            the server ca to use to validate servers when connecting
       --tablet-grpc-cert string                                          the cert to use to connect
@@ -363,7 +365,6 @@ Flags:
       --tablet-manager-protocol string                                   Protocol to use to make tabletmanager RPCs to vttablets. (default "grpc")
       --tablet-path string                                               tablet alias
       --tablet-protocol string                                           Protocol to use to make queryservice RPCs to vttablets. (default "grpc")
-      --tablet_config string                                             YAML file config for tablet
       --throttle-tablet-types string                                     Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' always implicitly included (default "replica")
       --topo-consul-lock-delay duration                                  LockDelay for consul session. (default 15s)
       --topo-consul-lock-session-checks string                           List of checks for consul session. (default "serfHealth")
@@ -383,8 +384,8 @@ Flags:
       --topo-zk-tls-ca string                                            the server ca to use to validate servers when connecting to the zk topo server
       --topo-zk-tls-cert string                                          the cert to use to connect to the zk topo server, requires topo-zk-tls-key, enables TLS
       --topo-zk-tls-key string                                           the key to use to connect to the zk topo server, enables TLS
-      --topocustomrule_cell string                                       topo cell for customrules file. (default "global")
-      --topocustomrule_path string                                       path for customrules file. Disabled if empty.
+      --topocustomrule-cell string                                       topo cell for customrules file. (default "global")
+      --topocustomrule-path string                                       path for customrules file. Disabled if empty.
       --tracer string                                                    tracing service to use (default "noop")
       --tracing-enable-logging                                           whether to enable logging in the tracing service
       --tracing-sampling-rate float                                      sampling rate for the probabilistic jaeger sampler (default 0.1)

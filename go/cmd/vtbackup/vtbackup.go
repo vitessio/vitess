@@ -20,11 +20,13 @@ import (
 	"vitess.io/vitess/go/cmd/vtbackup/cli"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 func main() {
 	defer exit.Recover()
 
+	cli.Main.SetGlobalNormalizationFunc(utils.NormalizeUnderscoresToDashes)
 	if err := cli.Main.Execute(); err != nil {
 		log.Error(err)
 		exit.Return(1)
