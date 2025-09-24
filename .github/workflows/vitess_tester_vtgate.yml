@@ -62,7 +62,7 @@ jobs:
 
     - name: Set up Go
       if: steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
+      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
       with:
         go-version-file: go.mod
 
@@ -76,9 +76,14 @@ jobs:
         # Limit local port range to not use ports that overlap with server side
         # ports that we listen on.
         sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
+
         # Increase the asynchronous non-blocking I/O. More information at https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_use_native_aio
         echo "fs.aio-max-nr = 1048576" | sudo tee -a /etc/sysctl.conf
         sudo sysctl -p /etc/sysctl.conf
+
+        # Don't waste a bunch of time processing man-db triggers
+        echo "set man-db/auto-update false" | sudo debconf-communicate
+        sudo dpkg-reconfigure man-db
 
     - name: Get dependencies
       if: steps.changes.outputs.end_to_end == 'true'

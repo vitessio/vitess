@@ -108,7 +108,7 @@ func TestAnalysisEntriesHaveSameRecovery(t *testing.T) {
 	t.Parallel()
 	for _, tt := range tests {
 		t.Run(string(tt.prevAnalysisCode)+","+string(tt.newAnalysisCode), func(t *testing.T) {
-			res := analysisEntriesHaveSameRecovery(&inst.ReplicationAnalysis{Analysis: tt.prevAnalysisCode}, &inst.ReplicationAnalysis{Analysis: tt.newAnalysisCode})
+			res := analysisEntriesHaveSameRecovery(&inst.DetectionAnalysis{Analysis: tt.prevAnalysisCode}, &inst.DetectionAnalysis{Analysis: tt.newAnalysisCode})
 			require.Equal(t, tt.shouldBeEqual, res)
 		})
 	}
@@ -138,7 +138,7 @@ func TestElectNewPrimaryPanic(t *testing.T) {
 	}
 	err = inst.SaveTablet(tablet)
 	require.NoError(t, err)
-	analysisEntry := &inst.ReplicationAnalysis{
+	analysisEntry := &inst.DetectionAnalysis{
 		AnalyzedInstanceAlias: topoproto.TabletAliasString(tablet.Alias),
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -188,11 +188,11 @@ func TestRecoveryRegistration(t *testing.T) {
 	require.NoError(t, err)
 	err = inst.SaveTablet(replica)
 	require.NoError(t, err)
-	primaryAnalysisEntry := inst.ReplicationAnalysis{
+	primaryAnalysisEntry := inst.DetectionAnalysis{
 		AnalyzedInstanceAlias: topoproto.TabletAliasString(primary.Alias),
 		Analysis:              inst.ReplicationStopped,
 	}
-	replicaAnalysisEntry := inst.ReplicationAnalysis{
+	replicaAnalysisEntry := inst.DetectionAnalysis{
 		AnalyzedInstanceAlias: topoproto.TabletAliasString(replica.Alias),
 		Analysis:              inst.DeadPrimary,
 	}
@@ -223,14 +223,14 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		name                         string
 		ersEnabled                   bool
 		convertTabletWithErrantGTIDs bool
-		analysisEntry                *inst.ReplicationAnalysis
+		analysisEntry                *inst.DetectionAnalysis
 		wantRecoveryFunction         recoveryFunction
 		wantRecoverySkipCode         RecoverySkipCode
 	}{
 		{
 			name:       "DeadPrimary with ERS enabled",
 			ersEnabled: true,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.DeadPrimary,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
@@ -239,7 +239,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		}, {
 			name:       "DeadPrimary with ERS disabled",
 			ersEnabled: false,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.DeadPrimary,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
@@ -249,7 +249,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		}, {
 			name:       "StalledDiskPrimary with ERS enabled",
 			ersEnabled: true,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.PrimaryDiskStalled,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
@@ -258,7 +258,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		}, {
 			name:       "StalledDiskPrimary with ERS disabled",
 			ersEnabled: false,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.PrimaryDiskStalled,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
@@ -268,7 +268,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		}, {
 			name:       "PrimarySemiSyncBlocked with ERS enabled",
 			ersEnabled: true,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.PrimarySemiSyncBlocked,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
@@ -277,7 +277,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		}, {
 			name:       "PrimarySemiSyncBlocked with ERS disabled",
 			ersEnabled: false,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.PrimarySemiSyncBlocked,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
@@ -287,7 +287,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		}, {
 			name:       "PrimaryTabletDeleted with ERS enabled",
 			ersEnabled: true,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.PrimaryTabletDeleted,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
@@ -296,7 +296,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		}, {
 			name:       "PrimaryTabletDeleted with ERS disabled",
 			ersEnabled: false,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.PrimaryTabletDeleted,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
@@ -306,7 +306,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		}, {
 			name:       "PrimaryHasPrimary",
 			ersEnabled: false,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.PrimaryHasPrimary,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
@@ -315,7 +315,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		}, {
 			name:       "ClusterHasNoPrimary",
 			ersEnabled: false,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.ClusterHasNoPrimary,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
@@ -324,7 +324,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		}, {
 			name:       "ReplicationStopped",
 			ersEnabled: false,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.ReplicationStopped,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
@@ -333,7 +333,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		}, {
 			name:       "PrimarySemiSyncMustBeSet",
 			ersEnabled: false,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.PrimarySemiSyncMustBeSet,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
@@ -343,7 +343,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			name:                         "ErrantGTIDDetected",
 			ersEnabled:                   false,
 			convertTabletWithErrantGTIDs: true,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.ErrantGTIDDetected,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
@@ -353,7 +353,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			name:                         "ErrantGTIDDetected with --change-tablets-with-errant-gtid-to-drained false",
 			ersEnabled:                   false,
 			convertTabletWithErrantGTIDs: false,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.ErrantGTIDDetected,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
@@ -363,7 +363,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		}, {
 			name:       "DeadPrimary with global ERS enabled and keyspace ERS disabled",
 			ersEnabled: true,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.DeadPrimary,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
@@ -374,7 +374,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		}, {
 			name:       "DeadPrimary with global+keyspace ERS enabled and shard ERS disabled",
 			ersEnabled: true,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:                               inst.DeadPrimary,
 				AnalyzedKeyspace:                       keyspace,
 				AnalyzedShard:                          shard,
@@ -385,7 +385,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		}, {
 			name:       "UnreachablePrimary",
 			ersEnabled: true,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:                               inst.UnreachablePrimary,
 				AnalyzedKeyspace:                       keyspace,
 				AnalyzedShard:                          shard,
@@ -395,7 +395,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		}, {
 			name:       "UnreachablePrimaryWithBrokenReplicas",
 			ersEnabled: true,
-			analysisEntry: &inst.ReplicationAnalysis{
+			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:                               inst.UnreachablePrimaryWithBrokenReplicas,
 				AnalyzedKeyspace:                       keyspace,
 				AnalyzedShard:                          shard,
@@ -507,7 +507,7 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 			// set replication analysis in Vtorc DB.
 			db.Db = test.NewTestDB([][]sqlutils.RowMap{rowMaps})
 
-			err := recheckPrimaryHealth(&inst.ReplicationAnalysis{
+			err := recheckPrimaryHealth(&inst.DetectionAnalysis{
 				AnalyzedInstanceAlias: "zon1-0000000100",
 				Analysis:              inst.ReplicationStopped,
 				AnalyzedKeyspace:      "ks",

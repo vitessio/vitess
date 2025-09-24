@@ -76,14 +76,14 @@ func TestDownPrimary(t *testing.T) {
 	// check that the replication is setup correctly before we failover
 	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{rdonly, replica, crossCellReplica}, 10*time.Second)
 	// since all tablets are up and running, InstancePollSecondsExceeded should have `0` zero value
-	utils.WaitForInstancePollSecondsExceededCount(t, vtOrcProcess, "InstancePollSecondsExceeded", 0, true)
+	utils.WaitForInstancePollSecondsExceededCount(t, vtOrcProcess, 0, true)
 	// Make the rdonly vttablet unavailable
 	err := rdonly.VttabletProcess.TearDown()
 	require.NoError(t, err)
 	err = rdonly.MysqlctlProcess.Stop()
 	require.NoError(t, err)
 	// We have bunch of Vttablets down. Therefore we expect at least 1 occurrence of InstancePollSecondsExceeded
-	utils.WaitForInstancePollSecondsExceededCount(t, vtOrcProcess, "InstancePollSecondsExceeded", 1, false)
+	utils.WaitForInstancePollSecondsExceededCount(t, vtOrcProcess, 1, false)
 	// Make the current primary vttablet unavailable.
 	err = curPrimary.VttabletProcess.TearDown()
 	require.NoError(t, err)
@@ -370,7 +370,7 @@ func TestDeadPrimaryRecoversImmediately(t *testing.T) {
 
 	// check that the replica gets promoted
 	utils.CheckPrimaryTablet(t, clusterInfo, replica, true)
-	utils.WaitForInstancePollSecondsExceededCount(t, vtOrcProcess, "InstancePollSecondsExceeded", 2, false)
+	utils.WaitForInstancePollSecondsExceededCount(t, vtOrcProcess, 2, false)
 	// also check that the replication is working correctly after failover
 	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{crossCellReplica}, 10*time.Second)
 	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)

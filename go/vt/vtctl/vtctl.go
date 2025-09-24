@@ -3908,7 +3908,7 @@ func commandGenerateShardRanges(ctx context.Context, wr *wrangler.Wrangler, subF
 		return err
 	}
 
-	shardRanges, err := key.GenerateShardRanges(*numShards)
+	shardRanges, err := key.GenerateShardRanges(*numShards, 0)
 	if err != nil {
 		return err
 	}

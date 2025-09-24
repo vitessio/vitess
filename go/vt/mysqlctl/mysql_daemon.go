@@ -112,6 +112,8 @@ type MysqlDaemon interface {
 	GetDbaConnection(ctx context.Context) (*dbconnpool.DBConnection, error)
 	// GetAllPrivsConnection returns an allprivs connection (for user with all privileges except SUPER).
 	GetAllPrivsConnection(ctx context.Context) (*dbconnpool.DBConnection, error)
+	// GetFilteredConnection returns an filtered connection for use primarily in VReplication.
+	GetFilteredConnection(ctx context.Context) (*dbconnpool.DBConnection, error)
 
 	// GetVersionString returns the database version as a string
 	GetVersionString(ctx context.Context) (string, error)

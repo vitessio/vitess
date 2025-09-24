@@ -1244,6 +1244,11 @@ func (mysqld *Mysqld) GetAllPrivsConnection(ctx context.Context) (*dbconnpool.DB
 	return dbconnpool.NewDBConnection(ctx, mysqld.dbcfgs.AllPrivsWithDB())
 }
 
+// GetFilteredConnection creates a new DBConnection as the vt_filtered user, used primarily in VReplication.
+func (mysqld *Mysqld) GetFilteredConnection(ctx context.Context) (*dbconnpool.DBConnection, error) {
+	return dbconnpool.NewDBConnection(ctx, mysqld.dbcfgs.FilteredWithDB())
+}
+
 // Close will close this instance of Mysqld. It will wait for all dba
 // queries to be finished.
 func (mysqld *Mysqld) Close() {
