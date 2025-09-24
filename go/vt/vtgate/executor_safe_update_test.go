@@ -18,8 +18,12 @@ package vtgate
 
 import (
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"testing"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/sqlparser"
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 )
 
 func TestIsValidUpdateQuery(t *testing.T) {
@@ -156,6 +160,216 @@ func TestIsValidUpdateQuery(t *testing.T) {
 			}
 
 			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// TestSafeUpdateWithoutPrepare test prepare safe-update mode
+func TestSafeUpdateWithoutPrepare(t *testing.T) {
+	tests := []struct {
+		name     string
+		sql      string
+		expected bool
+	}{
+		{
+			name:     "UPDATE statement without WHERE clause",
+			sql:      "UPDATE users SET name='John'",
+			expected: false,
+		},
+		// Multi-table UPDATE test cases
+		{
+			name:     "Multi-table UPDATE without WHERE clause",
+			sql:      "UPDATE users u, orders o SET u.name='John', o.status='processed'",
+			expected: false,
+		},
+		{
+			name:     "JOIN multi-table UPDATE without WHERE clause",
+			sql:      "UPDATE users u JOIN orders o ON u.id=o.user_id SET u.name='John'",
+			expected: false,
+		},
+		{
+			name:     "JOIN multi-table UPDATE without WHERE clause",
+			sql:      "UPDATE users u JOIN orders o USING(id) SET u.name='John'",
+			expected: false,
+		},
+		// Multi-table DELETE test cases
+		{
+			name:     "Multi-table DELETE without WHERE clause",
+			sql:      "DELETE u, o FROM users u, orders o",
+			expected: false,
+		},
+		{
+			name:     "JOIN multi-table DELETE without WHERE clause",
+			sql:      "DELETE u, o FROM users u JOIN orders o ON u.id=o.user_id",
+			expected: false,
+		},
+		{
+			name:     "JOIN multi-table DELETE without WHERE clause",
+			sql:      "DELETE u, o FROM users u join orders o USING(id);",
+			expected: false,
+		},
+		{
+			name:     "Single table DELETE without WHERE clause",
+			sql:      "DELETE FROM users",
+			expected: false,
+		},
+	}
+
+	executorEnv, _, _, _, ctx := createExecutorEnv(t)
+	executorEnv.vConfig.SafeUpdateMode = true
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			session := econtext.NewSafeSession(&vtgatepb.Session{
+				InTransaction: true,
+				TargetString:  "@primary",
+			})
+
+			_, err := executorExecSession(ctx, executorEnv, session,
+				tt.sql, nil)
+			require.Errorf(t, err, "You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column.")
+		})
+
+		t.Run(tt.name, func(t *testing.T) {
+			session := econtext.NewSafeSession(&vtgatepb.Session{
+				InTransaction: false,
+				TargetString:  "@primary",
+			})
+
+			_, err := executorExecSession(ctx, executorEnv, session,
+				tt.sql, nil)
+			require.Errorf(t, err, "You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column.")
+		})
+	}
+
+	executorEnv.vConfig.SafeUpdateMode = false
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			session := econtext.NewSafeSession(&vtgatepb.Session{
+				InTransaction: true,
+				TargetString:  "@primary",
+			})
+
+			_, err := executorExecSession(ctx, executorEnv, session,
+				tt.sql, nil)
+			require.Errorf(t, err, "table users not found")
+		})
+
+		t.Run(tt.name, func(t *testing.T) {
+			session := econtext.NewSafeSession(&vtgatepb.Session{
+				InTransaction: false,
+				TargetString:  "@primary",
+			})
+
+			_, err := executorExecSession(ctx, executorEnv, session,
+				tt.sql, nil)
+			require.Errorf(t, err, "table users not found")
+		})
+	}
+}
+
+// TestUpdateInsertWithPrepare test prepare safe-update mode
+func TestSafeUpdateWithPrepare(t *testing.T) {
+	tests := []struct {
+		name     string
+		sql      string
+		expected bool
+	}{
+		{
+			name:     "UPDATE statement without WHERE clause",
+			sql:      "UPDATE users SET name='John'",
+			expected: false,
+		},
+		// Multi-table UPDATE test cases
+		{
+			name:     "Multi-table UPDATE without WHERE clause",
+			sql:      "UPDATE users u, orders o SET u.name='John', o.status='processed'",
+			expected: false,
+		},
+		{
+			name:     "JOIN multi-table UPDATE without WHERE clause",
+			sql:      "UPDATE users u JOIN orders o ON u.id=o.user_id SET u.name='John'",
+			expected: false,
+		},
+		{
+			name:     "JOIN multi-table UPDATE without WHERE clause",
+			sql:      "UPDATE users u JOIN orders o USING(id) SET u.name='John'",
+			expected: false,
+		},
+		// Multi-table DELETE test cases
+		{
+			name:     "Multi-table DELETE without WHERE clause",
+			sql:      "DELETE u, o FROM users u, orders o",
+			expected: false,
+		},
+		{
+			name:     "JOIN multi-table DELETE without WHERE clause",
+			sql:      "DELETE u, o FROM users u JOIN orders o ON u.id=o.user_id",
+			expected: false,
+		},
+		{
+			name:     "JOIN multi-table DELETE without WHERE clause",
+			sql:      "DELETE u, o FROM users u join orders o USING(id);",
+			expected: false,
+		},
+		{
+			name:     "Single table DELETE without WHERE clause",
+			sql:      "DELETE FROM users",
+			expected: false,
+		},
+	}
+
+	executorEnv, _, _, _, ctx := createExecutorEnv(t)
+	executorEnv.vConfig.SafeUpdateMode = true
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			session := econtext.NewSafeSession(&vtgatepb.Session{
+				InTransaction: true,
+				TargetString:  "@primary",
+			})
+
+			_, err := executorExecSession(ctx, executorEnv, session,
+				tt.sql, map[string]*querypb.BindVariable{})
+			require.Errorf(t, err, "You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column.")
+		})
+
+		t.Run(tt.name, func(t *testing.T) {
+			session := econtext.NewSafeSession(&vtgatepb.Session{
+				InTransaction: false,
+				TargetString:  "@primary",
+			})
+
+			_, err := executorExecSession(ctx, executorEnv, session,
+				tt.sql, map[string]*querypb.BindVariable{})
+			require.Errorf(t, err, "You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column.")
+		})
+	}
+
+	executorEnv.vConfig.SafeUpdateMode = false
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			session := econtext.NewSafeSession(&vtgatepb.Session{
+				InTransaction: true,
+				TargetString:  "@primary",
+			})
+
+			_, err := executorExecSession(ctx, executorEnv, session,
+				tt.sql, map[string]*querypb.BindVariable{})
+			require.Errorf(t, err, "table users not found")
+		})
+
+		t.Run(tt.name, func(t *testing.T) {
+			session := econtext.NewSafeSession(&vtgatepb.Session{
+				InTransaction: false,
+				TargetString:  "@primary",
+			})
+
+			_, err := executorExecSession(ctx, executorEnv, session,
+				tt.sql, map[string]*querypb.BindVariable{})
+			require.Errorf(t, err, "table users not found")
 		})
 	}
 }
