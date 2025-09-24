@@ -79,15 +79,6 @@ var (
 		},
 	)
 
-	snapshotTopologyInterval = viperutil.Configure(
-		"snapshot-topology-interval",
-		viperutil.Options[time.Duration]{
-			FlagName: "snapshot-topology-interval",
-			Default:  0 * time.Hour,
-			Dynamic:  true,
-		},
-	)
-
 	reasonableReplicationLag = viperutil.Configure(
 		"reasonable-replication-lag",
 		viperutil.Options[time.Duration]{
@@ -233,7 +224,6 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.Int("discovery-workers", discoveryWorkers.Default(), "Number of workers used for tablet discovery")
 	fs.String("sqlite-data-file", sqliteDataFile.Default(), "SQLite Datafile to use as VTOrc's database")
 	fs.Duration("instance-poll-time", instancePollTime.Default(), "Timer duration on which VTOrc refreshes MySQL information")
-	fs.Duration("snapshot-topology-interval", snapshotTopologyInterval.Default(), "Timer duration on which VTOrc takes a snapshot of the current MySQL information it has in the database. Should be in multiple of hours")
 	fs.Duration("reasonable-replication-lag", reasonableReplicationLag.Default(), "Maximum replication lag on replicas which is deemed to be acceptable")
 	fs.String("audit-file-location", auditFileLocation.Default(), "File location where the audit logs are to be stored")
 	fs.Bool("audit-to-backend", auditToBackend.Default(), "Whether to store the audit log in the VTOrc database")
@@ -256,7 +246,6 @@ func registerFlags(fs *pflag.FlagSet) {
 		preventCrossCellFailover,
 		discoveryWorkers,
 		sqliteDataFile,
-		snapshotTopologyInterval,
 		reasonableReplicationLag,
 		auditFileLocation,
 		auditToBackend,
@@ -308,11 +297,6 @@ func GetSQLiteDataFile() string {
 // GetReasonableReplicationLagSeconds gets the reasonable replication lag but in seconds.
 func GetReasonableReplicationLagSeconds() int64 {
 	return int64(reasonableReplicationLag.Get() / time.Second)
-}
-
-// GetSnapshotTopologyInterval is a getter function.
-func GetSnapshotTopologyInterval() time.Duration {
-	return snapshotTopologyInterval.Get()
 }
 
 // GetAuditFileLocation is a getter function.

@@ -21,7 +21,6 @@ var TableNames = []string{
 	"audit",
 	"node_health",
 	"topology_recovery",
-	"database_instance_topology_history",
 	"recovery_detection",
 	"database_instance_last_analysis",
 	"database_instance_analysis_changelog",
@@ -164,25 +163,6 @@ CREATE TABLE topology_recovery (
 )`,
 	`
 CREATE INDEX start_recovery_idx_topology_recovery ON topology_recovery (start_recovery)
-	`,
-	`
-DROP TABLE IF EXISTS database_instance_topology_history
-`,
-	`
-CREATE TABLE database_instance_topology_history (
-	snapshot_unix_timestamp int NOT NULL,
-	alias varchar(256) NOT NULL,
-	hostname varchar(128) NOT NULL,
-	port smallint NOT NULL,
-	source_host varchar(128) NOT NULL,
-	source_port smallint NOT NULL,
-	keyspace varchar(128) NOT NULL,
-	shard varchar(128) NOT NULL,
-	version varchar(128) not null default '',
-	PRIMARY KEY (snapshot_unix_timestamp, alias)
-)`,
-	`
-CREATE INDEX keyspace_shard_idx_database_instance_topology_history ON database_instance_topology_history (snapshot_unix_timestamp, keyspace, shard)
 	`,
 	`
 DROP TABLE IF EXISTS recovery_detection
