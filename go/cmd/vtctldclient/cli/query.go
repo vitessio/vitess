@@ -20,6 +20,7 @@ import (
 	"io"
 
 	"github.com/olekukonko/tablewriter"
+	"github.com/olekukonko/tablewriter/tw"
 
 	"vitess.io/vitess/go/sqltypes"
 )
@@ -31,7 +32,9 @@ func WriteQueryResultTable(w io.Writer, qr *sqltypes.Result) {
 		return
 	}
 
-	table := tablewriter.NewWriter(w)
+	table := tablewriter.NewTable(w,
+		tablewriter.WithSymbols(tw.NewSymbols(tw.StyleASCII)),
+	)
 
 	header := make([]any, 0, len(qr.Fields))
 	for _, field := range qr.Fields {
