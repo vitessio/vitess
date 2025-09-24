@@ -20,17 +20,14 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"reflect"
 	"runtime/pprof"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/test/utils"
@@ -113,16 +110,25 @@ func TestVStreamSkew(t *testing.T) {
 				vgtid.ShardGtids = append(vgtid.ShardGtids, &binlogdatapb.ShardGtid{Keyspace: ks, Gtid: "pos", Shard: "20-40"})
 				go stream(sbc1, ks, "20-40", tcase.numEventsPerShard, tcase.shard1idx)
 			}
-			ch := startVStream(ctx, t, vsm, vgtid, &vtgatepb.VStreamFlags{MinimizeSkew: true})
-			var receivedEvents []*binlogdatapb.VEvent
-			for len(receivedEvents) < int(want) {
-				select {
-				case <-time.After(1 * time.Minute):
-					require.FailNow(t, "test timed out")
-				case response := <-ch:
-					receivedEvents = append(receivedEvents, response.Events...)
+
+			vstreamCtx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+			defer cancel()
+
+			receivedEvents := make([]*binlogdatapb.VEvent, 0)
+			err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{MinimizeSkew: true}, func(events []*binlogdatapb.VEvent) error {
+				receivedEvents = append(receivedEvents, events...)
+
+				if int64(len(receivedEvents)) == want {
+					// Stop streaming after receiving both expected responses.
+					cancel()
 				}
-			}
+
+				return nil
+			})
+
+			require.Error(t, err)
+			require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
+
 			require.Equal(t, int(want), int(len(receivedEvents)))
 			require.Equal(t, tcase.expectedDelays, vsm.GetTotalStreamDelay()-previousDelays)
 			previousDelays = vsm.GetTotalStreamDelay()
@@ -187,23 +193,23 @@ func TestVStreamEventsExcludeKeyspaceFromTableName(t *testing.T) {
 			Gtid:     "pos",
 		}},
 	}
-	ch := make(chan *binlogdatapb.VStreamResponse)
-	go func() {
-		err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{ExcludeKeyspaceFromTableName: true}, func(events []*binlogdatapb.VEvent) error {
-			ch <- &binlogdatapb.VStreamResponse{Events: events}
-			return nil
-		})
-		wantErr := "context canceled"
-		if err == nil || !strings.Contains(err.Error(), wantErr) {
-			t.Errorf("vstream end: %v, must contain %v", err.Error(), wantErr)
-		}
-		ch <- nil
-	}()
-	verifyEvents(t, ch, want1, want2)
 
-	// Ensure the go func error return was verified.
-	cancel()
-	<-ch
+	receivedResponses := make([]*binlogdatapb.VStreamResponse, 0)
+	err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{ExcludeKeyspaceFromTableName: true}, func(events []*binlogdatapb.VEvent) error {
+		receivedResponses = append(receivedResponses, &binlogdatapb.VStreamResponse{Events: events})
+
+		if len(receivedResponses) == 2 {
+			// Stop streaming after receiving both expected responses.
+			cancel()
+		}
+
+		return nil
+	})
+
+	require.Error(t, err)
+	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
+
+	require.ElementsMatch(t, []*binlogdatapb.VStreamResponse{want1, want2}, receivedResponses)
 }
 
 func TestVStreamEvents(t *testing.T) {
@@ -262,23 +268,23 @@ func TestVStreamEvents(t *testing.T) {
 			Gtid:     "pos",
 		}},
 	}
-	ch := make(chan *binlogdatapb.VStreamResponse)
-	go func() {
-		err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
-			ch <- &binlogdatapb.VStreamResponse{Events: events}
-			return nil
-		})
-		wantErr := "context canceled"
-		if err == nil || !strings.Contains(err.Error(), wantErr) {
-			t.Errorf("vstream end: %v, must contain %v", err.Error(), wantErr)
-		}
-		ch <- nil
-	}()
-	verifyEvents(t, ch, want1, want2)
 
-	// Ensure the go func error return was verified.
-	cancel()
-	<-ch
+	receivedEvents := make([]*binlogdatapb.VStreamResponse, 0)
+	err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
+		receivedEvents = append(receivedEvents, &binlogdatapb.VStreamResponse{Events: events})
+
+		if len(receivedEvents) == 2 {
+			// Stop streaming after receiving both expected responses.
+			cancel()
+		}
+
+		return nil
+	})
+
+	require.Error(t, err)
+	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
+
+	require.ElementsMatch(t, []*binlogdatapb.VStreamResponse{want1, want2}, receivedEvents)
 }
 
 func BenchmarkVStreamEvents(b *testing.B) {
@@ -339,53 +345,34 @@ func BenchmarkVStreamEvents(b *testing.B) {
 					Gtid:     "pos",
 				}},
 			}
-			start := make(chan struct{})
-			ch := make(chan *binlogdatapb.VStreamResponse)
-			go func() {
-				close(start)
-				err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil,
-					&vtgatepb.VStreamFlags{ExcludeKeyspaceFromTableName: tt.excludeKeyspaceFromTableName}, func(events []*binlogdatapb.VEvent) error {
-						ch <- &binlogdatapb.VStreamResponse{Events: events}
-						return nil
-					})
-				wantErr := "context canceled"
-				if err == nil || !strings.Contains(err.Error(), wantErr) {
-					b.Errorf("vstream end: %v, must contain %v", err.Error(), wantErr)
-				}
-				ch <- nil
-			}()
 
-			// Start the timer when the VStream begins
-			<-start
+			// Start the timer and CPU profile after all setup is done
 			b.ResetTimer()
 			if os.Getenv("PROFILE_CPU") == "true" {
 				pprof.StartCPUProfile(f)
 			}
 
 			received := 0
-			for {
-				resp := <-ch
-				if resp == nil {
-					close(ch)
-					break
-				}
-				received += len(resp.Events)
+			err = vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{ExcludeKeyspaceFromTableName: tt.excludeKeyspaceFromTableName}, func(events []*binlogdatapb.VEvent) error {
+				received += len(events)
+
 				if received >= totalEvents {
-					b.Logf("Received events %d, expected total %d", received, totalEvents)
-					b.StopTimer()
-					if os.Getenv("PROFILE_CPU") == "true" {
-						pprof.StopCPUProfile()
-					}
 					cancel()
 				}
+
+				return nil
+			})
+
+			b.Logf("Received events %d, expected total %d", received, totalEvents)
+			b.StopTimer()
+			if os.Getenv("PROFILE_CPU") == "true" {
+				pprof.StopCPUProfile()
 			}
 
-			if received < totalEvents {
-				b.Errorf("expected at least %d events, got %d", totalEvents, received)
-			}
+			require.Error(b, err)
+			require.ErrorIs(b, vterrors.UnwrapAll(err), context.Canceled)
 
-			cancel()
-			<-ch
+			require.GreaterOrEqual(b, received, totalEvents)
 		})
 	}
 }
@@ -415,7 +402,6 @@ func TestVStreamChunks(t *testing.T) {
 
 	rowEncountered := false
 	doneCounting := false
-	var rowCount, ddlCount atomic.Int32
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: ks,
@@ -427,7 +413,10 @@ func TestVStreamChunks(t *testing.T) {
 			Gtid:     "pos",
 		}},
 	}
-	_ = vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
+
+	var rowCount, ddlCount int
+
+	err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
 		switch events[0].Type {
 		case binlogdatapb.VEventType_ROW:
 			if doneCounting {
@@ -435,30 +424,39 @@ func TestVStreamChunks(t *testing.T) {
 				return fmt.Errorf("unexpected event: %v", events[0])
 			}
 			rowEncountered = true
-			rowCount.Add(1)
+			rowCount += 1
+
 		case binlogdatapb.VEventType_COMMIT:
 			if !rowEncountered {
 				t.Errorf("Unexpected event, COMMIT after non-rows: %v", events[0])
 				return fmt.Errorf("unexpected event: %v", events[0])
 			}
 			doneCounting = true
+
 		case binlogdatapb.VEventType_DDL:
 			if !doneCounting && rowEncountered {
 				t.Errorf("Unexpected event, DDL during ROW events: %v", events[0])
 				return fmt.Errorf("unexpected event: %v", events[0])
 			}
-			ddlCount.Add(1)
+			ddlCount += 1
+
 		default:
 			t.Errorf("Unexpected event: %v", events[0])
 			return fmt.Errorf("unexpected event: %v", events[0])
 		}
-		if rowCount.Load() == int32(100) && ddlCount.Load() == int32(100) {
+
+		if rowCount == 100 && ddlCount == 100 {
 			cancel()
 		}
+
 		return nil
 	})
-	assert.Equal(t, int32(100), rowCount.Load())
-	assert.Equal(t, int32(100), ddlCount.Load())
+
+	require.Error(t, err)
+	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
+
+	require.Equal(t, 100, rowCount)
+	require.Equal(t, 100, ddlCount)
 }
 
 func TestVStreamMulti(t *testing.T) {
@@ -498,15 +496,31 @@ func TestVStreamMulti(t *testing.T) {
 			Gtid:     "pos",
 		}},
 	}
-	ch := startVStream(ctx, t, vsm, vgtid, nil)
-	<-ch
-	response := <-ch
+
+	receivedEvents := make([]*binlogdatapb.VEvent, 0)
+	err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
+		receivedEvents = append(receivedEvents, events...)
+
+		if len(receivedEvents) == 4 {
+			// Stop streaming after receiving both expected responses.
+			cancel()
+		}
+
+		return nil
+	})
+
+	require.Error(t, err)
+	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
+
+	require.Equal(t, 4, len(receivedEvents))
+
 	var got *binlogdatapb.VGtid
-	for _, ev := range response.Events {
+	for _, ev := range receivedEvents {
 		if ev.Type == binlogdatapb.VEventType_VGTID {
 			got = ev.Vgtid
 		}
 	}
+
 	want := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: ks,
@@ -518,9 +532,8 @@ func TestVStreamMulti(t *testing.T) {
 			Gtid:     "gtid02",
 		}},
 	}
-	if !proto.Equal(got, want) {
-		t.Errorf("VGtid:\n%v, want\n%v", got, want)
-	}
+
+	require.ElementsMatch(t, got.ShardGtids, want.ShardGtids)
 }
 
 func TestVStreamsMetrics(t *testing.T) {
@@ -566,52 +579,58 @@ func TestVStreamsMetrics(t *testing.T) {
 			Gtid:     "pos",
 		}},
 	}
-	ch := startVStream(ctx, t, vsm, vgtid, nil)
-	<-ch
-	<-ch
+
 	expectedLabels1 := "TestVStream.-20.PRIMARY"
 	expectedLabels2 := "TestVStream.20-40.PRIMARY"
 
-	wantVStreamsCreated := map[string]int64{
-		expectedLabels1: 1,
-		expectedLabels2: 1,
-	}
-	waitForMetricsMatch(t, vsm.vstreamsCreated.Counts, wantVStreamsCreated)
+	receivedResponses := make([]*binlogdatapb.VStreamResponse, 0)
+	err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
+		receivedResponses = append(receivedResponses, &binlogdatapb.VStreamResponse{Events: events})
 
-	wantVStreamsLag := map[string]int64{
-		expectedLabels1: 5,
-		expectedLabels2: 7,
-	}
-	waitForMetricsMatch(t, vsm.vstreamsLag.Counts, wantVStreamsLag)
+		// While the VStream is running, we should see one active stream per shard.
+		require.Equal(t, map[string]int64{
+			expectedLabels1: 1,
+			expectedLabels2: 1,
+		}, vsm.vstreamsCount.Counts())
 
-	wantVStreamsCount := map[string]int64{
-		expectedLabels1: 1,
-		expectedLabels2: 1,
-	}
-	waitForMetricsMatch(t, vsm.vstreamsCount.Counts, wantVStreamsCount)
+		if len(receivedResponses) == 2 {
+			// Stop streaming after receiving both expected responses.
+			cancel()
+		}
 
-	wantVEventsCount := map[string]int64{
-		expectedLabels1: 2,
-		expectedLabels2: 2,
-	}
-	waitForMetricsMatch(t, vsm.vstreamsEventsStreamed.Counts, wantVEventsCount)
+		return nil
+	})
 
-	wantVStreamsEndedWithErrors := map[string]int64{
+	require.Error(t, err)
+	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
+
+	require.Equal(t, 2, len(receivedResponses))
+
+	// After the streams end, the count should go back to zero.
+	require.Equal(t, map[string]int64{
 		expectedLabels1: 0,
 		expectedLabels2: 0,
-	}
-	waitForMetricsMatch(t, vsm.vstreamsEndedWithErrors.Counts, wantVStreamsEndedWithErrors)
-}
+	}, vsm.vstreamsCount.Counts())
 
-func waitForMetricsMatch(t *testing.T, getActual func() map[string]int64, want map[string]int64) {
-	deadline := time.Now().Add(1 * time.Second)
-	for time.Now().Before(deadline) {
-		if reflect.DeepEqual(getActual(), want) {
-			return
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	assert.Equal(t, want, getActual(), "metrics did not match within timeout")
+	require.Equal(t, map[string]int64{
+		expectedLabels1: 1,
+		expectedLabels2: 1,
+	}, vsm.vstreamsCreated.Counts())
+
+	require.Equal(t, map[string]int64{
+		expectedLabels1: 5,
+		expectedLabels2: 7,
+	}, vsm.vstreamsLag.Counts())
+
+	require.Equal(t, map[string]int64{
+		expectedLabels1: 2,
+		expectedLabels2: 2,
+	}, vsm.vstreamsEventsStreamed.Counts())
+
+	require.Equal(t, map[string]int64{
+		expectedLabels1: 0,
+		expectedLabels2: 0,
+	}, vsm.vstreamsEndedWithErrors.Counts())
 }
 
 func TestVStreamsMetricsErrors(t *testing.T) {
@@ -657,23 +676,11 @@ func TestVStreamsMetricsErrors(t *testing.T) {
 	}
 
 	results := make([]*binlogdatapb.VStreamResponse, 0)
+	err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
+		results = append(results, &binlogdatapb.VStreamResponse{Events: events})
 
-	var err error
-	ch := make(chan *binlogdatapb.VStreamResponse)
-	wg := sync.WaitGroup{}
-	wg.Go(func() {
-		for res := range ch {
-			results = append(results, res)
-		}
+		return nil
 	})
-	wg.Go(func() {
-		err = vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
-			ch <- &binlogdatapb.VStreamResponse{Events: events}
-			return nil
-		})
-		close(ch)
-	})
-	wg.Wait()
 
 	require.Error(t, err)
 	require.ErrorContains(t, err, wantErr)
@@ -751,8 +758,6 @@ func TestVStreamRetriableErrors(t *testing.T) {
 		{Type: binlogdatapb.VEventType_COMMIT},
 	}
 
-	want := &binlogdatapb.VStreamResponse{Events: commit}
-
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
@@ -793,43 +798,24 @@ func TestVStreamRetriableErrors(t *testing.T) {
 				}},
 			}
 
-			ch := make(chan *binlogdatapb.VStreamResponse)
-			done := make(chan struct{})
-			go func() {
-				err := vsm.VStream(ctx, topodatapb.TabletType_REPLICA, vgtid, nil, &vtgatepb.VStreamFlags{Cells: strings.Join(cells, ",")}, func(events []*binlogdatapb.VEvent) error {
-					ch <- &binlogdatapb.VStreamResponse{Events: events}
-					return nil
-				})
-				wantErr := "context canceled"
+			err := vsm.VStream(ctx, topodatapb.TabletType_REPLICA, vgtid, nil, &vtgatepb.VStreamFlags{Cells: strings.Join(cells, ",")}, func(events []*binlogdatapb.VEvent) error {
+				defer cancel()
 
-				if !tcase.shouldRetry {
-					wantErr = tcase.msg
-				}
+				require.Equal(t, 1, len(events))
+				require.Equal(t, commit, events)
 
-				if err == nil || !strings.Contains(err.Error(), wantErr) {
-					t.Errorf("vstream end: %v, must contain %v", err.Error(), wantErr)
-				}
-				close(done)
-			}()
+				return nil
+			})
 
-		Loop:
-			for {
-				if tcase.shouldRetry {
-					select {
-					case event := <-ch:
-						got := event.CloneVT()
-						if !proto.Equal(got, want) {
-							t.Errorf("got different vstream event than expected")
-						}
-						cancel()
-					case <-done:
-						// The goroutine has completed, so break out of the loop
-						break Loop
-					}
-				} else {
-					<-done
-					break Loop
-				}
+			if tcase.shouldRetry {
+				// Expect a cancel error because the stream was retried and our callback
+				// was called.
+				require.Error(t, err)
+				require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
+			} else {
+				// Expect the original error because no retry was done.
+				require.Error(t, err)
+				require.ErrorContains(t, err, tcase.msg)
 			}
 		})
 	}
@@ -882,8 +868,23 @@ func TestVStreamShouldNotSendSourceHeartbeats(t *testing.T) {
 			Gtid:     "pos",
 		}},
 	}
-	ch := startVStream(ctx, t, vsm, vgtid, nil)
-	verifyEvents(t, ch, want)
+
+	receivedResponses := make([]*binlogdatapb.VStreamResponse, 0)
+	err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
+		receivedResponses = append(receivedResponses, &binlogdatapb.VStreamResponse{Events: events})
+
+		if len(receivedResponses) == 1 {
+			// Stop streaming after receiving the expected response.
+			cancel()
+		}
+		return nil
+	})
+
+	require.Error(t, err)
+	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
+
+	require.Equal(t, 1, len(receivedResponses))
+	require.EqualExportedValues(t, want, receivedResponses[0])
 }
 
 func TestVStreamJournalOneToMany(t *testing.T) {
@@ -968,14 +969,32 @@ func TestVStreamJournalOneToMany(t *testing.T) {
 			Gtid:     "pos",
 		}},
 	}
-	ch := startVStream(ctx, t, vsm, vgtid, nil)
-	verifyEvents(t, ch, want1)
 
-	// The following two events from the different shards can come in any order.
-	// But the resulting VGTID should be the same after both are received.
-	<-ch
-	got := <-ch
-	wantevent := &binlogdatapb.VEvent{
+	receivedEvents := make([]*binlogdatapb.VStreamResponse, 0)
+	err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
+		receivedEvents = append(receivedEvents, &binlogdatapb.VStreamResponse{Events: events})
+
+		if len(receivedEvents) == 3 {
+			// Stop streaming after receiving all expected responses.
+			cancel()
+		}
+
+		return nil
+	})
+
+	require.Error(t, err)
+	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
+
+	require.Equal(t, 3, len(receivedEvents))
+
+	// First event should be the first transaction from the first shard.
+	require.EqualExportedValues(t, want1, receivedEvents[0])
+
+	// The second and third events can come in any order.
+	// So instead of comparing them directly, we simply verify that the GTID
+	// after the last event is the expected combined GTID.
+
+	require.EqualExportedValues(t, &binlogdatapb.VEvent{
 		Type: binlogdatapb.VEventType_VGTID,
 		Vgtid: &binlogdatapb.VGtid{
 			ShardGtids: []*binlogdatapb.ShardGtid{{
@@ -988,13 +1007,7 @@ func TestVStreamJournalOneToMany(t *testing.T) {
 				Gtid:     "gtid04",
 			}},
 		},
-	}
-	gotEvent := got.Events[0]
-	gotEvent.Keyspace = ""
-	gotEvent.Shard = ""
-	if !proto.Equal(gotEvent, wantevent) {
-		t.Errorf("vgtid: %v, want %v", got.Events[0], wantevent)
-	}
+	}, receivedEvents[2].Events[0])
 }
 
 func TestVStreamJournalManyToOne(t *testing.T) {
@@ -1087,12 +1100,25 @@ func TestVStreamJournalManyToOne(t *testing.T) {
 			Gtid:     "pos1020",
 		}},
 	}
-	ch := startVStream(ctx, t, vsm, vgtid, nil)
-	// The following two events from the different shards can come in any order.
-	// But the resulting VGTID should be the same after both are received.
-	<-ch
-	got := <-ch
-	wantevent := &binlogdatapb.VEvent{
+
+	receivedResponses := make([]*binlogdatapb.VStreamResponse, 0)
+	err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
+		receivedResponses = append(receivedResponses, &binlogdatapb.VStreamResponse{Events: events})
+
+		if len(receivedResponses) == 3 {
+			// Stop streaming after receiving all expected responses.
+			cancel()
+		}
+
+		return nil
+	})
+
+	require.Error(t, err)
+	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
+
+	require.Equal(t, 3, len(receivedResponses))
+
+	require.EqualExportedValues(t, &binlogdatapb.VEvent{
 		Type: binlogdatapb.VEventType_VGTID,
 		Vgtid: &binlogdatapb.VGtid{
 			ShardGtids: []*binlogdatapb.ShardGtid{{
@@ -1105,14 +1131,9 @@ func TestVStreamJournalManyToOne(t *testing.T) {
 				Gtid:     "gtid04",
 			}},
 		},
-	}
-	gotEvent := got.Events[0]
-	gotEvent.Keyspace = ""
-	gotEvent.Shard = ""
-	if !proto.Equal(gotEvent, wantevent) {
-		t.Errorf("vgtid: %v, want %v", got.Events[0], wantevent)
-	}
-	verifyEvents(t, ch, want1)
+	}, receivedResponses[1].Events[0])
+
+	require.EqualExportedValues(t, want1, receivedResponses[2])
 }
 
 func TestVStreamJournalNoMatch(t *testing.T) {
@@ -1239,8 +1260,29 @@ func TestVStreamJournalNoMatch(t *testing.T) {
 			Gtid:     "pos",
 		}},
 	}
-	ch := startVStream(ctx, t, vsm, vgtid, nil)
-	verifyEvents(t, ch, want1, wantjn1, want2, wantjn2, want3)
+
+	receivedResponses := make([]*binlogdatapb.VStreamResponse, 0)
+	err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
+		receivedResponses = append(receivedResponses, &binlogdatapb.VStreamResponse{Events: events})
+
+		if len(receivedResponses) == 5 {
+			// Stop streaming after receiving all expected responses.
+			cancel()
+		}
+
+		return nil
+	})
+
+	require.Error(t, err)
+	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
+
+	require.Equal(t, 5, len(receivedResponses))
+
+	require.EqualExportedValues(t, want1, receivedResponses[0])
+	require.EqualExportedValues(t, wantjn1, receivedResponses[1])
+	require.EqualExportedValues(t, want2, receivedResponses[2])
+	require.EqualExportedValues(t, wantjn2, receivedResponses[3])
+	require.EqualExportedValues(t, want3, receivedResponses[4])
 }
 
 func TestVStreamJournalPartialMatch(t *testing.T) {
@@ -1290,14 +1332,14 @@ func TestVStreamJournalPartialMatch(t *testing.T) {
 			Gtid:     "pos1020",
 		}},
 	}
+
 	err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
 		t.Errorf("unexpected events: %v", events)
 		return nil
 	})
-	wantErr := "not all journaling participants are in the stream"
-	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Errorf("vstream end: %v, must contain %v", err, wantErr)
-	}
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not all journaling participants are in the stream")
 
 	// Try a different order (different code path)
 	send = []*binlogdatapb.VEvent{
@@ -1319,14 +1361,14 @@ func TestVStreamJournalPartialMatch(t *testing.T) {
 		}},
 	}
 	sbc2.AddVStreamEvents(send, nil)
+
 	err = vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
 		t.Errorf("unexpected events: %v", events)
 		return nil
 	})
-	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Errorf("vstream end: %v, must contain %v", err, wantErr)
-	}
-	cancel()
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not all journaling participants are in the stream")
 }
 
 func TestResolveVStreamParams(t *testing.T) {
@@ -1575,27 +1617,25 @@ func TestVStreamIdleHeartbeat(t *testing.T) {
 	}
 	for _, tcase := range testcases {
 		t.Run(tcase.name, func(t *testing.T) {
-			var mu sync.Mutex
 			var heartbeatCount int
-			ctx, cancel := context.WithCancel(ctx)
-			go func() {
-				vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{HeartbeatInterval: tcase.heartbeatInterval},
-					func(events []*binlogdatapb.VEvent) error {
-						mu.Lock()
-						defer mu.Unlock()
-						for _, event := range events {
-							if event.Type == binlogdatapb.VEventType_HEARTBEAT {
-								heartbeatCount++
-							}
-						}
-						return nil
-					})
-			}()
-			time.Sleep(time.Duration(4500) * time.Millisecond)
-			mu.Lock()
-			defer mu.Unlock()
+
+			ctx, cancel := context.WithTimeout(ctx, time.Duration(4500)*time.Millisecond)
+			defer cancel()
+
+			err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{HeartbeatInterval: tcase.heartbeatInterval}, func(events []*binlogdatapb.VEvent) error {
+				for _, event := range events {
+					if event.Type == binlogdatapb.VEventType_HEARTBEAT {
+						heartbeatCount++
+					}
+				}
+
+				return nil
+			})
+
+			require.Error(t, err)
+			require.ErrorIs(t, vterrors.UnwrapAll(err), context.DeadlineExceeded)
+
 			require.Equalf(t, heartbeatCount, tcase.want, "got %d, want %d", heartbeatCount, tcase.want)
-			cancel()
 		})
 	}
 }
@@ -1978,26 +2018,28 @@ func TestVStreamManagerHealthCheckResponseHandling(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			done := make(chan struct{})
-			go func() {
-				sctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-				defer cancel()
-				defer close(done)
-				// SandboxConn's VStream implementation always waits for the context to timeout.
-				err := vsm.VStream(sctx, tabletType, vgtid, nil, nil, func(events []*binlogdatapb.VEvent) error {
-					require.Fail(t, "unexpected event", "Received unexpected events: %v", events)
-					return nil
-				})
-				if tc.wantErr != "" { // Otherwise we simply expect the context to timeout
-					if !strings.Contains(logger.String(), tc.wantErr) {
-						require.Fail(t, "unexpected vstream error", "vstream ended with error: %v, which did not contain: %s", err, tc.wantErr)
-					}
-				}
-			}()
 			if tc.wantErr != "" {
 				source.SetStreamHealthResponse(tc.hcRes)
 			}
-			<-done
+
+			sctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+
+			// SandboxConn's VStream implementation always waits for the context to timeout.
+			err := vsm.VStream(sctx, tabletType, vgtid, nil, nil, func(events []*binlogdatapb.VEvent) error {
+				require.Fail(t, "unexpected event", "Received unexpected events: %v", events)
+				return nil
+			})
+
+			if tc.wantErr != "" {
+				require.Error(t, err)
+				require.Contains(t, logger.String(), tc.wantErr)
+			} else {
+				// Otherwise we simply expect the context to timeout
+				require.Error(t, err)
+				require.ErrorIs(t, vterrors.UnwrapAll(err), context.DeadlineExceeded)
+			}
+
 			logger.Clear()
 		})
 	}
@@ -2007,36 +2049,6 @@ func newTestVStreamManager(ctx context.Context, hc discovery.HealthCheck, serv s
 	gw := NewTabletGateway(ctx, hc, serv, cell)
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
 	return newVStreamManager(srvResolver, serv, cell)
-}
-
-func startVStream(ctx context.Context, t *testing.T, vsm *vstreamManager, vgtid *binlogdatapb.VGtid, flags *vtgatepb.VStreamFlags) <-chan *binlogdatapb.VStreamResponse {
-	t.Helper()
-	if flags == nil {
-		flags = &vtgatepb.VStreamFlags{}
-	}
-	ch := make(chan *binlogdatapb.VStreamResponse)
-	go func() {
-		_ = vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, flags, func(events []*binlogdatapb.VEvent) error {
-			ch <- &binlogdatapb.VStreamResponse{Events: events}
-			return nil
-		})
-	}()
-	return ch
-}
-
-func verifyEvents(t *testing.T, ch <-chan *binlogdatapb.VStreamResponse, wants ...*binlogdatapb.VStreamResponse) {
-	t.Helper()
-	for i, want := range wants {
-		val := <-ch
-		got := val.CloneVT()
-		require.NotNil(t, got)
-		for _, event := range got.Events {
-			event.Timestamp = 0
-		}
-		if !proto.Equal(got, want) {
-			t.Errorf("vstream(%d):\n%v, want\n%v", i, got, want)
-		}
-	}
 }
 
 func getVEvents(keyspace, shard string, count, idx int64) []*binlogdatapb.VEvent {

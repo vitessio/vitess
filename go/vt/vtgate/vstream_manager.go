@@ -321,7 +321,11 @@ func (vs *vstream) stream(ctx context.Context) error {
 	ctx, vs.cancel = context.WithCancel(ctx)
 	defer vs.cancel()
 
-	go vs.sendEvents(ctx)
+	vs.wg.Add(1)
+	go func() {
+		defer vs.wg.Done()
+		vs.sendEvents(ctx)
+	}()
 
 	// Make a copy first, because the ShardGtids list can change once streaming starts.
 	copylist := append(([]*binlogdatapb.ShardGtid)(nil), vs.vgtid.ShardGtids...)
@@ -359,6 +363,7 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 		}
 		return nil
 	}
+
 	for {
 		select {
 		case <-ctx.Done():
