@@ -70,6 +70,11 @@ func (e *Executor) newExecute(
 	execPlan planExec, // used when there is a plan to execute
 	recResult txResult, // used when it's something simple like begin/commit/rollback/savepoint
 ) (err error) {
+	// Append caller ID if enabled
+	if e.appendCallerID {
+		sql = addCallerIDUserToQuery(ctx, sql)
+	}
+
 	// Start an implicit transaction if necessary.
 	err = e.startTxIfNecessary(ctx, safeSession)
 	if err != nil {
