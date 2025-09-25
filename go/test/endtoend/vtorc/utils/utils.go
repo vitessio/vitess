@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vtorc/logic"
 
 	// Register topo implementations.
 	_ "vitess.io/vitess/go/vt/topo/consultopo"
@@ -1000,10 +1001,10 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 }
 
 // WaitForSkippedRecoveryCount waits until the given recovery name's count of skipped runs matches the count expected
-func WaitForSkippedRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, recoveryName, keyspace, shard string, countExpected int) {
+func WaitForSkippedRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, recoveryName, keyspace, shard string, recoverySkipCode logic.RecoverySkipCode, countExpected int) {
 	t.Helper()
 	timeout := 15 * time.Second
-	mapKey := fmt.Sprintf("%s.%s.%s", recoveryName, keyspace, shard)
+	mapKey := fmt.Sprintf("%s.%s.%s.%s", recoveryName, keyspace, shard, recoverySkipCode)
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		vars := vtorcInstance.GetVars()
 		skippedRecoveriesMap := vars["SkippedRecoveries"].(map[string]interface{})
