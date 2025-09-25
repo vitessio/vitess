@@ -55,8 +55,8 @@ type RelayLogPositions struct {
 // AtLeast returns true if the RelayLogPositions object contains at least the positions provided
 // as pos. If the combined positions are equal, prioritize the position where more events have
 // been executed/applied, as this avoids picking tablets with SQL delay (intended or not) that
-// can delay/timeout the reparent. Otherwise, pick the larger of the two positions as it
-// contains more changes, irrespective of how many changes are applied.
+// can delay/timeout the reparent. Otherwise, pick the larger of the two combined positions as
+// it contains more changes, irrespective of how many changes are executed/applied.
 func (rlp *RelayLogPositions) AtLeast(pos *RelayLogPositions) bool {
 	if pos == nil {
 		return false
