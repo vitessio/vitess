@@ -20,13 +20,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/test/utils"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -179,14 +178,15 @@ func TestConcatenate_WithErrors(t *testing.T) {
 
 func TestConcatenateTypes(t *testing.T) {
 	tests := []struct {
-		t1, t2, expected string
+		t1, t2   string
+		expected []*querypb.Field
 	}{
-		{t1: "int32", t2: "int64", expected: `[name:"id" type:int64 charset:63]`},
-		{t1: "int32", t2: "int32", expected: `[name:"id" type:int32 charset:63]`},
-		{t1: "int32", t2: "varchar", expected: `[name:"id" type:varchar charset:255]`},
-		{t1: "int32", t2: "decimal", expected: `[name:"id" type:decimal charset:63]`},
-		{t1: "hexval", t2: "uint64", expected: `[name:"id" type:varchar charset:255]`},
-		{t1: "varchar", t2: "varbinary", expected: `[name:"id" type:varbinary charset:63 flags:128]`},
+		{t1: "int32", t2: "int64", expected: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64, Charset: collations.CollationBinaryID}}},
+		{t1: "int32", t2: "int32", expected: []*querypb.Field{{Name: "id", Type: querypb.Type_INT32, Charset: collations.CollationBinaryID}}},
+		{t1: "int32", t2: "varchar", expected: []*querypb.Field{{Name: "id", Type: querypb.Type_VARCHAR, Charset: collations.CollationUtf8mb4ID}}},
+		{t1: "int32", t2: "decimal", expected: []*querypb.Field{{Name: "id", Type: querypb.Type_DECIMAL, Charset: collations.CollationBinaryID}}},
+		{t1: "hexval", t2: "uint64", expected: []*querypb.Field{{Name: "id", Type: querypb.Type_VARCHAR, Charset: collations.CollationUtf8mb4ID}}},
+		{t1: "varchar", t2: "varbinary", expected: []*querypb.Field{{Name: "id", Type: querypb.Type_VARBINARY, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)}}},
 	}
 
 	for _, test := range tests {
@@ -204,7 +204,7 @@ func TestConcatenateTypes(t *testing.T) {
 			res, err := concatenate.GetFields(context.Background(), &noopVCursor{}, nil)
 			require.NoError(t, err)
 
-			assert.Equal(t, test.expected, strings.ToLower(fmt.Sprintf("%v", res.Fields)))
+			require.Equal(t, test.expected, res.Fields)
 		})
 	}
 }
