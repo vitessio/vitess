@@ -59,12 +59,13 @@ func (rlp *RelayLogPositions) AtLeast(pos *RelayLogPositions) bool {
 		return false
 	}
 
-	// if two combined GTID sets are equal, sort by the executed GTID
-	// set so we pick a position with the most advanced SQL thread.
+	// If the combined positions are not equal, pick the larger of the two as it contains
+	// more information/events, irrespective of how much of this information/events has
+	// been applied yet. Otherwise, prioritize the position where more events have been
+	// executed/applied, as it is likely to catch up faster.
 	if rlp.Combined.Equal(pos.Combined) {
 		return rlp.Executed.AtLeast(pos.Executed)
 	}
-
 	return rlp.Combined.AtLeast(pos.Combined)
 }
 
