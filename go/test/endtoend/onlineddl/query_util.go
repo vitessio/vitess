@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 
 	"github.com/olekukonko/tablewriter"
+	"github.com/olekukonko/tablewriter/tw"
 )
 
 // PrintQueryResult will pretty-print a QueryResult to the logger.
@@ -34,7 +35,11 @@ func PrintQueryResult(writer io.Writer, qr *sqltypes.Result) {
 		return
 	}
 
-	table := tablewriter.NewWriter(writer)
+	table := tablewriter.NewTable(writer,
+		tablewriter.WithSymbols(tw.NewSymbols(tw.StyleASCII)),
+		tablewriter.WithHeaderAutoFormat(tw.State(-1)),
+		tablewriter.WithRowMaxWidth(30),
+	)
 
 	// Make header.
 	header := make([]any, 0, len(qr.Fields))

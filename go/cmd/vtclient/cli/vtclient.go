@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/olekukonko/tablewriter"
+	"github.com/olekukonko/tablewriter/tw"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
@@ -396,7 +397,11 @@ func (r *results) print(w io.Writer) {
 		return
 	}
 
-	table := tablewriter.NewWriter(os.Stdout)
+	table := tablewriter.NewTable(os.Stdout,
+		tablewriter.WithSymbols(tw.NewSymbols(tw.StyleASCII)),
+		tablewriter.WithHeaderAutoFormat(tw.State(-1)),
+		tablewriter.WithRowMaxWidth(30),
+	)
 	headerAny := make([]any, len(r.Fields))
 	for i, field := range r.Fields {
 		headerAny[i] = field

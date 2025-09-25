@@ -34,6 +34,15 @@ func WriteQueryResultTable(w io.Writer, qr *sqltypes.Result) {
 
 	table := tablewriter.NewTable(w,
 		tablewriter.WithSymbols(tw.NewSymbols(tw.StyleASCII)),
+		tablewriter.WithHeaderAutoFormat(tw.State(-1)),
+		tablewriter.WithRowMaxWidth(30),
+		tablewriter.WithRendition(tw.Rendition{
+			Settings: tw.Settings{
+				Separators: tw.Separators{
+					BetweenRows: tw.On,
+				},
+			},
+		}),
 	)
 
 	header := make([]any, 0, len(qr.Fields))

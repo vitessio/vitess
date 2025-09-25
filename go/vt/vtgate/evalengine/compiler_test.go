@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/olekukonko/tablewriter"
+	"github.com/olekukonko/tablewriter/tw"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -62,7 +63,20 @@ type Tracker struct {
 
 func NewTracker() *Tracker {
 	track := &Tracker{}
-	track.tbl = tablewriter.NewWriter(&track.buf)
+	track.tbl = tablewriter.NewTable(&track.buf,
+		tablewriter.WithAlignment(tw.Alignment{
+			tw.AlignLeft,
+			tw.AlignRight,
+			tw.AlignRight,
+			tw.AlignRight,
+		}),
+		tablewriter.WithFooterAlignmentConfig(tw.CellAlignment{
+			Global: tw.AlignRight,
+		}),
+		tablewriter.WithRendition(tw.Rendition{
+			Borders: tw.BorderNone,
+		}),
+	)
 	return track
 }
 
@@ -78,7 +92,6 @@ func (s *Tracker) Add(name string, supported, total int) {
 }
 
 func (s *Tracker) String() string {
-	// Add footer as a regular row since SetFooter is no longer available
 	s.tbl.Footer(
 		"",
 		strconv.Itoa(s.supported),
