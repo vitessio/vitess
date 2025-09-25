@@ -111,8 +111,8 @@ func TestVStreamSkew(t *testing.T) {
 				go stream(sbc1, ks, "20-40", tcase.numEventsPerShard, tcase.shard1idx)
 			}
 
-			vstreamCtx, cancel := context.WithTimeout(ctx, 1*time.Minute)
-			defer cancel()
+			vstreamCtx, vstreamCancel := context.WithTimeout(ctx, 1*time.Minute)
+			defer vstreamCancel()
 
 			receivedEvents := make([]*binlogdatapb.VEvent, 0)
 			err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{MinimizeSkew: true}, func(events []*binlogdatapb.VEvent) error {
@@ -120,7 +120,7 @@ func TestVStreamSkew(t *testing.T) {
 
 				if int64(len(receivedEvents)) == want {
 					// Stop streaming after receiving both expected responses.
-					cancel()
+					vstreamCancel()
 				}
 
 				return nil
@@ -139,6 +139,7 @@ func TestVStreamSkew(t *testing.T) {
 func TestVStreamEventsExcludeKeyspaceFromTableName(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
 	cell := "aa"
 	ks := "TestVStream"
 	_ = createSandbox(ks)
@@ -194,13 +195,16 @@ func TestVStreamEventsExcludeKeyspaceFromTableName(t *testing.T) {
 		}},
 	}
 
+	vstreamCtx, vstreamCancel := context.WithCancel(ctx)
+	defer vstreamCancel()
+
 	receivedResponses := make([]*binlogdatapb.VStreamResponse, 0)
-	err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{ExcludeKeyspaceFromTableName: true}, func(events []*binlogdatapb.VEvent) error {
+	err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{ExcludeKeyspaceFromTableName: true}, func(events []*binlogdatapb.VEvent) error {
 		receivedResponses = append(receivedResponses, &binlogdatapb.VStreamResponse{Events: events})
 
 		if len(receivedResponses) == 2 {
 			// Stop streaming after receiving both expected responses.
-			cancel()
+			vstreamCancel()
 		}
 
 		return nil
@@ -269,13 +273,16 @@ func TestVStreamEvents(t *testing.T) {
 		}},
 	}
 
+	vstreamCtx, vstreamCancel := context.WithCancel(ctx)
+	defer vstreamCancel()
+
 	receivedEvents := make([]*binlogdatapb.VStreamResponse, 0)
-	err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
+	err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
 		receivedEvents = append(receivedEvents, &binlogdatapb.VStreamResponse{Events: events})
 
 		if len(receivedEvents) == 2 {
 			// Stop streaming after receiving both expected responses.
-			cancel()
+			vstreamCancel()
 		}
 
 		return nil
@@ -352,12 +359,15 @@ func BenchmarkVStreamEvents(b *testing.B) {
 				pprof.StartCPUProfile(f)
 			}
 
+			vstreamCtx, vstreamCancel := context.WithCancel(ctx)
+			defer vstreamCancel()
+
 			received := 0
-			err = vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{ExcludeKeyspaceFromTableName: tt.excludeKeyspaceFromTableName}, func(events []*binlogdatapb.VEvent) error {
+			err = vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{ExcludeKeyspaceFromTableName: tt.excludeKeyspaceFromTableName}, func(events []*binlogdatapb.VEvent) error {
 				received += len(events)
 
 				if received >= totalEvents {
-					cancel()
+					vstreamCancel()
 				}
 
 				return nil
@@ -414,9 +424,11 @@ func TestVStreamChunks(t *testing.T) {
 		}},
 	}
 
-	var rowCount, ddlCount int
+	vstreamCtx, vstreamCancel := context.WithCancel(ctx)
+	defer vstreamCancel()
 
-	err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
+	var rowCount, ddlCount int
+	err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
 		switch events[0].Type {
 		case binlogdatapb.VEventType_ROW:
 			if doneCounting {
@@ -446,7 +458,7 @@ func TestVStreamChunks(t *testing.T) {
 		}
 
 		if rowCount == 100 && ddlCount == 100 {
-			cancel()
+			vstreamCancel()
 		}
 
 		return nil
@@ -497,13 +509,16 @@ func TestVStreamMulti(t *testing.T) {
 		}},
 	}
 
+	vstreamCtx, vstreamCancel := context.WithCancel(ctx)
+	defer vstreamCancel()
+
 	receivedEvents := make([]*binlogdatapb.VEvent, 0)
-	err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
+	err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
 		receivedEvents = append(receivedEvents, events...)
 
 		if len(receivedEvents) == 4 {
 			// Stop streaming after receiving both expected responses.
-			cancel()
+			vstreamCancel()
 		}
 
 		return nil
@@ -583,8 +598,11 @@ func TestVStreamsMetrics(t *testing.T) {
 	expectedLabels1 := "TestVStream.-20.PRIMARY"
 	expectedLabels2 := "TestVStream.20-40.PRIMARY"
 
+	vstreamCtx, vstreamCancel := context.WithCancel(ctx)
+	defer vstreamCancel()
+
 	receivedResponses := make([]*binlogdatapb.VStreamResponse, 0)
-	err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
+	err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
 		receivedResponses = append(receivedResponses, &binlogdatapb.VStreamResponse{Events: events})
 
 		// While the VStream is running, we should see one active stream per shard.
@@ -595,7 +613,7 @@ func TestVStreamsMetrics(t *testing.T) {
 
 		if len(receivedResponses) == 2 {
 			// Stop streaming after receiving both expected responses.
-			cancel()
+			vstreamCancel()
 		}
 
 		return nil
@@ -675,9 +693,17 @@ func TestVStreamsMetricsErrors(t *testing.T) {
 		}},
 	}
 
+	vstreamCtx, vstreamCancel := context.WithCancel(ctx)
+	defer vstreamCancel()
+
 	results := make([]*binlogdatapb.VStreamResponse, 0)
-	err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
+	err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
 		results = append(results, &binlogdatapb.VStreamResponse{Events: events})
+
+		if len(results) == 2 {
+			// We should never actually see 2 responses come in
+			vstreamCancel()
+		}
 
 		return nil
 	})
@@ -798,8 +824,11 @@ func TestVStreamRetriableErrors(t *testing.T) {
 				}},
 			}
 
-			err := vsm.VStream(ctx, topodatapb.TabletType_REPLICA, vgtid, nil, &vtgatepb.VStreamFlags{Cells: strings.Join(cells, ",")}, func(events []*binlogdatapb.VEvent) error {
-				defer cancel()
+			vstreamCtx, vstreamCancel := context.WithCancel(ctx)
+			defer vstreamCancel()
+
+			err := vsm.VStream(vstreamCtx, topodatapb.TabletType_REPLICA, vgtid, nil, &vtgatepb.VStreamFlags{Cells: strings.Join(cells, ",")}, func(events []*binlogdatapb.VEvent) error {
+				defer vstreamCancel()
 
 				require.Equal(t, 1, len(events))
 				require.Equal(t, commit, events)
@@ -819,7 +848,6 @@ func TestVStreamRetriableErrors(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestVStreamShouldNotSendSourceHeartbeats(t *testing.T) {
@@ -869,13 +897,16 @@ func TestVStreamShouldNotSendSourceHeartbeats(t *testing.T) {
 		}},
 	}
 
+	vstreamCtx, vstreamCancel := context.WithCancel(ctx)
+	defer vstreamCancel()
+
 	receivedResponses := make([]*binlogdatapb.VStreamResponse, 0)
-	err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
+	err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
 		receivedResponses = append(receivedResponses, &binlogdatapb.VStreamResponse{Events: events})
 
 		if len(receivedResponses) == 1 {
 			// Stop streaming after receiving the expected response.
-			cancel()
+			vstreamCancel()
 		}
 		return nil
 	})
@@ -970,13 +1001,16 @@ func TestVStreamJournalOneToMany(t *testing.T) {
 		}},
 	}
 
+	vstreamCtx, vstreamCancel := context.WithCancel(ctx)
+	defer vstreamCancel()
+
 	receivedEvents := make([]*binlogdatapb.VStreamResponse, 0)
-	err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
+	err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
 		receivedEvents = append(receivedEvents, &binlogdatapb.VStreamResponse{Events: events})
 
 		if len(receivedEvents) == 3 {
 			// Stop streaming after receiving all expected responses.
-			cancel()
+			vstreamCancel()
 		}
 
 		return nil
@@ -1101,13 +1135,16 @@ func TestVStreamJournalManyToOne(t *testing.T) {
 		}},
 	}
 
+	vstreamCtx, vstreamCancel := context.WithCancel(ctx)
+	defer vstreamCancel()
+
 	receivedResponses := make([]*binlogdatapb.VStreamResponse, 0)
-	err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
+	err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
 		receivedResponses = append(receivedResponses, &binlogdatapb.VStreamResponse{Events: events})
 
 		if len(receivedResponses) == 3 {
 			// Stop streaming after receiving all expected responses.
-			cancel()
+			vstreamCancel()
 		}
 
 		return nil
@@ -1261,13 +1298,16 @@ func TestVStreamJournalNoMatch(t *testing.T) {
 		}},
 	}
 
+	vstreamCtx, vstreamCancel := context.WithCancel(ctx)
+	defer vstreamCancel()
+
 	receivedResponses := make([]*binlogdatapb.VStreamResponse, 0)
-	err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
+	err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
 		receivedResponses = append(receivedResponses, &binlogdatapb.VStreamResponse{Events: events})
 
 		if len(receivedResponses) == 5 {
 			// Stop streaming after receiving all expected responses.
-			cancel()
+			vstreamCancel()
 		}
 
 		return nil
@@ -1334,8 +1374,7 @@ func TestVStreamJournalPartialMatch(t *testing.T) {
 	}
 
 	err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
-		t.Errorf("unexpected events: %v", events)
-		return nil
+		return fmt.Errorf("unexpected events: %v", events)
 	})
 
 	require.Error(t, err)
@@ -1363,8 +1402,7 @@ func TestVStreamJournalPartialMatch(t *testing.T) {
 	sbc2.AddVStreamEvents(send, nil)
 
 	err = vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
-		t.Errorf("unexpected events: %v", events)
-		return nil
+		return fmt.Errorf("unexpected events: %v", events)
 	})
 
 	require.Error(t, err)
@@ -1619,10 +1657,10 @@ func TestVStreamIdleHeartbeat(t *testing.T) {
 		t.Run(tcase.name, func(t *testing.T) {
 			var heartbeatCount int
 
-			ctx, cancel := context.WithTimeout(ctx, time.Duration(4500)*time.Millisecond)
-			defer cancel()
+			vstreamCtx, vstreamCancel := context.WithTimeout(ctx, time.Duration(4500)*time.Millisecond)
+			defer vstreamCancel()
 
-			err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{HeartbeatInterval: tcase.heartbeatInterval}, func(events []*binlogdatapb.VEvent) error {
+			err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{HeartbeatInterval: tcase.heartbeatInterval}, func(events []*binlogdatapb.VEvent) error {
 				for _, event := range events {
 					if event.Type == binlogdatapb.VEventType_HEARTBEAT {
 						heartbeatCount++
@@ -2022,13 +2060,12 @@ func TestVStreamManagerHealthCheckResponseHandling(t *testing.T) {
 				source.SetStreamHealthResponse(tc.hcRes)
 			}
 
-			sctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			defer cancel()
+			vstreamCtx, vstreamCancel := context.WithTimeout(ctx, 5*time.Second)
+			defer vstreamCancel()
 
 			// SandboxConn's VStream implementation always waits for the context to timeout.
-			err := vsm.VStream(sctx, tabletType, vgtid, nil, nil, func(events []*binlogdatapb.VEvent) error {
-				require.Fail(t, "unexpected event", "Received unexpected events: %v", events)
-				return nil
+			err := vsm.VStream(vstreamCtx, tabletType, vgtid, nil, nil, func(events []*binlogdatapb.VEvent) error {
+				return fmt.Errorf("unexpected events: %v", events)
 			})
 
 			if tc.wantErr != "" {
