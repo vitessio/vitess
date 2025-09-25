@@ -2004,7 +2004,7 @@ func TestVStreamManagerHealthCheckResponseHandling(t *testing.T) {
 }
 
 func newTestVStreamManager(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, cell string) *vstreamManager {
-	gw := NewTabletGateway(ctx, hc, serv, cell)
+	gw, _ := NewTabletGateway(ctx, hc, serv, cell)
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
 	return newVStreamManager(srvResolver, serv, cell)
 }
