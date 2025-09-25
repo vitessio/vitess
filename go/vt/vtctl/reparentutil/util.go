@@ -86,7 +86,7 @@ func ElectNewPrimary(
 		mu sync.Mutex
 		// tablets that are possible candidates to be the new primary and their positions
 		validTablets         []*topodatapb.Tablet
-		tabletPositions      []replication.Position
+		tabletPositions      []*RelayLogPositions
 		innodbBufferPool     []int
 		errorGroup, groupCtx = errgroup.WithContext(ctx)
 	)
@@ -167,9 +167,11 @@ func ElectNewPrimary(
 	return validTablets[0].Alias, nil
 }
 
-// findTabletPositionLagBackupStatus processes the replication position and lag for a single tablet and
+// findTabletPositionLagBackupStatus processes the replication positions and lag for a single tablet and
 // returns it. It is safe to call from multiple goroutines.
-func findTabletPositionLagBackupStatus(ctx context.Context, tablet *topodatapb.Tablet, logger logutil.Logger, tmc tmclient.TabletManagerClient, waitTimeout time.Duration) (replication.Position, time.Duration, bool, bool, error) {
+func findTabletPositionLagBackupStatus(ctx context.Context, tablet *topodatapb.Tablet, logger logutil.Logger, tmc tmclient.TabletManagerClient, waitTimeout time.Duration) (*RelayLogPositions, time.Duration, bool, bool, error) {
+	rlp := &RelayLogPositions{}
+
 	logger.Infof("getting replication position from %v", topoproto.TabletAliasString(tablet.Alias))
 
 	ctx, cancel := context.WithTimeout(ctx, waitTimeout)
@@ -180,24 +182,25 @@ func findTabletPositionLagBackupStatus(ctx context.Context, tablet *topodatapb.T
 		sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
 		if isSQLErr && sqlErr != nil && sqlErr.Number() == sqlerror.ERNotReplica {
 			logger.Warningf("no replication statue from %v, using empty gtid set", topoproto.TabletAliasString(tablet.Alias))
-			return replication.Position{}, 0, false, false, nil
+			return rlp, 0, false, false, nil
 		}
 		logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", topoproto.TabletAliasString(tablet.Alias), err)
-		return replication.Position{}, 0, false, false, err
+		return rlp, 0, false, false, err
 	}
 
-	// Use the relay log position if available, otherwise use the executed GTID set (binary log position).
-	positionString := status.Position
-	if status.RelayLogPosition != "" {
-		positionString = status.RelayLogPosition
-	}
-	pos, err := replication.DecodePosition(positionString)
+	rlp.Executed, err = replication.DecodePosition(status.Position)
 	if err != nil {
-		logger.Warningf("cannot decode replica position %v for tablet %v, ignoring tablet: %v", positionString, topoproto.TabletAliasString(tablet.Alias), err)
-		return replication.Position{}, 0, status.BackupRunning, false, err
+		logger.Warningf("cannot decode replica position %v for tablet %v, ignoring tablet: %v", status.Position, topoproto.TabletAliasString(tablet.Alias), err)
+		return rlp, 0, status.BackupRunning, false, err
 	}
 
-	return pos, time.Second * time.Duration(status.ReplicationLagSeconds), status.BackupRunning, status.ReplicationLagUnknown, nil
+	rlp.Combined, err = replication.DecodePosition(status.RelayLogPosition)
+	if err != nil {
+		logger.Warningf("cannot decode replica position %v for tablet %v, ignoring tablet: %v", status.RelayLogPosition, topoproto.TabletAliasString(tablet.Alias), err)
+		return rlp, 0, status.BackupRunning, false, err
+	}
+
+	return rlp, time.Second * time.Duration(status.ReplicationLagSeconds), status.BackupRunning, status.ReplicationLagUnknown, nil
 }
 
 // FindCurrentPrimary returns the current primary tablet of a shard, if any. The
@@ -299,9 +302,9 @@ func ShardReplicationStatuses(ctx context.Context, ts *topo.Server, tmc tmclient
 }
 
 // getValidCandidatesAndPositionsAsList converts the valid candidates from a map to a list of tablets, making it easier to sort
-func getValidCandidatesAndPositionsAsList(validCandidates map[string]replication.Position, tabletMap map[string]*topo.TabletInfo) ([]*topodatapb.Tablet, []replication.Position, error) {
+func getValidCandidatesAndPositionsAsList(validCandidates map[string]*RelayLogPositions, tabletMap map[string]*topo.TabletInfo) ([]*topodatapb.Tablet, []*RelayLogPositions, error) {
 	var validTablets []*topodatapb.Tablet
-	var tabletPositions []replication.Position
+	var tabletPositions []*RelayLogPositions
 	for tabletAlias, position := range validCandidates {
 		tablet, isFound := tabletMap[tabletAlias]
 		if !isFound {
@@ -314,8 +317,8 @@ func getValidCandidatesAndPositionsAsList(validCandidates map[string]replication
 }
 
 // restrictValidCandidates is used to restrict some candidates from being considered eligible for becoming the intermediate source or the final promotion candidate
-func restrictValidCandidates(validCandidates map[string]replication.Position, tabletMap map[string]*topo.TabletInfo) (map[string]replication.Position, error) {
-	restrictedValidCandidates := make(map[string]replication.Position)
+func restrictValidCandidates(validCandidates map[string]*RelayLogPositions, tabletMap map[string]*topo.TabletInfo) (map[string]*RelayLogPositions, error) {
+	restrictedValidCandidates := make(map[string]*RelayLogPositions)
 	for candidate, position := range validCandidates {
 		candidateInfo, ok := tabletMap[candidate]
 		if !ok {
