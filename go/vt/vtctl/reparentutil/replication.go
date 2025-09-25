@@ -52,17 +52,16 @@ type RelayLogPositions struct {
 	Executed replication.Position
 }
 
-// AtLeast returns true if the RelayLogPositions object contains at
-// least the positions provided as pos.
+// AtLeast returns true if the RelayLogPositions object contains at least the positions provided
+// as pos. If the combined positions are equal, prioritize the position where more events have
+// been executed/applied, as this avoids picking tablets with SQL delay (intended or not) that
+// can delay/timeout the reparent. Otherwise, pick the larger of the two positions as it
+// contains more changes, irrespective of how many changes are applied.
 func (rlp *RelayLogPositions) AtLeast(pos *RelayLogPositions) bool {
 	if pos == nil {
 		return false
 	}
 
-	// If the combined positions are not equal, pick the larger of the two as it contains
-	// more information/events, irrespective of how much of this information/events has
-	// been applied yet. Otherwise, prioritize the position where more events have been
-	// executed/applied, as it is likely to catch up faster.
 	if rlp.Combined.Equal(pos.Combined) {
 		return rlp.Executed.AtLeast(pos.Executed)
 	}
