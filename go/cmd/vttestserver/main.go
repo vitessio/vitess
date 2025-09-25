@@ -19,10 +19,13 @@ package main
 import (
 	"vitess.io/vitess/go/cmd/vttestserver/cli"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 func main() {
-	if err := cli.New().Execute(); err != nil {
+	cmd := cli.New()
+	cmd.SetGlobalNormalizationFunc(utils.NormalizeUnderscoresToDashes)
+	if err := cmd.Execute(); err != nil {
 		log.Fatal(err)
 	}
 }

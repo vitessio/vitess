@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -37,7 +38,7 @@ import (
 var vtgateProtocol = "grpc"
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&vtgateProtocol, "vtgate_protocol", vtgateProtocol, "how to talk to vtgate")
+	utils.SetFlagStringVar(fs, &vtgateProtocol, "vtgate-protocol", vtgateProtocol, "how to talk to vtgate")
 }
 
 func init() {

@@ -35,7 +35,7 @@ import (
 //   - Do so for all recorded positions.
 //   - Then, a 2nd round where some backups are purged -- this tests to see that we're still able to find a restore path
 //     (of course we only delete backups that still leave us with valid restore paths).
-//   - Last, create a new tablet with --restore_from_backup --restore-to-pos and see that it bootstraps with restored data
+//   - Last, create a new tablet with --restore-from-backup --restore-to-pos and see that it bootstraps with restored data
 //     and that it ends up in DRAINED type
 func TestIncrementalBackupAndRestoreToPos(t *testing.T) {
 	tcase := &backup.PITRTestCase{
@@ -59,7 +59,7 @@ func TestIncrementalBackupAndRestoreToPos(t *testing.T) {
 //   - Do so for all recorded tiemstamps.
 //   - Then, a 2nd round where some backups are purged -- this tests to see that we're still able to find a restore path
 //     (of course we only delete backups that still leave us with valid restore paths).
-//   - Last, create a new tablet with --restore_from_backup --restore-to-timestamp and see that it bootstraps with restored data
+//   - Last, create a new tablet with --restore-from-backup --restore-to-timestamp and see that it bootstraps with restored data
 //     and that it ends up in DRAINED type
 func TestIncrementalBackupAndRestoreToTimestamp(t *testing.T) {
 	tcase := &backup.PITRTestCase{

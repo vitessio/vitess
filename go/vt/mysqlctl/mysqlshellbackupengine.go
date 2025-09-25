@@ -318,7 +318,7 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 			if err != nil {
 				params.Logger.Errorf("unable to re-enable REDO_LOG: %v", err)
 			} else {
-				params.Logger.Infof("Disabled REDO_LOG")
+				params.Logger.Infof("Enabled REDO_LOG")
 			}
 		}()
 	}

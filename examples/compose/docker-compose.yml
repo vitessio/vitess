@@ -138,7 +138,7 @@ services:
     - -c
     - ' /vt/bin/vtctld --topo-implementation consul --topo-global-server-address consul1:8500
       --topo-global-root vitess/global --cell test
-      --service-map ''grpc-vtctl,grpc-vtctld'' --backup-storage-implementation file --file_backup_storage_root
+      --service-map ''grpc-vtctl,grpc-vtctld'' --backup-storage-implementation file --file-backup-storage-root
       /vt/vtdataroot/backups --logtostderr=true --port 8080 --grpc-port 15999 '
     depends_on:
       external_db_host:
@@ -155,7 +155,7 @@ services:
     - -c
     - '/script/run-forever.sh /vt/bin/vtgate --topo-implementation consul --topo-global-server-address
       consul1:8500 --topo-global-root vitess/global --logtostderr=true --port 8080 --grpc-port
-      15999 --mysql-server-port 15306 --mysql-auth-server-impl none --cell test --cells_to_watch
+      15999 --mysql-server-port 15306 --mysql-auth-server-impl none --cell test --cells-to-watch
       test --tablet-types-to-wait PRIMARY,REPLICA,RDONLY --service-map ''grpc-vtgateservice''
       --normalize-queries=true '
     depends_on:

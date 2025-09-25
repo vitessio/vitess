@@ -39,10 +39,8 @@ import (
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vtorc/collection"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
-	"vitess.io/vitess/go/vt/vtorc/metrics/query"
 	"vitess.io/vitess/go/vt/vtorc/util"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -62,8 +60,6 @@ var (
 	readTopologyInstanceCounter = stats.NewCounter("InstanceReadTopology", "Number of times an instance was read from the topology")
 	readInstanceCounter         = stats.NewCounter("InstanceRead", "Number of times an instance was read")
 	currentErrantGTIDCount      = stats.NewGaugesWithSingleLabel("CurrentErrantGTIDCount", "Number of errant GTIDs a vttablet currently has", "TabletAlias")
-	backendWrites               = collection.CreateOrReturnCollection("BACKEND_WRITES")
-	writeBufferLatency          = stopwatch.NewNamedStopwatch()
 )
 
 var (
@@ -72,9 +68,6 @@ var (
 )
 
 func init() {
-	_ = writeBufferLatency.AddMany([]string{"wait", "write"})
-	writeBufferLatency.Start("wait")
-
 	go initializeInstanceDao()
 }
 
@@ -86,15 +79,12 @@ func initializeInstanceDao() {
 
 // ExecDBWriteFunc chooses how to execute a write onto the database: whether synchronously or not
 func ExecDBWriteFunc(f func() error) error {
-	m := query.NewMetric()
-
 	ctx, cancel := context.WithTimeout(context.Background(), maxBackendOpTime)
 	defer cancel()
 
 	if err := instanceWriteSem.Acquire(ctx, 1); err != nil {
 		return err
 	}
-	m.WaitLatency = time.Since(m.Timestamp)
 
 	// catch the exec time and error if there is one
 	defer func() {
@@ -102,15 +92,7 @@ func ExecDBWriteFunc(f func() error) error {
 			if _, ok := r.(runtime.Error); ok {
 				panic(r)
 			}
-
-			if s, ok := r.(string); ok {
-				m.Err = errors.New(s)
-			} else {
-				m.Err = r.(error)
-			}
 		}
-		m.ExecuteLatency = time.Since(m.Timestamp.Add(m.WaitLatency))
-		_ = backendWrites.Append(m)
 		instanceWriteSem.Release(1)
 	}()
 	res := f()

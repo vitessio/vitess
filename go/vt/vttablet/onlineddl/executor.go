@@ -114,7 +114,7 @@ func init() {
 
 func registerOnlineDDLFlags(fs *pflag.FlagSet) {
 	utils.SetFlagDurationVar(fs, &migrationCheckInterval, "migration-check-interval", migrationCheckInterval, "Interval between migration checks")
-	fs.DurationVar(&retainOnlineDDLTables, "retain_online_ddl_tables", retainOnlineDDLTables, "How long should vttablet keep an old migrated table before purging it")
+	utils.SetFlagDurationVar(fs, &retainOnlineDDLTables, "retain-online-ddl-tables", retainOnlineDDLTables, "How long should vttablet keep an old migrated table before purging it")
 	utils.SetFlagIntVar(fs, &maxConcurrentOnlineDDLs, "max-concurrent-online-ddl", maxConcurrentOnlineDDLs, "Maximum number of online DDL changes that may run concurrently")
 }
 
@@ -4039,6 +4039,16 @@ func (e *Executor) updateMigrationReadyToComplete(ctx context.Context, uuid stri
 				atomic.StoreInt64(&runningMigration.WasReadyToComplete, 1) // WasReadyToComplete is set once and never cleared
 			}
 			atomic.StoreInt64(&runningMigration.ReadyToComplete, storeValue)
+		}
+	}
+	log.Infof("updateMigrationReadyToComplete: uuid=%s, isReady=%t", uuid, isReady)
+
+	if isReady {
+		// We set progress to 100%. Remember that progress is based on table rows estimation. We can get here
+		// with progress 87% or another value that is way off. But once we realize the migration is ready to complete,
+		// we know row copy is fully complete _and_ that vplayer is not far behind. So it's a better DX to report 100%.
+		if err = e.updateMigrationProgress(ctx, uuid, progressPctFull); err != nil {
+			return err
 		}
 	}
 	return nil

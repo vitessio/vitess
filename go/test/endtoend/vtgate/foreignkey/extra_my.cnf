@@ -1,0 +1,3 @@
+[mysqld-8.4]
+# Foreign key test configuration
+restrict_fk_on_non_standard_key = OFF

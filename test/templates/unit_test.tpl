@@ -1,5 +1,12 @@
 name: {{.Name}}
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - "main"
+      - "release-[0-9]+.[0-9]"
+    tags: '**'
+  pull_request:
+    branches: '**'
 concurrency:
   group: format('{0}-{1}', ${{"{{"}} github.ref {{"}}"}}, '{{.Name}}')
   cancel-in-progress: true
@@ -25,31 +32,12 @@ jobs:
           exit 1
         fi
 
-    - name: Check if workflow needs to be skipped
-      id: skip-workflow
-      run: |
-        skip='false'
-        if [[ "{{"${{github.event.pull_request}}"}}" ==  "" ]] && [[ "{{"${{github.ref}}"}}" != "refs/heads/main" ]] && [[ ! "{{"${{github.ref}}"}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "{{"${{github.ref}}"}}" =~ "refs/tags/.*" ]]; then
-          skip='true'
-        fi
-        echo Skip ${skip}
-        echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
-
-        PR_DATA=$(curl \
-          -H "{{"Authorization: token ${{ secrets.GITHUB_TOKEN }}"}}" \
-          -H "Accept: application/vnd.github.v3+json" \
-          "{{"https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}"}}")
-        draft=$(echo "$PR_DATA" | jq .draft -r)
-        echo "is_draft=${draft}" >> $GITHUB_OUTPUT
-
     - name: Check out code
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         persist-credentials: 'false'
 
     - name: Check for changes in relevant files
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: dorny/paths-filter@ebc4d7e9ebcb0b1eb21480bb8f43113e996ac77a # v3.0.1
       id: changes
       with:
@@ -70,31 +58,37 @@ jobs:
             - '.github/workflows/{{.FileName}}'
 
     - name: Set up Go
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
-      uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
+      if: steps.changes.outputs.unit_tests == 'true'
+      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
       with:
         go-version-file: go.mod
 
 {{if .GoPrivate}}
     - name: Setup GitHub access token
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
+      if: steps.changes.outputs.unit_tests == 'true'
       run: git config --global url.https://${{`{{ secrets.GH_ACCESS_TOKEN }}`}}@github.com/.insteadOf https://github.com/
 {{end}}
 
     - name: Set up python
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
+      if: steps.changes.outputs.unit_tests == 'true'
       uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
 
     - name: Tune the OS
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
+      if: steps.changes.outputs.unit_tests == 'true'
       run: |
         sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
+
         # Increase the asynchronous non-blocking I/O. More information at https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_use_native_aio
         echo "fs.aio-max-nr = 1048576" | sudo tee -a /etc/sysctl.conf
         sudo sysctl -p /etc/sysctl.conf
 
+        # Don't waste a bunch of time processing man-db triggers
+        echo "set man-db/auto-update false" | sudo debconf-communicate
+        sudo dpkg-reconfigure man-db
+
+
     - name: Get dependencies
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
+      if: steps.changes.outputs.unit_tests == 'true'
       run: |
         export DEBIAN_FRONTEND="noninteractive"
         sudo apt-get update
@@ -110,7 +104,7 @@ jobs:
 
         # Get key to latest MySQL repo
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.33-1_all.deb
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.34-1_all.deb
 
         {{if (eq .Platform "mysql57")}}
         # Bionic packages are still compatible for Jammy since there's no MySQL 5.7
@@ -161,12 +155,12 @@ jobs:
         go install github.com/vitessio/go-junit-report@HEAD
 
     - name: Run make tools
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
+      if: steps.changes.outputs.unit_tests == 'true'
       run: |
         make tools
 
     - name: Setup launchable dependencies
-      if: steps.skip-workflow.outputs.is_draft == 'false' && steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true' && github.base_ref == 'main'
+      if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.unit_tests == 'true' && github.base_ref == 'main'
       run: |
         # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
         pip3 install --user launchable~=1.0 > /dev/null
@@ -178,7 +172,7 @@ jobs:
         launchable record build --name "$GITHUB_RUN_ID" --no-commit-collection --source .
 
     - name: Run test
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
+      if: steps.changes.outputs.unit_tests == 'true'
       timeout-minutes: 30
       run: |
         set -exo pipefail
@@ -194,19 +188,20 @@ jobs:
         
         eatmydata -- make unit_test | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
-    - name: Print test output and Record test result in launchable if PR is not a draft
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true' && always()
+    - name: Record test results in launchable if PR is not a draft
+      if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.unit_tests == 'true' && github.base_ref == 'main' && !cancelled()
       run: |
-        if [[ "{{"${{steps.skip-workflow.outputs.is_draft}}"}}" ==  "false" ]]; then
-          # send recorded tests to launchable
-          launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
-        fi
+        # send recorded tests to launchable
+        launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
 
+    - name: Print test output
+      if: steps.changes.outputs.unit_tests == 'true' && !cancelled()
+      run: |
         # print test output
         cat output.txt
 
     - name: Test Summary
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true' && always()
+      if: steps.changes.outputs.unit_tests == 'true' && !cancelled()
       uses: test-summary/action@31493c76ec9e7aa675f1585d3ed6f1da69269a86 # v2.4
       with:
         paths: "report.xml"

@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	vtutils "vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtgate"
 )
 
@@ -73,6 +74,11 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
+		vtgateVer, err := cluster.GetMajorVersion("vtgate")
+		if err != nil {
+			return 1, err
+		}
+
 		// List of users authorized to execute vschema ddl operations
 		if utils.BinaryIsAtLeastAtVersion(22, "vtgate") {
 			timeNow := time.Now().Unix()
@@ -85,9 +91,9 @@ func TestMain(m *testing.M) {
 			}
 			defer os.Remove(configFile)
 
-			clusterInstance.VtGateExtraArgs = []string{fmt.Sprintf("--config-file=%s", configFile), "--schema_change_signal=false"}
+			clusterInstance.VtGateExtraArgs = []string{fmt.Sprintf("--config-file=%s", configFile), vtutils.GetFlagVariantForTestsByVersion("--schema-change-signal", vtgateVer) + "=false"}
 		} else {
-			clusterInstance.VtGateExtraArgs = []string{"--vschema_ddl_authorized_users=%", "--schema_change_signal=false"}
+			clusterInstance.VtGateExtraArgs = []string{"--vschema-ddl-authorized-users=%", "--schema-change-signal=false"}
 		}
 
 		// Start keyspace

@@ -1895,7 +1895,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "any_value(0) AS type, any_value(1) AS id",
+            "Aggregates": "constant_aggr('a') AS type, constant_aggr(0) AS id",
             "GroupBy": "2 COLLATE utf8mb4_0900_ai_ci",
             "ResultColumns": 2,
             "Inputs": [
@@ -2007,5 +2007,66 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "UNION with column aliases ",
+    "query": "(SELECT `team_id` AS `foo` FROM user WHERE `team_id` = 1 ORDER BY `id` DESC LIMIT 1) UNION ALL (SELECT `team_id` AS `foo` FROM user WHERE `team_id` = 2 ORDER BY `id` DESC LIMIT 1)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "(SELECT `team_id` AS `foo` FROM user WHERE `team_id` = 1 ORDER BY `id` DESC LIMIT 1) UNION ALL (SELECT `team_id` AS `foo` FROM user WHERE `team_id` = 2 ORDER BY `id` DESC LIMIT 1)",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:foo"
+        ],
+        "Columns": "0",
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Limit",
+                "Count": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select team_id as foo, id, weight_string(id) from `user` where 1 != 1",
+                    "OrderBy": "(1|2) DESC",
+                    "Query": "select team_id as foo, id, weight_string(id) from `user` where team_id = 1 order by id desc limit 1"
+                  }
+                ]
+              },
+              {
+                "OperatorType": "Limit",
+                "Count": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select team_id as foo, id, weight_string(id) from `user` where 1 != 1",
+                    "OrderBy": "(1|2) DESC",
+                    "Query": "select team_id as foo, id, weight_string(id) from `user` where team_id = 2 order by id desc limit 1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
+
 ]

@@ -77,8 +77,9 @@ const (
 	AggregateCountStar
 	AggregateGroupConcat
 	AggregateAvg
-	AggregateUDF  // This is an opcode used to represent UDFs
-	_NumOfOpCodes // This line must be last of the opcodes!
+	AggregateUDF      // This is an opcode used to represent UDFs
+	AggregateConstant // This is an opcode used to represent constants that are not grouped
+	_NumOfOpCodes     // This line must be last of the opcodes!
 )
 
 // SupportedAggregates maps the list of supported aggregate
@@ -97,6 +98,7 @@ var SupportedAggregates = map[string]AggregateOpcode{
 	"count_star":     AggregateCountStar,
 	"any_value":      AggregateAnyValue,
 	"group_concat":   AggregateGroupConcat,
+	"constant_aggr":  AggregateGroupConcat,
 }
 
 var AggregateName = map[AggregateOpcode]string{
@@ -111,6 +113,7 @@ var AggregateName = map[AggregateOpcode]string{
 	AggregateGroupConcat:   "group_concat",
 	AggregateAnyValue:      "any_value",
 	AggregateAvg:           "avg",
+	AggregateConstant:      "constant_aggr",
 }
 
 func (code AggregateOpcode) String() string {
@@ -127,7 +130,7 @@ func (code AggregateOpcode) MarshalJSON() ([]byte, error) {
 	return ([]byte)(fmt.Sprintf("\"%s\"", code.String())), nil
 }
 
-// Type returns the opcode return sql type, and a bool telling is we are sure about this type or not
+// SQLType returns the opcode return sql type, and a bool telling is we are sure about this type or not
 func (code AggregateOpcode) SQLType(typ querypb.Type) querypb.Type {
 	switch code {
 	case AggregateUnassigned:
@@ -154,7 +157,7 @@ func (code AggregateOpcode) SQLType(typ querypb.Type) querypb.Type {
 		return sqltypes.Int64
 	case AggregateGtid:
 		return sqltypes.VarChar
-	case AggregateUDF:
+	case AggregateUDF, AggregateConstant: // TODO: we can probably figure out the type here
 		return sqltypes.Unknown
 	default:
 		panic(code.String()) // we have a unit test checking we never reach here

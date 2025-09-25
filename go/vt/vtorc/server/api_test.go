@@ -26,6 +26,9 @@ func TestGetACLPermissionLevelForAPI(t *testing.T) {
 			apiEndpoint: enableGlobalRecoveriesAPI,
 			want:        acl.ADMIN,
 		}, {
+			apiEndpoint: detectionAnalysisAPI,
+			want:        acl.MONITORING,
+		}, {
 			apiEndpoint: replicationAnalysisAPI,
 			want:        acl.MONITORING,
 		}, {

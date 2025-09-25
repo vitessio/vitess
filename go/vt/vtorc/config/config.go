@@ -22,8 +22,14 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/viperutil"
+	vtorcdatapb "vitess.io/vitess/go/vt/proto/vtorcdata"
 	"vitess.io/vitess/go/vt/servenv"
 )
+
+// DefaultKeyspaceTopoConfig is the default topo-based VTOrc config for a keyspace.
+var DefaultKeyspaceTopoConfig = &vtorcdatapb.Keyspace{
+	DisableEmergencyReparent: false,
+}
 
 var configurationLoaded = make(chan bool)
 
@@ -33,8 +39,6 @@ const (
 	DebugMetricsIntervalSeconds           = 10
 	StaleInstanceCoordinatesExpireSeconds = 60
 	DiscoveryQueueCapacity                = 100000
-	DiscoveryQueueMaxStatisticsSize       = 120
-	DiscoveryCollectionRetentionSeconds   = 120
 	UnseenInstanceForgetHours             = 240 // Number of hours after which an unseen instance is forgotten
 )
 
