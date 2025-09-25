@@ -489,6 +489,12 @@ func (e *Executor) addNeededBindVars(vcursor *econtext.VCursorImpl, bindVarNeeds
 			bindVars[key] = sqltypes.BoolBindVariable(session.Autocommit)
 		case sysvars.QueryTimeout.Name:
 			bindVars[key] = sqltypes.Int64BindVariable(session.GetQueryTimeout())
+		case sysvars.TransactionTimeout.Name:
+			var v int64
+			ifOptionsExist(session, func(options *querypb.ExecuteOptions) {
+				v = options.GetTransactionTimeout()
+			})
+			bindVars[key] = sqltypes.Int64BindVariable(v)
 		case sysvars.ClientFoundRows.Name:
 			var v bool
 			ifOptionsExist(session, func(options *querypb.ExecuteOptions) {
