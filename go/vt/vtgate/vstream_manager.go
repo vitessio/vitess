@@ -319,11 +319,17 @@ func (vsm *vstreamManager) GetTotalStreamDelay() int64 {
 
 func (vs *vstream) stream(ctx context.Context) error {
 	ctx, vs.cancel = context.WithCancel(ctx)
-	defer vs.cancel()
 
 	vs.wg.Add(1)
 	go func() {
 		defer vs.wg.Done()
+
+		// sendEvents returns either if the given context has been canceled or if
+		// an error is returned from the callback. If the callback returns an error,
+		// we need to cancel the context to stop the other stream goroutines
+		// and to unblock the VStream call.
+		defer vs.cancel()
+
 		vs.sendEvents(ctx)
 	}()
 
