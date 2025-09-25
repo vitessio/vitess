@@ -38,7 +38,11 @@ func TestWaitlistExpireWithMultipleWaiters(t *testing.T) {
 
 	for i := 0; i < waiterCount; i++ {
 		go func() {
-			_, err := wait.waitForConn(ctx, nil)
+			_, err := wait.waitForConn(ctx, nil, func() bool {
+				// This function is called to check if the pool is closed.
+				return ctx.Err() != nil
+			})
+
 			if err != nil {
 				expireCount.Add(1)
 			}
