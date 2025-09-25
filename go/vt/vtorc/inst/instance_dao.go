@@ -1127,40 +1127,6 @@ func ForgetLongUnseenInstances() error {
 	return err
 }
 
-// SnapshotTopologies records topology graph for all existing topologies
-func SnapshotTopologies() error {
-	writeFunc := func() error {
-		_, err := db.ExecVTOrc(`INSERT OR IGNORE
-			INTO database_instance_topology_history (
-				snapshot_unix_timestamp,
-				alias,
-				hostname,
-				port,
-				source_host,
-				source_port,
-				keyspace,
-				shard,
-				version
-			)
-			SELECT
-				STRFTIME('%s', 'now'),
-				vitess_tablet.alias, vitess_tablet.hostname, vitess_tablet.port,
-				database_instance.source_host, database_instance.source_port,
-				vitess_tablet.keyspace, vitess_tablet.shard, database_instance.version
-			FROM
-				vitess_tablet LEFT JOIN database_instance USING (alias, hostname, port)
-			`,
-		)
-		if err != nil {
-			log.Error(err)
-			return err
-		}
-
-		return nil
-	}
-	return ExecDBWriteFunc(writeFunc)
-}
-
 func ExpireStaleInstanceBinlogCoordinates() error {
 	expireSeconds := config.GetReasonableReplicationLagSeconds() * 2
 	if expireSeconds < config.StaleInstanceCoordinatesExpireSeconds {
