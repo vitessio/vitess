@@ -41,11 +41,11 @@ func RefreshAllKeyspacesAndShards(ctx context.Context) error {
 
 	var keyspaces []string
 	if len(shardsToWatch) == 0 { // all known keyspaces
-		ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
-		defer cancel()
+		getCtx, getCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+		defer getCancel()
 		var err error
 		// Get all the keyspaces
-		keyspaces, err = ts.GetKeyspaces(ctx)
+		keyspaces, err = ts.GetKeyspaces(getCtx)
 		if err != nil {
 			return err
 		}
@@ -57,7 +57,7 @@ func RefreshAllKeyspacesAndShards(ctx context.Context) error {
 	refreshCtx, refreshCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer refreshCancel()
 
-	eg, _ := errgroup.WithContext(ctx)
+	eg, egCtx := errgroup.WithContext(refreshCtx)
 	for idx, keyspace := range keyspaces {
 		// Check if the current keyspace name is the same as the last one.
 		// If it is, then we know we have already refreshed its information.
@@ -67,11 +67,10 @@ func RefreshAllKeyspacesAndShards(ctx context.Context) error {
 		}
 
 		eg.Go(func() error {
-			return refreshKeyspaceHelper(refreshCtx, keyspace)
+			return refreshKeyspaceHelper(egCtx, keyspace)
 		})
-
 		eg.Go(func() error {
-			return refreshAllShards(refreshCtx, keyspace)
+			return refreshAllShards(egCtx, keyspace)
 		})
 	}
 	return eg.Wait()

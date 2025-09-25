@@ -36,13 +36,12 @@ func TestNewFileBasedConfigLoader(t *testing.T) {
 
 func TestFileBasedConfigLoader_Load(t *testing.T) {
 	tests := []struct {
-		name                string
-		configPath          string
-		mockReadFile        func(filename string) ([]byte, error)
-		mockJsonUnmarshal   func(data []byte, v interface{}) error
-		expectedConfig      Config
-		expectedError       string
-		expectedErrorNotNil bool
+		name              string
+		configPath        string
+		mockReadFile      func(filename string) ([]byte, error)
+		mockJsonUnmarshal func(data []byte, v interface{}) error
+		expectedConfig    Config
+		expectedError     string
 	}{
 		{
 			name:       "successful config load with minimal config",
@@ -58,7 +57,6 @@ func TestFileBasedConfigLoader_Load(t *testing.T) {
 				Enabled:  true,
 				Strategy: registry.ThrottlingStrategyTabletThrottler,
 			},
-			expectedErrorNotNil: false,
 		},
 		{
 			name:       "successful config load with disabled throttler",
@@ -74,7 +72,6 @@ func TestFileBasedConfigLoader_Load(t *testing.T) {
 				Enabled:  false,
 				Strategy: registry.ThrottlingStrategyTabletThrottler,
 			},
-			expectedErrorNotNil: false,
 		},
 		{
 			name:       "file read error - file not found",
@@ -86,9 +83,8 @@ func TestFileBasedConfigLoader_Load(t *testing.T) {
 			mockJsonUnmarshal: func(data []byte, v interface{}) error {
 				return json.Unmarshal(data, v)
 			},
-			expectedConfig:      Config{},
-			expectedError:       "no such file or directory",
-			expectedErrorNotNil: true,
+			expectedConfig: Config{},
+			expectedError:  "no such file or directory",
 		},
 		{
 			name:       "successful config load with dry run as enabled",
@@ -105,7 +101,6 @@ func TestFileBasedConfigLoader_Load(t *testing.T) {
 				Strategy: registry.ThrottlingStrategyTabletThrottler,
 				DryRun:   true,
 			},
-			expectedErrorNotNil: false,
 		},
 		{
 			name:       "file read error - permission denied",
@@ -117,9 +112,8 @@ func TestFileBasedConfigLoader_Load(t *testing.T) {
 			mockJsonUnmarshal: func(data []byte, v interface{}) error {
 				return json.Unmarshal(data, v)
 			},
-			expectedConfig:      Config{},
-			expectedError:       "permission denied",
-			expectedErrorNotNil: true,
+			expectedConfig: Config{},
+			expectedError:  "permission denied",
 		},
 		{
 			name:       "json unmarshal error - invalid json",
@@ -131,9 +125,8 @@ func TestFileBasedConfigLoader_Load(t *testing.T) {
 			mockJsonUnmarshal: func(data []byte, v interface{}) error {
 				return json.Unmarshal(data, v)
 			},
-			expectedConfig:      Config{},
-			expectedError:       "unexpected end of JSON input",
-			expectedErrorNotNil: true,
+			expectedConfig: Config{},
+			expectedError:  "unexpected end of JSON input",
 		},
 		{
 			name:       "json unmarshal error - invalid field type",
@@ -145,9 +138,8 @@ func TestFileBasedConfigLoader_Load(t *testing.T) {
 			mockJsonUnmarshal: func(data []byte, v interface{}) error {
 				return json.Unmarshal(data, v)
 			},
-			expectedConfig:      Config{},
-			expectedError:       "cannot unmarshal string into Go struct field Config.enabled of type bool",
-			expectedErrorNotNil: true,
+			expectedConfig: Config{},
+			expectedError:  "json: cannot unmarshal string into Go struct field Config.enabled of type bool",
 		},
 		{
 			name:       "empty file - should unmarshal to zero value config",
@@ -163,7 +155,6 @@ func TestFileBasedConfigLoader_Load(t *testing.T) {
 				Enabled:  false,
 				Strategy: "",
 			},
-			expectedErrorNotNil: false,
 		},
 	}
 
@@ -176,9 +167,9 @@ func TestFileBasedConfigLoader_Load(t *testing.T) {
 			config, err := loader.Load(context.Background())
 
 			// Assert
-			if tt.expectedErrorNotNil {
+			if tt.expectedError != "" {
 				require.Error(t, err)
-				require.Contains(t, err.Error(), tt.expectedError)
+				require.EqualError(t, err, tt.expectedError)
 				require.Equal(t, tt.expectedConfig, config)
 			} else {
 				require.NoError(t, err)
