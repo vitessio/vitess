@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -83,55 +84,57 @@ func TestVStreamSkew(t *testing.T) {
 	cell := "aa"
 	for idx, tcase := range tcases {
 		t.Run("", func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			synctest.Test(t, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
 
-			ks := fmt.Sprintf("TestVStreamSkew-%d", idx)
-			_ = createSandbox(ks)
-			hc := discovery.NewFakeHealthCheck(nil)
-			st := getSandboxTopo(ctx, cell, ks, []string{"-20", "20-40"})
-			vsm := newTestVStreamManager(ctx, hc, st, cell)
-			vgtid := &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{}}
-			want := int64(0)
-			var sbc0, sbc1 *sandboxconn.SandboxConn
-			if tcase.shard0idx != 0 {
-				sbc0 = hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
-				addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
-				sbc0.VStreamCh = make(chan *binlogdatapb.VEvent)
-				want += 2 * tcase.numEventsPerShard
-				vgtid.ShardGtids = append(vgtid.ShardGtids, &binlogdatapb.ShardGtid{Keyspace: ks, Gtid: "pos", Shard: "-20"})
-				go stream(sbc0, ks, "-20", tcase.numEventsPerShard, tcase.shard0idx)
-			}
-			if tcase.shard1idx != 0 {
-				sbc1 = hc.AddTestTablet(cell, "1.1.1.1", 1002, ks, "20-40", topodatapb.TabletType_PRIMARY, true, 1, nil)
-				addTabletToSandboxTopo(t, ctx, st, ks, "20-40", sbc1.Tablet())
-				sbc1.VStreamCh = make(chan *binlogdatapb.VEvent)
-				want += 2 * tcase.numEventsPerShard
-				vgtid.ShardGtids = append(vgtid.ShardGtids, &binlogdatapb.ShardGtid{Keyspace: ks, Gtid: "pos", Shard: "20-40"})
-				go stream(sbc1, ks, "20-40", tcase.numEventsPerShard, tcase.shard1idx)
-			}
-
-			vstreamCtx, vstreamCancel := context.WithTimeout(ctx, 1*time.Minute)
-			defer vstreamCancel()
-
-			receivedEvents := make([]*binlogdatapb.VEvent, 0)
-			err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{MinimizeSkew: true}, func(events []*binlogdatapb.VEvent) error {
-				receivedEvents = append(receivedEvents, events...)
-
-				if int64(len(receivedEvents)) == want {
-					// Stop streaming after receiving both expected responses.
-					vstreamCancel()
+				ks := fmt.Sprintf("TestVStreamSkew-%d", idx)
+				_ = createSandbox(ks)
+				hc := discovery.NewFakeHealthCheck(nil)
+				st := getSandboxTopo(ctx, cell, ks, []string{"-20", "20-40"})
+				vsm := newTestVStreamManager(ctx, hc, st, cell)
+				vgtid := &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{}}
+				want := int64(0)
+				var sbc0, sbc1 *sandboxconn.SandboxConn
+				if tcase.shard0idx != 0 {
+					sbc0 = hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
+					addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
+					sbc0.VStreamCh = make(chan *binlogdatapb.VEvent)
+					want += 2 * tcase.numEventsPerShard
+					vgtid.ShardGtids = append(vgtid.ShardGtids, &binlogdatapb.ShardGtid{Keyspace: ks, Gtid: "pos", Shard: "-20"})
+					go stream(sbc0, ks, "-20", tcase.numEventsPerShard, tcase.shard0idx)
+				}
+				if tcase.shard1idx != 0 {
+					sbc1 = hc.AddTestTablet(cell, "1.1.1.1", 1002, ks, "20-40", topodatapb.TabletType_PRIMARY, true, 1, nil)
+					addTabletToSandboxTopo(t, ctx, st, ks, "20-40", sbc1.Tablet())
+					sbc1.VStreamCh = make(chan *binlogdatapb.VEvent)
+					want += 2 * tcase.numEventsPerShard
+					vgtid.ShardGtids = append(vgtid.ShardGtids, &binlogdatapb.ShardGtid{Keyspace: ks, Gtid: "pos", Shard: "20-40"})
+					go stream(sbc1, ks, "20-40", tcase.numEventsPerShard, tcase.shard1idx)
 				}
 
-				return nil
+				vstreamCtx, vstreamCancel := context.WithTimeout(ctx, 1*time.Minute)
+				defer vstreamCancel()
+
+				receivedEvents := make([]*binlogdatapb.VEvent, 0)
+				err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{MinimizeSkew: true}, func(events []*binlogdatapb.VEvent) error {
+					receivedEvents = append(receivedEvents, events...)
+
+					if int64(len(receivedEvents)) == want {
+						// Stop streaming after receiving both expected responses.
+						vstreamCancel()
+					}
+
+					return nil
+				})
+
+				require.Error(t, err)
+				require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
+
+				require.Equal(t, int(want), int(len(receivedEvents)))
+				require.Equal(t, tcase.expectedDelays, vsm.GetTotalStreamDelay()-previousDelays)
+				previousDelays = vsm.GetTotalStreamDelay()
 			})
-
-			require.Error(t, err)
-			require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
-
-			require.Equal(t, int(want), int(len(receivedEvents)))
-			require.Equal(t, tcase.expectedDelays, vsm.GetTotalStreamDelay()-previousDelays)
-			previousDelays = vsm.GetTotalStreamDelay()
 		})
 	}
 }
@@ -1710,25 +1713,27 @@ func TestVStreamIdleHeartbeat(t *testing.T) {
 	}
 	for _, tcase := range testcases {
 		t.Run(tcase.name, func(t *testing.T) {
-			var heartbeatCount int
+			synctest.Test(t, func(t *testing.T) {
+				var heartbeatCount int
 
-			vstreamCtx, vstreamCancel := context.WithTimeout(ctx, time.Duration(4500)*time.Millisecond)
-			defer vstreamCancel()
+				vstreamCtx, vstreamCancel := context.WithTimeout(ctx, time.Duration(4500)*time.Millisecond)
+				defer vstreamCancel()
 
-			err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{HeartbeatInterval: tcase.heartbeatInterval}, func(events []*binlogdatapb.VEvent) error {
-				for _, event := range events {
-					if event.Type == binlogdatapb.VEventType_HEARTBEAT {
-						heartbeatCount++
+				err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{HeartbeatInterval: tcase.heartbeatInterval}, func(events []*binlogdatapb.VEvent) error {
+					for _, event := range events {
+						if event.Type == binlogdatapb.VEventType_HEARTBEAT {
+							heartbeatCount++
+						}
 					}
-				}
 
-				return nil
+					return nil
+				})
+
+				require.Error(t, err)
+				require.ErrorIs(t, vterrors.UnwrapAll(err), context.DeadlineExceeded)
+
+				require.Equalf(t, heartbeatCount, tcase.want, "got %d, want %d", heartbeatCount, tcase.want)
 			})
-
-			require.Error(t, err)
-			require.ErrorIs(t, vterrors.UnwrapAll(err), context.DeadlineExceeded)
-
-			require.Equalf(t, heartbeatCount, tcase.want, "got %d, want %d", heartbeatCount, tcase.want)
 		})
 	}
 }
@@ -2111,28 +2116,30 @@ func TestVStreamManagerHealthCheckResponseHandling(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.wantErr != "" {
-				source.SetStreamHealthResponse(tc.hcRes)
-			}
+			synctest.Test(t, func(t *testing.T) {
+				if tc.wantErr != "" {
+					source.SetStreamHealthResponse(tc.hcRes)
+				}
 
-			vstreamCtx, vstreamCancel := context.WithTimeout(ctx, 5*time.Second)
-			defer vstreamCancel()
+				vstreamCtx, vstreamCancel := context.WithTimeout(ctx, 5*time.Second)
+				defer vstreamCancel()
 
-			// SandboxConn's VStream implementation always waits for the context to timeout.
-			err := vsm.VStream(vstreamCtx, tabletType, vgtid, nil, nil, func(events []*binlogdatapb.VEvent) error {
-				return fmt.Errorf("unexpected events: %v", events)
+				// SandboxConn's VStream implementation always waits for the context to timeout.
+				err := vsm.VStream(vstreamCtx, tabletType, vgtid, nil, nil, func(events []*binlogdatapb.VEvent) error {
+					return fmt.Errorf("unexpected events: %v", events)
+				})
+
+				if tc.wantErr != "" {
+					require.Error(t, err)
+					require.Contains(t, logger.String(), tc.wantErr)
+				} else {
+					// Otherwise we simply expect the context to timeout
+					require.Error(t, err)
+					require.ErrorIs(t, vterrors.UnwrapAll(err), context.DeadlineExceeded)
+				}
+
+				logger.Clear()
 			})
-
-			if tc.wantErr != "" {
-				require.Error(t, err)
-				require.Contains(t, logger.String(), tc.wantErr)
-			} else {
-				// Otherwise we simply expect the context to timeout
-				require.Error(t, err)
-				require.ErrorIs(t, vterrors.UnwrapAll(err), context.DeadlineExceeded)
-			}
-
-			logger.Clear()
 		})
 	}
 }
