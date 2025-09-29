@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -785,6 +786,37 @@ func TestTxPoolBeginStatements(t *testing.T) {
 			require.Equal(t, tc.expBeginSQL, beginSQL)
 		})
 	}
+}
+
+func TestGetTransactionTimeout(t *testing.T) {
+	_, txPool, _, closer := setup(t)
+	defer closer()
+
+	txPool.env.Config().Oltp.TxTimeout = 5 * time.Millisecond
+
+	// No options should use workload timeout
+	timeout := getTransactionTimeout(nil, txPool.env.Config(), querypb.ExecuteOptions_OLTP)
+	require.Equal(t, 5*time.Millisecond, timeout)
+
+	// Options with no timeout should use workload timeout
+	options := &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_OLTP}
+	timeout = getTransactionTimeout(options, txPool.env.Config(), options.Workload)
+	require.Equal(t, 5*time.Millisecond, timeout)
+
+	// Options with larger timeout should use smaller workload timeout
+	options.TransactionTimeout = ptr.Of(int64(10)) // ms
+	timeout = getTransactionTimeout(options, txPool.env.Config(), options.Workload)
+	require.Equal(t, 5*time.Millisecond, timeout)
+
+	// Options with smaller timeout should use smaller session timeout
+	options.TransactionTimeout = ptr.Of(int64(3)) // ms
+	timeout = getTransactionTimeout(options, txPool.env.Config(), options.Workload)
+	require.Equal(t, 3*time.Millisecond, timeout)
+
+	// Options with explicit zero timeout should use larger workload timeout
+	options.TransactionTimeout = ptr.Of(int64(0))
+	timeout = getTransactionTimeout(options, txPool.env.Config(), options.Workload)
+	require.Equal(t, 5*time.Millisecond, timeout)
 }
 
 func newTxPool() (*TxPool, *fakeLimiter) {

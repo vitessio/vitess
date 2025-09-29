@@ -273,7 +273,7 @@ func (tsv *TabletServer) loadQueryTimeoutWithTxAndOptions(txID int64, options *q
 	}
 
 	// fetch the transaction timeout.
-	txTimeout := tsv.config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP)
+	txTimeout := getTransactionTimeout(options, tsv.config, querypb.ExecuteOptions_OLTP)
 
 	// Use the smaller of the two values (0 means infinity).
 	return smallerTimeout(timeout, txTimeout)
@@ -1024,7 +1024,7 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 		allowOnShutdown = true
 		// Use the transaction timeout. StreamExecute calls happen for OLAP only,
 		// so we can directly fetch the OLAP TX timeout.
-		timeout = tsv.config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLAP)
+		timeout = getTransactionTimeout(options, tsv.config, querypb.ExecuteOptions_OLAP)
 	}
 
 	return tsv.execRequest(
