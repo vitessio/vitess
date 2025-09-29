@@ -149,6 +149,7 @@ jobs:
         export VTDATAROOT="/tmp/"
 
         export NOVTADMINBUILD=1
+        export VT_GO_PARALLEL_VALUE=$(nproc)
         export VTEVALENGINETEST="0"
         # We sometimes need to alter the behavior based on the platform we're
         # testing, e.g. MySQL 5.7 vs 8.0.
