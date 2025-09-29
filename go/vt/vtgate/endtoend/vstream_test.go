@@ -594,6 +594,10 @@ func TestVStreamCopyResume(t *testing.T) {
 					if expectedEvents[i].CurrentTime != 0 {
 						cloneExpectedEvent.CurrentTime = ev.CurrentTime
 					}
+					// Clear non-deterministic fields from actual event for comparison
+					ev.CommitParent = 0
+					ev.SequenceNumber = 0
+					ev.EventGtid = ""
 					require.True(t, proto.Equal(cloneExpectedEvent, ev), "event: %s, \nexpected: %s", ev.String(), cloneExpectedEvent.String())
 				}
 				t.Logf("TestVStreamCopyResume was successful")
