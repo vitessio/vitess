@@ -58,6 +58,7 @@ func TestVStreamSkew(t *testing.T) {
 			time.Sleep(time.Duration(idx*100) * time.Millisecond)
 		}
 	}
+
 	type skewTestCase struct {
 		numEventsPerShard    int64
 		shard0idx, shard1idx int64

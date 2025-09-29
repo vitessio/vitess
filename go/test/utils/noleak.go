@@ -72,6 +72,8 @@ func ensureNoLeaks() error {
 
 func ensureNoGoroutines() error {
 	var ignored = []goleak.Option{
+		goleak.IgnoreTopFunction("internal/synctest.Run"),
+		goleak.IgnoreTopFunction("testing/synctest.testingSynctestTest"),
 		goleak.IgnoreTopFunction("github.com/golang/glog.(*fileSink).flushDaemon"),
 		goleak.IgnoreTopFunction("github.com/golang/glog.(*loggingT).flushDaemon"),
 		goleak.IgnoreTopFunction("vitess.io/vitess/go/vt/dbconfigs.init.0.func1"),
