@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 func TestDiscoveryQueue(t *testing.T) {
@@ -32,11 +33,12 @@ func TestDiscoveryQueue(t *testing.T) {
 		Cell: "zone1",
 		Uid:  1,
 	}
+	tabletAliasString := topoproto.TabletAliasString(tabletAlias)
 
 	// Push
 	q.Push(tabletAlias)
 	require.Equal(t, 1, q.QueueLen())
-	_, found := q.enqueued[tabletAlias]
+	_, found := q.enqueued[tabletAliasString]
 	require.True(t, found)
 
 	// Push duplicate
@@ -46,13 +48,13 @@ func TestDiscoveryQueue(t *testing.T) {
 	// Consume
 	require.Equal(t, tabletAlias, q.Consume())
 	require.Equal(t, 1, q.QueueLen())
-	_, found = q.enqueued[tabletAlias]
+	_, found = q.enqueued[tabletAliasString]
 	require.True(t, found)
 
 	// Release
 	q.Release(tabletAlias)
 	require.Zero(t, q.QueueLen())
-	_, found = q.enqueued[tabletAlias]
+	_, found = q.enqueued[tabletAliasString]
 	require.False(t, found)
 }
 

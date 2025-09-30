@@ -224,7 +224,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		convertTabletWithErrantGTIDs bool
 		analysisEntry                *inst.DetectionAnalysis
 		wantRecoveryFunction         recoveryFunction
-		wantSkipRecovery             bool
+		wantRecoverySkipCode         RecoverySkipCode
 	}{
 		{
 			name:       "DeadPrimary with ERS enabled",
@@ -244,7 +244,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedShard:    shard,
 			},
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
-			wantSkipRecovery:     true,
+			wantRecoverySkipCode: RecoverySkipERSDisabled,
 		}, {
 			name:       "StalledDiskPrimary with ERS enabled",
 			ersEnabled: true,
@@ -263,7 +263,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedShard:    shard,
 			},
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
-			wantSkipRecovery:     true,
+			wantRecoverySkipCode: RecoverySkipERSDisabled,
 		}, {
 			name:       "PrimarySemiSyncBlocked with ERS enabled",
 			ersEnabled: true,
@@ -282,7 +282,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedShard:    shard,
 			},
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
-			wantSkipRecovery:     true,
+			wantRecoverySkipCode: RecoverySkipERSDisabled,
 		}, {
 			name:       "PrimaryTabletDeleted with ERS enabled",
 			ersEnabled: true,
@@ -301,7 +301,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedShard:    shard,
 			},
 			wantRecoveryFunction: recoverPrimaryTabletDeletedFunc,
-			wantSkipRecovery:     true,
+			wantRecoverySkipCode: RecoverySkipERSDisabled,
 		}, {
 			name:       "PrimaryHasPrimary",
 			ersEnabled: false,
@@ -358,7 +358,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedShard:    shard,
 			},
 			wantRecoveryFunction: recoverErrantGTIDDetectedFunc,
-			wantSkipRecovery:     true,
+			wantRecoverySkipCode: RecoverySkipNoRecoveryAction,
 		}, {
 			name:       "DeadPrimary with global ERS enabled and keyspace ERS disabled",
 			ersEnabled: true,
@@ -369,7 +369,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedKeyspaceEmergencyReparentDisabled: true,
 			},
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
-			wantSkipRecovery:     true,
+			wantRecoverySkipCode: RecoverySkipERSDisabled,
 		}, {
 			name:       "DeadPrimary with global+keyspace ERS enabled and shard ERS disabled",
 			ersEnabled: true,
@@ -380,7 +380,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedShardEmergencyReparentDisabled: true,
 			},
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
-			wantSkipRecovery:     true,
+			wantRecoverySkipCode: RecoverySkipERSDisabled,
 		}, {
 			name:       "UnreachablePrimary",
 			ersEnabled: true,
@@ -391,7 +391,6 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedShardEmergencyReparentDisabled: true,
 			},
 			wantRecoveryFunction: restartArbitraryDirectReplicaFunc,
-			wantSkipRecovery:     false,
 		}, {
 			name:       "UnreachablePrimaryWithBrokenReplicas",
 			ersEnabled: true,
@@ -402,7 +401,6 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedShardEmergencyReparentDisabled: true,
 			},
 			wantRecoveryFunction: restartAllDirectReplicasFunc,
-			wantSkipRecovery:     false,
 		},
 	}
 
@@ -416,9 +414,9 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			config.SetConvertTabletWithErrantGTIDs(tt.convertTabletWithErrantGTIDs)
 			defer config.SetConvertTabletWithErrantGTIDs(convertErrantVal)
 
-			gotFunc, skipRecovery := getCheckAndRecoverFunctionCode(tt.analysisEntry)
+			gotFunc, recoverySkipCode := getCheckAndRecoverFunctionCode(tt.analysisEntry)
 			require.EqualValues(t, tt.wantRecoveryFunction, gotFunc)
-			require.EqualValues(t, tt.wantSkipRecovery, skipRecovery)
+			require.EqualValues(t, tt.wantRecoverySkipCode.String(), recoverySkipCode.String())
 		})
 	}
 }
@@ -513,7 +511,7 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 				Analysis:              inst.ReplicationStopped,
 				AnalyzedKeyspace:      "ks",
 				AnalyzedShard:         "0",
-			}, func(*topodatapb.TabletAlias, bool) {
+			}, []string{"ks", "0", ""}, func(*topodatapb.TabletAlias, bool) {
 				// the implementation for DiscoverInstance is not required because we are mocking the db response.
 			})
 
