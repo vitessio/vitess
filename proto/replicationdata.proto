@@ -111,3 +111,12 @@ message FullStatus {
   bool semi_sync_blocked = 24;
   topodata.TabletType tablet_type = 25;
 }
+
+// WaitForRelayLogsMode represents what approach to use for deciding the number
+// of tablets to for the wait-for-relaylogs phase of EmergencyReparentShard.
+enum WaitForRelayLogsMode {
+  DEFAULT = 0;
+  ALL = 1;
+  MAJORITY = 2;
+  COUNT = 3;
+}

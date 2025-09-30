@@ -1299,6 +1299,8 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 	span.Annotate("wait_replicas_timeout_sec", waitReplicasTimeout.Seconds())
 	span.Annotate("prevent_cross_cell_promotion", req.PreventCrossCellPromotion)
 	span.Annotate("wait_for_all_tablets", req.WaitForAllTablets)
+	span.Annotate("wait_for_relay_logs_mode", req.WaitForRelayLogsMode)
+	span.Annotate("wait_for_relay_logs_tablet_count", req.WaitForRelayLogsTabletCount)
 
 	m := sync.RWMutex{}
 	logstream := []*logutilpb.Event{}
@@ -1309,16 +1311,22 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 		logstream = append(logstream, e)
 	})
 
+	if req.WaitForRelayLogsMode == replicationdatapb.WaitForRelayLogsMode_COUNT && req.WaitForRelayLogsTabletCount == 0 {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "WaitForRelaylogsTabletCount field must be > 0 when WaitForRelayLogsMode field is set to COUNT")
+	}
+
 	ev, err := reparentutil.NewEmergencyReparenter(s.ts, s.tmc, logger).ReparentShard(ctx,
 		req.Keyspace,
 		req.Shard,
 		reparentutil.EmergencyReparentOptions{
-			NewPrimaryAlias:           req.NewPrimary,
-			IgnoreReplicas:            sets.New(ignoreReplicaAliases...),
-			WaitReplicasTimeout:       waitReplicasTimeout,
-			WaitAllTablets:            req.WaitForAllTablets,
-			PreventCrossCellPromotion: req.PreventCrossCellPromotion,
-			ExpectedPrimaryAlias:      req.ExpectedPrimary,
+			NewPrimaryAlias:             req.NewPrimary,
+			IgnoreReplicas:              sets.New(ignoreReplicaAliases...),
+			WaitReplicasTimeout:         waitReplicasTimeout,
+			WaitAllTablets:              req.WaitForAllTablets,
+			PreventCrossCellPromotion:   req.PreventCrossCellPromotion,
+			ExpectedPrimaryAlias:        req.ExpectedPrimary,
+			WaitForRelayLogsMode:        req.WaitForRelayLogsMode,
+			WaitForRelayLogsTabletCount: req.WaitForRelayLogsTabletCount,
 		},
 	)
 

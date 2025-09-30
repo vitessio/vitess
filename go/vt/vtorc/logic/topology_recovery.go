@@ -304,10 +304,12 @@ func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.DetectionAn
 		tablet.Keyspace,
 		tablet.Shard,
 		reparentutil.EmergencyReparentOptions{
-			IgnoreReplicas:            nil,
-			WaitReplicasTimeout:       config.GetWaitReplicasTimeout(),
-			PreventCrossCellPromotion: config.GetPreventCrossCellFailover(),
-			WaitAllTablets:            waitForAllTablets,
+			IgnoreReplicas:              nil,
+			WaitReplicasTimeout:         config.GetWaitReplicasTimeout(),
+			PreventCrossCellPromotion:   config.GetPreventCrossCellFailover(),
+			WaitForRelayLogsMode:        config.GetWaitForRelayLogsMode(),
+			WaitForRelayLogsTabletCount: config.GetWaitForRelayLogsTabletCount(),
+			WaitAllTablets:              waitForAllTablets,
 		},
 	)
 	if err != nil {

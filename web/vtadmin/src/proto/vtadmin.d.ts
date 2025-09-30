@@ -49847,6 +49847,14 @@ export namespace replicationdata {
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
+
+    /** WaitForRelayLogsMode enum. */
+    enum WaitForRelayLogsMode {
+        DEFAULT = 0,
+        ALL = 1,
+        MAJORITY = 2,
+        COUNT = 3
+    }
 }
 
 /** Namespace vschema. */
@@ -58978,6 +58986,12 @@ export namespace vtctldata {
 
         /** EmergencyReparentShardRequest expected_primary */
         expected_primary?: (topodata.ITabletAlias|null);
+
+        /** EmergencyReparentShardRequest wait_for_relay_logs_mode */
+        wait_for_relay_logs_mode?: (replicationdata.WaitForRelayLogsMode|null);
+
+        /** EmergencyReparentShardRequest wait_for_relay_logs_tablet_count */
+        wait_for_relay_logs_tablet_count?: (number|Long|null);
     }
 
     /** Represents an EmergencyReparentShardRequest. */
@@ -59012,6 +59026,12 @@ export namespace vtctldata {
 
         /** EmergencyReparentShardRequest expected_primary. */
         public expected_primary?: (topodata.ITabletAlias|null);
+
+        /** EmergencyReparentShardRequest wait_for_relay_logs_mode. */
+        public wait_for_relay_logs_mode: replicationdata.WaitForRelayLogsMode;
+
+        /** EmergencyReparentShardRequest wait_for_relay_logs_tablet_count. */
+        public wait_for_relay_logs_tablet_count: (number|Long);
 
         /**
          * Creates a new EmergencyReparentShardRequest instance using the specified properties.

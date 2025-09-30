@@ -113,4 +113,6 @@ Flags:
       --v Level                                                     log level for V logs
   -v, --version                                                     print binary version
       --vmodule vModuleFlag                                         comma-separated list of pattern=N settings for file-filtered logging
+      --wait-for-relaylogs-mode string                              Specifies the number of tablets to wait for relaylog applying during an EmergencyReparentShard action. ALL: wait for all tablets, MAJORITY: wait for a majority of tablets, COUNT: wait for an exact number of tablets (using --wait-for-relaylogs-tablet-count flag) (default "ALL")
+      --wait-for-relaylogs-tablet-count int                         Specifies the exact number of tablets to wait for relaylogs during EmergencyReparentShard actions. This setting must be > 0 when --wait-for-relaylogs-mode=COUNT is set
       --wait-replicas-timeout duration                              Duration for which to wait for replica's to respond when issuing RPCs (default 30s)
