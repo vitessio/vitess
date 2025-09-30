@@ -86,8 +86,15 @@ jobs:
         echo "set man-db/auto-update false" | sudo debconf-communicate
         sudo dpkg-reconfigure man-db
 
+    - name: Install eatmydata
+      if: steps.changes.outputs.unit_tests == 'true'
+      run: |
+        sudo apt-get update && sudo apt-get install -y --no-install-recommends eatmydata
+
     - name: Get dependencies
       if: steps.changes.outputs.unit_tests == 'true'
+      env:
+        LD_PRELOAD: "libeatmydata.so"
       run: |
         export DEBIAN_FRONTEND="noninteractive"
         sudo apt-get update
@@ -136,7 +143,7 @@ jobs:
         sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
         {{end}}
 
-        sudo apt-get install -y make unzip g++ curl git wget ant openjdk-11-jdk eatmydata
+        sudo apt-get install -y make unzip g++ curl git wget ant openjdk-11-jdk
         
         sudo service mysql stop
         sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
@@ -154,9 +161,9 @@ jobs:
         go install github.com/vitessio/go-junit-report@HEAD
 
     - name: Run make tools
+      if: steps.changes.outputs.unit_tests == 'true'
       env:
         LD_PRELOAD: "libeatmydata.so"
-      if: steps.changes.outputs.unit_tests == 'true'
       run: |
         make tools
 
