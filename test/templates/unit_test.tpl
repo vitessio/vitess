@@ -86,10 +86,15 @@ jobs:
         echo "set man-db/auto-update false" | sudo debconf-communicate
         sudo dpkg-reconfigure man-db
 
+    - name: Update apt
+      if: steps.changes.outputs.unit_tests == 'true'
+      run: |
+        sudo apt-get update
+
     - name: Install eatmydata
       if: steps.changes.outputs.unit_tests == 'true'
       run: |
-        sudo apt-get update && sudo apt-get install -y --no-install-recommends eatmydata
+        sudo apt-get install -y --no-install-recommends eatmydata
 
     - name: Get dependencies
       if: steps.changes.outputs.unit_tests == 'true'
@@ -97,7 +102,6 @@ jobs:
         LD_PRELOAD: "libeatmydata.so"
       run: |
         export DEBIAN_FRONTEND="noninteractive"
-        sudo apt-get update
 
         # Uninstall any previously installed MySQL first
         # sudo systemctl stop apparmor
