@@ -86,7 +86,6 @@ jobs:
         echo "set man-db/auto-update false" | sudo debconf-communicate
         sudo dpkg-reconfigure man-db
 
-
     - name: Get dependencies
       if: steps.changes.outputs.unit_tests == 'true'
       run: |
@@ -161,6 +160,8 @@ jobs:
 
     - name: Setup launchable dependencies
       if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.unit_tests == 'true' && github.base_ref == 'main'
+      env:
+        LD_PRELOAD: "libeatmydata.so"
       run: |
         # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
         pip3 install --user launchable~=1.0 > /dev/null
@@ -174,6 +175,8 @@ jobs:
     - name: Run test
       if: steps.changes.outputs.unit_tests == 'true'
       timeout-minutes: 30
+      env:
+        LD_PRELOAD: "libeatmydata.so"
       run: |
         set -exo pipefail
         # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
@@ -186,8 +189,8 @@ jobs:
         # We sometimes need to alter the behavior based on the platform we're
         # testing, e.g. MySQL 5.7 vs 8.0.
         export CI_DB_PLATFORM="{{.Platform}}"
-        
-        eatmydata -- make unit_test | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+
+        make unit_test | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Record test results in launchable if PR is not a draft
       if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.unit_tests == 'true' && github.base_ref == 'main' && !cancelled()
