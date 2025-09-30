@@ -123,6 +123,8 @@ jobs:
         go install github.com/vitessio/go-junit-report@HEAD
 
     - name: Run make tools
+      env:
+        LD_PRELOAD: "libeatmydata.so"
       if: steps.changes.outputs.unit_tests == 'true'
       run: |
         make tools
