@@ -25,16 +25,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
-
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools/events"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -1501,4 +1500,73 @@ func TestWaitForRelayLogsToApply(t *testing.T) {
 			assert.NoError(t, err)
 		})
 	}
+}
+
+func TestRelayLogPositions_AtLeast(t *testing.T) {
+	gtidSet1, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")
+	gtidSet2, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
+	gtidSet3, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-3")
+	gtidSet4, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-2")
+
+	rlp := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: gtidSet1},
+		Executed: replication.Position{GTIDSet: gtidSet3},
+	}
+
+	// rlp is equal
+	assert.True(t, rlp.AtLeast(&RelayLogPositions{
+		Combined: replication.Position{GTIDSet: rlp.Combined.GTIDSet},
+		Executed: replication.Position{GTIDSet: rlp.Executed.GTIDSet},
+	}))
+
+	// rlp is less advanced
+	assert.False(t, rlp.AtLeast(&RelayLogPositions{
+		Combined: replication.Position{GTIDSet: gtidSet1},
+		Executed: replication.Position{GTIDSet: gtidSet2},
+	}))
+
+	// rlp is more advanced
+	assert.True(t, rlp.AtLeast(&RelayLogPositions{
+		Combined: replication.Position{GTIDSet: gtidSet2},
+		Executed: replication.Position{GTIDSet: gtidSet4},
+	}))
+}
+
+func TestRelayLogPositions_Equal(t *testing.T) {
+	gtidSet1, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")
+	gtidSet2, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
+	gtidSet3, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-3")
+
+	rlp := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: gtidSet1},
+		Executed: replication.Position{GTIDSet: gtidSet2},
+	}
+
+	// rlp is not equal
+	assert.False(t, rlp.Equal(&RelayLogPositions{
+		Combined: replication.Position{GTIDSet: gtidSet2},
+		Executed: replication.Position{GTIDSet: gtidSet3},
+	}))
+
+	// rlp is partially equal
+	assert.False(t, rlp.Equal(&RelayLogPositions{
+		Combined: replication.Position{GTIDSet: rlp.Combined.GTIDSet},
+		Executed: replication.Position{GTIDSet: gtidSet3},
+	}))
+
+	// rlp is equal
+	assert.True(t, rlp.Equal(&RelayLogPositions{
+		Combined: replication.Position{GTIDSet: rlp.Combined.GTIDSet},
+		Executed: replication.Position{GTIDSet: rlp.Executed.GTIDSet},
+	}))
+}
+
+func TestRelayLogPositions_IsZero(t *testing.T) {
+	gtidSet, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")
+	rlp := &RelayLogPositions{}
+	assert.True(t, rlp.IsZero())
+
+	rlp.Combined = replication.Position{GTIDSet: gtidSet}
+	rlp.Executed = replication.Position{GTIDSet: gtidSet}
+	assert.False(t, rlp.IsZero())
 }
