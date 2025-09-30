@@ -900,6 +900,13 @@ func (vs *vstream) shouldRetry(err error) (retry bool, ignoreTablet bool) {
 	if errCode == vtrpcpb.Code_INTERNAL {
 		return false, false
 	}
+	// Handle binary log purging errors by retrying with a different tablet.
+	// This occurs when a tablet doesn't have the requested GTID because the
+	// source purged the required binary logs. Another tablet might still have
+	// the logs, so we ignore this tablet and retry.
+	if errCode == vtrpcpb.Code_UNKNOWN && strings.Contains(err.Error(), "the source purged required binary logs") {
+		return true, true
+	}
 
 	// For anything else, if this is an ephemeral SQL error -- such as a
 	// MAX_EXECUTION_TIME SQL error during the copy phase -- or any other

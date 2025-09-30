@@ -833,6 +833,13 @@ func TestVStreamRetriableErrors(t *testing.T) {
 			shouldRetry:  true,
 			ignoreTablet: false,
 		},
+		{
+			name:         "binary log purged",
+			code:         vtrpcpb.Code_UNKNOWN,
+			msg:          "vttablet: rpc error: code = Unknown desc = stream (at source tablet) error @ <GTID>: Cannot replicate because the source purged required binary logs. Replicate the missing transactions from elsewhere",
+			shouldRetry:  true,
+			ignoreTablet: true,
+		},
 	}
 
 	commit := []*binlogdatapb.VEvent{
