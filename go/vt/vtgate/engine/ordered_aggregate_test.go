@@ -626,12 +626,37 @@ func TestOrderedAggregateExecuteGtid(t *testing.T) {
 	result, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 	require.NoError(t, err)
 
+	gtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{
+			{
+				Keyspace: "ks",
+				Shard:    "-40",
+				Gtid:     "a",
+			},
+			{
+				Keyspace: "ks",
+				Shard:    "40-80",
+				Gtid:     "b",
+			},
+			{
+				Keyspace: "ks",
+				Shard:    "80-c0",
+				Gtid:     "c",
+			},
+			{
+				Keyspace: "ks",
+				Shard:    "c0-",
+				Gtid:     "d",
+			},
+		},
+	}
+
 	wantResult := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"keyspace|vgtid",
 			"varchar|varchar",
 		),
-		`ks|shard_gtids:{keyspace:"ks" shard:"-40" gtid:"a"} shard_gtids:{keyspace:"ks" shard:"40-80" gtid:"b"} shard_gtids:{keyspace:"ks" shard:"80-c0" gtid:"c"} shard_gtids:{keyspace:"ks" shard:"c0-" gtid:"d"}`,
+		fmt.Sprintf("ks|%v", gtid),
 	)
 	utils.MustMatch(t, wantResult, result)
 }
