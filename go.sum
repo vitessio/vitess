@@ -323,8 +323,6 @@ github.com/grpc-ecosystem/go-grpc-middleware v1.4.0 h1:UH//fgunKIs4JdUbpDl1VZCDa
 github.com/grpc-ecosystem/go-grpc-middleware v1.4.0/go.mod h1:g5qyo/la0ALbONm6Vbp88Yd8NsDy6rZz+RcrMPxvld8=
 github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0 h1:Ovs26xHkKqVztRpIrF/92BcuyuQ/YW4NSIpoGtfXNho=
 github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0/go.mod h1:8NvIoxWQoOIhqOTXgfV/d3M/q6VIi02HzZEHgUlZvzk=
-github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.2 h1:8Tjv8EJ+pM1xP8mK6egEbD1OgnVTyacbefKhmbLhIhU=
-github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.2/go.mod h1:pkJQ2tZHJ0aFOVEEot6oZmaVEZcRme73eIFmhiVuRWs=
 github.com/hashicorp/consul/api v1.32.4 h1:xNe27KcBNYHbqWX/6c6WTAlPoZlZv8onDEySmjcspO0=
 github.com/hashicorp/consul/api v1.32.4/go.mod h1:jy0q71iTvUGfbCwo+ExBF0gEesE5cY2TSeAz2EoNG8E=
 github.com/hashicorp/consul/sdk v0.16.3 h1:kI/oax+yeaoremkh36G/f4Q13ivdFF4AE+Co/LlZa0Q=
@@ -638,12 +636,12 @@ github.com/yusufpapurcu/wmi v1.2.4 h1:zFUKzehAFReQwLys1b/iSMl+JQGSCSjtVqQn9bBrPo
 github.com/yusufpapurcu/wmi v1.2.4/go.mod h1:SBZ9tNy3G9/m5Oi98Zks0QjeHVDvuK0qfxQmPyzfmi0=
 github.com/z-division/go-zookeeper v1.0.0 h1:ULsCj0nP6+U1liDFWe+2oEF6o4amixoDcDlwEUghVUY=
 github.com/z-division/go-zookeeper v1.0.0/go.mod h1:6X4UioQXpvyezJJl4J9NHAJKsoffCwy5wCaaTktXjOA=
-go.etcd.io/etcd/api/v3 v3.6.5 h1:pMMc42276sgR1j1raO/Qv3QI9Af/AuyQUW6CBAWuntA=
-go.etcd.io/etcd/api/v3 v3.6.5/go.mod h1:ob0/oWA/UQQlT1BmaEkWQzI0sJ1M0Et0mMpaABxguOQ=
-go.etcd.io/etcd/client/pkg/v3 v3.6.5 h1:Duz9fAzIZFhYWgRjp/FgNq2gO1jId9Yae/rLn3RrBP8=
-go.etcd.io/etcd/client/pkg/v3 v3.6.5/go.mod h1:8Wx3eGRPiy0qOFMZT/hfvdos+DjEaPxdIDiCDUv/FQk=
-go.etcd.io/etcd/client/v3 v3.6.5 h1:yRwZNFBx/35VKHTcLDeO7XVLbCBFbPi+XV4OC3QJf2U=
-go.etcd.io/etcd/client/v3 v3.6.5/go.mod h1:ZqwG/7TAFZ0BJ0jXRPoJjKQJtbFo/9NIY8uoFFKcCyo=
+go.etcd.io/etcd/api/v3 v3.5.23 h1:tQi/RaO6peOhmf0c11miU3RQIYPZmiL3UzG9V+f8g6k=
+go.etcd.io/etcd/api/v3 v3.5.23/go.mod h1:QP4ZLWROP49Kk/vPLhudxYQcF4ndhMQ1gvJE4rCTAgc=
+go.etcd.io/etcd/client/pkg/v3 v3.5.23 h1:RzwVV28JgOwGl5TUjA47s9IWxl5qQjM2VqSh8wjFFLM=
+go.etcd.io/etcd/client/pkg/v3 v3.5.23/go.mod h1:IdIjxGUGNy+8HWeVlbBXDqmPqe+n8GsVGVYnccAEZ5o=
+go.etcd.io/etcd/client/v3 v3.5.23 h1:WN7sypGG326sFP5jLkFqD3anf/k6NNlV5Hy/UxvTPvc=
+go.etcd.io/etcd/client/v3 v3.5.23/go.mod h1:XTf1oMQi4ZzpXGFoPgvAqbY9JFmTFQqWI1SF4g+hV6o=
 go.opentelemetry.io/auto/sdk v1.2.1 h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=
 go.opentelemetry.io/auto/sdk v1.2.1/go.mod h1:KRTj+aOaElaLi+wW1kO/DZRXwkF4C5xPbEe3ZiIhN7Y=
 go.opentelemetry.io/collector/component v1.42.0 h1:on4XJ/NT1oPnuCVKDEtlpcr3GGPAS9taWBe8woHSTmY=
