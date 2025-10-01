@@ -115,7 +115,6 @@ require (
 
 require (
 	github.com/DataDog/datadog-agent/comp/core/tagger/origindetection v0.70.2 // indirect
-	github.com/DataDog/datadog-agent/pkg/opentelemetry-mapping-go/otlp/attributes v0.72.0-devel // indirect
 	github.com/DataDog/datadog-agent/pkg/proto v0.70.2 // indirect
 	github.com/DataDog/datadog-agent/pkg/trace v0.70.2 // indirect
 	github.com/DataDog/datadog-agent/pkg/util/log v0.70.2 // indirect
@@ -124,7 +123,7 @@ require (
 	github.com/DataDog/dd-trace-go/v2 v2.2.3 // indirect
 	github.com/DataDog/go-libddwaf/v4 v4.5.0 // indirect
 	github.com/DataDog/go-runtime-metrics-internal v0.0.4-0.20250721125240-fdf1ef85b633 // indirect
-	github.com/DataDog/opentelemetry-mapping-go/pkg/otlp/attributes v0.33.0 // indirect
+	github.com/DataDog/opentelemetry-mapping-go/pkg/otlp/attributes v0.29.1 // indirect
 	github.com/Masterminds/semver/v3 v3.4.0 // indirect
 	github.com/cihub/seelog v0.0.0-20170130134532-f561c5e57575 // indirect
 	github.com/cilium/ebpf v0.19.0 // indirect
@@ -270,3 +269,5 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
+
+exclude github.com/DataDog/opentelemetry-mapping-go/pkg/otlp/attributes v0.33.0

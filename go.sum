@@ -46,8 +46,6 @@ github.com/DataDog/datadog-agent/comp/core/tagger/origindetection v0.70.2 h1:kUc
 github.com/DataDog/datadog-agent/comp/core/tagger/origindetection v0.70.2/go.mod h1:C32ImT3ZcOaEG8xARqPF5uVBTUd4Q9XSZ8qZUDKn+V8=
 github.com/DataDog/datadog-agent/pkg/obfuscate v0.70.2 h1:Xrmg13fi5wOm7+fhKRsMQGAKcZJIv/k1R/3czUnBL08=
 github.com/DataDog/datadog-agent/pkg/obfuscate v0.70.2/go.mod h1:lpp+8NC8/ggIah/F89kN4A7zzEWsIpDy0L9v8jsTpwg=
-github.com/DataDog/datadog-agent/pkg/opentelemetry-mapping-go/otlp/attributes v0.72.0-devel h1:WqM9ELVlsyhBNULBOaJdKctRiO7ZSc7iU2CoVJVQ9js=
-github.com/DataDog/datadog-agent/pkg/opentelemetry-mapping-go/otlp/attributes v0.72.0-devel/go.mod h1:XeZj0IgsiL3vgeEGTucf61JvJRh1LxWMUbZA/XJsPD0=
 github.com/DataDog/datadog-agent/pkg/proto v0.70.2 h1:1/DbqEqvyhDe9j/V5RHDZndhKLa6GF2zHnwSHCYuWbo=
 github.com/DataDog/datadog-agent/pkg/proto v0.70.2/go.mod h1:04uBfKTbFuA9muKbgBE6yC/+955fGjnpwkTPV2LjREY=
 github.com/DataDog/datadog-agent/pkg/remoteconfig/state v0.70.2 h1:8WERtPbezb94idOvUmEyzB7pznpSn3/bEoOcGRyEi4w=
@@ -75,8 +73,8 @@ github.com/DataDog/go-tuf v1.1.1-0.5.2 h1:YWvghV4ZvrQsPcUw8IOUMSDpqc3W5ruOIC+KJx
 github.com/DataDog/go-tuf v1.1.1-0.5.2/go.mod h1:zBcq6f654iVqmkk8n2Cx81E1JnNTMOAx1UEO/wZR+P0=
 github.com/DataDog/gostackparse v0.7.0 h1:i7dLkXHvYzHV308hnkvVGDL3BR4FWl7IsXNPz/IGQh4=
 github.com/DataDog/gostackparse v0.7.0/go.mod h1:lTfqcJKqS9KnXQGnyQMCugq3u1FP6UZMfWR0aitKFMM=
-github.com/DataDog/opentelemetry-mapping-go/pkg/otlp/attributes v0.33.0 h1:ju98Y0a0mC7tTWJGUSRo9HvWbMR/XHtMhUqI+iPspSw=
-github.com/DataDog/opentelemetry-mapping-go/pkg/otlp/attributes v0.33.0/go.mod h1:KhkezjjbSSfWv0BmHCokcV24Rhdmjw8X4nZD3K38Ts8=
+github.com/DataDog/opentelemetry-mapping-go/pkg/otlp/attributes v0.29.1 h1:RoHver8/fv4qKZtmb11TJ/zcOMd0SqOKT8H9ZQIjjPA=
+github.com/DataDog/opentelemetry-mapping-go/pkg/otlp/attributes v0.29.1/go.mod h1:yN8VBQrExGN/nbIpn8E2jrMJn94e69mnq8a5PDCKY/g=
 github.com/DataDog/sketches-go v1.4.7 h1:eHs5/0i2Sdf20Zkj0udVFWuCrXGRFig2Dcfm5rtcTxc=
 github.com/DataDog/sketches-go v1.4.7/go.mod h1:eAmQ/EBmtSO+nQp7IZMZVRPT4BQTmIc5RZQ+deGlTPM=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.30.0 h1:sBEjpZlNHzK1voKq9695PJSX2o5NEXl7/OL3coiIY0c=
@@ -652,8 +650,8 @@ go.opentelemetry.io/collector/component v1.42.0 h1:on4XJ/NT1oPnuCVKDEtlpcr3GGPAS
 go.opentelemetry.io/collector/component v1.42.0/go.mod h1:mehIbkABLhEEs3kmAqer2GRmLwcQLoeF7C48CR6lxP0=
 go.opentelemetry.io/collector/component/componentstatus v0.131.0 h1:IVsyN0melBQU3QAabLj3ey1QQ+K2e8PhIcPRXH+LfiI=
 go.opentelemetry.io/collector/component/componentstatus v0.131.0/go.mod h1:DotgEZNwPF9Ug2YKk2+zBlmGW4hRTJ7k7YBkZoM4xL4=
-go.opentelemetry.io/collector/component/componenttest v0.133.0 h1:mg54QqXC+GNqLHa9y6Efh3X5Di4XivjgJr6mzvfVQR8=
-go.opentelemetry.io/collector/component/componenttest v0.133.0/go.mod h1:E+oqRK03WjG/b1aX1pd0CfTKh12MPTKbEBaBROp4w0M=
+go.opentelemetry.io/collector/component/componenttest v0.131.0 h1:pvBENFUdOSIikdIExUP2+2B4K3LbZIqdUI7Kh7jNGxI=
+go.opentelemetry.io/collector/component/componenttest v0.131.0/go.mod h1:5RdiTb/UaiCp1RvKH2+B6SyggGNvcY8Yd5799lJcEe4=
 go.opentelemetry.io/collector/consumer v1.37.0 h1:RqTqEcc95Fg7T3MRPPjUX2nxzn1X88yfFUQV+AjdMK0=
 go.opentelemetry.io/collector/consumer v1.37.0/go.mod h1:vDA1JDXeb7vnQ02PXIjjR6dI9LTaya+Qr89Nyt2Gl7Y=
 go.opentelemetry.io/collector/consumer/consumertest v0.131.0 h1:+lgAblWlItsaWhUW10mKCmt3vTrmwvAWRSTrvrPgN/Q=
