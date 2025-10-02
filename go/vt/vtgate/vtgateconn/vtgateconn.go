@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -37,7 +38,7 @@ import (
 var vtgateProtocol = "grpc"
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&vtgateProtocol, "vtgate_protocol", vtgateProtocol, "how to talk to vtgate")
+	utils.SetFlagStringVar(fs, &vtgateProtocol, "vtgate-protocol", vtgateProtocol, "how to talk to vtgate")
 }
 
 func init() {
@@ -169,6 +170,11 @@ func (sn *VTGateSession) Prepare(ctx context.Context, query string) ([]*querypb.
 	session, fields, paramsCount, err := sn.impl.Prepare(ctx, sn.session, query)
 	sn.session = session
 	return fields, paramsCount, err
+}
+
+// CloseSession closes the session provided by rolling back any active transaction.
+func (sn *VTGateSession) CloseSession(ctx context.Context) error {
+	return sn.impl.CloseSession(ctx, sn.session)
 }
 
 //

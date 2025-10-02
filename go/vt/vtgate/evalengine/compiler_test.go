@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/olekukonko/tablewriter"
+	"github.com/olekukonko/tablewriter/tw"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -62,7 +63,20 @@ type Tracker struct {
 
 func NewTracker() *Tracker {
 	track := &Tracker{}
-	track.tbl = tablewriter.NewWriter(&track.buf)
+	track.tbl = tablewriter.NewTable(&track.buf,
+		tablewriter.WithAlignment(tw.Alignment{
+			tw.AlignLeft,
+			tw.AlignRight,
+			tw.AlignRight,
+			tw.AlignRight,
+		}),
+		tablewriter.WithFooterAlignmentConfig(tw.CellAlignment{
+			Global: tw.AlignRight,
+		}),
+		tablewriter.WithRendition(tw.Rendition{
+			Borders: tw.BorderNone,
+		}),
+	)
 	return track
 }
 
@@ -78,21 +92,13 @@ func (s *Tracker) Add(name string, supported, total int) {
 }
 
 func (s *Tracker) String() string {
-	s.tbl.SetBorder(false)
-	s.tbl.SetColumnAlignment([]int{
-		tablewriter.ALIGN_LEFT,
-		tablewriter.ALIGN_RIGHT,
-		tablewriter.ALIGN_RIGHT,
-		tablewriter.ALIGN_RIGHT,
-	})
-	s.tbl.SetFooterAlignment(tablewriter.ALIGN_RIGHT)
-	s.tbl.SetFooter([]string{
+	s.tbl.Footer(
 		"",
 		strconv.Itoa(s.supported),
 		strconv.Itoa(s.total),
 		fmt.Sprintf("%.02f%%", 100*float64(s.supported)/float64(s.total)),
-	})
-	s.tbl.Render()
+	)
+	_ = s.tbl.Render() // Ignore render error as this is output formatting
 	return s.buf.String()
 }
 

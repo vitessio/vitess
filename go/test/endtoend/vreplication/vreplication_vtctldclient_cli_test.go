@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/wrangler"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -154,11 +155,11 @@ func TestVtctldclientCLI(t *testing.T) {
 		require.NotNil(t, targetReplicaTab1)
 
 		overrides := map[string]string{
-			"vreplication-copy-phase-duration":     "10h11m12s",
-			"vreplication-experimental-flags":      "7",
-			"vreplication-parallel-insert-workers": "4",
-			"vreplication-net-read-timeout":        "6000",
-			"relay_log_max_items":                  "10000",
+			"vreplication-copy-phase-duration":                  "10h11m12s",
+			"vreplication-experimental-flags":                   "7",
+			"vreplication-parallel-insert-workers":              "4",
+			"vreplication-net-read-timeout":                     "6000",
+			utils.GetFlagVariantForTests("relay-log-max-items"): "10000",
 		}
 		createFlags := []string{"--auto-start=false", "--defer-secondary-keys=false",
 			"--on-ddl", "STOP", "--tablet-types", "primary,rdonly", "--tablet-types-in-preference-order=true",
@@ -224,9 +225,9 @@ func TestVtctldclientCLI(t *testing.T) {
 func testMoveTablesFlags1(t *testing.T, mt *iMoveTables, sourceKeyspace, targetKeyspace, workflowName string, targetTabs map[string]*cluster.VttabletProcess) {
 	tables := "customer,customer2"
 	overrides := map[string]string{
-		"vreplication-net-read-timeout":        "6000",
-		"relay_log_max_items":                  "10000",
-		"vreplication-parallel-insert-workers": "10",
+		"vreplication-net-read-timeout":                     "6000",
+		utils.GetFlagVariantForTests("relay-log-max-items"): "10000",
+		"vreplication-parallel-insert-workers":              "10",
 	}
 	createFlags := []string{"--auto-start=false", "--defer-secondary-keys=false", "--stop-after-copy",
 		"--no-routing-rules", "--on-ddl", "STOP", "--exclude-tables", "customer2",
@@ -547,11 +548,11 @@ func createMoveTables(t *testing.T, sourceKeyspace, targetKeyspace, workflowName
 
 func splitShard(t *testing.T, keyspace, workflowName, sourceShards, targetShards string, targetTabs map[string]*cluster.VttabletProcess) {
 	overrides := map[string]string{
-		"vreplication-copy-phase-duration":     "10h11m12s",
-		"vreplication-experimental-flags":      "7",
-		"vreplication-parallel-insert-workers": "4",
-		"vreplication-net-read-timeout":        "6000",
-		"relay_log_max_items":                  "10000",
+		"vreplication-copy-phase-duration":                  "10h11m12s",
+		"vreplication-experimental-flags":                   "7",
+		"vreplication-parallel-insert-workers":              "4",
+		"vreplication-net-read-timeout":                     "6000",
+		utils.GetFlagVariantForTests("relay-log-max-items"): "10000",
 	}
 	createFlags := []string{"--auto-start=false", "--defer-secondary-keys=false", "--stop-after-copy",
 		"--on-ddl", "STOP", "--tablet-types", "primary,rdonly", "--tablet-types-in-preference-order=true",

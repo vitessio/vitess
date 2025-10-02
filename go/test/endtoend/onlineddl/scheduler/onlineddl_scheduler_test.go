@@ -569,6 +569,7 @@ func testScheduler(t *testing.T) {
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				assert.True(t, row["shadow_analyzed_timestamp"].IsNull())
+				assert.Equal(t, 100.0, row.AsFloat64("progress", 0))
 			}
 		})
 
@@ -619,6 +620,7 @@ func testScheduler(t *testing.T) {
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				assert.True(t, row["shadow_analyzed_timestamp"].IsNull())
+				assert.Equal(t, 100.0, row.AsFloat64("progress", 0))
 			}
 		})
 
@@ -1352,7 +1354,7 @@ func testScheduler(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusCancelled)
 		})
 
-		// now, we submit the exact same migratoin again: same UUID, same migration context.
+		// now, we submit the exact same migration again: same UUID, same migration context.
 		t.Run("resubmit migration", func(t *testing.T) {
 			executedUUID := testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy, "vtctl", "", "", true)) // skip wait
 			require.Equal(t, uuid, executedUUID)

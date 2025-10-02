@@ -27,6 +27,7 @@ import (
 	"github.com/spf13/pflag"
 
 	vtschema "vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	"vitess.io/vitess/go/vt/servenv"
@@ -57,7 +58,7 @@ func init() {
 }
 
 func registerHealthStreamerFlags(fs *pflag.FlagSet) {
-	fs.UintVar(&streamHealthBufferSize, "stream_health_buffer_size", streamHealthBufferSize, "max streaming health entries to buffer per streaming health client")
+	utils.SetFlagUintVar(fs, &streamHealthBufferSize, "stream-health-buffer-size", streamHealthBufferSize, "max streaming health entries to buffer per streaming health client")
 }
 
 // healthStreamer streams health information to callers.

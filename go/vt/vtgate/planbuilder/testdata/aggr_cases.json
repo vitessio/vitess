@@ -2345,7 +2345,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "any_value(0) AS 1, sum_count(1) AS count(id)",
+            "Aggregates": "constant_aggr(1) AS 1, sum_count(1) AS count(id)",
             "Inputs": [
               {
                 "OperatorType": "VindexLookup",
@@ -2464,7 +2464,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "any_value(0) AS 1, sum_count(1) AS count(id)",
+            "Aggregates": "constant_aggr(1) AS 1, sum_count(1) AS count(id)",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -3825,7 +3825,7 @@
                   {
                     "OperatorType": "Aggregate",
                     "Variant": "Scalar",
-                    "Aggregates": "any_value(0) AS id, sum_count_star(1) AS count(*), any_value(2)",
+                    "Aggregates": "any_value(0) AS id, sum_count_star(1) AS count(*), constant_aggr(1) AS 1",
                     "Inputs": [
                       {
                         "OperatorType": "Route",
@@ -5464,7 +5464,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "any_value(0), sum_count_star(1) AS count(*)",
+            "Aggregates": "constant_aggr(1) AS 1, sum_count_star(1) AS count(*)",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -7371,6 +7371,44 @@
       "TablesUsed": [
         "user.user",
         "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Group-only Aggregation on top of a derived table should return the correct number of columns",
+    "query": "select col from (select col, intcol from user group by 1, 2) t group by 1",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select col from (select col, intcol from user group by 1, 2) t group by 1",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "GroupBy": "0",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "GroupBy": "0, 1",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col, intcol from `user` where 1 != 1 group by col, intcol",
+                "OrderBy": "0 ASC, 1 ASC",
+                "Query": "select col, intcol from `user` group by col, intcol order by col asc, intcol asc"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
       ]
     }
   }

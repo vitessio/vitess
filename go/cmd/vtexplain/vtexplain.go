@@ -21,11 +21,13 @@ import (
 
 	"vitess.io/vitess/go/cmd/vtexplain/cli"
 	"vitess.io/vitess/go/exit"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 func main() {
 	defer exit.RecoverAll()
 
+	cli.Main.SetGlobalNormalizationFunc(utils.NormalizeUnderscoresToDashes)
 	if err := cli.Main.Execute(); err != nil {
 		fmt.Printf("ERROR: %s\n", err)
 		exit.Return(1)

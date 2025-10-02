@@ -47,7 +47,7 @@ Flags:
       --config-persistence-min-interval duration                    minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                          Config file type (omit to infer config type from file extension).
       --dbname string                                               Optional database target to override normal routing
-      --default_tablet_type topodatapb.TabletType                   The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
+      --default-tablet-type topodatapb.TabletType                   The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
       --execution-mode string                                       The execution mode to simulate -- must be set to multi, legacy-autocommit, or twopc (default "multi")
   -h, --help                                                        help for vtexplain
       --keep-logs duration                                          keep logs for this long (using ctime) (zero to keep forever)
@@ -59,7 +59,7 @@ Flags:
       --log_backtrace_at traceLocations                             when logging hits line file:N, emit a stack trace
       --log_dir string                                              If non-empty, write log files in this directory
       --logtostderr                                                 log to standard error instead of files
-      --mysql-server-version string                                 MySQL server version to advertise. (default "8.0.40-Vitess")
+      --mysql-server-version string                                 MySQL server version to advertise. (default "8.4.6-Vitess")
       --normalize                                                   Whether to enable vtgate normalization
       --output-mode string                                          Output in human-friendly text or json (default "text")
       --planner-version string                                      Sets the default planner to use. Valid values are: Gen4, Gen4Greedy, Gen4Left2Right

@@ -34,7 +34,6 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/prototext"
 
-	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sets"
@@ -3043,8 +3042,8 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 
 	// Consistently handle errors by logging and returning them.
 	handleError := func(message string, err error) (int64, *[]string, error) {
+		ts.Logger().Errorf("%s: %v", message, err)
 		werr := vterrors.Wrap(err, message)
-		ts.Logger().Error(werr)
 		return 0, nil, werr
 	}
 
@@ -3279,28 +3278,48 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 	if err := confirmKeyspaceLocksHeld(); err != nil {
 		return handleError("locks were lost", err)
 	}
+	ts.logger.Infof("Creating journals for workflow %s.%s", ts.targetKeyspace, ts.workflow)
 	if err := sw.createJournals(ctx, sourceWorkflows); err != nil {
 		return handleError("failed to create the journal", err)
 	}
+	ts.logger.Infof("Created journals for workflow %s.%s", ts.targetKeyspace, ts.workflow)
+
+	ts.logger.Infof("Allowing writes on target for workflow %s.%s", ts.targetKeyspace, ts.workflow)
 	if err := sw.allowTargetWrites(ctx); err != nil {
 		return handleError(fmt.Sprintf("failed to allow writes in the %s keyspace", ts.TargetKeyspaceName()), err)
 	}
+	ts.logger.Infof("Allowed writes on target for workflow %s.%s", ts.targetKeyspace, ts.workflow)
+
+	ts.logger.Infof("Updating routing rules for workflow %s.%s", ts.targetKeyspace, ts.workflow)
 	if err := sw.changeRouting(ctx); err != nil {
 		return handleError("failed to update the routing rules", err)
 	}
+	ts.logger.Infof("Updated routing rules for workflow %s.%s", ts.targetKeyspace, ts.workflow)
+
+	ts.logger.Infof("Finalizing stream migrations for workflow %s.%s", ts.targetKeyspace, ts.workflow)
 	if err := sw.streamMigraterfinalize(ctx, ts, sourceWorkflows); err != nil {
 		return handleError("failed to finalize the traffic switch", err)
 	}
+	ts.logger.Infof("Finalized stream migrations for workflow %s.%s", ts.targetKeyspace, ts.workflow)
+
 	if req.EnableReverseReplication {
+		ts.logger.Infof("Starting reverse workflow %s on keyspace %s", ts.reverseWorkflow, ts.sourceKeyspace)
 		if err := sw.startReverseVReplication(ctx); err != nil {
 			return handleError("failed to start the reverse workflow", err)
 		}
+		ts.logger.Infof("Started reverse workflow %s on keyspace %s", ts.reverseWorkflow, ts.sourceKeyspace)
+	} else {
+		ts.logger.Infof("Reverse replication not requested, not creating reverse workflow %s on keyspace %s",
+			ts.reverseWorkflow, ts.sourceKeyspace)
 	}
 
+	ts.logger.Infof("Marking workflow frozen %s.%s", ts.targetKeyspace, ts.workflow)
 	if err := sw.freezeTargetVReplication(ctx); err != nil {
 		return handleError(fmt.Sprintf("failed to freeze the workflow in the %s keyspace", ts.TargetKeyspaceName()), err)
 	}
+	ts.logger.Infof("Marked workflow frozen %s.%s", ts.targetKeyspace, ts.workflow)
 
+	ts.logger.Infof("Switch writes completed for workflow %s.%s", ts.targetKeyspace, ts.workflow)
 	return ts.id, sw.logs(), nil
 }
 
@@ -3653,8 +3672,7 @@ func (s *Server) validateShardsHaveVReplicationPermissions(ctx context.Context, 
 			}
 			if !res.GetOk() {
 				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
-					"user %s does not have the required set of permissions (select,insert,update,delete) on the %s.vreplication table on tablet %s",
-					res.GetUser(), sidecar.GetIdentifier(), topoproto.TabletAliasString(tablet.Alias))
+					"failed to validate required vreplication metadata permissions: %s", res.GetError())
 			}
 			return nil
 		})

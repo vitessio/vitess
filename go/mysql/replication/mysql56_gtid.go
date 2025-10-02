@@ -33,6 +33,10 @@ var (
 	ErrExpectMysql56Flavor = vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "expected MySQL GTID position but found a different or invalid format.")
 )
 
+func ParseMysql56GTID(s string) (GTID, error) {
+	return parseMysql56GTID(s)
+}
+
 // parseMysql56GTID is registered as a GTID parser.
 func parseMysql56GTID(s string) (GTID, error) {
 	// Split into parts.
@@ -94,8 +98,7 @@ func ParseSID(s string) (sid SID, err error) {
 type Mysql56GTID struct {
 	// Server is the SID of the server that originally committed the transaction.
 	Server SID
-	// Sequence is the sequence number of the transaction within a given Server's
-	// scope.
+	// Sequence is the sequence number of the transaction within a given Server's scope.
 	Sequence int64
 }
 
@@ -126,7 +129,9 @@ func (gtid Mysql56GTID) SequenceNumber() any {
 
 // GTIDSet implements GTID.GTIDSet().
 func (gtid Mysql56GTID) GTIDSet() GTIDSet {
-	return Mysql56GTIDSet{}.AddGTID(gtid)
+	return Mysql56GTIDSet{
+		gtid.Server: []interval{{start: gtid.Sequence, end: gtid.Sequence}},
+	}
 }
 
 func init() {

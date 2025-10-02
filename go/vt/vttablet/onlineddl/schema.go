@@ -357,7 +357,8 @@ const (
 		LIMIT 1
 	`
 	sqlSelectStaleMigrations = `SELECT
-			migration_uuid
+			migration_uuid,
+			timestampdiff(minute, liveness_timestamp, now()) as stale_minutes
 		FROM _vt.schema_migrations
 		WHERE
 			migration_status='running'

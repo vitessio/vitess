@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mitchellh/mapstructure"
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
@@ -167,9 +167,7 @@ func LoadConfig() (context.CancelFunc, error) {
 			msg := "Failed to read in config %s: %s"
 			switch configFileNotFoundHandling.Get() {
 			case WarnOnConfigFileNotFound:
-				msg += ". This is optional, and can be ignored if you are not using config files. For a detailed explanation, see https://github.com/vitessio/vitess/blob/main/doc/viper/viper.md#config-files."
-				log.WARN(msg, registry.Static.ConfigFileUsed(), err.Error())
-				fallthrough // after warning, ignore the error
+				fallthrough // ignore the error
 			case IgnoreConfigFileNotFound:
 				return func() {}, nil
 			case ErrorOnConfigFileNotFound:

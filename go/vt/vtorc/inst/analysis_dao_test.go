@@ -42,15 +42,15 @@ var (
 		`INSERT INTO vitess_tablet VALUES('zone1-0000000101','localhost',6714,'ks','0','zone1',1,'2022-12-28 07:23:25.129898 +0000 UTC',X'616c6961733a7b63656c6c3a227a6f6e653122207569643a3130317d20686f73746e616d653a226c6f63616c686f73742220706f72745f6d61703a7b6b65793a2267727063222076616c75653a363731337d20706f72745f6d61703a7b6b65793a227674222076616c75653a363731327d206b657973706163653a226b73222073686172643a22302220747970653a5052494d415259206d7973716c5f686f73746e616d653a226c6f63616c686f737422206d7973716c5f706f72743a36373134207072696d6172795f7465726d5f73746172745f74696d653a7b7365636f6e64733a31363732323132323035206e616e6f7365636f6e64733a3132393839383030307d2064625f7365727665725f76657273696f6e3a22382e302e3331222064656661756c745f636f6e6e5f636f6c6c6174696f6e3a3435');`,
 		`INSERT INTO vitess_tablet VALUES('zone1-0000000112','localhost',6747,'ks','0','zone1',3,'0001-01-01 00:00:00 +0000 UTC',X'616c6961733a7b63656c6c3a227a6f6e653122207569643a3131327d20686f73746e616d653a226c6f63616c686f73742220706f72745f6d61703a7b6b65793a2267727063222076616c75653a363734367d20706f72745f6d61703a7b6b65793a227674222076616c75653a363734357d206b657973706163653a226b73222073686172643a22302220747970653a52444f4e4c59206d7973716c5f686f73746e616d653a226c6f63616c686f737422206d7973716c5f706f72743a363734372064625f7365727665725f76657273696f6e3a22382e302e3331222064656661756c745f636f6e6e5f636f6c6c6174696f6e3a3435');`,
 		`INSERT INTO vitess_tablet VALUES('zone2-0000000200','localhost',6756,'ks','0','zone2',2,'0001-01-01 00:00:00 +0000 UTC',X'616c6961733a7b63656c6c3a227a6f6e653222207569643a3230307d20686f73746e616d653a226c6f63616c686f73742220706f72745f6d61703a7b6b65793a2267727063222076616c75653a363735357d20706f72745f6d61703a7b6b65793a227674222076616c75653a363735347d206b657973706163653a226b73222073686172643a22302220747970653a5245504c494341206d7973716c5f686f73746e616d653a226c6f63616c686f737422206d7973716c5f706f72743a363735362064625f7365727665725f76657273696f6e3a22382e302e3331222064656661756c745f636f6e6e5f636f6c6c6174696f6e3a3435');`,
-		`INSERT INTO vitess_shard VALUES('ks','0','zone1-0000000101','2025-06-25 23:48:57.306096 +0000 UTC');`,
-		`INSERT INTO vitess_keyspace VALUES('ks',0,'semi_sync');`,
+		`INSERT INTO vitess_shard VALUES('ks','0','zone1-0000000101','2025-06-25 23:48:57.306096 +0000 UTC',0);`,
+		`INSERT INTO vitess_keyspace VALUES('ks',0,'semi_sync',0);`,
 	}
 )
 
-// TestGetReplicationAnalysisDecision tests the code of GetReplicationAnalysis decision-making. It doesn't check the SQL query
+// TestGetDetectionAnalysisDecision tests the code of GetDetectionAnalysis decision-making. It doesn't check the SQL query
 // run by it. It only checks the analysis part after the rows have been read. This tests fakes the db and explicitly returns the
 // rows that are specified in the test.
-func TestGetReplicationAnalysisDecision(t *testing.T) {
+func TestGetDetectionAnalysisDecision(t *testing.T) {
 	tests := []struct {
 		name           string
 		info           []*test.InfoForRecoveryAnalysis
@@ -975,7 +975,7 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 			}
 			db.Db = test.NewTestDB([][]sqlutils.RowMap{rowMaps})
 
-			got, err := GetReplicationAnalysis("", "", &ReplicationAnalysisHints{})
+			got, err := GetDetectionAnalysis("", "", &DetectionAnalysisHints{})
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
 				return
@@ -993,11 +993,11 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 	}
 }
 
-// TestGetReplicationAnalysis tests the entire GetReplicationAnalysis. It inserts data into the database and runs the function.
-// The database is not faked. This is intended to give more test coverage. This test is more comprehensive but more expensive than TestGetReplicationAnalysisDecision.
+// TestGetDetectionAnalysis tests the entire GetDetectionAnalysis. It inserts data into the database and runs the function.
+// The database is not faked. This is intended to give more test coverage. This test is more comprehensive but more expensive than TestGetDetectionAnalysisDecision.
 // This test is somewhere between a unit test, and an end-to-end test. It is specifically useful for testing situations which are hard to come by in end-to-end test, but require
 // real-world data to test specifically.
-func TestGetReplicationAnalysis(t *testing.T) {
+func TestGetDetectionAnalysis(t *testing.T) {
 	// The test is intended to be used as follows. The initial data is stored into the database. Following this, some specific queries are run that each individual test specifies to get the desired state.
 	tests := []struct {
 		name           string
@@ -1059,7 +1059,7 @@ func TestGetReplicationAnalysis(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			got, err := GetReplicationAnalysis("", "", &ReplicationAnalysisHints{})
+			got, err := GetDetectionAnalysis("", "", &DetectionAnalysisHints{})
 			require.NoError(t, err)
 			if tt.codeWanted == NoProblem {
 				require.Len(t, got, 0)
@@ -1161,12 +1161,12 @@ func TestPostProcessAnalyses(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		analyses []*ReplicationAnalysis
-		want     []*ReplicationAnalysis
+		analyses []*DetectionAnalysis
+		want     []*DetectionAnalysis
 	}{
 		{
 			name: "No processing needed",
-			analyses: []*ReplicationAnalysis{
+			analyses: []*DetectionAnalysis{
 				{
 					Analysis:         ReplicationStopped,
 					AnalyzedKeyspace: keyspace,
@@ -1189,7 +1189,7 @@ func TestPostProcessAnalyses(t *testing.T) {
 			},
 		}, {
 			name: "Conversion of InvalidPrimary to DeadPrimary",
-			analyses: []*ReplicationAnalysis{
+			analyses: []*DetectionAnalysis{
 				{
 					Analysis:              InvalidPrimary,
 					AnalyzedInstanceAlias: "zone1-100",
@@ -1235,7 +1235,7 @@ func TestPostProcessAnalyses(t *testing.T) {
 					TabletType:            topodatapb.TabletType_REPLICA,
 				},
 			},
-			want: []*ReplicationAnalysis{
+			want: []*DetectionAnalysis{
 				{
 					Analysis:              DeadPrimary,
 					AnalyzedInstanceAlias: "zone1-100",
@@ -1261,7 +1261,7 @@ func TestPostProcessAnalyses(t *testing.T) {
 		},
 		{
 			name: "Unable to convert InvalidPrimary to DeadPrimary",
-			analyses: []*ReplicationAnalysis{
+			analyses: []*DetectionAnalysis{
 				{
 					Analysis:              InvalidPrimary,
 					AnalyzedInstanceAlias: "zone1-100",

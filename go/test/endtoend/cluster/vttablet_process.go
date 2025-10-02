@@ -36,6 +36,8 @@ import (
 	"testing"
 	"time"
 
+	vtutils "vitess.io/vitess/go/vt/utils"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/constants/sidecar"
@@ -92,6 +94,10 @@ type VttabletProcess struct {
 
 // Setup starts vttablet process with required arguements
 func (vttablet *VttabletProcess) Setup() (err error) {
+	vttabletVer, err := GetMajorVersion(vttablet.Binary)
+	if err != nil {
+		return err
+	}
 	vttablet.proc = exec.Command(
 		vttablet.Binary,
 		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
@@ -110,7 +116,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"--health_check_interval", fmt.Sprintf("%ds", vttablet.HealthCheckInterval),
 		"--enable_replication_reporter",
 		"--backup_storage_implementation", vttablet.BackupStorageImplementation,
-		"--file_backup_storage_root", vttablet.FileBackupStorageRoot,
+		vtutils.GetFlagVariantForTestsByVersion("--file-backup-storage-root", vttabletVer), vttablet.FileBackupStorageRoot,
 		"--service_map", vttablet.ServiceMap,
 		"--db_charset", vttablet.Charset,
 		"--bind-address", "127.0.0.1",
@@ -124,6 +130,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		vttablet.proc.Args = append(vttablet.proc.Args, "--pprof", fmt.Sprintf("cpu,waitSig,path=vttablet_pprof_%s", vttablet.Name))
 	}
 
+	//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 	if vttablet.SupportsBackup {
 		vttablet.proc.Args = append(vttablet.proc.Args, "--restore_from_backup")
 	}

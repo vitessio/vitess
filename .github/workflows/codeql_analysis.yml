@@ -32,7 +32,7 @@ jobs:
           persist-credentials: 'false'
 
       - name: Set up Go
-        uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
           go-version-file: go.mod
 
@@ -62,8 +62,8 @@ jobs:
           # sudo rm -rf /etc/mysql
           # Install mysql80
           sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
-          wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.33-1_all.deb
-          echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
+          wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.34-1_all.deb
+          echo mysql-apt-config mysql-apt-config/select-server select mysql-8.4-lts | sudo debconf-set-selections
           sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
           sudo apt-get update
           sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client

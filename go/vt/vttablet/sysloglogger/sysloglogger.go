@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -46,7 +47,7 @@ var logQueries bool
 
 func registerFlags(fs *pflag.FlagSet) {
 	// logQueries is the vttablet startup flag that must be set for this plugin to be active.
-	fs.BoolVar(&logQueries, "log_queries", logQueries, "Enable query logging to syslog.")
+	utils.SetFlagBoolVar(fs, &logQueries, "log-queries", logQueries, "Enable query logging to syslog.")
 }
 
 func init() {

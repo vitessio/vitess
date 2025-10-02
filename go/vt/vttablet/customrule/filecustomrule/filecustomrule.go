@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 )
@@ -42,7 +43,7 @@ var (
 
 func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&fileRulePath, "filecustomrules", fileRulePath, "file based custom rule path")
-	fs.BoolVar(&fileRuleShouldWatch, "filecustomrules_watch", fileRuleShouldWatch, "set up a watch on the target file and reload query rules when it changes")
+	utils.SetFlagBoolVar(fs, &fileRuleShouldWatch, "filecustomrules-watch", fileRuleShouldWatch, "set up a watch on the target file and reload query rules when it changes")
 }
 
 func init() {

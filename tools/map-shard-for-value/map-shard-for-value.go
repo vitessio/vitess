@@ -189,7 +189,7 @@ func main() {
 		if *shardsCSV != "" {
 			log.Fatalf("cannot specify both total_shards and shards")
 		}
-		shardArr, err := key.GenerateShardRanges(*totalShards)
+		shardArr, err := key.GenerateShardRanges(*totalShards, 0)
 		if err != nil {
 			log.Fatalf("failed to generate shard ranges: %v", err)
 		}

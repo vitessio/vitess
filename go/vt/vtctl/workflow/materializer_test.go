@@ -593,8 +593,6 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 			require.NoError(t, err)
 			sourceShard, err := env.topoServ.GetShardNames(ctx, ms.SourceKeyspace)
 			require.NoError(t, err)
-			want := fmt.Sprintf("shard_streams:{key:\"%s/%s\" value:{streams:{id:1 tablet:{cell:\"%s\" uid:200} source_shard:\"%s/%s\" position:\"%s\" status:\"Running\" info:\"VStream Lag: 0s\"}}} traffic_state:\"Reads Not Switched. Writes Not Switched\"",
-				ms.TargetKeyspace, targetShard[0], env.cell, ms.SourceKeyspace, sourceShard[0], gtid(position))
 
 			res, err := env.ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
 				Workflow:       ms.Workflow,
@@ -603,8 +601,29 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 				IncludeTables:  []string{"t1"},
 				OnDdl:          onDDLAction,
 			})
+			key := fmt.Sprintf("%s/%s", ms.TargetKeyspace, targetShard[0])
+			want := &vtctldatapb.WorkflowStatusResponse{
+				ShardStreams: map[string]*vtctldatapb.WorkflowStatusResponse_ShardStreams{
+					key: {
+						Streams: []*vtctldatapb.WorkflowStatusResponse_ShardStreamState{
+							{
+								Id: 1,
+								Tablet: &topodatapb.TabletAlias{
+									Cell: env.cell,
+									Uid:  200,
+								},
+								SourceShard: fmt.Sprintf("%s/%s", ms.SourceKeyspace, sourceShard[0]),
+								Position:    gtid(position),
+								Status:      "Running",
+								Info:        "VStream Lag: 0s",
+							},
+						},
+					},
+				},
+				TrafficState: "Reads Not Switched. Writes Not Switched",
+			}
 			require.NoError(t, err)
-			require.Equal(t, want, fmt.Sprintf("%+v", res))
+			require.Equal(t, want, res)
 		})
 	}
 }
