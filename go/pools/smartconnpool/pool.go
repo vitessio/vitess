@@ -280,6 +280,32 @@ func (pool *ConnPool[C]) CloseWithContext(ctx context.Context) error {
 	// for the pool
 	err := pool.setCapacity(ctx, 0)
 
+	// update the idle count to match the new capacity if necessary
+	// wait for connections to be returned to the pool if we're reducing the capacity.
+	// defer pool.setIdleCount()
+
+	const delay = 10 * time.Millisecond
+
+	// close connections until we're under capacity
+	for pool.active.Load() > 0 {
+		// if we're closing down the pool, make sure there's no clients waiting
+		// for connections because they won't be returned in the future
+		pool.wait.expire(true)
+
+		// try closing from connections which are currently idle in the stacks
+		conn := pool.getFromSettingsStack(nil)
+		if conn == nil {
+			conn = pool.pop(&pool.clean)
+		}
+		if conn == nil {
+			time.Sleep(delay)
+			continue
+		}
+
+		conn.Close()
+		pool.closedConn()
+	}
+
 	close(pool.close)
 	pool.workers.Wait()
 	pool.close = nil
@@ -716,37 +742,40 @@ func (pool *ConnPool[C]) setCapacity(ctx context.Context, newcap int64) error {
 	if oldcap == newcap {
 		return nil
 	}
+
+	pool.setIdleCount()
+
 	// update the idle count to match the new capacity if necessary
 	// wait for connections to be returned to the pool if we're reducing the capacity.
-	defer pool.setIdleCount()
+	// defer pool.setIdleCount()
 
-	const delay = 10 * time.Millisecond
+	// const delay = 10 * time.Millisecond
 
-	// close connections until we're under capacity
-	for pool.active.Load() > newcap {
-		if err := ctx.Err(); err != nil {
-			return vterrors.Errorf(vtrpcpb.Code_ABORTED,
-				"timed out while waiting for connections to be returned to the pool (capacity=%d, active=%d, borrowed=%d)",
-				pool.capacity.Load(), pool.active.Load(), pool.borrowed.Load())
-		}
-		// if we're closing down the pool, make sure there's no clients waiting
-		// for connections because they won't be returned in the future
-		if newcap == 0 {
-			pool.wait.expire(true)
-		}
+	// // close connections until we're under capacity
+	// for pool.active.Load() > newcap {
+	// 	if err := ctx.Err(); err != nil {
+	// 		return vterrors.Errorf(vtrpcpb.Code_ABORTED,
+	// 			"timed out while waiting for connections to be returned to the pool (capacity=%d, active=%d, borrowed=%d)",
+	// 			pool.capacity.Load(), pool.active.Load(), pool.borrowed.Load())
+	// 	}
+	// 	// if we're closing down the pool, make sure there's no clients waiting
+	// 	// for connections because they won't be returned in the future
+	// 	if newcap == 0 {
+	// 		pool.wait.expire(true)
+	// 	}
 
-		// try closing from connections which are currently idle in the stacks
-		conn := pool.getFromSettingsStack(nil)
-		if conn == nil {
-			conn = pool.pop(&pool.clean)
-		}
-		if conn == nil {
-			time.Sleep(delay)
-			continue
-		}
-		conn.Close()
-		pool.closedConn()
-	}
+	// 	// try closing from connections which are currently idle in the stacks
+	// 	conn := pool.getFromSettingsStack(nil)
+	// 	if conn == nil {
+	// 		conn = pool.pop(&pool.clean)
+	// 	}
+	// 	if conn == nil {
+	// 		time.Sleep(delay)
+	// 		continue
+	// 	}
+	// 	conn.Close()
+	// 	pool.closedConn()
+	// }
 
 	return nil
 }
