@@ -1242,71 +1242,79 @@ func TestGetSpike(t *testing.T) {
 	}
 }
 
-// TestCloseDuringGetAndPut confirms that we do not get hung when closing a connection
-// pool while connections are concurrently being added and removed from the pool.
-func TestCloseDuringGetAndPut(t *testing.T) {
-	timeout := time.After(5 * time.Minute)
-	done := make(chan struct{})
+// TestCloseDuringWaitForConn confirms that we do not get hung when the pool gets
+// closed while we are waiting for a connection from it.
+func TestCloseDuringWaitForConn(t *testing.T) {
 	ctx := context.Background()
+	goRoutineCnt := 5
+	getTimeout := 5 * time.Second
 
-	go func() {
-		for range 50 {
-			var state TestState
-			p := NewPool(&Config[*TestConn]{
-				Capacity:     1,
-				MaxIdleCount: 1,
-				IdleTimeout:  time.Second,
-				LogWait:      state.LogWait,
-			}).Open(newConnector(&state), nil)
+	for range 50 {
+		hung := make(chan (struct{}), goRoutineCnt)
+		var state TestState
+		p := NewPool(&Config[*TestConn]{
+			Capacity:     1,
+			MaxIdleCount: 1,
+			IdleTimeout:  time.Second,
+			LogWait:      state.LogWait,
+		}).Open(newConnector(&state), nil)
 
-			var closed = atomic.Bool{}
-			wg := sync.WaitGroup{}
-			var count atomic.Int64
+		var closed = atomic.Bool{}
+		wg := sync.WaitGroup{}
+		var count atomic.Int64
 
-			fmt.Println("Starting TestCloseDuringGetAndPut")
+		fmt.Println("Starting TestCloseDuringGetAndPut")
 
-			// Spawn multiple goroutines to perform Get and Put operations, but only
-			// allow connections to be checked out until `closed` has been set to true.
-			for range 2 {
-				wg.Go(func() {
-					for !closed.Load() {
+		// Spawn multiple goroutines to perform Get and Put operations, but only
+		// allow connections to be checked out until `closed` has been set to true.
+		for range goRoutineCnt {
+			wg.Go(func() {
+				for !closed.Load() {
+					timeout := time.After(getTimeout)
+					done := make(chan struct{})
+					go func() {
+						defer close(done)
 						r, err := p.Get(ctx, nil)
 						if err != nil {
-							continue
+							return
 						}
 						count.Add(1)
 						r.Recycle()
+					}()
+					select {
+					case <-timeout:
+						hung <- struct{}{}
+						return
+					case <-done:
 					}
-				})
-			}
-
-			// Allow some time for goroutines to start and attempt to get connections.
-			time.Sleep(1000 * time.Millisecond)
-			// Close the pool, which should allow all goroutines to finish.
-			closeCtx, closeCancel := context.WithTimeout(ctx, 500*time.Millisecond)
-			defer closeCancel()
-			err := p.CloseWithContext(closeCtx)
-			closed.Store(true)
-			require.NoError(t, err, "Failed to close pool")
-
-			// Wait for a short time to ensure all goroutines have completed.
-			wg.Wait()
-			fmt.Println("Count of connections checked out:", count.Load())
-
-			// Check that the pool is closed and no connections are available.
-			assert.EqualValues(t, 0, p.Capacity())
-			assert.EqualValues(t, 0, p.Available())
-			if state.open.Load() != 0 {
-				t.Errorf("Expected no open connections, but found %d", state.open.Load())
-			}
-			require.EqualValues(t, 0, state.open.Load())
+				}
+			})
 		}
-		done <- struct{}{}
-	}()
 
-	select {
-	case <-timeout:
-		require.FailNow(t, "Race encountered and deadlock detected")
-	case <-done:
+		// Let the go-routines get up and running.
+		for count.Load() < 5000 {
+			time.Sleep(1 * time.Millisecond)
+		}
+
+		// Close the pool, which should allow all goroutines to finish.
+		closeCtx, closeCancel := context.WithTimeout(ctx, 1*time.Second)
+		defer closeCancel()
+		err := p.CloseWithContext(closeCtx)
+		closed.Store(true)
+		require.NoError(t, err, "Failed to close pool")
+
+		// Wait for all goroutines to finish.
+		wg.Wait()
+		select {
+		case <-hung:
+			require.FailNow(t, "Race encountered and deadlock detected")
+		default:
+		}
+
+		fmt.Println("Count of connections checked out:", count.Load())
+		// Check that the pool is closed and no connections are available.
+		assert.EqualValues(t, 0, p.Capacity())
+		assert.EqualValues(t, 0, p.Available())
+		require.EqualValues(t, 0, state.open.Load())
 	}
 }
