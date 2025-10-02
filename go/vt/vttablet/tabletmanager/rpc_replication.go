@@ -519,20 +519,20 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 // or on a tablet that already transitioned to REPLICA.
 //
 // If a step fails in the middle, it will try to undo any changes it made.
-func (tm *TabletManager) DemotePrimary(ctx context.Context) (*replicationdatapb.PrimaryStatus, error) {
+func (tm *TabletManager) DemotePrimary(ctx context.Context, force bool) (*replicationdatapb.PrimaryStatus, error) {
 	log.Infof("DemotePrimary")
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return nil, err
 	}
 	// The public version always reverts on partial failure.
-	return tm.demotePrimary(ctx, true /* revertPartialFailure */)
+	return tm.demotePrimary(ctx, true /* revertPartialFailure */, force)
 }
 
 // demotePrimary implements DemotePrimary with an additional, private option.
 //
 // If revertPartialFailure is true, and a step fails in the middle, it will try
 // to undo any changes it made.
-func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure bool) (primaryStatus *replicationdatapb.PrimaryStatus, finalErr error) {
+func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure bool, force bool) (primaryStatus *replicationdatapb.PrimaryStatus, finalErr error) {
 	if err := tm.lock(ctx); err != nil {
 		return nil, err
 	}
@@ -594,11 +594,13 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		}()
 	}
 
-	// Now we know no writes are in-flight and no new writes can occur.
-	// We just need to wait for no write being blocked on semi-sync ACKs.
-	err = tm.SemiSyncMonitor.WaitUntilSemiSyncUnblocked(ctx)
-	if err != nil {
-		return nil, err
+	if !force {
+		// Now we know no writes are in-flight and no new writes can occur.
+		// We just need to wait for no write being blocked on semi-sync ACKs.
+		err = tm.SemiSyncMonitor.WaitUntilSemiSyncUnblocked(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// We can now set MySQL to super_read_only mode. If we are already super_read_only because of a
