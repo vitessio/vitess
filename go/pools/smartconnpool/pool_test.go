@@ -1247,11 +1247,11 @@ func TestGetSpike(t *testing.T) {
 func TestCloseDuringGetAndPut(t *testing.T) {
 	timeout := time.After(5 * time.Minute)
 	done := make(chan struct{})
+	ctx := context.Background()
 
 	go func() {
 		for range 50 {
 			var state TestState
-			ctx := context.Background()
 			p := NewPool(&Config[*TestConn]{
 				Capacity:     1,
 				MaxIdleCount: 1,
@@ -1283,9 +1283,9 @@ func TestCloseDuringGetAndPut(t *testing.T) {
 			// Allow some time for goroutines to start and attempt to get connections.
 			time.Sleep(1000 * time.Millisecond)
 			// Close the pool, which should allow all goroutines to finish.
-			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-			defer cancel()
-			err := p.CloseWithContext(ctx)
+			closeCtx, closeCancel := context.WithTimeout(ctx, 500*time.Millisecond)
+			defer closeCancel()
+			err := p.CloseWithContext(closeCtx)
 			closed.Store(true)
 			require.NoError(t, err, "Failed to close pool")
 
