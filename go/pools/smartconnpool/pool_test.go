@@ -1241,3 +1241,72 @@ func TestGetSpike(t *testing.T) {
 		close(errs)
 	}
 }
+
+// TestCloseDuringGetAndPut confirms that we do not get hung when closing a connection
+// pool while connections are concurrently being added and removed from the pool.
+func TestCloseDuringGetAndPut(t *testing.T) {
+	timeout := time.After(5 * time.Minute)
+	done := make(chan struct{})
+
+	go func() {
+		for range 50 {
+			var state TestState
+			ctx := context.Background()
+			p := NewPool(&Config[*TestConn]{
+				Capacity:     1,
+				MaxIdleCount: 1,
+				IdleTimeout:  time.Second,
+				LogWait:      state.LogWait,
+			}).Open(newConnector(&state), nil)
+
+			var closed = atomic.Bool{}
+			wg := sync.WaitGroup{}
+			var count atomic.Int64
+
+			fmt.Println("Starting TestCloseDuringGetAndPut")
+
+			// Spawn multiple goroutines to perform Get and Put operations, but only
+			// allow connections to be checked out until `closed` has been set to true.
+			for range 2 {
+				wg.Go(func() {
+					for !closed.Load() {
+						r, err := p.Get(ctx, nil)
+						if err != nil {
+							continue
+						}
+						count.Add(1)
+						r.Recycle()
+					}
+				})
+			}
+
+			// Allow some time for goroutines to start and attempt to get connections.
+			time.Sleep(1000 * time.Millisecond)
+			// Close the pool, which should allow all goroutines to finish.
+			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			defer cancel()
+			err := p.CloseWithContext(ctx)
+			closed.Store(true)
+			require.NoError(t, err, "Failed to close pool")
+
+			// Wait for a short time to ensure all goroutines have completed.
+			wg.Wait()
+			fmt.Println("Count of connections checked out:", count.Load())
+
+			// Check that the pool is closed and no connections are available.
+			assert.EqualValues(t, 0, p.Capacity())
+			assert.EqualValues(t, 0, p.Available())
+			if state.open.Load() != 0 {
+				t.Errorf("Expected no open connections, but found %d", state.open.Load())
+			}
+			require.EqualValues(t, 0, state.open.Load())
+		}
+		done <- struct{}{}
+	}()
+
+	select {
+	case <-timeout:
+		require.FailNow(t, "Race encountered and deadlock detected")
+	case <-done:
+	}
+}
