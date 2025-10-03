@@ -485,6 +485,7 @@ message InitReplicaResponse {
 }
 
 message DemotePrimaryRequest {
+  bool force = 1;
 }
 
 message DemotePrimaryResponse {
