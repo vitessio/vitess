@@ -94,7 +94,7 @@
     "postcss": "^8.4.31",
     "prettier": "^2.2.1",
     "protobufjs-cli": "^1.1.3",
-    "serve": "^14.2.0",
+    "serve": "^14.2.5",
     "stylelint": "^14.4.0",
     "stylelint-config-prettier": "^9.0.3",
     "stylelint-config-standard-scss": "^3.0.0",
