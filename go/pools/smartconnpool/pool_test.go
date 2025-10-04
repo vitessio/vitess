@@ -1259,7 +1259,7 @@ func TestCloseDuringWaitForConn(t *testing.T) {
 			LogWait:      state.LogWait,
 		}).Open(newConnector(&state), nil)
 
-		var closed = atomic.Bool{}
+		closed := atomic.Bool{}
 		wg := sync.WaitGroup{}
 		var count atomic.Int64
 
@@ -1315,8 +1315,8 @@ func TestCloseDuringWaitForConn(t *testing.T) {
 
 		fmt.Println("Count of connections checked out:", count.Load())
 		// Check that the pool is closed and no connections are available.
-		assert.EqualValues(t, 0, p.Capacity())
-		assert.EqualValues(t, 0, p.Available())
+		require.EqualValues(t, 0, p.Capacity())
+		require.EqualValues(t, 0, p.Available())
 		require.EqualValues(t, 0, state.open.Load())
 	}
 }

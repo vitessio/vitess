@@ -93,7 +93,6 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, isClos
 		if removed { // We successfully removed ourselves, wake up our semaphore goroutine so it can finish.
 			elem.Value.sema.notify(false)
 		} // Otherwise someone else removed us and will/has notified the semaphore.
-
 		<-done
 		// Check what connection we have now that we know the semaphore goroutine has completed.
 		conn = elem.Value.conn
