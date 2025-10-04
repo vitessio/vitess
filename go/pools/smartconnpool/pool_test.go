@@ -1271,10 +1271,12 @@ func TestCloseDuringWaitForConn(t *testing.T) {
 			wg.Go(func() {
 				for !closed.Load() {
 					timeout := time.After(getTimeout)
+					getCtx, getCancel := context.WithTimeout(ctx, getTimeout/3)
+					defer getCancel()
 					done := make(chan struct{})
 					go func() {
 						defer close(done)
-						r, err := p.Get(ctx, nil)
+						r, err := p.Get(getCtx, nil)
 						if err != nil {
 							return
 						}

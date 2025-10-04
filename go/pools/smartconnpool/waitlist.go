@@ -56,7 +56,7 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, isClos
 
 	wl.mu.Lock()
 	if isClosed() {
-		// if the pool is closed, we can't wait for a connection, so return an error
+		// If the pool is closed, we can't wait for a connection, so return an error.
 		wl.nodes.Put(elem)
 		wl.mu.Unlock()
 		return nil, ErrConnPoolClosed
@@ -65,19 +65,51 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, isClos
 	wl.list.PushBackValue(elem)
 	wl.mu.Unlock()
 
-	// block on our waiter's semaphore until somebody can hand over a connection to us
-	elem.Value.sema.wait()
+	done := make(chan struct{})
+	go func() {
+		// Block on our waiter's semaphore until somebody can hand over a connection to us.
+		elem.Value.sema.wait()
+		close(done)
+	}()
 
-	// we're awake -- the conn in our waiter contains the connection that was handed
-	// over to us, or nothing if we've been waken up forcefully. save the conn before
-	// we return our waiter to the pool of waiters for reuse.
-	conn := elem.Value.conn
-	wl.nodes.Put(elem)
+	var conn *Pooled[C]
+	var err error
 
-	if conn != nil {
-		return conn, nil
+	select {
+	case <-ctx.Done():
+		// Context expired. We need to try to remove ourselves from the waitlist to
+		// prevent another goroutine from trying to hand us a connection later on.
+		wl.mu.Lock()
+		// Try to find and remove ourselves from the list.
+		removed := false
+		for e := wl.list.Front(); e != nil; e = e.Next() {
+			if e == elem {
+				wl.list.Remove(elem)
+				removed = true
+				break
+			}
+		}
+		wl.mu.Unlock()
+		if removed { // We successfully removed ourselves, wake up our semaphore goroutine so it can finish.
+			elem.Value.sema.notify(false)
+		} // Otherwise someone else removed us and will/has notified the semaphore.
+
+		<-done
+		// Check what connection we have now that we know the semaphore goroutine has completed.
+		conn = elem.Value.conn
+		if conn == nil {
+			if isClosed() {
+				err = ErrConnPoolClosed
+			} else {
+				err = ctx.Err()
+			}
+		} // Otherwise we got the connection *just* before the context expired.
+	case <-done:
+		conn = elem.Value.conn
 	}
-	return nil, ctx.Err()
+
+	wl.nodes.Put(elem)
+	return conn, err
 }
 
 // expire removes and wakes any expired waiter in the waitlist.
