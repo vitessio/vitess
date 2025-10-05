@@ -52,12 +52,12 @@ type waitlist[C Connection] struct {
 // forced an expiration of all waiters in the waitlist.
 func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, isClosed func() bool) (*Pooled[C], error) {
 	elem := wl.nodes.Get().(*list.Element[waiter[C]])
+	defer wl.nodes.Put(elem)
 	elem.Value = waiter[C]{setting: setting, conn: nil, ctx: ctx}
 
 	wl.mu.Lock()
 	if isClosed() {
 		// If the pool is closed, we can't wait for a connection, so return an error.
-		wl.nodes.Put(elem)
 		wl.mu.Unlock()
 		return nil, ErrConnPoolClosed
 	}
@@ -79,9 +79,10 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, isClos
 	case <-ctx.Done():
 		// Context expired. We need to try to remove ourselves from the waitlist to
 		// prevent another goroutine from trying to hand us a connection later on.
+		removed := false
+
 		wl.mu.Lock()
 		// Try to find and remove ourselves from the list.
-		removed := false
 		for e := wl.list.Front(); e != nil; e = e.Next() {
 			if e == elem {
 				wl.list.Remove(elem)
@@ -90,24 +91,21 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, isClos
 			}
 		}
 		wl.mu.Unlock()
-		if removed { // We successfully removed ourselves, wake up our semaphore goroutine so it can finish.
+
+		// If we removed ourselves from the waitlist, we need to notify our semaphore
+		if removed {
 			elem.Value.sema.notify(false)
-		} // Otherwise someone else removed us and will/has notified the semaphore.
+			// Also store the context error to return it later
+			err = context.Cause(ctx)
+		}
+
+		// Wait for the semaphore to have been notified
 		<-done
-		// Check what connection we have now that we know the semaphore goroutine has completed.
-		conn = elem.Value.conn
-		if conn == nil {
-			if isClosed() {
-				err = ErrConnPoolClosed
-			} else {
-				err = ctx.Err()
-			}
-		} // Otherwise we got the connection *just* before the context expired.
+
 	case <-done:
 		conn = elem.Value.conn
 	}
 
-	wl.nodes.Put(elem)
 	return conn, err
 }
 
