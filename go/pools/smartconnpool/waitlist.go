@@ -97,16 +97,22 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, isClos
 			elem.Value.sema.notify(false)
 		}
 
-		// Wait for the semaphore to have been notified
+		// Wait for the semaphore to have been notified, either by us or by someone else
 		<-done
 
 		if removed {
 			err = context.Cause(ctx)
-		} else if elem.Value.conn == nil {
-			err = ErrConnPoolClosed
 		}
+
 	case <-done:
 		conn = elem.Value.conn
+
+		if conn == nil {
+			// if the goroutine returned without being canceled, but without a connection,
+			// it means the pool has been closed and all waiters have been expired.
+			// we need to return an error in this case.
+			err = ErrConnPoolClosed
+		}
 	}
 
 	return conn, err
