@@ -26,7 +26,6 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -54,17 +53,21 @@ type SessionBalancer struct {
 	// externalRings are the hash rings created for each target. It contains only tablets
 	// external to localCell.
 	externalRings map[discovery.KeyspaceShardTabletType]*hashRing
+
+	// tablets keeps track of the latest state of each tablet, keyed by tablet alias. This is
+	// used to check whether a tablet's target has changed, and needs to be removed from its old
+	// hash ring.
+	tablets map[string]*discovery.TabletHealth
 }
 
 // NewSessionBalancer creates a new session balancer.
 func NewSessionBalancer(ctx context.Context, localCell string, topoServer srvtopo.Server, hc discovery.HealthCheck) (TabletBalancer, error) {
-	log.Info("session balancer: creating new session balancer")
-
 	b := &SessionBalancer{
 		localCell:     localCell,
 		hc:            hc,
 		localRings:    make(map[discovery.KeyspaceShardTabletType]*hashRing),
 		externalRings: make(map[discovery.KeyspaceShardTabletType]*hashRing),
+		tablets:       make(map[string]*discovery.TabletHealth),
 	}
 
 	// Set up health check subscription
@@ -140,6 +143,8 @@ func (b *SessionBalancer) watchHealthCheck(ctx context.Context, hcChan chan *dis
 				continue
 			}
 
+			b.removeOldTablet(tablet)
+
 			// Ignore tablets we aren't supposed to watch
 			if _, ok := tabletTypesToWatch[tablet.Target.TabletType]; !ok {
 				continue
@@ -148,6 +153,39 @@ func (b *SessionBalancer) watchHealthCheck(ctx context.Context, hcChan chan *dis
 			b.onTabletHealthChange(tablet)
 		}
 	}
+}
+
+// removeOldTablet removes the entry for a tablet in its old hash ring if its target has changed. For example, if a
+// reparent happens and a replica is now a primary, we need to remove it from the replica hash ring.
+func (b *SessionBalancer) removeOldTablet(tablet *discovery.TabletHealth) {
+	alias := tabletAlias(tablet)
+	prevTablet, ok := b.tablets[alias]
+	if !ok {
+		return
+	}
+
+	prevTarget := prevTablet.Target
+
+	// If this tablet's target changed, remove it from its old hash ring.
+	targetChanged := prevTarget.TabletType != tablet.Target.TabletType || prevTarget.Keyspace != tablet.Target.Keyspace || prevTarget.Shard != tablet.Target.Shard
+	if !targetChanged {
+		return
+	}
+
+	prevKey := discovery.KeyFromTarget(prevTablet.Target)
+
+	var ring map[discovery.KeyspaceShardTabletType]*hashRing
+	if tablet.Tablet.Alias.Cell == b.localCell {
+		ring = b.localRings
+	} else {
+		ring = b.externalRings
+	}
+
+	if ring == nil || ring[prevKey] == nil {
+		return
+	}
+
+	ring[prevKey].remove(prevTablet)
 }
 
 // onTabletHealthChange is the handler for tablet health events. If a tablet goes into serving,
@@ -166,8 +204,12 @@ func (b *SessionBalancer) onTabletHealthChange(tablet *discovery.TabletHealth) {
 
 	if tablet.Serving {
 		ring.add(tablet)
+
+		alias := tabletAlias(tablet)
+		b.tablets[alias] = tablet
 	} else {
 		ring.remove(tablet)
+		delete(b.tablets, tabletAlias(tablet))
 	}
 }
 

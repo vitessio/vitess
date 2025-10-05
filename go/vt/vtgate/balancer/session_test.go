@@ -681,6 +681,128 @@ func TestTabletTypesToWatch(t *testing.T) {
 	}
 }
 
+func TestTabletTargetChanges(t *testing.T) {
+	b, hcChan := newSessionBalancer(t)
+
+	replica := &discovery.TabletHealth{
+		Tablet: &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "local",
+				Uid:  100,
+			},
+			Keyspace: "keyspace",
+			Shard:    "0",
+		},
+		Target: &querypb.Target{
+			Keyspace:   "keyspace",
+			Shard:      "0",
+			TabletType: topodatapb.TabletType_REPLICA,
+			Cell:       "local",
+		},
+		Serving: true,
+	}
+
+	primary := &discovery.TabletHealth{
+		Tablet: &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "local",
+				Uid:  100,
+			},
+			Keyspace: "keyspace",
+			Shard:    "0",
+		},
+		Target: &querypb.Target{
+			Keyspace:   "keyspace",
+			Shard:      "0",
+			TabletType: topodatapb.TabletType_PRIMARY,
+			Cell:       "local",
+		},
+		Serving: true,
+	}
+
+	hcChan <- replica
+
+	// Give a moment for the worker to process the tablets
+	time.Sleep(100 * time.Millisecond)
+
+	require.Len(t, b.localRings, 1, b.print())
+	require.Len(t, b.localRings[discovery.KeyFromTarget(replica.Target)].tablets, 1, b.print())
+
+	require.Len(t, b.externalRings, 0, b.print())
+
+	// Reparent happens, tablet is now a primary
+	hcChan <- primary
+
+	// Give a moment for the worker to process the tablets
+	time.Sleep(100 * time.Millisecond)
+
+	require.Len(t, b.localRings, 1, b.print())
+	require.Len(t, b.localRings[discovery.KeyFromTarget(replica.Target)].tablets, 0, b.print())
+
+	require.Len(t, b.externalRings, 0, b.print())
+}
+
+func TestExternalTabletTargetChanges(t *testing.T) {
+	b, hcChan := newSessionBalancer(t)
+
+	replica := &discovery.TabletHealth{
+		Tablet: &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "external",
+				Uid:  100,
+			},
+			Keyspace: "keyspace",
+			Shard:    "0",
+		},
+		Target: &querypb.Target{
+			Keyspace:   "keyspace",
+			Shard:      "0",
+			TabletType: topodatapb.TabletType_REPLICA,
+			Cell:       "external",
+		},
+		Serving: true,
+	}
+
+	primary := &discovery.TabletHealth{
+		Tablet: &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "external",
+				Uid:  100,
+			},
+			Keyspace: "keyspace",
+			Shard:    "0",
+		},
+		Target: &querypb.Target{
+			Keyspace:   "keyspace",
+			Shard:      "0",
+			TabletType: topodatapb.TabletType_PRIMARY,
+			Cell:       "external",
+		},
+		Serving: true,
+	}
+
+	hcChan <- replica
+
+	// Give a moment for the worker to process the tablets
+	time.Sleep(100 * time.Millisecond)
+
+	require.Len(t, b.externalRings, 1, b.print())
+	require.Len(t, b.externalRings[discovery.KeyFromTarget(replica.Target)].tablets, 1, b.print())
+
+	require.Len(t, b.localRings, 0, b.print())
+
+	// Reparent happens, tablet is now a primary
+	hcChan <- primary
+
+	// Give a moment for the worker to process the tablets
+	time.Sleep(100 * time.Millisecond)
+
+	require.Len(t, b.externalRings, 1, b.print())
+	require.Len(t, b.externalRings[discovery.KeyFromTarget(replica.Target)].tablets, 0, b.print())
+
+	require.Len(t, b.localRings, 0, b.print())
+}
+
 func buildOpts(uuid string) PickOpts {
 	return PickOpts{SessionUUID: uuid}
 }
