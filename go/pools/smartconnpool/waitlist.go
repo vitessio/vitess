@@ -95,13 +95,16 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, isClos
 		// If we removed ourselves from the waitlist, we need to notify our semaphore
 		if removed {
 			elem.Value.sema.notify(false)
-			// Also store the context error to return it later
-			err = context.Cause(ctx)
 		}
 
 		// Wait for the semaphore to have been notified
 		<-done
 
+		if removed {
+			err = context.Cause(ctx)
+		} else if elem.Value.conn == nil {
+			err = ErrConnPoolClosed
+		}
 	case <-done:
 		conn = elem.Value.conn
 	}
