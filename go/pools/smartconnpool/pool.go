@@ -194,7 +194,10 @@ func (pool *ConnPool[C]) runWorker(close <-chan struct{}, interval time.Duration
 
 func (pool *ConnPool[C]) open() {
 	closeChan := make(chan struct{})
-	pool.close.Store(&closeChan)
+	if !pool.close.CompareAndSwap(nil, &closeChan) {
+		// already open
+		return
+	}
 
 	pool.capacity.Store(pool.config.maxCapacity)
 	pool.setIdleCount()
