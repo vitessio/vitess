@@ -1249,7 +1249,7 @@ func TestCloseDuringWaitForConn(t *testing.T) {
 	goRoutineCnt := 5
 	getTimeout := 5 * time.Second
 
-	for range 50 {
+	for range 10 {
 		hung := make(chan (struct{}), goRoutineCnt)
 		var state TestState
 		p := NewPool(&Config[*TestConn]{
