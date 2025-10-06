@@ -202,7 +202,7 @@ func (pool *ConnPool[C]) open() {
 	// The expire worker takes care of removing from the waiter list any clients whose
 	// context has been cancelled.
 	pool.runWorker(closeChan, 100*time.Millisecond, func(_ time.Time) bool {
-		maybeStarving := pool.wait.expire(false)
+		maybeStarving := pool.wait.maybeStarvingCount()
 
 		// Do not allow connections to starve; if there's waiters in the queue
 		// and connections in the stack, it means we could be starving them.
@@ -599,9 +599,13 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 	// to other clients, wait until one of the connections is returned
 	if conn == nil {
 		start := time.Now()
-		conn, err = pool.wait.waitForConn(ctx, nil, func() bool {
-			return pool.close.Load() == nil || pool.capacity.Load() == 0
-		})
+
+		closeChan := pool.close.Load()
+		if closeChan == nil {
+			return nil, ErrConnPoolClosed
+		}
+
+		conn, err = pool.wait.waitForConn(ctx, nil, *closeChan)
 		if err != nil {
 			return nil, ErrTimeout
 		}
@@ -658,9 +662,13 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 	// wait for one of them
 	if conn == nil {
 		start := time.Now()
-		conn, err = pool.wait.waitForConn(ctx, setting, func() bool {
-			return pool.close.Load() == nil || pool.capacity.Load() == 0
-		})
+
+		closeChan := pool.close.Load()
+		if closeChan == nil {
+			return nil, ErrConnPoolClosed
+		}
+
+		conn, err = pool.wait.waitForConn(ctx, setting, *closeChan)
 		if err != nil {
 			return nil, ErrTimeout
 		}
@@ -736,11 +744,6 @@ func (pool *ConnPool[C]) setCapacity(ctx context.Context, newcap int64) error {
 			return vterrors.Errorf(vtrpcpb.Code_ABORTED,
 				"timed out while waiting for connections to be returned to the pool (capacity=%d, active=%d, borrowed=%d)",
 				pool.capacity.Load(), pool.active.Load(), pool.borrowed.Load())
-		}
-		// if we're closing down the pool, make sure there's no clients waiting
-		// for connections because they won't be returned in the future
-		if newcap == 0 {
-			pool.wait.expire(true)
 		}
 
 		// try closing from connections which are currently idle in the stacks
