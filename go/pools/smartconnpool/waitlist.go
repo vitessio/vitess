@@ -102,6 +102,11 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, isClos
 
 		if removed {
 			err = context.Cause(ctx)
+		} else if conn == nil {
+			// if the context cancellation raced with another goroutine that expired waiters
+			// (for example, because the pool was closed), and we didn't get a connection,
+			// we need to return an error.
+			err = ErrConnPoolClosed
 		}
 
 	case <-done:
