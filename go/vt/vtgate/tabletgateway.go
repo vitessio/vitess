@@ -111,7 +111,7 @@ func createHealthCheck(ctx context.Context, retryDelay, timeout time.Duration, t
 }
 
 // NewTabletGateway creates and returns a new TabletGateway
-func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, localCell string) (*TabletGateway, error) {
+func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, localCell string) *TabletGateway {
 	// hack to accommodate various users of gateway + tests
 	if hc == nil {
 		var topoServer *topo.Server
@@ -132,16 +132,11 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 		statusAggregators: make(map[string]*TabletStatusAggregator),
 	}
 	gw.setupBuffering(ctx)
-
 	if balancerEnabled {
-		err := gw.setupBalancer(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("tablet gateway: failed to set up balancer: %w", err)
-		}
+		gw.setupBalancer()
 	}
-
 	gw.QueryService = queryservice.Wrap(nil, gw.withRetry)
-	return gw, nil
+	return gw
 }
 
 func (gw *TabletGateway) setupBuffering(ctx context.Context) {
@@ -173,29 +168,22 @@ func (gw *TabletGateway) setupBuffering(ctx context.Context) {
 	}(bufferCtx, ksChan, gw.buffer)
 }
 
-func (gw *TabletGateway) setupBalancer(ctx context.Context) error {
+func (gw *TabletGateway) setupBalancer() {
 	if len(balancerVtgateCells) == 0 {
 		log.Exitf("balancer-vtgate-cells is required for balanced mode")
 	}
 
 	switch balancerType {
 	case "session":
-		balancer, err := balancer.NewSessionBalancer(ctx, gw.localCell, gw.srvTopoServer, gw.hc)
-		if err != nil {
-			return fmt.Errorf("failed to create session balancer: %w", err)
-		}
-
-		gw.balancer = balancer
+		gw.balancer = balancer.NewSessionBalancer(gw.localCell)
 	default:
 		if balancerType != "balanced" {
 			log.Warningf("Unrecognized balancer type %q, using default \"balanced\"", balancerType)
+			balancerType = "balanced"
 		}
 
-		balancerType = "balanced"
 		gw.balancer = balancer.NewTabletBalancer(gw.localCell, balancerVtgateCells)
 	}
-
-	return nil
 }
 
 // QueryServiceByAlias satisfies the Gateway interface

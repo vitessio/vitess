@@ -86,7 +86,7 @@ func (vte *VTExplain) initVtgateExecutor(ctx context.Context, ts *topo.Server, v
 }
 
 func (vte *VTExplain) newFakeResolver(ctx context.Context, opts *Options, serv srvtopo.Server, cell string) *vtgate.Resolver {
-	gw, _ := vtgate.NewTabletGateway(ctx, vte.healthCheck, serv, cell)
+	gw := vtgate.NewTabletGateway(ctx, vte.healthCheck, serv, cell)
 	_ = gw.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
 
 	txMode := vtgatepb.TransactionMode_MULTI

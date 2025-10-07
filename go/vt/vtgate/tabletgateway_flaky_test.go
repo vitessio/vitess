@@ -59,7 +59,7 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 	// create a new fake health check. We want to check the buffering code which uses Subscribe, so we must also pass a channel
 	hc := discovery.NewFakeHealthCheck(make(chan *discovery.TabletHealth))
 	// create a new tablet gateway
-	tg, _ := NewTabletGateway(ctx, hc, ts, "cell")
+	tg := NewTabletGateway(ctx, hc, ts, "cell")
 	defer tg.Close(ctx)
 
 	// add a primary tablet which is serving
@@ -162,7 +162,7 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 	// create a new fake health check. We want to check the buffering code which uses Subscribe, so we must also pass a channel
 	hc := discovery.NewFakeHealthCheck(make(chan *discovery.TabletHealth))
 	// create a new tablet gateway
-	tg, _ := NewTabletGateway(ctx, hc, ts, "cell")
+	tg := NewTabletGateway(ctx, hc, ts, "cell")
 	defer tg.Close(ctx)
 
 	// add a primary tablet which is serving
@@ -292,7 +292,7 @@ func TestInconsistentStateDetectedBuffering(t *testing.T) {
 	// create a new fake health check. We want to check the buffering code which uses Subscribe, so we must also pass a channel
 	hc := discovery.NewFakeHealthCheck(make(chan *discovery.TabletHealth))
 	// create a new tablet gateway
-	tg, _ := NewTabletGateway(ctx, hc, ts, "cell")
+	tg := NewTabletGateway(ctx, hc, ts, "cell")
 	defer tg.Close(ctx)
 
 	tg.retryCount = 0

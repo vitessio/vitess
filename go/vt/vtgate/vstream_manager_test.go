@@ -813,7 +813,6 @@ func TestVStreamRetriableErrors(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestVStreamShouldNotSendSourceHeartbeats(t *testing.T) {
@@ -1520,7 +1519,6 @@ func TestResolveVStreamParams(t *testing.T) {
 			require.Equal(t, minimizeSkew, flags2.MinimizeSkew)
 		})
 	}
-
 }
 
 func TestVStreamIdleHeartbeat(t *testing.T) {
@@ -1984,7 +1982,7 @@ func TestVStreamManagerHealthCheckResponseHandling(t *testing.T) {
 }
 
 func newTestVStreamManager(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, cell string) *vstreamManager {
-	gw, _ := NewTabletGateway(ctx, hc, serv, cell)
+	gw := NewTabletGateway(ctx, hc, serv, cell)
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
 	return newVStreamManager(srvResolver, serv, cell)
 }
