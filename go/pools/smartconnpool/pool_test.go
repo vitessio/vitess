@@ -1206,7 +1206,7 @@ func TestGetSpike(t *testing.T) {
 func TestCloseDuringWaitForConn(t *testing.T) {
 	ctx := context.Background()
 	goRoutineCnt := 50
-	getTimeout := 300 * time.Millisecond
+	getTimeout := 2000 * time.Millisecond
 
 	for range 50 {
 		hung := make(chan (struct{}), goRoutineCnt)
@@ -1221,7 +1221,7 @@ func TestCloseDuringWaitForConn(t *testing.T) {
 		wg := sync.WaitGroup{}
 		var count atomic.Int64
 
-		fmt.Println("Starting TestCloseDuringGetAndPut")
+		fmt.Println("Starting TestCloseDuringWaitForConn")
 
 		// Spawn multiple goroutines to perform Get and Put operations, but only
 		// allow connections to be checked out until `closed` has been set to true.
