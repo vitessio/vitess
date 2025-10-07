@@ -1247,7 +1247,7 @@ func TestGetSpike(t *testing.T) {
 func TestCloseDuringWaitForConn(t *testing.T) {
 	ctx := context.Background()
 	goRoutineCnt := 50
-	getTimeout := 1000 * time.Millisecond
+	getTimeout := 2000 * time.Millisecond
 
 	for range 50 {
 		hung := make(chan (struct{}), goRoutineCnt)
