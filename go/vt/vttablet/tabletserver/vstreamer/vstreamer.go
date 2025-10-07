@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -329,7 +330,11 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	if vs.filter != nil && vs.filter.WorkflowName != "" {
 		wfNameLog = fmt.Sprintf(" in workflow %s", vs.filter.WorkflowName)
 	}
+	fullyThrottledTimeLimit := 10 * time.Minute // How long we can be fully throttled before returning an error
+	throttlerErrs := make(chan error, 1)        // How we return the error when we've been fully throttled too long
+	defer close(throttlerErrs)
 	throttleEvents := func(throttledEvents chan mysql.BinlogEvent) {
+		throttledTime := atomic.Int64{}
 		for {
 			// Check throttler.
 			if checkResult, ok := vs.vse.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vs.throttlerApp); !ok {
@@ -340,9 +345,17 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				default:
 					// Do nothing special.
 				}
+				curtime := time.Now().Unix()
+				if !throttledTime.CompareAndSwap(0, curtime) {
+					if curtime-throttledTime.Load() > int64(fullyThrottledTimeLimit.Seconds()) {
+						throttlerErrs <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vstreamer has been fully throttled for more than %v, giving up so that we can retry", fullyThrottledTimeLimit)
+						return
+					}
+				}
 				logger.Infof("vstreamer throttled%s: %s.", wfNameLog, checkResult.Summary())
 				continue
 			}
+			throttledTime.Store(0) // We are no longer fully throttled
 			select {
 			case ev, ok := <-events:
 				if ok {
@@ -413,6 +426,9 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			}
 		case err := <-errs:
 			return err
+		case throttlerErr := <-throttlerErrs:
+			vs.vse.errorCounts.Add("FullyThrottledTimeLimit", 1)
+			return throttlerErr
 		case <-ctx.Done():
 			return nil
 		case <-hbTimer.C:

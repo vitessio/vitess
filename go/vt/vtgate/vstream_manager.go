@@ -70,6 +70,10 @@ const tabletPickerContextTimeout = 90 * time.Second
 // ending the stream from the tablet.
 const stopOnReshardDelay = 500 * time.Millisecond
 
+// livenessTimeout is the point at which we return an error to the client if the stream has recieved
+// no events, including heartbeats, from any of the shards.
+const livenessTimeout = 10 * time.Minute
+
 // vstream contains the metadata for one VStream request.
 type vstream struct {
 	// mu protects parts of vgtid, the semantics of a send, and journaler.
@@ -135,6 +139,9 @@ type vstream struct {
 	ts                *topo.Server
 
 	tabletPickerOptions discovery.TabletPickerOptions
+
+	// At what point, without any activity in the stream, should we consider it dead.
+	streamLivenessTimer *time.Timer
 
 	flags *vtgatepb.VStreamFlags
 }
@@ -206,6 +213,7 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 		vsm:                         vsm,
 		eventCh:                     make(chan []*binlogdatapb.VEvent),
 		heartbeatInterval:           flags.GetHeartbeatInterval(),
+		streamLivenessTimer:         time.NewTimer(livenessTimeout),
 		ts:                          ts,
 		copyCompletedShard:          make(map[string]struct{}),
 		tabletPickerOptions: discovery.TabletPickerOptions{
@@ -401,6 +409,14 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 				})
 				return
 			}
+		case <-vs.streamLivenessTimer.C:
+			vs.once.Do(func() {
+				vs.setError(
+					vterrors.New(vtrpcpb.Code_UNAVAILABLE, fmt.Sprintf("vstream failed liveness checks as there was no activity, including heartbeats, within the last %v", livenessTimeout)),
+					"vstream is fully throttled or otherwise hung",
+				)
+			})
+			return
 		}
 	}
 }
@@ -697,6 +713,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 
 			sendevents := make([]*binlogdatapb.VEvent, 0, len(events))
 			for i, event := range events {
+				vs.streamLivenessTimer.Reset(livenessTimeout) // Any event in the stream demonstrates liveness
 				switch event.Type {
 				case binlogdatapb.VEventType_FIELD:
 					ev := maybeUpdateTableName(event, sgtid.Keyspace, vs.flags.GetExcludeKeyspaceFromTableName(), extractFieldTableName)
