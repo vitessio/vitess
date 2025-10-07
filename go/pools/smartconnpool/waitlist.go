@@ -50,8 +50,9 @@ type waitlist[C Connection] struct {
 // The returned connection may _not_ have the requested Setting. This function can
 // also return a `nil` connection even if our context has expired, if the pool has
 // forced an expiration of all waiters in the waitlist.
-func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting) (*Pooled[C], error) {
+func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeChan <-chan struct{}) (*Pooled[C], error) {
 	elem := wl.nodes.Get().(*list.Element[waiter[C]])
+	defer wl.nodes.Put(elem)
 	elem.Value = waiter[C]{setting: setting, conn: nil, ctx: ctx}
 
 	wl.mu.Lock()
@@ -59,52 +60,94 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting) (*Pool
 	wl.list.PushBackValue(elem)
 	wl.mu.Unlock()
 
-	// block on our waiter's semaphore until somebody can hand over a connection to us
-	elem.Value.sema.wait()
+	done := make(chan struct{})
+	go func() {
+		// Block on our waiter's semaphore until somebody can hand over a connection to us.
+		elem.Value.sema.wait()
+		close(done)
+	}()
 
-	// we're awake -- the conn in our waiter contains the connection that was handed
-	// over to us, or nothing if we've been waken up forcefully. save the conn before
-	// we return our waiter to the pool of waiters for reuse.
-	conn := elem.Value.conn
-	wl.nodes.Put(elem)
+	select {
+	case <-closeChan:
+		// Pool was closed while we were waiting.
+		removed := false
 
-	if conn != nil {
-		return conn, nil
+		wl.mu.Lock()
+		// Try to find and remove ourselves from the list.
+		for e := wl.list.Front(); e != nil; e = e.Next() {
+			if e == elem {
+				wl.list.Remove(elem)
+				removed = true
+				break
+			}
+		}
+		wl.mu.Unlock()
+
+		// If we removed ourselves from the waitlist, we need to notify our semaphore
+		if removed {
+			elem.Value.sema.notify(false)
+		}
+
+		// Wait for the semaphore to have been notified, either by us or by someone else
+		<-done
+
+		if removed {
+			return nil, ErrConnPoolClosed
+		}
+
+		return elem.Value.conn, nil
+
+	case <-ctx.Done():
+		// Context expired. We need to try to remove ourselves from the waitlist to
+		// prevent another goroutine from trying to hand us a connection later on.
+		removed := false
+
+		wl.mu.Lock()
+		// Try to find and remove ourselves from the list.
+		for e := wl.list.Front(); e != nil; e = e.Next() {
+			if e == elem {
+				wl.list.Remove(elem)
+				removed = true
+				break
+			}
+		}
+		wl.mu.Unlock()
+
+		// If we removed ourselves from the waitlist, we need to notify our semaphore
+		if removed {
+			elem.Value.sema.notify(false)
+		}
+
+		// Wait for the semaphore to have been notified, either by us or by someone else
+		<-done
+
+		if removed {
+			return nil, context.Cause(ctx)
+		}
+
+		return elem.Value.conn, nil
+
+	case <-done:
+		return elem.Value.conn, nil
 	}
-	return nil, ctx.Err()
 }
 
-// expire removes and wakes any expired waiter in the waitlist.
-// if force is true, it'll wake and remove all the waiters.
-func (wl *waitlist[C]) expire(force bool) (maybeStarving int) {
+func (wl *waitlist[C]) maybeStarvingCount() (maybeStarving int) {
 	if wl.list.Len() == 0 {
 		return
 	}
 
-	var expired []*list.Element[waiter[C]]
-
 	wl.mu.Lock()
+	defer wl.mu.Unlock()
+
 	// iterate the waitlist looking for waiters with an expired Context,
 	// or remove everything if force is true
 	for e := wl.list.Front(); e != nil; e = e.Next() {
-		if force || e.Value.ctx.Err() != nil {
-			expired = append(expired, e)
-			continue
-		}
 		if e.Value.age == 0 {
 			maybeStarving++
 		}
 	}
-	// remove the expired waiters from the waitlist after traversing it
-	for _, e := range expired {
-		wl.list.Remove(e)
-	}
-	wl.mu.Unlock()
 
-	// once all the expired waiters have been removed from the waitlist, wake them up one by one
-	for _, e := range expired {
-		e.Value.sema.notify(false)
-	}
 	return
 }
 
