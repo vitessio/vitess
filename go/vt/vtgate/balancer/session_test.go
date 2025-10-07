@@ -18,8 +18,6 @@ package balancer
 
 import (
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -48,10 +46,9 @@ func TestNewSessionBalancer(t *testing.T) {
 
 	require.Equal(t, "local", b.localCell)
 	require.NotNil(t, b.hc)
-	require.NotNil(t, b.localRings)
-	require.Len(t, b.localRings, 0)
-	require.NotNil(t, b.externalRings)
-	require.Len(t, b.externalRings, 0)
+	require.NotNil(t, b.localTablets)
+	require.NotNil(t, b.externalTablets)
+	require.NotNil(t, b.tablets)
 }
 
 func TestPickNoTablets(t *testing.T) {
@@ -121,7 +118,7 @@ func TestPickLocalOnly(t *testing.T) {
 	// Give a moment for the worker to process the tablets
 	time.Sleep(10 * time.Millisecond)
 
-	// Pick for a specific session hash
+	// Pick for a specific session UUID
 	opts := buildOpts("a")
 	picked1 := b.Pick(target, nil, opts)
 	require.NotNil(t, picked1)
@@ -131,10 +128,10 @@ func TestPickLocalOnly(t *testing.T) {
 	require.Equal(t, picked1, picked2, fmt.Sprintf("expected %s, got %s", tabletAlias(picked1), tabletAlias(picked2)))
 
 	// Pick with different session hash, empirically know that it should return tablet2
-	opts = buildOpts("c")
+	opts = buildOpts("b")
 	picked3 := b.Pick(target, nil, opts)
 	require.NotNil(t, picked3)
-	require.NotEqual(t, picked2, picked3, fmt.Sprintf("expected different tablets, got %s", tabletAlias(picked3)))
+	require.NotEqual(t, picked2, picked3, fmt.Sprintf("expected different tablets, got %s for both", tabletAlias(picked3)))
 }
 
 func TestPickPreferLocal(t *testing.T) {
@@ -372,7 +369,7 @@ func TestNewLocalTablet(t *testing.T) {
 
 	time.Sleep(10 * time.Millisecond)
 
-	opts := buildOpts("a")
+	opts := buildOpts("b")
 	picked1 := b.Pick(target, nil, opts)
 	require.NotNil(t, picked1)
 
@@ -463,16 +460,6 @@ func TestNewExternalTablet(t *testing.T) {
 	picked2 := b.Pick(target, nil, opts)
 	require.NotNil(t, picked2)
 	require.NotEqual(t, picked1, picked2, fmt.Sprintf("expected different tablets, got %s", tabletAlias(picked2)))
-}
-
-func TestDebugHandler(t *testing.T) {
-	b, _ := newSessionBalancer(t)
-
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/debug", nil)
-
-	b.DebugHandler(w, r)
-	require.Equal(t, http.StatusOK, w.Code)
 }
 
 func TestPickNoOpts(t *testing.T) {
@@ -671,17 +658,17 @@ func TestTabletTypesToWatch(t *testing.T) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
-	require.Len(t, b.localRings, 2)
-	require.Len(t, b.externalRings, 0)
+	require.Len(t, b.localTablets, 2)
+	require.Len(t, b.externalTablets, 0)
 
-	for _, ring := range b.localRings {
-		for _, tablet := range ring.nodeMap {
+	for _, target := range b.localTablets {
+		for _, tablet := range target {
 			require.Contains(t, tabletTypesToWatch, tablet.Target.TabletType)
 		}
 	}
 }
 
-func TestTabletTargetChanges(t *testing.T) {
+func TestLocalTabletTargetChanges(t *testing.T) {
 	b, hcChan := newSessionBalancer(t)
 
 	replica := &discovery.TabletHealth{
@@ -725,10 +712,10 @@ func TestTabletTargetChanges(t *testing.T) {
 	// Give a moment for the worker to process the tablets
 	time.Sleep(100 * time.Millisecond)
 
-	require.Len(t, b.localRings, 1, b.print())
-	require.Len(t, b.localRings[discovery.KeyFromTarget(replica.Target)].tablets, 1, b.print())
+	require.Len(t, b.localTablets, 1, b.print())
+	require.Len(t, b.localTablets[discovery.KeyFromTarget(replica.Target)], 1, b.print())
 
-	require.Len(t, b.externalRings, 0, b.print())
+	require.Len(t, b.externalTablets, 0, b.print())
 
 	// Reparent happens, tablet is now a primary
 	hcChan <- primary
@@ -736,10 +723,10 @@ func TestTabletTargetChanges(t *testing.T) {
 	// Give a moment for the worker to process the tablets
 	time.Sleep(100 * time.Millisecond)
 
-	require.Len(t, b.localRings, 1, b.print())
-	require.Len(t, b.localRings[discovery.KeyFromTarget(replica.Target)].tablets, 0, b.print())
+	require.Len(t, b.localTablets, 1, b.print())
+	require.Len(t, b.localTablets[discovery.KeyFromTarget(replica.Target)], 0, b.print())
 
-	require.Len(t, b.externalRings, 0, b.print())
+	require.Len(t, b.externalTablets, 0, b.print())
 }
 
 func TestExternalTabletTargetChanges(t *testing.T) {
@@ -786,10 +773,10 @@ func TestExternalTabletTargetChanges(t *testing.T) {
 	// Give a moment for the worker to process the tablets
 	time.Sleep(100 * time.Millisecond)
 
-	require.Len(t, b.externalRings, 1, b.print())
-	require.Len(t, b.externalRings[discovery.KeyFromTarget(replica.Target)].tablets, 1, b.print())
+	require.Len(t, b.externalTablets, 1, b.print())
+	require.Len(t, b.externalTablets[discovery.KeyFromTarget(replica.Target)], 1, b.print())
 
-	require.Len(t, b.localRings, 0, b.print())
+	require.Len(t, b.localTablets, 0, b.print())
 
 	// Reparent happens, tablet is now a primary
 	hcChan <- primary
@@ -797,10 +784,10 @@ func TestExternalTabletTargetChanges(t *testing.T) {
 	// Give a moment for the worker to process the tablets
 	time.Sleep(100 * time.Millisecond)
 
-	require.Len(t, b.externalRings, 1, b.print())
-	require.Len(t, b.externalRings[discovery.KeyFromTarget(replica.Target)].tablets, 0, b.print())
+	require.Len(t, b.externalTablets, 1, b.print())
+	require.Len(t, b.externalTablets[discovery.KeyFromTarget(replica.Target)], 0, b.print())
 
-	require.Len(t, b.localRings, 0, b.print())
+	require.Len(t, b.localTablets, 0, b.print())
 }
 
 func buildOpts(uuid string) PickOpts {
