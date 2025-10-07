@@ -1268,7 +1268,9 @@ func TestCloseDuringWaitForConn(t *testing.T) {
 		// Spawn multiple goroutines to perform Get and Put operations, but only
 		// allow connections to be checked out until `closed` has been set to true.
 		for range goRoutineCnt {
-			wg.Go(func() {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
 				for !closed.Load() {
 					timeout := time.After(getTimeout)
 					getCtx, getCancel := context.WithTimeout(ctx, getTimeout/3)
@@ -1290,7 +1292,7 @@ func TestCloseDuringWaitForConn(t *testing.T) {
 					case <-done:
 					}
 				}
-			})
+			}()
 		}
 
 		// Let the go-routines get up and running.
