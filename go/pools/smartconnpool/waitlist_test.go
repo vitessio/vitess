@@ -26,30 +26,32 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestWaitlistExpireWithMultipleWaiters(t *testing.T) {
+func TestWaitlistPoolCloseWithMultipleWaiters(t *testing.T) {
 	wait := waitlist[*TestConn]{}
 	wait.init()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 
+	poolClose := make(chan struct{})
+
 	waiterCount := 2
 	expireCount := atomic.Int32{}
 
 	for i := 0; i < waiterCount; i++ {
 		go func() {
-			_, err := wait.waitForConn(ctx, nil)
+			_, err := wait.waitForConn(ctx, nil, poolClose)
+
 			if err != nil {
 				expireCount.Add(1)
 			}
 		}()
 	}
 
+	close(poolClose)
+
 	// Wait for the context to expire
 	<-ctx.Done()
-
-	// Expire the waiters
-	wait.expire(false)
 
 	// Wait for the notified goroutines to finish
 	timeout := time.After(1 * time.Second)
