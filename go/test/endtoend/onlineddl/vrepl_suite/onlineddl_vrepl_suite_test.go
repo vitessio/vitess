@@ -20,6 +20,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"regexp"
@@ -27,18 +28,23 @@ import (
 	"testing"
 	"time"
 
+	"github.com/olekukonko/errors"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	"vitess.io/vitess/go/test/endtoend/throttler"
+	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
 var (
@@ -70,6 +76,8 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	testsFilter = os.Getenv(testFilterEnvVar)
+	vserrChan := make(chan error, 1)
+	defer close(vserrChan)
 
 	exitcode, err := func() (int, error) {
 		clusterInstance = cluster.NewCluster(cell, hostname)
@@ -104,9 +112,10 @@ func TestMain(m *testing.M) {
 		keyspace := &cluster.Keyspace{
 			Name: keyspaceName,
 		}
+		shardName := "1"
 
 		// No need for replicas in this stress test
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 0, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{shardName}, 0, false); err != nil {
 			return 1, err
 		}
 
@@ -122,15 +131,61 @@ func TestMain(m *testing.M) {
 			Port: clusterInstance.VtgateMySQLPort,
 		}
 
+		// Run a VTGate VSTream throughout all of the schema changes to ensure we encounter no errors.
+		vsctx, vscancel := context.WithCancel(context.Background())
+		defer vscancel()
+		conn, err := vtgateconn.Dial(vsctx, fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateGrpcPort))
+		if err != nil {
+			return 1, err
+		}
+		defer conn.Close()
+		vgtid := &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: keyspaceName,
+				Shard:    shardName,
+				Gtid:     "",
+			}},
+		}
+		filter := &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match: ".*",
+			}},
+		}
+		flags := &vtgatepb.VStreamFlags{}
+		vsreader, err := conn.VStream(vsctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
+		if err != nil {
+			return 1, err
+		}
+		go func() {
+			for {
+				_, err := vsreader.Recv()
+				if err != nil {
+					for errors.Unwrap(err) != nil {
+						err = errors.Unwrap(err)
+					}
+					if !errors.Is(err, io.EOF) && !errors.Is(err, context.Canceled) {
+						vserrChan <- errors.Wrapf(err, "%s:: vstream error\n", time.Now())
+					}
+					return
+				}
+			}
+		}()
+
 		return m.Run(), nil
 	}()
+
+	select {
+	case vserr := <-vserrChan:
+		fmt.Printf("%v\n", vserr)
+		os.Exit(1)
+	default:
+	}
 	if err != nil {
 		fmt.Printf("%v\n", err)
 		os.Exit(1)
 	} else {
 		os.Exit(exitcode)
 	}
-
 }
 
 func TestVreplSuiteSchemaChanges(t *testing.T) {
