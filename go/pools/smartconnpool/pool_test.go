@@ -18,6 +18,7 @@ package smartconnpool
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"sync"
@@ -965,18 +966,31 @@ func TestTimeout(t *testing.T) {
 
 	for _, setting := range []*Setting{nil, sFoo} {
 		// trying to get the connection without a timeout.
-		newctx, cancel := context.WithTimeout(ctx, 10*time.Millisecond)
-		_, err = p.Get(newctx, setting)
-		cancel()
-		assert.EqualError(t, err, "connection pool timed out")
+		{
+			newctx, cancel := context.WithTimeout(ctx, 10*time.Millisecond)
+			defer cancel()
 
+			_, err = p.Get(newctx, setting)
+			assert.ErrorIs(t, err, context.DeadlineExceeded)
+		}
+
+		// trying to get the connection with a timeout and a specific cause
+		{
+			expectedError := errors.New("test error")
+
+			newctx, cancel := context.WithTimeoutCause(ctx, 10*time.Millisecond, expectedError)
+			defer cancel()
+
+			_, err = p.Get(newctx, setting)
+			assert.ErrorIs(t, err, expectedError)
+		}
 	}
 
 	// put the connection take was taken initially.
 	p.put(r)
 }
 
-func TestExpired(t *testing.T) {
+func TestGetWithExpiredContext(t *testing.T) {
 	var state TestState
 
 	p := NewPool(&Config[*TestConn]{
@@ -989,10 +1003,24 @@ func TestExpired(t *testing.T) {
 
 	for _, setting := range []*Setting{nil, sFoo} {
 		// expired context
-		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-1*time.Second))
-		_, err := p.Get(ctx, setting)
-		cancel()
-		require.EqualError(t, err, "connection pool context already expired")
+		{
+			ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-1*time.Second))
+			defer cancel()
+
+			_, err := p.Get(ctx, setting)
+			require.ErrorIs(t, err, context.DeadlineExceeded)
+		}
+
+		// context cancelled with cause
+		{
+			expectedError := errors.New("test error")
+
+			ctx, cancel := context.WithCancelCause(context.Background())
+			cancel(expectedError)
+
+			_, err := p.Get(ctx, setting)
+			require.ErrorIs(t, err, expectedError)
+		}
 	}
 }
 
