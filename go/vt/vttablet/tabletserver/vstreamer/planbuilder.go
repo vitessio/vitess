@@ -151,6 +151,13 @@ type Table struct {
 	Fields []*querypb.Field
 }
 
+func (ta *Table) logDebugInfo(msg string) {
+	log.Infof("Debugging: %s::Table %s, len(fields) %d", msg, ta.Name, len(ta.Fields))
+	for i, col := range ta.Fields {
+		log.Infof("Debug: Table %s, Column: %d, %s, %s", ta.Name, i, col.Name, col.String())
+	}
+}
+
 // FindColumn finds a column in the table. It returns the index if found.
 // Otherwise, it returns -1.
 func (ta *Table) FindColumn(name sqlparser.IdentifierCI) int {
@@ -1050,5 +1057,6 @@ func findColumn(ti *Table, name sqlparser.IdentifierCI) (int, error) {
 			return i, nil
 		}
 	}
+	ti.logDebugInfo(fmt.Sprintf("column %s not found in table %s", sqlparser.String(name), ti.Name))
 	return 0, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "column %s not found in table %s", sqlparser.String(name), ti.Name)
 }

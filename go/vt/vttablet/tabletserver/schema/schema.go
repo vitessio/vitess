@@ -162,3 +162,7 @@ func (ta *Table) GetPKColumn(index int) *querypb.Field {
 func (ta *Table) HasPrimary() bool {
 	return len(ta.PKColumns) != 0
 }
+
+func (ta *Table) String() string {
+	return fmt.Sprintf("Table %s: %+v", ta.Name.String(), ta.Fields)
+}

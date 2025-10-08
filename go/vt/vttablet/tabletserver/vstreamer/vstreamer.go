@@ -152,6 +152,15 @@ func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine
 	}
 }
 
+func (vs *vstreamer) logDebugInfo(msg string) {
+	log.Infof("vstreamer debug log for: %s", msg)
+	tablesMap := vs.se.GetSchema()
+	for tableName, table := range tablesMap {
+		log.Infof("vstreamer debug log table: %s: TableName %s, CreateTime %v, Fields %+v",
+			msg, tableName, table.CreateTime, table.Fields)
+	}
+}
+
 // SetVSchema updates the vstreamer against the new vschema.
 func (vs *vstreamer) SetVSchema(vschema *localVSchema) {
 	// Since vs.Stream is a single-threaded loop. We just send an event to
@@ -839,6 +848,9 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 	}
 	plan, err := buildPlan(vs.se.Environment(), table, vs.vschema, vs.filter)
 	if err != nil {
+		if strings.Contains(err.Error(), "not found in table") {
+			vs.logDebugInfo(err.Error())
+		}
 		return nil, err
 	}
 	if plan == nil {
