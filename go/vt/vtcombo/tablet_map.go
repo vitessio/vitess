@@ -750,6 +750,12 @@ func (itc *internalTabletConn) VStreamResults(
 	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
+// DumpBinlog is part of queryservice.QueryService
+func (itc *internalTabletConn) DumpBinlog(ctx context.Context, request *binlogdatapb.DumpBinlogRequest, send func(*binlogdatapb.DumpBinlogResponse) error) error {
+	err := itc.tablet.qsc.QueryService().DumpBinlog(ctx, request, send)
+	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+}
+
 //
 // TabletManagerClient implementation
 //
