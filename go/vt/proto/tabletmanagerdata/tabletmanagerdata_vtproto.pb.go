@@ -1748,6 +1748,7 @@ func (m *DemotePrimaryRequest) CloneVT() *DemotePrimaryRequest {
 		return (*DemotePrimaryRequest)(nil)
 	}
 	r := new(DemotePrimaryRequest)
+	r.Force = m.Force
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -7270,6 +7271,16 @@ func (m *DemotePrimaryRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) 
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.Force {
+		i--
+		if m.Force {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x8
+	}
 	return len(dAtA) - i, nil
 }
 
@@ -12566,6 +12577,9 @@ func (m *DemotePrimaryRequest) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
+	if m.Force {
+		n += 2
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -22601,6 +22615,26 @@ func (m *DemotePrimaryRequest) UnmarshalVT(dAtA []byte) error {
 			return fmt.Errorf("proto: DemotePrimaryRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Force", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Force = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
