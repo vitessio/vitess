@@ -43,7 +43,7 @@ func TestNoOpStrategy_Lifecycle(t *testing.T) {
 	strategy.Stop()
 
 	// Verify Evaluate still works after Start/Stop
-	decision := strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT 1"}, 0, nil)
+	decision := strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT 1"}, 0, QueryAttributes{WorkloadName: "test", Priority: 100})
 	require.False(t, decision.Throttle, "NoOpStrategy should never throttle")
 }
 
@@ -86,7 +86,7 @@ func TestNoOpStrategy_Evaluate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			strategy := &NoOpStrategy{}
 
-			result := strategy.Evaluate(context.Background(), tt.giveTabletType, &sqlparser.ParsedQuery{Query: tt.giveSQL}, 0, nil)
+			result := strategy.Evaluate(context.Background(), tt.giveTabletType, &sqlparser.ParsedQuery{Query: tt.giveSQL}, 0, QueryAttributes{WorkloadName: "test", Priority: 100})
 			require.Equal(t, tt.expectedResult, result)
 		})
 	}
