@@ -17,11 +17,17 @@
 package config
 
 import (
+	"fmt"
+	"os"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 
 	"vitess.io/vitess/go/viperutil"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	vtorcdatapb "vitess.io/vitess/go/vt/proto/vtorcdata"
 	"vitess.io/vitess/go/vt/servenv"
 )
@@ -222,6 +228,44 @@ var (
 			Dynamic:  true,
 		},
 	)
+
+	waitForRelayLogsMode = viperutil.Configure(
+		"wait-for-relaylogs-mode",
+		viperutil.Options[replicationdatapb.WaitForRelayLogsMode]{
+			FlagName: "wait-for-relaylogs-mode",
+			Default:  replicationdatapb.WaitForRelayLogsMode_ALL,
+			Dynamic:  true,
+			GetFunc: func(v *viper.Viper) func(key string) replicationdatapb.WaitForRelayLogsMode {
+				return func(key string) replicationdatapb.WaitForRelayLogsMode {
+					modeName := v.GetString(key)
+					modeCode, ok := replicationdatapb.WaitForRelayLogsMode_value[strings.ToUpper(modeName)]
+					if !ok {
+						var allModes []string
+						for k := range replicationdatapb.WaitForRelayLogsMode_value {
+							allModes = append(allModes, k)
+						}
+						slices.Sort(allModes)
+
+						fmt.Printf("Invalid option: %v\n", modeName)
+						fmt.Printf("Usage: --wait-for-relaylogs-mode {%s}\n", strings.Join(allModes, " | "))
+
+						os.Exit(1)
+						return -1
+					}
+					return replicationdatapb.WaitForRelayLogsMode(modeCode)
+				}
+			},
+		},
+	)
+
+	waitForRelayLogsTabletCount = viperutil.Configure(
+		"wait-for-relaylogs-tablet-count",
+		viperutil.Options[int64]{
+			FlagName: "wait-for-relaylogs-tablet-count",
+			Default:  0,
+			Dynamic:  true,
+		},
+	)
 )
 
 func init() {
@@ -251,6 +295,10 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.Bool("change-tablets-with-errant-gtid-to-drained", convertTabletsWithErrantGTIDs.Default(), "Whether VTOrc should be changing the type of tablets with errant GTIDs to DRAINED")
 	fs.Bool("enable-primary-disk-stalled-recovery", enablePrimaryDiskStalledRecovery.Default(), "Whether VTOrc should detect a stalled disk on the primary and failover")
 
+	waitForRelayLogsModeDefaultStr := replicationdatapb.WaitForRelayLogsMode_name[int32(waitForRelayLogsMode.Default())]
+	fs.String("wait-for-relaylogs-mode", waitForRelayLogsModeDefaultStr, "Specifies the number of tablets to wait for relaylog applying during an EmergencyReparentShard action. ALL: wait for all tablets, MAJORITY: wait for a majority of tablets, COUNT: wait for an exact number of tablets (using --wait-for-relaylogs-tablet-count flag)")
+	fs.Int64("wait-for-relaylogs-tablet-count", waitForRelayLogsTabletCount.Default(), "Specifies the exact number of tablets to wait for relaylogs during EmergencyReparentShard actions. This setting must be > 0 when --wait-for-relaylogs-mode=COUNT is set")
+
 	viperutil.BindFlags(fs,
 		instancePollTime,
 		preventCrossCellFailover,
@@ -272,7 +320,17 @@ func registerFlags(fs *pflag.FlagSet) {
 		allowRecovery,
 		convertTabletsWithErrantGTIDs,
 		enablePrimaryDiskStalledRecovery,
+		waitForRelayLogsMode,
+		waitForRelayLogsTabletCount,
 	)
+}
+
+// Validate returns an error if the current configuration is invalid.
+func Validate() error {
+	if GetWaitForRelayLogsMode() == replicationdatapb.WaitForRelayLogsMode_COUNT && GetWaitForRelayLogsTabletCount() <= 0 {
+		return fmt.Errorf("--wait-for-relaylogs-tablet-count must be > 0 when --wait-for-relaylogs-mode is COUNT")
+	}
+	return nil
 }
 
 // GetInstancePollTime is a getter function.
@@ -413,6 +471,17 @@ func SetConvertTabletWithErrantGTIDs(val bool) {
 // GetStalledDiskPrimaryRecovery reports whether VTOrc is allowed to check for and recovery stalled disk problems.
 func GetStalledDiskPrimaryRecovery() bool {
 	return enablePrimaryDiskStalledRecovery.Get()
+}
+
+// GetWaitForRelayLogsMode returns the replicationdatapb.WaitForRelayLogMode that should be used during EmergencyReparentShard actions.
+func GetWaitForRelayLogsMode() replicationdatapb.WaitForRelayLogsMode {
+	return waitForRelayLogsMode.Get()
+}
+
+// GetWaitForRelayLogsTabletCount returns the number of tablets to wait for applying relay logs during EmergencyReparentShard actions.
+// This setting is only relevant when the wait for relaylogs mode is replicationdata.WaitForRelayLogMode_COUNT.
+func GetWaitForRelayLogsTabletCount() int64 {
+	return waitForRelayLogsTabletCount.Get()
 }
 
 // MarkConfigurationLoaded is called once configuration has first been loaded.

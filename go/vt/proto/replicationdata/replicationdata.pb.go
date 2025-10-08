@@ -86,6 +86,60 @@ func (StopReplicationMode) EnumDescriptor() ([]byte, []int) {
 	return file_replicationdata_proto_rawDescGZIP(), []int{0}
 }
 
+// WaitForRelayLogsMode represents what approach to use for deciding the number
+// of tablets to for the wait-for-relaylogs phase of EmergencyReparentShard.
+type WaitForRelayLogsMode int32
+
+const (
+	WaitForRelayLogsMode_DEFAULT  WaitForRelayLogsMode = 0
+	WaitForRelayLogsMode_ALL      WaitForRelayLogsMode = 1
+	WaitForRelayLogsMode_MAJORITY WaitForRelayLogsMode = 2
+	WaitForRelayLogsMode_COUNT    WaitForRelayLogsMode = 3
+)
+
+// Enum value maps for WaitForRelayLogsMode.
+var (
+	WaitForRelayLogsMode_name = map[int32]string{
+		0: "DEFAULT",
+		1: "ALL",
+		2: "MAJORITY",
+		3: "COUNT",
+	}
+	WaitForRelayLogsMode_value = map[string]int32{
+		"DEFAULT":  0,
+		"ALL":      1,
+		"MAJORITY": 2,
+		"COUNT":    3,
+	}
+)
+
+func (x WaitForRelayLogsMode) Enum() *WaitForRelayLogsMode {
+	p := new(WaitForRelayLogsMode)
+	*p = x
+	return p
+}
+
+func (x WaitForRelayLogsMode) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (WaitForRelayLogsMode) Descriptor() protoreflect.EnumDescriptor {
+	return file_replicationdata_proto_enumTypes[1].Descriptor()
+}
+
+func (WaitForRelayLogsMode) Type() protoreflect.EnumType {
+	return &file_replicationdata_proto_enumTypes[1]
+}
+
+func (x WaitForRelayLogsMode) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use WaitForRelayLogsMode.Descriptor instead.
+func (WaitForRelayLogsMode) EnumDescriptor() ([]byte, []int) {
+	return file_replicationdata_proto_rawDescGZIP(), []int{1}
+}
+
 // Status is the replication status for MySQL/MariaDB/File-based. Returned by a
 // flavor-specific command and parsed into a Position and fields.
 type Status struct {
@@ -796,7 +850,12 @@ const file_replicationdata_proto_rawDesc = "" +
 	"tabletType*;\n" +
 	"\x13StopReplicationMode\x12\x12\n" +
 	"\x0eIOANDSQLTHREAD\x10\x00\x12\x10\n" +
-	"\fIOTHREADONLY\x10\x01B.Z,vitess.io/vitess/go/vt/proto/replicationdatab\x06proto3"
+	"\fIOTHREADONLY\x10\x01*E\n" +
+	"\x14WaitForRelayLogsMode\x12\v\n" +
+	"\aDEFAULT\x10\x00\x12\a\n" +
+	"\x03ALL\x10\x01\x12\f\n" +
+	"\bMAJORITY\x10\x02\x12\t\n" +
+	"\x05COUNT\x10\x03B.Z,vitess.io/vitess/go/vt/proto/replicationdatab\x06proto3"
 
 var (
 	file_replicationdata_proto_rawDescOnce sync.Once
@@ -810,24 +869,25 @@ func file_replicationdata_proto_rawDescGZIP() []byte {
 	return file_replicationdata_proto_rawDescData
 }
 
-var file_replicationdata_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_replicationdata_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
 var file_replicationdata_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_replicationdata_proto_goTypes = []any{
 	(StopReplicationMode)(0),      // 0: replicationdata.StopReplicationMode
-	(*Status)(nil),                // 1: replicationdata.Status
-	(*Configuration)(nil),         // 2: replicationdata.Configuration
-	(*StopReplicationStatus)(nil), // 3: replicationdata.StopReplicationStatus
-	(*PrimaryStatus)(nil),         // 4: replicationdata.PrimaryStatus
-	(*FullStatus)(nil),            // 5: replicationdata.FullStatus
-	(topodata.TabletType)(0),      // 6: topodata.TabletType
+	(WaitForRelayLogsMode)(0),     // 1: replicationdata.WaitForRelayLogsMode
+	(*Status)(nil),                // 2: replicationdata.Status
+	(*Configuration)(nil),         // 3: replicationdata.Configuration
+	(*StopReplicationStatus)(nil), // 4: replicationdata.StopReplicationStatus
+	(*PrimaryStatus)(nil),         // 5: replicationdata.PrimaryStatus
+	(*FullStatus)(nil),            // 6: replicationdata.FullStatus
+	(topodata.TabletType)(0),      // 7: topodata.TabletType
 }
 var file_replicationdata_proto_depIdxs = []int32{
-	1, // 0: replicationdata.StopReplicationStatus.before:type_name -> replicationdata.Status
-	1, // 1: replicationdata.StopReplicationStatus.after:type_name -> replicationdata.Status
-	1, // 2: replicationdata.FullStatus.replication_status:type_name -> replicationdata.Status
-	4, // 3: replicationdata.FullStatus.primary_status:type_name -> replicationdata.PrimaryStatus
-	2, // 4: replicationdata.FullStatus.replication_configuration:type_name -> replicationdata.Configuration
-	6, // 5: replicationdata.FullStatus.tablet_type:type_name -> topodata.TabletType
+	2, // 0: replicationdata.StopReplicationStatus.before:type_name -> replicationdata.Status
+	2, // 1: replicationdata.StopReplicationStatus.after:type_name -> replicationdata.Status
+	2, // 2: replicationdata.FullStatus.replication_status:type_name -> replicationdata.Status
+	5, // 3: replicationdata.FullStatus.primary_status:type_name -> replicationdata.PrimaryStatus
+	3, // 4: replicationdata.FullStatus.replication_configuration:type_name -> replicationdata.Configuration
+	7, // 5: replicationdata.FullStatus.tablet_type:type_name -> topodata.TabletType
 	6, // [6:6] is the sub-list for method output_type
 	6, // [6:6] is the sub-list for method input_type
 	6, // [6:6] is the sub-list for extension type_name
@@ -845,7 +905,7 @@ func file_replicationdata_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_replicationdata_proto_rawDesc), len(file_replicationdata_proto_rawDesc)),
-			NumEnums:      1,
+			NumEnums:      2,
 			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,

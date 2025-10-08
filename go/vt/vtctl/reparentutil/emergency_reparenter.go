@@ -63,6 +63,11 @@ type EmergencyReparentOptions struct {
 	PreventCrossCellPromotion bool
 	ExpectedPrimaryAlias      *topodatapb.TabletAlias
 
+	// WaitForRelayLogsMode + TabletCount determines how many tablets
+	// are used to apply relay logs before candidate selection.
+	WaitForRelayLogsMode        replicationdatapb.WaitForRelayLogsMode
+	WaitForRelayLogsTabletCount int64
+
 	// Private options managed internally. We use value passing to avoid leaking
 	// these details back out.
 	lockAction string
@@ -100,6 +105,11 @@ func NewEmergencyReparenter(ts *topo.Server, tmc tmclient.TabletManagerClient, l
 func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, keyspace string, shard string, opts EmergencyReparentOptions) (*events.Reparent, error) {
 	var err error
 	statsLabels := []string{keyspace, shard}
+
+	// convert DEFAULT mode to replicationdatapb.WaitForRelayLogsMode_ALL.
+	if opts.WaitForRelayLogsMode == replicationdatapb.WaitForRelayLogsMode_DEFAULT {
+		opts.WaitForRelayLogsMode = replicationdatapb.WaitForRelayLogsMode_ALL
+	}
 
 	opts.lockAction = erp.getLockAction(opts.NewPrimaryAlias)
 	// First step is to lock the shard for the given operation, if not already locked
@@ -221,7 +231,9 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return err
 	}
 	// Restrict the valid candidates list. We remove any tablet which is of the type DRAINED, RESTORE or BACKUP.
-	validCandidates, err = restrictValidCandidates(validCandidates, tabletMap)
+	// When WaitForRelayLogsMode == replicationpb.WaitForRelayLogsMode_MAJORITY or _COUNT, the list is further
+	// reduced to a subset of most-advanced candidates in terms of replication relaylog positions.
+	validCandidates, err = restrictValidCandidates(validCandidates, tabletMap, opts, erp.logger)
 	if err != nil {
 		return err
 	} else if len(validCandidates) == 0 {
