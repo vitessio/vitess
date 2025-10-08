@@ -18,6 +18,7 @@ package grpctabletconn
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"sync"
 
@@ -854,6 +855,12 @@ func (conn *gRPCQueryClient) VStreamResults(ctx context.Context, target *querypb
 			return err
 		}
 	}
+}
+
+// BinlogDump streams data from the binlog.
+func (conn *gRPCQueryClient) DumpBinlog(ctx context.Context, request *binlogdatapb.DumpBinlogRequest, send func(*binlogdatapb.DumpBinlogResponse) error) error {
+	// Not implemented yet.
+	return fmt.Errorf("not implemented")
 }
 
 // HandlePanic is a no-op.
