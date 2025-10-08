@@ -87,6 +87,7 @@ type (
 		EnableViews        bool
 		WarnShardedOnly    bool
 		PlannerVersion     plancontext.PlannerVersion
+		SafeUpdateMode     bool
 
 		WarmingReadsPercent int
 		WarmingReadsTimeout time.Duration
