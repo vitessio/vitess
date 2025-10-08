@@ -613,13 +613,22 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 			// Usually the vstreamer will also error out when this happens, and vstreamer re-initializes its table map.
 			// But if the vstreamer is not aware of the restart, we could get an id that matches one in the cache, but
 			// is for a different table. We then invalidate and recompute the plan for this id.
+			// If we've performed OnlineDDL cutovers then the table id <-> name mappings also change and we need to
+			// invalidate the related cached replication plans.
 			isInternal := tm.Database == sidecar.GetName()
 			if plan == nil ||
 				(plan.Table.Name == tm.Name && isInternal == plan.IsInternal) {
 				return nil, nil
 			}
-			vs.plans[id] = nil
-			log.Infof("table map changed: id %d for %s has changed to %s", id, plan.Table.Name, tm.Name)
+			if plan.Table.Name != tm.Name {
+				log.Infof("Table map changed: id %d for %s has changed to %s.", id, plan.Table.Name, tm.Name)
+				log.Infof("Invalidating cached table replication plan for the tables with id %d, name %s, and name %s.", id, plan.Table.Name, tm.Name)
+				for tid, tplan := range vs.plans {
+					if tid == id || tplan.Table.Name == plan.Table.Name || tplan.Table.Name == tm.Name {
+						vs.plans[tid] = nil
+					}
+				}
+			}
 		}
 
 		// The database connector `vs.cp` points to the keyspace's database.
