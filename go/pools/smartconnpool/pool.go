@@ -388,7 +388,7 @@ func (pool *ConnPool[C]) recordWait(start time.Time) {
 // The connection must be returned to the pool once it's not needed by calling Pooled.Recycle
 func (pool *ConnPool[C]) Get(ctx context.Context, setting *Setting) (*Pooled[C], error) {
 	if ctx.Err() != nil {
-		return nil, ErrCtxTimeout
+		return nil, context.Cause(ctx)
 	}
 	if pool.capacity.Load() == 0 {
 		return nil, ErrConnPoolClosed
@@ -594,10 +594,12 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 	if err != nil {
 		return nil, err
 	}
+
 	// if we don't have capacity, try popping a connection from any of the setting stacks
 	if conn == nil {
 		conn = pool.getFromSettingsStack(nil)
 	}
+
 	// if there are no connections in the setting stacks and we've lent out connections
 	// to other clients, wait until one of the connections is returned
 	if conn == nil {
@@ -610,13 +612,9 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 
 		conn, err = pool.wait.waitForConn(ctx, nil, *closeChan)
 		if err != nil {
-			return nil, ErrTimeout
+			return nil, err
 		}
 		pool.recordWait(start)
-	}
-	// no connections available and no connections to wait for (pool is closed)
-	if conn == nil {
-		return nil, ErrTimeout
 	}
 
 	// if the connection we've acquired has a Setting applied, we must reset it before returning
@@ -649,6 +647,7 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 	if conn == nil {
 		conn = pool.pop(&pool.clean)
 	}
+
 	// otherwise try opening a brand new connection and we'll apply the setting to it
 	if conn == nil {
 		conn, err = pool.getNew(ctx)
@@ -656,11 +655,13 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 			return nil, err
 		}
 	}
+
 	// try on the _other_ setting stacks, even if we have to reset the Setting for the returned
 	// connection
 	if conn == nil {
 		conn = pool.getFromSettingsStack(setting)
 	}
+
 	// no connections anywhere in the pool; if we've lent out connections to other clients
 	// wait for one of them
 	if conn == nil {
@@ -673,13 +674,9 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 
 		conn, err = pool.wait.waitForConn(ctx, setting, *closeChan)
 		if err != nil {
-			return nil, ErrTimeout
+			return nil, err
 		}
 		pool.recordWait(start)
-	}
-	// no connections available and no connections to wait for (pool is closed)
-	if conn == nil {
-		return nil, ErrTimeout
 	}
 
 	// ensure that the setting applied to the connection matches the one we want

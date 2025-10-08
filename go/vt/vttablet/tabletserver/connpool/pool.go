@@ -134,7 +134,7 @@ func (cp *Pool) Get(ctx context.Context, setting *smartconnpool.Setting) (*Poole
 
 	if cp.timeout != 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, cp.timeout)
+		ctx, cancel = context.WithTimeoutCause(ctx, cp.timeout, smartconnpool.ErrTimeout)
 		defer cancel()
 	}
 
