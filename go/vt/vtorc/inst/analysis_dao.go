@@ -354,7 +354,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		a.SemiSyncBlocked = m.GetBool("semi_sync_blocked")
 		a.SemiSyncReplicaEnabled = m.GetBool("semi_sync_replica_enabled")
 		a.CountSemiSyncReplicasEnabled = m.GetUint("count_semi_sync_replicas")
-		a.CountValidSemiSyncReplicasReplicating = m.GetUint("count_valid_semi_sync_replicas_replicating")
+		a.CountValidSemiSyncReplicatingReplicas = m.GetUint("count_valid_semi_sync_replicas_replicating")
 		// countValidSemiSyncReplicasEnabled := m.GetUint("count_valid_semi_sync_replicas")
 		a.SemiSyncPrimaryWaitForReplicaCount = m.GetUint("semi_sync_primary_wait_for_replica_count")
 		a.SemiSyncPrimaryClients = m.GetUint("semi_sync_primary_clients")

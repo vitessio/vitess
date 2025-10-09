@@ -39,7 +39,7 @@ func TestHasMinSemiSyncAckers(t *testing.T) {
 		{
 			name: "durability policy none",
 			analysis: &DetectionAnalysis{
-				CountValidSemiSyncReplicasReplicating: 0,
+				CountValidSemiSyncReplicatingReplicas: 0,
 			},
 			durabler: durablerNone,
 			expect:   true,
@@ -48,7 +48,7 @@ func TestHasMinSemiSyncAckers(t *testing.T) {
 			name:     "durability policy cross_cell without min ackers",
 			durabler: durablerCrossCell,
 			analysis: &DetectionAnalysis{
-				CountValidSemiSyncReplicasReplicating: 0,
+				CountValidSemiSyncReplicatingReplicas: 0,
 			},
 			expect: false,
 		},
@@ -56,7 +56,7 @@ func TestHasMinSemiSyncAckers(t *testing.T) {
 			name:     "durability policy cross_cell with min ackers",
 			durabler: durablerCrossCell,
 			analysis: &DetectionAnalysis{
-				CountValidSemiSyncReplicasReplicating: uint(durablerCrossCell.SemiSyncAckers(tablet)),
+				CountValidSemiSyncReplicatingReplicas: uint(durablerCrossCell.SemiSyncAckers(tablet)),
 			},
 			expect: true,
 		},

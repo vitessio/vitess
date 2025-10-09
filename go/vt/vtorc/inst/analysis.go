@@ -123,7 +123,7 @@ type DetectionAnalysis struct {
 	SemiSyncReplicaEnabled                    bool
 	SemiSyncBlocked                           bool
 	CountSemiSyncReplicasEnabled              uint
-	CountValidSemiSyncReplicasReplicating     uint
+	CountValidSemiSyncReplicatingReplicas     uint
 	CountLoggingReplicas                      uint
 	CountStatementBasedLoggingReplicas        uint
 	CountMixedBasedLoggingReplicas            uint
@@ -157,7 +157,7 @@ func HasMinSemiSyncAckers(durabler policy.Durabler, primary *topodatapb.Tablet, 
 	if durabler == nil || analysis == nil {
 		return false
 	}
-	return int(analysis.CountValidSemiSyncReplicasReplicating) >= durabler.SemiSyncAckers(primary)
+	return int(analysis.CountValidSemiSyncReplicatingReplicas) >= durabler.SemiSyncAckers(primary)
 }
 
 // ValidSecondsFromSeenToLastAttemptedCheck returns the maximum allowed elapsed time

@@ -397,7 +397,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 				LastCheckValid:                        1,
 				CountReplicas:                         4,
 				CountValidReplicas:                    4,
-				CountValidSemiSyncReplicasReplicating: 4,
+				CountValidSemiSyncReplicatingReplicas: 4,
 				IsPrimary:                             1,
 				SemiSyncPrimaryEnabled:                0,
 				CurrentTabletType:                     int(topodatapb.TabletType_PRIMARY),
