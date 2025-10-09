@@ -193,6 +193,15 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		) AS count_valid_semi_sync_replicas,
 		IFNULL(
 			SUM(
+				replica_instance.last_checked <= replica_instance.last_seen
+				AND replica_instance.replica_io_running != 0
+				AND replica_instance.replica_sql_running != 0
+				AND replica_instance.semi_sync_replica_enabled != 0
+			),
+			0
+		) AS count_valid_semi_sync_replicas_replicating,
+		IFNULL(
+			SUM(
 				replica_instance.log_bin
 				AND replica_instance.log_replica_updates
 			),
@@ -345,6 +354,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		a.SemiSyncBlocked = m.GetBool("semi_sync_blocked")
 		a.SemiSyncReplicaEnabled = m.GetBool("semi_sync_replica_enabled")
 		a.CountSemiSyncReplicasEnabled = m.GetUint("count_semi_sync_replicas")
+		a.CountValidSemiSyncReplicasReplicating = m.GetUint("count_valid_semi_sync_replicas_replicating")
 		// countValidSemiSyncReplicasEnabled := m.GetUint("count_valid_semi_sync_replicas")
 		a.SemiSyncPrimaryWaitForReplicaCount = m.GetUint("semi_sync_primary_wait_for_replica_count")
 		a.SemiSyncPrimaryClients = m.GetUint("semi_sync_primary_clients")
@@ -447,7 +457,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			a.Analysis = PrimaryIsReadOnly
 			a.Description = "Primary is read-only"
 			//
-		case a.IsClusterPrimary && policy.SemiSyncAckers(ca.durability, tablet) != 0 && !a.SemiSyncPrimaryEnabled:
+		case a.IsClusterPrimary && policy.SemiSyncAckers(ca.durability, tablet) > 0 && HasMinSemiSyncAckers(ca.durability, tablet, a) && !a.SemiSyncPrimaryEnabled:
 			a.Analysis = PrimarySemiSyncMustBeSet
 			a.Description = "Primary semi-sync must be set"
 			//

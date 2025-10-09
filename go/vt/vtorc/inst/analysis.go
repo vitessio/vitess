@@ -21,6 +21,7 @@ import (
 	"time"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/config"
 )
 
@@ -122,6 +123,7 @@ type DetectionAnalysis struct {
 	SemiSyncReplicaEnabled                    bool
 	SemiSyncBlocked                           bool
 	CountSemiSyncReplicasEnabled              uint
+	CountValidSemiSyncReplicasReplicating     uint
 	CountLoggingReplicas                      uint
 	CountStatementBasedLoggingReplicas        uint
 	CountMixedBasedLoggingReplicas            uint
@@ -146,6 +148,16 @@ func (detectionAnalysis *DetectionAnalysis) MarshalJSON() ([]byte, error) {
 	i.DetectionAnalysis = *detectionAnalysis
 
 	return json.Marshal(i)
+}
+
+// HasMinSemiSyncAckers returns true if there are a minimum number of semi-sync ackers enabled and replicating.
+// True is always returned if the durability policy does not require semi-sync ackers (eg: "none"). This gives
+// a useful signal if it is safe to enable semi-sync without risk of stalling ongoing PRIMARY writes.
+func HasMinSemiSyncAckers(durabler policy.Durabler, primary *topodatapb.Tablet, analysis *DetectionAnalysis) bool {
+	if durabler == nil || analysis == nil {
+		return false
+	}
+	return int(analysis.CountValidSemiSyncReplicasReplicating) >= durabler.SemiSyncAckers(primary)
 }
 
 // ValidSecondsFromSeenToLastAttemptedCheck returns the maximum allowed elapsed time
