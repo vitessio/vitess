@@ -58,3 +58,41 @@ func TestDeregisterDialer(t *testing.T) {
 		t.Fatalf("protocol: %s is not registered, should return error: %v", protocol, err)
 	}
 }
+
+func TestDialCustom(t *testing.T) {
+
+	const protocol = "test4"
+	var dialer string
+
+	defaultDialerFunc := func(context.Context, string) (Impl, error) {
+		dialer = "default"
+		return nil, nil
+	}
+
+	customDialerFunc := func(context.Context, string) (Impl, error) {
+		dialer = "custom"
+		return nil, nil
+	}
+
+	customDialerFunc2 := func(context.Context, string) (Impl, error) {
+		dialer = "custom2"
+		return nil, nil
+	}
+
+	RegisterDialer("test4", defaultDialerFunc)
+
+	_, err := DialProtocol(context.Background(), protocol, "")
+	if err != nil || dialer != "default" {
+		t.Fatalf("default dialerFunc should have been called, got %s, err: %v", dialer, err)
+	}
+
+	_, err = DialCustom(context.Background(), customDialerFunc, protocol)
+	if err != nil || dialer != "custom" {
+		t.Fatalf("custom dialerFunc should have been called, got %s, err: %v", dialer, err)
+	}
+
+	_, err = DialCustom(context.Background(), customDialerFunc2, protocol)
+	if err != nil || dialer != "custom2" {
+		t.Fatalf("custom2 dialerFunc should have been called, got %s, err: %v", dialer, err)
+	}
+}
