@@ -31,7 +31,7 @@ go.sum @harshit-gangal @mattlord @rohit-nayak-ps @systay @frouioui
 /go/test/endtoend/transaction @harshit-gangal @systay @frouioui
 /go/test/endtoend/*throttler* @shlomi-noach @mattlord @timvaillancourt
 /go/test/endtoend/vtgate @harshit-gangal @systay @frouioui
-/go/test/endtoend/vtorc @shlomi-noach @timvaillancourt
+/go/test/endtoend/vtorc @mattlord @shlomi-noach @timvaillancourt
 /go/tools/ @frouioui @systay
 /go/vt/dbconnpool @harshit-gangal @mattlord
 /go/vt/discovery @frouioui
@@ -63,7 +63,7 @@ go.sum @harshit-gangal @mattlord @rohit-nayak-ps @systay @frouioui
 /go/vt/vtgate/planbuilder @harshit-gangal @systay @frouioui @arthurschreiber
 /go/vt/vtgate/*vstream* @rohit-nayak-ps @mattlord @shlomi-noach @beingnoble03
 /go/vt/vtgate/evalengine @dbussink @systay
-/go/vt/vtorc @shlomi-noach @timvaillancourt
+/go/vt/vtorc @mattlord @shlomi-noach @timvaillancourt
 /go/vt/vttablet/*conn* @harshit-gangal @systay
 /go/vt/vttablet/endtoend @harshit-gangal @mattlord @rohit-nayak-ps @systay
 /go/vt/vttablet/grpc* @rohit-nayak-ps @shlomi-noach @harshit-gangal
