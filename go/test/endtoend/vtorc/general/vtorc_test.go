@@ -502,6 +502,55 @@ func TestSemiSync(t *testing.T) {
 	}
 }
 
+func TestSemiSync_FromNone(t *testing.T) {
+	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 1, 0, nil, cluster.VTOrcConfiguration{}, 1, "")
+	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+
+	// find primary from topo
+	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	assert.NotNil(t, curPrimary, "should have elected a primary")
+	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+	utils.WaitForSuccessfulPRSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
+
+	// find any replica tablet other than the current primary
+	var replica *cluster.Vttablet
+	for _, tablet := range shard0.Vttablets {
+		if tablet.Alias != curPrimary.Alias {
+			replica = tablet
+			break
+		}
+	}
+	assert.NotNil(t, replica, "could not find any replica tablet")
+
+	// check that the replication is setup correctly before we failover
+	utils.CheckReplication(t, clusterInfo, curPrimary, shard0.Vttablets, 10*time.Second)
+
+	// Make the replica vttablet unavailable
+	err := replica.VttabletProcess.TearDown()
+	require.NoError(t, err)
+
+	// Enable semi-sync durability policy
+	out, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspace.Name, "--durability-policy=semi_sync")
+	require.NoError(t, err, out)
+
+	// Wait for no detected PrimarySemiSyncMustBeSet problem
+	time.Sleep(time.Second * 10)
+	utils.WaitForDetectedProblems(t, vtOrcProcess,
+		string(inst.PrimarySemiSyncMustBeSet),
+		curPrimary.Alias,
+		keyspace.Name,
+		shard0.Name,
+		0,
+	)
+
+	// Startup up replica vttablet again, wait for FixPrimary recovery
+	require.NoError(t, replica.VttabletProcess.Setup())
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+}
+
 // TestVTOrcWithPrs tests that VTOrc works fine even when PRS is called from vtctld
 func TestVTOrcWithPrs(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
