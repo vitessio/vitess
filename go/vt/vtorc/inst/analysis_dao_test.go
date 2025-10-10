@@ -382,31 +382,6 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			shardWanted:    "0",
 			codeWanted:     PrimarySemiSyncMustNotBeSet,
 		}, {
-			name: "PrimarySemiSyncCannotBeSet",
-			info: []*test.InfoForRecoveryAnalysis{{
-				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
-					Hostname:      "localhost",
-					Keyspace:      "ks",
-					Shard:         "0",
-					Type:          topodatapb.TabletType_PRIMARY,
-					MysqlHostname: "localhost",
-					MysqlPort:     6709,
-				},
-				DurabilityPolicy:                      policy.DurabilitySemiSync,
-				LastCheckValid:                        1,
-				CountReplicas:                         2,
-				CountValidReplicas:                    2,
-				CountValidReplicatingReplicas:         2,
-				CountValidSemiSyncReplicatingReplicas: 0,
-				IsPrimary:                             1,
-				SemiSyncPrimaryEnabled:                0,
-				CurrentTabletType:                     int(topodatapb.TabletType_PRIMARY),
-			}},
-			keyspaceWanted: "ks",
-			shardWanted:    "0",
-			codeWanted:     PrimarySemiSyncCannotBeSet,
-		}, {
 			name: "PrimarySemiSyncMustBeSet",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{

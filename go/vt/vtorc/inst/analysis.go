@@ -40,7 +40,6 @@ const (
 	PrimaryHasPrimary                      AnalysisCode = "PrimaryHasPrimary"
 	PrimaryIsReadOnly                      AnalysisCode = "PrimaryIsReadOnly"
 	PrimaryCurrentTypeMismatch             AnalysisCode = "PrimaryCurrentTypeMismatch"
-	PrimarySemiSyncCannotBeSet             AnalysisCode = "PrimarySemiSyncCannotBeSet"
 	PrimarySemiSyncMustBeSet               AnalysisCode = "PrimarySemiSyncMustBeSet"
 	PrimarySemiSyncMustNotBeSet            AnalysisCode = "PrimarySemiSyncMustNotBeSet"
 	ReplicaIsWritable                      AnalysisCode = "ReplicaIsWritable"

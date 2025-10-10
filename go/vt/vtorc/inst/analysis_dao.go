@@ -555,9 +555,6 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		case a.IsPrimary && a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0:
 			a.Analysis = AllPrimaryReplicasNotReplicatingOrDead
 			a.Description = "Primary is reachable but none of its replicas is replicating"
-		case a.IsClusterPrimary && policy.SemiSyncAckers(ca.durability, tablet) > 0 && !hasMinSemiSyncAckers(ca.durability, tablet, a) && !a.SemiSyncPrimaryEnabled:
-			a.Analysis = PrimarySemiSyncCannotBeSet
-			a.Description = "Primary semi-sync cannot be set due to insufficient ackers"
 			//
 			// case a.IsPrimary && a.CountReplicas == 0:
 			//	a.Analysis = PrimaryWithoutReplicas
