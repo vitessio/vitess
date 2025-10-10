@@ -101,7 +101,7 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["count_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountReplicas), Valid: true}
 	rowMap["count_row_based_logging_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountRowBasedLoggingReplicas), Valid: true}
 	rowMap["count_semi_sync_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountSemiSyncReplicasEnabled), Valid: true}
-	rowMap["count_valid_semi_sync_replicas_replicating"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountValidSemiSyncReplicatingReplicas), Valid: true}
+	rowMap["count_valid_semi_sync_replicating_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountValidSemiSyncReplicatingReplicas), Valid: true}
 	rowMap["count_statement_based_logging_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountStatementBasedLoggingReplicas), Valid: true}
 	rowMap["count_valid_binlog_server_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountValidBinlogServerReplicas), Valid: true}
 	rowMap["count_valid_oracle_gtid_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountValidOracleGTIDReplicas), Valid: true}

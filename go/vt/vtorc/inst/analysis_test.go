@@ -64,7 +64,7 @@ func TestHasMinSemiSyncAckers(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			assert.Equal(t, testCase.expect, HasMinSemiSyncAckers(testCase.durabler, tablet, testCase.analysis))
+			assert.Equal(t, testCase.expect, hasMinSemiSyncAckers(testCase.durabler, tablet, testCase.analysis))
 		})
 	}
 }

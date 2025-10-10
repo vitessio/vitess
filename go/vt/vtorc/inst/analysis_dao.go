@@ -199,7 +199,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 				AND replica_instance.semi_sync_replica_enabled != 0
 			),
 			0
-		) AS count_valid_semi_sync_replicas_replicating,
+		) AS count_valid_semi_sync_replicating_replicas,
 		IFNULL(
 			SUM(
 				replica_instance.log_bin
@@ -354,7 +354,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		a.SemiSyncBlocked = m.GetBool("semi_sync_blocked")
 		a.SemiSyncReplicaEnabled = m.GetBool("semi_sync_replica_enabled")
 		a.CountSemiSyncReplicasEnabled = m.GetUint("count_semi_sync_replicas")
-		a.CountValidSemiSyncReplicatingReplicas = m.GetUint("count_valid_semi_sync_replicas_replicating")
+		a.CountValidSemiSyncReplicatingReplicas = m.GetUint("count_valid_semi_sync_replicating_replicas")
 		// countValidSemiSyncReplicasEnabled := m.GetUint("count_valid_semi_sync_replicas")
 		a.SemiSyncPrimaryWaitForReplicaCount = m.GetUint("semi_sync_primary_wait_for_replica_count")
 		a.SemiSyncPrimaryClients = m.GetUint("semi_sync_primary_clients")
@@ -457,7 +457,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			a.Analysis = PrimaryIsReadOnly
 			a.Description = "Primary is read-only"
 			//
-		case a.IsClusterPrimary && policy.SemiSyncAckers(ca.durability, tablet) > 0 && HasMinSemiSyncAckers(ca.durability, tablet, a) && !a.SemiSyncPrimaryEnabled:
+		case a.IsClusterPrimary && policy.SemiSyncAckers(ca.durability, tablet) > 0 && hasMinSemiSyncAckers(ca.durability, tablet, a) && !a.SemiSyncPrimaryEnabled:
 			a.Analysis = PrimarySemiSyncMustBeSet
 			a.Description = "Primary semi-sync must be set"
 			//
@@ -555,6 +555,9 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		case a.IsPrimary && a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0:
 			a.Analysis = AllPrimaryReplicasNotReplicatingOrDead
 			a.Description = "Primary is reachable but none of its replicas is replicating"
+		case a.IsClusterPrimary && policy.SemiSyncAckers(ca.durability, tablet) > 0 && !hasMinSemiSyncAckers(ca.durability, tablet, a) && !a.SemiSyncPrimaryEnabled:
+			a.Analysis = PrimarySemiSyncCannotBeSet
+			a.Description = "Primary semi-sync cannot be set due to insufficient ackers"
 			//
 			// case a.IsPrimary && a.CountReplicas == 0:
 			//	a.Analysis = PrimaryWithoutReplicas
