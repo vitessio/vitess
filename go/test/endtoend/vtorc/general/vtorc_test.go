@@ -502,6 +502,68 @@ func TestSemiSync(t *testing.T) {
 	}
 }
 
+func TestSemiSync_NoAckers(t *testing.T) {
+	// stop any vtorc instance running due to a previous test.
+	utils.StopVTOrcs(t, clusterInfo)
+	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 3, 0, nil, cluster.VTOrcConfiguration{
+		PreventCrossCellFailover: true,
+	}, 1, "")
+	defer func() {
+		utils.StopVTOrcs(t, clusterInfo)
+		clusterInfo.ClusterInstance.Teardown()
+	}()
+	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+
+	// find primary from topo
+	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	assert.NotNil(t, curPrimary, "should have elected a primary")
+	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+	utils.WaitForSuccessfulPRSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
+
+	// find the replica tablet
+	replicas := make([]*cluster.Vttablet, 0)
+	for _, tablet := range shard0.Vttablets {
+		if tablet.Alias != curPrimary.Alias {
+			replicas = append(replicas, tablet)
+		}
+	}
+	assert.NotEmpty(t, replicas, "did not find replica tablets")
+
+	// check that the replication is setup correctly before we failover
+	utils.CheckReplication(t, clusterInfo, curPrimary, shard0.Vttablets, 10*time.Second)
+
+	// Make the replica vttablet unavailable and delete from topo so the PRIMARY cannot apply semi-sync
+	for _, replica := range replicas {
+		replica.VttabletProcess.Kill()
+		out, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("DeleteTablets", replica.Alias)
+		require.NoError(t, err, out)
+	}
+
+	// Enable semi-sync durability policy
+	out, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspace.Name, "--durability-policy=semi_sync")
+	require.NoError(t, err, out)
+
+	// Wait for no detected PrimarySemiSyncMustBeSet problem, and no FixPrimary recovery, because we have no ackers
+	time.Sleep(time.Second * 10)
+	utils.WaitForDetectedProblems(t, vtOrcProcess,
+		string(inst.PrimarySemiSyncMustBeSet),
+		curPrimary.Alias,
+		keyspace.Name,
+		shard0.Name,
+		0,
+	)
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixPrimaryRecoveryName, keyspace.Name, shard0.Name, 0)
+
+	// Startup up replica vttablet again, wait for FixPrimary recovery
+	for _, replica := range replicas {
+		require.NoError(t, replica.VttabletProcess.Setup())
+	}
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+}
+
 // TestVTOrcWithPrs tests that VTOrc works fine even when PRS is called from vtctld
 func TestVTOrcWithPrs(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
