@@ -548,6 +548,13 @@ func TestSemiSync_FromNone(t *testing.T) {
 
 	// Startup up replica vttablet again, wait for FixPrimary recovery
 	require.NoError(t, replica.VttabletProcess.Setup())
+	utils.WaitForDetectedProblems(t, vtOrcProcess,
+		string(inst.PrimarySemiSyncMustBeSet),
+		curPrimary.Alias,
+		keyspace.Name,
+		shard0.Name,
+		1,
+	)
 	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
 }
 
