@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"testing"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler/registry"
@@ -74,17 +75,16 @@ func TestFileBasedConfigLoader_Load(t *testing.T) {
 			},
 		},
 		{
-			name:       "file read error - file not found",
+			name:       "file not found - returns default disabled config",
 			configPath: "/nonexistent/config.json",
 			mockReadFile: func(filename string) ([]byte, error) {
 				require.Equal(t, "/nonexistent/config.json", filename)
-				return nil, errors.New("no such file or directory")
+				return nil, os.ErrNotExist
 			},
 			mockJsonUnmarshal: func(data []byte, v interface{}) error {
 				return json.Unmarshal(data, v)
 			},
-			expectedConfig: Config{},
-			expectedError:  "no such file or directory",
+			expectedConfig: Config{Enabled: false},
 		},
 		{
 			name:       "successful config load with dry run as enabled",
@@ -168,7 +168,6 @@ func TestFileBasedConfigLoader_Load(t *testing.T) {
 
 			// Assert
 			if tt.expectedError != "" {
-				require.Error(t, err)
 				require.EqualError(t, err, tt.expectedError)
 				require.Equal(t, tt.expectedConfig, config)
 			} else {
