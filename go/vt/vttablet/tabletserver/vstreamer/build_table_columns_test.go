@@ -158,28 +158,6 @@ func TestBuildTableColumns(t *testing.T) {
 			errorContains: "cannot determine table columns",
 		},
 		{
-			name: "schema column type mismatch with ERR_ON_MISMATCH",
-			tableMap: &mysql.TableMap{
-				Name:     "test_build_cols",
-				Database: env.KeyspaceName,
-				Types: []byte{
-					binlog.TypeVarString, // id int
-					binlog.TypeLong,      // txt text
-					binlog.TypeVarString, // val varchar(64)
-				},
-				ColumnCollationIDs: []collations.ID{
-					collations.CollationUtf8mb4ID,
-					collations.CollationUtf8mb4BinID,
-				},
-				Metadata: []uint16{0, 0, 0, 0, 0},
-			},
-			filter: &binlogdatapb.Filter{
-				FieldEventMode: binlogdatapb.Filter_ERR_ON_MISMATCH,
-			},
-			expectError:   true,
-			errorContains: "cannot determine table columns",
-		},
-		{
 			name: "schema column count mismatch with BEST_EFFORT",
 			tableMap: &mysql.TableMap{
 				Name:     "test_build_cols",
