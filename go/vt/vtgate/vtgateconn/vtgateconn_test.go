@@ -19,6 +19,8 @@ package vtgateconn
 import (
 	"context"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestRegisterDialer(t *testing.T) {
@@ -60,7 +62,6 @@ func TestDeregisterDialer(t *testing.T) {
 }
 
 func TestDialCustom(t *testing.T) {
-
 	const protocol = "test4"
 	var dialer string
 
@@ -79,20 +80,17 @@ func TestDialCustom(t *testing.T) {
 		return nil, nil
 	}
 
-	RegisterDialer("test4", defaultDialerFunc)
+	RegisterDialer(protocol, defaultDialerFunc)
 
 	_, err := DialProtocol(context.Background(), protocol, "")
-	if err != nil || dialer != "default" {
-		t.Fatalf("default dialerFunc should have been called, got %s, err: %v", dialer, err)
-	}
+	require.NoError(t, err)
+	require.Equal(t, "default", dialer)
 
 	_, err = DialCustom(context.Background(), customDialerFunc, protocol)
-	if err != nil || dialer != "custom" {
-		t.Fatalf("custom dialerFunc should have been called, got %s, err: %v", dialer, err)
-	}
+	require.NoError(t, err)
+	require.Equal(t, "custom", dialer)
 
 	_, err = DialCustom(context.Background(), customDialerFunc2, protocol)
-	if err != nil || dialer != "custom2" {
-		t.Fatalf("custom2 dialerFunc should have been called, got %s, err: %v", dialer, err)
-	}
+	require.NoError(t, err)
+	require.Equal(t, "custom2", dialer)
 }
