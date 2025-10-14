@@ -312,6 +312,7 @@ func AreTypesEquivalent(mysqlTypeFromBinlog, mysqlTypeFromSchema querypb.Type) b
 // AreTypesCompatible returns whether two types are in the same type group.
 func AreTypesCompatible(mysqlTypeFromBinlog, mysqlTypeFromSchema querypb.Type) bool {
 	return (mysqlTypeFromBinlog == mysqlTypeFromSchema) ||
+		(IsQuoted(mysqlTypeFromBinlog) && IsQuoted(mysqlTypeFromSchema)) ||
 		(IsIntegral(mysqlTypeFromBinlog) && IsIntegral(mysqlTypeFromSchema)) ||
 		(IsText(mysqlTypeFromBinlog) && IsText(mysqlTypeFromSchema)) ||
 		(IsBinary(mysqlTypeFromBinlog) && IsBinary(mysqlTypeFromSchema)) ||
