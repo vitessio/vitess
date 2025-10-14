@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/vt/log"
@@ -41,6 +42,11 @@ const (
 	defaultPriority = 100 // sqlparser.MaxPriorityValue
 )
 
+type Stats struct {
+	requestsTotal     *stats.CountersWithMultiLabels
+	requestsThrottled *stats.CountersWithMultiLabels
+}
+
 type QueryThrottler struct {
 	ctx            context.Context
 	throttleClient *throttle.Client
@@ -52,6 +58,8 @@ type QueryThrottler struct {
 	cfgLoader ConfigLoader
 	// strategy is the current throttling strategy handler.
 	strategy registry.ThrottlingStrategyHandler
+	env      tabletenv.Env
+	stats    Stats
 }
 
 // NewQueryThrottler creates a new  query throttler.
@@ -65,6 +73,11 @@ func NewQueryThrottler(ctx context.Context, throttler *throttle.Throttler, cfgLo
 		cfg:            Config{},
 		cfgLoader:      cfgLoader,
 		strategy:       &registry.NoOpStrategy{}, // default strategy until config is loaded
+		env:            env,
+		stats: Stats{
+			requestsTotal:     env.Exporter().NewCountersWithMultiLabels(_queryThrottleAppName+"Requests", "query throttler requests", []string{"strategy", "workload", "priority"}),
+			requestsThrottled: env.Exporter().NewCountersWithMultiLabels(_queryThrottleAppName+"Throttled", "query throttler requests throttled", []string{"strategy", "workload", "priority"}),
+		},
 	}
 
 	// Start the initial strategy
@@ -97,7 +110,10 @@ func (qt *QueryThrottler) Shutdown() {
 func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, transactionID int64, options *querypb.ExecuteOptions) error {
 	// Lock-free read: for maximum performance in the hot path as cfg and strategy are updated rarely (default once per minute).
 	// They are word-sized and safe for atomic reads; stale data for one query is acceptable and avoids mutex contention in the hot path.
-	if !qt.cfg.Enabled {
+	tCfg := qt.cfg
+	tStrategy := qt.strategy
+
+	if !tCfg.Enabled {
 		return nil
 	}
 
@@ -109,6 +125,8 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 
 	// Evaluate the throttling decision
 	decision := qt.strategy.Evaluate(ctx, tabletType, parsedQuery, transactionID, attrs)
+
+	qt.stats.requestsTotal.Add([]string{strategyName, workload, priorityStr}, 1)
 
 	// If no throttling is needed, allow the query
 	if !decision.Throttle {
@@ -122,6 +140,7 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 	}
 
 	// Normal throttling: return an error to reject the query
+	qt.stats.requestsThrottled.Add([]string{strategyName, workload, priorityStr}, 1)
 	return vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, decision.Message)
 }
 
