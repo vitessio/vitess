@@ -22,7 +22,7 @@
 gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '^go/.*\.go$' | grep -v '^go/vt/proto/')
 
 # Find goimports. This is useful if goimports was installed outside of $GOPATH/bin, for example by Homebrew.
-goimports_path=$(whereis -qb goimports)
+goimports_path="$(whereis -b goimports | awk '{print $2}')"
 [ -z "$goimports_path" ] && goimports_path="$(go env GOPATH)/bin/goimports"
 [ ! -x "$goimports_path" ] && echo "cannot find goimports, is it installed?" && exit 1
 
