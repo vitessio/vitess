@@ -1048,7 +1048,7 @@ func findColumn(ti *Table, name sqlparser.IdentifierCI) (int, error) {
 	}
 	// Let's see if the Table only has TableMap event names and if so return a different error.
 	for _, col := range ti.Fields {
-		if !strings.HasPrefix("@", col.Name) {
+		if !strings.HasPrefix(col.Name, "@") {
 			return 0, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "column %s not found in table %s", sqlparser.String(name), ti.Name)
 		}
 	}
