@@ -523,10 +523,6 @@ func buildTablePlan(env *vtenv.Environment, ti *Table, vschema *localVSchema, qu
 		return nil, err
 	}
 
-	if sel.Where == nil {
-		return plan, nil
-	}
-
 	return plan, nil
 }
 
@@ -1050,5 +1046,11 @@ func findColumn(ti *Table, name sqlparser.IdentifierCI) (int, error) {
 			return i, nil
 		}
 	}
-	return 0, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "column %s not found in table %s", sqlparser.String(name), ti.Name)
+	// Let's see if the Table only has TableMap event names and if so return a different error.
+	for _, col := range ti.Fields {
+		if !strings.HasPrefix("@", col.Name) {
+			return 0, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "column %s not found in table %s", sqlparser.String(name), ti.Name)
+		}
+	}
+	return 0, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot use column names in vstream filter as the current table schema for table %s is not compatible with the current event for this table in the stream", ti.Name)
 }

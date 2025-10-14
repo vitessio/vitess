@@ -613,7 +613,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 			// Usually the vstreamer will also error out when this happens, and vstreamer re-initializes its table map.
 			// But if the vstreamer is not aware of the restart, we could get an id that matches one in the cache, but
 			// is for a different table. We then invalidate and recompute the plan for this id.
-			// If we've performed OnlineDDL cutovers then the table id <-> name mappings also change and we need to
+			// If we've performed OnlineDDL cutovers then the table id <-> name mappings can also change and we need to
 			// invalidate the related cached replication plans.
 			isInternal := tm.Database == sidecar.GetName()
 			if plan == nil ||
@@ -925,9 +925,11 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 		return fields, nil
 	}
 
-	// Check if the schema returned by schema.Engine matches with row.
+	// Check if the schema returned by schema.Engine is compatible with the row.
+	// If not then we rely on the TableMap event alone. This will prevent us from
+	// being able to handle filters with colum names (in planbuilder.findColumn()).
 	for i := range tm.Types {
-		if !sqltypes.AreTypesEquivalent(fields[i].Type, st.Fields[i].Type) {
+		if !sqltypes.AreTypesCompatible(fields[i].Type, st.Fields[i].Type) {
 			return fields, nil
 		}
 	}
@@ -1348,7 +1350,7 @@ func wrapError(err error, stopPos replication.Position, vse *Engine) error {
 	if err != nil {
 		vse.vstreamersEndedWithErrors.Add(1)
 		vse.errorCounts.Add("StreamEnded", 1)
-		err = fmt.Errorf("stream (at source tablet) error @ %v: %v", stopPos, err)
+		err = fmt.Errorf("stream (at source tablet) error @ (including the GTID we failed to process) %v: %v", stopPos, err)
 		log.Error(err)
 		return err
 	}
