@@ -1354,6 +1354,6 @@ func wrapError(err error, stopPos replication.Position, vse *Engine) error {
 		log.Error(err)
 		return err
 	}
-	log.Infof("stream (at source tablet) ended @ %v", stopPos)
+	log.Infof("stream (at source tablet) ended @ (including the GTID we failed to process) %v", stopPos)
 	return nil
 }
