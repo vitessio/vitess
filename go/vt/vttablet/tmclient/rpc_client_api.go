@@ -191,6 +191,9 @@ type TabletManagerClient interface {
 	// StartReplication starts the mysql replication
 	StartReplication(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error
 
+	// RestartReplication stops and then starts the mysql replication
+	RestartReplication(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error
+
 	// StartReplicationUntilAfter starts replication until after the position specified
 	StartReplicationUntilAfter(ctx context.Context, tablet *topodatapb.Tablet, position string, duration time.Duration) error
 

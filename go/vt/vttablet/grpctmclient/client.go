@@ -887,6 +887,19 @@ func (client *Client) StartReplication(ctx context.Context, tablet *topodatapb.T
 	return vterrors.FromGRPC(err)
 }
 
+// RestartReplication is part of the tmclient.TabletManagerClient interface.
+func (client *Client) RestartReplication(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return err
+	}
+	defer closer.Close()
+	_, err = c.RestartReplication(ctx, &tabletmanagerdatapb.RestartReplicationRequest{
+		SemiSync: semiSync,
+	})
+	return err
+}
+
 // StartReplicationUntilAfter is part of the tmclient.TabletManagerClient interface.
 func (client *Client) StartReplicationUntilAfter(ctx context.Context, tablet *topodatapb.Tablet, position string, waitTime time.Duration) error {
 	c, closer, err := client.dialer.dial(ctx, tablet)
