@@ -70,6 +70,12 @@ func commandGetPermissions(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	// Before displaying, remove/checksum fields from UserPermissions
+	if resp != nil && resp.Permissions != nil {
+		for _, up := range resp.Permissions.UserPermissions {
+			up.PasswordChecksum = 0
+		}
+	}
 	p, err := cli.MarshalJSON(resp.Permissions)
 	if err != nil {
 		return err
