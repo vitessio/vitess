@@ -213,7 +213,6 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 		vsm:                         vsm,
 		eventCh:                     make(chan []*binlogdatapb.VEvent),
 		heartbeatInterval:           flags.GetHeartbeatInterval(),
-		streamLivenessTimer:         time.NewTimer(livenessTimeout),
 		ts:                          ts,
 		copyCompletedShard:          make(map[string]struct{}),
 		tabletPickerOptions: discovery.TabletPickerOptions{
@@ -327,6 +326,10 @@ func (vsm *vstreamManager) GetTotalStreamDelay() int64 {
 
 func (vs *vstream) stream(ctx context.Context) error {
 	ctx, vs.cancel = context.WithCancel(ctx)
+	if vs.streamLivenessTimer == nil {
+		vs.streamLivenessTimer = time.NewTimer(livenessTimeout)
+		defer vs.streamLivenessTimer.Stop()
+	}
 
 	vs.wg.Add(1)
 	go func() {
@@ -410,11 +413,10 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 				return
 			}
 		case <-vs.streamLivenessTimer.C:
+			msg := fmt.Sprintf("vstream failed liveness checks as there was no activity, including heartbeats, within the last %v", livenessTimeout)
+			log.Infof("Error in vstream: %s", msg)
 			vs.once.Do(func() {
-				vs.setError(
-					vterrors.New(vtrpcpb.Code_UNAVAILABLE, fmt.Sprintf("vstream failed liveness checks as there was no activity, including heartbeats, within the last %v", livenessTimeout)),
-					"vstream is fully throttled or otherwise hung",
-				)
+				vs.setError(vterrors.New(vtrpcpb.Code_UNAVAILABLE, msg), "vstream is fully throttled or otherwise hung")
 			})
 			return
 		}
