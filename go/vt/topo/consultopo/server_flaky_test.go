@@ -128,6 +128,11 @@ func startConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
 }
 
 func TestConsulTopo(t *testing.T) {
+	originalWatchPollDuration := watchPollDuration
+	defer func() {
+		watchPollDuration = originalWatchPollDuration
+	}()
+
 	// One test is going to wait that full period, so make it shorter.
 	watchPollDuration = 100 * time.Millisecond
 
@@ -150,6 +155,7 @@ func TestConsulTopo(t *testing.T) {
 	testIndex := 0
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
 	test.TopoServerTestSuite(t, ctx, func() *topo.Server {
 		// Each test will use its own sub-directories.
 		testRoot := fmt.Sprintf("test-%v", testIndex)
@@ -175,6 +181,16 @@ func TestConsulTopo(t *testing.T) {
 
 func TestConsulTopoWithChecks(t *testing.T) {
 	// One test is going to wait that full period, so make it shorter.
+	originalWatchPollDuration := watchPollDuration
+	originalConsulLockSessionChecks := consulLockSessionChecks
+	originalConsulLockSessionTTL := consulLockSessionTTL
+
+	defer func() {
+		watchPollDuration = originalWatchPollDuration
+		consulLockSessionTTL = originalConsulLockSessionTTL
+		consulLockSessionChecks = originalConsulLockSessionChecks
+	}()
+
 	watchPollDuration = 100 * time.Millisecond
 	consulLockSessionChecks = "serfHealth"
 	consulLockSessionTTL = "15s"
@@ -248,6 +264,11 @@ func TestConsulTopoWithAuth(t *testing.T) {
 	}
 	defer os.Remove(tmpFile.Name())
 
+	originalConsulAuthClientStaticFile := consulAuthClientStaticFile
+	defer func() {
+		consulAuthClientStaticFile = originalConsulAuthClientStaticFile
+	}()
+
 	consulAuthClientStaticFile = tmpFile.Name()
 
 	jsonConfig := "{\"global\":{\"acl_token\":\"123456\"}, \"test\":{\"acl_token\":\"123456\"}}"
@@ -299,6 +320,11 @@ func TestConsulTopoWithAuthFailure(t *testing.T) {
 	}
 	defer os.Remove(tmpFile.Name())
 
+	originalConsulAuthClientStaticFile := consulAuthClientStaticFile
+	defer func() {
+		consulAuthClientStaticFile = originalConsulAuthClientStaticFile
+	}()
+
 	consulAuthClientStaticFile = tmpFile.Name()
 
 	// check valid, empty json causes error
@@ -346,10 +372,10 @@ func TestConsulTopoWithAuthFailure(t *testing.T) {
 func TestConsulWatcherStormPrevention(t *testing.T) {
 	// Save original values and restore them after the test
 	originalWatchPollDuration := watchPollDuration
-	originalAuthFile := consulAuthClientStaticFile
+	originalConsulAuthClientStaticFile := consulAuthClientStaticFile
 	defer func() {
 		watchPollDuration = originalWatchPollDuration
-		consulAuthClientStaticFile = originalAuthFile
+		consulAuthClientStaticFile = originalConsulAuthClientStaticFile
 	}()
 
 	// Configure test settings - using direct assignment since flag parsing in tests is complex
@@ -368,7 +394,9 @@ func TestConsulWatcherStormPrevention(t *testing.T) {
 		os.Remove(configFilename)
 	}()
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	testRoot := "storm-test"
 
 	// Create the topo server
