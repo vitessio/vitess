@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+DIR=$( cd "$( dirname "${BASH_SOURCE[0]:-$0}" )" && pwd )
 source $DIR/shell_functions.inc
 
 # Normal builds run directly against the git repo, but when packaging (for example with rpms)
