@@ -78,6 +78,7 @@ func commandGetPermissions(cmd *cobra.Command, args []string) error {
 			}
 		}
 	}
+	cli.DefaultMarshalOptions.EmitUnpopulated = false
 	p, err := cli.MarshalJSON(resp.Permissions)
 	if err != nil {
 		return err
