@@ -28,12 +28,13 @@ import (
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/vschema"
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 func TestInitializeTargetSequences(t *testing.T) {
@@ -41,10 +42,10 @@ func TestInitializeTargetSequences(t *testing.T) {
 	defer cancel()
 
 	workflowName := "wf1"
-	tableName := "t1"
-	tableName2 := "t2"
-	sourceKeyspaceName := "sourceks"
-	targetKeyspaceName := "targetks"
+	tableName := "tbl-t1"
+	tableName2 := "tbl-t2"
+	sourceKeyspaceName := "source-ks"
+	targetKeyspaceName := "target-ks"
 
 	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
 		tableName: {
@@ -88,7 +89,7 @@ func TestInitializeTargetSequences(t *testing.T) {
 			backingTableKeyspace: sourceKeyspaceName,
 			backingTableDBName:   fmt.Sprintf("vt_%s", sourceKeyspaceName),
 			usingTableName:       tableName,
-			usingTableDBName:     "vt_targetks",
+			usingTableDBName:     "vt_target-ks",
 			usingTableDefinition: &vschema.Table{
 				AutoIncrement: &vschema.AutoIncrement{
 					Column:   "my-col",
@@ -101,7 +102,7 @@ func TestInitializeTargetSequences(t *testing.T) {
 			backingTableKeyspace: sourceKeyspaceName,
 			backingTableDBName:   fmt.Sprintf("vt_%s", sourceKeyspaceName),
 			usingTableName:       tableName2,
-			usingTableDBName:     "vt_targetks",
+			usingTableDBName:     "vt_target-ks",
 			usingTableDefinition: &vschema.Table{
 				AutoIncrement: &vschema.AutoIncrement{
 					Column:   "my-col-2",
@@ -118,13 +119,13 @@ func TestInitializeTargetSequences(t *testing.T) {
 					BackingTableName:        "my-seq1",
 					UsingColEscaped:         "`my-col`",
 					UsingTableNameEscaped:   fmt.Sprintf("`%s`", tableName),
-					UsingTableDbNameEscaped: "`vt_targetks`",
+					UsingTableDbNameEscaped: "`vt_target-ks`",
 				},
 				{
 					BackingTableName:        "my-seq2",
 					UsingColEscaped:         "`my-col-2`",
 					UsingTableNameEscaped:   fmt.Sprintf("`%s`", tableName2),
-					UsingTableDbNameEscaped: "`vt_targetks`",
+					UsingTableDbNameEscaped: "`vt_target-ks`",
 				},
 			},
 		},
@@ -163,16 +164,16 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 	defer cancel()
 	cell := "cell1"
 	workflow := "wf1"
-	table := "`t1`"
-	tableDDL := "create table t1 (id int not null auto_increment primary key, c1 varchar(10))"
-	table2 := "t2"
-	unescapedTable := "t1"
+	table := "`tbl-t1`"
+	tableDDL := "create table tbl-t1 (id int not null auto_increment primary key, c1 varchar(10))"
+	table2 := "tbl-t2"
+	unescapedTable := "tbl-t1"
 	sourceKeyspace := &testKeyspace{
 		KeyspaceName: "source-ks",
 		ShardNames:   []string{"0"},
 	}
 	targetKeyspace := &testKeyspace{
-		KeyspaceName: "targetks",
+		KeyspaceName: "target-ks",
 		ShardNames:   []string{"-80", "80-"},
 	}
 	vindexes := map[string]*vschema.Vindex{
@@ -241,7 +242,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 					backingTableKeyspace: "source-ks",
 					backingTableDBName:   "vt_source-ks",
 					usingTableName:       unescapedTable,
-					usingTableDBName:     "vt_targetks",
+					usingTableDBName:     "vt_target-ks",
 					usingTableDefinition: &vschema.Table{
 						ColumnVindexes: []*vschema.ColumnVindex{
 							{
@@ -301,7 +302,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 					backingTableKeyspace: "source-ks",
 					backingTableDBName:   "vt_source-ks",
 					usingTableName:       unescapedTable,
-					usingTableDBName:     "vt_targetks",
+					usingTableDBName:     "vt_target-ks",
 					usingTableDefinition: &vschema.Table{
 						ColumnVindexes: []*vschema.ColumnVindex{
 							{
@@ -350,7 +351,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 					backingTableKeyspace: "source-ks",
 					backingTableDBName:   "vt_source-ks",
 					usingTableName:       unescapedTable,
-					usingTableDBName:     "vt_targetks",
+					usingTableDBName:     "vt_target-ks",
 					usingTableDefinition: &vschema.Table{
 						ColumnVindexes: []*vschema.ColumnVindex{
 							{
@@ -414,7 +415,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 					backingTableKeyspace: "source-ks",
 					backingTableDBName:   "vt_source-ks",
 					usingTableName:       unescapedTable,
-					usingTableDBName:     "vt_targetks",
+					usingTableDBName:     "vt_target-ks",
 					usingTableDefinition: &vschema.Table{
 						ColumnVindexes: []*vschema.ColumnVindex{
 							{
@@ -433,7 +434,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 					backingTableKeyspace: "source-ks",
 					backingTableDBName:   "vt_source-ks",
 					usingTableName:       table2,
-					usingTableDBName:     "vt_targetks",
+					usingTableDBName:     "vt_target-ks",
 					usingTableDefinition: &vschema.Table{
 						ColumnVindexes: []*vschema.ColumnVindex{
 							{
@@ -482,7 +483,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 					backingTableKeyspace: "source-ks",
 					backingTableDBName:   "vt_source-ks",
 					usingTableName:       unescapedTable,
-					usingTableDBName:     "vt_targetks",
+					usingTableDBName:     "vt_target-ks",
 					usingTableDefinition: &vschema.Table{
 						ColumnVindexes: []*vschema.ColumnVindex{
 							{
@@ -680,9 +681,9 @@ func TestDryRunInitializeTargetSequences(t *testing.T) {
 	defer cancel()
 
 	workflowName := "wf1"
-	tableName := "t1"
-	sourceKeyspaceName := "sourceks"
-	targetKeyspaceName := "targetks"
+	tableName := "tbl-t1"
+	sourceKeyspaceName := "source-ks"
+	targetKeyspaceName := "target-ks"
 
 	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
 		tableName: {
@@ -718,28 +719,28 @@ func TestDryRunInitializeTargetSequences(t *testing.T) {
 
 	sm1 := sequenceMetadata{
 		backingTableName:     "seq1",
-		backingTableKeyspace: "sourceks",
+		backingTableKeyspace: "source-ks",
 		backingTableDBName:   "ks1",
-		usingTableName:       "t1",
-		usingTableDBName:     "targetks",
+		usingTableName:       "tbl-t1",
+		usingTableDBName:     "target-ks",
 		usingTableDefinition: &vschema.Table{
 			AutoIncrement: &vschema.AutoIncrement{Column: "id", Sequence: "seq1"},
 		},
 	}
 	sm2 := sm1
 	sm2.backingTableName = "seq2"
-	sm2.usingTableName = "t2"
+	sm2.usingTableName = "tbl-t2"
 	sm2.usingTableDefinition.AutoIncrement.Sequence = "seq2"
 
 	sm3 := sm1
-	sm3.backingTableName = "seq3"
-	sm3.usingTableName = "t3"
+	sm3.backingTableName = "tbl-seq3"
+	sm3.usingTableName = "tbl-t3"
 	sm3.usingTableDefinition.AutoIncrement.Sequence = "seq3"
 
 	tables := map[string]*sequenceMetadata{
-		"t1": &sm1,
-		"t2": &sm2,
-		"t3": &sm3,
+		"tbl-t1": &sm1,
+		"tbl-t2": &sm2,
+		"tbl-t3": &sm3,
 	}
 
 	for range tables {
