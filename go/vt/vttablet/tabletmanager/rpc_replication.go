@@ -623,12 +623,36 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		}()
 	}
 
-	if !force {
-		// Now we know no writes are in-flight and no new writes can occur.
-		// We just need to wait for no write being blocked on semi-sync ACKs.
-		err = tm.SemiSyncMonitor.WaitUntilSemiSyncUnblocked(ctx)
-		if err != nil {
-			return nil, err
+	isSemiSyncBlocked, err := tm.MysqlDaemon.IsSemiSyncBlocked(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if isSemiSyncBlocked {
+		if force {
+			if tm.isPrimarySideSemiSyncEnabled(ctx) {
+				// Disable the primary side semi-sync to unblock the writes.
+				if err := tm.fixSemiSync(ctx, topodatapb.TabletType_REPLICA, SemiSyncActionSet); err != nil {
+					return nil, err
+				}
+				defer func() {
+					if finalErr != nil && revertPartialFailure && wasPrimary {
+						// enable primary-side semi-sync again
+						if err := tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, SemiSyncActionSet); err != nil {
+							log.Warningf("fixSemiSync(PRIMARY) failed during revert: %v", err)
+						}
+					}
+				}()
+			}
+		} else {
+			// TODO: Shouldn't we better just fail here?
+
+			// Now we know no writes are in-flight and no new writes can occur.
+			// We just need to wait for no write being blocked on semi-sync ACKs.
+			err = tm.SemiSyncMonitor.WaitUntilSemiSyncUnblocked(ctx)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -653,8 +677,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		}
 	}()
 
-	// Here, we check if the primary side semi sync is enabled or not. If it isn't enabled then we do not need to take any action.
-	// If it is enabled then we should turn it off and revert in case of failure.
+	// If we haven't disabled the primary side semi-sync so far, do it now.
 	if tm.isPrimarySideSemiSyncEnabled(ctx) {
 		// If using semi-sync, we need to disable primary-side.
 		if err := tm.fixSemiSync(ctx, topodatapb.TabletType_REPLICA, SemiSyncActionSet); err != nil {
