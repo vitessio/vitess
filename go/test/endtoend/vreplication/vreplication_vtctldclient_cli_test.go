@@ -76,7 +76,7 @@ func TestVtctldclientCLI(t *testing.T) {
 	sourceTab = vc.Cells["zone1"].Keyspaces[sourceKeyspaceName].Shards["0"].Tablets["zone1-100"].Vttablet
 	require.NotNil(t, sourceTab)
 
-	targetTabs := setupMinimalCustomerKeyspace(t)
+	targetTabs := setupMinimalTargetKeyspace(t)
 	targetTab1 = targetTabs["-80"]
 	require.NotNil(t, targetTab1)
 	targetTab2 = targetTabs["80-"]

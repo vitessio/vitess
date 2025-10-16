@@ -36,20 +36,18 @@ func testMoveTablesMirrorTraffic(t *testing.T, flavor workflowFlavor) {
 	vc = setupMinimalCluster(t)
 	defer vc.TearDown()
 
-	sourceKeyspace := "product"
-	targetKeyspace := "customer"
 	workflowName := "wf1"
 	tables := []string{"customer", "loadtest", "customer2"}
 
-	_ = setupMinimalCustomerKeyspace(t)
+	_ = setupMinimalTargetKeyspace(t)
 
 	mtwf := &moveTablesWorkflow{
 		workflowInfo: &workflowInfo{
 			vc:             vc,
 			workflowName:   workflowName,
-			targetKeyspace: targetKeyspace,
+			targetKeyspace: targetKs,
 		},
-		sourceKeyspace: sourceKeyspace,
+		sourceKeyspace: sourceKs,
 		tables:         "customer,loadtest,customer2",
 		mirrorFlags:    []string{"--percent", "25"},
 	}
@@ -64,7 +62,7 @@ func testMoveTablesMirrorTraffic(t *testing.T, flavor workflowFlavor) {
 	// Mirror rules can be created after a MoveTables workflow is created.
 	mt.MirrorTraffic()
 	confirmMirrorRulesExist(t)
-	expectMirrorRules(t, sourceKeyspace, targetKeyspace, tables, []topodatapb.TabletType{
+	expectMirrorRules(t, sourceKs, targetKs, tables, []topodatapb.TabletType{
 		topodatapb.TabletType_PRIMARY,
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_RDONLY,
@@ -74,7 +72,7 @@ func testMoveTablesMirrorTraffic(t *testing.T, flavor workflowFlavor) {
 	mtwf.mirrorFlags[1] = "50"
 	mt.MirrorTraffic()
 	confirmMirrorRulesExist(t)
-	expectMirrorRules(t, sourceKeyspace, targetKeyspace, tables, []topodatapb.TabletType{
+	expectMirrorRules(t, sourceKs, targetKs, tables, []topodatapb.TabletType{
 		topodatapb.TabletType_PRIMARY,
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_RDONLY,
@@ -85,7 +83,7 @@ func testMoveTablesMirrorTraffic(t *testing.T, flavor workflowFlavor) {
 	mtwf.mirrorFlags[1] = "75"
 	mt.MirrorTraffic()
 	confirmMirrorRulesExist(t)
-	expectMirrorRules(t, sourceKeyspace, targetKeyspace, tables, []topodatapb.TabletType{
+	expectMirrorRules(t, sourceKs, targetKs, tables, []topodatapb.TabletType{
 		topodatapb.TabletType_PRIMARY,
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_RDONLY,
@@ -105,7 +103,7 @@ func testMoveTablesMirrorTraffic(t *testing.T, flavor workflowFlavor) {
 	mtwf.mirrorFlags = append(mtwf.mirrorFlags, "--tablet-types", "primary")
 	mt.MirrorTraffic()
 	confirmMirrorRulesExist(t)
-	expectMirrorRules(t, sourceKeyspace, targetKeyspace, tables, []topodatapb.TabletType{
+	expectMirrorRules(t, sourceKs, targetKs, tables, []topodatapb.TabletType{
 		topodatapb.TabletType_PRIMARY,
 	}, 100)
 

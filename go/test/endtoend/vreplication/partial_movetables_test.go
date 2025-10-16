@@ -35,10 +35,10 @@ import (
 // Before canceling, we first switch traffic to the target keyspace and then reverse it back to the source keyspace.
 // This tests that artifacts are being properly cleaned up when a MoveTables ia canceled.
 func testCancel(t *testing.T) {
-	targetKeyspace := "customer2"
-	sourceKeyspace := "customer"
+	targetKs := "customer2"
+	sourceKs := "customer"
 	workflowName := "partial80DashForCancel"
-	ksWorkflow := fmt.Sprintf("%s.%s", targetKeyspace, workflowName)
+	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflowName)
 	// We use a different table in this MoveTables than the subsequent one, so that setting up of the artifacts
 	// while creating MoveTables do not paper over any issues with cleaning up artifacts when MoveTables is canceled.
 	// Ref: https://github.com/vitessio/vitess/issues/13998
@@ -49,9 +49,9 @@ func testCancel(t *testing.T) {
 		workflowInfo: &workflowInfo{
 			vc:             vc,
 			workflowName:   workflowName,
-			targetKeyspace: targetKeyspace,
+			targetKeyspace: targetKs,
 		},
-		sourceKeyspace: sourceKeyspace,
+		sourceKeyspace: sourceKs,
 		tables:         table,
 		sourceShards:   shard,
 	}, workflowFlavorVtctld)
@@ -63,22 +63,22 @@ func testCancel(t *testing.T) {
 
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 
-	checkDenyList(targetKeyspace, false)
-	checkDenyList(sourceKeyspace, false)
+	checkDenyList(targetKs, false)
+	checkDenyList(sourceKs, false)
 
 	mt.SwitchReadsAndWrites()
-	checkDenyList(targetKeyspace, false)
-	checkDenyList(sourceKeyspace, true)
+	checkDenyList(targetKs, false)
+	checkDenyList(sourceKs, true)
 	time.Sleep(loadTestBufferingWindowDuration + 1*time.Second)
 
 	mt.ReverseReadsAndWrites()
-	checkDenyList(targetKeyspace, true)
-	checkDenyList(sourceKeyspace, false)
+	checkDenyList(targetKs, true)
+	checkDenyList(sourceKs, false)
 	time.Sleep(loadTestBufferingWindowDuration + 1*time.Second)
 
 	mt.Cancel()
-	checkDenyList(targetKeyspace, false)
-	checkDenyList(sourceKeyspace, false)
+	checkDenyList(targetKs, false)
+	checkDenyList(sourceKs, false)
 
 }
 
@@ -109,26 +109,24 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 	}()
 	vc = setupMinimalCluster(t)
 	defer vc.TearDown()
-	sourceKeyspace := "product"
-	targetKeyspace := "customer"
 	workflowName := "wf1"
-	targetTabs := setupMinimalCustomerKeyspace(t)
+	targetTabs := setupMinimalTargetKeyspace(t)
 	targetTab80Dash := targetTabs["80-"]
 	targetTabDash80 := targetTabs["-80"]
 	mt := newMoveTables(vc, &moveTablesWorkflow{
 		workflowInfo: &workflowInfo{
 			vc:             vc,
 			workflowName:   workflowName,
-			targetKeyspace: targetKeyspace,
+			targetKeyspace: targetKs,
 		},
-		sourceKeyspace: sourceKeyspace,
+		sourceKeyspace: sourceKs,
 		tables:         "customer,loadtest,customer2",
 	}, flavor)
 	mt.Create()
 
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKs, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
 	catchup(t, targetTab80Dash, workflowName, "MoveTables")
-	vdiff(t, targetKeyspace, workflowName, defaultCellName, nil)
+	vdiff(t, targetKs, workflowName, defaultCellName, nil)
 	mt.SwitchReadsAndWrites()
 	time.Sleep(loadTestBufferingWindowDuration + 1*time.Second)
 	mt.Complete()
@@ -165,8 +163,8 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 	}
 	var err error
 	workflowName = "partial80Dash"
-	sourceKeyspace = "customer"
-	targetKeyspace = "customer2"
+	sourceKeyspace := targetKs
+	targetKeyspace := "customer2"
 	shard := "80-"
 	tables := "customer,loadtest"
 	mt80Dash := newMoveTables(vc, &moveTablesWorkflow{
@@ -189,9 +187,9 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 		}()
 		lg.waitForCount(1000)
 	}
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKs, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
 	catchup(t, targetTab80Dash, workflowName, "MoveTables")
-	vdiff(t, targetKeyspace, workflowName, defaultCellName, nil)
+	vdiff(t, targetKs, workflowName, defaultCellName, nil)
 
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()

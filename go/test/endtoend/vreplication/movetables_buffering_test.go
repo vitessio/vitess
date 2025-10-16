@@ -24,7 +24,7 @@ func TestMoveTablesBuffering(t *testing.T) {
 	defer vc.TearDown()
 
 	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
-	setupMinimalCustomerKeyspace(t)
+	setupMinimalTargetKeyspace(t)
 	tables := "loadtest"
 	err := tstWorkflowExec(t, defaultCellName, workflowName, sourceKs, targetKs,
 		tables, workflowActionCreate, "", "", "", defaultWorkflowExecOptions)
@@ -40,7 +40,7 @@ func TestMoveTablesBuffering(t *testing.T) {
 	catchup(t, targetTab1, workflowName, "MoveTables")
 	catchup(t, targetTab2, workflowName, "MoveTables")
 	vdiff(t, targetKs, workflowName, "", nil)
-	waitForLowLag(t, "customer", workflowName)
+	waitForLowLag(t, targetKs, workflowName)
 	for i := 0; i < 10; i++ {
 		tstWorkflowSwitchReadsAndWrites(t)
 		time.Sleep(loadTestBufferingWindowDuration + 1*time.Second)

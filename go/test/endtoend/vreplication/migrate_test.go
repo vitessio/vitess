@@ -63,7 +63,7 @@ func TestMigrateUnsharded(t *testing.T) {
 	}()
 
 	defaultCell := vc.Cells[vc.CellNames[0]]
-	_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0",
+	_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, "0",
 		initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
 	require.NoError(t, err, "failed to create product keyspace")
 
@@ -91,7 +91,7 @@ func TestMigrateUnsharded(t *testing.T) {
 	extVtgateConn := getConnection(t, extVc.ClusterConfig.hostname, extVc.ClusterConfig.vtgateMySQLPort)
 	insertInitialDataIntoExternalCluster(t, extVtgateConn)
 
-	targetPrimary := vc.getPrimaryTablet(t, "product", "0")
+	targetPrimary := vc.getPrimaryTablet(t, sourceKs, "0")
 
 	var output, expected string
 
@@ -115,26 +115,26 @@ func TestMigrateUnsharded(t *testing.T) {
 		require.Equal(t, "/vitess/global", gjson.Get(output, "topo_root").String())
 	})
 
-	ksWorkflow := "product.e1"
+	ksWorkflow := fmt.Sprintf("%s.e1", sourceKs)
 
 	t.Run("migrate from external cluster", func(t *testing.T) {
 		if output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
-			"--target-keyspace", "product", "--workflow", "e1",
+			"--target-keyspace", sourceKs, "--workflow", "e1",
 			"create", "--source-keyspace", "rating", "--mount-name", "ext1", "--all-tables", "--cells=extcell1", "--tablet-types=primary,replica"); err != nil {
 			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
 		}
 		waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
-		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 1)
-		waitForRowCountInTablet(t, targetPrimary, "product", "rating", 2)
-		waitForRowCountInTablet(t, targetPrimary, "product", "review", 3)
+		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", fmt.Sprintf("%s:0", sourceKs), 1)
+		waitForRowCountInTablet(t, targetPrimary, sourceKs, "rating", 2)
+		waitForRowCountInTablet(t, targetPrimary, sourceKs, "review", 3)
 		execVtgateQuery(t, extVtgateConn, "rating", "insert into review(rid, pid, review) values(4, 1, 'review4');")
 		execVtgateQuery(t, extVtgateConn, "rating", "insert into rating(gid, pid, rating) values(3, 1, 3);")
-		waitForRowCountInTablet(t, targetPrimary, "product", "rating", 3)
-		waitForRowCountInTablet(t, targetPrimary, "product", "review", 4)
+		waitForRowCountInTablet(t, targetPrimary, sourceKs, "rating", 3)
+		waitForRowCountInTablet(t, targetPrimary, sourceKs, "review", 4)
 		doVDiff(t, ksWorkflow, "extcell1")
 
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
-			"--target-keyspace", "product", "--workflow", "e1", "show")
+			"--target-keyspace", sourceKs, "--workflow", "e1", "show")
 		require.NoError(t, err, "Migrate command failed with %s", output)
 
 		wf := gjson.Get(output, "workflows").Array()[0]
@@ -142,32 +142,32 @@ func TestMigrateUnsharded(t *testing.T) {
 		require.Equal(t, "Migrate", wf.Get("workflow_type").String())
 
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
-			"--target-keyspace", "product", "--workflow", "e1", "status", "--format=json")
+			"--target-keyspace", sourceKs, "--workflow", "e1", "status", "--format=json")
 		require.NoError(t, err, "Migrate command failed with %s", output)
 
-		require.Equal(t, "Running", gjson.Get(output, "shard_streams.product/0.streams.0.status").String())
+		require.Equal(t, "Running", gjson.Get(output, fmt.Sprintf("shard_streams.%s/0.streams.0.status", sourceKs)).String())
 
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
-			"--target-keyspace", "product", "--workflow", "e1", "complete")
+			"--target-keyspace", sourceKs, "--workflow", "e1", "complete")
 		require.NoError(t, err, "Migrate command failed with %s", output)
 
-		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 0)
+		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", fmt.Sprintf("%s:0", sourceKs), 0)
 	})
 	t.Run("cancel migrate workflow", func(t *testing.T) {
-		execVtgateQuery(t, vtgateConn, "product", "drop table review,rating")
+		execVtgateQuery(t, vtgateConn, sourceKs, "drop table review,rating")
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
-			"--target-keyspace", "product", "--workflow", "e1", "Create", "--source-keyspace", "rating",
+			"--target-keyspace", sourceKs, "--workflow", "e1", "Create", "--source-keyspace", "rating",
 			"--mount-name", "ext1", "--all-tables", "--auto-start=false", "--cells=extcell1")
 		require.NoError(t, err, "Migrate command failed with %s", output)
 
-		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 1, binlogdatapb.VReplicationWorkflowState_Stopped.String())
-		waitForRowCountInTablet(t, targetPrimary, "product", "rating", 0)
-		waitForRowCountInTablet(t, targetPrimary, "product", "review", 0)
+		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", fmt.Sprintf("%s:0", sourceKs), 1, binlogdatapb.VReplicationWorkflowState_Stopped.String())
+		waitForRowCountInTablet(t, targetPrimary, sourceKs, "rating", 0)
+		waitForRowCountInTablet(t, targetPrimary, sourceKs, "review", 0)
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
-			"--target-keyspace", "product", "--workflow", "e1", "cancel")
+			"--target-keyspace", sourceKs, "--workflow", "e1", "cancel")
 		require.NoError(t, err, "Migrate command failed with %s", output)
 
-		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 0)
+		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", fmt.Sprintf("%s:0", sourceKs), 0)
 		var found bool
 		found, err = checkIfTableExists(t, vc, "zone1-100", "review")
 		require.NoError(t, err)
@@ -213,7 +213,7 @@ func TestMigrateSharded(t *testing.T) {
 	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 
-	setupCustomerKeyspace(t)
+	setupTargetKeyspace(t)
 	createMoveTablesWorkflow(t, "customer,Lead,datze,customer2")
 	tstWorkflowSwitchReadsAndWrites(t)
 	tstWorkflowComplete(t)
@@ -246,7 +246,7 @@ func TestMigrateSharded(t *testing.T) {
 	ksWorkflow := "rating.e1"
 	if output, err = extVc.VtctldClient.ExecuteCommandWithOutput("Migrate",
 		"--target-keyspace", "rating", "--workflow", "e1",
-		"create", "--source-keyspace", "customer", "--mount-name", "external", "--all-tables", "--cells=zone1",
+		"create", "--source-keyspace", targetKs, "--mount-name", "external", "--all-tables", "--cells=zone1",
 		"--tablet-types=primary"); err != nil {
 		require.FailNow(t, "Migrate command failed with %+v : %s\n", err, output)
 	}
