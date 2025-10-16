@@ -748,9 +748,9 @@ func (tm *TabletManager) GetMaxValueForSequences(ctx context.Context, req *table
 
 func (tm *TabletManager) getMaxSequenceValue(ctx context.Context, sm *tabletmanagerdatapb.GetMaxValueForSequencesRequest_SequenceMetadata) (int64, error) {
 	query := sqlparser.BuildParsedQuery(sqlGetMaxSequenceVal,
-		sm.UsingColEscaped,
-		sm.UsingTableDbNameEscaped,
-		sm.UsingTableNameEscaped,
+		sqlparser.NewColName(sm.UsingColEscaped),
+		sqlparser.NewIdentifierCI(sm.UsingTableDbNameEscaped),
+		sqlparser.NewTableName(sm.UsingTableNameEscaped),
 	)
 	qr, err := tm.ExecuteFetchAsApp(ctx, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
 		Query:   []byte(query.Query),
@@ -804,8 +804,8 @@ func (tm *TabletManager) updateSequenceValue(ctx context.Context, seq *tabletman
 	}
 	log.Infof("Updating sequence %s.%s to %d", seq.BackingTableDbName, seq.BackingTableName, nextVal)
 	initQuery := sqlparser.BuildParsedQuery(sqlInitSequenceTable,
-		seq.BackingTableDbName,
-		seq.BackingTableName,
+		sqlparser.NewIdentifierCI(seq.BackingTableDbName),
+		sqlparser.NewTableName(seq.BackingTableName),
 		nextVal,
 		nextVal,
 		nextVal,
@@ -846,7 +846,7 @@ func (tm *TabletManager) updateSequenceValue(ctx context.Context, seq *tabletman
 }
 
 func (tm *TabletManager) createSequenceTable(ctx context.Context, escapedTableName string) error {
-	stmt := sqlparser.BuildParsedQuery(sqlCreateSequenceTable, escapedTableName)
+	stmt := sqlparser.BuildParsedQuery(sqlCreateSequenceTable, sqlparser.NewTableName(escapedTableName))
 	_, err := tm.ApplySchema(ctx, &tmutils.SchemaChange{
 		SQL:                     stmt.Query,
 		Force:                   false,
