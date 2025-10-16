@@ -932,9 +932,11 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 		return fields, nil
 	}
 
-	// Check if the schema returned by schema.Engine matches with row.
+	// Check if the schema returned by schema.Engine is compatible with the row.
+	// If not then we rely on the TableMap event alone. This will prevent us from
+	// being able to handle filters with colum names (in planbuilder.findColumn()).
 	for i := range tm.Types {
-		if !sqltypes.AreTypesEquivalent(fields[i].Type, st.Fields[i].Type) {
+		if !sqltypes.AreTypesCompatible(fields[i].Type, st.Fields[i].Type) {
 			return fields, nil
 		}
 	}
@@ -1355,10 +1357,10 @@ func wrapError(err error, stopPos replication.Position, vse *Engine) error {
 	if err != nil {
 		vse.vstreamersEndedWithErrors.Add(1)
 		vse.errorCounts.Add("StreamEnded", 1)
-		err = fmt.Errorf("stream (at source tablet) error @ %v: %v", stopPos, err)
+		err = fmt.Errorf("stream (at source tablet) error @ (including the GTID we failed to process) %v: %v", stopPos, err)
 		log.Error(err)
 		return err
 	}
-	log.Infof("stream (at source tablet) ended @ %v", stopPos)
+	log.Infof("stream (at source tablet) ended @ (including the GTID we failed to process) %v", stopPos)
 	return nil
 }

@@ -22,7 +22,7 @@
 # https://dev.mysql.com/doc/refman/5.7/en/replication-mode-change-online-disable-gtids.html
 # https://www.percona.com/blog/2013/02/08/how-to-createrestore-a-slave-using-gtid-replication-in-mysql-5-6/
 
-cd "$(dirname "${BASH_SOURCE[0]}")"
+cd "$(dirname "${BASH_SOURCE[0]:-$0}")"
 
 function get_replication_status() {
     # Get replication status
