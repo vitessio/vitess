@@ -288,7 +288,11 @@ func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, da
 // Note: you specify the number of values that you want to reserve
 // and you get back the max value reserved.
 func waitForSequenceValue(t *testing.T, conn *mysql.Conn, database, sequence string, numVals int) int64 {
-	query := fmt.Sprintf("select next %d values from %s.%s", numVals, database, sequence)
+	escapedDB, err := sqlescape.EnsureEscaped(database)
+	require.NoError(t, err)
+	escapedSeq, err := sqlescape.EnsureEscaped(sequence)
+	require.NoError(t, err)
+	query := fmt.Sprintf("select next %d values from %s.%s", numVals, escapedDB, escapedSeq)
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
@@ -545,7 +549,7 @@ func validateDryRunResults(t *testing.T, output string, want []string) {
 		}
 		if !match {
 			fail = true
-			require.Fail(t, "invlaid dry run results", "want %s, got %s\n", w, gotDryRun[i])
+			require.Fail(t, "invalid dry run results", "want %s, got %s\n", w, gotDryRun[i])
 		}
 	}
 	if fail {

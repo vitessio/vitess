@@ -33,6 +33,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/ptr"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -73,8 +74,8 @@ var testCases = []*testCase{
 		name:                "MoveTables/unsharded to two shards",
 		workflow:            "p1c2",
 		typ:                 "MoveTables",
-		sourceKs:            "product",
-		targetKs:            "customer",
+		sourceKs:            sourceKs,
+		targetKs:            targetKs,
 		sourceShards:        "0",
 		targetShards:        "-80,80-",
 		tabletBaseID:        200,
@@ -94,8 +95,8 @@ var testCases = []*testCase{
 		name:           "Reshard Merge/split 2 to 3",
 		workflow:       "c2c3",
 		typ:            "Reshard",
-		sourceKs:       "customer",
-		targetKs:       "customer",
+		sourceKs:       targetKs,
+		targetKs:       targetKs,
 		sourceShards:   "-80,80-",
 		targetShards:   "-40,40-a0,a0-",
 		tabletBaseID:   400,
@@ -109,8 +110,8 @@ var testCases = []*testCase{
 		name:           "Reshard/merge 3 to 1",
 		workflow:       "c3c1",
 		typ:            "Reshard",
-		sourceKs:       "customer",
-		targetKs:       "customer",
+		sourceKs:       targetKs,
+		targetKs:       targetKs,
 		sourceShards:   "-40,40-a0,a0-",
 		targetShards:   "0",
 		tabletBaseID:   700,
@@ -132,9 +133,7 @@ func checkVDiffCountStat(t *testing.T, tablet *cluster.VttabletProcess, expected
 
 func TestVDiff2(t *testing.T) {
 	cellNames := "zone5,zone1,zone2,zone3,zone4"
-	sourceKs := "product"
 	sourceShards := []string{"0"}
-	targetKs := "customer"
 	targetShards := []string{"-80", "80-"}
 	extraVTTabletArgs = []string{
 		// This forces us to use multiple vstream packets even with small test tables.
@@ -281,7 +280,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 		require.Equal(t, int64(0), leadRestarts, "expected VDiffRestartedTableDiffsCount stat to be 0 for the Lead table, got %d", leadRestarts)
 
 		// Cleanup the created customer records so as not to slow down the rest of the test.
-		delstmt := fmt.Sprintf("delete from %s.customer order by cid desc limit %d", sourceKs, chunkSize)
+		delstmt := fmt.Sprintf("delete from %s.customer order by cid desc limit %d", sqlescape.EscapeID(sourceKs), chunkSize)
 		for i := int64(0); i < totalRowsToCreate; i += chunkSize {
 			_, err := vtgateConn.ExecuteFetch(delstmt, int(chunkSize), false)
 			require.NoError(t, err, "failed to cleanup added customer records: %v", err)

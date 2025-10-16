@@ -35,10 +35,10 @@ import (
 // Before canceling, we first switch traffic to the target keyspace and then reverse it back to the source keyspace.
 // This tests that artifacts are being properly cleaned up when a MoveTables ia canceled.
 func testCancel(t *testing.T) {
-	targetKs := "customer2"
-	sourceKs := "customer"
+	sourceKeyspace := targetKs
+	targetKeyspace := "customer2"
 	workflowName := "partial80DashForCancel"
-	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflowName)
+	ksWorkflow := fmt.Sprintf("%s.%s", targetKeyspace, workflowName)
 	// We use a different table in this MoveTables than the subsequent one, so that setting up of the artifacts
 	// while creating MoveTables do not paper over any issues with cleaning up artifacts when MoveTables is canceled.
 	// Ref: https://github.com/vitessio/vitess/issues/13998
@@ -49,9 +49,9 @@ func testCancel(t *testing.T) {
 		workflowInfo: &workflowInfo{
 			vc:             vc,
 			workflowName:   workflowName,
-			targetKeyspace: targetKs,
+			targetKeyspace: targetKeyspace,
 		},
-		sourceKeyspace: sourceKs,
+		sourceKeyspace: sourceKeyspace,
 		tables:         table,
 		sourceShards:   shard,
 	}, workflowFlavorVtctld)
@@ -63,22 +63,22 @@ func testCancel(t *testing.T) {
 
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 
-	checkDenyList(targetKs, false)
-	checkDenyList(sourceKs, false)
+	checkDenyList(targetKeyspace, false)
+	checkDenyList(sourceKeyspace, false)
 
 	mt.SwitchReadsAndWrites()
-	checkDenyList(targetKs, false)
-	checkDenyList(sourceKs, true)
+	checkDenyList(targetKeyspace, false)
+	checkDenyList(sourceKeyspace, true)
 	time.Sleep(loadTestBufferingWindowDuration + 1*time.Second)
 
 	mt.ReverseReadsAndWrites()
-	checkDenyList(targetKs, true)
-	checkDenyList(sourceKs, false)
+	checkDenyList(targetKeyspace, true)
+	checkDenyList(sourceKeyspace, false)
 	time.Sleep(loadTestBufferingWindowDuration + 1*time.Second)
 
 	mt.Cancel()
-	checkDenyList(targetKs, false)
-	checkDenyList(sourceKs, false)
+	checkDenyList(targetKeyspace, false)
+	checkDenyList(sourceKeyspace, false)
 
 }
 
@@ -109,6 +109,8 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 	}()
 	vc = setupMinimalCluster(t)
 	defer vc.TearDown()
+	sourceKeyspace := sourceKs
+	targetKeyspace := targetKs
 	workflowName := "wf1"
 	targetTabs := setupMinimalTargetKeyspace(t)
 	targetTab80Dash := targetTabs["80-"]
@@ -117,27 +119,30 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 		workflowInfo: &workflowInfo{
 			vc:             vc,
 			workflowName:   workflowName,
-			targetKeyspace: targetKs,
+			targetKeyspace: targetKeyspace,
 		},
-		sourceKeyspace: sourceKs,
+		sourceKeyspace: sourceKeyspace,
 		tables:         "customer,loadtest,customer2",
 	}, flavor)
 	mt.Create()
 
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKs, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
 	catchup(t, targetTab80Dash, workflowName, "MoveTables")
-	vdiff(t, targetKs, workflowName, defaultCellName, nil)
+	vdiff(t, targetKeyspace, workflowName, defaultCellName, nil)
 	mt.SwitchReadsAndWrites()
 	time.Sleep(loadTestBufferingWindowDuration + 1*time.Second)
 	mt.Complete()
 
 	emptyGlobalRoutingRules := "{}\n"
 
+	sourceKeyspace = targetKs
+	targetKeyspace = "customer2"
+
 	// These should be listed in shard order
 	emptyShardRoutingRules := `{"rules":[]}`
-	preCutoverShardRoutingRules := `{"rules":[{"from_keyspace":"customer2","to_keyspace":"customer","shard":"-80"},{"from_keyspace":"customer2","to_keyspace":"customer","shard":"80-"}]}`
-	halfCutoverShardRoutingRules := `{"rules":[{"from_keyspace":"customer2","to_keyspace":"customer","shard":"-80"},{"from_keyspace":"customer","to_keyspace":"customer2","shard":"80-"}]}`
-	postCutoverShardRoutingRules := `{"rules":[{"from_keyspace":"customer","to_keyspace":"customer2","shard":"-80"},{"from_keyspace":"customer","to_keyspace":"customer2","shard":"80-"}]}`
+	preCutoverShardRoutingRules := fmt.Sprintf(`{"rules":[{"from_keyspace":"%s","to_keyspace":"%s","shard":"-80"},{"from_keyspace":"%s","to_keyspace":"%s","shard":"80-"}]}`, targetKeyspace, sourceKeyspace, targetKeyspace, sourceKeyspace)
+	halfCutoverShardRoutingRules := fmt.Sprintf(`{"rules":[{"from_keyspace":"%s","to_keyspace":"%s","shard":"-80"},{"from_keyspace":"%s","to_keyspace":"%s","shard":"80-"}]}`, targetKeyspace, sourceKeyspace, sourceKeyspace, targetKeyspace)
+	postCutoverShardRoutingRules := fmt.Sprintf(`{"rules":[{"from_keyspace":"%s","to_keyspace":"%s","shard":"-80"},{"from_keyspace":"%s","to_keyspace":"%s","shard":"80-"}]}`, sourceKeyspace, targetKeyspace, sourceKeyspace, targetKeyspace)
 
 	// Remove any manually applied shard routing rules as these
 	// should be set by SwitchTraffic.
@@ -163,8 +168,6 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 	}
 	var err error
 	workflowName = "partial80Dash"
-	sourceKeyspace := targetKs
-	targetKeyspace := "customer2"
 	shard := "80-"
 	tables := "customer,loadtest"
 	mt80Dash := newMoveTables(vc, &moveTablesWorkflow{
@@ -187,15 +190,15 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 		}()
 		lg.waitForCount(1000)
 	}
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKs, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
 	catchup(t, targetTab80Dash, workflowName, "MoveTables")
-	vdiff(t, targetKs, workflowName, defaultCellName, nil)
+	vdiff(t, targetKeyspace, workflowName, defaultCellName, nil)
 
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
-	waitForRowCount(t, vtgateConn, "customer", "customer", 3)      // customer: all shards
-	waitForRowCount(t, vtgateConn, "customer2", "customer", 3)     // customer2: all shards
-	waitForRowCount(t, vtgateConn, "customer2:80-", "customer", 2) // customer2: 80-
+	waitForRowCount(t, vtgateConn, sourceKeyspace, "customer", 3)                        // customer: all shards
+	waitForRowCount(t, vtgateConn, targetKeyspace, "customer", 3)                        // customer2: all shards
+	waitForRowCount(t, vtgateConn, fmt.Sprintf("%s:80-", sourceKeyspace), "customer", 2) // customer2: 80-
 
 	confirmGlobalRoutingToSource := func() {
 		output, err := vc.VtctldClient.ExecuteCommandWithOutput("GetRoutingRules", "--compact")
@@ -241,14 +244,14 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 	require.NoError(t, err)
 	_, err = vtgateConn.ExecuteFetch(shard80DashRoutedQuery, 0, false)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "target: customer.80-.primary", "Query was routed to the target before any SwitchTraffic")
+	require.Contains(t, err.Error(), fmt.Sprintf("target: %s.80-.primary", sourceKeyspace), "Query was routed to the target before any SwitchTraffic")
 
 	log.Infof("Testing reverse route (target->source) for shard NOT being switched")
 	_, err = vtgateConn.ExecuteFetch("use `customer2:-80`", 0, false)
 	require.NoError(t, err)
 	_, err = vtgateConn.ExecuteFetch(shardDash80RoutedQuery, 0, false)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "target: customer.-80.primary", "Query was routed to the target before any SwitchTraffic")
+	require.Contains(t, err.Error(), fmt.Sprintf("target: %s.-80.primary", sourceKeyspace), "Query was routed to the target before any SwitchTraffic")
 
 	// Switch all traffic for the shard
 	mt80Dash.SwitchReadsAndWrites()
@@ -273,7 +276,7 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 	require.Contains(t, err.Error(), "target: customer2.80-.primary", "Query was routed to the source after partial SwitchTraffic")
 	_, err = vtgateConn.ExecuteFetch(shardDash80RoutedQuery, 0, false)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "target: customer.-80.primary", "Query was routed to the target before partial SwitchTraffic")
+	require.Contains(t, err.Error(), fmt.Sprintf("target: %s.-80.primary", sourceKeyspace), "Query was routed to the target before partial SwitchTraffic")
 
 	// Shard targeting
 	_, err = vtgateConn.ExecuteFetch("use `customer2:80-`", 0, false)
@@ -281,7 +284,7 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 	_, err = vtgateConn.ExecuteFetch(shard80DashRoutedQuery, 0, false)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "target: customer2.80-.primary", "Query was routed to the source after partial SwitchTraffic")
-	_, err = vtgateConn.ExecuteFetch("use `customer:80-`", 0, false)
+	_, err = vtgateConn.ExecuteFetch(fmt.Sprintf("use `%s:80-`", sourceKeyspace), 0, false)
 	require.NoError(t, err)
 	_, err = vtgateConn.ExecuteFetch(shard80DashRoutedQuery, 0, false)
 	require.Error(t, err)
@@ -295,21 +298,21 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 	require.Contains(t, err.Error(), "target: customer2.80-.replica", "Query was routed to the source after partial SwitchTraffic")
 	_, err = vtgateConn.ExecuteFetch(shardDash80RoutedQuery, 0, false)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "target: customer.-80.replica", "Query was routed to the target before partial SwitchTraffic")
-	_, err = vtgateConn.ExecuteFetch("use `customer@replica`", 0, false)
+	require.Contains(t, err.Error(), fmt.Sprintf("target: %s.-80.replica", sourceKeyspace), "Query was routed to the target before partial SwitchTraffic")
+	_, err = vtgateConn.ExecuteFetch(fmt.Sprintf("use `%s@replica`", sourceKeyspace), 0, false)
 	require.NoError(t, err)
 	_, err = vtgateConn.ExecuteFetch(shard80DashRoutedQuery, 0, false)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "target: customer2.80-.replica", "Query was routed to the source after partial SwitchTraffic")
 	_, err = vtgateConn.ExecuteFetch(shardDash80RoutedQuery, 0, false)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "target: customer.-80.replica", "Query was routed to the target before partial SwitchTraffic")
+	require.Contains(t, err.Error(), fmt.Sprintf("target: %s.-80.replica", sourceKeyspace), "Query was routed to the target before partial SwitchTraffic")
 
 	workflowExec := tstWorkflowExec
 
 	// We cannot Complete a partial move tables at the moment because
 	// it will find that all traffic has (obviously) not been switched.
-	err = workflowExec(t, "", workflowName, "", targetKs, "", workflowActionComplete, "", "", "", workflowExecOptsPartial80Dash)
+	err = workflowExec(t, "", workflowName, "", targetKeyspace, "", workflowActionComplete, "", "", "", workflowExecOptsPartial80Dash)
 	require.Error(t, err)
 
 	// Confirm global routing rules: -80 should still be be routed to customer
@@ -367,8 +370,8 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 		require.True(t, isEmptyWorkflowShowOutput(output))
 
 		// Be sure we've deleted the original workflow.
-		_, _ = vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", targetKs, "delete", "--workflow", wf, "--shards", opts.shardSubset)
-		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", targetKs, "show", "--workflow", wf, "--shards", opts.shardSubset)
+		_, _ = vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", targetKeyspace, "delete", "--workflow", wf, "--shards", opts.shardSubset)
+		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", targetKeyspace, "show", "--workflow", wf, "--shards", opts.shardSubset)
 		require.NoError(t, err, output)
 		require.True(t, isEmptyWorkflowShowOutput(output))
 	}

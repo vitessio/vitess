@@ -35,6 +35,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/throttler"
@@ -97,7 +98,7 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
 	table := "orders"
 	newColumn := "ddltest"
-	cell := "zone1"
+	cell := defaultCellName
 	shard := "0"
 	vc = NewVitessCluster(t, nil)
 	defer vc.TearDown()
@@ -258,7 +259,7 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	// because of the InnoDB History List length.
 	moveTablesActionWithTabletTypes(t, "Create", defaultCell.Name, workflow, sourceKs, targetKs, table, "primary", true)
 	// Wait for the copy phase to start
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKs, workflow), binlogdatapb.VReplicationWorkflowState_Copying.String())
+	waitForWorkflowState(t, vc, fmt.Sprintf("`%s`.%s", targetKs, workflow), binlogdatapb.VReplicationWorkflowState_Copying.String())
 	// The initial copy phase should be blocking on the history list.
 	confirmWorkflowHasCopiedNoData(t, targetKs, workflow)
 	releaseInnoDBRowHistory(t, trxConn)
@@ -287,7 +288,6 @@ func testBasicVreplicationWorkflow(t *testing.T, binlogRowImage string) {
 // If limited == true, we only run a limited set of workflows.
 func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string) {
 	var err error
-	defaultCellName := "zone1"
 	vc = NewVitessCluster(t, nil)
 	defer vc.TearDown()
 	// Keep the cluster processes minimal to deal with CI resource constraints
@@ -359,7 +359,7 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 		if strings.ToLower(binlogRowImage) == "noblob" {
 			return
 		}
-		_, err = vtgateConn.ExecuteFetch(fmt.Sprintf("use %s", targetKs), 1, false)
+		_, err = vtgateConn.ExecuteFetch(fmt.Sprintf("use `%s`", targetKs), 1, false)
 		require.NoError(t, err, "error using %s keyspace: %v", targetKs, err)
 		res, err := vtgateConn.ExecuteFetch("select count(*) from customer where name is not null", 1, false)
 		require.NoError(t, err, "error getting current row count in customer: %v", err)
@@ -372,10 +372,10 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 		require.NoError(t, err, "error executing %q: %v", insert, err)
 
 		vindexName := "customer_name_keyspace_id"
-		err = vc.VtctldClient.ExecuteCommand("LookupVindex", "--name", vindexName, "--table-keyspace=product", "create", "--keyspace=customer",
+		err = vc.VtctldClient.ExecuteCommand("LookupVindex", "--name", vindexName, "--table-keyspace", sourceKs, "create", "--keyspace", targetKs,
 			"--type=consistent_lookup", "--table-owner=customer", "--table-owner-columns=name,cid", "--ignore-nulls", "--tablet-types=PRIMARY")
 		require.NoError(t, err, "error executing LookupVindex create: %v", err)
-		waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", sourceKs, vindexName), binlogdatapb.VReplicationWorkflowState_Running.String())
+		waitForWorkflowState(t, vc, fmt.Sprintf("`%s`.%s", sourceKs, vindexName), binlogdatapb.VReplicationWorkflowState_Running.String())
 		waitForRowCount(t, vtgateConn, sourceKs, vindexName, int(rows))
 		customerVSchema, err = vc.VtctldClient.ExecuteCommandWithOutput("GetVSchema", targetKs)
 		require.NoError(t, err, "error executing GetVSchema: %v", err)
@@ -383,7 +383,7 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 		require.NotNil(t, vdx, "lookup vindex %s not found", vindexName)
 		require.Equal(t, "true", vdx.Get("params.write_only").String(), "expected write_only parameter to be true")
 
-		err = vc.VtctldClient.ExecuteCommand("LookupVindex", "--name", vindexName, "--table-keyspace=product", "externalize", "--keyspace=customer")
+		err = vc.VtctldClient.ExecuteCommand("LookupVindex", "--name", vindexName, "--table-keyspace", sourceKs, "externalize", "--keyspace", targetKs)
 		require.NoError(t, err, "error executing LookupVindex externalize: %v", err)
 		customerVSchema, err = vc.VtctldClient.ExecuteCommandWithOutput("GetVSchema", targetKs)
 		require.NoError(t, err, "error executing GetVSchema: %v", err)
@@ -391,7 +391,7 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 		require.NotNil(t, vdx, "lookup vindex %s not found", vindexName)
 		require.NotEqual(t, "true", vdx.Get("params.write_only").String(), "did not expect write_only parameter to be true")
 
-		err = vc.VtctldClient.ExecuteCommand("LookupVindex", "--name", vindexName, "--table-keyspace=product", "internalize", "--keyspace=customer")
+		err = vc.VtctldClient.ExecuteCommand("LookupVindex", "--name", vindexName, "--table-keyspace", sourceKs, "internalize", "--keyspace", targetKs)
 		require.NoError(t, err, "error executing LookupVindex internalize: %v", err)
 		customerVSchema, err = vc.VtctldClient.ExecuteCommandWithOutput("GetVSchema", targetKs)
 		require.NoError(t, err, "error executing GetVSchema: %v", err)
@@ -714,8 +714,8 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	vc = NewVitessCluster(t, &clusterOptions{cells: cells})
 	defer vc.TearDown()
 
-	keyspace := sourceKs
 	shard := "0"
+	table := "product"
 
 	// Run the e2e test with binlog_row_image=NOBLOB and
 	// binlog_row_value_options=PARTIAL_JSON.
@@ -724,7 +724,7 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 
 	cell1 := vc.Cells["zone1"]
 	cell2 := vc.Cells["zone2"]
-	vc.AddKeyspace(t, []*Cell{cell1, cell2}, keyspace, shard, initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, sourceKsOpts)
+	vc.AddKeyspace(t, []*Cell{cell1, cell2}, sourceKs, shard, initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, sourceKsOpts)
 
 	// Add cell alias containing only zone2
 	result, err := vc.VtctldClient.ExecuteCommandWithOutput("AddCellsAlias", "--cells", "zone2", "alias")
@@ -735,7 +735,7 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 
 	vtgate := cell1.Vtgates[0]
 	t.Run("VStreamFrom", func(t *testing.T) {
-		testVStreamFrom(t, vtgate, keyspace, 2)
+		testVStreamFrom(t, vtgate, table, 2)
 	})
 	shardCustomer(t, true, []*Cell{cell1, cell2}, "alias", false)
 	isTableInDenyList(t, vc, fmt.Sprintf("%s/0", sourceKs), "customer")
@@ -978,8 +978,8 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 
 			output, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", targetKs, "show", "--workflow", workflow)
 			require.NoError(t, err)
-			require.Contains(t, output, "'customer.reverse_bits'")
-			require.Contains(t, output, "'customer.bmd5'")
+			require.Contains(t, output, fmt.Sprintf("'%s.reverse_bits'", targetKs))
+			require.Contains(t, output, fmt.Sprintf("'%s.bmd5'", targetKs))
 
 			insertQuery1 = "insert into customer(cid, name) values(1002, 'tempCustomer5')"
 			assertQueryExecutesOnTablet(t, vtgateConn, productTab, sourceKs, insertQuery1, matchInsertQuery1)
@@ -1007,7 +1007,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			require.False(t, exists)
 
 			for _, shard := range strings.Split("-80,80-", ",") {
-				expectNumberOfStreams(t, vtgateConn, "shardCustomerTargetStreams", "p2c", "customer:"+shard, 0)
+				expectNumberOfStreams(t, vtgateConn, "shardCustomerTargetStreams", "p2c", fmt.Sprintf("%s:%s", targetKs, shard), 0)
 			}
 
 			expectNumberOfStreams(t, vtgateConn, "shardCustomerReverseStreams", "p2c_reverse", fmt.Sprintf("%s:0", sourceKs), 0)
@@ -1031,13 +1031,13 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			execVtgateQuery(t, vtgateConn, targetKs, "delete from customer where name like 'tempCustomer%'")
 			waitForRowCountInTablet(t, customerTab1, targetKs, "customer", 1)
 			waitForRowCountInTablet(t, customerTab2, targetKs, "customer", 2)
-			waitForRowCount(t, vtgateConn, targetKs, fmt.Sprintf("%s.customer", targetKs), 3)
+			waitForRowCount(t, vtgateConn, targetKs, fmt.Sprintf("%s.customer", sqlescape.EscapeID(targetKs)), 3)
 
 			query = "insert into customer (name, cid) values('george', 5)"
 			execVtgateQuery(t, vtgateConn, targetKs, query)
 			waitForRowCountInTablet(t, customerTab1, targetKs, "customer", 1)
 			waitForRowCountInTablet(t, customerTab2, targetKs, "customer", 3)
-			waitForRowCount(t, vtgateConn, targetKs, "customer.customer", 4)
+			waitForRowCount(t, vtgateConn, targetKs, fmt.Sprintf("%s.customer", sqlescape.EscapeID(targetKs)), 4)
 		}
 	})
 }

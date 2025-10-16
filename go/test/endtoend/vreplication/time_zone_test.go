@@ -33,8 +33,6 @@ import (
 // TestMoveTablesTZ tests the conversion of datetime based on the source timezone passed to the MoveTables workflow
 func TestMoveTablesTZ(t *testing.T) {
 	workflow := "tz"
-	sourceKs := "product"
-	targetKs := "customer"
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
 	ksReverseWorkflow := fmt.Sprintf("%s.%s_reverse", sourceKs, workflow)
 
@@ -163,7 +161,7 @@ func TestMoveTablesTZ(t *testing.T) {
 
 	// user should be either running this query or have set their location in their driver to map from the time in Vitess/UTC to local
 	query = "select id, convert_tz(dt1, 'UTC', 'US/Pacific') dt1, convert_tz(dt2, 'UTC', 'US/Pacific') dt2, convert_tz(ts1, 'UTC', 'US/Pacific') ts1 from datze"
-	qrTargetUSPacific, err := customerTab.QueryTablet(query, "customer", true)
+	qrTargetUSPacific, err := customerTab.QueryTablet(query, targetKs, true)
 	require.NoError(t, err)
 	require.NotNil(t, qrTargetUSPacific)
 	require.Equal(t, len(qrSourceUSPacific.Rows), len(qrTargetUSPacific.Rows))
@@ -189,7 +187,7 @@ func TestMoveTablesTZ(t *testing.T) {
 	}
 
 	// inserts to test date conversions in reverse replication
-	execVtgateQuery(t, vtgateConn, "customer", "insert into datze(id, dt2) values (13, '2022-01-01 18:20:30')")
-	execVtgateQuery(t, vtgateConn, "customer", "insert into datze(id, dt2) values (14, '2022-04-01 12:06:07')")
+	execVtgateQuery(t, vtgateConn, targetKs, "insert into datze(id, dt2) values (13, '2022-01-01 18:20:30')")
+	execVtgateQuery(t, vtgateConn, targetKs, "insert into datze(id, dt2) values (14, '2022-04-01 12:06:07')")
 	doVDiff(t, ksReverseWorkflow, "")
 }

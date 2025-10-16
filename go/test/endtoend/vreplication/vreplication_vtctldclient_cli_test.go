@@ -66,8 +66,8 @@ func TestVtctldclientCLI(t *testing.T) {
 	require.NotNil(t, zone2)
 	defer vc.TearDown()
 
-	sourceKeyspaceName := "product"
-	targetKeyspaceName := "customer"
+	sourceKeyspaceName := sourceKs
+	targetKeyspaceName := targetKs
 	var mt iMoveTables
 	workflowName := "wf1"
 
@@ -184,7 +184,7 @@ func TestVtctldclientCLI(t *testing.T) {
 		require.NotNil(vc.t, resp)
 		require.NotNil(vc.t, resp.ShardStreams)
 		require.Equal(vc.t, len(resp.ShardStreams), 2)
-		keyspace := "customer"
+		keyspace := targetKs
 		for _, shard := range []string{"80-c0", "c0-"} {
 			streams := resp.ShardStreams[fmt.Sprintf("%s/%s", keyspace, shard)]
 			require.Equal(vc.t, 1, len(streams.Streams))
@@ -272,7 +272,7 @@ func testMoveTablesFlags2(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 	confirmNoRoutingRules(t)
 	for _, tab := range targetTabs {
 		alias := fmt.Sprintf("zone1-%d", tab.TabletUID)
-		query := "update _vt.vreplication set source := replace(source, 'stop_after_copy:true', 'stop_after_copy:false') where db_name = 'vt_customer' and workflow = 'wf1'"
+		query := fmt.Sprintf("update _vt.vreplication set source := replace(source, 'stop_after_copy:true', 'stop_after_copy:false') where db_name = 'vt_%s' and workflow = 'wf1'", targetKeyspace)
 		output, err := vc.VtctldClient.ExecuteCommandWithOutput("ExecuteFetchAsDBA", alias, query)
 		require.NoError(t, err, output)
 	}
@@ -289,70 +289,70 @@ func testMoveTablesFlags2(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 
 	(*mt).SwitchReads()
 	validateReadsRouteToTarget(t, "replica")
-	validateTableRoutingRule(t, "customer", "replica", sourceKs, targetKs)
-	validateTableRoutingRule(t, "customer", "", targetKs, sourceKs)
+	validateTableRoutingRule(t, "customer", "replica", sourceKeyspace, targetKeyspace)
+	validateTableRoutingRule(t, "customer", "", targetKeyspace, sourceKeyspace)
 	confirmStates(t, &wf, wrangler.WorkflowStateNotSwitched, wrangler.WorkflowStateReadsSwitched)
 
 	(*mt).ReverseReads()
 	validateReadsRouteToSource(t, "replica")
-	validateTableRoutingRule(t, "customer", "replica", targetKs, sourceKs)
-	validateTableRoutingRule(t, "customer", "", targetKs, sourceKs)
+	validateTableRoutingRule(t, "customer", "replica", targetKeyspace, sourceKeyspace)
+	validateTableRoutingRule(t, "customer", "", targetKeyspace, sourceKeyspace)
 	confirmStates(t, &wf, wrangler.WorkflowStateReadsSwitched, wrangler.WorkflowStateNotSwitched)
 
 	(*mt).SwitchReadsAndWrites()
 	validateReadsRouteToTarget(t, "replica")
-	validateTableRoutingRule(t, "customer", "replica", sourceKs, targetKs)
+	validateTableRoutingRule(t, "customer", "replica", sourceKeyspace, targetKeyspace)
 	validateWritesRouteToTarget(t)
-	validateTableRoutingRule(t, "customer", "", sourceKs, targetKs)
+	validateTableRoutingRule(t, "customer", "", sourceKeyspace, targetKeyspace)
 	confirmStates(t, &wf, wrangler.WorkflowStateNotSwitched, wrangler.WorkflowStateAllSwitched)
 
 	(*mt).ReverseReadsAndWrites()
 	validateReadsRouteToSource(t, "replica")
-	validateTableRoutingRule(t, "customer", "replica", targetKs, sourceKs)
+	validateTableRoutingRule(t, "customer", "replica", targetKeyspace, sourceKeyspace)
 	validateWritesRouteToSource(t)
-	validateTableRoutingRule(t, "customer", "", targetKs, sourceKs)
+	validateTableRoutingRule(t, "customer", "", targetKeyspace, sourceKeyspace)
 	confirmStates(t, &wf, wrangler.WorkflowStateAllSwitched, wrangler.WorkflowStateNotSwitched)
 
 	(*mt).SwitchReadsAndWrites()
 	validateReadsRouteToTarget(t, "replica")
-	validateTableRoutingRule(t, "customer", "replica", sourceKs, targetKs)
+	validateTableRoutingRule(t, "customer", "replica", sourceKeyspace, targetKeyspace)
 	validateWritesRouteToTarget(t)
-	validateTableRoutingRule(t, "customer", "", sourceKs, targetKs)
+	validateTableRoutingRule(t, "customer", "", sourceKeyspace, targetKeyspace)
 	confirmStates(t, &wf, wrangler.WorkflowStateNotSwitched, wrangler.WorkflowStateAllSwitched)
 
 	(*mt).ReverseReads()
 	validateReadsRouteToSource(t, "replica")
-	validateTableRoutingRule(t, "customer", "replica", targetKs, sourceKs)
+	validateTableRoutingRule(t, "customer", "replica", targetKeyspace, sourceKeyspace)
 	validateWritesRouteToTarget(t)
-	validateTableRoutingRule(t, "customer", "", sourceKs, targetKs)
+	validateTableRoutingRule(t, "customer", "", sourceKeyspace, targetKeyspace)
 	confirmStates(t, &wf, wrangler.WorkflowStateAllSwitched, wrangler.WorkflowStateWritesSwitched)
 
 	(*mt).ReverseWrites()
 	validateReadsRouteToSource(t, "replica")
-	validateTableRoutingRule(t, "customer", "replica", targetKs, sourceKs)
+	validateTableRoutingRule(t, "customer", "replica", targetKeyspace, sourceKeyspace)
 	validateWritesRouteToSource(t)
-	validateTableRoutingRule(t, "customer", "", targetKs, sourceKs)
+	validateTableRoutingRule(t, "customer", "", targetKeyspace, sourceKeyspace)
 	confirmStates(t, &wf, wrangler.WorkflowStateWritesSwitched, wrangler.WorkflowStateNotSwitched)
 
 	(*mt).SwitchReadsAndWrites()
 	validateReadsRouteToTarget(t, "replica")
-	validateTableRoutingRule(t, "customer", "replica", sourceKs, targetKs)
+	validateTableRoutingRule(t, "customer", "replica", sourceKeyspace, targetKeyspace)
 	validateWritesRouteToTarget(t)
-	validateTableRoutingRule(t, "customer", "", sourceKs, targetKs)
+	validateTableRoutingRule(t, "customer", "", sourceKeyspace, targetKeyspace)
 	confirmStates(t, &wf, wrangler.WorkflowStateNotSwitched, wrangler.WorkflowStateAllSwitched)
 
 	(*mt).ReverseWrites()
 	validateReadsRouteToTarget(t, "replica")
-	validateTableRoutingRule(t, "customer", "replica", sourceKs, targetKs)
+	validateTableRoutingRule(t, "customer", "replica", sourceKeyspace, targetKeyspace)
 	validateWritesRouteToSource(t)
-	validateTableRoutingRule(t, "customer", "", targetKs, sourceKs)
+	validateTableRoutingRule(t, "customer", "", targetKeyspace, sourceKeyspace)
 	confirmStates(t, &wf, wrangler.WorkflowStateAllSwitched, wrangler.WorkflowStateReadsSwitched)
 
 	(*mt).ReverseReads()
 	validateReadsRouteToSource(t, "replica")
-	validateTableRoutingRule(t, "customer", "replica", targetKs, sourceKs)
+	validateTableRoutingRule(t, "customer", "replica", targetKeyspace, sourceKeyspace)
 	validateWritesRouteToSource(t)
-	validateTableRoutingRule(t, "customer", "", targetKs, sourceKs)
+	validateTableRoutingRule(t, "customer", "", targetKeyspace, sourceKeyspace)
 	confirmStates(t, &wf, wrangler.WorkflowStateReadsSwitched, wrangler.WorkflowStateNotSwitched)
 
 	// Confirm that everything is still in sync after our switch fest.
@@ -360,9 +360,9 @@ func testMoveTablesFlags2(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 
 	(*mt).SwitchReadsAndWrites()
 	validateReadsRouteToTarget(t, "replica")
-	validateTableRoutingRule(t, "customer", "replica", sourceKs, targetKs)
+	validateTableRoutingRule(t, "customer", "replica", sourceKeyspace, targetKeyspace)
 	validateWritesRouteToTarget(t)
-	validateTableRoutingRule(t, "customer", "", sourceKs, targetKs)
+	validateTableRoutingRule(t, "customer", "", sourceKeyspace, targetKeyspace)
 	confirmStates(t, &wf, wrangler.WorkflowStateNotSwitched, wrangler.WorkflowStateAllSwitched)
 
 	(*mt).Complete()
@@ -408,8 +408,8 @@ func testMoveTablesFlags3(t *testing.T, sourceKeyspace, targetKeyspace string, t
 	mt.SwitchReads()
 	wf := mt.(iWorkflow)
 	validateReadsRouteToTarget(t, "replica")
-	validateTableRoutingRule(t, "customer", "replica", sourceKs, targetKs)
-	validateTableRoutingRule(t, "customer", "", targetKs, sourceKs)
+	validateTableRoutingRule(t, "customer", "replica", sourceKeyspace, targetKeyspace)
+	validateTableRoutingRule(t, "customer", "", targetKeyspace, sourceKeyspace)
 	confirmStates(t, &wf, wrangler.WorkflowStateNotSwitched, wrangler.WorkflowStateReadsSwitched)
 	mt.Cancel()
 	confirmNoRoutingRules(t)
@@ -584,7 +584,7 @@ func splitShard(t *testing.T, keyspace, workflowName, sourceShards, targetShards
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String())
 	for _, tab := range targetTabs {
 		alias := fmt.Sprintf("zone1-%d", tab.TabletUID)
-		query := "update _vt.vreplication set source := replace(source, 'stop_after_copy:true', 'stop_after_copy:false') where db_name = 'vt_customer' and workflow = '" + workflowName + "'"
+		query := fmt.Sprintf("update _vt.vreplication set source := replace(source, 'stop_after_copy:true', 'stop_after_copy:false') where db_name = 'vt_%s' and workflow = '%s'", keyspace, workflowName)
 		output, err := vc.VtctldClient.ExecuteCommandWithOutput("ExecuteFetchAsDBA", alias, query)
 		require.NoError(t, err, output)
 	}
@@ -754,7 +754,7 @@ func validateReshardResponse(rs iReshard) {
 	require.NotNil(vc.t, resp)
 	require.NotNil(vc.t, resp.ShardStreams)
 	require.Equal(vc.t, len(resp.ShardStreams), 2)
-	keyspace := "customer"
+	keyspace := targetKs
 	for _, shard := range []string{"-40", "40-80"} {
 		streams := resp.ShardStreams[fmt.Sprintf("%s/%s", keyspace, shard)]
 		require.Equal(vc.t, 1, len(streams.Streams))
@@ -768,9 +768,9 @@ func validateReshardWorkflow(t *testing.T, workflows []*vtctldatapb.Workflow) {
 	require.Equal(t, "reshard", wf.Name)
 	require.Equal(t, binlogdatapb.VReplicationWorkflowType_Reshard.String(), wf.WorkflowType)
 	require.Equal(t, "None", wf.WorkflowSubType)
-	require.Equal(t, "customer", wf.Target.Keyspace)
+	require.Equal(t, targetKs, wf.Target.Keyspace)
 	require.Equal(t, 2, len(wf.Target.Shards))
-	require.Equal(t, "customer", wf.Source.Keyspace)
+	require.Equal(t, targetKs, wf.Source.Keyspace)
 	require.Equal(t, 1, len(wf.Source.Shards))
 	require.False(t, wf.DeferSecondaryKeys)
 
@@ -919,9 +919,9 @@ func validateMoveTablesWorkflow(t *testing.T, workflows []*vtctldatapb.Workflow)
 	require.Equal(t, "wf1", wf.Name)
 	require.Equal(t, binlogdatapb.VReplicationWorkflowType_MoveTables.String(), wf.WorkflowType)
 	require.Equal(t, "None", wf.WorkflowSubType)
-	require.Equal(t, "customer", wf.Target.Keyspace)
+	require.Equal(t, targetKs, wf.Target.Keyspace)
 	require.Equal(t, 2, len(wf.Target.Shards))
-	require.Equal(t, "product", wf.Source.Keyspace)
+	require.Equal(t, sourceKs, wf.Source.Keyspace)
 	require.Equal(t, 1, len(wf.Source.Shards))
 	require.False(t, wf.DeferSecondaryKeys)
 
