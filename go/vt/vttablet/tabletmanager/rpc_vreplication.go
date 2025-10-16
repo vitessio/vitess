@@ -797,6 +797,11 @@ func (tm *TabletManager) updateSequenceValue(ctx context.Context, seq *tabletman
 	if tm.Tablet().DbNameOverride != "" {
 		seq.BackingTableDbName = tm.Tablet().DbNameOverride
 	}
+	backingTableDbNameEscaped, err := sqlescape.EnsureEscaped(seq.BackingTableDbName)
+	if err != nil {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid database name %s specified for sequence backing table: %v",
+			seq.BackingTableDbName, err)
+	}
 	backingTableNameEscaped, err := sqlescape.EnsureEscaped(seq.BackingTableName)
 	if err != nil {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid table name %s specified for sequence backing table: %v",
@@ -804,8 +809,8 @@ func (tm *TabletManager) updateSequenceValue(ctx context.Context, seq *tabletman
 	}
 	log.Infof("Updating sequence %s.%s to %d", seq.BackingTableDbName, seq.BackingTableName, nextVal)
 	initQuery := sqlparser.BuildParsedQuery(sqlInitSequenceTable,
-		sqlparser.NewIdentifierCI(seq.BackingTableDbName),
-		sqlparser.NewTableName(seq.BackingTableName),
+		backingTableDbNameEscaped,
+		backingTableNameEscaped,
 		nextVal,
 		nextVal,
 		nextVal,
@@ -828,7 +833,7 @@ func (tm *TabletManager) updateSequenceValue(ctx context.Context, seq *tabletman
 			return vterrors.Errorf(
 				vtrpcpb.Code_INTERNAL,
 				"failed to initialize the backing sequence table %s.%s: %v",
-				seq.BackingTableDbName, seq.BackingTableName, err,
+				backingTableDbNameEscaped, backingTableNameEscaped, err,
 			)
 		}
 
@@ -842,11 +847,11 @@ func (tm *TabletManager) updateSequenceValue(ctx context.Context, seq *tabletman
 
 	return vterrors.Errorf(
 		vtrpcpb.Code_INTERNAL, "failed to initialize the backing sequence table %s.%s after retries. Last error: %v",
-		seq.BackingTableDbName, backingTableNameEscaped, err)
+		backingTableDbNameEscaped, backingTableNameEscaped, err)
 }
 
-func (tm *TabletManager) createSequenceTable(ctx context.Context, escapedTableName string) error {
-	stmt := sqlparser.BuildParsedQuery(sqlCreateSequenceTable, sqlparser.NewTableName(escapedTableName))
+func (tm *TabletManager) createSequenceTable(ctx context.Context, tableName string) error {
+	stmt := sqlparser.BuildParsedQuery(sqlCreateSequenceTable, sqlparser.NewTableName(tableName))
 	_, err := tm.ApplySchema(ctx, &tmutils.SchemaChange{
 		SQL:                     stmt.Query,
 		Force:                   false,
