@@ -4022,6 +4022,12 @@ spec:
                               type: object
                             equal:
                               properties:
+                                hexWidth:
+                                  default: 0
+                                  format: int32
+                                  maximum: 65536
+                                  minimum: 0
+                                  type: integer
                                 parts:
                                   format: int32
                                   maximum: 65536
@@ -4459,6 +4465,7 @@ spec:
                                     - databaseInitScriptSecret
                                   type: object
                               required:
+                                - hexWidth
                                 - parts
                               type: object
                           type: object
@@ -5847,6 +5854,12 @@ spec:
                         type: object
                       equal:
                         properties:
+                          hexWidth:
+                            default: 0
+                            format: int32
+                            maximum: 65536
+                            minimum: 0
+                            type: integer
                           parts:
                             format: int32
                             maximum: 65536
@@ -6284,6 +6297,7 @@ spec:
                               - databaseInitScriptSecret
                             type: object
                         required:
+                          - hexWidth
                           - parts
                         type: object
                     type: object
@@ -7795,4 +7809,9 @@ spec:
               cpu: 100m
               memory: 128Mi
       priorityClassName: vitess-operator-control-plane
+      securityContext:
+        # The fsGroup needs to be set to the default fsGroup of Vitess.
+        # It is inherited by the backup subcontroller and allows it to access
+        # the files created by Vitess on the shared persistent volume.
+        fsGroup: 999 # Default fsGroup of Vitess
       serviceAccountName: vitess-operator
