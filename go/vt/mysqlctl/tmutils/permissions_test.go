@@ -62,8 +62,7 @@ func testPermissionsDiff(t *testing.T, left, right *tabletmanagerdatapb.Permissi
 }
 
 func TestNewUserPermission(t *testing.T) {
-	p := &tabletmanagerdatapb.Permissions{}
-	p.UserPermissions = append(p.UserPermissions, NewUserPermission(mapToSQLResults(map[string]string{
+	up := NewUserPermission(mapToSQLResults(map[string]string{
 		"Host":        "%",
 		"User":        "vt",
 		"Password":    "correct horse battery staple",
@@ -73,20 +72,16 @@ func TestNewUserPermission(t *testing.T) {
 		"password_last_changed": "2016-11-08 02:56:23",
 		// Test the next field is filtered.
 		"authentication_string": "this should be filtered out",
-	})))
-	require.EqualValues(t, &tabletmanagerdatapb.Permissions{
-		UserPermissions: []*tabletmanagerdatapb.UserPermission{
-			{
-				Host:             "%",
-				User:             "vt",
-				PasswordChecksum: 17759204488013904955,
-				Privileges: map[string]string{
-					"Insert_priv": "N",
-					"Select_priv": "Y",
-				},
-			},
+	}))
+	require.EqualValues(t, &tabletmanagerdatapb.UserPermission{
+		Host:             "%",
+		User:             "vt",
+		PasswordChecksum: 17759204488013904955,
+		Privileges: map[string]string{
+			"Insert_priv": "N",
+			"Select_priv": "Y",
 		},
-	}, p)
+	}, up)
 }
 
 func TestPermissionsDiff(t *testing.T) {
