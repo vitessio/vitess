@@ -8,6 +8,7 @@
     <version>24.0.0-SNAPSHOT</version>
   </parent>
   <artifactId>vitess-client</artifactId>
+  <name>Vitess Java Client</name>
 
   <dependencies>
     <dependency>
