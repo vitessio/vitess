@@ -8,6 +8,7 @@
     <version>22.0.2-SNAPSHOT</version>
   </parent>
   <artifactId>vitess-client</artifactId>
+  <name>Vitess Java Client</name>
 
   <dependencies>
     <dependency>
