@@ -69,7 +69,9 @@ func redactUserPermissions(perms *tabletmanagerdatapb.Permissions) {
 		}
 		if up.Privileges != nil {
 			// Remove the "authentication_string" field, which is a
-			// sensitive field from the mysql.users table.
+			// sensitive field from the mysql.users table. This is
+			// redacted server-side in v23+ so this line can be
+			// removed in the future.
 			delete(up.Privileges, "authentication_string")
 		}
 	}
