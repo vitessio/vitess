@@ -26,10 +26,10 @@ func TestMoveTablesBuffering(t *testing.T) {
 	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
 	setupMinimalTargetKeyspace(t)
 	tables := "loadtest"
-	err := tstWorkflowExec(t, defaultCellName, workflowName, defaultSourceKs, defaultTargetKs,
+	err := tstWorkflowExec(t, defaultCellName, defaultWorkflowName, defaultSourceKs, defaultTargetKs,
 		tables, workflowActionCreate, "", "", "", defaultWorkflowExecOptions)
 	require.NoError(t, err)
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	waitForWorkflowState(t, vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 
 	lg := newLoadGenerator(t, vc)
 	go func() {
@@ -37,10 +37,10 @@ func TestMoveTablesBuffering(t *testing.T) {
 	}()
 	lg.waitForCount(1000)
 
-	catchup(t, targetTab1, workflowName, "MoveTables")
-	catchup(t, targetTab2, workflowName, "MoveTables")
-	vdiff(t, defaultTargetKs, workflowName, "", nil)
-	waitForLowLag(t, defaultTargetKs, workflowName)
+	catchup(t, targetTab1, defaultWorkflowName, "MoveTables")
+	catchup(t, targetTab2, defaultWorkflowName, "MoveTables")
+	vdiff(t, defaultTargetKs, defaultWorkflowName, "", nil)
+	waitForLowLag(t, defaultTargetKs, defaultWorkflowName)
 	for i := 0; i < 10; i++ {
 		tstWorkflowSwitchReadsAndWrites(t)
 		time.Sleep(loadTestBufferingWindowDuration + 1*time.Second)

@@ -666,7 +666,7 @@ func confirmWorkflowHasCopiedNoData(t *testing.T, defaultTargetKs, workflow stri
 				(pos.Exists() && pos.String() != "") {
 				require.FailNowf(t, "Unexpected data copied in workflow",
 					"The MoveTables workflow %q copied data in less than %s when it should have been waiting. Show output: %s",
-					ksWorkflow, defaultTimeout, output)
+					defaultKsWorkflow, defaultTimeout, output)
 			}
 			return true
 		})

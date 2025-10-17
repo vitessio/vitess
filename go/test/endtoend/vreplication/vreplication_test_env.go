@@ -20,12 +20,12 @@ import "fmt"
 
 const (
 	// Defaults used for all tests.
-	defaultSourceKs   = "test-product"
-	defaultTargetKs   = "test-customer"
-	workflowName      = "wf1"
-	ksWorkflow        = defaultTargetKs + "." + workflowName
-	reverseKsWorkflow = defaultSourceKs + "." + workflowName + "_reverse"
-	defaultCellName   = "zone1"
+	defaultSourceKs          = "test-product"
+	defaultTargetKs          = "test-customer"
+	defaultWorkflowName      = "wf1"
+	defaultKsWorkflow        = defaultTargetKs + "." + defaultWorkflowName
+	defaultReverseKsWorkflow = defaultSourceKs + "." + defaultWorkflowName + "_reverse"
+	defaultCellName          = "zone1"
 )
 
 var dryRunResultsSwitchWritesCustomerShard = []string{

@@ -57,7 +57,7 @@ func testMoveTablesMirrorTraffic(t *testing.T, flavor workflowFlavor) {
 	mt.Create()
 	confirmNoMirrorRules(t)
 
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	waitForWorkflowState(t, vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 
 	// Mirror rules can be created after a MoveTables workflow is created.
 	mt.MirrorTraffic()

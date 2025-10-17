@@ -74,14 +74,14 @@ var defaultWorkflowExecOptions = &workflowExecOptions{
 }
 
 func createReshardWorkflow(t *testing.T, sourceShards, targetShards string) error {
-	err := tstWorkflowExec(t, defaultCellName, workflowName, defaultTargetKs, defaultTargetKs,
+	err := tstWorkflowExec(t, defaultCellName, defaultWorkflowName, defaultTargetKs, defaultTargetKs,
 		"", workflowActionCreate, "", sourceShards, targetShards, defaultWorkflowExecOptions)
 	require.NoError(t, err)
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	waitForWorkflowState(t, vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 	confirmTablesHaveSecondaryKeys(t, []*cluster.VttabletProcess{targetTab1}, defaultTargetKs, "")
-	catchup(t, targetTab1, workflowName, "Reshard")
-	catchup(t, targetTab2, workflowName, "Reshard")
-	doVDiff(t, ksWorkflow, "")
+	catchup(t, targetTab1, defaultWorkflowName, "Reshard")
+	catchup(t, targetTab2, defaultWorkflowName, "Reshard")
+	doVDiff(t, defaultKsWorkflow, "")
 	return nil
 }
 
@@ -89,18 +89,18 @@ func createMoveTablesWorkflow(t *testing.T, tables string) {
 	if tables == "" {
 		tables = "customer"
 	}
-	err := tstWorkflowExec(t, defaultCellName, workflowName, defaultSourceKs, defaultTargetKs,
+	err := tstWorkflowExec(t, defaultCellName, defaultWorkflowName, defaultSourceKs, defaultTargetKs,
 		tables, workflowActionCreate, "", "", "", defaultWorkflowExecOptions)
 	require.NoError(t, err)
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	waitForWorkflowState(t, vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 	confirmTablesHaveSecondaryKeys(t, []*cluster.VttabletProcess{targetTab1}, defaultTargetKs, tables)
-	catchup(t, targetTab1, workflowName, "MoveTables")
-	catchup(t, targetTab2, workflowName, "MoveTables")
-	doVDiff(t, ksWorkflow, "")
+	catchup(t, targetTab1, defaultWorkflowName, "MoveTables")
+	catchup(t, targetTab2, defaultWorkflowName, "MoveTables")
+	doVDiff(t, defaultKsWorkflow, "")
 }
 
 func tstWorkflowAction(t *testing.T, action, tabletTypes, cells string) error {
-	return tstWorkflowExec(t, cells, workflowName, defaultSourceKs, defaultTargetKs, "customer", action, tabletTypes, "", "", defaultWorkflowExecOptions)
+	return tstWorkflowExec(t, cells, defaultWorkflowName, defaultSourceKs, defaultTargetKs, "customer", action, tabletTypes, "", "", defaultWorkflowExecOptions)
 }
 
 // tstWorkflowExec executes a MoveTables or Reshard workflow command using
@@ -220,7 +220,7 @@ func testWorkflowUpdate(t *testing.T) {
 	_, err := vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", "noexist", "update", "--workflow", "noexist", "--tablet-types", tabletTypes)
 	require.Error(t, err)
 	// Change the tablet-types to rdonly.
-	resp, err := vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", defaultTargetKs, "update", "--workflow", workflowName, "--tablet-types", "rdonly")
+	resp, err := vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", defaultTargetKs, "update", "--workflow", defaultWorkflowName, "--tablet-types", "rdonly")
 	require.NoError(t, err, err)
 	// Confirm that we changed the workflow.
 	var ures vtctldatapb.WorkflowUpdateResponse
@@ -230,7 +230,7 @@ func testWorkflowUpdate(t *testing.T) {
 	require.Greater(t, len(ures.Details), 0)
 	require.True(t, ures.Details[0].Changed)
 	// Change tablet-types back to primary,replica,rdonly.
-	resp, err = vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", defaultTargetKs, "update", "--workflow", workflowName, "--tablet-types", tabletTypes)
+	resp, err = vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", defaultTargetKs, "update", "--workflow", defaultWorkflowName, "--tablet-types", tabletTypes)
 	require.NoError(t, err, err)
 	// Confirm that we changed the workflow.
 	err = protojson.Unmarshal([]byte(resp), &ures)
@@ -238,7 +238,7 @@ func testWorkflowUpdate(t *testing.T) {
 	require.Greater(t, len(ures.Details), 0)
 	require.True(t, ures.Details[0].Changed)
 	// Execute a no-op as tablet-types is already primary,replica,rdonly.
-	resp, err = vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", defaultTargetKs, "update", "--workflow", workflowName, "--tablet-types", tabletTypes)
+	resp, err = vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", defaultTargetKs, "update", "--workflow", defaultWorkflowName, "--tablet-types", tabletTypes)
 	require.NoError(t, err, err)
 	// Confirm that we didn't change the workflow.
 	err = protojson.Unmarshal([]byte(resp), &ures)
@@ -313,13 +313,13 @@ func validateWritesRouteToTarget(t *testing.T) {
 }
 
 func revert(t *testing.T, workflowType string) {
-	switchWrites(t, workflowType, ksWorkflow, true)
+	switchWrites(t, workflowType, defaultKsWorkflow, true)
 	validateWritesRouteToSource(t)
-	switchReadsNew(t, workflowType, getCellNames(nil), ksWorkflow, true)
+	switchReadsNew(t, workflowType, getCellNames(nil), defaultKsWorkflow, true)
 	validateReadsRouteToSource(t, "replica")
 
 	// cancel the workflow to cleanup
-	_, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--target-keyspace", defaultTargetKs, "--workflow", workflowName, "cancel")
+	_, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--target-keyspace", defaultTargetKs, "--workflow", defaultWorkflowName, "cancel")
 	require.NoError(t, err, fmt.Sprintf("%s Cancel error: %v", workflowType, err))
 }
 
@@ -474,11 +474,11 @@ func testReplicatingWithPKEnumCols(t *testing.T) {
 	deleteQuery := "delete from customer where cid = 2 and typ = 'soho'"
 	insertQuery := "insert into customer(cid, name, typ, sport, meta) values(2, 'Paül','soho','cricket',convert(x'7b7d' using utf8mb4))"
 	execVtgateQuery(t, vtgateConn, defaultSourceKs, deleteQuery)
-	waitForNoWorkflowLag(t, vc, defaultTargetKs, workflowName)
-	doVDiff(t, ksWorkflow, "")
+	waitForNoWorkflowLag(t, vc, defaultTargetKs, defaultWorkflowName)
+	doVDiff(t, defaultKsWorkflow, "")
 	execVtgateQuery(t, vtgateConn, defaultSourceKs, insertQuery)
-	waitForNoWorkflowLag(t, vc, defaultTargetKs, workflowName)
-	doVDiff(t, ksWorkflow, "")
+	waitForNoWorkflowLag(t, vc, defaultTargetKs, defaultWorkflowName)
+	doVDiff(t, defaultKsWorkflow, "")
 }
 
 func testReshardV2Workflow(t *testing.T) {
@@ -598,7 +598,7 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	// The purge table should get skipped/ignored
 	// If it's not then we'll get an error as the table doesn't exist in the vschema
 	createMoveTablesWorkflow(t, "customer,loadtest,vdiff_order,reftable,_vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431")
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	waitForWorkflowState(t, vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 	validateReadsRouteToSource(t, "replica,rdonly")
 	validateWritesRouteToSource(t)
 
@@ -960,7 +960,7 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 		switchWrites(t, workflowType, ksWorkflow, false)
 		validateWritesRouteToTarget(t)
 
-		switchWrites(t, workflowType, reverseKsWorkflow, true)
+		switchWrites(t, workflowType, defaultReverseKsWorkflow, true)
 		validateWritesRouteToSource(t)
 
 		validateReadsRouteToSource(t, "replica")
