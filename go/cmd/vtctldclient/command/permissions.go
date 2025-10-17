@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -56,6 +57,25 @@ var (
 	}
 )
 
+// redactUserPermissions ensures checksum/secrets are redacted from a
+// *tabletmanagerdatapb.Permissions response.
+func redactUserPermissions(perms *tabletmanagerdatapb.Permissions) {
+	if perms == nil {
+		return
+	}
+	for _, up := range perms.UserPermissions {
+		if up == nil {
+			continue
+		}
+		up.PasswordChecksum = 0
+		if up.Privileges != nil {
+			// Remove the "authentication_string" field, which is a
+			// sensitive field from the mysql.users table.
+			delete(up.Privileges, "authentication_string")
+		}
+	}
+}
+
 func commandGetPermissions(cmd *cobra.Command, args []string) error {
 	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
 	if err != nil {
@@ -70,18 +90,9 @@ func commandGetPermissions(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	// Obfuscate the checksum so as not to potentially display sensitive info.
+	// Obfuscate the checksum/secrets so as not to potentially display sensitive info.
 	if resp != nil && resp.Permissions != nil {
-		for _, up := range resp.Permissions.UserPermissions {
-			if up != nil {
-				up.PasswordChecksum = 0
-				if up.Privileges != nil {
-					// Remove the "authentication_string" field, which is a
-					// sensitive field from the mysql.users table.
-					delete(up.Privileges, "authentication_string")
-				}
-			}
-		}
+		redactUserPermissions(resp.Permissions)
 	}
 	cli.DefaultMarshalOptions.EmitUnpopulated = false
 	p, err := cli.MarshalJSON(resp.Permissions)
