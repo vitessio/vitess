@@ -75,6 +75,9 @@ func commandGetPermissions(cmd *cobra.Command, args []string) error {
 		for _, up := range resp.Permissions.UserPermissions {
 			if up != nil {
 				up.PasswordChecksum = 0
+				if up.Privileges != nil {
+					delete(up.Privileges, "authentication_string")
+				}
 			}
 		}
 	}
