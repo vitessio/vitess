@@ -857,8 +857,12 @@ func (tm *TabletManager) updateSequenceValue(ctx context.Context, seq *tabletman
 }
 
 func (tm *TabletManager) createSequenceTable(ctx context.Context, tableName string) error {
-	stmt := sqlparser.BuildParsedQuery(sqlCreateSequenceTable, sqlparser.NewTableName(tableName))
-	_, err := tm.ApplySchema(ctx, &tmutils.SchemaChange{
+	escapedTableName, err := sqlescape.EnsureEscaped(tableName)
+	if err != nil {
+		return err
+	}
+	stmt := sqlparser.BuildParsedQuery(sqlCreateSequenceTable, escapedTableName)
+	_, err = tm.ApplySchema(ctx, &tmutils.SchemaChange{
 		SQL:                     stmt.Query,
 		Force:                   false,
 		AllowReplication:        true,
