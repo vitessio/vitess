@@ -57,7 +57,7 @@ var (
 	}
 )
 
-// redactUserPermissions ensures checksum/secrets are redacted from a
+// redactUserPermissions ensures sensitive info is redacted from a
 // *tabletmanagerdatapb.Permissions response.
 func redactUserPermissions(perms *tabletmanagerdatapb.Permissions) {
 	if perms == nil {
@@ -67,7 +67,6 @@ func redactUserPermissions(perms *tabletmanagerdatapb.Permissions) {
 		if up == nil {
 			continue
 		}
-		up.PasswordChecksum = 0
 		if up.Privileges != nil {
 			// Remove the "authentication_string" field, which is a
 			// sensitive field from the mysql.users table.
@@ -90,7 +89,7 @@ func commandGetPermissions(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	// Obfuscate the checksum/secrets so as not to potentially display sensitive info.
+	// Obfuscate the secrets so as not to potentially display sensitive info.
 	if resp != nil && resp.Permissions != nil {
 		redactUserPermissions(resp.Permissions)
 	}

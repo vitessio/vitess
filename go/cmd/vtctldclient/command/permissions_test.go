@@ -612,7 +612,8 @@ func TestRedactUserPermissions(t *testing.T) {
 	perms := &tabletmanagerdatapb.Permissions{
 		UserPermissions: []*tabletmanagerdatapb.UserPermission{
 			{
-				PasswordChecksum: 12345,
+				Host: "%",
+				User: "vt",
 				Privileges: map[string]string{
 					"authentication_string": "this should be removed from the response",
 				},
@@ -623,8 +624,9 @@ func TestRedactUserPermissions(t *testing.T) {
 	require.EqualValues(t, &tabletmanagerdatapb.Permissions{
 		UserPermissions: []*tabletmanagerdatapb.UserPermission{
 			{
-				PasswordChecksum: 0,
-				Privileges:       map[string]string{},
+				Host:       "%",
+				User:       "vt",
+				Privileges: map[string]string{},
 			},
 		},
 	}, perms)
