@@ -229,7 +229,7 @@ var (
 					"to":           "keyspace_id",
 					"ignore_nulls": fmt.Sprintf("%t", vindex.IgnoreNulls),
 				},
-				Owner: createOptions.TableOwner,
+				Owner: vindex.TableOwner,
 			}
 
 			targetTableColumnVindex := &vschemapb.ColumnVindex{
