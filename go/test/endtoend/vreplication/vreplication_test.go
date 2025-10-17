@@ -259,7 +259,7 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	// because of the InnoDB History List length.
 	moveTablesActionWithTabletTypes(t, "Create", defaultCell.Name, workflow, sourceKs, targetKs, table, "primary", true)
 	// Wait for the copy phase to start
-	waitForWorkflowState(t, vc, fmt.Sprintf("`%s`.%s", targetKs, workflow), binlogdatapb.VReplicationWorkflowState_Copying.String())
+	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKs, workflow), binlogdatapb.VReplicationWorkflowState_Copying.String())
 	// The initial copy phase should be blocking on the history list.
 	confirmWorkflowHasCopiedNoData(t, targetKs, workflow)
 	releaseInnoDBRowHistory(t, trxConn)
@@ -375,7 +375,7 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 		err = vc.VtctldClient.ExecuteCommand("LookupVindex", "--name", vindexName, "--table-keyspace", sourceKs, "create", "--keyspace", targetKs,
 			"--type=consistent_lookup", "--table-owner=customer", "--table-owner-columns=name,cid", "--ignore-nulls", "--tablet-types=PRIMARY")
 		require.NoError(t, err, "error executing LookupVindex create: %v", err)
-		waitForWorkflowState(t, vc, fmt.Sprintf("`%s`.%s", sourceKs, vindexName), binlogdatapb.VReplicationWorkflowState_Running.String())
+		waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", sourceKs, vindexName), binlogdatapb.VReplicationWorkflowState_Running.String())
 		waitForRowCount(t, vtgateConn, sourceKs, vindexName, int(rows))
 		customerVSchema, err = vc.VtctldClient.ExecuteCommandWithOutput("GetVSchema", targetKs)
 		require.NoError(t, err, "error executing GetVSchema: %v", err)
