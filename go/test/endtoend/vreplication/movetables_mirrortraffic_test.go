@@ -45,9 +45,9 @@ func testMoveTablesMirrorTraffic(t *testing.T, flavor workflowFlavor) {
 		workflowInfo: &workflowInfo{
 			vc:             vc,
 			workflowName:   workflowName,
-			targetKeyspace: targetKs,
+			targetKeyspace: defaultTargetKs,
 		},
-		sourceKeyspace: sourceKs,
+		sourceKeyspace: defaultSourceKs,
 		tables:         "customer,loadtest,customer2",
 		mirrorFlags:    []string{"--percent", "25"},
 	}
@@ -62,7 +62,7 @@ func testMoveTablesMirrorTraffic(t *testing.T, flavor workflowFlavor) {
 	// Mirror rules can be created after a MoveTables workflow is created.
 	mt.MirrorTraffic()
 	confirmMirrorRulesExist(t)
-	expectMirrorRules(t, sourceKs, targetKs, tables, []topodatapb.TabletType{
+	expectMirrorRules(t, defaultSourceKs, defaultTargetKs, tables, []topodatapb.TabletType{
 		topodatapb.TabletType_PRIMARY,
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_RDONLY,
@@ -72,7 +72,7 @@ func testMoveTablesMirrorTraffic(t *testing.T, flavor workflowFlavor) {
 	mtwf.mirrorFlags[1] = "50"
 	mt.MirrorTraffic()
 	confirmMirrorRulesExist(t)
-	expectMirrorRules(t, sourceKs, targetKs, tables, []topodatapb.TabletType{
+	expectMirrorRules(t, defaultSourceKs, defaultTargetKs, tables, []topodatapb.TabletType{
 		topodatapb.TabletType_PRIMARY,
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_RDONLY,
@@ -83,7 +83,7 @@ func testMoveTablesMirrorTraffic(t *testing.T, flavor workflowFlavor) {
 	mtwf.mirrorFlags[1] = "75"
 	mt.MirrorTraffic()
 	confirmMirrorRulesExist(t)
-	expectMirrorRules(t, sourceKs, targetKs, tables, []topodatapb.TabletType{
+	expectMirrorRules(t, defaultSourceKs, defaultTargetKs, tables, []topodatapb.TabletType{
 		topodatapb.TabletType_PRIMARY,
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_RDONLY,
@@ -103,7 +103,7 @@ func testMoveTablesMirrorTraffic(t *testing.T, flavor workflowFlavor) {
 	mtwf.mirrorFlags = append(mtwf.mirrorFlags, "--tablet-types", "primary")
 	mt.MirrorTraffic()
 	confirmMirrorRulesExist(t)
-	expectMirrorRules(t, sourceKs, targetKs, tables, []topodatapb.TabletType{
+	expectMirrorRules(t, defaultSourceKs, defaultTargetKs, tables, []topodatapb.TabletType{
 		topodatapb.TabletType_PRIMARY,
 	}, 100)
 

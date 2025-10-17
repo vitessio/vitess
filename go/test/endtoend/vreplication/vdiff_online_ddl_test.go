@@ -32,7 +32,7 @@ func TestOnlineDDLVDiff(t *testing.T) {
 	defaultReplicas = 0
 	vc = setupMinimalCluster(t)
 	defer vc.TearDown()
-	keyspace := sourceKs
+	keyspace := defaultSourceKs
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

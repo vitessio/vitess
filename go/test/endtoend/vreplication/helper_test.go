@@ -650,11 +650,11 @@ func getDebugVar(t *testing.T, port int, varPath []string) (string, error) {
 	return string(val), nil
 }
 
-func confirmWorkflowHasCopiedNoData(t *testing.T, targetKS, workflow string) {
+func confirmWorkflowHasCopiedNoData(t *testing.T, defaultTargetKs, workflow string) {
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
-		output, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", targetKs, "show", "--workflow", workflow, "--compact", "--include-logs=false")
+		output, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", defaultTargetKs, "show", "--workflow", workflow, "--compact", "--include-logs=false")
 		require.NoError(t, err, output)
 		streams := gjson.Get(output, "workflows.0.shard_streams.*.streams")
 		streams.ForEach(func(streamId, stream gjson.Result) bool { // For each stream

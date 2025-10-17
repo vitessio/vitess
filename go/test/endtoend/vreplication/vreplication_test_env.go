@@ -20,40 +20,40 @@ import "fmt"
 
 const (
 	// Defaults used for all tests.
+	defaultSourceKs   = "test-product"
+	defaultTargetKs   = "test-customer"
 	workflowName      = "wf1"
-	sourceKs          = "test-product"
-	targetKs          = "test-customer"
-	ksWorkflow        = targetKs + "." + workflowName
-	reverseKsWorkflow = sourceKs + "." + workflowName + "_reverse"
+	ksWorkflow        = defaultTargetKs + "." + workflowName
+	reverseKsWorkflow = defaultSourceKs + "." + workflowName + "_reverse"
 	defaultCellName   = "zone1"
 )
 
 var dryRunResultsSwitchWritesCustomerShard = []string{
-	fmt.Sprintf("Lock keyspace %s", sourceKs),
-	fmt.Sprintf("Lock keyspace %s", targetKs),
-	fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [PRIMARY]", sourceKs, targetKs),
-	fmt.Sprintf("/Stop writes on keyspace %s for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order]: [keyspace:%s;shard:0;position:", sourceKs, sourceKs),
+	fmt.Sprintf("Lock keyspace %s", defaultSourceKs),
+	fmt.Sprintf("Lock keyspace %s", defaultTargetKs),
+	fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [PRIMARY]", defaultSourceKs, defaultTargetKs),
+	fmt.Sprintf("/Stop writes on keyspace %s for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order]: [keyspace:%s;shard:0;position:", defaultSourceKs, defaultSourceKs),
 	"Wait for vreplication on stopped streams to catchup for up to 30s",
 	"Create reverse vreplication workflow p2c_reverse",
 	"Create journal entries on source databases",
-	fmt.Sprintf("Enable writes on keyspace %s for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order]", targetKs),
-	fmt.Sprintf("Switch routing from keyspace %s to keyspace %s", sourceKs, targetKs),
+	fmt.Sprintf("Enable writes on keyspace %s for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order]", defaultTargetKs),
+	fmt.Sprintf("Switch routing from keyspace %s to keyspace %s", defaultSourceKs, defaultTargetKs),
 	"Routing rules for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order] will be updated",
 	"Switch writes completed, freeze and delete vreplication streams on: [tablet:200,tablet:300]",
 	"Start reverse vreplication streams on: [tablet:100]",
-	fmt.Sprintf("Mark vreplication streams frozen on: [keyspace:%s;shard:-80;tablet:200;workflow:p2c;dbname:vt_%s,keyspace:%s;shard:80-;tablet:300;workflow:p2c;dbname:vt_%s]", targetKs, targetKs, targetKs, targetKs),
-	fmt.Sprintf("Unlock keyspace %s", targetKs),
-	fmt.Sprintf("Unlock keyspace %s", sourceKs),
+	fmt.Sprintf("Mark vreplication streams frozen on: [keyspace:%s;shard:-80;tablet:200;workflow:p2c;dbname:vt_%s,keyspace:%s;shard:80-;tablet:300;workflow:p2c;dbname:vt_%s]", defaultTargetKs, defaultTargetKs, defaultTargetKs, defaultTargetKs),
+	fmt.Sprintf("Unlock keyspace %s", defaultTargetKs),
+	fmt.Sprintf("Unlock keyspace %s", defaultSourceKs),
 	"", // Additional empty newline in the output
 }
 
 var dryRunResultsReadCustomerShard = []string{
-	fmt.Sprintf("Lock keyspace %s", sourceKs),
-	fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [RDONLY,REPLICA]", sourceKs, targetKs),
-	fmt.Sprintf("Switch reads for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order] to keyspace %s for tablet types [RDONLY,REPLICA]", targetKs),
+	fmt.Sprintf("Lock keyspace %s", defaultSourceKs),
+	fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [RDONLY,REPLICA]", defaultSourceKs, defaultTargetKs),
+	fmt.Sprintf("Switch reads for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order] to keyspace %s for tablet types [RDONLY,REPLICA]", defaultTargetKs),
 	"Routing rules for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order] will be updated",
-	fmt.Sprintf("Serving VSchema will be rebuilt for the %s keyspace", targetKs),
-	fmt.Sprintf("Unlock keyspace %s", sourceKs),
+	fmt.Sprintf("Serving VSchema will be rebuilt for the %s keyspace", defaultTargetKs),
+	fmt.Sprintf("Unlock keyspace %s", defaultSourceKs),
 	"", // Additional empty newline in the output
 }
 

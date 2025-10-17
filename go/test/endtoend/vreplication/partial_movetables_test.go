@@ -35,7 +35,7 @@ import (
 // Before canceling, we first switch traffic to the target keyspace and then reverse it back to the source keyspace.
 // This tests that artifacts are being properly cleaned up when a MoveTables ia canceled.
 func testCancel(t *testing.T) {
-	sourceKeyspace := targetKs
+	sourceKeyspace := defaultTargetKs
 	targetKeyspace := "customer2"
 	workflowName := "partial80DashForCancel"
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKeyspace, workflowName)
@@ -109,8 +109,8 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 	}()
 	vc = setupMinimalCluster(t)
 	defer vc.TearDown()
-	sourceKeyspace := sourceKs
-	targetKeyspace := targetKs
+	sourceKeyspace := defaultSourceKs
+	targetKeyspace := defaultTargetKs
 	workflowName := "wf1"
 	targetTabs := setupMinimalTargetKeyspace(t)
 	targetTab80Dash := targetTabs["80-"]
@@ -135,7 +135,7 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 
 	emptyGlobalRoutingRules := "{}\n"
 
-	sourceKeyspace = targetKs
+	sourceKeyspace = defaultTargetKs
 	targetKeyspace = "customer2"
 
 	// These should be listed in shard order

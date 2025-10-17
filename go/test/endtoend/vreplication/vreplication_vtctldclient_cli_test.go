@@ -66,8 +66,8 @@ func TestVtctldclientCLI(t *testing.T) {
 	require.NotNil(t, zone2)
 	defer vc.TearDown()
 
-	sourceKeyspaceName := sourceKs
-	targetKeyspaceName := targetKs
+	sourceKeyspaceName := defaultSourceKs
+	targetKeyspaceName := defaultTargetKs
 	var mt iMoveTables
 	workflowName := "wf1"
 
@@ -184,7 +184,7 @@ func TestVtctldclientCLI(t *testing.T) {
 		require.NotNil(vc.t, resp)
 		require.NotNil(vc.t, resp.ShardStreams)
 		require.Equal(vc.t, len(resp.ShardStreams), 2)
-		keyspace := targetKs
+		keyspace := defaultTargetKs
 		for _, shard := range []string{"80-c0", "c0-"} {
 			streams := resp.ShardStreams[fmt.Sprintf("%s/%s", keyspace, shard)]
 			require.Equal(vc.t, 1, len(streams.Streams))
@@ -754,7 +754,7 @@ func validateReshardResponse(rs iReshard) {
 	require.NotNil(vc.t, resp)
 	require.NotNil(vc.t, resp.ShardStreams)
 	require.Equal(vc.t, len(resp.ShardStreams), 2)
-	keyspace := targetKs
+	keyspace := defaultTargetKs
 	for _, shard := range []string{"-40", "40-80"} {
 		streams := resp.ShardStreams[fmt.Sprintf("%s/%s", keyspace, shard)]
 		require.Equal(vc.t, 1, len(streams.Streams))
@@ -768,9 +768,9 @@ func validateReshardWorkflow(t *testing.T, workflows []*vtctldatapb.Workflow) {
 	require.Equal(t, "reshard", wf.Name)
 	require.Equal(t, binlogdatapb.VReplicationWorkflowType_Reshard.String(), wf.WorkflowType)
 	require.Equal(t, "None", wf.WorkflowSubType)
-	require.Equal(t, targetKs, wf.Target.Keyspace)
+	require.Equal(t, defaultTargetKs, wf.Target.Keyspace)
 	require.Equal(t, 2, len(wf.Target.Shards))
-	require.Equal(t, targetKs, wf.Source.Keyspace)
+	require.Equal(t, defaultTargetKs, wf.Source.Keyspace)
 	require.Equal(t, 1, len(wf.Source.Shards))
 	require.False(t, wf.DeferSecondaryKeys)
 
@@ -919,9 +919,9 @@ func validateMoveTablesWorkflow(t *testing.T, workflows []*vtctldatapb.Workflow)
 	require.Equal(t, "wf1", wf.Name)
 	require.Equal(t, binlogdatapb.VReplicationWorkflowType_MoveTables.String(), wf.WorkflowType)
 	require.Equal(t, "None", wf.WorkflowSubType)
-	require.Equal(t, targetKs, wf.Target.Keyspace)
+	require.Equal(t, defaultTargetKs, wf.Target.Keyspace)
 	require.Equal(t, 2, len(wf.Target.Shards))
-	require.Equal(t, sourceKs, wf.Source.Keyspace)
+	require.Equal(t, defaultSourceKs, wf.Source.Keyspace)
 	require.Equal(t, 1, len(wf.Source.Shards))
 	require.False(t, wf.DeferSecondaryKeys)
 

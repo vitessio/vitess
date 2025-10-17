@@ -36,17 +36,17 @@ func TestMultipleConcurrentVDiffs(t *testing.T) {
 	vc = NewVitessCluster(t, nil)
 	defer vc.TearDown()
 
-	sourceKeyspace := sourceKs
+	sourceKeyspace := defaultSourceKs
 	shardName := "0"
 
 	cell := vc.Cells[cellName]
-	vc.AddKeyspace(t, []*Cell{cell}, sourceKeyspace, shardName, initialProductVSchema, initialProductSchema, 0, 0, 100, sourceKsOpts)
+	vc.AddKeyspace(t, []*Cell{cell}, sourceKeyspace, shardName, initialProductVSchema, initialProductSchema, 0, 0, 100, defaultSourceKsOpts)
 
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
 	targetTabletId := 200
-	targetKeyspace := targetKs
-	vc.AddKeyspace(t, []*Cell{cell}, targetKeyspace, shardName, initialProductVSchema, initialProductSchema, 0, 0, targetTabletId, sourceKsOpts)
+	targetKeyspace := defaultTargetKs
+	vc.AddKeyspace(t, []*Cell{cell}, targetKeyspace, shardName, initialProductVSchema, initialProductSchema, 0, 0, targetTabletId, defaultSourceKsOpts)
 
 	index := 1000
 	var loadCtx context.Context
@@ -109,7 +109,7 @@ func TestMultipleConcurrentVDiffs(t *testing.T) {
 	loadCancel()
 
 	// confirm that show all shows the correct workflow and only that workflow.
-	output, err := vc.VtctldClient.ExecuteCommandWithOutput("VDiff", "--format", "json", "--workflow", "wf1", "--target-keyspace", targetKs, "show", "all")
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput("VDiff", "--format", "json", "--workflow", "wf1", "--target-keyspace", defaultTargetKs, "show", "all")
 	require.NoError(t, err)
 	log.Infof("VDiff output: %s", output)
 	count := gjson.Get(output, "..#").Int()
@@ -117,5 +117,5 @@ func TestMultipleConcurrentVDiffs(t *testing.T) {
 	ksName := gjson.Get(output, "0.Keyspace").String()
 	require.Equal(t, int64(1), count)
 	require.Equal(t, "wf1", wf)
-	require.Equal(t, targetKs, ksName)
+	require.Equal(t, defaultTargetKs, ksName)
 }
