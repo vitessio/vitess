@@ -76,6 +76,8 @@ func commandGetPermissions(cmd *cobra.Command, args []string) error {
 			if up != nil {
 				up.PasswordChecksum = 0
 				if up.Privileges != nil {
+					// Remove the "authentication_string" field, which is a
+					// sensitive field from the mysql.users table.
 					delete(up.Privileges, "authentication_string")
 				}
 			}
