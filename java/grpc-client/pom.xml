@@ -8,6 +8,7 @@
     <version>22.0.2-SNAPSHOT</version>
   </parent>
   <artifactId>vitess-grpc-client</artifactId>
+  <name>Vitess gRPC Client</name>
 
   <dependencies>
     <dependency>
