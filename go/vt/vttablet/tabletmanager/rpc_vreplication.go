@@ -747,10 +747,11 @@ func (tm *TabletManager) GetMaxValueForSequences(ctx context.Context, req *table
 }
 
 func (tm *TabletManager) getMaxSequenceValue(ctx context.Context, sm *tabletmanagerdatapb.GetMaxValueForSequencesRequest_SequenceMetadata) (int64, error) {
-	for _, val := range []string{sm.UsingColEscaped, sm.UsingTableDbNameEscaped, sm.UsingTableNameEscaped} {
-		if val[0] != '`' || val[len(val)-1] != '`' {
+	for _, val := range []string{sm.UsingTableDbNameEscaped, sm.UsingTableNameEscaped, sm.UsingColEscaped} {
+		lv := len(val)
+		if lv < 3 || val[0] != '`' || val[lv-1] != '`' {
 			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
-				"the column (%s), database (%s), and table (%s) names must be escaped", sm.UsingColEscaped, sm.UsingTableDbNameEscaped, sm.UsingTableNameEscaped)
+				"the database (%s), table (%s), and column (%s) names must be non-empty escaped values", sm.UsingTableDbNameEscaped, sm.UsingTableNameEscaped, sm.UsingColEscaped)
 		}
 	}
 	query := sqlparser.BuildParsedQuery(sqlGetMaxSequenceVal,
