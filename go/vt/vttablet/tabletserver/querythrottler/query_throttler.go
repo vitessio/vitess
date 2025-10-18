@@ -84,19 +84,20 @@ func (qt *QueryThrottler) Shutdown() {
 
 // Throttle checks if the tablet is under heavy load
 // and enforces throttling by rejecting the incoming request if necessary.
-// Note: This method performs lock-free reads of config and strategy for optimal performance.
-// Config updates are rare (default: every 1 minute) compared to query frequency,
-// so the tiny risk of reading slightly stale data during config updates is acceptable
-// for the significant performance improvement of avoiding mutex contention.
+// This method uses RWMutex read locks to safely access qt.cfg and qt.strategy
+// while allowing concurrent reads from multiple goroutines.
 func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, transactionID int64, options *querypb.ExecuteOptions) error {
-	// Lock-free read: for maximum performance in the hot path as cfg and strategy are updated rarely (default once per minute).
-	// They are word-sized and safe for atomic reads; stale data for one query is acceptable and avoids mutex contention in the hot path.
-	if !qt.cfg.Enabled {
+	qt.mu.RLock()
+	cfg := qt.cfg
+	strategy := qt.strategy
+	qt.mu.RUnlock()
+
+	if !cfg.Enabled {
 		return nil
 	}
 
 	// Evaluate the throttling decision
-	decision := qt.strategy.Evaluate(ctx, tabletType, parsedQuery, transactionID, options)
+	decision := strategy.Evaluate(ctx, tabletType, parsedQuery, transactionID, options)
 
 	// If no throttling is needed, allow the query
 	if !decision.Throttle {
@@ -104,7 +105,7 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 	}
 
 	// If dry-run mode is enabled, log the decision but don't throttle
-	if qt.cfg.DryRun {
+	if cfg.DryRun {
 		log.Warningf("[DRY-RUN] %s", decision.Message)
 		return nil
 	}
