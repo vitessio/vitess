@@ -802,15 +802,15 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 	// else, user specified an init db file
 	sqlFile, err := os.Open(initDBSQLFile)
 	if err != nil {
-		return fmt.Errorf("can't open init_db_sql_file (%v): %v", initDBSQLFile, err)
+		return fmt.Errorf("can't open init-db-sql-file (%v): %v", initDBSQLFile, err)
 	}
 	defer sqlFile.Close()
 	script, err := io.ReadAll(sqlFile)
 	if err != nil {
-		return fmt.Errorf("can't read init_db_sql_file (%v): %v", initDBSQLFile, err)
+		return fmt.Errorf("can't read init-db-sql-file (%v): %v", initDBSQLFile, err)
 	}
 	if err := mysqld.executeMysqlScript(ctx, params, string(script)); err != nil {
-		return fmt.Errorf("can't run init_db_sql_file (%v): %v", initDBSQLFile, err)
+		return fmt.Errorf("can't run init-db-sql-file (%v): %v", initDBSQLFile, err)
 	}
 	return nil
 }
@@ -978,6 +978,7 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 				log.Infof("could not open config file for mycnf: %v", path)
 				continue
 			}
+			log.Infof("loaded extra MySQL config from: %s", path)
 			myTemplateSource.WriteString("## " + path + "\n")
 			myTemplateSource.Write(data)
 		}
@@ -1241,6 +1242,11 @@ func (mysqld *Mysqld) GetDbaConnection(ctx context.Context) (*dbconnpool.DBConne
 // GetAllPrivsConnection creates a new DBConnection.
 func (mysqld *Mysqld) GetAllPrivsConnection(ctx context.Context) (*dbconnpool.DBConnection, error) {
 	return dbconnpool.NewDBConnection(ctx, mysqld.dbcfgs.AllPrivsWithDB())
+}
+
+// GetFilteredConnection creates a new DBConnection as the vt_filtered user, used primarily in VReplication.
+func (mysqld *Mysqld) GetFilteredConnection(ctx context.Context) (*dbconnpool.DBConnection, error) {
+	return dbconnpool.NewDBConnection(ctx, mysqld.dbcfgs.FilteredWithDB())
 }
 
 // Close will close this instance of Mysqld. It will wait for all dba

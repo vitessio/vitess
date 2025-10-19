@@ -50,6 +50,7 @@ const (
 	ReplicaMisconfigured                   AnalysisCode = "ReplicaMisconfigured"
 	UnreachablePrimaryWithLaggingReplicas  AnalysisCode = "UnreachablePrimaryWithLaggingReplicas"
 	UnreachablePrimary                     AnalysisCode = "UnreachablePrimary"
+	UnreachablePrimaryWithBrokenReplicas   AnalysisCode = "UnreachablePrimaryWithBrokenReplicas"
 	PrimarySingleReplicaNotReplicating     AnalysisCode = "PrimarySingleReplicaNotReplicating"
 	PrimarySingleReplicaDead               AnalysisCode = "PrimarySingleReplicaDead"
 	AllPrimaryReplicasNotReplicating       AnalysisCode = "AllPrimaryReplicasNotReplicating"
@@ -80,19 +81,21 @@ const (
 // Key of this map is a InstanceAnalysis.String()
 type PeerAnalysisMap map[string]int
 
-type ReplicationAnalysisHints struct {
+type DetectionAnalysisHints struct {
 	AuditAnalysis bool
 }
 
-// ReplicationAnalysis notes analysis on replication chain status, per instance
-type ReplicationAnalysis struct {
-	AnalyzedInstanceAlias        string
-	AnalyzedInstancePrimaryAlias string
-	TabletType                   topodatapb.TabletType
-	CurrentTabletType            topodatapb.TabletType
-	PrimaryTimeStamp             time.Time
-	AnalyzedKeyspace             string
-	AnalyzedShard                string
+// DetectionAnalysis represents an analysis of a detected problem.
+type DetectionAnalysis struct {
+	AnalyzedInstanceAlias                     string
+	AnalyzedInstancePrimaryAlias              string
+	TabletType                                topodatapb.TabletType
+	CurrentTabletType                         topodatapb.TabletType
+	PrimaryTimeStamp                          time.Time
+	AnalyzedKeyspace                          string
+	AnalyzedShard                             string
+	AnalyzedKeyspaceEmergencyReparentDisabled bool
+	AnalyzedShardEmergencyReparentDisabled    bool
 	// ShardPrimaryTermTimestamp is the primary term start time stored in the shard record.
 	ShardPrimaryTermTimestamp                 time.Time
 	AnalyzedInstanceBinlogCoordinates         BinlogCoordinates
@@ -136,11 +139,11 @@ type ReplicationAnalysis struct {
 	IsDiskStalled                             bool
 }
 
-func (replicationAnalysis *ReplicationAnalysis) MarshalJSON() ([]byte, error) {
+func (detectionAnalysis *DetectionAnalysis) MarshalJSON() ([]byte, error) {
 	i := struct {
-		ReplicationAnalysis
+		DetectionAnalysis
 	}{}
-	i.ReplicationAnalysis = *replicationAnalysis
+	i.DetectionAnalysis = *detectionAnalysis
 
 	return json.Marshal(i)
 }

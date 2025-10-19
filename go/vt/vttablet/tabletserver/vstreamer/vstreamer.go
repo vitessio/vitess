@@ -242,8 +242,13 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		vevent.Shard = vs.vse.shard
 
 		switch vevent.Type {
+		case binlogdatapb.VEventType_PREVIOUS_GTIDS:
+			// At this time do nothing. Ideally we would issue a `bufferedEvents = append(bufferedEvents, vevent)`,
+			// ie merged into the `case` clause below.
+			// But at this time the tests will fail as this event is unexpected. This is a TODO for the earliest
+			// opportunity to work on this.
 		case binlogdatapb.VEventType_GTID, binlogdatapb.VEventType_BEGIN, binlogdatapb.VEventType_FIELD,
-			binlogdatapb.VEventType_PREVIOUS_GTIDS, binlogdatapb.VEventType_JOURNAL:
+			binlogdatapb.VEventType_JOURNAL:
 			// We never have to send GTID, BEGIN, FIELD events on their own.
 			// A JOURNAL event is always preceded by a BEGIN and followed by a COMMIT.
 			// So, we don't have to send it right away.
@@ -444,6 +449,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		if err != nil {
 			return nil, fmt.Errorf("can't parse FORMAT_DESCRIPTION_EVENT: %v, event data: %#v", err, ev)
 		}
+		vs.eventGTID = nil
 		return nil, nil
 	}
 
@@ -487,7 +493,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 				SequenceNumber: sequenceNumber,
 			})
 		}
-		vs.pos = replication.AppendGTIDInPlace(vs.pos, gtid)
+		vs.pos = replication.AppendGTID(vs.pos, gtid) // Ideally using AppendGTIDInPlace, but there's a race condition here, see https://github.com/vitessio/vitess/pull/18611
 		vs.commitParent = commitParent
 		vs.sequenceNumber = sequenceNumber
 		vs.eventGTID = gtid
@@ -912,9 +918,11 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 		return fields, nil
 	}
 
-	// Check if the schema returned by schema.Engine matches with row.
+	// Check if the schema returned by schema.Engine is compatible with the row.
+	// If not then we rely on the TableMap event alone. This will prevent us from
+	// being able to handle filters with colum names (in planbuilder.findColumn()).
 	for i := range tm.Types {
-		if !sqltypes.AreTypesEquivalent(fields[i].Type, st.Fields[i].Type) {
+		if !sqltypes.AreTypesCompatible(fields[i].Type, st.Fields[i].Type) {
 			return fields, nil
 		}
 	}
@@ -1335,10 +1343,10 @@ func wrapError(err error, stopPos replication.Position, vse *Engine) error {
 	if err != nil {
 		vse.vstreamersEndedWithErrors.Add(1)
 		vse.errorCounts.Add("StreamEnded", 1)
-		err = fmt.Errorf("stream (at source tablet) error @ %v: %v", stopPos, err)
+		err = fmt.Errorf("stream (at source tablet) error @ (including the GTID we failed to process) %v: %v", stopPos, err)
 		log.Error(err)
 		return err
 	}
-	log.Infof("stream (at source tablet) ended @ %v", stopPos)
+	log.Infof("stream (at source tablet) ended @ (including the GTID we failed to process) %v", stopPos)
 	return nil
 }

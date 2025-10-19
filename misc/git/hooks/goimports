@@ -20,16 +20,22 @@
 #
 # This script does not handle file names that contain spaces.
 gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '^go/.*\.go$' | grep -v '^go/vt/proto/')
-
 [ -z "$gofiles" ] && exit 0
-unformatted=$($(go env GOPATH)/bin/goimports -local vitess.io/vitess -l=true $gofiles 2>&1 | awk -F: '{print $1}')
+
+# Find goimports. This is useful if goimports was installed outside of $GOPATH/bin, for example by Homebrew.
+goimports_path="$(command -v goimports)"
+[ -z "$goimports_path" ] && goimports_path="$(go env GOPATH)/bin/goimports"
+[ ! -x "$goimports_path" ] && echo "cannot find goimports, is it installed?" && exit 1
+
+# Run goimports
+unformatted=$($goimports_path -local vitess.io/vitess -l=true $gofiles 2>&1 | awk -F: '{print $1}')
 [ -z "$unformatted" ] && exit 0
 
 # Some files are not goimports'd. Print message and fail.
 
 echo >&2 "Go files must be formatted with goimports. Please run:"
 echo >&2
-echo -n >&2 "  $(go env GOPATH)/bin/goimports -local vitess.io/vitess -w"
+echo -n >&2 "  $goimports_path -local vitess.io/vitess -w"
 for fn in $unformatted; do
     echo -n >&2 " $PWD/$fn"
 done

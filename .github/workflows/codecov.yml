@@ -1,5 +1,12 @@
 name: Code Coverage
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - "main"
+      - "release-[0-9]+.[0-9]"
+    tags: '**'
+  pull_request:
+    branches: '**'
 concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Code Coverage')
   cancel-in-progress: true
@@ -32,7 +39,7 @@ jobs:
 
     - name: Set up Go
       if: steps.changes.outputs.changed_files == 'true'
-      uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
+      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
       with:
         go-version-file: go.mod
 
@@ -47,6 +54,10 @@ jobs:
         # Increase the asynchronous non-blocking I/O. More information at https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_use_native_aio
         echo "fs.aio-max-nr = 1048576" | sudo tee -a /etc/sysctl.conf
         sudo sysctl -p /etc/sysctl.conf
+
+        # Don't waste a bunch of time processing man-db triggers
+        echo "set man-db/auto-update false" | sudo debconf-communicate
+        sudo dpkg-reconfigure man-db
 
     - name: Get dependencies
       if: steps.changes.outputs.changed_files == 'true'
@@ -66,9 +77,9 @@ jobs:
         # Get key to latest MySQL repo
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
 
-        # mysql80
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.29-1_all.deb
-        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
+        # mysql84
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.34-1_all.deb
+        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.4-lts | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get update
         sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client

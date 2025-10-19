@@ -173,6 +173,7 @@ type (
 		vm                  VSchemaOperator
 		semTable            *semantics.SemTable
 		queryTimeout        time.Duration
+		transactionTimeout  time.Duration
 
 		warnings []*querypb.QueryWarning // any warnings that are accumulated during the planning phase are stored here
 
@@ -1150,6 +1151,11 @@ func (vc *VCursorImpl) SetAutocommit(ctx context.Context, autocommit bool) error
 // SetQueryTimeout implements the SessionActions interface
 func (vc *VCursorImpl) SetQueryTimeout(maxExecutionTime int64) {
 	vc.SafeSession.QueryTimeout = maxExecutionTime
+}
+
+// SetTransactionTimeout implements the SessionActions interface
+func (vc *VCursorImpl) SetTransactionTimeout(transactionTimeout int64) {
+	vc.SafeSession.GetOrCreateOptions().TransactionTimeout = &transactionTimeout
 }
 
 // SetClientFoundRows implements the SessionActions interface

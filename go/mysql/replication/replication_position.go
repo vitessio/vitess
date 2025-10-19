@@ -112,11 +112,13 @@ func AppendGTID(rp Position, gtid GTID) Position {
 // AppendGTID returns a new Position that represents the position
 // after the given GTID is replicated.
 func AppendGTIDInPlace(rp Position, gtid GTID) Position {
-	switch {
-	case gtid == nil:
-	case rp.GTIDSet == nil:
+	// If gtid is nil, treat it as a no-op and return the input Position.
+	if gtid == nil {
+		return rp
+	}
+	if rp.GTIDSet == nil {
 		rp.GTIDSet = gtid.GTIDSet()
-	default:
+	} else {
 		rp.GTIDSet.AddGTIDInPlace(gtid)
 	}
 	return rp
@@ -141,7 +143,7 @@ func AppendGTIDSetInPlace(rp Position, gtidSet GTIDSet) Position {
 	if rp.GTIDSet == nil {
 		return AppendGTIDSet(rp, gtidSet)
 	}
-	rp.GTIDSet = rp.GTIDSet.InPlaceUnion(gtidSet)
+	rp.GTIDSet = rp.GTIDSet.UnionInPlace(gtidSet)
 	return rp
 }
 

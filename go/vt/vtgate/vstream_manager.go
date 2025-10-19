@@ -319,9 +319,19 @@ func (vsm *vstreamManager) GetTotalStreamDelay() int64 {
 
 func (vs *vstream) stream(ctx context.Context) error {
 	ctx, vs.cancel = context.WithCancel(ctx)
-	defer vs.cancel()
 
-	go vs.sendEvents(ctx)
+	vs.wg.Add(1)
+	go func() {
+		defer vs.wg.Done()
+
+		// sendEvents returns either if the given context has been canceled or if
+		// an error is returned from the callback. If the callback returns an error,
+		// we need to cancel the context to stop the other stream goroutines
+		// and to unblock the VStream call.
+		defer vs.cancel()
+
+		vs.sendEvents(ctx)
+	}()
 
 	// Make a copy first, because the ShardGtids list can change once streaming starts.
 	copylist := append(([]*binlogdatapb.ShardGtid)(nil), vs.vgtid.ShardGtids...)
@@ -359,6 +369,7 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 		}
 		return nil
 	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -888,6 +899,20 @@ func (vs *vstream) shouldRetry(err error) (retry bool, ignoreTablet bool) {
 	// VStream.
 	if errCode == vtrpcpb.Code_INTERNAL {
 		return false, false
+	}
+	// Handle binary log purging errors by retrying with a different tablet.
+	// This occurs when a tablet doesn't have the requested GTID because the
+	// source purged the required binary logs. Another tablet might still have
+	// the logs, so we ignore this tablet and retry.
+	if errCode == vtrpcpb.Code_UNKNOWN {
+		sqlErr := sqlerror.NewSQLErrorFromError(err)
+		if sqlError, ok := sqlErr.(*sqlerror.SQLError); ok {
+			switch sqlError.Number() {
+			case sqlerror.ERMasterFatalReadingBinlog, // 1236
+				sqlerror.ERSourceHasPurgedRequiredGtids: // 1789
+				return true, true
+			}
+		}
 	}
 
 	// For anything else, if this is an ephemeral SQL error -- such as a

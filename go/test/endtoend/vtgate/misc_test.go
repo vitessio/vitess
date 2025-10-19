@@ -746,6 +746,27 @@ func TestFilterAfterLeftJoin(t *testing.T) {
 	utils.AssertMatches(t, conn, query, `[[INT64(1) INT64(10)]]`)
 }
 
+func TestFilterWithINAfterLeftJoin(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, conn, "insert into t1 (id1,id2) values (1, 10)")
+	utils.Exec(t, conn, "insert into t1 (id1,id2) values (2, 3)")
+	utils.Exec(t, conn, "insert into t1 (id1,id2) values (3, 2)")
+	utils.Exec(t, conn, "insert into t1 (id1,id2) values (4, 5)")
+
+	query := "select a.id1, b.id3 from t1 as a left outer join t2 as b on a.id2 = b.id4 WHERE a.id2 = 10 AND (b.id3 IS NULL OR b.id3 IN (1))"
+	utils.AssertMatches(t, conn, query, `[[INT64(1) NULL]]`)
+
+	utils.Exec(t, conn, "insert into t2 (id3,id4) values (1, 10)")
+
+	query = "select a.id1, b.id3 from t1 as a left outer join t2 as b on a.id2 = b.id4 WHERE a.id2 = 10 AND (b.id3 IS NULL OR b.id3 IN (1))"
+	utils.AssertMatches(t, conn, query, `[[INT64(1) INT64(1)]]`)
+
+	query = "select a.id1, b.id3 from t1 as a left outer join t2 as b on a.id2 = b.id4 WHERE a.id2 = 10 AND (b.id3 IS NULL OR (b.id3, b.id4) IN ((1, 10)))"
+	utils.AssertMatches(t, conn, query, `[[INT64(1) INT64(1)]]`)
+}
+
 func TestDescribeVindex(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
@@ -1006,6 +1027,38 @@ func TestQueryProcessedMetric(t *testing.T) {
 			initialQP, initialQR, initialQT = updatedQP, updatedQR, updatedQT
 		})
 	}
+}
+
+// TestQueryProcessedMetric verifies that query metrics are correctly published.
+func TestMetricForExplain(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	initialQP := getQPMetric(t, "QueryExecutions")
+	initialQT := getQPMetric(t, "QueryExecutionsByTable")
+	t.Run("explain t1", func(t *testing.T) {
+		utils.Exec(t, conn, "explain t1")
+		updatedQP := getQPMetric(t, "QueryExecutions")
+		updatedQT := getQPMetric(t, "QueryExecutionsByTable")
+		assert.EqualValuesf(t, 1, getValue(updatedQP, "EXPLAIN.Passthrough.PRIMARY")-getValue(initialQP, "EXPLAIN.Passthrough.PRIMARY"), "queryExecutions metric: %s", "explain")
+		assert.EqualValuesf(t, 1, getValue(updatedQT, "EXPLAIN.ks_t1")-getValue(initialQT, "EXPLAIN.ks_t1"), "queryExecutionsByTable metric: %s", "asdasd")
+	})
+
+	t.Run("explain `select id1, id2 from t1`", func(t *testing.T) {
+		utils.ExecAllowError(t, conn, "explain `select id1, id2 from t1`")
+		updatedQP := getQPMetric(t, "QueryExecutions")
+		updatedQT := getQPMetric(t, "QueryExecutionsByTable")
+		assert.EqualValuesf(t, 1, getValue(updatedQP, "EXPLAIN.Passthrough.PRIMARY")-getValue(initialQP, "EXPLAIN.Passthrough.PRIMARY"), "queryExecutions metric: %s", "explain")
+		assert.EqualValuesf(t, 1, getValue(updatedQT, "EXPLAIN.ks_t1")-getValue(initialQT, "EXPLAIN.ks_t1"), "queryExecutionsByTable metric: %s", "asdasd")
+	})
+
+	t.Run("explain select id1, id2 from t1", func(t *testing.T) {
+		utils.Exec(t, conn, "explain select id1, id2 from t1")
+		updatedQP := getQPMetric(t, "QueryExecutions")
+		updatedQT := getQPMetric(t, "QueryExecutionsByTable")
+		assert.EqualValuesf(t, 2, getValue(updatedQP, "EXPLAIN.Passthrough.PRIMARY")-getValue(initialQP, "EXPLAIN.Passthrough.PRIMARY"), "queryExecutions metric: %s", "explain")
+		assert.EqualValuesf(t, 2, getValue(updatedQT, "EXPLAIN.ks_t1")-getValue(initialQT, "EXPLAIN.ks_t1"), "queryExecutionsByTable metric: %s", "asdasd")
+	})
 }
 
 func getQPMetric(t *testing.T, metric string) map[string]any {

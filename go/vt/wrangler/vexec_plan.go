@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/olekukonko/tablewriter"
+	"github.com/olekukonko/tablewriter/tw"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -92,16 +93,25 @@ func (p vreplicationPlanner) dryRun(ctx context.Context) error {
 	p.vx.wr.Logger().Printf("Query: %s\nwill be run on the following streams in keyspace %s for workflow %s:\n\n",
 		p.vx.plannedQuery, p.vx.keyspace, p.vx.workflow)
 	tableString := &strings.Builder{}
-	table := tablewriter.NewWriter(tableString)
-	table.SetHeader([]string{"Tablet", "ID", "BinLogSource", "State", "DBName", "Current GTID"})
+
+	table := tablewriter.NewTable(tableString,
+		tablewriter.WithSymbols(tw.NewSymbols(tw.StyleASCII)),
+		tablewriter.WithRowMaxWidth(30),
+		tablewriter.WithRendition(tw.Rendition{
+			Settings: tw.Settings{
+				Separators: tw.Separators{
+					BetweenRows: tw.On,
+				},
+			},
+		}),
+	)
+	table.Header("TABLET", "ID", "BINLOGSOURCE", "STATE", "DBNAME", "CURRENT GTID")
 	for _, primary := range p.vx.primaries {
 		key := fmt.Sprintf("%s/%s", primary.Shard, primary.AliasString())
 		for _, stream := range rsr.ShardStatuses[key].PrimaryReplicationStatuses {
-			table.Append([]string{key, fmt.Sprintf("%d", stream.ID), stream.Bls.String(), stream.State, stream.DBName, stream.Pos})
+			table.Append(key, fmt.Sprintf("%d", stream.ID), stream.Bls.String(), stream.State, stream.DBName, stream.Pos)
 		}
 	}
-	table.SetAutoMergeCellsByColumnIndex([]int{0})
-	table.SetRowLine(true)
 	table.Render()
 	p.vx.wr.Logger().Printf(tableString.String())
 	p.vx.wr.Logger().Printf("\n\n")

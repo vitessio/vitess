@@ -90,7 +90,7 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-			"--vschema_ddl_authorized_users", "%")
+			"--vschema-ddl-authorized-users", "%")
 		// Start vtgate
 		err = clusterInstance.StartVtgate()
 		if err != nil {

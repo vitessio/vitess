@@ -16,12 +16,12 @@ vtctld \
 	--topo-global-root /vitess/ \
 	--service-map 'grpc-vtctl,grpc-vtctld' \
 	--backup-storage-implementation file \
-	--file_backup_storage_root $VTDATAROOT/backups \
+	--file-backup-storage-root $VTDATAROOT/backups \
 	--port 15000 \
 	--grpc-port 15999
 
 Flags:
-      --action_timeout duration                                          time to wait for an action before resorting to force (default 1m0s)
+      --action-timeout duration                                          time to wait for an action before resorting to force (default 1m0s)
       --alsologtostderr                                                  log to standard error as well as files
       --azblob-backup-account-key-file string                            Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path).
       --azblob-backup-account-name string                                Azure Storage Account name for backups; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_NAME will be used.
@@ -52,9 +52,10 @@ Flags:
       --consul-auth-static-file string                                   JSON File to read the topos/tokens from.
       --datadog-agent-host string                                        host to send spans to. if empty, no tracing will be done
       --datadog-agent-port string                                        port to send spans to. if empty, no tracing will be done
+      --datadog-trace-debug-mode                                         enable debug mode for datadog tracing
       --disable-active-reparents                                         if set, do not allow active reparents. Use this to protect a cluster using external reparents.
       --emit-stats                                                       If set, emit stats to push-based monitoring and stats backends
-      --file_backup_storage_root string                                  Root directory for the file backup storage.
+      --file-backup-storage-root string                                  Root directory for the file backup storage.
       --gcs-backup-storage-bucket string                                 Google Cloud Storage bucket to use for backups.
       --gcs-backup-storage-root string                                   Root prefix for all backup-related object names.
       --grpc-auth-mode string                                            Which auth plugin implementation to use (eg: static)
@@ -99,7 +100,7 @@ Flags:
       --log_dir string                                                   If non-empty, write log files in this directory
       --logtostderr                                                      log to standard error instead of files
       --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
-      --mysql-server-version string                                      MySQL server version to advertise. (default "8.0.40-Vitess")
+      --mysql-server-version string                                      MySQL server version to advertise. (default "8.4.6-Vitess")
       --onclose-timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)
       --onterm-timeout duration                                          wait no more than this for OnTermSync handlers before stopping (default 10s)
       --opentsdb-uri string                                              URI of opentsdb /api/put method

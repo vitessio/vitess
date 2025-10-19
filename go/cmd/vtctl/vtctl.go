@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
@@ -86,10 +87,12 @@ func init() {
 			vtctl.PrintAllCommands(logger)
 		}
 
-		fs.DurationVar(&waitTime, "wait-time", waitTime, "time to wait on an action")
+		utils.SetFlagDurationVar(fs, &waitTime, "wait-time", waitTime, "time to wait on an action")
 		fs.BoolVar(&detachedMode, "detach", detachedMode, "detached mode - run vtcl detached from the terminal")
 
 		acl.RegisterFlags(fs)
+
+		fs.SetNormalizeFunc(utils.NormalizeUnderscoresToDashes)
 	})
 }
 

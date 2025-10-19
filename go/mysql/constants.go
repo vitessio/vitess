@@ -37,6 +37,10 @@ const (
 // implemented authentication methods.
 type AuthMethodDescription string
 
+// ConnectionAttributes is a map of key/value pairs sent by the client during
+// the connection phase.
+type ConnectionAttributes map[string]string
+
 // Supported auth forms.
 const (
 	// MysqlNativePassword uses a salt and transmits a hash on the wire.

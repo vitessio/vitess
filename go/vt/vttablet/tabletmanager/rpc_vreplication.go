@@ -99,6 +99,12 @@ limit 1
 	sqlGetMaxSequenceVal   = "select max(%a) as maxval from %a.%a"
 	sqlInitSequenceTable   = "insert into %a.%a (id, next_id, cache) values (0, %d, 1000) on duplicate key update next_id = if(next_id < %d, %d, next_id)"
 	sqlCreateSequenceTable = "create table if not exists %a (id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence'"
+
+	// Functional permission testing queries - test each permission individually without accessing mysql.user table
+	sqlTestVReplicationSelectPermission = "select count(*) from %s.vreplication limit 1"
+	sqlTestVReplicationInsertPermission = "insert into %s.vreplication (workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options) values (%a, '', '', 0, 0, '', '', now(), 0, 'Stopped', '__test__', 0, 0, false, '{}')"
+	sqlTestVReplicationUpdatePermission = "update %s.vreplication set message = '__test_update__' where workflow = %a and db_name = '__test__'"
+	sqlTestVReplicationDeletePermission = "delete from %s.vreplication where workflow = %a and db_name = '__test__'"
 )
 
 var (
@@ -851,10 +857,13 @@ func (tm *TabletManager) createSequenceTable(ctx context.Context, escapedTableNa
 	return err
 }
 
-// ValidateVReplicationPermissions validates that the --db_filtered_user has
+// ValidateVReplicationPermissionsOld validates that the --db_filtered_user has
 // the minimum permissions required on the sidecardb vreplication table
 // needed in order to manage vreplication metadata.
-func (tm *TabletManager) ValidateVReplicationPermissions(ctx context.Context, req *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (*tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, error) {
+// Switching to use a functional test approach in ValidateVReplicationPermissions below
+// instead of querying mysql.user table directly as that requires permissions on the mysql.user table.
+// Leaving this here for now in case we want to revert back.
+func (tm *TabletManager) ValidateVReplicationPermissionsOld(ctx context.Context, req *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (*tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, error) {
 	query, err := sqlparser.ParseAndBind(sqlValidateVReplicationPermissions,
 		sqltypes.StringBindVariable(tm.DBConfigs.Filtered.User),
 		sqltypes.StringBindVariable(sidecar.GetName()),
@@ -892,6 +901,87 @@ func (tm *TabletManager) ValidateVReplicationPermissions(ctx context.Context, re
 		User:  tm.DBConfigs.Filtered.User,
 		Ok:    val,
 		Error: errorString,
+	}, nil
+}
+
+// ValidateVReplicationPermissions validates that the --db_filtered_user has
+// the minimum permissions required on the sidecardb vreplication table
+// using a functional testing approach that doesn't require access to mysql.user table.
+func (tm *TabletManager) ValidateVReplicationPermissions(ctx context.Context, req *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (*tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, error) {
+	log.Infof("Validating VReplication permissions on sidecar db %s", tm.tabletAlias)
+
+	conn, err := tm.MysqlDaemon.GetFilteredConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecuteFetch("START TRANSACTION", 1, false); err != nil {
+		return nil, vterrors.Wrap(err, "failed to start transaction for permission testing")
+	}
+	defer func() {
+		_, err := conn.ExecuteFetch("ROLLBACK", 1, false)
+		if err != nil {
+			log.Warningf("failed to rollback transaction after permission testing: %v", err)
+		}
+	}()
+
+	// Create a unique test workflow name to avoid conflicts using timestamp and random component
+	testWorkflow := fmt.Sprintf("__permission_test_%d_%d", time.Now().Unix(), time.Now().Nanosecond()%1000000)
+	sidecarDB := sidecar.GetName()
+
+	permissionTests := []struct {
+		permission  string
+		sqlTemplate string
+	}{
+		{"SELECT", sqlTestVReplicationSelectPermission},
+		{"INSERT", sqlTestVReplicationInsertPermission},
+		{"UPDATE", sqlTestVReplicationUpdatePermission},
+		{"DELETE", sqlTestVReplicationDeletePermission},
+	}
+
+	for _, test := range permissionTests {
+		var query string
+		var err error
+
+		if test.permission == "SELECT" {
+			parsed := sqlparser.BuildParsedQuery(test.sqlTemplate, sidecar.GetIdentifier())
+			query, err = parsed.GenerateQuery(nil, nil)
+		} else {
+			parsed := sqlparser.BuildParsedQuery(test.sqlTemplate, sidecar.GetIdentifier(), ":workflow")
+			query, err = parsed.GenerateQuery(map[string]*querypb.BindVariable{
+				"workflow": sqltypes.StringBindVariable(testWorkflow),
+			}, nil)
+		}
+
+		if err != nil {
+			return nil, vterrors.Wrapf(err, "failed to bind %s query for permission testing", test.permission)
+		}
+
+		log.Infof("Testing %s permission using query: %s", test.permission, query)
+		if _, err := conn.ExecuteFetch(query, 1, false); err != nil {
+			// Check if we got `ERTableAccessDenied` error code from MySQL
+			sqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
+			if !ok || sqlErr.Num != sqlerror.ERTableAccessDenied {
+				return nil, vterrors.Wrapf(err, "error executing %s permission test query", test.permission)
+			}
+
+			return &tabletmanagerdatapb.ValidateVReplicationPermissionsResponse{
+				User: tm.DBConfigs.Filtered.User,
+				Ok:   false,
+				Error: fmt.Sprintf("user %s does not have %s permission on %s.vreplication table on tablet %s: %v",
+					tm.DBConfigs.Filtered.User, test.permission, sidecarDB, topoproto.TabletAliasString(tm.tabletAlias), err),
+			}, nil
+		}
+	}
+
+	log.Infof("VReplication sidecardb permission validation succeeded for user %s on tablet %s",
+		tm.DBConfigs.Filtered.User, tm.tabletAlias)
+
+	return &tabletmanagerdatapb.ValidateVReplicationPermissionsResponse{
+		User:  tm.DBConfigs.Filtered.User,
+		Ok:    true,
+		Error: "",
 	}, nil
 }
 

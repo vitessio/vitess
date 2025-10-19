@@ -148,7 +148,7 @@ func TestHealthCheck(t *testing.T) {
 
 	// stop the replica's source mysqld instance to break replication
 	// and test that the replica tablet becomes unhealthy and non-serving after crossing
-	// the tablet's --unhealthy_threshold and the gateway's --discovery_low_replication_lag
+	// the tablet's --unhealthy-threshold and the gateway's --discovery-low-replication-lag
 	err = primaryTablet.MysqlctlProcess.Stop()
 	require.NoError(t, err)
 

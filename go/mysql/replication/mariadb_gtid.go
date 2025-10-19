@@ -255,7 +255,7 @@ func (gtidSet MariadbGTIDSet) Union(other GTIDSet) GTIDSet {
 }
 
 // Union implements GTIDSet.Union().
-func (gtid MariadbGTIDSet) InPlaceUnion(other GTIDSet) GTIDSet {
+func (gtid MariadbGTIDSet) UnionInPlace(other GTIDSet) GTIDSet {
 	gtid = gtid.Union(other).(MariadbGTIDSet)
 
 	return gtid

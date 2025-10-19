@@ -78,7 +78,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        branch: [ latest, mysql84, percona80 ]
+        branch: [ latest, mysql80, mysql84, percona80 ]
 
     steps:
       - name: Check out code
@@ -144,7 +144,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        debian: [ bullseye, bookworm ]
+        debian: [ bookworm, trixie ]
         component: [ vtadmin, vtorc, vtgate, vttablet, mysqlctld, mysqlctl, vtctl, vtctlclient, vtctld, vtctldclient, logrotate, logtail, vtbackup, vtexplain ]
 
     steps:
