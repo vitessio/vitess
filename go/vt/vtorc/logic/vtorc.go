@@ -18,7 +18,6 @@ package logic
 
 import (
 	"context"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -39,8 +38,6 @@ import (
 // requested for discovery. It can be continuously updated
 // as discovery process progresses.
 var discoveryQueue *DiscoveryQueue
-var snapshotDiscoveryKeys chan string
-var snapshotDiscoveryKeysMutex sync.Mutex
 var hasReceivedSIGTERM int32
 
 var (
@@ -61,8 +58,6 @@ var (
 var recentDiscoveryOperationKeys *cache.Cache
 
 func init() {
-	snapshotDiscoveryKeys = make(chan string, 10)
-
 	onMetricsTick(func() {
 		discoveryQueueLengthGauge.Set(int64(discoveryQueue.QueueLen()))
 	})
@@ -218,18 +213,6 @@ func onHealthTick() {
 	if err != nil {
 		log.Error(err)
 	}
-
-	func() {
-		// Normally onHealthTick() shouldn't run concurrently. It is kicked by a ticker.
-		// However it _is_ invoked inside a goroutine. I like to be safe here.
-		snapshotDiscoveryKeysMutex.Lock()
-		defer snapshotDiscoveryKeysMutex.Unlock()
-
-		countSnapshotKeys := len(snapshotDiscoveryKeys)
-		for i := 0; i < countSnapshotKeys; i++ {
-			tabletAliases = append(tabletAliases, <-snapshotDiscoveryKeys)
-		}
-	}()
 	// avoid any logging unless there's something to be done
 	if len(tabletAliases) > 0 {
 		for _, tabletAlias := range tabletAliases {
@@ -263,10 +246,6 @@ func ContinuousDiscovery() {
 	recoveryTick := time.Tick(config.GetRecoveryPollDuration())
 	tabletTopoTick := OpenTabletDiscovery()
 	var recoveryEntrance int64
-	var snapshotTopologiesTick <-chan time.Time
-	if config.GetSnapshotTopologyInterval() > 0 {
-		snapshotTopologiesTick = time.Tick(config.GetSnapshotTopologyInterval())
-	}
 
 	go func() {
 		_ = initMetrics()
@@ -304,10 +283,6 @@ func ContinuousDiscovery() {
 					}
 					CheckAndRecover()
 				}()
-			}()
-		case <-snapshotTopologiesTick:
-			go func() {
-				go inst.SnapshotTopologies()
 			}()
 		case <-tabletTopoTick:
 			ctx, cancel := context.WithTimeout(context.Background(), config.GetTopoInformationRefreshDuration())
