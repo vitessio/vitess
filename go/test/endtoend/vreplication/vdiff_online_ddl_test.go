@@ -14,11 +14,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vtctldata"
-<<<<<<< HEAD
-=======
 	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/utils"
->>>>>>> f0738d1d4c (VReplication: Ensure proper handling of keyspace/database names with dashes (#18762))
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
