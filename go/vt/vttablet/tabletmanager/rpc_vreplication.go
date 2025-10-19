@@ -702,7 +702,163 @@ func (tm *TabletManager) UpdateVReplicationWorkflows(ctx context.Context, req *t
 	}, nil
 }
 
+<<<<<<< HEAD
 // ValidateVReplicationPermissions validates that the --db_filtered_user has
+=======
+func (tm *TabletManager) GetMaxValueForSequences(ctx context.Context, req *tabletmanagerdatapb.GetMaxValueForSequencesRequest) (*tabletmanagerdatapb.GetMaxValueForSequencesResponse, error) {
+	maxValues := make(map[string]int64, len(req.Sequences))
+	mu := sync.Mutex{}
+	initGroup, gctx := errgroup.WithContext(ctx)
+	for _, sm := range req.Sequences {
+		initGroup.Go(func() error {
+			maxId, err := tm.getMaxSequenceValue(gctx, sm)
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			maxValues[sm.BackingTableName] = maxId
+			return nil
+		})
+	}
+	errs := initGroup.Wait()
+	if errs != nil {
+		return nil, errs
+	}
+	return &tabletmanagerdatapb.GetMaxValueForSequencesResponse{
+		MaxValuesBySequenceTable: maxValues,
+	}, nil
+}
+
+func (tm *TabletManager) getMaxSequenceValue(ctx context.Context, sm *tabletmanagerdatapb.GetMaxValueForSequencesRequest_SequenceMetadata) (int64, error) {
+	for _, val := range []string{sm.UsingTableDbNameEscaped, sm.UsingTableNameEscaped, sm.UsingColEscaped} {
+		lv := len(val)
+		if lv < 3 || val[0] != '`' || val[lv-1] != '`' {
+			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+				"the database (%s), table (%s), and column (%s) names must be non-empty escaped values", sm.UsingTableDbNameEscaped, sm.UsingTableNameEscaped, sm.UsingColEscaped)
+		}
+	}
+	query := sqlparser.BuildParsedQuery(sqlGetMaxSequenceVal,
+		sm.UsingColEscaped,
+		sm.UsingTableDbNameEscaped,
+		sm.UsingTableNameEscaped,
+	)
+	qr, err := tm.ExecuteFetchAsApp(ctx, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
+		Query:   []byte(query.Query),
+		MaxRows: 1,
+	})
+	if err != nil || len(qr.Rows) != 1 {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+			"failed to get the max used sequence value for target table %s in order to initialize the backing sequence table: %v", sm.UsingTableNameEscaped, err)
+	}
+	rawVal := sqltypes.Proto3ToResult(qr).Rows[0][0]
+	maxID := int64(0)
+	if !rawVal.IsNull() { // If it's NULL then there are no rows and 0 remains the max
+		maxID, err = rawVal.ToInt64()
+		if err != nil {
+			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s in order to initialize the backing sequence table: %v", sm.UsingTableNameEscaped, err)
+		}
+	}
+	return maxID, nil
+}
+
+func (tm *TabletManager) UpdateSequenceTables(ctx context.Context, req *tabletmanagerdatapb.UpdateSequenceTablesRequest) (*tabletmanagerdatapb.UpdateSequenceTablesResponse, error) {
+	sequenceTables := make([]string, 0, len(req.Sequences))
+	for _, sm := range req.Sequences {
+		if err := tm.updateSequenceValue(ctx, sm); err != nil {
+			return nil, err
+		}
+		sequenceTables = append(sequenceTables, sm.BackingTableName)
+	}
+
+	// It is important to reset in-memory sequence counters on the tables,
+	// since it is possible for it to be outdated, this will prevent duplicate
+	// key errors.
+	err := tm.ResetSequences(ctx, sequenceTables)
+	if err != nil {
+		return nil, vterrors.Errorf(
+			vtrpcpb.Code_INTERNAL, "failed to reset sequences on %q: %v",
+			tm.DBConfigs.DBName, err)
+	}
+	return &tabletmanagerdatapb.UpdateSequenceTablesResponse{}, nil
+}
+
+func (tm *TabletManager) updateSequenceValue(ctx context.Context, seq *tabletmanagerdatapb.UpdateSequenceTablesRequest_SequenceMetadata) error {
+	nextVal := seq.MaxValue + 1
+	if tm.Tablet().DbNameOverride != "" {
+		seq.BackingTableDbName = tm.Tablet().DbNameOverride
+	}
+	backingTableDbNameEscaped, err := sqlescape.EnsureEscaped(seq.BackingTableDbName)
+	if err != nil {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid database name %s specified for sequence backing table: %v",
+			seq.BackingTableDbName, err)
+	}
+	backingTableNameEscaped, err := sqlescape.EnsureEscaped(seq.BackingTableName)
+	if err != nil {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid table name %s specified for sequence backing table: %v",
+			seq.BackingTableName, err)
+	}
+	log.Infof("Updating sequence %s.%s to %d", seq.BackingTableDbName, seq.BackingTableName, nextVal)
+	initQuery := sqlparser.BuildParsedQuery(sqlInitSequenceTable,
+		backingTableDbNameEscaped,
+		backingTableNameEscaped,
+		nextVal,
+		nextVal,
+		nextVal,
+	)
+	const maxTries = 2
+
+	for i := 0; i < maxTries; i++ {
+		// Attempt to initialize the sequence.
+		_, err = tm.ExecuteFetchAsApp(ctx, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
+			Query:   []byte(initQuery.Query),
+			MaxRows: 1,
+		})
+		if err == nil {
+			return nil
+		}
+
+		// If the table doesn't exist, try creating it.
+		sqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
+		if !ok || (sqlErr.Num != sqlerror.ERNoSuchTable && sqlErr.Num != sqlerror.ERBadTable) {
+			return vterrors.Errorf(
+				vtrpcpb.Code_INTERNAL,
+				"failed to initialize the backing sequence table %s.%s: %v",
+				backingTableDbNameEscaped, backingTableNameEscaped, err,
+			)
+		}
+
+		if err := tm.createSequenceTable(ctx, backingTableNameEscaped); err != nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+				"failed to create the backing sequence table %s in the global-keyspace %s: %v",
+				backingTableNameEscaped, tm.Tablet().Keyspace, err)
+		}
+		// Table has been created, so we fall through and try again on the next loop iteration.
+	}
+
+	return vterrors.Errorf(
+		vtrpcpb.Code_INTERNAL, "failed to initialize the backing sequence table %s.%s after retries. Last error: %v",
+		backingTableDbNameEscaped, backingTableNameEscaped, err)
+}
+
+func (tm *TabletManager) createSequenceTable(ctx context.Context, tableName string) error {
+	escapedTableName, err := sqlescape.EnsureEscaped(tableName)
+	if err != nil {
+		return err
+	}
+	stmt := sqlparser.BuildParsedQuery(sqlCreateSequenceTable, escapedTableName)
+	_, err = tm.ApplySchema(ctx, &tmutils.SchemaChange{
+		SQL:                     stmt.Query,
+		Force:                   false,
+		AllowReplication:        true,
+		SQLMode:                 vreplication.SQLMode,
+		DisableForeignKeyChecks: true,
+	})
+	return err
+}
+
+// ValidateVReplicationPermissionsOld validates that the --db_filtered_user has
+>>>>>>> f0738d1d4c (VReplication: Ensure proper handling of keyspace/database names with dashes (#18762))
 // the minimum permissions required on the sidecardb vreplication table
 // needed in order to manage vreplication metadata.
 func (tm *TabletManager) ValidateVReplicationPermissions(ctx context.Context, req *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (*tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, error) {

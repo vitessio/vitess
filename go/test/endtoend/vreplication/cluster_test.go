@@ -359,7 +359,7 @@ func getClusterOptions(opts *clusterOptions) *clusterOptions {
 		opts = &clusterOptions{}
 	}
 	if opts.cells == nil {
-		opts.cells = []string{"zone1"}
+		opts.cells = []string{defaultCellName}
 	}
 	if opts.clusterConfig == nil {
 		opts.clusterConfig = mainClusterConfig

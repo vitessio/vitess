@@ -24,6 +24,7 @@ import (
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
+	"vitess.io/vitess/go/sqlescape"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -38,7 +39,7 @@ var (
 	}
 
 	baseOptions = struct {
-		// This is where the lookup table and VReplicaiton workflow
+		// This is where the lookup table and VReplication workflow
 		// will be created.
 		TableKeyspace string
 		// This will be the name of the Lookup Vindex and the name
@@ -90,12 +91,20 @@ var (
 		if !strings.Contains(createOptions.Type, "lookup") {
 			return fmt.Errorf("vindex type must be a lookup vindex")
 		}
+		escapedTableKeyspace, err := sqlescape.EnsureEscaped(baseOptions.TableKeyspace)
+		if err != nil {
+			return fmt.Errorf("invalid table keyspace (%s): %v", baseOptions.TableKeyspace, err)
+		}
+		escapedTableName, err := sqlescape.EnsureEscaped(createOptions.TableName)
+		if err != nil {
+			return fmt.Errorf("invalid table name (%s): %v", createOptions.TableName, err)
+		}
 		baseOptions.Vschema = &vschemapb.Keyspace{
 			Vindexes: map[string]*vschemapb.Vindex{
 				baseOptions.Name: {
 					Type: createOptions.Type,
 					Params: map[string]string{
-						"table":        baseOptions.TableKeyspace + "." + createOptions.TableName,
+						"table":        escapedTableKeyspace + "." + escapedTableName,
 						"from":         strings.Join(createOptions.TableOwnerColumns, ","),
 						"to":           "keyspace_id",
 						"ignore_nulls": fmt.Sprintf("%t", createOptions.IgnoreNulls),
@@ -139,6 +148,97 @@ var (
 		return nil
 	}
 
+<<<<<<< HEAD
+=======
+	parseVindexParams = func(params map[string]*vindexParams, cmd *cobra.Command) error {
+		if len(params) == 0 {
+			return fmt.Errorf("at least 1 vindex is required")
+		}
+
+		vindexes := map[string]*vschemapb.Vindex{}
+		tables := map[string]*vschemapb.Table{}
+		for vindexName, vindex := range params {
+			if len(vindex.TableOwnerColumns) == 0 {
+				return fmt.Errorf("table owner columns found empty for '%s'", vindexName)
+			}
+			if vindex.TableOwner == "" {
+				return fmt.Errorf("table owner found empty for '%s'", vindexName)
+			}
+			if vindex.TableName == "" {
+				vindex.TableName = vindexName
+			}
+
+			if !strings.Contains(vindex.LookupVindexType, "lookup") {
+				return fmt.Errorf("%s is not a lookup vindex type", vindex.LookupVindexType)
+			}
+
+			escapedTableKeyspace, err := sqlescape.EnsureEscaped(baseOptions.TableKeyspace)
+			if err != nil {
+				return fmt.Errorf("invalid table keyspace (%s): %v", baseOptions.TableKeyspace, err)
+			}
+			escapedTableName, err := sqlescape.EnsureEscaped(createOptions.TableName)
+			if err != nil {
+				return fmt.Errorf("invalid table name (%s): %v", vindex.TableName, err)
+			}
+			vindexes[vindexName] = &vschemapb.Vindex{
+				Type: vindex.LookupVindexType,
+				Params: map[string]string{
+					"table":        escapedTableKeyspace + "." + escapedTableName,
+					"from":         strings.Join(vindex.TableOwnerColumns, ","),
+					"to":           "keyspace_id",
+					"ignore_nulls": fmt.Sprintf("%t", vindex.IgnoreNulls),
+				},
+				Owner: vindex.TableOwner,
+			}
+
+			targetTableColumnVindex := &vschemapb.ColumnVindex{
+				// If the vindex type is empty then we'll fill this later by
+				// choosing the most appropriate vindex type for the given column.
+				Name:    vindex.TableVindexType,
+				Columns: vindex.TableOwnerColumns,
+			}
+			sourceTableColumnVindex := &vschemapb.ColumnVindex{
+				Name:    vindexName,
+				Columns: vindex.TableOwnerColumns,
+			}
+
+			if table, ok := tables[vindex.TableName]; !ok {
+				tables[vindex.TableName] = &vschemapb.Table{
+					ColumnVindexes: []*vschemapb.ColumnVindex{targetTableColumnVindex},
+				}
+			} else {
+				table.ColumnVindexes = append(table.ColumnVindexes, targetTableColumnVindex)
+			}
+
+			if table, ok := tables[vindex.TableOwner]; !ok {
+				tables[vindex.TableOwner] = &vschemapb.Table{
+					ColumnVindexes: []*vschemapb.ColumnVindex{sourceTableColumnVindex},
+				}
+			} else {
+				table.ColumnVindexes = append(table.ColumnVindexes, sourceTableColumnVindex)
+			}
+		}
+
+		baseOptions.Vschema = &vschemapb.Keyspace{
+			Vindexes: vindexes,
+			Tables:   tables,
+		}
+
+		// VReplication specific flags.
+		ttFlag := cmd.Flags().Lookup("tablet-types")
+		if ttFlag != nil && ttFlag.Changed {
+			createOptions.TabletTypes = tabletTypesDefault
+		}
+		cFlag := cmd.Flags().Lookup("cells")
+		if cFlag != nil && cFlag.Changed {
+			for i, cell := range createOptions.Cells {
+				createOptions.Cells[i] = strings.TrimSpace(cell)
+			}
+		}
+		return nil
+	}
+
+>>>>>>> f0738d1d4c (VReplication: Ensure proper handling of keyspace/database names with dashes (#18762))
 	// cancel makes a WorkflowDelete call to a vtctld.
 	cancel = &cobra.Command{
 		Use:                   "cancel",
