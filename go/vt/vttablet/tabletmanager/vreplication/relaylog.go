@@ -29,6 +29,10 @@ import (
 
 const relayLogIOStalledMsg = "relay log I/O stalled"
 
+// maxItemsPrealloc is some reasonable initial allocation for the relay log buffer,
+// to avoid incrementally re-allocating what would end up fully allocated anyhow.
+const maxItemsPrealloc = 5000
+
 type relayLog struct {
 	ctx      context.Context
 	maxItems int
@@ -87,6 +91,9 @@ func (rl *relayLog) Send(events []*binlogdatapb.VEvent) error {
 		}
 	}
 	rl.timedout = false
+	if rl.items == nil {
+		rl.items = make([][]*binlogdatapb.VEvent, 0, min(maxItemsPrealloc, rl.maxItems))
+	}
 	rl.items = append(rl.items, events)
 	rl.curSize += eventsSize(events)
 	rl.hasItems.Broadcast()
