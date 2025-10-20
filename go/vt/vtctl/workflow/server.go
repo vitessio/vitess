@@ -63,7 +63,6 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
 )
@@ -507,7 +506,7 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 		}
 		mirrorRules, err := topotools.GetMirrorRules(ctx, ts.TopoServer())
 		if err != nil {
-			return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "failed to get mirror rules: %v", err)
+			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get mirror rules: %v", err)
 		}
 		for _, table := range ts.Tables() {
 			// If a rule for the primary tablet type exists (= no @primary
