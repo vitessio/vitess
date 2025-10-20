@@ -72,7 +72,7 @@ const stopOnReshardDelay = 500 * time.Millisecond
 
 // livenessTimeout is the point at which we return an error to the client if the stream has recieved
 // no events, including heartbeats, from any of the shards.
-const livenessTimeout = 10 * time.Minute
+var livenessTimeout = 10 * time.Minute
 
 // vstream contains the metadata for one VStream request.
 type vstream struct {

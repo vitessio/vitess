@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -1743,6 +1744,83 @@ func TestVStreamIdleHeartbeat(t *testing.T) {
 			require.ErrorIs(t, vterrors.UnwrapAll(err), context.DeadlineExceeded)
 
 			require.Equalf(t, heartbeatCount, tcase.want, "got %d, want %d", heartbeatCount, tcase.want)
+		})
+	}
+}
+
+func TestVStreamLivenessChecks(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	cell := "aa"
+	ks := "TestVStream"
+	_ = createSandbox(ks)
+	hc := discovery.NewFakeHealthCheck(nil)
+	st := getSandboxTopo(ctx, cell, ks, []string{"-20"})
+	vsm := newTestVStreamManager(ctx, hc, st, cell)
+	origLivenessTimeout := livenessTimeout
+	origHeartbeatTime := vstreamer.HeartbeatTime
+	defer func() {
+		livenessTimeout = origLivenessTimeout
+		vstreamer.HeartbeatTime = origHeartbeatTime
+	}()
+	fakeTablet := hc.AddTestTablet("aa", "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	addTabletToSandboxTopo(t, ctx, st, fakeTablet.Tablet().Keyspace, fakeTablet.Tablet().Shard, fakeTablet.Tablet())
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: fakeTablet.Tablet().Keyspace,
+			Shard:    fakeTablet.Tablet().Shard,
+		}},
+	}
+
+	type testcase struct {
+		name            string
+		livenessTimeout time.Duration
+		// We use simulated tablet vstreamer heartbeats as a substitute for the hardcoded 900ms
+		// heartbeats that come from a real tablet server's vstreamer because we have no real
+		// tablet server here.
+		simulateVstreamerHeartbeats bool
+		wantErr                     string
+	}
+	testcases := []testcase{
+		{
+			name:            "should fail liveness check",
+			livenessTimeout: 100 * time.Millisecond,
+			wantErr:         fmt.Sprintf("vstream is fully throttled or otherwise hung: vstream failed liveness checks as there was no activity, including heartbeats, within the last %v", 100*time.Millisecond),
+		},
+		{
+			name:                        "should not fail liveness check",
+			livenessTimeout:             100 * time.Millisecond,
+			simulateVstreamerHeartbeats: true,
+			wantErr:                     "context ended while sending events: context deadline exceeded",
+		},
+	}
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			vstreamCtx, vstreamCancel := context.WithTimeout(ctx, tcase.livenessTimeout*2)
+			defer vstreamCancel()
+			livenessTimeout = tcase.livenessTimeout
+			if tcase.simulateVstreamerHeartbeats {
+				events := []*binlogdatapb.VEvent{
+					{Type: binlogdatapb.VEventType_HEARTBEAT},
+					{Type: binlogdatapb.VEventType_HEARTBEAT},
+					{Type: binlogdatapb.VEventType_HEARTBEAT},
+					{Type: binlogdatapb.VEventType_HEARTBEAT},
+				}
+				fakeTablet.VStreamEventDelay = time.Duration(tcase.livenessTimeout / 2)
+				for _, event := range events {
+					fakeTablet.AddVStreamEvents([]*binlogdatapb.VEvent{event}, nil)
+				}
+			}
+
+			err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
+				return nil
+			})
+
+			if tcase.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			require.EqualError(t, err, tcase.wantErr)
 		})
 	}
 }
