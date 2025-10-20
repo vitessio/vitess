@@ -387,12 +387,19 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 
 		// If we found an existing tablet record, use its tablet type instead of the initial one
 		if err == nil {
-			log.Infof("Found existing tablet record with --init-tablet-type-lookup enabled, using tablet type %v from topology instead of init-tablet-type %v",
-				existingTablet.Type, tablet.Type)
-			tablet.Type = existingTablet.Type
-			// If it was a PRIMARY, preserve the start time
-			if existingTablet.Type == topodatapb.TabletType_PRIMARY {
-				tablet.PrimaryTermStartTime = existingTablet.PrimaryTermStartTime
+			// Skip transient operational types (BACKUP, RESTORE)
+			// These are temporary states that should not be preserved across restarts
+			if existingTablet.Type == topodatapb.TabletType_BACKUP || existingTablet.Type == topodatapb.TabletType_RESTORE {
+				log.Infof("Found existing tablet record with transient type %v, using init-tablet-type %v instead",
+					existingTablet.Type, tablet.Type)
+			} else {
+				log.Infof("Found existing tablet record with --init-tablet-type-lookup enabled, using tablet type %v from topology instead of init-tablet-type %v",
+					existingTablet.Type, tablet.Type)
+				tablet.Type = existingTablet.Type
+				// If it was a PRIMARY, preserve the start time
+				if existingTablet.Type == topodatapb.TabletType_PRIMARY {
+					tablet.PrimaryTermStartTime = existingTablet.PrimaryTermStartTime
+				}
 			}
 		} else {
 			log.Infof("No existing tablet record found, using init-tablet-type: %v", tablet.Type)
