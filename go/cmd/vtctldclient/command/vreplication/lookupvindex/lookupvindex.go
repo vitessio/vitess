@@ -24,6 +24,7 @@ import (
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
+	"vitess.io/vitess/go/sqlescape"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -38,7 +39,7 @@ var (
 	}
 
 	baseOptions = struct {
-		// This is where the lookup table and VReplicaiton workflow
+		// This is where the lookup table and VReplication workflow
 		// will be created.
 		TableKeyspace string
 		// This will be the name of the Lookup Vindex and the name
@@ -90,12 +91,20 @@ var (
 		if !strings.Contains(createOptions.Type, "lookup") {
 			return fmt.Errorf("vindex type must be a lookup vindex")
 		}
+		escapedTableKeyspace, err := sqlescape.EnsureEscaped(baseOptions.TableKeyspace)
+		if err != nil {
+			return fmt.Errorf("invalid table keyspace (%s): %v", baseOptions.TableKeyspace, err)
+		}
+		escapedTableName, err := sqlescape.EnsureEscaped(createOptions.TableName)
+		if err != nil {
+			return fmt.Errorf("invalid table name (%s): %v", createOptions.TableName, err)
+		}
 		baseOptions.Vschema = &vschemapb.Keyspace{
 			Vindexes: map[string]*vschemapb.Vindex{
 				baseOptions.Name: {
 					Type: createOptions.Type,
 					Params: map[string]string{
-						"table":        baseOptions.TableKeyspace + "." + createOptions.TableName,
+						"table":        escapedTableKeyspace + "." + escapedTableName,
 						"from":         strings.Join(createOptions.TableOwnerColumns, ","),
 						"to":           "keyspace_id",
 						"ignore_nulls": fmt.Sprintf("%t", createOptions.IgnoreNulls),

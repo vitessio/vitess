@@ -50,7 +50,7 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 	defaultRdonly = 0
 
 	defaultCell := vc.Cells[vc.CellNames[0]]
-	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
+	vc.AddKeyspace(t, []*Cell{defaultCell}, defaultSourceKs, "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
 	vtgate := defaultCell.Vtgates[0]
@@ -65,7 +65,7 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 	defer vstreamConn.Close()
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
-			Keyspace: "product",
+			Keyspace: defaultSourceKs,
 			Shard:    "0",
 			Gtid:     "",
 		}}}
@@ -97,7 +97,7 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 			}
 			insertMu.Lock()
 			id++
-			execVtgateQuery(t, vtgateConn, "product", fmt.Sprintf("insert into customer (cid, name) values (%d, 'customer%d')", id+100, id))
+			execVtgateQuery(t, vtgateConn, defaultSourceKs, fmt.Sprintf("insert into customer (cid, name) values (%d, 'customer%d')", id+100, id))
 			insertMu.Unlock()
 		}
 	}()
@@ -142,7 +142,7 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 		case 1:
 			if failover {
 				insertMu.Lock()
-				output, err := vc.VtctldClient.ExecuteCommandWithOutput("PlannedReparentShard", "product/0", "--new-primary=zone1-101")
+				output, err := vc.VtctldClient.ExecuteCommandWithOutput("PlannedReparentShard", fmt.Sprintf("%s/0", defaultSourceKs), "--new-primary=zone1-101")
 				insertMu.Unlock()
 				log.Infof("output of first PRS is %s", output)
 				require.NoError(t, err)
@@ -150,7 +150,7 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 		case 2:
 			if failover {
 				insertMu.Lock()
-				output, err := vc.VtctldClient.ExecuteCommandWithOutput("PlannedReparentShard", "product/0", "--new-primary=zone1-100")
+				output, err := vc.VtctldClient.ExecuteCommandWithOutput("PlannedReparentShard", fmt.Sprintf("%s/0", defaultSourceKs), "--new-primary=zone1-100")
 				insertMu.Unlock()
 				log.Infof("output of second PRS is %s", output)
 				require.NoError(t, err)
@@ -166,7 +166,7 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 		}
 	}
 
-	qr := execVtgateQuery(t, vtgateConn, "product", "select count(*) from customer")
+	qr := execVtgateQuery(t, vtgateConn, defaultSourceKs, "select count(*) from customer")
 	require.NotNil(t, qr)
 	// total number of row events found by the VStream API should match the rows inserted
 	insertedRows, err := qr.Rows[0][0].ToCastInt64()
@@ -491,7 +491,7 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEven
 		tickCount++
 		switch tickCount {
 		case 1:
-			reshard(t, "sharded", "customer", "vstreamCopyMultiKeyspaceReshard", "-80,80-", "-40,40-", baseTabletID+400, nil, nil, nil, nil, defaultCellName, 1)
+			reshard(t, "sharded", defaultTargetKs, "vstreamCopyMultiKeyspaceReshard", "-80,80-", "-40,40-", baseTabletID+400, nil, nil, nil, nil, defaultCellName, 1)
 			reshardDone = true
 		case 60:
 			done = true
@@ -545,7 +545,7 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 	require.NoError(t, err)
 
 	// Add the new shards.
-	err = vc.AddShards(t, []*Cell{defaultCell}, keyspace, newShards, defaultReplicas, defaultRdonly, baseTabletID+2000, targetKsOpts)
+	err = vc.AddShards(t, []*Cell{defaultCell}, keyspace, newShards, defaultReplicas, defaultRdonly, baseTabletID+2000, defaultTargetKsOpts)
 	require.NoError(t, err)
 
 	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
@@ -741,7 +741,7 @@ func TestMultiVStreamsKeyspaceStopOnReshard(t *testing.T) {
 	require.NoError(t, err)
 
 	// Add the new shards.
-	err = vc.AddShards(t, []*Cell{defaultCell}, keyspace, newShards, defaultReplicas, defaultRdonly, baseTabletID+2000, targetKsOpts)
+	err = vc.AddShards(t, []*Cell{defaultCell}, keyspace, newShards, defaultReplicas, defaultRdonly, baseTabletID+2000, defaultTargetKsOpts)
 	require.NoError(t, err)
 
 	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
@@ -940,7 +940,7 @@ func TestVStreamStopOnReshardFalse(t *testing.T) {
 
 func TestVStreamWithKeyspacesToWatch(t *testing.T) {
 	extraVTGateArgs = append(extraVTGateArgs, []string{
-		"--keyspaces_to_watch", "product",
+		"--keyspaces_to_watch", defaultSourceKs,
 	}...)
 
 	testVStreamWithFailover(t, false)
@@ -979,7 +979,7 @@ func doVStream(t *testing.T, vc *VitessCluster, flags *vtgatepb.VStreamFlags) (n
 	done := false
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
-			Keyspace: "product",
+			Keyspace: defaultSourceKs,
 			Shard:    "0",
 			Gtid:     "",
 		}}}
@@ -1004,7 +1004,7 @@ func doVStream(t *testing.T, vc *VitessCluster, flags *vtgatepb.VStreamFlags) (n
 					arr := strings.Split(rowEvent.TableName, ".")
 					require.Equal(t, len(arr), 2)
 					tableName := arr[1]
-					require.Equal(t, "product", rowEvent.Keyspace)
+					require.Equal(t, defaultSourceKs, rowEvent.Keyspace)
 					require.Equal(t, "0", rowEvent.Shard)
 					numRowEvents[tableName]++
 
@@ -1013,7 +1013,7 @@ func doVStream(t *testing.T, vc *VitessCluster, flags *vtgatepb.VStreamFlags) (n
 					arr := strings.Split(fieldEvent.TableName, ".")
 					require.Equal(t, len(arr), 2)
 					tableName := arr[1]
-					require.Equal(t, "product", fieldEvent.Keyspace)
+					require.Equal(t, defaultSourceKs, fieldEvent.Keyspace)
 					require.Equal(t, "0", fieldEvent.Shard)
 					numFieldEvents[tableName]++
 				default:
@@ -1052,7 +1052,7 @@ func TestVStreamHeartbeats(t *testing.T) {
 	defaultRdonly = 0
 
 	defaultCell := vc.Cells[vc.CellNames[0]]
-	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema,
+	vc.AddKeyspace(t, []*Cell{defaultCell}, defaultSourceKs, "0", initialProductVSchema, initialProductSchema,
 		defaultReplicas, defaultRdonly, 100, nil)
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
@@ -1108,7 +1108,7 @@ func TestVStreamPushdownFilters(t *testing.T) {
 	})
 	defer vc.TearDown()
 	require.NotNil(t, vc)
-	ks := "product"
+	ks := defaultSourceKs
 	shard := "0"
 	defaultCell := vc.Cells[vc.CellNames[0]]
 

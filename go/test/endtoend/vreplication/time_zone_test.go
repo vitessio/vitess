@@ -33,10 +33,8 @@ import (
 // TestMoveTablesTZ tests the conversion of datetime based on the source timezone passed to the MoveTables workflow
 func TestMoveTablesTZ(t *testing.T) {
 	workflow := "tz"
-	sourceKs := "product"
-	targetKs := "customer"
-	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
-	ksReverseWorkflow := fmt.Sprintf("%s.%s_reverse", sourceKs, workflow)
+	ksWorkflow := fmt.Sprintf("%s.%s", defaultTargetKs, workflow)
+	ksReverseWorkflow := fmt.Sprintf("%s.%s_reverse", defaultSourceKs, workflow)
 
 	vc = NewVitessCluster(t, nil)
 	defer vc.TearDown()
@@ -44,13 +42,13 @@ func TestMoveTablesTZ(t *testing.T) {
 	cells := []*Cell{defaultCell}
 
 	cell1 := vc.Cells["zone1"]
-	vc.AddKeyspace(t, []*Cell{cell1}, sourceKs, "0", initialProductVSchema, initialProductSchema, 0, 0, 100, sourceKsOpts)
+	vc.AddKeyspace(t, []*Cell{cell1}, defaultSourceKs, "0", initialProductVSchema, initialProductSchema, 0, 0, 100, defaultSourceKsOpts)
 
 	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 
-	productTab := vc.Cells[defaultCell.Name].Keyspaces[sourceKs].Shards["0"].Tablets["zone1-100"].Vttablet
+	productTab := vc.Cells[defaultCell.Name].Keyspaces[defaultSourceKs].Shards["0"].Tablets["zone1-100"].Vttablet
 	timeZoneSQLBytes, _ := os.ReadFile("tz.sql")
 	timeZoneSQL := string(timeZoneSQLBytes)
 
@@ -77,23 +75,23 @@ func TestMoveTablesTZ(t *testing.T) {
 
 	insertInitialData(t)
 
-	if _, err := vc.AddKeyspace(t, cells, targetKs, "0", customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200, targetKsOpts); err != nil {
+	if _, err := vc.AddKeyspace(t, cells, defaultTargetKs, "0", customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200, defaultTargetKsOpts); err != nil {
 		t.Fatal(err)
 	}
-	custKs := vc.Cells[defaultCell.Name].Keyspaces[targetKs]
+	custKs := vc.Cells[defaultCell.Name].Keyspaces[defaultTargetKs]
 	customerTab := custKs.Shards["0"].Tablets["zone1-200"].Vttablet
 
 	loadTimeZoneInfo(customerTab, timeZoneSQL, "UTC")
 
 	tables := "datze"
 
-	output, err := vc.VtctldClient.ExecuteCommandWithOutput("MoveTables", "--workflow", workflow, "--target-keyspace", targetKs, "Create",
-		"--source-keyspace", sourceKs, "--tables", tables, "--source-time-zone", "US/Pacifik")
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput("MoveTables", "--workflow", workflow, "--target-keyspace", defaultTargetKs, "Create",
+		"--source-keyspace", defaultSourceKs, "--tables", tables, "--source-time-zone", "US/Pacifik")
 	require.Error(t, err, output)
 	require.Contains(t, output, "time zone is invalid")
 
-	output, err = vc.VtctldClient.ExecuteCommandWithOutput("MoveTables", "--workflow", workflow, "--target-keyspace", targetKs, "Create",
-		"--source-keyspace", sourceKs, "--tables", tables, "--source-time-zone", "US/Pacific")
+	output, err = vc.VtctldClient.ExecuteCommandWithOutput("MoveTables", "--workflow", workflow, "--target-keyspace", defaultTargetKs, "Create",
+		"--source-keyspace", defaultSourceKs, "--tables", tables, "--source-time-zone", "US/Pacific")
 	require.NoError(t, err, output)
 
 	catchup(t, customerTab, workflow, "MoveTables")
@@ -115,11 +113,11 @@ func TestMoveTablesTZ(t *testing.T) {
 	doVDiff(t, ksWorkflow, "")
 
 	query := "select * from datze"
-	qrSourceUSPacific, err := productTab.QueryTablet(query, sourceKs, true)
+	qrSourceUSPacific, err := productTab.QueryTablet(query, defaultSourceKs, true)
 	require.NoError(t, err)
 	require.NotNil(t, qrSourceUSPacific)
 
-	qrTargetUTC, err := customerTab.QueryTablet(query, targetKs, true)
+	qrTargetUTC, err := customerTab.QueryTablet(query, defaultTargetKs, true)
 	require.NoError(t, err)
 	require.NotNil(t, qrTargetUTC)
 
@@ -163,7 +161,7 @@ func TestMoveTablesTZ(t *testing.T) {
 
 	// user should be either running this query or have set their location in their driver to map from the time in Vitess/UTC to local
 	query = "select id, convert_tz(dt1, 'UTC', 'US/Pacific') dt1, convert_tz(dt2, 'UTC', 'US/Pacific') dt2, convert_tz(ts1, 'UTC', 'US/Pacific') ts1 from datze"
-	qrTargetUSPacific, err := customerTab.QueryTablet(query, "customer", true)
+	qrTargetUSPacific, err := customerTab.QueryTablet(query, defaultTargetKs, true)
 	require.NoError(t, err)
 	require.NotNil(t, qrTargetUSPacific)
 	require.Equal(t, len(qrSourceUSPacific.Rows), len(qrTargetUSPacific.Rows))
@@ -174,7 +172,7 @@ func TestMoveTablesTZ(t *testing.T) {
 		require.Equal(t, row.AsString("dt2", ""), qrTargetUSPacific.Named().Rows[i].AsString("dt2", ""))
 		require.Equal(t, row.AsString("ts1", ""), qrTargetUSPacific.Named().Rows[i].AsString("ts1", ""))
 	}
-	output, err = vc.VtctldClient.ExecuteCommandWithOutput("MoveTables", "--target-keyspace", targetKs, "SwitchTraffic", "--workflow", workflow)
+	output, err = vc.VtctldClient.ExecuteCommandWithOutput("MoveTables", "--target-keyspace", defaultTargetKs, "SwitchTraffic", "--workflow", workflow)
 	require.NoError(t, err, output)
 
 	qr, err := productTab.QueryTablet(sqlparser.BuildParsedQuery("select * from %s.vreplication where workflow='%s_reverse'",
@@ -189,7 +187,7 @@ func TestMoveTablesTZ(t *testing.T) {
 	}
 
 	// inserts to test date conversions in reverse replication
-	execVtgateQuery(t, vtgateConn, "customer", "insert into datze(id, dt2) values (13, '2022-01-01 18:20:30')")
-	execVtgateQuery(t, vtgateConn, "customer", "insert into datze(id, dt2) values (14, '2022-04-01 12:06:07')")
+	execVtgateQuery(t, vtgateConn, defaultTargetKs, "insert into datze(id, dt2) values (13, '2022-01-01 18:20:30')")
+	execVtgateQuery(t, vtgateConn, defaultTargetKs, "insert into datze(id, dt2) values (14, '2022-04-01 12:06:07')")
 	doVDiff(t, ksReverseWorkflow, "")
 }
