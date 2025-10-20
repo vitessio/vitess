@@ -51,16 +51,23 @@ import (
 )
 
 const (
-	trxHistoryLenQuery = `select count as history_len from information_schema.INNODB_METRICS where name = 'trx_rseg_history_len'`
-	replicaLagQuery    = `show replica status`
-	legacyLagQuery     = `show slave status`
-	hostQuery          = `select @@hostname as hostname, @@port as port`
+	trxHistoryLenQuery        = `select count as history_len from information_schema.INNODB_METRICS where name = 'trx_rseg_history_len'`
+	replicaLagQuery           = `show replica status`
+	legacyLagQuery            = `show slave status`
+	hostQuery                 = `select @@hostname as hostname, @@port as port`
+	fullyThrottledMetricLabel = "FullyThrottledTimeout"
 )
 
 // HeartbeatTime is set to slightly below 1s, compared to idleTimeout
 // set by VPlayer at slightly above 1s. This minimizes conflicts
 // between the two timeouts.
 var HeartbeatTime = 900 * time.Millisecond
+
+// How long we can be fully throttled before returning an error.
+// If we hit this then we can surface a metric to for operators and we can run the tablet picker again
+// to try and pick another tablet which is perhaps less burdened. Running the tablet picker also gives
+// us a natural backoff period.
+var fullyThrottledTimeout = 10 * time.Minute
 
 // vstreamer is for serving a single vreplication stream on the source side.
 type vstreamer struct {
@@ -330,8 +337,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	if vs.filter != nil && vs.filter.WorkflowName != "" {
 		wfNameLog = fmt.Sprintf(" in workflow %s", vs.filter.WorkflowName)
 	}
-	fullyThrottledTimeLimit := 10 * time.Minute // How long we can be fully throttled before returning an error
-	throttlerErrs := make(chan error, 1)        // How we return the error when we've been fully throttled too long
+	throttlerErrs := make(chan error, 1) // How we share the error when we've been fully throttled too long
 	defer close(throttlerErrs)
 	throttleEvents := func(throttledEvents chan mysql.BinlogEvent) {
 		throttledTime := atomic.Int64{}
@@ -347,8 +353,8 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				}
 				curtime := time.Now().Unix()
 				if !throttledTime.CompareAndSwap(0, curtime) {
-					if curtime-throttledTime.Load() > int64(fullyThrottledTimeLimit.Seconds()) {
-						throttlerErrs <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vstreamer has been fully throttled for more than %v, giving up so that we can retry", fullyThrottledTimeLimit)
+					if curtime-throttledTime.Load() > int64(fullyThrottledTimeout.Seconds()) {
+						throttlerErrs <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vstreamer has been fully throttled for more than %v, giving up so that we can retry", fullyThrottledTimeout)
 						return
 					}
 				}
@@ -427,7 +433,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		case err := <-errs:
 			return err
 		case throttlerErr := <-throttlerErrs:
-			vs.vse.errorCounts.Add("FullyThrottledTimeLimit", 1)
+			vs.vse.errorCounts.Add(fullyThrottledMetricLabel, 1)
 			return throttlerErr
 		case <-ctx.Done():
 			return nil
