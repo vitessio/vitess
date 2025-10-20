@@ -63,6 +63,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
 )
@@ -502,6 +503,22 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 					state.WritesSwitched = true
 					break
 				}
+			}
+		}
+		mirrorRules, err := topotools.GetMirrorRules(ctx, ts.TopoServer())
+		if err != nil {
+			return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "failed to get mirror rules: %v", err)
+		}
+		for _, table := range ts.Tables() {
+			// If a rule for the primary tablet type exists (= no @primary
+			// qualifier) for any table and points to the target keyspace,
+			// then traffic has been mirrored.
+			fromTable := fmt.Sprintf("%s.%s", sourceKeyspace, table)
+			toTable := fmt.Sprintf("%s.%s", targetKeyspace, table)
+			mr := mirrorRules[fromTable]
+			if _, ok := mr[toTable]; ok {
+				state.TrafficMirrored = true
+				break
 			}
 		}
 	} else {
@@ -2985,9 +3002,11 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 	}
 
 	// Remove mirror rules for the specified tablet types.
-	if err := sw.mirrorTableTraffic(ctx, roTabletTypes, 0); err != nil {
-		return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to remove mirror rules from source keyspace %s to target keyspace %s, workflow %s, for read-only tablet types",
-			ts.SourceKeyspaceName(), ts.TargetKeyspaceName(), ts.WorkflowName()), err)
+	if state.TrafficMirrored {
+		if err := sw.mirrorTableTraffic(ctx, roTabletTypes, 0); err != nil {
+			return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to remove mirror rules from source keyspace %s to target keyspace %s, workflow %s, for read-only tablet types",
+				ts.SourceKeyspaceName(), ts.TargetKeyspaceName(), ts.WorkflowName()), err)
+		}
 	}
 
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
@@ -3593,6 +3612,20 @@ func (s *Server) WorkflowMirrorTraffic(ctx context.Context, req *vtctldatapb.Wor
 			"cannot mirror [%s] traffic for workflow %s at this time: traffic for those tablet types is switched",
 			strings.Join(cannotSwitchTabletTypes, ","), startState.Workflow)
 	}
+
+	// Lock the workflow for mirror traffic.
+	lockName := fmt.Sprintf("%s/%s", req.Keyspace, req.Workflow)
+	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "MirrorTraffic")
+	if lockErr != nil {
+		return nil, vterrors.Wrapf(lockErr, "failed to lock the %s workflow", lockName)
+	}
+	defer workflowUnlock(&err)
+
+	ctx, targetUnlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "MirrorTraffic")
+	if lockErr != nil {
+		return nil, vterrors.Wrapf(lockErr, "failed to lock the %s keyspace", req.Keyspace)
+	}
+	defer targetUnlock(&err)
 
 	if err := s.mirrorTraffic(ctx, req, ts, startState); err != nil {
 		return nil, err

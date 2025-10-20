@@ -1111,7 +1111,7 @@ func (ts *trafficSwitcher) switchDeniedTables(ctx context.Context, backward bool
 		})
 	})
 	egrp.Go(func() error {
-		return ts.setTargetDeniedTables(ectx, rmtarget, false /*readable*/, ts.force)
+		return ts.setTargetDeniedTables(ectx, rmtarget, false /*readable*/)
 	})
 	if err := egrp.Wait(); err != nil {
 		ts.Logger().Warningf("Error in switchDeniedTables: %s", err)
@@ -1569,14 +1569,14 @@ func (ts *trafficSwitcher) mirrorTableTraffic(ctx context.Context, types []topod
 
 	// Make denied tables on the target side readable if there are any mirror rules. Otherwise, make them unreadable.
 	readable := len(mrs) > 0
-	if err := ts.setTargetDeniedTables(ctx, false /*remove*/, readable, false /*force*/); err != nil {
+	if err := ts.setTargetDeniedTables(ctx, false /*remove*/, readable); err != nil {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to make target denied tables readable=%t: %v", readable, err)
 	}
 
 	return ts.TopoServer().RebuildSrvVSchema(ctx, nil)
 }
 
-func (ts *trafficSwitcher) setTargetDeniedTables(ctx context.Context, remove, readable, force bool) error {
+func (ts *trafficSwitcher) setTargetDeniedTables(ctx context.Context, remove, readable bool) error {
 	return ts.ForAllTargets(func(target *MigrationTarget) error {
 		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.TargetKeyspaceName(), target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
 			return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, remove, ts.Tables(), readable)
@@ -1589,7 +1589,7 @@ func (ts *trafficSwitcher) setTargetDeniedTables(ctx context.Context, remove, re
 		if isPartial {
 			msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s target shard (%v):\n  %v",
 				target.GetShard().Keyspace(), target.GetShard().ShardName(), err, partialDetails)
-			if force {
+			if ts.force {
 				log.Warning(msg)
 				return nil
 			} else {
