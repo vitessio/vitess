@@ -1566,7 +1566,9 @@ type Shard_TabletControl struct {
 	DeniedTables []string   `protobuf:"bytes,4,rep,name=denied_tables,json=deniedTables,proto3" json:"denied_tables,omitempty"`
 	// frozen is set if we've started failing over traffic for
 	// the primary. If set, this record should not be removed.
-	Frozen        bool `protobuf:"varint,5,opt,name=frozen,proto3" json:"frozen,omitempty"`
+	Frozen bool `protobuf:"varint,5,opt,name=frozen,proto3" json:"frozen,omitempty"`
+	// Allow reads to the denied tables.
+	AllowReads    bool `protobuf:"varint,6,opt,name=allow_reads,json=allowReads,proto3" json:"allow_reads,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1625,6 +1627,13 @@ func (x *Shard_TabletControl) GetDeniedTables() []string {
 func (x *Shard_TabletControl) GetFrozen() bool {
 	if x != nil {
 		return x.Frozen
+	}
+	return false
+}
+
+func (x *Shard_TabletControl) GetAllowReads() bool {
+	if x != nil {
+		return x.AllowReads
 	}
 	return false
 }
@@ -1813,7 +1822,7 @@ const file_topodata_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a7\n" +
 	"\tTagsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x03\x10\x04J\x04\b\v\x10\fJ\x04\b\x0f\x10\x10\"\xef\x05\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x03\x10\x04J\x04\b\v\x10\fJ\x04\b\x0f\x10\x10\"\x90\x06\n" +
 	"\x05Shard\x12:\n" +
 	"\rprimary_alias\x18\x01 \x01(\v2\x15.topodata.TabletAliasR\fprimaryAlias\x12C\n" +
 	"\x17primary_term_start_time\x18\b \x01(\v2\f.vttime.TimeR\x14primaryTermStartTime\x12/\n" +
@@ -1828,13 +1837,15 @@ const file_topodata_proto_rawDesc = "" +
 	"\bkeyspace\x18\x02 \x01(\tR\bkeyspace\x12\x14\n" +
 	"\x05shard\x18\x03 \x01(\tR\x05shard\x12/\n" +
 	"\tkey_range\x18\x04 \x01(\v2\x12.topodata.KeyRangeR\bkeyRange\x12\x16\n" +
-	"\x06tables\x18\x05 \x03(\tR\x06tables\x1a\x9f\x01\n" +
+	"\x06tables\x18\x05 \x03(\tR\x06tables\x1a\xc0\x01\n" +
 	"\rTabletControl\x125\n" +
 	"\vtablet_type\x18\x01 \x01(\x0e2\x14.topodata.TabletTypeR\n" +
 	"tabletType\x12\x14\n" +
 	"\x05cells\x18\x02 \x03(\tR\x05cells\x12#\n" +
 	"\rdenied_tables\x18\x04 \x03(\tR\fdeniedTables\x12\x16\n" +
-	"\x06frozen\x18\x05 \x01(\bR\x06frozenJ\x04\b\x03\x10\x04J\x04\b\x03\x10\x04J\x04\b\x05\x10\x06\"\x88\x03\n" +
+	"\x06frozen\x18\x05 \x01(\bR\x06frozen\x12\x1f\n" +
+	"\vallow_reads\x18\x06 \x01(\bR\n" +
+	"allowReadsJ\x04\b\x03\x10\x04J\x04\b\x03\x10\x04J\x04\b\x05\x10\x06\"\x88\x03\n" +
 	"\bKeyspace\x12;\n" +
 	"\rkeyspace_type\x18\x05 \x01(\x0e2\x16.topodata.KeyspaceTypeR\fkeyspaceType\x12#\n" +
 	"\rbase_keyspace\x18\x06 \x01(\tR\fbaseKeyspace\x121\n" +

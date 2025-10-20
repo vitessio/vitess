@@ -18818,6 +18818,9 @@ export namespace topodata {
 
             /** TabletControl frozen */
             frozen?: (boolean|null);
+
+            /** TabletControl allow_reads */
+            allow_reads?: (boolean|null);
         }
 
         /** Represents a TabletControl. */
@@ -18840,6 +18843,9 @@ export namespace topodata {
 
             /** TabletControl frozen. */
             public frozen: boolean;
+
+            /** TabletControl allow_reads. */
+            public allow_reads: boolean;
 
             /**
              * Creates a new TabletControl instance using the specified properties.

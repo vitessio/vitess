@@ -210,6 +210,9 @@ type Rule struct {
 	// Any matched plan will make this condition true (OR)
 	plans []planbuilder.PlanType
 
+	// Any matched planFunc will make this condition true (OR)
+	planFuncs []func(planbuilder.PlanType) bool
+
 	// Any matched tableNames will make this condition true (OR)
 	tableNames []string
 
@@ -364,6 +367,13 @@ func (qr *Rule) SetUserCond(pattern string) (err error) {
 // This function acts as an OR: Any plan id match is considered a match.
 func (qr *Rule) AddPlanCond(planType planbuilder.PlanType) {
 	qr.plans = append(qr.plans, planType)
+}
+
+// AddPlanFunc adds to the list of plans funcs that can be matched for
+// the rule to fire.
+// This function acts as an OR: Any plan func match is considered a match.
+func (qr *Rule) AddPlanFunc(planFunc func(planbuilder.PlanType) bool) {
+	qr.planFuncs = append(qr.planFuncs, planFunc)
 }
 
 // AddTableCond adds to the list of tableNames that can be matched for
@@ -1064,4 +1074,8 @@ func safeEncode(b *bytes.Buffer, prefix string, v any) {
 	if err := enc.Encode(v); err != nil {
 		_ = enc.Encode(err.Error())
 	}
+}
+
+type TableCond struct {
+	tableName string
 }

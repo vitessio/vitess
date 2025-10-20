@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -85,6 +86,10 @@ type tmState struct {
 	// displayState contains the current snapshot of the internal state
 	// and has its own mutex.
 	displayState displayState
+
+	// allowReadsFromDeniedTables allows readonly operations to execute against
+	// denied tables.
+	allowReadsFromDeniedTables bool
 }
 
 func newTMState(tm *TabletManager, tablet *topodatapb.Tablet) *tmState {
@@ -152,6 +157,7 @@ func (ts *tmState) RefreshFromTopoInfo(ctx context.Context, shardInfo *topo.Shar
 		for _, tc := range shardInfo.TabletControls {
 			if topo.InCellList(ts.tm.tabletAlias.Cell, tc.Cells) {
 				ts.deniedTables[tc.TabletType] = tc.DeniedTables
+				ts.allowReadsFromDeniedTables = tc.AllowReads
 			}
 		}
 	}
@@ -405,6 +411,27 @@ func (ts *tmState) applyDenyList(ctx context.Context) (err error) {
 			qr := rules.NewQueryRule("enforce denied tables", "denied_table", rules.QRFailRetry)
 			for _, t := range tables {
 				qr.AddTableCond(t)
+			}
+			// This pathway exists in order to allow traffic to pass to the
+			// target of a MoveTables workflow after using MirrorTraffic.
+			if ts.allowReadsFromDeniedTables {
+				// If a plan does not match any of the types below, it will be
+				// allowed to execute in spite of the table conditions above.
+				//
+				// A good rule of thumb for determining which plans should be
+				// included below is to consider whether the plan could result
+				// in VDiff mismatch between the source and target of the
+				// MoveTables workflow.
+				qr.AddPlanCond(planbuilder.PlanNextval)
+				qr.AddPlanCond(planbuilder.PlanNextval)
+				qr.AddPlanCond(planbuilder.PlanInsert)
+				qr.AddPlanCond(planbuilder.PlanInsertMessage)
+				qr.AddPlanCond(planbuilder.PlanOtherAdmin)
+				qr.AddPlanCond(planbuilder.PlanLoad)
+				qr.AddPlanCond(planbuilder.PlanFlush)
+				qr.AddPlanCond(planbuilder.PlanCallProc)
+				qr.AddPlanCond(planbuilder.PlanAlterMigration)
+				qr.AddPlanCond(planbuilder.PlanRevertMigration)
 			}
 			denyListRules.Add(qr)
 		}
