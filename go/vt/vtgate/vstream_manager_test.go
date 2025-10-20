@@ -39,7 +39,6 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -1757,10 +1756,8 @@ func TestVStreamLivenessChecks(t *testing.T) {
 	st := getSandboxTopo(ctx, cell, ks, []string{"-20"})
 	vsm := newTestVStreamManager(ctx, hc, st, cell)
 	origLivenessTimeout := livenessTimeout
-	origHeartbeatTime := vstreamer.HeartbeatTime
 	defer func() {
 		livenessTimeout = origLivenessTimeout
-		vstreamer.HeartbeatTime = origHeartbeatTime
 	}()
 	fakeTablet := hc.AddTestTablet("aa", "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	addTabletToSandboxTopo(t, ctx, st, fakeTablet.Tablet().Keyspace, fakeTablet.Tablet().Shard, fakeTablet.Tablet())
@@ -1790,22 +1787,25 @@ func TestVStreamLivenessChecks(t *testing.T) {
 			name:                        "should not fail liveness check",
 			livenessTimeout:             100 * time.Millisecond,
 			simulateVstreamerHeartbeats: true,
-			wantErr:                     "context ended while sending events: context deadline exceeded",
 		},
 	}
+
 	for _, tcase := range testcases {
 		t.Run(tcase.name, func(t *testing.T) {
 			vstreamCtx, vstreamCancel := context.WithTimeout(ctx, tcase.livenessTimeout*2)
 			defer vstreamCancel()
+
+			// We need to ensure that there's a steady stream of vtgate<-vttablet vstream heartbeat
+			// events so that we stay within the defined livenessTimeout and instead the stream ends
+			// when the vstreamCtx times out.
 			livenessTimeout = tcase.livenessTimeout
+			tenMsChunks := tcase.livenessTimeout.Nanoseconds() / (10 * time.Millisecond.Nanoseconds())
+			events := make([]*binlogdatapb.VEvent, 0, tenMsChunks)
 			if tcase.simulateVstreamerHeartbeats {
-				events := []*binlogdatapb.VEvent{
-					{Type: binlogdatapb.VEventType_HEARTBEAT},
-					{Type: binlogdatapb.VEventType_HEARTBEAT},
-					{Type: binlogdatapb.VEventType_HEARTBEAT},
-					{Type: binlogdatapb.VEventType_HEARTBEAT},
+				for range tenMsChunks {
+					events = append(events, &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_HEARTBEAT})
 				}
-				fakeTablet.VStreamEventDelay = time.Duration(tcase.livenessTimeout / 2)
+				fakeTablet.VStreamEventDelay = time.Duration((tcase.livenessTimeout.Nanoseconds() / tenMsChunks) * 2)
 				for _, event := range events {
 					fakeTablet.AddVStreamEvents([]*binlogdatapb.VEvent{event}, nil)
 				}
@@ -1814,12 +1814,11 @@ func TestVStreamLivenessChecks(t *testing.T) {
 			err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
 				return nil
 			})
-
 			if tcase.wantErr == "" {
-				require.NoError(t, err)
-				return
+				// Then we expect the context ended error, which means that no real errors occurred
+				// in the stream.
+				tcase.wantErr = "context ended while sending events: context deadline exceeded"
 			}
-			require.Error(t, err)
 			require.EqualError(t, err, tcase.wantErr)
 		})
 	}
