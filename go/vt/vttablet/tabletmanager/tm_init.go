@@ -89,13 +89,14 @@ const (
 
 var (
 	// The following flags initialize the tablet record.
-	tabletHostname     string
-	initKeyspace       string
-	initShard          string
-	initTabletType     string
-	initDbNameOverride string
-	skipBuildInfoTags  = "/.*/"
-	initTags           flagutil.StringMapValue
+	tabletHostname       string
+	initKeyspace         string
+	initShard            string
+	initTabletType       string
+	initTabletTypeLookup bool
+	initDbNameOverride   string
+	skipBuildInfoTags    = "/.*/"
+	initTags             flagutil.StringMapValue
 
 	initTimeout          = 1 * time.Minute
 	mysqlShutdownTimeout = mysqlctl.DefaultShutdownTimeout
@@ -106,6 +107,7 @@ func registerInitFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &initKeyspace, "init-keyspace", initKeyspace, "(init parameter) keyspace to use for this tablet")
 	utils.SetFlagStringVar(fs, &initShard, "init-shard", initShard, "(init parameter) shard to use for this tablet")
 	utils.SetFlagStringVar(fs, &initTabletType, "init-tablet-type", initTabletType, "(init parameter) tablet type to use for this tablet. Valid values are: PRIMARY, REPLICA, SPARE, and RDONLY. The default is REPLICA.")
+	fs.BoolVar(&initTabletTypeLookup, "init-tablet-type-lookup", initTabletTypeLookup, "(optional, init parameter) if enabled, look up the tablet type from the existing topology record on restart and use that instead of init-tablet-type. This allows tablets to maintain their changed roles (e.g., RDONLY/DRAINED) across restarts. If disabled or if no topology record exists, init-tablet-type will be used.")
 	utils.SetFlagStringVar(fs, &initDbNameOverride, "init-db-name-override", initDbNameOverride, "(init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>")
 	utils.SetFlagStringVar(fs, &skipBuildInfoTags, "vttablet-skip-buildinfo-tags", skipBuildInfoTags, "comma-separated list of buildinfo tags to skip from merging with --init-tags. each tag is either an exact match or a regular expression of the form '/regexp/'.")
 	utils.SetFlagVar(fs, &initTags, "init-tags", "(init parameter) comma separated list of key:value pairs used to tag the tablet")
@@ -372,6 +374,33 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	tm.DBConfigs.DBName = topoproto.TabletDbName(tablet)
 	tm.tabletAlias = tablet.Alias
 	tm.tmc = tmclient.NewTabletManagerClient()
+
+	// Check if there's an existing tablet record in topology and use it if flag is enabled
+	if initTabletTypeLookup {
+		ctx, cancel := context.WithTimeout(tm.BatchCtx, initTimeout)
+		defer cancel()
+		existingTablet, err := tm.TopoServer.GetTablet(ctx, tablet.Alias)
+		if err != nil && !topo.IsErrType(err, topo.NoNode) {
+			// Error other than "node doesn't exist" - return it
+			return vterrors.Wrap(err, "failed to check for existing tablet record")
+		}
+
+		// If we found an existing tablet record, use its tablet type instead of the initial one
+		if err == nil {
+			log.Infof("Found existing tablet record with --init-tablet-type-lookup enabled, using tablet type %v from topology instead of init-tablet-type %v",
+				existingTablet.Type, tablet.Type)
+			tablet.Type = existingTablet.Type
+			// If it was a PRIMARY, preserve the start time
+			if existingTablet.Type == topodatapb.TabletType_PRIMARY {
+				tablet.PrimaryTermStartTime = existingTablet.PrimaryTermStartTime
+			}
+		} else {
+			log.Infof("No existing tablet record found, using init-tablet-type: %v", tablet.Type)
+		}
+	} else {
+		log.Infof("Using init-tablet-type %v (--init-tablet-type-lookup is not enabled)", tablet.Type)
+	}
+
 	tm.tmState = newTMState(tm, tablet)
 	tm.actionSema = semaphore.NewWeighted(1)
 	tm._waitForGrantsComplete = make(chan struct{})
