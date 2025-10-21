@@ -288,7 +288,11 @@ func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, da
 // Note: you specify the number of values that you want to reserve
 // and you get back the max value reserved.
 func waitForSequenceValue(t *testing.T, conn *mysql.Conn, database, sequence string, numVals int) int64 {
-	query := fmt.Sprintf("select next %d values from %s.%s", numVals, database, sequence)
+	escapedDB, err := sqlescape.EnsureEscaped(database)
+	require.NoError(t, err)
+	escapedSeq, err := sqlescape.EnsureEscaped(sequence)
+	require.NoError(t, err)
+	query := fmt.Sprintf("select next %d values from %s.%s", numVals, escapedDB, escapedSeq)
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
@@ -545,7 +549,7 @@ func validateDryRunResults(t *testing.T, output string, want []string) {
 		}
 		if !match {
 			fail = true
-			require.Fail(t, "invlaid dry run results", "want %s, got %s\n", w, gotDryRun[i])
+			require.Fail(t, "invalid dry run results", "want %s, got %s\n", w, gotDryRun[i])
 		}
 	}
 	if fail {
@@ -646,11 +650,11 @@ func getDebugVar(t *testing.T, port int, varPath []string) (string, error) {
 	return string(val), nil
 }
 
-func confirmWorkflowHasCopiedNoData(t *testing.T, targetKS, workflow string) {
+func confirmWorkflowHasCopiedNoData(t *testing.T, defaultTargetKs, workflow string) {
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
-		output, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", targetKs, "show", "--workflow", workflow, "--compact", "--include-logs=false")
+		output, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", defaultTargetKs, "show", "--workflow", workflow, "--compact", "--include-logs=false")
 		require.NoError(t, err, output)
 		streams := gjson.Get(output, "workflows.0.shard_streams.*.streams")
 		streams.ForEach(func(streamId, stream gjson.Result) bool { // For each stream
@@ -662,7 +666,7 @@ func confirmWorkflowHasCopiedNoData(t *testing.T, targetKS, workflow string) {
 				(pos.Exists() && pos.String() != "") {
 				require.FailNowf(t, "Unexpected data copied in workflow",
 					"The MoveTables workflow %q copied data in less than %s when it should have been waiting. Show output: %s",
-					ksWorkflow, defaultTimeout, output)
+					defaultKsWorkflow, defaultTimeout, output)
 			}
 			return true
 		})
