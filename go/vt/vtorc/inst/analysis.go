@@ -87,8 +87,8 @@ type DetectionAnalysisHints struct {
 
 // DetectionAnalysis represents an analysis of a detected problem.
 type DetectionAnalysis struct {
-	AnalyzedInstanceAlias                     string
-	AnalyzedInstancePrimaryAlias              string
+	AnalyzedInstanceAlias                     *topodatapb.TabletAlias
+	AnalyzedInstancePrimaryAlias              *topodatapb.TabletAlias
 	TabletType                                topodatapb.TabletType
 	CurrentTabletType                         topodatapb.TabletType
 	PrimaryTimeStamp                          time.Time

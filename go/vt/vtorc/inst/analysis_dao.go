@@ -53,7 +53,7 @@ func initializeAnalysisDaoPostConfiguration() {
 type clusterAnalysis struct {
 	hasShardWideAction bool
 	totalTablets       int
-	primaryAlias       string
+	primaryAlias       *topodatapb.TabletAlias
 	durability         policy.Durabler
 }
 
@@ -319,8 +319,8 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 
 		a.ShardPrimaryTermTimestamp = m.GetTime("shard_primary_term_timestamp")
 		a.IsPrimary = m.GetBool("is_primary")
-		a.AnalyzedInstanceAlias = topoproto.TabletAliasString(tablet.Alias)
-		a.AnalyzedInstancePrimaryAlias = topoproto.TabletAliasString(primaryTablet.Alias)
+		a.AnalyzedInstanceAlias = tablet.Alias
+		a.AnalyzedInstancePrimaryAlias = primaryTablet.Alias
 		a.AnalyzedInstanceBinlogCoordinates = BinlogCoordinates{
 			LogFile: m.GetString("binary_log_file"),
 			LogPos:  m.GetUint64("binary_log_pos"),
@@ -461,12 +461,12 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		case topo.IsReplicaType(a.TabletType) && a.ErrantGTID != "":
 			a.Analysis = ErrantGTIDDetected
 			a.Description = "Tablet has errant GTIDs"
-		case topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && a.ShardPrimaryTermTimestamp.IsZero():
+		case topo.IsReplicaType(a.TabletType) && ca.primaryAlias == nil && a.ShardPrimaryTermTimestamp.IsZero():
 			// ClusterHasNoPrimary should only be detected when the shard record doesn't have any primary term start time specified either.
 			a.Analysis = ClusterHasNoPrimary
 			a.Description = "Cluster has no primary"
 			ca.hasShardWideAction = true
-		case topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && !a.ShardPrimaryTermTimestamp.IsZero():
+		case topo.IsReplicaType(a.TabletType) && ca.primaryAlias == nil && !a.ShardPrimaryTermTimestamp.IsZero():
 			// If there are no primary tablets, but the shard primary start time isn't empty, then we know
 			// the primary tablet was deleted.
 			a.Analysis = PrimaryTabletDeleted
@@ -491,7 +491,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			a.Analysis = ReplicaMisconfigured
 			a.Description = "Replica has been misconfigured"
 			//
-		case topo.IsReplicaType(a.TabletType) && !a.IsPrimary && ca.primaryAlias != "" && a.AnalyzedInstancePrimaryAlias != ca.primaryAlias:
+		case topo.IsReplicaType(a.TabletType) && !a.IsPrimary && ca.primaryAlias != nil && !topoproto.TabletAliasEqual(a.AnalyzedInstancePrimaryAlias, ca.primaryAlias):
 			a.Analysis = ConnectedToWrongPrimary
 			a.Description = "Connected to wrong primary"
 			//
@@ -659,12 +659,13 @@ func postProcessAnalyses(result []*DetectionAnalysis, clusters map[string]*clust
 // auditInstanceAnalysisInChangelog will write down an instance's analysis in the database_instance_analysis_changelog table.
 // To not repeat recurring analysis code, the database_instance_last_analysis table is used, so that only changes to
 // analysis codes are written.
-func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisCode) error {
-	if lastWrittenAnalysis, found := recentInstantAnalysis.Get(tabletAlias); found {
+func auditInstanceAnalysisInChangelog(tabletAlias *topodatapb.TabletAlias, analysisCode AnalysisCode) error {
+	tabletAliasString := topoproto.TabletAliasString(tabletAlias)
+	if lastWrittenAnalysis, found := recentInstantAnalysis.Get(tabletAliasString); found {
 		if lastWrittenAnalysis == analysisCode {
 			// Surely nothing new.
 			// And let's expand the timeout
-			recentInstantAnalysis.Set(tabletAlias, analysisCode, cache.DefaultExpiration)
+			recentInstantAnalysis.Set(tabletAliasString, analysisCode, cache.DefaultExpiration)
 			return nil
 		}
 	}
@@ -680,7 +681,9 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 				alias = ?
 				AND analysis != ?
 			`,
-			string(analysisCode), tabletAlias, string(analysisCode),
+			string(analysisCode),
+			tabletAliasString,
+			string(analysisCode),
 		)
 		if err != nil {
 			log.Error(err)
@@ -709,7 +712,8 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 				DATETIME('now'),
 				?
 			)`,
-			tabletAlias, string(analysisCode),
+			tabletAliasString,
+			string(analysisCode),
 		)
 		if err != nil {
 			log.Error(err)
@@ -722,7 +726,7 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 		}
 		firstInsertion = rows > 0
 	}
-	recentInstantAnalysis.Set(tabletAlias, analysisCode, cache.DefaultExpiration)
+	recentInstantAnalysis.Set(tabletAliasString, analysisCode, cache.DefaultExpiration)
 	// If the analysis has changed or if it is the first insertion, we need to make sure we write this change to the database.
 	if !lastAnalysisChanged && !firstInsertion {
 		return nil
@@ -738,7 +742,8 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 			DATETIME('now'),
 			?
 		)`,
-		tabletAlias, string(analysisCode),
+		tabletAliasString,
+		string(analysisCode),
 	)
 	if err == nil {
 		analysisChangeWriteCounter.Add(1)

@@ -22,9 +22,12 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/go-viper/mapstructure/v2"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/viperutil/debug"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/logic"
 	"vitess.io/vitess/go/vt/vtorc/process"
@@ -225,9 +228,23 @@ func detectionAnalysisAPIHandler(response http.ResponseWriter, request *http.Req
 		return
 	}
 
+	// return the tablet alias in topoproto.TabletAliasString(...) format.
+	// to achieve this, we make structs a map of string-to-interface and
+	// override the "AnalyzedInstanceAlias" field.
+	processedAnalysis := make([]map[string]interface{}, 0)
+	for _, analysis := range analysis {
+		out := make(map[string]interface{})
+		if err := mapstructure.Decode(analysis, &out); err != nil {
+			http.Error(response, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		out["AnalyzedInstanceAlias"] = topoproto.TabletAliasString(analysis.AnalyzedInstanceAlias)
+		processedAnalysis = append(processedAnalysis, out)
+	}
+
 	// TODO: We can also add filtering for a specific instance too based on the tablet alias.
 	// Currently inst.DetectionAnalysis doesn't store the tablet alias, but once it does we can filter on that too
-	returnAsJSON(response, http.StatusOK, analysis)
+	returnAsJSON(response, http.StatusOK, processedAnalysis)
 }
 
 // healthAPIHandler is the handler for the healthAPI endpoint
