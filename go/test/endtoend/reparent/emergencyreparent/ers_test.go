@@ -19,6 +19,7 @@ package emergencyreparent
 import (
 	"context"
 	"os/exec"
+	"sync"
 	"testing"
 	"time"
 
@@ -28,6 +29,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
 	"vitess.io/vitess/go/vt/log"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
 
@@ -129,6 +131,95 @@ func TestReparentDownPrimary(t *testing.T) {
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
 	utils.ConfirmReplication(t, tablets[1], []*cluster.Vttablet{tablets[2], tablets[3]})
 	utils.ResurrectTablet(ctx, t, clusterInstance, tablets[0])
+}
+
+func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
+	defer utils.TeardownCluster(clusterInstance)
+
+	err := clusterInstance.StartVtgate()
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	conn, err := mysql.Connect(ctx, &mysql.ConnParams{
+		Host: clusterInstance.Hostname,
+		Port: clusterInstance.VtgateMySQLPort,
+	})
+	require.NoError(t, err)
+	defer conn.Close()
+
+	_, err = conn.ExecuteFetch("CREATE TABLE test (id INT PRIMARY KEY, msg VARCHAR(64))", 0, false)
+	require.NoError(t, err)
+
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+
+	// Simulate no semi-sync replicas being available by disabling semi-sync on all replicas
+	for _, tablet := range tablets[1:] {
+		utils.RunSQL(ctx, t, "STOP REPLICA", tablet)
+
+		// Disable semi-sync on replicas to simulate blocking
+		semisyncType, err := utils.SemiSyncExtensionLoaded(context.Background(), tablet)
+		require.NoError(t, err)
+		switch semisyncType {
+		case mysql.SemiSyncTypeSource:
+			utils.RunSQL(context.Background(), t, "SET GLOBAL rpl_semi_sync_replica_enabled = false", tablet)
+		case mysql.SemiSyncTypeMaster:
+			utils.RunSQL(context.Background(), t, "SET GLOBAL rpl_semi_sync_slave_enabled = false", tablet)
+		}
+
+		utils.RunSQL(context.Background(), t, "START REPLICA", tablet)
+	}
+
+	// Try performing a write and ensure that it blocks
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		// Attempt writing via vtgate against the primary. This should block (because there's no replicas to ack the semi-sync),
+		// and fail once we perform the ERS
+		_, err := conn.ExecuteFetch("insert into test (id, msg) values (1, 'test 1')", 0, false)
+		require.Error(t, err)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		// Just give a tiny bit of time to ensure the write is waiting on the primary
+		time.Sleep(500 * time.Millisecond)
+
+		// Send SIGSTOP to primary to simulate it being unresponsive
+		tablets[0].VttabletProcess.Stop()
+
+		// Run forced reparent operation, this should now proceed unimpeded.
+		out, err := utils.Ers(clusterInstance, tablets[1], "120s", "61s")
+		require.NoError(t, err, out)
+	}()
+
+	wg.Wait()
+
+	// Bring back the demoted primary
+	tablets[0].VttabletProcess.Resume()
+
+	utils.ValidateTopology(t, clusterInstance, false)
+	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
+
+	// Check that the old primary has been switched to replica and is replicating from the new primary
+	// In this scenario, the old primary can be reattached to the new primary because the change that
+	// was blocking semi-sync acks was successfully send to the replicas - they just didn't acknowledge
+	// the commit.
+
+	tabletInfo, err := clusterInstance.VtctldClientProcess.GetTablet(tablets[0].Alias)
+	require.NoError(t, err)
+
+	// Ensure the old primary was demoted correctly
+	require.Equal(t, topodatapb.TabletType_REPLICA, tabletInfo.GetType())
+
+	// Ensure the old primary also has replication running
+	utils.ConfirmReplication(t, tablets[1], []*cluster.Vttablet{tablets[0], tablets[2], tablets[3]})
 }
 
 func TestReparentNoChoiceDownPrimary(t *testing.T) {
