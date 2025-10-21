@@ -64,7 +64,7 @@ const (
 var HeartbeatTime = 900 * time.Millisecond
 
 // How long we can be fully throttled before returning an error.
-// If we hit this then we can surface a metric to for operators and we can run the tablet picker again
+// If we hit this then we can surface a metric for operators and we can run the tablet picker again
 // to try and pick another tablet which is perhaps less burdened. Running the tablet picker also gives
 // us a natural backoff period.
 var fullyThrottledTimeout = 10 * time.Minute

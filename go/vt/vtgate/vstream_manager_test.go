@@ -1795,20 +1795,21 @@ func TestVStreamLivenessChecks(t *testing.T) {
 			vstreamCtx, vstreamCancel := context.WithTimeout(ctx, tcase.livenessTimeout*2)
 			defer vstreamCancel()
 
-			// We need to ensure that there's a steady stream of vtgate<-vttablet vstream heartbeat
-			// events so that we stay within the defined livenessTimeout and instead the stream ends
-			// when the vstreamCtx times out.
 			livenessTimeout = tcase.livenessTimeout
-			tenMsChunks := tcase.livenessTimeout.Nanoseconds() / (10 * time.Millisecond.Nanoseconds())
-			events := make([]*binlogdatapb.VEvent, 0, tenMsChunks)
 			if tcase.simulateVstreamerHeartbeats {
-				for range tenMsChunks {
-					events = append(events, &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_HEARTBEAT})
-				}
-				fakeTablet.VStreamEventDelay = time.Duration((tcase.livenessTimeout.Nanoseconds() / tenMsChunks) * 2)
-				for _, event := range events {
+				// We need to ensure that there's a steady stream of vtgate<-vttablet vstream heartbeat
+				// events so that we stay within the defined livenessTimeout and the stream ends when
+				// the vstreamCtx times out.
+				numEvents := tcase.livenessTimeout.Nanoseconds() / 1e5
+				for range numEvents {
+					event := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_HEARTBEAT}
 					fakeTablet.AddVStreamEvents([]*binlogdatapb.VEvent{event}, nil)
 				}
+				origVStreamEventDelay := fakeTablet.VStreamEventDelay
+				defer func() {
+					fakeTablet.VStreamEventDelay = origVStreamEventDelay
+				}()
+				fakeTablet.VStreamEventDelay = time.Duration((tcase.livenessTimeout.Nanoseconds() / numEvents) * 2)
 			}
 
 			err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {

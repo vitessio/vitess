@@ -1962,7 +1962,7 @@ func TestHeartbeat(t *testing.T) {
 	cancel()
 }
 
-func TestFullyThrottled(t *testing.T) {
+func TestFullyThrottledTimeout(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	origTimeout := fullyThrottledTimeout
