@@ -162,8 +162,8 @@ func TestIsUnrecoverableError(t *testing.T) {
 			expected: false,
 		},
 		{
-			name:     "SQL error with ERBinlogCreateRoutineNeedsSuper",
-			err:      sqlerror.NewSQLError(sqlerror.ERBinlogCreateRoutineNeedsSuper, "unknown", "error applying event: You do not have the SUPER privilege and binary logging is enabled (you *might* want to use the less safe log_bin_trust_function_creators variable) (errno 1419) (sqlstate HY000) during query: CREATE DEFINER=`root`@`localhost` TRIGGER upd_customer BEFORE UPDATE ON customer FOR EACH ROW SET @email = NEW.email + \" (updated)\""),
+			name:     "SQL error with ERBinlogCreateRoutineNeedSuper",
+			err:      sqlerror.NewSQLError(sqlerror.ERBinlogCreateRoutineNeedSuper, "unknown", "error applying event: You do not have the SUPER privilege and binary logging is enabled (you *might* want to use the less safe log_bin_trust_function_creators variable) (errno 1419) (sqlstate HY000) during query: CREATE DEFINER=`root`@`localhost` TRIGGER upd_customer BEFORE UPDATE ON customer FOR EACH ROW SET @email = NEW.email + \" (updated)\""),
 			expected: true,
 		},
 	}

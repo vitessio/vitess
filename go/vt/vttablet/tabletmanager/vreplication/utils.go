@@ -214,7 +214,7 @@ func isUnrecoverableError(err error) bool {
 		sqlerror.ErrWrongValueForType,
 		sqlerror.ERSPDoesNotExist,
 		sqlerror.ERSpecifiedAccessDenied,
-		sqlerror.ERBinlogCreateRoutineNeedsSuper,
+		sqlerror.ERBinlogCreateRoutineNeedSuper,
 		sqlerror.ERSyntaxError,
 		sqlerror.ERTooBigRowSize,
 		sqlerror.ERTooBigSet,
