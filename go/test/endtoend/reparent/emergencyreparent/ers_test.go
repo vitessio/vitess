@@ -29,8 +29,9 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
 	"vitess.io/vitess/go/vt/log"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 func TestTrivialERS(t *testing.T) {
@@ -188,38 +189,44 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 	go func() {
 		defer wg.Done()
 
-		// Just give a tiny bit of time to ensure the write is waiting on the primary
-		time.Sleep(500 * time.Millisecond)
+		// Just give a tiny bit of time to ensure the write is waiting on the primary,
+		// and that queries from the semi-sync unblocker start piling up
+		time.Sleep(2000 * time.Millisecond)
 
 		// Send SIGSTOP to primary to simulate it being unresponsive
 		tablets[0].VttabletProcess.Stop()
 
 		// Run forced reparent operation, this should now proceed unimpeded.
-		out, err := utils.Ers(clusterInstance, tablets[1], "120s", "61s")
+		out, err := utils.Ers(clusterInstance, tablets[1], "15s", "10s")
 		require.NoError(t, err, out)
 	}()
 
 	wg.Wait()
 
+	// We need to wait at least 10 seconds here to ensure the wait-for-replicas-timeout has passed,
+	// before we resume the old primary - otherwise the old primary will receive a `SetReplicationSource` call.
+	time.Sleep(10 * time.Second)
+
 	// Bring back the demoted primary
 	tablets[0].VttabletProcess.Resume()
 
-	utils.ValidateTopology(t, clusterInstance, false)
-	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
+	// Give the old primary some time to realize it's no longer the primary.
+	time.Sleep(10 * time.Second)
 
-	// Check that the old primary has been switched to replica and is replicating from the new primary
-	// In this scenario, the old primary can be reattached to the new primary because the change that
-	// was blocking semi-sync acks was successfully send to the replicas - they just didn't acknowledge
-	// the commit.
-
+	// Ensure the old primary was demoted correctly
 	tabletInfo, err := clusterInstance.VtctldClientProcess.GetTablet(tablets[0].Alias)
 	require.NoError(t, err)
 
-	// Ensure the old primary was demoted correctly
+	// The old primary should have noticed there's a new primary tablet now and should
+	// have demoted itself to REPLICA.
 	require.Equal(t, topodatapb.TabletType_REPLICA, tabletInfo.GetType())
 
-	// Ensure the old primary also has replication running
-	utils.ConfirmReplication(t, tablets[1], []*cluster.Vttablet{tablets[0], tablets[2], tablets[3]})
+	// The old primary should be in not serving mode because we should be unable to re-attach it
+	// as a replica due to the errant GTID caused by semi-sync writes that were never replicated out.
+	//
+	// Note: The writes that were not replicated were caused by the semi sync unblocker, which
+	//       performed writes after ERS.
+	require.Equal(t, "NOT_SERVING", tablets[0].VttabletProcess.GetTabletStatus())
 }
 
 func TestReparentNoChoiceDownPrimary(t *testing.T) {
