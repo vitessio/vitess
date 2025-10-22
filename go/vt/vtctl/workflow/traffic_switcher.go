@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -1567,19 +1568,22 @@ func (ts *trafficSwitcher) mirrorTableTraffic(ctx context.Context, types []topod
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to save mirror rules: %v", err)
 	}
 
-	// Make denied tables on the target side readable if there are any mirror rules. Otherwise, make them unreadable.
-	readable := len(mrs) > 0
-	if err := ts.setTargetDeniedTables(ctx, false /*remove*/, readable); err != nil {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to make target denied tables readable=%t: %v", readable, err)
+	// Allow read-only queries to execute against the target @primary if there
+	// are any mirror rules. Otherwise, disallow them.
+	if slices.Contains(types, topodatapb.TabletType_PRIMARY) {
+		allowReads := len(mrs) > 0
+		if err := ts.setTargetDeniedTables(ctx, false /*remove*/, allowReads); err != nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to make target denied tables readable=%t: %v", allowReads, err)
+		}
 	}
 
 	return ts.TopoServer().RebuildSrvVSchema(ctx, nil)
 }
 
-func (ts *trafficSwitcher) setTargetDeniedTables(ctx context.Context, remove, readable bool) error {
+func (ts *trafficSwitcher) setTargetDeniedTables(ctx context.Context, remove, allowReads bool) error {
 	return ts.ForAllTargets(func(target *MigrationTarget) error {
 		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.TargetKeyspaceName(), target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, remove, ts.Tables(), readable)
+			return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, remove, ts.Tables(), allowReads)
 		}); err != nil {
 			return err
 		}

@@ -418,20 +418,34 @@ func (ts *tmState) applyDenyList(ctx context.Context) (err error) {
 				// If a plan does not match any of the types below, it will be
 				// allowed to execute in spite of the table conditions above.
 				//
-				// A good rule of thumb for determining which plans should be
-				// included below is to consider whether the plan could result
-				// in VDiff mismatch between the source and target of the
-				// MoveTables workflow.
-				qr.AddPlanCond(planbuilder.PlanNextval)
+				// The only plan supported by traffic mirror at present is
+				// PlanSelect, so add all other plans below.
 				qr.AddPlanCond(planbuilder.PlanNextval)
 				qr.AddPlanCond(planbuilder.PlanInsert)
 				qr.AddPlanCond(planbuilder.PlanInsertMessage)
+				qr.AddPlanCond(planbuilder.PlanUpdate)
+				qr.AddPlanCond(planbuilder.PlanUpdateLimit)
+				qr.AddPlanCond(planbuilder.PlanDelete)
+				qr.AddPlanCond(planbuilder.PlanDeleteLimit)
+				qr.AddPlanCond(planbuilder.PlanDDL)
+				qr.AddPlanCond(planbuilder.PlanSet)
+				qr.AddPlanCond(planbuilder.PlanOtherRead)
 				qr.AddPlanCond(planbuilder.PlanOtherAdmin)
+				qr.AddPlanCond(planbuilder.PlanMessageStream)
+				qr.AddPlanCond(planbuilder.PlanSavepoint)
+				qr.AddPlanCond(planbuilder.PlanRelease)
+				qr.AddPlanCond(planbuilder.PlanSRollback)
+				qr.AddPlanCond(planbuilder.PlanShow)
 				qr.AddPlanCond(planbuilder.PlanLoad)
 				qr.AddPlanCond(planbuilder.PlanFlush)
+				qr.AddPlanCond(planbuilder.PlanUnlockTables)
 				qr.AddPlanCond(planbuilder.PlanCallProc)
 				qr.AddPlanCond(planbuilder.PlanAlterMigration)
 				qr.AddPlanCond(planbuilder.PlanRevertMigration)
+				qr.AddPlanCond(planbuilder.PlanShowMigrations)
+				qr.AddPlanCond(planbuilder.PlanShowMigrationLogs)
+				qr.AddPlanCond(planbuilder.PlanShowThrottledApps)
+				qr.AddPlanCond(planbuilder.PlanShowThrottlerStatus)
 			}
 			denyListRules.Add(qr)
 		}
