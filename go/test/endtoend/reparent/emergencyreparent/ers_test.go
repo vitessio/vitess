@@ -138,6 +138,10 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 
+	if clusterInstance.VtTabletMajorVersion < 24 {
+		t.Skip("Skipping test since `DemotePrimary` on earlier versions does not handle blocked primaries correctly")
+	}
+
 	err := clusterInstance.StartVtgate()
 	require.NoError(t, err)
 
