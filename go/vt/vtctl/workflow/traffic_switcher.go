@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -1568,13 +1567,11 @@ func (ts *trafficSwitcher) mirrorTableTraffic(ctx context.Context, types []topod
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to save mirror rules: %v", err)
 	}
 
-	// Allow read-only queries to execute against the target @primary if there
+	// Allow read-only queries to execute against the target tablet if there
 	// are any mirror rules. Otherwise, disallow them.
-	if slices.Contains(types, topodatapb.TabletType_PRIMARY) {
-		allowReads := len(mrs) > 0
-		if err := ts.setTargetDeniedTables(ctx, false /*remove*/, allowReads); err != nil {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to make target denied tables readable=%t: %v", allowReads, err)
-		}
+	allowReads := len(mrs) > 0
+	if err := ts.setTargetDeniedTables(ctx, false /*remove*/, allowReads); err != nil {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to make target denied tables readable=%t: %v", allowReads, err)
 	}
 
 	return ts.TopoServer().RebuildSrvVSchema(ctx, nil)
