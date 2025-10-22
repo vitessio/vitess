@@ -205,13 +205,13 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 
 	// We need to wait at least 10 seconds here to ensure the wait-for-replicas-timeout has passed,
 	// before we resume the old primary - otherwise the old primary will receive a `SetReplicationSource` call.
-	time.Sleep(10 * time.Second)
+	time.Sleep(20 * time.Second)
 
 	// Bring back the demoted primary
 	tablets[0].VttabletProcess.Resume()
 
 	// Give the old primary some time to realize it's no longer the primary.
-	time.Sleep(10 * time.Second)
+	time.Sleep(20 * time.Second)
 
 	// Ensure the old primary was demoted correctly
 	tabletInfo, err := clusterInstance.VtctldClientProcess.GetTablet(tablets[0].Alias)
