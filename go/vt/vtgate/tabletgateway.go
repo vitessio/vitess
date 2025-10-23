@@ -59,7 +59,8 @@ var (
 	retryCount = 2
 
 	// configuration flags for the tablet balancer
-	balancerEnabled     bool
+	balancerEnabled     bool   // deprecated: use balancerMode instead
+	balancerMode        string // "cell" (default), "flow", or "random"
 	balancerVtgateCells []string
 	balancerKeyspaces   []string
 
@@ -71,9 +72,10 @@ func init() {
 		utils.SetFlagStringVar(fs, &CellsToWatch, "cells-to-watch", "", "comma-separated list of cells for watching tablets")
 		utils.SetFlagDurationVar(fs, &initialTabletTimeout, "gateway-initial-tablet-timeout", 30*time.Second, "At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type")
 		fs.IntVar(&retryCount, "retry-count", 2, "retry count")
-		fs.BoolVar(&balancerEnabled, "enable-balancer", false, "Enable the tablet balancer to evenly spread query load for a given tablet type")
-		fs.StringSliceVar(&balancerVtgateCells, "balancer-vtgate-cells", []string{}, "When in balanced mode, a comma-separated list of cells that contain vtgates (required)")
-		fs.StringSliceVar(&balancerKeyspaces, "balancer-keyspaces", []string{}, "When in balanced mode, a comma-separated list of keyspaces for which to use the balancer (optional)")
+		fs.BoolVar(&balancerEnabled, "enable-balancer", false, "(DEPRECATED: use --vtgate-balancer-mode instead) Enable the tablet balancer to evenly spread query load for a given tablet type")
+		fs.StringVar(&balancerMode, "vtgate-balancer-mode", "", "Tablet balancer mode (options: cell, flow, random). Defaults to 'cell' which shuffles tablets in the local cell.")
+		fs.StringSliceVar(&balancerVtgateCells, "balancer-vtgate-cells", []string{}, "Comma-separated list of cells that contain vtgates. For 'flow' mode, this is required. For 'random' mode, this is optional and filters tablets to those cells.")
+		fs.StringSliceVar(&balancerKeyspaces, "balancer-keyspaces", []string{}, "Comma-separated list of keyspaces for which to use the balancer (optional). If empty, applies to all keyspaces.")
 	})
 }
 
@@ -131,9 +133,7 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 		statusAggregators: make(map[string]*TabletStatusAggregator),
 	}
 	gw.setupBuffering(ctx)
-	if balancerEnabled {
-		gw.setupBalancer(ctx)
-	}
+	gw.setupBalancer(ctx)
 	gw.QueryService = queryservice.Wrap(nil, gw.withRetry)
 	return gw
 }
@@ -168,10 +168,44 @@ func (gw *TabletGateway) setupBuffering(ctx context.Context) {
 }
 
 func (gw *TabletGateway) setupBalancer(ctx context.Context) {
-	if len(balancerVtgateCells) == 0 {
-		log.Exitf("balancer-vtgate-cells is required for balanced mode")
+	// Determine the effective balancer mode, handling backwards compatibility
+	mode := balancerMode
+
+	// Check for conflicting flags
+	if balancerEnabled && balancerMode != "" {
+		log.Exitf("Cannot use both --enable-balancer and --vtgate-balancer-mode flags. Please use --vtgate-balancer-mode only.")
 	}
-	gw.balancer = balancer.NewTabletBalancer(gw.localCell, balancerVtgateCells)
+
+	// Handle deprecated --enable-balancer flag for backwards compatibility
+	if balancerEnabled {
+		log.Warning("Flag --enable-balancer is deprecated. Please use --vtgate-balancer-mode=flow instead.")
+		mode = "flow"
+	}
+
+	// Default to "cell" mode if not specified
+	if mode == "" {
+		mode = "cell"
+	}
+
+	// Cell mode uses the default shuffleTablets behavior, no balancer needed
+	if mode == "cell" {
+		log.Info("Tablet balancer using 'cell' mode (shuffle tablets in local cell)")
+		return
+	}
+
+	// Validate mode-specific requirements
+	if mode == "flow" && len(balancerVtgateCells) == 0 {
+		log.Exitf("--balancer-vtgate-cells is required when using --vtgate-balancer-mode=flow")
+	}
+
+	// Create the balancer for flow or random modes
+	var err error
+	gw.balancer, err = balancer.NewTabletBalancer(mode, gw.localCell, balancerVtgateCells)
+	if err != nil {
+		log.Exitf("Failed to create tablet balancer: %v", err)
+	}
+
+	log.Infof("Tablet balancer enabled with mode: %s", mode)
 }
 
 // QueryServiceByAlias satisfies the Gateway interface
@@ -361,12 +395,14 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 
 		var th *discovery.TabletHealth
 
-		useBalancer := balancerEnabled
-		if balancerEnabled && len(balancerKeyspaces) > 0 {
+		// Determine if we should use the balancer for this target
+		useBalancer := gw.balancer != nil
+		if useBalancer && len(balancerKeyspaces) > 0 {
 			useBalancer = slices.Contains(balancerKeyspaces, target.Keyspace)
 		}
+
 		if useBalancer {
-			// filter out the tablets that we've tried before (if any), then pick the best one
+			// Filter out the tablets that we've tried before (if any)
 			if len(invalidTablets) > 0 {
 				tablets = slices.DeleteFunc(tablets, func(t *discovery.TabletHealth) bool {
 					_, isInvalid := invalidTablets[topoproto.TabletAliasString(t.Tablet.Alias)]

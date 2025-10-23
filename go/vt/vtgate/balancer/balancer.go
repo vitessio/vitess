@@ -96,15 +96,35 @@ type TabletBalancer interface {
 	DebugHandler(w http.ResponseWriter, r *http.Request)
 }
 
-func NewTabletBalancer(localCell string, vtGateCells []string) TabletBalancer {
-	return &tabletBalancer{
+// NewTabletBalancer creates a new tablet balancer based on the specified mode.
+// Supported modes:
+//   - "flow": Flow-based balancer that maintains cell affinity while balancing load
+//   - "random": Random balancer that uniformly distributes load without cell affinity
+//
+// Note: "cell" mode is handled by the gateway and does not create a balancer instance.
+// Returns an error for unsupported modes.
+func NewTabletBalancer(mode, localCell string, vtGateCells []string) (TabletBalancer, error) {
+	switch mode {
+	case "flow":
+		return newFlowBalancer(localCell, vtGateCells), nil
+	case "random":
+		return newRandomBalancer(localCell, vtGateCells), nil
+	case "cell":
+		return nil, fmt.Errorf("cell mode should be handled by the gateway, not the balancer factory")
+	default:
+		return nil, fmt.Errorf("unsupported balancer mode: %s (supported modes: cell, flow, random)", mode)
+	}
+}
+
+func newFlowBalancer(localCell string, vtGateCells []string) TabletBalancer {
+	return &flowBalancer{
 		localCell:   localCell,
 		vtGateCells: vtGateCells,
 		allocations: map[discovery.KeyspaceShardTabletType]*targetAllocation{},
 	}
 }
 
-type tabletBalancer struct {
+type flowBalancer struct {
 	//
 	// Configuration
 	//
@@ -145,13 +165,13 @@ type targetAllocation struct {
 	TotalAllocation int
 }
 
-func (b *tabletBalancer) print() string {
+func (b *flowBalancer) print() string {
 	allocations, _ := json.Marshal(&b.allocations)
 	return fmt.Sprintf("LocalCell: %s, VtGateCells: %s, allocations: %s",
 		b.localCell, b.vtGateCells, string(allocations))
 }
 
-func (b *tabletBalancer) DebugHandler(w http.ResponseWriter, _ *http.Request) {
+func (b *flowBalancer) DebugHandler(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 	fmt.Fprintf(w, "Local Cell: %v\r\n", b.localCell)
 	fmt.Fprintf(w, "Vtgate Cells: %v\r\n", b.vtGateCells)
@@ -167,7 +187,8 @@ func (b *tabletBalancer) DebugHandler(w http.ResponseWriter, _ *http.Request) {
 // Given the total allocation for the set of tablets, choose the best target
 // by a weighted random sample so that over time the system will achieve the
 // desired balanced allocation.
-func (b *tabletBalancer) Pick(target *querypb.Target, tablets []*discovery.TabletHealth) *discovery.TabletHealth {
+func (b *flowBalancer) Pick(target *querypb.Target, tablets []*discovery.TabletHealth) *discovery.TabletHealth {
+
 	numTablets := len(tablets)
 	if numTablets == 0 {
 		return nil
@@ -190,7 +211,7 @@ func (b *tabletBalancer) Pick(target *querypb.Target, tablets []*discovery.Table
 // To stick with integer arithmetic, use 1,000,000 as the full load
 const ALLOCATION = 1000000
 
-func (b *tabletBalancer) allocateFlows(allTablets []*discovery.TabletHealth) *targetAllocation {
+func (b *flowBalancer) allocateFlows(allTablets []*discovery.TabletHealth) *targetAllocation {
 	// Initialization: Set up some data structures and derived values
 	a := targetAllocation{
 		Target:      map[string]int{},
@@ -336,7 +357,7 @@ func (b *tabletBalancer) allocateFlows(allTablets []*discovery.TabletHealth) *ta
 }
 
 // getAllocation builds the allocation map if needed and returns a copy of the map
-func (b *tabletBalancer) getAllocation(target *querypb.Target, tablets []*discovery.TabletHealth) (map[uint32]int, int) {
+func (b *flowBalancer) getAllocation(target *querypb.Target, tablets []*discovery.TabletHealth) (map[uint32]int, int) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
