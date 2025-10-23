@@ -92,7 +92,6 @@ func getCgroupCpuUsage() (float64, error) {
 }
 
 func getCurrentCgroupCpuUsage() (uint64, error) {
-	once.Do(setup)
 	if cgroupManager == nil {
 		return 0, errCgroupMetricsNotAvailable
 	}
