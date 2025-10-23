@@ -305,7 +305,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		}
 
 		a.TabletType = tablet.Type
-		a.CurrentTabletType = topodatapb.TabletType(m.GetInt("current_tablet_type"))
+		a.CurrentTabletType = topodatapb.TabletType(m.GetInt32("current_tablet_type"))
 		a.AnalyzedKeyspace = m.GetString("keyspace")
 		a.AnalyzedShard = m.GetString("shard")
 		a.AnalyzedKeyspaceEmergencyReparentDisabled = m.GetBool("keyspace_disable_emergency_reparent")
