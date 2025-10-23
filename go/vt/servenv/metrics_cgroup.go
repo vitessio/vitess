@@ -34,11 +34,11 @@ import (
 )
 
 var (
-	cgroupManager       *cgroup2.Manager
-	lastCpu             uint64
-	lastTime            time.Time
-	nilCgroupManagerErr = fmt.Errorf("cgroup metrics are not properly initialized")
-	once                sync.Once
+	once                         sync.Once
+	cgroupManager                *cgroup2.Manager
+	lastCpu                      uint64
+	lastTime                     time.Time
+	errCgroupMetricsNotAvailable = fmt.Errorf("cgroup metrics are not available")
 )
 
 func setup() {
@@ -94,7 +94,7 @@ func getCgroupCpuUsage() (float64, error) {
 func getCurrentCgroupCpuUsage() (uint64, error) {
 	once.Do(setup)
 	if cgroupManager == nil {
-		return 0, nilCgroupManagerErr
+		return 0, errCgroupMetricsNotAvailable
 	}
 	stat1, err := cgroupManager.Stat()
 	if err != nil {
@@ -121,7 +121,7 @@ func getCpuUsageFromSamples(usage1 uint64, usage2 uint64, interval time.Duration
 func getCgroupMemoryUsage() (float64, error) {
 	once.Do(setup)
 	if cgroupManager == nil {
-		return -1, nilCgroupManagerErr
+		return -1, errCgroupMetricsNotAvailable
 	}
 	stats, err := cgroupManager.Stat()
 	if err != nil {
@@ -133,7 +133,7 @@ func getCgroupMemoryUsage() (float64, error) {
 }
 
 func computeMemoryUsage(usage uint64, limit uint64) (float64, error) {
-	if usage == 0 || usage == math.MaxUint64 || limit == 0 {
+	if usage == 0 || usage == math.MaxUint64 {
 		return -1, fmt.Errorf("invalid memory usage value: %d", usage)
 	}
 	if limit == 0 {
