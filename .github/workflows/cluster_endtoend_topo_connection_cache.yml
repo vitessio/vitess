@@ -92,7 +92,7 @@ jobs:
       run: |
         
         # Get key to latest MySQL repo
-        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
+        wget -qO- https://repo.mysql.com/RPM-GPG-KEY-mysql-2023 | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/mysql.gpg > /dev/null
         # Setup MySQL 8.4
         wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.34-1_all.deb
         echo mysql-apt-config mysql-apt-config/select-server select mysql-8.4-lts | sudo debconf-set-selections
