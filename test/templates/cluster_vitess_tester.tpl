@@ -11,7 +11,7 @@ env:
   LAUNCHABLE_WORKSPACE: "vitess-app"
   GITHUB_PR_HEAD_SHA: "${{`{{ github.event.pull_request.head.sha }}`}}"
   GOPRIVATE: github.com/slackhq/vitess-addons
-  GH_ACCESS_TOKEN: "${{ secrets.GH_ACCESS_TOKEN }}"
+  GH_ACCESS_TOKEN: "${{`{{ secrets.GH_ACCESS_TOKEN }}`}}"
 
 jobs:
   build:
@@ -99,7 +99,7 @@ jobs:
         # Get key to latest MySQL repo
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
         # Setup MySQL 8.0
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.33-1_all.deb
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.35-1_all.deb
         echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get -qq update
