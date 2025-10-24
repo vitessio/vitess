@@ -24,9 +24,12 @@ import {
     MALFORMED_HTTP_RESPONSE_ERROR,
 } from '../errors/errorTypes';
 import * as errorHandler from '../errors/errorHandler';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 
 vi.mock('../errors/errorHandler');
+
+// Preserve import.meta.env to restore after each test
+const ORIGINAL_ENV = { ...import.meta.env };
 
 // mockServerJson configures an HttpOkResponse containing the given `json`
 // for all requests made against the given `endpoint`.
@@ -36,6 +39,20 @@ const mockServerJson = (endpoint: string, json: object, status: number = 200) =>
 };
 
 describe('api/http', () => {
+    afterEach(() => {
+        // Restore import.meta.env after each test to prevent leakage
+        // First, delete any keys that weren't in the original
+        for (const key in import.meta.env) {
+            if (!(key in ORIGINAL_ENV)) {
+                delete import.meta.env[key];
+            }
+        }
+        // Then restore the original values
+        Object.assign(import.meta.env, ORIGINAL_ENV);
+        // Reset all mocks to prevent leakage
+        vi.clearAllMocks();
+    });
+
     describe('vtfetch', () => {
         it('parses and returns JSON, given an HttpOkResponse response', async () => {
             const endpoint = `/api/tablets`;
@@ -141,6 +158,9 @@ describe('api/http', () => {
             });
 
             it('uses the fetch default `credentials` property by default', async () => {
+                // Explicitly unset VITE_FETCH_CREDENTIALS to test default behavior
+                delete import.meta.env.VITE_FETCH_CREDENTIALS;
+
                 vi.spyOn(global, 'fetch');
 
                 const endpoint = `/api/tablets`;
@@ -157,7 +177,7 @@ describe('api/http', () => {
             });
 
             it('throws an error if an invalid value used for `credentials`', async () => {
-                (process as any).env.VITE_FETCH_CREDENTIALS = 'nope';
+                import.meta.env.VITE_FETCH_CREDENTIALS = 'nope';
 
                 vi.spyOn(global, 'fetch');
 
@@ -185,7 +205,7 @@ describe('api/http', () => {
         });
 
         it('allows GET requests when in read only mode', async () => {
-            (process as any).env.VITE_READONLY_MODE = 'true';
+            import.meta.env.VITE_READONLY_MODE = 'true';
 
             const endpoint = `/api/tablets`;
             const response = { ok: true, result: null };
@@ -199,7 +219,7 @@ describe('api/http', () => {
         });
 
         it('throws an error when executing a write request in read only mode', async () => {
-            (process as any).env.VITE_READONLY_MODE = 'true';
+            import.meta.env.VITE_READONLY_MODE = 'true';
 
             vi.spyOn(global, 'fetch');
 
