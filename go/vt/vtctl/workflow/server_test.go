@@ -1042,7 +1042,7 @@ func TestWorkflowDelete(t *testing.T) {
 					_, err := env.ts.UpdateShardFields(lockCtx, targetKeyspaceName, shard, func(si *topo.ShardInfo) error {
 						// So t1_2 and t1_3 do not exist in the denied table list when we go
 						// to remove t1, t1_2, and t1_3.
-						err := si.UpdateDeniedTables(lockCtx, topodatapb.TabletType_PRIMARY, nil, false, []string{table1Name, "t2", "t3"})
+						err := si.UpdateDeniedTables(lockCtx, topodatapb.TabletType_PRIMARY, nil, false, []string{table1Name, "t2", "t3"}, false)
 						return err
 					})
 					require.NoError(t, err)
@@ -1680,13 +1680,11 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 			},
 			want: []string{
 				fmt.Sprintf("Lock keyspace %s", sourceKeyspaceName),
-				fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [REPLICA,RDONLY]", sourceKeyspaceName, targetKeyspaceName),
 				fmt.Sprintf("Switch reads for tables [%s] to keyspace %s for tablet types [REPLICA,RDONLY]", tablesStr, targetKeyspaceName),
 				fmt.Sprintf("Routing rules for tables [%s] will be updated", tablesStr),
 				fmt.Sprintf("Unlock keyspace %s", sourceKeyspaceName),
 				fmt.Sprintf("Lock keyspace %s", sourceKeyspaceName),
 				fmt.Sprintf("Lock keyspace %s", targetKeyspaceName),
-				fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [PRIMARY]", sourceKeyspaceName, targetKeyspaceName),
 				fmt.Sprintf("Stop writes on keyspace %s for tables [%s]: [keyspace:%s;shard:-80;position:%s,keyspace:%s;shard:80-;position:%s]",
 					sourceKeyspaceName, tablesStr, sourceKeyspaceName, position, sourceKeyspaceName, position),
 				"Wait for vreplication on stopped streams to catchup for up to 30s",
@@ -1721,13 +1719,11 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 			},
 			want: []string{
 				fmt.Sprintf("Lock keyspace %s", targetKeyspaceName),
-				fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [REPLICA,RDONLY]", targetKeyspaceName, sourceKeyspaceName),
 				fmt.Sprintf("Switch reads for tables [%s] to keyspace %s for tablet types [REPLICA,RDONLY]", tablesStr, sourceKeyspaceName),
 				fmt.Sprintf("Routing rules for tables [%s] will be updated", tablesStr),
 				fmt.Sprintf("Unlock keyspace %s", targetKeyspaceName),
 				fmt.Sprintf("Lock keyspace %s", targetKeyspaceName),
 				fmt.Sprintf("Lock keyspace %s", sourceKeyspaceName),
-				fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [PRIMARY]", targetKeyspaceName, sourceKeyspaceName),
 				fmt.Sprintf("Stop writes on keyspace %s for tables [%s]: [keyspace:%s;shard:-80;position:%s,keyspace:%s;shard:80-;position:%s]",
 					targetKeyspaceName, tablesStr, targetKeyspaceName, position, targetKeyspaceName, position),
 				"Wait for vreplication on stopped streams to catchup for up to 30s",
@@ -1762,7 +1758,6 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 			},
 			want: []string{
 				fmt.Sprintf("Lock keyspace %s", sourceKeyspaceName),
-				fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [REPLICA,RDONLY]", sourceKeyspaceName, targetKeyspaceName),
 				fmt.Sprintf("Switch reads for tables [%s] to keyspace %s for tablet types [REPLICA,RDONLY]", tablesStr, sourceKeyspaceName),
 				fmt.Sprintf("Routing rules for tables [%s] will be updated", tablesStr),
 				fmt.Sprintf("Serving VSchema will be rebuilt for the %s keyspace", sourceKeyspaceName),
