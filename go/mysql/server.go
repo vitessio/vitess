@@ -125,7 +125,7 @@ type Handler interface {
 	ComBinlogDump(c *Conn, logFile string, binlogPos uint32) error
 
 	// ComBinlogDumpGTID is called when a connection receives a ComBinlogDumpGTID request
-	ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error
+	ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet, nonBlock bool) error
 
 	// WarningCount is called at the end of each query to obtain
 	// the value to be returned to the client in the EOF packet.

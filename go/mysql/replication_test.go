@@ -109,11 +109,12 @@ func TestComBinlogDumpGTID(t *testing.T) {
 			0x00, 0x00, 0x00, 0x00, // data-size is zero, no GTID payload
 		}
 		assert.Equal(t, expectedData, data)
-		logFile, logPos, pos, err := sConn.parseComBinlogDumpGTID(data)
+		logFile, logPos, pos, nonBlock, err := sConn.parseComBinlogDumpGTID(data)
 		require.NoError(t, err, "parseComBinlogDumpGTID failed: %v", err)
 		assert.Equal(t, "moofarm", logFile)
 		assert.Equal(t, uint64(0x05060708090a0b0c), logPos)
 		assert.True(t, pos.IsZero())
+		require.True(t, nonBlock)
 	})
 
 	sConn.sequence = 0
@@ -145,11 +146,12 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		}
 		expectedData = append(expectedData, sidBlock...) // data
 		assert.Equal(t, expectedData, data)
-		logFile, logPos, pos, err := sConn.parseComBinlogDumpGTID(data)
+		logFile, logPos, pos, nonBlock, err := sConn.parseComBinlogDumpGTID(data)
 		require.NoError(t, err, "parseComBinlogDumpGTID failed: %v", err)
 		assert.Equal(t, "moofarm", logFile)
 		assert.Equal(t, uint64(0x05060708090a0b0c), logPos)
 		assert.Equal(t, gtidSet, pos.GTIDSet)
+		require.True(t, nonBlock)
 	})
 
 	sConn.sequence = 0

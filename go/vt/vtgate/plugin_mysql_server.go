@@ -42,13 +42,17 @@ import (
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttls"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 var (
@@ -474,8 +478,64 @@ func (vh *vtgateHandler) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos 
 }
 
 // ComBinlogDumpGTID is part of the mysql.Handler interface.
-func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error {
-	return vterrors.VT12001("ComBinlogDumpGTID for the VTGate handler")
+func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet, nonBlock bool) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	c.UpdateCancelCtx(cancel)
+
+	// Fill in the ImmediateCallerID with the UserData returned by
+	// the AuthServer plugin for that user. If nothing was
+	// returned, use the User. This lets the plugin map a MySQL
+	// user used for authentication to a Vitess User used for
+	// Table ACLs and Vitess authentication in general.
+	im := c.UserData.Get()
+	ef := callerid.NewEffectiveCallerID(
+		c.User,                  /* principal: who */
+		c.RemoteAddr().String(), /* component: running client process */
+		"VTGate MySQL Connector" /* subcomponent: part of the client */)
+	ctx = callerid.NewContext(ctx, ef, im)
+
+	log.Errorf("Received ComBinlogDumpGTID request: logFile: %s, logPos: %d, gtidSet: %s, nonBlock: %v\n", logFile, logPos, gtidSet.String(), nonBlock)
+	log.Errorf("Session TargetString: %s\n", vh.session(c).TargetString)
+	keyspace, tabletType, destination, err := topoproto.ParseDestination("commerce/0", topodatapb.TabletType_PRIMARY)
+	if err != nil {
+		return err
+	}
+
+	log.Errorf("Resolved destination to keyspace: %s, tabletType: %s, destination: %s\n", keyspace, tabletType.String(), destination)
+	resolvedShards, err := vh.vtg.resolver.resolver.ResolveDestination(ctx, keyspace, tabletType, destination)
+	if err != nil {
+		return fmt.Errorf("failed to resolve destination: %w", err)
+	}
+
+	fmt.Printf("Resolved %d shard(s)\n", len(resolvedShards))
+
+	rs := resolvedShards[0]
+	tabletStats := vh.vtg.gw.hc.GetHealthyTabletStats(rs.Target)
+
+	if len(tabletStats) == 0 {
+		return fmt.Errorf("no healthy tablets available for %s/%s", keyspace, rs.Target.String())
+	}
+
+	tablet := tabletStats[0].Tablet
+	fmt.Printf("Calling DumpBinlog on tablet: %s\n", topoproto.TabletAliasString(tablet.Alias))
+
+	tabletConn, err := vh.vtg.resolver.resolver.GetGateway().QueryServiceByAlias(ctx, tablet.Alias, rs.Target)
+	if err != nil {
+		log.Errorf(err.Error())
+		return vterrors.Wrapf(err, "failed to get tablet connection to %s", topoproto.TabletAliasString(tablet.Alias))
+	}
+
+	// TODO: pass through the given options
+	err = tabletConn.DumpBinlog(ctx, &binlogdatapb.DumpBinlogRequest{}, func(response *binlogdatapb.DumpBinlogResponse) error {
+		return c.WritePacket(response.Data)
+	})
+
+	if err != nil {
+		log.Errorf("DumpBinlog failed: %v\n", err)
+		return vterrors.Wrapf(err, "DumpBinlog failed on tablet %s", topoproto.TabletAliasString(tablet.Alias))
+	}
+
+	return nil
 }
 
 // KillConnection closes an open connection by connection ID.

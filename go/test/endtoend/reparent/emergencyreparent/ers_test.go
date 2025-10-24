@@ -18,7 +18,9 @@ package emergencyreparent
 
 import (
 	"context"
+	"fmt"
 	"os/exec"
+	"sync"
 	"testing"
 	"time"
 
@@ -27,8 +29,13 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
+	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func TestTrivialERS(t *testing.T) {
@@ -129,6 +136,60 @@ func TestReparentDownPrimary(t *testing.T) {
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
 	utils.ConfirmReplication(t, tablets[1], []*cluster.Vttablet{tablets[2], tablets[3]})
 	utils.ResurrectTablet(ctx, t, clusterInstance, tablets[0])
+}
+
+func TestCallDumpBinlog(t *testing.T) {
+	c := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
+	defer utils.TeardownCluster(c)
+	tablets := c.Keyspaces[0].Shards[0].Vttablets
+
+	tablet, err := c.VtctldClientProcess.GetTablet(tablets[0].Alias)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, err := tabletconn.GetDialer()(ctx, tablet, grpcclient.FailFast(false))
+	require.NoError(t, err)
+
+	wg := sync.WaitGroup{}
+	wg.Go(func() {
+		// Get the current replication position of the primary
+		pos, _ := cluster.GetPrimaryPosition(t, *tablets[0], "localhost")
+		t.Logf("Primary position: %v", pos)
+
+		t.Logf("Calling DumpBinlog on tablet %s", tablets[0].Alias)
+		err := conn.DumpBinlog(ctx, &binlogdatapb.DumpBinlogRequest{
+			Target: &querypb.Target{
+				Keyspace:   utils.KeyspaceName,
+				Shard:      utils.ShardName,
+				TabletType: tablet.Type,
+			},
+
+			Gtid: pos,
+		}, func(dbr *binlogdatapb.DumpBinlogResponse) error {
+			fmt.Printf("Received binlog response: %v\n", dbr)
+			return nil
+		})
+
+		t.Logf("DumpBinlog on tablet %s returned: %v", tablets[0].Alias, err)
+	})
+
+	wg.Go(func() {
+
+	})
+
+	wg.Go(func() {
+		for range 5 {
+			time.Sleep(3 * time.Second)
+			t.Logf("Writing to primary tablet %s", tablets[0].Alias)
+			_ = utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
+			t.Logf("Done writing")
+		}
+	})
+
+	wg.Wait()
+
 }
 
 func TestReparentNoChoiceDownPrimary(t *testing.T) {

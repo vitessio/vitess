@@ -596,6 +596,10 @@ func (c *Conn) ReadPacket() ([]byte, error) {
 	return result, err
 }
 
+func (c *Conn) WritePacket(data []byte) error {
+	return c.writePacket(data)
+}
+
 // writePacket writes a packet, possibly cutting it into multiple
 // chunks.  Note this is not very efficient, as the client probably
 // has to build the []byte and that makes a memory copy.
@@ -1022,12 +1026,13 @@ func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue b
 		}
 	}()
 
-	logFile, logPos, position, err := c.parseComBinlogDumpGTID(data)
+	log.Errorf("Received ComBinlogDumpGTID: %x", data)
+	logFile, logPos, position, nonBlock, err := c.parseComBinlogDumpGTID(data)
 	if err != nil {
 		log.Errorf("conn %v: parseComBinlogDumpGTID failed: %v", c.ID(), err)
 		return false
 	}
-	if err := handler.ComBinlogDumpGTID(c, logFile, logPos, position.GTIDSet); err != nil {
+	if err := handler.ComBinlogDumpGTID(c, logFile, logPos, position.GTIDSet, nonBlock); err != nil {
 		log.Error(err.Error())
 		return false
 	}

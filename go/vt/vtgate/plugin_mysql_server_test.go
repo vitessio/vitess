@@ -97,7 +97,7 @@ func (th *testHandler) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos ui
 	return nil
 }
 
-func (th *testHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error {
+func (th *testHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet, nonBlock bool) error {
 	return nil
 }
 

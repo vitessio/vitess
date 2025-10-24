@@ -564,7 +564,7 @@ func (db *DB) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos uint32) err
 }
 
 // ComBinlogDumpGTID is part of the mysql.Handler interface.
-func (db *DB) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error {
+func (db *DB) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet, nonBlock bool) error {
 	return nil
 }
 
