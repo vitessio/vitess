@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
@@ -605,4 +606,28 @@ func TestPermissions(t *testing.T) {
 		Shards:   []string{primary.Tablet.Shard},
 	})
 	require.ErrorContains(t, err, "has an extra user")
+}
+
+func TestRedactUserPermissions(t *testing.T) {
+	perms := &tabletmanagerdatapb.Permissions{
+		UserPermissions: []*tabletmanagerdatapb.UserPermission{
+			{
+				Host: "%",
+				User: "vt",
+				Privileges: map[string]string{
+					"authentication_string": "this should be removed from the response",
+				},
+			},
+		},
+	}
+	redactUserPermissions(perms)
+	require.EqualValues(t, &tabletmanagerdatapb.Permissions{
+		UserPermissions: []*tabletmanagerdatapb.UserPermission{
+			{
+				Host:       "%",
+				User:       "vt",
+				Privileges: map[string]string{},
+			},
+		},
+	}, perms)
 }
