@@ -405,7 +405,7 @@ func (vp *vplayer) updatePos(ctx context.Context, ts int64) (posReached bool, er
 		trxTs = vp.vr.stats.Heartbeat()
 	}
 	if trxTs < 1 {
-		log.Warningf("vplayer could not determine transaction lag as there was no transaction timestamp or heartbeat timestamp")
+		log.Warning("vplayer could not determine transaction lag as there was no transaction timestamp or heartbeat timestamp")
 	} else {
 		trxLagSecs := nowUnixTs - trxTs
 		if trxLagSecs >= 0 {
