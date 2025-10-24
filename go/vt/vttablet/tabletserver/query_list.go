@@ -26,6 +26,8 @@ import (
 
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callinfo"
+
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -112,7 +114,10 @@ func (ql *QueryList) Terminate(connID int64) bool {
 		return false
 	}
 	for _, qd := range qds {
-		_ = qd.conn.Kill("QueryList.Terminate()", time.Since(qd.start))
+		err := qd.conn.Kill("QueryList.Terminate()", time.Since(qd.start))
+		if err != nil {
+			log.Warningf("Error terminating query on connection id: %d, error: %v", qd.conn.ID(), err)
+		}
 	}
 	return true
 }
@@ -123,7 +128,10 @@ func (ql *QueryList) TerminateAll() {
 	defer ql.mu.Unlock()
 	for _, qds := range ql.queryDetails {
 		for _, qd := range qds {
-			_ = qd.conn.Kill("QueryList.TerminateAll()", time.Since(qd.start))
+			err := qd.conn.Kill("QueryList.TerminateAll()", time.Since(qd.start))
+			if err != nil {
+				log.Warningf("Error terminating query on connection id: %d, error: %v", qd.conn.ID(), err)
+			}
 		}
 	}
 }
