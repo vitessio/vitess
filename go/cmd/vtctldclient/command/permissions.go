@@ -91,14 +91,11 @@ func commandGetPermissions(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-<<<<<<< HEAD
-=======
 	// Obfuscate the secrets so as not to potentially display sensitive info.
 	if resp != nil && resp.Permissions != nil {
 		redactUserPermissions(resp.Permissions)
 	}
 	cli.DefaultMarshalOptions.EmitUnpopulated = false
->>>>>>> b1709cf180 (`vtctldclient GetPermissions`: hide `authentication_string` from response (#18771))
 	p, err := cli.MarshalJSON(resp.Permissions)
 	if err != nil {
 		return err
