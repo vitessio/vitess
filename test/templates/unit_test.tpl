@@ -86,12 +86,22 @@ jobs:
         echo "set man-db/auto-update false" | sudo debconf-communicate
         sudo dpkg-reconfigure man-db
 
+    - name: Update apt
+      if: steps.changes.outputs.unit_tests == 'true'
+      run: |
+        sudo apt-get update
+
+    - name: Install eatmydata
+      if: steps.changes.outputs.unit_tests == 'true'
+      run: |
+        sudo apt-get install -y --no-install-recommends eatmydata
 
     - name: Get dependencies
       if: steps.changes.outputs.unit_tests == 'true'
+      env:
+        LD_PRELOAD: "libeatmydata.so"
       run: |
         export DEBIAN_FRONTEND="noninteractive"
-        sudo apt-get update
 
         # Uninstall any previously installed MySQL first
         # sudo systemctl stop apparmor
@@ -135,7 +145,7 @@ jobs:
         sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
         {{end}}
 
-        sudo apt-get install -y make unzip g++ curl git wget ant openjdk-11-jdk eatmydata
+        sudo apt-get install -y make unzip g++ curl git wget ant openjdk-11-jdk
         
         sudo service mysql stop
         sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
@@ -154,11 +164,15 @@ jobs:
 
     - name: Run make tools
       if: steps.changes.outputs.unit_tests == 'true'
+      env:
+        LD_PRELOAD: "libeatmydata.so"
       run: |
         make tools
 
     - name: Setup launchable dependencies
       if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.unit_tests == 'true' && github.base_ref == 'main'
+      env:
+        LD_PRELOAD: "libeatmydata.so"
       run: |
         # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
         pip3 install --user launchable~=1.0 > /dev/null
@@ -172,6 +186,8 @@ jobs:
     - name: Run test
       if: steps.changes.outputs.unit_tests == 'true'
       timeout-minutes: 30
+      env:
+        LD_PRELOAD: "libeatmydata.so"
       run: |
         set -exo pipefail
         # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
@@ -184,8 +200,8 @@ jobs:
         # We sometimes need to alter the behavior based on the platform we're
         # testing, e.g. MySQL 5.7 vs 8.0.
         export CI_DB_PLATFORM="{{.Platform}}"
-        
-        eatmydata -- make unit_test | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+
+        make unit_test | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Record test results in launchable if PR is not a draft
       if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.unit_tests == 'true' && github.base_ref == 'main' && !cancelled()
