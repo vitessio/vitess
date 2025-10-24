@@ -18,7 +18,7 @@ import { useMemo } from 'react';
 
 import { useManyExperimentalTabletDebugVars, useWorkflow } from '../../hooks/api';
 import { vtadmin } from '../../proto/vtadmin';
-import { getStreamVReplicationLagTimeseries, QPS_REFETCH_INTERVAL, TimeseriesMap } from '../../util/tabletDebugVars';
+import { getStreamVReplicationTransactionLagTimeseries, QPS_REFETCH_INTERVAL, TimeseriesMap } from '../../util/tabletDebugVars';
 import { formatStreamKey, getStreams, getStreamTablets } from '../../util/workflows';
 import { D3Timeseries } from './D3Timeseries';
 
@@ -78,10 +78,10 @@ export const getWorkflowTimeseries = (
 
         const tabletAlias = tq.data.params.alias;
 
-        const lagData = getStreamVReplicationLagTimeseries(tq.data.data, tq.dataUpdatedAt);
+        const lagData = getStreamVReplicationTransactionLagTimeseries(tq.data.data, tq.dataUpdatedAt);
         Object.entries(lagData).forEach(([streamID, streamLagData]) => {
-            // Don't graph aggregate vreplication lag for the tablet, since that
-            // can include vreplication lag data for streams running on the tablet
+            // Don't graph aggregate vreplication transaction lag for the tablet, since that
+            // can include vreplication transaction lag data for streams running on the tablet
             // that are not in the current workflow.
             if (streamID === 'All') {
                 return;

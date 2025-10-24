@@ -386,14 +386,33 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 
 // updatePos should get called at a minimum of vreplicationMinimumHeartbeatUpdateInterval.
 func (vp *vplayer) updatePos(ctx context.Context, ts int64) (posReached bool, err error) {
-	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts, vp.vr.stats.CopyRowCount.Get(), vp.vr.workflowConfig.StoreCompressedGTID)
+	now := time.Now()
+	nowUnixTs := now.Unix()
+	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, nowUnixTs, ts, vp.vr.stats.CopyRowCount.Get(), vp.vr.workflowConfig.StoreCompressedGTID)
 	if _, err := vp.query(ctx, update); err != nil {
 		return false, fmt.Errorf("error %v updating position", err)
 	}
 	vp.numAccumulatedHeartbeats = 0
 	vp.unsavedEvent = nil
-	vp.timeLastSaved = time.Now()
+	vp.timeLastSaved = now
 	vp.vr.stats.SetLastPosition(vp.pos)
+
+	// Record the transaction lag using the last transaction's timestamp if available, otherwise
+	// use the last heartbeat time.
+	trxTs := ts
+	if trxTs < 1 {
+		// No transaction timestamp, so we haven't yet executed anything, use heartbeat time instead.
+		trxTs = vp.vr.stats.Heartbeat()
+	}
+	if trxTs < 1 {
+		log.Warningf("vplayer could not determine transaction lag as there was no transaction timestamp or heartbeat timestamp")
+	} else {
+		trxLagSecs := nowUnixTs - trxTs
+		if trxLagSecs >= 0 {
+			vp.vr.stats.VReplicationTransactionLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(trxLagSecs)*time.Second)
+		}
+	}
+
 	posReached = !vp.stopPos.IsZero() && vp.pos.AtLeast(vp.stopPos)
 	if posReached {
 		log.Infof("Stopped at position: %v", vp.stopPos)
