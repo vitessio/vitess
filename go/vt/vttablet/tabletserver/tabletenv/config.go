@@ -198,6 +198,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.Int64Var(&currentConfig.ConsolidatorStreamTotalSize, "consolidator-stream-total-size", defaultConfig.ConsolidatorStreamTotalSize, "Configure the stream consolidator total size in bytes. Setting to 0 disables the stream consolidator.")
 
 	fs.Int64Var(&currentConfig.ConsolidatorQueryWaiterCap, "consolidator-query-waiter-cap", 0, "Configure the maximum number of clients allowed to wait on the consolidator.")
+	fs.StringVar(&currentConfig.ConsolidatorQueryWaiterCapMethod, "consolidator-query-waiter-cap-method", "fallthrough", "Configure the method when consolidator waiter cap is exceeded. Options: fallthrough, reject.")
 	fs.DurationVar(&healthCheckInterval, "health_check_interval", defaultConfig.Healthcheck.Interval, "Interval between health checks")
 	fs.DurationVar(&degradedThreshold, "degraded_threshold", defaultConfig.Healthcheck.DegradedThreshold, "replication lag after which a replica is considered degraded")
 	fs.DurationVar(&unhealthyThreshold, "unhealthy_threshold", defaultConfig.Healthcheck.UnhealthyThreshold, "replication lag after which a replica is considered unhealthy")
@@ -247,6 +248,16 @@ func Init() {
 		currentConfig.Consolidator = Enable
 	default:
 		currentConfig.Consolidator = Disable
+	}
+
+	switch currentConfig.ConsolidatorQueryWaiterCapMethod {
+	case "fallthrough", "reject":
+		// Valid options
+	case "":
+		// Empty string defaults to fallthrough
+		currentConfig.ConsolidatorQueryWaiterCapMethod = "fallthrough"
+	default:
+		log.Exitf("Invalid consolidator-query-waiter-cap-method value %v: must be either 'fallthrough' or 'reject'", currentConfig.ConsolidatorQueryWaiterCapMethod)
 	}
 
 	if heartbeatInterval == 0 {
@@ -319,6 +330,7 @@ type TabletConfig struct {
 	ConsolidatorStreamTotalSize      int64         `json:"consolidatorStreamTotalSize,omitempty"`
 	ConsolidatorStreamQuerySize      int64         `json:"consolidatorStreamQuerySize,omitempty"`
 	ConsolidatorQueryWaiterCap       int64         `json:"consolidatorMaxQueryWait,omitempty"`
+	ConsolidatorQueryWaiterCapMethod string        `json:"consolidatorQueryWaiterCapMethod,omitempty"`
 	QueryCacheMemory                 int64         `json:"queryCacheMemory,omitempty"`
 	QueryCacheDoorkeeper             bool          `json:"queryCacheDoorkeeper,omitempty"`
 	SchemaReloadInterval             time.Duration `json:"schemaReloadIntervalSeconds,omitempty"`
@@ -982,9 +994,10 @@ var defaultConfig = TabletConfig{
 		// of them ready in MySQL and profit from a pipelining effect.
 		MaxConcurrency: 5,
 	},
-	Consolidator:                Enable,
-	ConsolidatorStreamTotalSize: 128 * 1024 * 1024,
-	ConsolidatorStreamQuerySize: 2 * 1024 * 1024,
+	Consolidator:                     Enable,
+	ConsolidatorStreamTotalSize:      128 * 1024 * 1024,
+	ConsolidatorStreamQuerySize:      2 * 1024 * 1024,
+	ConsolidatorQueryWaiterCapMethod: "fallthrough",
 	// The value for StreamBufferSize was chosen after trying out a few of
 	// them. Too small buffers force too many packets to be sent. Too big
 	// buffers force the clients to read them in multiple chunks and make
