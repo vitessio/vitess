@@ -18,7 +18,11 @@ import { useMemo } from 'react';
 
 import { useManyExperimentalTabletDebugVars, useWorkflow } from '../../hooks/api';
 import { vtadmin } from '../../proto/vtadmin';
-import { getStreamVReplicationTransactionLagTimeseries, QPS_REFETCH_INTERVAL, TimeseriesMap } from '../../util/tabletDebugVars';
+import {
+    getStreamVReplicationTransactionLagTimeseries,
+    QPS_REFETCH_INTERVAL,
+    TimeseriesMap,
+} from '../../util/tabletDebugVars';
 import { formatStreamKey, getStreams, getStreamTablets } from '../../util/workflows';
 import { D3Timeseries } from './D3Timeseries';
 
