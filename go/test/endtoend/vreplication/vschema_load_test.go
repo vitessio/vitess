@@ -43,7 +43,7 @@ func TestVSchemaChangesUnderLoad(t *testing.T) {
 	defer vc.TearDown()
 
 	defaultCell := vc.Cells[vc.CellNames[0]]
-	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, 1, 0, 100, sourceKsOpts)
+	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, 1, 0, 100, defaultSourceKsOpts)
 
 	vtgateConn := vc.GetVTGateConn(t)
 	defer vtgateConn.Close()

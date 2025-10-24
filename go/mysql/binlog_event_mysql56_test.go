@@ -176,7 +176,7 @@ func TestMysql56DecodeTransactionPayload(t *testing.T) {
 				query, err := ev.Query(format)
 				require.NoError(t, err)
 				eventStrs = append(eventStrs, query.SQL)
-			case ev.IsWriteRows():
+			case ev.IsWriteRows() || ev.IsUpdateRows() || ev.IsDeleteRows():
 				rows, err := ev.Rows(format, tableMap)
 				require.NoError(t, err)
 				for i := range rows.Rows {

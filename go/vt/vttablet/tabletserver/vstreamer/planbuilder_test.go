@@ -930,3 +930,76 @@ func TestCompare(t *testing.T) {
 		})
 	}
 }
+
+// TestFindColumn confirms that the findColumn function works as expected/intended in
+// various scenarios.
+func TestFindColumn(t *testing.T) {
+	tableName := "testy"
+	testcases := []struct {
+		name        string
+		table       *Table
+		columnName  string
+		expectError string
+	}{
+		{
+			name: "happy path",
+			table: &Table{
+				Name: tableName,
+				Fields: []*querypb.Field{
+					{
+						Name: "id",
+					},
+					{
+						Name: "email",
+					},
+				},
+			},
+			columnName: "id",
+		},
+		{
+			name: "not found due to TableMap ordinal column names",
+			table: &Table{
+				Name: tableName,
+				Fields: []*querypb.Field{
+					{
+						Name: "@1",
+					},
+					{
+						Name: "@2",
+					},
+				},
+			},
+			columnName:  "id",
+			expectError: "cannot use column names in vstream filter as the current table schema for table testy is not compatible with the current event for this table in the stream",
+		},
+		{
+			name: "not found due to schema mismatch",
+			table: &Table{
+				Name: tableName,
+				Fields: []*querypb.Field{
+					{
+						Name: "id",
+					},
+					{
+						Name: "email",
+					},
+				},
+			},
+			columnName:  "wut",
+			expectError: "column wut not found in table testy",
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run("", func(t *testing.T) {
+			fields, err := findColumn(tc.table, sqlparser.NewIdentifierCI(tc.columnName))
+			if tc.expectError != "" {
+				require.Error(t, err)
+				require.EqualError(t, err, tc.expectError)
+			} else {
+				require.NoError(t, err)
+			}
+			require.NotNil(t, fields)
+		})
+	}
+}

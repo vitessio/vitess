@@ -518,7 +518,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 
 	instance.Hostname = m.GetString("hostname")
 	instance.Port = m.GetInt("port")
-	instance.TabletType = topodatapb.TabletType(m.GetInt("tablet_type"))
+	instance.TabletType = topodatapb.TabletType(m.GetInt32("tablet_type"))
 	instance.Cell = m.GetString("cell")
 	instance.ServerID = m.GetUint("server_id")
 	instance.ServerUUID = m.GetString("server_uuid")

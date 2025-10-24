@@ -236,7 +236,7 @@ func TestMultiTenantSimple(t *testing.T) {
 	// Create again and run it to completion.
 	createFunc()
 
-	vdiff(t, targetKeyspace, workflowName, defaultCellName, nil)
+	vdiff(t, targetKeyspace, defaultWorkflowName, defaultCellName, nil)
 	mt.SwitchReads()
 	confirmOnlyReadsSwitched(t)
 
@@ -396,7 +396,7 @@ func TestMultiTenantSharded(t *testing.T) {
 	// Note: we cannot insert into the target keyspace since that is never routed to the source keyspace.
 	lastIndex = insertRows(lastIndex, sourceKeyspace)
 	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
-	vdiff(t, targetKeyspace, workflowName, defaultCellName, nil)
+	vdiff(t, targetKeyspace, defaultWorkflowName, defaultCellName, nil)
 	mt.SwitchReadsAndWrites()
 	// Note: here we have already switched, and we can insert into the target keyspace, and it should get reverse
 	// replicated to the source keyspace. The source keyspace is routed to the target keyspace at this point.

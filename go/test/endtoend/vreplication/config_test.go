@@ -431,44 +431,44 @@ create table ukTable (id1 int not null, id2 int not null, name varchar(20), uniq
   }
 }
 `
-	materializeProductSpec = `
+	materializeProductSpec = fmt.Sprintf(`
 	{
 	"workflow": "cproduct",
-	"source_keyspace": "product",
-	"target_keyspace": "customer",
+	"source_keyspace": "%s",
+	"target_keyspace": "%s",
 	"table_settings": [{
 		"target_table": "cproduct",
 		"source_expression": "select * from product",
 		"create_ddl": "create table cproduct(pid bigint, description varchar(128), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key(pid)) CHARSET=utf8mb4"
 	}]
 }
-`
+`, defaultSourceKs, defaultTargetKs)
 
-	materializeCustomerNameSpec = `
+	materializeCustomerNameSpec = fmt.Sprintf(`
 {
   "workflow": "customer_name",
-  "source_keyspace": "customer",
-  "target_keyspace": "customer",
+  "source_keyspace": "%s",
+  "target_keyspace": "%s",
   "table_settings": [{
     "target_table": "customer_name",
     "source_expression": "select cid, name from customer",
     "create_ddl": "create table if not exists customer_name (cid bigint not null, name varchar(128), primary key(cid), key(name))"
   }]
 }
-`
+`, defaultTargetKs, defaultTargetKs)
 
-	materializeCustomerTypeSpec = `
+	materializeCustomerTypeSpec = fmt.Sprintf(`
 {
   "workflow": "enterprise_customer",
-  "source_keyspace": "customer",
-  "target_keyspace": "customer",
+  "source_keyspace": "%s",
+  "target_keyspace": "%s",
   "table_settings": [{
     "target_table": "enterprise_customer",
     "source_expression": "select cid, name, typ from customer where typ = 'enterprise'",
     "create_ddl": "create table if not exists enterprise_customer (cid bigint not null, name varchar(128), typ varchar(64), primary key(cid), key(typ))"
   }]
 }
-`
+`, defaultTargetKs, defaultTargetKs)
 
 	merchantOrdersVSchema = `
 {
@@ -512,10 +512,10 @@ create table ukTable (id1 int not null, id2 int not null, name varchar(20), uniq
 `
 
 	// the merchant-type keyspace allows us to test keyspace names with special characters in them (dash)
-	materializeMerchantOrdersSpec = `
+	materializeMerchantOrdersSpec = fmt.Sprintf(`
 {
   "workflow": "morders",
-  "source_keyspace": "customer",
+  "source_keyspace": "%s",
   "target_keyspace": "merchant-type",
   "table_settings": [{
     "target_table": "morders",
@@ -523,12 +523,12 @@ create table ukTable (id1 int not null, id2 int not null, name varchar(20), uniq
     "create_ddl": "create table morders(oid int, cid int, mname varchar(128), pid int, price int, qty int, total int, total2 int as (10 * total), primary key(oid)) CHARSET=utf8"
   }]
 }
-`
+`, defaultTargetKs)
 
-	materializeMerchantSalesSpec = `
+	materializeMerchantSalesSpec = fmt.Sprintf(`
 {
   "workflow": "msales",
-  "source_keyspace": "customer",
+  "source_keyspace": "%s",
   "target_keyspace": "merchant-type",
   "table_settings": [{
     "target_table": "msales",
@@ -536,7 +536,7 @@ create table ukTable (id1 int not null, id2 int not null, name varchar(20), uniq
     "create_ddl": "create table msales(merchant_name varchar(128), kount int, amount int, primary key(merchant_name)) CHARSET=utf8"
   }]
 }
-`
+`, defaultTargetKs)
 
 	materializeSalesVSchema = `
 {
@@ -552,30 +552,30 @@ create table ukTable (id1 int not null, id2 int not null, name varchar(20), uniq
   }
 }
 `
-	materializeSalesSpec = `
+	materializeSalesSpec = fmt.Sprintf(`
 {
   "workflow": "sales",
-  "source_keyspace": "customer",
-  "target_keyspace": "product",
+  "source_keyspace": "%s",
+  "target_keyspace": "%s",
   "table_settings": [{
     "target_Table": "sales",
     "source_expression": "select pid, count(*) as kount, sum(price) as amount from orders group by pid",
     "create_ddl": "create table sales(pid int, kount int, amount int, primary key(pid)) CHARSET=utf8"
   }]
 }
-`
-	materializeRollupSpec = `
+`, defaultTargetKs, defaultSourceKs)
+	materializeRollupSpec = fmt.Sprintf(`
 {
   "workflow": "rollup",
-  "source_keyspace": "product",
-  "target_keyspace": "product",
+  "source_keyspace": "%s",
+  "target_keyspace": "%s",
   "table_settings": [{
     "target_table": "rollup",
     "source_expression": "select 'total' as rollupname, count(*) as kount from product group by rollupname",
     "create_ddl": "create table rollup(rollupname varchar(100), kount int, primary key (rollupname)) CHARSET=utf8mb4"
   }]
 }
-`
+`, defaultSourceKs, defaultSourceKs)
 	initialExternalSchema = `
 create table review(rid int, pid int, review varbinary(128), primary key(rid));
 create table rating(gid int, pid int, rating int, primary key(gid));

@@ -180,7 +180,7 @@ func (bls *Streamer) Stream(ctx context.Context) (err error) {
 	stopPos := bls.startPos
 	defer func() {
 		if err != nil && err != ErrBinlogUnavailable {
-			err = fmt.Errorf("stream error @ %v: %v", stopPos, err)
+			err = fmt.Errorf("stream error @ (including the GTID we failed to process) %v: %v", stopPos, err)
 		}
 		log.Infof("stream ended @ %v, err = %v", stopPos, err)
 	}()
