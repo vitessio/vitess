@@ -61,11 +61,11 @@ func setup() {
 func getCgroupManager() (*cgroup2.Manager, error) {
 	path, err := cgroup2.NestedGroupPath("")
 	if err != nil {
-		return nil, fmt.Errorf("failed to build nested cgroup paths: %v", err)
+		return nil, fmt.Errorf("failed to build nested cgroup paths: %w", err)
 	}
 	cgroupManager, err := cgroup2.Load(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load cgroup manager: %v", err)
+		return nil, fmt.Errorf("failed to load cgroup manager: %w", err)
 	}
 	return cgroupManager, nil
 }
@@ -79,7 +79,7 @@ func getCgroupCpuUsage() (float64, error) {
 	currentTime := time.Now()
 	currentUsage, err = getCurrentCgroupCpuUsage()
 	if err != nil {
-		return -1, fmt.Errorf("failed to read current cgroup CPU usage: %v", err)
+		return -1, fmt.Errorf("failed to read current cgroup CPU usage: %w", err)
 	}
 	duration := currentTime.Sub(lastTime)
 	usage, err := getCpuUsageFromSamples(lastCpu, currentUsage, duration)
@@ -97,7 +97,7 @@ func getCurrentCgroupCpuUsage() (uint64, error) {
 	}
 	stat1, err := cgroupManager.Stat()
 	if err != nil {
-		return 0, fmt.Errorf("failed to get initial cgroup CPU stats: %v", err)
+		return 0, fmt.Errorf("failed to get initial cgroup CPU stats: %w", err)
 	}
 	currentUsage := stat1.CPU.UsageUsec
 	return currentUsage, nil
@@ -141,7 +141,7 @@ func computeMemoryUsage(usage uint64, limit uint64) (float64, error) {
 	if limit == math.MaxUint64 {
 		vmem, err := mem.VirtualMemory()
 		if err != nil {
-			return -1, fmt.Errorf("failed to get virtual memory stats: %v", err)
+			return -1, fmt.Errorf("failed to get virtual memory stats: %w", err)
 		}
 		limit = vmem.Total
 	}
