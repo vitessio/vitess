@@ -24,7 +24,6 @@ global.fetch = fetch;
 // Mock IntersectionObserver for @headlessui/react
 // JSDOM doesn't support IntersectionObserver
 class IntersectionObserverMock {
-  constructor() {}
   disconnect() {}
   observe() {}
   takeRecords() {
