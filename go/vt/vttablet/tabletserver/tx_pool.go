@@ -300,19 +300,24 @@ func (tp *TxPool) begin(ctx context.Context, options *querypb.ExecuteOptions, re
 }
 
 func (tp *TxPool) createConn(ctx context.Context, options *querypb.ExecuteOptions, setting *smartconnpool.Setting) (*StatefulConnection, error) {
+	if ctx.Err() != nil {
+		tp.LogActive()
+
+		errCode := vterrors.Code(smartconnpool.ErrCtxTimeout)
+		return nil, vterrors.Errorf(errCode, "transaction pool aborting request due to already expired context")
+	}
+
 	conn, err := tp.scp.NewConn(ctx, options, setting)
 	if err != nil {
-		errCode := vterrors.Code(err)
-		switch err {
-		case smartconnpool.ErrCtxTimeout:
+		if err == smartconnpool.ErrTimeout {
 			tp.LogActive()
-			err = vterrors.Errorf(errCode, "transaction pool aborting request due to already expired context")
-		case smartconnpool.ErrTimeout:
-			tp.LogActive()
-			err = vterrors.Errorf(errCode, "transaction pool connection limit exceeded")
+			errCode := vterrors.Code(smartconnpool.ErrTimeout)
+			return nil, vterrors.Errorf(errCode, "transaction pool connection limit exceeded")
 		}
+
 		return nil, err
 	}
+
 	return conn, nil
 }
 
