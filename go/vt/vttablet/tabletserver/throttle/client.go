@@ -94,8 +94,9 @@ func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName throttlera
 		return emptyCheckResult, true
 	}
 	if c.throttler == nil {
-		// no throttler
-		return emptyCheckResult, true
+		// No throttler, so we only throttle if we're in a test and have set the
+		// always throttle app name.
+		return emptyCheckResult, overrideAppName != throttlerapp.TestingAlwaysThrottledName
 	}
 	checkApp := c.appName
 	if overrideAppName != "" {
