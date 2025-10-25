@@ -378,7 +378,7 @@ func (client *FakeTabletManagerClient) ReadReparentJournalInfo(ctx context.Conte
 }
 
 // DemotePrimary is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+func (client *FakeTabletManagerClient) DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet, force bool) (*replicationdatapb.PrimaryStatus, error) {
 	return nil, nil
 }
 
