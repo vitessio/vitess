@@ -649,6 +649,10 @@ func (sbc *SandboxConn) VStreamResults(ctx context.Context, target *querypb.Targ
 	return fmt.Errorf("not implemented in test")
 }
 
+func (sbc *SandboxConn) DumpBinlog(ctx context.Context, request *binlogdatapb.DumpBinlogRequest, send func(*binlogdatapb.DumpBinlogResponse) error) error {
+	return fmt.Errorf("not implemented in test")
+}
+
 // QueryServiceByAlias is part of the Gateway interface.
 func (sbc *SandboxConn) QueryServiceByAlias(_ context.Context, _ *topodatapb.TabletAlias, _ *querypb.Target) (queryservice.QueryService, error) {
 	return sbc, nil

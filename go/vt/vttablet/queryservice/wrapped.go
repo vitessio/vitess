@@ -312,6 +312,13 @@ func (ws *wrappedService) VStreamResults(ctx context.Context, target *querypb.Ta
 	})
 }
 
+func (ws *wrappedService) DumpBinlog(ctx context.Context, request *binlogdatapb.DumpBinlogRequest, send func(*binlogdatapb.DumpBinlogResponse) error) error {
+	return ws.wrapper(ctx, request.Target, ws.impl, "DumpBinlog", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
+		innerErr := conn.DumpBinlog(ctx, request, send)
+		return false, innerErr
+	})
+}
+
 func (ws *wrappedService) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
 	return ws.wrapper(ctx, nil, ws.impl, "StreamHealth", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		innerErr := conn.StreamHealth(ctx, callback)
