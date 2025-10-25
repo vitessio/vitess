@@ -310,7 +310,7 @@ type mockThrottlingStrategy struct {
 	stopped  bool
 }
 
-func (m *mockThrottlingStrategy) Evaluate(ctx context.Context, targetTabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, transactionID int64, options *querypb.ExecuteOptions) registry.ThrottleDecision {
+func (m *mockThrottlingStrategy) Evaluate(ctx context.Context, targetTabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, transactionID int64, attrs registry.QueryAttributes) registry.ThrottleDecision {
 	return m.decision
 }
 
@@ -333,4 +333,123 @@ type testLogCapture struct {
 
 func (lc *testLogCapture) captureLog(msg string, args ...interface{}) {
 	lc.logs = append(lc.logs, fmt.Sprintf(msg, args...))
+}
+
+func TestQueryThrottler_extractWorkloadName(t *testing.T) {
+	tests := []struct {
+		name    string
+		options *querypb.ExecuteOptions
+		want    string
+	}{
+		{
+			name:    "nil options returns unknown",
+			options: nil,
+			want:    "unknown",
+		},
+		{
+			name: "empty workload name returns default",
+			options: &querypb.ExecuteOptions{
+				WorkloadName: "",
+			},
+			want: "default",
+		},
+		{
+			name: "custom workload name returns the name",
+			options: &querypb.ExecuteOptions{
+				WorkloadName: "analytics",
+			},
+			want: "analytics",
+		},
+		{
+			name: "another custom workload name",
+			options: &querypb.ExecuteOptions{
+				WorkloadName: "batch-processing",
+			},
+			want: "batch-processing",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractWorkloadName(tt.options)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestQueryThrottler_extractPriority(t *testing.T) {
+	tests := []struct {
+		name    string
+		options *querypb.ExecuteOptions
+		want    int
+	}{
+		{
+			name:    "nil options returns default priority",
+			options: nil,
+			want:    100,
+		},
+		{
+			name: "empty priority returns default priority",
+			options: &querypb.ExecuteOptions{
+				Priority: "",
+			},
+			want: 100,
+		},
+		{
+			name: "valid integer priority 0",
+			options: &querypb.ExecuteOptions{
+				Priority: "0",
+			},
+			want: 0,
+		},
+		{
+			name: "valid integer priority 50",
+			options: &querypb.ExecuteOptions{
+				Priority: "50",
+			},
+			want: 50,
+		},
+		{
+			name: "valid integer priority 100",
+			options: &querypb.ExecuteOptions{
+				Priority: "100",
+			},
+			want: 100,
+		},
+		{
+			name: "invalid non-numeric priority returns default priority",
+			options: &querypb.ExecuteOptions{
+				Priority: "high",
+			},
+			want: 100,
+		},
+		{
+			name: "invalid non-numeric priority low returns default priority",
+			options: &querypb.ExecuteOptions{
+				Priority: "low",
+			},
+			want: 100,
+		},
+		{
+			name: "invalid negative priority returns default priority",
+			options: &querypb.ExecuteOptions{
+				Priority: "-1",
+			},
+			want: 100,
+		},
+		{
+			name: "invalid decimal priority returns default priority",
+			options: &querypb.ExecuteOptions{
+				Priority: "50.5",
+			},
+			want: 100,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractPriority(tt.options)
+			require.Equal(t, tt.want, got)
+		})
+	}
 }
