@@ -496,7 +496,13 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 
 	log.Errorf("Received ComBinlogDumpGTID request: logFile: %s, logPos: %d, gtidSet: %s, nonBlock: %v\n", logFile, logPos, gtidSet.String(), nonBlock)
 	log.Errorf("Session TargetString: %s\n", vh.session(c).TargetString)
-	keyspace, tabletType, destination, err := topoproto.ParseDestination("commerce/0", topodatapb.TabletType_PRIMARY)
+
+	target := vh.session(c).TargetString
+	if target == "" {
+		target = "commerce/0@primary"
+	}
+
+	keyspace, tabletType, destination, err := topoproto.ParseDestination(target, topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		return err
 	}
@@ -507,7 +513,7 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 		return fmt.Errorf("failed to resolve destination: %w", err)
 	}
 
-	fmt.Printf("Resolved %d shard(s)\n", len(resolvedShards))
+	log.Errorf("Resolved %d shard(s)\n", len(resolvedShards))
 
 	rs := resolvedShards[0]
 	tabletStats := vh.vtg.gw.hc.GetHealthyTabletStats(rs.Target)
@@ -517,7 +523,7 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 	}
 
 	tablet := tabletStats[0].Tablet
-	fmt.Printf("Calling DumpBinlog on tablet: %s\n", topoproto.TabletAliasString(tablet.Alias))
+	log.Errorf("Calling DumpBinlog on tablet: %s\n", topoproto.TabletAliasString(tablet.Alias))
 
 	tabletConn, err := vh.vtg.resolver.resolver.GetGateway().QueryServiceByAlias(ctx, tablet.Alias, rs.Target)
 	if err != nil {
@@ -526,8 +532,14 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 	}
 
 	// TODO: pass through the given options
-	err = tabletConn.DumpBinlog(ctx, &binlogdatapb.DumpBinlogRequest{}, func(response *binlogdatapb.DumpBinlogResponse) error {
-		return c.WritePacket(response.Data)
+	err = tabletConn.DumpBinlog(ctx, &binlogdatapb.DumpBinlogRequest{
+		Target: rs.Target,
+		Gtid:   "MySQL56/" + gtidSet.String(),
+	}, func(response *binlogdatapb.DumpBinlogResponse) error {
+		// Pad with the mysql packet header
+		data := make([]byte, 4+len(response.Data))
+		copy(data[4:], response.Data)
+		return c.WritePacket(data)
 	})
 
 	if err != nil {

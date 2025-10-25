@@ -33,6 +33,7 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler"
 
@@ -1371,6 +1372,12 @@ func (tsv *TabletServer) DumpBinlog(ctx context.Context, request *binlogdatapb.D
 	for {
 		var resp binlogdatapb.DumpBinlogResponse
 		resp.Data, err = conn.ReadPacket()
+
+		log.Errorf("Received MySQL packet: %v", resp.Data)
+
+		ev := mysql.NewMysql56BinlogEventWithSemiSyncInfo(resp.Data[1:], false)
+		log.Errorf("IsValid: %v", ev.IsValid())
+
 		if err != nil {
 			if err == io.EOF {
 				return nil
