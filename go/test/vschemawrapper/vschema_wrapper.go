@@ -236,7 +236,7 @@ func (vw *VSchemaWrapper) ShardDestination() key.ShardDestination {
 }
 
 func (vw *VSchemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.BaseTable, string, topodatapb.TabletType, key.ShardDestination, error) {
-	destKeyspace, destTabletType, destTarget, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
+	destKeyspace, destTabletType, destTarget, _, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		return nil, destKeyspace, destTabletType, destTarget, err
 	}
@@ -248,7 +248,7 @@ func (vw *VSchemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.BaseTabl
 }
 
 func (vw *VSchemaWrapper) FindView(tab sqlparser.TableName) sqlparser.TableStatement {
-	destKeyspace, _, _, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
+	destKeyspace, _, _, _, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		return nil
 	}
@@ -256,7 +256,7 @@ func (vw *VSchemaWrapper) FindView(tab sqlparser.TableName) sqlparser.TableState
 }
 
 func (vw *VSchemaWrapper) FindViewTarget(name sqlparser.TableName) (*vindexes.Keyspace, error) {
-	destKeyspace, _, _, err := topoproto.ParseDestination(name.Qualifier.String(), topodatapb.TabletType_PRIMARY)
+	destKeyspace, _, _, _, err := topoproto.ParseDestination(name.Qualifier.String(), topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		return nil, err
 	}
@@ -336,7 +336,7 @@ func (vw *VSchemaWrapper) IsViewsEnabled() bool {
 // FindMirrorRule finds the mirror rule for the requested keyspace, table
 // name, and the tablet type in the VSchema.
 func (vw *VSchemaWrapper) FindMirrorRule(tab sqlparser.TableName) (*vindexes.MirrorRule, error) {
-	destKeyspace, destTabletType, _, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
+	destKeyspace, destTabletType, _, _, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		return nil, err
 	}
