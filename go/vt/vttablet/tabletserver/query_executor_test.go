@@ -1466,6 +1466,79 @@ func TestQueryExecutorShouldConsolidate(t *testing.T) {
 	}
 }
 
+func TestQueryExecutorConsolidatorWaiterCapFallback(t *testing.T) {
+	// Test that when the consolidator waiter cap is reached, queries fall back
+	// to independent execution instead of returning empty results.
+
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	ctx := context.Background()
+	tsv := newTestTabletServer(ctx, enableConsolidator, db)
+	defer tsv.StopService()
+
+	// Set a waiter cap of 1
+	tsv.config.ConsolidatorQueryWaiterCap = 1
+
+	fakeConsolidator := sync2.NewFakeConsolidator()
+	tsv.qe.consolidator = fakeConsolidator
+
+	input := "select * from t limit 10001"
+	result := &sqltypes.Result{
+		Fields: getTestTableFields(),
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt32(1),   // pk
+			sqltypes.NewInt32(100), // name
+			sqltypes.NewInt32(200), // addr
+		}},
+	}
+
+	// Set up consolidator to simulate an identical query already running (Created=false)
+	fakePendingResult := &sync2.FakePendingResult{}
+	fakePendingResult.SetResult(result)
+	// Start with waiter count above the cap (2 > 1), so the condition fails
+	fakePendingResult.WaiterCount = 2
+
+	fakeConsolidator.CreateReturn = &sync2.FakeConsolidatorCreateReturn{
+		Created:       false, // Simulate identical query already running
+		PendingResult: fakePendingResult,
+	}
+
+	// Set up database query/response for fallback execution
+	db.AddQuery(input, result)
+
+	qre := newTestQueryExecutor(context.Background(), tsv, input, 0)
+	qre.options = &querypb.ExecuteOptions{Consolidator: querypb.ExecuteOptions_CONSOLIDATOR_ENABLED}
+
+	// Execute query
+	actualResult, err := qre.Execute()
+	require.NoError(t, err)
+	require.NotNil(t, actualResult)
+
+	// Verify we got the correct result (not empty)
+	require.Equal(t, result.Fields, actualResult.Fields)
+	require.Equal(t, result.Rows, actualResult.Rows)
+
+	// Verify consolidator was attempted
+	require.Len(t, fakeConsolidator.CreateCalls, 1)
+
+	// Verify we did NOT wait (because waiter cap was exceeded)
+	require.Equal(t, 0, fakePendingResult.WaitCalls)
+
+	// Verify we did NOT broadcast (because we're not the original)
+	require.Equal(t, 0, fakePendingResult.BroadcastCalls)
+
+	// Verify AddWaiterCounter was called: once with 0 (to check count), once with -1 (cleanup)
+	require.Len(t, fakePendingResult.AddWaiterCounterCalls, 2)
+	require.Equal(t, int64(0), fakePendingResult.AddWaiterCounterCalls[0])  // Check current count
+	require.Equal(t, int64(-1), fakePendingResult.AddWaiterCounterCalls[1]) // Decrement
+
+	// Verify fallback executed the query independently
+	require.Equal(t, 1, db.GetQueryCalledNum(input))
+
+	db.VerifyAllExecutedOrFail()
+}
+
 func TestGetConnectionLogStats(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
