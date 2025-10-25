@@ -27,12 +27,12 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/os2"
-	"vitess.io/vitess/go/vt/mysqlctl/errors"
-
+	"vitess.io/vitess/go/fileutil"
 	"vitess.io/vitess/go/ioutil"
+	"vitess.io/vitess/go/os2"
 	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	"vitess.io/vitess/go/vt/mysqlctl/errors"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/utils"
 )
@@ -147,9 +147,13 @@ func newFileBackupStorage(params backupstorage.Params) *FileBackupStorage {
 
 // ListBackups is part of the BackupStorage interface
 func (fbs *FileBackupStorage) ListBackups(ctx context.Context, dir string) ([]backupstorage.BackupHandle, error) {
-	// ReadDir already sorts the results
-	p := path.Join(FileBackupStorageRoot, dir)
-	fi, err := os.ReadDir(p)
+	// Check dir is not a directory traversal.
+	path, err := fileutil.SafePathJoin(FileBackupStorageRoot, dir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse backup path %q: %w", path, err)
+	}
+
+	fi, err := os.ReadDir(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
