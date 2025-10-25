@@ -45,5 +45,5 @@ func SafePathJoin(rootPath string, joinPaths ...string) (string, error) {
 	if absPath != absRootPath && !strings.HasPrefix(absPath, absRootPath+string(os.PathSeparator)) {
 		return p, ErrInvalidBackupDir
 	}
-	return p, nil
+	return absPath, nil
 }
