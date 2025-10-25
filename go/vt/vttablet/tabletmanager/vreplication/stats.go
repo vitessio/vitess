@@ -142,21 +142,6 @@ func (st *vrStats) register() {
 			return result
 		})
 
-	stats.NewRateFunc(
-		"VReplicationTransactionLag",
-		"vreplication transaction lag per stream",
-		func() map[string][]float64 {
-			st.mu.Lock()
-			defer st.mu.Unlock()
-			result := make(map[string][]float64)
-			for _, ct := range st.controllers {
-				for k, v := range ct.blpStats.VReplicationTransactionLagRates.Get() {
-					result[k] = v
-				}
-			}
-			return result
-		})
-
 	stats.Publish("VReplicationSource", stats.StringMapFunc(func() map[string]string {
 		st.mu.Lock()
 		defer st.mu.Unlock()

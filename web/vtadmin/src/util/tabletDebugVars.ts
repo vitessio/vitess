@@ -39,7 +39,6 @@ export type TabletDebugVars = Partial<{
 
     // See https://github.com/vitessio/vitess/blob/main/go/vt/vttablet/tabletmanager/vreplication/stats.go
     VReplicationLag: { [k: string]: number[] };
-    VReplicationTransactionLag: { [k: string]: number[] };
     VReplicationQPS: { [k: string]: number[] };
 }>;
 
@@ -57,11 +56,6 @@ export const getStreamVReplicationLagTimeseries = (
     d: TabletDebugVars | null | undefined,
     endAt?: number
 ): TimeseriesMap => formatTimeseriesMap(d?.VReplicationLag || {}, endAt);
-
-export const getStreamVReplicationTransactionLagTimeseries = (
-    d: TabletDebugVars | null | undefined,
-    endAt?: number
-): TimeseriesMap => formatTimeseriesMap(d?.VReplicationTransactionLag || {}, endAt);
 
 export const getVReplicationQPSTimeseries = (d: TabletDebugVars | null | undefined, endAt?: number): TimeseriesMap =>
     formatTimeseriesMap(d?.VReplicationQPS || {}, endAt);

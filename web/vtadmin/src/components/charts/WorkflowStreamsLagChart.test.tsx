@@ -47,7 +47,7 @@ describe('WorkflowStreamsLagChart', () => {
                     data: {
                         params: { alias: 'us_east_1a-123456', clusterID: 'zone1' },
                         data: {
-                            VReplicationTransactionLag: {
+                            VReplicationLag: {
                                 All: [3, 3, 3],
                                 '1': [1, 1, 1],
                                 '2': [2, 2, 2],
@@ -60,7 +60,7 @@ describe('WorkflowStreamsLagChart', () => {
                     data: {
                         params: { alias: 'us_east_1a-789012', clusterID: 'zone1' },
                         data: {
-                            VReplicationTransactionLag: {
+                            VReplicationLag: {
                                 All: [],
                                 '1': [1, 1, 1],
                                 // Some other stream running on the tablet that isn't part
