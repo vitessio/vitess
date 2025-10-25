@@ -18,7 +18,6 @@ package fileutil
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"path"
 	"path/filepath"
@@ -36,11 +35,11 @@ func SafePathJoin(rootPath string, joinPaths ...string) (string, error) {
 	p := path.Join(allPaths...)
 	absPath, err := filepath.Abs(p)
 	if err != nil {
-		return p, fmt.Errorf("failed to parse path %q: %w", p, err)
+		return p, err
 	}
 	absRootPath, err := filepath.Abs(rootPath)
 	if err != nil {
-		return p, fmt.Errorf("failed to parse root path %q: %w", rootPath, err)
+		return p, err
 	}
 	if absPath != absRootPath && !strings.HasPrefix(absPath, absRootPath+string(os.PathSeparator)) {
 		return p, ErrInvalidJoinedPath
