@@ -538,7 +538,8 @@ func (vc *VCursorImpl) parseDestinationTarget(targetString string) (string, topo
 
 // ParseDestinationTarget parses destination target string and provides a keyspace if possible.
 func ParseDestinationTarget(targetString string, tablet topodatapb.TabletType, vschema *vindexes.VSchema) (string, topodatapb.TabletType, key.ShardDestination, error) {
-	destKeyspace, destTabletType, dest, err := topoprotopb.ParseDestination(targetString, tablet)
+	destKeyspace, destTabletType, dest, _, err := topoprotopb.ParseDestination(targetString, tablet)
+	// Note: We ignore the tablet alias here as it's handled separately in SetTarget
 	// If the keyspace is not specified, and there is only one keyspace in the VSchema, use that.
 	if destKeyspace == "" && len(vschema.Keyspaces) == 1 {
 		for k := range vschema.Keyspaces {
@@ -1027,10 +1028,24 @@ func (vc *VCursorImpl) Session() engine.SessionActions {
 }
 
 func (vc *VCursorImpl) SetTarget(target string) error {
-	keyspace, tabletType, _, err := topoprotopb.ParseDestination(target, vc.config.DefaultTabletType)
+	keyspace, tabletType, _, tabletAlias, err := topoprotopb.ParseDestination(target, vc.config.DefaultTabletType)
 	if err != nil {
 		return err
 	}
+
+	// Clear any existing tablet-specific routing if not specified
+	if tabletAlias == nil {
+		vc.SafeSession.SetTargetTabletAlias(nil)
+	} else {
+		// Store tablet alias in session for routing
+		// Note: We don't validate the tablet exists here - if it doesn't exist or is
+		// unreachable, the query will fail during execution with a clear error message
+		vc.SafeSession.SetTargetTabletAlias(tabletAlias)
+
+		// Keep tabletType as determined by ParseDestination (defaultTabletType)
+		// The actual routing uses the tablet alias, so the type is only for VCursor state
+	}
+
 	if _, ok := vc.vschema.Keyspaces[keyspace]; !ignoreKeyspace(keyspace) && !ok {
 		return vterrors.VT05003(keyspace)
 	}

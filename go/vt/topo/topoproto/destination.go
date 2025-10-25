@@ -29,16 +29,37 @@ import (
 
 // ParseDestination parses the string representation of a ShardDestination
 // of the form keyspace:shard@tablet_type. You can use a / instead of a :.
-func ParseDestination(targetString string, defaultTabletType topodatapb.TabletType) (string, topodatapb.TabletType, key.ShardDestination, error) {
+// It also supports tablet-specific routing with keyspace@tablet-alias where
+// tablet-alias is in the format cell-uid (e.g., zone1-0000000100).
+func ParseDestination(targetString string, defaultTabletType topodatapb.TabletType) (string, topodatapb.TabletType, key.ShardDestination, *topodatapb.TabletAlias, error) {
 	var dest key.ShardDestination
 	var keyspace string
+	var tabletAlias *topodatapb.TabletAlias
 	tabletType := defaultTabletType
 
 	last := strings.LastIndexAny(targetString, "@")
 	if last != -1 {
-		// No need to check the error. UNKNOWN will be returned on
-		// error and it will fail downstream.
-		tabletType, _ = ParseTabletType(targetString[last+1:])
+		afterAt := targetString[last+1:]
+		// Try parsing as tablet type first (backward compatible)
+		parsedTabletType, err := ParseTabletType(afterAt)
+		// If tablet type parsing fails or returns UNKNOWN, try parsing as tablet alias
+		if err != nil || parsedTabletType == topodatapb.TabletType_UNKNOWN {
+			// Check if it looks like a tablet alias (contains a dash)
+			if strings.Contains(afterAt, "-") {
+				alias, aliasErr := ParseTabletAlias(afterAt)
+				if aliasErr == nil {
+					tabletAlias = alias
+					// Keep tabletType as defaultTabletType when using tablet alias
+				} else {
+					// If both tablet type and tablet alias parsing fail, keep the UNKNOWN tablet type
+					// which will cause appropriate error handling downstream
+					tabletType = topodatapb.TabletType_UNKNOWN
+				}
+			}
+		} else {
+			// Successfully parsed as tablet type
+			tabletType = parsedTabletType
+		}
 		targetString = targetString[:last]
 	}
 	last = strings.LastIndexAny(targetString, "/:")
@@ -51,29 +72,29 @@ func ParseDestination(targetString string, defaultTabletType topodatapb.TabletTy
 	if last != -1 {
 		rangeEnd := strings.LastIndexAny(targetString, "]")
 		if rangeEnd == -1 {
-			return keyspace, tabletType, dest, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid key range provided. Couldn't find range end ']'")
+			return keyspace, tabletType, dest, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid key range provided. Couldn't find range end ']'")
 		}
 		rangeString := targetString[last+1 : rangeEnd]
 		if strings.Contains(rangeString, "-") {
 			// Parse as range
 			keyRange, err := key.ParseShardingSpec(rangeString)
 			if err != nil {
-				return keyspace, tabletType, dest, err
+				return keyspace, tabletType, dest, nil, err
 			}
 			if len(keyRange) != 1 {
-				return keyspace, tabletType, dest, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "single keyrange expected in %s", rangeString)
+				return keyspace, tabletType, dest, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "single keyrange expected in %s", rangeString)
 			}
 			dest = key.DestinationExactKeyRange{KeyRange: keyRange[0]}
 		} else {
 			// Parse as keyspace id
 			destBytes, err := hex.DecodeString(rangeString)
 			if err != nil {
-				return keyspace, tabletType, dest, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expected valid hex in keyspace id %s", rangeString)
+				return keyspace, tabletType, dest, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expected valid hex in keyspace id %s", rangeString)
 			}
 			dest = key.DestinationKeyspaceID(destBytes)
 		}
 		targetString = targetString[:last]
 	}
 	keyspace = targetString
-	return keyspace, tabletType, dest, nil
+	return keyspace, tabletType, dest, tabletAlias, nil
 }

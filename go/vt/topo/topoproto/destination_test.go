@@ -90,7 +90,7 @@ func TestParseDestination(t *testing.T) {
 	}}
 
 	for _, tcase := range testcases {
-		if targetKeyspace, targetTabletType, targetDest, _ := ParseDestination(tcase.targetString, topodatapb.TabletType_PRIMARY); !reflect.DeepEqual(targetDest, tcase.dest) || targetKeyspace != tcase.keyspace || targetTabletType != tcase.tabletType {
+		if targetKeyspace, targetTabletType, targetDest, _, _ := ParseDestination(tcase.targetString, topodatapb.TabletType_PRIMARY); !reflect.DeepEqual(targetDest, tcase.dest) || targetKeyspace != tcase.keyspace || targetTabletType != tcase.tabletType {
 			t.Errorf("ParseDestination(%s) - got: (%v, %v, %v), want (%v, %v, %v)",
 				tcase.targetString,
 				targetDest,
@@ -103,19 +103,19 @@ func TestParseDestination(t *testing.T) {
 		}
 	}
 
-	_, _, _, err := ParseDestination("ks[20-40-60]", topodatapb.TabletType_PRIMARY)
+	_, _, _, _, err := ParseDestination("ks[20-40-60]", topodatapb.TabletType_PRIMARY)
 	want := "single keyrange expected in 20-40-60"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec error: %v, want %s", err, want)
 	}
 
-	_, _, _, err = ParseDestination("ks[--60]", topodatapb.TabletType_PRIMARY)
+	_, _, _, _, err = ParseDestination("ks[--60]", topodatapb.TabletType_PRIMARY)
 	want = "malformed spec: MinKey/MaxKey cannot be in the middle of the spec: \"--60\""
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec error: %v, want %s", err, want)
 	}
 
-	_, _, _, err = ParseDestination("ks[qrnqorrs]@primary", topodatapb.TabletType_PRIMARY)
+	_, _, _, _, err = ParseDestination("ks[qrnqorrs]@primary", topodatapb.TabletType_PRIMARY)
 	want = "expected valid hex in keyspace id qrnqorrs"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec error: %v, want %s", err, want)
