@@ -31,5 +31,6 @@ echo "\
   -X 'vitess.io/vitess/go/vt/servenv.buildGitRev=${BUILD_GIT_REV:-$DEFAULT_BUILD_GIT_REV}' \
   -X 'vitess.io/vitess/go/vt/servenv.buildGitBranch=${BUILD_GIT_BRANCH:-$DEFAULT_BUILD_GIT_BRANCH}' \
   -X 'vitess.io/vitess/go/vt/servenv.buildTime=${BUILD_TIME:-$DEFAULT_BUILD_TIME}' \
-  -X 'vitess.io/vitess/go/vt/servenv.jenkinsBuildNumberStr=${BUILD_NUMBER}' \
+  -X 'vitess.io/vitess/go/vt/servenv.buildNumberStr=${BUILD_NUMBER}' \
+  -X 'vitess.io/vitess/go/vt/servenv.buildSystem=${BUILD_SYSTEM}' \
 "
