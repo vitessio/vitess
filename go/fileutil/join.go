@@ -25,7 +25,7 @@ import (
 	"strings"
 )
 
-var ErrInvalidBackupDir = errors.New("invalid backup directory")
+var ErrInvalidJoinedPath = errors.New("invalid joined path")
 
 // SafePathJoin joins file paths using a rootPath and one or many other paths,
 // returning a single absolute path. An error is returned if the joined path
@@ -43,7 +43,7 @@ func SafePathJoin(rootPath string, joinPaths ...string) (string, error) {
 		return p, fmt.Errorf("failed to parse backup root path %q: %w", rootPath, err)
 	}
 	if absPath != absRootPath && !strings.HasPrefix(absPath, absRootPath+string(os.PathSeparator)) {
-		return p, ErrInvalidBackupDir
+		return p, ErrInvalidJoinedPath
 	}
 	return absPath, nil
 }

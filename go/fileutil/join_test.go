@@ -36,6 +36,6 @@ func TestSafePathJoin(t *testing.T) {
 
 	t.Run("dir-traversal", func(t *testing.T) {
 		_, err := SafePathJoin(rootDir, "../../..")
-		require.ErrorIs(t, err, ErrInvalidBackupDir)
+		require.ErrorIs(t, err, ErrInvalidJoinedPath)
 	})
 }
