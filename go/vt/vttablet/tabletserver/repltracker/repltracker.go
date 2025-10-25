@@ -96,6 +96,7 @@ func (rt *ReplTracker) MakePrimary() {
 		rt.hw.Open()
 	}
 	rt.hw.Open()
+	replicationLagSeconds.Reset() // we are the primary, we have no lag
 }
 
 // MakeNonPrimary must be called if the tablet type becomes non-PRIMARY.
@@ -130,6 +131,7 @@ func (rt *ReplTracker) Status() (time.Duration, error) {
 
 	switch {
 	case rt.isPrimary || rt.mode == tabletenv.Disable:
+		replicationLagSeconds.Reset() // we are the primary, we have no lag
 		return 0, nil
 	case rt.mode == tabletenv.Heartbeat:
 		return rt.hr.Status()
