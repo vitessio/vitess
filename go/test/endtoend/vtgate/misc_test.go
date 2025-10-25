@@ -835,6 +835,56 @@ func TestDDLTargeted(t *testing.T) {
 	utils.AssertMatches(t, conn, `select id from ddl_targeted`, `[[INT64(1)]]`)
 }
 
+// TestTabletTargeting tests tablet-specific routing with USE keyspace@tablet-alias syntax.
+func TestTabletTargeting(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// Get tablet aliases from show vitess_tablets
+	qr := utils.Exec(t, conn, "show vitess_tablets")
+	require.Greater(t, len(qr.Rows), 0, "no tablets found")
+
+	// Find a PRIMARY tablet
+	var primaryAlias string
+	for _, row := range qr.Rows {
+		tabletType := row[3].ToString()
+		if tabletType == "PRIMARY" {
+			primaryAlias = row[0].ToString()
+			break
+		}
+	}
+	require.NotEmpty(t, primaryAlias, "no PRIMARY tablet found")
+
+	// Test: Basic tablet-specific SELECT
+	utils.Exec(t, conn, fmt.Sprintf("USE ks@%s", primaryAlias))
+	utils.Exec(t, conn, "insert into t1(id1, id2) values(9001, 1)")
+	utils.AssertMatches(t, conn, "select id1 from t1 where id1=9001", "[[INT64(9001)]]")
+
+	// Test: Clear tablet targeting with plain USE
+	utils.Exec(t, conn, "USE ks")
+	utils.AssertMatches(t, conn, "select id1 from t1 where id1=9001", "[[INT64(9001)]]")
+
+	// Test: Transaction with tablet-specific routing
+	utils.Exec(t, conn, fmt.Sprintf("USE ks@%s", primaryAlias))
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "insert into t1(id1, id2) values(9002, 1)")
+	utils.Exec(t, conn, "commit")
+	utils.AssertMatches(t, conn, "select id1 from t1 where id1 in (9001, 9002) order by id1", "[[INT64(9001)] [INT64(9002)]]")
+
+	// Test: Rollback with tablet-specific routing
+	utils.Exec(t, conn, fmt.Sprintf("USE ks@%s", primaryAlias))
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "insert into t1(id1, id2) values(9003, 1)")
+	utils.Exec(t, conn, "rollback")
+	// 9003 should not exist
+	utils.AssertIsEmpty(t, conn, "select id1 from t1 where id1=9003")
+
+	// Cleanup
+	utils.Exec(t, conn, "delete from t1 where id1 >= 9001 and id1 <= 9003")
+}
+
 // TestDynamicConfig tests the dynamic configurations.
 func TestDynamicConfig(t *testing.T) {
 	t.Run("DiscoveryLowReplicationLag", func(t *testing.T) {
