@@ -632,3 +632,68 @@ func TestIsConnClosed(t *testing.T) {
 		})
 	}
 }
+
+// TestActionInfoWithTabletAlias tests the actionInfo function with tablet-specific routing.
+func TestActionInfoWithTabletAlias(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	target := &querypb.Target{
+		Keyspace:   "ks",
+		Shard:      "-80",
+		TabletType: topodatapb.TabletType_PRIMARY,
+	}
+	tabletAlias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+
+	t.Run("non-transactional with tablet alias", func(t *testing.T) {
+		session := econtext.NewSafeSession(&vtgatepb.Session{})
+		session.SetTargetTabletAlias(tabletAlias)
+
+		info, shardSession, err := actionInfo(ctx, target, session, false, vtgatepb.TransactionMode_MULTI)
+		require.NoError(t, err)
+		assert.Nil(t, shardSession)
+		assert.Equal(t, nothing, info.actionNeeded)
+		assert.Equal(t, tabletAlias, info.alias)
+	})
+
+	t.Run("transaction begin with tablet alias", func(t *testing.T) {
+		session := econtext.NewSafeSession(&vtgatepb.Session{
+			InTransaction: true,
+		})
+		session.SetTargetTabletAlias(tabletAlias)
+
+		info, shardSession, err := actionInfo(ctx, target, session, false, vtgatepb.TransactionMode_MULTI)
+		require.NoError(t, err)
+		assert.Nil(t, shardSession)
+		assert.Equal(t, begin, info.actionNeeded)
+		assert.Equal(t, tabletAlias, info.alias)
+	})
+
+	t.Run("existing transaction with tablet alias", func(t *testing.T) {
+		session := econtext.NewSafeSession(&vtgatepb.Session{
+			InTransaction: true,
+			ShardSessions: []*vtgatepb.Session_ShardSession{{
+				Target:        target,
+				TransactionId: 12345,
+				TabletAlias:   &topodatapb.TabletAlias{Cell: "zone1", Uid: 50},
+			}},
+		})
+		session.SetTargetTabletAlias(tabletAlias)
+
+		info, shardSession, err := actionInfo(ctx, target, session, false, vtgatepb.TransactionMode_MULTI)
+		require.NoError(t, err)
+		assert.NotNil(t, shardSession)
+		assert.Equal(t, int64(12345), info.transactionID)
+		assert.Equal(t, nothing, info.actionNeeded)
+		// Tablet alias should be overridden
+		assert.Equal(t, tabletAlias, info.alias)
+	})
+
+	t.Run("no tablet alias - existing behavior", func(t *testing.T) {
+		session := econtext.NewSafeSession(&vtgatepb.Session{})
+
+		info, shardSession, err := actionInfo(ctx, target, session, false, vtgatepb.TransactionMode_MULTI)
+		require.NoError(t, err)
+		assert.Nil(t, shardSession)
+		assert.Equal(t, nothing, info.actionNeeded)
+		assert.Nil(t, info.alias)
+	})
+}

@@ -840,6 +840,73 @@ func TestDDLTargeted(t *testing.T) {
 	utils.AssertMatches(t, conn, `select id from ddl_targeted`, `[[INT64(1)]]`)
 }
 
+// TestTabletTargeting tests tablet-specific routing with USE keyspace@tablet-alias syntax.
+// In a sharded keyspace, this validates that tablet-specific routing overrides normal hash-based routing.
+func TestTabletTargeting(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// Get tablet aliases from show vitess_tablets
+	qr := utils.Exec(t, conn, "show vitess_tablets")
+	require.Greater(t, len(qr.Rows), 0, "no tablets found")
+
+	// Find PRIMARY tablets for both shards (-80 and 80-)
+	var primaryShard80Minus string // We'll target this shard
+	var primaryShard80Plus string  // We'll verify this shard gets no writes
+	for _, row := range qr.Rows {
+		shard := row[2].ToString()
+		tabletType := row[3].ToString()
+		if tabletType == "PRIMARY" {
+			switch shard {
+			case "-80":
+				primaryShard80Minus = row[0].ToString()
+			case "80-":
+				primaryShard80Plus = row[0].ToString()
+			}
+		}
+	}
+	require.NotEmpty(t, primaryShard80Minus, "no PRIMARY tablet found for -80 shard")
+	require.NotEmpty(t, primaryShard80Plus, "no PRIMARY tablet found for 80- shard")
+
+	// Test: Target the -80 shard's PRIMARY and insert rows that normally hash to -80
+	// id1=1 and id1=2 both hash to -80 shard based on the hash vindex
+	utils.Exec(t, conn, fmt.Sprintf("USE ks@%s", primaryShard80Minus))
+	utils.Exec(t, conn, "insert into t1(id1, id2) values(1, 100), (2, 200)")
+	utils.AssertMatches(t, conn, "select id1 from t1 where id1 in (1, 2) order by id1", "[[INT64(1)] [INT64(2)]]")
+
+	// Test: Verify the other shard (80-) did not receive these writes
+	utils.Exec(t, conn, fmt.Sprintf("USE ks@%s", primaryShard80Plus))
+	utils.AssertIsEmpty(t, conn, "select id1 from t1 where id1 in (1, 2)")
+
+	// Test: Transaction with tablet-specific routing
+	utils.Exec(t, conn, fmt.Sprintf("USE ks@%s", primaryShard80Minus))
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "insert into t1(id1, id2) values(10, 300)")
+	utils.Exec(t, conn, "commit")
+	utils.AssertMatches(t, conn, "select id1 from t1 where id1=10", "[[INT64(10)]]")
+
+	// Test: Verify the other shard still has no data for our test rows
+	utils.Exec(t, conn, fmt.Sprintf("USE ks@%s", primaryShard80Plus))
+	utils.AssertIsEmpty(t, conn, "select id1 from t1 where id1 in (1, 2, 10)")
+
+	// Test: Rollback with tablet-specific routing
+	utils.Exec(t, conn, fmt.Sprintf("USE ks@%s", primaryShard80Minus))
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "insert into t1(id1, id2) values(20, 400)")
+	utils.Exec(t, conn, "rollback")
+	// 20 should not exist
+	utils.AssertIsEmpty(t, conn, "select id1 from t1 where id1=20")
+
+	// Test: Clear tablet targeting returns to normal routing
+	utils.Exec(t, conn, "USE ks")
+	utils.AssertMatches(t, conn, "select id1 from t1 where id1 in (1, 2, 10) order by id1", "[[INT64(1)] [INT64(2)] [INT64(10)]]")
+
+	// Cleanup
+	utils.Exec(t, conn, "delete from t1 where id1 in (1, 2, 10)")
+}
+
 // TestDynamicConfig tests the dynamic configurations.
 func TestDynamicConfig(t *testing.T) {
 	t.Run("DiscoveryLowReplicationLag", func(t *testing.T) {

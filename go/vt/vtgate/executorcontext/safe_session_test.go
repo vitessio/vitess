@@ -205,3 +205,37 @@ func TestTimeZone(t *testing.T) {
 		})
 	}
 }
+
+// TestTargetTabletAlias tests the SetTargetTabletAlias and GetTargetTabletAlias methods.
+func TestTargetTabletAlias(t *testing.T) {
+	session := NewSafeSession(&vtgatepb.Session{})
+
+	// Test: initially nil
+	assert.Nil(t, session.GetTargetTabletAlias())
+
+	// Test: Set and get
+	alias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+	session.SetTargetTabletAlias(alias)
+	got := session.GetTargetTabletAlias()
+	assert.Equal(t, alias, got)
+
+	// Test: Clear (set to nil)
+	session.SetTargetTabletAlias(nil)
+	assert.Nil(t, session.GetTargetTabletAlias())
+
+	// Test: Thread safety - concurrent access
+	done := make(chan bool)
+	for i := 0; i < 100; i++ {
+		go func(uid uint32) {
+			testAlias := &topodatapb.TabletAlias{Cell: "cell", Uid: uid}
+			session.SetTargetTabletAlias(testAlias)
+			_ = session.GetTargetTabletAlias()
+			done <- true
+		}(uint32(i))
+	}
+	for i := 0; i < 100; i++ {
+		<-done
+	}
+	// Just verify we didn't panic - the final value is non-deterministic
+	assert.NotNil(t, session.GetTargetTabletAlias())
+}

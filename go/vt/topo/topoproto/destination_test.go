@@ -35,6 +35,7 @@ func TestParseDestination(t *testing.T) {
 		dest         key.ShardDestination
 		keyspace     string
 		tabletType   topodatapb.TabletType
+		tabletAlias  *topodatapb.TabletAlias
 	}{{
 		targetString: "ks[10-20]@primary",
 		keyspace:     "ks",
@@ -87,18 +88,36 @@ func TestParseDestination(t *testing.T) {
 		keyspace:     "ks",
 		dest:         key.DestinationShard("-80"),
 		tabletType:   topodatapb.TabletType_PRIMARY,
+	}, {
+		targetString: "ks@zone1-0000000100",
+		keyspace:     "ks",
+		tabletType:   topodatapb.TabletType_PRIMARY,
+		tabletAlias:  &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+	}, {
+		targetString: "ks:-80@zone1-0000000100",
+		keyspace:     "ks",
+		dest:         key.DestinationShard("-80"),
+		tabletType:   topodatapb.TabletType_PRIMARY,
+		tabletAlias:  &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+	}, {
+		targetString: "@zone1-0000000200",
+		keyspace:     "",
+		tabletType:   topodatapb.TabletType_PRIMARY,
+		tabletAlias:  &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
 	}}
 
 	for _, tcase := range testcases {
-		if targetKeyspace, targetTabletType, targetDest, _, _ := ParseDestination(tcase.targetString, topodatapb.TabletType_PRIMARY); !reflect.DeepEqual(targetDest, tcase.dest) || targetKeyspace != tcase.keyspace || targetTabletType != tcase.tabletType {
-			t.Errorf("ParseDestination(%s) - got: (%v, %v, %v), want (%v, %v, %v)",
+		if targetKeyspace, targetTabletType, targetDest, targetAlias, _ := ParseDestination(tcase.targetString, topodatapb.TabletType_PRIMARY); !reflect.DeepEqual(targetDest, tcase.dest) || targetKeyspace != tcase.keyspace || targetTabletType != tcase.tabletType || !reflect.DeepEqual(targetAlias, tcase.tabletAlias) {
+			t.Errorf("ParseDestination(%s) - got: (%v, %v, %v, %v), want (%v, %v, %v, %v)",
 				tcase.targetString,
-				targetDest,
 				targetKeyspace,
 				targetTabletType,
-				tcase.dest,
+				targetDest,
+				targetAlias,
 				tcase.keyspace,
 				tcase.tabletType,
+				tcase.dest,
+				tcase.tabletAlias,
 			)
 		}
 	}
