@@ -485,7 +485,6 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		behindSecs := behind / 1e9
 		vp.vr.stats.ReplicationLagSeconds.Store(behindSecs)
 		vp.vr.stats.VReplicationLagGauges.Set(strconv.Itoa(int(vp.vr.id)), behindSecs)
-		log.Errorf("DEBUG: estimateLag lag seconds: %d", behindSecs)
 	}
 
 	// If we're not running, set ReplicationLagSeconds to be very high.
@@ -592,7 +591,6 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 			lagSecs := lag / 1e9
 			vp.vr.stats.ReplicationLagSeconds.Store(lagSecs)
 			vp.vr.stats.VReplicationLagGauges.Set(strconv.Itoa(int(vp.vr.id)), lagSecs)
-			log.Errorf("DEBUG: lag seconds: %d", lagSecs)
 		} else { // We couldn't determine the lag, so we need to estimate it
 			estimateLag()
 		}
