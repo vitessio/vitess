@@ -476,6 +476,10 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 				return nil, err
 			}
 			vre.controllers[id] = ct
+			if blpStats[id] == nil {
+				blpStats[id] = binlogplayer.NewStats()
+				defer blpStats[id].Stop()
+			}
 			vdbc := newVDBClient(dbClient, blpStats[id], ct.WorkflowConfig.RelayLogMaxSize)
 			insertLog(vdbc, LogStateChange, id, params["state"], "")
 		}

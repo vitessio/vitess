@@ -52,6 +52,7 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtutils "vitess.io/vitess/go/vt/utils"
 	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
@@ -1580,14 +1581,28 @@ func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info str
 	vttablet.WaitForVReplicationToCatchup(t, workflow, fmt.Sprintf("vt_%s", vttablet.Keyspace), sidecarDBName, maxWait)
 }
 
-func moveTablesAction(t *testing.T, action, cell, workflow, defaultSourceKs, defaultTargetKs, tables string, extraFlags ...string) {
+func moveTablesAction(t *testing.T, action, cell, workflow, sourceKs, targetKs, tables string, extraFlags ...string) {
 	var err error
-	args := []string{"MoveTables", "--workflow=" + workflow, "--target-keyspace=" + defaultTargetKs, action}
+	args := []string{"MoveTables", "--workflow=" + workflow, "--target-keyspace=" + targetKs, action}
 	switch strings.ToLower(action) {
 	case strings.ToLower(workflowActionCreate):
-		extraFlags = append(extraFlags, "--source-keyspace="+defaultSourceKs, "--tables="+tables, "--cells="+cell, "--tablet-types=primary,replica,rdonly")
+		extraFlags = append(extraFlags, "--source-keyspace="+sourceKs, "--tables="+tables, "--cells="+cell, "--tablet-types=primary,replica,rdonly")
 	case strings.ToLower(workflowActionSwitchTraffic):
 		extraFlags = append(extraFlags, "--initialize-target-sequences")
+	case strings.ToLower(workflowActionComplete):
+		// Confirm that the timings stats have been maintained throughout the workflow.
+		targetTablets := vc.getVttabletsInKeyspace(t, vc.Cells[cell], targetKs, topodatapb.TabletType_PRIMARY.String())
+		for _, targetTablet := range targetTablets {
+			if targetTablet.ServingStatus != vtadminpb.Tablet_SERVING.String() {
+				continue
+			}
+			lag, err := getDebugVar(t, targetTablet.Port, []string{"VReplicationLag"})
+			require.NoError(t, err)
+			require.NotEqual(t, "{}", lag)
+			qps, err := getDebugVar(t, targetTablet.Port, []string{"VReplicationQPS"})
+			require.NoError(t, err)
+			require.NotEqual(t, "{}", qps)
+		}
 	}
 	args = append(args, extraFlags...)
 	output, err := vc.VtctldClient.ExecuteCommandWithOutput(args...)
@@ -1599,9 +1614,10 @@ func moveTablesAction(t *testing.T, action, cell, workflow, defaultSourceKs, def
 		t.Fatalf("MoveTables %s command failed with %+v\n", action, err)
 	}
 }
-func moveTablesActionWithTabletTypes(t *testing.T, action, cell, workflow, defaultSourceKs, defaultTargetKs, tables string, tabletTypes string, ignoreErrors bool) {
-	if err := vc.VtctldClient.ExecuteCommand("MoveTables", "--workflow="+workflow, "--target-keyspace="+defaultTargetKs, action,
-		"--source-keyspace="+defaultSourceKs, "--tables="+tables, "--cells="+cell, "--tablet-types="+tabletTypes); err != nil {
+
+func moveTablesActionWithTabletTypes(t *testing.T, action, cell, workflow, sourceKs, targetKs, tables string, tabletTypes string, ignoreErrors bool) {
+	if err := vc.VtctldClient.ExecuteCommand("MoveTables", "--workflow="+workflow, "--target-keyspace="+targetKs, action,
+		"--source-keyspace="+sourceKs, "--tables="+tables, "--cells="+cell, "--tablet-types="+tabletTypes); err != nil {
 		if !ignoreErrors {
 			t.Fatalf("MoveTables %s command failed with %+v\n", action, err)
 		}
