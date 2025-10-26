@@ -1591,7 +1591,12 @@ func moveTablesAction(t *testing.T, action, cell, workflow, sourceKs, targetKs, 
 		extraFlags = append(extraFlags, "--initialize-target-sequences")
 	case strings.ToLower(workflowActionComplete):
 		// Confirm that the timings stats have been maintained throughout the workflow.
-		targetTablets := vc.getVttabletsInKeyspace(t, vc.Cells[cell], targetKs, topodatapb.TabletType_PRIMARY.String())
+		cells := strings.Split(cell, ",")
+		targetTablets := make(map[string]*cluster.VttabletProcess)
+		for _, cell := range cells {
+			cellTargetTablets := vc.getVttabletsInKeyspace(t, vc.Cells[cell], targetKs, topodatapb.TabletType_PRIMARY.String())
+			maps.Copy(targetTablets, cellTargetTablets)
+		}
 		for _, targetTablet := range targetTablets {
 			if targetTablet.ServingStatus != vtadminpb.Tablet_SERVING.String() {
 				continue

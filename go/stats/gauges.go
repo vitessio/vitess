@@ -104,7 +104,7 @@ func (g *Gauges) snapshot() {
 	now := timeNow()
 	g.timeStamps.Add(now.UnixNano())
 
-	// Sample current value for each gauge
+	// Sample current value for each gauge.
 	for name, gauge := range g.current {
 		value := gauge.Load()
 
@@ -135,7 +135,7 @@ func (g *Gauges) Get() map[string][]float64 {
 			continue
 		}
 
-		// Convert to float64 for consistency with Rates API
+		// Convert to float64 for consistency with Rates API.
 		result[name] = make([]float64, len(values))
 		for i, v := range values {
 			result[name][i] = float64(v)
