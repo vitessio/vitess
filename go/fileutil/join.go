@@ -29,7 +29,8 @@ var ErrInvalidJoinedPath = errors.New("invalid joined path")
 // returning a single absolute path. An error is returned if the joined path
 // causes a directory traversal to a path outside of the provided rootPath.
 func SafePathJoin(rootPath string, joinPaths ...string) (string, error) {
-	allPaths := []string{rootPath}
+	allPaths := make([]string, 0, len(joinPaths)+1)
+	allPaths = append(allPaths, rootPath)
 	allPaths = append(allPaths, joinPaths...)
 	p := filepath.Join(allPaths...)
 	absPath, err := filepath.Abs(p)
