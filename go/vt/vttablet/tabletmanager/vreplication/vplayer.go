@@ -482,8 +482,10 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 
 	estimateLag := func() {
 		behind := time.Now().UnixNano() - vp.lastTimestampNs - vp.timeOffsetNs
-		vp.vr.stats.ReplicationLagSeconds.Store(behind / 1e9)
-		vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(behind/1e9)*time.Second)
+		behindSecs := behind / 1e9
+		vp.vr.stats.ReplicationLagSeconds.Store(behindSecs)
+		vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(behindSecs)*time.Second)
+		log.Errorf("DEBUG: estimateLag lag seconds: %d", behindSecs)
 	}
 
 	// If we're not running, set ReplicationLagSeconds to be very high.
@@ -491,7 +493,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 	// can estimate this value more accurately.
 	defer vp.vr.stats.ReplicationLagSeconds.Store(math.MaxInt64)
 	defer vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), math.MaxInt64)
-	var lagSecs int64
+	var lag int64
 	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -525,7 +527,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 			}
 		}
 
-		lagSecs = -1
+		lag = -1
 		for i, events := range items {
 			for j, event := range events {
 				if event.Timestamp != 0 {
@@ -536,8 +538,9 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 					// will estimate it after processing the batch.
 					if !(event.Type == binlogdatapb.VEventType_HEARTBEAT && event.Throttled) {
 						vp.lastTimestampNs = event.Timestamp * 1e9
-						vp.timeOffsetNs = time.Now().UnixNano() - event.CurrentTime
-						lagSecs = event.CurrentTime/1e9 - event.Timestamp
+						now := time.Now().UnixNano()
+						vp.timeOffsetNs = now - event.CurrentTime
+						lag = now - vp.lastTimestampNs - vp.timeOffsetNs
 					}
 				}
 				mustSave := false
@@ -584,9 +587,11 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 			}
 		}
 
-		if lagSecs >= 0 {
+		if lag >= 0 {
+			lagSecs := lag / 1e9
 			vp.vr.stats.ReplicationLagSeconds.Store(lagSecs)
 			vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(lagSecs)*time.Second)
+			log.Errorf("DEBUG: lag seconds: %d", lagSecs)
 		} else { // We couldn't determine the lag, so we need to estimate it
 			estimateLag()
 		}

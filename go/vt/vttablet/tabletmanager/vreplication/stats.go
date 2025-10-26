@@ -118,7 +118,7 @@ func (st *vrStats) register() {
 		func() map[string][]float64 {
 			st.mu.Lock()
 			defer st.mu.Unlock()
-			result := make(map[string][]float64)
+			result := make(map[string][]float64, len(st.controllers))
 			for _, ct := range st.controllers {
 				for k, v := range ct.blpStats.Rates.Get() {
 					result[k] = v
@@ -133,7 +133,7 @@ func (st *vrStats) register() {
 		func() map[string][]float64 {
 			st.mu.Lock()
 			defer st.mu.Unlock()
-			result := make(map[string][]float64)
+			result := make(map[string][]float64, len(st.controllers))
 			for _, ct := range st.controllers {
 				for k, v := range ct.blpStats.VReplicationLagRates.Get() {
 					result[k] = v

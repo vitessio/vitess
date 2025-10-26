@@ -323,7 +323,7 @@ func (vre *Engine) Close() {
 	vre.cancel()
 	// We still have to wait for all controllers to stop.
 	for _, ct := range vre.controllers {
-		ct.Stop()
+		ct.Stop(true)
 	}
 	vre.controllers = make(map[int32]*controller)
 
@@ -393,8 +393,6 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		return nil, err
 	}
 
-	stats := binlogplayer.NewStats()
-	defer stats.Stop()
 	switch plan.opcode {
 	case insertQuery:
 		qr, err := dbClient.ExecuteFetch(plan.query, 1)
@@ -425,8 +423,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		for id := firstID; id <= lastID; id += int32(autoIncrementStep) {
 			if ct := vre.controllers[id]; ct != nil {
 				// Unreachable. Just a failsafe.
-				ct.Stop()
-				delete(vre.controllers, id)
+				vre.removeController(id)
 			}
 			params, err := readRow(dbClient, id)
 			if err != nil {
@@ -437,7 +434,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 				return nil, err
 			}
 			vre.controllers[id] = ct
-			vdbc := newVDBClient(dbClient, stats, ct.WorkflowConfig.RelayLogMaxSize)
+			vdbc := newVDBClient(dbClient, ct.blpStats, ct.WorkflowConfig.RelayLogMaxSize)
 			insertLogWithParams(vdbc, LogStreamCreate, id, params)
 		}
 		return qr, nil
@@ -449,11 +446,13 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		if len(ids) == 0 {
 			return &sqltypes.Result{}, nil
 		}
-		blpStats := make(map[int32]*binlogplayer.Stats)
+		blpStats := make(map[int32]*binlogplayer.Stats, len(ids))
 		for _, id := range ids {
 			if ct := vre.controllers[id]; ct != nil {
-				// Stop the current controller.
-				ct.Stop()
+				// Stop the current controller. But don't stop the blp stats as
+				// we're going to re-use it with the new replacement controller
+				// to carry the stats forward.
+				ct.Stop(false)
 				blpStats[id] = ct.blpStats
 			}
 		}
@@ -477,7 +476,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 				return nil, err
 			}
 			vre.controllers[id] = ct
-			vdbc := newVDBClient(dbClient, stats, ct.WorkflowConfig.RelayLogMaxSize)
+			vdbc := newVDBClient(dbClient, blpStats[id], ct.WorkflowConfig.RelayLogMaxSize)
 			insertLog(vdbc, LogStateChange, id, params["state"], "")
 		}
 		return qr, nil
@@ -492,9 +491,8 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		// Stop and delete the current controllers.
 		for _, id := range ids {
 			if ct := vre.controllers[id]; ct != nil {
-				vdbc := newVDBClient(dbClient, stats, ct.WorkflowConfig.RelayLogMaxSize)
-				ct.Stop()
-				delete(vre.controllers, id)
+				vdbc := newVDBClient(dbClient, binlogplayer.NewStats(), ct.WorkflowConfig.RelayLogMaxSize)
+				vre.removeController(id)
 				insertLogWithParams(vdbc, LogStreamDelete, id, nil)
 			}
 		}
@@ -662,7 +660,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 	for id := range participants {
 		ks := participants[id]
 		refid = je.participants[ks]
-		vre.controllers[refid].Stop()
+		vre.controllers[refid].Stop(true)
 	}
 
 	dbClient := vre.dbClientFactoryFiltered()
@@ -724,7 +722,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 	for id := range participants {
 		ks := participants[id]
 		id := je.participants[ks]
-		delete(vre.controllers, id)
+		vre.removeController(id)
 	}
 
 	for _, id := range newids {
@@ -884,6 +882,15 @@ func (vre *Engine) getAutoIncrementStep(dbClient binlogplayer.DBClient) (uint16,
 		return 0, err
 	}
 	return autoIncrement, nil
+}
+
+// removeController stops the controller and removes it.
+func (vre *Engine) removeController(id int32) {
+	ct := vre.controllers[id]
+	if ct != nil {
+		ct.Stop(true)
+	}
+	delete(vre.controllers, id)
 }
 
 func readRow(dbClient binlogplayer.DBClient, id int32) (map[string]string, error) {

@@ -161,11 +161,11 @@ func (rt *Rates) Get() (rateMap map[string][]float64) {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
 
-	rateMap = make(map[string][]float64)
 	timeStamps := rt.timeStamps.Values()
 	if len(timeStamps) <= 1 {
 		return
 	}
+	rateMap = make(map[string][]float64, len(rt.counts))
 	for k, v := range rt.counts {
 		rateMap[k] = make([]float64, len(timeStamps)-1)
 		values := v.Values()
