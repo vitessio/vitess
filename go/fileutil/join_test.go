@@ -27,7 +27,6 @@ func TestSafePathJoin(t *testing.T) {
 	rootDir := t.TempDir()
 
 	t.Run("success", func(t *testing.T) {
-		rootDir := t.TempDir()
 		path, err := SafePathJoin(rootDir, "good/path")
 		require.NoError(t, err)
 		require.True(t, filepath.IsAbs(path))
