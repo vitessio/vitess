@@ -511,13 +511,25 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 		for _, table := range ts.Tables() {
 			// If a rule for the primary tablet type exists (= no @primary
 			// qualifier) for any table and points to the target keyspace,
-			// then traffic has been mirrored.
+			// then write traffic is mirrored.
 			fromTable := fmt.Sprintf("%s.%s", sourceKeyspace, table)
 			toTable := fmt.Sprintf("%s.%s", targetKeyspace, table)
-			mr := mirrorRules[fromTable]
-			if _, ok := mr[toTable]; ok {
-				state.TrafficMirrored = true
-				break
+			if mr, ok := mirrorRules[fromTable]; ok {
+				if _, ok := mr[toTable]; ok {
+					state.WritesMirrored = true
+				}
+			}
+
+			// If a rule for either @replica or @rdonly tablet type exists for
+			// any table and points to the target keyspace, then read traffic is
+			// mirrored.
+			for _, tabletType := range []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY} {
+				fromTable = fmt.Sprintf("%s@%s", fromTable, topoproto.TabletTypeLString(tabletType))
+				if mr, ok := mirrorRules[fromTable]; ok {
+					if _, ok := mr[toTable]; ok {
+						state.ReadsMirrored = true
+					}
+				}
 			}
 		}
 	} else {
@@ -3001,7 +3013,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 	}
 
 	// Remove mirror rules for the specified tablet types.
-	if state.TrafficMirrored {
+	if state.ReadsMirrored {
 		if err := sw.mirrorTableTraffic(ctx, roTabletTypes, 0); err != nil {
 			return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to remove mirror rules from source keyspace %s to target keyspace %s, workflow %s, for read-only tablet types",
 				ts.SourceKeyspaceName(), ts.TargetKeyspaceName(), ts.WorkflowName()), err)
@@ -3123,7 +3135,7 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 	}
 
 	// Remove mirror rules for the primary tablet type.
-	if state.TrafficMirrored {
+	if state.WritesMirrored {
 		if err := sw.mirrorTableTraffic(ctx, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY}, 0); err != nil {
 			return handleError(fmt.Sprintf("failed to remove mirror rules from source keyspace %s to target keyspace %s, workflow %s, for primary tablet type",
 				ts.SourceKeyspaceName(), ts.TargetKeyspaceName(), ts.WorkflowName()), err)

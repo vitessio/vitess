@@ -76,7 +76,8 @@ type State struct {
 	ShardsAlreadySwitched []string
 	ShardsNotYetSwitched  []string
 
-	TrafficMirrored bool
+	ReadsMirrored  bool
+	WritesMirrored bool
 }
 
 func (s *State) String() string {
