@@ -127,7 +127,10 @@ func (fbh *FileBackupHandle) ReadFile(ctx context.Context, filename string) (io.
 	if !fbh.readOnly {
 		return nil, fmt.Errorf("ReadFile cannot be called on read-write backup")
 	}
-	p := path.Join(FileBackupStorageRoot, fbh.dir, fbh.name, filename)
+	p, err := fileutil.SafePathJoin(FileBackupStorageRoot, fbh.dir, fbh.name, filename)
+	if err != nil {
+		return nil, err
+	}
 	f, err := os.Open(p)
 	if err != nil {
 		return nil, err
@@ -177,14 +180,17 @@ func (fbs *FileBackupStorage) ListBackups(ctx context.Context, dir string) ([]ba
 // StartBackup is part of the BackupStorage interface
 func (fbs *FileBackupStorage) StartBackup(ctx context.Context, dir, name string) (backupstorage.BackupHandle, error) {
 	// Make sure the directory exists.
-	p := path.Join(FileBackupStorageRoot, dir)
-	if err := os2.MkdirAll(p); err != nil {
+	p, err := fileutil.SafePathJoin(FileBackupStorageRoot, dir)
+	if err != nil {
+		return nil, err
+	}
+	if err = os2.MkdirAll(p); err != nil {
 		return nil, err
 	}
 
 	// Create the subdirectory for this named backup.
 	p = path.Join(p, name)
-	if err := os2.Mkdir(p); err != nil {
+	if err = os2.Mkdir(p); err != nil {
 		return nil, err
 	}
 
@@ -193,7 +199,10 @@ func (fbs *FileBackupStorage) StartBackup(ctx context.Context, dir, name string)
 
 // RemoveBackup is part of the BackupStorage interface
 func (fbs *FileBackupStorage) RemoveBackup(ctx context.Context, dir, name string) error {
-	p := path.Join(FileBackupStorageRoot, dir, name)
+	p, err := fileutil.SafePathJoin(FileBackupStorageRoot, dir, name)
+	if err != nil {
+		return err
+	}
 	return os.RemoveAll(p)
 }
 
