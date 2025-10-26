@@ -111,8 +111,7 @@ type Stats struct {
 	ErrorCounts        *stats.CountersWithMultiLabels
 	NoopQueryCount     *stats.CountersWithSingleLabel
 
-	VReplicationLags     *stats.Timings
-	VReplicationLagRates *stats.Rates
+	VReplicationLagGauges *stats.Gauges
 
 	TableCopyRowCounts *stats.CountersWithSingleLabel
 	TableCopyTimings   *stats.Timings
@@ -169,7 +168,7 @@ func (bps *Stats) MessageHistory() []string {
 
 func (bps *Stats) Stop() {
 	bps.Rates.Stop()
-	bps.VReplicationLagRates.Stop()
+	bps.VReplicationLagGauges.Stop()
 }
 
 // NewStats creates a new Stats structure.
@@ -188,8 +187,7 @@ func NewStats() *Stats {
 	bps.CopyLoopCount = stats.NewCounter("", "")
 	bps.ErrorCounts = stats.NewCountersWithMultiLabels("", "", []string{"type"})
 	bps.NoopQueryCount = stats.NewCountersWithSingleLabel("", "", "Statement")
-	bps.VReplicationLags = stats.NewTimings("", "", "")
-	bps.VReplicationLagRates = stats.NewRates("", bps.VReplicationLags, 15*60/5, 5*time.Second)
+	bps.VReplicationLagGauges = stats.NewGauges(15*60/5, 5*time.Second)
 	bps.TableCopyRowCounts = stats.NewCountersWithSingleLabel("", "", "Table")
 	bps.TableCopyTimings = stats.NewTimings("", "", "Table")
 	bps.PartialQueryCacheSize = stats.NewCountersWithMultiLabels("", "", []string{"type"})

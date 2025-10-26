@@ -484,7 +484,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		behind := time.Now().UnixNano() - vp.lastTimestampNs - vp.timeOffsetNs
 		behindSecs := behind / 1e9
 		vp.vr.stats.ReplicationLagSeconds.Store(behindSecs)
-		vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(behindSecs)*time.Second)
+		vp.vr.stats.VReplicationLagGauges.Set(strconv.Itoa(int(vp.vr.id)), behindSecs)
 		log.Errorf("DEBUG: estimateLag lag seconds: %d", behindSecs)
 	}
 
@@ -492,7 +492,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 	// TODO(sougou): if we also stored the time of the last event, we
 	// can estimate this value more accurately.
 	defer vp.vr.stats.ReplicationLagSeconds.Store(math.MaxInt64)
-	defer vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), math.MaxInt64)
+	defer vp.vr.stats.VReplicationLagGauges.Set(strconv.Itoa(int(vp.vr.id)), math.MaxInt64)
 	var lag int64
 	for {
 		if ctx.Err() != nil {
@@ -530,19 +530,6 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		lag = -1
 		for i, events := range items {
 			for j, event := range events {
-				if event.Timestamp != 0 {
-					// If the event is a heartbeat sent while throttled then do not update
-					// the lag based on it.
-					// If the batch consists only of throttled heartbeat events then we cannot
-					// determine the actual lag, as the vstreamer is fully throttled, and we
-					// will estimate it after processing the batch.
-					if !(event.Type == binlogdatapb.VEventType_HEARTBEAT && event.Throttled) {
-						vp.lastTimestampNs = event.Timestamp * 1e9
-						now := time.Now().UnixNano()
-						vp.timeOffsetNs = now - event.CurrentTime
-						lag = now - vp.lastTimestampNs - vp.timeOffsetNs
-					}
-				}
 				mustSave := false
 				switch event.Type {
 				case binlogdatapb.VEventType_COMMIT:
@@ -584,13 +571,27 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 					}
 					return err
 				}
+				// Calculate the lag now that we've applied the event.
+				if event.Timestamp != 0 {
+					// If the event is a heartbeat sent while throttled then do not update
+					// the lag based on it.
+					// If the batch consists only of throttled heartbeat events then we cannot
+					// determine the actual lag, as the vstreamer is fully throttled, and we
+					// will estimate it after processing the batch.
+					if !(event.Type == binlogdatapb.VEventType_HEARTBEAT && event.Throttled) {
+						vp.lastTimestampNs = event.Timestamp * 1e9
+						now := time.Now().UnixNano()
+						vp.timeOffsetNs = now - event.CurrentTime
+						lag = now - vp.lastTimestampNs - vp.timeOffsetNs
+					}
+				}
 			}
 		}
 
 		if lag >= 0 {
 			lagSecs := lag / 1e9
 			vp.vr.stats.ReplicationLagSeconds.Store(lagSecs)
-			vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(lagSecs)*time.Second)
+			vp.vr.stats.VReplicationLagGauges.Set(strconv.Itoa(int(vp.vr.id)), lagSecs)
 			log.Errorf("DEBUG: lag seconds: %d", lagSecs)
 		} else { // We couldn't determine the lag, so we need to estimate it
 			estimateLag()

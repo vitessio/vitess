@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 	"sync"
@@ -120,24 +121,20 @@ func (st *vrStats) register() {
 			defer st.mu.Unlock()
 			result := make(map[string][]float64, len(st.controllers))
 			for _, ct := range st.controllers {
-				for k, v := range ct.blpStats.Rates.Get() {
-					result[k] = v
-				}
+				maps.Copy(result, ct.blpStats.Rates.Get())
 			}
 			return result
 		})
 
-	stats.NewRateFunc(
+	stats.NewGaugesFunc(
 		"VReplicationLag",
-		"vreplication lag per stream",
+		"vreplication lag per stream in seconds",
 		func() map[string][]float64 {
 			st.mu.Lock()
 			defer st.mu.Unlock()
 			result := make(map[string][]float64, len(st.controllers))
 			for _, ct := range st.controllers {
-				for k, v := range ct.blpStats.VReplicationLagRates.Get() {
-					result[k] = v
-				}
+				maps.Copy(result, ct.blpStats.VReplicationLagGauges.Get())
 			}
 			return result
 		})
