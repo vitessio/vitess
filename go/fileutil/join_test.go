@@ -14,24 +14,27 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package servenv
+package fileutil
 
-func getCpuUsage() float64 {
-	if value, err := getCgroupCpu(); err == nil {
-		return value
-	}
-	if value, err := getHostCpuUsage(); err == nil {
-		return value
-	}
-	return -1
-}
+import (
+	"path/filepath"
+	"testing"
 
-func getMemoryUsage() float64 {
-	if value, err := getCgroupMemory(); err == nil {
-		return value
-	}
-	if value, err := getHostMemoryUsage(); err == nil {
-		return value
-	}
-	return -1
+	"github.com/stretchr/testify/require"
+)
+
+func TestSafePathJoin(t *testing.T) {
+	rootDir := t.TempDir()
+
+	t.Run("success", func(t *testing.T) {
+		path, err := SafePathJoin(rootDir, "good/path")
+		require.NoError(t, err)
+		require.True(t, filepath.IsAbs(path))
+		require.Equal(t, filepath.Join(rootDir, "good/path"), path)
+	})
+
+	t.Run("dir-traversal", func(t *testing.T) {
+		_, err := SafePathJoin(rootDir, "../../..")
+		require.ErrorIs(t, err, ErrInvalidJoinedPath)
+	})
 }

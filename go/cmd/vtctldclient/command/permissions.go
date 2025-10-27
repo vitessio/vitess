@@ -70,6 +70,15 @@ func commandGetPermissions(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	// Obfuscate the checksum so as not to potentially display sensitive info.
+	if resp != nil && resp.Permissions != nil {
+		for _, up := range resp.Permissions.UserPermissions {
+			if up != nil {
+				up.PasswordChecksum = 0
+			}
+		}
+	}
+	cli.DefaultMarshalOptions.EmitUnpopulated = false
 	p, err := cli.MarshalJSON(resp.Permissions)
 	if err != nil {
 		return err
