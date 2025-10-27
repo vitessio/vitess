@@ -29,8 +29,10 @@ import (
 
 // ParseDestination parses the string representation of a ShardDestination
 // of the form keyspace:shard@tablet_type. You can use a / instead of a :.
-// It also supports tablet-specific routing with keyspace@tablet-alias where
-// tablet-alias is in the format cell-uid (e.g., zone1-0000000100).
+// It also supports tablet-specific routing with keyspace:shard@tablet_type|tablet-alias
+// where tablet-alias is in the format cell-uid (e.g., zone1-0000000100).
+// The tablet_type|tablet-alias syntax explicitly specifies both the expected tablet type
+// and the specific tablet to route to (e.g., @replica|zone1-0000000100).
 func ParseDestination(targetString string, defaultTabletType topodatapb.TabletType) (string, topodatapb.TabletType, key.ShardDestination, *topodatapb.TabletAlias, error) {
 	var dest key.ShardDestination
 	var keyspace string
@@ -40,25 +42,27 @@ func ParseDestination(targetString string, defaultTabletType topodatapb.TabletTy
 	last := strings.LastIndexAny(targetString, "@")
 	if last != -1 {
 		afterAt := targetString[last+1:]
-		// Try parsing as tablet type first (backward compatible)
-		parsedTabletType, err := ParseTabletType(afterAt)
-		// If tablet type parsing fails or returns UNKNOWN, try parsing as tablet alias
-		if err != nil || parsedTabletType == topodatapb.TabletType_UNKNOWN {
-			// Check if it looks like a tablet alias (contains a dash)
-			if strings.Contains(afterAt, "-") {
-				alias, aliasErr := ParseTabletAlias(afterAt)
-				if aliasErr == nil {
-					tabletAlias = alias
-					// Keep tabletType as defaultTabletType when using tablet alias
-				} else {
-					// If both tablet type and tablet alias parsing fail, keep the UNKNOWN tablet type
-					// which will cause appropriate error handling downstream
-					tabletType = topodatapb.TabletType_UNKNOWN
-				}
+		// Check for explicit tablet_type|tablet_alias syntax (e.g., "replica|zone1-0000000100")
+		if pipeIdx := strings.Index(afterAt, "|"); pipeIdx != -1 {
+			typeStr := afterAt[:pipeIdx]
+			aliasStr := afterAt[pipeIdx+1:]
+
+			// Parse the tablet type
+			parsedTabletType, err := ParseTabletType(typeStr)
+			if err != nil || parsedTabletType == topodatapb.TabletType_UNKNOWN {
+				return "", defaultTabletType, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid tablet type in target: %s", typeStr)
 			}
-		} else {
-			// Successfully parsed as tablet type
 			tabletType = parsedTabletType
+
+			// Parse the tablet alias
+			alias, err := ParseTabletAlias(aliasStr)
+			if err != nil {
+				return "", defaultTabletType, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid tablet alias in target: %s", aliasStr)
+			}
+			tabletAlias = alias
+		} else {
+			// No pipe: just a tablet type (backward compatible - allow UNKNOWN)
+			tabletType, _ = ParseTabletType(afterAt)
 		}
 		targetString = targetString[:last]
 	}
@@ -96,5 +100,8 @@ func ParseDestination(targetString string, defaultTabletType topodatapb.TabletTy
 		targetString = targetString[:last]
 	}
 	keyspace = targetString
+	if tabletAlias != nil && dest == nil {
+		return "", defaultTabletType, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tablet alias must be used with a shard")
+	}
 	return keyspace, tabletType, dest, tabletAlias, nil
 }
