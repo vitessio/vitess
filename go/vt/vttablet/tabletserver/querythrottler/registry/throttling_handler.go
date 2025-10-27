@@ -58,4 +58,7 @@ type ThrottlingStrategyHandler interface {
 	// This method should be called when the strategy is no longer needed.
 	// Implementations should clean up background processes, caches, or other resources.
 	Stop()
+
+	// GetStrategyName returns the name of the strategy.
+	GetStrategyName() string
 }
