@@ -362,9 +362,9 @@ func (ct *controller) pickSourceTablet(ctx context.Context, dbClient binlogplaye
 	return tablet, err
 }
 
-// Stop stops the controller from running and optionally stops its stats.
-// The stats should only be stopped if they will never be re-used as the timings
-// cannot be restarted.
+// Stop stops the controller and optionally stop its stats. The stats
+// should only be stopped if they will never be re-used as the timeseries
+// stats (Timings and Gauges) will be cleared and cannot be restarted.
 func (ct *controller) Stop(stopStats bool) {
 	ct.cancel()
 	if stopStats {

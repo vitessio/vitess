@@ -1590,7 +1590,7 @@ func moveTablesAction(t *testing.T, action, cell, workflow, sourceKs, targetKs, 
 	case strings.ToLower(workflowActionSwitchTraffic):
 		extraFlags = append(extraFlags, "--initialize-target-sequences")
 	case strings.ToLower(workflowActionComplete):
-		// Confirm that the timings stats have been maintained throughout the workflow.
+		// Confirm that the timeseries stats have been maintained throughout the workflow.
 		cells := strings.Split(cell, ",")
 		targetTablets := make(map[string]*cluster.VttabletProcess)
 		for _, cell := range cells {
