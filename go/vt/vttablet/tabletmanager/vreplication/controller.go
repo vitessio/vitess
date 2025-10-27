@@ -136,7 +136,6 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	if state == binlogdatapb.VReplicationWorkflowState_Stopped.String() || state == binlogdatapb.VReplicationWorkflowState_Error.String() {
 		ct.cancel = func() {}
 		close(ct.done)
-		blpStats.Stop()
 		return ct, nil
 	}
 
@@ -363,8 +362,13 @@ func (ct *controller) pickSourceTablet(ctx context.Context, dbClient binlogplaye
 	return tablet, err
 }
 
-func (ct *controller) Stop() {
+// Stop stops the controller and optionally stops its stats. The stats
+// should only be stopped if they will never be re-used as the timeseries
+// stats (Rates and Gauges) will be cleared and cannot be restarted.
+func (ct *controller) Stop(stopStats bool) {
 	ct.cancel()
-	ct.blpStats.Stop()
+	if stopStats {
+		ct.blpStats.Stop()
+	}
 	<-ct.done
 }
