@@ -8,6 +8,7 @@
     <version>23.0.0-rc1</version>
   </parent>
   <artifactId>vitess-jdbc</artifactId>
+  <name>Vitess JDBC Driver</name>
 
   <dependencies>
     <dependency>

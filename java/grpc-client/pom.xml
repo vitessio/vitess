@@ -8,6 +8,7 @@
     <version>23.0.0-rc1</version>
   </parent>
   <artifactId>vitess-grpc-client</artifactId>
+  <name>Vitess gRPC Client</name>
 
   <dependencies>
     <dependency>

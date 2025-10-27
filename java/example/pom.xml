@@ -8,6 +8,7 @@
     <version>23.0.0-rc1</version>
   </parent>
   <artifactId>vitess-example</artifactId>
+  <name>Vitess Java Client Example</name>
 
   <dependencies>
     <dependency>
