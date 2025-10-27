@@ -167,8 +167,8 @@ func (bps *Stats) MessageHistory() []string {
 }
 
 // Stop stops the stats. They should only be stopped if they will never be
-// re-used as the timeseries stats (Timings and Gauges) will be cleared
-// and cannot be restarted.
+// re-used as the timeseries stats (Rates and Gauges) will be cleared and
+// cannot be restarted.
 func (bps *Stats) Stop() {
 	bps.Rates.Stop()
 	bps.VReplicationLagGauges.Stop()
