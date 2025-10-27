@@ -89,21 +89,23 @@ func TestParseDestination(t *testing.T) {
 		dest:         key.DestinationShard("-80"),
 		tabletType:   topodatapb.TabletType_PRIMARY,
 	}, {
-		targetString: "ks@zone1-0000000100",
-		keyspace:     "ks",
-		tabletType:   topodatapb.TabletType_PRIMARY,
-		tabletAlias:  &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
-	}, {
-		targetString: "ks:-80@zone1-0000000100",
+		targetString: "ks:-80@primary|zone1-0000000100",
 		keyspace:     "ks",
 		dest:         key.DestinationShard("-80"),
 		tabletType:   topodatapb.TabletType_PRIMARY,
 		tabletAlias:  &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 	}, {
-		targetString: "@zone1-0000000200",
-		keyspace:     "",
-		tabletType:   topodatapb.TabletType_PRIMARY,
-		tabletAlias:  &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+		targetString: "ks:-80@replica|zone1-0000000101",
+		keyspace:     "ks",
+		dest:         key.DestinationShard("-80"),
+		tabletType:   topodatapb.TabletType_REPLICA,
+		tabletAlias:  &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+	}, {
+		targetString: "ks:80-@rdonly|zone2-0000000200",
+		keyspace:     "ks",
+		dest:         key.DestinationShard("80-"),
+		tabletType:   topodatapb.TabletType_RDONLY,
+		tabletAlias:  &topodatapb.TabletAlias{Cell: "zone2", Uid: 200},
 	}}
 
 	for _, tcase := range testcases {
@@ -138,5 +140,46 @@ func TestParseDestination(t *testing.T) {
 	want = "expected valid hex in keyspace id qrnqorrs"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec error: %v, want %s", err, want)
+	}
+
+	_, _, _, _, err = ParseDestination("ks@primary|zone1-0000000100", topodatapb.TabletType_PRIMARY)
+	want = "tablet alias must be used with a shard"
+	if err == nil || err.Error() != want {
+		t.Errorf("ParseDestination error: %v, want %s", err, want)
+	}
+
+	// Test invalid tablet type in pipe syntax
+	_, _, _, _, err = ParseDestination("ks:-80@invalid|zone1-0000000100", topodatapb.TabletType_PRIMARY)
+	want = "invalid tablet type in target: invalid"
+	if err == nil || err.Error() != want {
+		t.Errorf("ParseDestination error: %v, want %s", err, want)
+	}
+
+	// Test invalid tablet alias in pipe syntax
+	_, _, _, _, err = ParseDestination("ks:-80@primary|invalid-alias", topodatapb.TabletType_PRIMARY)
+	want = "invalid tablet alias in target: invalid-alias"
+	if err == nil || err.Error() != want {
+		t.Errorf("ParseDestination error: %v, want %s", err, want)
+	}
+
+	// Test unknown tablet type in pipe syntax
+	_, _, _, _, err = ParseDestination("ks:-80@unknown|zone1-0000000100", topodatapb.TabletType_PRIMARY)
+	want = "invalid tablet type in target: unknown"
+	if err == nil || err.Error() != want {
+		t.Errorf("ParseDestination error: %v, want %s", err, want)
+	}
+
+	// Test empty tablet type in pipe syntax
+	_, _, _, _, err = ParseDestination("ks:-80@|zone1-0000000100", topodatapb.TabletType_PRIMARY)
+	want = "invalid tablet type in target: "
+	if err == nil || err.Error() != want {
+		t.Errorf("ParseDestination error: %v, want %s", err, want)
+	}
+
+	// Test empty tablet alias in pipe syntax
+	_, _, _, _, err = ParseDestination("ks:-80@primary|", topodatapb.TabletType_PRIMARY)
+	want = "invalid tablet alias in target: "
+	if err == nil || err.Error() != want {
+		t.Errorf("ParseDestination error: %v, want %s", err, want)
 	}
 }
