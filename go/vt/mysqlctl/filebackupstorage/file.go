@@ -27,18 +27,12 @@ import (
 
 	"github.com/spf13/pflag"
 
-<<<<<<< HEAD
-	"vitess.io/vitess/go/ioutil"
-	"vitess.io/vitess/go/os2"
-	"vitess.io/vitess/go/vt/concurrency"
-=======
 	"vitess.io/vitess/go/fileutil"
 	"vitess.io/vitess/go/ioutil"
 	"vitess.io/vitess/go/os2"
->>>>>>> f0f8f8e0c8 (Address dir traversal in file backup storage `.ListBackups(...)` (#18814))
+	"vitess.io/vitess/go/vt/concurrency"
 	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
-	"vitess.io/vitess/go/vt/mysqlctl/errors"
 	"vitess.io/vitess/go/vt/servenv"
 )
 
