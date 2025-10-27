@@ -2071,6 +2071,50 @@ func TestMirrorTraffic(t *testing.T) {
 			wantWritesMirrored:             true,
 		},
 		{
+			name: "ok @primary tablet type",
+			req: &vtctldatapb.WorkflowMirrorTrafficRequest{
+				Keyspace:    targetKs,
+				Workflow:    workflow,
+				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+				Percent:     50.0,
+			},
+			routingRules: initialRoutingRules,
+			wantMirrorRules: map[string]map[string]float32{
+				fmt.Sprintf("%s.%s", sourceKs, table1): {
+					fmt.Sprintf("%s.%s", targetKs, table1): 50.0,
+				},
+				fmt.Sprintf("%s.%s", sourceKs, table2): {
+					fmt.Sprintf("%s.%s", targetKs, table2): 50.0,
+				},
+			},
+			wantDeniedTables:               []string{table1, table2},
+			wantAllowReadsFromDeniedTables: true,
+			wantReadsMirrored:              false,
+			wantWritesMirrored:             true,
+		},
+		{
+			name: "ok @replica tablet type",
+			req: &vtctldatapb.WorkflowMirrorTrafficRequest{
+				Keyspace:    targetKs,
+				Workflow:    workflow,
+				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_REPLICA},
+				Percent:     50.0,
+			},
+			routingRules: initialRoutingRules,
+			wantMirrorRules: map[string]map[string]float32{
+				fmt.Sprintf("%s.%s@replica", sourceKs, table1): {
+					fmt.Sprintf("%s.%s", targetKs, table1): 50.0,
+				},
+				fmt.Sprintf("%s.%s@replica", sourceKs, table2): {
+					fmt.Sprintf("%s.%s", targetKs, table2): 50.0,
+				},
+			},
+			wantDeniedTables:               []string{table1, table2},
+			wantAllowReadsFromDeniedTables: true,
+			wantReadsMirrored:              true,
+			wantWritesMirrored:             false,
+		},
+		{
 			name: "does not overwrite unrelated mirror rules",
 			mirrorRules: map[string]map[string]float32{
 				"other_source.table2": {
