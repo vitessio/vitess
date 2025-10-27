@@ -84,11 +84,12 @@ const (
 	ERKeyDoesNotExist       = ErrorCode(1176)
 
 	// permissions
-	ERDBAccessDenied            = ErrorCode(1044)
-	ERAccessDeniedError         = ErrorCode(1045)
-	ERKillDenied                = ErrorCode(1095)
-	ERNoPermissionToCreateUsers = ErrorCode(1211)
-	ERSpecifiedAccessDenied     = ErrorCode(1227)
+	ERDBAccessDenied               = ErrorCode(1044)
+	ERAccessDeniedError            = ErrorCode(1045)
+	ERKillDenied                   = ErrorCode(1095)
+	ERNoPermissionToCreateUsers    = ErrorCode(1211)
+	ERSpecifiedAccessDenied        = ErrorCode(1227)
+	ERBinlogCreateRoutineNeedSuper = ErrorCode(1419)
 
 	// failed precondition
 	ERNoDb                          = ErrorCode(1046)
