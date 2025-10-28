@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -238,10 +239,10 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 		// If it's a "select *", we return a partial plan, and complete
 		// it when we get back field info from the stream.
 		if len(sel.SelectExprs.Exprs) != 1 {
-			return nil, planError(fmt.Errorf("unsupported mix of '*' and columns"), sqlparser.String(sel))
+			return nil, planError(errors.New("unsupported mix of '*' and columns"), sqlparser.String(sel))
 		}
 		if !expr.TableName.IsEmpty() {
-			return nil, planError(fmt.Errorf("unsupported qualifier for '*' expression"), sqlparser.String(expr))
+			return nil, planError(errors.New("unsupported qualifier for '*' expression"), sqlparser.String(expr))
 		}
 		sendRule.Filter = query
 		tablePlan := &TablePlan{
@@ -392,13 +393,13 @@ func analyzeSelectFrom(query string, parser *sqlparser.Parser) (sel *sqlparser.S
 	}
 	sel, ok := statement.(*sqlparser.Select)
 	if !ok {
-		return nil, "", fmt.Errorf("unsupported non-select statement")
+		return nil, "", errors.New("unsupported non-select statement")
 	}
 	if sel.Distinct {
-		return nil, "", fmt.Errorf("unsupported distinct clause")
+		return nil, "", errors.New("unsupported distinct clause")
 	}
 	if len(sel.From) > 1 {
-		return nil, "", fmt.Errorf("unsupported multi-table usage")
+		return nil, "", errors.New("unsupported multi-table usage")
 	}
 	node, ok := sel.From[0].(*sqlparser.AliasedTableExpr)
 	if !ok {

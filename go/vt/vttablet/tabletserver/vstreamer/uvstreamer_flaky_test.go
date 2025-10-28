@@ -374,7 +374,7 @@ func initTables(t *testing.T, tables []string) {
 		tableName := table
 		idx = i + 1
 		insertMultipleRows(t, table, idx, numInitialRows)
-		positions[fmt.Sprintf("%sBulkInsert", table)] = primaryPosition(t)
+		positions[table+"BulkInsert"] = primaryPosition(t)
 
 		callbacks[fmt.Sprintf("LASTPK.*%s.*%d", table, numInitialRows)] = func() {
 			ctx := context.Background()
@@ -429,7 +429,7 @@ func initialize(t *testing.T) {
 func getRule(table string) *binlogdatapb.Rule {
 	return &binlogdatapb.Rule{
 		Match:  table,
-		Filter: fmt.Sprintf("select * from %s", table),
+		Filter: "select * from " + table,
 	}
 }
 

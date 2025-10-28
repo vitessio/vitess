@@ -22,6 +22,7 @@ package zkctl
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -164,7 +165,7 @@ func (zkd *Zkd) makeCfg() (string, error) {
 // Init generates a new config and then starts ZooKeeper.
 func (zkd *Zkd) Init() error {
 	if zkd.Inited() {
-		return fmt.Errorf("zk already inited")
+		return errors.New("zk already inited")
 	}
 
 	log.Infof("zkd.Init")

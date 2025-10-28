@@ -26,6 +26,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -679,7 +680,7 @@ func GenerateUpdateRowsCopied(uid int32, rowsCopied int64) string {
 // GenerateUpdateHeartbeat returns a statement to record the latest heartbeat in the _vt.vreplication table.
 func GenerateUpdateHeartbeat(uid int32, timeUpdated int64) (string, error) {
 	if timeUpdated == 0 {
-		return "", fmt.Errorf("timeUpdated cannot be zero")
+		return "", errors.New("timeUpdated cannot be zero")
 	}
 	return fmt.Sprintf("update _vt.vreplication set time_updated=%v, time_heartbeat=%v where id=%v", timeUpdated, timeUpdated, uid), nil
 }
@@ -687,7 +688,7 @@ func GenerateUpdateHeartbeat(uid int32, timeUpdated int64) (string, error) {
 // GenerateUpdateTimeThrottled returns a statement to record the latest throttle time in the _vt.vreplication table.
 func GenerateUpdateTimeThrottled(uid int32, timeThrottledUnix int64, componentThrottled string, reasonThrottled string) (string, error) {
 	if timeThrottledUnix == 0 {
-		return "", fmt.Errorf("timeUpdated cannot be zero")
+		return "", errors.New("timeUpdated cannot be zero")
 	}
 	return fmt.Sprintf("update _vt.vreplication set time_updated=%v, time_throttled=%v, component_throttled='%v', reason_throttled=%v where id=%v", timeThrottledUnix, timeThrottledUnix, componentThrottled, encodeString(MessageTruncate(reasonThrottled)), uid), nil
 }

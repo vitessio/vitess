@@ -22,8 +22,8 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
-	"fmt"
 	"net"
+	"strconv"
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -68,7 +68,7 @@ func ConnectWithAttributes(ctx context.Context, params *ConnParams, attributes C
 		netProto = "unix"
 		addr = params.UnixSocket
 	} else {
-		addr = net.JoinHostPort(params.Host, fmt.Sprintf("%v", params.Port))
+		addr = net.JoinHostPort(params.Host, strconv.Itoa(params.Port))
 	}
 
 	// Start a background connection routine.  It first

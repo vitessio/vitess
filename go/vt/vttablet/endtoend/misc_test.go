@@ -214,7 +214,7 @@ func TestSidecarTables(t *testing.T) {
 		"dt_state",
 		"dt_participant",
 	} {
-		_, err = conn.ExecuteFetch(fmt.Sprintf("describe _vt.%s", table), 10, false)
+		_, err = conn.ExecuteFetch("describe _vt."+table, 10, false)
 		require.NoError(t, err)
 	}
 }
@@ -339,7 +339,7 @@ func TestBindInSelect(t *testing.T) {
 }
 
 func TestHealth(t *testing.T) {
-	response, err := http.Get(fmt.Sprintf("%s/debug/health", framework.ServerAddress))
+	response, err := http.Get(framework.ServerAddress + "/debug/health")
 	require.NoError(t, err)
 	defer response.Body.Close()
 	result, err := io.ReadAll(response.Body)
@@ -710,7 +710,7 @@ func TestSelectBooleanSystemVariables(t *testing.T) {
 
 	for _, tc := range tcs {
 		qr, err := client.Execute(
-			fmt.Sprintf("select :%s", tc.Variable),
+			"select :"+tc.Variable,
 			map[string]*querypb.BindVariable{tc.Variable: sqltypes.BoolBindVariable(tc.Value)},
 		)
 		require.NoError(t, err)
@@ -1155,7 +1155,7 @@ func TestUpdateTableIndexMetrics(t *testing.T) {
 	// Analyze tables to make sure stats are updated prior to reload
 	tables := []string{"vitess_a", "vitess_part", "vitess_autoinc_seq"}
 	for _, table := range tables {
-		_, err = client.Execute(fmt.Sprintf("analyze table %s", table), nil)
+		_, err = client.Execute("analyze table "+table, nil)
 		require.NoError(t, err)
 	}
 

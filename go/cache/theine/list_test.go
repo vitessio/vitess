@@ -18,7 +18,6 @@ limitations under the License.
 package theine
 
 import (
-	"fmt"
 	"strconv"
 	"testing"
 
@@ -45,7 +44,7 @@ func TestList(t *testing.T) {
 
 	for i := range 5 {
 		entry := l.PopTail()
-		require.Equal(t, StringKey(fmt.Sprintf("%d", i+1)), entry.key)
+		require.Equal(t, StringKey(strconv.Itoa(i+1)), entry.key)
 	}
 	entry := l.PopTail()
 	require.Nil(t, entry)

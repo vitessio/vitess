@@ -622,7 +622,7 @@ func TestExecutorSetAndSelect(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			selectQ := fmt.Sprintf("select @@%s", tcase.sysVar)
+			selectQ := "select @@" + tcase.sysVar
 			// if the query reaches the shard, it will return REPEATABLE-READ isolation level.
 			sbc.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields(tcase.sysVar, "varchar"), "REPEATABLE-READ")})
 

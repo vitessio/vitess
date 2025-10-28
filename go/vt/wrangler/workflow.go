@@ -195,8 +195,8 @@ func (vrw *VReplicationWorkflow) stateAsString(ws *workflow.State) string {
 			// shard when writes are switched.
 			if len(ws.ShardsAlreadySwitched) > 0 && len(ws.ShardsNotYetSwitched) > 0 {
 				sort.Strings(ws.ShardsAlreadySwitched)
-				stateInfo = append(stateInfo, fmt.Sprintf("Reads partially switched, for shards: %s", strings.Join(ws.ShardsAlreadySwitched, ",")))
-				stateInfo = append(stateInfo, fmt.Sprintf("Writes partially switched, for shards: %s", strings.Join(ws.ShardsAlreadySwitched, ",")))
+				stateInfo = append(stateInfo, "Reads partially switched, for shards: "+strings.Join(ws.ShardsAlreadySwitched, ","))
+				stateInfo = append(stateInfo, "Writes partially switched, for shards: "+strings.Join(ws.ShardsAlreadySwitched, ","))
 			} else {
 				if len(ws.ShardsAlreadySwitched) == 0 {
 					stateInfo = append(stateInfo, "Reads Not Switched")
@@ -217,7 +217,7 @@ func (vrw *VReplicationWorkflow) stateAsString(ws *workflow.State) string {
 func (vrw *VReplicationWorkflow) Create(ctx context.Context) error {
 	var err error
 	if vrw.Exists() {
-		return fmt.Errorf("workflow already exists")
+		return errors.New("workflow already exists")
 	}
 	if vrw.CachedState() != WorkflowStateNotCreated {
 		return fmt.Errorf("workflow has already been created, state is %s", vrw.CachedState())
@@ -305,10 +305,10 @@ func (vrw *VReplicationWorkflow) SwitchTraffic(direction workflow.TrafficSwitchD
 	var hasReplica, hasRdonly, hasPrimary bool
 
 	if !vrw.Exists() {
-		return nil, fmt.Errorf("workflow has not yet been started")
+		return nil, errors.New("workflow has not yet been started")
 	}
 	if vrw.workflowType == MigrateWorkflow {
-		return nil, fmt.Errorf("invalid action for Migrate workflow: SwitchTraffic")
+		return nil, errors.New("invalid action for Migrate workflow: SwitchTraffic")
 	}
 
 	vrw.params.Direction = direction
@@ -354,10 +354,10 @@ func (vrw *VReplicationWorkflow) SwitchTraffic(direction workflow.TrafficSwitchD
 // ReverseTraffic switches traffic backwards for tablet_types passed
 func (vrw *VReplicationWorkflow) ReverseTraffic() (*[]string, error) {
 	if !vrw.Exists() {
-		return nil, fmt.Errorf("workflow has not yet been started")
+		return nil, errors.New("workflow has not yet been started")
 	}
 	if vrw.workflowType == MigrateWorkflow {
-		return nil, fmt.Errorf("invalid action for Migrate workflow: ReverseTraffic")
+		return nil, errors.New("invalid action for Migrate workflow: ReverseTraffic")
 	}
 	return vrw.SwitchTraffic(workflow.DirectionBackward)
 }

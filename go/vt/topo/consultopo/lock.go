@@ -18,7 +18,6 @@ package consultopo
 
 import (
 	"context"
-	"fmt"
 	"path"
 	"time"
 
@@ -90,7 +89,7 @@ func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.Lo
 	// Throw error in this case
 	for _, e := range entries {
 		if e.Name == locksFilename && e.Type == topo.TypeFile && e.Ephemeral {
-			return nil, topo.NewError(topo.NodeExists, fmt.Sprintf("lock already exists at path %s", dirPath))
+			return nil, topo.NewError(topo.NodeExists, "lock already exists at path "+dirPath)
 		}
 	}
 

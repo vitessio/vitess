@@ -324,7 +324,7 @@ func TestCleanupMySQL(t *testing.T) {
 			if tt.shouldDeleteUsers {
 				for _, drop := range tt.expectedDropUsers {
 					mysql.ExpectedExecuteSuperQueryList = append(mysql.ExpectedExecuteSuperQueryList,
-						fmt.Sprintf("DROP USER %s", drop),
+						"DROP USER "+drop,
 					)
 				}
 			}

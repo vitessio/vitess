@@ -9039,7 +9039,7 @@ func TestPlannedReparentShard(t *testing.T) {
 					Error    error
 				}{
 					"zone1-0000000200": {
-						Error: fmt.Errorf("global status vars failed"),
+						Error: errors.New("global status vars failed"),
 					},
 					"zone1-0000000101": {
 						Statuses: map[string]string{

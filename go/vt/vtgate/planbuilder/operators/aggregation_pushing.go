@@ -239,7 +239,7 @@ func checkIfWeCanPush(ctx *plancontext.PlanningContext, aggregator *Aggregator) 
 	}
 
 	if !canPush && differentExpr != nil {
-		panic(vterrors.VT12001(fmt.Sprintf("only one DISTINCT aggregation is allowed in a SELECT: %s", sqlparser.String(differentExpr))))
+		panic(vterrors.VT12001("only one DISTINCT aggregation is allowed in a SELECT: " + sqlparser.String(differentExpr)))
 	}
 
 	return canPush, distinctExprs
@@ -454,7 +454,7 @@ func pushAggregationThroughHashJoin(ctx *plancontext.PlanningContext, rootAggr *
 	return rootAggr, Rewrote("push Aggregation under hash join")
 }
 
-var errAbortAggrPushing = fmt.Errorf("abort aggregation pushing")
+var errAbortAggrPushing = errors.New("abort aggregation pushing")
 
 func createJoinPusher(rootAggr *Aggregator, operator Operator) *joinPusher {
 	return &joinPusher{

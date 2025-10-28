@@ -18,6 +18,7 @@ package trace
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"testing"
@@ -135,7 +136,7 @@ func (f *fakeTracer) GetOpenTracingTracer() opentracing.Tracer {
 
 func (f *fakeTracer) NewFromString(parent, label string) (Span, error) {
 	if parent == "" {
-		return &mockSpan{tracer: f}, fmt.Errorf("parent is empty")
+		return &mockSpan{tracer: f}, errors.New("parent is empty")
 	}
 	return &mockSpan{tracer: f}, nil
 }

@@ -18,7 +18,6 @@ package reservedconn
 
 import (
 	"context"
-	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -185,7 +184,7 @@ func TestLocksWithTxFailure(t *testing.T) {
 	utils.Exec(t, conn1, "use ks")
 	// kill the mysql connection shard which has transaction open.
 	vttablet1 := clusterInstance.Keyspaces[0].Shards[1].PrimaryTablet() // 80-
-	vttablet1.VttabletProcess.QueryTablet(fmt.Sprintf("kill %s", qr.Rows[0][0].ToString()), keyspaceName, false)
+	vttablet1.VttabletProcess.QueryTablet("kill "+qr.Rows[0][0].ToString(), keyspaceName, false)
 
 	// transaction fails on commit.
 	_, err = conn1.ExecuteFetch("commit", 1, true)

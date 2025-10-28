@@ -306,7 +306,7 @@ func buildDBDDLPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema
 		}
 		return newPlanResult(engine.NewDBDDL(ksName, true, queryTimeout(dbDDL.Comments.Directives()))), nil
 	}
-	return nil, vterrors.VT13001(fmt.Sprintf("database DDL not recognized: %s", sqlparser.String(dbDDLstmt)))
+	return nil, vterrors.VT13001("database DDL not recognized: " + sqlparser.String(dbDDLstmt))
 }
 
 func buildLoadPlan(query string, vschema plancontext.VSchema) (*planResult, error) {

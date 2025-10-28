@@ -501,7 +501,7 @@ func TestRenameFieldsOnOLAP(t *testing.T) {
 
 	qr := utils.Exec(t, conn, "show tables")
 	require.Equal(t, 1, len(qr.Fields))
-	assert.Equal(t, `Tables_in_ks`, fmt.Sprintf("%v", qr.Fields[0].Name))
+	assert.Equal(t, `Tables_in_ks`, qr.Fields[0].Name)
 	_ = utils.Exec(t, conn, "use mysql")
 	qr = utils.Exec(t, conn, "select @@workload")
 	assert.Equal(t, `[[VARCHAR("OLAP")]]`, fmt.Sprintf("%v", qr.Rows))
@@ -523,7 +523,7 @@ func TestSQLSelectLimit(t *testing.T) {
 	utils.Exec(t, conn, "insert into t7_xxhash(uid, msg) values(1, 'a'), (2, 'b'), (3, null), (4, 'a'), (5, 'a'), (6, 'b')")
 
 	for _, workload := range []string{"olap", "oltp"} {
-		utils.Exec(t, conn, fmt.Sprintf("set workload = %s", workload))
+		utils.Exec(t, conn, "set workload = "+workload)
 		utils.Exec(t, conn, "set sql_select_limit = 2")
 		utils.AssertMatches(t, conn, "select uid, msg from t7_xxhash order by uid", `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")]]`)
 		utils.AssertMatches(t, conn, "(select uid, msg from t7_xxhash order by uid)", `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")]]`)
@@ -569,7 +569,7 @@ func TestSQLSelectLimitWithPlanCache(t *testing.T) {
 		out:   `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")] [VARCHAR("3") NULL]]`,
 	}}
 	for _, workload := range []string{"olap", "oltp"} {
-		utils.Exec(t, conn, fmt.Sprintf("set workload = %s", workload))
+		utils.Exec(t, conn, "set workload = "+workload)
 		for _, tcase := range tcases {
 			utils.Exec(t, conn, fmt.Sprintf("set sql_select_limit = %d", tcase.limit))
 			utils.AssertMatches(t, conn, "select uid, msg from t7_xxhash order by uid", tcase.out)

@@ -19,6 +19,7 @@ package vreplication
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -319,7 +320,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		return err
 	}
 	ct.blpStats.ErrorCounts.Add([]string{"Invalid Source"}, 1)
-	return fmt.Errorf("missing source")
+	return errors.New("missing source")
 }
 
 func (ct *controller) setMessage(dbClient binlogplayer.DBClient, message string) error {
@@ -351,11 +352,11 @@ func (ct *controller) pickSourceTablet(ctx context.Context, dbClient binlogplaye
 		case <-ctx.Done():
 		default:
 			ct.blpStats.ErrorCounts.Add([]string{"No Source Tablet Found"}, 1)
-			ct.setMessage(dbClient, fmt.Sprintf("Error picking tablet: %s", err.Error()))
+			ct.setMessage(dbClient, "Error picking tablet: "+err.Error())
 		}
 		return tablet, err
 	}
-	ct.setMessage(dbClient, fmt.Sprintf("Picked source tablet: %s", tablet.Alias.String()))
+	ct.setMessage(dbClient, "Picked source tablet: "+tablet.Alias.String())
 	log.Infof("Found eligible source tablet %s for vreplication stream id %d for workflow %s",
 		tablet.Alias.String(), ct.id, ct.workflow)
 	ct.sourceTablet.Store(tablet.Alias)

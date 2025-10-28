@@ -132,11 +132,11 @@ func start(b *testing.B) (*mysql.Conn, func()) {
 
 	deleteAll := func() {
 		tables := []string{
-			fmt.Sprintf("%s.tbl_no_lkp_vdx", sKs1),
-			fmt.Sprintf("%s.mirror_tbl1", sKs1),
-			fmt.Sprintf("%s.mirror_tbl2", sKs1),
-			fmt.Sprintf("%s.mirror_tbl1", sKs2),
-			fmt.Sprintf("%s.mirror_tbl2", sKs3),
+			sKs1 + ".tbl_no_lkp_vdx",
+			sKs1 + ".mirror_tbl1",
+			sKs1 + ".mirror_tbl2",
+			sKs2 + ".mirror_tbl1",
+			sKs3 + ".mirror_tbl2",
 		}
 		for _, table := range tables {
 			_, _ = utils.ExecAllowError(b, conn, "delete from "+table)

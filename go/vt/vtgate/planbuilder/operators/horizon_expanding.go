@@ -17,6 +17,7 @@ limitations under the License.
 package operators
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -315,7 +316,7 @@ func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProj
 	aes, err := slice.MapWithError(qp.SelectExprs, func(from SelectExpr) (*sqlparser.AliasedExpr, error) {
 		ae, ok := from.Col.(*sqlparser.AliasedExpr)
 		if !ok {
-			return nil, fmt.Errorf("star found")
+			return nil, errors.New("star found")
 		}
 		return ae, nil
 	})

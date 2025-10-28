@@ -17,6 +17,7 @@ package tablegc
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -169,7 +170,7 @@ func populateTable(t *testing.T) {
 // tableExists sees that a given table exists in MySQL
 func tableExists(exprs ...string) (exists bool, tableName string, err error) {
 	if len(exprs) == 0 {
-		return false, "", fmt.Errorf("empty table list")
+		return false, "", errors.New("empty table list")
 	}
 	var clauses []string
 	for _, expr := range exprs {

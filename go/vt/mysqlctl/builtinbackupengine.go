@@ -689,7 +689,7 @@ func (be *BuiltinBackupEngine) backupFileEntries(ctx context.Context, fes []File
 		}
 		g.Go(func() error {
 			fe := &fes[i]
-			name := fmt.Sprintf("%v", i)
+			name := strconv.Itoa(i)
 
 			// Check for context cancellation explicitly because, the way semaphore code is written, theoretically we might
 			// end up not throwing an error even after cancellation. Please see https://cs.opensource.google/go/x/sync/+/refs/tags/v0.1.0:semaphore/semaphore.go;l=66,
@@ -1208,7 +1208,7 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 		}
 		g.Go(func() error {
 			fe := &fes[i]
-			name := fmt.Sprintf("%v", i)
+			name := strconv.Itoa(i)
 			// Check for context cancellation explicitly because, the way semaphore code is written, theoretically we might
 			// end up not throwing an error even after cancellation. Please see https://cs.opensource.google/go/x/sync/+/refs/tags/v0.1.0:semaphore/semaphore.go;l=66,
 			// which suggests that if the context is already done, `Acquire()` may still succeed without blocking. This introduces

@@ -19,6 +19,7 @@ package vdiff
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -166,7 +167,7 @@ func (vde *Engine) getDefaultCell() (string, error) {
 	}
 	if len(cells) == 0 {
 		// Unreachable
-		return "", fmt.Errorf("there are no cells in the topo")
+		return "", errors.New("there are no cells in the topo")
 	}
 	sort.Strings(cells) // Ensure that the resulting value is deterministic
 	return strings.Join(cells, ","), nil

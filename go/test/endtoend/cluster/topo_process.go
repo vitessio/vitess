@@ -19,12 +19,14 @@ package cluster
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -80,7 +82,7 @@ func (topo *TopoProcess) Setup(topoFlavor string, cluster *LocalProcessCluster) 
 		return
 	}
 
-	topo.Server, err = vtopo.OpenServer(topoFlavor, net.JoinHostPort(topo.Host, fmt.Sprintf("%d", topo.Port)), TopoGlobalRoot(topoFlavor))
+	topo.Server, err = vtopo.OpenServer(topoFlavor, net.JoinHostPort(topo.Host, strconv.Itoa(topo.Port)), TopoGlobalRoot(topoFlavor))
 	return
 }
 
@@ -130,7 +132,7 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 	for time.Now().Before(timeout) {
 		if topo.IsHealthy() {
 			cli, cerr := clientv3.New(clientv3.Config{
-				Endpoints:   []string{net.JoinHostPort(topo.Host, fmt.Sprintf("%d", topo.Port))},
+				Endpoints:   []string{net.JoinHostPort(topo.Host, strconv.Itoa(topo.Port))},
 				DialTimeout: 5 * time.Second,
 			})
 			if cerr != nil {
@@ -404,11 +406,11 @@ func (topo *TopoProcess) ManageTopoDir(command string, directory string) (err er
 	case "rmdir":
 		if *topoFlavor == "etcd2" {
 			if topo.Client == nil {
-				return fmt.Errorf("etcd client is not initialized")
+				return errors.New("etcd client is not initialized")
 			}
 			cli, ok := topo.Client.(*clientv3.Client)
 			if !ok {
-				return fmt.Errorf("etcd client is invalid")
+				return errors.New("etcd client is invalid")
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), vtopo.RemoteOperationTimeout)
 			defer cancel()

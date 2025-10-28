@@ -9,6 +9,7 @@ linters:
     - errcheck
     - govet
     - ineffassign
+    - perfsprint
     - staticcheck
   settings:
     depguard:

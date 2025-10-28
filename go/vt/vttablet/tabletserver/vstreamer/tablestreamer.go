@@ -181,7 +181,7 @@ func (ts *tableStreamer) newRowStreamer(ctx context.Context, query string, lastp
 }
 
 func (ts *tableStreamer) streamTable(ctx context.Context, tableName string) error {
-	query := fmt.Sprintf("select * from %s", sqlescape.EscapeID(tableName))
+	query := "select * from " + sqlescape.EscapeID(tableName)
 
 	send := func(response *binlogdatapb.VStreamRowsResponse) error {
 		return ts.send(&binlogdatapb.VStreamTablesResponse{
