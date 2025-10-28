@@ -133,6 +133,7 @@ linters:
         path: ^go/vt/proto/
       - linters:
           - errcheck
+          - whitespace
         path: ^go/cmd/(vtcombo|vtgateclienttest|vtorc)/
       - linters:
           - errcheck
