@@ -2107,7 +2107,6 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 	searchGroup, gctx := errgroup.WithContext(ctx)
 	searchCompleted := make(chan struct{})
 	for _, keyspace := range keyspaces {
-		// https://golang.org/doc/faq#closures_and_goroutines
 		searchGroup.Go(func() error {
 			return searchKeyspace(gctx, searchCompleted, keyspace)
 		})
