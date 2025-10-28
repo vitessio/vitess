@@ -22,6 +22,10 @@ jobs:
           exit 1
         fi
 
+    - name: Tune the OS
+      if: steps.changes.outputs.vtadmin_changes == 'true'
+      uses: ./.github/actions/tune-os
+
     - name: Check out code
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
@@ -48,15 +52,6 @@ jobs:
       if: steps.changes.outputs.vtadmin_changes == 'true'
       with:
         go-version-file: go.mod
-
-    - name: Tune the OS
-      if: steps.changes.outputs.vtadmin_changes == 'true'
-      run: |
-        sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
-
-        # Don't waste a bunch of time processing man-db triggers
-        echo "set man-db/auto-update false" | sudo debconf-communicate
-        sudo dpkg-reconfigure man-db
 
     - name: Get dependencies
       if: steps.changes.outputs.vtadmin_changes == 'true'

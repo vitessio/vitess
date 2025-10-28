@@ -36,6 +36,9 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Tune the OS
+        uses: ./.github/actions/tune-os
+
       # Initializes the CodeQL tools for scanning.
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
@@ -68,7 +71,7 @@ jobs:
           sudo apt-get update
           sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
           # Install everything else we need, and configure
-          sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget eatmydata
+          sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
           
           sudo service mysql stop
           sudo service etcd stop

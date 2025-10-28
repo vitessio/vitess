@@ -85,12 +85,7 @@ jobs:
 
     - name: Tune the OS
       if: steps.changes.outputs.end_to_end == 'true'
-      run: |
-        sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
-
-        # Don't waste a bunch of time processing man-db triggers
-        echo "set man-db/auto-update false" | sudo debconf-communicate
-        sudo dpkg-reconfigure man-db
+      uses: ./.github/actions/tune-os
 
     - name: Get base dependencies
       timeout-minutes: 10
@@ -113,7 +108,7 @@ jobs:
         sudo apt-get update
         sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
         # Install everything else we need, and configure
-        sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget eatmydata
+        sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
         
         sudo service mysql stop
         sudo service etcd stop
@@ -220,7 +215,7 @@ jobs:
         source build.env
         export PRIMARY_TABLET_BINARY_SUFFIX=""
         export REPLICA_TABLET_BINARY_SUFFIX="-last"
-        eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_onlineddl_flow
+        go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_onlineddl_flow
 
     # Running a test with primary tablet at version n-1  and replica vttablet at version n (current SHA)
     - name: Run Online DDL tests (primary=N-1, replica=N)
@@ -232,7 +227,7 @@ jobs:
         source build.env
         export PRIMARY_TABLET_BINARY_SUFFIX="-last"
         export REPLICA_TABLET_BINARY_SUFFIX=""
-        eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_onlineddl_flow
+        go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_onlineddl_flow
 
     # Running a test with primary tablet at version n+1 and replica vttablet at version n (current SHA)
     - name: Run Online DDL tests (primary=N+1, replica=N)
@@ -244,7 +239,7 @@ jobs:
         source build.env
         export PRIMARY_TABLET_BINARY_SUFFIX="-next"
         export REPLICA_TABLET_BINARY_SUFFIX=""
-        eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_onlineddl_flow
+        go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_onlineddl_flow
 
     # Running a test with primary tablet at version n (current SHA) and replica vttablet at version n+1
     - name: Run Online DDL tests (primary=N, replica=N+1)
@@ -256,4 +251,4 @@ jobs:
         source build.env
         export PRIMARY_TABLET_BINARY_SUFFIX=""
         export REPLICA_TABLET_BINARY_SUFFIX="-next"
-        eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_onlineddl_flow
+        go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_onlineddl_flow
