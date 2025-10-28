@@ -73,7 +73,6 @@ func TestAuditOperation(t *testing.T) {
 	err = SaveTablet(tab100)
 	require.NoError(t, err)
 
-	tab100Alias := topoproto.TabletAliasString(tab100.Alias)
 	auditType := "test-audit-operation"
 	message := "test-message"
 
@@ -83,26 +82,26 @@ func TestAuditOperation(t *testing.T) {
 		config.SetAuditToBackend(true)
 
 		// Auditing should succeed as expected
-		err = AuditOperation(auditType, tab100Alias, message)
+		err = AuditOperation(auditType, tab100.Alias, message)
 		require.NoError(t, err)
 
 		// Check that we can read the recent audits
-		audits, err := readRecentAudit(tab100Alias, 0)
+		audits, err := readRecentAudit(tab100.Alias, 0)
 		require.NoError(t, err)
 		require.Len(t, audits, 1)
 		require.EqualValues(t, 1, audits[0].AuditID)
 		require.EqualValues(t, auditType, audits[0].AuditType)
 		require.EqualValues(t, message, audits[0].Message)
-		require.EqualValues(t, tab100Alias, audits[0].AuditTabletAlias)
+		testRequireTabletAliasEqual(t, tab100.Alias, audits[0].AuditTabletAlias)
 
 		// Check the same for no-filtering
-		audits, err = readRecentAudit("", 0)
+		audits, err = readRecentAudit(nil, 0)
 		require.NoError(t, err)
 		require.Len(t, audits, 1)
 		require.EqualValues(t, 1, audits[0].AuditID)
 		require.EqualValues(t, auditType, audits[0].AuditType)
 		require.EqualValues(t, message, audits[0].Message)
-		require.EqualValues(t, tab100Alias, audits[0].AuditTabletAlias)
+		testRequireTabletAliasEqual(t, tab100.Alias, audits[0].AuditTabletAlias)
 	})
 
 	t.Run("audit to File", func(t *testing.T) {
@@ -114,7 +113,7 @@ func TestAuditOperation(t *testing.T) {
 		defer os.Remove(file.Name())
 		config.SetAuditFileLocation(file.Name())
 
-		err = AuditOperation(auditType, tab100Alias, message)
+		err = AuditOperation(auditType, tab100.Alias, message)
 		require.NoError(t, err)
 
 		// Give a little time for the write to succeed since it happens in a separate go-routine
@@ -132,42 +131,46 @@ type audit struct {
 	AuditID          int64
 	AuditTimestamp   string
 	AuditType        string
-	AuditTabletAlias string
+	AuditTabletAlias *topodatapb.TabletAlias
 	Message          string
 }
 
 // readRecentAudit returns a list of audit entries order chronologically descending, using page number.
-func readRecentAudit(tabletAlias string, page int) ([]audit, error) {
+func readRecentAudit(tabletAlias *topodatapb.TabletAlias, page int) ([]audit, error) {
 	res := []audit{}
 	var args []any
 	whereCondition := ``
-	if tabletAlias != "" {
-		whereCondition = `where alias=?`
-		args = append(args, tabletAlias)
+	if tabletAlias != nil {
+		whereCondition = `WHERE alias = ?`
+		args = append(args, topoproto.TabletAliasString(tabletAlias))
 	}
 	query := fmt.Sprintf(`
-		select
+		SELECT
 			audit_id,
 			audit_timestamp,
 			audit_type,
 			alias,
 			message
-		from
+		FROM
 			audit
 		%s
-		order by
-			audit_timestamp desc
-		limit ?
-		offset ?
-		`, whereCondition)
+		ORDER BY
+			audit_timestamp DESC
+		LIMIT ?
+		OFFSET ?`,
+		whereCondition,
+	)
 	args = append(args, config.AuditPageSize, page*config.AuditPageSize)
-	err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
+	err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) (err error) {
 		a := audit{}
 		a.AuditID = m.GetInt64("audit_id")
 		a.AuditTimestamp = m.GetString("audit_timestamp")
 		a.AuditType = m.GetString("audit_type")
-		a.AuditTabletAlias = m.GetString("alias")
 		a.Message = m.GetString("message")
+		a.AuditTabletAlias, err = topoproto.ParseTabletAlias(m.GetString("alias"))
+		if err != nil {
+			return err
+		}
 
 		res = append(res, a)
 		return nil
