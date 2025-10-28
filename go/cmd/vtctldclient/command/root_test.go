@@ -18,7 +18,6 @@ package command_test
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -85,7 +84,7 @@ func TestRootWithInternalVtctld(t *testing.T) {
 	}{
 		{
 			command:   "AddCellInfo",
-			args:      []string{"--root", fmt.Sprintf("/vitess/%s", cell), "--server-address", "", cell},
+			args:      []string{"--root", "/vitess/" + cell, "--server-address", "", cell},
 			expectErr: "node already exists", // Cell already exists
 		},
 		{

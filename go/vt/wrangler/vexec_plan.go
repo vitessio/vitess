@@ -19,6 +19,7 @@ package wrangler
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/olekukonko/tablewriter"
@@ -109,7 +110,7 @@ func (p vreplicationPlanner) dryRun(ctx context.Context) error {
 	for _, primary := range p.vx.primaries {
 		key := fmt.Sprintf("%s/%s", primary.Shard, primary.AliasString())
 		for _, stream := range rsr.ShardStatuses[key].PrimaryReplicationStatuses {
-			table.Append(key, fmt.Sprintf("%d", stream.ID), stream.Bls.String(), stream.State, stream.DBName, stream.Pos)
+			table.Append(key, strconv.Itoa(int(stream.ID)), stream.Bls.String(), stream.State, stream.DBName, stream.Pos)
 		}
 	}
 	table.Render()

@@ -17,7 +17,8 @@ limitations under the License.
 package schema
 
 import (
-	"fmt"
+	"errors"
+	"strconv"
 	"testing"
 	"time"
 
@@ -124,7 +125,7 @@ func TestMultipleUpdatesFromDifferentShards(t *testing.T) {
 	},
 	}
 	for i, test := range tests {
-		t.Run(fmt.Sprintf("%d", i+1), func(t *testing.T) {
+		t.Run(strconv.Itoa(i+1), func(t *testing.T) {
 			var signalNb, initNb int
 			var updatedTables []string
 			update := func(th *discovery.TabletHealth) bool {
@@ -142,7 +143,7 @@ func TestMultipleUpdatesFromDifferentShards(t *testing.T) {
 					initNb++
 					var err error
 					if test.initFail {
-						err = fmt.Errorf("error")
+						err = errors.New("error")
 					}
 					return err
 				},
@@ -251,7 +252,7 @@ func TestViewsUpdates(t *testing.T) {
 	},
 	}
 	for i, test := range tests {
-		t.Run(fmt.Sprintf("%d", i+1), func(t *testing.T) {
+		t.Run(strconv.Itoa(i+1), func(t *testing.T) {
 			var signalNb, initNb int
 			var updatedViews []string
 			update := func(th *discovery.TabletHealth) bool {
@@ -269,7 +270,7 @@ func TestViewsUpdates(t *testing.T) {
 					initNb++
 					var err error
 					if test.initFail {
-						err = fmt.Errorf("error")
+						err = errors.New("error")
 					}
 					return err
 				},

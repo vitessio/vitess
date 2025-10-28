@@ -19,6 +19,7 @@ package vexec
 import (
 	"errors"
 	"fmt"
+	"strconv"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -332,12 +333,12 @@ func (planner *VReplicationLogQueryPlanner) planSelect(sel *sqlparser.Select) (Q
 				Left: &sqlparser.ColName{
 					Name: sqlparser.NewIdentifierCI("vrepl_id"),
 				},
-				Right: sqlparser.NewIntLiteral(fmt.Sprintf("%d", streamIDs[0])),
+				Right: sqlparser.NewIntLiteral(strconv.FormatInt(streamIDs[0], 10)),
 			}
 		default: // WHERE vreplication_log.vrepl_id IN (?)
 			vals := []sqlparser.Expr{}
 			for _, streamID := range streamIDs {
-				vals = append(vals, sqlparser.NewIntLiteral(fmt.Sprintf("%d", streamID)))
+				vals = append(vals, sqlparser.NewIntLiteral(strconv.FormatInt(streamID, 10)))
 			}
 
 			var tuple sqlparser.ValTuple = vals

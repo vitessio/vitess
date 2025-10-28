@@ -18,6 +18,7 @@ package binlogplayertest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -99,7 +100,7 @@ var testBinlogTransaction = &binlogdatapb.BinlogTransaction{
 // StreamKeyRange is part of the UpdateStream interface
 func (fake *FakeBinlogStreamer) StreamKeyRange(ctx context.Context, position string, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset, callback func(reply *binlogdatapb.BinlogTransaction) error) error {
 	if fake.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	req := &keyRangeRequest{
 		Position: position,
@@ -167,7 +168,7 @@ var testTablesRequest = &tablesRequest{
 // StreamTables is part of the UpdateStream interface
 func (fake *FakeBinlogStreamer) StreamTables(ctx context.Context, position string, tables []string, charset *binlogdatapb.Charset, callback func(reply *binlogdatapb.BinlogTransaction) error) error {
 	if fake.panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	req := &tablesRequest{
 		Position: position,

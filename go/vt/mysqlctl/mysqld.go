@@ -98,7 +98,7 @@ var (
 
 	replicationConnectRetry = 10 * time.Second
 
-	versionRegex = regexp.MustCompile(fmt.Sprintf(`%s([0-9]+)\.([0-9]+)\.([0-9]+)`, versionStringPrefix))
+	versionRegex = regexp.MustCompile(versionStringPrefix + "([0-9]+)\\.([0-9]+)\\.([0-9]+)")
 	// versionSQLQuery will return a version string directly from
 	// a MySQL server that is compatible with what we expect from
 	// mysqld --version and matches the versionRegex. Example
@@ -461,7 +461,7 @@ func (mysqld *Mysqld) startNoWait(cnf *Mycnf, mysqldArgs ...string) error {
 }
 
 func cleanupLockfile(socket string, ts string) error {
-	lockPath := fmt.Sprintf("%s.lock", socket)
+	lockPath := socket + ".lock"
 	pid, err := os.ReadFile(lockPath)
 	if errors.Is(err, os.ErrNotExist) {
 		log.Infof("%v: no stale lock file at %s", ts, lockPath)

@@ -20,6 +20,7 @@ package filebackupstorage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -32,7 +33,7 @@ import (
 	"vitess.io/vitess/go/os2"
 	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
-	"vitess.io/vitess/go/vt/mysqlctl/errors"
+	mysqlctlerrors "vitess.io/vitess/go/vt/mysqlctl/errors"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/utils"
 )
@@ -62,7 +63,7 @@ type FileBackupHandle struct {
 	dir      string
 	name     string
 	readOnly bool
-	errors.PerFileErrorRecorder
+	mysqlctlerrors.PerFileErrorRecorder
 }
 
 func NewBackupHandle(
@@ -95,7 +96,7 @@ func (fbh *FileBackupHandle) Name() string {
 // AddFile is part of the BackupHandle interface
 func (fbh *FileBackupHandle) AddFile(ctx context.Context, filename string, filesize int64) (io.WriteCloser, error) {
 	if fbh.readOnly {
-		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
+		return nil, errors.New("AddFile cannot be called on read-only backup")
 	}
 	p := path.Join(FileBackupStorageRoot, fbh.dir, fbh.name, filename)
 	f, err := os2.Create(p)
@@ -109,7 +110,7 @@ func (fbh *FileBackupHandle) AddFile(ctx context.Context, filename string, files
 // EndBackup is part of the BackupHandle interface
 func (fbh *FileBackupHandle) EndBackup(ctx context.Context) error {
 	if fbh.readOnly {
-		return fmt.Errorf("EndBackup cannot be called on read-only backup")
+		return errors.New("EndBackup cannot be called on read-only backup")
 	}
 	return nil
 }
@@ -117,7 +118,7 @@ func (fbh *FileBackupHandle) EndBackup(ctx context.Context) error {
 // AbortBackup is part of the BackupHandle interface
 func (fbh *FileBackupHandle) AbortBackup(ctx context.Context) error {
 	if fbh.readOnly {
-		return fmt.Errorf("AbortBackup cannot be called on read-only backup")
+		return errors.New("AbortBackup cannot be called on read-only backup")
 	}
 	return fbh.fbs.RemoveBackup(ctx, fbh.dir, fbh.name)
 }
@@ -125,7 +126,7 @@ func (fbh *FileBackupHandle) AbortBackup(ctx context.Context) error {
 // ReadFile is part of the BackupHandle interface
 func (fbh *FileBackupHandle) ReadFile(ctx context.Context, filename string) (io.ReadCloser, error) {
 	if !fbh.readOnly {
-		return nil, fmt.Errorf("ReadFile cannot be called on read-write backup")
+		return nil, errors.New("ReadFile cannot be called on read-write backup")
 	}
 	p, err := fileutil.SafePathJoin(FileBackupStorageRoot, fbh.dir, fbh.name, filename)
 	if err != nil {

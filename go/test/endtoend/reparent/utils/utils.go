@@ -19,6 +19,7 @@ package utils
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -223,7 +224,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	}
 	if clusterInstance.VtctlMajorVersion >= 14 {
 		clusterInstance.VtctldClientProcess = *cluster.VtctldClientProcessInstance(clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TopoPort, "localhost", clusterInstance.TmpDirectory)
-		out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", KeyspaceName, fmt.Sprintf("--durability-policy=%s", durability))
+		out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", KeyspaceName, "--durability-policy="+durability)
 		require.NoError(t, err, out)
 	}
 
@@ -739,7 +740,7 @@ func WaitForReplicationPosition(t *testing.T, tabletA *cluster.Vttablet, tabletB
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
-	return fmt.Errorf("failed to catch up on replication position")
+	return errors.New("failed to catch up on replication position")
 }
 
 // positionAtLeast executes the command position at_least

@@ -525,7 +525,7 @@ func (vse *Engine) waitForMySQL(ctx context.Context, db dbconfigs.Connector, tab
 					// Global row streamer waits on the source tablet
 					vse.rowStreamerWaits.Record("waitForMySQL", ct)
 					// Waits by the table we're copying from the source tablet
-					vse.vstreamerPhaseTimings.Record(fmt.Sprintf("%s:waitForMySQL", tableName), ct)
+					vse.vstreamerPhaseTimings.Record(tableName+":waitForMySQL", ct)
 				}()
 				recording = true
 			}

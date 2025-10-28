@@ -17,7 +17,6 @@ limitations under the License.
 package vttest
 
 import (
-	"fmt"
 	"math/rand/v2"
 	"net"
 	"os"
@@ -303,7 +302,7 @@ func NewLocalTestEnvWithDirectory(basePort int, directory string) (*LocalTestEnv
 		DefaultMyCnf: mycnf,
 		InitDBFile:   path.Join(os.Getenv("VTROOT"), "config/init_db.sql"),
 		Env: []string{
-			fmt.Sprintf("VTDATAROOT=%s", directory),
+			"VTDATAROOT=" + directory,
 			"VTTEST=endtoend",
 		},
 	}, nil

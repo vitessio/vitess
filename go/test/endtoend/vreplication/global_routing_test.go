@@ -110,7 +110,7 @@ func (h *grHelpers) waitForTableAvailability(t *testing.T, vtgateConn *mysql.Con
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
-		_, err := vtgateConn.ExecuteFetch(fmt.Sprintf("select * from %s", table), 1, false)
+		_, err := vtgateConn.ExecuteFetch("select * from "+table, 1, false)
 		if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("table %s not found", table)) {
 			return
 		}
@@ -134,10 +134,10 @@ func (h *grHelpers) checkForTable(
 
 	for _, table := range tables {
 		for _, target := range []string{"", "@primary"} {
-			_, err := vtgateConn.ExecuteFetch(fmt.Sprintf("use %s", target), 1, false)
+			_, err := vtgateConn.ExecuteFetch("use "+target, 1, false)
 			require.NoError(t, err)
 			h.waitForTableAvailability(t, vtgateConn, table)
-			rs, err := vtgateConn.ExecuteFetch(fmt.Sprintf("select * from %s", table), 1, false)
+			rs, err := vtgateConn.ExecuteFetch("select * from "+table, 1, false)
 			queryCallback(rs, err)
 		}
 	}

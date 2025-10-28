@@ -17,6 +17,7 @@ limitations under the License.
 package vdiff
 
 import (
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -119,13 +120,13 @@ var (
 		}
 		// Enforce non-negative values for limits and max options.
 		if createOptions.Limit < 1 {
-			return fmt.Errorf("--limit must be a positive value")
+			return errors.New("--limit must be a positive value")
 		}
 		if createOptions.MaxReportSampleRows < 0 {
-			return fmt.Errorf("--max-report-sample-rows must not be a negative value")
+			return errors.New("--max-report-sample-rows must not be a negative value")
 		}
 		if createOptions.MaxExtraRowsToCompare < 0 {
-			return fmt.Errorf("--max-extra-rows-to-compare must not be a negative value")
+			return errors.New("--max-extra-rows-to-compare must not be a negative value")
 		}
 		return nil
 	}

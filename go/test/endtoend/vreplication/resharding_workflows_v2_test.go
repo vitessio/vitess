@@ -324,8 +324,8 @@ func revert(t *testing.T, workflowType string) {
 }
 
 func checkStates(t *testing.T, startState, endState string) {
-	require.Contains(t, lastOutput, fmt.Sprintf("Start State: %s", startState))
-	require.Contains(t, lastOutput, fmt.Sprintf("Current State: %s", endState))
+	require.Contains(t, lastOutput, "Start State: "+startState)
+	require.Contains(t, lastOutput, "Current State: "+endState)
 }
 
 func getCurrentStatus(t *testing.T) string {
@@ -390,7 +390,7 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 		"customer2", workflowActionCreate, "", "", "", defaultWorkflowExecOptions)
 	require.NoError(t, err)
 
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.wf2", defaultTargetKs), binlogdatapb.VReplicationWorkflowState_Running.String())
+	waitForWorkflowState(t, vc, defaultTargetKs+".wf2", binlogdatapb.VReplicationWorkflowState_Running.String())
 	waitForLowLag(t, defaultTargetKs, "wf2")
 
 	err = tstWorkflowExec(t, defaultCellName, "wf2", defaultSourceKs, defaultTargetKs,
@@ -426,7 +426,7 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 	err = tstWorkflowExec(t, defaultCellName, "wf3", defaultTargetKs, defaultSourceKs,
 		"customer2", workflowActionCreate, "", "", "", defaultWorkflowExecOptions)
 	require.NoError(t, err)
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.wf3", defaultSourceKs), binlogdatapb.VReplicationWorkflowState_Running.String())
+	waitForWorkflowState(t, vc, defaultSourceKs+".wf3", binlogdatapb.VReplicationWorkflowState_Running.String())
 
 	waitForLowLag(t, defaultSourceKs, "wf3")
 	err = tstWorkflowExec(t, defaultCellName, "wf3", defaultTargetKs, defaultSourceKs,

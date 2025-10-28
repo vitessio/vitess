@@ -803,7 +803,7 @@ func (s *Server) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSet
 	for _, table := range ms.ReferenceTables {
 		ms.TableSettings = append(ms.TableSettings, &vtctldatapb.TableMaterializeSettings{
 			TargetTable:      table,
-			SourceExpression: fmt.Sprintf("select * from %s", table),
+			SourceExpression: "select * from " + table,
 			CreateDdl:        createDDLAsCopyDropForeignKeys,
 		})
 	}
@@ -885,7 +885,7 @@ func (s *Server) WorkflowAddTables(ctx context.Context, req *vtctldatapb.Workflo
 		// values corresponding to a reference table.
 		for _, ts := range req.TableSettings {
 			if ts.SourceExpression == "" {
-				ts.SourceExpression = fmt.Sprintf("select * from %s", ts.TargetTable)
+				ts.SourceExpression = "select * from " + ts.TargetTable
 			}
 			if ts.CreateDdl == "" {
 				ts.CreateDdl = createDDLAsCopyDropForeignKeys

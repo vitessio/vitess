@@ -473,7 +473,7 @@ func waitForReplicationCatchup(t *testing.T) {
 	primaryPos := getTabletPosition(t, primary)
 	var wg sync.WaitGroup
 	for _, replica := range []*cluster.Vttablet{replicaNoFK, replicaFK} {
-		replica := replica
+
 		wg.Add(1)
 		go func() {
 			waitForReplicaCatchup(t, ctx, replica, primaryPos)
@@ -957,7 +957,7 @@ func waitForTable(t *testing.T, tableName string, conn *mysql.Conn) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
-	query := fmt.Sprintf("select count(*) from %s", tableName)
+	query := "select count(*) from " + tableName
 	for {
 		if _, err := conn.ExecuteFetch(query, 1, false); err == nil {
 			return // good
@@ -1007,7 +1007,7 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 
 // getCreateTableStatement returns the CREATE TABLE statement for a given table
 func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName string) (statement string) {
-	queryResult := queryTablet(t, tablet, fmt.Sprintf("show create table %s", tableName), "")
+	queryResult := queryTablet(t, tablet, "show create table "+tableName, "")
 
 	require.Equal(t, len(queryResult.Rows), 1)
 	row := queryResult.Rows[0]

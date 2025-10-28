@@ -39,7 +39,7 @@ func TestSimpleInsertSelect(t *testing.T) {
 
 	for i, mode := range []string{"oltp", "olap"} {
 		mcmp.Run(mode, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", mode))
+			utils.Exec(t, mcmp.VtConn, "set workload = "+mode)
 
 			qr := mcmp.Exec(fmt.Sprintf("insert into s_tbl(id, num) select id*%d, num*%d from s_tbl where id < 10", 10+i, 20+i))
 			assert.EqualValues(t, 2, qr.RowsAffected)
@@ -63,7 +63,7 @@ func TestInsertOnDup(t *testing.T) {
 
 	for _, mode := range []string{"oltp", "olap"} {
 		mcmp.Run(mode, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", mode))
+			utils.Exec(t, mcmp.VtConn, "set workload = "+mode)
 
 			mcmp.Exec(`insert into order_tbl(oid, region_id, cust_no) values (2,2,3),(4,4,5) on duplicate key update cust_no = if(values(cust_no) in (1, 2, 3), region_id, values(cust_no))`)
 			mcmp.Exec(`select oid, region_id, cust_no from order_tbl order by oid, region_id`)
@@ -85,7 +85,7 @@ func TestFailureInsertSelect(t *testing.T) {
 
 	for _, mode := range []string{"oltp", "olap"} {
 		mcmp.Run(mode, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", mode))
+			utils.Exec(t, mcmp.VtConn, "set workload = "+mode)
 
 			// primary key same
 			mcmp.AssertContainsError("insert into s_tbl(id, num) select id, num*20 from s_tbl where id = 1", `AlreadyExists desc = Duplicate entry '1' for key`)
@@ -397,7 +397,7 @@ func TestInsertSelectUnshardedUsingSharded(t *testing.T) {
 
 	for _, mode := range []string{"oltp", "olap"} {
 		mcmp.Run(mode, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", mode))
+			utils.Exec(t, mcmp.VtConn, "set workload = "+mode)
 			qr := mcmp.Exec("insert into u_tbl(id, num) select id, num from s_tbl where s_tbl.id in (1,3)")
 			assert.EqualValues(t, 2, qr.RowsAffected)
 			mcmp.AssertMatches(`select id, num from u_tbl order by id`, `[[INT64(1) INT64(2)] [INT64(3) INT64(4)]]`)

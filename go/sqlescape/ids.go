@@ -14,6 +14,7 @@ limitations under the License.
 package sqlescape
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -64,7 +65,7 @@ func UnescapeID(in string) (string, error) {
 
 	if l == 1 {
 		if in[0] == '`' {
-			return "", fmt.Errorf("UnescapeID err: invalid input identifier '`'")
+			return "", errors.New("UnescapeID err: invalid input identifier '`'")
 		}
 		return in, nil
 	}

@@ -18,6 +18,7 @@ package repltracker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -139,7 +140,7 @@ func (r *heartbeatReader) Status() (time.Duration, error) {
 
 	// Return an error if we didn't receive a heartbeat for more than two seconds
 	if !r.lastKnownTime.IsZero() && r.now().Sub(r.lastKnownTime) > 2*r.interval {
-		return 0, fmt.Errorf("no heartbeat received in over 2x the heartbeat interval")
+		return 0, errors.New("no heartbeat received in over 2x the heartbeat interval")
 	}
 
 	return r.lastKnownLag, nil

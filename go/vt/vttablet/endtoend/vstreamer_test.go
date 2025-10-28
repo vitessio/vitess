@@ -486,7 +486,7 @@ func encodeString(in string) string {
 }
 
 func validateSchemaInserted(client *framework.QueryClient, ddl string) bool {
-	qr, _ := client.Execute(fmt.Sprintf("select * from _vt.schema_version where ddl = %s", encodeString(ddl)), nil)
+	qr, _ := client.Execute("select * from _vt.schema_version where ddl = "+encodeString(ddl), nil)
 	if len(qr.Rows) == 1 {
 		log.Infof("Found ddl in schema_version: %s", ddl)
 		return true

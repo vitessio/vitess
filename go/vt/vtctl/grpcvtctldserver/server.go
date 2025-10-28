@@ -257,7 +257,7 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 
 	migrationContext := req.MigrationContext
 	if migrationContext == "" {
-		migrationContext = fmt.Sprintf("vtctl:%s", executionUUID)
+		migrationContext = "vtctl:" + executionUUID
 	}
 
 	waitReplicasTimeout, ok, err := protoutil.DurationFromProto(req.WaitReplicasTimeout)
@@ -2074,7 +2074,7 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 	defer panicHandler(&err)
 
 	if req.Enable && req.Disable {
-		return nil, fmt.Errorf("--enable and --disable are mutually exclusive")
+		return nil, errors.New("--enable and --disable are mutually exclusive")
 	}
 
 	if req.MetricName != "" && !base.KnownMetricNames.Contains(base.MetricName(req.MetricName)) {
@@ -2995,7 +2995,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	// assume that whatever data is on all the replicas is what they intended.
 	// If the database doesn't exist, it means the user intends for these tablets
 	// to begin serving with no data (i.e. first time initialization).
-	createDB := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", sqlescape.EscapeID(topoproto.TabletDbName(primaryElectTabletInfo.Tablet)))
+	createDB := "CREATE DATABASE IF NOT EXISTS " + sqlescape.EscapeID(topoproto.TabletDbName(primaryElectTabletInfo.Tablet))
 	if _, err := tmc.ExecuteFetchAsDba(ctx, primaryElectTabletInfo.Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
 		Query:        []byte(createDB),
 		MaxRows:      1,

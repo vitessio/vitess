@@ -22,6 +22,7 @@ limitations under the License.
 package uset
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 )
@@ -669,7 +670,7 @@ func (u *UnicodeSet) FreezeCheck_() error {
 		return nil
 	}
 	if u.frozen == nil {
-		return fmt.Errorf("UnicodeSet is not frozen")
+		return errors.New("UnicodeSet is not frozen")
 	}
 	for r := rune(0); r <= 0x10ffff; r++ {
 		want := (u.findCodePoint(r) & 1) != 0

@@ -40,7 +40,7 @@ func parseDecimal64(s []byte) (Decimal, error) {
 		switch {
 		case c == '.':
 			if dot > -1 {
-				return Decimal{}, fmt.Errorf("too many .s")
+				return Decimal{}, errors.New("too many .s")
 			}
 			dot = i
 			continue

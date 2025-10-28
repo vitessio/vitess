@@ -18,6 +18,7 @@ package vstreamer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"regexp"
@@ -431,7 +432,7 @@ func (uvs *uvstreamer) init() error {
 		}
 	}
 	if uvs.pos.IsZero() && (len(uvs.plans) == 0) {
-		return fmt.Errorf("stream needs a position or a table to copy")
+		return errors.New("stream needs a position or a table to copy")
 	}
 	return nil
 }
@@ -546,7 +547,7 @@ func (uvs *uvstreamer) copyComplete(tableName string) error {
 
 func (uvs *uvstreamer) setPosition(gtid string, isInTx bool) error {
 	if gtid == "" {
-		return fmt.Errorf("empty gtid passed to setPosition")
+		return errors.New("empty gtid passed to setPosition")
 	}
 	pos, err := replication.DecodePosition(gtid)
 	if err != nil {

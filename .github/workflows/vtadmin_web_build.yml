@@ -34,6 +34,9 @@ jobs:
         with:
           persist-credentials: 'false'
 
+      - name: Tune the OS
+        uses: ./.github/actions/tune-os
+
       - uses: actions/setup-node@v4
         with:
           # node-version should match package.json

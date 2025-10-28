@@ -100,7 +100,7 @@ func NewHookWithEnv(name string, params []string, env map[string]string) *Hook {
 func (hook *Hook) findHook(ctx context.Context) (*exec.Cmd, int, error) {
 	// Check the hook path.
 	if strings.Contains(hook.Name, "/") {
-		return nil, HOOK_INVALID_NAME, fmt.Errorf("hook cannot contain '/'")
+		return nil, HOOK_INVALID_NAME, errors.New("hook cannot contain '/'")
 	}
 
 	// Find our root.

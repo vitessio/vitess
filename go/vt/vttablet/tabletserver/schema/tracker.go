@@ -18,7 +18,7 @@ package schema
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"sync"
 	"time"
 
@@ -212,7 +212,7 @@ func (tr *Tracker) possiblyInsertInitialSchema(ctx context.Context) error {
 func (tr *Tracker) schemaUpdated(gtid string, ddl string, timestamp int64) error {
 	log.Infof("Processing schemaUpdated event for gtid %s, ddl %s", gtid, ddl)
 	if gtid == "" || ddl == "" {
-		return fmt.Errorf("got invalid gtid or ddl in schemaUpdated")
+		return errors.New("got invalid gtid or ddl in schemaUpdated")
 	}
 	ctx := context.Background()
 	// Engine will have reloaded the schema because vstream will reload it on a DDL

@@ -106,8 +106,8 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"--topo_global_root", vttablet.TopoGlobalRoot,
 		"--log_queries_to_file", vttablet.FileToLogQueries,
 		"--tablet-path", vttablet.TabletPath,
-		"--port", fmt.Sprintf("%d", vttablet.Port),
-		"--grpc_port", fmt.Sprintf("%d", vttablet.GrpcPort),
+		"--port", strconv.Itoa(vttablet.Port),
+		"--grpc_port", strconv.Itoa(vttablet.GrpcPort),
 		"--init_shard", vttablet.Shard,
 		"--log_dir", vttablet.LogDir,
 		"--tablet_hostname", vttablet.TabletHostname,
@@ -127,7 +127,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		vttablet.proc.Args = append(vttablet.proc.Args, "--test.coverprofile="+getCoveragePath("vttablet.out"))
 	}
 	if *PerfTest {
-		vttablet.proc.Args = append(vttablet.proc.Args, "--pprof", fmt.Sprintf("cpu,waitSig,path=vttablet_pprof_%s", vttablet.Name))
+		vttablet.proc.Args = append(vttablet.proc.Args, "--pprof", "cpu,waitSig,path=vttablet_pprof_"+vttablet.Name)
 	}
 
 	//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
@@ -136,7 +136,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	}
 	//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 	if vttablet.DbFlavor != "" {
-		vttablet.proc.Args = append(vttablet.proc.Args, fmt.Sprintf("--db_flavor=%s", vttablet.DbFlavor))
+		vttablet.proc.Args = append(vttablet.proc.Args, "--db_flavor="+vttablet.DbFlavor)
 	}
 
 	vttablet.proc.Args = append(vttablet.proc.Args, vttablet.ExtraArgs...)
@@ -370,7 +370,7 @@ func contains(arr []string, str string) bool {
 func (vttablet *VttabletProcess) WaitForBinLogPlayerCount(expectedCount int) error {
 	timeout := time.Now().Add(vttabletStateTimeout)
 	for time.Now().Before(timeout) {
-		if vttablet.getVReplStreamCount() == fmt.Sprintf("%d", expectedCount) {
+		if vttablet.getVReplStreamCount() == strconv.Itoa(expectedCount) {
 			return nil
 		}
 		select {
@@ -454,8 +454,8 @@ func (vttablet *VttabletProcess) CreateDB(keyspace string) error {
 	if vttablet.DbName == "" {
 		vttablet.DbName = "vt_" + keyspace
 	}
-	_, _ = vttablet.QueryTablet(fmt.Sprintf("drop database IF EXISTS %s", vttablet.DbName), keyspace, false)
-	_, err := vttablet.QueryTablet(fmt.Sprintf("create database IF NOT EXISTS %s", vttablet.DbName), keyspace, false)
+	_, _ = vttablet.QueryTablet("drop database IF EXISTS "+vttablet.DbName, keyspace, false)
+	_, err := vttablet.QueryTablet("create database IF NOT EXISTS "+vttablet.DbName, keyspace, false)
 	return err
 }
 
