@@ -473,7 +473,7 @@ func waitForReplicationCatchup(t *testing.T) {
 	primaryPos := getTabletPosition(t, primary)
 	var wg sync.WaitGroup
 	for _, replica := range []*cluster.Vttablet{replicaNoFK, replicaFK} {
-		replica := replica
+
 		wg.Add(1)
 		go func() {
 			waitForReplicaCatchup(t, ctx, replica, primaryPos)

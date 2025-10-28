@@ -264,7 +264,6 @@ func (check *ThrottlerCheck) SelfChecks(ctx context.Context) {
 			case <-selfCheckTicker.C:
 				for metricName, metricResult := range check.AggregatedMetrics(ctx) {
 					aggregatedMetricName := metricName
-					metricResult := metricResult
 
 					go check.localCheck(ctx, aggregatedMetricName)
 					go check.reportAggregated(aggregatedMetricName, metricResult)

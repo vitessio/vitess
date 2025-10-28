@@ -1694,7 +1694,7 @@ func TestGetSchema(t *testing.T) {
 	ctx := context.Background()
 
 	for i, tt := range tests {
-		i := i
+
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
