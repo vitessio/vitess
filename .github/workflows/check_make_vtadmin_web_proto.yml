@@ -22,13 +22,13 @@ jobs:
           exit 1
         fi
 
-    - name: Tune the OS
-      uses: ./.github/actions/tune-os
-
     - name: Check out code
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         persist-credentials: 'false'
+
+    - name: Tune the OS
+      uses: ./.github/actions/tune-os
 
     - name: Check for changes in relevant files
       uses: dorny/paths-filter@ebc4d7e9ebcb0b1eb21480bb8f43113e996ac77a # v3.0.1

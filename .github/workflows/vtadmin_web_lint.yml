@@ -30,12 +30,12 @@ jobs:
             exit 1
           fi
 
-      - name: Tune the OS
-        uses: ./.github/actions/tune-os
-
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: 'false'
+
+      - name: Tune the OS
+        uses: ./.github/actions/tune-os
 
       - uses: actions/setup-node@v4
         with:
