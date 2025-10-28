@@ -147,6 +147,9 @@ linters:
           - errcheck
         path: ^go/sqltypes/
       - linters:
+          - whitespace
+        path: ^go/vt/sqlparser/ast_format_fast.go
+      - linters:
           - errcheck
         path: ^go/stats/statsd/
       - linters:
