@@ -2313,7 +2313,7 @@ func TestWorkflowStatus(t *testing.T) {
 		Workflow:       workflow,
 		TableSettings: []*vtctldatapb.TableMaterializeSettings{
 			{
-				TargetTable:      "table1",
+				TargetTable:      "table1", // Already finished copying
 				SourceExpression: fmt.Sprintf("select * from %s", "table1"),
 			},
 			{
@@ -2323,7 +2323,9 @@ func TestWorkflowStatus(t *testing.T) {
 		},
 	}, sourceShards, targetShards)
 
-	tablesResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name", "varchar"), "table1", "table2")
+	// We only specify table2 here as we finished copying table1 already.
+	// table1 should still be returned in the copy status though.
+	tablesResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name", "varchar"), "table2")
 	te.tmc.expectVRQuery(200, "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1", tablesResult)
 
 	tablesTargetCopyResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|table_rows|data_length", "varchar|int64|int64"), "table1|50|500", "table2|100|250")
