@@ -275,7 +275,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	demoteCtx, demoteCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer demoteCancel()
 
-	primaryStatus, err := pr.tmc.DemotePrimary(demoteCtx, currentPrimary.Tablet)
+	primaryStatus, err := pr.tmc.DemotePrimary(demoteCtx, currentPrimary.Tablet, false)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to DemotePrimary on current primary %v: %v", currentPrimary.AliasString(), err)
 	}
@@ -426,7 +426,7 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 			// tablet type), that's already in read-only.
 			pr.logger.Infof("demoting tablet %v", alias)
 
-			primaryStatus, err := pr.tmc.DemotePrimary(stopAllCtx, tablet)
+			primaryStatus, err := pr.tmc.DemotePrimary(stopAllCtx, tablet, false)
 			if err != nil {
 				rec.RecordError(vterrors.Wrapf(err, "DemotePrimary(%v) failed on contested primary", alias))
 
