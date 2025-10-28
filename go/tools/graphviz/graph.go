@@ -17,6 +17,7 @@ limitations under the License.
 package graphviz
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -197,7 +198,7 @@ func (g *Graph) Render() error {
 		}
 	}
 
-	return fmt.Errorf("failed to open browser for SVG debugging")
+	return errors.New("failed to open browser for SVG debugging")
 }
 
 func New() *Graph {

@@ -19,6 +19,7 @@ package vstreamer
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -327,7 +328,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	logger := logutil.NewThrottledLogger(vs.vse.GetTabletInfo(), throttledLoggerInterval)
 	wfNameLog := ""
 	if vs.filter != nil && vs.filter.WorkflowName != "" {
-		wfNameLog = fmt.Sprintf(" in workflow %s", vs.filter.WorkflowName)
+		wfNameLog = " in workflow " + vs.filter.WorkflowName
 	}
 	throttleEvents := func(throttledEvents chan mysql.BinlogEvent) {
 		for {
@@ -1172,7 +1173,7 @@ func (vs *vstreamer) getValues(plan *streamerPlan, data []byte,
 	for colNum := 0; colNum < dataColumns.Count(); colNum++ {
 		if !dataColumns.Bit(colNum) {
 			if vs.config.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage == 0 {
-				return nil, nil, false, fmt.Errorf("partial row image encountered: ensure binlog_row_image is set to 'full'")
+				return nil, nil, false, errors.New("partial row image encountered: ensure binlog_row_image is set to 'full'")
 			} else {
 				partial = true
 			}

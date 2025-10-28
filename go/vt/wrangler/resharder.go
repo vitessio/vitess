@@ -169,7 +169,7 @@ func (wr *Wrangler) buildResharder(ctx context.Context, keyspace, workflow strin
 func (rs *resharder) validateTargets(ctx context.Context) error {
 	err := rs.forAll(rs.targetShards, func(target *topo.ShardInfo) error {
 		targetPrimary := rs.targetPrimaries[target.ShardName()]
-		query := fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s", encodeString(targetPrimary.DbName()))
+		query := "select 1 from _vt.vreplication where db_name=" + encodeString(targetPrimary.DbName())
 		p3qr, err := rs.wr.tmc.VReplicationExec(ctx, targetPrimary.Tablet, query)
 		if err != nil {
 			return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", targetPrimary.Tablet, query)

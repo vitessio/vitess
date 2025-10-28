@@ -18,7 +18,7 @@ package concurrency
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"testing"
 	"time"
 
@@ -128,7 +128,7 @@ func spawnGoRoutines(errCh chan Error, shouldError bool, count int) {
 			time.Sleep(100 * time.Millisecond)
 			var err Error
 			if shouldError {
-				err.Err = fmt.Errorf("a general error")
+				err.Err = errors.New("a general error")
 			}
 			errCh <- err
 		}()
@@ -141,7 +141,7 @@ func spawnDelayedGoRoutine(groupContext context.Context, errCh chan Error, mustW
 			select {
 			case <-groupContext.Done():
 				err := Error{
-					Err: fmt.Errorf("context cancelled"),
+					Err: errors.New("context cancelled"),
 				}
 				errCh <- err
 			case <-time.After(300 * time.Millisecond):

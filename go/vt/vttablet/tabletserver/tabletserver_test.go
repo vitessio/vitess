@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -2412,7 +2413,7 @@ func TestRelease(t *testing.T) {
 
 	for i, test := range tests {
 
-		name := fmt.Sprintf("%d", i)
+		name := strconv.Itoa(i)
 		if test.begin {
 			name += " begin"
 		}

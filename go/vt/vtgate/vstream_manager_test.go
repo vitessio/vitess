@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"runtime/pprof"
@@ -778,7 +779,7 @@ func TestVStreamErrorInCallback(t *testing.T) {
 		}},
 	}
 
-	expectedError := fmt.Errorf("callback error")
+	expectedError := errors.New("callback error")
 
 	err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
 		return expectedError
@@ -2080,7 +2081,7 @@ func TestVStreamManagerHealthCheckResponseHandling(t *testing.T) {
 				TabletAlias: source.Tablet().Alias,
 				Target:      nil, // This is seen as a healthcheck stream failure
 			},
-			wantErr: fmt.Sprintf("health check failed on %s", tabletAlias),
+			wantErr: "health check failed on " + tabletAlias,
 		},
 		{
 			name: "tablet type changed",

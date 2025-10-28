@@ -2,7 +2,7 @@ package engine
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"testing"
 	"time"
 
@@ -73,7 +73,7 @@ func TestDBDDLTimeout(t *testing.T) {
 	DBDDLRegister(pluginName, plugin)
 
 	primitive := &DBDDL{name: "ks", create: true, queryTimeout: 100}
-	vc := &loggingVCursor{dbDDLPlugin: pluginName, shardErr: fmt.Errorf("db not available")}
+	vc := &loggingVCursor{dbDDLPlugin: pluginName, shardErr: errors.New("db not available")}
 	_, err := primitive.TryExecute(context.Background(), vc, nil, false)
 	assert.EqualError(t, err, "could not validate create database: destination not resolved")
 

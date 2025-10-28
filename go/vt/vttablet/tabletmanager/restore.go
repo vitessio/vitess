@@ -18,6 +18,7 @@ package tabletmanager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -105,7 +106,7 @@ func (tm *TabletManager) RestoreData(
 	}
 	defer tm.unlock()
 	if tm.Cnf == nil {
-		return fmt.Errorf("cannot perform restore without my.cnf, please restart vttablet with a my.cnf file specified")
+		return errors.New("cannot perform restore without my.cnf, please restart vttablet with a my.cnf file specified")
 	}
 
 	var (

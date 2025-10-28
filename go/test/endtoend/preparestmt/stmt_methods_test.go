@@ -326,7 +326,7 @@ func (c *columns) ToString() string {
 
 func getIntToString(x sql.NullInt64) string {
 	if x.Valid {
-		return fmt.Sprintf("%d", x.Int64)
+		return strconv.FormatInt(x.Int64, 10)
 	}
 	return "NULL"
 }
@@ -607,7 +607,7 @@ func getPlanWhenReady(t *testing.T, sql string, timeout time.Duration, plansFunc
 	for {
 		select {
 		case <-waitTimeout:
-			require.Fail(t, fmt.Sprintf("timeout waiting for plan for query: %s", sql))
+			require.Fail(t, "timeout waiting for plan for query: "+sql)
 			return nil
 		default:
 			p, err := plansFunc()

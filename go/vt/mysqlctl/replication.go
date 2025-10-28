@@ -650,7 +650,7 @@ func (mysqld *Mysqld) GetPreviousGTIDs(ctx context.Context, binlog string) (prev
 		}
 	}
 	if !previousGtidsFound {
-		return previousGtids, fmt.Errorf("GetPreviousGTIDs: previous GTIDs not found")
+		return previousGtids, errors.New("GetPreviousGTIDs: previous GTIDs not found")
 	}
 	return previousGtids, nil
 }

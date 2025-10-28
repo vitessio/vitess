@@ -18,7 +18,7 @@ package schemamanager
 
 import (
 	"context"
-	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -331,7 +331,7 @@ func TestBatchSQLs(t *testing.T) {
 		},
 	}
 	for _, tcase := range tcases {
-		t.Run(fmt.Sprintf("%d", tcase.batchSize), func(t *testing.T) {
+		t.Run(strconv.Itoa(tcase.batchSize), func(t *testing.T) {
 			batchedSQLs := batchSQLs(sqls, tcase.batchSize)
 			assert.Equal(t, tcase.expectSQLs, batchedSQLs)
 		})

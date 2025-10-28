@@ -120,10 +120,10 @@ func requireExpectedVSchema(t *testing.T, vschema *vschemapb.SrvVSchema, sourceK
 
 	foundA, foundB := false, false
 	for _, r := range vschema.RoutingRules.Rules {
-		if r.FromTable == "t1" && len(r.ToTables) == 1 && r.ToTables[0] == fmt.Sprintf("%s.t1", sourceKeyspace) {
+		if r.FromTable == "t1" && len(r.ToTables) == 1 && r.ToTables[0] == sourceKeyspace+".t1" {
 			foundA = true
 		}
-		if r.FromTable == fmt.Sprintf("%s.t1", targetKeyspace) && len(r.ToTables) == 1 && r.ToTables[0] == fmt.Sprintf("%s.t1", sourceKeyspace) {
+		if r.FromTable == targetKeyspace+".t1" && len(r.ToTables) == 1 && r.ToTables[0] == sourceKeyspace+".t1" {
 			foundB = true
 		}
 	}
@@ -450,7 +450,7 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 				"v": {
 					Type: "lookup_unique",
 					Params: map[string]string{
-						"table": fmt.Sprintf("%s.lkp", ms.TargetKeyspace),
+						"table": ms.TargetKeyspace + ".lkp",
 						"from":  "c1",
 						"to":    "c2",
 					},
@@ -484,7 +484,7 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 				"v": {
 					Type: "lookup_unique",
 					Params: map[string]string{
-						"table": fmt.Sprintf("%s.lkp", ms.TargetKeyspace),
+						"table": ms.TargetKeyspace + ".lkp",
 						"from":  "c1",
 						"to":    "c2",
 					},
@@ -518,7 +518,7 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 				"v": {
 					Type: "lookup",
 					Params: map[string]string{
-						"table": fmt.Sprintf("%s.lkp", ms.TargetKeyspace),
+						"table": ms.TargetKeyspace + ".lkp",
 						"from":  "c1,c2",
 						"to":    "c3",
 					},
@@ -553,7 +553,7 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 				"v": {
 					Type: "lookup_unique",
 					Params: map[string]string{
-						"table": fmt.Sprintf("%s.lkp", ms.TargetKeyspace),
+						"table": ms.TargetKeyspace + ".lkp",
 						"from":  "c1",
 						"to":    "c2",
 					},
@@ -583,7 +583,7 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 				"v": {
 					Type: "lookup_unique",
 					Params: map[string]string{
-						"table": fmt.Sprintf("%s.lkp", ms.TargetKeyspace),
+						"table": ms.TargetKeyspace + ".lkp",
 						"from":  "c1",
 						"to":    "c2",
 					},
@@ -3520,7 +3520,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 	tableMaterializeSettings := []*vtctldatapb.TableMaterializeSettings{
 		{
 			TargetTable:      table,
-			SourceExpression: fmt.Sprintf("select * from %s", table),
+			SourceExpression: "select * from " + table,
 		},
 	}
 	targetVSchema := &vschemapb.Keyspace{
@@ -3570,7 +3570,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 						Rules: []*binlogdatapb.Rule{
 							{
 								Match:  table,
-								Filter: fmt.Sprintf("select * from %s", table),
+								Filter: "select * from " + table,
 							},
 						},
 					},
@@ -3663,7 +3663,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 						Rules: []*binlogdatapb.Rule{
 							{
 								Match:  table,
-								Filter: fmt.Sprintf("select * from %s", table),
+								Filter: "select * from " + table,
 							},
 						},
 					},
@@ -3675,7 +3675,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 						Rules: []*binlogdatapb.Rule{
 							{
 								Match:  table,
-								Filter: fmt.Sprintf("select * from %s", table),
+								Filter: "select * from " + table,
 							},
 						},
 					},

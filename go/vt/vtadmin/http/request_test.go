@@ -17,7 +17,6 @@ limitations under the License.
 package http
 
 import (
-	"fmt"
 	"net/http"
 	"net/url"
 	"testing"
@@ -74,7 +73,7 @@ func TestParseQueryParamAsBool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			rawurl := fmt.Sprintf("http://example.com/%s", tt.fragment)
+			rawurl := "http://example.com/" + tt.fragment
 			u, err := url.Parse(rawurl)
 			require.NoError(t, err, "could not parse %s", rawurl)
 

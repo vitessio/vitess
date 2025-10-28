@@ -283,8 +283,7 @@ func TestSysInfo(t *testing.T) {
 	_, err = conn.ExecuteFetch("drop table if exists `a`", 1000, true)
 	require.NoError(t, err)
 
-	_, err = conn.ExecuteFetch(fmt.Sprintf("CREATE TABLE `a` (`one` int NOT NULL,`two` int NOT NULL,PRIMARY KEY (`one`,`two`)) ENGINE=InnoDB DEFAULT CHARSET=%s",
-		charsetName), 1000, true)
+	_, err = conn.ExecuteFetch("CREATE TABLE `a` (`one` int NOT NULL,`two` int NOT NULL,PRIMARY KEY (`one`,`two`)) ENGINE=InnoDB DEFAULT CHARSET="+charsetName, 1000, true)
 	require.NoError(t, err)
 	defer conn.ExecuteFetch("drop table `a`", 1000, true)
 

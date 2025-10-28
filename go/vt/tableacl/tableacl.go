@@ -287,7 +287,7 @@ func Register(name string, factory acl.Factory) {
 	mu.Lock()
 	defer mu.Unlock()
 	if _, ok := acls[name]; ok {
-		panic(fmt.Sprintf("register a registered key: %s", name))
+		panic("register a registered key: " + name)
 	}
 	acls[name] = factory
 }
@@ -304,7 +304,7 @@ func GetCurrentACLFactory() (acl.Factory, error) {
 	mu.Lock()
 	defer mu.Unlock()
 	if len(acls) == 0 {
-		return nil, fmt.Errorf("no AclFactories registered")
+		return nil, errors.New("no AclFactories registered")
 	}
 	if defaultACL == "" {
 		if len(acls) == 1 {

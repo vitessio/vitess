@@ -18,6 +18,7 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -177,7 +178,7 @@ func Exec(t testing.TB, conn *mysql.Conn, query string) *sqltypes.Result {
 // The test fails if the query produces an error.
 func ExecTrace(t testing.TB, conn *mysql.Conn, query string) engine.PrimitiveDescription {
 	t.Helper()
-	qr, err := conn.ExecuteFetch(fmt.Sprintf("vexplain trace %s", query), 10000, false)
+	qr, err := conn.ExecuteFetch("vexplain trace "+query, 10000, false)
 	require.NoError(t, err, "for query: "+query)
 
 	// Extract the trace result and format it with indentation for pretty printing
@@ -411,7 +412,7 @@ func GetInitDBSQL(initDBSQL string, updatedPasswords string, oldAlterTableMode s
 	// super_read_only therefore doing the split below.
 	splitString := strings.Split(initDBSQL, "# {{custom_sql}}")
 	if len(splitString) != 2 {
-		return "", fmt.Errorf("missing `# {{custom_sql}}` in init_db.sql file")
+		return "", errors.New("missing `# {{custom_sql}}` in init_db.sql file")
 	}
 	var builder strings.Builder
 	builder.WriteString(splitString[0])

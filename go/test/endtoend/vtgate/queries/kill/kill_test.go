@@ -203,12 +203,12 @@ func testHugeData(t *testing.T, workload string, execFunc func(*mysql.Conn) erro
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
-	utils.Exec(t, conn, fmt.Sprintf("set workload = %s", workload))
+	utils.Exec(t, conn, "set workload = "+workload)
 
 	killConn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 	defer killConn.Close()
-	utils.Exec(t, killConn, fmt.Sprintf("set workload = %s", workload))
+	utils.Exec(t, killConn, "set workload = "+workload)
 
 	runQueryInGoRoutineAndCheckError(t, conn, killConn, execFunc, killFunc, errMsgs)
 }

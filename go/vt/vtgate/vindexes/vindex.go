@@ -200,7 +200,7 @@ var registry = make(map[string]NewVindexFunc)
 // time of vschema loading.
 func Register(vindexType string, newVindexFunc NewVindexFunc) {
 	if _, ok := registry[vindexType]; ok {
-		panic(fmt.Sprintf("%s is already registered", vindexType))
+		panic(vindexType + " is already registered")
 	}
 	registry[vindexType] = newVindexFunc
 }

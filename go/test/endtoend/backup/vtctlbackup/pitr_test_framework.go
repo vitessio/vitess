@@ -319,7 +319,7 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 
 			var tablet *cluster.Vttablet
 
-			t.Run(fmt.Sprintf("init from backup pos %s", sampleTestedBackupPos), func(t *testing.T) {
+			t.Run("init from backup pos "+sampleTestedBackupPos, func(t *testing.T) {
 				tablet, err = SetupReplica3Tablet([]string{"--restore-to-pos", sampleTestedBackupPos})
 				assert.NoError(t, err)
 			})

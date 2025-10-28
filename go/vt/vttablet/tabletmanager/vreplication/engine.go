@@ -389,7 +389,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 	// Change the database to ensure that these events don't get
 	// replicated by another vreplication. This can happen when
 	// we reverse replication.
-	if _, err := dbClient.ExecuteFetch(fmt.Sprintf("use %s", sidecar.GetIdentifier()), 1); err != nil {
+	if _, err := dbClient.ExecuteFetch("use "+sidecar.GetIdentifier(), 1); err != nil {
 		return nil, err
 	}
 
@@ -400,7 +400,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 			return nil, err
 		}
 		if qr.InsertID == 0 {
-			return nil, fmt.Errorf("insert failed to generate an id")
+			return nil, errors.New("insert failed to generate an id")
 		}
 		maxInsert := qr.InsertID + uint64(plan.numInserts)
 		if maxInsert > math.MaxInt32 {
@@ -857,7 +857,7 @@ func (vre *Engine) readAllRows(ctx context.Context) ([]map[string]string, error)
 		return nil, err
 	}
 	defer dbClient.Close()
-	qr, err := dbClient.ExecuteFetch(fmt.Sprintf("select * from _vt.vreplication where db_name=%s", encodeString(vre.dbName)), maxRows)
+	qr, err := dbClient.ExecuteFetch("select * from _vt.vreplication where db_name="+encodeString(vre.dbName), maxRows)
 	if err != nil {
 		return nil, err
 	}

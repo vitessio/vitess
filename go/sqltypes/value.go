@@ -667,7 +667,7 @@ func (v Value) MarshalJSON() ([]byte, error) {
 // It's not a complete implementation.
 func (v *Value) UnmarshalJSON(b []byte) error {
 	if len(b) == 0 {
-		return fmt.Errorf("error unmarshaling empty bytes")
+		return errors.New("error unmarshaling empty bytes")
 	}
 	var val any
 	var err error

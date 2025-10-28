@@ -638,7 +638,7 @@ func TestExecutorShow(t *testing.T) {
 	assert.Equal(t, want, lastQuery, "Got: %v, want %v", lastQuery, want)
 
 	wantqr := showResults
-	utils.MustMatch(t, wantqr, qr, fmt.Sprintf("unexpected results running query: %s", query))
+	utils.MustMatch(t, wantqr, qr, "unexpected results running query: "+query)
 
 	wantErrNoTable := "table unknown_table not found"
 	_, err = executorExecSession(ctx, executor, session, "show create table unknown_table", nil)
@@ -1093,7 +1093,7 @@ func TestExecutorShow(t *testing.T) {
 			buildVarCharRow("TestXBadVSchema/e0-"),
 		},
 	}
-	utils.MustMatch(t, wantqr, qr, fmt.Sprintf("%s, with a bad keyspace", query))
+	utils.MustMatch(t, wantqr, qr, query+", with a bad keyspace")
 
 	query = "show vschema tables"
 	session = econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})

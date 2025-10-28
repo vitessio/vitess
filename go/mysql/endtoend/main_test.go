@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -86,7 +87,7 @@ func runMysql(t *testing.T, params *mysql.ConnParams, command string) (string, b
 	} else {
 		args = append(args,
 			"-h", params.Host,
-			"-P", fmt.Sprintf("%v", params.Port))
+			"-P", strconv.Itoa(params.Port))
 	}
 	if params.Uname != "" {
 		args = append(args, "-u", params.Uname)

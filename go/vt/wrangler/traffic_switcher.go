@@ -356,10 +356,10 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflowNam
 		}
 		if !ts.isPartialMigration { // shard level traffic switching is all or nothing
 			if direction == workflow.DirectionBackward && servedType == topodatapb.TabletType_REPLICA && len(ws.ReplicaCellsSwitched) == 0 {
-				return handleError("invalid request", fmt.Errorf("requesting reversal of read traffic for REPLICAs but REPLICA reads have not been switched"))
+				return handleError("invalid request", errors.New("requesting reversal of read traffic for REPLICAs but REPLICA reads have not been switched"))
 			}
 			if direction == workflow.DirectionBackward && servedType == topodatapb.TabletType_RDONLY && len(ws.RdonlyCellsSwitched) == 0 {
-				return handleError("invalid request", fmt.Errorf("requesting reversal of SwitchReads for RDONLYs but RDONLY reads have not been switched"))
+				return handleError("invalid request", errors.New("requesting reversal of SwitchReads for RDONLYs but RDONLY reads have not been switched"))
 			}
 		}
 		switch servedType {
@@ -636,7 +636,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 		}
 	} else {
 		if cancel {
-			return handleError("invalid cancel", fmt.Errorf("traffic switching has reached the point of no return, cannot cancel"))
+			return handleError("invalid cancel", errors.New("traffic switching has reached the point of no return, cannot cancel"))
 		}
 		ts.Logger().Infof("Journals were found. Completing the left over steps.")
 		// Need to gather positions in case all journals were not created.
@@ -1046,7 +1046,7 @@ func (ts *trafficSwitcher) isPartialMoveTables(sourceShards, targetShards []stri
 
 func getSourceAndTargetKeyRanges(sourceShards, targetShards []string) (*topodatapb.KeyRange, *topodatapb.KeyRange, error) {
 	if len(sourceShards) == 0 || len(targetShards) == 0 {
-		return nil, nil, fmt.Errorf("either source or target shards are missing")
+		return nil, nil, errors.New("either source or target shards are missing")
 	}
 
 	getKeyRange := func(shard string) (*topodatapb.KeyRange, error) {
@@ -1273,7 +1273,7 @@ func (ts *trafficSwitcher) executeLockTablesOnSource(ctx context.Context) error 
 	sb := strings.Builder{}
 	sb.WriteString("LOCK TABLES ")
 	for _, tableName := range ts.Tables() {
-		sb.WriteString(fmt.Sprintf("%s READ,", sqlescape.EscapeID(tableName)))
+		sb.WriteString(sqlescape.EscapeID(tableName) + " READ,")
 	}
 	// Trim extra trailing comma.
 	lockStmt := sb.String()[:sb.Len()-1]
@@ -1747,7 +1747,7 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 		if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 			rules, err := topotools.GetRoutingRules(ctx, ts.TopoServer())
 			if err != nil {
-				rec.RecordError(fmt.Errorf("could not get RoutingRules"))
+				rec.RecordError(errors.New("could not get RoutingRules"))
 			}
 			for fromTable, toTables := range rules {
 				for _, toTable := range toTables {
@@ -1989,7 +1989,7 @@ func (ts *trafficSwitcher) addParticipatingTablesToKeyspace(ctx context.Context,
 		}
 	} else {
 		if vschema.Sharded {
-			return fmt.Errorf("no sharded vschema was provided, so you will need to update the vschema of the target manually for the moved tables")
+			return errors.New("no sharded vschema was provided, so you will need to update the vschema of the target manually for the moved tables")
 		}
 		for _, table := range ts.tables {
 			vschema.Tables[table] = &vschemapb.Table{}

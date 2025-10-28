@@ -17,7 +17,7 @@ limitations under the License.
 package json2
 
 import (
-	"fmt"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -81,7 +81,7 @@ func TestAnnotate(t *testing.T) {
 	}{
 		{
 			data: []byte("invalid JSON"),
-			err:  fmt.Errorf("line: 1, position 1: invalid character 'i' looking for beginning of value"),
+			err:  errors.New("line: 1, position 1: invalid character 'i' looking for beginning of value"),
 		},
 	}
 

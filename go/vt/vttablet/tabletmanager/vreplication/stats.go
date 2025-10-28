@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"maps"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -80,7 +81,7 @@ func (st *vrStats) register() {
 			for _, ct := range st.controllers {
 				state := ct.blpStats.State.Load()
 				if state != nil {
-					result[ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = state.(string)
+					result[ct.workflow+"."+strconv.Itoa(int(ct.id))] = state.(string)
 				}
 			}
 			return result
@@ -95,7 +96,7 @@ func (st *vrStats) register() {
 			defer st.mu.Unlock()
 			result := make(map[string]int64, len(st.controllers))
 			for _, ct := range st.controllers {
-				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.ReplicationLagSeconds.Load()
+				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+strconv.Itoa(int(ct.id))] = ct.blpStats.ReplicationLagSeconds.Load()
 			}
 			return result
 		})
@@ -144,7 +145,7 @@ func (st *vrStats) register() {
 		defer st.mu.Unlock()
 		result := make(map[string]string, len(st.controllers))
 		for _, ct := range st.controllers {
-			result[fmt.Sprintf("%v", ct.id)] = ct.source.Keyspace + "/" + ct.source.Shard
+			result[strconv.Itoa(int(ct.id))] = ct.source.Keyspace + "/" + ct.source.Shard
 		}
 		return result
 	}))
@@ -155,7 +156,7 @@ func (st *vrStats) register() {
 		for _, ct := range st.controllers {
 			ta := ct.sourceTablet.Load()
 			if ta != nil {
-				result[fmt.Sprintf("%v", ct.id)] = ta.(*topodatapb.TabletAlias).String()
+				result[strconv.Itoa(int(ct.id))] = ta.(*topodatapb.TabletAlias).String()
 			}
 		}
 		return result
@@ -170,7 +171,7 @@ func (st *vrStats) register() {
 				hist := rec.(*binlogplayer.StatsHistoryRecord)
 				messages = append(messages, fmt.Sprintf("%s:%s", hist.Time.Format(time.RFC3339Nano), hist.Message))
 			}
-			result[fmt.Sprintf("%v", ct.id)] = strings.Join(messages, "; ")
+			result[strconv.Itoa(int(ct.id))] = strings.Join(messages, "; ")
 		}
 		return result
 	}))
@@ -184,7 +185,7 @@ func (st *vrStats) register() {
 			result := make(map[string]int64, len(st.controllers))
 			for _, ct := range st.controllers {
 				for phase, t := range ct.blpStats.PhaseTimings.Histograms() {
-					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+phase] = t.Total()
+					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+strconv.Itoa(int(ct.id))+"."+phase] = t.Total()
 				}
 			}
 			return result
@@ -214,7 +215,7 @@ func (st *vrStats) register() {
 			result := make(map[string]int64, len(st.controllers))
 			for _, ct := range st.controllers {
 				for phase, t := range ct.blpStats.PhaseTimings.Counts() {
-					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+phase] = t
+					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+strconv.Itoa(int(ct.id))+"."+phase] = t
 				}
 			}
 			return result
@@ -232,7 +233,7 @@ func (st *vrStats) register() {
 					if label == "" {
 						continue
 					}
-					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+label] = count
+					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+strconv.Itoa(int(ct.id))+"."+label] = count
 				}
 			}
 			return result
@@ -266,7 +267,7 @@ func (st *vrStats) register() {
 					if label == "" {
 						continue
 					}
-					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+label] = count
+					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+strconv.Itoa(int(ct.id))+"."+label] = count
 				}
 			}
 			return result
@@ -299,7 +300,7 @@ func (st *vrStats) register() {
 					if label == "" {
 						continue
 					}
-					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+label] = count
+					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+strconv.Itoa(int(ct.id))+"."+label] = count
 				}
 			}
 			return result
@@ -333,7 +334,7 @@ func (st *vrStats) register() {
 					if label == "" {
 						continue
 					}
-					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+label] = count
+					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+strconv.Itoa(int(ct.id))+"."+label] = count
 				}
 			}
 			return result
@@ -363,7 +364,7 @@ func (st *vrStats) register() {
 			defer st.mu.Unlock()
 			result := make(map[string]int64, len(st.controllers))
 			for _, ct := range st.controllers {
-				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.CopyRowCount.Get()
+				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+strconv.Itoa(int(ct.id))] = ct.blpStats.CopyRowCount.Get()
 			}
 			return result
 		})
@@ -390,7 +391,7 @@ func (st *vrStats) register() {
 			defer st.mu.Unlock()
 			result := make(map[string]int64, len(st.controllers))
 			for _, ct := range st.controllers {
-				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.CopyLoopCount.Get()
+				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+strconv.Itoa(int(ct.id))] = ct.blpStats.CopyLoopCount.Get()
 			}
 			return result
 		})
@@ -431,7 +432,7 @@ func (st *vrStats) register() {
 			defer st.mu.Unlock()
 			result := make(map[string]int64, len(st.controllers))
 			for _, ct := range st.controllers {
-				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.Heartbeat()
+				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+strconv.Itoa(int(ct.id))] = ct.blpStats.Heartbeat()
 			}
 			return result
 		})
@@ -449,7 +450,7 @@ func (st *vrStats) register() {
 					if table == "" {
 						continue
 					}
-					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+table] = count
+					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+strconv.Itoa(int(ct.id))+"."+table] = count
 				}
 			}
 			return result
@@ -465,7 +466,7 @@ func (st *vrStats) register() {
 			result := make(map[string]int64, len(st.controllers))
 			for _, ct := range st.controllers {
 				for table, t := range ct.blpStats.TableCopyTimings.Histograms() {
-					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+table] = t.Total()
+					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+strconv.Itoa(int(ct.id))+"."+table] = t.Total()
 				}
 			}
 			return result
@@ -480,7 +481,7 @@ func (st *vrStats) register() {
 			result := make(map[string]int64, len(st.controllers))
 			for _, ct := range st.controllers {
 				for typ, t := range ct.blpStats.PartialQueryCount.Counts() {
-					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+typ] = t
+					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+strconv.Itoa(int(ct.id))+"."+typ] = t
 				}
 			}
 			return result
@@ -495,7 +496,7 @@ func (st *vrStats) register() {
 			result := make(map[string]int64, len(st.controllers))
 			for _, ct := range st.controllers {
 				for typ, t := range ct.blpStats.PartialQueryCacheSize.Counts() {
-					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+typ] = t
+					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+strconv.Itoa(int(ct.id))+"."+typ] = t
 				}
 			}
 			return result

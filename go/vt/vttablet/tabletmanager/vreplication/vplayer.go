@@ -559,11 +559,11 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 							table = event.GetRowEvent().TableName
 						}
 						if table != "" {
-							tableLogMsg = fmt.Sprintf(" for table %s", table)
+							tableLogMsg = " for table " + table
 						}
 						pos := getNextPosition(items, i, j+1)
 						if pos != "" {
-							gtidLogMsg = fmt.Sprintf(" while processing position %s", pos)
+							gtidLogMsg = " while processing position " + pos
 						}
 						log.Errorf("Error applying event%s%s: %s", tableLogMsg, gtidLogMsg, err.Error())
 						err = vterrors.Wrapf(err, "error applying event%s%s", tableLogMsg, gtidLogMsg)
@@ -769,7 +769,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if _, err := vp.updatePos(ctx, event.Timestamp); err != nil {
 				return err
 			}
-			if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at DDL %s", event.Statement)); err != nil {
+			if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, "Stopped at DDL "+event.Statement); err != nil {
 				return err
 			}
 			if err := vp.commit(); err != nil {
@@ -785,7 +785,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 				return err
 			}
 			if stats != nil {
-				stats.Send(fmt.Sprintf("%v", event.Statement))
+				stats.Send(event.Statement)
 			}
 			posReached, err := vp.updatePos(ctx, event.Timestamp)
 			if err != nil {
@@ -799,7 +799,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 				log.Infof("Ignoring error: %v for DDL: %s", err, event.Statement)
 			}
 			if stats != nil {
-				stats.Send(fmt.Sprintf("%v", event.Statement))
+				stats.Send(event.Statement)
 			}
 			posReached, err := vp.updatePos(ctx, event.Timestamp)
 			if err != nil {

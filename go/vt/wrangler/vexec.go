@@ -19,6 +19,7 @@ package wrangler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -405,7 +406,7 @@ func (wr *Wrangler) canRestartWorkflow(ctx context.Context, workflow, keyspace s
 
 		if status.WorkflowSubType == binlogdatapb.VReplicationWorkflowSubType_AtomicCopy.String() &&
 			status.RowsCopied > 0 && len(status.CopyState) > 0 {
-			return fmt.Errorf("cannot restart an atomic copy workflow which previously stopped in the Copying phase")
+			return errors.New("cannot restart an atomic copy workflow which previously stopped in the Copying phase")
 		}
 		break // We only need to check one shard
 	}
@@ -450,7 +451,7 @@ func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, 
 				dryRunChanges.WriteString(fmt.Sprintf("  on_ddl=%q\n", binlogdatapb.OnDDLAction_name[int32(*rpcReq.OnDdl)]))
 			}
 			if !changes {
-				return nil, fmt.Errorf("no updates were provided; use --cells, --tablet-types, or --on-ddl to specify new values")
+				return nil, errors.New("no updates were provided; use --cells, --tablet-types, or --on-ddl to specify new values")
 			}
 			wr.Logger().Printf("The following workflow fields will be updated:\n%s", dryRunChanges.String())
 			wr.Logger().Printf("On the following tablets in the %s keyspace for workflow %s:\n",
@@ -486,7 +487,7 @@ func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, 
 func (wr *Wrangler) WorkflowTagAction(ctx context.Context, keyspace string, workflow string, tags string) (map[*topo.TabletInfo]*sqltypes.Result, error) {
 	// A WHERE clause with the correct workflow name is automatically added
 	// to the query later on in vexec.addDefaultWheres().
-	query := fmt.Sprintf("update _vt.vreplication set tags = %s", encodeString(tags))
+	query := "update _vt.vreplication set tags = " + encodeString(tags)
 	results, err := wr.runVexec(ctx, workflow, keyspace, query, nil, false, nil)
 	return wr.convertQueryResultToSQLTypesResult(results), err
 }

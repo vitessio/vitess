@@ -120,7 +120,7 @@ func TestGroupBy(t *testing.T) {
 	// run queries in both workloads
 	workloads := []string{"oltp", "olap"}
 	for _, workload := range workloads {
-		utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", workload))
+		utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
 		// test ordering and group by int column
 		mcmp.AssertMatches("select id6, id7, count(*) k from t3 group by id6, id7 order by k", `[[INT64(3) INT64(6) INT64(1)] [INT64(2) INT64(4) INT64(2)] [INT64(1) INT64(2) INT64(3)]]`)
 		mcmp.AssertMatches("select id6+id7, count(*) k from t3 group by id6+id7 order by k", `[[INT64(9) INT64(1)] [INT64(6) INT64(2)] [INT64(3) INT64(3)]]`)
@@ -399,7 +399,7 @@ func TestEmptyTableAggr(t *testing.T) {
 
 	for _, workload := range []string{"oltp", "olap"} {
 		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", workload))
+			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
 			mcmp.AssertMatches(" select count(*) from t1 inner join t2 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
 			mcmp.AssertMatches(" select count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
 			mcmp.AssertMatches(" select t1.`name`, count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo' group by t1.`name`", "[]")
@@ -415,7 +415,7 @@ func TestEmptyTableAggr(t *testing.T) {
 
 	for _, workload := range []string{"oltp", "olap"} {
 		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", workload))
+			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
 			mcmp.AssertMatches(" select count(*) from t1 inner join t2 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
 			mcmp.AssertMatches(" select count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
 			mcmp.AssertMatches(" select t1.`name`, count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo' group by t1.`name`", "[]")

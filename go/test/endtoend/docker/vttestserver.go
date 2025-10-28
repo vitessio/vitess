@@ -18,6 +18,7 @@ package docker
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -68,8 +69,8 @@ func (v *vttestserver) startDockerImage() error {
 	cmd.Args = append(cmd.Args, "-p", fmt.Sprintf("%d:%d", v.basePort+1, v.basePort+1))
 	cmd.Args = append(cmd.Args, "-p", fmt.Sprintf("%d:%d", v.basePort+3, v.basePort+3))
 	cmd.Args = append(cmd.Args, "-e", fmt.Sprintf("PORT=%d", v.basePort))
-	cmd.Args = append(cmd.Args, "-e", fmt.Sprintf("KEYSPACES=%s", strings.Join(v.keyspaces, ",")))
-	cmd.Args = append(cmd.Args, "-e", fmt.Sprintf("NUM_SHARDS=%s", strings.Join(convertToStringSlice(v.numShards), ",")))
+	cmd.Args = append(cmd.Args, "-e", "KEYSPACES="+strings.Join(v.keyspaces, ","))
+	cmd.Args = append(cmd.Args, "-e", "NUM_SHARDS="+strings.Join(convertToStringSlice(v.numShards), ","))
 	cmd.Args = append(cmd.Args, "-e", "MYSQL_BIND_HOST=0.0.0.0")
 	cmd.Args = append(cmd.Args, "-e", "VTCOMBO_BIND_HOST=0.0.0.0")
 	cmd.Args = append(cmd.Args, "-e", fmt.Sprintf("MYSQL_MAX_CONNECTIONS=%d", v.mysqlMaxConnecetions))
@@ -103,7 +104,7 @@ func (v *vttestserver) waitUntilDockerHealthy(timeoutDelay int) error {
 		select {
 		case <-timeOut:
 			// return error due to timeout
-			return fmt.Errorf("timed out waiting for docker image to start")
+			return errors.New("timed out waiting for docker image to start")
 		case <-time.After(time.Second):
 			cmd := exec.Command("docker", "inspect", "vttestserver-end2end-test")
 			out, err := cmd.Output()

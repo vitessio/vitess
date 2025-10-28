@@ -80,7 +80,7 @@ func purgeLogsOnce(now time.Time, dir, program string, ctimeDelta time.Duration,
 		current[c] = true
 	}
 
-	files, err := filepath.Glob(path.Join(dir, fmt.Sprintf("%s.*", program)))
+	files, err := filepath.Glob(path.Join(dir, program+".*"))
 	if err != nil {
 		return
 	}

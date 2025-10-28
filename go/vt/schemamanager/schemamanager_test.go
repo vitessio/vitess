@@ -288,14 +288,14 @@ func (client *fakeTabletManagerClient) GetSchema(ctx context.Context, tablet *to
 
 func (client *fakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
 	if client.EnableExecuteFetchAsDbaError {
-		return nil, fmt.Errorf("ExecuteFetchAsDba occur an unknown error")
+		return nil, errors.New("ExecuteFetchAsDba occur an unknown error")
 	}
 	return client.TabletManagerClient.ExecuteFetchAsDba(ctx, tablet, usePool, req)
 }
 
 func (client *fakeTabletManagerClient) ExecuteMultiFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest) ([]*querypb.QueryResult, error) {
 	if client.EnableExecuteFetchAsDbaError {
-		return nil, fmt.Errorf("ExecuteMultiFetchAsDba occur an unknown error")
+		return nil, errors.New("ExecuteMultiFetchAsDba occur an unknown error")
 	}
 	return client.TabletManagerClient.ExecuteMultiFetchAsDba(ctx, tablet, usePool, req)
 }

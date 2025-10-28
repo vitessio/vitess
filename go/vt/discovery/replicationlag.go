@@ -17,7 +17,7 @@ limitations under the License.
 package discovery
 
 import (
-	"fmt"
+	"errors"
 	"sort"
 	"time"
 
@@ -292,7 +292,7 @@ func mean(tabletHealthList []*TabletHealth, idxExclude int) (uint64, error) {
 		count++
 	}
 	if count == 0 {
-		return 0, fmt.Errorf("empty list")
+		return 0, errors.New("empty list")
 	}
 	return sum / count, nil
 }
