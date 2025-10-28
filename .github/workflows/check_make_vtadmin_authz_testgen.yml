@@ -22,10 +22,6 @@ jobs:
           exit 1
         fi
 
-    - name: Tune the OS
-      if: steps.changes.outputs.vtadmin_changes == 'true'
-      uses: ./.github/actions/tune-os
-
     - name: Check out code
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
@@ -46,6 +42,10 @@ jobs:
             - 'Makefile'
             - 'go/vt/vtadmin/**'
             - '.github/workflows/check_make_vtadmin_authz_testgen.yml'
+
+    - name: Tune the OS
+      if: steps.changes.outputs.vtadmin_changes == 'true'
+      uses: ./.github/actions/tune-os
 
     - name: Set up Go
       uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
