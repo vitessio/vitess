@@ -19,6 +19,7 @@ package querythrottler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 )
 
@@ -54,9 +55,17 @@ func NewFileBasedConfigLoaderWithDeps(configPath string, readFile func(string) (
 }
 
 // Load reads the configuration from the configured file path.
+// If the file doesn't exist, it returns a default disabled config to avoid log pollution.
+// This is the expected behavior when throttling is not in use.
 func (f *FileBasedConfigLoader) Load(ctx context.Context) (Config, error) {
 	data, err := f.readFile(f.configPath)
 	if err != nil {
+		// If the file doesn't exist, return a default disabled config
+		// This is normal when throttling is not enabled
+		if errors.Is(err, os.ErrNotExist) {
+			return Config{Enabled: false}, nil
+		}
+		// For other errors (permission denied, etc.), return the error
 		return Config{}, err
 	}
 
