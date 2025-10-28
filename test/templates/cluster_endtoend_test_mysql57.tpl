@@ -98,17 +98,7 @@ jobs:
 
     - name: Tune the OS
       if: steps.changes.outputs.end_to_end == 'true'
-      run: |
-        sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
-
-        # Increase the asynchronous non-blocking I/O. More information at https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_use_native_aio
-        echo "fs.aio-max-nr = 1048576" | sudo tee -a /etc/sysctl.conf
-        sudo sysctl -p /etc/sysctl.conf
-
-        # Don't waste a bunch of time processing man-db triggers
-        echo "set man-db/auto-update false" | sudo debconf-communicate
-        sudo dpkg-reconfigure man-db
-
+      uses: ./.github/actions/tune-os
 
     - name: Get dependencies
       if: steps.changes.outputs.end_to_end == 'true'
@@ -142,7 +132,7 @@ jobs:
         sudo dpkg -i libaio1_0.3.112-13build1_amd64.deb
         sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-client=5.7* mysql-community-server=5.7* mysql-server=5.7* libncurses6
 
-        sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget eatmydata
+        sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
 
         sudo service mysql stop
         sudo service etcd stop
@@ -221,7 +211,7 @@ jobs:
         {{end}}
 
         # run the tests however you normally do, then produce a JUnit XML file
-        eatmydata -- go run test.go -docker={{if .Docker}}true -flavor={{.Platform}}{{else}}false{{end}} -follow -shard {{.Shard}}{{if .PartialKeyspace}} -partial-keyspace=true {{end}} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        go run test.go -docker={{if .Docker}}true -flavor={{.Platform}}{{else}}false{{end}} -follow -shard {{.Shard}}{{if .PartialKeyspace}} -partial-keyspace=true {{end}} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Record test results in launchable if PR is not a draft
       if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main' && !cancelled()
