@@ -51,8 +51,12 @@ type FakePendingResult struct {
 	BroadcastCalls int
 	// WaitCalls can be used to inspect Wait calls.
 	WaitCalls int
-	err       error
-	result    *sqltypes.Result
+	// AddWaiterCounterCalls can be used to inspect AddWaiterCounter calls.
+	AddWaiterCounterCalls []int64
+	// WaiterCount simulates the current waiter count
+	WaiterCount int64
+	err         error
+	result      *sqltypes.Result
 }
 
 var (
@@ -112,3 +116,13 @@ func (fr *FakePendingResult) SetResult(result *sqltypes.Result) {
 func (fr *FakePendingResult) Wait() {
 	fr.WaitCalls++
 }
+<<<<<<< HEAD
+=======
+
+// AddWaiterCounter records the call and simulates waiter count changes.
+func (fr *FakePendingResult) AddWaiterCounter(delta int64) *int64 {
+	fr.AddWaiterCounterCalls = append(fr.AddWaiterCounterCalls, delta)
+	fr.WaiterCount += delta
+	return &fr.WaiterCount
+}
+>>>>>>> 5203ed482a (Fix bug where query consolidator returns empty result without error when the waiter cap exceeded (#18782))

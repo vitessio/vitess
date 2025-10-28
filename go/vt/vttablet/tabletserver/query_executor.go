@@ -691,6 +691,7 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 	// Check tablet type.
 	if qre.shouldConsolidate() {
 		q, original := qre.tsv.qe.consolidator.Create(sqlWithoutComments)
+		waiterCapExceeded := false
 		if original {
 			defer q.Broadcast()
 			conn, err := qre.getConn()
@@ -704,15 +705,34 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 				q.SetErr(err)
 			}
 		} else {
+<<<<<<< HEAD
 			qre.logStats.QuerySources |= tabletenv.QuerySourceConsolidator
 			startTime := time.Now()
 			q.Wait()
 			qre.tsv.stats.WaitTimings.Record("Consolidations", startTime)
+=======
+			waiterCap := qre.tsv.config.ConsolidatorQueryWaiterCap
+			if waiterCap == 0 || *q.AddWaiterCounter(0) <= waiterCap {
+				qre.logStats.QuerySources |= tabletenv.QuerySourceConsolidator
+				startTime := time.Now()
+				q.Wait()
+				qre.tsv.stats.WaitTimings.Record("Consolidations", startTime)
+			} else {
+				// Waiter cap exceeded, fall back to independent query execution
+				waiterCapExceeded = true
+			}
+			q.AddWaiterCounter(-1)
+>>>>>>> 5203ed482a (Fix bug where query consolidator returns empty result without error when the waiter cap exceeded (#18782))
 		}
-		if q.Err() != nil {
-			return nil, q.Err()
+
+		// Return consolidation results unless waiter cap was exceeded
+		if !waiterCapExceeded {
+			if q.Err() != nil {
+				return nil, q.Err()
+			}
+			return q.Result(), nil
 		}
-		return q.Result(), nil
+		// If waiter cap exceeded, fall through to independent execution
 	}
 	conn, err := qre.getConn()
 	if err != nil {
