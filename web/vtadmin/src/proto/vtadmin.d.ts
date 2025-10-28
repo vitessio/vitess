@@ -80769,6 +80769,13 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** TableCopyPhase enum. */
+    enum TableCopyPhase {
+        COMPLETE = 0,
+        INPROGRESS = 1,
+        NOTSTARTED = 2
+    }
+
     /** Properties of a WorkflowStatusResponse. */
     interface IWorkflowStatusResponse {
 
@@ -80900,6 +80907,9 @@ export namespace vtctldata {
 
             /** TableCopyState bytes_percentage */
             bytes_percentage?: (number|null);
+
+            /** TableCopyState phase */
+            phase?: (vtctldata.TableCopyPhase|null);
         }
 
         /** Represents a TableCopyState. */
@@ -80928,6 +80938,9 @@ export namespace vtctldata {
 
             /** TableCopyState bytes_percentage. */
             public bytes_percentage: number;
+
+            /** TableCopyState phase. */
+            public phase: vtctldata.TableCopyPhase;
 
             /**
              * Creates a new TableCopyState instance using the specified properties.

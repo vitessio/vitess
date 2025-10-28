@@ -2177,6 +2177,12 @@ message WorkflowStatusRequest {
   repeated string shards = 3;
 }
 
+enum TableCopyPhase {
+  COMPLETE = 0;
+  INPROGRESS = 1;
+  NOTSTARTED = 2;
+}
+
 message WorkflowStatusResponse {
   message TableCopyState {
     int64 rows_copied = 1;
@@ -2185,6 +2191,7 @@ message WorkflowStatusResponse {
     int64 bytes_copied = 4;
     int64 bytes_total = 5;
     float bytes_percentage = 6;
+    TableCopyPhase phase = 7;
   }
   message ShardStreamState {
     int32 id = 1;

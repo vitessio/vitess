@@ -85,6 +85,7 @@ var tabletTypeSuffixes = []string{primaryTabletSuffix, replicaTabletSuffix, rdon
 type tableCopyProgress struct {
 	TargetRowCount, TargetTableSize int64
 	SourceRowCount, SourceTableSize int64
+	Phase                           vtctldatapb.TableCopyPhase
 }
 
 // copyProgress stores the tableCopyProgress for all tables still being copied
@@ -1685,6 +1686,7 @@ func (s *Server) WorkflowStatus(ctx context.Context, req *vtctldatapb.WorkflowSt
 			resp.TableCopyState[table].BytesCopied = progress.TargetTableSize
 			resp.TableCopyState[table].BytesTotal = progress.SourceTableSize
 			resp.TableCopyState[table].BytesPercentage = tableSizePct
+			resp.TableCopyState[table].Phase = progress.Phase
 		}
 	}
 
@@ -1757,7 +1759,7 @@ func (s *Server) getCopyProgress(ctx context.Context, ts *trafficSwitcher) (*cop
 	}
 	getTablesQuery := "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = %d"
 	getRowCountQuery := "select table_name, table_rows, data_length from information_schema.tables where table_schema = %s and table_name in (%s)"
-	var inProgressTables []string
+	var inProgressTables = make(map[string]struct{})
 	var mu sync.Mutex
 	err := ts.ForAllTargets(func(target *MigrationTarget) error {
 		for id := range target.Sources {
@@ -1781,7 +1783,7 @@ func (s *Server) getCopyProgress(ctx context.Context, ts *trafficSwitcher) (*cop
 				func() {
 					mu.Lock()
 					defer mu.Unlock()
-					inProgressTables = append(inProgressTables, qr.Rows[i][0].ToString())
+					inProgressTables[qr.Rows[i][0].ToString()] = struct{}{}
 				}()
 			}
 		}
@@ -1878,11 +1880,20 @@ func (s *Server) getCopyProgress(ctx context.Context, ts *trafficSwitcher) (*cop
 
 	copyProgress := copyProgress{}
 	for table, rowCount := range targetRowCounts {
+		var phase vtctldatapb.TableCopyPhase
+		if _, ok := inProgressTables[table]; !ok {
+			phase = vtctldatapb.TableCopyPhase_COMPLETE
+		} else if rowCount == 0 {
+			phase = vtctldatapb.TableCopyPhase_NOTSTARTED
+		} else {
+			phase = vtctldatapb.TableCopyPhase_INPROGRESS
+		}
 		copyProgress[table] = &tableCopyProgress{
 			TargetRowCount:  rowCount,
 			TargetTableSize: targetTableSizes[table],
 			SourceRowCount:  sourceRowCounts[table],
 			SourceTableSize: sourceTableSizes[table],
+			Phase:           phase,
 		}
 	}
 	return &copyProgress, nil
