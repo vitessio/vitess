@@ -298,7 +298,6 @@ func getBuildTags(buildTags map[string]string, skipTagsCSV string) (map[string]s
 	skipTags := strings.Split(skipTagsCSV, ",")
 	skippers := make([]func(string) bool, len(skipTags))
 	for i, skipTag := range skipTags {
-		skipTag := skipTag // copy to preserve iteration scope in the closures below
 		if strings.HasPrefix(skipTag, "/") && strings.HasSuffix(skipTag, "/") && len(skipTag) > 1 {
 			// regexp mode
 			tagRegexp, err := regexp.Compile(skipTag[1 : len(skipTag)-1])

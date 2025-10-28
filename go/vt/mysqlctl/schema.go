@@ -114,7 +114,6 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, request *tab
 	tableNames := make([]string, 0, len(tds))
 	for _, td := range tds {
 		tableNames = append(tableNames, td.Name)
-		td := td
 
 		eg.Go(func() error {
 			fields, columns, schema, err := mysqld.collectSchema(ctx, dbName, td.Name, td.Type, request.TableSchemaOnly)
