@@ -69,7 +69,6 @@ func testVcopierTestCases(t *testing.T, test func(*testing.T), cases []vcopierTe
 	}()
 
 	for _, tc := range cases {
-		tc := tc // Avoid export loop bugs.
 		// Set test flags.
 		vttablet.DefaultVReplicationConfig.ExperimentalFlags = tc.vreplicationExperimentalFlags
 		vttablet.DefaultVReplicationConfig.ParallelInsertWorkers = tc.vreplicationParallelInsertWorkers

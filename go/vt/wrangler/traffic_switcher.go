@@ -2107,7 +2107,6 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 	searchGroup, gctx := errgroup.WithContext(ctx)
 	searchCompleted := make(chan struct{})
 	for _, keyspace := range keyspaces {
-		keyspace := keyspace // https://golang.org/doc/faq#closures_and_goroutines
 		searchGroup.Go(func() error {
 			return searchKeyspace(gctx, searchCompleted, keyspace)
 		})
@@ -2297,7 +2296,6 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 
 	initGroup, gctx := errgroup.WithContext(ctx)
 	for sequenceTableName, sequenceMetadata := range sequencesByBackingTable {
-		sequenceTableName, sequenceMetadata := sequenceTableName, sequenceMetadata // https://golang.org/doc/faq#closures_and_goroutines
 		initGroup.Go(func() error {
 			return initSequenceTable(gctx, sequenceTableName, sequenceMetadata)
 		})
