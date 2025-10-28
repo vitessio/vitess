@@ -178,7 +178,6 @@ func TestFKExt(t *testing.T) {
 	t.Run("Validate materialize counts at end of test", func(t *testing.T) {
 		validateMaterializeRowCounts(t)
 	})
-
 }
 
 // checkRowCounts checks that the parent and child tables in the source and target shards have the same number of rows.

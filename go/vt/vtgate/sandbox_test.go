@@ -340,7 +340,6 @@ func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string, callba
 				if !callback(update.Value, update.Err) {
 					panic("sandboxTopo callback returned false")
 				}
-
 			}
 		}
 	}()

@@ -155,7 +155,6 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 	}
 
 	return fmt.Errorf("process '%s' timed out after 60s (err: %s)", mysqlctld.Name, mysqlctld.Stop())
-
 }
 
 // Stop executes mysqlctld command to stop mysql instance

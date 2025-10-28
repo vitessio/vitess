@@ -119,7 +119,6 @@ func (tfe *TestFieldEvent) String() string {
 			}
 		}
 		fe.Fields = append(fe.Fields, field)
-
 	}
 	if !ignoreKeyspaceShardInFieldAndRowEvents {
 		fe.Keyspace = testenv.DBName

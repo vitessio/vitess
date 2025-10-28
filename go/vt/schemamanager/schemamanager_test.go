@@ -232,7 +232,6 @@ func TestSchemaManagerRegisterControllerFactory(t *testing.T) {
 			"test_controller",
 			func(params map[string]string) (Controller, error) {
 				return newFakeController([]string{sql}, false, false, false), nil
-
 			})
 	}()
 }

@@ -307,7 +307,6 @@ func NewConnParams(port int, password, socketPath, keyspace string) mysql.ConnPa
 	}
 
 	return cp
-
 }
 
 // WriteDbCredentialToTmp writes JSON formatted db credentials to the

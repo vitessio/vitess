@@ -104,7 +104,6 @@ func (r *earlyRewriter) up(cursor *sqlparser.Cursor) error {
 		if node.Type == sqlparser.HavingClause {
 			return r.handleHavingClause(node, cursor.Parent())
 		}
-
 	}
 	return nil
 }

@@ -213,7 +213,6 @@ func getShardRanges(ks string, vschema *vschemapb.Keyspace, ksShardMap map[strin
 			shards = append(shards, ref)
 		}
 		return shards, nil
-
 	}
 
 	numShards := 1

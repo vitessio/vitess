@@ -12,6 +12,7 @@ linters:
     - ineffassign
     - perfsprint
     - staticcheck
+    - whitespace
   settings:
     depguard:
       rules:
@@ -100,11 +101,6 @@ linters:
         - (*vitess.io/vitess/go/bytes2.Buffer).WriteByte
         - (*vitess.io/vitess/go/bytes2.Buffer).WriteString
         - (vitess.io/vitess/go/sqltypes.BinWriter).Write
-        - vitess.io/vitess/go/vt/orchestrator/external/golib/log.Errore
-        - vitess.io/vitess/go/vt/orchestrator/external/golib/log.Errorf
-        - vitess.io/vitess/go/vt/orchestrator/external/golib/log.Fatal
-        - vitess.io/vitess/go/vt/orchestrator/external/golib/log.Fatale
-        - vitess.io/vitess/go/vt/orchestrator/external/golib/log.Fatalf
         - (*vitess.io/vitess/go/vt/vttest.LocalCluster).TearDown
     govet:
       disable:
@@ -162,12 +158,6 @@ linters:
       - linters:
           - errcheck
         path: ^go/vt/mysqlctl/
-      - linters:
-          - errcheck
-        path: ^go/vt/orchestrator/
-      - linters:
-          - errcheck
-        path: ^go/vt/orchestrator/external/
       - linters:
           - errcheck
         path: ^go/vt/schemamanager/

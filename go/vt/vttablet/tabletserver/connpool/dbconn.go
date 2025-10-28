@@ -242,7 +242,6 @@ func (dbc *Conn) FetchNext(ctx context.Context, maxrows int, wantfields bool) (*
 		return nil, err
 	}
 	return res, err
-
 }
 
 // Stream executes the query and streams the results.

@@ -1690,7 +1690,6 @@ func TestResolveVStreamParams(t *testing.T) {
 			require.Equal(t, minimizeSkew, flags2.MinimizeSkew)
 		})
 	}
-
 }
 
 func TestVStreamIdleHeartbeat(t *testing.T) {

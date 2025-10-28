@@ -173,7 +173,6 @@ func BenchmarkXXHash(b *testing.B) {
 		b.Run(name, func(b *testing.B) {
 			benchmarkXXHashBytes(b, input)
 		})
-
 	}
 }
 

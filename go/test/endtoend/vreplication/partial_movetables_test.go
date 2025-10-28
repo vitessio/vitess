@@ -79,7 +79,6 @@ func testCancel(t *testing.T) {
 	mt.Cancel()
 	checkDenyList(targetKeyspace, false)
 	checkDenyList(sourceKeyspace, false)
-
 }
 
 func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {

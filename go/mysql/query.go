@@ -444,12 +444,10 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 			return nil, false, 0, sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
 		}
 		if c.isEOFPacket(data) {
-
 			// This is what we expect.
 			// Warnings and status flags are ignored.
 			c.recycleReadPacket()
 			// goto: read row loop
-
 		} else if isErrorPacket(data) {
 			defer c.recycleReadPacket()
 			return nil, false, 0, ParseErrorPacket(data)
@@ -496,7 +494,6 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 				result.Info = packetEof.info
 			}
 			return result, more, warnings, nil
-
 		} else if isErrorPacket(data) {
 			defer c.recycleReadPacket()
 			// Error packet.

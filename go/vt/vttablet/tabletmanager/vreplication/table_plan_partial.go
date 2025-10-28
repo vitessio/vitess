@@ -115,7 +115,6 @@ func (tpb *tablePlanBuilder) generatePartialSelectPart(buf *sqlparser.TrackedBuf
 		buf.Myprintf("%s", separator)
 		separator = ", "
 		buf.Myprintf("%v", cexpr.expr)
-
 	}
 	buf.WriteString(" from dual where ")
 	tpb.generatePKConstraint(buf, bvf)

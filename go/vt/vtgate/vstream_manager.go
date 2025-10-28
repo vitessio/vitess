@@ -224,7 +224,6 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 // resolveParams provides defaults for the inputs if they're not specified.
 func (vsm *vstreamManager) resolveParams(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid,
 	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags) (*binlogdatapb.VGtid, *binlogdatapb.Filter, *vtgatepb.VStreamFlags, error) {
-
 	if filter == nil {
 		filter = &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{
@@ -842,7 +841,6 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		}
 		log.Infof("vstream for %s/%s error, retrying: %v", sgtid.Keyspace, sgtid.Shard, err)
 	}
-
 }
 
 // maybeUpdateTableNames updates table names when the ExcludeKeyspaceFromTableName flag is disabled.

@@ -108,7 +108,6 @@ func TestCallProcedureInsideTx(t *testing.T) {
 
 	_, err = client.Execute(`select 1`, nil)
 	require.Contains(t, err.Error(), "ended")
-
 }
 
 func TestCallProcedureInsideReservedConn(t *testing.T) {

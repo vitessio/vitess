@@ -165,5 +165,4 @@ func (sa *ScalarAggregate) description() PrimitiveDescription {
 		Variant:      "Scalar",
 		Other:        other,
 	}
-
 }

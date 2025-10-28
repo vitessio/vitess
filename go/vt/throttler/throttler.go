@@ -155,7 +155,6 @@ func newThrottler(manager *managerImpl, name, unit string, threadCount int, maxR
 	config.MaxReplicationLagSec = maxReplicationLag
 
 	return newThrottlerFromConfig(manager, name, unit, threadCount, maxRate, config, nowFunc)
-
 }
 
 func newThrottlerFromConfig(manager *managerImpl, name, unit string, threadCount int, maxRateModuleMaxRate int64, maxReplicationLagModuleConfig MaxReplicationLagModuleConfig, nowFunc func() time.Time) (Throttler, error) {

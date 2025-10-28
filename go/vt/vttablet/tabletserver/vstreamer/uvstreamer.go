@@ -102,7 +102,6 @@ type uvstreamerConfig struct {
 func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se *schema.Engine, startPos string,
 	tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, vschema *localVSchema,
 	throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions) *uvstreamer {
-
 	ctx, cancel := context.WithCancel(ctx)
 	config := &uvstreamerConfig{
 		MaxReplicationLag: 1 * time.Nanosecond,
@@ -201,7 +200,6 @@ func (uvs *uvstreamer) buildTablePlan() error {
 		plan.tablePK = tablePK
 		uvs.plans[tableName] = plan
 		uvs.tablesToCopy = append(uvs.tablesToCopy, tableName)
-
 	}
 	sort.Strings(uvs.tablesToCopy)
 	return nil
@@ -214,7 +212,6 @@ func matchTable(tableName string, filter *binlogdatapb.Filter, tables map[string
 	}
 	found := false
 	for _, rule := range filter.Rules {
-
 		switch {
 		case tableName == rule.Match:
 			found = true

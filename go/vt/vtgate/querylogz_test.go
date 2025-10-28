@@ -147,7 +147,6 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 	close(ch)
 	body, _ = io.ReadAll(response.Body)
 	checkQuerylogzHasStats(t, slowQueryPattern, logStats, body)
-
 }
 
 func checkQuerylogzHasStats(t *testing.T, pattern []string, logStats *logstats.LogStats, page []byte) {

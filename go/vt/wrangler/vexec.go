@@ -172,7 +172,6 @@ func (wr *Wrangler) VExec(ctx context.Context, workflow, keyspace, query string,
 func (wr *Wrangler) runVexec(ctx context.Context, workflow, keyspace, query string,
 	callback func(context.Context, *topo.TabletInfo) (*querypb.QueryResult, error),
 	dryRun bool, shards []string) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
-
 	vx := newVExec(ctx, workflow, keyspace, query, wr)
 
 	if err := vx.getPrimaries(shards); err != nil {
@@ -814,7 +813,6 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string, s
 			} else {
 				if lastTransactionTimestamp == 0 /* no new events after copy */ ||
 					lastHeartbeatTime > lastTransactionTimestamp /* no recent transactions, so all caught up */ {
-
 					lastTransactionTimestamp = lastHeartbeatTime
 				}
 				now := time.Now().Unix() /*seconds since epoch*/

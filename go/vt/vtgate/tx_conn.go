@@ -589,7 +589,6 @@ func (txc *TxConn) rollbackTx(ctx context.Context, dtid string, mmShard *vtgatep
 		return err
 	}
 	return txc.tabletGateway.ConcludeTransaction(ctx, mmShard.Target, dtid)
-
 }
 
 func (txc *TxConn) rollbackMM(ctx context.Context, dtid string, mmShard *vtgatepb.Session_ShardSession) error {

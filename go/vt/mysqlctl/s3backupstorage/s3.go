@@ -101,7 +101,6 @@ var (
 )
 
 func registerFlags(fs *pflag.FlagSet) {
-
 	utils.SetFlagStringVar(fs, &region, "s3-backup-aws-region", "us-east-1", "AWS region to use.")
 	utils.SetFlagIntVar(fs, &retryCount, "s3-backup-aws-retries", -1, "AWS request retries.")
 	utils.SetFlagStringVar(fs, &endpoint, "s3-backup-aws-endpoint", "", "endpoint of the S3 backend (region must be provided).")
