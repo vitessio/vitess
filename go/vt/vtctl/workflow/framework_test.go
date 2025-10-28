@@ -948,7 +948,7 @@ func checkCellRouting(t *testing.T, ws *Server, cell string, want map[string][]s
 	require.EqualValues(t, got, want, "routing rules don't match for cell %s: got: %v, want: %v", cell, got, want)
 }
 
-func checkDenyList(t *testing.T, ts *topo.Server, keyspace, shard string, want []string) {
+func checkDenyList(t *testing.T, ts *topo.Server, keyspace, shard string, wantDeniedTables []string, wantAllowReadsFromDeniedTables bool) {
 	t.Helper()
 	ctx := context.Background()
 	si, err := ts.GetShard(ctx, keyspace, shard)
@@ -958,7 +958,10 @@ func checkDenyList(t *testing.T, ts *topo.Server, keyspace, shard string, want [
 	if tc != nil {
 		got = tc.DeniedTables
 	}
-	require.EqualValues(t, got, want, "denied tables for %s/%s: got: %v, want: %v", keyspace, shard, got, want)
+	require.EqualValues(t, got, wantDeniedTables, "denied tables for %s/%s: got: %v, want: %v", keyspace, shard, got, wantDeniedTables)
+	if tc != nil {
+		require.Equal(t, tc.AllowReads, wantAllowReadsFromDeniedTables, "allow reads for %s/%s: got: %v, want: %v", keyspace, shard, tc.AllowReads, wantAllowReadsFromDeniedTables)
+	}
 }
 
 func checkServedTypes(t *testing.T, ts *topo.Server, keyspace, shard string, want int) {
