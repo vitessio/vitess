@@ -1842,7 +1842,7 @@ func (s *Server) getCopyProgress(ctx context.Context, ts *trafficSwitcher) (*cop
 		break
 	}
 	if sourceDbName == "" {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no sources found")
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no source database found")
 	}
 	targetDbName := ""
 	for _, tsTarget := range ts.targets {

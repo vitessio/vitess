@@ -22,10 +22,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/exp/maps"
+	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/vt/key"
@@ -277,6 +280,22 @@ func OutputStatusResponse(resp *vtctldatapb.WorkflowStatusResponse, format strin
 				tout.WriteString(fmt.Sprintf("id=%d on %s/%s: Status: %s. %s.\n",
 					shardstream.Id, BaseOptions.TargetKeyspace, tablet, shardstream.Status, shardstream.Info))
 			}
+		}
+		if len(resp.TableCopyState) > 0 {
+			tables := maps.Keys(resp.TableCopyState)
+			sort.Strings(tables) // Ensure that the output is intuitive and consistent
+			tout.WriteString("\nTable Copy Status: ")
+			for _, table := range tables {
+				tout.WriteString("\n\t")
+				tout.WriteString(table)
+				tout.WriteString(": ")
+				st, err := prototext.Marshal(resp.TableCopyState[table])
+				if err != nil {
+					return err
+				}
+				tout.Write(st)
+			}
+			tout.WriteString("\n")
 		}
 		tout.WriteString("\nTraffic State: ")
 		tout.WriteString(resp.TrafficState)
