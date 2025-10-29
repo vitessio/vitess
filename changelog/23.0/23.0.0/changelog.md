@@ -19,6 +19,8 @@
  * fix topo use in local_example [#18357](https://github.com/vitessio/vitess/pull/18357) 
 #### General
  * Fix golang-ci lint file to allow a version without preceding `v` [#18110](https://github.com/vitessio/vitess/pull/18110) 
+#### Observability
+ * [release-23.0] Improve cgroup metric management (#18791) [#18801](https://github.com/vitessio/vitess/pull/18801) 
 #### Online DDL
  * Online DDL: resume vreplication after cut-over/RENAME failure [#18428](https://github.com/vitessio/vitess/pull/18428) 
 #### Query Serving
@@ -62,7 +64,9 @@
  * VReplication: Fix bug while reading _vt.vreplication record [#18478](https://github.com/vitessio/vitess/pull/18478)
  * VReplication: Fix some switch writes related issues and logging [#18608](https://github.com/vitessio/vitess/pull/18608)
  * Vstreamer: idempotent gtid set (bugfix) [#18611](https://github.com/vitessio/vitess/pull/18611)
- * VStream: Try new tablet on purged binlog error [#18710](https://github.com/vitessio/vitess/pull/18710) 
+ * VStream: Try new tablet on purged binlog error [#18710](https://github.com/vitessio/vitess/pull/18710)
+ * [release-23.0] VReplication: Ensure proper handling of keyspace/database names with dashes (#18762) [#18773](https://github.com/vitessio/vitess/pull/18773)
+ * [release-23.0] VReplication: Treat ER_BINLOG_CREATE_ROUTINE_NEED_SUPER as unrecoverable (#18784) [#18820](https://github.com/vitessio/vitess/pull/18820) 
 #### VTCombo
  * Flags migration: Make --vschema-ddl-authorized-users dependent on version [#18637](https://github.com/vitessio/vitess/pull/18637) 
 #### VTGate
@@ -75,7 +79,9 @@
  * Fix: Deadlock in `Close` and `write` in semi-sync monitor. [#18359](https://github.com/vitessio/vitess/pull/18359)
  * [Bugfix] Broken Heartbeat system in Row Streamer [#18390](https://github.com/vitessio/vitess/pull/18390)
  * Reset in-memory sequence info on vttablet on UpdateSequenceTables request [#18415](https://github.com/vitessio/vitess/pull/18415)
- * Allow empty passwords for unmanaged tablet configuration [#18448](https://github.com/vitessio/vitess/pull/18448) 
+ * Allow empty passwords for unmanaged tablet configuration [#18448](https://github.com/vitessio/vitess/pull/18448)
+ * [release-23.0] repltracker: reset replica lag when we are primary (#18800) [#18807](https://github.com/vitessio/vitess/pull/18807)
+ * [release-23.0] Fix bug where query consolidator returns empty result without error when the waiter cap exceeded (#18782) [#18833](https://github.com/vitessio/vitess/pull/18833) 
 #### vtctl
  * fix: Fix `GenerateShardRanges` returning shard names that don't cover the full range [#18641](https://github.com/vitessio/vitess/pull/18641) 
 #### vtctldclient
@@ -88,7 +94,8 @@
  * Try updating the create PR workflow step [#18563](https://github.com/vitessio/vitess/pull/18563)
  * Update MySQL 8.4 to be the default [#18569](https://github.com/vitessio/vitess/pull/18569)
  * Update additional jobs to use 8.4 [#18592](https://github.com/vitessio/vitess/pull/18592)
- * Fix golden tests after disabling proto randomness hack #18325 [#18671](https://github.com/vitessio/vitess/pull/18671) 
+ * Fix golden tests after disabling proto randomness hack #18325 [#18671](https://github.com/vitessio/vitess/pull/18671)
+ * [release-23.0] ci: use the newest mysql apt config package (#18790) [#18794](https://github.com/vitessio/vitess/pull/18794) 
 #### Docker
  * docker: add trixie and rm bullseye from build matrix [#18609](https://github.com/vitessio/vitess/pull/18609)
  * build `lite:mysql80` docker image [#18692](https://github.com/vitessio/vitess/pull/18692)
@@ -99,6 +106,8 @@
  * [main] Upgrade the Golang version to `go1.24.4` [#18327](https://github.com/vitessio/vitess/pull/18327)
  * [main] Upgrade the Golang version to `go1.25.0` [#18573](https://github.com/vitessio/vitess/pull/18573)
  * [main] Upgrade the Golang version to `go1.25.1` [#18622](https://github.com/vitessio/vitess/pull/18622) 
+#### Java
+ * [release-23.0] update java packages to use central instead of ossrh (#18765) [#18767](https://github.com/vitessio/vitess/pull/18767) 
 #### VReplication
  * Split workflow with flaky vdiff2 e2e test. Skip flaky Migrate test. [#18300](https://github.com/vitessio/vitess/pull/18300)
 ### Dependencies 
@@ -115,7 +124,6 @@
  * Bump @babel/runtime from 7.26.0 to 7.27.6 in /web/vtadmin [#18467](https://github.com/vitessio/vitess/pull/18467)
  * Bump form-data from 4.0.1 to 4.0.4 in /web/vtadmin [#18473](https://github.com/vitessio/vitess/pull/18473)
  * Bump vite from 4.5.9 to 4.5.14 in /web/vtadmin [#18485](https://github.com/vitessio/vitess/pull/18485)
- * [release-23.0] Address `Moderate` dependabot vulns in VTAdmin (#18744) [#18750](https://github.com/vitessio/vitess/pull/18750)
 ### Documentation 
 #### Documentation
  * copy edit release notes to prepare for v22 GA [#18186](https://github.com/vitessio/vitess/pull/18186)
@@ -256,7 +264,8 @@
  * `vtorc`: rename `ReplicationAnalysis` -> `DetectionAnalysis` [#18615](https://github.com/vitessio/vitess/pull/18615)
  * `vtorc`: cleanup timeout `context.Context` in keyspace/shard refresh [#18643](https://github.com/vitessio/vitess/pull/18643)
  * `vtorc`: add `Reason` and missing cases to `SkippedRecoveries` metric [#18644](https://github.com/vitessio/vitess/pull/18644)
- * `vtorc`: remove aggregated discovery metrics HTTP API, cleanup code [#18672](https://github.com/vitessio/vitess/pull/18672) 
+ * `vtorc`: remove aggregated discovery metrics HTTP API, cleanup code [#18672](https://github.com/vitessio/vitess/pull/18672)
+ * [release-23.0] `vtorc`: address CodeQL scanning alerts (#18753) [#18756](https://github.com/vitessio/vitess/pull/18756) 
 #### schema management
  * tablet manager's `ExecuteFetchAsDba` does not allow multiple queries [#18183](https://github.com/vitessio/vitess/pull/18183) 
 #### vtclient
@@ -289,6 +298,18 @@
  * [main] Copy `v21.0.5` release notes [#18381](https://github.com/vitessio/vitess/pull/18381)
  * [main] Copy `v20.0.8` release notes [#18383](https://github.com/vitessio/vitess/pull/18383)
  * [release-23.0] Code Freeze for `v23.0.0-RC1` [#18729](https://github.com/vitessio/vitess/pull/18729)
+ * [release-23.0] Release of `v23.0.0-RC1` [#18755](https://github.com/vitessio/vitess/pull/18755)
+### Security 
+#### Backup and Restore
+ * [release-23.0] Address dir traversal in file backup storage `GetBackups` RPC (#18814) [#18818](https://github.com/vitessio/vitess/pull/18818) 
+#### Java
+ * [release-23.0] Resolve `commons-lang` vulnerability in Java driver (#18768) [#18797](https://github.com/vitessio/vitess/pull/18797) 
+#### VTAdmin
+ * [release-23.0] Address `Moderate` dependabot vulns in VTAdmin (#18744) [#18750](https://github.com/vitessio/vitess/pull/18750)
+ * [release-23.0] vtadmin: upgrade vite to the latest (#18803) [#18812](https://github.com/vitessio/vitess/pull/18812) 
+#### vtctldclient
+ * [release-23.0] Potential fix for code scanning alert no. 2992: Clear-text logging of sensitive information (#18754) [#18760](https://github.com/vitessio/vitess/pull/18760)
+ * [release-23.0] `vtctldclient GetPermissions`: hide `authentication_string` from response (#18771) [#18799](https://github.com/vitessio/vitess/pull/18799)
 ### Testing 
 #### Build/CI
  * flaky test fix TestTrackerNoLock and TestCreateLookupVindexMultipleCreate [#18317](https://github.com/vitessio/vitess/pull/18317)
