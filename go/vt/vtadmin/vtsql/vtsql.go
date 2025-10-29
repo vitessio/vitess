@@ -178,7 +178,7 @@ func (vtgate *VTGateProxy) ShowTablets(ctx context.Context) (*sql.Rows, error) {
 
 	vtadminproto.AnnotateClusterSpan(vtgate.cluster, span)
 
-	// The caller must run .Close() if the *sql.Rows != nil.
+	// The caller must run .Close() if the *sql.Rows != nil. We will suppress the sqlclosecheck linter here.
 	return vtgate.conn.QueryContext(vtgate.getQueryContext(ctx), "SHOW vitess_tablets") //nolint:sqlclosecheck
 }
 
