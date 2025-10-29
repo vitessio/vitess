@@ -1232,7 +1232,7 @@ func (e *Executor) getCachedOrBuildPlan(
 	planKey engine.PlanKey,
 	ignoreCache bool,
 ) (plan *engine.Plan, cached bool, stmt sqlparser.Statement, err error) {
-	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
+	stmt, reservedVars, err := parseAndValidateQuery(query, e.vConfig.SafeUpdateMode, e.env.Parser())
 	if err != nil {
 		return nil, false, nil, err
 	}
@@ -1474,6 +1474,38 @@ func isValidPayloadSize(query string) bool {
 	return true
 }
 
+// IsValidDeleteOrUpdateQuery validation delete/update request if there is a where clause,
+// with the where returns true, no returns false
+func isValidDeleteOrUpdateQuery(stmt sqlparser.Statement) bool {
+	types := sqlparser.ASTToStatementType(stmt)
+	if types == sqlparser.StmtDelete {
+		var flag = false
+		_ = sqlparser.VisitSQLNode(stmt, func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			switch node.(type) {
+			case *sqlparser.Where:
+				flag = true
+				return false, nil
+			}
+			return true, nil
+		})
+		return flag
+	}
+
+	if types == sqlparser.StmtUpdate {
+		var flag = false
+		_ = sqlparser.VisitSQLNode(stmt, func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			switch node.(type) {
+			case *sqlparser.Where:
+				flag = true
+				return false, nil
+			}
+			return true, nil
+		})
+		return flag
+	}
+	return true
+}
+
 // Prepare executes a prepare statements.
 func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econtext.SafeSession, sql string) (fld []*querypb.Field, paramsCount uint16, err error) {
 	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
@@ -1548,6 +1580,7 @@ func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVer
 		ForeignKeyMode:     fkMode(foreignKeyMode),
 		EnableShardRouting: enableShardRouting,
 		WarnShardedOnly:    warnOnShardedOnly,
+		SafeUpdateMode:     safeUpdate,
 
 		DBDDLPlugin: dbDDLPlugin,
 
@@ -1641,13 +1674,17 @@ func buildNullFieldTypes(stmt sqlparser.Statement) ([]*querypb.Field, uint16, bo
 	return fields, countArguments(stmt), true
 }
 
-func parseAndValidateQuery(query string, parser *sqlparser.Parser) (sqlparser.Statement, *sqlparser.ReservedVars, error) {
+func parseAndValidateQuery(query string, safeUpdateMode bool, parser *sqlparser.Parser) (sqlparser.Statement, *sqlparser.ReservedVars, error) {
 	stmt, reserved, err := parser.Parse2(query)
 	if err != nil {
 		return nil, nil, err
 	}
 	if !sqlparser.IgnoreMaxPayloadSizeDirective(stmt) && !isValidPayloadSize(query) {
 		return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "query payload size above threshold")
+	}
+
+	if safeUpdateMode && !isValidDeleteOrUpdateQuery(stmt) {
+		return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonWhereClause, "You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column.")
 	}
 	return stmt, sqlparser.NewReservedVars("vtg", reserved), nil
 }
