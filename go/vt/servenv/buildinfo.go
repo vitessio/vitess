@@ -90,7 +90,7 @@ func (v *versionInfo) String() string {
 		if v.buildSystem != "" {
 			buildInfo = fmt.Sprintf(" (%s build %d)", v.buildSystem, v.buildNumber)
 		} else {
-			buildInfo = fmt.Sprintf(" (Jenkins build %d)", v.buildNumber)
+			buildInfo = fmt.Sprintf(" (build %d)", v.buildNumber)
 		}
 	}
 	return fmt.Sprintf("Version: %s%s (Git revision %s branch '%s') built on %s by %s@%s using %s %s/%s",
