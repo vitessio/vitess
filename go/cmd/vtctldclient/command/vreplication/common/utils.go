@@ -17,7 +17,6 @@ limitations under the License.
 package common
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -263,45 +262,45 @@ func GetTabletSelectionPreference(cmd *cobra.Command) tabletmanagerdatapb.Tablet
 }
 
 func OutputStatusResponse(resp *vtctldatapb.WorkflowStatusResponse, format string) error {
-	var output []byte
-	var err error
 	if format == "json" {
-		output, err = cli.MarshalJSONPretty(resp)
+		output, err := cli.MarshalJSONPretty(resp)
 		if err != nil {
 			return err
 		}
-	} else {
-		tout := bytes.Buffer{}
-		tout.WriteString(fmt.Sprintf("The following vreplication streams exist for workflow %s.%s:\n\n",
-			BaseOptions.TargetKeyspace, BaseOptions.Workflow))
-		for _, shardstreams := range resp.ShardStreams {
-			for _, shardstream := range shardstreams.Streams {
-				tablet := fmt.Sprintf("%s-%d", shardstream.Tablet.Cell, shardstream.Tablet.Uid)
-				tout.WriteString(fmt.Sprintf("id=%d on %s/%s: Status: %s. %s.\n",
-					shardstream.Id, BaseOptions.TargetKeyspace, tablet, shardstream.Status, shardstream.Info))
-			}
-		}
-		if len(resp.TableCopyState) > 0 {
-			tables := maps.Keys(resp.TableCopyState)
-			sort.Strings(tables) // Ensure that the output is intuitive and consistent
-			tout.WriteString("\nTable Copy Status: ")
-			for _, table := range tables {
-				tout.WriteString("\n\t")
-				tout.WriteString(table)
-				tout.WriteString(": ")
-				st, err := prototext.Marshal(resp.TableCopyState[table])
-				if err != nil {
-					return err
-				}
-				tout.Write(st)
-			}
-			tout.WriteString("\n")
-		}
-		tout.WriteString("\nTraffic State: ")
-		tout.WriteString(resp.TrafficState)
-		output = tout.Bytes()
+		fmt.Println(string(output))
+		return nil
 	}
-	fmt.Println(string(output))
+
+	// Plain text formatted output.
+	tout := strings.Builder{}
+	tout.WriteString(fmt.Sprintf("The following vreplication streams exist for workflow %s.%s:\n\n",
+		BaseOptions.TargetKeyspace, BaseOptions.Workflow))
+	for _, shardstreams := range resp.ShardStreams {
+		for _, shardstream := range shardstreams.Streams {
+			tablet := fmt.Sprintf("%s-%d", shardstream.Tablet.Cell, shardstream.Tablet.Uid)
+			tout.WriteString(fmt.Sprintf("id=%d on %s/%s: Status: %s. %s.\n",
+				shardstream.Id, BaseOptions.TargetKeyspace, tablet, shardstream.Status, shardstream.Info))
+		}
+	}
+	if len(resp.TableCopyState) > 0 {
+		tables := maps.Keys(resp.TableCopyState)
+		sort.Strings(tables) // Ensure that the output is intuitive and consistent
+		tout.WriteString("\nTable Copy Status: ")
+		for _, table := range tables {
+			tout.WriteString("\n\t")
+			tout.WriteString(table)
+			tout.WriteString(": ")
+			st, err := prototext.Marshal(resp.TableCopyState[table])
+			if err != nil {
+				return err
+			}
+			tout.Write(st)
+		}
+		tout.WriteString("\n")
+	}
+	tout.WriteString("\nTraffic State: ")
+	tout.WriteString(resp.TrafficState)
+	fmt.Println(tout.String())
 	return nil
 }
 
