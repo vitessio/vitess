@@ -76,19 +76,14 @@ jobs:
 
     - name: Tune the OS
       if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
-      run: |
-        sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
-
-        # Don't waste a bunch of time processing man-db triggers
-        echo "set man-db/auto-update false" | sudo debconf-communicate
-        sudo dpkg-reconfigure man-db
+      uses: ./.github/actions/tune-os
 
     - name: Get base dependencies
       timeout-minutes: 10
       if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
       run: |
         sudo apt-get update
-        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd-client etcd-server curl git wget eatmydata
+        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd-client etcd-server curl git wget
         
         sudo service mysql stop
         sudo service etcd stop
@@ -170,7 +165,7 @@ jobs:
         mkdir -p /tmp/vtdataroot
         set -x
         source build.env
-        eatmydata -- go run test.go -skip-build -docker=false -print-log -follow -tag upgrade_downgrade_backups
+        go run test.go -skip-build -docker=false -print-log -follow -tag upgrade_downgrade_backups
 
     # Swap binaries again, use current version's VTTablet, and next release's VTBackup
     - name: Use current version VTTablet, and other version VTBackup
@@ -194,4 +189,4 @@ jobs:
         mkdir -p /tmp/vtdataroot
         set -x
         source build.env
-        eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -tag upgrade_downgrade_backups
+        go run test.go -skip-build -keep-data -docker=false -print-log -follow -tag upgrade_downgrade_backups
