@@ -11,6 +11,7 @@ linters:
     - govet
     - ineffassign
     - perfsprint
+    - sqlclosecheck
     - staticcheck
   settings:
     depguard:
@@ -155,6 +156,7 @@ linters:
         path: ^go/stats/statsd/
       - linters:
           - errcheck
+          - sqlclosecheck
         path: ^go/test/
       - linters:
           - errcheck
