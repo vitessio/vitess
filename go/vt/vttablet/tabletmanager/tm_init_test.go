@@ -1036,12 +1036,21 @@ func TestInitTabletTypeLookup_PreservesPrimaryWithTermTime(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// 3. Restart with flag enabled - should preserve PRIMARY and term start time
+	// 3. Update shard's PrimaryAlias to point to this tablet so checkPrimaryShip will promote it
+	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = alias
+		si.PrimaryTermStartTime = protoutil.TimeToProto(now)
+		return nil
+	})
+	require.NoError(t, err)
+
+	// 4. Restart with flag enabled - should set to REPLICA initially, then checkPrimaryShip promotes to PRIMARY
 	initTabletTypeLookup = true
 	err = tm.Start(tablet, nil)
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
+	// Should be promoted to PRIMARY by checkPrimaryShip and preserve the term start time
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
 	assert.Equal(t, now.Unix(), ti.GetPrimaryTermStartTime().Unix())
 	tm.Stop()
