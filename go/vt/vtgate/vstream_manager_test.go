@@ -1748,6 +1748,84 @@ func TestVStreamIdleHeartbeat(t *testing.T) {
 	}
 }
 
+func TestVStreamLivenessChecks(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	cell := "aa"
+	ks := "TestVStream"
+	_ = createSandbox(ks)
+	hc := discovery.NewFakeHealthCheck(nil)
+	st := getSandboxTopo(ctx, cell, ks, []string{"-20"})
+	vsm := newTestVStreamManager(ctx, hc, st, cell)
+	origLivenessTimeout := livenessTimeout
+	defer func() {
+		livenessTimeout = origLivenessTimeout
+	}()
+	fakeTablet := hc.AddTestTablet("aa", "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	addTabletToSandboxTopo(t, ctx, st, fakeTablet.Tablet().Keyspace, fakeTablet.Tablet().Shard, fakeTablet.Tablet())
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: fakeTablet.Tablet().Keyspace,
+			Shard:    fakeTablet.Tablet().Shard,
+		}},
+	}
+
+	type testcase struct {
+		name            string
+		livenessTimeout time.Duration
+		// We use simulated tablet vstreamer heartbeats as a substitute for the hardcoded 900ms
+		// heartbeats that come from a real tablet server's vstreamer because we have no real
+		// tablet server here.
+		simulateVstreamerHeartbeats bool
+		wantErr                     string
+	}
+	testcases := []testcase{
+		{
+			name:            "should fail liveness check",
+			livenessTimeout: 100 * time.Millisecond,
+			wantErr:         fmt.Sprintf("vstream is fully throttled or otherwise hung: vstream failed liveness checks as there was no activity, including heartbeats, within the last %v", 100*time.Millisecond),
+		},
+		{
+			name:                        "should not fail liveness check",
+			livenessTimeout:             100 * time.Millisecond,
+			simulateVstreamerHeartbeats: true,
+		},
+	}
+
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			vstreamCtx, vstreamCancel := context.WithTimeout(ctx, tcase.livenessTimeout*2)
+			defer vstreamCancel()
+
+			livenessTimeout = tcase.livenessTimeout
+			if tcase.simulateVstreamerHeartbeats {
+				// We need to ensure that there's a steady stream of vtgate<-vttablet vstream heartbeat
+				// events so that we stay within the defined livenessTimeout and the stream ends when
+				// the vstreamCtx times out.
+				numEvents := tcase.livenessTimeout.Nanoseconds() / 1e5
+				for range numEvents {
+					event := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_HEARTBEAT}
+					fakeTablet.AddVStreamEvents([]*binlogdatapb.VEvent{event}, nil)
+				}
+				origVStreamEventDelay := fakeTablet.VStreamEventDelay
+				defer func() {
+					fakeTablet.VStreamEventDelay = origVStreamEventDelay
+				}()
+				fakeTablet.VStreamEventDelay = time.Duration((tcase.livenessTimeout.Nanoseconds() / numEvents) * 2)
+			}
+
+			err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
+				return nil
+			})
+			if tcase.wantErr == "" {
+				// Then we expect the context ended error, which means that no real errors occurred
+				// in the stream.
+				tcase.wantErr = "context ended while sending events: context deadline exceeded"
+			}
+			require.EqualError(t, err, tcase.wantErr)
+		})
+	}
+}
+
 func TestKeyspaceHasBeenSharded(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 
