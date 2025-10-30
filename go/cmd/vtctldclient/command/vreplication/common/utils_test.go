@@ -336,6 +336,7 @@ Traffic State: Reads Not Switched. Writes Not Switched
 `,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			origStdout := os.Stdout
@@ -344,6 +345,7 @@ Traffic State: Reads Not Switched. Writes Not Switched
 			}()
 			r, w, _ := os.Pipe()
 			os.Stdout = w
+
 			err := common.OutputStatusResponse(tt.resp, tt.format)
 			w.Close()
 			require.NoError(t, err)
