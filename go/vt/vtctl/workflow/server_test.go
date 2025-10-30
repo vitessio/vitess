@@ -2364,11 +2364,11 @@ func TestWorkflowStatus(t *testing.T) {
 	assert.Equal(t, int64(200), stateTable2.RowsTotal)
 	assert.Equal(t, int64(100), stateTable2.RowsCopied)
 	assert.Equal(t, float32(50), stateTable2.RowsPercentage)
-	assert.Equal(t, vtctldatapb.TableCopyPhase_INPROGRESS, stateTable2.Phase)
+	assert.Equal(t, vtctldatapb.TableCopyPhase_IN_PROGRESS, stateTable2.Phase)
 	assert.Equal(t, int64(5000), stateTable3.RowsTotal)
 	assert.Equal(t, int64(0), stateTable3.RowsCopied)
 	assert.Equal(t, float32(0), stateTable3.RowsPercentage)
-	assert.Equal(t, vtctldatapb.TableCopyPhase_NOTSTARTED, stateTable3.Phase)
+	assert.Equal(t, vtctldatapb.TableCopyPhase_NOT_STARTED, stateTable3.Phase)
 }
 
 func TestDeleteShard(t *testing.T) {

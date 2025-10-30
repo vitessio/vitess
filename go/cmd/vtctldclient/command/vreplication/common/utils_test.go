@@ -17,7 +17,10 @@ limitations under the License.
 package common_test
 
 import (
+	"bytes"
 	"context"
+	"io"
+	"os"
 	"testing"
 	"time"
 
@@ -33,6 +36,9 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 func TestParseAndValidateCreateOptions(t *testing.T) {
@@ -151,4 +157,140 @@ func SetupLocalVtctldClient(t *testing.T, ctx context.Context, cells ...string) 
 	client, err := vtctldclient.New(ctx, command.VtctldClientProtocol, "")
 	require.NoError(t, err, "failed to create local vtctld client which uses an internal vtctld server")
 	common.SetClient(client)
+}
+
+func TestOutputStatusResponse(t *testing.T) {
+	cell := "zone1"
+	tests := []struct {
+		name   string
+		resp   *vtctldatapb.WorkflowStatusResponse
+		want   string
+		format string
+	}{
+		{
+			name: "text",
+			resp: &vtctldatapb.WorkflowStatusResponse{
+				TableCopyState: map[string]*vtctldatapb.WorkflowStatusResponse_TableCopyState{
+					"table1": {
+						RowsCopied:      20,
+						RowsTotal:       20,
+						RowsPercentage:  100,
+						BytesCopied:     1000,
+						BytesTotal:      1000,
+						BytesPercentage: 100,
+						Phase:           vtctldatapb.TableCopyPhase_COMPLETE,
+					},
+					"table2": {
+						RowsCopied:      10,
+						RowsTotal:       50,
+						RowsPercentage:  20,
+						BytesCopied:     1000,
+						BytesTotal:      5000,
+						BytesPercentage: 20,
+						Phase:           vtctldatapb.TableCopyPhase_IN_PROGRESS,
+					},
+					"table3": {
+						RowsCopied:      0,
+						RowsTotal:       2000,
+						RowsPercentage:  0,
+						BytesCopied:     0,
+						BytesTotal:      200000,
+						BytesPercentage: 0,
+						Phase:           vtctldatapb.TableCopyPhase_NOT_STARTED,
+					},
+				},
+				ShardStreams: map[string]*vtctldatapb.WorkflowStatusResponse_ShardStreams{
+					"customer/0": {
+						Streams: []*vtctldatapb.WorkflowStatusResponse_ShardStreamState{
+							{
+								Id: 1,
+								Tablet: &topodatapb.TabletAlias{
+									Cell: cell,
+									Uid:  1,
+								},
+								SourceShard: "commerce/0",
+								Position:    "f3918180-b58f-11f0-9085-360472309971:1-29655",
+								Status:      "Copying",
+								Info:        "VStream Lag: -1s; ; Tx time: Thu Oct 30 13:05:02 2025.",
+							},
+						},
+					},
+				},
+				TrafficState: "Reads Not Switched. Writes Not Switched",
+			},
+			want: "The following vreplication streams exist for workflow .:\n\nid=1 on /zone1-1: Status: Copying. VStream Lag: -1s; ; Tx time: Thu Oct 30 13:05:02 2025..\n\nTable Copy Status: \n\ttable1: RowsCopied:20, RowsTotal:20, RowsPercentage:100.00, BytesCopied:1000, BytesTotal:1000, BytesPercentage:100.00, Phase:COMPLETE\n\ttable2: RowsCopied:10, RowsTotal:50, RowsPercentage:20.00, BytesCopied:1000, BytesTotal:5000, BytesPercentage:20.00, Phase:IN_PROGRESS\n\ttable3: RowsCopied:0, RowsTotal:2000, RowsPercentage:0.00, BytesCopied:0, BytesTotal:200000, BytesPercentage:0.00, Phase:NOT_STARTED\n\nTraffic State: Reads Not Switched. Writes Not Switched\n",
+		},
+		{
+			name: "text",
+			resp: &vtctldatapb.WorkflowStatusResponse{
+				TableCopyState: map[string]*vtctldatapb.WorkflowStatusResponse_TableCopyState{
+					"table1": {
+						RowsCopied:      20,
+						RowsTotal:       20,
+						RowsPercentage:  100,
+						BytesCopied:     1000,
+						BytesTotal:      1000,
+						BytesPercentage: 100,
+						Phase:           vtctldatapb.TableCopyPhase_COMPLETE,
+					},
+					"table2": {
+						RowsCopied:      10,
+						RowsTotal:       50,
+						RowsPercentage:  20,
+						BytesCopied:     1000,
+						BytesTotal:      5000,
+						BytesPercentage: 20,
+						Phase:           vtctldatapb.TableCopyPhase_IN_PROGRESS,
+					},
+					"table3": {
+						RowsCopied:      0,
+						RowsTotal:       2000,
+						RowsPercentage:  0,
+						BytesCopied:     0,
+						BytesTotal:      200000,
+						BytesPercentage: 0,
+						Phase:           vtctldatapb.TableCopyPhase_NOT_STARTED,
+					},
+				},
+				ShardStreams: map[string]*vtctldatapb.WorkflowStatusResponse_ShardStreams{
+					"customer/0": {
+						Streams: []*vtctldatapb.WorkflowStatusResponse_ShardStreamState{
+							{
+								Id: 1,
+								Tablet: &topodatapb.TabletAlias{
+									Cell: cell,
+									Uid:  1,
+								},
+								SourceShard: "commerce/0",
+								Position:    "f3918180-b58f-11f0-9085-360472309971:1-29655",
+								Status:      "Copying",
+								Info:        "VStream Lag: -1s; ; Tx time: Thu Oct 30 13:05:02 2025.",
+							},
+						},
+					},
+				},
+				TrafficState: "Reads Not Switched. Writes Not Switched",
+			},
+			format: "json",
+			want:   "{\n  \"table_copy_state\": {\n    \"table1\": {\n      \"rows_copied\": \"20\",\n      \"rows_total\": \"20\",\n      \"rows_percentage\": 100,\n      \"bytes_copied\": \"1000\",\n      \"bytes_total\": \"1000\",\n      \"bytes_percentage\": 100,\n      \"phase\": \"COMPLETE\"\n    },\n    \"table2\": {\n      \"rows_copied\": \"10\",\n      \"rows_total\": \"50\",\n      \"rows_percentage\": 20,\n      \"bytes_copied\": \"1000\",\n      \"bytes_total\": \"5000\",\n      \"bytes_percentage\": 20,\n      \"phase\": \"IN_PROGRESS\"\n    },\n    \"table3\": {\n      \"rows_copied\": \"0\",\n      \"rows_total\": \"2000\",\n      \"rows_percentage\": 0,\n      \"bytes_copied\": \"0\",\n      \"bytes_total\": \"200000\",\n      \"bytes_percentage\": 0,\n      \"phase\": \"NOT_STARTED\"\n    }\n  },\n  \"shard_streams\": {\n    \"customer/0\": {\n      \"streams\": [\n        {\n          \"id\": 1,\n          \"tablet\": {\n            \"cell\": \"zone1\",\n            \"uid\": 1\n          },\n          \"source_shard\": \"commerce/0\",\n          \"position\": \"f3918180-b58f-11f0-9085-360472309971:1-29655\",\n          \"status\": \"Copying\",\n          \"info\": \"VStream Lag: -1s; ; Tx time: Thu Oct 30 13:05:02 2025.\"\n        }\n      ]\n    }\n  },\n  \"traffic_state\": \"Reads Not Switched. Writes Not Switched\"\n}\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			origStdout := os.Stdout
+			defer func() {
+				os.Stdout = origStdout
+			}()
+			r, w, _ := os.Pipe()
+			os.Stdout = w
+			err := common.OutputStatusResponse(tt.resp, tt.format)
+			w.Close()
+			require.NoError(t, err)
+			var buf bytes.Buffer
+			_, err = io.Copy(&buf, r)
+			require.NoError(t, err)
+			output := buf.String()
+			require.Equal(t, tt.want, output)
+		})
+	}
 }

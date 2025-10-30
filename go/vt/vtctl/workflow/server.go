@@ -1676,9 +1676,13 @@ func (s *Server) WorkflowStatus(ctx context.Context, req *vtctldatapb.WorkflowSt
 			progress = *(*copyProgress)[table]
 			if progress.SourceRowCount > 0 {
 				rowCountPct = float32(100.0 * float64(progress.TargetRowCount) / float64(progress.SourceRowCount))
+			} else {
+				rowCountPct = 100.0
 			}
 			if progress.SourceTableSize > 0 {
 				tableSizePct = float32(100.0 * float64(progress.TargetTableSize) / float64(progress.SourceTableSize))
+			} else {
+				tableSizePct = 100.0
 			}
 			resp.TableCopyState[table].RowsCopied = progress.TargetRowCount
 			resp.TableCopyState[table].RowsTotal = progress.SourceRowCount
@@ -1884,9 +1888,9 @@ func (s *Server) getCopyProgress(ctx context.Context, ts *trafficSwitcher) (*cop
 		if _, ok := inProgressTables[table]; !ok {
 			phase = vtctldatapb.TableCopyPhase_COMPLETE
 		} else if rowCount == 0 {
-			phase = vtctldatapb.TableCopyPhase_NOTSTARTED
+			phase = vtctldatapb.TableCopyPhase_NOT_STARTED
 		} else {
-			phase = vtctldatapb.TableCopyPhase_INPROGRESS
+			phase = vtctldatapb.TableCopyPhase_IN_PROGRESS
 		}
 		copyProgress[table] = &tableCopyProgress{
 			TargetRowCount:  rowCount,

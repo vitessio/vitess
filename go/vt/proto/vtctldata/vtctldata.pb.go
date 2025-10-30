@@ -207,22 +207,22 @@ func (ShardedAutoIncrementHandling) EnumDescriptor() ([]byte, []int) {
 type TableCopyPhase int32
 
 const (
-	TableCopyPhase_COMPLETE   TableCopyPhase = 0
-	TableCopyPhase_INPROGRESS TableCopyPhase = 1
-	TableCopyPhase_NOTSTARTED TableCopyPhase = 2
+	TableCopyPhase_COMPLETE    TableCopyPhase = 0
+	TableCopyPhase_IN_PROGRESS TableCopyPhase = 1
+	TableCopyPhase_NOT_STARTED TableCopyPhase = 2
 )
 
 // Enum value maps for TableCopyPhase.
 var (
 	TableCopyPhase_name = map[int32]string{
 		0: "COMPLETE",
-		1: "INPROGRESS",
-		2: "NOTSTARTED",
+		1: "IN_PROGRESS",
+		2: "NOT_STARTED",
 	}
 	TableCopyPhase_value = map[string]int32{
-		"COMPLETE":   0,
-		"INPROGRESS": 1,
-		"NOTSTARTED": 2,
+		"COMPLETE":    0,
+		"IN_PROGRESS": 1,
+		"NOT_STARTED": 2,
 	}
 )
 
@@ -18667,13 +18667,11 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x05LEAVE\x10\x00\x12\n" +
 	"\n" +
 	"\x06REMOVE\x10\x01\x12\v\n" +
-	"\aREPLACE\x10\x02*>\n" +
+	"\aREPLACE\x10\x02*@\n" +
 	"\x0eTableCopyPhase\x12\f\n" +
-	"\bCOMPLETE\x10\x00\x12\x0e\n" +
-	"\n" +
-	"INPROGRESS\x10\x01\x12\x0e\n" +
-	"\n" +
-	"NOTSTARTED\x10\x02B(Z&vitess.io/vitess/go/vt/proto/vtctldatab\x06proto3"
+	"\bCOMPLETE\x10\x00\x12\x0f\n" +
+	"\vIN_PROGRESS\x10\x01\x12\x0f\n" +
+	"\vNOT_STARTED\x10\x02B(Z&vitess.io/vitess/go/vt/proto/vtctldatab\x06proto3"
 
 var (
 	file_vtctldata_proto_rawDescOnce sync.Once

@@ -27,7 +27,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"golang.org/x/exp/maps"
-	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/vt/key"
@@ -287,14 +286,19 @@ func OutputStatusResponse(resp *vtctldatapb.WorkflowStatusResponse, format strin
 		sort.Strings(tables) // Ensure that the output is intuitive and consistent
 		tout.WriteString("\nTable Copy Status: ")
 		for _, table := range tables {
+			// Unfortunately we cannot use the prototext marshaler here as it has no option
+			// to emit unpopulated fields.
+			tcs := resp.TableCopyState[table]
 			tout.WriteString("\n\t")
 			tout.WriteString(table)
 			tout.WriteString(": ")
-			st, err := prototext.Marshal(resp.TableCopyState[table])
-			if err != nil {
-				return err
-			}
-			tout.Write(st)
+			tout.WriteString(fmt.Sprintf("RowsCopied:%d, ", tcs.RowsCopied))
+			tout.WriteString(fmt.Sprintf("RowsTotal:%d, ", tcs.RowsTotal))
+			tout.WriteString(fmt.Sprintf("RowsPercentage:%.2f, ", tcs.RowsPercentage))
+			tout.WriteString(fmt.Sprintf("BytesCopied:%d, ", tcs.BytesCopied))
+			tout.WriteString(fmt.Sprintf("BytesTotal:%d, ", tcs.BytesTotal))
+			tout.WriteString(fmt.Sprintf("BytesPercentage:%.2f, ", tcs.BytesPercentage))
+			tout.WriteString(fmt.Sprintf("Phase:%s", tcs.Phase))
 		}
 		tout.WriteString("\n")
 	}
