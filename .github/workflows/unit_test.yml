@@ -1,6 +1,6 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Unit Test (mysql80)
+name: Unit Test (mysql57)
 on:
   push:
     branches:
@@ -10,7 +10,7 @@ on:
   pull_request:
     branches: '**'
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Unit Test (mysql80)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Unit Test (mysql57)')
   cancel-in-progress: true
 
 permissions: read-all
@@ -22,7 +22,15 @@ env:
 
 jobs:
   test:
-    name: Unit Test (mysql80)
+    strategy:
+      matrix:
+        flavor: [mysql57, mysql80, mysql84]
+        race: false
+        include:
+          - flavor: mysql80
+            race: true
+
+    name: Unit Test (${{ if matrix.race }}${{ matrix.flavor }}Race${{ else }}${{ matrix.flavor }}${{ endif }})
     runs-on: ubuntu-24.04
 
     steps:
@@ -56,7 +64,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
-            - '.github/workflows/unit_test_mysql80.yml'
+            - '.github/workflows/unit_test_mysql57.yml'
 
     - name: Set up Go
       if: steps.changes.outputs.unit_tests == 'true'
@@ -76,7 +84,7 @@ jobs:
       if: steps.changes.outputs.unit_tests == 'true'
       uses: ./.github/actions/setup-mysql
       with:
-        flavor: mysql-8.0
+        flavor: mysql-5.7
         
     - name: Get dependencies
       if: steps.changes.outputs.unit_tests == 'true'
@@ -125,9 +133,9 @@ jobs:
         export VTEVALENGINETEST="0"
         # We sometimes need to alter the behavior based on the platform we're
         # testing, e.g. MySQL 5.7 vs 8.0.
-        export CI_DB_PLATFORM="mysql80"
+        export CI_DB_PLATFORM="${{ matrix.flavor }}"
 
-        make unit_test | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        make unit_test${{ if matrix.race }}_race{{ end }} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Record test results in launchable if PR is not a draft
       if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.unit_tests == 'true' && github.base_ref == 'main' && !cancelled()
