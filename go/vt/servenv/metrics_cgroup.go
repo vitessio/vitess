@@ -20,13 +20,14 @@ limitations under the License.
 package servenv
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/containerd/cgroups"
-	"github.com/containerd/cgroups/v3/cgroup1"
 	"github.com/containerd/cgroups/v3/cgroup2"
 	"github.com/shirou/gopsutil/v4/mem"
 
@@ -34,75 +35,52 @@ import (
 )
 
 var (
-	cgroup2Manager *cgroup2.Manager
-	cgroup1Manager cgroup1.Cgroup
-	lastCpu        uint64
-	lastTime       time.Time
+	once                         sync.Once
+	cgroupManager                *cgroup2.Manager
+	lastCpu                      uint64
+	lastTime                     time.Time
+	errCgroupMetricsNotAvailable = errors.New("cgroup metrics are not available")
 )
 
-func init() {
-	if cgroups.Mode() == cgroups.Unified {
-		manager, err := getCgroup2()
-		if err != nil {
-			log.Errorf("Failed to init cgroup2 manager: %v", err)
-		}
-		cgroup2Manager = manager
-		lastCpu, err = getCgroup2CpuUsage()
-		if err != nil {
-			log.Errorf("Failed to init cgroup2 cpu %v", err)
-		}
-	} else {
-		cgroup, err := getCgroup1()
-		if err != nil {
-			log.Errorf("Failed to init cgroup1 manager: %v", err)
-		}
-		cgroup1Manager = cgroup
-		lastCpu, err = getCgroup1CpuUsage()
-		if err != nil {
-			log.Errorf("Failed to init cgroup1 cpu %v", err)
-		}
+func setup() {
+	if cgroups.Mode() != cgroups.Unified {
+		log.Warning("cgroup metrics are only supported with cgroup v2, will use host metrics")
+		return
+	}
+	manager, err := getCgroupManager()
+	if err != nil {
+		log.Warningf("Failed to init cgroup manager for metrics, will use host metrics: %v", err)
+	}
+	cgroupManager = manager
+	lastCpu, err = getCurrentCgroupCpuUsage()
+	if err != nil {
+		log.Warningf("Failed to get initial cgroup CPU usage: %v", err)
 	}
 	lastTime = time.Now()
 }
 
-func isCgroupV2() bool {
-	return cgroups.Mode() == cgroups.Unified
-}
-
-func getCgroup1() (cgroup1.Cgroup, error) {
-	path := cgroup1.NestedPath("")
-	cgroup, err := cgroup1.Load(path)
-	if err != nil {
-		return nil, fmt.Errorf("cgroup1 manager is nil")
-	}
-	return cgroup, nil
-}
-
-func getCgroup2() (*cgroup2.Manager, error) {
+func getCgroupManager() (*cgroup2.Manager, error) {
 	path, err := cgroup2.NestedGroupPath("")
 	if err != nil {
-		return nil, fmt.Errorf("failed to load cgroup2 manager: %w", err)
+		return nil, fmt.Errorf("failed to build nested cgroup paths: %w", err)
 	}
 	cgroupManager, err := cgroup2.Load(path)
 	if err != nil {
-		return nil, fmt.Errorf("cgroup2 manager is nil")
+		return nil, fmt.Errorf("failed to load cgroup manager: %w", err)
 	}
 	return cgroupManager, nil
 }
 
 func getCgroupCpuUsage() (float64, error) {
+	once.Do(setup)
 	var (
 		currentUsage uint64
 		err          error
 	)
 	currentTime := time.Now()
-	if isCgroupV2() {
-		currentUsage, err = getCgroup2CpuUsage()
-	} else {
-		currentUsage, err = getCgroup1CpuUsage()
-	}
+	currentUsage, err = getCurrentCgroupCpuUsage()
 	if err != nil {
-		return -1, fmt.Errorf("Could not read cpu usage")
+		return -1, fmt.Errorf("failed to read current cgroup CPU usage: %w", err)
 	}
 	duration := currentTime.Sub(lastTime)
 	usage, err := getCpuUsageFromSamples(lastCpu, currentUsage, duration)
@@ -114,27 +92,13 @@ func getCgroupCpuUsage() (float64, error) {
 	return usage, nil
 }
 
-func getCgroupMemoryUsage() (float64, error) {
-	if isCgroupV2() {
-		return getCgroup2MemoryUsage()
-	} else {
-		return getCgroup1MemoryUsage()
+func getCurrentCgroupCpuUsage() (uint64, error) {
+	if cgroupManager == nil {
+		return 0, errCgroupMetricsNotAvailable
 	}
-}
-
-func getCgroup1CpuUsage() (uint64, error) {
-	stat1, err := cgroup1Manager.Stat()
+	stat1, err := cgroupManager.Stat()
 	if err != nil {
-		return 0, fmt.Errorf("failed to get initial CPU stat: %w", err)
-	}
-	currentUsage := stat1.CPU.Usage.Total
-	return currentUsage, nil
-}
-
-func getCgroup2CpuUsage() (uint64, error) {
-	stat1, err := cgroup2Manager.Stat()
-	if err != nil {
-		return 0, fmt.Errorf("failed to get initial CPU stat: %w", err)
+		return 0, fmt.Errorf("failed to get initial cgroup CPU stats: %w", err)
 	}
 	currentUsage := stat1.CPU.UsageUsec
 	return currentUsage, nil
@@ -142,7 +106,7 @@ func getCgroup2CpuUsage() (uint64, error) {
 
 func getCpuUsageFromSamples(usage1 uint64, usage2 uint64, interval time.Duration) (float64, error) {
 	if usage1 == 0 && usage2 == 0 {
-		return -1, fmt.Errorf("CPU usage for both samples is zero")
+		return -1, errors.New("CPU usage for both samples is zero")
 	}
 
 	deltaUsage := usage2 - usage1
@@ -154,20 +118,14 @@ func getCpuUsageFromSamples(usage1 uint64, usage2 uint64, interval time.Duration
 	return cpuUsage, nil
 }
 
-func getCgroup1MemoryUsage() (float64, error) {
-	stats, err := cgroup1Manager.Stat()
-	if err != nil {
-		return -1, fmt.Errorf("failed to get cgroup2 stats: %w", err)
+func getCgroupMemoryUsage() (float64, error) {
+	once.Do(setup)
+	if cgroupManager == nil {
+		return -1, errCgroupMetricsNotAvailable
 	}
-	usage := stats.Memory.Usage.Usage
-	limit := stats.Memory.Usage.Limit
-	return computeMemoryUsage(usage, limit)
-}
-
-func getCgroup2MemoryUsage() (float64, error) {
-	stats, err := cgroup2Manager.Stat()
+	stats, err := cgroupManager.Stat()
 	if err != nil {
-		return -1, fmt.Errorf("failed to get cgroup2 stats: %w", err)
+		return -1, fmt.Errorf("failed to get cgroup stats: %w", err)
 	}
 	usage := stats.Memory.Usage
 	limit := stats.Memory.UsageLimit
@@ -176,15 +134,15 @@ func getCgroup2MemoryUsage() (float64, error) {
 
 func computeMemoryUsage(usage uint64, limit uint64) (float64, error) {
 	if usage == 0 || usage == math.MaxUint64 {
-		return -1, fmt.Errorf("Failed to find memory usage with invalid value: %d", usage)
+		return -1, fmt.Errorf("invalid memory usage value: %d", usage)
 	}
 	if limit == 0 {
-		return -1, fmt.Errorf("Failed to compute memory usage with invalid limit: %d", limit)
+		return -1, fmt.Errorf("invalid memory limit: %d", limit)
 	}
 	if limit == math.MaxUint64 {
 		vmem, err := mem.VirtualMemory()
 		if err != nil {
-			return -1, fmt.Errorf("Failed to fall back to system max memory: %w", err)
+			return -1, fmt.Errorf("failed to get virtual memory stats: %w", err)
 		}
 		limit = vmem.Total
 	}

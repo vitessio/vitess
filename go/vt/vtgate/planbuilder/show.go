@@ -132,7 +132,7 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) 
 	case sqlparser.VschemaVindexes:
 		return buildVschemaVindexesPlan(show, vschema)
 	}
-	return nil, vterrors.VT13001(fmt.Sprintf("unknown SHOW query type %s", show.Command.ToString()))
+	return nil, vterrors.VT13001("unknown SHOW query type " + show.Command.ToString())
 
 }
 

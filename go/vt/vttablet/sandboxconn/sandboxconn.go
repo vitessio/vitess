@@ -20,6 +20,7 @@ package sandboxconn
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -640,17 +641,17 @@ func (sbc *SandboxConn) VStream(ctx context.Context, request *binlogdatapb.VStre
 
 // VStreamRows is part of the QueryService interface.
 func (sbc *SandboxConn) VStreamRows(ctx context.Context, request *binlogdatapb.VStreamRowsRequest, send func(*binlogdatapb.VStreamRowsResponse) error) error {
-	return fmt.Errorf("not implemented in test")
+	return errors.New("not implemented in test")
 }
 
 // VStreamTables is part of the QueryService interface.
 func (sbc *SandboxConn) VStreamTables(ctx context.Context, request *binlogdatapb.VStreamTablesRequest, send func(response *binlogdatapb.VStreamTablesResponse) error) error {
-	return fmt.Errorf("not implemented in test")
+	return errors.New("not implemented in test")
 }
 
 // VStreamResults is part of the QueryService interface.
 func (sbc *SandboxConn) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
-	return fmt.Errorf("not implemented in test")
+	return errors.New("not implemented in test")
 }
 
 // QueryServiceByAlias is part of the Gateway interface.

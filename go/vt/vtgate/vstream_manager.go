@@ -711,7 +711,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			}
 
 			aligningStreamsErr := fmt.Sprintf("error aligning streams across %s/%s", sgtid.Keyspace, sgtid.Shard)
-			sendingEventsErr := fmt.Sprintf("error sending event batch from tablet %s", tabletAliasString)
+			sendingEventsErr := "error sending event batch from tablet " + tabletAliasString
 
 			sendevents := make([]*binlogdatapb.VEvent, 0, len(events))
 			for i, event := range events {

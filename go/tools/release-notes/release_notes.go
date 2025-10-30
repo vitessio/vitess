@@ -18,6 +18,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -170,7 +171,7 @@ func loadKnownIssues(release string) ([]knownIssue, error) {
 	if idx > -1 {
 		release = release[:idx]
 	}
-	label := fmt.Sprintf("Known issue: %s", release)
+	label := "Known issue: " + release
 	out, err := execCmd("gh", "issue", "list", "--repo", "vitessio/vitess", "--label", label, "--json", "title,number")
 	if err != nil {
 		return nil, err
@@ -184,7 +185,7 @@ func loadKnownIssues(release string) ([]knownIssue, error) {
 }
 
 func loadMergedPRsAndAuthors(name string) (pris []pullRequestInformation, authors []string, err error) {
-	out, err := execCmd("gh", "pr", "list", "-s", "merged", "-S", fmt.Sprintf("milestone:%s", name), "--json", "number,title,labels,author", "--limit", "5000")
+	out, err := execCmd("gh", "pr", "list", "-s", "merged", "-S", "milestone:"+name, "--json", "number,title,labels,author", "--limit", "5000")
 	if err != nil {
 		return
 	}
@@ -220,7 +221,7 @@ func execCmd(name string, arg ...string) ([]byte, error) {
 			return nil, fmt.Errorf("%s:\nstderr: %s\nstdout: %s", err.Error(), execErr.Stderr, out)
 		}
 		if strings.Contains(err.Error(), " executable file not found in") {
-			return nil, fmt.Errorf("the command `gh` seems to be missing. Please install it from https://github.com/cli/cli")
+			return nil, errors.New("the command `gh` seems to be missing. Please install it from https://github.com/cli/cli")
 		}
 		return nil, err
 	}

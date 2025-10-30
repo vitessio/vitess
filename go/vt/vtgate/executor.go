@@ -24,6 +24,7 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1029,7 +1030,7 @@ func (e *Executor) ShowVitessReplicationStatus(ctx context.Context, filter *sqlp
 				// estimated lag value when replication is not running (based
 				// on how long we've seen that it's not been running).
 				if ts.Stats != nil && ts.Stats.ReplicationLagSeconds > 0 { // Use the value we get from the ReplicationTracker
-					replLag = fmt.Sprintf("%d", ts.Stats.ReplicationLagSeconds)
+					replLag = strconv.FormatUint(uint64(ts.Stats.ReplicationLagSeconds), 10)
 				} else { // Use the value from mysqld
 					if row[secondsBehindSourceField].IsNull() {
 						replLag = strings.ToUpper(sqltypes.NullStr) // Uppercase to match mysqld's output in SHOW REPLICA STATUS

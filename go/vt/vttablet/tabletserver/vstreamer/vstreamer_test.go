@@ -758,7 +758,7 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 					want := expectedEvents[i]
 					switch want {
 					case "begin", "commit", "gtid":
-						want = fmt.Sprintf("type:%s", strings.ToUpper(want))
+						want = "type:" + strings.ToUpper(want)
 					default:
 						want = env.RemoveAnyDeprecatedDisplayWidths(want)
 					}
@@ -2011,7 +2011,7 @@ func TestNoFutureGTID(t *testing.T) {
 	index := strings.LastIndexByte(pos, '-')
 	num, err := strconv.Atoi(pos[index+1:])
 	require.NoError(t, err)
-	future := pos[:index+1] + fmt.Sprintf("%d", num+1)
+	future := pos[:index+1] + strconv.Itoa(num+1)
 	t.Logf("future position: %v", future)
 
 	ctx, cancel := context.WithCancel(context.Background())

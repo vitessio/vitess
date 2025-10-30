@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"expvar"
-	"fmt"
 	"sort"
 	"strings"
 	"testing"
@@ -67,7 +66,7 @@ func TestInitErrors(t *testing.T) {
 
 	exec := func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
 		if useDB {
-			if _, err := conn.ExecuteFetch(fmt.Sprintf("use %s", sidecar.GetIdentifier()), maxRows, true); err != nil {
+			if _, err := conn.ExecuteFetch("use "+sidecar.GetIdentifier(), maxRows, true); err != nil {
 				return nil, err
 			}
 		}
@@ -138,7 +137,7 @@ func TestMiscSidecarDB(t *testing.T) {
 	require.NoError(t, err)
 	exec := func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
 		if useDB {
-			if _, err := conn.ExecuteFetch(fmt.Sprintf("use %s", sidecar.GetIdentifier()), maxRows, true); err != nil {
+			if _, err := conn.ExecuteFetch("use "+sidecar.GetIdentifier(), maxRows, true); err != nil {
 				return nil, err
 			}
 		}

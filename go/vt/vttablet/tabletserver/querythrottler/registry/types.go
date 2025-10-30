@@ -21,6 +21,16 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 )
 
+// QueryAttributes contains query-level metadata used by throttling strategies.
+// This centralizes extraction of workload and priority information.
+type QueryAttributes struct {
+	// WorkloadName contains the name of the workload for the query.
+	WorkloadName string
+
+	// Priority contains the priority of the query (0-100, where 0 is highest priority).
+	Priority int
+}
+
 // ThrottleDecision represents the result of evaluating whether a query should be throttled.
 // It separates the decision-making logic from the enforcement action.
 type ThrottleDecision struct {

@@ -229,7 +229,7 @@ func TestShardReplicationFix(t *testing.T) {
 	assert.Len(t, result[cell].Nodes, 3)
 
 	// Manually add a bogus entry to the replication graph, and check it is removed by ShardReplicationFix
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ShardReplicationAdd", keyspaceShard, fmt.Sprintf("%s-9000", cell))
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ShardReplicationAdd", keyspaceShard, cell+"-9000")
 	require.Nil(t, err, "error should be Nil")
 
 	result, err = clusterInstance.VtctldClientProcess.GetShardReplication(keyspaceName, shardName, cell)

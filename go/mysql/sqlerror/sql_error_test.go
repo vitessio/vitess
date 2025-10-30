@@ -17,7 +17,7 @@ limitations under the License.
 package sqlerror
 
 import (
-	"fmt"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -156,17 +156,17 @@ func TestNewSQLErrorFromError(t *testing.T) {
 			ss:  SSNoDB,
 		},
 		{
-			err: fmt.Errorf("just some random text here"),
+			err: errors.New("just some random text here"),
 			num: ERUnknownError,
 			ss:  SSUnknownSQLState,
 		},
 		{
-			err: fmt.Errorf("task error: Column 'val' cannot be null (errno 1048) (sqlstate 23000) during query: insert into _edf4846d_ab65_11ed_abb1_0a43f95f28a3_20230213061619_vrepl(id,val,ts) values (1,2,'2023-02-13 04:46:16'), (2,3,'2023-02-13 04:46:16'), (3,null,'2023-02-13 04:46:16')"),
+			err: errors.New("task error: Column 'val' cannot be null (errno 1048) (sqlstate 23000) during query: insert into _edf4846d_ab65_11ed_abb1_0a43f95f28a3_20230213061619_vrepl(id,val,ts) values (1,2,'2023-02-13 04:46:16'), (2,3,'2023-02-13 04:46:16'), (3,null,'2023-02-13 04:46:16')"),
 			num: ERBadNullError,
 			ss:  SSConstraintViolation,
 		},
 		{
-			err: vterrors.Wrapf(fmt.Errorf("Column 'val' cannot be null (errno 1048) (sqlstate 23000) during query: insert into _edf4846d_ab65_11ed_abb1_0a43f95f28a3_20230213061619_vrepl(id,val,ts) values (1,2,'2023-02-13 04:46:16'), (2,3,'2023-02-13 04:46:16'), (3,null,'2023-02-13 04:46:16')"), "task error: %d", 17),
+			err: vterrors.Wrapf(errors.New("Column 'val' cannot be null (errno 1048) (sqlstate 23000) during query: insert into _edf4846d_ab65_11ed_abb1_0a43f95f28a3_20230213061619_vrepl(id,val,ts) values (1,2,'2023-02-13 04:46:16'), (2,3,'2023-02-13 04:46:16'), (3,null,'2023-02-13 04:46:16')"), "task error: %d", 17),
 			num: ERBadNullError,
 			ss:  SSConstraintViolation,
 		},
@@ -181,19 +181,19 @@ func TestNewSQLErrorFromError(t *testing.T) {
 			ss:  SSConstraintViolation,
 		},
 		{
-			err: fmt.Errorf("ERROR HY000: Got error 204 - 'No more room in disk' during COMMIT"),
+			err: errors.New("ERROR HY000: Got error 204 - 'No more room in disk' during COMMIT"),
 			num: ERUnknownError,
 			ss:  SSUnknownSQLState,
 			ha:  HaErrDiskFullNowait,
 		},
 		{
-			err: fmt.Errorf("COMMIT failed w/ error: Got error 204 - 'No more room in disk' during COMMIT (errno 1180) (sqlstate HY000) during query: commit"),
+			err: errors.New("COMMIT failed w/ error: Got error 204 - 'No more room in disk' during COMMIT (errno 1180) (sqlstate HY000) during query: commit"),
 			num: ERErrorDuringCommit,
 			ss:  SSUnknownSQLState,
 			ha:  HaErrDiskFullNowait,
 		},
 		{
-			err: fmt.Errorf("COMMIT failed w/ error: Got error 149 - 'Lock deadlock; Retry transaction' during COMMIT (errno 1180) (sqlstate HY000) during query: commit"),
+			err: errors.New("COMMIT failed w/ error: Got error 149 - 'Lock deadlock; Retry transaction' during COMMIT (errno 1180) (sqlstate HY000) during query: commit"),
 			num: ERErrorDuringCommit,
 			ss:  SSUnknownSQLState,
 			ha:  HaErrLockDeadlock,

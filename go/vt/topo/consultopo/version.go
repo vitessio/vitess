@@ -16,9 +16,7 @@ limitations under the License.
 
 package consultopo
 
-import (
-	"fmt"
-)
+import "strconv"
 
 // ConsulVersion is consul's idea of a version.
 // It implements topo.Version.
@@ -27,5 +25,5 @@ type ConsulVersion uint64
 
 // String is part of the topo.Version interface.
 func (v ConsulVersion) String() string {
-	return fmt.Sprintf("%v", uint64(v))
+	return strconv.FormatUint(uint64(v), 10)
 }

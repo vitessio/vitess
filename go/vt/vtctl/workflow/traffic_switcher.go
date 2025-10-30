@@ -399,7 +399,7 @@ func (ts *trafficSwitcher) addParticipatingTablesToKeyspace(ctx context.Context,
 		}
 	} else {
 		if vschema.Sharded {
-			return fmt.Errorf("no sharded vschema was provided, so you will need to update the vschema of the target manually for the moved tables")
+			return errors.New("no sharded vschema was provided, so you will need to update the vschema of the target manually for the moved tables")
 		}
 		for _, table := range ts.tables {
 			vschema.Tables[table] = &vschemapb.Table{}
@@ -456,7 +456,7 @@ func (ts *trafficSwitcher) deleteKeyspaceRoutingRules(ctx context.Context) error
 		return nil
 	}
 	ts.Logger().Infof("deleteKeyspaceRoutingRules: workflow %s.%s", ts.targetKeyspace, ts.workflow)
-	reason := fmt.Sprintf("Deleting rules for %s", ts.SourceKeyspaceName())
+	reason := "Deleting rules for " + ts.SourceKeyspaceName()
 	return topotools.UpdateKeyspaceRoutingRules(ctx, ts.TopoServer(), reason,
 		func(ctx context.Context, rules *map[string]string) error {
 			for _, suffix := range tabletTypeSuffixes {
@@ -1477,7 +1477,7 @@ func (ts *trafficSwitcher) executeLockTablesOnSource(ctx context.Context) error 
 	sb := strings.Builder{}
 	sb.WriteString("LOCK TABLES ")
 	for _, tableName := range ts.Tables() {
-		sb.WriteString(fmt.Sprintf("%s READ,", sqlescape.EscapeID(tableName)))
+		sb.WriteString(sqlescape.EscapeID(tableName) + " READ,")
 	}
 	// trim extra trailing comma
 	lockStmt := sb.String()[:sb.Len()-1]

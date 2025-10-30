@@ -350,7 +350,7 @@ func TestValidateShardName(t *testing.T) {
 	}
 
 	for _, tcase := range cases {
-		tcase := tcase
+
 		t.Run(tcase.name, func(t *testing.T) {
 			t.Parallel()
 

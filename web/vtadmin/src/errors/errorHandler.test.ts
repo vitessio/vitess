@@ -82,10 +82,10 @@ describe('errorHandler', () => {
         });
 
         it('only includes santizied environment variables', () => {
-            import.meta.env = {
+            Object.assign(import.meta.env, {
                 VITE_VTADMIN_API_ADDRESS: 'http://not-secret.example.com',
                 VITE_BUGSNAG_API_KEY: 'secret',
-            } as Vite.ImportMetaEnv;
+            });
 
             const err = new Error('testing');
             errorHandler.notify(err);

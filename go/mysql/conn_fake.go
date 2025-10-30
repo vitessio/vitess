@@ -17,7 +17,7 @@ limitations under the License.
 package mysql
 
 import (
-	"fmt"
+	"errors"
 	"net"
 	"time"
 )
@@ -39,7 +39,7 @@ func (t testConn) Write(b []byte) (n int, err error) {
 	if t.writeToPass[t.pos] {
 		return 0, nil
 	}
-	return 0, fmt.Errorf("error in writing to connection")
+	return 0, errors.New("error in writing to connection")
 }
 
 func (t testConn) Close() error {

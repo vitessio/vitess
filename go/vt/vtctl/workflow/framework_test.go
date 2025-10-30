@@ -359,7 +359,7 @@ func (tmc *testTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *t
 	for i, table := range maps.Keys(tmc.schema) {
 		rules[i] = &binlogdatapb.Rule{
 			Match:  table,
-			Filter: fmt.Sprintf("select * from %s", table),
+			Filter: "select * from " + table,
 		}
 	}
 	blsKs := tmc.env.sourceKeyspace

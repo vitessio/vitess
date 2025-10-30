@@ -193,3 +193,4 @@ fi
 rm -rf /var/lib/apt/lists/*
 rm -rf /var/lib/mysql/
 rm -rf /tmp/*.deb
+rm -rf /etc/apt/sources.list.d/mysql.list /etc/apt/sources.list.d/percona*.list

@@ -20,6 +20,7 @@ package azblobbackupstorage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -32,13 +33,12 @@ import (
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/mysqlctl/errors"
-	"vitess.io/vitess/go/vt/utils"
-
 	"vitess.io/vitess/go/viperutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	mysqlctlerrors "vitess.io/vitess/go/vt/mysqlctl/errors"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -146,7 +146,7 @@ func azInternalCredentials() (string, string, error) {
 	}
 
 	if actName == "" || actKey == "" {
-		return "", "", fmt.Errorf("Azure Storage Account credentials not found in command-line flags or environment variables")
+		return "", "", errors.New("Azure Storage Account credentials not found in command-line flags or environment variables")
 	}
 	return actName, actKey, nil
 }
@@ -214,7 +214,7 @@ type AZBlobBackupHandle struct {
 	waitGroup sync.WaitGroup
 	ctx       context.Context
 	cancel    context.CancelFunc
-	errors.PerFileErrorRecorder
+	mysqlctlerrors.PerFileErrorRecorder
 }
 
 // Directory implements BackupHandle.
@@ -230,7 +230,7 @@ func (bh *AZBlobBackupHandle) Name() string {
 // AddFile implements BackupHandle.
 func (bh *AZBlobBackupHandle) AddFile(ctx context.Context, filename string, filesize int64) (io.WriteCloser, error) {
 	if bh.readOnly {
-		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
+		return nil, errors.New("AddFile cannot be called on read-only backup")
 	}
 	// Error out if the file size it too large ( ~4.75 TB)
 	maxSize := int64(azblob.BlockBlobMaxStageBlockBytes * azblob.BlockBlobMaxBlocks)
@@ -267,7 +267,7 @@ func (bh *AZBlobBackupHandle) AddFile(ctx context.Context, filename string, file
 // EndBackup implements BackupHandle.
 func (bh *AZBlobBackupHandle) EndBackup(ctx context.Context) error {
 	if bh.readOnly {
-		return fmt.Errorf("EndBackup cannot be called on read-only backup")
+		return errors.New("EndBackup cannot be called on read-only backup")
 	}
 	bh.waitGroup.Wait()
 	return bh.Error()
@@ -276,7 +276,7 @@ func (bh *AZBlobBackupHandle) EndBackup(ctx context.Context) error {
 // AbortBackup implements BackupHandle.
 func (bh *AZBlobBackupHandle) AbortBackup(ctx context.Context) error {
 	if bh.readOnly {
-		return fmt.Errorf("AbortBackup cannot be called on read-only backup")
+		return errors.New("AbortBackup cannot be called on read-only backup")
 	}
 	// Cancel the context of any uploads.
 	bh.cancel()
@@ -288,7 +288,7 @@ func (bh *AZBlobBackupHandle) AbortBackup(ctx context.Context) error {
 // ReadFile implements BackupHandle.
 func (bh *AZBlobBackupHandle) ReadFile(ctx context.Context, filename string) (io.ReadCloser, error) {
 	if !bh.readOnly {
-		return nil, fmt.Errorf("ReadFile cannot be called on read-write backup")
+		return nil, errors.New("ReadFile cannot be called on read-write backup")
 	}
 
 	obj := objName(bh.dir, filename)

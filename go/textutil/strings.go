@@ -17,6 +17,7 @@ limitations under the License.
 package textutil
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -150,7 +151,7 @@ func TruncateText(text string, limit int, location TruncationLocation, indicator
 		return text, nil
 	}
 	if len(indicator)+2 >= limit {
-		return "", fmt.Errorf("the truncation indicator is too long for the provided text")
+		return "", errors.New("the truncation indicator is too long for the provided text")
 	}
 	switch location {
 	case TruncationLocationMiddle:

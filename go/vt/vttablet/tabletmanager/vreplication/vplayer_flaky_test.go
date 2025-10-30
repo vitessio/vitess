@@ -629,7 +629,7 @@ func TestPlayerStatementModeWithFilterAndErrorHandling(t *testing.T) {
 	// It does not work when filter is enabled
 	output := qh.Expect(
 		"rollback",
-		fmt.Sprintf("/update _vt.vreplication set message='%s", expectedMsg),
+		"/update _vt.vreplication set message='"+expectedMsg,
 	)
 
 	execStatements(t, input)

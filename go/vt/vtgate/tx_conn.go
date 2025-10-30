@@ -391,7 +391,7 @@ func (txc *TxConn) errActionAndLogWarn(
 }
 
 func createWarningMessage(dtid string, txPhase commitPhase) string {
-	warningMsg := fmt.Sprintf("%s distributed transaction ID failed during", dtid)
+	warningMsg := dtid + " distributed transaction ID failed during"
 	switch txPhase {
 	case Commit2pcCreateTransaction:
 		warningMsg += " transaction record creation; rollback attempted; conclude on recovery"

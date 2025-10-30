@@ -5,10 +5,12 @@ linters:
   default: none
   enable:
     - bodyclose
+    - copyloopvar
     - depguard
     - errcheck
     - govet
     - ineffassign
+    - perfsprint
     - staticcheck
   settings:
     depguard:

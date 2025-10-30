@@ -19,6 +19,7 @@ package stats
 import (
 	"bytes"
 	"fmt"
+	"strconv"
 	"sync/atomic"
 )
 
@@ -45,7 +46,7 @@ type Histogram struct {
 func NewHistogram(name, help string, cutoffs []int64) *Histogram {
 	labels := make([]string, len(cutoffs)+1)
 	for i, v := range cutoffs {
-		labels[i] = fmt.Sprintf("%d", v)
+		labels[i] = strconv.FormatInt(v, 10)
 	}
 	labels[len(labels)-1] = "inf"
 	return NewGenericHistogram(name, help, cutoffs, labels, "Count", "Total")

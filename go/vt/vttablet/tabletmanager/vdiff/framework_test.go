@@ -18,6 +18,7 @@ package vdiff
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -210,7 +211,7 @@ func resetBinlogClient() {
 // This can be used to end a vdiff, by returning an error from the specified query, once the test
 // has verified the necessary behavior.
 func shortCircuitTestAfterQuery(query string, dbClient *binlogplayer.MockDBClient) {
-	dbClient.ExpectRequest(query, singleRowAffected, fmt.Errorf("Short circuiting test"))
+	dbClient.ExpectRequest(query, singleRowAffected, errors.New("Short circuiting test"))
 	dbClient.ExpectRequest("update _vt.vdiff set state = 'error', last_error = left('Short circuiting test', 1024)  where id = 1", singleRowAffected, nil)
 	dbClient.ExpectRequest("insert into _vt.vdiff_log(vdiff_id, message) values (1, 'State changed to: error')", singleRowAffected, nil)
 	dbClient.ExpectRequest("insert into _vt.vdiff_log(vdiff_id, message) values (1, 'Error: Short circuiting test')", singleRowAffected, nil)
@@ -551,7 +552,7 @@ func newTestVDiffEnv(t *testing.T) *testVDiffEnv {
 
 		// This is needed for the vstreamer engine and the snapshotConn which
 		// use the real DB started by vttestserver
-		ddls = append(ddls, fmt.Sprintf("create database if not exists %s", vdiffDBName))
+		ddls = append(ddls, "create database if not exists "+vdiffDBName)
 		ddls = append(ddls, fmt.Sprintf("create table if not exists %s.t1 (c1 bigint primary key, c2 bigint)", vdiffDBName))
 
 		for _, ddl := range ddls {

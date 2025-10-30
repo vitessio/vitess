@@ -17,7 +17,7 @@ limitations under the License.
 package vterrors
 
 import (
-	"fmt"
+	"errors"
 	"testing"
 	"time"
 
@@ -31,7 +31,7 @@ const maxTimeInError = 100 * time.Millisecond
 // TestLastErrorZeroMaxTime tests maxTimeInError = 0, should always retry
 func TestLastErrorZeroMaxTime(t *testing.T) {
 	le := NewLastError("test", 0)
-	err1 := fmt.Errorf("error1")
+	err1 := errors.New("error1")
 	le.Record(err1)
 	require.True(t, le.ShouldRetry())
 	time.Sleep(shortWait)
@@ -44,7 +44,7 @@ func TestLastErrorZeroMaxTime(t *testing.T) {
 func TestLastErrorNoError(t *testing.T) {
 	le := NewLastError("test", maxTimeInError)
 	require.True(t, le.ShouldRetry())
-	err1 := fmt.Errorf("error1")
+	err1 := errors.New("error1")
 	le.Record(err1)
 	require.True(t, le.ShouldRetry())
 	le.Record(nil)
@@ -54,7 +54,7 @@ func TestLastErrorNoError(t *testing.T) {
 // TestLastErrorOneError validates that we retry an error if happening within the maxTimeInError, but not after
 func TestLastErrorOneError(t *testing.T) {
 	le := NewLastError("test", maxTimeInError)
-	err1 := fmt.Errorf("error1")
+	err1 := errors.New("error1")
 	le.Record(err1)
 	require.True(t, le.ShouldRetry())
 	time.Sleep(shortWait)
@@ -69,7 +69,7 @@ func TestLastErrorOneError(t *testing.T) {
 // unless it happens after maxTimeInError
 func TestLastErrorRepeatedError(t *testing.T) {
 	le := NewLastError("test", maxTimeInError)
-	err1 := fmt.Errorf("error1")
+	err1 := errors.New("error1")
 	le.Record(err1)
 	require.True(t, le.ShouldRetry())
 	for i := 1; i < 10; i++ {

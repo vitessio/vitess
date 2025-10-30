@@ -21,6 +21,8 @@ package servenv
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetCGroupCpuUsageMetrics(t *testing.T) {
@@ -34,4 +36,26 @@ func TestGetCgroupMemoryUsageMetrics(t *testing.T) {
 	mem, err := getCgroupMemoryUsage()
 	validateMem(t, mem, err)
 	t.Logf("mem %.5f", mem)
+}
+
+func TestErrHandlingWithCgroups(t *testing.T) {
+	origCgroupManager := cgroupManager
+	defer func() {
+		cgroupManager = origCgroupManager
+	}()
+
+	cpu, err := getCgroupCpuUsage()
+	validateCpu(t, cpu, err)
+	mem, err := getCgroupMemoryUsage()
+	validateMem(t, mem, err)
+
+	cgroupManager = nil
+	require.Nil(t, cgroupManager)
+
+	cpu, err = getCgroupCpuUsage()
+	require.ErrorContains(t, err, errCgroupMetricsNotAvailable.Error())
+	require.Equal(t, int(cpu), -1)
+	mem, err = getCgroupMemoryUsage()
+	require.ErrorContains(t, err, errCgroupMetricsNotAvailable.Error())
+	require.Equal(t, int(mem), -1)
 }

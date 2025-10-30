@@ -31,15 +31,15 @@ func insertInitialData(t *testing.T) {
 		defer closeConn()
 		log.Infof("Inserting initial data")
 		lines, _ := os.ReadFile("unsharded_init_data.sql")
-		execMultipleQueries(t, vtgateConn, fmt.Sprintf("%s:0", defaultSourceKs), string(lines))
-		execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:0", defaultSourceKs), "insert into customer_seq(id, next_id, cache) values(0, 100, 100);")
-		execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:0", defaultSourceKs), "insert into order_seq(id, next_id, cache) values(0, 100, 100);")
-		execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:0", defaultSourceKs), "insert into customer_seq2(id, next_id, cache) values(0, 100, 100);")
+		execMultipleQueries(t, vtgateConn, defaultSourceKs+":0", string(lines))
+		execVtgateQuery(t, vtgateConn, defaultSourceKs+":0", "insert into customer_seq(id, next_id, cache) values(0, 100, 100);")
+		execVtgateQuery(t, vtgateConn, defaultSourceKs+":0", "insert into order_seq(id, next_id, cache) values(0, 100, 100);")
+		execVtgateQuery(t, vtgateConn, defaultSourceKs+":0", "insert into customer_seq2(id, next_id, cache) values(0, 100, 100);")
 		log.Infof("Done inserting initial data")
 
-		waitForRowCount(t, vtgateConn, fmt.Sprintf("%s:0", defaultSourceKs), "product", 2)
-		waitForRowCount(t, vtgateConn, fmt.Sprintf("%s:0", defaultSourceKs), "customer", 3)
-		waitForQueryResult(t, vtgateConn, fmt.Sprintf("%s:0", defaultSourceKs), "select * from merchant",
+		waitForRowCount(t, vtgateConn, defaultSourceKs+":0", "product", 2)
+		waitForRowCount(t, vtgateConn, defaultSourceKs+":0", "customer", 3)
+		waitForQueryResult(t, vtgateConn, defaultSourceKs+":0", "select * from merchant",
 			`[[VARCHAR("Monoprice") VARCHAR("eléctronics")] [VARCHAR("newegg") VARCHAR("elec†ronics")]]`)
 
 		insertJSONValues(t)
@@ -52,12 +52,12 @@ func insertJSONValues(t *testing.T) {
 	// insert null value combinations
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
-	execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:0", defaultSourceKs), "insert into json_tbl(id, j3) values(1, \"{}\")")
-	execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:0", defaultSourceKs), "insert into json_tbl(id, j1, j3) values(2, \"{}\", \"{}\")")
-	execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:0", defaultSourceKs), "insert into json_tbl(id, j2, j3) values(3, \"{}\", \"{}\")")
-	execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:0", defaultSourceKs), "insert into json_tbl(id, j1, j2, j3) values(4, NULL, 'null', '\"null\"')")
-	execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:0", defaultSourceKs), "insert into json_tbl(id, j3) values(5, JSON_QUOTE('null'))")
-	execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:0", defaultSourceKs), "insert into json_tbl(id, j3) values(6, '{}')")
+	execVtgateQuery(t, vtgateConn, defaultSourceKs+":0", "insert into json_tbl(id, j3) values(1, \"{}\")")
+	execVtgateQuery(t, vtgateConn, defaultSourceKs+":0", "insert into json_tbl(id, j1, j3) values(2, \"{}\", \"{}\")")
+	execVtgateQuery(t, vtgateConn, defaultSourceKs+":0", "insert into json_tbl(id, j2, j3) values(3, \"{}\", \"{}\")")
+	execVtgateQuery(t, vtgateConn, defaultSourceKs+":0", "insert into json_tbl(id, j1, j2, j3) values(4, NULL, 'null', '\"null\"')")
+	execVtgateQuery(t, vtgateConn, defaultSourceKs+":0", "insert into json_tbl(id, j3) values(5, JSON_QUOTE('null'))")
+	execVtgateQuery(t, vtgateConn, defaultSourceKs+":0", "insert into json_tbl(id, j3) values(6, '{}')")
 
 	id := 8 // 6 inserted above and one after copy phase is done
 
@@ -68,7 +68,7 @@ func insertJSONValues(t *testing.T) {
 		j1 := rand.IntN(numJsonValues)
 		j2 := rand.IntN(numJsonValues)
 		query := fmt.Sprintf(q, id, jsonValues[j1], jsonValues[j2])
-		execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:0", defaultSourceKs), query)
+		execVtgateQuery(t, vtgateConn, defaultSourceKs+":0", query)
 	}
 }
 
@@ -137,6 +137,6 @@ func insertIntoBlobTable(t *testing.T) {
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
 	for _, query := range blobTableQueries {
-		execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:0", defaultSourceKs), query)
+		execVtgateQuery(t, vtgateConn, defaultSourceKs+":0", query)
 	}
 }

@@ -18,6 +18,7 @@ package vstreamer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -896,14 +897,14 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 	case *sqlparser.Literal:
 		// allow only intval 1
 		if inner.Type != sqlparser.IntVal {
-			return ColExpr{}, fmt.Errorf("only integer literals are supported")
+			return ColExpr{}, errors.New("only integer literals are supported")
 		}
 		num, err := strconv.ParseInt(string(inner.Val), 0, 64)
 		if err != nil {
 			return ColExpr{}, err
 		}
 		if num != 1 {
-			return ColExpr{}, fmt.Errorf("only the integer literal 1 is supported")
+			return ColExpr{}, errors.New("only the integer literal 1 is supported")
 		}
 		return ColExpr{
 			Field: &querypb.Field{

@@ -28,12 +28,7 @@ jobs:
         cache: 'false'
 
     - name: Tune the OS
-      run: |
-        sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
-
-        # Don't waste a bunch of time processing man-db triggers
-        echo "set man-db/auto-update false" | sudo debconf-communicate
-        sudo dpkg-reconfigure man-db
+      uses: ./.github/actions/tune-os
 
     - name: Get dependencies
       run: |

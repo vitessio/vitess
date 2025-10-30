@@ -1426,12 +1426,12 @@ func val2MySQL(v sqltypes.Value) ([]byte, error) {
 
 			sub1 := strings.Split(string(v.Raw()), ":")
 			if len(sub1) != 3 {
-				err := fmt.Errorf("incorrect time value, ':' is not found")
+				err := errors.New("incorrect time value, ':' is not found")
 				return []byte{}, err
 			}
 			sub2 := strings.Split(sub1[2], ".")
 			if len(sub2) != 2 {
-				err := fmt.Errorf("incorrect time value, '.' is not found")
+				err := errors.New("incorrect time value, '.' is not found")
 				return []byte{}, err
 			}
 
@@ -1488,7 +1488,7 @@ func val2MySQL(v sqltypes.Value) ([]byte, error) {
 
 			sub1 := strings.Split(string(v.Raw()), ":")
 			if len(sub1) != 3 {
-				err := fmt.Errorf("incorrect time value, ':' is not found")
+				err := errors.New("incorrect time value, ':' is not found")
 				return []byte{}, err
 			}
 
@@ -1527,7 +1527,7 @@ func val2MySQL(v sqltypes.Value) ([]byte, error) {
 			pos = writeByte(out, pos, byte(minutes))
 			writeByte(out, pos, byte(seconds))
 		} else {
-			err := fmt.Errorf("incorrect time value")
+			err := errors.New("incorrect time value")
 			return []byte{}, err
 		}
 	case sqltypes.Decimal, sqltypes.Text, sqltypes.Blob, sqltypes.VarChar,
@@ -1578,7 +1578,7 @@ func val2MySQLLen(v sqltypes.Value) (int, error) {
 		} else if len(v.Raw()) > 0 {
 			length = 9
 		} else {
-			err = fmt.Errorf("incorrect time value")
+			err = errors.New("incorrect time value")
 		}
 	case sqltypes.Decimal, sqltypes.Text, sqltypes.Blob, sqltypes.VarChar,
 		sqltypes.VarBinary, sqltypes.Char, sqltypes.Bit, sqltypes.Enum,

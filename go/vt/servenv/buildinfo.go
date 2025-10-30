@@ -135,10 +135,10 @@ func init() {
 	buildValues := []string{
 		AppVersion.buildHost,
 		AppVersion.buildUser,
-		fmt.Sprintf("%v", AppVersion.buildTime),
+		strconv.FormatInt(AppVersion.buildTime, 10),
 		AppVersion.buildGitRev,
 		AppVersion.buildGitBranch,
-		fmt.Sprintf("%v", AppVersion.jenkinsBuildNumber),
+		strconv.FormatInt(AppVersion.jenkinsBuildNumber, 10),
 	}
 	stats.NewGaugesWithMultiLabels("BuildInformation", "build information exposed via label", buildLabels).Set(buildValues, 1)
 

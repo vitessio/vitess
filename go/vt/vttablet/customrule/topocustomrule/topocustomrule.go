@@ -22,6 +22,7 @@ package topocustomrule
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"sync"
@@ -194,7 +195,7 @@ func (cr *topoCustomRule) oneWatch() error {
 
 	}
 
-	return fmt.Errorf("watch terminated with no error")
+	return errors.New("watch terminated with no error")
 }
 
 // activateTopoCustomRules activates topo dynamic custom rule mechanism.

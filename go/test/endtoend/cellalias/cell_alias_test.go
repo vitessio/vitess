@@ -350,7 +350,7 @@ func testQueriesOnTabletType(t *testing.T, tabletType string, vtgateGrpcPort int
 	qr, err := localCluster.ExecOnVTGate(context.Background(),
 		fmt.Sprintf("%s:%d", localCluster.Hostname, vtgateGrpcPort),
 		"@"+tabletType,
-		fmt.Sprintf(`select * from %s`, tableName), nil, nil,
+		"select * from "+tableName, nil, nil,
 	)
 	if shouldFail {
 		require.Error(t, err)

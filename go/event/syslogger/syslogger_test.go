@@ -19,7 +19,7 @@ limitations under the License.
 package syslogger
 
 import (
-	"fmt"
+	"errors"
 	"log/syslog"
 	"strings"
 	"testing"
@@ -125,7 +125,7 @@ func TestBadWriter(t *testing.T) {
 
 // TestWriteError checks that we don't panic on a write error.
 func TestWriteError(t *testing.T) {
-	writer = &fakeWriter{err: fmt.Errorf("forced error")}
+	writer = &fakeWriter{err: errors.New("forced error")}
 
 	event.Dispatch(&TestEvent{priority: syslog.LOG_EMERG})
 }

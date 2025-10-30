@@ -17,7 +17,7 @@ limitations under the License.
 package migrate
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/spf13/cobra"
 
@@ -59,7 +59,7 @@ var createCommand = &cobra.Command{
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		// Either specific tables or the all tables flags are required.
 		if !cmd.Flags().Lookup("tables").Changed && !cmd.Flags().Lookup("all-tables").Changed {
-			return fmt.Errorf("tables or all-tables are required to specify which tables to move")
+			return errors.New("tables or all-tables are required to specify which tables to move")
 		}
 		if err := common.ParseAndValidateCreateOptions(cmd); err != nil {
 			return err

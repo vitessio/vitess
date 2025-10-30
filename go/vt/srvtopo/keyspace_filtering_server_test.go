@@ -18,7 +18,7 @@ package srvtopo
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"reflect"
 	"sync"
 	"testing"
@@ -127,7 +127,7 @@ func TestFilteringServerGetSrvKeyspaceNamesPassesThroughErrors(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	_, mock, f := newFiltering(ctx, stockFilters)
-	wantErr := fmt.Errorf("some badcell error")
+	wantErr := errors.New("some badcell error")
 	mock.SrvKeyspaceNamesError = wantErr
 	doTestGetSrvKeyspaceNames(t, f, "badcell", stockFilters, wantErr)
 }
@@ -158,7 +158,7 @@ func TestFilteringServerGetSrvKeyspaceReturnsSelectedKeyspaces(t *testing.T) {
 func TestFilteringServerGetSrvKeyspaceErrorPassthrough(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	wantErr := fmt.Errorf("some error")
+	wantErr := errors.New("some error")
 	_, mock, f := newFiltering(ctx, stockFilters)
 	mock.SrvKeyspace = stockKeyspaces["bar"]
 	mock.SrvKeyspaceError = wantErr
@@ -215,7 +215,7 @@ func TestFilteringServerWatchSrvVSchemaHandlesNilSchema(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	wantErr := fmt.Errorf("some err")
+	wantErr := errors.New("some err")
 	_, mock, f := newFiltering(ctx, stockFilters)
 	mock.WatchedSrvVSchema = nil
 	mock.WatchedSrvVSchemaError = wantErr

@@ -193,7 +193,7 @@ func checkRowCounts(t *testing.T, keyspace string, sourceShards, targetShards []
 	}
 
 	getCount := func(tab *cluster.VttabletProcess, table string) (int64, error) {
-		qr, err := tab.QueryTablet(fmt.Sprintf("select count(*) from %s", table), keyspace, true)
+		qr, err := tab.QueryTablet("select count(*) from "+table, keyspace, true)
 		if err != nil {
 			return 0, err
 		}

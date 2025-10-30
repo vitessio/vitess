@@ -1,7 +1,7 @@
 package trace
 
 import (
-	"fmt"
+	"errors"
 	"io"
 	"net"
 
@@ -52,7 +52,7 @@ func init() {
 func newDatadogTracer(serviceName string) (tracingService, io.Closer, error) {
 	host, port := dataDogHost.Get(), dataDogPort.Get()
 	if host == "" || port == "" {
-		return nil, nil, fmt.Errorf("need host and port to datadog agent to use datadog tracing")
+		return nil, nil, errors.New("need host and port to datadog agent to use datadog tracing")
 	}
 
 	opts := []ddtracer.StartOption{

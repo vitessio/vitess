@@ -115,7 +115,7 @@ func TestMigrateUnsharded(t *testing.T) {
 		require.Equal(t, "/vitess/global", gjson.Get(output, "topo_root").String())
 	})
 
-	ksWorkflow := fmt.Sprintf("%s.e1", defaultSourceKs)
+	ksWorkflow := defaultSourceKs + ".e1"
 
 	t.Run("migrate from external cluster", func(t *testing.T) {
 		if output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
@@ -124,7 +124,7 @@ func TestMigrateUnsharded(t *testing.T) {
 			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
 		}
 		waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
-		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", fmt.Sprintf("%s:0", defaultSourceKs), 1)
+		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", defaultSourceKs+":0", 1)
 		waitForRowCountInTablet(t, targetPrimary, defaultSourceKs, "rating", 2)
 		waitForRowCountInTablet(t, targetPrimary, defaultSourceKs, "review", 3)
 		execVtgateQuery(t, extVtgateConn, "rating", "insert into review(rid, pid, review) values(4, 1, 'review4');")
@@ -151,7 +151,7 @@ func TestMigrateUnsharded(t *testing.T) {
 			"--target-keyspace", defaultSourceKs, "--workflow", "e1", "complete")
 		require.NoError(t, err, "Migrate command failed with %s", output)
 
-		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", fmt.Sprintf("%s:0", defaultSourceKs), 0)
+		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", defaultSourceKs+":0", 0)
 	})
 	t.Run("cancel migrate workflow", func(t *testing.T) {
 		execVtgateQuery(t, vtgateConn, defaultSourceKs, "drop table review,rating")
@@ -160,14 +160,14 @@ func TestMigrateUnsharded(t *testing.T) {
 			"--mount-name", "ext1", "--all-tables", "--auto-start=false", "--cells=extcell1")
 		require.NoError(t, err, "Migrate command failed with %s", output)
 
-		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", fmt.Sprintf("%s:0", defaultSourceKs), 1, binlogdatapb.VReplicationWorkflowState_Stopped.String())
+		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", defaultSourceKs+":0", 1, binlogdatapb.VReplicationWorkflowState_Stopped.String())
 		waitForRowCountInTablet(t, targetPrimary, defaultSourceKs, "rating", 0)
 		waitForRowCountInTablet(t, targetPrimary, defaultSourceKs, "review", 0)
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
 			"--target-keyspace", defaultSourceKs, "--workflow", "e1", "cancel")
 		require.NoError(t, err, "Migrate command failed with %s", output)
 
-		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", fmt.Sprintf("%s:0", defaultSourceKs), 0)
+		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", defaultSourceKs+":0", 0)
 		var found bool
 		found, err = checkIfTableExists(t, vc, "zone1-100", "review")
 		require.NoError(t, err)

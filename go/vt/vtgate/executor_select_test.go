@@ -2010,8 +2010,8 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 				// i%4 ensures that there are duplicates across shards.
 				// This will allow us to test that cross-shard ordering
 				// still works correctly.
-				sqltypes.NewVarChar(fmt.Sprintf("%d", i%4)),
-				sqltypes.NewVarBinary(fmt.Sprintf("%d", i%4)),
+				sqltypes.NewVarChar(strconv.Itoa(i % 4)),
+				sqltypes.NewVarBinary(strconv.Itoa(i % 4)),
 			}},
 		}})
 		conns = append(conns, sbc)
@@ -2046,7 +2046,7 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 		for j := 0; j < 2; j++ {
 			row := []sqltypes.Value{
 				sqltypes.NewInt32(1),
-				sqltypes.NewVarChar(fmt.Sprintf("%d", 3-i)),
+				sqltypes.NewVarChar(strconv.Itoa(3 - i)),
 			}
 			wantResult.Rows = append(wantResult.Rows, row)
 		}
@@ -2141,8 +2141,8 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(1),
-				sqltypes.NewVarChar(fmt.Sprintf("%d", i%4)),
-				sqltypes.NewVarBinary(fmt.Sprintf("%d", i%4)),
+				sqltypes.NewVarChar(strconv.Itoa(i % 4)),
+				sqltypes.NewVarBinary(strconv.Itoa(i % 4)),
 			}},
 		}})
 		conns = append(conns, sbc)
@@ -2171,7 +2171,7 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		row := []sqltypes.Value{
 			sqltypes.NewInt32(1),
-			sqltypes.NewVarChar(fmt.Sprintf("%d", 3-i)),
+			sqltypes.NewVarChar(strconv.Itoa(3 - i)),
 		}
 		wantResult.Rows = append(wantResult.Rows, row, row)
 	}
@@ -2238,7 +2238,7 @@ func TestSelectScatterAggregate(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		row := []sqltypes.Value{
 			sqltypes.NewInt32(int32(i)),
-			sqltypes.NewDecimal(fmt.Sprintf("%d", i*2+4)),
+			sqltypes.NewDecimal(strconv.Itoa(i*2 + 4)),
 		}
 		wantResult.Rows = append(wantResult.Rows, row)
 	}
@@ -2300,7 +2300,7 @@ func TestStreamSelectScatterAggregate(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		row := []sqltypes.Value{
 			sqltypes.NewInt32(int32(i)),
-			sqltypes.NewDecimal(fmt.Sprintf("%d", i*2+4)),
+			sqltypes.NewDecimal(strconv.Itoa(i*2 + 4)),
 		}
 		wantResult.Rows = append(wantResult.Rows, row)
 	}
@@ -4113,7 +4113,7 @@ func TestMultiColPartial(t *testing.T) {
 
 	for _, tcase := range tcases {
 		t.Run(tcase.where, func(t *testing.T) {
-			sql := fmt.Sprintf("select * from multicoltbl where %s", tcase.where)
+			sql := "select * from multicoltbl where " + tcase.where
 			_, err := executor.Execute(ctx, nil, "TestMultiCol", session, sql, nil, false)
 			require.NoError(t, err)
 			var shards []string

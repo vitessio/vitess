@@ -85,7 +85,7 @@ func TestSetSysVarSingle(t *testing.T) {
 		query := fmt.Sprintf("set %s = %s", q.name, q.expr)
 		t.Run(fmt.Sprintf("%d-%s", i, query), func(t *testing.T) {
 			utils.Exec(t, conn, query)
-			utils.AssertMatchesAny(t, conn, fmt.Sprintf("select @@%s", q.name), q.expected...)
+			utils.AssertMatchesAny(t, conn, "select @@"+q.name, q.expected...)
 		})
 	}
 }
@@ -126,7 +126,7 @@ func TestSetSystemVarWithTxFailure(t *testing.T) {
 
 	// kill the mysql connection shard which has transaction open.
 	vttablet1 := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet() // 80-
-	vttablet1.VttabletProcess.QueryTablet(fmt.Sprintf("kill %s", qr.Rows[0][0].ToString()), keyspaceName, false)
+	vttablet1.VttabletProcess.QueryTablet("kill "+qr.Rows[0][0].ToString(), keyspaceName, false)
 
 	// transaction fails on commit - we should no longer be in a transaction
 	_, err = conn.ExecuteFetch("commit", 1, true)
@@ -227,7 +227,7 @@ func TestSetSystemVarAutocommitWithConnError(t *testing.T) {
 
 	// kill the mysql connection shard which has transaction open.
 	vttablet1 := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet() // -80
-	_, err = vttablet1.VttabletProcess.QueryTablet(fmt.Sprintf("kill %s", qr.Rows[0][0].ToString()), keyspaceName, false)
+	_, err = vttablet1.VttabletProcess.QueryTablet("kill "+qr.Rows[0][0].ToString(), keyspaceName, false)
 	require.NoError(t, err)
 
 	// first query to 80- shard should pass
@@ -255,7 +255,7 @@ func TestSetSystemVarInTxWithConnError(t *testing.T) {
 
 	// kill the mysql connection shard which has transaction open.
 	vttablet1 := clusterInstance.Keyspaces[0].Shards[1].PrimaryTablet() // 80-
-	_, err = vttablet1.VttabletProcess.QueryTablet(fmt.Sprintf("kill %s", qr.Rows[0][0].ToString()), keyspaceName, false)
+	_, err = vttablet1.VttabletProcess.QueryTablet("kill "+qr.Rows[0][0].ToString(), keyspaceName, false)
 	require.NoError(t, err)
 
 	// query to -80 shard should pass and remain in transaction.

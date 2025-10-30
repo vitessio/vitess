@@ -295,7 +295,7 @@ func (tsv *TabletServer) loadQueryTimeoutWithOptions(options *querypb.ExecuteOpt
 //     for all new queries (see Execute() function and call to GetPlan())
 //  2. affecting already existing rules: a Rule has a context.WithCancel, that is cancelled by onlineDDLExecutor
 func (tsv *TabletServer) onlineDDLExecutorToggleTableBuffer(bufferingCtx context.Context, tableName string, timeout time.Duration, bufferQueries bool) {
-	queryRuleSource := fmt.Sprintf("onlineddl/%s", tableName)
+	queryRuleSource := "onlineddl/" + tableName
 
 	if bufferQueries {
 		tsv.RegisterQueryRuleSource(queryRuleSource)
@@ -1814,7 +1814,7 @@ func (tsv *TabletServer) healthzHandler(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "500 internal server error: vttablet is not serving", http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Length", fmt.Sprintf("%v", len(okMessage)))
+	w.Header().Set("Content-Length", strconv.Itoa(len(okMessage)))
 	w.WriteHeader(http.StatusOK)
 	w.Write(okMessage)
 }

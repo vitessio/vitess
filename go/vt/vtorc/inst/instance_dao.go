@@ -169,7 +169,7 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 	errorChan := make(chan error, 32)
 
 	if tabletAlias == "" {
-		return instance, fmt.Errorf("ReadTopologyInstance will not act on empty tablet alias")
+		return instance, errors.New("ReadTopologyInstance will not act on empty tablet alias")
 	}
 
 	lastAttemptedCheckTimer := time.AfterFunc(time.Second, func() {

@@ -18,18 +18,18 @@ package mysqlctl
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"io"
 
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
-	"vitess.io/vitess/go/vt/mysqlctl/errors"
+	mysqlctlerrors "vitess.io/vitess/go/vt/mysqlctl/errors"
 )
 
 type FakeBackupHandle struct {
 	Dir      string
 	NameV    string
 	ReadOnly bool
-	errors.PerFileErrorRecorder
+	mysqlctlerrors.PerFileErrorRecorder
 
 	AbortBackupCalls  []context.Context
 	AbortBackupReturn error
@@ -89,7 +89,7 @@ func (fbh *FakeBackupHandle) AbortBackup(ctx context.Context) error {
 func (fbh *FakeBackupHandle) ReadFile(ctx context.Context, filename string) (io.ReadCloser, error) {
 	fbh.ReadFileCalls = append(fbh.ReadFileCalls, FakeBackupHandleReadFileCall{ctx, filename})
 	if fbh.ReadFileReturnF == nil {
-		return nil, fmt.Errorf("FakeBackupHandle has not defined a ReadFileReturnF")
+		return nil, errors.New("FakeBackupHandle has not defined a ReadFileReturnF")
 	}
 	return fbh.ReadFileReturnF(ctx, filename)
 }

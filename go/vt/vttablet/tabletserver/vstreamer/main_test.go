@@ -18,6 +18,7 @@ package vstreamer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -348,7 +349,7 @@ func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogda
 		select {
 		case ch <- evs:
 		case <-ctx.Done():
-			return fmt.Errorf("engine.Stream Done() stream ended early")
+			return errors.New("engine.Stream Done() stream ended early")
 		case <-timer.C:
 			t.Log("VStream timed out waiting for events")
 			return io.EOF

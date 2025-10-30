@@ -97,7 +97,7 @@ func TestCommitPreparedFailRetryable(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	_, err = conn.ExecuteFetch(fmt.Sprintf("kill query %s", connRes.Rows[0][0].ToString()), 1, false)
+	_, err = conn.ExecuteFetch("kill query "+connRes.Rows[0][0].ToString(), 1, false)
 	require.NoError(t, err)
 
 	client2.Release()

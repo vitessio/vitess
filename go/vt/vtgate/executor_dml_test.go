@@ -18,7 +18,6 @@ package vtgate
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"testing"
 
@@ -2967,7 +2966,7 @@ func TestInsertSelectFromDual(t *testing.T) {
 			sbc1.Queries = nil
 			sbc2.Queries = nil
 			sbclookup.Queries = nil
-			wQuery := fmt.Sprintf("set @@workload = %s", workload)
+			wQuery := "set @@workload = " + workload
 			// set result for dual query.
 			sbc1.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("1|2|myname", "int64|int64|varchar"), "1|2|myname")})
 
@@ -3032,7 +3031,7 @@ func TestInsertSelectFromTable(t *testing.T) {
 		sbc1.Queries = nil
 		sbc2.Queries = nil
 		sbclookup.Queries = nil
-		wQuery := fmt.Sprintf("set @@workload = %s", workload)
+		wQuery := "set @@workload = " + workload
 		_, err := executorExecSession(context.Background(), executor, session, wQuery, nil)
 		require.NoError(t, err)
 

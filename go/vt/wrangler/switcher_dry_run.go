@@ -154,7 +154,7 @@ func (dr *switcherDryRun) startReverseVReplication(ctx context.Context) error {
 }
 
 func (dr *switcherDryRun) createReverseVReplication(ctx context.Context) error {
-	dr.drLog.Log(fmt.Sprintf("Create reverse replication workflow %s", dr.ts.ReverseWorkflowName()))
+	dr.drLog.Log("Create reverse replication workflow " + dr.ts.ReverseWorkflowName())
 	return nil
 }
 
@@ -218,7 +218,7 @@ func (dr *switcherDryRun) stopStreams(ctx context.Context, sm *workflow.StreamMi
 		}
 	}
 	if len(logs) > 0 {
-		dr.drLog.Log(fmt.Sprintf("Stop streams on keyspace %s", dr.ts.SourceKeyspaceName()))
+		dr.drLog.Log("Stop streams on keyspace " + dr.ts.SourceKeyspaceName())
 		dr.drLog.LogSlice(logs)
 	}
 	return nil, nil
@@ -229,9 +229,9 @@ func (dr *switcherDryRun) cancelMigration(ctx context.Context, sm *workflow.Stre
 }
 
 func (dr *switcherDryRun) lockKeyspace(ctx context.Context, keyspace, _ string) (context.Context, func(*error), error) {
-	dr.drLog.Log(fmt.Sprintf("Lock keyspace %s", keyspace))
+	dr.drLog.Log("Lock keyspace " + keyspace)
 	return ctx, func(e *error) {
-		dr.drLog.Log(fmt.Sprintf("Unlock keyspace %s", keyspace))
+		dr.drLog.Log("Unlock keyspace " + keyspace)
 	}, nil
 }
 
@@ -402,7 +402,6 @@ func (dr *switcherDryRun) resetSequences(ctx context.Context) error {
 func (dr *switcherDryRun) initializeTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error {
 	sortedBackingTableNames := maps.Keys(sequencesByBackingTable)
 	slices.Sort(sortedBackingTableNames)
-	dr.drLog.Log(fmt.Sprintf("The following sequence backing tables used by tables being moved will be initialized: %s",
-		strings.Join(sortedBackingTableNames, ",")))
+	dr.drLog.Log("The following sequence backing tables used by tables being moved will be initialized: " + strings.Join(sortedBackingTableNames, ","))
 	return nil
 }
