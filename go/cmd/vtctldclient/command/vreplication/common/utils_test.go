@@ -213,7 +213,7 @@ func TestOutputStatusResponse(t *testing.T) {
 								SourceShard: "commerce/0",
 								Position:    "f3918180-b58f-11f0-9085-360472309971:1-29655",
 								Status:      "Copying",
-								Info:        "VStream Lag: -1s; ; Tx time: Thu Oct 30 13:05:02 2025.",
+								Info:        "VStream Lag: -1s; ; Tx time: Thu Oct 30 13:05:02 2025",
 							},
 						},
 					},
@@ -222,7 +222,7 @@ func TestOutputStatusResponse(t *testing.T) {
 			},
 			want: `The following vreplication streams exist for workflow customer.commerce2customer:
 
-id=1 on customer/zone1-1: Status: Copying. VStream Lag: -1s; ; Tx time: Thu Oct 30 13:05:02 2025..
+id=1 on customer/zone1-1: Status: Copying. VStream Lag: -1s; ; Tx time: Thu Oct 30 13:05:02 2025.
 
 Table Copy Status:
 	table1: RowsCopied:20, RowsTotal:20, RowsPercentage:100.00, BytesCopied:1000, BytesTotal:1000, BytesPercentage:100.00, Phase:COMPLETE
@@ -276,7 +276,7 @@ Traffic State: Reads Not Switched. Writes Not Switched
 								SourceShard: "commerce/0",
 								Position:    "f3918180-b58f-11f0-9085-360472309971:1-29655",
 								Status:      "Copying",
-								Info:        "VStream Lag: -1s; ; Tx time: Thu Oct 30 13:05:02 2025.",
+								Info:        "VStream Lag: -1s; ; Tx time: Thu Oct 30 13:05:02 2025",
 							},
 						},
 					},
@@ -326,7 +326,7 @@ Traffic State: Reads Not Switched. Writes Not Switched
           "source_shard": "commerce/0",
           "position": "f3918180-b58f-11f0-9085-360472309971:1-29655",
           "status": "Copying",
-          "info": "VStream Lag: -1s; ; Tx time: Thu Oct 30 13:05:02 2025."
+          "info": "VStream Lag: -1s; ; Tx time: Thu Oct 30 13:05:02 2025"
         }
       ]
     }
