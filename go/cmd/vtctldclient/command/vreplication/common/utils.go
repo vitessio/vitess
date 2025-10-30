@@ -284,7 +284,7 @@ func OutputStatusResponse(resp *vtctldatapb.WorkflowStatusResponse, format strin
 	if len(resp.TableCopyState) > 0 {
 		tables := maps.Keys(resp.TableCopyState)
 		sort.Strings(tables) // Ensure that the output is intuitive and consistent
-		tout.WriteString("\nTable Copy Status: ")
+		tout.WriteString("\nTable Copy Status:")
 		for _, table := range tables {
 			// Unfortunately we cannot use the prototext marshaler here as it has no option
 			// to emit unpopulated fields.

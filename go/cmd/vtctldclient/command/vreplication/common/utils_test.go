@@ -161,6 +161,8 @@ func SetupLocalVtctldClient(t *testing.T, ctx context.Context, cells ...string) 
 
 func TestOutputStatusResponse(t *testing.T) {
 	cell := "zone1"
+	common.BaseOptions.TargetKeyspace = "customer"
+	common.BaseOptions.Workflow = "commerce2customer"
 	tests := []struct {
 		name   string
 		resp   *vtctldatapb.WorkflowStatusResponse
@@ -218,10 +220,20 @@ func TestOutputStatusResponse(t *testing.T) {
 				},
 				TrafficState: "Reads Not Switched. Writes Not Switched",
 			},
-			want: "The following vreplication streams exist for workflow .:\n\nid=1 on /zone1-1: Status: Copying. VStream Lag: -1s; ; Tx time: Thu Oct 30 13:05:02 2025..\n\nTable Copy Status: \n\ttable1: RowsCopied:20, RowsTotal:20, RowsPercentage:100.00, BytesCopied:1000, BytesTotal:1000, BytesPercentage:100.00, Phase:COMPLETE\n\ttable2: RowsCopied:10, RowsTotal:50, RowsPercentage:20.00, BytesCopied:1000, BytesTotal:5000, BytesPercentage:20.00, Phase:IN_PROGRESS\n\ttable3: RowsCopied:0, RowsTotal:2000, RowsPercentage:0.00, BytesCopied:0, BytesTotal:200000, BytesPercentage:0.00, Phase:NOT_STARTED\n\nTraffic State: Reads Not Switched. Writes Not Switched\n",
+			want: `The following vreplication streams exist for workflow customer.commerce2customer:
+
+id=1 on customer/zone1-1: Status: Copying. VStream Lag: -1s; ; Tx time: Thu Oct 30 13:05:02 2025..
+
+Table Copy Status:
+	table1: RowsCopied:20, RowsTotal:20, RowsPercentage:100.00, BytesCopied:1000, BytesTotal:1000, BytesPercentage:100.00, Phase:COMPLETE
+	table2: RowsCopied:10, RowsTotal:50, RowsPercentage:20.00, BytesCopied:1000, BytesTotal:5000, BytesPercentage:20.00, Phase:IN_PROGRESS
+	table3: RowsCopied:0, RowsTotal:2000, RowsPercentage:0.00, BytesCopied:0, BytesTotal:200000, BytesPercentage:0.00, Phase:NOT_STARTED
+
+Traffic State: Reads Not Switched. Writes Not Switched
+`,
 		},
 		{
-			name: "text",
+			name: "json",
 			resp: &vtctldatapb.WorkflowStatusResponse{
 				TableCopyState: map[string]*vtctldatapb.WorkflowStatusResponse_TableCopyState{
 					"table1": {
@@ -272,7 +284,56 @@ func TestOutputStatusResponse(t *testing.T) {
 				TrafficState: "Reads Not Switched. Writes Not Switched",
 			},
 			format: "json",
-			want:   "{\n  \"table_copy_state\": {\n    \"table1\": {\n      \"rows_copied\": \"20\",\n      \"rows_total\": \"20\",\n      \"rows_percentage\": 100,\n      \"bytes_copied\": \"1000\",\n      \"bytes_total\": \"1000\",\n      \"bytes_percentage\": 100,\n      \"phase\": \"COMPLETE\"\n    },\n    \"table2\": {\n      \"rows_copied\": \"10\",\n      \"rows_total\": \"50\",\n      \"rows_percentage\": 20,\n      \"bytes_copied\": \"1000\",\n      \"bytes_total\": \"5000\",\n      \"bytes_percentage\": 20,\n      \"phase\": \"IN_PROGRESS\"\n    },\n    \"table3\": {\n      \"rows_copied\": \"0\",\n      \"rows_total\": \"2000\",\n      \"rows_percentage\": 0,\n      \"bytes_copied\": \"0\",\n      \"bytes_total\": \"200000\",\n      \"bytes_percentage\": 0,\n      \"phase\": \"NOT_STARTED\"\n    }\n  },\n  \"shard_streams\": {\n    \"customer/0\": {\n      \"streams\": [\n        {\n          \"id\": 1,\n          \"tablet\": {\n            \"cell\": \"zone1\",\n            \"uid\": 1\n          },\n          \"source_shard\": \"commerce/0\",\n          \"position\": \"f3918180-b58f-11f0-9085-360472309971:1-29655\",\n          \"status\": \"Copying\",\n          \"info\": \"VStream Lag: -1s; ; Tx time: Thu Oct 30 13:05:02 2025.\"\n        }\n      ]\n    }\n  },\n  \"traffic_state\": \"Reads Not Switched. Writes Not Switched\"\n}\n",
+			want: `{
+  "table_copy_state": {
+    "table1": {
+      "rows_copied": "20",
+      "rows_total": "20",
+      "rows_percentage": 100,
+      "bytes_copied": "1000",
+      "bytes_total": "1000",
+      "bytes_percentage": 100,
+      "phase": "COMPLETE"
+    },
+    "table2": {
+      "rows_copied": "10",
+      "rows_total": "50",
+      "rows_percentage": 20,
+      "bytes_copied": "1000",
+      "bytes_total": "5000",
+      "bytes_percentage": 20,
+      "phase": "IN_PROGRESS"
+    },
+    "table3": {
+      "rows_copied": "0",
+      "rows_total": "2000",
+      "rows_percentage": 0,
+      "bytes_copied": "0",
+      "bytes_total": "200000",
+      "bytes_percentage": 0,
+      "phase": "NOT_STARTED"
+    }
+  },
+  "shard_streams": {
+    "customer/0": {
+      "streams": [
+        {
+          "id": 1,
+          "tablet": {
+            "cell": "zone1",
+            "uid": 1
+          },
+          "source_shard": "commerce/0",
+          "position": "f3918180-b58f-11f0-9085-360472309971:1-29655",
+          "status": "Copying",
+          "info": "VStream Lag: -1s; ; Tx time: Thu Oct 30 13:05:02 2025."
+        }
+      ]
+    }
+  },
+  "traffic_state": "Reads Not Switched. Writes Not Switched"
+}
+`,
 		},
 	}
 	for _, tt := range tests {
