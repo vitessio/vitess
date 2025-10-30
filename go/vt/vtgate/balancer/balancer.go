@@ -18,6 +18,7 @@ package balancer
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"net/http"
@@ -110,7 +111,7 @@ func NewTabletBalancer(mode, localCell string, vtGateCells []string) (TabletBala
 	case "random":
 		return newRandomBalancer(localCell, vtGateCells), nil
 	case "cell":
-		return nil, fmt.Errorf("cell mode should be handled by the gateway, not the balancer factory")
+		return nil, errors.New("cell mode should be handled by the gateway, not the balancer factory")
 	default:
 		return nil, fmt.Errorf("unsupported balancer mode: %s (supported modes: cell, flow, random)", mode)
 	}
