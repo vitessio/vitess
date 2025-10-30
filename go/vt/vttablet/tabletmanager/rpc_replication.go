@@ -191,7 +191,7 @@ func (tm *TabletManager) PrimaryPosition(ctx context.Context) (string, error) {
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return "", err
 	}
-	pos, err := tm.MysqlDaemon.PrimaryPosition()
+	pos, err := tm.MysqlDaemon.PrimaryPosition(context.TODO()) // not passing the context to keep the same behavior as before.
 	if err != nil {
 		return "", err
 	}
@@ -259,7 +259,7 @@ func (tm *TabletManager) StopReplicationMinimum(ctx context.Context, position st
 	if err := tm.stopReplicationLocked(ctx); err != nil {
 		return "", err
 	}
-	pos, err = tm.MysqlDaemon.PrimaryPosition()
+	pos, err = tm.MysqlDaemon.PrimaryPosition(context.TODO()) // not passing the context to keep the same behavior as before.
 	if err != nil {
 		return "", err
 	}
@@ -362,7 +362,7 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 	}
 
 	// get the current replication position
-	pos, err := tm.MysqlDaemon.PrimaryPosition()
+	pos, err := tm.MysqlDaemon.PrimaryPosition(context.TODO()) // not passing the context to keep the same behavior as before.
 	if err != nil {
 		return "", err
 	}

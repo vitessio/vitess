@@ -79,7 +79,7 @@ type MysqlDaemon interface {
 
 	// reparenting related methods
 	ResetReplication(ctx context.Context) error
-	PrimaryPosition() (replication.Position, error)
+	PrimaryPosition(ctx context.Context) (replication.Position, error)
 	IsReadOnly() (bool, error)
 	IsSuperReadOnly() (bool, error)
 	SetReadOnly(on bool) error

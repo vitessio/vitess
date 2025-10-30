@@ -159,7 +159,11 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 	// so we pass a new one.
 	defer func() { params.Mysqld.ReleaseGlobalReadLock(context.Background()) }()
 
-	posBeforeBackup, err := params.Mysqld.PrimaryPosition()
+	// we need to add a timeout to the context so we don't wait forever for the position.
+	positionCtx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+
+	posBeforeBackup, err := params.Mysqld.PrimaryPosition(positionCtx)
 	if err != nil {
 		return BackupUnusable, vterrors.Wrap(err, "failed to fetch position")
 	}

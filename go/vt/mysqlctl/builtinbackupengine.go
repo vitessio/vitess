@@ -454,7 +454,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 			}()
 
 		}
-		replicationPosition, err = params.Mysqld.PrimaryPosition()
+		replicationPosition, err = params.Mysqld.PrimaryPosition(context.TODO())
 		if err != nil {
 			return BackupUnusable, vterrors.Wrap(err, "can't get position on primary")
 		}

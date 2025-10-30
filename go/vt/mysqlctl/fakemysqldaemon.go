@@ -379,7 +379,7 @@ func (fmd *FakeMysqlDaemon) GetPreviousGTIDs(ctx context.Context, binlog string)
 }
 
 // PrimaryPosition is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) PrimaryPosition() (replication.Position, error) {
+func (fmd *FakeMysqlDaemon) PrimaryPosition(ctx context.Context) (replication.Position, error) {
 	return fmd.GetPrimaryPositionLocked(), nil
 }
 

@@ -553,7 +553,7 @@ func (tm *TabletManager) catchupToGTID(ctx context.Context, afterGTIDPos string,
 	go func() {
 		timeToWait := time.Now().Add(timeoutForGTIDLookup)
 		for time.Now().Before(timeToWait) {
-			pos, err := tm.MysqlDaemon.PrimaryPosition()
+			pos, err := tm.MysqlDaemon.PrimaryPosition(context.TODO()) // not passing the context to keep the same behavior as before.
 			if err != nil {
 				chGTIDCaughtup <- false
 			}

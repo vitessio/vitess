@@ -432,8 +432,8 @@ func (mysqld *Mysqld) GetGTIDPurged(ctx context.Context) (replication.Position, 
 }
 
 // PrimaryPosition returns the primary replication position.
-func (mysqld *Mysqld) PrimaryPosition() (replication.Position, error) {
-	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
+func (mysqld *Mysqld) PrimaryPosition(ctx context.Context) (replication.Position, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return replication.Position{}, err
 	}
