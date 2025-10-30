@@ -30,7 +30,7 @@ jobs:
           - flavor: mysql80
             race: true
 
-    name: Unit Test (${{ if matrix.race }}${{ matrix.flavor }}Race${{ else }}${{ matrix.flavor }}${{ endif }})
+    name: Unit Test (${{ (matrix.race && 'Race') || matrix.flavor }})
     runs-on: ubuntu-24.04
 
     steps:
@@ -135,7 +135,7 @@ jobs:
         # testing, e.g. MySQL 5.7 vs 8.0.
         export CI_DB_PLATFORM="${{ matrix.flavor }}"
 
-        make unit_test${{ if matrix.race }}_race{{ end }} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        make unit_test${{ matrix.race && '_race' }} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Record test results in launchable if PR is not a draft
       if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.unit_tests == 'true' && github.base_ref == 'main' && !cancelled()
