@@ -110,10 +110,11 @@ type SandboxConn struct {
 	MessageIDs []*querypb.Value
 
 	// vstream expectations.
-	StartPos      string
-	VStreamEvents [][]*binlogdatapb.VEvent
-	VStreamErrors []error
-	VStreamCh     chan *binlogdatapb.VEvent
+	StartPos          string
+	VStreamEvents     [][]*binlogdatapb.VEvent
+	VStreamErrors     []error
+	VStreamCh         chan *binlogdatapb.VEvent
+	VStreamEventDelay time.Duration // Any sleep that should be introduced before each event is streamed
 
 	// transaction id generator
 	TransactionID atomic.Int64
@@ -624,6 +625,9 @@ func (sbc *SandboxConn) VStream(ctx context.Context, request *binlogdatapb.VStre
 			sbc.VStreamErrors = sbc.VStreamErrors[1:]
 			if ev == nil {
 				return err
+			}
+			if sbc.VStreamEventDelay > 0 {
+				time.Sleep(sbc.VStreamEventDelay)
 			}
 			if err := send(ev); err != nil {
 				return err
