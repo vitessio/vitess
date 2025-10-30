@@ -25,7 +25,7 @@ jobs:
     strategy:
       matrix:
         flavor: [mysql57, mysql80, mysql84]
-        race: false
+        race: [false]
         include:
           - flavor: mysql80
             race: true
