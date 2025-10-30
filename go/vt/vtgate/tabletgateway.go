@@ -297,11 +297,11 @@ func (gw *TabletGateway) CacheStatus() TabletCacheStatusList {
 }
 
 func (gw *TabletGateway) DebugBalancerHandler(w http.ResponseWriter, r *http.Request) {
-	if balancerEnabled {
+	if gw.balancer != nil {
 		gw.balancer.DebugHandler(w, r)
 	} else {
 		w.Header().Set("Content-Type", "text/plain")
-		w.Write([]byte("not enabled"))
+		w.Write([]byte("Balancer mode: cell (default shuffle, no balancer instance)"))
 	}
 }
 

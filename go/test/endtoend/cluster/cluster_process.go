@@ -453,6 +453,7 @@ func (cluster *LocalProcessCluster) AddShard(keyspaceName string, shardName stri
 			HTTPPort:  cluster.GetAndReservePort(),
 			GrpcPort:  cluster.GetAndReservePort(),
 			MySQLPort: cluster.GetAndReservePort(),
+			Cell:      cluster.Cell,
 			Alias:     fmt.Sprintf("%s-%010d", cluster.Cell, tabletUID),
 		}
 		if i == 0 { // Make the first one as primary
