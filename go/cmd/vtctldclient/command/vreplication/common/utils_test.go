@@ -170,7 +170,7 @@ func TestOutputStatusResponse(t *testing.T) {
 		format string
 	}{
 		{
-			name: "text",
+			name: "plain-text format",
 			resp: &vtctldatapb.WorkflowStatusResponse{
 				TableCopyState: map[string]*vtctldatapb.WorkflowStatusResponse_TableCopyState{
 					"table1": {
@@ -233,7 +233,73 @@ Traffic State: Reads Not Switched. Writes Not Switched
 `,
 		},
 		{
-			name: "json",
+			// An older server won't send the new Phase field so it will have the
+			// zero value for it in the message. We should then not display it in
+			// the output.
+			name: "plain-text format with old server",
+			resp: &vtctldatapb.WorkflowStatusResponse{
+				TableCopyState: map[string]*vtctldatapb.WorkflowStatusResponse_TableCopyState{
+					"table1": {
+						RowsCopied:      20,
+						RowsTotal:       20,
+						RowsPercentage:  100,
+						BytesCopied:     1000,
+						BytesTotal:      1000,
+						BytesPercentage: 100,
+						Phase:           vtctldatapb.TableCopyPhase_UNKNOWN,
+					},
+					"table2": {
+						RowsCopied:      10,
+						RowsTotal:       50,
+						RowsPercentage:  20,
+						BytesCopied:     1000,
+						BytesTotal:      5000,
+						BytesPercentage: 20,
+						Phase:           vtctldatapb.TableCopyPhase_UNKNOWN,
+					},
+					"table3": {
+						RowsCopied:      0,
+						RowsTotal:       2000,
+						RowsPercentage:  0,
+						BytesCopied:     0,
+						BytesTotal:      200000,
+						BytesPercentage: 0,
+						Phase:           vtctldatapb.TableCopyPhase_UNKNOWN,
+					},
+				},
+				ShardStreams: map[string]*vtctldatapb.WorkflowStatusResponse_ShardStreams{
+					"customer/0": {
+						Streams: []*vtctldatapb.WorkflowStatusResponse_ShardStreamState{
+							{
+								Id: 1,
+								Tablet: &topodatapb.TabletAlias{
+									Cell: cell,
+									Uid:  1,
+								},
+								SourceShard: "commerce/0",
+								Position:    "f3918180-b58f-11f0-9085-360472309971:1-29655",
+								Status:      "Copying",
+								Info:        "VStream Lag: -1s; ; Tx time: Thu Oct 30 13:05:02 2025",
+							},
+						},
+					},
+				},
+				TrafficState: "Reads Not Switched. Writes Not Switched",
+			},
+			want: `The following vreplication streams exist for workflow customer.commerce2customer:
+
+id=1 on customer/zone1-1: Status: Copying. VStream Lag: -1s; ; Tx time: Thu Oct 30 13:05:02 2025.
+
+Table Copy Status:
+	table1: RowsCopied:20, RowsTotal:20, RowsPercentage:100.00, BytesCopied:1000, BytesTotal:1000, BytesPercentage:100.00
+	table2: RowsCopied:10, RowsTotal:50, RowsPercentage:20.00, BytesCopied:1000, BytesTotal:5000, BytesPercentage:20.00
+	table3: RowsCopied:0, RowsTotal:2000, RowsPercentage:0.00, BytesCopied:0, BytesTotal:200000, BytesPercentage:0.00
+
+Traffic State: Reads Not Switched. Writes Not Switched
+`,
+		},
+		{
+			name: "json format",
 			resp: &vtctldatapb.WorkflowStatusResponse{
 				TableCopyState: map[string]*vtctldatapb.WorkflowStatusResponse_TableCopyState{
 					"table1": {

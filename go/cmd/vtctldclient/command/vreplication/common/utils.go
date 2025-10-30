@@ -297,8 +297,12 @@ func OutputStatusResponse(resp *vtctldatapb.WorkflowStatusResponse, format strin
 			tout.WriteString(fmt.Sprintf("RowsPercentage:%.2f, ", tcs.RowsPercentage))
 			tout.WriteString(fmt.Sprintf("BytesCopied:%d, ", tcs.BytesCopied))
 			tout.WriteString(fmt.Sprintf("BytesTotal:%d, ", tcs.BytesTotal))
-			tout.WriteString(fmt.Sprintf("BytesPercentage:%.2f, ", tcs.BytesPercentage))
-			tout.WriteString(fmt.Sprintf("Phase:%s", tcs.Phase))
+			tout.WriteString(fmt.Sprintf("BytesPercentage:%.2f", tcs.BytesPercentage))
+			// If we're talking to an older server it won't provide this field. We should
+			// not show a wrong or confusing value in this case so elide it from the output.
+			if tcs.Phase != vtctldatapb.TableCopyPhase_UNKNOWN {
+				tout.WriteString(fmt.Sprintf(", Phase:%s", tcs.Phase))
+			}
 		}
 		tout.WriteString("\n")
 	}

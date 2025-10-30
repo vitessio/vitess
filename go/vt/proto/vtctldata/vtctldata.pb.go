@@ -207,22 +207,25 @@ func (ShardedAutoIncrementHandling) EnumDescriptor() ([]byte, []int) {
 type TableCopyPhase int32
 
 const (
-	TableCopyPhase_COMPLETE    TableCopyPhase = 0
-	TableCopyPhase_IN_PROGRESS TableCopyPhase = 1
-	TableCopyPhase_NOT_STARTED TableCopyPhase = 2
+	TableCopyPhase_UNKNOWN     TableCopyPhase = 0
+	TableCopyPhase_NOT_STARTED TableCopyPhase = 1
+	TableCopyPhase_IN_PROGRESS TableCopyPhase = 2
+	TableCopyPhase_COMPLETE    TableCopyPhase = 3
 )
 
 // Enum value maps for TableCopyPhase.
 var (
 	TableCopyPhase_name = map[int32]string{
-		0: "COMPLETE",
-		1: "IN_PROGRESS",
-		2: "NOT_STARTED",
+		0: "UNKNOWN",
+		1: "NOT_STARTED",
+		2: "IN_PROGRESS",
+		3: "COMPLETE",
 	}
 	TableCopyPhase_value = map[string]int32{
-		"COMPLETE":    0,
-		"IN_PROGRESS": 1,
-		"NOT_STARTED": 2,
+		"UNKNOWN":     0,
+		"NOT_STARTED": 1,
+		"IN_PROGRESS": 2,
+		"COMPLETE":    3,
 	}
 )
 
@@ -17211,7 +17214,7 @@ func (x *WorkflowStatusResponse_TableCopyState) GetPhase() TableCopyPhase {
 	if x != nil {
 		return x.Phase
 	}
-	return TableCopyPhase_COMPLETE
+	return TableCopyPhase_UNKNOWN
 }
 
 type WorkflowStatusResponse_ShardStreamState struct {
@@ -18667,11 +18670,12 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x05LEAVE\x10\x00\x12\n" +
 	"\n" +
 	"\x06REMOVE\x10\x01\x12\v\n" +
-	"\aREPLACE\x10\x02*@\n" +
-	"\x0eTableCopyPhase\x12\f\n" +
-	"\bCOMPLETE\x10\x00\x12\x0f\n" +
-	"\vIN_PROGRESS\x10\x01\x12\x0f\n" +
-	"\vNOT_STARTED\x10\x02B(Z&vitess.io/vitess/go/vt/proto/vtctldatab\x06proto3"
+	"\aREPLACE\x10\x02*M\n" +
+	"\x0eTableCopyPhase\x12\v\n" +
+	"\aUNKNOWN\x10\x00\x12\x0f\n" +
+	"\vNOT_STARTED\x10\x01\x12\x0f\n" +
+	"\vIN_PROGRESS\x10\x02\x12\f\n" +
+	"\bCOMPLETE\x10\x03B(Z&vitess.io/vitess/go/vt/proto/vtctldatab\x06proto3"
 
 var (
 	file_vtctldata_proto_rawDescOnce sync.Once

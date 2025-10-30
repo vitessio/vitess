@@ -80771,9 +80771,10 @@ export namespace vtctldata {
 
     /** TableCopyPhase enum. */
     enum TableCopyPhase {
-        COMPLETE = 0,
-        IN_PROGRESS = 1,
-        NOT_STARTED = 2
+        UNKNOWN = 0,
+        NOT_STARTED = 1,
+        IN_PROGRESS = 2,
+        COMPLETE = 3
     }
 
     /** Properties of a WorkflowStatusResponse. */
