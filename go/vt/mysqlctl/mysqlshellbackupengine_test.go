@@ -406,6 +406,10 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 
 		require.Equal(t, mysqlShellBackupEngineName, manifest.BackupMethod)
 
+		if hostname, err := os.Hostname(); err == nil {
+			require.Equal(t, hostname, manifest.Hostname)
+		}
+
 		// did we notice the lock was release and did we release it ours as well?
 		require.Contains(t, logger.String(), "global read lock released after",
 			"failed to release the global lock after mysqlsh")
