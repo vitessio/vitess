@@ -70,7 +70,7 @@ const tabletPickerContextTimeout = 90 * time.Second
 // ending the stream from the tablet.
 const stopOnReshardDelay = 500 * time.Millisecond
 
-// livenessTimeout is the point at which we return an error to the client if the stream has recieved
+// livenessTimeout is the point at which we return an error to the client if the stream has received
 // no events, including heartbeats, from any of the shards.
 var livenessTimeout = 10 * time.Minute
 
