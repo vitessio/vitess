@@ -1887,10 +1887,10 @@ func (s *Server) getCopyProgress(ctx context.Context, ts *trafficSwitcher) (*cop
 		var phase vtctldatapb.TableCopyPhase
 		if _, ok := inProgressTables[table]; !ok {
 			phase = vtctldatapb.TableCopyPhase_COMPLETE
-		} else if rowCount == 0 {
-			phase = vtctldatapb.TableCopyPhase_NOT_STARTED
-		} else {
+		} else if rowCount > 0 {
 			phase = vtctldatapb.TableCopyPhase_IN_PROGRESS
+		} else {
+			phase = vtctldatapb.TableCopyPhase_NOT_STARTED
 		}
 		copyProgress[table] = &tableCopyProgress{
 			TargetRowCount:  rowCount,
