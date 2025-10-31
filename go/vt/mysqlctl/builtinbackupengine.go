@@ -62,9 +62,7 @@ const (
 	AutoIncrementalFromPos  = "auto"
 	dataDictionaryFile      = "mysql.ibd"
 
-	maxRetriesPerFile   = 1
-	fileCloseRetries    = 3
-	fileCloseRetryDelay = 500 * time.Millisecond
+	maxRetriesPerFile = 1
 )
 
 var (
@@ -856,7 +854,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 
 	defer func() {
 		closeSourceAt := time.Now()
-		if err := closeWithRetry(source); err != nil {
+		if err := closeWithRetry(ctx, source); err != nil {
 			params.Logger.Infof("Failed to close %s source file during backup: %v", fe.Name, err)
 		}
 		params.Stats.Scope(stats.Operation("Source:Close")).TimedIncrement(time.Since(closeSourceAt))
@@ -885,13 +883,9 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 
 	defer func(name, fileName string) {
 		closeDestAt := time.Now()
-		if rerr := closeWithRetry(dest); rerr != nil {
+		if rerr := closeWithRetry(ctx, dest); rerr != nil {
 			rerr = vterrors.Wrapf(rerr, "failed to close destination file (%v) %v", name, fe.Name)
 			params.Logger.Error(rerr)
-			// Let's try to delete the file as we will retry.
-			if cerr := os.Remove(source.Name()); cerr != nil {
-				finalErr = errors.Join(finalErr, cerr)
-			}
 			finalErr = errors.Join(finalErr, rerr)
 		}
 		params.Stats.Scope(stats.Operation("Destination:Close")).TimedIncrement(time.Since(closeDestAt))
@@ -940,7 +934,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 				// Close gzip to flush it, after that all data is sent to writer.
 				closeCompressorAt := time.Now()
 				params.Logger.Infof("Closing compressor for file: %s %s", fe.Name, retryStr)
-				if cerr := closeWithRetry(closer); err != nil {
+				if cerr := closeWithRetry(ctx, closer); err != nil {
 					cerr = vterrors.Wrapf(cerr, "failed to close compressor %v", fe.Name)
 					params.Logger.Error(cerr)
 					createAndCopyErr = errors.Join(createAndCopyErr, cerr)
@@ -1004,7 +998,7 @@ func (be *BuiltinBackupEngine) backupManifest(
 			return vterrors.Wrapf(err, "cannot add %v to backup %s", backupManifestFileName, retryStr)
 		}
 		defer func() {
-			if err := closeWithRetry(wc); err != nil {
+			if err := closeWithRetry(ctx, wc); err != nil {
 				addAndWriteError = errors.Join(addAndWriteError, vterrors.Wrapf(err, "cannot close backup: %v", backupManifestFileName))
 			}
 		}()
@@ -1266,7 +1260,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 
 	defer func() {
 		closeSourceAt := time.Now()
-		if err := closeWithRetry(source); err != nil {
+		if err := closeWithRetry(ctx, source); err != nil {
 			params.Logger.Errorf("Failed to close source file %s during restore: %v", name, err)
 		}
 		params.Stats.Scope(stats.Operation("Source:Close")).TimedIncrement(time.Since(closeSourceAt))
@@ -1292,7 +1286,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	params.Stats.Scope(stats.Operation("Destination:Open")).TimedIncrement(time.Since(openDestAt))
 
 	defer func() {
-		if cerr := closeWithRetry(dest); cerr != nil {
+		if cerr := closeWithRetry(ctx, dest); cerr != nil {
 			finalErr = errors.Join(finalErr, vterrors.Wrap(cerr, "failed to close destination file"))
 			params.Logger.Errorf("Failed to close destination file %s during restore: %v", dest.Name(), err)
 		}
@@ -1342,7 +1336,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 		defer func() {
 			closeDecompressorAt := time.Now()
 			params.Logger.Infof("closing decompressor")
-			if cerr := closeWithRetry(closer); err != nil {
+			if cerr := closeWithRetry(ctx, closer); err != nil {
 				cerr = vterrors.Wrapf(cerr, "failed to close decompressor %v", name)
 				params.Logger.Error(cerr)
 				finalErr = errors.Join(finalErr, cerr)
@@ -1414,16 +1408,32 @@ func init() {
 	BackupRestoreEngineMap[builtinBackupEngineName] = &BuiltinBackupEngine{}
 }
 
-// closeWithRetry does just what it says. Retrying a close operation is
-// important as an error is most likely transient and leaving around open
-// file descriptors can lead to later problems.
-func closeWithRetry(file io.Closer) error {
+// closeWithRetry does just what it says. Retrying a close operation is important as
+// an error is most likely transient and leaving around open file descriptors can lead
+// to later problems as the file may be in a sort-of uploaded state where it exists
+// but has not yet been finalized (this is true for GCS). This can cause unexpected
+// behavior if you retry the file while the original request is still in this state.
+// Most implementations such as GCS will automatically retry operations, but close
+// is one that may be left to the caller (this is true for GCS).
+// We model this retry after the GCS retry implementation described here:
+// https://cloud.google.com/storage/docs/retry-strategy#go
+func closeWithRetry(ctx context.Context, file io.Closer) error {
+	backoff := 1 * time.Second
+	backoffLimit := backoff * 30
 	var err error
-	for range fileCloseRetries {
+	for {
 		if err = file.Close(); err == nil {
 			return nil
 		}
-		time.Sleep(fileCloseRetryDelay)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(backoff):
+			// Exponential backoff with 2 as a factor.
+			if backoff != backoffLimit {
+				updatedBackoff := time.Duration(float64(backoff) * 2)
+				backoff = min(updatedBackoff, backoffLimit)
+			}
+		}
 	}
-	return err
 }
