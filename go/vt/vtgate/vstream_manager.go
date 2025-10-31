@@ -688,16 +688,27 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			Options:      options,
 		}
 		log.Infof("Starting to vstream from %s, with req %+v", tabletAliasString, req)
+		// Track if we're holding the lock across callbacks for a chunked transaction
+		var txLockHeld bool
+
 		err = tabletConn.VStream(ctx, req, func(events []*binlogdatapb.VEvent) error {
 			// We received a valid event. Reset error count.
 			errCount = 0
 
 			select {
 			case <-ctx.Done():
+				if txLockHeld {
+					vs.mu.Unlock()
+					txLockHeld = false
+				}
 				return vterrors.Wrapf(ctx.Err(), "context ended while streaming from tablet %s in %s/%s",
 					tabletAliasString, sgtid.Keyspace, sgtid.Shard)
 			case streamErr := <-errCh:
 				log.Infof("vstream for %s/%s ended due to health check, should retry: %v", sgtid.Keyspace, sgtid.Shard, streamErr)
+				if txLockHeld {
+					vs.mu.Unlock()
+					txLockHeld = false
+				}
 				// You must return Code_UNAVAILABLE here to trigger a restart.
 				return vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "error streaming from tablet %s in %s/%s: %s",
 					tabletAliasString, sgtid.Keyspace, sgtid.Shard, streamErr.Error())
@@ -706,6 +717,10 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 				// This can happen if a server misbehaves and does not end
 				// the stream after we return an error.
 				log.Infof("vstream for %s/%s ended due to journal event, returning io.EOF", sgtid.Keyspace, sgtid.Shard)
+				if txLockHeld {
+					vs.mu.Unlock()
+					txLockHeld = false
+				}
 				return io.EOF
 			default:
 			}
@@ -713,10 +728,18 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			aligningStreamsErr := fmt.Sprintf("error aligning streams across %s/%s", sgtid.Keyspace, sgtid.Shard)
 			sendingEventsErr := "error sending event batch from tablet " + tabletAliasString
 
+			// Track BEGIN/COMMIT counts to detect incomplete transactions
+			// A callback can contain multiple complete transactions plus an incomplete one:
+			// [BEGIN, ROW, COMMIT, BEGIN, ROW, COMMIT, BEGIN, ROW...]
+			var beginCount, commitCount int
+
 			sendevents := make([]*binlogdatapb.VEvent, 0, len(events))
 			for i, event := range events {
 				vs.streamLivenessTimer.Reset(livenessTimeout) // Any event in the stream demonstrates liveness
 				switch event.Type {
+				case binlogdatapb.VEventType_BEGIN:
+					beginCount++
+					sendevents = append(sendevents, event)
 				case binlogdatapb.VEventType_FIELD:
 					ev := maybeUpdateTableName(event, sgtid.Keyspace, vs.flags.GetExcludeKeyspaceFromTableName(), extractFieldTableName)
 					sendevents = append(sendevents, ev)
@@ -724,16 +747,31 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 					ev := maybeUpdateTableName(event, sgtid.Keyspace, vs.flags.GetExcludeKeyspaceFromTableName(), extractRowTableName)
 					sendevents = append(sendevents, ev)
 				case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER:
+					if event.Type == binlogdatapb.VEventType_COMMIT {
+						commitCount++
+					}
 					sendevents = append(sendevents, event)
 					eventss = append(eventss, sendevents)
 
 					if err := vs.alignStreams(ctx, event, sgtid.Keyspace, sgtid.Shard); err != nil {
+						if txLockHeld {
+							vs.mu.Unlock()
+							txLockHeld = false
+						}
 						return vterrors.Wrap(err, aligningStreamsErr)
 					}
 
-					if err := vs.sendAll(ctx, sgtid, eventss); err != nil {
-						log.Infof("vstream for %s/%s, error in sendAll: %v", sgtid.Keyspace, sgtid.Shard, err)
-						return vterrors.Wrap(err, sendingEventsErr)
+					var sendErr error
+					if txLockHeld {
+						sendErr = vs.sendEventsLocked(ctx, sgtid, eventss)
+						vs.mu.Unlock()
+						txLockHeld = false
+					} else {
+						sendErr = vs.sendAll(ctx, sgtid, eventss)
+					}
+					if sendErr != nil {
+						log.Infof("vstream for %s/%s, error in sendAll: %v", sgtid.Keyspace, sgtid.Shard, sendErr)
+						return vterrors.Wrap(sendErr, sendingEventsErr)
 					}
 					eventss = nil
 					sendevents = nil
@@ -745,12 +783,24 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 					eventss = append(eventss, sendevents)
 
 					if err := vs.alignStreams(ctx, event, sgtid.Keyspace, sgtid.Shard); err != nil {
+						if txLockHeld {
+							vs.mu.Unlock()
+							txLockHeld = false
+						}
 						return vterrors.Wrap(err, aligningStreamsErr)
 					}
 
-					if err := vs.sendAll(ctx, sgtid, eventss); err != nil {
-						log.Infof("vstream for %s/%s, error in sendAll, on copy completed event: %v", sgtid.Keyspace, sgtid.Shard, err)
-						return vterrors.Wrap(err, sendingEventsErr)
+					var sendErr error
+					if txLockHeld {
+						sendErr = vs.sendEventsLocked(ctx, sgtid, eventss)
+						vs.mu.Unlock()
+						txLockHeld = false
+					} else {
+						sendErr = vs.sendAll(ctx, sgtid, eventss)
+					}
+					if sendErr != nil {
+						log.Infof("vstream for %s/%s, error in sendAll, on copy completed event: %v", sgtid.Keyspace, sgtid.Shard, sendErr)
+						return vterrors.Wrap(sendErr, sendingEventsErr)
 					}
 					eventss = nil
 					sendevents = nil
@@ -759,6 +809,10 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 					// Otherwise they can accumulate indefinitely if there are no real events.
 					// TODO(sougou): figure out a model for this.
 					if err := vs.alignStreams(ctx, event, sgtid.Keyspace, sgtid.Shard); err != nil {
+						if txLockHeld {
+							vs.mu.Unlock()
+							txLockHeld = false
+						}
 						return vterrors.Wrap(err, aligningStreamsErr)
 					}
 				case binlogdatapb.VEventType_JOURNAL:
@@ -779,9 +833,17 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 							}
 						}
 						eventss = append(eventss, sendevents)
-						if err := vs.sendAll(ctx, sgtid, eventss); err != nil {
-							log.Infof("vstream for %s/%s, error in sendAll, on journal event: %v", sgtid.Keyspace, sgtid.Shard, err)
-							return vterrors.Wrap(err, sendingEventsErr)
+						var sendErr error
+						if txLockHeld {
+							sendErr = vs.sendEventsLocked(ctx, sgtid, eventss)
+							vs.mu.Unlock()
+							txLockHeld = false
+						} else {
+							sendErr = vs.sendAll(ctx, sgtid, eventss)
+						}
+						if sendErr != nil {
+							log.Infof("vstream for %s/%s, error in sendAll on journal event: %v", sgtid.Keyspace, sgtid.Shard, sendErr)
+							return vterrors.Wrap(sendErr, sendingEventsErr)
 						}
 						eventss = nil
 						sendevents = nil
@@ -828,6 +890,37 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			if len(sendevents) != 0 {
 				eventss = append(eventss, sendevents)
 			}
+
+			// Lock management for chunked transactions:
+			// Count BEGIN/COMMIT pairs to detect incomplete transactions.
+
+			if commitCount > 0 && beginCount <= commitCount && txLockHeld {
+				// We saw at least one COMMIT, and all transactions are balanced.
+				// This means we're either completing a transaction from a previous callback
+				// or all transactions in this callback are complete.
+				vs.mu.Unlock()
+				txLockHeld = false
+			}
+
+			// Send accumulated events only if holding lock (chunked transaction in progress)
+			// If not holding lock, all events were already sent by COMMIT/DDL/OTHER handlers
+			if len(eventss) > 0 && txLockHeld {
+				if err := vs.sendEventsLocked(ctx, sgtid, eventss); err != nil {
+					log.Infof("vstream for %s/%s, error in sendAll at end of callback: %v", sgtid.Keyspace, sgtid.Shard, err)
+					vs.mu.Unlock()
+					txLockHeld = false
+					return vterrors.Wrap(err, sendingEventsErr)
+				}
+				eventss = nil
+			}
+
+			if beginCount > commitCount && !txLockHeld {
+				// Incomplete transaction detected - acquire lock to prevent interleaving
+				// Lock will be held across subsequent callbacks until all transactions complete
+				vs.mu.Lock()
+				txLockHeld = true
+			}
+
 			return nil
 		})
 		// If stream was ended (by a journal event), return nil without checking for error.
@@ -944,6 +1037,12 @@ func (vs *vstream) shouldRetry(err error) (retry bool, ignoreTablet bool) {
 func (vs *vstream) sendAll(ctx context.Context, sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdatapb.VEvent) error {
 	vs.mu.Lock()
 	defer vs.mu.Unlock()
+	return vs.sendEventsLocked(ctx, sgtid, eventss)
+}
+
+// sendEventsLocked sends events assuming vs.mu is already held by the caller.
+// This is used when sending events while holding the transaction lock.
+func (vs *vstream) sendEventsLocked(ctx context.Context, sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdatapb.VEvent) error {
 	labelValues := []string{sgtid.Keyspace, sgtid.Shard, vs.tabletType.String()}
 
 	// Send all chunks while holding the lock.
