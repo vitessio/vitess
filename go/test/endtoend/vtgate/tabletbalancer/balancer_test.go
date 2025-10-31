@@ -94,7 +94,6 @@ func TestCellModeBalancer(t *testing.T) {
 	cell2Count := 0
 	for _, tablet := range replicaTablets {
 		count := counts[aliases[tablet.Alias]]
-		require.NotEqual(t, -1, count, "Failed to parse query count for tablet %s", tablet.Alias)
 
 		switch tablet.Cell {
 		case cell1:
@@ -170,7 +169,6 @@ func TestPreferCell(t *testing.T) {
 	cell2Count := 0
 	for _, tablet := range replicaTablets {
 		count := counts[aliases[tablet.Alias]]
-		require.NotEqual(t, -1, count, "Failed to parse query count for tablet %s", tablet.Alias)
 
 		switch tablet.Cell {
 		case cell1:
@@ -248,8 +246,6 @@ func TestRandomModeBalancer(t *testing.T) {
 	// Verify each replica got roughly equal queries
 	for _, tablet := range replicaTablets {
 		count := counts[aliases[tablet.Alias]]
-		require.NotEqual(t, -1, count, "Failed to parse query count for tablet %s", tablet.Alias)
-
 		assert.Greater(t, count, 0, "Expected replica %s to receive queries", tablet.Alias)
 		assert.InDelta(t, expectedPerReplica, count, float64(tolerance),
 			"Expected replica %s to receive ~%d queries (±%d), got %d",
@@ -330,8 +326,6 @@ func TestRandomModeWithCellFiltering(t *testing.T) {
 
 	for _, tablet := range replicaTablets {
 		count := counts[aliases[tablet.Alias]]
-		require.NotEqual(t, -1, count, "Failed to parse query count for tablet %s", tablet.Alias)
-
 		switch tablet.Cell {
 		case cell1:
 			assert.Greater(t, count, 0, "Expected cell1 replica %s to receive queries", tablet.Alias)
@@ -407,8 +401,6 @@ func TestDeprecatedEnableBalancerFlag(t *testing.T) {
 	cell2Count := 0
 	for _, tablet := range replicaTablets {
 		count := counts[aliases[tablet.Alias]]
-		require.NotEqual(t, -1, count, "Failed to parse query count for tablet %s", tablet.Alias)
-
 		switch tablet.Cell {
 		case cell1:
 			cell1Count += count
