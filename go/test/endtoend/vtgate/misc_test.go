@@ -851,6 +851,9 @@ func TestTabletTargeting(t *testing.T) {
 	instances := make(map[string]map[string][]string)
 
 	for _, ks := range clusterInstance.Keyspaces {
+		if ks.Name != "ks" {
+			continue
+		}
 		for _, shard := range ks.Shards {
 			instances[shard.Name] = make(map[string][]string)
 			for _, tablet := range shard.Vttablets {
@@ -864,7 +867,6 @@ func TestTabletTargeting(t *testing.T) {
 	require.NotEmpty(t, instances["-80"]["replica"], "no REPLICA tablets found for -80 shard")
 	require.NotEmpty(t, instances["80-"]["replica"], "no REPLICA tablets found for 80- shard")
 
-	// Test 1: Shard targeting bypasses vindex resolution
 	// Insert data that would normally hash to 80- shard, but goes to -80 because of shard targeting
 	useStmt := fmt.Sprintf("USE `ks:-80@primary|%s`", instances["-80"]["primary"][0])
 	utils.Exec(t, conn, useStmt)
@@ -880,7 +882,7 @@ func TestTabletTargeting(t *testing.T) {
 	utils.Exec(t, conn, "USE `ks:80-`")
 	utils.AssertIsEmpty(t, conn, "select id1 from t1 where id1=4")
 
-	// Test 2: Transaction with tablet-specific routing maintains sticky connection
+	// Transaction with tablet-specific routing maintains sticky connection
 	useStmt = fmt.Sprintf("USE `ks:-80@primary|%s`", instances["-80"]["primary"][0])
 	utils.Exec(t, conn, useStmt)
 	utils.Exec(t, conn, "begin")
@@ -890,7 +892,7 @@ func TestTabletTargeting(t *testing.T) {
 	utils.Exec(t, conn, "commit")
 	utils.AssertMatches(t, conn, "select id1 from t1 where id1=10", "[[INT64(10)]]")
 
-	// Test 3: Rollback with tablet-specific routing
+	// Rollback with tablet-specific routing
 	useStmt = fmt.Sprintf("USE `ks:-80@primary|%s`", instances["-80"]["primary"][0])
 	utils.Exec(t, conn, useStmt)
 	utils.Exec(t, conn, "begin")
@@ -898,24 +900,24 @@ func TestTabletTargeting(t *testing.T) {
 	utils.Exec(t, conn, "rollback")
 	utils.AssertIsEmpty(t, conn, "select id1 from t1 where id1=20")
 
-	// Test 4: Invalid tablet alias should fail
+	// Invalid tablet alias should fail
 	useStmt = "USE `ks:-80@primary|nonexistent-tablet`"
 	_, err = conn.ExecuteFetch(useStmt, 1, false)
 	require.Error(t, err, "query should fail on invalid tablet")
 	require.Contains(t, err.Error(), "invalid tablet alias in target")
 
-	// Test 5: Tablet alias without shard should fail
+	// Tablet alias without shard should fail
 	useStmt = fmt.Sprintf("USE `ks@primary|%s`", instances["-80"]["primary"][0])
 	_, err = conn.ExecuteFetch(useStmt, 1, false)
 	require.Error(t, err, "tablet alias must be used with a shard")
 
-	// Test 6: Clear tablet targeting returns to normal routing
+	// Clear tablet targeting returns to normal routing
 	// With normal routing, the query for id1=4 will be sent to the wrong shard (80-), so it won't be found.
 	// This is expected and demonstrates that vindex routing is back in effect.
 	utils.Exec(t, conn, "USE ks")
 	utils.AssertMatches(t, conn, "select id1 from t1 where id1 in (1, 2, 4, 10) order by id1", "[[INT64(1)] [INT64(2)] [INT64(10)]]")
 
-	// Test 7: Targeting a specific REPLICA tablet allows reads but not writes
+	// Targeting a specific REPLICA tablet allows reads but not writes
 	replicaAlias := instances["-80"]["replica"][0]
 	useStmt = fmt.Sprintf("USE `ks:-80@replica|%s`", replicaAlias)
 	utils.Exec(t, conn, useStmt)
@@ -928,7 +930,7 @@ func TestTabletTargeting(t *testing.T) {
 	require.Error(t, err, "write should fail on replica tablet")
 	require.Contains(t, err.Error(), "1290")
 
-	// Test 8: Targeting different REPLICA tablets in the same shard
+	// Targeting different REPLICA tablets in the same shard
 	secondReplicaAlias := instances["-80"]["replica"][1]
 	useStmt = fmt.Sprintf("USE `ks:-80@replica|%s`", secondReplicaAlias)
 	utils.Exec(t, conn, useStmt)
@@ -941,7 +943,7 @@ func TestTabletTargeting(t *testing.T) {
 	require.Error(t, err, "write should fail on replica tablet")
 	require.Contains(t, err.Error(), "1290")
 
-	// Test 9: Write to primary, verify it replicates to replica
+	// Write to primary, verify it replicates to replica
 	// This tests that tablet-specific routing doesn't break replication
 	useStmt = fmt.Sprintf("USE `ks:-80@primary|%s`", instances["-80"]["primary"][0])
 	utils.Exec(t, conn, useStmt)
@@ -956,7 +958,7 @@ func TestTabletTargeting(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	utils.AssertMatches(t, conn, "select id1 from t1 where id1=50", "[[INT64(50)]]")
 
-	// Test 10: Query different replicas and verify different server UUIDs
+	// Query different replicas and verify different server UUIDs
 	// This proves we're actually hitting different physical tablets
 	for range 10 {
 		// Get server UUID from first replica
