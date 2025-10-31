@@ -1,6 +1,6 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Unit Test (mysql57)
+name: Unit Tests
 on:
   push:
     branches:
@@ -10,7 +10,7 @@ on:
   pull_request:
     branches: '**'
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Unit Test (mysql57)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Unit Tests')
   cancel-in-progress: true
 
 permissions: read-all
@@ -23,9 +23,11 @@ env:
 jobs:
   test:
     strategy:
+      fail-fast: false
       matrix:
         flavor: [mysql57, mysql80, mysql84]
         race: [false]
+
         include:
           - flavor: mysql80
             race: true
