@@ -124,6 +124,10 @@ func (m Mode) String() string {
 	}
 }
 
+func GetAvailableModeNames() []string {
+	return []string{ModeCell.String(), ModePreferCell.String(), ModeRandom.String()}
+}
+
 type TabletBalancer interface {
 	// Pick is the main entry point to the balancer. Returns the best tablet out of the list
 	// for a given query to maintain the desired balanced allocation over multiple executions.
@@ -136,9 +140,11 @@ type TabletBalancer interface {
 // NewTabletBalancer creates a new tablet balancer based on the specified mode.
 // Supported modes:
 //   - "prefer-cell": Flow-based balancer that maintains cell affinity while balancing load
+//   - See the RFC here: https://github.com/vitessio/vitess/issues/12241
 //   - "random": Random balancer that uniformly distributes load without cell affinity
 //
 // Note: "cell" mode is handled by the gateway and does not create a balancer instance.
+// operates as a round robin inside of the vtgate's cell
 // Returns an error for unsupported modes.
 func NewTabletBalancer(mode Mode, localCell string, vtGateCells []string) (TabletBalancer, error) {
 	switch mode {
@@ -149,7 +155,7 @@ func NewTabletBalancer(mode Mode, localCell string, vtGateCells []string) (Table
 	case ModeCell:
 		return nil, errors.New("cell mode should be handled by the gateway, not the balancer factory")
 	default:
-		return nil, fmt.Errorf("unsupported balancer mode: %s (supported modes: cell, flow, random)", mode)
+		return nil, fmt.Errorf("unsupported balancer mode: %s (supported modes: %s)", mode, strings.Join(GetAvailableModeNames(), ", "))
 	}
 }
 
