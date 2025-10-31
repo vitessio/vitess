@@ -62,7 +62,8 @@ const (
 	AutoIncrementalFromPos  = "auto"
 	dataDictionaryFile      = "mysql.ibd"
 
-	maxRetriesPerFile = 1
+	maxRetriesPerFile   = 1
+	maxFileCloseRetries = 20 // At this point we should consider it fatal/non-transient
 )
 
 var (
@@ -1421,9 +1422,16 @@ func closeWithRetry(ctx context.Context, file io.Closer) error {
 	backoff := 1 * time.Second
 	backoffLimit := backoff * 30
 	var err error
+	retries := 0
 	for {
 		if err = file.Close(); err == nil {
 			return nil
+		}
+		if retries == maxFileCloseRetries {
+			// Let's give up as this does not appear to be transient. We cannot
+			// know the full list of all transient errors across any backup engine
+			// or provider so we consider it non-transient at this point.
+			return vterrors.Errorf(vtrpcpb.Code_ABORTED, "failed to close the file after %d attempts, giving up", maxFileCloseRetries)
 		}
 		select {
 		case <-ctx.Done():
@@ -1435,5 +1443,6 @@ func closeWithRetry(ctx context.Context, file io.Closer) error {
 				backoff = min(updatedBackoff, backoffLimit)
 			}
 		}
+		retries++
 	}
 }
