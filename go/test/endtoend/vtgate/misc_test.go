@@ -848,42 +848,25 @@ func TestTabletTargeting(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	// Get tablet aliases from show vitess_tablets
-	// Note: In partial keyspace mode, there may be multiple keyspaces (e.g. ks and ks_routed)
-	qr := utils.Exec(t, conn, "show vitess_tablets")
-	require.Greater(t, len(qr.Rows), 0, "no tablets found")
+	instances := make(map[string]map[string][]string)
 
-	// Find PRIMARY and REPLICA tablets for both shards (-80 and 80-) in the test keyspace
-	var primaryShard80Minus string
-	var primaryShard80Plus string
-	var replicasShard80Minus []string
-	var replicasShard80Plus []string
-	for _, row := range qr.Rows {
-		if row[1].ToString() != KeyspaceName {
-			continue
-		}
-		shard := row[2].ToString()
-		tabletType := row[3].ToString()
-		alias := row[5].ToString()
-		switch {
-		case tabletType == "PRIMARY" && shard == "-80":
-			primaryShard80Minus = alias
-		case tabletType == "PRIMARY" && shard == "80-":
-			primaryShard80Plus = alias
-		case tabletType == "REPLICA" && shard == "-80":
-			replicasShard80Minus = append(replicasShard80Minus, alias)
-		case tabletType == "REPLICA" && shard == "80-":
-			replicasShard80Plus = append(replicasShard80Plus, alias)
+	for _, ks := range clusterInstance.Keyspaces {
+		for _, shard := range ks.Shards {
+			instances[shard.Name] = make(map[string][]string)
+			for _, tablet := range shard.Vttablets {
+				instances[shard.Name][tablet.Type] = append(instances[shard.Name][tablet.Type], tablet.Alias)
+			}
 		}
 	}
-	require.NotEmpty(t, primaryShard80Minus, "no PRIMARY tablet found for -80 shard")
-	require.NotEmpty(t, primaryShard80Plus, "no PRIMARY tablet found for 80- shard")
-	require.NotEmpty(t, replicasShard80Minus, "no REPLICA tablets found for -80 shard")
-	require.NotEmpty(t, replicasShard80Plus, "no REPLICA tablets found for 80- shard")
+
+	require.NotEmpty(t, instances["-80"]["primary"][0], "no PRIMARY tablet found for -80 shard")
+	require.NotEmpty(t, instances["80-"]["primary"][0], "no PRIMARY tablet found for 80- shard")
+	require.NotEmpty(t, instances["-80"]["replica"], "no REPLICA tablets found for -80 shard")
+	require.NotEmpty(t, instances["80-"]["replica"], "no REPLICA tablets found for 80- shard")
 
 	// Test 1: Shard targeting bypasses vindex resolution
 	// Insert data that would normally hash to 80- shard, but goes to -80 because of shard targeting
-	useStmt := fmt.Sprintf("USE `ks:-80@primary|%s`", primaryShard80Minus)
+	useStmt := fmt.Sprintf("USE `ks:-80@primary|%s`", instances["-80"]["primary"][0])
 	utils.Exec(t, conn, useStmt)
 	utils.Exec(t, conn, "INSERT into t1(id1, id2) values(1, 100), (2, 200)")
 	// id1=4 hashes to 80-, but we're targeting -80 shard explicitly
@@ -898,7 +881,7 @@ func TestTabletTargeting(t *testing.T) {
 	utils.AssertIsEmpty(t, conn, "select id1 from t1 where id1=4")
 
 	// Test 2: Transaction with tablet-specific routing maintains sticky connection
-	useStmt = fmt.Sprintf("USE `ks:-80@primary|%s`", primaryShard80Minus)
+	useStmt = fmt.Sprintf("USE `ks:-80@primary|%s`", instances["-80"]["primary"][0])
 	utils.Exec(t, conn, useStmt)
 	utils.Exec(t, conn, "begin")
 	utils.Exec(t, conn, "insert into t1(id1, id2) values(10, 300)")
@@ -908,7 +891,7 @@ func TestTabletTargeting(t *testing.T) {
 	utils.AssertMatches(t, conn, "select id1 from t1 where id1=10", "[[INT64(10)]]")
 
 	// Test 3: Rollback with tablet-specific routing
-	useStmt = fmt.Sprintf("USE `ks:-80@primary|%s`", primaryShard80Minus)
+	useStmt = fmt.Sprintf("USE `ks:-80@primary|%s`", instances["-80"]["primary"][0])
 	utils.Exec(t, conn, useStmt)
 	utils.Exec(t, conn, "begin")
 	utils.Exec(t, conn, "insert into t1(id1, id2) values(20, 500)")
@@ -922,7 +905,7 @@ func TestTabletTargeting(t *testing.T) {
 	require.Contains(t, err.Error(), "invalid tablet alias in target")
 
 	// Test 5: Tablet alias without shard should fail
-	useStmt = fmt.Sprintf("USE `ks@primary|%s`", primaryShard80Minus)
+	useStmt = fmt.Sprintf("USE `ks@primary|%s`", instances["-80"]["primary"][0])
 	_, err = conn.ExecuteFetch(useStmt, 1, false)
 	require.Error(t, err, "tablet alias must be used with a shard")
 
@@ -933,7 +916,7 @@ func TestTabletTargeting(t *testing.T) {
 	utils.AssertMatches(t, conn, "select id1 from t1 where id1 in (1, 2, 4, 10) order by id1", "[[INT64(1)] [INT64(2)] [INT64(10)]]")
 
 	// Test 7: Targeting a specific REPLICA tablet allows reads but not writes
-	replicaAlias := replicasShard80Minus[0]
+	replicaAlias := instances["-80"]["replica"][0]
 	useStmt = fmt.Sprintf("USE `ks:-80@replica|%s`", replicaAlias)
 	utils.Exec(t, conn, useStmt)
 
@@ -946,7 +929,7 @@ func TestTabletTargeting(t *testing.T) {
 	require.Contains(t, err.Error(), "1290")
 
 	// Test 8: Targeting different REPLICA tablets in the same shard
-	secondReplicaAlias := replicasShard80Minus[1]
+	secondReplicaAlias := instances["-80"]["replica"][1]
 	useStmt = fmt.Sprintf("USE `ks:-80@replica|%s`", secondReplicaAlias)
 	utils.Exec(t, conn, useStmt)
 
@@ -960,13 +943,13 @@ func TestTabletTargeting(t *testing.T) {
 
 	// Test 9: Write to primary, verify it replicates to replica
 	// This tests that tablet-specific routing doesn't break replication
-	useStmt = fmt.Sprintf("USE `ks:-80@primary|%s`", primaryShard80Minus)
+	useStmt = fmt.Sprintf("USE `ks:-80@primary|%s`", instances["-80"]["primary"][0])
 	utils.Exec(t, conn, useStmt)
 	utils.Exec(t, conn, "insert into t1(id1, id2) values(50, 5000)")
 	utils.AssertMatches(t, conn, "select id1 from t1 where id1=50", "[[INT64(50)]]")
 
 	// Switch to replica and verify the data replicated
-	replicaAlias = replicasShard80Minus[0]
+	replicaAlias = instances["-80"]["replica"][0]
 	useStmt = fmt.Sprintf("USE `ks:-80@replica|%s`", replicaAlias)
 	utils.Exec(t, conn, useStmt)
 	// Give replication a moment to catch up
@@ -977,7 +960,7 @@ func TestTabletTargeting(t *testing.T) {
 	// This proves we're actually hitting different physical tablets
 	for range 10 {
 		// Get server UUID from first replica
-		useStmt = fmt.Sprintf("USE `ks:-80@replica|%s`", replicasShard80Minus[0])
+		useStmt = fmt.Sprintf("USE `ks:-80@replica|%s`", instances["-80"]["replica"][0])
 		utils.Exec(t, conn, useStmt)
 		var uuid1 string
 		for i := range 5 {
@@ -992,7 +975,7 @@ func TestTabletTargeting(t *testing.T) {
 		}
 
 		// Get server UUID from second replica
-		useStmt = fmt.Sprintf("USE `ks:-80@replica|%s`", replicasShard80Minus[1])
+		useStmt = fmt.Sprintf("USE `ks:-80@replica|%s`", instances["-80"]["replica"][1])
 		utils.Exec(t, conn, useStmt)
 		var uuid2 string
 		for i := range 5 {
