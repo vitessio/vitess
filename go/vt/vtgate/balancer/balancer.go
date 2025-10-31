@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"net/http"
+	"strings"
 	"sync"
 
 	"vitess.io/vitess/go/vt/discovery"
@@ -88,6 +89,41 @@ converge on the desired balanced query load.
 
 */
 
+type Mode int
+
+const (
+	ModeInvalid Mode = iota
+	ModeCell
+	ModePreferCell
+	ModeRandom
+)
+
+func ParseMode(ms string) Mode {
+	switch strings.ToLower(ms) {
+	case "cell":
+		return ModeCell
+	case "prefer-cell":
+		return ModePreferCell
+	case "random":
+		return ModeRandom
+	default:
+		return ModeInvalid
+	}
+}
+
+func (m Mode) String() string {
+	switch m {
+	case ModeCell:
+		return "cell"
+	case ModePreferCell:
+		return "prefer-cell"
+	case ModeRandom:
+		return "random"
+	default:
+		return "invalid"
+	}
+}
+
 type TabletBalancer interface {
 	// Pick is the main entry point to the balancer. Returns the best tablet out of the list
 	// for a given query to maintain the desired balanced allocation over multiple executions.
@@ -99,18 +135,18 @@ type TabletBalancer interface {
 
 // NewTabletBalancer creates a new tablet balancer based on the specified mode.
 // Supported modes:
-//   - "flow": Flow-based balancer that maintains cell affinity while balancing load
+//   - "prefer-cell": Flow-based balancer that maintains cell affinity while balancing load
 //   - "random": Random balancer that uniformly distributes load without cell affinity
 //
 // Note: "cell" mode is handled by the gateway and does not create a balancer instance.
 // Returns an error for unsupported modes.
-func NewTabletBalancer(mode, localCell string, vtGateCells []string) (TabletBalancer, error) {
+func NewTabletBalancer(mode Mode, localCell string, vtGateCells []string) (TabletBalancer, error) {
 	switch mode {
-	case "flow":
+	case ModePreferCell:
 		return newFlowBalancer(localCell, vtGateCells), nil
-	case "random":
+	case ModeRandom:
 		return newRandomBalancer(localCell, vtGateCells), nil
-	case "cell":
+	case ModeCell:
 		return nil, errors.New("cell mode should be handled by the gateway, not the balancer factory")
 	default:
 		return nil, fmt.Errorf("unsupported balancer mode: %s (supported modes: cell, flow, random)", mode)

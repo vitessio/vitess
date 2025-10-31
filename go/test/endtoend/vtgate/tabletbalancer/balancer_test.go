@@ -118,6 +118,9 @@ func TestCellModeBalancer(t *testing.T) {
 	_, err = conn.ExecuteFetch("INSERT INTO balancer_test (value) VALUES ('cell_mode_test')", 1, false)
 	require.NoError(t, err)
 
+	// wait for replication
+	time.Sleep(500 * time.Millisecond)
+
 	// Execute queries against replicas - cell mode should route to local cell only
 	counts := executeReplicaQueries(t, conn, 100)
 
@@ -148,9 +151,9 @@ func TestCellModeBalancer(t *testing.T) {
 	assert.Equal(t, 0, cell2Count, "Expected cell2 (remote) to receive NO queries in cell mode")
 }
 
-// TestFlowModeBalancer tests the "flow" mode which maintains cell affinity while balancing load
-func TestFlowModeBalancer(t *testing.T) {
-	// Start vtgate in cell1 with flow mode
+// TestPreferCell tests the "prefer-cell" mode which maintains cell affinity while balancing load
+func TestPreferCell(t *testing.T) {
+	// Start vtgate in cell1 with prefer-cell mode
 	vtgateProcess := cluster.VtgateProcessInstance(
 		clusterInstance.GetAndReservePort(),
 		clusterInstance.GetAndReservePort(),
@@ -162,7 +165,7 @@ func TestFlowModeBalancer(t *testing.T) {
 		clusterInstance.TopoProcess.Port,
 		clusterInstance.TmpDirectory,
 		[]string{
-			"--vtgate-balancer-mode", "flow",
+			"--vtgate-balancer-mode", "prefer-cell",
 			"--balancer-vtgate-cells", fmt.Sprintf("%s,%s", cell1, cell2),
 		},
 		plancontext.PlannerVersion(0),
@@ -193,13 +196,16 @@ func TestFlowModeBalancer(t *testing.T) {
 	_, err = conn.ExecuteFetch("INSERT INTO balancer_test (value) VALUES ('flow_mode_test')", 1, false)
 	require.NoError(t, err)
 
-	// Execute queries against replicas - flow mode supports cross-cell routing
+	// wait for replication
+	time.Sleep(500 * time.Millisecond)
+
+	// Execute queries against replicas - prefer-cell mode supports cross-cell routing
 	counts := executeReplicaQueries(t, conn, 100)
 
 	// Verify query distribution via /queryz endpoint
 	allTablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
-	// Flow mode: verify BOTH cells received queries
+	// Prefer cell mode: verify BOTH cells received queries
 	cell1Count := 0
 	cell2Count := 0
 	for _, tablet := range allTablets {
@@ -217,8 +223,8 @@ func TestFlowModeBalancer(t *testing.T) {
 		}
 	}
 
-	assert.Greater(t, cell1Count, 0, "Expected cell1 to receive queries in flow mode")
-	assert.Greater(t, cell2Count, 0, "Expected cell2 to receive queries in flow mode")
+	assert.Greater(t, cell1Count, 0, "Expected cell1 to receive queries in prefer-cell mode")
+	assert.Greater(t, cell2Count, 0, "Expected cell2 to receive queries in prefer-cell mode")
 }
 
 // TestRandomModeBalancer tests the "random" mode which uniformly distributes load
@@ -354,6 +360,9 @@ func TestRandomModeWithCellFiltering(t *testing.T) {
 	_, err = conn.ExecuteFetch("INSERT INTO balancer_test (value) VALUES ('random_filtered_test')", 1, false)
 	require.NoError(t, err)
 
+	// wait for the row to replicate
+	time.Sleep(500 * time.Millisecond)
+
 	// Execute queries against replicas - random mode with cell filtering
 	numQueries := 200
 	counts := executeReplicaQueries(t, conn, numQueries)
@@ -416,7 +425,7 @@ func TestDeprecatedEnableBalancerFlag(t *testing.T) {
 	require.NoError(t, vtgateProcess.Setup())
 	defer vtgateProcess.TearDown()
 
-	// Verify vtgate started successfully (should map to flow mode)
+	// Verify vtgate started successfully (should map to prefer-cell mode)
 	require.True(t, vtgateProcess.WaitForStatus())
 
 	// Wait for tablets to be discovered
@@ -425,7 +434,7 @@ func TestDeprecatedEnableBalancerFlag(t *testing.T) {
 	// Fetch a map of server_id to tablet alias for later verification
 	aliases := getTabletIDFromServerID(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets)
 
-	// Connect and test that it behaves like flow mode
+	// Connect and test that it behaves like prefer-cell mode
 	vtParams := mysql.ConnParams{
 		Host: clusterInstance.Hostname,
 		Port: vtgateProcess.MySQLServerPort,
@@ -439,7 +448,10 @@ func TestDeprecatedEnableBalancerFlag(t *testing.T) {
 	_, err = conn.ExecuteFetch("INSERT INTO balancer_test (value) VALUES ('deprecated_flag_test')", 1, false)
 	require.NoError(t, err)
 
-	// Execute queries against replicas - deprecated flag should behave like flow mode
+	// wait for replication
+	time.Sleep(500 * time.Millisecond)
+
+	// Execute queries against replicas - deprecated flag should behave like prefer-cell mode
 	counts := executeReplicaQueries(t, conn, 100)
 
 	var tablets []*cluster.Vttablet
@@ -448,8 +460,7 @@ func TestDeprecatedEnableBalancerFlag(t *testing.T) {
 			tablets = append(tablets, tablet)
 		}
 	}
-
-	// Deprecated flag should behave like flow mode: verify BOTH cells received queries
+	// Deprecated flag should behave like prefer-cell mode: verify BOTH cells received queries
 	cell1Count := 0
 	cell2Count := 0
 	for _, tablet := range tablets {

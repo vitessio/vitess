@@ -1,5 +1,5 @@
 /*
-Copyright 2024 The Vitess Authors.
+Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -47,9 +47,16 @@ purely random without any cell preference.
 */
 
 func newRandomBalancer(localCell string, vtGateCells []string) TabletBalancer {
+	// Build map for O(1) cell membership lookups
+	cellsMap := make(map[string]struct{}, len(vtGateCells))
+	for _, cell := range vtGateCells {
+		cellsMap[cell] = struct{}{}
+	}
+
 	return &randomBalancer{
-		localCell:   localCell,
-		vtGateCells: vtGateCells,
+		localCell:      localCell,
+		vtGateCells:    vtGateCells,
+		vtGateCellsMap: cellsMap,
 	}
 }
 
@@ -59,36 +66,58 @@ type randomBalancer struct {
 
 	// Optional list of cells to filter tablets to. If empty, all tablets are considered.
 	vtGateCells []string
+
+	// Map of vtGateCells for O(1) lookup performance. Initialized from vtGateCells.
+	vtGateCellsMap map[string]struct{}
 }
 
 // Pick returns a random tablet from the list with uniform probability (1/N).
 // If vtGateCells is configured, only tablets in those cells are considered.
 func (b *randomBalancer) Pick(target *querypb.Target, tablets []*discovery.TabletHealth) *discovery.TabletHealth {
-	// Filter to tablets in configured cells if vtGateCells is specified
-	if len(b.vtGateCells) > 0 {
-		filtered := make([]*discovery.TabletHealth, 0, len(tablets))
-		for _, tablet := range tablets {
-			for _, cell := range b.vtGateCells {
-				if tablet.Tablet.Alias.Cell == cell {
-					filtered = append(filtered, tablet)
-					break
-				}
-			}
-		}
-		tablets = filtered
-	}
-
-	numTablets := len(tablets)
-	if numTablets == 0 {
+	if len(tablets) == 0 {
 		return nil
 	}
 
-	if numTablets == 1 {
+	if len(tablets) == 1 {
+		// Single tablet: check if in target cells (if filtering enabled)
+		if len(b.vtGateCells) > 0 {
+			if _, ok := b.vtGateCellsMap[tablets[0].Tablet.Alias.Cell]; ok {
+				return tablets[0]
+			}
+			return nil
+		}
 		return tablets[0]
 	}
 
+	// Multiple tablets with cell filtering: use fast-path random sampling
+	if len(b.vtGateCells) > 0 {
+		// Fast path: try 3 random samples
+		for range 3 {
+			candidate := tablets[rand.IntN(len(tablets))]
+			if _, ok := b.vtGateCellsMap[candidate.Tablet.Alias.Cell]; ok {
+				return candidate
+			}
+		}
+
+		// fallback to filtering
+		filtered := make([]*discovery.TabletHealth, 0, len(tablets))
+		for _, tablet := range tablets {
+			if _, ok := b.vtGateCellsMap[tablet.Tablet.Alias.Cell]; ok {
+				filtered = append(filtered, tablet)
+			}
+		}
+		if len(filtered) == 0 {
+			return nil
+		}
+		if len(filtered) == 1 {
+			return filtered[0]
+		}
+
+		tablets = filtered
+	}
+
 	// Uniform random selection
-	return tablets[rand.IntN(numTablets)]
+	return tablets[rand.IntN(len(tablets))]
 }
 
 func (b *randomBalancer) DebugHandler(w http.ResponseWriter, _ *http.Request) {

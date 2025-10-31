@@ -89,7 +89,7 @@ func TestRandomBalancerPickSingle(t *testing.T) {
 
 func TestRandomBalancerFactory(t *testing.T) {
 	// Test that the factory creates a random balancer correctly
-	b, err := NewTabletBalancer("random", "cell1", []string{"cell1", "cell2"})
+	b, err := NewTabletBalancer(ModeRandom, "cell1", []string{"cell1", "cell2"})
 	require.NoError(t, err)
 	require.NotNil(t, b)
 
@@ -100,13 +100,13 @@ func TestRandomBalancerFactory(t *testing.T) {
 
 func TestBalancerFactoryInvalidModes(t *testing.T) {
 	// Test that "cell" mode returns an error (should be handled by gateway)
-	b, err := NewTabletBalancer("cell", "cell1", []string{})
+	b, err := NewTabletBalancer(ModeCell, "cell1", []string{})
 	assert.Error(t, err)
 	assert.Nil(t, b)
 	assert.Contains(t, err.Error(), "cell mode should be handled by the gateway")
 
 	// Test that an invalid mode returns an error
-	b, err = NewTabletBalancer("invalid", "cell1", []string{})
+	b, err = NewTabletBalancer(ModeInvalid, "cell1", []string{})
 	assert.Error(t, err)
 	assert.Nil(t, b)
 	assert.Contains(t, err.Error(), "unsupported balancer mode")
