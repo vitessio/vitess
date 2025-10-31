@@ -62,8 +62,11 @@ const (
 	AutoIncrementalFromPos  = "auto"
 	dataDictionaryFile      = "mysql.ibd"
 
+	// How many times we will retry file operations. Note that a file operation that
+	// returns a vtrpc.Code_FAILED_PRECONDITION error is considered fatal and we will
+	// not retry.
 	maxRetriesPerFile   = 1
-	maxFileCloseRetries = 20 // At this point we should consider it fatal/non-transient
+	maxFileCloseRetries = 20 // At this point we should consider it permanent
 )
 
 var (
@@ -657,7 +660,7 @@ func (be *BuiltinBackupEngine) backupFiles(
 	var manifestErr error
 	for currentRetry := 0; currentRetry <= maxRetriesPerFile; currentRetry++ {
 		manifestErr = be.backupManifest(ctx, params, bh, backupPosition, purgedPosition, fromPosition, fromBackupName, serverUUID, mysqlVersion, incrDetails, fes, currentRetry)
-		if manifestErr == nil {
+		if manifestErr == nil || vterrors.Code(manifestErr) == vtrpcpb.Code_FAILED_PRECONDITION {
 			break
 		}
 		bh.ResetErrorForFile(backupManifestFileName)
@@ -708,7 +711,7 @@ func (be *BuiltinBackupEngine) backupFileEntries(ctx context.Context, fes []File
 			var errBackupFile error
 			if errBackupFile = be.backupFile(ctxCancel, params, bh, fe, name); errBackupFile != nil {
 				bh.RecordError(name, vterrors.Wrapf(errBackupFile, "failed to backup file '%s'", name))
-				if fe.RetryCount >= maxRetriesPerFile {
+				if fe.RetryCount >= maxRetriesPerFile || vterrors.Code(errBackupFile) == vtrpcpb.Code_FAILED_PRECONDITION {
 					// this is the last attempt, and we have an error, we can cancel everything and fail fast.
 					cancel()
 				}
@@ -1147,7 +1150,7 @@ func (be *BuiltinBackupEngine) restoreManifest(ctx context.Context, params Resto
 
 	for ; retryCount <= maxRetriesPerFile; retryCount++ {
 		params.Logger.Infof("Restoring file %s %s", backupManifestFileName, retryToString(retryCount))
-		if finalErr = getBackupManifestInto(ctx, bh, &bm); finalErr == nil {
+		if finalErr = getBackupManifestInto(ctx, bh, &bm); finalErr == nil || vterrors.Code(finalErr) == vtrpcpb.Code_FAILED_PRECONDITION {
 			break
 		}
 		params.Logger.Infof("Failed restoring %s %s", backupManifestFileName, retryToString(retryCount))
@@ -1230,7 +1233,7 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 			params.Logger.Infof("Copying file %v: %v %s", name, fe.Name, retryToString(fe.RetryCount))
 			if errRestore := be.restoreFile(ctx, params, bh, fe, bm, name); errRestore != nil {
 				bh.RecordError(name, vterrors.Wrapf(errRestore, "failed to restore file %v to %v", name, fe.Name))
-				if fe.RetryCount >= maxRetriesPerFile {
+				if fe.RetryCount >= maxRetriesPerFile || vterrors.Code(errRestore) == vtrpcpb.Code_FAILED_PRECONDITION {
 					// this is the last attempt, and we have an error, we can return an error, which will let errgroup
 					// know it can cancel the context
 					return errRestore
@@ -1410,11 +1413,11 @@ func init() {
 }
 
 // closeWithRetry does just what it says. Retrying a close operation is important as
-// an error is most likely transient and leaving around open file descriptors can lead
-// to later problems as the file may be in a sort-of uploaded state where it exists
-// but has not yet been finalized (this is true for GCS). This can cause unexpected
-// behavior if you retry the file while the original request is still in this state.
-// Most implementations such as GCS will automatically retry operations, but close
+// an error is most likely transient/ephemeral and leaving around open file descriptors
+// can lead to later problems as the file may be in a sort-of uploaded state where it
+// exists but has not yet been finalized (this is true for GCS). This can cause
+// unexpected behavior if you retry the file while the original request is still in this
+// state. Most implementations such as GCS will automatically retry operations, but close
 // is one that may be left to the caller (this is true for GCS).
 // We model this retry after the GCS retry implementation described here:
 // https://cloud.google.com/storage/docs/retry-strategy#go
@@ -1428,10 +1431,12 @@ func closeWithRetry(ctx context.Context, file io.Closer) error {
 			return nil
 		}
 		if retries == maxFileCloseRetries {
-			// Let's give up as this does not appear to be transient. We cannot
-			// know the full list of all transient errors across any backup engine
-			// or provider so we consider it non-transient at this point.
-			return vterrors.Errorf(vtrpcpb.Code_ABORTED, "failed to close the file after %d attempts, giving up", maxFileCloseRetries)
+			// Let's give up as this does not appear to be transient. We cannot know
+			// the full list of all transient/ephemeral errors across all backup engine
+			// providers so we consider it permanent at this point. We return a
+			// FAILED_PRECONDITION code which tells the upper layers not to retry as we
+			// now cannot be sure that this backup would be usable when it finishes.
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to close the file after %d attempts, giving up", maxFileCloseRetries)
 		}
 		select {
 		case <-ctx.Done():
