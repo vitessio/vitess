@@ -54,7 +54,7 @@ import (
 
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -62,7 +62,9 @@ const (
 	AutoIncrementalFromPos  = "auto"
 	dataDictionaryFile      = "mysql.ibd"
 
-	maxRetriesPerFile = 1
+	maxRetriesPerFile   = 1
+	fileCloseRetries    = 3
+	fileCloseRetryDelay = 500 * time.Millisecond
 )
 
 var (
@@ -189,7 +191,7 @@ func (fe *FileEntry) fullPath(cnf *Mycnf) (string, error) {
 	case backupBinlogDir:
 		root = filepath.Dir(cnf.BinLogPath)
 	default:
-		return "", vterrors.Errorf(vtrpc.Code_UNKNOWN, "unknown base: %v", fe.Base)
+		return "", vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "unknown base: %v", fe.Base)
 	}
 
 	return path.Join(fe.ParentPath, root, fe.Name), nil
@@ -312,7 +314,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 		}
 		purgedGTIDSet, ok := gtidPurged.GTIDSet.(replication.Mysql56GTIDSet)
 		if !ok {
-			return gtidPurged, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "failed to parse a valid MySQL GTID set from value: %v", gtidPurged)
+			return gtidPurged, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to parse a valid MySQL GTID set from value: %v", gtidPurged)
 		}
 		return gtidPurged, purgedGTIDSet, nil
 	}
@@ -375,7 +377,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 		return BackupUnusable, vterrors.Wrapf(err, "reading timestamps from binlog files %v", binaryLogsToBackup)
 	}
 	if resp.FirstTimestampBinlog == "" || resp.LastTimestampBinlog == "" {
-		return BackupUnusable, vterrors.Errorf(vtrpc.Code_ABORTED, "empty binlog name in response. Request=%v, Response=%v", req, resp)
+		return BackupUnusable, vterrors.Errorf(vtrpcpb.Code_ABORTED, "empty binlog name in response. Request=%v, Response=%v", req, resp)
 	}
 	log.Infof("ReadBinlogFilesTimestampsResponse: %+v", resp)
 	incrDetails := &IncrementalBackupDetails{
@@ -698,7 +700,7 @@ func (be *BuiltinBackupEngine) backupFileEntries(ctx context.Context, fes []File
 			select {
 			case <-ctxCancel.Done():
 				log.Errorf("Context canceled or timed out during %q backup", fe.Name)
-				bh.RecordError(name, vterrors.Errorf(vtrpc.Code_CANCELED, "context canceled"))
+				bh.RecordError(name, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context canceled"))
 				return nil
 			default:
 			}
@@ -854,7 +856,9 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 
 	defer func() {
 		closeSourceAt := time.Now()
-		source.Close()
+		if err := closeWithRetry(source); err != nil {
+			params.Logger.Infof("Failed to close %s source file during backup: %v", fe.Name, err)
+		}
 		params.Stats.Scope(stats.Operation("Source:Close")).TimedIncrement(time.Since(closeSourceAt))
 	}()
 
@@ -881,9 +885,13 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 
 	defer func(name, fileName string) {
 		closeDestAt := time.Now()
-		if rerr := dest.Close(); rerr != nil {
-			rerr = vterrors.Wrapf(rerr, "failed to close file %v,%v", name, fe.Name)
+		if rerr := closeWithRetry(dest); rerr != nil {
+			rerr = vterrors.Wrapf(rerr, "failed to close destination file (%v) %v", name, fe.Name)
 			params.Logger.Error(rerr)
+			// Let's try to delete the file as we will retry.
+			if cerr := os.Remove(source.Name()); cerr != nil {
+				finalErr = errors.Join(finalErr, cerr)
+			}
 			finalErr = errors.Join(finalErr, rerr)
 		}
 		params.Stats.Scope(stats.Operation("Destination:Close")).TimedIncrement(time.Since(closeDestAt))
@@ -932,7 +940,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 				// Close gzip to flush it, after that all data is sent to writer.
 				closeCompressorAt := time.Now()
 				params.Logger.Infof("Closing compressor for file: %s %s", fe.Name, retryStr)
-				if cerr := closer.Close(); err != nil {
+				if cerr := closeWithRetry(closer); err != nil {
 					cerr = vterrors.Wrapf(cerr, "failed to close compressor %v", fe.Name)
 					params.Logger.Error(cerr)
 					createAndCopyErr = errors.Join(createAndCopyErr, cerr)
@@ -996,7 +1004,7 @@ func (be *BuiltinBackupEngine) backupManifest(
 			return vterrors.Wrapf(err, "cannot add %v to backup %s", backupManifestFileName, retryStr)
 		}
 		defer func() {
-			if err := wc.Close(); err != nil {
+			if err := closeWithRetry(wc); err != nil {
 				addAndWriteError = errors.Join(addAndWriteError, vterrors.Wrapf(err, "cannot close backup: %v", backupManifestFileName))
 			}
 		}()
@@ -1076,7 +1084,7 @@ func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Conte
 	defer os.RemoveAll(createdDir)
 	mysqld, ok := params.Mysqld.(*Mysqld)
 	if !ok {
-		return vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "expected: Mysqld")
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "expected: Mysqld")
 	}
 	for _, fe := range bm.FileEntries {
 		fe.ParentPath = createdDir
@@ -1216,7 +1224,7 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 			select {
 			case <-ctx.Done():
 				log.Errorf("Context canceled or timed out during %q restore", fe.Name)
-				bh.RecordError(name, vterrors.Errorf(vtrpc.Code_CANCELED, "context canceled"))
+				bh.RecordError(name, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context canceled"))
 				return nil
 			default:
 			}
@@ -1258,7 +1266,9 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 
 	defer func() {
 		closeSourceAt := time.Now()
-		source.Close()
+		if err := closeWithRetry(source); err != nil {
+			params.Logger.Errorf("Failed to close source file %s during restore: %v", name, err)
+		}
 		params.Stats.Scope(stats.Operation("Source:Close")).TimedIncrement(time.Since(closeSourceAt))
 	}()
 
@@ -1282,10 +1292,11 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	params.Stats.Scope(stats.Operation("Destination:Open")).TimedIncrement(time.Since(openDestAt))
 
 	defer func() {
-		closeDestAt := time.Now()
-		if cerr := dest.Close(); cerr != nil {
+		if cerr := closeWithRetry(dest); cerr != nil {
 			finalErr = errors.Join(finalErr, vterrors.Wrap(cerr, "failed to close destination file"))
+			params.Logger.Errorf("Failed to close destination file %s during restore: %v", dest.Name(), err)
 		}
+		closeDestAt := time.Now()
 		params.Stats.Scope(stats.Operation("Destination:Close")).TimedIncrement(time.Since(closeDestAt))
 	}()
 
@@ -1331,7 +1342,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 		defer func() {
 			closeDecompressorAt := time.Now()
 			params.Logger.Infof("closing decompressor")
-			if cerr := closer.Close(); err != nil {
+			if cerr := closeWithRetry(closer); err != nil {
 				cerr = vterrors.Wrapf(cerr, "failed to close decompressor %v", name)
 				params.Logger.Error(cerr)
 				finalErr = errors.Join(finalErr, cerr)
@@ -1348,7 +1359,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	// Check the hash.
 	hash := br.HashString()
 	if hash != fe.Hash {
-		return vterrors.Errorf(vtrpc.Code_INTERNAL, "hash mismatch for %v, got %v expected %v", fe.Name, hash, fe.Hash)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "hash mismatch for %v, got %v expected %v", fe.Name, hash, fe.Hash)
 	}
 
 	// Flush the buffer.
@@ -1401,4 +1412,18 @@ func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, t
 
 func init() {
 	BackupRestoreEngineMap[builtinBackupEngineName] = &BuiltinBackupEngine{}
+}
+
+// closeWithRetry does just what it says. Retrying a close operation is
+// important as an error is most likely transient and leaving around open
+// file descriptors can lead to later problems.
+func closeWithRetry(file io.Closer) error {
+	var err error
+	for range fileCloseRetries {
+		if err = file.Close(); err == nil {
+			return nil
+		}
+		time.Sleep(fileCloseRetryDelay)
+	}
+	return err
 }
