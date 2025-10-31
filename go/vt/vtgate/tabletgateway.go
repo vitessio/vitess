@@ -59,8 +59,8 @@ var (
 	retryCount = 2
 
 	// configuration flags for the tablet balancer
-	balancerEnabled     bool   // deprecated: use balancerMode instead
-	balancerMode        string // "cell" (default), "flow", or "random"
+	balancerEnabled     bool // deprecated: use balancerMode instead
+	balancerModeFlag    string
 	balancerVtgateCells []string
 	balancerKeyspaces   []string
 
@@ -73,8 +73,8 @@ func init() {
 		utils.SetFlagDurationVar(fs, &initialTabletTimeout, "gateway-initial-tablet-timeout", 30*time.Second, "At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type")
 		fs.IntVar(&retryCount, "retry-count", 2, "retry count")
 		fs.BoolVar(&balancerEnabled, "enable-balancer", false, "(DEPRECATED: use --vtgate-balancer-mode instead) Enable the tablet balancer to evenly spread query load for a given tablet type")
-		fs.StringVar(&balancerMode, "vtgate-balancer-mode", "", "Tablet balancer mode (options: cell, flow, random). Defaults to 'cell' which shuffles tablets in the local cell.")
-		fs.StringSliceVar(&balancerVtgateCells, "balancer-vtgate-cells", []string{}, "Comma-separated list of cells that contain vtgates. For 'flow' mode, this is required. For 'random' mode, this is optional and filters tablets to those cells.")
+		fs.StringVar(&balancerModeFlag, "vtgate-balancer-mode", "", "Tablet balancer mode (options: cell, prefer-cell, random). Defaults to 'cell' which shuffles tablets in the local cell.")
+		fs.StringSliceVar(&balancerVtgateCells, "balancer-vtgate-cells", []string{}, "Comma-separated list of cells that contain vtgates. For 'prefer-cell' mode, this is required. For 'random' mode, this is optional and filters tablets to those cells.")
 		fs.StringSliceVar(&balancerKeyspaces, "balancer-keyspaces", []string{}, "Comma-separated list of keyspaces for which to use the balancer (optional). If empty, applies to all keyspaces.")
 	})
 }
@@ -133,7 +133,7 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 		statusAggregators: make(map[string]*TabletStatusAggregator),
 	}
 	gw.setupBuffering(ctx)
-	gw.setupBalancer(ctx)
+	gw.setupBalancer()
 	gw.QueryService = queryservice.Wrap(nil, gw.withRetry)
 	return gw
 }
@@ -167,38 +167,38 @@ func (gw *TabletGateway) setupBuffering(ctx context.Context) {
 	}(bufferCtx, ksChan, gw.buffer)
 }
 
-func (gw *TabletGateway) setupBalancer(ctx context.Context) {
-	// Determine the effective balancer mode, handling backwards compatibility
-	mode := balancerMode
-
+func (gw *TabletGateway) setupBalancer() {
 	// Check for conflicting flags
-	if balancerEnabled && balancerMode != "" {
+	if balancerEnabled && balancerModeFlag != "" {
 		log.Exitf("Cannot use both --enable-balancer and --vtgate-balancer-mode flags. Please use --vtgate-balancer-mode only.")
 	}
 
-	// Handle deprecated --enable-balancer flag for backwards compatibility
-	if balancerEnabled {
-		log.Warning("Flag --enable-balancer is deprecated. Please use --vtgate-balancer-mode=flow instead.")
-		mode = "flow"
-	}
-
-	// Default to "cell" mode if not specified
-	if mode == "" {
-		mode = "cell"
+	// Determine the effective mode: new flag takes precedence, then deprecated flag, then default
+	var mode balancer.Mode
+	if balancerModeFlag != "" {
+		// Explicit new flag
+		mode = balancer.ParseMode(balancerModeFlag)
+	} else if balancerEnabled {
+		// Deprecated flag for backwards compatibility
+		log.Warning("Flag --enable-balancer is deprecated. Please use --vtgate-balancer-mode=prefer-cell instead.")
+		mode = balancer.ModePreferCell
+	} else {
+		// Default: no flags set
+		mode = balancer.ModeCell
 	}
 
 	// Cell mode uses the default shuffleTablets behavior, no balancer needed
-	if mode == "cell" {
+	if mode == balancer.ModeCell {
 		log.Info("Tablet balancer using 'cell' mode (shuffle tablets in local cell)")
 		return
 	}
 
 	// Validate mode-specific requirements
-	if mode == "flow" && len(balancerVtgateCells) == 0 {
-		log.Exitf("--balancer-vtgate-cells is required when using --vtgate-balancer-mode=flow")
+	if mode == balancer.ModePreferCell && len(balancerVtgateCells) == 0 {
+		log.Exitf("--balancer-vtgate-cells is required when using --vtgate-balancer-mode=prefer-cell")
 	}
 
-	// Create the balancer for flow or random modes
+	// Create the balancer for prefer-cell or random modes
 	var err error
 	gw.balancer, err = balancer.NewTabletBalancer(mode, gw.localCell, balancerVtgateCells)
 	if err != nil {
