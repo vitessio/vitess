@@ -28,7 +28,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
@@ -65,6 +64,7 @@ func TestCellModeBalancer(t *testing.T) {
 	}
 
 	allTablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	shardName := clusterInstance.Keyspaces[0].Shards[0].Name
 	replicaTablets := replicaTablets(allTablets)
 
 	conn, err := mysql.Connect(context.Background(), &vtParams)
@@ -72,9 +72,11 @@ func TestCellModeBalancer(t *testing.T) {
 	defer conn.Close()
 
 	// Wait for tablets to be discovered
-	require.Eventually(t, func() bool {
-		return len(utils.Exec(t, conn, "show vitess_tablets").Rows) == len(allTablets)
-	}, 15*time.Second, 500*time.Millisecond)
+	err = vtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspaceName, shardName), 1, 30*time.Second)
+	require.NoError(t, err)
+
+	err = vtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), len(replicaTablets), 30*time.Second)
+	require.NoError(t, err)
 
 	// Fetch a map of server_id to tablet alias for later verification
 	aliases := mapTabletAliasToMySQLServerID(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets)
@@ -140,6 +142,7 @@ func TestPreferCell(t *testing.T) {
 	}
 
 	allTablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	shardName := clusterInstance.Keyspaces[0].Shards[0].Name
 	replicaTablets := replicaTablets(allTablets)
 
 	conn, err := mysql.Connect(context.Background(), &vtParams)
@@ -147,9 +150,11 @@ func TestPreferCell(t *testing.T) {
 	defer conn.Close()
 
 	// Wait for tablets to be discovered
-	require.Eventually(t, func() bool {
-		return len(utils.Exec(t, conn, "show vitess_tablets").Rows) == len(allTablets)
-	}, 15*time.Second, 500*time.Millisecond)
+	err = vtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspaceName, shardName), 1, 30*time.Second)
+	require.NoError(t, err)
+
+	err = vtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), len(replicaTablets), 30*time.Second)
+	require.NoError(t, err)
 
 	// Fetch a map of server_id to tablet alias for later verification
 	aliases := mapTabletAliasToMySQLServerID(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets)
@@ -212,6 +217,7 @@ func TestRandomModeBalancer(t *testing.T) {
 	}
 
 	allTablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	shardName := clusterInstance.Keyspaces[0].Shards[0].Name
 	replicaTablets := replicaTablets(allTablets)
 
 	conn, err := mysql.Connect(context.Background(), &vtParams)
@@ -219,9 +225,11 @@ func TestRandomModeBalancer(t *testing.T) {
 	defer conn.Close()
 
 	// Wait for tablets to be discovered
-	require.Eventually(t, func() bool {
-		return len(utils.Exec(t, conn, "show vitess_tablets").Rows) == len(allTablets)
-	}, 15*time.Second, 500*time.Millisecond)
+	err = vtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspaceName, shardName), 1, 30*time.Second)
+	require.NoError(t, err)
+
+	err = vtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), len(replicaTablets), 30*time.Second)
+	require.NoError(t, err)
 
 	// Fetch a map of server_id to tablet alias for later verification
 	aliases := mapTabletAliasToMySQLServerID(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets)
@@ -295,6 +303,7 @@ func TestRandomModeWithCellFiltering(t *testing.T) {
 	}
 
 	allTablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	shardName := clusterInstance.Keyspaces[0].Shards[0].Name
 	replicaTablets := replicaTablets(allTablets)
 
 	conn, err := mysql.Connect(context.Background(), &vtParams)
@@ -302,9 +311,11 @@ func TestRandomModeWithCellFiltering(t *testing.T) {
 	defer conn.Close()
 
 	// Wait for tablets to be discovered
-	require.Eventually(t, func() bool {
-		return len(utils.Exec(t, conn, "show vitess_tablets").Rows) == len(allTablets)
-	}, 15*time.Second, 500*time.Millisecond)
+	err = vtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspaceName, shardName), 1, 30*time.Second)
+	require.NoError(t, err)
+
+	err = vtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), len(replicaTablets), 30*time.Second)
+	require.NoError(t, err)
 
 	// Fetch a map of server_id to tablet alias for later verification
 	aliases := mapTabletAliasToMySQLServerID(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets)
@@ -336,7 +347,7 @@ func TestRandomModeWithCellFiltering(t *testing.T) {
 		}
 	}
 
-	assert.Greater(t, cell1Count, 0, "Expected cell1 to receive queries")
+	assert.Equal(t, cell1Count, 200, "Expected cell1 to receive all queries")
 	assert.Equal(t, 0, cell2Count, "Expected cell2 to receive NO queries (filtered out)")
 	assert.Equal(t, numQueries, cell1Count, "Expected all queries to go to cell1")
 }
@@ -372,6 +383,7 @@ func TestDeprecatedEnableBalancerFlag(t *testing.T) {
 	}
 
 	allTablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	shardName := clusterInstance.Keyspaces[0].Shards[0].Name
 	replicaTablets := replicaTablets(allTablets)
 
 	conn, err := mysql.Connect(context.Background(), &vtParams)
@@ -379,9 +391,11 @@ func TestDeprecatedEnableBalancerFlag(t *testing.T) {
 	defer conn.Close()
 
 	// Wait for tablets to be discovered
-	require.Eventually(t, func() bool {
-		return len(utils.Exec(t, conn, "show vitess_tablets").Rows) == len(allTablets)
-	}, 15*time.Second, 500*time.Millisecond)
+	err = vtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspaceName, shardName), 1, 30*time.Second)
+	require.NoError(t, err)
+
+	err = vtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), len(replicaTablets), 30*time.Second)
+	require.NoError(t, err)
 
 	// Fetch a map of server_id to tablet alias for later verification
 	aliases := mapTabletAliasToMySQLServerID(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets)

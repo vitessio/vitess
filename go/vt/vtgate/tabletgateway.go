@@ -24,6 +24,7 @@ import (
 	"runtime/debug"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -73,7 +74,7 @@ func init() {
 		utils.SetFlagDurationVar(fs, &initialTabletTimeout, "gateway-initial-tablet-timeout", 30*time.Second, "At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type")
 		fs.IntVar(&retryCount, "retry-count", 2, "retry count")
 		fs.BoolVar(&balancerEnabled, "enable-balancer", false, "(DEPRECATED: use --vtgate-balancer-mode instead) Enable the tablet balancer to evenly spread query load for a given tablet type")
-		fs.StringVar(&balancerModeFlag, "vtgate-balancer-mode", "", "Tablet balancer mode (options: cell, prefer-cell, random). Defaults to 'cell' which shuffles tablets in the local cell.")
+		fs.StringVar(&balancerModeFlag, "vtgate-balancer-mode", "", fmt.Sprintf("Tablet balancer mode (options: %s). Defaults to 'cell' which shuffles tablets in the local cell.", strings.Join(balancer.GetAvailableModeNames(), ", ")))
 		fs.StringSliceVar(&balancerVtgateCells, "balancer-vtgate-cells", []string{}, "Comma-separated list of cells that contain vttablets. For 'prefer-cell' mode, this is required. For 'random' mode, this is optional and filters tablets to those cells.")
 		fs.StringSliceVar(&balancerKeyspaces, "balancer-keyspaces", []string{}, "Comma-separated list of keyspaces for which to use the balancer (optional). If empty, applies to all keyspaces.")
 	})
