@@ -43,7 +43,7 @@ jobs:
       run: |
         totalMem=$(free -g | awk 'NR==2 {print $2}')
         echo "total memory $totalMem GB"
-        if [[ "$totalMem" -lt 15 ]]; then 
+        if [[ "$totalMem" -lt 15 ]]; then
           echo "Less memory than required"
           exit 1
         fi
@@ -110,11 +110,18 @@ jobs:
         sudo dpkg-reconfigure man-db
 
 
+    - name: Setup MySQL
+      if: steps.changes.outputs.end_to_end == 'true'
+      uses: ./.github/actions/setup-mysql
+      with:
+        flavor: mysql-5.7
+
     - name: Get dependencies
       if: steps.changes.outputs.end_to_end == 'true'
       run: |
         sudo apt-get update
 
+<<<<<<< HEAD
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
 
@@ -143,8 +150,10 @@ jobs:
         sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-client=5.7* mysql-community-server=5.7* mysql-server=5.7* libncurses6
 
         sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget eatmydata
+=======
+        sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
+>>>>>>> 885917d5cb (ci: DRY up MySQL Setup (#18815))
 
-        sudo service mysql stop
         sudo service etcd stop
 
         # install JUnit report formatter
