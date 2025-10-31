@@ -49,15 +49,7 @@ jobs:
 
     - name: Tune the OS
       if: steps.changes.outputs.changed_files == 'true'
-      run: |
-        sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
-        # Increase the asynchronous non-blocking I/O. More information at https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_use_native_aio
-        echo "fs.aio-max-nr = 1048576" | sudo tee -a /etc/sysctl.conf
-        sudo sysctl -p /etc/sysctl.conf
-
-        # Don't waste a bunch of time processing man-db triggers
-        echo "set man-db/auto-update false" | sudo debconf-communicate
-        sudo dpkg-reconfigure man-db
+      uses: ./.github/actions/tune-os
 
     - name: Get dependencies
       if: steps.changes.outputs.changed_files == 'true'
@@ -84,7 +76,7 @@ jobs:
         sudo apt-get update
         sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
 
-        sudo apt-get install -y make unzip g++ curl git wget ant openjdk-11-jdk eatmydata
+        sudo apt-get install -y make unzip g++ curl git wget ant openjdk-11-jdk
 
         sudo service mysql stop
         sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
@@ -118,7 +110,7 @@ jobs:
         # TODO: figure out how best to include our endtoend tests in the coverage report.
         rm -rf go/test/endtoend go/*/endtoend go/vt/*/endtoend go/cmd/vttestserver
 
-        eatmydata -- make unit_test_cover
+        make unit_test_cover
 
         # Restore the files we deleted as codecov tries to fix their paths.
         git reset --hard HEAD
