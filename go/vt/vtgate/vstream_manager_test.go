@@ -411,8 +411,6 @@ func TestVStreamChunks(t *testing.T) {
 	}
 	sbc1.AddVStreamEvents([]*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_COMMIT}}, nil)
 
-	rowEncountered := false
-	doneCounting := false
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: ks,
@@ -428,37 +426,25 @@ func TestVStreamChunks(t *testing.T) {
 	vstreamCtx, vstreamCancel := context.WithCancel(ctx)
 	defer vstreamCancel()
 
-	var rowCount, ddlCount int
+	var rowCount, ddlCount, commitCount int
 	err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
-		switch events[0].Type {
-		case binlogdatapb.VEventType_ROW:
-			if doneCounting {
-				t.Errorf("Unexpected event, only expecting DDL: %v", events[0])
-				return fmt.Errorf("unexpected event: %v", events[0])
+		for _, event := range events {
+			switch event.Type {
+			case binlogdatapb.VEventType_ROW:
+				rowCount += 1
+			case binlogdatapb.VEventType_COMMIT:
+				commitCount += 1
+			case binlogdatapb.VEventType_DDL:
+				ddlCount += 1
+			case binlogdatapb.VEventType_VGTID:
+				// Expected, skip
+			default:
+				t.Errorf("Unexpected event type: %v", event.Type)
+				return fmt.Errorf("unexpected event: %v", event)
 			}
-			rowEncountered = true
-			rowCount += 1
-
-		case binlogdatapb.VEventType_COMMIT:
-			if !rowEncountered {
-				t.Errorf("Unexpected event, COMMIT after non-rows: %v", events[0])
-				return fmt.Errorf("unexpected event: %v", events[0])
-			}
-			doneCounting = true
-
-		case binlogdatapb.VEventType_DDL:
-			if !doneCounting && rowEncountered {
-				t.Errorf("Unexpected event, DDL during ROW events: %v", events[0])
-				return fmt.Errorf("unexpected event: %v", events[0])
-			}
-			ddlCount += 1
-
-		default:
-			t.Errorf("Unexpected event: %v", events[0])
-			return fmt.Errorf("unexpected event: %v", events[0])
 		}
 
-		if rowCount == 100 && ddlCount == 100 {
+		if rowCount == 100 && ddlCount == 100 && commitCount == 1 {
 			vstreamCancel()
 		}
 
@@ -470,6 +456,7 @@ func TestVStreamChunks(t *testing.T) {
 
 	require.Equal(t, 100, rowCount)
 	require.Equal(t, 100, ddlCount)
+	require.Equal(t, 1, commitCount)
 }
 
 func TestVStreamMulti(t *testing.T) {
