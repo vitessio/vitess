@@ -858,7 +858,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 
 	defer func() {
 		closeSourceAt := time.Now()
-		if err := closeWithRetry(ctx, source); err != nil {
+		if err := closeWithRetry(ctx, params.Logger, source, fe.Name); err != nil {
 			params.Logger.Infof("Failed to close %s source file during backup: %v", fe.Name, err)
 		}
 		params.Stats.Scope(stats.Operation("Source:Close")).TimedIncrement(time.Since(closeSourceAt))
@@ -887,7 +887,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 
 	defer func(name, fileName string) {
 		closeDestAt := time.Now()
-		if rerr := closeWithRetry(ctx, dest); rerr != nil {
+		if rerr := closeWithRetry(ctx, params.Logger, dest, fe.Name); rerr != nil {
 			rerr = vterrors.Wrapf(rerr, "failed to close destination file (%v) %v", name, fe.Name)
 			params.Logger.Error(rerr)
 			finalErr = errors.Join(finalErr, rerr)
@@ -938,7 +938,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 				// Close gzip to flush it, after that all data is sent to writer.
 				closeCompressorAt := time.Now()
 				params.Logger.Infof("Closing compressor for file: %s %s", fe.Name, retryStr)
-				if cerr := closeWithRetry(ctx, closer); err != nil {
+				if cerr := closeWithRetry(ctx, params.Logger, closer, "compressor"); err != nil {
 					cerr = vterrors.Wrapf(cerr, "failed to close compressor %v", fe.Name)
 					params.Logger.Error(cerr)
 					createAndCopyErr = errors.Join(createAndCopyErr, cerr)
@@ -1002,7 +1002,7 @@ func (be *BuiltinBackupEngine) backupManifest(
 			return vterrors.Wrapf(err, "cannot add %v to backup %s", backupManifestFileName, retryStr)
 		}
 		defer func() {
-			if err := closeWithRetry(ctx, wc); err != nil {
+			if err := closeWithRetry(ctx, params.Logger, wc, backupManifestFileName); err != nil {
 				addAndWriteError = errors.Join(addAndWriteError, vterrors.Wrapf(err, "cannot close backup: %v", backupManifestFileName))
 			}
 		}()
@@ -1264,7 +1264,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 
 	defer func() {
 		closeSourceAt := time.Now()
-		if err := closeWithRetry(ctx, source); err != nil {
+		if err := closeWithRetry(ctx, params.Logger, source, fe.Name); err != nil {
 			params.Logger.Errorf("Failed to close source file %s during restore: %v", name, err)
 		}
 		params.Stats.Scope(stats.Operation("Source:Close")).TimedIncrement(time.Since(closeSourceAt))
@@ -1290,7 +1290,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	params.Stats.Scope(stats.Operation("Destination:Open")).TimedIncrement(time.Since(openDestAt))
 
 	defer func() {
-		if cerr := closeWithRetry(ctx, dest); cerr != nil {
+		if cerr := closeWithRetry(ctx, params.Logger, dest, fe.Name); cerr != nil {
 			finalErr = errors.Join(finalErr, vterrors.Wrap(cerr, "failed to close destination file"))
 			params.Logger.Errorf("Failed to close destination file %s during restore: %v", dest.Name(), err)
 		}
@@ -1340,7 +1340,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 		defer func() {
 			closeDecompressorAt := time.Now()
 			params.Logger.Infof("closing decompressor")
-			if cerr := closeWithRetry(ctx, closer); err != nil {
+			if cerr := closeWithRetry(ctx, params.Logger, closer, "decompressor"); err != nil {
 				cerr = vterrors.Wrapf(cerr, "failed to close decompressor %v", name)
 				params.Logger.Error(cerr)
 				finalErr = errors.Join(finalErr, cerr)
@@ -1421,11 +1421,15 @@ func init() {
 // is one that may be left to the caller (this is true for GCS).
 // We model this retry after the GCS retry implementation described here:
 // https://cloud.google.com/storage/docs/retry-strategy#go
-func closeWithRetry(ctx context.Context, file io.Closer) error {
+func closeWithRetry(ctx context.Context, logger logutil.Logger, file io.Closer, name string) error {
 	backoff := 1 * time.Second
 	backoffLimit := backoff * 30
 	var err error
 	retries := 0
+	fileType := "source"
+	if _, ok := file.(io.Writer); ok {
+		fileType = "destination"
+	}
 	for {
 		if err = file.Close(); err == nil {
 			return nil
@@ -1436,7 +1440,8 @@ func closeWithRetry(ctx context.Context, file io.Closer) error {
 			// providers so we consider it permanent at this point. We return a
 			// FAILED_PRECONDITION code which tells the upper layers not to retry as we
 			// now cannot be sure that this backup would be usable when it finishes.
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to close the file after %d attempts, giving up", maxFileCloseRetries)
+			logger.Errorf("Failed to close %s file %s after %d attempts, giving up: %v", fileType, name, maxFileCloseRetries, err)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to close the %s file after %d attempts, giving up", fileType, maxFileCloseRetries)
 		}
 		select {
 		case <-ctx.Done():
@@ -1449,5 +1454,6 @@ func closeWithRetry(ctx context.Context, file io.Closer) error {
 			}
 		}
 		retries++
+		logger.Errorf("Failed to close %s file %s, will perform retry %d of %d in %v: %v", fileType, name, retries, maxFileCloseRetries, backoff, err)
 	}
 }
