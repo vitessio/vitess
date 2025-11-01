@@ -233,7 +233,9 @@ func (bs *GCSBackupStorage) Close() error {
 		// so we know to create a new client the next time one
 		// is needed.
 		client := bs._client
-		bs._client = nil
+		defer func() {
+			bs._client = nil
+		}()
 		if err := client.Close(); err != nil {
 			return err
 		}
