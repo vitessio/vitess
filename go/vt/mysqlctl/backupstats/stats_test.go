@@ -1,7 +1,6 @@
 package backupstats
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -110,9 +109,9 @@ func TestStatsAreNotInitializedByDefault(t *testing.T) {
 }
 
 func TestTimedIncrement(t *testing.T) {
-	bytes := stats.NewCountersWithMultiLabels(fmt.Sprintf("%s_test_timed_increment_bytes", t.Name()), "", labels)
-	count := stats.NewCountersWithMultiLabels(fmt.Sprintf("%s_test_timed_increment_count", t.Name()), "", labels)
-	durationNs := stats.NewCountersWithMultiLabels(fmt.Sprintf("%s_test_timed_increment_duration_ns", t.Name()), "", labels)
+	bytes := stats.NewCountersWithMultiLabels(t.Name()+"_test_timed_increment_bytes", "", labels)
+	count := stats.NewCountersWithMultiLabels(t.Name()+"_test_timed_increment_count", "", labels)
+	durationNs := stats.NewCountersWithMultiLabels(t.Name()+"_test_timed_increment_duration_ns", "", labels)
 
 	stats := newScopedStats(bytes, count, durationNs, nil)
 
@@ -141,9 +140,9 @@ func TestTimedIncrement(t *testing.T) {
 }
 
 func TestTimedIncrementBytes(t *testing.T) {
-	bytes := stats.NewCountersWithMultiLabels(fmt.Sprintf("%s_test_timed_increment_bytes", t.Name()), "", labels)
-	count := stats.NewCountersWithMultiLabels(fmt.Sprintf("%s_test_timed_increment_count", t.Name()), "", labels)
-	durationNs := stats.NewCountersWithMultiLabels(fmt.Sprintf("%s_test_timed_increment_duration_ns", t.Name()), "", labels)
+	bytes := stats.NewCountersWithMultiLabels(t.Name()+"_test_timed_increment_bytes", "", labels)
+	count := stats.NewCountersWithMultiLabels(t.Name()+"_test_timed_increment_count", "", labels)
+	durationNs := stats.NewCountersWithMultiLabels(t.Name()+"_test_timed_increment_duration_ns", "", labels)
 
 	stats := newScopedStats(bytes, count, durationNs, nil)
 

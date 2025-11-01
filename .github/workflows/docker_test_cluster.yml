@@ -56,8 +56,7 @@ jobs:
 
     - name: Tune the OS
       if: steps.changes.outputs.end_to_end == 'true'
-      run: |
-        sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
+      uses: ./.github/actions/tune-os
 
     - name: Run tests which require docker - 2
       if: steps.changes.outputs.end_to_end == 'true'

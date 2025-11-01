@@ -601,7 +601,6 @@ FROM users AS u JOIN earnings AS e ON e.user_id = u.id;
 	}
 	for _, ts := range tt {
 		t.Run(ts.schema, func(t *testing.T) {
-
 			_, err := NewSchemaFromSQL(NewTestEnv(), ts.schema)
 			if ts.expectErr == nil {
 				assert.NoError(t, err)

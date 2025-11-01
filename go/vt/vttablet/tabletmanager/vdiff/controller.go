@@ -85,7 +85,6 @@ type controller struct {
 
 func newController(row sqltypes.RowNamedValues, dbClientFactory func() binlogplayer.DBClient,
 	ts *topo.Server, vde *Engine, options *tabletmanagerdata.VDiffOptions) (*controller, error) {
-
 	log.Infof("VDiff controller initializing for %+v", row)
 	id, _ := row["id"].ToInt64()
 

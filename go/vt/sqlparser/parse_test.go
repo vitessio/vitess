@@ -4845,7 +4845,6 @@ func TestPositionedErr(t *testing.T) {
 }
 
 func TestSubStr(t *testing.T) {
-
 	validSQL := []struct {
 		input  string
 		output string
@@ -6633,7 +6632,6 @@ func BenchmarkParseTraces(b *testing.B) {
 			}
 		})
 	}
-
 }
 
 func BenchmarkParseStress(b *testing.B) {
@@ -6903,7 +6901,7 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 	name = locateFile(name)
 	fd, err := os.OpenFile(name, os.O_RDONLY, 0)
 	if err != nil {
-		panic(fmt.Sprintf("Could not open file %s", name))
+		panic("Could not open file " + name)
 	}
 
 	testCaseIterator = make(chan testCase)

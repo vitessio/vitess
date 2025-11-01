@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -184,7 +185,7 @@ func (tm *TabletManager) DeleteTableData(ctx context.Context, req *tabletmanager
 	if batchSize < 1 {
 		batchSize = movetables.DefaultDeleteBatchSize
 	}
-	limit := &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral(fmt.Sprintf("%d", batchSize))}
+	limit := &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral(strconv.FormatInt(batchSize, 10))}
 	// We will log some progress info every 100 delete batches.
 	progressRows := uint64(batchSize * 100)
 
@@ -694,7 +695,7 @@ func getOptionSetString(config map[string]string) string {
 		}
 		clause += ")"
 	}
-	options = fmt.Sprintf(", options = %s", clause)
+	options = ", options = " + clause
 	return options
 }
 
@@ -1037,7 +1038,7 @@ func (tm *TabletManager) buildReadVReplicationWorkflowsQuery(req *tabletmanagerd
 			if i > 0 {
 				additionalPredicates.WriteByte(',')
 			}
-			additionalPredicates.WriteString(fmt.Sprintf("%d", id))
+			additionalPredicates.WriteString(strconv.Itoa(int(id)))
 		}
 		additionalPredicates.WriteByte(')')
 	}

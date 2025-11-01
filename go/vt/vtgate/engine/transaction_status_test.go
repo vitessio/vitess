@@ -18,7 +18,7 @@ package engine
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -77,7 +77,7 @@ func TestTransactionStatusOutput(t *testing.T) {
 			primitive: &TransactionStatus{
 				TransactionID: "ks:-80:v24s7843sf78934l3",
 			},
-			resultErr: fmt.Errorf("failed reading transaction state"),
+			resultErr: errors.New("failed reading transaction state"),
 		}, {
 			name: "Valid Transaction Statuses for a keyspace",
 			primitive: &TransactionStatus{

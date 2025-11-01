@@ -17,6 +17,7 @@ limitations under the License.
 package command
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -84,7 +85,7 @@ func commandRm(cmd *cobra.Command, args []string) error {
 	if hasError {
 		// to be consistent with the command line 'rm -f', return
 		// 0 if using 'zk rm -f' and the file doesn't exist.
-		return fmt.Errorf("rm: some paths had errors")
+		return errors.New("rm: some paths had errors")
 	}
 	return nil
 }

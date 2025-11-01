@@ -22,7 +22,7 @@ limitations under the License.
 package uprops
 
 import (
-	"fmt"
+	"errors"
 	"sync"
 
 	"vitess.io/vitess/go/mysql/icuregex/internal/icudata"
@@ -68,7 +68,7 @@ func readData(bytes *udata.Bytes) error {
 
 	count := bytes.Int32() / 4
 	if count < 8 {
-		return fmt.Errorf("indexes[0] too small in ucase.icu")
+		return errors.New("indexes[0] too small in ucase.icu")
 	}
 
 	indexes := make([]int32, count)

@@ -18,10 +18,12 @@ package vttest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -113,7 +115,7 @@ func (ctl *Toxiproxyctl) run() error {
 
 	cmd := exec.CommandContext(ctx,
 		ctl.binary,
-		"-port", fmt.Sprintf("%d", ctl.apiPort),
+		"-port", strconv.Itoa(ctl.apiPort),
 	)
 	cmd.Env = append(cmd.Env, os.Environ()...)
 
@@ -137,11 +139,11 @@ func (ctl *Toxiproxyctl) run() error {
 		// Wait for toxiproxy to start
 		time.Sleep(1 * time.Second)
 
-		toxiClient := toxiproxy.NewClient("127.0.0.1:" + fmt.Sprintf("%d", ctl.apiPort))
+		toxiClient := toxiproxy.NewClient("127.0.0.1:" + strconv.Itoa(ctl.apiPort))
 		proxy, err := toxiClient.CreateProxy(
 			"mysql",
-			"127.0.0.1:"+fmt.Sprintf("%d", ctl.port),
-			"127.0.0.1:"+fmt.Sprintf("%d", ctl.mysqlctl.Port),
+			"127.0.0.1:"+strconv.Itoa(ctl.port),
+			"127.0.0.1:"+strconv.Itoa(ctl.mysqlctl.Port),
 		)
 		if err == nil {
 			ctl.proxy = proxy
@@ -249,7 +251,7 @@ func WriteInitDBFile(initFile, customSQL, newInitFile string) error {
 func getInitDBSQL(initDBSQL string, customSQL string) (string, error) {
 	splitString := strings.Split(initDBSQL, "# {{custom_sql}}")
 	if len(splitString) != 2 {
-		return "", fmt.Errorf("missing `# {{custom_sql}}` in init_db.sql file")
+		return "", errors.New("missing `# {{custom_sql}}` in init_db.sql file")
 	}
 	var builder strings.Builder
 	builder.WriteString(splitString[0])

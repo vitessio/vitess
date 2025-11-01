@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -112,7 +113,7 @@ func ParseCells(cmd *cobra.Command) error {
 	cf := cmd.Flags().Lookup("cells")
 	af := cmd.Flags().Lookup("all-cells")
 	if cf != nil && cf.Changed && af != nil && af.Changed {
-		return fmt.Errorf("cannot specify both --cells and --all-cells")
+		return errors.New("cannot specify both --cells and --all-cells")
 	}
 	if cf.Changed { // Validate the provided value(s)
 		for i, cell := range CreateOptions.Cells { // Which only means trimming whitespace
@@ -135,12 +136,12 @@ func ParseCells(cmd *cobra.Command) error {
 func ParseTabletTypes(cmd *cobra.Command) error {
 	ttf := cmd.Flags().Lookup("tablet-types")
 	if ttf == nil {
-		return fmt.Errorf("no tablet-types flag found")
+		return errors.New("no tablet-types flag found")
 	}
 	if !ttf.Changed {
 		CreateOptions.TabletTypes = tabletTypesDefault
 	} else if strings.TrimSpace(ttf.Value.String()) == "" {
-		return fmt.Errorf("invalid tablet-types value, at least one valid tablet type must be specified")
+		return errors.New("invalid tablet-types value, at least one valid tablet type must be specified")
 	}
 	return nil
 }
@@ -149,17 +150,17 @@ func ParseTableMaterializeSettings(tableSettings string, parser *sqlparser.Parse
 	tableMaterializeSettings := make([]*vtctldatapb.TableMaterializeSettings, 0)
 	err := json.Unmarshal([]byte(tableSettings), &tableMaterializeSettings)
 	if err != nil {
-		return tableMaterializeSettings, fmt.Errorf("table-settings is not valid JSON")
+		return tableMaterializeSettings, errors.New("table-settings is not valid JSON")
 	}
 	if len(tableMaterializeSettings) == 0 {
-		return tableMaterializeSettings, fmt.Errorf("empty table-settings")
+		return tableMaterializeSettings, errors.New("empty table-settings")
 	}
 
 	// Validate the provided queries.
 	seenSourceTables := make(map[string]bool)
 	for _, tms := range tableMaterializeSettings {
 		if tms.TargetTable == "" || tms.SourceExpression == "" {
-			return tableMaterializeSettings, fmt.Errorf("missing target_table or source_expression")
+			return tableMaterializeSettings, errors.New("missing target_table or source_expression")
 		}
 		// Validate that the query is valid.
 		stmt, err := parser.Parse(tms.SourceExpression)

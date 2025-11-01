@@ -52,7 +52,6 @@ func flagVariants(name string) (underscored, dashed string) {
 // setFunc should be a function with signature func(fs *pflag.FlagSet, p *T, name string, def T, usage string)
 func setFlagVar[T any](fs *pflag.FlagSet, p *T, name string, def T, usage string,
 	setFunc func(fs *pflag.FlagSet, p *T, name string, def T, usage string)) {
-
 	if strings.Contains(name, "_") {
 		fmt.Printf("[WARNING] Please use flag names with dashes instead of underscores, preparing for deprecation of underscores in flag names")
 	}

@@ -867,11 +867,11 @@ func NewLimit(offset, rowCount int) *Limit {
 	return &Limit{
 		Offset: &Literal{
 			Type: IntVal,
-			Val:  fmt.Sprint(offset),
+			Val:  strconv.Itoa(offset),
 		},
 		Rowcount: &Literal{
 			Type: IntVal,
-			Val:  fmt.Sprint(rowCount),
+			Val:  strconv.Itoa(rowCount),
 		},
 	}
 }
@@ -882,7 +882,7 @@ func NewLimitWithoutOffset(rowCount int) *Limit {
 		Offset: nil,
 		Rowcount: &Literal{
 			Type: IntVal,
-			Val:  fmt.Sprint(rowCount),
+			Val:  strconv.Itoa(rowCount),
 		},
 	}
 }

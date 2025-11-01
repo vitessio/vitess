@@ -17,6 +17,7 @@ limitations under the License.
 package opentsdb
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -58,7 +59,7 @@ func unmarshalTextToData(dp *DataPoint, text []byte) error {
 	if len(parts) < 3 {
 		// Technically every OpenTSDB time series requires at least one tag,
 		// but some of the metrics we send have zero.
-		return fmt.Errorf("require format: <metric> <timestamp> <value> [<tagk=tagv> <tagkN=tagkV>]")
+		return errors.New("require format: <metric> <timestamp> <value> [<tagk=tagv> <tagkN=tagkV>]")
 	}
 
 	dp.Metric = parts[0]
@@ -78,7 +79,7 @@ func unmarshalTextToData(dp *DataPoint, text []byte) error {
 	for _, kv := range parts[3:] {
 		tagParts := strings.Split(kv, "=")
 		if len(tagParts) != 2 {
-			return fmt.Errorf("require tag format: <tagk=tagv>")
+			return errors.New("require tag format: <tagk=tagv>")
 		}
 		if dp.Tags == nil {
 			dp.Tags = make(map[string]string)

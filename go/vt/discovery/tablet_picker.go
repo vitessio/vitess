@@ -253,7 +253,6 @@ func NewTabletPicker(
 	}
 
 	return tp, nil
-
 }
 
 // dedupeCells is used to remove duplicates in the cell list in case it is passed in

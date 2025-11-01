@@ -212,7 +212,6 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 	arrTargetShards := strings.Split(tc.targetShards, ",")
 	if tc.typ == "Reshard" {
 		require.NoError(t, vc.AddShards(t, cells, tks, tc.targetShards, 0, 0, tc.tabletBaseID, defaultTargetKsOpts))
-
 	}
 	ksWorkflow := fmt.Sprintf("%s.%s", tc.targetKs, tc.workflow)
 	statsShard := arrTargetShards[0]
@@ -299,7 +298,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 	vdrc, err := getDebugVar(t, statsTablet.Port, []string{"VDiffRowsCompared"})
 	require.NoError(t, err, "failed to get VDiffRowsCompared stat from %s-%d tablet: %v", statsTablet.Cell, statsTablet.TabletUID, err)
 	uuid, jsout := performVDiff2Action(t, ksWorkflow, allCellNames, "show", "last", false, "--verbose")
-	expect := gjson.Get(jsout, fmt.Sprintf("Reports.customer.%s", statsShard)).Int()
+	expect := gjson.Get(jsout, "Reports.customer."+statsShard).Int()
 	got := gjson.Get(vdrc, fmt.Sprintf("%s.%s.%s", tc.workflow, uuid, "customer")).Int()
 	require.Equal(t, expect, got, "expected VDiffRowsCompared stat to be %d, but got %d", expect, got)
 
@@ -402,9 +401,9 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 	t.Run("Client flag handling", func(t *testing.T) {
 		res, err := vc.VtctldClient.ExecuteCommandWithOutput("vdiff", "--target-keyspace", targetKs, "--workflow", workflowName,
 			"create",
-			"--limit", fmt.Sprintf("%d", expectedOptions.CoreOptions.MaxRows),
-			"--max-report-sample-rows", fmt.Sprintf("%d", expectedOptions.ReportOptions.MaxSampleRows),
-			"--max-extra-rows-to-compare", fmt.Sprintf("%d", expectedOptions.CoreOptions.MaxExtraRowsToCompare),
+			"--limit", strconv.FormatInt(expectedOptions.CoreOptions.MaxRows, 10),
+			"--max-report-sample-rows", strconv.FormatInt(expectedOptions.ReportOptions.MaxSampleRows, 10),
+			"--max-extra-rows-to-compare", strconv.FormatInt(expectedOptions.CoreOptions.MaxExtraRowsToCompare, 10),
 			"--filtered-replication-wait-time", fmt.Sprintf("%v", time.Duration(expectedOptions.CoreOptions.TimeoutSeconds)*time.Second),
 			"--max-diff-duration", fmt.Sprintf("%v", time.Duration(expectedOptions.CoreOptions.MaxDiffSeconds)*time.Second),
 			"--source-cells", expectedOptions.PickerOptions.SourceCell,

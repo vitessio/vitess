@@ -156,7 +156,6 @@ func TestParseRawString(t *testing.T) {
 		f(`"x\\y"tail`, `x\\y`, "tail")
 		f(`"\\\"й\n\"я"tail`, `\\\"й\n\"я`, "tail")
 		f(`"\\\\\\\\"tail`, `\\\\\\\\`, "tail")
-
 	})
 
 	t.Run("error", func(t *testing.T) {

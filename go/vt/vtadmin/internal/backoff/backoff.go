@@ -26,7 +26,6 @@ limitations under the License.
 package backoff
 
 import (
-	"fmt"
 	"math/rand/v2"
 	"strings"
 	"time"
@@ -122,6 +121,6 @@ func Get(strategy string, cfg grpcbackoff.Config) Strategy {
 	case "none":
 		return None{}
 	default:
-		panic(fmt.Sprintf("unknown backoff strategy: %s", strategy))
+		panic("unknown backoff strategy: " + strategy)
 	}
 }

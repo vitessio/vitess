@@ -18,6 +18,7 @@ package testutil
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -426,7 +427,7 @@ func (stream *backupStreamAdapter) Send(msg *logutilpb.Event) error {
 // Backup is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.BackupRequest) (logutil.EventStream, error) {
 	if tablet.Type == topodatapb.TabletType_PRIMARY && !req.AllowPrimary {
-		return nil, fmt.Errorf("cannot backup primary with allowPrimary=false")
+		return nil, errors.New("cannot backup primary with allowPrimary=false")
 	}
 
 	key := topoproto.TabletAliasString(tablet.Alias)
@@ -753,7 +754,7 @@ func (fake *TabletManagerClient) FullStatus(ctx context.Context, tablet *topodat
 		return nil, assert.AnError
 	}
 
-	return nil, fmt.Errorf("no output set for FullStatus")
+	return nil, errors.New("no output set for FullStatus")
 }
 
 // GetPermissions is part of the tmclient.TabletManagerClient interface.
@@ -789,7 +790,7 @@ func (fake *TabletManagerClient) GetPermissions(ctx context.Context, tablet *top
 // GetReplicas is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) GetReplicas(ctx context.Context, tablet *topodatapb.Tablet) ([]string, error) {
 	if fake.GetReplicasResults == nil {
-		return nil, fmt.Errorf("no results set on fake")
+		return nil, errors.New("no results set on fake")
 	}
 
 	key := topoproto.TabletAliasString(tablet.Alias)
@@ -1267,7 +1268,7 @@ func (fake *TabletManagerClient) SetReplicationSource(ctx context.Context, table
 	if fake.SetReplicationSourceSemiSync != nil {
 		if semiSyncRequirement, ok := fake.SetReplicationSourceSemiSync[key]; ok {
 			if semiSyncRequirement != semiSync {
-				return fmt.Errorf("semi-sync settings incorrect")
+				return errors.New("semi-sync settings incorrect")
 			}
 		}
 	}

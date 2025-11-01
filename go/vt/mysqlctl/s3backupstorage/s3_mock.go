@@ -19,7 +19,6 @@ package s3backupstorage
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"sync"
 
@@ -159,7 +158,7 @@ func (fwr *failReadPipeReader) Read(p []byte) (n int, err error) {
 
 func FailFirstWrite(s3bh *S3BackupHandle, ctx context.Context, filename string, filesize int64, firstAdd bool) (io.WriteCloser, error) {
 	if s3bh.readOnly {
-		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
+		return nil, errors.New("AddFile cannot be called on read-only backup")
 	}
 
 	partSizeBytes, err := calculateUploadPartSize(filesize)
@@ -182,7 +181,7 @@ func FailFirstWrite(s3bh *S3BackupHandle, ctx context.Context, filename string, 
 
 func FailAllWrites(s3bh *S3BackupHandle, ctx context.Context, filename string, filesize int64, _ bool) (io.WriteCloser, error) {
 	if s3bh.readOnly {
-		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
+		return nil, errors.New("AddFile cannot be called on read-only backup")
 	}
 
 	partSizeBytes, err := calculateUploadPartSize(filesize)

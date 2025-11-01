@@ -17,6 +17,7 @@ limitations under the License.
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -45,7 +46,7 @@ func TabletAliasesFromPosArgs(args []string) ([]*topodatapb.TabletAlias, error) 
 // converts them to a map of tablet tags.
 func TabletTagsFromPosArgs(args []string) (map[string]string, error) {
 	if len(args) == 0 {
-		return nil, fmt.Errorf("no tablet tags specified")
+		return nil, errors.New("no tablet tags specified")
 	}
 
 	tags := make(map[string]string, len(args))

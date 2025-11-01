@@ -77,7 +77,6 @@ func newShardedRouting(ctx *plancontext.PlanningContext, vtable *vindexes.BaseTa
 				OpCode: engine.EqualUnique,
 			},
 		}
-
 	}
 	// Find the tableInfo for the given id
 	ti, err := ctx.SemTable.TableInfoFor(id)
@@ -284,7 +283,6 @@ func (tr *ShardedRouting) planComparison(ctx *plancontext.PlanningContext, cmp *
 	case sqlparser.LikeOp:
 		found := tr.planLikeOp(ctx, cmp)
 		return nil, found
-
 	}
 	return nil, false
 }

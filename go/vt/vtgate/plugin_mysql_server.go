@@ -18,11 +18,11 @@ package vtgate
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"os"
 	"os/signal"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -614,7 +614,7 @@ func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 	if mysqlServerPort >= 0 {
 		srv.tcpListener, err = mysql.NewListener(
 			mysqlTCPVersion,
-			net.JoinHostPort(mysqlServerBindAddress, fmt.Sprintf("%v", mysqlServerPort)),
+			net.JoinHostPort(mysqlServerBindAddress, strconv.Itoa(mysqlServerPort)),
 			authServer,
 			srv.vtgateHandle,
 			mysqlConnReadTimeout,

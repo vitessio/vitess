@@ -179,7 +179,6 @@ func TestMainImpl(m *testing.M) {
 	} else {
 		os.Exit(exitCode)
 	}
-
 }
 
 // TestRecoveryImpl does following

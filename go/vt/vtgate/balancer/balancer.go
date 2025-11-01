@@ -335,7 +335,6 @@ func (b *flowBalancer) allocateFlows(allTablets []*discovery.TabletHealth) *targ
 	// assigning local cell traffic and distributing load from cells without tablets.
 	//
 	if /* fudge for integer arithmetic */ unbalancedFlow > 10 {
-
 		// cells which are overallocated
 		overAllocated := make(map[string]int)
 		for cell, allocation := range a.Target {
@@ -355,7 +354,6 @@ func (b *flowBalancer) allocateFlows(allTablets []*discovery.TabletHealth) *targ
 		for _, vtgateCell := range b.vtGateCells {
 			for underAllocatedCell, underAllocatedFlow := range underAllocated {
 				for overAllocatedCell, overAllocatedFlow := range overAllocated {
-
 					currentFlow := a.Outflows[vtgateCell][overAllocatedCell]
 					if currentFlow == 0 {
 						continue

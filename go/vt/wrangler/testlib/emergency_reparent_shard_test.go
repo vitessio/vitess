@@ -18,7 +18,7 @@ package testlib
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"testing"
 	"time"
 
@@ -245,7 +245,7 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 	defer newPrimary.StopActionLoop(t)
 
 	// old primary, will be scrapped
-	oldPrimary.FakeMysqlDaemon.ReplicationStatusError = fmt.Errorf("old primary stopped working")
+	oldPrimary.FakeMysqlDaemon.ReplicationStatusError = errors.New("old primary stopped working")
 	oldPrimary.StartActionLoop(t, wr)
 	defer oldPrimary.StopActionLoop(t)
 

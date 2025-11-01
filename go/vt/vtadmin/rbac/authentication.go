@@ -134,7 +134,7 @@ var (
 // function.
 func RegisterAuthenticator(name string, f func() Authenticator) {
 	if _, ok := authenticators[name]; ok {
-		panic(fmt.Sprintf("authenticator already registered with name: %s", name))
+		panic("authenticator already registered with name: " + name)
 	}
 
 	authenticators[name] = f

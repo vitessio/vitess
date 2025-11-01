@@ -18,6 +18,7 @@ limitations under the License.
 package datetime
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -30,7 +31,7 @@ func compile(ds map[byte]Spec, p string, exec func(Spec)) error {
 			break
 		}
 		if i == l-1 {
-			return fmt.Errorf(`stray %% at the end of pattern`)
+			return errors.New(`stray %% at the end of pattern`)
 		}
 
 		// we found a '%'. we need the next byte to decide what to do next

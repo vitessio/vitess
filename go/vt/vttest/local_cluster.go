@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -506,7 +507,7 @@ func (db *LocalCluster) loadSchema(shouldRunDatabaseMigrations bool) error {
 	log.Info("Loading custom schema...")
 
 	if !isDir(db.SchemaDir) {
-		return fmt.Errorf("LoadSchema(): SchemaDir does not exist")
+		return errors.New("LoadSchema(): SchemaDir does not exist")
 	}
 
 	for _, kpb := range db.Topology.Keyspaces {
@@ -558,7 +559,7 @@ func (db *LocalCluster) loadSchema(shouldRunDatabaseMigrations bool) error {
 func (db *LocalCluster) createVTSchema() error {
 	var sidecardbExec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
 		if useDB {
-			if err := db.Execute([]string{fmt.Sprintf("use %s", sidecar.GetIdentifier())}, ""); err != nil {
+			if err := db.Execute([]string{"use " + sidecar.GetIdentifier()}, ""); err != nil {
 				return nil, err
 			}
 		}

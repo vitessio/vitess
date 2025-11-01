@@ -104,7 +104,6 @@ func (p *pathGen) addStep(
 		slice:     slice,
 	}
 	p.steps = append(p.steps, s)
-
 }
 
 func (p *pathGen) addStructFields(t types.Type, strct *types.Struct, spi generatorSPI) {

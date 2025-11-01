@@ -51,7 +51,6 @@ func TestIsConnErr(t *testing.T) {
 	for _, tcase := range testcases {
 		got := sqlerror.IsConnErr(tcase.in)
 		assert.Equal(t, tcase.want, got, "IsConnErr(%#v): %v, want %v", tcase.in, got, tcase.want)
-
 	}
 }
 
@@ -81,6 +80,5 @@ func TestIsConnLostDuringQuery(t *testing.T) {
 	for _, tcase := range testcases {
 		got := sqlerror.IsConnLostDuringQuery(tcase.in)
 		assert.Equal(t, tcase.want, got, "IsConnLostDuringQuery(%#v): %v, want %v", tcase.in, got, tcase.want)
-
 	}
 }

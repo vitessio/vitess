@@ -43,20 +43,15 @@ jobs:
             - 'go/vt/vtadmin/**'
             - '.github/workflows/check_make_vtadmin_authz_testgen.yml'
 
+    - name: Tune the OS
+      if: steps.changes.outputs.vtadmin_changes == 'true'
+      uses: ./.github/actions/tune-os
+
     - name: Set up Go
       uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
       if: steps.changes.outputs.vtadmin_changes == 'true'
       with:
         go-version-file: go.mod
-
-    - name: Tune the OS
-      if: steps.changes.outputs.vtadmin_changes == 'true'
-      run: |
-        sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
-
-        # Don't waste a bunch of time processing man-db triggers
-        echo "set man-db/auto-update false" | sudo debconf-communicate
-        sudo dpkg-reconfigure man-db
 
     - name: Get dependencies
       if: steps.changes.outputs.vtadmin_changes == 'true'

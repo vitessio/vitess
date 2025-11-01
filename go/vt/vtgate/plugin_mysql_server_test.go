@@ -20,7 +20,6 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"fmt"
 	"os"
 	"path"
 	"strings"
@@ -215,7 +214,7 @@ func newFromStringFail(t *testing.T) func(ctx context.Context, parentSpan string
 
 func newFromStringError(t *testing.T) func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
 	return func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
-		return trace.NoopSpan{}, context.Background(), fmt.Errorf("")
+		return trace.NoopSpan{}, context.Background(), errors.New("")
 	}
 }
 

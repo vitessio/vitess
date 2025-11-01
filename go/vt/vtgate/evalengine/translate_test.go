@@ -420,7 +420,6 @@ func TestTranslationFailures(t *testing.T) {
 			require.EqualError(t, err, testcase.expectedErr)
 		})
 	}
-
 }
 
 func TestCardinalityWithBindVariables(t *testing.T) {

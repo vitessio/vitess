@@ -18,6 +18,7 @@ package tabletmanager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -44,7 +45,7 @@ const (
 // Backup takes a db backup and sends it to the BackupStorage.
 func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req *tabletmanagerdatapb.BackupRequest) error {
 	if tm.Cnf == nil {
-		return fmt.Errorf("cannot perform backup without my.cnf, please restart vttablet with a my.cnf file specified")
+		return errors.New("cannot perform backup without my.cnf, please restart vttablet with a my.cnf file specified")
 	}
 
 	// Check tablet type current process has.
@@ -53,7 +54,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 	// It is not safe to take backups from tablet in this state
 	currentTablet := tm.Tablet()
 	if !req.AllowPrimary && currentTablet.Type == topodatapb.TabletType_PRIMARY {
-		return fmt.Errorf("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow_primary")
+		return errors.New("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow_primary")
 	}
 
 	backupEngine := ""
@@ -71,7 +72,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 		return err
 	}
 	if !req.AllowPrimary && tablet.Type == topodatapb.TabletType_PRIMARY {
-		return fmt.Errorf("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow_primary")
+		return errors.New("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow_primary")
 	}
 
 	// Prevent concurrent backups, and record stats
@@ -192,7 +193,7 @@ func (tm *TabletManager) RestoreFromBackup(ctx context.Context, logger logutil.L
 		return err
 	}
 	if tablet.Type == topodatapb.TabletType_PRIMARY {
-		return fmt.Errorf("type PRIMARY cannot restore from backup, if you really need to do this, restart vttablet in replica mode")
+		return errors.New("type PRIMARY cannot restore from backup, if you really need to do this, restart vttablet in replica mode")
 	}
 
 	// Create the logger: tee to console and source.

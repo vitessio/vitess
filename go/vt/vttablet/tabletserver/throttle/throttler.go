@@ -832,7 +832,6 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 								})
 						}
 					}
-
 				}
 			case <-dormantCollectTicker.C:
 				if throttler.IsOpen() {

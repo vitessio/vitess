@@ -52,17 +52,17 @@ describe('Advanced keyspace actions', () => {
     });
 
     beforeAll(() => {
-        import.meta.env = { ...TEST_PROCESS_ENV } as Vite.ImportMetaEnv;
+        Object.assign(import.meta.env, TEST_PROCESS_ENV);
         server.listen();
     });
 
     beforeEach(() => {
-        import.meta.env = { ...TEST_PROCESS_ENV } as Vite.ImportMetaEnv;
+        Object.assign(import.meta.env, TEST_PROCESS_ENV);
         vi.clearAllMocks();
     });
 
     afterAll(() => {
-        import.meta.env = { ...ORIGINAL_PROCESS_ENV };
+        Object.assign(import.meta.env, ORIGINAL_PROCESS_ENV);
         server.close();
     });
 

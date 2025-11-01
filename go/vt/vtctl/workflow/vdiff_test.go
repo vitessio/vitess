@@ -18,7 +18,7 @@ package workflow
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"math"
 	"testing"
 	"time"
@@ -277,7 +277,7 @@ func TestVDiffResume(t *testing.T) {
 				Workflow:       workflow,
 				Uuid:           uuid,
 			},
-			wantErr: fmt.Sprintf("specified target shard 0 not a valid target for workflow %s", workflow),
+			wantErr: "specified target shard 0 not a valid target for workflow " + workflow,
 		},
 	}
 	for _, tt := range tests {
@@ -374,7 +374,7 @@ func TestVDiffStop(t *testing.T) {
 				Workflow:       workflow,
 				Uuid:           uuid,
 			},
-			wantErr: fmt.Sprintf("specified target shard 0 not a valid target for workflow %s", workflow),
+			wantErr: "specified target shard 0 not a valid target for workflow " + workflow,
 		},
 	}
 	for _, tt := range tests {
@@ -459,7 +459,7 @@ func TestVDiffDelete(t *testing.T) {
 						Action:    action,
 						ActionArg: uuid,
 					},
-					err: fmt.Errorf("error on invalid delete"),
+					err: errors.New("error on invalid delete"),
 				},
 				env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID+tabletUIDStep]: {
 					req: &tabletmanagerdatapb.VDiffRequest{

@@ -19,6 +19,7 @@ package zkfs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -44,7 +45,7 @@ func (fs *FS) CopyContext(ctx context.Context, src, dst string) error {
 	dst = zkfilepath.Clean(dst)
 
 	if !IsFile(src) && !IsFile(dst) {
-		return fmt.Errorf("cp: neither src nor dst is a /zk file")
+		return errors.New("cp: neither src nor dst is a /zk file")
 	}
 
 	data, err := fs.ReadContext(ctx, src)

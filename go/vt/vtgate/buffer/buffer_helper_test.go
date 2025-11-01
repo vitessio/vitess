@@ -139,7 +139,7 @@ func waitForRequestsExceededWindow(count int) error {
 
 func isCanceledError(err error) error {
 	if err == nil {
-		return fmt.Errorf("buffering should have stopped early and returned an error because the request was canceled from the outside")
+		return errors.New("buffering should have stopped early and returned an error because the request was canceled from the outside")
 	}
 	if got, want := vterrors.Code(err), vtrpcpb.Code_UNAVAILABLE; got != want {
 		return fmt.Errorf("wrong error code for canceled buffered request. got = %v, want = %v", got, want)
@@ -188,7 +188,7 @@ func checkVariables(t *testing.T) {
 		// The evicted count is grouped by Reason i.e. the entries are named
 		// "<Keyspace>.<Shard>.<Reason>". Match all reasons for this shard.
 		for withReason, v := range requestsEvicted.Counts() {
-			if strings.HasPrefix(withReason, fmt.Sprintf("%s.", k)) {
+			if strings.HasPrefix(withReason, k+".") {
 				evicted += v
 			}
 		}

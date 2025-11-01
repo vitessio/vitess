@@ -141,7 +141,7 @@ func Run(ctx context.Context, controller Controller, executor Executor) (execRes
 // RegisterControllerFactory register a control factory.
 func RegisterControllerFactory(name string, factory ControllerFactory) {
 	if _, ok := controllerFactories[name]; ok {
-		panic(fmt.Sprintf("register a registered key: %s", name))
+		panic("register a registered key: " + name)
 	}
 	controllerFactories[name] = factory
 }

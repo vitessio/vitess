@@ -616,7 +616,6 @@ func addColumnToInput(
 	var src Operator
 	var updateSrc func(Operator)
 	switch op := operator.(type) {
-
 	// Pass through operators - we can just add the columns to their source
 	case *SubQuery:
 		src, updateSrc = op.Outer, func(newSrc Operator) { op.Outer = newSrc }

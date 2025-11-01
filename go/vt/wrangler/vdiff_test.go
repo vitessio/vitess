@@ -1033,7 +1033,6 @@ func TestVDiffReplicationWait(t *testing.T) {
 }
 
 func TestVDiffFindPKs(t *testing.T) {
-
 	testcases := []struct {
 		name         string
 		table        *tabletmanagerdatapb.TableDefinition
@@ -1106,7 +1105,6 @@ func TestVDiffFindPKs(t *testing.T) {
 			require.EqualValues(t, tc.tdOut, tc.tdIn)
 		})
 	}
-
 }
 
 func TestVDiffPlanInclude(t *testing.T) {

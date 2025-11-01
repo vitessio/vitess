@@ -190,7 +190,6 @@ func TestTxEngineBegin(t *testing.T) {
 		_, _, err = exec()
 		assert.EqualError(t, err, "tx engine can't accept new connections in state NotServing")
 	}
-
 }
 
 func TestTxEngineRenewFails(t *testing.T) {
@@ -285,7 +284,6 @@ func changeState(te *TxEngine, state txEngineState) {
 }
 
 func TestWithInnerTests(outerT *testing.T) {
-
 	tests := []TestCase{
 		// Start from RW and test all single hop transitions with and without tx
 		{AcceptingReadAndWrite, []txEngineState{
@@ -483,7 +481,6 @@ func TestWithInnerTests(outerT *testing.T) {
 
 	for _, test := range tests {
 		outerT.Run(test.String(), func(t *testing.T) {
-
 			db := setUpQueryExecutorTest(t)
 			db.AddQuery("set transaction isolation level REPEATABLE READ", &sqltypes.Result{})
 			db.AddQuery("start transaction with consistent snapshot, read only", &sqltypes.Result{})

@@ -820,7 +820,7 @@ func TestMultiStatementStopsOnError(t *testing.T) {
 
 			// this handler will return results according to the query. In case the query contains "error" it will return an error
 			// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
-			handler := &testRun{err: fmt.Errorf("execution failed")}
+			handler := &testRun{err: errors.New("execution failed")}
 			res := sConn.handleNextCommand(handler)
 			// Execution error will occur in this case because the query sent is error and testRun will throw an error.
 			// We should send an error packet but not close the connection.
@@ -934,7 +934,7 @@ func TestMultiStatementOnSplitError(t *testing.T) {
 
 			// this handler will return results according to the query. In case the query contains "error" it will return an error
 			// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
-			handler := &testRun{err: fmt.Errorf("execution failed")}
+			handler := &testRun{err: errors.New("execution failed")}
 
 			// We will encounter an error in split statement when this multi statement is processed.
 			res := sConn.handleNextCommand(handler)
@@ -963,7 +963,7 @@ func TestInitDbAgainstWrongDbDoesNotDropConnection(t *testing.T) {
 
 	// this handler will return results according to the query. In case the query contains "error" it will return an error
 	// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
-	handler := &testRun{err: fmt.Errorf("execution failed")}
+	handler := &testRun{err: errors.New("execution failed")}
 	res := sConn.handleNextCommand(handler)
 	require.True(t, res, "we should not break the connection because of execution errors")
 
@@ -1003,7 +1003,7 @@ func TestConnectionErrorWhileWritingComStmtSendLongData(t *testing.T) {
 	}, DefaultFlushDelay, 0)
 
 	// this handler will return an error on the first run, and fail the test if it's run more times
-	handler := &testRun{err: fmt.Errorf("not used")}
+	handler := &testRun{err: errors.New("not used")}
 	res := sConn.handleNextCommand(handler)
 	require.False(t, res, "we should beak the connection in case of error writing error packet")
 }
@@ -1017,7 +1017,7 @@ func TestConnectionErrorWhileWritingComPrepare(t *testing.T) {
 	}, DefaultFlushDelay, 0)
 	sConn.Capabilities = sConn.Capabilities | CapabilityClientMultiStatements
 	// this handler will return an error on the first run, and fail the test if it's run more times
-	handler := &testRun{err: fmt.Errorf("not used")}
+	handler := &testRun{err: errors.New("not used")}
 	res := sConn.handleNextCommand(handler)
 	require.False(t, res, "we should beak the connection in case of error writing error packet")
 }
@@ -1031,7 +1031,7 @@ func TestConnectionErrorWhileWritingComStmtExecute(t *testing.T) {
 			0x69, 0x6f, 0x6e, 0x5f, 0x63, 0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x20, 0x6c, 0x69, 0x6d, 0x69, 0x74, 0x20, 0x31},
 	}, DefaultFlushDelay, 0)
 	// this handler will return an error on the first run, and fail the test if it's run more times
-	handler := &testRun{err: fmt.Errorf("not used")}
+	handler := &testRun{err: errors.New("not used")}
 	res := sConn.handleNextCommand(handler)
 	require.False(t, res, "we should beak the connection in case of error writing error packet")
 }

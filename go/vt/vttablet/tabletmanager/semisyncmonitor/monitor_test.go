@@ -18,8 +18,8 @@ package semisyncmonitor
 
 import (
 	"context"
-	"fmt"
 	"runtime"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -58,7 +58,6 @@ func createFakeDBAndMonitor(t *testing.T) (*fakesqldb.DB, *Monitor) {
 	monitor.isOpen = true
 	monitor.appPool.Open(config.DB.AppWithDB())
 	return db, monitor
-
 }
 
 // TestMonitorIsSemiSyncBlocked tests the functionality of isSemiSyncBlocked.
@@ -216,7 +215,7 @@ func TestMonitorIncrementWriteCount(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		t.Run(fmt.Sprintf("%d", tt.initVal), func(t *testing.T) {
+		t.Run(strconv.Itoa(tt.initVal), func(t *testing.T) {
 			db, m := createFakeDBAndMonitor(t)
 			defer db.Close()
 			defer func() {
@@ -254,7 +253,7 @@ func TestMonitorDecrementWriteCount(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		t.Run(fmt.Sprintf("%d", tt.initVal), func(t *testing.T) {
+		t.Run(strconv.Itoa(tt.initVal), func(t *testing.T) {
 			db, m := createFakeDBAndMonitor(t)
 			defer db.Close()
 			defer func() {
@@ -291,7 +290,7 @@ func TestMonitorAllWritesBlocked(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		t.Run(fmt.Sprintf("%d", tt.initVal), func(t *testing.T) {
+		t.Run(strconv.Itoa(tt.initVal), func(t *testing.T) {
 			db, m := createFakeDBAndMonitor(t)
 			defer db.Close()
 			defer func() {
@@ -327,7 +326,7 @@ func TestMonitorWrite(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		t.Run(fmt.Sprintf("%d", tt.initVal), func(t *testing.T) {
+		t.Run(strconv.Itoa(tt.initVal), func(t *testing.T) {
 			db, m := createFakeDBAndMonitor(t)
 			defer db.Close()
 			defer func() {

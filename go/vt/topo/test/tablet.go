@@ -136,5 +136,4 @@ func checkTablet(t *testing.T, ctx context.Context, ts *topo.Server) {
 	if _, err := ts.GetTablet(ctx, tablet.Alias); !topo.IsErrType(err, topo.NoNode) {
 		t.Errorf("GetTablet: expected error, tablet was deleted: %v", err)
 	}
-
 }

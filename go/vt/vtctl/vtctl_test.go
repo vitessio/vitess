@@ -154,11 +154,11 @@ func TestMoveTables(t *testing.T) {
 			Rules: []*binlogdatapb.Rule{
 				{
 					Match:  table1,
-					Filter: fmt.Sprintf("select * from %s", table1),
+					Filter: "select * from " + table1,
 				},
 				{
 					Match:  table2,
-					Filter: fmt.Sprintf("select * from %s", table2),
+					Filter: "select * from " + table2,
 				},
 			},
 		},

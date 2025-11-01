@@ -351,7 +351,6 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 		// Finally, the actual update, which is also sent to -20, same route as the subquery.
 		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
 	})
-
 }
 
 func TestUpdateEqualMultiColChangedVindex(t *testing.T) {
@@ -586,7 +585,6 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 		// Finally, the actual update, which is also sent to -20, same route as the subquery.
 		`ExecuteMultiShard sharded.-20: dummy_update {} sharded.20-: dummy_update {} true false`,
 	})
-
 }
 
 func TestUpdateIn(t *testing.T) {

@@ -86,26 +86,26 @@ func TestInitializeTargetSequences(t *testing.T) {
 		"my-seq1": {
 			backingTableName:     "my-seq1",
 			backingTableKeyspace: sourceKeyspaceName,
-			backingTableDBName:   fmt.Sprintf("vt_%s", sourceKeyspaceName),
+			backingTableDBName:   "vt_" + sourceKeyspaceName,
 			usingTableName:       tableName,
 			usingTableDBName:     "vt_targetks",
 			usingTableDefinition: &vschema.Table{
 				AutoIncrement: &vschema.AutoIncrement{
 					Column:   "my-col",
-					Sequence: fmt.Sprintf("%s.my-seq1", sourceKeyspace.KeyspaceName),
+					Sequence: sourceKeyspace.KeyspaceName + ".my-seq1",
 				},
 			},
 		},
 		"my-seq2": {
 			backingTableName:     "my-seq2",
 			backingTableKeyspace: sourceKeyspaceName,
-			backingTableDBName:   fmt.Sprintf("vt_%s", sourceKeyspaceName),
+			backingTableDBName:   "vt_" + sourceKeyspaceName,
 			usingTableName:       tableName2,
 			usingTableDBName:     "vt_targetks",
 			usingTableDefinition: &vschema.Table{
 				AutoIncrement: &vschema.AutoIncrement{
 					Column:   "my-col-2",
-					Sequence: fmt.Sprintf("%s.my-seq2", sourceKeyspace.KeyspaceName),
+					Sequence: sourceKeyspace.KeyspaceName + ".my-seq2",
 				},
 			},
 		},
@@ -139,12 +139,12 @@ func TestInitializeTargetSequences(t *testing.T) {
 		Sequences: []*tabletmanagerdatapb.UpdateSequenceTablesRequest_SequenceMetadata{
 			{
 				BackingTableName:   "my-seq1",
-				BackingTableDbName: fmt.Sprintf("vt_%s", sourceKeyspaceName),
+				BackingTableDbName: "vt_" + sourceKeyspaceName,
 				MaxValue:           34,
 			},
 			{
 				BackingTableName:   "my-seq2",
-				BackingTableDbName: fmt.Sprintf("vt_%s", sourceKeyspaceName),
+				BackingTableDbName: "vt_" + sourceKeyspaceName,
 				MaxValue:           10,
 			},
 		},
@@ -251,7 +251,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 						},
 						AutoIncrement: &vschema.AutoIncrement{
 							Column:   "my-col",
-							Sequence: fmt.Sprintf("%s.my-seq1", sourceKeyspace.KeyspaceName),
+							Sequence: sourceKeyspace.KeyspaceName + ".my-seq1",
 						},
 					},
 				},
@@ -391,7 +391,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 						},
 						AutoIncrement: &vschema.AutoIncrement{
 							Column:   "col1",
-							Sequence: fmt.Sprintf("%s.seq1", sourceKeyspace.KeyspaceName),
+							Sequence: sourceKeyspace.KeyspaceName + ".seq1",
 						},
 					},
 					table2: {
@@ -403,7 +403,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 						},
 						AutoIncrement: &vschema.AutoIncrement{
 							Column:   "col2",
-							Sequence: fmt.Sprintf("%s.seq2", sourceKeyspace.KeyspaceName),
+							Sequence: sourceKeyspace.KeyspaceName + ".seq2",
 						},
 					},
 				},
@@ -424,7 +424,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 						},
 						AutoIncrement: &vschema.AutoIncrement{
 							Column:   "col1",
-							Sequence: fmt.Sprintf("%s.seq1", sourceKeyspace.KeyspaceName),
+							Sequence: sourceKeyspace.KeyspaceName + ".seq1",
 						},
 					},
 				},
@@ -443,7 +443,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 						},
 						AutoIncrement: &vschema.AutoIncrement{
 							Column:   "col2",
-							Sequence: fmt.Sprintf("%s.seq2", sourceKeyspace.KeyspaceName),
+							Sequence: sourceKeyspace.KeyspaceName + ".seq2",
 						},
 					},
 				},
@@ -471,7 +471,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 						},
 						AutoIncrement: &vschema.AutoIncrement{
 							Column:   "col1",
-							Sequence: fmt.Sprintf("%s.seq1", sourceKeyspace.KeyspaceName),
+							Sequence: sourceKeyspace.KeyspaceName + ".seq1",
 						},
 					},
 				},
@@ -492,7 +492,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 						},
 						AutoIncrement: &vschema.AutoIncrement{
 							Column:   "col1",
-							Sequence: fmt.Sprintf("%s.seq1", sourceKeyspace.KeyspaceName),
+							Sequence: sourceKeyspace.KeyspaceName + ".seq1",
 						},
 					},
 				},

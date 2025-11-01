@@ -168,7 +168,6 @@ func metadataTotalLength(types []byte) int {
 // metadataRead reads a single value from the metadata string.
 func metadataRead(data []byte, pos int, typ byte) (uint16, int, error) {
 	switch typ {
-
 	case binlog.TypeDecimal, binlog.TypeTiny, binlog.TypeShort, binlog.TypeLong, binlog.TypeNull, binlog.TypeTimestamp, binlog.TypeLongLong, binlog.TypeInt24, binlog.TypeDate, binlog.TypeTime, binlog.TypeDateTime, binlog.TypeYear, binlog.TypeNewDate:
 		// No data here.
 		return 0, pos, nil
@@ -194,7 +193,6 @@ func metadataRead(data []byte, pos int, typ byte) (uint16, int, error) {
 // metadataWrite writes a single value into the metadata string.
 func metadataWrite(data []byte, pos int, typ byte, value uint16) int {
 	switch typ {
-
 	case binlog.TypeDecimal, binlog.TypeTiny, binlog.TypeShort, binlog.TypeLong, binlog.TypeNull, binlog.TypeTimestamp, binlog.TypeLongLong, binlog.TypeInt24, binlog.TypeDate, binlog.TypeTime, binlog.TypeDateTime, binlog.TypeYear, binlog.TypeNewDate:
 		// No data here.
 		return pos

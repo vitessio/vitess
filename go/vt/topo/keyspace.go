@@ -301,8 +301,6 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 	eg.SetLimit(int(opt.Concurrency))
 
 	for _, shard := range shards {
-		shard := shard
-
 		eg.Go(func() error {
 			si, err := ts.GetShard(ctx, keyspace, shard)
 			switch {

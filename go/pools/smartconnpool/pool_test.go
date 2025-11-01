@@ -18,6 +18,7 @@ package smartconnpool
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"sync"
@@ -83,7 +84,7 @@ func (tr *TestConn) ResetSetting(ctx context.Context) error {
 
 func (tr *TestConn) ApplySetting(ctx context.Context, setting *Setting) error {
 	if tr.failApply {
-		return fmt.Errorf("ApplySetting failed")
+		return errors.New("ApplySetting failed")
 	}
 	tr.setting = setting
 	return nil
@@ -109,7 +110,7 @@ func newConnector(state *TestState) Connector[*TestConn] {
 			time.Sleep(state.chaos.delayConnect)
 		}
 		if state.chaos.failConnect.Load() {
-			return nil, fmt.Errorf("failed to connect: forced failure")
+			return nil, errors.New("failed to connect: forced failure")
 		}
 		return &TestConn{
 			num:         state.lastID.Add(1),
@@ -619,7 +620,6 @@ func TestConnReopen(t *testing.T) {
 	time.Sleep(300 * time.Millisecond)
 	// no active connection should be left.
 	assert.Zero(t, p.Active())
-
 }
 
 func TestIdleTimeout(t *testing.T) {
@@ -969,7 +969,6 @@ func TestTimeout(t *testing.T) {
 		_, err = p.Get(newctx, setting)
 		cancel()
 		assert.EqualError(t, err, "connection pool timed out")
-
 	}
 
 	// put the connection take was taken initially.

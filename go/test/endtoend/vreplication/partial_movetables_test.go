@@ -79,7 +79,6 @@ func testCancel(t *testing.T) {
 	mt.Cancel()
 	checkDenyList(targetKeyspace, false)
 	checkDenyList(sourceKeyspace, false)
-
 }
 
 func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
@@ -196,9 +195,9 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
-	waitForRowCount(t, vtgateConn, sourceKeyspace, "customer", 3)                        // customer: all shards
-	waitForRowCount(t, vtgateConn, targetKeyspace, "customer", 3)                        // customer2: all shards
-	waitForRowCount(t, vtgateConn, fmt.Sprintf("%s:80-", sourceKeyspace), "customer", 2) // customer2: 80-
+	waitForRowCount(t, vtgateConn, sourceKeyspace, "customer", 3)        // customer: all shards
+	waitForRowCount(t, vtgateConn, targetKeyspace, "customer", 3)        // customer2: all shards
+	waitForRowCount(t, vtgateConn, sourceKeyspace+":80-", "customer", 2) // customer2: 80-
 
 	confirmGlobalRoutingToSource := func() {
 		output, err := vc.VtctldClient.ExecuteCommandWithOutput("GetRoutingRules", "--compact")

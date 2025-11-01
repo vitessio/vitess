@@ -18,7 +18,7 @@ package vtgate
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"strings"
 	"testing"
 
@@ -230,7 +230,7 @@ func testTabletGatewayGenericHelper(t *testing.T, ctx context.Context, f func(ct
 
 	// tablet with error
 	hc.Reset()
-	hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, false, 10, fmt.Errorf("no connection"))
+	hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, false, 10, errors.New("no connection"))
 	err = f(ctx, tg, target)
 	verifyShardErrors(t, err, want, vtrpcpb.Code_UNAVAILABLE)
 

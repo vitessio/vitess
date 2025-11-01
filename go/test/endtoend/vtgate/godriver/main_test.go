@@ -125,7 +125,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestStreamMessaging(t *testing.T) {
-
 	cnf := vitessdriver.Configuration{
 		Protocol: "grpc",
 		Address:  clusterInstance.Hostname + ":" + strconv.Itoa(clusterInstance.VtgateGrpcPort),

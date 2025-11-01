@@ -19,6 +19,7 @@ package vdiff
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -174,14 +175,14 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 func (td *tableDiffer) stopTargetVReplicationStreams(ctx context.Context, dbClient binlogplayer.DBClient) error {
 	log.Infof("stopTargetVReplicationStreams")
 	ct := td.wd.ct
-	query := fmt.Sprintf("update _vt.vreplication set state = 'Stopped', message='for vdiff' %s", ct.workflowFilter)
+	query := "update _vt.vreplication set state = 'Stopped', message='for vdiff' " + ct.workflowFilter
 	if _, err := ct.vde.vre.Exec(query); err != nil {
 		return err
 	}
 	// streams are no longer running because vre.Exec would have replaced old controllers and new ones will not start
 
 	// update position of all source streams
-	query = fmt.Sprintf("select id, source, pos from _vt.vreplication %s", ct.workflowFilter)
+	query = "select id, source, pos from _vt.vreplication " + ct.workflowFilter
 	qr, err := dbClient.ExecuteFetch(query, -1)
 	if err != nil {
 		return err
@@ -291,7 +292,6 @@ func (td *tableDiffer) selectTablets(ctx context.Context) error {
 
 func (td *tableDiffer) pickTablet(ctx context.Context, ts *topo.Server, cells []string, keyspace,
 	shard, tabletTypes string, options discovery.TabletPickerOptions) (*topodatapb.Tablet, error) {
-
 	tp, err := discovery.NewTabletPicker(ctx, ts, cells, td.wd.ct.vde.thisTablet.Alias.Cell, keyspace,
 		shard, tabletTypes, options)
 	if err != nil {
@@ -723,7 +723,7 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 
 func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *DiffReport, lastRow []sqltypes.Value) error {
 	if dr == nil {
-		return fmt.Errorf("cannot update progress with a nil diff report")
+		return errors.New("cannot update progress with a nil diff report")
 	}
 
 	var err error

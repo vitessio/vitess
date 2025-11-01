@@ -2397,7 +2397,6 @@ func TestCreateTableDiff(t *testing.T) {
 				assert.Equal(t, ts.diff, diff)
 
 				if len(ts.diffs) > 0 {
-
 					allSubsequentDiffs := AllSubsequent(alter)
 					allSubsequentDiffsStatements := []string{}
 					for _, d := range allSubsequentDiffs {

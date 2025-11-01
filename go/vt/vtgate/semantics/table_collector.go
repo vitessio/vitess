@@ -384,7 +384,6 @@ func (etc *earlyTableCollector) buildRecursiveCTE(node *sqlparser.AliasedTableEx
 	if sc != nil && len(sc.commonTableExprScopes) > 0 {
 		cte := sc.commonTableExprScopes[len(sc.commonTableExprScopes)-1]
 		if cte.ID.String() == t.Name.String() {
-
 			if err := checkValidRecursiveCTE(cteDef); err != nil {
 				return nil, err
 			}

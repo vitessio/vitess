@@ -172,7 +172,7 @@ func TestSetAndGetLastInsertID(t *testing.T) {
 	for _, workload := range []string{"olap", "oltp"} {
 		for _, tx := range []bool{true, false} {
 			mcmp, closer := start(t)
-			_, err := mcmp.VtConn.ExecuteFetch(fmt.Sprintf("set workload = %s", workload), 1000, false)
+			_, err := mcmp.VtConn.ExecuteFetch("set workload = "+workload, 1000, false)
 			require.NoError(t, err)
 			if tx {
 				_, err := mcmp.VtConn.ExecuteFetch("begin", 1000, false)
@@ -207,7 +207,6 @@ func TestSetAndGetLastInsertIDWithInsertUnsharded(t *testing.T) {
 
 	runTests := func(mcmp *utils.MySQLCompare) {
 		for _, test := range tests {
-
 			lastInsertID := getVal()
 			query := fmt.Sprintf(test, lastInsertID)
 
@@ -454,7 +453,7 @@ func TestAnalyze(t *testing.T) {
 
 	for _, workload := range []string{"olap", "oltp"} {
 		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", workload))
+			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
 			utils.Exec(t, mcmp.VtConn, "analyze table t1")
 			utils.Exec(t, mcmp.VtConn, "analyze table uks.unsharded")
 			utils.Exec(t, mcmp.VtConn, "analyze table mysql.user")
@@ -574,7 +573,7 @@ func TestJoinTypes(t *testing.T) {
 
 	for _, mode := range []string{"oltp", "olap"} {
 		mcmp.Run(mode, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", mode))
+			utils.Exec(t, mcmp.VtConn, "set workload = "+mode)
 			// No result from the RHS, but the RHS uses LHS's values in a few places
 			// There used to be instances where the query sent to vttablet looked like this:
 			//
@@ -786,7 +785,7 @@ func TestSemiJoin(t *testing.T) {
 	// Test that the semi join works as intended
 	for _, mode := range []string{"oltp", "olap"} {
 		mcmp.Run(mode, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", mode))
+			utils.Exec(t, mcmp.VtConn, "set workload = "+mode)
 
 			mcmp.Exec("select id1, id2 from t1 where exists (select id from tbl where nonunq_col = t1.id2) order by id1")
 		})

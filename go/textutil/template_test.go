@@ -35,7 +35,6 @@ func TestExecuteTemplate(t *testing.T) {
 
 	expectedResult := "Result: Test"
 	assert.Equal(t, expectedResult, result)
-
 }
 
 func TestExecuteTemplateWithError(t *testing.T) {

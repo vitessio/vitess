@@ -18,6 +18,7 @@ package cluster
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -156,9 +157,9 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"--config-file", vtgate.ConfigFile,
 		"--log_dir", vtgate.LogDir,
 		"--log_queries_to_file", vtgate.FileToLogQueries,
-		"--port", fmt.Sprintf("%d", vtgate.Port),
-		"--grpc_port", fmt.Sprintf("%d", vtgate.GrpcPort),
-		"--mysql_server_port", fmt.Sprintf("%d", vtgate.MySQLServerPort),
+		"--port", strconv.Itoa(vtgate.Port),
+		"--grpc_port", strconv.Itoa(vtgate.GrpcPort),
+		"--mysql_server_port", strconv.Itoa(vtgate.MySQLServerPort),
 		"--mysql_server_socket_path", vtgate.MySQLServerSocketPath,
 		"--cell", vtgate.Cell,
 		"--cells_to_watch", vtgate.CellsToWatch,
@@ -466,7 +467,7 @@ func (vtgate *VtgateProcess) ReadQueryPlans() (map[string]any, error) {
 	}
 	output, ok := results.(map[string]any)
 	if !ok {
-		return nil, fmt.Errorf("result is not a map")
+		return nil, errors.New("result is not a map")
 	}
 	return output, nil
 }

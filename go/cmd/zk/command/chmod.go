@@ -17,6 +17,7 @@ limitations under the License.
 package command
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -38,14 +39,14 @@ zk chmod n+mode /zk/path`,
 func commandChmod(cmd *cobra.Command, args []string) error {
 	mode := cmd.Flags().Arg(0)
 	if mode[0] != 'n' {
-		return fmt.Errorf("chmod: invalid mode")
+		return errors.New("chmod: invalid mode")
 	}
 
 	addPerms := false
 	if mode[1] == '+' {
 		addPerms = true
 	} else if mode[1] != '-' {
-		return fmt.Errorf("chmod: invalid mode")
+		return errors.New("chmod: invalid mode")
 	}
 
 	permMask := zkfs.ParsePermMode(mode[2:])
@@ -81,7 +82,7 @@ func commandChmod(cmd *cobra.Command, args []string) error {
 		}
 	}
 	if hasError {
-		return fmt.Errorf("chmod: some paths had errors")
+		return errors.New("chmod: some paths had errors")
 	}
 	return nil
 }

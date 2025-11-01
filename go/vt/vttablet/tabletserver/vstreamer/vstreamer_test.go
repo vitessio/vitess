@@ -315,7 +315,6 @@ func TestSetForeignKeyCheck(t *testing.T) {
 		{"commit", nil},
 	}}
 	ts.Run()
-
 }
 
 func TestStmtComment(t *testing.T) {
@@ -530,7 +529,7 @@ func TestVStreamMissingFieldsInLastPK(t *testing.T) {
 	}
 	ctx := context.Background()
 	ch := make(chan []*binlogdatapb.VEvent)
-	err := vstream(ctx, t, "", tablePKs, filter, ch)
+	err := vstream(ctx, t, "", tablePKs, filter, ch, false)
 	require.ErrorContains(t, err, "lastpk for table t1 has no fields defined")
 }
 
@@ -758,7 +757,7 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 					want := expectedEvents[i]
 					switch want {
 					case "begin", "commit", "gtid":
-						want = fmt.Sprintf("type:%s", strings.ToUpper(want))
+						want = "type:" + strings.ToUpper(want)
 					default:
 						want = env.RemoveAnyDeprecatedDisplayWidths(want)
 					}
@@ -1483,7 +1482,7 @@ func TestDDLDropColumn(t *testing.T) {
 		}
 	}()
 	defer close(ch)
-	err := vstream(ctx, t, pos, nil, nil, ch)
+	err := vstream(ctx, t, pos, nil, nil, ch, false)
 	want := "cannot determine table columns"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, must contain %s", err, want)
@@ -1962,6 +1961,39 @@ func TestHeartbeat(t *testing.T) {
 	cancel()
 }
 
+func TestFullyThrottledTimeout(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	origTimeout := fullyThrottledTimeout
+	origHeartbeatTime := HeartbeatTime
+	startingMetric := engine.errorCounts.Counts()[fullyThrottledMetricLabel]
+	defer func() {
+		fullyThrottledTimeout = origTimeout
+		HeartbeatTime = origHeartbeatTime
+	}()
+
+	fullyThrottledTimeout = 100 * time.Millisecond
+	HeartbeatTime = fullyThrottledTimeout * 15
+	waitTimer := time.NewTimer(HeartbeatTime)
+	defer waitTimer.Stop()
+	done := make(chan struct{})
+	go func() {
+		wg, evs := startFullyThrottledStream(ctx, t, nil, "", nil) // Fully throttled
+		wg.Wait()
+		require.Zero(t, len(evs))
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		endingMetric := engine.errorCounts.Counts()[fullyThrottledMetricLabel]
+		require.Equal(t, startingMetric+1, endingMetric)
+		return
+	case <-waitTimer.C:
+		require.FailNow(t, "fully throttled stall handler did not fire as expected")
+	}
+}
+
 func TestNoFutureGTID(t *testing.T) {
 	// Execute something to make sure we have ranges in GTIDs.
 	execStatements(t, []string{
@@ -1978,7 +2010,7 @@ func TestNoFutureGTID(t *testing.T) {
 	index := strings.LastIndexByte(pos, '-')
 	num, err := strconv.Atoi(pos[index+1:])
 	require.NoError(t, err)
-	future := pos[:index+1] + fmt.Sprintf("%d", num+1)
+	future := pos[:index+1] + strconv.Itoa(num+1)
 	t.Logf("future position: %v", future)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1990,7 +2022,7 @@ func TestNoFutureGTID(t *testing.T) {
 		}
 	}()
 	defer close(ch)
-	err = vstream(ctx, t, future, nil, nil, ch)
+	err = vstream(ctx, t, future, nil, nil, ch, false)
 	want := "GTIDSet Mismatch"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, must contain %s", err, want)

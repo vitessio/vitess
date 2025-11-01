@@ -23,7 +23,6 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -36,7 +35,7 @@ var _ ThrottlingStrategyHandler = (*NoOpStrategy)(nil)
 type NoOpStrategy struct{}
 
 // Evaluate always returns a decision to not throttle since this is a no-op strategy.
-func (s *NoOpStrategy) Evaluate(ctx context.Context, targetTabletType topodatapb.TabletType, fullQuery *sqlparser.ParsedQuery, transactionID int64, options *querypb.ExecuteOptions) ThrottleDecision {
+func (s *NoOpStrategy) Evaluate(ctx context.Context, targetTabletType topodatapb.TabletType, fullQuery *sqlparser.ParsedQuery, transactionID int64, attrs QueryAttributes) ThrottleDecision {
 	return ThrottleDecision{
 		Throttle: false,
 		Message:  "NoOpStrategy: no throttling applied",

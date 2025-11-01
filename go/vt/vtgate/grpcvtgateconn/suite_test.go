@@ -23,6 +23,7 @@ package grpcvtgateconn
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -106,7 +107,7 @@ func (f *fakeVTGateService) Execute(
 		return session, nil, errTestVtGateError
 	}
 	if f.panics {
-		panic(fmt.Errorf("test forced panic"))
+		panic(errors.New("test forced panic"))
 	}
 	f.checkCallerID(ctx, "Execute")
 	sql = strings.TrimSpace(sql)
@@ -145,7 +146,7 @@ func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, session *vtgatepb.
 		return session, nil, errTestVtGateError
 	}
 	if f.panics {
-		panic(fmt.Errorf("test forced panic"))
+		panic(errors.New("test forced panic"))
 	}
 	f.checkCallerID(ctx, "ExecuteBatch")
 	execCase, ok := execMap[sqlList[0]]
@@ -174,7 +175,7 @@ func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, session *vtgatepb.
 // StreamExecute is part of the VTGateService interface
 func (f *fakeVTGateService) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
 	if f.panics {
-		panic(fmt.Errorf("test forced panic"))
+		panic(errors.New("test forced panic"))
 	}
 	sql = strings.TrimSpace(sql)
 	execCase, ok := execMap[sql]
@@ -263,7 +264,7 @@ func (f *fakeVTGateService) Prepare(ctx context.Context, session *vtgatepb.Sessi
 		return session, nil, 0, errTestVtGateError
 	}
 	if f.panics {
-		panic(fmt.Errorf("test forced panic"))
+		panic(errors.New("test forced panic"))
 	}
 	f.checkCallerID(ctx, "Prepare")
 	execCase, ok := execMap[sql]

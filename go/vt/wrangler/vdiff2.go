@@ -39,7 +39,6 @@ type VDiffOutput struct {
 
 func (wr *Wrangler) VDiff2(ctx context.Context, keyspace, workflowName string, action vdiff2.VDiffAction, actionArg, uuid string,
 	options *tabletmanagerdata.VDiffOptions) (*VDiffOutput, error) {
-
 	log.Infof("VDiff2 called with %s, %s, %s, %s, %s, %+v", keyspace, workflowName, action, actionArg, uuid, options)
 
 	req := &tabletmanagerdata.VDiffRequest{

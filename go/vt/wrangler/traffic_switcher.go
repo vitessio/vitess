@@ -256,7 +256,6 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 		// We assume a consistent state, so only choose routing rule for one table.
 		if len(ts.Tables()) == 0 {
 			return nil, nil, fmt.Errorf("no tables in workflow %s.%s", targetKeyspace, workflowName)
-
 		}
 		table := ts.Tables()[0]
 
@@ -356,10 +355,10 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflowNam
 		}
 		if !ts.isPartialMigration { // shard level traffic switching is all or nothing
 			if direction == workflow.DirectionBackward && servedType == topodatapb.TabletType_REPLICA && len(ws.ReplicaCellsSwitched) == 0 {
-				return handleError("invalid request", fmt.Errorf("requesting reversal of read traffic for REPLICAs but REPLICA reads have not been switched"))
+				return handleError("invalid request", errors.New("requesting reversal of read traffic for REPLICAs but REPLICA reads have not been switched"))
 			}
 			if direction == workflow.DirectionBackward && servedType == topodatapb.TabletType_RDONLY && len(ws.RdonlyCellsSwitched) == 0 {
-				return handleError("invalid request", fmt.Errorf("requesting reversal of SwitchReads for RDONLYs but RDONLY reads have not been switched"))
+				return handleError("invalid request", errors.New("requesting reversal of SwitchReads for RDONLYs but RDONLY reads have not been switched"))
 			}
 		}
 		switch servedType {
@@ -636,7 +635,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 		}
 	} else {
 		if cancel {
-			return handleError("invalid cancel", fmt.Errorf("traffic switching has reached the point of no return, cannot cancel"))
+			return handleError("invalid cancel", errors.New("traffic switching has reached the point of no return, cannot cancel"))
 		}
 		ts.Logger().Infof("Journals were found. Completing the left over steps.")
 		// Need to gather positions in case all journals were not created.
@@ -891,7 +890,6 @@ func (wr *Wrangler) getShardSubset(ctx context.Context, keyspace string, shardSu
 	log.Infof("Selecting subset of shards in keyspace %s: %d from %d :: %+v",
 		keyspace, len(shardSubset), len(allShards), shardSubset)
 	return shardSubset, nil
-
 }
 
 func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workflowName string) (*trafficSwitcher, error) {
@@ -1027,7 +1025,6 @@ func (ts *trafficSwitcher) getSourceAndTargetShardsNames() ([]string, []string) 
 // same number of shards, is not covering the entire shard range, and has
 // one-to-one shards in source and target.
 func (ts *trafficSwitcher) isPartialMoveTables(sourceShards, targetShards []string) (bool, error) {
-
 	if ts.MigrationType() != binlogdatapb.MigrationType_TABLES {
 		return false, nil
 	}
@@ -1046,7 +1043,7 @@ func (ts *trafficSwitcher) isPartialMoveTables(sourceShards, targetShards []stri
 
 func getSourceAndTargetKeyRanges(sourceShards, targetShards []string) (*topodatapb.KeyRange, *topodatapb.KeyRange, error) {
 	if len(sourceShards) == 0 || len(targetShards) == 0 {
-		return nil, nil, fmt.Errorf("either source or target shards are missing")
+		return nil, nil, errors.New("either source or target shards are missing")
 	}
 
 	getKeyRange := func(shard string) (*topodatapb.KeyRange, error) {
@@ -1273,7 +1270,7 @@ func (ts *trafficSwitcher) executeLockTablesOnSource(ctx context.Context) error 
 	sb := strings.Builder{}
 	sb.WriteString("LOCK TABLES ")
 	for _, tableName := range ts.Tables() {
-		sb.WriteString(fmt.Sprintf("%s READ,", sqlescape.EscapeID(tableName)))
+		sb.WriteString(sqlescape.EscapeID(tableName) + " READ,")
 	}
 	// Trim extra trailing comma.
 	lockStmt := sb.String()[:sb.Len()-1]
@@ -1518,7 +1515,6 @@ func (ts *trafficSwitcher) createJournals(ctx context.Context, sourceWorkflows [
 				Keyspace: source.GetShard().Keyspace(),
 				Shard:    shard,
 			})
-
 		}
 		log.Infof("Creating journal %v", journal)
 		ts.Logger().Infof("Creating journal: %v", journal)
@@ -1747,7 +1743,7 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 		if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 			rules, err := topotools.GetRoutingRules(ctx, ts.TopoServer())
 			if err != nil {
-				rec.RecordError(fmt.Errorf("could not get RoutingRules"))
+				rec.RecordError(errors.New("could not get RoutingRules"))
 			}
 			for fromTable, toTables := range rules {
 				for _, toTable := range toTables {
@@ -1764,7 +1760,6 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 		return fmt.Errorf("%s", strings.Join(rec.ErrorStrings(), "\n"))
 	}
 	return nil
-
 }
 
 func getRenameFileName(tableName string) string {
@@ -1806,7 +1801,6 @@ func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType w
 				return err
 			}
 			ts.Logger().Infof("%s: Removed table %s.%s\n", source.GetPrimary().String(), source.GetPrimary().DbName(), tableName)
-
 		}
 		return nil
 	})
@@ -1919,7 +1913,6 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 			}
 			ts.Logger().Infof("%s: Removed table %s.%s\n",
 				target.GetPrimary().String(), target.GetPrimary().DbName(), tableName)
-
 		}
 		return nil
 	})
@@ -1989,7 +1982,7 @@ func (ts *trafficSwitcher) addParticipatingTablesToKeyspace(ctx context.Context,
 		}
 	} else {
 		if vschema.Sharded {
-			return fmt.Errorf("no sharded vschema was provided, so you will need to update the vschema of the target manually for the moved tables")
+			return errors.New("no sharded vschema was provided, so you will need to update the vschema of the target manually for the moved tables")
 		}
 		for _, table := range ts.tables {
 			vschema.Tables[table] = &vschemapb.Table{}
@@ -2107,7 +2100,6 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 	searchGroup, gctx := errgroup.WithContext(ctx)
 	searchCompleted := make(chan struct{})
 	for _, keyspace := range keyspaces {
-		keyspace := keyspace // https://golang.org/doc/faq#closures_and_goroutines
 		searchGroup.Go(func() error {
 			return searchKeyspace(gctx, searchCompleted, keyspace)
 		})
@@ -2297,7 +2289,6 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 
 	initGroup, gctx := errgroup.WithContext(ctx)
 	for sequenceTableName, sequenceMetadata := range sequencesByBackingTable {
-		sequenceTableName, sequenceMetadata := sequenceTableName, sequenceMetadata // https://golang.org/doc/faq#closures_and_goroutines
 		initGroup.Go(func() error {
 			return initSequenceTable(gctx, sequenceTableName, sequenceMetadata)
 		})

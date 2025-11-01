@@ -154,7 +154,6 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	resultsObserver econtext.ResultsObserver,
 	fetchLastInsertID bool,
 ) (qr *sqltypes.Result, errs []error) {
-
 	if len(rss) != len(queries) {
 		return nil, []error{vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] got mismatched number of queries and shards")}
 	}
@@ -677,7 +676,6 @@ func (stc *ScatterConn) multiGoTransaction(
 	autocommit bool,
 	action shardActionTransactionFunc,
 ) (allErrors *concurrency.AllErrorRecorder) {
-
 	numShards := len(rss)
 	allErrors = new(concurrency.AllErrorRecorder)
 
@@ -758,7 +756,6 @@ func (stc *ScatterConn) multiGoTransaction(
 // i.e. if rss[2] had an error, then the error recorder will store that error
 // in the second position.
 func (stc *ScatterConn) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *econtext.SafeSession, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error) {
-
 	var (
 		qr    *sqltypes.Result
 		err   error

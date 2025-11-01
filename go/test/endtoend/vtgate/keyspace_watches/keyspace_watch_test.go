@@ -117,7 +117,6 @@ func createCluster(extraVTGateArgs []string) (*cluster.LocalProcessCluster, int)
 }
 
 func TestRoutingWithKeyspacesToWatch(t *testing.T) {
-
 	clusterInstance, exitCode := createCluster(nil)
 	defer clusterInstance.Teardown()
 
@@ -140,7 +139,6 @@ func TestRoutingWithKeyspacesToWatch(t *testing.T) {
 }
 
 func TestVSchemaDDLWithKeyspacesToWatch(t *testing.T) {
-
 	extraVTGateArgs := []string{
 		"--vschema-ddl-authorized-users", "%",
 	}

@@ -17,6 +17,7 @@ limitations under the License.
 package throttler
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -83,50 +84,50 @@ func NewMaxReplicationLagModuleConfig(maxReplicationLag int64) MaxReplicationLag
 // Verify returns an error if the config is invalid.
 func (cfg MaxReplicationLagModuleConfig) Verify() error {
 	if cfg.TargetReplicationLagSec < 1 {
-		return fmt.Errorf("target_replication_lag_sec must be >= 1")
+		return errors.New("target_replication_lag_sec must be >= 1")
 	}
 	if cfg.MaxReplicationLagSec < 2 {
-		return fmt.Errorf("max_replication_lag_sec must be >= 2")
+		return errors.New("max_replication_lag_sec must be >= 2")
 	}
 	if cfg.TargetReplicationLagSec > cfg.MaxReplicationLagSec {
 		return fmt.Errorf("target_replication_lag_sec must not be higher than max_replication_lag_sec: invalid: %v > %v",
 			cfg.TargetReplicationLagSec, cfg.MaxReplicationLagSec)
 	}
 	if cfg.InitialRate < 1 {
-		return fmt.Errorf("initial_rate must be >= 1")
+		return errors.New("initial_rate must be >= 1")
 	}
 	if cfg.MaxIncrease <= 0 {
-		return fmt.Errorf("max_increase must be > 0")
+		return errors.New("max_increase must be > 0")
 	}
 	if cfg.EmergencyDecrease <= 0 {
-		return fmt.Errorf("emergency_decrease must be > 0")
+		return errors.New("emergency_decrease must be > 0")
 	}
 	if cfg.MinDurationBetweenIncreasesSec < 1 {
-		return fmt.Errorf("min_duration_between_increases_sec must be >= 1")
+		return errors.New("min_duration_between_increases_sec must be >= 1")
 	}
 	if cfg.MaxDurationBetweenIncreasesSec < 1 {
-		return fmt.Errorf("max_duration_between_increases_sec must be >= 1")
+		return errors.New("max_duration_between_increases_sec must be >= 1")
 	}
 	if cfg.MinDurationBetweenDecreasesSec < 1 {
-		return fmt.Errorf("min_duration_between_decreases_sec must be >= 1")
+		return errors.New("min_duration_between_decreases_sec must be >= 1")
 	}
 	if cfg.SpreadBacklogAcrossSec < 1 {
-		return fmt.Errorf("spread_backlog_across_sec must be >= 1")
+		return errors.New("spread_backlog_across_sec must be >= 1")
 	}
 	if cfg.IgnoreNSlowestReplicas < 0 {
-		return fmt.Errorf("ignore_n_slowest_replicas must be >= 0")
+		return errors.New("ignore_n_slowest_replicas must be >= 0")
 	}
 	if cfg.IgnoreNSlowestRdonlys < 0 {
-		return fmt.Errorf("ignore_n_slowest_rdonlys must be >= 0")
+		return errors.New("ignore_n_slowest_rdonlys must be >= 0")
 	}
 	if cfg.AgeBadRateAfterSec < 1 {
-		return fmt.Errorf("age_bad_rate_after_sec must be >= 1")
+		return errors.New("age_bad_rate_after_sec must be >= 1")
 	}
 	if cfg.MaxRateApproachThreshold < 0 {
-		return fmt.Errorf("max_rate_approach_threshold must be >=0")
+		return errors.New("max_rate_approach_threshold must be >=0")
 	}
 	if cfg.MaxRateApproachThreshold > 1 {
-		return fmt.Errorf("max_rate_approach_threshold must be <=1")
+		return errors.New("max_rate_approach_threshold must be <=1")
 	}
 	return nil
 }

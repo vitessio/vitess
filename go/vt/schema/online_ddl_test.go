@@ -18,7 +18,7 @@ package schema
 
 import (
 	"encoding/hex"
-	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -364,7 +364,7 @@ func TestNewOnlineDDLsForeignKeys(t *testing.T) {
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
 			for _, allowForeignKeys := range []bool{false, true} {
-				testName := fmt.Sprintf("%t", allowForeignKeys)
+				testName := strconv.FormatBool(allowForeignKeys)
 				t.Run(testName, func(t *testing.T) {
 					stmt, err := parser.Parse(query)
 					require.NoError(t, err)

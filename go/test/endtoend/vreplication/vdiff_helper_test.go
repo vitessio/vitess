@@ -112,7 +112,7 @@ func waitForVDiff2ToComplete(t *testing.T, ksWorkflow, cells, uuid string, compl
 		return info
 	case <-time.After(vdiffTimeout):
 		log.Errorf("VDiff never completed for UUID %s. Latest output: %s", uuid, jsonStr)
-		require.FailNow(t, fmt.Sprintf("VDiff never completed for UUID %s", uuid))
+		require.FailNow(t, "VDiff never completed for UUID "+uuid)
 		return nil
 	}
 }
@@ -126,7 +126,7 @@ type expectedVDiff2Result struct {
 
 func doVtctldclientVDiff(t *testing.T, keyspace, workflow, cells string, want *expectedVDiff2Result, extraFlags ...string) {
 	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
-	t.Run(fmt.Sprintf("vtctldclient vdiff %s", ksWorkflow), func(t *testing.T) {
+	t.Run("vtctldclient vdiff "+ksWorkflow, func(t *testing.T) {
 		// update-table-stats is needed in order to test progress reports.
 		flags := []string{"--auto-retry", "--update-table-stats", fmt.Sprintf("--filtered-replication-wait-time=%v", vdiffTimeout/2)}
 		if len(extraFlags) > 0 {

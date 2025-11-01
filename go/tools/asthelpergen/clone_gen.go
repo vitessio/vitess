@@ -17,7 +17,6 @@ limitations under the License.
 package asthelpergen
 
 import (
-	"fmt"
 	"go/types"
 	"log"
 	"slices"
@@ -56,7 +55,7 @@ func newCloneGen(pkgname string, options *CloneOptions) *cloneGen {
 }
 
 func (c *cloneGen) addFunc(name string, code *jen.Statement) {
-	c.file.Add(jen.Comment(fmt.Sprintf("%s creates a deep clone of the input.", name)))
+	c.file.Add(jen.Comment(name + " creates a deep clone of the input."))
 	c.file.Add(code)
 }
 
@@ -131,7 +130,6 @@ func (c *cloneGen) copySliceElement(t types.Type, elType types.Type, spi generat
 }
 
 func (c *cloneGen) interfaceMethod(t types.Type, iface *types.Interface, spi generatorSPI) error {
-
 	// func CloneAST(in AST) AST {
 	//	if in == nil {
 	//	return nil

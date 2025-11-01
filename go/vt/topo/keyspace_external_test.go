@@ -133,7 +133,7 @@ func TestServerGetServingShards(t *testing.T) {
 	}{
 		{
 			shards: 0,
-			err:    fmt.Sprintf("%s has no serving shards", keyspace),
+			err:    keyspace + " has no serving shards",
 		},
 		{
 			shards: 2,

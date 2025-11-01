@@ -112,7 +112,7 @@ func TestControllerKeyRange(t *testing.T) {
 	}
 	defer func() {
 		dbClient.ExpectRequest("update _vt.vreplication set state='Stopped', message='context canceled' where id=1", testDMLResponse, nil)
-		ct.Stop()
+		ct.Stop(true)
 	}()
 
 	dbClient.Wait()
@@ -175,7 +175,7 @@ func TestControllerTables(t *testing.T) {
 	}
 	defer func() {
 		dbClient.ExpectRequest("update _vt.vreplication set state='Stopped', message='context canceled' where id=1", testDMLResponse, nil)
-		ct.Stop()
+		ct.Stop(true)
 	}()
 
 	dbClient.Wait()
@@ -205,7 +205,7 @@ func TestControllerStopped(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ct.Stop()
+	defer ct.Stop(true)
 
 	select {
 	case <-ct.done:
@@ -249,7 +249,7 @@ func TestControllerOverrides(t *testing.T) {
 	}
 	defer func() {
 		dbClient.ExpectRequest("update _vt.vreplication set state='Stopped', message='context canceled' where id=1", testDMLResponse, nil)
-		ct.Stop()
+		ct.Stop(true)
 	}()
 
 	dbClient.Wait()
@@ -275,7 +275,7 @@ func TestControllerCanceledContext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ct.Stop()
+	defer ct.Stop(true)
 
 	select {
 	case <-ct.done:
@@ -323,7 +323,7 @@ func TestControllerRetry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ct.Stop()
+	defer ct.Stop(true)
 
 	dbClient.Wait()
 }
@@ -388,7 +388,7 @@ func TestControllerStopPosition(t *testing.T) {
 	}
 	defer func() {
 		dbClient.ExpectRequest("update _vt.vreplication set state='Stopped', message='context canceled' where id=1", testDMLResponse, nil)
-		ct.Stop()
+		ct.Stop(true)
 	}()
 
 	// Also confirm that replication stopped.

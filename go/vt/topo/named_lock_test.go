@@ -18,7 +18,6 @@ package topo_test
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -53,7 +52,7 @@ func TestTopoNamedLock(t *testing.T) {
 	// as we first check the context and see that the lock is held, thus the
 	// lockNameCalls should not be increased.
 	_, _, err = ts.LockName(ctx, lockName, action)
-	require.ErrorContains(t, err, fmt.Sprintf("%s is already held", lockName))
+	require.ErrorContains(t, err, lockName+" is already held")
 
 	// Check that we have the named lock.
 	err = topo.CheckNameLocked(ctx, lockName)
@@ -71,7 +70,7 @@ func TestTopoNamedLock(t *testing.T) {
 
 	// Confirm that we no longer have the first named lock.
 	err = topo.CheckNameLocked(ctx, lockName)
-	require.ErrorContains(t, err, fmt.Sprintf("%s is not locked", lockName))
+	require.ErrorContains(t, err, lockName+" is not locked")
 	err = topo.CheckNameLocked(ctx, lockName2)
 	require.NoError(t, err)
 

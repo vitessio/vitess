@@ -343,6 +343,7 @@ func replaceGoVersionInCodebase(old, new *version.Version) error {
 		"./build.env",
 		"./docker/bootstrap/Dockerfile.common",
 		"./docker/lite/Dockerfile",
+		"./docker/lite/Dockerfile.mysql80",
 		"./docker/lite/Dockerfile.mysql84",
 		"./docker/lite/Dockerfile.percona80",
 		"./docker/vttestserver/Dockerfile.mysql80",
@@ -400,8 +401,8 @@ func updateBootstrapVersionInCodebase(old, new string, newGoVersion *version.Ver
 				regexp.MustCompile(regexpReplaceMakefileBootstrapVersion),   // Makefile
 			},
 			[]string{
-				fmt.Sprintf("ARG bootstrap_version=%s", new), // Dockerfile
-				fmt.Sprintf("BOOTSTRAP_VERSION=%s", new),     // Makefile
+				"ARG bootstrap_version=" + new, // Dockerfile
+				"BOOTSTRAP_VERSION=" + new,     // Makefile
 			},
 			file,
 		)
@@ -517,7 +518,7 @@ func replaceInFile(oldexps []*regexp.Regexp, new []string, fileToChange string) 
 
 func (b bootstrapVersion) toString() string {
 	if b.minor == -1 {
-		return fmt.Sprintf("%d", b.major)
+		return strconv.Itoa(b.major)
 	}
 	return fmt.Sprintf("%d.%d", b.major, b.minor)
 }

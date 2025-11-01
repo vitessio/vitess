@@ -232,7 +232,6 @@ func (a *AuthServerStatic) UserEntryWithCacheHash(conn *Conn, salt []byte, user 
 			if MatchSourceHost(remoteAddr, entry.SourceHost) && isPass {
 				return &StaticUserData{entry.UserData, entry.Groups}, AuthAccepted, nil
 			}
-
 		} else {
 			computedAuthResponse := ScrambleCachingSha2Password(salt, []byte(entry.Password))
 

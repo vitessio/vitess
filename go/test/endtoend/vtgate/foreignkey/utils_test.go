@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -69,7 +70,7 @@ func convertIntValueToString(value int) string {
 	if value == 0 {
 		return "NULL"
 	}
-	return fmt.Sprintf("%d", value)
+	return strconv.Itoa(value)
 }
 
 // waitForSchemaTrackingForFkTables waits for schema tracking to have run and seen the tables used

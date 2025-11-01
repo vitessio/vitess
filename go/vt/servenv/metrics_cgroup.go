@@ -20,6 +20,7 @@ limitations under the License.
 package servenv
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"runtime"
@@ -38,7 +39,7 @@ var (
 	cgroupManager                *cgroup2.Manager
 	lastCpu                      uint64
 	lastTime                     time.Time
-	errCgroupMetricsNotAvailable = fmt.Errorf("cgroup metrics are not available")
+	errCgroupMetricsNotAvailable = errors.New("cgroup metrics are not available")
 )
 
 func setup() {
@@ -105,7 +106,7 @@ func getCurrentCgroupCpuUsage() (uint64, error) {
 
 func getCpuUsageFromSamples(usage1 uint64, usage2 uint64, interval time.Duration) (float64, error) {
 	if usage1 == 0 && usage2 == 0 {
-		return -1, fmt.Errorf("CPU usage for both samples is zero")
+		return -1, errors.New("CPU usage for both samples is zero")
 	}
 
 	deltaUsage := usage2 - usage1

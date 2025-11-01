@@ -203,8 +203,7 @@ func (opts *Options) InstallFlags(fs *pflag.FlagSet) {
 		"repeated, comma-separated list of tags to use when discovering hosts to connect to. "+
 			"the semantics of the tags may depend on the specific discovery implementation used.")
 	fs.Var(&opts.BalancerPolicy, "grpc-balancer-policy",
-		fmt.Sprintf("Specify a load balancer policy to use for resolvers built by these options (the default grpc behavior is pick_first). Valid choices are %s",
-			strings.Join(allBalancerPolicies, ",")))
+		"Specify a load balancer policy to use for resolvers built by these options (the default grpc behavior is pick_first). Valid choices are "+strings.Join(allBalancerPolicies, ","))
 
 	fs.DurationVar(&opts.MinDiscoveryInterval, "min-rediscovery-interval", time.Second*30,
 		"Minimum amount of time to wait between successful discovery resolution calls. "+

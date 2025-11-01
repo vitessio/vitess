@@ -18,6 +18,7 @@ package logic
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -608,7 +609,7 @@ func TestSetReadOnly(t *testing.T) {
 			tablet: tab100,
 			tmc: &testutil.TabletManagerClient{
 				SetReadOnlyResults: map[string]error{
-					"zone-1-0000000100": fmt.Errorf("testing error"),
+					"zone-1-0000000100": errors.New("testing error"),
 				},
 			},
 			errShouldContain: "testing error",
@@ -672,7 +673,7 @@ func TestTabletUndoDemotePrimary(t *testing.T) {
 			tablet: tab100,
 			tmc: &testutil.TabletManagerClient{
 				UndoDemotePrimaryResults: map[string]error{
-					"zone-1-0000000100": fmt.Errorf("testing error"),
+					"zone-1-0000000100": errors.New("testing error"),
 				},
 			},
 			errShouldContain: "testing error",
@@ -736,7 +737,7 @@ func TestChangeTabletType(t *testing.T) {
 			tablet: tab100,
 			tmc: &testutil.TabletManagerClient{
 				ChangeTabletTypeResult: map[string]error{
-					"zone-1-0000000100": fmt.Errorf("testing error"),
+					"zone-1-0000000100": errors.New("testing error"),
 				},
 			},
 			errShouldContain: "testing error",
@@ -800,7 +801,7 @@ func TestSetReplicationSource(t *testing.T) {
 			tablet: tab100,
 			tmc: &testutil.TabletManagerClient{
 				SetReplicationSourceResults: map[string]error{
-					"zone-1-0000000100": fmt.Errorf("testing error"),
+					"zone-1-0000000100": errors.New("testing error"),
 				},
 			},
 			errShouldContain: "testing error",

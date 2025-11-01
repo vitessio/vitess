@@ -18,6 +18,7 @@ package topo
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path"
 	"sort"
@@ -606,7 +607,7 @@ func (ts *Server) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, all
 	} else {
 		si, err = ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 		if IsErrType(err, NoNode) {
-			return fmt.Errorf("missing parent shard, use -parent option to create it, or CreateKeyspace / CreateShard")
+			return errors.New("missing parent shard, use -parent option to create it, or CreateKeyspace / CreateShard")
 		}
 	}
 

@@ -19,6 +19,7 @@ package workflow
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -95,7 +96,7 @@ func (mz *materializer) getWorkflowSubType() (binlogdatapb.VReplicationWorkflowS
 	switch {
 	case mz.isPartial && mz.ms.AtomicCopy:
 		return binlogdatapb.VReplicationWorkflowSubType_None,
-			fmt.Errorf("both atomic copy and partial mode cannot be specified for the same workflow")
+			errors.New("both atomic copy and partial mode cannot be specified for the same workflow")
 	case mz.isPartial:
 		return binlogdatapb.VReplicationWorkflowSubType_Partial, nil
 	case mz.ms.AtomicCopy:
@@ -359,7 +360,6 @@ func (mz *materializer) deploySchema() error {
 					}
 					if sourceTableName.Name.String() != ts.TargetTable {
 						return fmt.Errorf("source and target table names must match for copying schema: %v vs %v", sqlparser.String(sourceTableName), ts.TargetTable)
-
 					}
 				}
 

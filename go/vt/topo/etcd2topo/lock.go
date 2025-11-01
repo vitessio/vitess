@@ -150,7 +150,7 @@ func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.Lo
 	// Throw error in this case
 	for _, e := range entries {
 		if e.Name == locksPath && e.Type == topo.TypeDirectory && e.Ephemeral {
-			return nil, topo.NewError(topo.NodeExists, fmt.Sprintf("lock already exists at path %s", dirPath))
+			return nil, topo.NewError(topo.NodeExists, "lock already exists at path "+dirPath)
 		}
 	}
 

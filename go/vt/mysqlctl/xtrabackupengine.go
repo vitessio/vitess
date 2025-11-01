@@ -458,7 +458,7 @@ func (be *XtrabackupEngine) backupFiles(
 	sterrOutput := stderrBuilder.String()
 
 	if err := backupCmd.Wait(); err != nil {
-		return replicationPosition, vterrors.Wrap(err, fmt.Sprintf("xtrabackup failed with error. Output=%s", sterrOutput))
+		return replicationPosition, vterrors.Wrap(err, "xtrabackup failed with error. Output="+sterrOutput)
 	}
 
 	replicationPosition, rerr := findReplicationPositionFromXtrabackupInfo(params.Cnf.TmpDir, flavor, params.Logger)
@@ -471,7 +471,6 @@ func (be *XtrabackupEngine) backupFiles(
 
 // ExecuteRestore restores from a backup. Any error is returned.
 func (be *XtrabackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (*BackupManifest, error) {
-
 	var bm xtraBackupManifest
 
 	if err := getBackupManifestInto(ctx, bh, &bm); err != nil {

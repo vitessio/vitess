@@ -18,6 +18,7 @@ package binlog
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -220,7 +221,7 @@ func (updateStream *UpdateStreamImpl) StreamKeyRange(ctx context.Context, positi
 	if !updateStream.IsEnabled() {
 		updateStream.actionLock.Unlock()
 		log.Errorf("Unable to serve client request: Update stream service is not enabled")
-		return fmt.Errorf("update stream service is not enabled")
+		return errors.New("update stream service is not enabled")
 	}
 	updateStream.stateWaitGroup.Add(1)
 	updateStream.actionLock.Unlock()
@@ -260,7 +261,7 @@ func (updateStream *UpdateStreamImpl) StreamTables(ctx context.Context, position
 	if !updateStream.IsEnabled() {
 		updateStream.actionLock.Unlock()
 		log.Errorf("Unable to serve client request: Update stream service is not enabled")
-		return fmt.Errorf("update stream service is not enabled")
+		return errors.New("update stream service is not enabled")
 	}
 	updateStream.stateWaitGroup.Add(1)
 	updateStream.actionLock.Unlock()

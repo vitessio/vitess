@@ -346,7 +346,7 @@ func (si *schemaInit) createSidecarDB() error {
 
 // Sets the current db in the used connection.
 func (si *schemaInit) setCurrentDatabase(dbName string) error {
-	_, err := si.exec(si.ctx, fmt.Sprintf("use %s", dbName), 1, false)
+	_, err := si.exec(si.ctx, "use "+dbName, 1, false)
 	return err
 }
 

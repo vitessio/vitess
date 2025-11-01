@@ -131,7 +131,6 @@ func RegisterFlags(userKeys ...string) {
 }
 
 func registerBaseFlags(fs *pflag.FlagSet) {
-
 	utils.SetFlagStringVar(fs, &GlobalDBConfigs.Socket, "db-socket", "", "The unix socket to connect on. If this is specified, host and port will not be used.")
 	utils.SetFlagStringVar(fs, &GlobalDBConfigs.Host, "db-host", "", "The host name for the tcp connection.")
 	utils.SetFlagIntVar(fs, &GlobalDBConfigs.Port, "db-port", 0, "tcp port")

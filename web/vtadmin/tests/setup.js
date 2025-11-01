@@ -20,25 +20,39 @@ import { fetch } from 'cross-fetch';
 import { server } from './server'
 
 global.fetch = fetch;
-const ORIGINAL_PROCESS_ENV = import.meta.env;
+
+// Mock IntersectionObserver for @headlessui/react
+// JSDOM doesn't support IntersectionObserver
+class IntersectionObserverMock {
+  disconnect() {}
+  observe() {}
+  takeRecords() {
+    return [];
+  }
+  unobserve() {}
+}
+
+global.IntersectionObserver = IntersectionObserverMock;
+
+const ORIGINAL_PROCESS_ENV = { ...import.meta.env };
 const TEST_PROCESS_ENV = {
     ...import.meta.env,
     VITE_VTADMIN_API_ADDRESS: 'http://test-api.com',
 };
 global.server = server
 beforeAll(() => {
-  import.meta.env = { ...TEST_PROCESS_ENV };
+  Object.assign(import.meta.env, TEST_PROCESS_ENV);
   server.listen({ onUnhandledRequest: `error` })
 });
 afterAll(() => {
-  import.meta.env = { ...ORIGINAL_PROCESS_ENV }
+  Object.assign(import.meta.env, ORIGINAL_PROCESS_ENV);
   cleanup()
   server.close()
 })
 afterEach(() => {
-  import.meta.env = { ...TEST_PROCESS_ENV }
+  Object.assign(import.meta.env, TEST_PROCESS_ENV);
   server.resetHandlers()
-  
+
 });
 
 // extends Vitest's expect method with methods from react-testing-library

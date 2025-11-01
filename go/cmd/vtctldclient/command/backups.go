@@ -17,6 +17,7 @@ limitations under the License.
 package command
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -243,7 +244,7 @@ func commandRestoreFromBackup(cmd *cobra.Command, args []string) error {
 	}
 
 	if restoreFromBackupOptions.RestoreToPos != "" && restoreFromBackupOptions.RestoreToTimestamp != "" {
-		return fmt.Errorf("--restore-to-pos and --restore-to-timestamp are mutually exclusive")
+		return errors.New("--restore-to-pos and --restore-to-timestamp are mutually exclusive")
 	}
 
 	var restoreToTimestamp time.Time

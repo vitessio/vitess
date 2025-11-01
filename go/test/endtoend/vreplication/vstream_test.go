@@ -305,7 +305,7 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 		case 1:
 			if failover {
 				insertMu.Lock()
-				output, err := vc.VtctldClient.ExecuteCommandWithOutput("PlannedReparentShard", fmt.Sprintf("%s/0", defaultSourceKs), "--new-primary=zone1-101")
+				output, err := vc.VtctldClient.ExecuteCommandWithOutput("PlannedReparentShard", defaultSourceKs+"/0", "--new-primary=zone1-101")
 				insertMu.Unlock()
 				log.Infof("output of first PRS is %s", output)
 				require.NoError(t, err)
@@ -313,7 +313,7 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 		case 2:
 			if failover {
 				insertMu.Lock()
-				output, err := vc.VtctldClient.ExecuteCommandWithOutput("PlannedReparentShard", fmt.Sprintf("%s/0", defaultSourceKs), "--new-primary=zone1-100")
+				output, err := vc.VtctldClient.ExecuteCommandWithOutput("PlannedReparentShard", defaultSourceKs+"/0", "--new-primary=zone1-100")
 				insertMu.Unlock()
 				log.Infof("output of second PRS is %s", output)
 				require.NoError(t, err)
@@ -384,7 +384,7 @@ func insertRow(keyspace, table string, id int) {
 	if vtgateConn == nil {
 		return
 	}
-	vtgateConn.ExecuteFetch(fmt.Sprintf("use %s", keyspace), 1000, false)
+	vtgateConn.ExecuteFetch("use "+keyspace, 1000, false)
 	vtgateConn.ExecuteFetch("begin", 1000, false)
 	_, err := vtgateConn.ExecuteFetch(fmt.Sprintf("insert into %s (name) values ('%s%d')", table, table, id), 1000, false)
 	if err != nil {
@@ -788,7 +788,7 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 						case "0":
 							// We expect some for the sequence backing table, but don't care.
 						default:
-							require.FailNow(t, fmt.Sprintf("received event for unexpected shard: %s", shard))
+							require.FailNow(t, "received event for unexpected shard: "+shard)
 						}
 					case binlogdatapb.VEventType_VGTID:
 						newVGTID = ev.GetVgtid()
@@ -846,7 +846,7 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 						case "0":
 							// Again, we expect some for the sequence backing table, but don't care.
 						default:
-							require.FailNow(t, fmt.Sprintf("received event for unexpected shard: %s", shard))
+							require.FailNow(t, "received event for unexpected shard: "+shard)
 						}
 					case binlogdatapb.VEventType_JOURNAL:
 						require.True(t, ev.Journal.MigrationType == binlogdatapb.MigrationType_SHARDS)
@@ -983,7 +983,7 @@ func TestMultiVStreamsKeyspaceStopOnReshard(t *testing.T) {
 						case "-80", "80-":
 							oldShardRowEvents++
 						default:
-							require.FailNow(t, fmt.Sprintf("received event for unexpected shard: %s", shard))
+							require.FailNow(t, "received event for unexpected shard: "+shard)
 						}
 					case binlogdatapb.VEventType_VGTID:
 						newVGTID = ev.GetVgtid()
@@ -1040,7 +1040,7 @@ func TestMultiVStreamsKeyspaceStopOnReshard(t *testing.T) {
 						switch shard {
 						case "-80", "80-":
 						default:
-							require.FailNow(t, fmt.Sprintf("received event for unexpected shard: %s", shard))
+							require.FailNow(t, "received event for unexpected shard: "+shard)
 						}
 					case binlogdatapb.VEventType_JOURNAL:
 						t.Logf("Journal event: %+v", ev)

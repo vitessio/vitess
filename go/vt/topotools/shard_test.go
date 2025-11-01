@@ -18,8 +18,8 @@ package topotools
 
 import (
 	"context"
-	"fmt"
 	"math/rand/v2"
+	"strconv"
 	"sync"
 	"testing"
 
@@ -115,7 +115,7 @@ func TestGetOrCreateShard(t *testing.T) {
 
 			for j := 0; j < 100; j++ {
 				index := rand.IntN(10)
-				shard := fmt.Sprintf("%v", index)
+				shard := strconv.Itoa(index)
 				si, err := ts.GetOrCreateShard(ctx, keyspace, shard)
 				if err != nil {
 					t.Errorf("GetOrCreateShard(%v, %v) failed: %v", i, shard, err)

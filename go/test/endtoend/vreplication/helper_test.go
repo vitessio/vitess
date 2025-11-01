@@ -226,7 +226,7 @@ func verifyNoInternalTables(t *testing.T, conn *mysql.Conn, keyspaceShard string
 }
 
 func waitForRowCount(t *testing.T, conn *mysql.Conn, database string, table string, want int) {
-	query := fmt.Sprintf("select count(*) from %s", table)
+	query := "select count(*) from " + table
 	wantRes := fmt.Sprintf("[[INT64(%d)]]", want)
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
@@ -252,7 +252,7 @@ func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, da
 	ticker := time.NewTicker(defaultTick)
 	defer ticker.Stop()
 
-	query := fmt.Sprintf("select count(*) as c from %s", table)
+	query := "select count(*) as c from " + table
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
@@ -452,7 +452,7 @@ func confirmTablesHaveSecondaryKeys(t *testing.T, tablets []*cluster.VttabletPro
 				}
 				table := strings.TrimSpace(table)
 				secondaryKeys := 0
-				res, err := tablet.QueryTablet(fmt.Sprintf("show create table %s", sqlescape.EscapeID(table)), ksName, true)
+				res, err := tablet.QueryTablet("show create table "+sqlescape.EscapeID(table), ksName, true)
 				require.NoError(t, err)
 				require.NotNil(t, res)
 				row := res.Named().Row()
@@ -478,7 +478,7 @@ func confirmTablesHaveSecondaryKeys(t *testing.T, tablets []*cluster.VttabletPro
 		}
 		select {
 		case <-timer.C:
-			failureMessage := fmt.Sprintf("The following table(s) do not have any secondary keys: %s", strings.Join(tablesWithoutSecondaryKeys, ", "))
+			failureMessage := "The following table(s) do not have any secondary keys: " + strings.Join(tablesWithoutSecondaryKeys, ", ")
 			require.FailNow(t, failureMessage)
 		default:
 			time.Sleep(defaultTick)
@@ -770,8 +770,8 @@ func getIntVal(t *testing.T, vars map[string]interface{}, key string) int {
 
 func getPartialMetrics(t *testing.T, key string, tab *cluster.VttabletProcess) (int, int, int, int) {
 	vars := tab.GetVars()
-	insertKey := fmt.Sprintf("%s.insert", key)
-	updateKey := fmt.Sprintf("%s.insert", key)
+	insertKey := key + ".insert"
+	updateKey := key + ".insert"
 	cacheSizes := vars["VReplicationPartialQueryCacheSize"].(map[string]interface{})
 	queryCounts := vars["VReplicationPartialQueryCount"].(map[string]interface{})
 	if cacheSizes[insertKey] == nil || cacheSizes[updateKey] == nil ||
@@ -795,7 +795,7 @@ func isBinlogRowImageNoBlob(t *testing.T, tablet *cluster.VttabletProcess) bool 
 }
 
 func getRowCount(t *testing.T, vtgateConn *mysql.Conn, table string) int {
-	query := fmt.Sprintf("select count(*) from %s", table)
+	query := "select count(*) from " + table
 	qr := execQuery(t, vtgateConn, query)
 	numRows, _ := qr.Rows[0][0].ToInt()
 	return numRows
@@ -1004,7 +1004,7 @@ func vexplain(t *testing.T, database, query string) *VExplainPlan {
 	vtgateConn := vc.GetVTGateConn(t)
 	defer vtgateConn.Close()
 
-	qr := execVtgateQuery(t, vtgateConn, database, fmt.Sprintf("vexplain %s", query))
+	qr := execVtgateQuery(t, vtgateConn, database, "vexplain "+query)
 	require.NotNil(t, qr)
 	require.Equal(t, 1, len(qr.Rows))
 	json := qr.Rows[0][0].ToString()

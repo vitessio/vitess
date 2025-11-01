@@ -19,7 +19,7 @@ package cli
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
 	"os"
 	"os/signal"
 	"path"
@@ -66,7 +66,7 @@ func (t *topoFlags) buildTopology() (*vttestpb.VTTestTopology, error) {
 	keyspaces := t.keyspaces
 	shardCounts := t.shards
 	if len(keyspaces) != len(shardCounts) {
-		return nil, fmt.Errorf("--keyspaces must be same length as --shards")
+		return nil, errors.New("--keyspaces must be same length as --shards")
 	}
 
 	for i := range keyspaces {

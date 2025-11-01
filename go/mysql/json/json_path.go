@@ -614,7 +614,7 @@ func (p *PathParser) lexQuotedString(in []byte) (string, []byte, error) {
 		n = len(in) - len(tail)
 	}
 
-	return "", nil, fmt.Errorf("unexpected EOF: missing closing '\"'")
+	return "", nil, errors.New("unexpected EOF: missing closing '\"'")
 }
 
 func (p *PathParser) lexNumeric(in []byte) (int32, []byte, error) {

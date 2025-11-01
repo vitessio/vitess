@@ -88,7 +88,6 @@ func (tc *testConcat) Test(t *testing.T, remote *RemoteCoercionResult, local col
 	assert.True(t, bytes.Equal(concat.Bytes(), rEBytes), "failed to concatenate text;\n\tCONCAT(%v COLLATE %s, %v COLLATE %s) = \n\tCONCAT(%v, %v) COLLATE %s = \n\t\t%v\n\n\texpected: %v", tc.left.Text, collations.MySQL8().LookupName(tc.left.Collation),
 		tc.right.Text, collations.MySQL8().LookupName(tc.right.Collation), leftText, rightText, localCollation.Name(),
 		concat.Bytes(), rEBytes)
-
 }
 
 type testComparison struct {
@@ -121,7 +120,6 @@ func (tc *testComparison) Test(t *testing.T, remote *RemoteCoercionResult, local
 	remoteEquals := rEBytes[0] == '1'
 	localEquals := localCollation.Collate(leftText, rightText, false) == 0
 	assert.Equal(t, localEquals, remoteEquals, "failed to collate %#v = %#v with collation %s (expected %v, got %v)", leftText, rightText, localCollation.Name(), remoteEquals, localEquals)
-
 }
 
 func TestComparisonSemantics(t *testing.T) {

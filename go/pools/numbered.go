@@ -17,7 +17,9 @@ limitations under the License.
 package pools
 
 import (
+	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -68,7 +70,7 @@ func (nu *Numbered) Register(id int64, val any) error {
 
 	_, ok := nu.resources[id]
 	if ok {
-		return fmt.Errorf("already present")
+		return errors.New("already present")
 	}
 	nu.resources[id] = resource
 	return nil
@@ -79,7 +81,7 @@ func (nu *Numbered) Unregister(id int64, reason string) {
 	success := nu.unregister(id)
 	if success {
 		nu.recentlyUnregistered.Set(
-			fmt.Sprintf("%v", id), &unregistered{reason: reason, timeUnregistered: time.Now()})
+			strconv.FormatInt(id, 10), &unregistered{reason: reason, timeUnregistered: time.Now()})
 	}
 }
 
@@ -105,10 +107,10 @@ func (nu *Numbered) Get(id int64, purpose string) (val any, err error) {
 	defer nu.mu.Unlock()
 	nw, ok := nu.resources[id]
 	if !ok {
-		if unreg, ok := nu.recentlyUnregistered.Get(fmt.Sprintf("%v", id)); ok {
+		if unreg, ok := nu.recentlyUnregistered.Get(strconv.FormatInt(id, 10)); ok {
 			return nil, fmt.Errorf("ended at %v (%v)", unreg.timeUnregistered.Format("2006-01-02 15:04:05.000 MST"), unreg.reason)
 		}
-		return nil, fmt.Errorf("not found (potential transaction timeout)")
+		return nil, errors.New("not found (potential transaction timeout)")
 	}
 	if nw.inUse {
 		return nil, fmt.Errorf("in use: %s", nw.purpose)

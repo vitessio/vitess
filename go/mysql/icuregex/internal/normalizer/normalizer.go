@@ -470,7 +470,6 @@ func (n *Normalizer) getCC(norm16 uint16) uint8 {
 		return 0
 	}
 	return n.getCCFromNoNo(norm16)
-
 }
 
 func (n *Normalizer) getCCFromNoNo(norm16 uint16) uint8 {

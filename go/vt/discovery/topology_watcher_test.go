@@ -105,7 +105,6 @@ func TestStartAndCloseTopoWatcher(t *testing.T) {
 
 	_, ok := <-result
 	require.True(t, ok, "timed out")
-
 }
 
 func TestCellTabletsWatcher(t *testing.T) {

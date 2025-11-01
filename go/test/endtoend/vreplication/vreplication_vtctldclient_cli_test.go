@@ -232,7 +232,7 @@ func testMoveTablesFlags1(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 		"--no-routing-rules", "--on-ddl", "STOP", "--exclude-tables", "customer2",
 		"--tablet-types", "primary,rdonly", "--tablet-types-in-preference-order=true",
 		"--all-cells", "--config-overrides", mapToCSV(overrides),
-		"--sharded-auto-increment-handling=REPLACE", fmt.Sprintf("--global-keyspace=%s", sourceKeyspace),
+		"--sharded-auto-increment-handling=REPLACE", "--global-keyspace=" + sourceKeyspace,
 	}
 	completeFlags := []string{"--keep-routing-rules", "--keep-data"}
 	switchFlags := []string{}
@@ -786,7 +786,6 @@ func validateReshardWorkflow(t *testing.T, workflows []*vtctldatapb.Workflow) {
 	bls := stream.BinlogSource
 	require.Equal(t, binlogdatapb.OnDDLAction_STOP, bls.OnDdl)
 	require.True(t, bls.StopAfterCopy)
-
 }
 
 func getReshardResponse(rs iReshard) *vtctldatapb.WorkflowStatusResponse {
@@ -1013,7 +1012,6 @@ func testRoutingRulesApplyCommands(t *testing.T) {
 		}
 		testOneRoutingRulesCommand(t, typ, string(rulesBytes), validateRules)
 	}
-
 }
 
 // For a given routing rules type, test that the rules can be applied using the vtctldclient CLI.
@@ -1048,11 +1046,11 @@ func testOneRoutingRulesCommand(t *testing.T, typ string, rules string, validate
 			for _, keyCase := range []string{"camelCase", "snake_case"} {
 				t.Run(keyCase, func(t *testing.T) {
 					var args []string
-					apply := fmt.Sprintf("Apply%s", typ)
-					get := fmt.Sprintf("Get%s", typ)
+					apply := "Apply" + typ
+					get := "Get" + typ
 					args = append(args, apply)
 					if tt.useFile {
-						tmpFile, err := os.CreateTemp("", fmt.Sprintf("%s_rules.json", tt.name))
+						tmpFile, err := os.CreateTemp("", tt.name+"_rules.json")
 						require.NoError(t, err)
 						defer os.Remove(tmpFile.Name())
 						_, err = tmpFile.WriteString(wantRules)
@@ -1080,6 +1078,6 @@ func testOneRoutingRulesCommand(t *testing.T, typ string, rules string, validate
 }
 
 func confirmStates(t *testing.T, workflow *iWorkflow, startState, endState string) {
-	require.Contains(t, (*workflow).GetLastOutput(), fmt.Sprintf("Start State: %s", startState))
-	require.Contains(t, (*workflow).GetLastOutput(), fmt.Sprintf("Current State: %s", endState))
+	require.Contains(t, (*workflow).GetLastOutput(), "Start State: "+startState)
+	require.Contains(t, (*workflow).GetLastOutput(), "Current State: "+endState)
 }

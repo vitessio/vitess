@@ -17,9 +17,8 @@ limitations under the License.
 package fakes
 
 import (
-	"fmt"
-
 	"context"
+	"errors"
 
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
@@ -30,6 +29,6 @@ import (
 var ErrorQueryService = queryservice.Wrap(
 	nil,
 	func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService, name string, inTransaction bool, inner func(context.Context, *querypb.Target, queryservice.QueryService) (bool, error)) error {
-		return fmt.Errorf("ErrorQueryService does not implement any method")
+		return errors.New("ErrorQueryService does not implement any method")
 	},
 )

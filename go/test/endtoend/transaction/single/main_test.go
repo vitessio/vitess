@@ -269,7 +269,6 @@ func TestOnlyMultiShardWriteFail(t *testing.T) {
 		utils.Exec(t, conn, `select * from t1 where txn_id in ("d", "e", "f")`)
 		utils.Exec(t, conn, `commit`)
 	})
-
 }
 
 func setup(t *testing.T) (*mysql.Conn, func()) {

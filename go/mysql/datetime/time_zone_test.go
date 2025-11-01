@@ -106,7 +106,6 @@ func TestParseTimeZone(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-
 		zone, err := ParseTimeZone(tc.tz)
 		if err != nil {
 			assert.Equal(t, tc.want, err.Error())

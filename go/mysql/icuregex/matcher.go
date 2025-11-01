@@ -1251,7 +1251,6 @@ func (m *Matcher) isWordBoundary(pos int) bool {
 
 	prevCIsWord := false
 	for pos > m.lookStart {
-
 		prevChar := charAt(m.input, pos-1)
 		pos--
 		if !(uprops.HasBinaryProperty(prevChar, uprops.UCharGraphemeExtend) || uchar.CharType(prevChar) == uchar.FormatChar) {

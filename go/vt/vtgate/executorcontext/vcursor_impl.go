@@ -839,7 +839,7 @@ func (vc *VCursorImpl) markSavepoint(ctx context.Context, needsRollbackOnParialE
 	if !needsRollbackOnParialExec || !vc.SafeSession.CanAddSavepoint() {
 		return nil
 	}
-	uID := fmt.Sprintf("_vt%s", strings.ReplaceAll(uuid.NewString(), "-", "_"))
+	uID := "_vt" + strings.ReplaceAll(uuid.NewString(), "-", "_")
 	spQuery := fmt.Sprintf("%ssavepoint %s%s", vc.marginComments.Leading, uID, vc.marginComments.Trailing)
 	vc.SafeSession.SetExecReadQuery(true)
 	_, err := vc.executor.Execute(ctx, nil, "MarkSavepoint", vc.SafeSession, spQuery, bindVars, false)

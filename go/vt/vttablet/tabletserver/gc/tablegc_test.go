@@ -482,7 +482,6 @@ func TestCheckTables(t *testing.T) {
 	var foundDropTables []*gcTable
 	var foundTransitionRequests []*transitionRequest
 	for responses != expectResponses {
-
 		select {
 		case <-ctx.Done():
 			assert.FailNow(t, "timeout")

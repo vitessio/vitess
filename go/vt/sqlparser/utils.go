@@ -17,7 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
-	"fmt"
+	"errors"
 	"sort"
 	"strings"
 
@@ -28,7 +28,7 @@ import (
 // (one is enough)
 func (p *Parser) QueryMatchesTemplates(query string, queryTemplates []string) (match bool, err error) {
 	if len(queryTemplates) == 0 {
-		return false, fmt.Errorf("No templates found")
+		return false, errors.New("No templates found")
 	}
 	bv := make(map[string]*querypb.BindVariable)
 

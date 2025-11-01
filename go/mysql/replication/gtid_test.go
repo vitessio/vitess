@@ -34,7 +34,6 @@ func TestParseGTID(t *testing.T) {
 	got, err := ParseGTID(flavor, input)
 	assert.NoError(t, err, "unexpected error: %v", err)
 	assert.Equal(t, want, got, "ParseGTID(%#v, %#v) = %#v, want %#v", flavor, input, got, want)
-
 }
 
 func TestMustParseGTID(t *testing.T) {
@@ -47,7 +46,6 @@ func TestMustParseGTID(t *testing.T) {
 
 	got := MustParseGTID(flavor, input)
 	assert.Equal(t, want, got, "MustParseGTID(%#v, %#v) = %#v, want %#v", flavor, input, got, want)
-
 }
 
 func TestMustParseGTIDError(t *testing.T) {
@@ -70,7 +68,6 @@ func TestParseUnknownFlavor(t *testing.T) {
 
 	_, err := ParseGTID("foobar8675309", "foo")
 	assert.True(t, strings.HasPrefix(err.Error(), want), "wrong error, got '%v', want '%v'", err, want)
-
 }
 
 func TestEncodeGTID(t *testing.T) {
@@ -95,7 +92,6 @@ func TestDecodeGTID(t *testing.T) {
 	got, err := DecodeGTID(input)
 	assert.NoError(t, err, "unexpected error: %v", err)
 	assert.Equal(t, want, got, "DecodeGTID(%#v) = %#v, want %#v", input, got, want)
-
 }
 
 func TestMustDecodeGTID(t *testing.T) {
@@ -107,7 +103,6 @@ func TestMustDecodeGTID(t *testing.T) {
 
 	got := MustDecodeGTID(input)
 	assert.Equal(t, want, got, "DecodeGTID(%#v) = %#v, want %#v", input, got, want)
-
 }
 
 func TestMustDecodeGTIDError(t *testing.T) {
@@ -141,7 +136,6 @@ func TestDecodeNilGTID(t *testing.T) {
 	got, err := DecodeGTID(input)
 	assert.NoError(t, err, "unexpected error: %v", err)
 	assert.Equal(t, want, got, "DecodeGTID(%#v) = %#v, want %#v", input, got, want)
-
 }
 
 func TestDecodeNoFlavor(t *testing.T) {
@@ -154,7 +148,6 @@ func TestDecodeNoFlavor(t *testing.T) {
 	got, err := DecodeGTID(input)
 	assert.NoError(t, err, "unexpected error: %v", err)
 	assert.Equal(t, want, got, "DecodeGTID(%#v) = %#v, want %#v", input, got, want)
-
 }
 
 func TestDecodeGTIDWithSeparator(t *testing.T) {
@@ -167,7 +160,6 @@ func TestDecodeGTIDWithSeparator(t *testing.T) {
 	got, err := DecodeGTID(input)
 	assert.NoError(t, err, "unexpected error: %v", err)
 	assert.Equal(t, want, got, "DecodeGTID(%#v) = %#v, want %#v", input, got, want)
-
 }
 
 type fakeGTID struct {

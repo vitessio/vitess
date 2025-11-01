@@ -355,7 +355,6 @@ func tryPushLimit(ctx *plancontext.PlanningContext, in *Limit) (Operator, *Apply
 		in.AST = combinedLimit
 		in.Source = src.Source
 		return in, Rewrote("merged two limits")
-
 	}
 	return setUpperLimit(in)
 }

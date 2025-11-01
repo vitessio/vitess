@@ -28,7 +28,6 @@ import (
 )
 
 func TestJoinValuesExecute(t *testing.T) {
-
 	/*
 		select col1, col2, col3, col4, col5, col6 from left join right on left.col1 = right.col4
 		LHS: select col1, col2, col3 from left

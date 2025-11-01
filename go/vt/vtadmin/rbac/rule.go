@@ -17,8 +17,6 @@ limitations under the License.
 package rbac
 
 import (
-	"fmt"
-
 	"vitess.io/vitess/go/sets"
 )
 
@@ -45,12 +43,12 @@ func (r *Rule) Allows(clusterID string, action Action, actor *Actor) bool {
 				return false
 			}
 
-			if r.subjects.Has(fmt.Sprintf("user:%s", actor.Name)) {
+			if r.subjects.Has("user:" + actor.Name) {
 				return true
 			}
 
 			for _, role := range actor.Roles {
-				if r.subjects.Has(fmt.Sprintf("role:%s", role)) {
+				if r.subjects.Has("role:" + role) {
 					return true
 				}
 			}

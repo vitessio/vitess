@@ -140,7 +140,7 @@ func TestConsistentLookupMap(t *testing.T) {
 	vc.verifyContext(t, ctx)
 
 	// Test query fail.
-	vc.AddResult(nil, fmt.Errorf("execute failed"))
+	vc.AddResult(nil, errors.New("execute failed"))
 	_, err = lookup.Map(ctx, vc, []sqltypes.Value{sqltypes.NewInt64(1)})
 	wantErr := "lookup.Map: execute failed"
 	if err == nil || err.Error() != wantErr {
@@ -250,7 +250,7 @@ func TestConsistentLookupVerify(t *testing.T) {
 	vc.verifyContext(t, ctx)
 
 	// Test query fail.
-	vc.AddResult(nil, fmt.Errorf("execute failed"))
+	vc.AddResult(nil, errors.New("execute failed"))
 	_, err = lookup.Verify(ctx, vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
 	want := "lookup.Verify: execute failed"
 	if err == nil || err.Error() != want {

@@ -77,7 +77,6 @@ func TestComBinlogDump(t *testing.T) {
 		0x04, 0x03, 0x02, 0x01, // server-id
 	}
 	assert.True(t, reflect.DeepEqual(data, expectedData), "ComBinlogDump returned unexpected data:\n%v\nwas expecting:\n%v", data, expectedData)
-
 }
 
 func TestComBinlogDumpGTID(t *testing.T) {
@@ -238,5 +237,4 @@ func TestSendSemiSyncAck(t *testing.T) {
 		'm', 'o', 'o', 'f', 'a', 'r', 'm', // binlog-filename
 	}
 	assert.True(t, reflect.DeepEqual(data, expectedData), "SendSemiSyncAck returned unexpected data:\n%v\nwas expecting:\n%v", data, expectedData)
-
 }

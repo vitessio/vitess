@@ -169,7 +169,6 @@ func TestPermutations(t *testing.T) {
 	env := NewTestEnv()
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-
 			fromSchema, err := NewSchemaFromQueries(env, tc.fromQueries)
 			require.NoError(t, err)
 			require.NotNil(t, fromSchema)

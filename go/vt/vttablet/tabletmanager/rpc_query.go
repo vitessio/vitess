@@ -63,7 +63,6 @@ func analyzeExecuteFetchAsDbaMultiQuery(sql string, parser *sqlparser.Parser) (q
 				allowZeroInDate = true
 			}
 		}
-
 	}
 	return queries, parseable, countCreate, allowZeroInDate, nil
 }

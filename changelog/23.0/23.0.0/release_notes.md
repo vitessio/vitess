@@ -165,7 +165,7 @@ Builds will continue for Debian Bookworm, and add the recently released Debian T
 ------------
 The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/23.0/23.0.0/changelog.md).
 
-The release includes 225 merged Pull Requests.
+The release includes 239 merged Pull Requests.
 
 Thanks to all our contributors: @Arshdeep54, @BenjaminLockhart, @GrahamCampbell, @GuptaManan100, @HenryCaiHaiying, @app/dependabot, @app/vitess-bot, @arthurschreiber, @bantyK, @beingnoble03, @canoriz, @chapsuk, @chrisplim, @corbantek, @davidpiegza, @dbussink, @deepthi, @demmer, @derekperkins, @frouioui, @harshit-gangal, @jdoupe, @jeefy, @leejones, @mattlord, @maxenglander, @mdlayher, @mhamza15, @morgo, @mounicasruthi, @nickvanw, @notfelineit, @rohit-nayak-ps, @rvrangel, @shlomi-noach, @siddharth16396, @stankevich, @stutibiyani, @systay, @timvaillancourt, @twthorn, @vitess-bot, @wukuai, @yoheimuta
 

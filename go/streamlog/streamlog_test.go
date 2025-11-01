@@ -19,6 +19,7 @@ package streamlog
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -607,7 +608,7 @@ func TestGetFormatter(t *testing.T) {
 			params: url.Values{
 				"keys": []string{"key1", "key2"},
 			},
-			val:         &mockFormatter{err: fmt.Errorf("formatter error")},
+			val:         &mockFormatter{err: errors.New("formatter error")},
 			expectedErr: "formatter error",
 		},
 	}

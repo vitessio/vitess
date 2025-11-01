@@ -17,6 +17,7 @@ limitations under the License.
 package movetables
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -56,7 +57,7 @@ var (
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			// Either specific tables or the all tables flags are required.
 			if !cmd.Flags().Lookup("tables").Changed && !cmd.Flags().Lookup("all-tables").Changed {
-				return fmt.Errorf("tables or all-tables are required to specify which tables to move")
+				return errors.New("tables or all-tables are required to specify which tables to move")
 			}
 			if err := common.ParseAndValidateCreateOptions(cmd); err != nil {
 				return err
@@ -83,10 +84,10 @@ var (
 
 			tenantId := createOptions.WorkflowOptions.GetTenantId()
 			if len(createOptions.WorkflowOptions.GetShards()) > 0 && tenantId == "" {
-				return fmt.Errorf("--shards specified, but not --tenant-id: you can only specify target shards for multi-tenant migrations")
+				return errors.New("--shards specified, but not --tenant-id: you can only specify target shards for multi-tenant migrations")
 			}
 			if tenantId != "" && len(createOptions.SourceShards) > 0 {
-				return fmt.Errorf("cannot specify both --tenant-id (i.e. a multi-tenant migration) and --source-shards (i.e. a shard-by-shard migration)")
+				return errors.New("cannot specify both --tenant-id (i.e. a multi-tenant migration) and --source-shards (i.e. a shard-by-shard migration)")
 			}
 
 			// createOptions.ShardedAutoIncrementHandlingStr is the CLI flag value

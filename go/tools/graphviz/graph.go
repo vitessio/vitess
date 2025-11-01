@@ -17,6 +17,7 @@ limitations under the License.
 package graphviz
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -72,7 +73,6 @@ node [shape=record, fontsize=10]
 			} else {
 				labels += "|" + attr
 			}
-
 		}
 		labels += "}"
 		if node.tooltip != "" {
@@ -144,7 +144,6 @@ const htmlTemplate = `
 `
 
 func (g *Graph) Render() error {
-
 	dot := g.produceDot()
 
 	browsers := func() []string {
@@ -197,7 +196,7 @@ func (g *Graph) Render() error {
 		}
 	}
 
-	return fmt.Errorf("failed to open browser for SVG debugging")
+	return errors.New("failed to open browser for SVG debugging")
 }
 
 func New() *Graph {

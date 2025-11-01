@@ -514,7 +514,6 @@ func releaseReadLock(ctx context.Context, reader io.Reader, params BackupParams,
 		line := scanner.Text()
 
 		if !released {
-
 			if !strings.Contains(line, mysqlShellLockMessage) {
 				continue
 			}

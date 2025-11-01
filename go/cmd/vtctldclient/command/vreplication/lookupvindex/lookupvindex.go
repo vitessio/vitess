@@ -18,8 +18,10 @@ package lookupvindex
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -100,13 +102,13 @@ var (
 	parseAndValidateCreate = func(cmd *cobra.Command, args []string) error {
 		if createOptions.ParamsFile != "" {
 			if createOptions.TableOwner != "" {
-				return fmt.Errorf("cannot specify both table-owner and params-file")
+				return errors.New("cannot specify both table-owner and params-file")
 			}
 			if createOptions.Type != "" {
-				return fmt.Errorf("cannot specify both type and params-file")
+				return errors.New("cannot specify both type and params-file")
 			}
 			if len(createOptions.TableOwnerColumns) != 0 {
-				return fmt.Errorf("cannot specify both table-owner-columns and params-file")
+				return errors.New("cannot specify both table-owner-columns and params-file")
 			}
 			paramsFile, err := os.ReadFile(createOptions.ParamsFile)
 			if err != nil {
@@ -120,19 +122,19 @@ var (
 			return parseVindexParams(createVindexParams, cmd)
 		}
 		if createOptions.TableOwner == "" {
-			return fmt.Errorf("table-owner is a required flag")
+			return errors.New("table-owner is a required flag")
 		}
 		if createOptions.Type == "" {
-			return fmt.Errorf("type is a required flag")
+			return errors.New("type is a required flag")
 		}
 		if len(createOptions.TableOwnerColumns) == 0 {
-			return fmt.Errorf("table-owner-columns is a required flag")
+			return errors.New("table-owner-columns is a required flag")
 		}
 		if createOptions.TableName == "" { // Use vindex name
 			createOptions.TableName = baseOptions.Name
 		}
 		if !strings.Contains(createOptions.Type, "lookup") {
-			return fmt.Errorf("vindex type must be a lookup vindex")
+			return errors.New("vindex type must be a lookup vindex")
 		}
 		escapedTableKeyspace, err := sqlescape.EnsureEscaped(baseOptions.TableKeyspace)
 		if err != nil {
@@ -150,7 +152,7 @@ var (
 						"table":        escapedTableKeyspace + "." + escapedTableName,
 						"from":         strings.Join(createOptions.TableOwnerColumns, ","),
 						"to":           "keyspace_id",
-						"ignore_nulls": fmt.Sprintf("%t", createOptions.IgnoreNulls),
+						"ignore_nulls": strconv.FormatBool(createOptions.IgnoreNulls),
 					},
 					Owner: createOptions.TableOwner,
 				},
@@ -193,7 +195,7 @@ var (
 
 	parseVindexParams = func(params map[string]*vindexParams, cmd *cobra.Command) error {
 		if len(params) == 0 {
-			return fmt.Errorf("at least 1 vindex is required")
+			return errors.New("at least 1 vindex is required")
 		}
 
 		vindexes := map[string]*vschemapb.Vindex{}
@@ -227,7 +229,7 @@ var (
 					"table":        escapedTableKeyspace + "." + escapedTableName,
 					"from":         strings.Join(vindex.TableOwnerColumns, ","),
 					"to":           "keyspace_id",
-					"ignore_nulls": fmt.Sprintf("%t", vindex.IgnoreNulls),
+					"ignore_nulls": strconv.FormatBool(vindex.IgnoreNulls),
 				},
 				Owner: vindex.TableOwner,
 			}

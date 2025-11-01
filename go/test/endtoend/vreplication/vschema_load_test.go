@@ -36,7 +36,6 @@ import (
 // TestVSchemaChangesUnderLoad tests vstreamer under a load of high binlog events and simultaneous multiple vschema changes
 // see https://github.com/vitessio/vitess/issues/11169
 func TestVSchemaChangesUnderLoad(t *testing.T) {
-
 	extendedTimeout := defaultTimeout * 4
 
 	vc = NewVitessCluster(t, nil)

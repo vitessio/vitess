@@ -245,7 +245,7 @@ func CompareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, 
 	}
 	errStr += fmt.Sprintf("MySQL RowsAffected: %v\n", mysqlQr.RowsAffected)
 	if vtConn != nil {
-		qr, _ := ExecAllowError(t, vtConn, fmt.Sprintf("vexplain plan %s", query))
+		qr, _ := ExecAllowError(t, vtConn, "vexplain plan "+query)
 		if qr != nil && len(qr.Rows) > 0 {
 			errStr += fmt.Sprintf("query plan: \n%s\n", qr.Rows[0][0].ToString())
 		}

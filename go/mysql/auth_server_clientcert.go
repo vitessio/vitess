@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"errors"
 	"fmt"
 	"net"
 
@@ -84,7 +85,7 @@ func (asl *AuthServerClientCert) HandleUser(user string) bool {
 func (asl *AuthServerClientCert) UserEntryWithPassword(conn *Conn, user string, password string, remoteAddr net.Addr) (Getter, error) {
 	userCerts := conn.GetTLSClientCerts()
 	if len(userCerts) == 0 {
-		return nil, fmt.Errorf("no client certs for connection")
+		return nil, errors.New("no client certs for connection")
 	}
 	commonName := userCerts[0].Subject.CommonName
 

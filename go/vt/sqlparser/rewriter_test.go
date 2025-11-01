@@ -150,5 +150,4 @@ func TestChangeValueTypeGivesError(t *testing.T) {
 		}
 		return true
 	}, nil)
-
 }

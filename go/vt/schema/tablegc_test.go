@@ -123,7 +123,6 @@ func TestIsGCTableName(t *testing.T) {
 			}
 		})
 	})
-
 }
 
 func TestAnalyzeGCTableName(t *testing.T) {

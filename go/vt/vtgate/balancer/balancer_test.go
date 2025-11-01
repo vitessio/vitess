@@ -367,5 +367,4 @@ func TestTopologyChanged(t *testing.T) {
 		assert.Equalf(t, ALLOCATION/4, allocation[th.Tablet.Alias.Uid], "allocation mismatch %s, cell %s", b.print(), allTablets[0].Tablet.Alias.Cell)
 		assert.Equalf(t, "b", th.Tablet.Alias.Cell, "shuffle promoted wrong tablet from cell %s", allTablets[0].Tablet.Alias.Cell)
 	}
-
 }

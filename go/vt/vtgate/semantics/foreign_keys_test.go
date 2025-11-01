@@ -17,7 +17,7 @@ limitations under the License.
 package semantics
 
 import (
-	"fmt"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -192,7 +192,7 @@ func TestGetAllManagedForeignKeys(t *testing.T) {
 						"ks_unmanaged": vschemapb.Keyspace_unmanaged,
 					},
 					KsError: map[string]error{
-						"ks": fmt.Errorf("VT09019: keyspace 'ks' has cyclic foreign keys"),
+						"ks": errors.New("VT09019: keyspace 'ks' has cyclic foreign keys"),
 					},
 				},
 			},
@@ -227,7 +227,7 @@ func TestFilterForeignKeysUsingUpdateExpressions(t *testing.T) {
 				cold: SingleTableSet(1),
 			},
 		},
-		getError: func() error { return fmt.Errorf("ambiguous test error") },
+		getError: func() error { return errors.New("ambiguous test error") },
 		tables: makeTableCollector(&FakeSI{
 			KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
 				"ks": vschemapb.Keyspace_managed,

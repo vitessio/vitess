@@ -353,7 +353,7 @@ func (session *SafeSession) SetRollbackCommand() {
 	}
 
 	if session.savepointState == savepointSet {
-		session.rollbackOnPartialExec = fmt.Sprintf("rollback to %s", session.savepointName)
+		session.rollbackOnPartialExec = "rollback to " + session.savepointName
 	} else {
 		session.rollbackOnPartialExec = TxRollback
 	}

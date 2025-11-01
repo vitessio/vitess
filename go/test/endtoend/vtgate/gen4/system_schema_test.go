@@ -142,7 +142,7 @@ func TestUseSystemSchema(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 	for _, dbname := range []string{"information_schema", "mysql", "performance_schema", "sys"} {
-		utils.Exec(t, conn, fmt.Sprintf("use %s", dbname))
+		utils.Exec(t, conn, "use "+dbname)
 		utils.Exec(t, conn, `select @@max_allowed_packet from dual`)
 	}
 }

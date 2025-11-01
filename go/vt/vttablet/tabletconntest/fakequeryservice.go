@@ -146,7 +146,7 @@ func (f *FakeQueryService) Begin(ctx context.Context, target *querypb.Target, op
 		return queryservice.TransactionState{}, f.TabletError
 	}
 	if f.Panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	f.checkTargetCallerID(ctx, "Begin", target)
 	if !proto.Equal(options, TestExecuteOptions) {
@@ -164,7 +164,7 @@ func (f *FakeQueryService) Commit(ctx context.Context, target *querypb.Target, t
 		return 0, f.TabletError
 	}
 	if f.Panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	f.checkTargetCallerID(ctx, "Commit", target)
 	if transactionID != commitTransactionID {
@@ -182,7 +182,7 @@ func (f *FakeQueryService) Rollback(ctx context.Context, target *querypb.Target,
 		return 0, f.TabletError
 	}
 	if f.Panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	f.checkTargetCallerID(ctx, "Rollback", target)
 	if transactionID != rollbackTransactionID {
@@ -200,7 +200,7 @@ func (f *FakeQueryService) Prepare(ctx context.Context, target *querypb.Target, 
 		return f.TabletError
 	}
 	if f.Panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	f.checkTargetCallerID(ctx, "Prepare", target)
 	if transactionID != commitTransactionID {
@@ -218,7 +218,7 @@ func (f *FakeQueryService) CommitPrepared(ctx context.Context, target *querypb.T
 		return f.TabletError
 	}
 	if f.Panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	f.checkTargetCallerID(ctx, "CommitPrepared", target)
 	if dtid != Dtid {
@@ -233,7 +233,7 @@ func (f *FakeQueryService) RollbackPrepared(ctx context.Context, target *querypb
 		return f.TabletError
 	}
 	if f.Panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	f.checkTargetCallerID(ctx, "RollbackPrepared", target)
 	if originalID != rollbackTransactionID {
@@ -273,7 +273,7 @@ func (f *FakeQueryService) CreateTransaction(ctx context.Context, target *queryp
 		return f.TabletError
 	}
 	if f.Panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	f.checkTargetCallerID(ctx, "CreateTransaction", target)
 	if dtid != Dtid {
@@ -291,7 +291,7 @@ func (f *FakeQueryService) StartCommit(ctx context.Context, target *querypb.Targ
 		return querypb.StartCommitState_Fail, f.TabletError
 	}
 	if f.Panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	f.checkTargetCallerID(ctx, "StartCommit", target)
 	if transactionID != commitTransactionID {
@@ -309,7 +309,7 @@ func (f *FakeQueryService) SetRollback(ctx context.Context, target *querypb.Targ
 		return f.TabletError
 	}
 	if f.Panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	f.checkTargetCallerID(ctx, "SetRollback", target)
 	if transactionID != commitTransactionID {
@@ -327,7 +327,7 @@ func (f *FakeQueryService) ConcludeTransaction(ctx context.Context, target *quer
 		return f.TabletError
 	}
 	if f.Panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	f.checkTargetCallerID(ctx, "ConcludeTransaction", target)
 	if dtid != Dtid {
@@ -350,7 +350,7 @@ func (f *FakeQueryService) ReadTransaction(ctx context.Context, target *querypb.
 		return nil, f.TabletError
 	}
 	if f.Panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	f.checkTargetCallerID(ctx, "ReadTransaction", target)
 	if dtid != Dtid {
@@ -365,7 +365,7 @@ func (f *FakeQueryService) UnresolvedTransactions(ctx context.Context, target *q
 		return nil, f.TabletError
 	}
 	if f.Panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	f.checkTargetCallerID(ctx, "UnresolvedTransactions", target)
 	return []*querypb.TransactionMetadata{Metadata}, nil
@@ -417,7 +417,7 @@ func (f *FakeQueryService) Execute(ctx context.Context, target *querypb.Target, 
 		return nil, f.TabletError
 	}
 	if f.Panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	if sql != ExecuteQuery {
 		f.t.Errorf("invalid Execute.Query.Sql: got %v expected %v", sql, ExecuteQuery)
@@ -474,7 +474,7 @@ var StreamExecuteQueryResult2 = sqltypes.Result{
 // StreamExecute is part of the queryservice.QueryService interface
 func (f *FakeQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	if f.Panics && f.StreamExecutePanicsEarly {
-		panic(fmt.Errorf("test-triggered panic early"))
+		panic(errors.New("test-triggered panic early"))
 	}
 	if sql != StreamExecuteQuery {
 		f.t.Errorf("invalid StreamExecute.Sql: got %v expected %v", sql, StreamExecuteQuery)
@@ -492,7 +492,7 @@ func (f *FakeQueryService) StreamExecute(ctx context.Context, target *querypb.Ta
 	if f.Panics && !f.StreamExecutePanicsEarly {
 		// wait until the client gets the response, then panics
 		<-f.PanicWait
-		panic(fmt.Errorf("test-triggered panic late"))
+		panic(errors.New("test-triggered panic late"))
 	}
 	if f.HasError {
 		// wait until the client has the response, since all
@@ -631,7 +631,7 @@ func (f *FakeQueryService) MessageStream(ctx context.Context, target *querypb.Ta
 		return f.TabletError
 	}
 	if f.Panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	if name != MessageName {
 		f.t.Errorf("name: %s, want %s", name, MessageName)
@@ -648,7 +648,7 @@ func (f *FakeQueryService) MessageAck(ctx context.Context, target *querypb.Targe
 		return 0, f.TabletError
 	}
 	if f.Panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	if name != MessageName {
 		f.t.Errorf("name: %s, want %s", name, MessageName)
@@ -688,7 +688,7 @@ func (f *FakeQueryService) StreamHealth(ctx context.Context, callback func(*quer
 		return errors.New(TestStreamHealthErrorMsg)
 	}
 	if f.Panics {
-		panic(fmt.Errorf("test-triggered panic"))
+		panic(errors.New("test-triggered panic"))
 	}
 	shr := f.StreamHealthResponse
 	if shr == nil {
@@ -703,7 +703,7 @@ func (f *FakeQueryService) StreamHealth(ctx context.Context, callback func(*quer
 // VStream is part of the queryservice.QueryService interface
 func (f *FakeQueryService) VStream(ctx context.Context, request *binlogdatapb.VStreamRequest, send func([]*binlogdatapb.VEvent) error) error {
 	// This is called as part of vreplication unit tests, so we don't panic here.
-	return fmt.Errorf("VStream not implemented")
+	return errors.New("VStream not implemented")
 }
 
 // VStreamRows is part of the QueryService interface.

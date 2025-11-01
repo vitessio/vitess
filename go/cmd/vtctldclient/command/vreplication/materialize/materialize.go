@@ -90,7 +90,7 @@ func registerCommands(root *cobra.Command) {
 	create.MarkFlagRequired("source-keyspace")
 	create.Flags().Var(&createOptions.TableSettings, "table-settings", "A JSON array defining what tables to materialize using what select statements. See the --help output for more details.")
 	create.Flags().BoolVar(&common.CreateOptions.StopAfterCopy, "stop-after-copy", false, "Stop the workflow after it's finished copying the existing rows and before it starts replicating changes.")
-	utils.SetFlagStringVar(create.Flags(), &common.CreateOptions.MySQLServerVersion, "mysql-server-version", fmt.Sprintf("%s-Vitess", config.DefaultMySQLVersion), "Configure the MySQL version to use for example for the parser.")
+	utils.SetFlagStringVar(create.Flags(), &common.CreateOptions.MySQLServerVersion, "mysql-server-version", config.DefaultMySQLVersion+"-Vitess", "Configure the MySQL version to use for example for the parser.")
 	create.Flags().IntVar(&common.CreateOptions.TruncateUILen, "sql-max-length-ui", 512, "truncate queries in debug UIs to the given length (default 512)")
 	create.Flags().IntVar(&common.CreateOptions.TruncateErrLen, "sql-max-length-errors", 0, "truncate queries in error logs to the given length (default unlimited)")
 	create.Flags().StringSliceVarP(&common.CreateOptions.ReferenceTables, "reference-tables", "r", nil, "Used to specify the reference tables to materialize on every target shard.")

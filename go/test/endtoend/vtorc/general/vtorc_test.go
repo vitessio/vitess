@@ -383,7 +383,7 @@ func TestRepairAfterTER(t *testing.T) {
 	assert.NotNil(t, curPrimary, "should have elected a primary")
 
 	// TODO(deepthi): we should not need to do this, the DB should be created automatically
-	_, err := curPrimary.VttabletProcess.QueryTablet(fmt.Sprintf("create database IF NOT EXISTS vt_%s", keyspace.Name), keyspace.Name, false)
+	_, err := curPrimary.VttabletProcess.QueryTablet("create database IF NOT EXISTS vt_"+keyspace.Name, keyspace.Name, false)
 	require.NoError(t, err)
 
 	var newPrimary *cluster.Vttablet
@@ -662,7 +662,7 @@ func TestDurabilityPolicySetLater(t *testing.T) {
 func TestFullStatusConnectionPooling(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 4, 0, []string{
-		fmt.Sprintf("%s=1", vtutils.GetFlagVariantForTests("--tablet-manager-grpc-concurrency")),
+		vtutils.GetFlagVariantForTests("--tablet-manager-grpc-concurrency") + "=1",
 	}, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
 	}, 1, "")

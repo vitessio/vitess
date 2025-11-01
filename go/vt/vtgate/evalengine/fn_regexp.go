@@ -634,7 +634,6 @@ func (r *builtinRegexpSubstr) eval(env *ExpressionEnv) (eval, error) {
 		if err != nil {
 			return nil, err
 		}
-
 	}
 
 	if occExpr != nil {

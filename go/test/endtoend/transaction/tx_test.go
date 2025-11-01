@@ -95,7 +95,6 @@ func TestMain(m *testing.M) {
 
 // TestTransactionModes tests transactions using twopc mode
 func TestTransactionModes(t *testing.T) {
-
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)

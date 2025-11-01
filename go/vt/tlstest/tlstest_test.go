@@ -274,7 +274,6 @@ func testConfigGeneration(t *testing.T, rootPrefix string, generateConfig func(C
 			break
 		}
 	}
-
 }
 
 func testNumberOfCertsWithOrWithoutCombining(t *testing.T, numCertsExpected int, combine bool) {

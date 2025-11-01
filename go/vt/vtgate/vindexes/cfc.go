@@ -197,7 +197,6 @@ func (vind *CFC) NeedsVCursor() bool {
 
 // computeKsid returns the corresponding keyspace id of a key.
 func (vind *cfcCommon) computeKsid(v []byte, prefix bool) ([]byte, error) {
-
 	if vind.hash == nil {
 		return v, nil
 	}
@@ -413,7 +412,6 @@ func md5hash(in []byte) []byte {
 		return out[:n]
 	}
 	return out
-
 }
 
 // same here

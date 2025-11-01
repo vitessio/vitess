@@ -32,7 +32,6 @@ import (
 
 // WaitForVReplicationStatus waits for a vreplication stream to be in one of given states, or timeout
 func WaitForVReplicationStatus(t *testing.T, vtParams *mysql.ConnParams, tablet *cluster.Vttablet, uuid string, timeout time.Duration, expectStatuses ...string) (status string) {
-
 	query, err := sqlparser.ParseAndBind("select state from _vt.vreplication where workflow=%a",
 		sqltypes.StringBindVariable(uuid),
 	)

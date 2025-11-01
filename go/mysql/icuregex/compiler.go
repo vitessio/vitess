@@ -187,7 +187,6 @@ func (c *compiler) nextChar(ch *reChar) {
 			//  Scan through any white space and comments, until we
 			//  reach a significant character or the end of input.
 			for ch.char != -1 {
-
 				if ch.char == chPound && c.eolComments {
 					// Start of a comment.  Consume the rest of it, until EOF or a new line
 					for {
@@ -332,7 +331,6 @@ func (c *compiler) compile(pat []rune) error {
 	//   file regexcst.txt is the source for the state table.  The logic behind
 	//     recongizing the pattern syntax is there, not here.
 	for c.err == nil {
-
 		if state == 0 {
 			panic("bad state?")
 		}

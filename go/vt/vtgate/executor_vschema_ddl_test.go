@@ -105,7 +105,6 @@ func waitForColVindexes(t *testing.T, ks, table string, names []string, executor
 
 	// Wait up to 10ms until the vindex manager gets notified of the update
 	for i := 0; i < 10; i++ {
-
 		vschema := executor.vm.GetCurrentSrvVschema()
 		table, ok := vschema.Keyspaces[ks].Tables[table]
 
@@ -127,7 +126,6 @@ func waitForColVindexes(t *testing.T, ks, table string, names []string, executor
 		}
 
 		time.Sleep(time.Millisecond)
-
 	}
 
 	t.Fatalf("updated vschema did not contain vindexes %v on table %s", names, table)

@@ -327,7 +327,6 @@ func (e *Executor) executePlan(
 	logStats *logstats.LogStats,
 	execStart time.Time,
 ) (*sqltypes.Result, error) {
-
 	// 4: Execute!
 	qr, err := vcursor.ExecutePrimitive(ctx, plan.Instructions, bindVars, true)
 

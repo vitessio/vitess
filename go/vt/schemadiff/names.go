@@ -17,8 +17,8 @@ limitations under the License.
 package schemadiff
 
 import (
-	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/textutil"
@@ -39,10 +39,10 @@ var constraintVitessNameRegexp = regexp.MustCompile(`^(.*?)(_([0-9a-z]{25}))?$`)
 // before schemadiff/vitess generated a replacement name.
 // e.g. input: "check1_7no794p1x6zw6je1gfqmt7bca", output: "check1"
 func ExtractConstraintOriginalName(tableName string, constraintName string) string {
-	if strings.HasPrefix(constraintName, fmt.Sprintf("%s_chk_", tableName)) {
+	if strings.HasPrefix(constraintName, tableName+"_chk_") {
 		return constraintName[len(tableName)+1:]
 	}
-	if strings.HasPrefix(constraintName, fmt.Sprintf("%s_ibfk_", tableName)) {
+	if strings.HasPrefix(constraintName, tableName+"_ibfk_") {
 		return constraintName[len(tableName)+1:]
 	}
 	if submatch := constraintVitessNameRegexp.FindStringSubmatch(constraintName); len(submatch) > 0 {
@@ -80,7 +80,7 @@ func newConstraintName(tableName string, baseUUID string, constraintDefinition *
 	oldName = ExtractConstraintOriginalName(tableName, oldName)
 	hash := textutil.UUIDv5Base36(baseUUID, tableName, seed)
 	for i := 1; hashExists[hash]; i++ {
-		hash = textutil.UUIDv5Base36(baseUUID, tableName, seed, fmt.Sprintf("%d", i))
+		hash = textutil.UUIDv5Base36(baseUUID, tableName, seed, strconv.Itoa(i))
 	}
 	hashExists[hash] = true
 	suffix := "_" + hash

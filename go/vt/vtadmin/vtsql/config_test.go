@@ -17,7 +17,6 @@ limitations under the License.
 package vtsql
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -76,7 +75,7 @@ func TestConfigParse(t *testing.T) {
 			"--discovery-tags=a:1,b:2",
 			"--effective-user=vt_appdebug",
 			"--discovery-tags=c:3",
-			fmt.Sprintf("--credentials-path-tmpl=%s", credsTmplStr),
+			"--credentials-path-tmpl=" + credsTmplStr,
 		}
 
 		expectedCreds := &StaticAuthCredentials{
@@ -131,7 +130,7 @@ func TestConfigParse(t *testing.T) {
 			"--effective-user=vt_appdebug",
 			"--discovery-tags=c:3",
 			"--credentials-password=my_password",
-			fmt.Sprintf("--credentials-path-tmpl=%s", credsTmplStr),
+			"--credentials-path-tmpl=" + credsTmplStr,
 		}
 
 		expectedCreds := &StaticAuthCredentials{
@@ -215,7 +214,7 @@ func TestConfigParse(t *testing.T) {
 			"--discovery-tags=a:1,b:2",
 			"--effective-user=vt_appdebug",
 			"--discovery-tags=c:3",
-			fmt.Sprintf("--credentials-path-tmpl=%s", credsTmplStr),
+			"--credentials-path-tmpl=" + credsTmplStr,
 		}
 
 		expectedCreds := &StaticAuthCredentials{

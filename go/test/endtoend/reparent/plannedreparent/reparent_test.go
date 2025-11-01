@@ -297,9 +297,9 @@ func TestReparentWithDownReplica(t *testing.T) {
 	require.Error(t, err)
 	// Assert that PRS failed
 	if clusterInstance.VtctlMajorVersion <= 20 {
-		assert.Contains(t, out, fmt.Sprintf("TabletManager.PrimaryStatus on %s", tablets[2].Alias))
+		assert.Contains(t, out, "TabletManager.PrimaryStatus on "+tablets[2].Alias)
 	} else {
-		assert.Contains(t, out, fmt.Sprintf("TabletManager.GetGlobalStatusVars on %s", tablets[2].Alias))
+		assert.Contains(t, out, "TabletManager.GetGlobalStatusVars on "+tablets[2].Alias)
 	}
 	// insert data into the old primary, check the connected replica works. The primary tablet shouldn't have changed.
 	insertVal := utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[3]})

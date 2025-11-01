@@ -18,6 +18,7 @@ package vstreamer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -323,7 +324,6 @@ func (plan *Plan) shouldFilter(values []sqltypes.Value, charsets []collations.ID
 // filtering cannot be performed in-place. The result argument must be a slice of
 // length equal to ColExprs
 func (plan *Plan) mapValues(values []sqltypes.Value) ([]sqltypes.Value, error) {
-
 	result := make([]sqltypes.Value, len(plan.ColExprs))
 
 	for i, colExpr := range plan.ColExprs {
@@ -896,14 +896,14 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 	case *sqlparser.Literal:
 		// allow only intval 1
 		if inner.Type != sqlparser.IntVal {
-			return ColExpr{}, fmt.Errorf("only integer literals are supported")
+			return ColExpr{}, errors.New("only integer literals are supported")
 		}
 		num, err := strconv.ParseInt(string(inner.Val), 0, 64)
 		if err != nil {
 			return ColExpr{}, err
 		}
 		if num != 1 {
-			return ColExpr{}, fmt.Errorf("only the integer literal 1 is supported")
+			return ColExpr{}, errors.New("only the integer literal 1 is supported")
 		}
 		return ColExpr{
 			Field: &querypb.Field{
