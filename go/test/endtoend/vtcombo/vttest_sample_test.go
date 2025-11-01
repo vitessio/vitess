@@ -279,7 +279,6 @@ func assertTabletsPresent(t *testing.T) {
 		default:
 			t.Logf("invalid shard %s", parts[2])
 		}
-
 	}
 
 	assert.Equal(t, 2, numPrimary)

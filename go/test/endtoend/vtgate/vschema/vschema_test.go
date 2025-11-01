@@ -121,7 +121,6 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitcode)
 	}
-
 }
 
 func writeConfig(path string, cfg map[string]string) error {

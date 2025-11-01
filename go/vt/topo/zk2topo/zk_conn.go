@@ -234,7 +234,6 @@ func (c *ZkConn) Close() error {
 //
 // https://issues.apache.org/jira/browse/ZOOKEEPER-22
 func (c *ZkConn) withRetry(ctx context.Context, action func(conn *zk.Conn) error) (err error) {
-
 	// Handle concurrent access to a Zookeeper server here.
 	err = c.sem.Acquire(ctx, 1)
 	if err != nil {
@@ -324,7 +323,6 @@ func (c *ZkConn) maybeAddAuth(ctx context.Context) {
 // clears out the connection record.
 func (c *ZkConn) handleSessionEvents(conn *zk.Conn, session <-chan zk.Event) {
 	for event := range session {
-
 		switch event.State {
 		case zk.StateDisconnected, zk.StateExpired, zk.StateConnecting:
 			c.mu.Lock()

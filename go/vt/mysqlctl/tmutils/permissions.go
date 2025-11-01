@@ -165,7 +165,6 @@ func PermissionsString(permissions *tabletmanagerdatapb.Permissions) string {
 }
 
 func diffPermissions(name, leftName string, left permissionList, rightName string, right permissionList, er concurrency.ErrorRecorder) {
-
 	leftIndex := 0
 	rightIndex := 0
 	for leftIndex < left.Len() && rightIndex < right.Len() {

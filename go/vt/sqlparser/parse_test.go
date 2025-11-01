@@ -4845,7 +4845,6 @@ func TestPositionedErr(t *testing.T) {
 }
 
 func TestSubStr(t *testing.T) {
-
 	validSQL := []struct {
 		input  string
 		output string
@@ -6633,7 +6632,6 @@ func BenchmarkParseTraces(b *testing.B) {
 			}
 		})
 	}
-
 }
 
 func BenchmarkParseStress(b *testing.B) {

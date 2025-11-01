@@ -498,7 +498,6 @@ func resolveShards(
 	destinations, err := vindex.Map(ctx, vcursor, vindexKeys)
 	if err != nil {
 		return nil, nil, err
-
 	}
 
 	// And use the Resolver to map to ResolvedShards.
@@ -563,7 +562,6 @@ func resolveShardsBetween(ctx context.Context, vcursor VCursor, vindex vindexes.
 	destinations, err := vindex.RangeMap(ctx, vcursor, vindexKeys[0], vindexKeys[1])
 	if err != nil {
 		return nil, nil, err
-
 	}
 
 	// And use the Resolver to map to ResolvedShards.

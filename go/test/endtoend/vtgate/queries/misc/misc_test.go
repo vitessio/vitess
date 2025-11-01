@@ -207,7 +207,6 @@ func TestSetAndGetLastInsertIDWithInsertUnsharded(t *testing.T) {
 
 	runTests := func(mcmp *utils.MySQLCompare) {
 		for _, test := range tests {
-
 			lastInsertID := getVal()
 			query := fmt.Sprintf(test, lastInsertID)
 

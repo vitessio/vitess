@@ -193,7 +193,6 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitcode)
 	}
-
 }
 
 func TestOnlineDDLFlow(t *testing.T) {

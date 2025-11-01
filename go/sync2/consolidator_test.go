@@ -113,5 +113,4 @@ func TestConsolidator(t *testing.T) {
 	if !reflect.DeepEqual(con.Items(), want) {
 		t.Fatalf("expected consolidator to have two items %v", con.Items())
 	}
-
 }

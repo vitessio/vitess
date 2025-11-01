@@ -111,7 +111,6 @@ func addCreateFlags(cmd *cobra.Command) {
 	cmd.Flags().StringSliceVar(&createOptions.IncludeTables, "tables", nil, "Source tables to copy.")
 	cmd.Flags().StringSliceVar(&createOptions.ExcludeTables, "exclude-tables", nil, "Source tables to exclude from copying.")
 	cmd.Flags().BoolVar(&createOptions.NoRoutingRules, "no-routing-rules", false, "(Advanced) Do not create routing rules while creating the workflow. See the reference documentation for limitations if you use this flag.")
-
 }
 
 func registerCommands(root *cobra.Command) {

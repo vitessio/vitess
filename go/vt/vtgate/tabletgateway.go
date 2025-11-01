@@ -281,7 +281,6 @@ func (gw *TabletGateway) DebugBalancerHandler(w http.ResponseWriter, r *http.Req
 // withShardError should not be combined with withRetry.
 func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, _ queryservice.QueryService,
 	_ string, inTransaction bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
-
 	// for transactions, we connect to a specific tablet instead of letting gateway choose one
 	if inTransaction && target.TabletType != topodatapb.TabletType_PRIMARY {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "tabletGateway's query service can only be used for non-transactional queries on replicas")
@@ -376,7 +375,6 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			}
 
 			th = gw.balancer.Pick(target, tablets)
-
 		} else {
 			gw.shuffleTablets(gw.localCell, tablets)
 
@@ -450,7 +448,6 @@ func (gw *TabletGateway) getStatsAggregator(target *querypb.Target) *TabletStatu
 }
 
 func (gw *TabletGateway) shuffleTablets(cell string, tablets []*discovery.TabletHealth) {
-
 	// Randomly shuffle the list of tablets, putting the same-cell hosts at the front
 	// of the list and the other-cell hosts at the back
 	//

@@ -569,7 +569,6 @@ func TestExecutorShowColumns(t *testing.T) {
 			sbclookup.BatchQueries = nil
 		})
 	}
-
 }
 
 func sortString(w string) string {
@@ -1807,7 +1806,6 @@ func TestGetPlanNormalized(t *testing.T) {
 }
 
 func TestGetPlanPriority(t *testing.T) {
-
 	testCases := []struct {
 		name             string
 		sql              string
@@ -1839,7 +1837,6 @@ func TestGetPlanPriority(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestPassthroughDDL(t *testing.T) {
@@ -2779,7 +2776,6 @@ func TestExecutorStartTxnStmt(t *testing.T) {
 
 			_, err = executorExecSession(ctx, executor, session, "rollback", nil)
 			require.NoError(t, err)
-
 		})
 	}
 }

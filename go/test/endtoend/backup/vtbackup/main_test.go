@@ -154,5 +154,4 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitCode)
 	}
-
 }

@@ -2240,7 +2240,6 @@ func TestACLHUP(t *testing.T) {
 	time.Sleep(100 * time.Millisecond) // wait for signal handler
 
 	test_loaded_acl()
-
 }
 
 func TestConfigChanges(t *testing.T) {
@@ -2412,7 +2411,6 @@ func TestRelease(t *testing.T) {
 	}}
 
 	for i, test := range tests {
-
 		name := strconv.Itoa(i)
 		if test.begin {
 			name += " begin"

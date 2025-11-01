@@ -453,7 +453,6 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 					log.Error("Failed to set super_read_only back to its original value")
 				}
 			}()
-
 		}
 		replicationPosition, err = params.Mysqld.PrimaryPosition(ctx)
 		if err != nil {
@@ -910,7 +909,6 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 			if err := br.Close(createAndCopyErr == nil); err != nil {
 				createAndCopyErr = errors.Join(createAndCopyErr, vterrors.Wrap(err, "failed to close the source reader"))
 			}
-
 		}()
 		// Create the gzip compression pipe, if necessary.
 		if backupStorageCompress {

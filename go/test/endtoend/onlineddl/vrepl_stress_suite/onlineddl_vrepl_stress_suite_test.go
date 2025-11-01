@@ -474,11 +474,9 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitcode)
 	}
-
 }
 
 func TestVreplStressSchemaChanges(t *testing.T) {
-
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 	require.Equal(t, 1, len(shards[0].Vttablets))

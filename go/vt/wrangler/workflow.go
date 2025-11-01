@@ -106,7 +106,6 @@ func (vrw *VReplicationWorkflow) String() string {
 // workflow from the persistent state stored in the vreplication table and the topo
 func (wr *Wrangler) NewVReplicationWorkflow(ctx context.Context, workflowType VReplicationWorkflowType,
 	params *VReplicationWorkflowParams) (*VReplicationWorkflow, error) {
-
 	wr.WorkflowParams = params
 	log.Infof("NewVReplicationWorkflow with params %+v", params)
 	vrw := &VReplicationWorkflow{wr: wr, ctx: ctx, params: params, workflowType: workflowType}

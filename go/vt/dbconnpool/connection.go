@@ -86,7 +86,6 @@ func (dbc *DBConnection) ExecuteFetch(query string, maxrows int, wantfields bool
 
 // ExecuteStreamFetch overwrites mysql.Conn.ExecuteStreamFetch.
 func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int) error {
-
 	err := dbc.Conn.ExecuteStreamFetch(query)
 	if err != nil {
 		dbc.handleError(err)

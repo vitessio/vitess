@@ -1497,7 +1497,6 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 }
 
 func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *schema.OnlineDDL, row sqltypes.RowNamedValues, err error) {
-
 	query, err := sqlparser.ParseAndBind(sqlSelectMigration,
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -2134,7 +2133,6 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 // - empty, in which case the migration is noop and implicitly successful, or
 // - non-empty, in which case the migration turns to be an ALTER
 func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schema.OnlineDDL) (diff schemadiff.EntityDiff, err error) {
-
 	// Modify the CREATE TABLE statement to indicate a different, made up table name, known as the "comparison table"
 	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL, e.env.Environment().Parser())
 	if err != nil {
@@ -2544,7 +2542,6 @@ func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema
 
 // executeSpecialAlterDirectDDLActionMigration executes a special plan using a direct ALTER TABLE statement.
 func (e *Executor) executeSpecialAlterDirectDDLActionMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) (err error) {
-
 	forceCutOverAfter, err := onlineDDL.StrategySetting().ForceCutOverAfter()
 	if err != nil {
 		return err
@@ -4625,7 +4622,6 @@ func (e *Executor) SubmitMigration(
 	)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "submitting migration %v", onlineDDL.UUID)
-
 	}
 	log.Infof("SubmitMigration: migration %s submitted", onlineDDL.UUID)
 

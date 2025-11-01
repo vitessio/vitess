@@ -1425,7 +1425,6 @@ func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
 	if backupstorage.BackupStorageImplementation == "file" {
 		require.Contains(t, bd, "BackupStorage.File.File:Write")
 	}
-
 }
 
 func verifyRestorePositionAndTimeStats(t *testing.T, vars map[string]any) {

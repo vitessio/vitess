@@ -243,7 +243,6 @@ func BinaryIsAtLeastAtVersion(majorVersion int, binary string) bool {
 		return false
 	}
 	return version >= majorVersion
-
 }
 
 // AssertMatchesWithTimeout asserts that the given query produces the expected result.
@@ -266,7 +265,6 @@ func AssertMatchesWithTimeout(t *testing.T, conn *mysql.Conn, query, expected st
 			diff = cmp.Diff(expected,
 				fmt.Sprintf("%v", qr.Rows))
 		}
-
 	}
 }
 

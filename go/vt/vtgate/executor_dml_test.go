@@ -1413,7 +1413,6 @@ func TestInsertShardedKeyrange(t *testing.T) {
 }
 
 func TestInsertShardedAutocommitLookup(t *testing.T) {
-
 	vschema := `
 {
 	"sharded": true,
@@ -2363,7 +2362,6 @@ func TestInsertBadAutoInc(t *testing.T) {
 }
 
 func TestKeyDestRangeQuery(t *testing.T) {
-
 	type testCase struct {
 		inputQuery, targetString string
 		expectedSbc1Query        string

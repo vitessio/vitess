@@ -202,7 +202,6 @@ func (conn *FakeVTGateConn) CloseSession(ctx context.Context, session *vtgatepb.
 // VStream streams binlog events.
 func (conn *FakeVTGateConn) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid,
 	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags) (vtgateconn.VStreamReader, error) {
-
 	return nil, errors.New("NYI")
 }
 

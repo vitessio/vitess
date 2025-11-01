@@ -435,7 +435,6 @@ func TestReparenting(t *testing.T) {
 
 // TestConnection validate the connection count and message streaming.
 func TestConnection(t *testing.T) {
-
 	name := "sharded_message"
 
 	// 1 sec sleep added to avoid invalid connection count

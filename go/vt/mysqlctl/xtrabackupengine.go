@@ -471,7 +471,6 @@ func (be *XtrabackupEngine) backupFiles(
 
 // ExecuteRestore restores from a backup. Any error is returned.
 func (be *XtrabackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (*BackupManifest, error) {
-
 	var bm xtraBackupManifest
 
 	if err := getBackupManifestInto(ctx, bh, &bm); err != nil {

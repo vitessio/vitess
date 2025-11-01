@@ -743,7 +743,6 @@ func (vc *VitessCluster) DeleteShard(t testing.TB, cellName string, ksName strin
 	if output, err := vc.VtctldClient.ExecuteCommandWithOutput("DeleteShard", "--recursive", "--even-if-serving", ksName+"/"+shardName); err != nil {
 		t.Fatalf("DeleteShard command failed with error %+v and output %s\n", err, output)
 	}
-
 }
 
 // StartVtgate starts a vtgate process

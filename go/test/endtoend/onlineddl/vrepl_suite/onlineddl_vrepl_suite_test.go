@@ -130,11 +130,9 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitcode)
 	}
-
 }
 
 func TestVreplSuiteSchemaChanges(t *testing.T) {
-
 	shards := clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 

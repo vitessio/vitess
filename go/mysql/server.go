@@ -769,7 +769,6 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 		if !ok {
 			return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read auth-response")
 		}
-
 	} else if clientFlags&CapabilityClientSecureConnection != 0 {
 		var l byte
 		l, pos, ok = readByte(data, pos)

@@ -40,7 +40,6 @@ func testRedacted(t *testing.T, source, expected string) {
 }
 
 func TestRedactSourcePassword(t *testing.T) {
-
 	// regular test case
 	testRedacted(t, `CHANGE REPLICATION SOURCE TO
   SOURCE_PASSWORD = 'AAA',
@@ -71,7 +70,6 @@ func TestRedactSourcePassword(t *testing.T) {
 }
 
 func TestRedactMasterPassword(t *testing.T) {
-
 	// regular test case
 	testRedacted(t, `CHANGE MASTER TO
   MASTER_PASSWORD = 'AAA',
