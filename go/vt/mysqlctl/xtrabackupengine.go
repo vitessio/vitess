@@ -245,6 +245,12 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 	}
 	defer closeFile(mwc, backupManifestFileName, params.Logger, &finalErr)
 
+	// Get the hostname
+	hostname, err := os.Hostname()
+	if err != nil {
+		hostname = ""
+	}
+
 	// JSON-encode and write the MANIFEST
 	bm := &xtraBackupManifest{
 		// Common base fields
@@ -255,6 +261,7 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 			PurgedPosition: replicationPosition,
 			ServerUUID:     serverUUID,
 			TabletAlias:    params.TabletAlias,
+			Hostname:       hostname,
 			Keyspace:       params.Keyspace,
 			Shard:          params.Shard,
 			BackupTime:     FormatRFC3339(params.BackupTime.UTC()),
