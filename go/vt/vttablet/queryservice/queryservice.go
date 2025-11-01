@@ -108,6 +108,8 @@ type QueryService interface {
 	// VStreamResults streams results along with the gtid of the snapshot.
 	VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error
 
+	DumpBinlog(ctx context.Context, request *binlogdatapb.DumpBinlogRequest, send func(*binlogdatapb.DumpBinlogResponse) error) error
+
 	// StreamHealth streams health status.
 	StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error
 

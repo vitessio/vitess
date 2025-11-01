@@ -721,6 +721,11 @@ func (f *FakeQueryService) VStreamResults(ctx context.Context, target *querypb.T
 	panic("not implemented")
 }
 
+// DumpBinlog is part of the QueryService interface.
+func (f *FakeQueryService) DumpBinlog(ctx context.Context, request *binlogdatapb.DumpBinlogRequest, send func(*binlogdatapb.DumpBinlogResponse) error) error {
+	panic("not implemented")
+}
+
 // QueryServiceByAlias satisfies the Gateway interface
 func (f *FakeQueryService) QueryServiceByAlias(_ context.Context, _ *topodatapb.TabletAlias, _ *querypb.Target) (queryservice.QueryService, error) {
 	panic("not implemented")
