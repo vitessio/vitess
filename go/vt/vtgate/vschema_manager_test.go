@@ -940,7 +940,6 @@ func TestForeignKeyRoutingRules(t *testing.T) {
 	assert.Equal(t, "targetKs.t2", targetTables["t1"].ChildForeignKeys[0].Table.String())
 	assert.Len(t, targetTables["t2"].ParentForeignKeys, 1, "target child table should have parent FK")
 	assert.Equal(t, "targetKs.t1", targetTables["t2"].ParentForeignKeys[0].Table.String())
-
 }
 
 func createTableInfoWithFK(fkTarget string) *vindexes.TableInfo {

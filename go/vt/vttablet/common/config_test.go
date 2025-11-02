@@ -140,7 +140,6 @@ func TestNewVReplicationConfig(t *testing.T) {
 			if tt.wantErr == 0 {
 				require.EqualValuesf(t, tt.config, got.Overrides,
 					"NewVReplicationConfig() overrides got = %v, want %v", got.Overrides, tt.config)
-
 			}
 			if tt.wantErr > 0 && err == nil || tt.wantErr == 0 && err != nil {
 				t.Errorf("NewVReplicationConfig() got num errors = %v, want %v", err, tt.wantErr)
@@ -159,7 +158,6 @@ func TestNewVReplicationConfig(t *testing.T) {
 				require.EqualValues(t, tt.want.Map(), got.Map(),
 					"NewVReplicationConfig() Map got = %v, want %v", got.Map(), tt.want.Map())
 			}
-
 		})
 	}
 }

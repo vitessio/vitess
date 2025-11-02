@@ -237,7 +237,6 @@ func stripAutoIncrement(ddl string, parser *sqlparser.Parser, replace func(colum
 					if err := replace(sqlparser.String(node.Name)); err != nil {
 						return false, vterrors.Wrapf(err, "failed to replace auto_increment column %q in %q", sqlparser.String(node.Name), ddl)
 					}
-
 				}
 			}
 		}
@@ -607,7 +606,6 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 		return fmt.Errorf("%s", strings.Join(rec.ErrorStrings(), "\n"))
 	}
 	return nil
-
 }
 
 // ReverseWorkflowName returns the "reversed" name of a workflow. For a
@@ -700,7 +698,6 @@ func areTabletsAvailableToStreamFrom(ctx context.Context, req *vtctldatapb.Workf
 // It returns ErrNoStreams if there are no targets found for the workflow.
 func LegacyBuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, targetKeyspace string, workflow string,
 	targetShards []string) (*TargetInfo, error) {
-
 	var (
 		frozen          bool
 		optCells        string
@@ -785,7 +782,6 @@ func LegacyBuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.Table
 
 			workflowType = getVReplicationWorkflowType(row)
 			workflowSubType = getVReplicationWorkflowSubType(row)
-
 		}
 
 		targets[targetShard] = target

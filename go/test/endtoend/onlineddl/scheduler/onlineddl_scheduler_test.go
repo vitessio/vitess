@@ -173,7 +173,6 @@ func waitForReadyToComplete(t *testing.T, uuid string, expected bool) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
-
 		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
@@ -295,11 +294,9 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitcode)
 	}
-
 }
 
 func TestSchedulerSchemaChanges(t *testing.T) {
-
 	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
 
 	t.Run("scheduler", testScheduler)
@@ -2809,7 +2806,6 @@ func testDeclarative(t *testing.T) {
 }
 
 func testForeignKeys(t *testing.T) {
-
 	var (
 		createStatements = []string{
 			`

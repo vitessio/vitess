@@ -570,7 +570,6 @@ func (exec *TabletExecutor) executeOneTablet(
 	viaQueryService bool,
 	errChan chan ShardWithError,
 	successChan chan ShardResult) {
-
 	var results []*querypb.QueryResult
 	var err error
 	if viaQueryService {
@@ -597,7 +596,6 @@ func (exec *TabletExecutor) executeOneTablet(
 			request.DisableForeignKeyChecks = true
 		}
 		results, err = exec.tmc.ExecuteMultiFetchAsDba(ctx, tablet, false, request)
-
 	}
 	if err != nil {
 		errChan <- ShardWithError{Shard: tablet.Shard, Err: err.Error()}

@@ -309,7 +309,6 @@ func (s *Stresser) startStressClient(resultCh chan result) {
 
 outer:
 	for !s.finished() {
-
 		// Update the connection parameters is Stresser has new ones, and
 		// create a new client using the new parameters.
 		// This allows us to change the target (server we are stressing) at

@@ -69,7 +69,6 @@ func TestList(t *testing.T) {
 	l.Remove(entries[1])
 	require.Equal(t, "4/2/3/0", l.display())
 	require.Equal(t, "0/3/2/4", l.displayReverse())
-
 }
 
 func TestListCountCost(t *testing.T) {

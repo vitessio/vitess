@@ -571,7 +571,6 @@ func TestConnAttrs(t *testing.T) {
 
 	clientConn.Close()
 	assert.True(t, clientConn.IsClosed(), "IsClosed should be true on Close-d connection.")
-
 }
 
 func TestConnCounts(t *testing.T) {
@@ -1014,7 +1013,6 @@ func TestTLSServer(t *testing.T) {
 
 	checkCountForTLSVer(t, tlsVersionToString(tlsVersion), 1)
 	conn.Close()
-
 }
 
 // TestTLSRequired creates a Server with TLS required, then tests that an insecure mysql
@@ -1404,7 +1402,6 @@ func runMysql(t *testing.T, params *ConnParams, command string) (string, bool) {
 		return output, false
 	}
 	return output, true
-
 }
 func runMysqlWithErr(t *testing.T, params *ConnParams, command string) (string, error) {
 	dir, err := venv.VtMysqlRoot()

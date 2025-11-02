@@ -85,7 +85,6 @@ func TestNewUserPermission(t *testing.T) {
 }
 
 func TestPermissionsDiff(t *testing.T) {
-
 	p1 := &tabletmanagerdatapb.Permissions{}
 	p1.UserPermissions = append(p1.UserPermissions, NewUserPermission(mapToSQLResults(map[string]string{
 		"Host":        "%",

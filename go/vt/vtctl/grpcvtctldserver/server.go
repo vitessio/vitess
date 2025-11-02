@@ -1879,7 +1879,6 @@ func (s *VtctldServer) GetSchemaMigrations(ctx context.Context, req *vtctldatapb
 		results = map[string]*sqltypes.Result{}
 	)
 	for _, tablet := range tabletsResp.Tablets {
-
 		wg.Add(1)
 		go func(tablet *topodatapb.Tablet) {
 			defer wg.Done()

@@ -51,7 +51,6 @@ type fakeConn struct {
 func (st *fakeConn) ListDir(ctx context.Context, dirPath string, full bool) (res []DirEntry, err error) {
 	if dirPath == "error" {
 		return res, errors.New("Dummy error")
-
 	}
 	return res, err
 }
@@ -63,7 +62,6 @@ func (st *fakeConn) Create(ctx context.Context, filePath string, contents []byte
 	}
 	if filePath == "error" {
 		return ver, errors.New("Dummy error")
-
 	}
 	return ver, err
 }
@@ -75,7 +73,6 @@ func (st *fakeConn) Update(ctx context.Context, filePath string, contents []byte
 	}
 	if filePath == "error" {
 		return ver, errors.New("Dummy error")
-
 	}
 	return ver, err
 }
@@ -84,7 +81,6 @@ func (st *fakeConn) Update(ctx context.Context, filePath string, contents []byte
 func (st *fakeConn) Get(ctx context.Context, filePath string) (bytes []byte, ver Version, err error) {
 	if filePath == "error" {
 		return bytes, ver, errors.New("Dummy error")
-
 	}
 	return bytes, ver, err
 }
@@ -93,7 +89,6 @@ func (st *fakeConn) Get(ctx context.Context, filePath string) (bytes []byte, ver
 func (st *fakeConn) GetVersion(ctx context.Context, filePath string, version int64) (bytes []byte, err error) {
 	if filePath == "error" {
 		return bytes, errors.New("Dummy error")
-
 	}
 	return bytes, err
 }

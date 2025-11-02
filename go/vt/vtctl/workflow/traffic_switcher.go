@@ -577,7 +577,6 @@ func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType T
 				}
 			}
 			ts.Logger().Infof("%s: Removed table %s.%s\n", topoproto.TabletAliasString(source.GetPrimary().GetAlias()), source.GetPrimary().DbName(), tableName)
-
 		}
 		return nil
 	})
@@ -727,7 +726,6 @@ func (ts *trafficSwitcher) createJournals(ctx context.Context, sourceWorkflows [
 				Keyspace: source.GetShard().Keyspace(),
 				Shard:    shard,
 			})
-
 		}
 		ts.Logger().Infof("Creating journal: %v", journal)
 		statement := fmt.Sprintf("insert into _vt.resharding_journal "+
@@ -1290,7 +1288,6 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 				}
 				ts.Logger().Infof("%s: Removed table %s.%s\n",
 					topoproto.TabletAliasString(target.GetPrimary().GetAlias()), target.GetPrimary().DbName(), tableName)
-
 			}
 			return nil
 		})
@@ -1359,7 +1356,6 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 					}
 					ts.Logger().Infof("%s: Removed view %s.%s\n",
 						topoproto.TabletAliasString(target.GetPrimary().GetAlias()), target.GetPrimary().DbName(), tableName)
-
 				} else {
 					query = fmt.Sprintf("drop table %s.%s", primaryDbName, tableName)
 					ts.Logger().Infof("%s: Dropping table %s.%s\n",

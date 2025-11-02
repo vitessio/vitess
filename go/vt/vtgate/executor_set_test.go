@@ -397,7 +397,6 @@ func TestExecutorSetOp(t *testing.T) {
 }
 
 func TestExecutorSetMetadata(t *testing.T) {
-
 	t.Run("Session 1", func(t *testing.T) {
 		executor, _, _, _, ctx := createExecutorEnv(t)
 		session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})

@@ -162,7 +162,6 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 				return err
 			}
 		}
-
 	}
 	// And then finally save the keyspace objects, in parallel.
 	rec := concurrency.AllErrorRecorder{}

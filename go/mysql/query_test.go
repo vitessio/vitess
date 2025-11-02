@@ -94,7 +94,6 @@ func TestComInitDB(t *testing.T) {
 	}
 	db := sConn.parseComInitDB(data)
 	assert.Equal(t, "my_db", db, "parseComInitDB returned unexpected data: %v", db)
-
 }
 
 func TestComSetOption(t *testing.T) {
@@ -116,7 +115,6 @@ func TestComSetOption(t *testing.T) {
 	operation, ok := sConn.parseComSetOption(data)
 	require.True(t, ok, "parseComSetOption failed unexpectedly")
 	assert.Equal(t, uint16(1), operation, "parseComSetOption returned unexpected data: %v", operation)
-
 }
 
 func TestComStmtPrepare(t *testing.T) {
@@ -152,7 +150,6 @@ func TestComStmtPrepare(t *testing.T) {
 	resp, err := cConn.ReadPacket()
 	require.NoError(t, err, "cConn.ReadPacket failed: %v", err)
 	require.Equal(t, prepare.StatementID, uint32(resp[1]), "Received incorrect Statement ID, want: %v, got: %v", prepare.StatementID, resp[1])
-
 }
 
 func TestComStmtPrepareUpdStmt(t *testing.T) {
@@ -226,7 +223,6 @@ func TestComStmtSendLongData(t *testing.T) {
 	// Check length of chunkData, Since its a subset of `data` and compare with it after we subtract the number of bytes that was read from it.
 	// sizeof(uint32) + sizeof(uint16) + 1 = 7
 	require.Equal(t, len(data)-7, len(chunkData), "Received bad chunkData")
-
 }
 
 func TestComStmtExecute(t *testing.T) {
@@ -247,7 +243,6 @@ func TestComStmtExecute(t *testing.T) {
 	stmtID, _, err := sConn.parseComStmtExecute(cConn.PrepareData, data)
 	require.NoError(t, err, "parseComStmtExeute failed: %v", err)
 	require.Equal(t, uint32(18), stmtID, "Parsed incorrect values")
-
 }
 
 func TestComStmtExecuteUpdStmt(t *testing.T) {
@@ -347,7 +342,6 @@ func TestComStmtClose(t *testing.T) {
 	stmtID, ok := sConn.parseComStmtClose(data)
 	require.True(t, ok, "parseComStmtClose failed")
 	require.Equal(t, prepare.StatementID, stmtID, "Received incorrect value, want: %v, got: %v", uint32(data[1]), prepare.StatementID)
-
 }
 
 // This test has been added to verify that IO errors in a connection lead to SQL Server lost errors
@@ -623,7 +617,6 @@ func checkQuery(t *testing.T, query string, sConn, cConn *Conn, result *sqltypes
 }
 
 func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *sqltypes.Result, wantfields, allRows, warnings bool) {
-
 	if sConn.Capabilities&CapabilityClientDeprecateEOF > 0 {
 		query += " NOEOF"
 	} else {
@@ -760,12 +753,10 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 	for i := 0; i < count; i++ {
 		kontinue := sConn.handleNextCommand(&handler)
 		require.True(t, kontinue, "error handling command: %d", i)
-
 	}
 
 	wg.Wait()
 	require.Equal(t, "", fatalError, fatalError)
-
 }
 
 func RowString(row []sqltypes.Value) string {

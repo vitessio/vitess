@@ -135,7 +135,6 @@ func TestExternalCompressors(t *testing.T) {
 
 			decompressor.Close()
 			assert.Equal(t, data, decompressed.Bytes())
-
 		})
 	}
 }

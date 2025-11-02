@@ -118,7 +118,6 @@ func TestKillDifferentConnectionQuery(t *testing.T) {
 
 // TestKillOnHungQuery test that any hung query should return.
 func TestKillOnHungQuery(t *testing.T) {
-
 	execFunc := func(conn *mysql.Conn) error {
 		utils.Exec(t, conn, "begin")
 		_, err := utils.ExecAllowError(t, conn, "insert into test(id, msg, extra) values (1, 'a', 'e')")

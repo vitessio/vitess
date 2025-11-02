@@ -42,7 +42,6 @@ func IsDivisibleBy(n int, divisibleby int) bool {
 }
 
 func getCommandType(index int) string {
-
 	m := map[int]string{
 		0:  "GetTablet", // Tablets
 		1:  "InitTablet",
@@ -104,7 +103,6 @@ func getCommandType(index int) string {
 		67: "FindAllShardsInKeyspace",
 	}
 	return m[index]
-
 }
 
 /*
@@ -128,7 +126,6 @@ In this fuzzer we split the input into 3 chunks:
 	corresponding command.
 */
 func Fuzz(data []byte) int {
-
 	//  Basic checks
 	if len(data) == 0 {
 		return -1
@@ -186,7 +183,6 @@ func Fuzz(data []byte) int {
 	}
 
 	return 1
-
 }
 
 func createTopo(ctx context.Context) (*topo.Server, error) {

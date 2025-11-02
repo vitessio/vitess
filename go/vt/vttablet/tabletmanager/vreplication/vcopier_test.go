@@ -670,7 +670,6 @@ func testPlayerCopyTables(t *testing.T) {
 		})
 	}
 	cancel()
-
 }
 
 // TestPlayerCopyBigTable ensures the copy-catchup back-and-forth loop works correctly.

@@ -315,7 +315,6 @@ func TestSetForeignKeyCheck(t *testing.T) {
 		{"commit", nil},
 	}}
 	ts.Run()
-
 }
 
 func TestStmtComment(t *testing.T) {

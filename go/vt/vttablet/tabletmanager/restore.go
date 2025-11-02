@@ -158,7 +158,6 @@ func (tm *TabletManager) RestoreData(
 }
 
 func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool, request *tabletmanagerdatapb.RestoreFromBackupRequest, mysqlShutdownTimeout time.Duration) error {
-
 	tablet := tm.Tablet()
 	originalType := tablet.Type
 	// Try to restore. Depending on the reason for failure, we may be ok.

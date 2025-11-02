@@ -108,7 +108,6 @@ func tstWorkflowAction(t *testing.T, action, tabletTypes, cells string) error {
 // tstWorkflowExecVtctl instead.
 func tstWorkflowExec(t *testing.T, cells, workflow, defaultSourceKs, defaultTargetKs, tables, action, tabletTypes,
 	sourceShards, targetShards string, options *workflowExecOptions) error {
-
 	var args []string
 	if currentWorkflowType == binlogdatapb.VReplicationWorkflowType_MoveTables {
 		args = append(args, "MoveTables")
@@ -972,7 +971,6 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 		validateWritesRouteToTarget(t)
 
 		revert(t, workflowType)
-
 	}
 	switchReadsFollowedBySwitchWrites()
 	switchWritesFollowedBySwitchReads()

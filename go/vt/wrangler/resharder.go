@@ -210,7 +210,6 @@ func (rs *resharder) readRefStreams(ctx context.Context) error {
 			}
 		}
 		for _, row := range qr.Rows {
-
 			workflow := row[0].ToString()
 			if workflow == "" {
 				return fmt.Errorf("VReplication streams must have named workflows for migration: shard: %s:%s", source.Keyspace(), source.ShardName())

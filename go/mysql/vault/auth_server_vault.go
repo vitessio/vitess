@@ -242,7 +242,6 @@ func (a *AuthServerVault) installSignalHandlers() {
 			if err != nil {
 				log.Errorf("%s", err)
 			}
-
 		}
 	}()
 }

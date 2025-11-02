@@ -1460,7 +1460,6 @@ func TestScopingSubQueryJoinClause(t *testing.T) {
 
 	tb := st.DirectDeps(extract(parse.(*sqlparser.Select), 0).(*sqlparser.Subquery).Select.(*sqlparser.Select).From[0].(*sqlparser.JoinTableExpr).Condition.On)
 	require.Equal(t, 3, tb.NumberOfTables())
-
 }
 
 var unsharded = &vindexes.Keyspace{

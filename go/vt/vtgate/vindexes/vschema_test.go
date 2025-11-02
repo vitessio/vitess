@@ -295,7 +295,6 @@ func TestMultiTenantAttribute(t *testing.T) {
 				require.Equal(t, test.wanted.TenantIdColumnName, ksSchema.MultiTenantSpec.TenantIdColumnName)
 				require.Equal(t, test.wanted.TenantIdColumnType, ksSchema.MultiTenantSpec.TenantIdColumnType)
 			}
-
 		})
 	}
 }
@@ -335,7 +334,6 @@ func TestForeignKeyMode(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, test.wantedFkMode, ksSchema.ForeignKeyMode)
 		})
-
 	}
 }
 

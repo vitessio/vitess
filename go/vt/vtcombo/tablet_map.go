@@ -367,7 +367,6 @@ func CreateKs(
 				if err != nil {
 					return 0, fmt.Errorf("error ensuring database exists: %v", err)
 				}
-
 			}
 			if cell == tpb.Cells[0] {
 				replicas--

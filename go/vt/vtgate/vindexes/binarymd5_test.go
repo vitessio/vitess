@@ -164,7 +164,6 @@ func BenchmarkMD5Hash(b *testing.B) {
 		b.Run(name, func(b *testing.B) {
 			benchmarkMD5HashBytes(b, input)
 		})
-
 	}
 }
 

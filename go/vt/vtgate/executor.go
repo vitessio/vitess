@@ -1831,7 +1831,6 @@ func fkMode(foreignkey string) vschemapb.Keyspace_ForeignKeyMode {
 		return vschemapb.Keyspace_managed
 	case "unmanaged":
 		return vschemapb.Keyspace_unmanaged
-
 	}
 	return vschemapb.Keyspace_unspecified
 }

@@ -594,5 +594,4 @@ func TestPermissions(t *testing.T) {
 	if err := vp.Run([]string{"ValidatePermissionsKeyspace", primary.Tablet.Keyspace}); err == nil || !strings.Contains(err.Error(), "has an extra user") {
 		t.Fatalf("ValidatePermissionsKeyspace has unexpected err: %v", err)
 	}
-
 }

@@ -409,7 +409,6 @@ func TestWaitForConsistentKeyspaces(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-
 		})
 	}
 }

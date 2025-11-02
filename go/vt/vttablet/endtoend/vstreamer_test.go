@@ -373,7 +373,6 @@ func runCases(ctx context.Context, t *testing.T, tests []test, eventCh chan []*b
 				t.Fatalf("Query %s never got inserted into the schema_version table", query)
 			}
 			framework.Server.SchemaEngine().Reload(ctx)
-
 		}
 	}
 }

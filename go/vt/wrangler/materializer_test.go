@@ -217,9 +217,7 @@ func TestMoveTablesAllAndExclude(t *testing.T) {
 			require.NoError(t, err)
 			require.EqualValues(t, tcase.want, targetTables(ctx, env))
 		})
-
 	}
-
 }
 
 func TestMoveTablesStopFlags(t *testing.T) {
@@ -2306,7 +2304,6 @@ func TestMaterializerCopySchema(t *testing.T) {
 	env.tmc.verifyQueries(t)
 	require.Equal(t, env.tmc.getSchemaRequestCount(100), 1)
 	require.Equal(t, env.tmc.getSchemaRequestCount(200), 1)
-
 }
 
 func TestMaterializerExplicitColumns(t *testing.T) {
@@ -2514,7 +2511,6 @@ func TestMaterializerNoDDL(t *testing.T) {
 	require.EqualError(t, err, "target table t1 does not exist and there is no create ddl defined")
 	require.Equal(t, env.tmc.getSchemaRequestCount(100), 0)
 	require.Equal(t, env.tmc.getSchemaRequestCount(200), 1)
-
 }
 
 func TestMaterializerNoSourcePrimary(t *testing.T) {

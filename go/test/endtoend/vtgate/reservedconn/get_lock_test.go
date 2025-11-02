@@ -240,7 +240,6 @@ func TestLocksKeepLockConnectionActive(t *testing.T) {
 	utils.AssertMatches(t, conn, `select * from test where id = 42`, `[]`) // this will trigger heartbeat.
 	time.Sleep(3 * time.Second)                                            // lock connection will not timeout after 5 seconds.
 	utils.AssertMatches(t, conn, `select is_free_lock('lock')`, `[[INT64(0)]]`)
-
 }
 
 func TestLocksResetLockOnTimeout(t *testing.T) {

@@ -922,5 +922,4 @@ func TestSkipUserMetrics(t *testing.T) {
 	for _, expected := range expectedDiffs {
 		compareIntDiff(t, vend, expected.tag, vstart, expected.diff)
 	}
-
 }

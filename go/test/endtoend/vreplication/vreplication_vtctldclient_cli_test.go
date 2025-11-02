@@ -786,7 +786,6 @@ func validateReshardWorkflow(t *testing.T, workflows []*vtctldatapb.Workflow) {
 	bls := stream.BinlogSource
 	require.Equal(t, binlogdatapb.OnDDLAction_STOP, bls.OnDdl)
 	require.True(t, bls.StopAfterCopy)
-
 }
 
 func getReshardResponse(rs iReshard) *vtctldatapb.WorkflowStatusResponse {
@@ -1013,7 +1012,6 @@ func testRoutingRulesApplyCommands(t *testing.T) {
 		}
 		testOneRoutingRulesCommand(t, typ, string(rulesBytes), validateRules)
 	}
-
 }
 
 // For a given routing rules type, test that the rules can be applied using the vtctldclient CLI.

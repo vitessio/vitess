@@ -240,7 +240,6 @@ func (tc *vrepTestCase) setupKeyspace(ks *keyspace) {
 		defaultCell := tc.vc.Cells[defaultCellName]
 		require.NotNil(tc.t, defaultCell)
 		tc.vtgate = defaultCell.Vtgates[0]
-
 	}
 }
 
@@ -289,7 +288,6 @@ func (wf *workflow) create() {
 		i += 100
 	}
 	doVtctldclientVDiff(t, wf.toKeyspace, wf.name, cell, nil)
-
 }
 
 func (wf *workflow) switchTraffic() {

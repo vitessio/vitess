@@ -159,7 +159,6 @@ func TestVExec(t *testing.T) {
 				}
 			} else {
 				require.ErrorContains(t, err, testCase.errorString, "Wrong error, want %s, got %s", testCase.errorString, err.Error())
-
 			}
 		})
 	}

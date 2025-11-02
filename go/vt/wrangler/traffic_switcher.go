@@ -256,7 +256,6 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 		// We assume a consistent state, so only choose routing rule for one table.
 		if len(ts.Tables()) == 0 {
 			return nil, nil, fmt.Errorf("no tables in workflow %s.%s", targetKeyspace, workflowName)
-
 		}
 		table := ts.Tables()[0]
 
@@ -891,7 +890,6 @@ func (wr *Wrangler) getShardSubset(ctx context.Context, keyspace string, shardSu
 	log.Infof("Selecting subset of shards in keyspace %s: %d from %d :: %+v",
 		keyspace, len(shardSubset), len(allShards), shardSubset)
 	return shardSubset, nil
-
 }
 
 func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workflowName string) (*trafficSwitcher, error) {
@@ -1027,7 +1025,6 @@ func (ts *trafficSwitcher) getSourceAndTargetShardsNames() ([]string, []string) 
 // same number of shards, is not covering the entire shard range, and has
 // one-to-one shards in source and target.
 func (ts *trafficSwitcher) isPartialMoveTables(sourceShards, targetShards []string) (bool, error) {
-
 	if ts.MigrationType() != binlogdatapb.MigrationType_TABLES {
 		return false, nil
 	}
@@ -1518,7 +1515,6 @@ func (ts *trafficSwitcher) createJournals(ctx context.Context, sourceWorkflows [
 				Keyspace: source.GetShard().Keyspace(),
 				Shard:    shard,
 			})
-
 		}
 		log.Infof("Creating journal %v", journal)
 		ts.Logger().Infof("Creating journal: %v", journal)
@@ -1764,7 +1760,6 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 		return fmt.Errorf("%s", strings.Join(rec.ErrorStrings(), "\n"))
 	}
 	return nil
-
 }
 
 func getRenameFileName(tableName string) string {
@@ -1806,7 +1801,6 @@ func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType w
 				return err
 			}
 			ts.Logger().Infof("%s: Removed table %s.%s\n", source.GetPrimary().String(), source.GetPrimary().DbName(), tableName)
-
 		}
 		return nil
 	})
@@ -1919,7 +1913,6 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 			}
 			ts.Logger().Infof("%s: Removed table %s.%s\n",
 				target.GetPrimary().String(), target.GetPrimary().DbName(), tableName)
-
 		}
 		return nil
 	})

@@ -51,7 +51,6 @@ func TestTransactionsWithGRPCAPI(t *testing.T) {
 		require.Equal(t, workload[index], session.Options.Workload.String())
 		execTest(ctx, t, workload[index], vtSession)
 	}
-
 }
 
 func execTest(ctx context.Context, t *testing.T, workload string, vtSession *vtgateconn.VTGateSession) {

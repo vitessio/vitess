@@ -158,7 +158,6 @@ func FilterStatsByReplicationLag(tabletHealthList []*TabletHealth) []*TabletHeal
 		res = filterStatsByLagWithLegacyAlgorithm(res)
 	}
 	return res
-
 }
 
 func filterStatsByLag(tabletHealthList []*TabletHealth) []*TabletHealth {

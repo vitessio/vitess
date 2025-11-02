@@ -620,7 +620,6 @@ func TestConnReopen(t *testing.T) {
 	time.Sleep(300 * time.Millisecond)
 	// no active connection should be left.
 	assert.Zero(t, p.Active())
-
 }
 
 func TestIdleTimeout(t *testing.T) {
@@ -970,7 +969,6 @@ func TestTimeout(t *testing.T) {
 		_, err = p.Get(newctx, setting)
 		cancel()
 		assert.EqualError(t, err, "connection pool timed out")
-
 	}
 
 	// put the connection take was taken initially.

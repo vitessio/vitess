@@ -38,7 +38,6 @@ func CompareKeyspaces(ctx context.Context, fromTS, toTS *topo.Server) error {
 	}
 
 	for _, keyspace := range keyspaces {
-
 		fromKs, err := fromTS.GetKeyspace(ctx, keyspace)
 		if err != nil {
 			return vterrors.Wrapf(err, "GetKeyspace(%v)", keyspace)
@@ -124,7 +123,6 @@ func CompareTablets(ctx context.Context, fromTS, toTS *topo.Server) error {
 			return vterrors.Wrapf(err, "GetTabletsByCell(%v)", cell)
 		}
 		for _, tabletAlias := range tabletAliases {
-
 			// read the source tablet
 			fromTi, err := fromTS.GetTablet(ctx, tabletAlias)
 			if err != nil {
