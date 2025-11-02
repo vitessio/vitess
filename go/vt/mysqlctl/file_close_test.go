@@ -223,7 +223,7 @@ func TestCloseWithRetryTransientFailure(t *testing.T) {
 	ctx := context.Background()
 	logger := logutil.NewMemoryLogger()
 
-	// Test with various failure counts that should eventually succeed
+	// Test with various failure counts that should eventually succeed.
 	// Note: We keep the failure count low because closeWithRetry uses exponential
 	// backoff (1s, 2s, 4s, 8s, 16s, 30s...) which can make tests slow.
 	testCases := []struct {
@@ -249,7 +249,7 @@ func TestCloseWithRetryTransientFailure(t *testing.T) {
 	}
 }
 
-// TestCloseWithRetryPermanentFailure tests that closeWithRetry gives up after maxFileCloseRetries
+// TestCloseWithRetryPermanentFailure tests that closeWithRetry gives up after maxFileCloseRetries.
 // Note: This test uses context cancellation to avoid waiting for the full exponential backoff
 // which can take several minutes with 20 retries.
 func TestCloseWithRetryPermanentFailure(t *testing.T) {
@@ -304,7 +304,7 @@ func TestBackupFileSourceCloseError(t *testing.T) {
 		DataDir: tmpDir,
 	}
 	be := &BuiltinBackupEngine{}
-	// Create a mock backup handle with a destination that closes successfully
+	// Create a mock backup handle with a destination that closes successfully.
 	destCloser := newMockWriteCloser(0, nil)
 	bh := newMockBackupHandle()
 	bh.addFileReturn = destCloser
@@ -367,11 +367,11 @@ func TestBackupFileDestinationCloseError(t *testing.T) {
 	assert.True(t, destCloser.isClosed())
 }
 
-// TestBackupFileDestinationCloseMaxRetries tests that destination close gives up after max retries
+// TestBackupFileDestinationCloseMaxRetries tests that destination close gives up after max retries.
 // Note: This test uses a short context timeout to avoid waiting for all retries with exponential
 // backoff.
 func TestBackupFileDestinationCloseMaxRetries(t *testing.T) {
-	// Use a short timeout to avoid waiting for the full exponential backoff
+	// Use a short timeout to avoid waiting for the full exponential backoff.
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	logger := logutil.NewMemoryLogger()
@@ -589,7 +589,7 @@ func TestRestoreFileWithCloseRetriesIntegration(t *testing.T) {
 	tmpDir := t.TempDir()
 	be := &BuiltinBackupEngine{}
 	content := []byte("integration test content for restore")
-	// Create a source that will fail to close a few times
+	// Create a source that will fail to close a few times.
 	sourceCloser := &mockReadWriteCloser{
 		mockCloser: newMockCloser(1, errors.New("transient close error")),
 		Reader:     bytes.NewReader(content),
@@ -624,7 +624,7 @@ func TestRestoreFileWithCloseRetriesIntegration(t *testing.T) {
 	// Verify source was closed with retry (1 failure + 1 success)
 	assert.Equal(t, 2, sourceCloser.getCloseCalled())
 	assert.True(t, sourceCloser.isClosed())
-	// Verify the file was created with correct content
+	// Verify the file was created with correct content.
 	destPath := filepath.Join(tmpDir, "integration-test.txt")
 	restoredContent, err := os.ReadFile(destPath)
 	require.NoError(t, err)
