@@ -860,6 +860,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 		closeSourceAt := time.Now()
 		if err := closeWithRetry(ctx, params.Logger, source, fe.Name); err != nil {
 			params.Logger.Infof("Failed to close %s source file during backup: %v", fe.Name, err)
+			return
 		}
 		params.Stats.Scope(stats.Operation("Source:Close")).TimedIncrement(time.Since(closeSourceAt))
 	}()
@@ -891,6 +892,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 			rerr = vterrors.Wrapf(rerr, "failed to close destination file (%v) %v", name, fe.Name)
 			params.Logger.Error(rerr)
 			finalErr = errors.Join(finalErr, rerr)
+			return
 		}
 		params.Stats.Scope(stats.Operation("Destination:Close")).TimedIncrement(time.Since(closeDestAt))
 	}(name, fe.Name)
@@ -936,12 +938,13 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 			closer := ioutil.NewTimeoutCloser(cancelableCtx, compressor, closeTimeout)
 			defer func() {
 				// Close gzip to flush it, after that all data is sent to writer.
-				closeCompressorAt := time.Now()
 				params.Logger.Infof("Closing compressor for file: %s %s", fe.Name, retryStr)
+				closeCompressorAt := time.Now()
 				if cerr := closeWithRetry(ctx, params.Logger, closer, "compressor"); cerr != nil {
 					cerr = vterrors.Wrapf(cerr, "failed to close compressor %v", fe.Name)
 					params.Logger.Error(cerr)
 					createAndCopyErr = errors.Join(createAndCopyErr, cerr)
+					return
 				}
 				params.Stats.Scope(stats.Operation("Compressor:Close")).TimedIncrement(time.Since(closeCompressorAt))
 			}()
@@ -1266,6 +1269,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 		closeSourceAt := time.Now()
 		if err := closeWithRetry(ctx, params.Logger, source, fe.Name); err != nil {
 			params.Logger.Errorf("Failed to close source file %s during restore: %v", name, err)
+			return
 		}
 		params.Stats.Scope(stats.Operation("Source:Close")).TimedIncrement(time.Since(closeSourceAt))
 	}()
@@ -1290,11 +1294,12 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	params.Stats.Scope(stats.Operation("Destination:Open")).TimedIncrement(time.Since(openDestAt))
 
 	defer func() {
+		closeDestAt := time.Now()
 		if cerr := closeWithRetry(ctx, params.Logger, dest, fe.Name); cerr != nil {
 			finalErr = errors.Join(finalErr, vterrors.Wrap(cerr, "failed to close destination file"))
 			params.Logger.Errorf("Failed to close destination file %s during restore: %v", dest.Name(), cerr)
+			return
 		}
-		closeDestAt := time.Now()
 		params.Stats.Scope(stats.Operation("Destination:Close")).TimedIncrement(time.Since(closeDestAt))
 	}()
 
@@ -1338,12 +1343,13 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 		reader = ioutil.NewMeteredReader(decompressor, decompressStats.TimedIncrementBytes)
 
 		defer func() {
-			closeDecompressorAt := time.Now()
 			params.Logger.Infof("closing decompressor")
+			closeDecompressorAt := time.Now()
 			if cerr := closeWithRetry(ctx, params.Logger, closer, "decompressor"); cerr != nil {
 				cerr = vterrors.Wrapf(cerr, "failed to close decompressor %v", name)
 				params.Logger.Error(cerr)
 				finalErr = errors.Join(finalErr, cerr)
+				return
 			}
 			params.Stats.Scope(stats.Operation("Decompressor:Close")).TimedIncrement(time.Since(closeDecompressorAt))
 		}()
