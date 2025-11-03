@@ -54,13 +54,22 @@ import (
 
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
 	builtinBackupEngineName = "builtin"
 	AutoIncrementalFromPos  = "auto"
 	dataDictionaryFile      = "mysql.ibd"
+<<<<<<< HEAD
+=======
+
+	// How many times we will retry file operations. Note that a file operation that
+	// returns a vtrpc.Code_FAILED_PRECONDITION error is considered fatal and we will
+	// not retry.
+	maxRetriesPerFile   = 1
+	maxFileCloseRetries = 20 // At this point we should consider it permanent
+>>>>>>> 1fe6c68094 (BuiltinBackupEngine: Retry file close and fail backup when we cannot (#18848))
 )
 
 var (
@@ -180,7 +189,7 @@ func (fe *FileEntry) fullPath(cnf *Mycnf) (string, error) {
 	case backupBinlogDir:
 		root = filepath.Dir(cnf.BinLogPath)
 	default:
-		return "", vterrors.Errorf(vtrpc.Code_UNKNOWN, "unknown base: %v", fe.Base)
+		return "", vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "unknown base: %v", fe.Base)
 	}
 
 	return path.Join(fe.ParentPath, root, fe.Name), nil
@@ -303,7 +312,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 		}
 		purgedGTIDSet, ok := gtidPurged.GTIDSet.(replication.Mysql56GTIDSet)
 		if !ok {
-			return gtidPurged, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "failed to parse a valid MySQL GTID set from value: %v", gtidPurged)
+			return gtidPurged, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to parse a valid MySQL GTID set from value: %v", gtidPurged)
 		}
 		return gtidPurged, purgedGTIDSet, nil
 	}
@@ -366,7 +375,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 		return BackupUnusable, vterrors.Wrapf(err, "reading timestamps from binlog files %v", binaryLogsToBackup)
 	}
 	if resp.FirstTimestampBinlog == "" || resp.LastTimestampBinlog == "" {
-		return BackupUnusable, vterrors.Errorf(vtrpc.Code_ABORTED, "empty binlog name in response. Request=%v, Response=%v", req, resp)
+		return BackupUnusable, vterrors.Errorf(vtrpcpb.Code_ABORTED, "empty binlog name in response. Request=%v, Response=%v", req, resp)
 	}
 	log.Infof("ReadBinlogFilesTimestampsResponse: %+v", resp)
 	incrDetails := &IncrementalBackupDetails{
@@ -604,6 +613,64 @@ func (be *BuiltinBackupEngine) backupFiles(
 	sema := semaphore.NewWeighted(int64(params.Concurrency))
 	wg := sync.WaitGroup{}
 
+<<<<<<< HEAD
+=======
+	// BackupHandle supports the BackupErrorRecorder interface for tracking errors
+	// across any goroutines that fan out to take the backup. This means that we
+	// don't need a local error recorder and can put everything through the bh.
+	//
+	// This handles the scenario where bh.AddFile() encounters an error asynchronously,
+	// which ordinarily would be lost in the context of `be.backupFile`, i.e. if an
+	// error were encountered
+	// [here](https://github.com/vitessio/vitess/blob/d26b6c7975b12a87364e471e2e2dfa4e253c2a5b/go/vt/mysqlctl/s3backupstorage/s3.go#L139-L142).
+	//
+	// All the errors are grouped per file, if one or more files failed, we back them up
+	// once more concurrently, if any of the retry fail, we fail-fast by canceling the context
+	// and return an error. There is no reason to continue processing the other retries, if
+	// one of them failed.
+	if files := bh.GetFailedFiles(); len(files) > 0 {
+		newFEs := make([]FileEntry, len(fes))
+		for _, file := range files {
+			fileNb, err := strconv.Atoi(file)
+			if err != nil {
+				return vterrors.Wrapf(err, "failed to retry file '%s'", file)
+			}
+			oldFes := fes[fileNb]
+			newFEs[fileNb] = FileEntry{
+				Base:       oldFes.Base,
+				Name:       oldFes.Name,
+				ParentPath: oldFes.ParentPath,
+				RetryCount: 1,
+			}
+			bh.ResetErrorForFile(file)
+		}
+		err = be.backupFileEntries(ctx, newFEs, bh, params)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Backup the MANIFEST file and apply retry logic.
+	var manifestErr error
+	for currentRetry := 0; currentRetry <= maxRetriesPerFile; currentRetry++ {
+		manifestErr = be.backupManifest(ctx, params, bh, backupPosition, purgedPosition, fromPosition, fromBackupName, serverUUID, mysqlVersion, incrDetails, fes, currentRetry)
+		if manifestErr == nil || vterrors.Code(manifestErr) == vtrpcpb.Code_FAILED_PRECONDITION {
+			break
+		}
+		bh.ResetErrorForFile(backupManifestFileName)
+	}
+	if manifestErr != nil {
+		return manifestErr
+	}
+	return nil
+}
+
+// backupFileEntries iterates over a slice of FileEntry, backing them up concurrently up to the defined concurrency limit.
+// This function will ignore empty FileEntry, allowing the retry mechanism to send a partially empty slice, to not
+// mess up the index of retriable FileEntry.
+// This function does not leave any background operation behind itself, all calls to bh.AddFile will be finished or canceled.
+func (be *BuiltinBackupEngine) backupFileEntries(ctx context.Context, fes []FileEntry, bh backupstorage.BackupHandle, params BackupParams) error {
+>>>>>>> 1fe6c68094 (BuiltinBackupEngine: Retry file close and fail backup when we cannot (#18848))
 	ctxCancel, cancel := context.WithCancel(ctx)
 	defer func() {
 		// We may still have operations in flight that require a valid context, such as adding files to S3.
@@ -645,16 +712,31 @@ func (be *BuiltinBackupEngine) backupFiles(
 			select {
 			case <-ctxCancel.Done():
 				log.Errorf("Context canceled or timed out during %q backup", fe.Name)
+<<<<<<< HEAD
 				bh.RecordError(vterrors.Errorf(vtrpc.Code_CANCELED, "context canceled"))
 				return
+=======
+				bh.RecordError(name, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context canceled"))
+				return nil
+>>>>>>> 1fe6c68094 (BuiltinBackupEngine: Retry file close and fail backup when we cannot (#18848))
 			default:
 			}
 
 			// Backup the individual file.
+<<<<<<< HEAD
 			name := fmt.Sprintf("%v", i)
 			if err := be.backupFile(ctxCancel, params, bh, fe, name); err != nil {
 				bh.RecordError(err)
 				cancel()
+=======
+			var errBackupFile error
+			if errBackupFile = be.backupFile(ctxCancel, params, bh, fe, name); errBackupFile != nil {
+				bh.RecordError(name, vterrors.Wrapf(errBackupFile, "failed to backup file '%s'", name))
+				if fe.RetryCount >= maxRetriesPerFile || vterrors.Code(errBackupFile) == vtrpcpb.Code_FAILED_PRECONDITION {
+					// this is the last attempt, and we have an error, we can cancel everything and fail fast.
+					cancel()
+				}
+>>>>>>> 1fe6c68094 (BuiltinBackupEngine: Retry file close and fail backup when we cannot (#18848))
 			}
 		}(i)
 	}
@@ -832,7 +914,10 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 
 	defer func() {
 		closeSourceAt := time.Now()
-		source.Close()
+		if err := closeWithRetry(ctx, params.Logger, source, fe.Name); err != nil {
+			params.Logger.Infof("Failed to close %s source file during backup: %v", fe.Name, err)
+			return
+		}
 		params.Stats.Scope(stats.Operation("Source:Close")).TimedIncrement(time.Since(closeSourceAt))
 	}()
 
@@ -858,10 +943,11 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 
 	defer func(name, fileName string) {
 		closeDestAt := time.Now()
-		if rerr := dest.Close(); rerr != nil {
-			rerr = vterrors.Wrapf(rerr, "failed to close file %v,%v", name, fe.Name)
+		if rerr := closeWithRetry(ctx, params.Logger, dest, fe.Name); rerr != nil {
+			rerr = vterrors.Wrapf(rerr, "failed to close destination file (%v) %v", name, fe.Name)
 			params.Logger.Error(rerr)
 			finalErr = errors.Join(finalErr, rerr)
+			return
 		}
 		params.Stats.Scope(stats.Operation("Destination:Close")).TimedIncrement(time.Since(closeDestAt))
 	}(name, fe.Name)
@@ -906,12 +992,20 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 			closer := ioutil.NewTimeoutCloser(ctx, compressor, closeTimeout)
 			defer func() {
 				// Close gzip to flush it, after that all data is sent to writer.
+<<<<<<< HEAD
 				closeCompressorAt := time.Now()
 				params.Logger.Infof("closing compressor")
 				if cerr := closer.Close(); err != nil {
 					cerr = vterrors.Wrapf(cerr, "failed to close compressor %v", name)
+=======
+				params.Logger.Infof("Closing compressor for file: %s %s", fe.Name, retryStr)
+				closeCompressorAt := time.Now()
+				if cerr := closeWithRetry(ctx, params.Logger, closer, "compressor"); cerr != nil {
+					cerr = vterrors.Wrapf(cerr, "failed to close compressor %v", fe.Name)
+>>>>>>> 1fe6c68094 (BuiltinBackupEngine: Retry file close and fail backup when we cannot (#18848))
 					params.Logger.Error(cerr)
 					createAndCopyErr = errors.Join(createAndCopyErr, cerr)
+					return
 				}
 				params.Stats.Scope(stats.Operation("Compressor:Close")).TimedIncrement(time.Since(closeCompressorAt))
 			}()
@@ -939,6 +1033,97 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	return nil
 }
 
+<<<<<<< HEAD
+=======
+func (be *BuiltinBackupEngine) backupManifest(
+	ctx context.Context,
+	params BackupParams,
+	bh backupstorage.BackupHandle,
+	backupPosition replication.Position,
+	purgedPosition replication.Position,
+	fromPosition replication.Position,
+	fromBackupName string,
+	serverUUID string,
+	mysqlVersion string,
+	incrDetails *IncrementalBackupDetails,
+	fes []FileEntry,
+	currentAttempt int,
+) (finalErr error) {
+	retryStr := retryToString(currentAttempt)
+	params.Logger.Infof("Backing up file %s %s", backupManifestFileName, retryStr)
+	defer func() {
+		state := "Completed"
+		if finalErr != nil {
+			state = "Failed"
+		}
+		params.Logger.Infof("%s backing up %s %s", state, backupManifestFileName, retryStr)
+	}()
+
+	// Creating this function allows us to ensure we always close the writer no matter what,
+	// and in case of success that we close it before calling bh.EndBackup.
+	addAndWrite := func() (addAndWriteError error) {
+		// open the MANIFEST
+		wc, err := bh.AddFile(ctx, backupManifestFileName, backupstorage.FileSizeUnknown)
+		if err != nil {
+			return vterrors.Wrapf(err, "cannot add %v to backup %s", backupManifestFileName, retryStr)
+		}
+		defer func() {
+			if err := closeWithRetry(ctx, params.Logger, wc, backupManifestFileName); err != nil {
+				addAndWriteError = errors.Join(addAndWriteError, vterrors.Wrapf(err, "cannot close backup: %v", backupManifestFileName))
+			}
+		}()
+
+		// JSON-encode and write the MANIFEST
+		bm := &builtinBackupManifest{
+			// Common base fields
+			BackupManifest: BackupManifest{
+				BackupName:         bh.Name(),
+				BackupMethod:       builtinBackupEngineName,
+				Position:           backupPosition,
+				PurgedPosition:     purgedPosition,
+				FromPosition:       fromPosition,
+				FromBackup:         fromBackupName,
+				Incremental:        !fromPosition.IsZero(),
+				ServerUUID:         serverUUID,
+				TabletAlias:        params.TabletAlias,
+				Keyspace:           params.Keyspace,
+				Shard:              params.Shard,
+				BackupTime:         params.BackupTime.UTC().Format(time.RFC3339),
+				FinishedTime:       time.Now().UTC().Format(time.RFC3339),
+				MySQLVersion:       mysqlVersion,
+				UpgradeSafe:        params.UpgradeSafe,
+				IncrementalDetails: incrDetails,
+			},
+
+			// Builtin-specific fields
+			FileEntries:          fes,
+			SkipCompress:         !backupStorageCompress,
+			CompressionEngine:    CompressionEngineName,
+			ExternalDecompressor: ManifestExternalDecompressorCmd,
+		}
+		data, err := json.MarshalIndent(bm, "", "  ")
+		if err != nil {
+			return vterrors.Wrapf(err, "cannot JSON encode %v %s", backupManifestFileName, retryStr)
+		}
+		if _, err := wc.Write(data); err != nil {
+			return vterrors.Wrapf(err, "cannot write %v %s", backupManifestFileName, retryStr)
+		}
+		return nil
+	}
+
+	err := addAndWrite()
+	if err != nil {
+		return err
+	}
+
+	err = bh.EndBackup(ctx)
+	if err != nil {
+		return err
+	}
+	return bh.Error()
+}
+
+>>>>>>> 1fe6c68094 (BuiltinBackupEngine: Retry file close and fail backup when we cannot (#18848))
 // executeRestoreFullBackup restores the files from a full backup. The underlying mysql database service is expected to be stopped.
 func (be *BuiltinBackupEngine) executeRestoreFullBackup(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, bm builtinBackupManifest) error {
 	if err := prepareToRestore(ctx, params.Cnf, params.Mysqld, params.Logger, params.MysqlShutdownTimeout); err != nil {
@@ -964,7 +1149,7 @@ func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Conte
 	defer os.RemoveAll(createdDir)
 	mysqld, ok := params.Mysqld.(*Mysqld)
 	if !ok {
-		return vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "expected: Mysqld")
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "expected: Mysqld")
 	}
 	for _, fe := range bm.FileEntries {
 		fe.ParentPath = createdDir
@@ -1021,6 +1206,29 @@ func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params Restor
 	return &bm.BackupManifest, nil
 }
 
+<<<<<<< HEAD
+=======
+func (be *BuiltinBackupEngine) restoreManifest(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (bm builtinBackupManifest, finalErr error) {
+	var retryCount int
+	defer func() {
+		state := "Completed"
+		if finalErr != nil {
+			state = "Failed"
+		}
+		params.Logger.Infof("%s restoring %s %s", state, backupManifestFileName, retryToString(retryCount))
+	}()
+
+	for ; retryCount <= maxRetriesPerFile; retryCount++ {
+		params.Logger.Infof("Restoring file %s %s", backupManifestFileName, retryToString(retryCount))
+		if finalErr = getBackupManifestInto(ctx, bh, &bm); finalErr == nil || vterrors.Code(finalErr) == vtrpcpb.Code_FAILED_PRECONDITION {
+			break
+		}
+		params.Logger.Infof("Failed restoring %s %s", backupManifestFileName, retryToString(retryCount))
+	}
+	return
+}
+
+>>>>>>> 1fe6c68094 (BuiltinBackupEngine: Retry file close and fail backup when we cannot (#18848))
 // restoreFiles will copy all the files from the BackupStorage to the
 // right place.
 func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, bm builtinBackupManifest) (createdDir string, err error) {
@@ -1086,19 +1294,35 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 			select {
 			case <-ctxCancel.Done():
 				log.Errorf("Context canceled or timed out during %q restore", fe.Name)
+<<<<<<< HEAD
 				rec.RecordError(vterrors.Errorf(vtrpc.Code_CANCELED, "context canceled"))
 				return
+=======
+				bh.RecordError(name, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context canceled"))
+				return nil
+>>>>>>> 1fe6c68094 (BuiltinBackupEngine: Retry file close and fail backup when we cannot (#18848))
 			default:
 			}
 
 			fe.ParentPath = createdDir
 			// And restore the file.
+<<<<<<< HEAD
 			name := fmt.Sprintf("%v", i)
 			params.Logger.Infof("Copying file %v: %v", name, fe.Name)
 			err := be.restoreFile(ctxCancel, params, bh, fe, bm, name)
 			if err != nil {
 				rec.RecordError(vterrors.Wrapf(err, "can't restore file %v to %v", name, fe.Name))
 				cancel()
+=======
+			params.Logger.Infof("Copying file %v: %v %s", name, fe.Name, retryToString(fe.RetryCount))
+			if errRestore := be.restoreFile(ctx, params, bh, fe, bm, name); errRestore != nil {
+				bh.RecordError(name, vterrors.Wrapf(errRestore, "failed to restore file %v to %v", name, fe.Name))
+				if fe.RetryCount >= maxRetriesPerFile || vterrors.Code(errRestore) == vtrpcpb.Code_FAILED_PRECONDITION {
+					// this is the last attempt, and we have an error, we can return an error, which will let errgroup
+					// know it can cancel the context
+					return errRestore
+				}
+>>>>>>> 1fe6c68094 (BuiltinBackupEngine: Retry file close and fail backup when we cannot (#18848))
 			}
 		}(i)
 	}
@@ -1123,7 +1347,10 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 
 	defer func() {
 		closeSourceAt := time.Now()
-		source.Close()
+		if err := closeWithRetry(ctx, params.Logger, source, fe.Name); err != nil {
+			params.Logger.Errorf("Failed to close source file %s during restore: %v", name, err)
+			return
+		}
 		params.Stats.Scope(stats.Operation("Source:Close")).TimedIncrement(time.Since(closeSourceAt))
 	}()
 
@@ -1141,8 +1368,10 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 
 	defer func() {
 		closeDestAt := time.Now()
-		if cerr := dest.Close(); cerr != nil {
+		if cerr := closeWithRetry(ctx, params.Logger, dest, fe.Name); cerr != nil {
 			finalErr = errors.Join(finalErr, vterrors.Wrap(cerr, "failed to close destination file"))
+			params.Logger.Errorf("Failed to close destination file %s during restore: %v", dest.Name(), cerr)
+			return
 		}
 		params.Stats.Scope(stats.Operation("Destination:Close")).TimedIncrement(time.Since(closeDestAt))
 	}()
@@ -1187,12 +1416,13 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 		reader = ioutil.NewMeteredReader(decompressor, decompressStats.TimedIncrementBytes)
 
 		defer func() {
-			closeDecompressorAt := time.Now()
 			params.Logger.Infof("closing decompressor")
-			if cerr := closer.Close(); err != nil {
+			closeDecompressorAt := time.Now()
+			if cerr := closeWithRetry(ctx, params.Logger, closer, "decompressor"); cerr != nil {
 				cerr = vterrors.Wrapf(cerr, "failed to close decompressor %v", name)
 				params.Logger.Error(cerr)
 				finalErr = errors.Join(finalErr, cerr)
+				return
 			}
 			params.Stats.Scope(stats.Operation("Decompressor:Close")).TimedIncrement(time.Since(closeDecompressorAt))
 		}()
@@ -1206,7 +1436,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	// Check the hash.
 	hash := br.HashString()
 	if hash != fe.Hash {
-		return vterrors.Errorf(vtrpc.Code_INTERNAL, "hash mismatch for %v, got %v expected %v", fe.Name, hash, fe.Hash)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "hash mismatch for %v, got %v expected %v", fe.Name, hash, fe.Hash)
 	}
 
 	// Flush the buffer.
@@ -1263,4 +1493,50 @@ func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, t
 
 func init() {
 	BackupRestoreEngineMap[builtinBackupEngineName] = &BuiltinBackupEngine{}
+}
+
+// closeWithRetry does just what it says. Retrying a close operation is important as
+// an error is most likely transient/ephemeral and leaving around open file descriptors
+// can lead to later problems as the file may be in a sort-of uploaded state where it
+// exists but has not yet been finalized (this is true for GCS). This can cause
+// unexpected behavior if you retry the file while the original request is still in this
+// state. Most implementations such as GCS will automatically retry operations, but close
+// is one that may be left to the caller (this is true for GCS).
+// We model this retry after the GCS retry implementation described here:
+// https://cloud.google.com/storage/docs/retry-strategy#go
+func closeWithRetry(ctx context.Context, logger logutil.Logger, file io.Closer, name string) error {
+	backoff := 1 * time.Second
+	backoffLimit := backoff * 30
+	var err error
+	retries := 0
+	fileType := "source"
+	if _, ok := file.(io.Writer); ok {
+		fileType = "destination"
+	}
+	for {
+		if err = file.Close(); err == nil {
+			return nil
+		}
+		if retries == maxFileCloseRetries {
+			// Let's give up as this does not appear to be transient. We cannot know
+			// the full list of all transient/ephemeral errors across all backup engine
+			// providers so we consider it permanent at this point. We return a
+			// FAILED_PRECONDITION code which tells the upper layers not to retry as we
+			// now cannot be sure that this backup would be usable when it finishes.
+			logger.Errorf("Failed to close %s file %s after %d attempts, giving up: %v", fileType, name, maxFileCloseRetries, err)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to close the %s file after %d attempts, giving up", fileType, maxFileCloseRetries)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(backoff):
+			// Exponential backoff with 2 as a factor.
+			if backoff != backoffLimit {
+				updatedBackoff := time.Duration(float64(backoff) * 2)
+				backoff = min(updatedBackoff, backoffLimit)
+			}
+		}
+		retries++
+		logger.Errorf("Failed to close %s file %s, will perform retry %d of %d in %v: %v", fileType, name, retries, maxFileCloseRetries, backoff, err)
+	}
 }
