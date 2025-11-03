@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 	"runtime/pprof"
 	"strings"
 	"sync"
@@ -2285,4 +2286,113 @@ func addTabletToSandboxTopo(tb testing.TB, ctx context.Context, st *sandboxTopo,
 	require.NoError(tb, err)
 	err = st.topoServer.CreateTablet(ctx, tablet)
 	require.NoError(tb, err)
+}
+
+func TestVStreamLargeTransactionMemory(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cell := "aa"
+	ks := "TestVStream"
+	_ = createSandbox(ks)
+	hc := discovery.NewFakeHealthCheck(nil)
+	st := getSandboxTopo(ctx, cell, ks, []string{"-20"})
+	vsm := newTestVStreamManager(ctx, hc, st, cell)
+	sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
+
+	// Simulate a large transaction by creating many chunks
+	const chunkSize = 1024 * 1024 // 1MB per chunk
+	const numChunks = 50          // 50 chunks = ~50MB total
+	const rowsPerChunk = 10
+
+	// Create large ROW events
+	largeData := make([]byte, chunkSize/rowsPerChunk)
+	for i := range largeData {
+		largeData[i] = byte(i % 256)
+	}
+
+	// Add BEGIN
+	sbc0.AddVStreamEvents([]*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_BEGIN}}, nil)
+
+	// Add many chunks of ROW events (simulating tablet chunking the transaction)
+	for chunk := 0; chunk < numChunks; chunk++ {
+		events := make([]*binlogdatapb.VEvent, rowsPerChunk)
+		for i := 0; i < rowsPerChunk; i++ {
+			events[i] = &binlogdatapb.VEvent{
+				Type: binlogdatapb.VEventType_ROW,
+				RowEvent: &binlogdatapb.RowEvent{
+					TableName: "large_table",
+					RowChanges: []*binlogdatapb.RowChange{{
+						After: &querypb.Row{
+							Lengths: []int64{int64(len(largeData))},
+							Values:  largeData,
+						},
+					}},
+				},
+			}
+		}
+		sbc0.AddVStreamEvents(events, nil)
+	}
+
+	// Add COMMIT
+	sbc0.AddVStreamEvents([]*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_COMMIT}}, nil)
+
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: ks,
+			Shard:    "-20",
+			Gtid:     "pos",
+		}},
+	}
+
+	vstreamCtx, vstreamCancel := context.WithCancel(ctx)
+	defer vstreamCancel()
+
+	var receivedRows, receivedCommits int
+	var maxMemUsedMB uint64
+
+	// Track memory usage
+	var memStats runtime.MemStats
+
+	err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
+		// Check memory after each batch
+		runtime.ReadMemStats(&memStats)
+		usedMB := memStats.Alloc / 1024 / 1024
+		if usedMB > maxMemUsedMB {
+			maxMemUsedMB = usedMB
+		}
+
+		for _, event := range events {
+			switch event.Type {
+			case binlogdatapb.VEventType_ROW:
+				receivedRows++
+			case binlogdatapb.VEventType_COMMIT:
+				receivedCommits++
+				// Cancel after receiving commit
+				vstreamCancel()
+			}
+		}
+
+		return nil
+	})
+
+	require.Error(t, err)
+	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
+
+	// Verify we got all events
+	expectedRows := numChunks * rowsPerChunk
+	require.Equal(t, expectedRows, receivedRows, "Should receive all ROW events")
+	require.Equal(t, 1, receivedCommits, "Should receive one COMMIT")
+
+	// Verify memory usage stayed reasonable, specifically that we did not accumulate all chunks
+	// in memory until COMMIT. Instead we should send chunks as they are received.
+	t.Logf("Max memory used: %d MB", maxMemUsedMB)
+
+	// Assert that we stayed under our expected max memory usage.
+	maxExpectedMemUsedMB := uint64(25)
+	require.Less(t, maxMemUsedMB, maxExpectedMemUsedMB,
+		"Memory usage should stay low due to immediate transaction chunk sending. "+
+			"VTGate should not accumulate all %d chunks (~%dMB) before sending.",
+		numChunks, numChunks)
 }
