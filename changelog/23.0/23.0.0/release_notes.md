@@ -11,7 +11,7 @@
     - **[New Support](#new-support)**
         - [Multi-Query Execution](#multi-query-execution)
         - [Transaction Timeout Session Variable](#transaction-timeout-session-variable)
-        - [Query Throttler](#query-throttler)
+        - [Experimental: Query Throttler](#query-throttler)
         - [Multiple Lookup Vindexes Support](#multiple-lookup-vindexes-support)
         - [Reference Tables in Materialize Workflows](#reference-tables-in-materialize-workflows)
         - [Online DDL Shard-Specific Completion](#online-ddl-shard-specific-completion)
@@ -223,9 +223,11 @@ This provides more granular timeout control compared to global server settings, 
 - Interactive sessions that should fail fast
 - Different timeout requirements per application workload
 
-#### <a id="query-throttler"/>Query Throttler</a>
+#### <a id="query-throttler"/>Experimental: Query Throttler</a>
 
-Vitess v23.0.0 introduces a new Query Throttler framework for rate-limiting incoming queries ([PR #18449](https://github.com/vitessio/vitess/pull/18449), [PR #18657](https://github.com/vitessio/vitess/pull/18657)).
+Vitess v23.0.0 introduces a new, experimental Query Throttler framework for rate-limiting incoming queries ([PR #18449](https://github.com/vitessio/vitess/pull/18449), [PR #18657](https://github.com/vitessio/vitess/pull/18657)). Work on this new throttler is ongoing with the potential for breaking changes in the future.
+
+Feedback on this experimental feature is appreciated in GitHub issues or the `#feat-handling-overload` channel of the [Vitess Community Slack](https://vitess.io/slack).
 
 **Features**:
 - File-based configuration for throttling rules
@@ -447,6 +449,7 @@ See [Breaking Changes](#deleted-metrics-breaking) for migration guidance.
 | `--allow-recovery` | vtorc | Boolean flag to disable all VTOrc recovery operations from startup. When false, VTOrc runs in monitoring-only mode. Default: true. | [#18005](https://github.com/vitessio/vitess/pull/18005) |
 
 **Use Case**: The `--allow-recovery=false` flag is useful for:
+- Testing VTOrc capacity/discovery performance ahead of a rollout, for example: migrating to VTOrc from another solution.
 - Maintenance windows where automatic failovers should be prevented
 - Debugging VTOrc behavior without triggering recoveries
 - Running VTOrc in observation-only mode
