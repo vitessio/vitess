@@ -95,6 +95,12 @@ func (m *mockCloser) isClosed() bool {
 	return m.closed
 }
 
+// mockReadOnlyCloser combines mockCloser with Read-Only capabilities for testing.
+type mockReadOnlyCloser struct {
+	*mockCloser
+	io.Reader
+}
+
 // mockReadWriteCloser combines mockCloser with Read/Write capabilities for testing.
 type mockReadWriteCloser struct {
 	*mockCloser
@@ -102,14 +108,14 @@ type mockReadWriteCloser struct {
 	io.Writer
 }
 
-func newMockReadCloser(failCount int, err error) *mockReadWriteCloser {
-	return &mockReadWriteCloser{
+func newMockReadOnlyCloser(failCount int, err error) *mockReadOnlyCloser {
+	return &mockReadOnlyCloser{
 		mockCloser: newMockCloser(failCount, err),
 		Reader:     bytes.NewReader([]byte("test data")),
 	}
 }
 
-func newMockWriteCloser(failCount int, err error) *mockReadWriteCloser {
+func newMockReadWriteCloser(failCount int, err error) *mockReadWriteCloser {
 	return &mockReadWriteCloser{
 		mockCloser: newMockCloser(failCount, err),
 		Writer:     &bytes.Buffer{},
@@ -289,7 +295,7 @@ func TestCloseWithRetryContextCancellation(t *testing.T) {
 	assert.Less(t, closer.getCloseCalled(), maxFileCloseRetries+1)
 }
 
-// TestBackupFileSourceCloseError tests error handling when source file close fails during backup.
+// TestBackupFileSourceCloseError tests error handling when a source file close fails during backup.
 func TestBackupFileSourceCloseError(t *testing.T) {
 	ctx := context.Background()
 	logger := logutil.NewMemoryLogger()
@@ -304,10 +310,10 @@ func TestBackupFileSourceCloseError(t *testing.T) {
 		DataDir: tmpDir,
 	}
 	be := &BuiltinBackupEngine{}
-	// Create a mock backup handle with a destination that closes successfully.
-	destCloser := newMockWriteCloser(0, nil)
+	// Create a mock backup handle with a source file that fails to close multiple times.
+	sourceCloser := newMockReadWriteCloser(2, errors.New("failed to close source file"))
 	bh := newMockBackupHandle()
-	bh.addFileReturn = destCloser
+	bh.addFileReturn = sourceCloser
 	params := BackupParams{
 		Cnf:         cnf,
 		Logger:      logger,
@@ -322,13 +328,13 @@ func TestBackupFileSourceCloseError(t *testing.T) {
 	// backupFile should handle the error gracefully.
 	err = be.backupFile(ctx, params, bh, fe, "0")
 
-	// The backup should succeed even if we can't perfectly verify the close behavior
-	// because we can't easily inject a failing close into the real file system
-	// This test mainly verifies the code path exists.
+	// Should succeed after retries.
 	assert.NoError(t, err)
+	assert.Equal(t, 3, sourceCloser.getCloseCalled()) // 2 failures + 1 success
+	assert.True(t, sourceCloser.isClosed())
 }
 
-// TestBackupFileDestinationCloseError tests error handling when destination file close fails during backup.
+// TestBackupFileDestinationCloseError tests error handling when a destination file close fails during backup.
 func TestBackupFileDestinationCloseError(t *testing.T) {
 	ctx := context.Background()
 	logger := logutil.NewMemoryLogger()
@@ -345,7 +351,7 @@ func TestBackupFileDestinationCloseError(t *testing.T) {
 	}
 	be := &BuiltinBackupEngine{}
 	// Create a mock backup handle with a destination that fails to close multiple times.
-	destCloser := newMockWriteCloser(3, errors.New("failed to close destination"))
+	destCloser := newMockReadWriteCloser(3, errors.New("failed to close destination file"))
 	bh := newMockBackupHandle()
 	bh.addFileReturn = destCloser
 	params := BackupParams{
@@ -377,19 +383,19 @@ func TestBackupFileDestinationCloseMaxRetries(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 	// Create a temporary directory for test files.
 	tmpDir := t.TempDir()
-	// Create test source file
-	sourceFile := path.Join(tmpDir, "source.txt")
+	// Create test destination file.
+	destFile := path.Join(tmpDir, "destination.txt")
 	content := []byte("test content for max retries")
-	err := os.WriteFile(sourceFile, content, 0644)
+	err := os.WriteFile(destFile, content, 0644)
 	require.NoError(t, err)
 	// Create Mycnf pointing to our temp directory.
 	cnf := &Mycnf{
 		DataDir: tmpDir,
 	}
 	be := &BuiltinBackupEngine{}
-	// Create a mock backup handle with a destination that always fails to close.
+	// Create a mock backup handle with a destination file that always fails to close.
 	destCloser := &mockReadWriteCloser{
-		mockCloser: newAlwaysFailingCloser(errors.New("permanent close failure")),
+		mockCloser: newAlwaysFailingCloser(errors.New("permanent file close failure")),
 		Writer:     &bytes.Buffer{},
 	}
 	bh := newMockBackupHandle()
@@ -402,14 +408,14 @@ func TestBackupFileDestinationCloseMaxRetries(t *testing.T) {
 	}
 	fe := &FileEntry{
 		Base: backupData,
-		Name: "source.txt",
+		Name: "destination.txt",
 	}
 
 	err = be.backupFile(ctx, params, bh, fe, "0")
 
 	// Should fail due to close error (context deadline exceeded).
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to close")
+	assert.Contains(t, err.Error(), "failed to close destination file")
 	// Should have attempted multiple times before timeout.
 	assert.Greater(t, destCloser.getCloseCalled(), 1)
 	assert.False(t, destCloser.isClosed())
@@ -470,7 +476,7 @@ func TestBackupManifestCloseError(t *testing.T) {
 					Writer:     &bytes.Buffer{},
 				}
 			} else {
-				wc = newMockWriteCloser(tc.failCount, errors.New("transient write error"))
+				wc = newMockReadWriteCloser(tc.failCount, errors.New("transient write error"))
 			}
 			bh := newMockBackupHandle()
 			bh.addFileReturn = wc
@@ -499,14 +505,14 @@ func TestBackupManifestCloseError(t *testing.T) {
 	}
 }
 
-// TestRestoreFileSourceCloseError tests error handling when source file close fails during restore.
+// TestRestoreFileSourceCloseError tests error handling when a source file close fails during restore.
 func TestRestoreFileSourceCloseError(t *testing.T) {
 	ctx := context.Background()
 	logger := logutil.NewMemoryLogger()
 	tmpDir := t.TempDir()
 	be := &BuiltinBackupEngine{}
-	// Create a mock backup handle with a source that fails to close.
-	sourceCloser := newMockReadCloser(2, errors.New("failed to close source"))
+	// Create a mock backup handle with a file source that fails to close.
+	sourceCloser := newMockReadOnlyCloser(2, errors.New("failed to close source file"))
 	bh := newMockBackupHandle()
 	bh.readFileReturn = sourceCloser
 	cnf := &Mycnf{
@@ -534,8 +540,8 @@ func TestRestoreFileSourceCloseError(t *testing.T) {
 	assert.GreaterOrEqual(t, sourceCloser.getCloseCalled(), 1)
 }
 
-// TestRestoreFileDestinationCloseError tests error handling when destination file close fails during restore.
-func TestRestoreFileDestinationCloseError(t *testing.T) {
+// TestRestoreFileDestinationClose tests the happy path when closing a destination file during restore.
+func TestRestoreFileDestinationClose(t *testing.T) {
 	ctx := context.Background()
 	logger := logutil.NewMemoryLogger()
 	tmpDir := t.TempDir()
@@ -590,8 +596,8 @@ func TestRestoreFileWithCloseRetriesIntegration(t *testing.T) {
 	be := &BuiltinBackupEngine{}
 	content := []byte("integration test content for restore")
 	// Create a source that will fail to close a few times.
-	sourceCloser := &mockReadWriteCloser{
-		mockCloser: newMockCloser(1, errors.New("transient close error")),
+	sourceCloser := &mockReadOnlyCloser{
+		mockCloser: newMockCloser(1, errors.New("transient file close error")),
 		Reader:     bytes.NewReader(content),
 	}
 	bh := newMockBackupHandle()
