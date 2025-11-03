@@ -29,6 +29,7 @@ import (
 
 	"vitess.io/vitess/go/ioutil"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -406,7 +407,7 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 
 		require.Equal(t, mysqlShellBackupEngineName, manifest.BackupMethod)
 
-		if hostname, err := os.Hostname(); err == nil {
+		if hostname, err := netutil.FullyQualifiedHostname(); err == nil {
 			require.Equal(t, hostname, manifest.Hostname)
 		}
 

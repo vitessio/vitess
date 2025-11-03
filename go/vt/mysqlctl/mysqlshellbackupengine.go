@@ -35,6 +35,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -205,7 +206,7 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 	defer closeFile(mwc, backupManifestFileName, params.Logger, &finalErr)
 
 	// Get the hostname
-	hostname, err := os.Hostname()
+	hostname, err := netutil.FullyQualifiedHostname()
 	if err != nil {
 		hostname = ""
 	}

@@ -34,6 +34,7 @@ import (
 
 	"vitess.io/vitess/go/ioutil"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -246,7 +247,7 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 	defer closeFile(mwc, backupManifestFileName, params.Logger, &finalErr)
 
 	// Get the hostname
-	hostname, err := os.Hostname()
+	hostname, err := netutil.FullyQualifiedHostname()
 	if err != nil {
 		hostname = ""
 	}
