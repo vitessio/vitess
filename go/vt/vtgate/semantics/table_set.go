@@ -18,6 +18,7 @@ package semantics
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/vt/vtgate/semantics/bitset"
@@ -48,7 +49,7 @@ func (ts TableSet) DebugString() string {
 	f.WriteString("TableSet{")
 	bitset.Bitset(ts).ForEach(func(tid int) {
 		if first {
-			f.WriteString(fmt.Sprintf("%d", tid))
+			f.WriteString(strconv.Itoa(tid))
 			first = false
 		} else {
 			f.WriteString(fmt.Sprintf(",%d", tid))

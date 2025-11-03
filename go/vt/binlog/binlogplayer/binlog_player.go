@@ -26,6 +26,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -111,8 +112,7 @@ type Stats struct {
 	ErrorCounts        *stats.CountersWithMultiLabels
 	NoopQueryCount     *stats.CountersWithSingleLabel
 
-	VReplicationLags     *stats.Timings
-	VReplicationLagRates *stats.Rates
+	VReplicationLagGauges *stats.Gauges
 
 	TableCopyRowCounts *stats.CountersWithSingleLabel
 	TableCopyTimings   *stats.Timings
@@ -167,9 +167,12 @@ func (bps *Stats) MessageHistory() []string {
 	return strs
 }
 
+// Stop stops the stats. They should only be stopped if they will never be
+// re-used as the timeseries stats (Rates and Gauges) will be cleared and
+// cannot be restarted.
 func (bps *Stats) Stop() {
 	bps.Rates.Stop()
-	bps.VReplicationLagRates.Stop()
+	bps.VReplicationLagGauges.Stop()
 }
 
 // NewStats creates a new Stats structure.
@@ -188,8 +191,7 @@ func NewStats() *Stats {
 	bps.CopyLoopCount = stats.NewCounter("", "")
 	bps.ErrorCounts = stats.NewCountersWithMultiLabels("", "", []string{"type"})
 	bps.NoopQueryCount = stats.NewCountersWithSingleLabel("", "", "Statement")
-	bps.VReplicationLags = stats.NewTimings("", "", "")
-	bps.VReplicationLagRates = stats.NewRates("", bps.VReplicationLags, 15*60/5, 5*time.Second)
+	bps.VReplicationLagGauges = stats.NewGauges(15*60/5, 5*time.Second)
 	bps.TableCopyRowCounts = stats.NewCountersWithSingleLabel("", "", "Table")
 	bps.TableCopyTimings = stats.NewTimings("", "", "Table")
 	bps.PartialQueryCacheSize = stats.NewCountersWithMultiLabels("", "", []string{"type"})
@@ -678,7 +680,7 @@ func GenerateUpdateRowsCopied(uid int32, rowsCopied int64) string {
 // GenerateUpdateHeartbeat returns a statement to record the latest heartbeat in the _vt.vreplication table.
 func GenerateUpdateHeartbeat(uid int32, timeUpdated int64) (string, error) {
 	if timeUpdated == 0 {
-		return "", fmt.Errorf("timeUpdated cannot be zero")
+		return "", errors.New("timeUpdated cannot be zero")
 	}
 	return fmt.Sprintf("update _vt.vreplication set time_updated=%v, time_heartbeat=%v where id=%v", timeUpdated, timeUpdated, uid), nil
 }
@@ -686,7 +688,7 @@ func GenerateUpdateHeartbeat(uid int32, timeUpdated int64) (string, error) {
 // GenerateUpdateTimeThrottled returns a statement to record the latest throttle time in the _vt.vreplication table.
 func GenerateUpdateTimeThrottled(uid int32, timeThrottledUnix int64, componentThrottled string, reasonThrottled string) (string, error) {
 	if timeThrottledUnix == 0 {
-		return "", fmt.Errorf("timeUpdated cannot be zero")
+		return "", errors.New("timeUpdated cannot be zero")
 	}
 	return fmt.Sprintf("update _vt.vreplication set time_updated=%v, time_throttled=%v, component_throttled='%v', reason_throttled=%v where id=%v", timeThrottledUnix, timeThrottledUnix, componentThrottled, encodeString(MessageTruncate(reasonThrottled)), uid), nil
 }

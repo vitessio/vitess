@@ -18,7 +18,7 @@ package vtctl
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"strings"
 
 	"github.com/spf13/pflag"
@@ -79,7 +79,7 @@ func commandAddCellInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("the <cell> argument is required for the AddCellInfo command")
+		return errors.New("the <cell> argument is required for the AddCellInfo command")
 	}
 	cell := subFlags.Arg(0)
 
@@ -100,7 +100,7 @@ func commandUpdateCellInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("the <cell> argument is required for the UpdateCellInfo command")
+		return errors.New("the <cell> argument is required for the UpdateCellInfo command")
 	}
 	cell := subFlags.Arg(0)
 
@@ -120,7 +120,7 @@ func commandDeleteCellInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("the <cell> argument is required for the DeleteCellInfo command")
+		return errors.New("the <cell> argument is required for the DeleteCellInfo command")
 	}
 	cell := subFlags.Arg(0)
 
@@ -136,7 +136,7 @@ func commandGetCellInfoNames(ctx context.Context, wr *wrangler.Wrangler, subFlag
 		return err
 	}
 	if subFlags.NArg() != 0 {
-		return fmt.Errorf("GetCellInfoNames command takes no parameter")
+		return errors.New("GetCellInfoNames command takes no parameter")
 	}
 	names, err := wr.TopoServer().GetCellInfoNames(ctx)
 	if err != nil {
@@ -151,7 +151,7 @@ func commandGetCellInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("the <cell> argument is required for the GetCellInfo command")
+		return errors.New("the <cell> argument is required for the GetCellInfo command")
 	}
 
 	// We use a strong read, because users using this command want the

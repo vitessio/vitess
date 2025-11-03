@@ -9039,7 +9039,7 @@ func TestPlannedReparentShard(t *testing.T) {
 					Error    error
 				}{
 					"zone1-0000000200": {
-						Error: fmt.Errorf("global status vars failed"),
+						Error: errors.New("global status vars failed"),
 					},
 					"zone1-0000000101": {
 						Statuses: map[string]string{
@@ -10379,7 +10379,6 @@ func TestRemoveShardCell(t *testing.T) {
 				require.NoError(t, lerr, "cannot lock keyspace %s to initialize serving graph", shard.Keyspace)
 
 				for _, cell := range servingCells {
-
 					err := ts.UpdateSrvKeyspace(lctx, cell, shard.Keyspace, &topodatapb.SrvKeyspace{
 						Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
 							{

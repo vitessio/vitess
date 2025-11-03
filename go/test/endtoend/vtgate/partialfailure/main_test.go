@@ -63,7 +63,6 @@ func TestMain(m *testing.M) {
 			VSchema:   VSchema,
 		}
 		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-c0", "c0-"}, 0, false); err != nil {
-
 			return 1
 		}
 

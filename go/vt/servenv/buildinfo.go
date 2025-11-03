@@ -28,13 +28,14 @@ import (
 )
 
 var (
-	buildHost             = ""
-	buildUser             = ""
-	buildTime             = ""
-	buildGitRev           = ""
-	buildGitBranch        = ""
-	statsBuildVersion     *stats.String
-	jenkinsBuildNumberStr = ""
+	buildHost         = ""
+	buildUser         = ""
+	buildTime         = ""
+	buildGitRev       = ""
+	buildGitBranch    = ""
+	statsBuildVersion *stats.String
+	buildNumberStr    = ""
+	buildSystem       = ""
 
 	// version registers the command line flag to expose build info.
 	version bool
@@ -48,17 +49,18 @@ func registerVersionFlag(fs *pflag.FlagSet) {
 var AppVersion versionInfo
 
 type versionInfo struct {
-	buildHost          string
-	buildUser          string
-	buildTime          int64
-	buildTimePretty    string
-	buildGitRev        string
-	buildGitBranch     string
-	jenkinsBuildNumber int64
-	goVersion          string
-	goOS               string
-	goArch             string
-	version            string
+	buildHost       string
+	buildUser       string
+	buildTime       int64
+	buildTimePretty string
+	buildGitRev     string
+	buildGitBranch  string
+	buildNumber     int64
+	buildSystem     string
+	goVersion       string
+	goOS            string
+	goArch          string
+	version         string
 }
 
 // ToStringMap returns the version info as a map[string]string, allowing version
@@ -83,12 +85,16 @@ func (v *versionInfo) Print() {
 }
 
 func (v *versionInfo) String() string {
-	jenkins := ""
-	if v.jenkinsBuildNumber != 0 {
-		jenkins = fmt.Sprintf(" (Jenkins build %d)", v.jenkinsBuildNumber)
+	buildInfo := ""
+	if v.buildNumber != 0 {
+		if v.buildSystem != "" {
+			buildInfo = fmt.Sprintf(" (%s build %d)", v.buildSystem, v.buildNumber)
+		} else {
+			buildInfo = fmt.Sprintf(" (build %d)", v.buildNumber)
+		}
 	}
 	return fmt.Sprintf("Version: %s%s (Git revision %s branch '%s') built on %s by %s@%s using %s %s/%s",
-		v.version, jenkins, v.buildGitRev, v.buildGitBranch, v.buildTimePretty, v.buildUser, v.buildHost, v.goVersion, v.goOS, v.goArch)
+		v.version, buildInfo, v.buildGitRev, v.buildGitBranch, v.buildTimePretty, v.buildUser, v.buildHost, v.goVersion, v.goOS, v.goArch)
 }
 
 func (v *versionInfo) MySQLVersion() string {
@@ -101,23 +107,24 @@ func init() {
 		panic(fmt.Sprintf("Couldn't parse build timestamp %q: %v", buildTime, err))
 	}
 
-	jenkinsBuildNumber, err := strconv.ParseInt(jenkinsBuildNumberStr, 10, 64)
+	buildNumber, err := strconv.ParseInt(buildNumberStr, 10, 64)
 	if err != nil {
-		jenkinsBuildNumber = 0
+		buildNumber = 0
 	}
 
 	AppVersion = versionInfo{
-		buildHost:          buildHost,
-		buildUser:          buildUser,
-		buildTime:          t.Unix(),
-		buildTimePretty:    buildTime,
-		buildGitRev:        buildGitRev,
-		buildGitBranch:     buildGitBranch,
-		jenkinsBuildNumber: jenkinsBuildNumber,
-		goVersion:          runtime.Version(),
-		goOS:               runtime.GOOS,
-		goArch:             runtime.GOARCH,
-		version:            versionName,
+		buildHost:       buildHost,
+		buildUser:       buildUser,
+		buildTime:       t.Unix(),
+		buildTimePretty: buildTime,
+		buildGitRev:     buildGitRev,
+		buildGitBranch:  buildGitBranch,
+		buildNumber:     buildNumber,
+		buildSystem:     buildSystem,
+		goVersion:       runtime.Version(),
+		goOS:            runtime.GOOS,
+		goArch:          runtime.GOARCH,
+		version:         versionName,
 	}
 	stats.NewString("BuildHost").Set(AppVersion.buildHost)
 	stats.NewString("BuildUser").Set(AppVersion.buildUser)
@@ -126,7 +133,7 @@ func init() {
 	statsBuildVersion.Set(AppVersion.version)
 	stats.NewString("BuildGitRev").Set(AppVersion.buildGitRev)
 	stats.NewString("BuildGitBranch").Set(AppVersion.buildGitBranch)
-	stats.NewGauge("BuildNumber", "build number").Set(AppVersion.jenkinsBuildNumber)
+	stats.NewGauge("BuildNumber", "build number").Set(AppVersion.buildNumber)
 	stats.NewString("GoVersion").Set(AppVersion.goVersion)
 	stats.NewString("GoOS").Set(AppVersion.goOS)
 	stats.NewString("GoArch").Set(AppVersion.goArch)
@@ -135,10 +142,10 @@ func init() {
 	buildValues := []string{
 		AppVersion.buildHost,
 		AppVersion.buildUser,
-		fmt.Sprintf("%v", AppVersion.buildTime),
+		strconv.FormatInt(AppVersion.buildTime, 10),
 		AppVersion.buildGitRev,
 		AppVersion.buildGitBranch,
-		fmt.Sprintf("%v", AppVersion.jenkinsBuildNumber),
+		strconv.FormatInt(AppVersion.buildNumber, 10),
 	}
 	stats.NewGaugesWithMultiLabels("BuildInformation", "build information exposed via label", buildLabels).Set(buildValues, 1)
 

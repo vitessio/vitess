@@ -17,6 +17,7 @@ limitations under the License.
 package command
 
 import (
+	"errors"
 	"fmt"
 	"path"
 	"sort"
@@ -138,7 +139,7 @@ func commandLs(cmd *cobra.Command, args []string) error {
 		}
 	}
 	if hasError {
-		return fmt.Errorf("ls: some paths had errors")
+		return errors.New("ls: some paths had errors")
 	}
 	return nil
 }

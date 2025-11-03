@@ -86,7 +86,6 @@ func TestLargeComment(t *testing.T) {
 
 // TestInsertLargerThenGrpcLimit insert blob larger then grpc limit and verify the error.
 func TestInsertLargerThenGrpcLimit(t *testing.T) {
-
 	ctx := context.Background()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -194,7 +193,6 @@ func TestSelectWithUnauthorizedUser(t *testing.T) {
 
 // TestPartitionedTable validates that partitioned tables are recognized by schema engine
 func TestPartitionedTable(t *testing.T) {
-
 	tablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
 
 	// Partitioned table already created, check if vttablet knows about it

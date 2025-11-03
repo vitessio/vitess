@@ -499,7 +499,7 @@ func testQueryLog(t *testing.T, executor *Executor, logChan chan *logstats.LogSt
 	// fields[13] contains the formatted bind vars
 
 	// fields[14] is the count of shard queries
-	assert.Equal(t, fmt.Sprintf("%v", shardQueries), fields[14], "logstats: ShardQueries")
+	assert.Equal(t, strconv.Itoa(shardQueries), fields[14], "logstats: ShardQueries")
 
 	return logStats
 }

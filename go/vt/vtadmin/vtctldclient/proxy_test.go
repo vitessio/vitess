@@ -272,6 +272,14 @@ func TestDialSecureDialOptionError(t *testing.T) {
 	// Parse the flags which will set the cert and key variables in grpcclientcommon
 	err = fs.Parse(os.Args[1:])
 	require.NoError(t, err)
+	// reset flags after test
+	defer func() {
+		_ = fs.Parse([]string{
+			"vtadmin",
+			"--vtctld-grpc-cert=",
+			"--vtctld-grpc-key=",
+		})
+	}()
 
 	// Now when we create a proxy, it should fail at line 116
 	disco := fakediscovery.New()

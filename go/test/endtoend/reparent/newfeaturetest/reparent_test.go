@@ -131,7 +131,7 @@ func TestChangeTypeWithoutSemiSync(t *testing.T) {
 	// Unload semi sync plugins
 	for _, tablet := range tablets[0:4] {
 		qr := utils.RunSQL(ctx, t, "select @@global.super_read_only", tablet)
-		result := fmt.Sprintf("%v", qr.Rows[0][0].ToString())
+		result := qr.Rows[0][0].ToString()
 		if result == "1" {
 			utils.RunSQL(ctx, t, "set global super_read_only = 0", tablet)
 		}

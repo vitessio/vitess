@@ -19,6 +19,7 @@ package binlog
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -45,11 +46,11 @@ var (
 
 	// ErrClientEOF is returned by Streamer if the stream ended because the
 	// consumer of the stream indicated it doesn't want any more events.
-	ErrClientEOF = fmt.Errorf("binlog stream consumer ended the reply stream")
+	ErrClientEOF = errors.New("binlog stream consumer ended the reply stream")
 	// ErrServerEOF is returned by Streamer if the stream ended because the
 	// connection to the mysqld server was lost, or the stream was terminated by
 	// mysqld.
-	ErrServerEOF = fmt.Errorf("binlog stream connection was closed by mysqld")
+	ErrServerEOF = errors.New("binlog stream connection was closed by mysqld")
 
 	// statementPrefixes are normal sql statement prefixes.
 	statementPrefixes = map[string]binlogdatapb.BinlogTransaction_Statement_Category{
@@ -180,7 +181,7 @@ func (bls *Streamer) Stream(ctx context.Context) (err error) {
 	stopPos := bls.startPos
 	defer func() {
 		if err != nil && err != ErrBinlogUnavailable {
-			err = fmt.Errorf("stream error @ %v: %v", stopPos, err)
+			err = fmt.Errorf("stream error @ (including the GTID we failed to process) %v: %v", stopPos, err)
 		}
 		log.Infof("stream ended @ %v, err = %v", stopPos, err)
 	}()

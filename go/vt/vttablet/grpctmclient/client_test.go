@@ -171,7 +171,6 @@ func TestDialPool(t *testing.T) {
 	})
 
 	t.Run("post ExecuteFetchAsDba maps", func(t *testing.T) {
-
 		rpcClient, ok := client.dialer.(*grpcClient)
 		require.True(t, ok)
 

@@ -135,7 +135,6 @@ func TestVSchemaTrackerInit(t *testing.T) {
 // properly handles primary tablet restarts -- meaning that we maintain
 // the exact same vschema state as before the restart.
 func TestVSchemaTrackerKeyspaceReInit(t *testing.T) {
-
 	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
 
 	// get the vschema prior to the restarts

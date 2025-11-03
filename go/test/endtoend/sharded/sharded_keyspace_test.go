@@ -97,7 +97,6 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitcode)
 	}
-
 }
 
 func TestShardedKeyspace(t *testing.T) {
@@ -185,7 +184,6 @@ func reloadSchemas(t *testing.T, aliases ...string) {
 		if err := clusterInstance.VtctldClientProcess.ExecuteCommand("ReloadSchema", alias); err != nil {
 			assert.Fail(t, "Unable to reload schema")
 		}
-
 	}
 }
 

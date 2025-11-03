@@ -574,7 +574,6 @@ func mathIntDiv_iu0(v1 int64, v2 uint64) (uint64, error) {
 			return 0, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "DIV")
 		}
 		return uint64(result), nil
-
 	}
 	return uint64(v1) / v2, nil
 }

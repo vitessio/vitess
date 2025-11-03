@@ -18,6 +18,7 @@ package throttler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -132,7 +133,7 @@ func UpdateThrottlerTopoConfigRaw(
 	}
 	if appCheckedMetrics != nil {
 		if len(appCheckedMetrics) != 1 {
-			return "", fmt.Errorf("appCheckedMetrics must either be nil or have exactly one entry")
+			return "", errors.New("appCheckedMetrics must either be nil or have exactly one entry")
 		}
 		for app, metrics := range appCheckedMetrics {
 			args = append(args, "--app-name", app)

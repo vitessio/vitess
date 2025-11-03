@@ -248,7 +248,7 @@ func initTimezoneData(t *testing.T, conn *mysql.Conn) {
 			t.Fatalf("failed to insert timezone info: %v", err)
 		}
 	}
-	_, err = conn.ExecuteFetch(fmt.Sprintf("USE %s", connParams.DbName), -1, false)
+	_, err = conn.ExecuteFetch("USE "+connParams.DbName, -1, false)
 	if err != nil {
 		t.Fatalf("failed to switch back to database: %v", err)
 	}

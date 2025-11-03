@@ -211,5 +211,4 @@ func TestValidateMySQLVersionUpgradeCompatible(t *testing.T) {
 			}
 		})
 	}
-
 }

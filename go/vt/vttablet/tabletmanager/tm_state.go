@@ -162,7 +162,6 @@ func (ts *tmState) RefreshFromTopoInfo(ctx context.Context, shardInfo *topo.Shar
 		ts.tm.QueryServiceControl.SetTwoPCAllowed(tabletserver.TwoPCAllowed_TabletControls, true)
 
 		for _, partition := range srvKeyspace.GetPartitions() {
-
 			for _, shard := range partition.GetShardReferences() {
 				if key.KeyRangeEqual(shard.GetKeyRange(), ts.tablet.KeyRange) {
 					ts.isShardServing[partition.GetServedType()] = true

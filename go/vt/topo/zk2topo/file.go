@@ -18,7 +18,7 @@ package zk2topo
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
 	"path"
 
 	"context"
@@ -46,7 +46,7 @@ func (zs *Server) Create(ctx context.Context, filePath string, contents []byte) 
 		return nil, convertError(err, zkPath)
 	}
 	if !bytes.Equal(data, contents) {
-		return nil, fmt.Errorf("file contents changed between zk.Create and zk.Get")
+		return nil, errors.New("file contents changed between zk.Create and zk.Get")
 	}
 
 	return ZKVersion(stat.Version), nil

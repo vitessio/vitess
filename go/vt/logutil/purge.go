@@ -55,7 +55,6 @@ func parseCreatedTimestamp(filename string) (timestamp time.Time, err error) {
 		return time.Time{}, fmt.Errorf("malformed logfile name: %v", filename)
 	}
 	return time.ParseInLocation("20060102-150405", parts[len(parts)-2], time.Now().Location())
-
 }
 
 func getModifiedTimestamp(filename string) (timestamp time.Time, err error) {
@@ -80,7 +79,7 @@ func purgeLogsOnce(now time.Time, dir, program string, ctimeDelta time.Duration,
 		current[c] = true
 	}
 
-	files, err := filepath.Glob(path.Join(dir, fmt.Sprintf("%s.*", program)))
+	files, err := filepath.Glob(path.Join(dir, program+".*"))
 	if err != nil {
 		return
 	}

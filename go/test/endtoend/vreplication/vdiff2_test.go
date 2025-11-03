@@ -33,6 +33,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/ptr"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -73,8 +74,8 @@ var testCases = []*testCase{
 		name:                "MoveTables/unsharded to two shards",
 		workflow:            "p1c2",
 		typ:                 "MoveTables",
-		sourceKs:            "product",
-		targetKs:            "customer",
+		sourceKs:            defaultSourceKs,
+		targetKs:            defaultTargetKs,
 		sourceShards:        "0",
 		targetShards:        "-80,80-",
 		tabletBaseID:        200,
@@ -94,8 +95,8 @@ var testCases = []*testCase{
 		name:           "Reshard Merge/split 2 to 3",
 		workflow:       "c2c3",
 		typ:            "Reshard",
-		sourceKs:       "customer",
-		targetKs:       "customer",
+		sourceKs:       defaultTargetKs,
+		targetKs:       defaultTargetKs,
 		sourceShards:   "-80,80-",
 		targetShards:   "-40,40-a0,a0-",
 		tabletBaseID:   400,
@@ -109,8 +110,8 @@ var testCases = []*testCase{
 		name:           "Reshard/merge 3 to 1",
 		workflow:       "c3c1",
 		typ:            "Reshard",
-		sourceKs:       "customer",
-		targetKs:       "customer",
+		sourceKs:       defaultTargetKs,
+		targetKs:       defaultTargetKs,
 		sourceShards:   "-40,40-a0,a0-",
 		targetShards:   "0",
 		tabletBaseID:   700,
@@ -132,9 +133,7 @@ func checkVDiffCountStat(t *testing.T, tablet *cluster.VttabletProcess, expected
 
 func TestVDiff2(t *testing.T) {
 	cellNames := "zone5,zone1,zone2,zone3,zone4"
-	sourceKs := "product"
 	sourceShards := []string{"0"}
-	targetKs := "customer"
 	targetShards := []string{"-80", "80-"}
 	extraVTTabletArgs = []string{
 		// This forces us to use multiple vstream packets even with small test tables.
@@ -150,7 +149,7 @@ func TestVDiff2(t *testing.T) {
 
 	// The primary tablet is only added in the first cell.
 	// We ONLY add primary tablets in this test.
-	_, err := vc.AddKeyspace(t, []*Cell{zone2, zone1, zone3}, sourceKs, strings.Join(sourceShards, ","), initialProductVSchema, initialProductSchema, 0, 0, 100, sourceKsOpts)
+	_, err := vc.AddKeyspace(t, []*Cell{zone2, zone1, zone3}, defaultSourceKs, strings.Join(sourceShards, ","), initialProductVSchema, initialProductSchema, 0, 0, 100, defaultSourceKsOpts)
 	require.NoError(t, err)
 
 	vtgateConn := vc.GetVTGateConn(t)
@@ -161,17 +160,17 @@ func TestVDiff2(t *testing.T) {
 	// Insert null and empty enum values for testing vdiff comparisons for those values.
 	// If we add this to the initial data list, the counts in several other tests will need to change
 	query := `insert into customer(cid, name, typ, sport) values(1001, null, 'soho','')`
-	execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:%s", sourceKs, sourceShards[0]), query)
+	execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:%s", defaultSourceKs, sourceShards[0]), query)
 
-	generateMoreCustomers(t, sourceKs, 1000)
+	generateMoreCustomers(t, defaultSourceKs, 1000)
 
 	// Create rows in the nopk table using the customer names and random ages between 20 and 100.
 	query = "insert into nopk(name, age) select name, floor(rand()*80)+20 from customer"
-	execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:%s", sourceKs, sourceShards[0]), query)
+	execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:%s", defaultSourceKs, sourceShards[0]), query)
 
 	// The primary tablet is only added in the first cell.
 	// We ONLY add primary tablets in this test.
-	tks, err := vc.AddKeyspace(t, []*Cell{zone3, zone1, zone2}, targetKs, strings.Join(targetShards, ","), customerVSchema, customerSchema, 0, 0, 200, targetKsOpts)
+	tks, err := vc.AddKeyspace(t, []*Cell{zone3, zone1, zone2}, defaultTargetKs, strings.Join(targetShards, ","), customerVSchema, customerSchema, 0, 0, 200, defaultTargetKsOpts)
 	require.NoError(t, err)
 	verifyClusterHealth(t, vc)
 
@@ -179,10 +178,10 @@ func TestVDiff2(t *testing.T) {
 	// (cid) vs (cid,typ) on the source. This confirms that we are able to properly
 	// diff the table when the source and target have a different PK definition.
 	// Remove the 0 date restrictions as the customer table uses them in its DEFAULTs.
-	execVtgateQuery(t, vtgateConn, targetKs, "set @@session.sql_mode='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'")
-	execVtgateQuery(t, vtgateConn, targetKs, customerTableModifiedPK)
+	execVtgateQuery(t, vtgateConn, defaultTargetKs, "set @@session.sql_mode='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'")
+	execVtgateQuery(t, vtgateConn, defaultTargetKs, customerTableModifiedPK)
 	// Set the sql_mode back to the default.
-	execVtgateQuery(t, vtgateConn, targetKs, "set @@session.sql_mode='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'")
+	execVtgateQuery(t, vtgateConn, defaultTargetKs, "set @@session.sql_mode='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'")
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -191,7 +190,7 @@ func TestVDiff2(t *testing.T) {
 		})
 	}
 
-	statsTablet := vc.getPrimaryTablet(t, targetKs, targetShards[0])
+	statsTablet := vc.getPrimaryTablet(t, defaultTargetKs, targetShards[0])
 
 	// We diffed X rows so confirm that the global total is > 0.
 	countStr, err := getDebugVar(t, statsTablet.Port, []string{"VDiffRowsComparedTotal"})
@@ -212,8 +211,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 	defer vtgateConn.Close()
 	arrTargetShards := strings.Split(tc.targetShards, ",")
 	if tc.typ == "Reshard" {
-		require.NoError(t, vc.AddShards(t, cells, tks, tc.targetShards, 0, 0, tc.tabletBaseID, targetKsOpts))
-
+		require.NoError(t, vc.AddShards(t, cells, tks, tc.targetShards, 0, 0, tc.tabletBaseID, defaultTargetKsOpts))
 	}
 	ksWorkflow := fmt.Sprintf("%s.%s", tc.targetKs, tc.workflow)
 	statsShard := arrTargetShards[0]
@@ -262,7 +260,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 		totalRowsToCreate := seconds * perSecondCount
 		log.Infof("Test host has %d vCPUs. Generating %d rows in the customer table to test --max-diff-duration", runtime.NumCPU(), totalRowsToCreate)
 		for i := int64(0); i < totalRowsToCreate; i += chunkSize {
-			generateMoreCustomers(t, sourceKs, chunkSize)
+			generateMoreCustomers(t, tc.sourceKs, chunkSize)
 		}
 
 		// Wait for the workflow to catch up after all the inserts.
@@ -281,7 +279,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 		require.Equal(t, int64(0), leadRestarts, "expected VDiffRestartedTableDiffsCount stat to be 0 for the Lead table, got %d", leadRestarts)
 
 		// Cleanup the created customer records so as not to slow down the rest of the test.
-		delstmt := fmt.Sprintf("delete from %s.customer order by cid desc limit %d", sourceKs, chunkSize)
+		delstmt := fmt.Sprintf("delete from %s.customer order by cid desc limit %d", sqlescape.EscapeID(tc.sourceKs), chunkSize)
 		for i := int64(0); i < totalRowsToCreate; i += chunkSize {
 			_, err := vtgateConn.ExecuteFetch(delstmt, int(chunkSize), false)
 			require.NoError(t, err, "failed to cleanup added customer records: %v", err)
@@ -300,7 +298,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 	vdrc, err := getDebugVar(t, statsTablet.Port, []string{"VDiffRowsCompared"})
 	require.NoError(t, err, "failed to get VDiffRowsCompared stat from %s-%d tablet: %v", statsTablet.Cell, statsTablet.TabletUID, err)
 	uuid, jsout := performVDiff2Action(t, ksWorkflow, allCellNames, "show", "last", false, "--verbose")
-	expect := gjson.Get(jsout, fmt.Sprintf("Reports.customer.%s", statsShard)).Int()
+	expect := gjson.Get(jsout, "Reports.customer."+statsShard).Int()
 	got := gjson.Get(vdrc, fmt.Sprintf("%s.%s.%s", tc.workflow, uuid, "customer")).Int()
 	require.Equal(t, expect, got, "expected VDiffRowsCompared stat to be %d, but got %d", expect, got)
 
@@ -403,9 +401,9 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 	t.Run("Client flag handling", func(t *testing.T) {
 		res, err := vc.VtctldClient.ExecuteCommandWithOutput("vdiff", "--target-keyspace", targetKs, "--workflow", workflowName,
 			"create",
-			"--limit", fmt.Sprintf("%d", expectedOptions.CoreOptions.MaxRows),
-			"--max-report-sample-rows", fmt.Sprintf("%d", expectedOptions.ReportOptions.MaxSampleRows),
-			"--max-extra-rows-to-compare", fmt.Sprintf("%d", expectedOptions.CoreOptions.MaxExtraRowsToCompare),
+			"--limit", strconv.FormatInt(expectedOptions.CoreOptions.MaxRows, 10),
+			"--max-report-sample-rows", strconv.FormatInt(expectedOptions.ReportOptions.MaxSampleRows, 10),
+			"--max-extra-rows-to-compare", strconv.FormatInt(expectedOptions.CoreOptions.MaxExtraRowsToCompare, 10),
 			"--filtered-replication-wait-time", fmt.Sprintf("%v", time.Duration(expectedOptions.CoreOptions.TimeoutSeconds)*time.Second),
 			"--max-diff-duration", fmt.Sprintf("%v", time.Duration(expectedOptions.CoreOptions.MaxDiffSeconds)*time.Second),
 			"--source-cells", expectedOptions.PickerOptions.SourceCell,

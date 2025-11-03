@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -140,7 +141,7 @@ func TestOpenAndReloadLegacy(t *testing.T) {
 		},
 	})
 
-	db.AddRejectedQuery(mysql.TablesWithSize57, fmt.Errorf("Reloading schema engine should query tables with size information"))
+	db.AddRejectedQuery(mysql.TablesWithSize57, errors.New("Reloading schema engine should query tables with size information"))
 
 	db.MockQueriesForTable("test_table_03", &sqltypes.Result{
 		Fields: []*querypb.Field{{
@@ -1502,7 +1503,7 @@ func TestEngineReload(t *testing.T) {
 			// Queries for reloading the tables' information.
 			{
 				for _, tableName := range []string{"t2", "T2"} {
-					db.AddQuery(fmt.Sprintf(`show create table %s`, tableName),
+					db.AddQuery("show create table "+tableName,
 						sqltypes.MakeTestResult(sqltypes.MakeTestFields("Table | Create Table", "varchar|varchar"),
 							fmt.Sprintf("%v|create_table_%v", tableName, tableName)))
 				}
@@ -1519,7 +1520,7 @@ func TestEngineReload(t *testing.T) {
 			// Queries for reloading the views' information.
 			{
 				for _, tableName := range []string{"v2", "V2"} {
-					db.AddQuery(fmt.Sprintf(`show create table %s`, tableName),
+					db.AddQuery("show create table "+tableName,
 						sqltypes.MakeTestResult(sqltypes.MakeTestFields(" View | Create View | character_set_client | collation_connection", "varchar|varchar|varchar|varchar"),
 							fmt.Sprintf("%v|create_table_%v|utf8mb4|utf8mb4_0900_ai_ci", tableName, tableName)))
 				}
@@ -1610,7 +1611,7 @@ func TestGetTableForPosLegacy(t *testing.T) {
 		db.AddQuery("SELECT UNIX_TIMESTAMP()", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"UNIX_TIMESTAMP()",
 			"int64"),
-			fmt.Sprintf("%d", time.Now().Unix()),
+			strconv.FormatInt(time.Now().Unix(), 10),
 		))
 		db.AddQuery(fmt.Sprintf(detectViewChange, sidecar.GetIdentifier()), sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name", "varchar")))
 		db.AddQuery(fmt.Sprintf(readTableCreateTimes, sidecar.GetIdentifier()),
@@ -1623,10 +1624,10 @@ func TestGetTableForPosLegacy(t *testing.T) {
 				InsertID:     0,
 				Rows: [][]sqltypes.Value{
 					{
-						sqltypes.MakeTrusted(sqltypes.VarChar, []byte(table.String())),                          // table_name
-						sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),                            // table_type
-						sqltypes.MakeTrusted(sqltypes.Int64, []byte(fmt.Sprintf("%d", time.Now().Unix()-1000))), // unix_timestamp(t.create_time)
-						sqltypes.MakeTrusted(sqltypes.VarChar, []byte("")),                                      // table_comment
+						sqltypes.MakeTrusted(sqltypes.VarChar, []byte(table.String())),                              // table_name
+						sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),                                // table_type
+						sqltypes.MakeTrusted(sqltypes.Int64, []byte(strconv.FormatInt(time.Now().Unix()-1000, 10))), // unix_timestamp(t.create_time)
+						sqltypes.MakeTrusted(sqltypes.VarChar, []byte("")),                                          // table_comment
 					},
 				},
 				SessionStateChanges: "",
@@ -1643,7 +1644,7 @@ func TestGetTableForPosLegacy(t *testing.T) {
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields("column_name", "varchar"), column))
 		db.AddQuery(fmt.Sprintf("SELECT `%s` FROM `fakesqldb`.`%v` WHERE 1 != 1", column, table.String()),
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields(column, "varchar")))
-		db.AddQuery(fmt.Sprintf(`show create table %s`, table.String()),
+		db.AddQuery("show create table "+table.String(),
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields("Table|Create Table", "varchar|varchar"), table.String(), tableSchema))
 		db.AddQuery("begin", &sqltypes.Result{})
 		db.AddQuery(fmt.Sprintf("delete from %s.`tables` where TABLE_SCHEMA = database() and TABLE_NAME in ('%s')",
@@ -1716,7 +1717,7 @@ func TestGetTableForPosLegacy(t *testing.T) {
 					sqltypes.MakeTestResult(sqltypes.MakeTestFields("column_name", "varchar"), column, "col2"))
 				db.AddQuery(fmt.Sprintf("SELECT `%s`, `%s` FROM `fakesqldb`.`%v` WHERE 1 != 1",
 					column, "col2", table.String()), sqltypes.MakeTestResult(sqltypes.MakeTestFields(fmt.Sprintf("%s|%s", column, "col2"), "varchar|varchar")))
-				db.AddQuery(fmt.Sprintf(`show create table %s`, table.String()),
+				db.AddQuery("show create table "+table.String(),
 					sqltypes.MakeTestResult(sqltypes.MakeTestFields("Table|Create Table", "varchar|varchar"), table.String(), newTableSchema))
 				db.AddQuery("begin", &sqltypes.Result{})
 				db.AddQuery(fmt.Sprintf("delete from %s.`tables` where TABLE_SCHEMA = database() and TABLE_NAME in ('%s')",
@@ -1801,7 +1802,7 @@ func TestGetTableForPos(t *testing.T) {
 		db.AddQuery("SELECT UNIX_TIMESTAMP()", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"UNIX_TIMESTAMP()",
 			"int64"),
-			fmt.Sprintf("%d", time.Now().Unix()),
+			strconv.FormatInt(time.Now().Unix(), 10),
 		))
 		db.AddQuery(fmt.Sprintf(detectViewChange, sidecar.GetIdentifier()), sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name", "varchar")))
 		db.AddQuery(fmt.Sprintf(readTableCreateTimes, sidecar.GetIdentifier()),
@@ -1821,10 +1822,10 @@ func TestGetTableForPos(t *testing.T) {
 			Fields: mysql.BaseShowTablesFields,
 			Rows: [][]sqltypes.Value{
 				{
-					sqltypes.MakeTrusted(sqltypes.VarChar, []byte(table.String())),                          // table_name
-					sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),                            // table_type
-					sqltypes.MakeTrusted(sqltypes.Int64, []byte(fmt.Sprintf("%d", time.Now().Unix()-1000))), // unix_timestamp(t.create_time)
-					sqltypes.MakeTrusted(sqltypes.VarChar, []byte("")),                                      // table_comment
+					sqltypes.MakeTrusted(sqltypes.VarChar, []byte(table.String())),                              // table_name
+					sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),                                // table_type
+					sqltypes.MakeTrusted(sqltypes.Int64, []byte(strconv.FormatInt(time.Now().Unix()-1000, 10))), // unix_timestamp(t.create_time)
+					sqltypes.MakeTrusted(sqltypes.VarChar, []byte("")),                                          // table_comment
 				},
 			},
 			SessionStateChanges: "",
@@ -1841,7 +1842,7 @@ func TestGetTableForPos(t *testing.T) {
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields("column_name", "varchar"), column))
 		db.AddQuery(fmt.Sprintf("SELECT `%s` FROM `fakesqldb`.`%v` WHERE 1 != 1", column, table.String()),
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields(column, "varchar")))
-		db.AddQuery(fmt.Sprintf(`show create table %s`, table.String()),
+		db.AddQuery("show create table "+table.String(),
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields("Table|Create Table", "varchar|varchar"), table.String(), tableSchema))
 		db.AddQuery("begin", &sqltypes.Result{})
 		db.AddQuery(fmt.Sprintf("delete from %s.`tables` where TABLE_SCHEMA = database() and TABLE_NAME in ('%s')",
@@ -1914,7 +1915,7 @@ func TestGetTableForPos(t *testing.T) {
 					sqltypes.MakeTestResult(sqltypes.MakeTestFields("column_name", "varchar"), column, "col2"))
 				db.AddQuery(fmt.Sprintf("SELECT `%s`, `%s` FROM `fakesqldb`.`%v` WHERE 1 != 1",
 					column, "col2", table.String()), sqltypes.MakeTestResult(sqltypes.MakeTestFields(fmt.Sprintf("%s|%s", column, "col2"), "varchar|varchar")))
-				db.AddQuery(fmt.Sprintf(`show create table %s`, table.String()),
+				db.AddQuery("show create table "+table.String(),
 					sqltypes.MakeTestResult(sqltypes.MakeTestFields("Table|Create Table", "varchar|varchar"), table.String(), newTableSchema))
 				db.AddQuery("begin", &sqltypes.Result{})
 				db.AddQuery(fmt.Sprintf("delete from %s.`tables` where TABLE_SCHEMA = database() and TABLE_NAME in ('%s')",

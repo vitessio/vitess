@@ -19,7 +19,6 @@ package engine
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -618,7 +617,7 @@ func TestSysVarSetErr(t *testing.T) {
 	}
 	vc := &loggingVCursor{
 		shards:         []string{"-20", "20-"},
-		multiShardErrs: []error{fmt.Errorf("error")},
+		multiShardErrs: []error{errors.New("error")},
 	}
 	_, err := set.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, "error")

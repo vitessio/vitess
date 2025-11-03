@@ -298,10 +298,9 @@ func (cluster *LocalProcessCluster) StartUnshardedKeyspace(keyspace Keyspace, re
 }
 
 func (cluster *LocalProcessCluster) startPartialKeyspace(keyspace Keyspace, shardNames []string, movedShard string, replicaCount int, rdonly bool, customizers ...any) (err error) {
-
 	cluster.HasPartialKeyspaces = true
 	routedKeyspace := &Keyspace{
-		Name:             fmt.Sprintf("%s_routed", keyspace.Name),
+		Name:             keyspace.Name + "_routed",
 		SchemaSQL:        keyspace.SchemaSQL,
 		VSchema:          keyspace.VSchema,
 		DurabilityPolicy: keyspace.DurabilityPolicy,
@@ -641,7 +640,7 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 		}
 		for _, tablet := range shard.Vttablets {
 			if !cluster.ReusingVTDATAROOT {
-				if _, err = tablet.VttabletProcess.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace.Name), keyspace.Name, false); err != nil {
+				if _, err = tablet.VttabletProcess.QueryTablet("create database vt_"+keyspace.Name, keyspace.Name, false); err != nil {
 					log.Errorf("error creating database for keyspace %v: %v", keyspace.Name, err)
 					return
 				}
@@ -1175,7 +1174,6 @@ func (cluster *LocalProcessCluster) StartVtbackup(newInitDBFile string, initialB
 		initialBackup)
 	cluster.VtbackupProcess.ExtraArgs = extraArgs
 	return cluster.VtbackupProcess.Setup()
-
 }
 
 // GetAndReservePort gives port for required process

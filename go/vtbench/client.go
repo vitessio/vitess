@@ -18,6 +18,7 @@ package vtbench
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -148,7 +149,7 @@ func (c *grpcVttabletConn) connect(ctx context.Context, cp ConnParams) error {
 
 	shard, ok := dest.(key.DestinationShard)
 	if !ok {
-		return fmt.Errorf("invalid destination shard")
+		return errors.New("invalid destination shard")
 	}
 
 	c.target = querypb.Target{

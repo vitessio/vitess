@@ -19,7 +19,6 @@ package base
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -59,10 +58,10 @@ func getMysqlMetricsRateLimiter(ctx context.Context, rateLimit time.Duration) *t
 // average on the MySQL server is not that susceptible to change.
 func readMysqlHostMetrics(ctx context.Context, params *SelfMetricReadParams) error {
 	if params.TmClient == nil {
-		return fmt.Errorf("tmClient is nil")
+		return errors.New("tmClient is nil")
 	}
 	if params.TabletInfo == nil {
-		return fmt.Errorf("tabletInfo is nil")
+		return errors.New("tabletInfo is nil")
 	}
 	rateLimiter := getMysqlMetricsRateLimiter(ctx, mysqlHostMetricsRateLimit)
 	err := rateLimiter.Do(func() error {

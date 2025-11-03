@@ -5721,6 +5721,7 @@ func (m *WorkflowStatusResponse_TableCopyState) CloneVT() *WorkflowStatusRespons
 	r.BytesCopied = m.BytesCopied
 	r.BytesTotal = m.BytesTotal
 	r.BytesPercentage = m.BytesPercentage
+	r.Phase = m.Phase
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -21638,6 +21639,11 @@ func (m *WorkflowStatusResponse_TableCopyState) MarshalToSizedBufferVT(dAtA []by
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.Phase != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.Phase))
+		i--
+		dAtA[i] = 0x38
+	}
 	if m.BytesPercentage != 0 {
 		i -= 4
 		binary.LittleEndian.PutUint32(dAtA[i:], uint32(math.Float32bits(float32(m.BytesPercentage))))
@@ -28409,6 +28415,9 @@ func (m *WorkflowStatusResponse_TableCopyState) SizeVT() (n int) {
 	}
 	if m.BytesPercentage != 0 {
 		n += 5
+	}
+	if m.Phase != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.Phase))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -67123,6 +67132,25 @@ func (m *WorkflowStatusResponse_TableCopyState) UnmarshalVT(dAtA []byte) error {
 			v = uint32(binary.LittleEndian.Uint32(dAtA[iNdEx:]))
 			iNdEx += 4
 			m.BytesPercentage = float32(math.Float32frombits(v))
+		case 7:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Phase", wireType)
+			}
+			m.Phase = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Phase |= TableCopyPhase(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

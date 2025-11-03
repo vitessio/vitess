@@ -18,7 +18,6 @@ package workflow
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -106,11 +105,11 @@ func TestGetWorkflowCopyStates(t *testing.T) {
 		TableSettings: []*vtctldatapb.TableMaterializeSettings{
 			{
 				TargetTable:      "table1",
-				SourceExpression: fmt.Sprintf("select * from %s", "table1"),
+				SourceExpression: "select * from " + "table1",
 			},
 			{
 				TargetTable:      "table2",
-				SourceExpression: fmt.Sprintf("select * from %s", "table2"),
+				SourceExpression: "select * from " + "table2",
 			},
 		},
 	}, sourceShards, targetShards)
@@ -166,11 +165,11 @@ func TestFetchCopyStatesByShardStream(t *testing.T) {
 		TableSettings: []*vtctldatapb.TableMaterializeSettings{
 			{
 				TargetTable:      "table1",
-				SourceExpression: fmt.Sprintf("select * from %s", "table1"),
+				SourceExpression: "select * from " + "table1",
 			},
 			{
 				TargetTable:      "table2",
-				SourceExpression: fmt.Sprintf("select * from %s", "table2"),
+				SourceExpression: "select * from " + "table2",
 			},
 		},
 	}, sourceShards, targetShards)

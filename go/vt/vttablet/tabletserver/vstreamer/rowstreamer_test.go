@@ -18,6 +18,7 @@ package vstreamer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -643,7 +644,7 @@ func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantQuery 
 		err := engine.StreamRows(context.Background(), query, lastpk, func(rows *binlogdatapb.VStreamRowsResponse) error {
 			if first {
 				if rows.Gtid == "" {
-					ch <- fmt.Errorf("stream gtid is empty")
+					ch <- errors.New("stream gtid is empty")
 				}
 				if got := engine.rowStreamers[engine.streamIdx-1].sendQuery; got != wantQuery {
 					log.Infof("Got: %v", got)

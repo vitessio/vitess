@@ -169,7 +169,7 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 	errorChan := make(chan error, 32)
 
 	if tabletAlias == "" {
-		return instance, fmt.Errorf("ReadTopologyInstance will not act on empty tablet alias")
+		return instance, errors.New("ReadTopologyInstance will not act on empty tablet alias")
 	}
 
 	lastAttemptedCheckTimer := time.AfterFunc(time.Second, func() {
@@ -518,7 +518,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 
 	instance.Hostname = m.GetString("hostname")
 	instance.Port = m.GetInt("port")
-	instance.TabletType = topodatapb.TabletType(m.GetInt("tablet_type"))
+	instance.TabletType = topodatapb.TabletType(m.GetInt32("tablet_type"))
 	instance.Cell = m.GetString("cell")
 	instance.ServerID = m.GetUint("server_id")
 	instance.ServerUUID = m.GetString("server_uuid")

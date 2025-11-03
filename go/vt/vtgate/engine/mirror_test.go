@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -145,7 +146,7 @@ func TestMirror(t *testing.T) {
 		}()
 
 		vc.results = nil
-		vc.resultErr = fmt.Errorf("return me")
+		vc.resultErr = errors.New("return me")
 
 		ctx := context.Background()
 		res, err := mirror.TryExecute(ctx, vc, map[string]*querypb.BindVariable{}, true)
@@ -179,7 +180,7 @@ func TestMirror(t *testing.T) {
 		}()
 
 		mirrorVC.results = nil
-		mirrorVC.resultErr = fmt.Errorf("ignore me")
+		mirrorVC.resultErr = errors.New("ignore me")
 
 		want := vc.results[0]
 		res, err := mirror.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
@@ -358,7 +359,7 @@ func TestMirror(t *testing.T) {
 		}()
 
 		vc.results = nil
-		vc.resultErr = fmt.Errorf("return me")
+		vc.resultErr = errors.New("return me")
 
 		err := mirror.TryStreamExecute(
 			context.Background(),
@@ -400,7 +401,7 @@ func TestMirror(t *testing.T) {
 		}()
 
 		mirrorVC.results = nil
-		mirrorVC.resultErr = fmt.Errorf("ignore me")
+		mirrorVC.resultErr = errors.New("ignore me")
 
 		want := vc.results[0]
 		err := mirror.TryStreamExecute(

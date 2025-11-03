@@ -14,6 +14,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vtctldata"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/utils"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -32,7 +33,7 @@ func TestOnlineDDLVDiff(t *testing.T) {
 	defaultReplicas = 0
 	vc = setupMinimalCluster(t)
 	defer vc.TearDown()
-	keyspace := "product"
+	keyspace := defaultSourceKs
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -90,8 +91,23 @@ func onlineDDLShow(t *testing.T, keyspace, uuid string) *vtctldata.GetSchemaMigr
 func execOnlineDDL(t *testing.T, strategy, keyspace, query string) string {
 	output, err := vc.VtctldClient.ExecuteCommandWithOutput("ApplySchema", utils.GetFlagVariantForTests("--ddl-strategy"), strategy, "--sql", query, keyspace)
 	require.NoError(t, err, output)
-	uuid := strings.TrimSpace(output)
+	output = strings.TrimSpace(output)
 	if strategy != "direct" {
+		// We expect a UUID as the only output, but when using --ddl_strategy we get a warning mixed into the output:
+		//   Flag --ddl_strategy has been deprecated, use --ddl-strategy instead
+		// In order to prevent this and other similar future issues, lets hunt for the UUID (which should be on its own line)
+		// in the returned output.
+		uuid := ""
+		lines := strings.Split(output, "\n")
+		for i := range lines {
+			line := strings.TrimSpace(lines[i])
+			if schema.IsOnlineDDLUUID(line) {
+				uuid = line
+				break
+			}
+		}
+		require.NotEmpty(t, uuid, "UUID not returned in ApplySchema command output: %v", output)
+		output = uuid // return the UUID instead of the original output
 		err = waitForCondition("online ddl to start", func() bool {
 			response := onlineDDLShow(t, keyspace, uuid)
 			if len(response.Migrations) > 0 &&
@@ -100,13 +116,13 @@ func execOnlineDDL(t *testing.T, strategy, keyspace, query string) string {
 				return true
 			}
 			return false
-		}, defaultTimeout)
+		}, workflowStateTimeout)
 		require.NoError(t, err)
 		// The online ddl migration is set to SchemaMigration_RUNNING before it creates the
 		// _vt.vreplication records. Hence wait for the vreplication workflow to be created as well.
 		waitForWorkflowToBeCreated(t, vc, fmt.Sprintf("%s.%s", keyspace, uuid))
 	}
-	return uuid
+	return output
 }
 
 func waitForAdditionalRows(t *testing.T, keyspace, table string, count int) {
@@ -132,7 +148,7 @@ func waitForAdditionalRows(t *testing.T, keyspace, table string, count int) {
 }
 
 func getNumRows(t *testing.T, vtgateConn *mysql.Conn, keyspace, table string) int {
-	qr := execVtgateQuery(t, vtgateConn, keyspace, fmt.Sprintf("SELECT COUNT(*) FROM %s", table))
+	qr := execVtgateQuery(t, vtgateConn, keyspace, "SELECT COUNT(*) FROM "+table)
 	require.NotNil(t, qr)
 	numRows, err := strconv.Atoi(qr.Rows[0][0].ToString())
 	require.NoError(t, err)

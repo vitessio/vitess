@@ -1,6 +1,6 @@
 module vitess.io/vitess
 
-go 1.25.1
+go 1.25.3
 
 require (
 	cloud.google.com/go/storage v1.57.0
@@ -134,7 +134,6 @@ require (
 	github.com/google/btree v1.1.3 // indirect
 	github.com/google/pprof v0.0.0-20250820193118-f64d9cf942d6 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/moby/sys/userns v0.1.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/olekukonko/cat v0.0.0-20250911104152-50322a0618f6 // indirect

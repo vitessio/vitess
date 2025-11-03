@@ -796,7 +796,7 @@ func TestVStreamCopyTransactions(t *testing.T) {
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match:  table,
-			Filter: fmt.Sprintf("select * from %s", table),
+			Filter: "select * from " + table,
 		}},
 	}
 
@@ -804,7 +804,7 @@ func TestVStreamCopyTransactions(t *testing.T) {
 	defer closeConnections()
 
 	// Clear any existing data.
-	q := fmt.Sprintf("delete from %s", table)
+	q := "delete from " + table
 	_, err := conn.ExecuteFetch(q, -1, false)
 	require.NoError(t, err, "error clearing data: %v", err)
 
