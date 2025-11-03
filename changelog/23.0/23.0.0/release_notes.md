@@ -225,7 +225,7 @@ This provides more granular timeout control compared to global server settings, 
 
 #### <a id="query-throttler"/>Experimental: Query Throttler</a>
 
-Vitess v23.0.0 introduces a new, experimental Query Throttler framework for rate-limiting incoming queries ([PR #18449](https://github.com/vitessio/vitess/pull/18449), [PR #18657](https://github.com/vitessio/vitess/pull/18657)). Work on this new throttler is ongoing with the potential for breaking changes in the future.
+Vitess v23.0.0 introduces a new, experimental Query Throttler framework for rate-limiting incoming queries ([RFC issue #18412](https://github.com/vitessio/vitess/issues/18412), [PR #18449](https://github.com/vitessio/vitess/pull/18449), [PR #18657](https://github.com/vitessio/vitess/pull/18657)). Work on this new throttler is ongoing with the potential for breaking changes in the future.
 
 Feedback on this experimental feature is appreciated in GitHub issues or the `#feat-handling-overload` channel of the [Vitess Community Slack](https://vitess.io/slack).
 
