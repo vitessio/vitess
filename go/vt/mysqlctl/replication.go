@@ -845,5 +845,4 @@ func (mysqld *Mysqld) IsSemiSyncBlocked(ctx context.Context) (bool, error) {
 	}
 	value, err := res.Rows[0][0].ToCastInt64()
 	return value != 0, err
-
 }

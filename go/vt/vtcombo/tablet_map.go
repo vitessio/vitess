@@ -1018,7 +1018,7 @@ func (itmc *internalTabletManagerClient) ReadReparentJournalInfo(ctx context.Con
 }
 
 func (itmc *internalTabletManagerClient) DemotePrimary(context.Context, *topodatapb.Tablet, bool) (*replicationdatapb.PrimaryStatus, error) {
-	return nil, fmt.Errorf("not implemented in vtcombo")
+	return nil, errors.New("not implemented in vtcombo")
 }
 
 func (itmc *internalTabletManagerClient) UndoDemotePrimary(context.Context, *topodatapb.Tablet, bool) error {
