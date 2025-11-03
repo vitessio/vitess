@@ -10,6 +10,7 @@ linters:
     - errcheck
     - govet
     - ineffassign
+    - mirror
     - perfsprint
     - staticcheck
     - whitespace

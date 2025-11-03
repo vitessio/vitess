@@ -374,7 +374,7 @@ var isGRPCOverflowRE = regexp.MustCompile(`.*?grpc: (received|trying to send) me
 
 func demuxResourceExhaustedErrors(msg string) ErrorCode {
 	switch {
-	case isGRPCOverflowRE.Match([]byte(msg)):
+	case isGRPCOverflowRE.MatchString(msg):
 		return ERNetPacketTooLarge
 	case strings.Contains(msg, "Transaction throttled"):
 		return EROutOfResources

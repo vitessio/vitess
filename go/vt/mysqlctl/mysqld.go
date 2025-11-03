@@ -1216,7 +1216,7 @@ socket=%v
 		return "", err
 	}
 	name := tmpfile.Name()
-	if _, err := tmpfile.Write([]byte(contents)); err != nil {
+	if _, err := tmpfile.WriteString(contents); err != nil {
 		tmpfile.Close()
 		os.Remove(name)
 		return "", err
