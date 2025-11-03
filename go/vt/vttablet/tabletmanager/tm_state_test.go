@@ -105,35 +105,71 @@ func TestStateResharding(t *testing.T) {
 }
 
 func TestStateDenyList(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	ts := memorytopo.NewServer(ctx, "cell1")
-	tm := newTestTM(t, ts, 1, "ks", "0", nil)
-	defer tm.Stop()
-
-	fmd := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
-	fmd.Schema = &tabletmanagerdatapb.SchemaDefinition{
-		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
-			Name: "t1",
-		}},
-	}
-	si := &topo.ShardInfo{
-		Shard: &topodatapb.Shard{
-			TabletControls: []*topodatapb.Shard_TabletControl{{
+	tests := []struct {
+		name                           string
+		tableDefinitions               []*tabletmanagerdatapb.TableDefinition
+		tabletControls                 []*topodatapb.Shard_TabletControl
+		wantDeniedTables               map[topodatapb.TabletType][]string
+		wantAllowReadsFromDeniedTables bool
+		wantQueryRules                 string
+	}{
+		{
+			name: "replica denied table",
+			tableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+				Name: "t1",
+			}},
+			tabletControls: []*topodatapb.Shard_TabletControl{{
 				TabletType:   topodatapb.TabletType_REPLICA,
 				Cells:        []string{"cell1"},
 				DeniedTables: []string{"t1"},
 			}},
+			wantDeniedTables: map[topodatapb.TabletType][]string{topodatapb.TabletType_REPLICA: {"t1"}},
+			wantQueryRules:   `[{"Description":"enforce denied tables","Name":"denied_table","TableNames":["t1"],"Action":"FAIL_RETRY"}]`,
+		},
+		{
+			name: "primay denied table with allow reads",
+			tableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+				Name: "t1",
+			}},
+			tabletControls: []*topodatapb.Shard_TabletControl{{
+				TabletType:   topodatapb.TabletType_REPLICA,
+				Cells:        []string{"cell1"},
+				DeniedTables: []string{"t1"},
+				AllowReads:   true,
+			}},
+			wantDeniedTables:               map[topodatapb.TabletType][]string{topodatapb.TabletType_REPLICA: {"t1"}},
+			wantAllowReadsFromDeniedTables: true,
+			wantQueryRules:                 `[{"Description":"enforce denied tables","Name":"denied_table","Plans":["Nextval","Insert","InsertMessage","Update","UpdateLimit","Delete","DeleteLimit","DDL","Set","OtherRead","OtherAdmin","MessageStream","Savepoint","Release","RollbackSavepoint","Show","Load","Flush","UnlockTables","CallProcedure","AlterMigration","RevertMigration","ShowMigrations","ShowMigrationLogs","ShowThrottledApps","ShowThrottlerStatus"],"TableNames":["t1"],"Action":"FAIL_RETRY"}]`,
 		},
 	}
-	tm.tmState.RefreshFromTopoInfo(ctx, si, nil)
-	tm.tmState.mu.Lock()
-	assert.Equal(t, map[topodatapb.TabletType][]string{topodatapb.TabletType_REPLICA: {"t1"}}, tm.tmState.deniedTables)
-	tm.tmState.mu.Unlock()
 
-	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
-	b, _ := json.Marshal(qsc.GetQueryRules(denyListQueryList))
-	assert.Equal(t, `[{"Description":"enforce denied tables","Name":"denied_table","TableNames":["t1"],"Action":"FAIL_RETRY"}]`, string(b))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ts := memorytopo.NewServer(ctx, "cell1")
+			tm := newTestTM(t, ts, 1, "ks", "0", nil)
+
+			fmd := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+			fmd.Schema = &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: tt.tableDefinitions,
+			}
+			si := &topo.ShardInfo{
+				Shard: &topodatapb.Shard{
+					TabletControls: tt.tabletControls,
+				},
+			}
+			tm.tmState.RefreshFromTopoInfo(ctx, si, nil)
+			tm.tmState.mu.Lock()
+			assert.Equal(t, tt.wantDeniedTables, tm.tmState.deniedTables)
+			assert.Equal(t, tt.wantAllowReadsFromDeniedTables, tm.tmState.allowReadsFromDeniedTables)
+			tm.tmState.mu.Unlock()
+
+			qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
+			b, _ := json.Marshal(qsc.GetQueryRules(denyListQueryList))
+			assert.Equal(t, tt.wantQueryRules, string(b))
+		})
+	}
 }
 
 func TestStateTabletControls(t *testing.T) {
