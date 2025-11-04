@@ -32,16 +32,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/utils"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
-	"vitess.io/vitess/go/vt/vttablet/tabletconn"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/utils"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 )
 
 var (
@@ -862,4 +861,32 @@ func WaitForTabletToBeServing(ctx context.Context, t *testing.T, clusterInstance
 	if err != nil && !strings.Contains(err.Error(), "context canceled") {
 		t.Fatal(err.Error())
 	}
+}
+
+func WaitForQueryWithStateInProcesslist(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, sql, state string, timeout time.Duration) {
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		qr := RunSQL(ctx, t, "show full processlist", tablet)
+		var commandIdx, infoIdx, stateIdx int
+		for i, field := range qr.Fields {
+			switch field.GetName() {
+			case "Command":
+				commandIdx = i
+			case "Info":
+				infoIdx = i // Info == the SQL being ran
+			case "State":
+				stateIdx = i
+			}
+		}
+		var found bool
+		for _, row := range qr.Rows {
+			if row[commandIdx].ToString() != "Query" {
+				continue
+			}
+			if row[stateIdx].ToString() == state && row[infoIdx].ToString() == sql {
+				found = true
+				break
+			}
+		}
+		assert.True(c, found, "query with state not in processlist")
+	}, timeout, time.Second)
 }

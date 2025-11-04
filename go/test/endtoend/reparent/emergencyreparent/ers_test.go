@@ -178,6 +178,7 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 	}
 
 	// Try performing a write and ensure that it blocks
+	writeSQL := `insert into test(id, msg) values (1, 'test 1')`
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
@@ -185,7 +186,7 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 
 		// Attempt writing via vtgate against the primary. This should block (because there's no replicas to ack the semi-sync),
 		// and fail once we perform the ERS
-		_, err := conn.ExecuteFetch("insert into test (id, msg) values (1, 'test 1')", 0, false)
+		_, err := conn.ExecuteFetch(writeSQL, 0, false)
 		require.Error(t, err)
 	}()
 
@@ -193,11 +194,10 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 	go func() {
 		defer wg.Done()
 
-		// Just give a tiny bit of time to ensure the write is waiting on the primary,
-		// and that queries from the semi-sync unblocker start piling up
-		time.Sleep(2000 * time.Millisecond)
+		// Ensure the write is waiting on the primary.
+		utils.WaitForQueryWithStateInProcesslist(context.TODO(), t, tablets[0], writeSQL, "Waiting for semi-sync ACK from replica", time.Second*20)
 
-		// Send SIGSTOP to primary to simulate it being unresponsive
+		// Send SIGSTOP to primary to simulate it being unresponsive.
 		tablets[0].VttabletProcess.Stop()
 
 		// Run forced reparent operation, this should now proceed unimpeded.
