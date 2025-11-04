@@ -239,7 +239,6 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unsupported statement for Online DDL: %v", sqlparser.String(stmt))
 		}
 		sql = sqlparser.String(stmt)
-
 	}
 
 	return &OnlineDDL{

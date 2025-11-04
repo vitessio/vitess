@@ -116,7 +116,7 @@ func (tm *TabletManager) lockTablesUsingLockTables(conn *dbconnpool.DBConnection
 		if name == "dual" {
 			continue
 		}
-		tableNames = append(tableNames, fmt.Sprintf("%s READ", sqlescape.EscapeID(name)))
+		tableNames = append(tableNames, sqlescape.EscapeID(name)+" READ")
 	}
 	lockStatement := fmt.Sprintf("LOCK TABLES %v", strings.Join(tableNames, ", "))
 	_, err := conn.ExecuteFetch("USE "+sqlescape.EscapeID(tm.DBConfigs.DBName), 0, false)
@@ -138,7 +138,7 @@ func (tm *TabletManager) UnlockTables(ctx context.Context) error {
 	defer tm.mutex.Unlock()
 
 	if tm._lockTablesConnection == nil {
-		return fmt.Errorf("tables were not locked")
+		return errors.New("tables were not locked")
 	}
 
 	return tm.unlockTablesHoldingMutex()

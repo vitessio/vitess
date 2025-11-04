@@ -19,6 +19,7 @@ package wrangler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"reflect"
@@ -184,7 +185,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 		}
 		if len(cells) == 0 {
 			// Unreachable
-			return nil, fmt.Errorf("there are no cells in the topo")
+			return nil, errors.New("there are no cells in the topo")
 		}
 		sourceCell = cells[0]
 		targetCell = sourceCell

@@ -1041,7 +1041,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		// Those queries are unaffected by query rules (ACLs) because they don't go through Vitess.
 		// We therefore hard-rename the table into an agreed upon name, and we won't swap it with
 		// the original table. We will actually make the table disappear, creating a void.
-		testSuiteBeforeTableName := fmt.Sprintf("%s_before", onlineDDL.Table)
+		testSuiteBeforeTableName := onlineDDL.Table + "_before"
 		parsed := sqlparser.BuildParsedQuery(sqlRenameTable, onlineDDL.Table, testSuiteBeforeTableName)
 		if _, err := e.execQuery(ctx, parsed.Query); err != nil {
 			return err
@@ -1128,7 +1128,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	{
 		if isVreplicationTestSuite {
 			// this is used in Vitess endtoend testing suite
-			testSuiteAfterTableName := fmt.Sprintf("%s_after", onlineDDL.Table)
+			testSuiteAfterTableName := onlineDDL.Table + "_after"
 			parsed := sqlparser.BuildParsedQuery(sqlRenameTable, vreplTable, testSuiteAfterTableName)
 			if _, err := e.execQuery(ctx, parsed.Query); err != nil {
 				return err
@@ -1497,7 +1497,6 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 }
 
 func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *schema.OnlineDDL, row sqltypes.RowNamedValues, err error) {
-
 	query, err := sqlparser.ParseAndBind(sqlSelectMigration,
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -2134,7 +2133,6 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 // - empty, in which case the migration is noop and implicitly successful, or
 // - non-empty, in which case the migration turns to be an ALTER
 func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schema.OnlineDDL) (diff schemadiff.EntityDiff, err error) {
-
 	// Modify the CREATE TABLE statement to indicate a different, made up table name, known as the "comparison table"
 	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL, e.env.Environment().Parser())
 	if err != nil {
@@ -2544,7 +2542,6 @@ func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema
 
 // executeSpecialAlterDirectDDLActionMigration executes a special plan using a direct ALTER TABLE statement.
 func (e *Executor) executeSpecialAlterDirectDDLActionMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) (err error) {
-
 	forceCutOverAfter, err := onlineDDL.StrategySetting().ForceCutOverAfter()
 	if err != nil {
 		return err
@@ -4625,7 +4622,6 @@ func (e *Executor) SubmitMigration(
 	)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "submitting migration %v", onlineDDL.UUID)
-
 	}
 	log.Infof("SubmitMigration: migration %s submitted", onlineDDL.UUID)
 
@@ -4649,7 +4645,7 @@ func (e *Executor) ShowMigrations(ctx context.Context, show *sqlparser.Show) (re
 	whereExpr := ""
 	if showBasic.Filter != nil {
 		if showBasic.Filter.Filter != nil {
-			whereExpr = fmt.Sprintf(" where %s", sqlparser.String(showBasic.Filter.Filter))
+			whereExpr = " where " + sqlparser.String(showBasic.Filter.Filter)
 		} else if showBasic.Filter.Like != "" {
 			lit := sqlparser.String(sqlparser.NewStrLiteral(showBasic.Filter.Like))
 			whereExpr = fmt.Sprintf(" where migration_uuid LIKE %s OR migration_context LIKE %s OR migration_status LIKE %s", lit, lit, lit)

@@ -744,6 +744,7 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 	// Check tablet type.
 	if qre.shouldConsolidate() {
 		q, original := qre.tsv.qe.consolidator.Create(sqlWithoutComments)
+		waiterCapExceeded := false
 		if original {
 			defer q.Broadcast()
 			conn, err := qre.getConn()
@@ -763,13 +764,21 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 				startTime := time.Now()
 				q.Wait()
 				qre.tsv.stats.WaitTimings.Record("Consolidations", startTime)
+			} else {
+				// Waiter cap exceeded, fall back to independent query execution
+				waiterCapExceeded = true
 			}
 			q.AddWaiterCounter(-1)
 		}
-		if q.Err() != nil {
-			return nil, q.Err()
+
+		// Return consolidation results unless waiter cap was exceeded
+		if !waiterCapExceeded {
+			if q.Err() != nil {
+				return nil, q.Err()
+			}
+			return q.Result(), nil
 		}
-		return q.Result(), nil
+		// If waiter cap exceeded, fall through to independent execution
 	}
 	conn, err := qre.getConn()
 	if err != nil {

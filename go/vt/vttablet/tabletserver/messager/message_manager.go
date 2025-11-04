@@ -19,6 +19,7 @@ package messager
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -753,7 +754,7 @@ func (mm *messageManager) runOneVStream(ctx context.Context) error {
 func (mm *messageManager) processRowEvent(fields []*querypb.Field, rowEvent *binlogdatapb.RowEvent) error {
 	if fields == nil {
 		// Unreachable.
-		return fmt.Errorf("internal error: unexpected rows without fields")
+		return errors.New("internal error: unexpected rows without fields")
 	}
 
 	now := time.Now().UnixNano()

@@ -18,7 +18,7 @@ package schemamanager
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"os"
 	"path"
 	"strings"
@@ -115,7 +115,7 @@ func TestLocalControllerSchemaChange(t *testing.T) {
 	err = controller.OnReadSuccess(ctx)
 	require.NoError(t, err)
 
-	err = controller.OnReadFail(ctx, fmt.Errorf("read fail"))
+	err = controller.OnReadFail(ctx, errors.New("read fail"))
 	require.NoError(t, err)
 
 	errorPath := path.Join(controller.errorDir, controller.sqlFilename)
@@ -126,7 +126,7 @@ func TestLocalControllerSchemaChange(t *testing.T) {
 	// move sql file from error dir to input dir for OnValidationFail test
 	os.Rename(errorPath, controller.sqlPath)
 
-	err = controller.OnValidationFail(ctx, fmt.Errorf("validation fail"))
+	err = controller.OnValidationFail(ctx, errors.New("validation fail"))
 	require.NoError(t, err)
 
 	_, err = os.Stat(errorPath)

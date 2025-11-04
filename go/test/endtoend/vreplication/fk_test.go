@@ -183,7 +183,6 @@ func TestFKWorkflow(t *testing.T) {
 		// Check for the secondary key
 		confirmTablesHaveSecondaryKeys(t, []*cluster.VttabletProcess{targetTab}, targetKeyspace, "parent")
 	}
-
 }
 
 func insertInitialFKData(t *testing.T) {

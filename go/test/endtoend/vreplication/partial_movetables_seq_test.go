@@ -240,7 +240,6 @@ func (tc *vrepTestCase) setupKeyspace(ks *keyspace) {
 		defaultCell := tc.vc.Cells[defaultCellName]
 		require.NotNil(tc.t, defaultCell)
 		tc.vtgate = defaultCell.Vtgates[0]
-
 	}
 }
 
@@ -277,7 +276,7 @@ func (wf *workflow) create() {
 		err = tstWorkflowExec(t, cell, wf.name, wf.fromKeyspace, wf.toKeyspace,
 			strings.Join(wf.options.tables, ","), workflowActionCreate, "", sourceShards, targetShards, defaultWorkflowExecOptions)
 	default:
-		panic(fmt.Sprintf("unknown workflow type: %s", wf.typ))
+		panic("unknown workflow type: " + wf.typ)
 	}
 	require.NoError(t, err)
 	waitForWorkflowState(t, wf.tc.vc, fmt.Sprintf("%s.%s", wf.toKeyspace, wf.name), binlogdatapb.VReplicationWorkflowState_Running.String())
@@ -289,7 +288,6 @@ func (wf *workflow) create() {
 		i += 100
 	}
 	doVtctldclientVDiff(t, wf.toKeyspace, wf.name, cell, nil)
-
 }
 
 func (wf *workflow) switchTraffic() {
@@ -597,7 +595,7 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 		output, err = tc.vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", wfSeq.toKeyspace, "show", "--workflow", wfSeq.name)
 		require.NoError(t, err)
 
-		output, err = tc.vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", wfSeq.fromKeyspace, "show", "--workflow", fmt.Sprintf("%s_reverse", wfSeq.name))
+		output, err = tc.vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", wfSeq.fromKeyspace, "show", "--workflow", wfSeq.name+"_reverse")
 		require.NoError(t, err)
 
 		wfSeq.complete()

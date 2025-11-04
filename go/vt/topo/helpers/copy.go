@@ -89,7 +89,6 @@ func CopyShards(ctx context.Context, fromTS, toTS *topo.Server) error {
 		}
 
 		for _, shard := range shards {
-
 			si, err := fromTS.GetShard(ctx, keyspace, shard)
 			if err != nil {
 				return fmt.Errorf("GetShard(%v, %v): %w", keyspace, shard, err)
@@ -127,7 +126,6 @@ func CopyTablets(ctx context.Context, fromTS, toTS *topo.Server) error {
 			return fmt.Errorf("GetTabletsByCell(%v): %w", cell, err)
 		} else {
 			for _, tabletAlias := range tabletAliases {
-
 				// read the source tablet
 				ti, err := fromTS.GetTablet(ctx, tabletAlias)
 				if err != nil {

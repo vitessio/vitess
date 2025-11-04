@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -173,7 +174,7 @@ func TestPrimaryRestartSetsPTSTimestamp(t *testing.T) {
 	actualType := streamHealthRes1.GetTarget().GetTabletType()
 	tabletType := topodatapb.TabletType_value["PRIMARY"]
 	got := fmt.Sprintf("%d", actualType)
-	want := fmt.Sprintf("%d", tabletType)
+	want := strconv.Itoa(int(tabletType))
 	assert.Equal(t, want, got)
 	assert.NotNil(t, streamHealthRes1.GetPrimaryTermStartTimestamp())
 	assert.True(t, streamHealthRes1.GetPrimaryTermStartTimestamp() > 0,
@@ -198,7 +199,7 @@ func TestPrimaryRestartSetsPTSTimestamp(t *testing.T) {
 	actualType = streamHealthRes2.GetTarget().GetTabletType()
 	tabletType = topodatapb.TabletType_value["PRIMARY"]
 	got = fmt.Sprintf("%d", actualType)
-	want = fmt.Sprintf("%d", tabletType)
+	want = strconv.Itoa(int(tabletType))
 	assert.Equal(t, want, got)
 
 	assert.NotNil(t, streamHealthRes2.GetPrimaryTermStartTimestamp())
@@ -213,7 +214,6 @@ func TestPrimaryRestartSetsPTSTimestamp(t *testing.T) {
 	require.NoError(t, err)
 	err = primaryTablet.VttabletProcess.WaitForTabletStatus("SERVING")
 	require.NoError(t, err)
-
 }
 
 func checkHealth(t *testing.T, port int, shouldError bool) {
@@ -236,7 +236,7 @@ func checkTabletType(t *testing.T, tabletAlias string, typeWant string) {
 	got := fmt.Sprintf("%d", actualType)
 
 	tabletType := topodatapb.TabletType_value[typeWant]
-	want := fmt.Sprintf("%d", tabletType)
+	want := strconv.Itoa(int(tabletType))
 
 	assert.Equal(t, want, got)
 }

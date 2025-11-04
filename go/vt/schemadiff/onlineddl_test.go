@@ -778,7 +778,6 @@ func TestUniqueKeysCoveredByColumns(t *testing.T) {
 }
 
 func TestRevertible(t *testing.T) {
-
 	type revertibleTestCase struct {
 		name       string
 		fromSchema string

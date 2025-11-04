@@ -397,7 +397,6 @@ func TestExecutorSetOp(t *testing.T) {
 }
 
 func TestExecutorSetMetadata(t *testing.T) {
-
 	t.Run("Session 1", func(t *testing.T) {
 		executor, _, _, _, ctx := createExecutorEnv(t)
 		session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
@@ -622,7 +621,7 @@ func TestExecutorSetAndSelect(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			selectQ := fmt.Sprintf("select @@%s", tcase.sysVar)
+			selectQ := "select @@" + tcase.sysVar
 			// if the query reaches the shard, it will return REPEATABLE-READ isolation level.
 			sbc.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields(tcase.sysVar, "varchar"), "REPEATABLE-READ")})
 

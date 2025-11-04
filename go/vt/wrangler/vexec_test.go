@@ -19,6 +19,7 @@ package wrangler
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -158,7 +159,6 @@ func TestVExec(t *testing.T) {
 				}
 			} else {
 				require.ErrorContains(t, err, testCase.errorString, "Wrong error, want %s, got %s", testCase.errorString, err.Error())
-
 			}
 		})
 	}
@@ -372,7 +372,7 @@ func TestVExecValidations(t *testing.T) {
 		{
 			name:          "other",
 			want:          "",
-			expectedError: fmt.Errorf("invalid action found: other"),
+			expectedError: errors.New("invalid action found: other"),
 		}}
 
 	for _, a := range actions {

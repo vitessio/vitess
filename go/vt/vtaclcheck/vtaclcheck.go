@@ -20,6 +20,7 @@ limitations under the License.
 package vtaclcheck
 
 import (
+	"errors"
 	"fmt"
 
 	"vitess.io/vitess/go/mysql"
@@ -41,11 +42,11 @@ var options *Options
 func Init(opts *Options) error {
 	// verify opts is defined
 	if opts == nil {
-		return fmt.Errorf("vtaclcheck.Init: opts is NULL")
+		return errors.New("vtaclcheck.Init: opts is NULL")
 	}
 	// Verify options
 	if opts.ACLFile == "" && opts.StaticAuthFile == "" {
-		return fmt.Errorf("no options specified")
+		return errors.New("no options specified")
 	}
 
 	options = opts

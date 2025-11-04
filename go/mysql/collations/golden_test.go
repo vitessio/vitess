@@ -56,7 +56,6 @@ func TestAllCollationsByCharset(t *testing.T) {
 				}
 				require.NotNil(t, cset.Default, "charset %s has no default", csname)
 				require.NotNil(t, cset.Binary, "charset %s has no binary", csname)
-
 			}
 
 			for charset, expected := range tc.defaults {

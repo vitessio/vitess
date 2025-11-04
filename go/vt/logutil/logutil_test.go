@@ -26,7 +26,6 @@ import (
 )
 
 func TestParsing(t *testing.T) {
-
 	path := []string{
 		"/tmp/something.foo/zkocc.goedel.szopa.log.INFO.20130806-151006.10530",
 		"/tmp/something.foo/zkocc.goedel.szopa.test.log.ERROR.20130806-151006.10530"}

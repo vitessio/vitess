@@ -205,7 +205,6 @@ func (d *Decimal) formatFast(prec int, round bool, trim bool) []byte {
 		default:
 			integral = zeroByte
 		}
-
 	} else {
 		exp = int(d.exp)
 		sign = d.value.Sign()

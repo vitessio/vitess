@@ -234,7 +234,6 @@ func (bt *benchThread) clientLoop(ctx context.Context) {
 		} else {
 			b.Rows.Add(int64(len(result.Rows)))
 		}
-
 	}
 
 	b.wg.Done()

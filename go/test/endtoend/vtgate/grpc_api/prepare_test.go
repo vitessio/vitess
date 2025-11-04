@@ -56,5 +56,4 @@ func TestPrepareWithGRPCAPI(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, `[name:"table_name" type:VARBINARY name:"create_options" type:VARCHAR name:"table_comment" type:VARCHAR]`, fmt.Sprintf("%v", fields))
 	assert.EqualValues(t, 2, paramsCount)
-
 }

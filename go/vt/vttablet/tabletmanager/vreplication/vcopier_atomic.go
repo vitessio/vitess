@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -289,7 +290,7 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 	select {
 	case <-ctx.Done():
 		log.Infof("Copy of %v stopped", state.currentTableName)
-		return fmt.Errorf("CopyAll was interrupted due to context expiration")
+		return errors.New("CopyAll was interrupted due to context expiration")
 	default:
 		if copyWorkQueue != nil {
 			copyWorkQueue.close()

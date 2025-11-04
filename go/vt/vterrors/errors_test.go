@@ -119,7 +119,6 @@ func TestUnwrapAll(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 type nilError struct{}
@@ -354,7 +353,6 @@ func TestWrapping(t *testing.T) {
 	assertContains(t, errorWithStack, "bar", true)
 	assertContains(t, errorWithStack, "baz", true)
 	assertContains(t, errorWithStack, "TestWrapping", true)
-
 }
 
 func assertContains(t *testing.T, s, substring string, contains bool) {

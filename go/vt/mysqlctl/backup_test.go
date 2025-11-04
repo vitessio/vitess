@@ -526,7 +526,6 @@ func TestRestoreManifestMySQLVersionValidation(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 type forTest []FileEntry

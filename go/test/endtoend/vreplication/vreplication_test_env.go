@@ -29,8 +29,8 @@ const (
 )
 
 var dryRunResultsSwitchWritesCustomerShard = []string{
-	fmt.Sprintf("Lock keyspace %s", defaultSourceKs),
-	fmt.Sprintf("Lock keyspace %s", defaultTargetKs),
+	"Lock keyspace " + defaultSourceKs,
+	"Lock keyspace " + defaultTargetKs,
 	fmt.Sprintf("/Stop writes on keyspace %s for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order]: [keyspace:%s;shard:0;position:", defaultSourceKs, defaultSourceKs),
 	"Wait for vreplication on stopped streams to catchup for up to 30s",
 	"Create reverse vreplication workflow p2c_reverse",
@@ -41,17 +41,17 @@ var dryRunResultsSwitchWritesCustomerShard = []string{
 	"Switch writes completed, freeze and delete vreplication streams on: [tablet:200,tablet:300]",
 	"Start reverse vreplication streams on: [tablet:100]",
 	fmt.Sprintf("Mark vreplication streams frozen on: [keyspace:%s;shard:-80;tablet:200;workflow:p2c;dbname:vt_%s,keyspace:%s;shard:80-;tablet:300;workflow:p2c;dbname:vt_%s]", defaultTargetKs, defaultTargetKs, defaultTargetKs, defaultTargetKs),
-	fmt.Sprintf("Unlock keyspace %s", defaultTargetKs),
-	fmt.Sprintf("Unlock keyspace %s", defaultSourceKs),
+	"Unlock keyspace " + defaultTargetKs,
+	"Unlock keyspace " + defaultSourceKs,
 	"", // Additional empty newline in the output
 }
 
 var dryRunResultsReadCustomerShard = []string{
-	fmt.Sprintf("Lock keyspace %s", defaultSourceKs),
+	"Lock keyspace " + defaultSourceKs,
 	fmt.Sprintf("Switch reads for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order] to keyspace %s for tablet types [RDONLY,REPLICA]", defaultTargetKs),
 	"Routing rules for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order] will be updated",
 	fmt.Sprintf("Serving VSchema will be rebuilt for the %s keyspace", defaultTargetKs),
-	fmt.Sprintf("Unlock keyspace %s", defaultSourceKs),
+	"Unlock keyspace " + defaultSourceKs,
 	"", // Additional empty newline in the output
 }
 

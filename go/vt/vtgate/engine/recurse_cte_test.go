@@ -126,5 +126,4 @@ func TestRecurseDualQuery(t *testing.T) {
 		fmt.Sprintf(`Execute col1: %v false`, sqltypes.Int64BindVariable(4)),
 	})
 	expectResult(t, r, wantRes)
-
 }

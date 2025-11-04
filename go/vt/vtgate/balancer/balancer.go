@@ -168,7 +168,6 @@ func (b *tabletBalancer) DebugHandler(w http.ResponseWriter, _ *http.Request) {
 // by a weighted random sample so that over time the system will achieve the
 // desired balanced allocation.
 func (b *tabletBalancer) Pick(target *querypb.Target, tablets []*discovery.TabletHealth) *discovery.TabletHealth {
-
 	numTablets := len(tablets)
 	if numTablets == 0 {
 		return nil
@@ -272,7 +271,6 @@ func (b *tabletBalancer) allocateFlows(allTablets []*discovery.TabletHealth) *ta
 	// assigning local cell traffic and distributing load from cells without tablets.
 	//
 	if /* fudge for integer arithmetic */ unbalancedFlow > 10 {
-
 		// cells which are overallocated
 		overAllocated := make(map[string]int)
 		for cell, allocation := range a.Target {
@@ -292,7 +290,6 @@ func (b *tabletBalancer) allocateFlows(allTablets []*discovery.TabletHealth) *ta
 		for _, vtgateCell := range b.vtGateCells {
 			for underAllocatedCell, underAllocatedFlow := range underAllocated {
 				for overAllocatedCell, overAllocatedFlow := range overAllocated {
-
 					currentFlow := a.Outflows[vtgateCell][overAllocatedCell]
 					if currentFlow == 0 {
 						continue

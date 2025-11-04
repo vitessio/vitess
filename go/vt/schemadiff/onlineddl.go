@@ -310,7 +310,7 @@ func GetExpandedColumns(
 	err error,
 ) {
 	if len(sourceColumns.Entities) != len(targetColumns.Entities) {
-		return nil, nil, fmt.Errorf("source and target columns must be of same length")
+		return nil, nil, errors.New("source and target columns must be of same length")
 	}
 
 	expandedEntities := []*ColumnDefinitionEntity{}
@@ -616,7 +616,7 @@ func OnlineDDLMigrationTablesAnalysis(
 	}
 
 	for _, uk := range analysis.RemovedUniqueKeys.Names() {
-		analysis.RevertibleNotes = append(analysis.RevertibleNotes, fmt.Sprintf("unique constraint removed: %s", uk))
+		analysis.RevertibleNotes = append(analysis.RevertibleNotes, "unique constraint removed: "+uk)
 	}
 	for _, name := range analysis.DroppedNoDefaultColumns.Names() {
 		analysis.RevertibleNotes = append(analysis.RevertibleNotes, fmt.Sprintf("column %s dropped, and had no default value", name))

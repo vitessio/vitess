@@ -18,7 +18,6 @@ package cache
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -42,7 +41,7 @@ var (
 func SetCacheRefreshKey(k string) {
 	l := strings.ToLower(k)
 	l = strings.ReplaceAll(l, " ", "-")
-	cacheRefreshHeader, cacheRefreshGRPCMetadataKey = fmt.Sprintf("x-%s", l), l
+	cacheRefreshHeader, cacheRefreshGRPCMetadataKey = "x-"+l, l
 }
 
 // NewIncomingRefreshContext returns an incoming gRPC context with metadata

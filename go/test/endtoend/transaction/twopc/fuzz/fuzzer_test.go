@@ -279,7 +279,6 @@ func (fz *fuzzer) runFuzzerThread(t *testing.T, threadId int) {
 		// Run an atomic transaction
 		fz.generateAndExecuteTransaction(threadId)
 	}
-
 }
 
 // initialize initializes all the variables that will be needed for running the fuzzer.
@@ -393,7 +392,6 @@ func (fz *fuzzer) runClusterDisruptionThread(t *testing.T) {
 		fz.runClusterDisruption(t)
 		time.Sleep(100 * time.Millisecond)
 	}
-
 }
 
 // runClusterDisruption tries to run a single cluster disruption.

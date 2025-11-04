@@ -126,7 +126,7 @@ func (lv *lookupVindex) show() error {
 func (lv *lookupVindex) expectParamsAndOwner(expectedWriteOnlyParam bool) {
 	vschema, err := vc.VtctldClient.ExecuteCommandWithOutput("GetVSchema", lv.ownerTableKeyspace)
 	require.NoError(lv.t, err, "error executing GetVSchema: %v", err)
-	vdx := gjson.Get(vschema, fmt.Sprintf("vindexes.%s", lv.name))
+	vdx := gjson.Get(vschema, "vindexes."+lv.name)
 	require.NotNil(lv.t, vdx, "lookup vindex %s not found", lv.name)
 
 	expectedOwner, expectedFrom, expectedTo := lv.ownerTable, strings.Join(lv.columns, ","), "keyspace_id"

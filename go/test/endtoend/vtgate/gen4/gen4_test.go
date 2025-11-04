@@ -207,7 +207,7 @@ func TestMultiColumnVindex(t *testing.T) {
 
 	for _, workload := range []string{"olap", "oltp"} {
 		t.Run(workload, func(t *testing.T) {
-			utils.Exec(t, mcmp.VtConn, fmt.Sprintf(`set workload = %s`, workload))
+			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
 			utils.AssertMatches(t, mcmp.VtConn, `select id from user_region where cola = 1 and colb = 2`, `[[INT64(1)]]`)
 			utils.AssertMatches(t, mcmp.VtConn, `select id from user_region where cola in (30,422333) and colb = 40 order by id`, `[[INT64(2)] [INT64(4)] [INT64(6)]]`)
 			utils.AssertMatches(t, mcmp.VtConn, `select id from user_region where cola in (30,422333) and colb in (40,60) order by id`, `[[INT64(2)] [INT64(4)] [INT64(6)] [INT64(7)]]`)
@@ -257,7 +257,7 @@ func TestFanoutVindex(t *testing.T) {
 	defer newConn.Close()
 
 	for _, workload := range []string{"olap", "oltp"} {
-		utils.Exec(t, newConn, fmt.Sprintf(`set workload = %s`, workload))
+		utils.Exec(t, newConn, "set workload = "+workload)
 		for _, tcase := range tcases {
 			t.Run(workload+strconv.Itoa(tcase.regionID), func(t *testing.T) {
 				sql := fmt.Sprintf("select rg, uid, msg from region_tbl where rg = %d order by uid", tcase.regionID)
@@ -313,7 +313,7 @@ func TestSubShardVindex(t *testing.T) {
 
 	defer utils.ExecAllowError(t, newConn, `delete from multicol_tbl`)
 	for _, workload := range []string{"olap", "oltp"} {
-		utils.Exec(t, newConn, fmt.Sprintf(`set workload = %s`, workload))
+		utils.Exec(t, newConn, "set workload = "+workload)
 		for _, tcase := range tcases {
 			t.Run(workload+strconv.Itoa(tcase.regionID), func(t *testing.T) {
 				sql := fmt.Sprintf("select cola, colb, colc, msg from multicol_tbl where cola = %d order by cola,msg", tcase.regionID)
@@ -518,5 +518,4 @@ func TestDualJoinQueries(t *testing.T) {
 
 	// left join with a dual table on right
 	mcmp.Exec("select t.title, t2.id from t2 left join (select 'ABC' as title) as t on t.title = t2.tcol1")
-
 }

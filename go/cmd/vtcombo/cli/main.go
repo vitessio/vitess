@@ -232,7 +232,6 @@ func run(cmd *cobra.Command, args []string) (err error) {
 		})
 		// We want to ensure we can write to this database
 		mysqld.SetReadOnly(ctx, false)
-
 	} else {
 		dbconfigs.GlobalDBConfigs.InitWithSocket("", env.CollationEnv())
 		mysqld.Mysqld = mysqlctl.NewMysqld(&dbconfigs.GlobalDBConfigs)

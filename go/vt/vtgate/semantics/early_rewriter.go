@@ -104,7 +104,6 @@ func (r *earlyRewriter) up(cursor *sqlparser.Cursor) error {
 		if node.Type == sqlparser.HavingClause {
 			return r.handleHavingClause(node, cursor.Parent())
 		}
-
 	}
 	return nil
 }
@@ -778,7 +777,7 @@ func (r *earlyRewriter) rewriteOrderByLiteral(node *sqlparser.Literal) (expr sql
 
 	if num < 1 || num > stmt.GetColumnCount() {
 		return nil, false, &ColumnNotFoundClauseError{
-			Column: fmt.Sprintf("%d", num),
+			Column: strconv.Itoa(num),
 			Clause: r.clause,
 		}
 	}

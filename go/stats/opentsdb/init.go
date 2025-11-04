@@ -18,6 +18,7 @@ package opentsdb
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -76,7 +77,7 @@ func InitWithoutServenv(prefix string) (stats.PushBackend, error) {
 
 func newBackend(prefix string) (*backend, error) {
 	if openTSDBURI == "" {
-		return nil, fmt.Errorf("cannot create opentsdb PushBackend with empty --opentsdb-uri")
+		return nil, errors.New("cannot create opentsdb PushBackend with empty --opentsdb-uri")
 	}
 
 	var w writer

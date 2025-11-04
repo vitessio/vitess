@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -235,7 +236,7 @@ func getStatement(stmt string) string {
 
 	sid, exists := sm.stmt[sKey]
 	if !exists {
-		sid = fmt.Sprintf("%d", len(sm.stmt)+1)
+		sid = strconv.Itoa(len(sm.stmt) + 1)
 		sm.stmt[sKey] = sid
 	}
 	return prefix + sid

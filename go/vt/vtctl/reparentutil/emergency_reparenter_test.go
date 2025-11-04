@@ -18,6 +18,7 @@ package reparentutil
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"testing"
@@ -1867,7 +1868,6 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
@@ -2017,7 +2017,7 @@ func TestEmergencyReparenter_promotionOfNewPrimary(t *testing.T) {
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Error: fmt.Errorf("primary position error"),
+						Error: errors.New("primary position error"),
 					},
 				},
 			},
@@ -3201,7 +3201,7 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Error: fmt.Errorf("primary position error"),
+						Error: errors.New("primary position error"),
 					},
 				},
 			},
@@ -3857,7 +3857,7 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 					"zone1-0000000100": nil,
 				},
 				SetReplicationSourceResults: map[string]error{
-					"zone1-0000000101": fmt.Errorf("An error"),
+					"zone1-0000000101": errors.New("An error"),
 				},
 			},
 			newSourceTabletAlias: "zone1-0000000100",
