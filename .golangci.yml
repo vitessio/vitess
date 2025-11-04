@@ -9,6 +9,11 @@ linters:
     - errcheck
     - govet
     - ineffassign
+<<<<<<< HEAD
+=======
+    - perfsprint
+    - sqlclosecheck
+>>>>>>> 22009c8daa (`golangci-lint`: add `sqlclosecheck` linter and fixes (#18844))
     - staticcheck
   settings:
     depguard:
@@ -153,6 +158,7 @@ linters:
         path: ^go/stats/statsd/
       - linters:
           - errcheck
+          - sqlclosecheck
         path: ^go/test/
       - linters:
           - errcheck
