@@ -102,7 +102,6 @@ func TestSidecarDB(t *testing.T) {
 		numChanges := modifySidecarDBSchema(t, vc, currentPrimary, ddls1)
 		expectedChanges100 += numChanges
 		prs(t, keyspace, shard)
-
 		currentPrimary = tablet100
 
 		validateSidecarDBTables(t, tablet100, sidecarDBTables)
