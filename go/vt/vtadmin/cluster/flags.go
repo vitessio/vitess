@@ -109,7 +109,7 @@ func (cf *ClustersFlag) Set(value string) error {
 	return nil
 }
 
-// nolint:gochecknoglobals
+//nolint:gochecknoglobals
 var discoveryFlagRegexp = regexp.MustCompile(`^discovery-(?P<impl>\w+)-(?P<flag>.+)$`)
 
 func parseFlag(cfg *Config, value string) error {

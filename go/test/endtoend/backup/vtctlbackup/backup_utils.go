@@ -1084,7 +1084,7 @@ func terminateBackup(t *testing.T, alias string) {
 		text := scanner.Text()
 		if strings.Contains(text, stopBackupMsg) {
 			tmpProcess.Process.Signal(syscall.SIGTERM)
-			found = true // nolint
+			found = true //nolint
 			return
 		}
 	}

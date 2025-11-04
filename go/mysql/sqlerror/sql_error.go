@@ -367,7 +367,7 @@ func convertToMysqlError(err error) error {
 	if !ok {
 		return err
 	}
-	return NewSQLError(mysqlCode.num, mysqlCode.state, err.Error()) //nolint:govet
+	return NewSQLError(mysqlCode.num, mysqlCode.state, err.Error())
 }
 
 var isGRPCOverflowRE = regexp.MustCompile(`.*?grpc: (received|trying to send) message larger than max \(\d+ vs. \d+\)`)
