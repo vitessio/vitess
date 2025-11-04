@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/ioutil"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/os2"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/log"
@@ -1008,6 +1009,12 @@ func (be *BuiltinBackupEngine) backupManifest(
 			}
 		}()
 
+		// Get the hostname
+		hostname, err := netutil.FullyQualifiedHostname()
+		if err != nil {
+			hostname = ""
+		}
+
 		// JSON-encode and write the MANIFEST
 		bm := &builtinBackupManifest{
 			// Common base fields
@@ -1021,6 +1028,7 @@ func (be *BuiltinBackupEngine) backupManifest(
 				Incremental:        !fromPosition.IsZero(),
 				ServerUUID:         serverUUID,
 				TabletAlias:        params.TabletAlias,
+				Hostname:           hostname,
 				Keyspace:           params.Keyspace,
 				Shard:              params.Shard,
 				BackupTime:         params.BackupTime.UTC().Format(time.RFC3339),
