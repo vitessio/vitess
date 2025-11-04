@@ -299,6 +299,9 @@
  * [main] Copy `v20.0.8` release notes [#18383](https://github.com/vitessio/vitess/pull/18383)
  * [release-23.0] Code Freeze for `v23.0.0-RC1` [#18729](https://github.com/vitessio/vitess/pull/18729)
  * [release-23.0] Release of `v23.0.0-RC1` [#18755](https://github.com/vitessio/vitess/pull/18755)
+ * [release-23.0] Release of `v23.0.0-RC2` [#18840](https://github.com/vitessio/vitess/pull/18840)
+ * [release-23.0] Bump to `v23.0.0-SNAPSHOT` after the `v23.0.0-RC2` release [#18842](https://github.com/vitessio/vitess/pull/18842)
+ * update release notes [#18855](https://github.com/vitessio/vitess/pull/18855)
 ### Security 
 #### Backup and Restore
  * [release-23.0] Address dir traversal in file backup storage `GetBackups` RPC (#18814) [#18818](https://github.com/vitessio/vitess/pull/18818) 
