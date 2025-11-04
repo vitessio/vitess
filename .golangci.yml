@@ -11,6 +11,7 @@ linters:
     - govet
     - ineffassign
     - mirror
+    - nolintlint
     - perfsprint
     - staticcheck
     - whitespace
@@ -139,9 +140,6 @@ linters:
       - linters:
           - errcheck
         path: ^go/mysql/
-      - linters:
-          - revive
-        path: ^go/mysql/collations
       - linters:
           - errcheck
         path: ^go/pools/.*_test.go
