@@ -20,8 +20,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"runtime"
+	"runtime/debug"
 	"runtime/pprof"
 	"strings"
 	"sync"
@@ -412,6 +414,8 @@ func TestVStreamChunks(t *testing.T) {
 	}
 	sbc1.AddVStreamEvents([]*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_COMMIT}}, nil)
 
+	rowEncountered := false
+	doneCounting := false
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: ks,
@@ -427,25 +431,37 @@ func TestVStreamChunks(t *testing.T) {
 	vstreamCtx, vstreamCancel := context.WithCancel(ctx)
 	defer vstreamCancel()
 
-	var rowCount, ddlCount, commitCount int
+	var rowCount, ddlCount int
 	err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
-		for _, event := range events {
-			switch event.Type {
-			case binlogdatapb.VEventType_ROW:
-				rowCount += 1
-			case binlogdatapb.VEventType_COMMIT:
-				commitCount += 1
-			case binlogdatapb.VEventType_DDL:
-				ddlCount += 1
-			case binlogdatapb.VEventType_VGTID:
-				// Expected, skip
-			default:
-				t.Errorf("Unexpected event type: %v", event.Type)
-				return fmt.Errorf("unexpected event: %v", event)
+		switch events[0].Type {
+		case binlogdatapb.VEventType_ROW:
+			if doneCounting {
+				t.Errorf("Unexpected event, only expecting DDL: %v", events[0])
+				return fmt.Errorf("unexpected event: %v", events[0])
 			}
+			rowEncountered = true
+			rowCount += 1
+
+		case binlogdatapb.VEventType_COMMIT:
+			if !rowEncountered {
+				t.Errorf("Unexpected event, COMMIT after non-rows: %v", events[0])
+				return fmt.Errorf("unexpected event: %v", events[0])
+			}
+			doneCounting = true
+
+		case binlogdatapb.VEventType_DDL:
+			if !doneCounting && rowEncountered {
+				t.Errorf("Unexpected event, DDL during ROW events: %v", events[0])
+				return fmt.Errorf("unexpected event: %v", events[0])
+			}
+			ddlCount += 1
+
+		default:
+			t.Errorf("Unexpected event: %v", events[0])
+			return fmt.Errorf("unexpected event: %v", events[0])
 		}
 
-		if rowCount == 100 && ddlCount == 100 && commitCount == 1 {
+		if rowCount == 100 && ddlCount == 100 {
 			vstreamCancel()
 		}
 
@@ -457,7 +473,167 @@ func TestVStreamChunks(t *testing.T) {
 
 	require.Equal(t, 100, rowCount)
 	require.Equal(t, 100, ddlCount)
-	require.Equal(t, 1, commitCount)
+}
+
+// Verifies that large chunked transactions from one shard
+// are not interleaved with events from other shards.
+func TestVStreamChunksOverSizeThreshold(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ks := "TestVStream"
+	cell := "aa"
+	_ = createSandbox(ks)
+	hc := discovery.NewFakeHealthCheck(nil)
+	st := getSandboxTopo(ctx, cell, ks, []string{"-20", "20-40"})
+	vsm := newTestVStreamManager(ctx, hc, st, cell)
+	sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
+	sbc1 := hc.AddTestTablet("aa", "1.1.1.1", 1002, ks, "20-40", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	addTabletToSandboxTopo(t, ctx, st, ks, "20-40", sbc1.Tablet())
+
+	// Shard 0: Large transaction with BEGIN, then rows sent in multiple chunks (no COMMIT yet)
+	// Create row data to ensure we exceed the 1KB threshold
+	rowData := make([]byte, 100) // 100 bytes per row
+	for i := range rowData {
+		rowData[i] = byte(i % 256)
+	}
+
+	sbc0.AddVStreamEvents([]*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_BEGIN}}, nil)
+	for i := 0; i < 50; i++ {
+		sbc0.AddVStreamEvents([]*binlogdatapb.VEvent{{
+			Type: binlogdatapb.VEventType_ROW,
+			RowEvent: &binlogdatapb.RowEvent{
+				TableName: "shard0_table",
+				RowChanges: []*binlogdatapb.RowChange{{
+					After: &querypb.Row{
+						Lengths: []int64{int64(len(rowData))},
+						Values:  rowData,
+					},
+				}},
+			},
+		}}, nil)
+	}
+
+	// Shard 1: Complete small transaction that should NOT interleave with shard0's incomplete transaction
+	sbc1.AddVStreamEvents([]*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_BEGIN}}, nil)
+	sbc1.AddVStreamEvents([]*binlogdatapb.VEvent{{
+		Type:     binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{TableName: "shard1_table"},
+	}}, nil)
+	sbc1.AddVStreamEvents([]*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_COMMIT}}, nil)
+
+	// Shard 0: Complete the transaction with more rows
+	for i := 0; i < 50; i++ {
+		sbc0.AddVStreamEvents([]*binlogdatapb.VEvent{{
+			Type: binlogdatapb.VEventType_ROW,
+			RowEvent: &binlogdatapb.RowEvent{
+				TableName: "shard0_table",
+				RowChanges: []*binlogdatapb.RowChange{{
+					After: &querypb.Row{
+						Lengths: []int64{int64(len(rowData))},
+						Values:  rowData,
+					},
+				}},
+			},
+		}}, nil)
+	}
+	sbc0.AddVStreamEvents([]*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_COMMIT}}, nil)
+
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: ks,
+			Shard:    "-20",
+			Gtid:     "pos",
+		}, {
+			Keyspace: ks,
+			Shard:    "20-40",
+			Gtid:     "pos",
+		}},
+	}
+
+	vstreamCtx, vstreamCancel := context.WithCancel(ctx)
+	defer vstreamCancel()
+
+	// Track transaction states
+	type txState struct {
+		shard     string
+		hasBegin  bool
+		hasCommit bool
+		rowCount  int
+	}
+	var currentTx *txState
+	var completedTxs []*txState
+
+	// Set a low transaction chunk size to trigger chunking for shard0's 100 rows
+	flags := &vtgatepb.VStreamFlags{
+		TransactionChunkSize: 1024, // 1KB - will trigger chunking
+	}
+
+	err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, flags, func(events []*binlogdatapb.VEvent) error {
+		for _, event := range events {
+			switch event.Type {
+			case binlogdatapb.VEventType_VGTID:
+				// Use Keyspace/Shard from VGTID event to track transaction shard
+				if event.Keyspace != "" && event.Shard != "" {
+					shard := event.Keyspace + "/" + event.Shard
+					// If we're in a transaction, verify it's from the same shard
+					if currentTx != nil && currentTx.shard != "" && currentTx.shard != shard {
+						return fmt.Errorf("VGTID from shard %s while transaction from shard %s is in progress (interleaving detected)", shard, currentTx.shard)
+					}
+					// Set shard for current transaction if not yet set
+					if currentTx != nil && currentTx.shard == "" {
+						currentTx.shard = shard
+					}
+				}
+			case binlogdatapb.VEventType_BEGIN:
+				// Start of new transaction - ensure no transaction is in progress
+				if currentTx != nil && !currentTx.hasCommit {
+					return fmt.Errorf("BEGIN received while transaction %s is still open (interleaving detected)", currentTx.shard)
+				}
+				currentTx = &txState{hasBegin: true}
+			case binlogdatapb.VEventType_ROW:
+				if currentTx == nil {
+					return fmt.Errorf("ROW event outside transaction")
+				}
+				currentTx.rowCount++
+			case binlogdatapb.VEventType_COMMIT:
+				if currentTx == nil {
+					return fmt.Errorf("COMMIT without BEGIN")
+				}
+				currentTx.hasCommit = true
+				completedTxs = append(completedTxs, currentTx)
+				t.Logf("COMMIT transaction for shard %s (rows=%d, completed_txs=%d)", currentTx.shard, currentTx.rowCount, len(completedTxs))
+				currentTx = nil
+			default:
+				// Ignore other event types
+			}
+		}
+
+		// Cancel after both transactions complete
+		if len(completedTxs) == 2 {
+			vstreamCancel()
+		}
+
+		return nil
+	})
+
+	require.Error(t, err)
+	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
+
+	// Verify we got both transactions
+	require.Equal(t, 2, len(completedTxs), "Should receive both transactions")
+
+	// Verify transaction integrity
+	var rowCounts []int
+	for _, tx := range completedTxs {
+		require.True(t, tx.hasBegin, "Transaction should have BEGIN")
+		require.True(t, tx.hasCommit, "Transaction should have COMMIT")
+		rowCounts = append(rowCounts, tx.rowCount)
+	}
+
+	// Verify we got transactions with expected row counts (order may vary)
+	require.ElementsMatch(t, []int{1, 100}, rowCounts, "Should have one transaction with 1 row and one with 100 rows")
 }
 
 func TestVStreamMulti(t *testing.T) {
@@ -2289,6 +2465,11 @@ func addTabletToSandboxTopo(tb testing.TB, ctx context.Context, st *sandboxTopo,
 }
 
 func TestVStreamLargeTransactionMemory(t *testing.T) {
+	// Set a memory limit to trigger more aggressive GC for accurate memory measurement
+	// This helps ensure we're not just measuring GC lag but actual memory accumulation
+	debug.SetMemoryLimit(30 * 1024 * 1024)    // 30MB limit
+	defer debug.SetMemoryLimit(math.MaxInt64) // Reset to no limit after test
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -2355,8 +2536,14 @@ func TestVStreamLargeTransactionMemory(t *testing.T) {
 	// Track memory usage
 	var memStats runtime.MemStats
 
-	err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
-		// Check memory after each batch
+	// Set a very low transaction chunk size to trigger immediate chunking
+	flags := &vtgatepb.VStreamFlags{
+		TransactionChunkSize: 100 * 1024, // 100KB - will trigger chunking for each chunk
+	}
+
+	err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, flags, func(events []*binlogdatapb.VEvent) error {
+		// Force GC and check memory after each batch
+		runtime.GC()
 		runtime.ReadMemStats(&memStats)
 		usedMB := memStats.Alloc / 1024 / 1024
 		if usedMB > maxMemUsedMB {
@@ -2390,9 +2577,12 @@ func TestVStreamLargeTransactionMemory(t *testing.T) {
 	t.Logf("Max memory used: %d MB", maxMemUsedMB)
 
 	// Assert that we stayed under our expected max memory usage.
-	maxExpectedMemUsedMB := uint64(25)
+	// With aggressive GC (30MB limit, explicit GC calls) and 100KB transaction chunk size,
+	// memory should stay very low as we only accumulate small chunks before sending.
+	// Without chunking, memory would accumulate all 50MB of events before COMMIT.
+	maxExpectedMemUsedMB := uint64(25) // With GC and chunking, should stay well under test data size
 	require.Less(t, maxMemUsedMB, maxExpectedMemUsedMB,
-		"Memory usage should stay low due to immediate transaction chunk sending. "+
-			"VTGate should not accumulate all %d chunks (~%dMB) before sending.",
-		numChunks, numChunks)
+		"Memory usage should stay low due to immediate transaction chunk sending with GC. "+
+			"Without chunking, memory would exceed 50MB. Got %dMB which should be < %dMB.",
+		maxMemUsedMB, maxExpectedMemUsedMB)
 }
