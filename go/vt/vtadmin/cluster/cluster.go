@@ -1318,6 +1318,7 @@ func (c *Cluster) getTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 
 	return c.parseTablets(rows)
 }
