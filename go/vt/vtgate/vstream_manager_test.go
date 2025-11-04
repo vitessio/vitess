@@ -594,12 +594,12 @@ func TestVStreamChunksOverSizeThreshold(t *testing.T) {
 				currentTx = &txState{hasBegin: true}
 			case binlogdatapb.VEventType_ROW:
 				if currentTx == nil {
-					return fmt.Errorf("ROW event outside transaction")
+					return errors.New("ROW event outside transaction")
 				}
 				currentTx.rowCount++
 			case binlogdatapb.VEventType_COMMIT:
 				if currentTx == nil {
-					return fmt.Errorf("COMMIT without BEGIN")
+					return errors.New("COMMIT without BEGIN")
 				}
 				currentTx.hasCommit = true
 				completedTxs = append(completedTxs, currentTx)
