@@ -231,7 +231,6 @@ func (b *flowBalancer) DebugHandler(w http.ResponseWriter, _ *http.Request) {
 // by a weighted random sample so that over time the system will achieve the
 // desired balanced allocation.
 func (b *flowBalancer) Pick(target *querypb.Target, tablets []*discovery.TabletHealth) *discovery.TabletHealth {
-
 	numTablets := len(tablets)
 	if numTablets == 0 {
 		return nil
