@@ -201,7 +201,7 @@ Flags:
       --init-db-name-override string                                     (init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>
       --init-keyspace string                                             (init parameter) keyspace to use for this tablet
       --init-shard string                                                (init parameter) shard to use for this tablet
-      --init_tablet_type string                                          (init parameter) the tablet type to use for this tablet. Can be REPLICA, RDONLY, or SPARE.
+      --init_tablet_type string                                          (init parameter) the tablet type to use for this tablet. Can be REPLICA, RDONLY, or SPARE. The default is REPLICA.
       --init_tablet_type_lookup                                          (optional, init parameter) if enabled, look up the tablet type from the existing topology record on restart and use that instead of init_tablet_type. This allows tablets to maintain their changed roles (e.g., RDONLY/DRAINED) across restarts. If disabled or if no topology record exists, init_tablet_type will be used.
       --init-tags StringMap                                              (init parameter) comma separated list of key:value pairs used to tag the tablet
       --init-timeout duration                                            (init parameter) timeout to use for the init phase. (default 1m0s)
