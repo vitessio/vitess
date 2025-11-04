@@ -1607,6 +1607,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.Safe
 
 	qr, err := plan.Instructions.GetFields(ctx, vcursor, bindVars)
 	logStats.ExecuteTime = time.Since(execStart)
+	// TODO(timvaillancourt): fix errCount = 1 never being used due to return.
 	var errCount uint64
 	if err != nil {
 		logStats.Error = err
