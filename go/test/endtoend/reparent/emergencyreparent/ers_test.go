@@ -231,6 +231,7 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 	// Note: The writes that were not replicated were caused by the semi sync unblocker, which
 	//       performed writes after ERS.
 	require.Equal(t, "NOT_SERVING", tablets[0].VttabletProcess.GetTabletStatus())
+	require.Equal(t, "SERVING", tablets[1].VttabletProcess.GetTabletStatus())
 }
 
 func TestReparentNoChoiceDownPrimary(t *testing.T) {
