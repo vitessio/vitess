@@ -195,7 +195,7 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 		defer wg.Done()
 
 		// Ensure the write is waiting on the primary.
-		utils.WaitForQueryWithStateInProcesslist(context.TODO(), t, tablets[0], writeSQL, "Waiting for semi-sync ACK from replica", time.Second*20)
+		utils.WaitForQueryWithStateInProcesslist(context.Background(), t, tablets[0], writeSQL, "Waiting for semi-sync ACK from replica", time.Second*20)
 
 		// Send SIGSTOP to primary to simulate it being unresponsive.
 		tablets[0].VttabletProcess.Stop()
