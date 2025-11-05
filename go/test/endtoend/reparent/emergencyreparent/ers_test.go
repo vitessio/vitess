@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -195,6 +196,8 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 	}()
 
 	wg.Add(1)
+
+	waitReplicasTimeout := time.Second * 10
 	go func() {
 		defer wg.Done()
 
@@ -205,7 +208,7 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 		tablets[0].VttabletProcess.Stop()
 
 		// Run forced reparent operation, this should now proceed unimpeded.
-		out, err := utils.Ers(clusterInstance, tablets[1], "15s", "10s")
+		out, err := utils.Ers(clusterInstance, tablets[1], "15s", waitReplicasTimeout.String())
 		require.NoError(t, err, out)
 	}()
 
@@ -213,29 +216,32 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 
 	// We need to wait at least 10 seconds here to ensure the wait-for-replicas-timeout has passed,
 	// before we resume the old primary - otherwise the old primary will receive a `SetReplicationSource` call.
-	time.Sleep(20 * time.Second)
+	time.Sleep(waitReplicasTimeout * 2)
 
 	// Bring back the demoted primary
 	tablets[0].VttabletProcess.Resume()
 
-	// Give the old primary some time to realize it's no longer the primary.
-	time.Sleep(20 * time.Second)
+	// Give the old primary some time to realize it's no longer the primary,
+	// and for a new primary to be promoted.
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		// Ensure the old primary was demoted correctly
+		tabletInfo, err := clusterInstance.VtctldClientProcess.GetTablet(tablets[0].Alias)
+		require.NoError(c, err)
 
-	// Ensure the old primary was demoted correctly
-	tabletInfo, err := clusterInstance.VtctldClientProcess.GetTablet(tablets[0].Alias)
-	require.NoError(t, err)
+		// The old primary should have noticed there's a new primary tablet now and should
+		// have demoted itself to REPLICA.
+		require.Equal(c, topodatapb.TabletType_REPLICA, tabletInfo.GetType())
 
-	// The old primary should have noticed there's a new primary tablet now and should
-	// have demoted itself to REPLICA.
-	require.Equal(t, topodatapb.TabletType_REPLICA, tabletInfo.GetType())
+		// The old primary should be in not serving mode because we should be unable to re-attach it
+		// as a replica due to the errant GTID caused by semi-sync writes that were never replicated out.
+		//
+		// Note: The writes that were not replicated were caused by the semi sync unblocker, which
+		//       performed writes after ERS.
+		require.Equal(c, "NOT_SERVING", tablets[0].VttabletProcess.GetTabletStatus())
 
-	// The old primary should be in not serving mode because we should be unable to re-attach it
-	// as a replica due to the errant GTID caused by semi-sync writes that were never replicated out.
-	//
-	// Note: The writes that were not replicated were caused by the semi sync unblocker, which
-	//       performed writes after ERS.
-	require.Equal(t, "NOT_SERVING", tablets[0].VttabletProcess.GetTabletStatus())
-	require.Equal(t, "SERVING", tablets[1].VttabletProcess.GetTabletStatus())
+		// Check the 2nd tablet becomes PRIMARY.
+		require.Equal(c, "SERVING", tablets[1].VttabletProcess.GetTabletStatus())
+	}, 30*time.Second, time.Second, "could not validate primary was demoted")
 }
 
 func TestReparentNoChoiceDownPrimary(t *testing.T) {
