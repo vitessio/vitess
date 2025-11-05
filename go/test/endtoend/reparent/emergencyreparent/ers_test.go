@@ -198,6 +198,7 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 
 		// Verify vtgate really processed the insert in case something unrelated caused the deadline exceeded.
 		vtgateVars := clusterInstance.VtgateProcess.GetVars()
+		require.NotNil(t, vtgateVars)
 		require.NotNil(t, vtgateVars["QueryRoutes"])
 		require.NotNil(t, vtgateVars["VtgateApiErrorCounts"])
 		require.EqualValues(t, map[string]interface{}{
