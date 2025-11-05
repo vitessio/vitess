@@ -39,7 +39,7 @@ jobs:
       run: |
         totalMem=$(free -g | awk 'NR==2 {print $2}')
         echo "total memory $totalMem GB"
-        if [[ "$totalMem" -lt 15 ]]; then 
+        if [[ "$totalMem" -lt 15 ]]; then
           echo "Less memory than required"
           exit 1
         fi
@@ -108,6 +108,14 @@ jobs:
         sudo dpkg-reconfigure man-db
 
 
+    {{if not .InstallXtraBackup}}
+    - name: Setup MySQL
+      if: steps.changes.outputs.end_to_end == 'true'
+      uses: ./.github/actions/setup-mysql
+      with:
+        flavor: mysql-8.4
+    {{ end }}
+
     - name: Get dependencies
       if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
@@ -116,12 +124,13 @@ jobs:
 
         # Setup Percona Server for MySQL 8.0
         sudo apt-get -qq update
-        sudo apt-get -qq install -y lsb-release gnupg2 curl
+        sudo apt-get -qq install -y lsb-release gnupg2
         wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
         sudo percona-release setup ps80
         sudo apt-get -qq update
 
+<<<<<<< HEAD
         # Install everything else we need, and configure
         sudo apt-get -qq install -y percona-server-server percona-server-client make unzip g++ etcd-client etcd-server git wget eatmydata xz-utils libncurses6
 
@@ -145,23 +154,32 @@ jobs:
 
         # Install everything else we need, and configure
         sudo apt-get -qq install -y mysql-server mysql-shell mysql-client make unzip g++ etcd-client etcd-server curl git wget eatmydata xz-utils libncurses6
+=======
+        sudo apt-get -qq install -y percona-server-server percona-server-client
+
+        sudo service mysql stop
+
+        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+
+        sudo apt-get -qq install -y percona-xtrabackup-80 lz4
+
+        {{else}}
+
+        sudo apt-get -qq install -y mysql-shell
+>>>>>>> 885917d5cb (ci: DRY up MySQL Setup (#18815))
 
         {{end}}
 
-        sudo service mysql stop
+        # Install everything else we need, and configure
+        sudo apt-get -qq install -y make unzip g++ etcd-client etcd-server curl git wget xz-utils libncurses6
+
         sudo service etcd stop
-        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+
         go mod download
 
         # install JUnit report formatter
         go install github.com/vitessio/go-junit-report@HEAD
-
-        {{if .InstallXtraBackup}}
-
-        sudo apt-get -qq install -y percona-xtrabackup-80 lz4
-
-        {{end}}
 
     {{if .NeedsMinio }}
     - name: Install Minio
