@@ -243,6 +243,9 @@ message Shard {
     // frozen is set if we've started failing over traffic for
     // the primary. If set, this record should not be removed.
     bool frozen = 5;
+
+    // Allow reads to the denied tables.
+    bool allow_reads = 6;
   }
 
   // tablet_controls has at most one entry per TabletType.
@@ -283,7 +286,7 @@ message Keyspace {
   // base_keyspace is the base keyspace from which a snapshot
   // keyspace is created. empty for normal keyspaces
   string base_keyspace = 6;
-  
+
   // snapshot_time (in UTC) is a property of snapshot
   // keyspaces which tells us what point in time
   // the snapshot is of
@@ -457,7 +460,7 @@ message CellInfo {
   reserved 3;
 }
 
-// CellsAlias 
+// CellsAlias
 message CellsAlias {
   // Cells that map to this alias
   repeated string cells = 2;
