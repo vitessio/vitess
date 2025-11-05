@@ -660,7 +660,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 
 	time.Sleep(srvTopoCacheTTL)
 
-	timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), srvTopoCacheRefresh*2) //nolint
+	timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), srvTopoCacheRefresh*2)
 	defer timeoutCancel()
 	_, err = rs.GetSrvKeyspaceNames(timeoutCtx, "test_cell", false)
 	if err != context.DeadlineExceeded {

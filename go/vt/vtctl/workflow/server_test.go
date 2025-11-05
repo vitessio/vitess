@@ -2313,24 +2313,30 @@ func TestWorkflowStatus(t *testing.T) {
 		Workflow:       workflow,
 		TableSettings: []*vtctldatapb.TableMaterializeSettings{
 			{
-				TargetTable:      "table1",
+				TargetTable:      "table1", // Already finished copying
 				SourceExpression: "select * from " + "table1",
 			},
 			{
-				TargetTable:      "table2",
+				TargetTable:      "table2", // In progress
 				SourceExpression: "select * from " + "table2",
+			},
+			{
+				TargetTable:      "table3", // Not started
+				SourceExpression: "select * from " + "table3",
 			},
 		},
 	}, sourceShards, targetShards)
 
-	tablesResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name", "varchar"), "table1", "table2")
+	// We don't specify table1 here as we finished copying it already.
+	// table1 should still be returned in the copy status though.
+	tablesResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name", "varchar"), "table2", "table3")
 	te.tmc.expectVRQuery(200, "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1", tablesResult)
 
-	tablesTargetCopyResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|table_rows|data_length", "varchar|int64|int64"), "table1|50|500", "table2|100|250")
-	te.tmc.expectVRQuery(200, "select table_name, table_rows, data_length from information_schema.tables where table_schema = 'vt_target_keyspace' and table_name in ('table1','table2')", tablesTargetCopyResult)
+	tablesTargetCopyResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|table_rows|data_length", "varchar|int64|int64"), "table1|100|1000", "table2|100|250", "table3|0|16")
+	te.tmc.expectVRQuery(200, "select table_name, table_rows, data_length from information_schema.tables where table_schema = 'vt_target_keyspace' and table_name in ('table1','table2','table3')", tablesTargetCopyResult)
 
-	tablesSourceCopyResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|table_rows|data_length", "varchar|int64|int64"), "table1|100|1000", "table2|200|500")
-	te.tmc.expectVRQuery(100, "select table_name, table_rows, data_length from information_schema.tables where table_schema = 'vt_source_keyspace' and table_name in ('table1','table2')", tablesSourceCopyResult)
+	tablesSourceCopyResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|table_rows|data_length", "varchar|int64|int64"), "table1|100|1000", "table2|200|500", "table3|5000|32000")
+	te.tmc.expectVRQuery(100, "select table_name, table_rows, data_length from information_schema.tables where table_schema = 'vt_source_keyspace' and table_name in ('table1','table2','table3')", tablesSourceCopyResult)
 
 	te.tmc.expectVRQuery(200, "select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (1) and id in (select max(id) from _vt.copy_state where vrepl_id in (1) group by vrepl_id, table_name)", &sqltypes.Result{})
 
@@ -2346,15 +2352,23 @@ func TestWorkflowStatus(t *testing.T) {
 
 	stateTable1 := res.TableCopyState["table1"]
 	stateTable2 := res.TableCopyState["table2"]
+	stateTable3 := res.TableCopyState["table3"]
 	require.NotNil(t, stateTable1)
 	require.NotNil(t, stateTable2)
+	require.NotNil(t, stateTable3)
 
 	assert.Equal(t, int64(100), stateTable1.RowsTotal)
+	assert.Equal(t, int64(100), stateTable1.RowsCopied)
+	assert.Equal(t, float32(100), stateTable1.RowsPercentage)
+	assert.Equal(t, vtctldatapb.TableCopyPhase_COMPLETE, stateTable1.Phase)
 	assert.Equal(t, int64(200), stateTable2.RowsTotal)
-	assert.Equal(t, int64(50), stateTable1.RowsCopied)
 	assert.Equal(t, int64(100), stateTable2.RowsCopied)
-	assert.Equal(t, float32(50), stateTable1.RowsPercentage)
 	assert.Equal(t, float32(50), stateTable2.RowsPercentage)
+	assert.Equal(t, vtctldatapb.TableCopyPhase_IN_PROGRESS, stateTable2.Phase)
+	assert.Equal(t, int64(5000), stateTable3.RowsTotal)
+	assert.Equal(t, int64(0), stateTable3.RowsCopied)
+	assert.Equal(t, float32(0), stateTable3.RowsPercentage)
+	assert.Equal(t, vtctldatapb.TableCopyPhase_NOT_STARTED, stateTable3.Phase)
 }
 
 func TestDeleteShard(t *testing.T) {

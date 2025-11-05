@@ -49,10 +49,10 @@ func TestConfigParse(t *testing.T) {
 		f, err := os.CreateTemp("", "vtsql-config-test-testcluster-*") // testcluster is going to appear in the template
 		require.NoError(t, err)
 
-		_, err = f.Write([]byte(`{
+		_, err = f.WriteString(`{
 	"Username": "vtadmin",
 	"Password": "hunter2"
-}`))
+}`)
 		require.NoError(t, err)
 
 		path := f.Name()
@@ -103,10 +103,10 @@ func TestConfigParse(t *testing.T) {
 		f, err := os.CreateTemp("", "vtsql-config-test-testcluster-*") // testcluster is going to appear in the template
 		require.NoError(t, err)
 
-		_, err = f.Write([]byte(`{
+		_, err = f.WriteString(`{
 	"Username": "vtadmin",
 	"Password": "hunter2"
-}`))
+}`)
 		require.NoError(t, err)
 
 		path := f.Name()
@@ -194,10 +194,10 @@ func TestConfigParse(t *testing.T) {
 		f, err := os.CreateTemp("", "vtsql-config-test-testcluster-*") // testcluster is going to appear in the template
 		require.NoError(t, err)
 
-		_, err = f.Write([]byte(`{
+		_, err = f.WriteString(`{
 	"Username": "vtadmin",
 	"Password": "hunter2"
-}`))
+}`)
 		require.NoError(t, err)
 
 		path := f.Name()
