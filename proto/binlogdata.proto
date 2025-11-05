@@ -601,3 +601,14 @@ message VStreamResultsResponse {
   string gtid = 3;
   repeated query.Row rows = 4;
 }
+
+message DumpBinlogRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  query.VTGateCallerID immediate_caller_id = 2;
+  query.Target target = 3;
+  string gtid = 4;
+}
+
+message DumpBinlogResponse {
+  bytes data = 1;
+}

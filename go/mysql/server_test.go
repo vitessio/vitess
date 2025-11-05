@@ -265,7 +265,7 @@ func (th *testHandler) ComRegisterReplica(c *Conn, replicaHost string, replicaPo
 func (th *testHandler) ComBinlogDump(c *Conn, logFile string, binlogPos uint32) error {
 	return nil
 }
-func (th *testHandler) ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error {
+func (th *testHandler) ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet, nonBlock bool) error {
 	return nil
 }
 
