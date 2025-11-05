@@ -234,10 +234,11 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 				Threshold:          80.0,
 				ThrottlePercentage: 1.0,
 			},
-			expectError:           false,
-			expectDryRunLog:       true,
-			expectedLogMsg:        "[DRY-RUN] Query throttled: metric=cpu value=95.0 threshold=80.0",
-			expectedTotalRequests: 1,
+			expectError:               false,
+			expectDryRunLog:           true,
+			expectedLogMsg:            "[DRY-RUN] Query throttled: metric=cpu value=95.0 threshold=80.0, metric name: cpu, metric value: 95.000000",
+			expectedTotalRequests:     1,
+			expectedThrottledRequests: 1,
 		},
 		{
 			name:    "Dry-run mode - query allowed normally",
@@ -273,7 +274,9 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 				env:      env,
 				stats: Stats{
 					requestsTotal:     env.Exporter().NewCountersWithMultiLabels(_queryThrottleAppName+"Requests", "TestThrottler requests", []string{"strategy", "workload", "priority"}),
-					requestsThrottled: env.Exporter().NewCountersWithMultiLabels(_queryThrottleAppName+"Throttled", "TestThrottler throttled", []string{"strategy", "workload", "priority"}),
+					requestsThrottled: env.Exporter().NewCountersWithMultiLabels(_queryThrottleAppName+"Throttled", "TestThrottler throttled", []string{"strategy", "workload", "priority", "metric_name", "metric_value", "dry_run"}),
+					totalLatency:      env.Exporter().NewMultiTimings(_queryThrottleAppName+"TotalLatencyMs", "Total latency of QueryThrottler.Throttle in milliseconds", []string{"strategy", "workload", "priority"}),
+					evaluateLatency:   env.Exporter().NewMultiTimings(_queryThrottleAppName+"EvaluateLatencyMs", "Latency from Throttle entry to completion of Evaluate in milliseconds", []string{"strategy", "workload", "priority"}),
 				},
 			}
 
