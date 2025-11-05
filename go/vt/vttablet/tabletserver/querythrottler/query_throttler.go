@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/vt/log"
@@ -38,6 +39,7 @@ import (
 )
 
 const (
+	_queryThrottleAppName = "QueryThrottler"
 	// defaultPriority is the default priority value when none is specified
 	defaultPriority = 100 // sqlparser.MaxPriorityValue
 )
@@ -45,6 +47,8 @@ const (
 type Stats struct {
 	requestsTotal     *stats.CountersWithMultiLabels
 	requestsThrottled *stats.CountersWithMultiLabels
+	totalLatency      *servenv.MultiTimingsWrapper
+	evaluateLatency   *servenv.MultiTimingsWrapper
 }
 
 type QueryThrottler struct {
@@ -76,7 +80,9 @@ func NewQueryThrottler(ctx context.Context, throttler *throttle.Throttler, cfgLo
 		env:            env,
 		stats: Stats{
 			requestsTotal:     env.Exporter().NewCountersWithMultiLabels(_queryThrottleAppName+"Requests", "query throttler requests", []string{"strategy", "workload", "priority"}),
-			requestsThrottled: env.Exporter().NewCountersWithMultiLabels(_queryThrottleAppName+"Throttled", "query throttler requests throttled", []string{"strategy", "workload", "priority"}),
+			requestsThrottled: env.Exporter().NewCountersWithMultiLabels(_queryThrottleAppName+"Throttled", "query throttler requests throttled", []string{"strategy", "workload", "priority", "metric_name", "metric_value", "dry_run"}),
+			totalLatency:      env.Exporter().NewMultiTimings(_queryThrottleAppName+"TotalLatencyNs", "Total latency of QueryThrottler.Throttle in nanoseconds", []string{"strategy", "workload", "priority"}),
+			evaluateLatency:   env.Exporter().NewMultiTimings(_queryThrottleAppName+"EvaluateLatencyNs", "Latency from Throttle entry to completion of Evaluate in nanoseconds", []string{"strategy", "workload", "priority"}),
 		},
 	}
 
@@ -117,14 +123,28 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 		return nil
 	}
 
+	// Capture start time for latency measurements only when throttling is enabled
+	startTime := time.Now()
+
 	// Extract query attributes once to avoid re computation in strategies
 	attrs := registry.QueryAttributes{
 		WorkloadName: extractWorkloadName(options),
 		Priority:     extractPriority(options),
 	}
+	strategyName := tStrategy.GetStrategyName()
+	workload := attrs.WorkloadName
+	priorityStr := strconv.Itoa(attrs.Priority)
+
+	// Defer total latency recording to ensure it's always emitted regardless of return path.
+	defer func() {
+		qt.stats.totalLatency.Record([]string{strategyName, workload, priorityStr}, startTime)
+	}()
 
 	// Evaluate the throttling decision
 	decision := qt.strategy.Evaluate(ctx, tabletType, parsedQuery, transactionID, attrs)
+
+	// Record evaluate-window latency immediately after Evaluate returns
+	qt.stats.evaluateLatency.Record([]string{strategyName, workload, priorityStr}, startTime)
 
 	qt.stats.requestsTotal.Add([]string{strategyName, workload, priorityStr}, 1)
 
@@ -133,14 +153,16 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 		return nil
 	}
 
+	// Emit metric of query being throttled.
+	qt.stats.requestsThrottled.Add([]string{strategyName, workload, priorityStr, decision.MetricName, strconv.FormatFloat(decision.MetricValue, 'f', -1, 64), strconv.FormatBool(tCfg.DryRun)}, 1)
+
 	// If dry-run mode is enabled, log the decision but don't throttle
 	if qt.cfg.DryRun {
-		log.Warningf("[DRY-RUN] %s", decision.Message)
+		log.Warningf("[DRY-RUN] %s, metric name: %s, metric value: %f", decision.Message, decision.MetricName, decision.MetricValue)
 		return nil
 	}
 
 	// Normal throttling: return an error to reject the query
-	qt.stats.requestsThrottled.Add([]string{strategyName, workload, priorityStr}, 1)
 	return vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, decision.Message)
 }
 
