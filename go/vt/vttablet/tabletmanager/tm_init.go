@@ -407,7 +407,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 			log.Infof("No existing tablet record found, using init-tablet-type: %v", tablet.Type)
 		}
 	} else {
-		log.Infof("Using init-tablet-type %v (--init-tablet-type-lookup is not enabled)", tablet.Type)
+		log.Infof("Using init-tablet-type %v", tablet.Type)
 	}
 
 	tm.tmState = newTMState(tm, tablet)
