@@ -252,9 +252,11 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 		// Note: The writes that were not replicated were caused by the semi sync unblocker, which
 		//       performed writes after ERS.
 		require.Equal(c, "NOT_SERVING", tablets[0].VttabletProcess.GetTabletStatus())
+		require.Equal(c, "replica", tablets[0].VttabletProcess.GetTabletType())
 
 		// Check the 2nd tablet becomes PRIMARY.
 		require.Equal(c, "SERVING", tablets[1].VttabletProcess.GetTabletStatus())
+		require.Equal(c, "primary", tablets[1].VttabletProcess.GetTabletType())
 	}, 30*time.Second, time.Second, "could not validate primary was demoted")
 }
 
