@@ -182,7 +182,7 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 		utils.RunSQL(context.Background(), t, "START REPLICA IO_THREAD", tablet)
 	}
 
-	// Try performing a write and ensure that it blocks
+	// Try performing a write and ensure that it blocks.
 	writeSQL := `insert into test(id, msg) values (1, 'test 1')`
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -190,18 +190,31 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 		defer wg.Done()
 
 		// Attempt writing via vtgate against the primary. This should block (because there's no replicas to ack the semi-sync),
-		// and fail once we perform the ERS
+		// and fail on the vtgate query timeout. Async replicas will still receive this write (probably), because it is written
+		// to the PRIMARY binlog even when no ackers exist. This means we need to disable the vtgate buffer (above), because it
+		// will attempt the write on the promoted, unblocked primary - and this will hit a dupe key error.
 		_, err := conn.ExecuteFetch(writeSQL, 0, false)
 		require.ErrorContains(t, err, "context deadline exceeded (errno 1317) (sqlstate 70100) during query: "+writeSQL)
+
+		// Verify vtgate really processed the insert in case something unrelated caused the deadline exceeded.
+		vtgateVars := clusterInstance.VtgateProcess.GetVars()
+		require.NotNil(t, vtgateVars["QueryRoutes"])
+		require.NotNil(t, vtgateVars["VtgateApiErrorCounts"])
+		require.EqualValues(t, map[string]interface{}{
+			"DDL.DirectDDL.PRIMARY":      float64(1),
+			"INSERT.Passthrough.PRIMARY": float64(1),
+		}, vtgateVars["QueryRoutes"])
+		require.EqualValues(t, map[string]interface{}{
+			"Execute.ks.primary.DEADLINE_EXCEEDED": float64(1),
+		}, vtgateVars["VtgateApiErrorCounts"])
 	}()
 
 	wg.Add(1)
-
 	waitReplicasTimeout := time.Second * 10
 	go func() {
 		defer wg.Done()
 
-		// Ensure the write is waiting on the primary.
+		// Ensure the write (other goroutine above) is blocked waiting on ACKs on the primary.
 		utils.WaitForQueryWithStateInProcesslist(context.Background(), t, tablets[0], writeSQL, "Waiting for semi-sync ACK from replica", time.Second*20)
 
 		// Send SIGSTOP to primary to simulate it being unresponsive.
