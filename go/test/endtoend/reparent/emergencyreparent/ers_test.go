@@ -142,6 +142,10 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 		t.Skip("Skipping test since `DemotePrimary` on earlier versions does not handle blocked primaries correctly")
 	}
 
+	// start vtgate w/disabled buffering
+	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
+		"--enable_buffer=false",
+		"--query-timeout", "3000")
 	err := clusterInstance.StartVtgate()
 	require.NoError(t, err)
 
@@ -162,7 +166,7 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 
 	// Simulate no semi-sync replicas being available by disabling semi-sync on all replicas
 	for _, tablet := range tablets[1:] {
-		utils.RunSQL(ctx, t, "STOP REPLICA", tablet)
+		utils.RunSQL(ctx, t, "STOP REPLICA IO_THREAD", tablet)
 
 		// Disable semi-sync on replicas to simulate blocking
 		semisyncType, err := utils.SemiSyncExtensionLoaded(context.Background(), tablet)
@@ -174,7 +178,7 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 			utils.RunSQL(context.Background(), t, "SET GLOBAL rpl_semi_sync_slave_enabled = false", tablet)
 		}
 
-		utils.RunSQL(context.Background(), t, "START REPLICA", tablet)
+		utils.RunSQL(context.Background(), t, "START REPLICA IO_THREAD", tablet)
 	}
 
 	// Try performing a write and ensure that it blocks
@@ -187,7 +191,7 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 		// Attempt writing via vtgate against the primary. This should block (because there's no replicas to ack the semi-sync),
 		// and fail once we perform the ERS
 		_, err := conn.ExecuteFetch(writeSQL, 0, false)
-		require.Error(t, err)
+		require.ErrorContains(t, err, "context deadline exceeded (errno 1317) (sqlstate 70100) during query: "+writeSQL)
 	}()
 
 	wg.Add(1)
