@@ -414,8 +414,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	// Save initial state so we can restore.
 	replicaStartRequired := false
 	sourceIsPrimary := false
-	superReadOnly := true // nolint
-	readOnly := true      // nolint
+	superReadOnly := true
 	var replicationPosition replication.Position
 	semiSyncSource, semiSyncReplica := params.Mysqld.SemiSyncEnabled(ctx)
 
@@ -433,7 +432,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	}
 
 	// get the read-only flag
-	readOnly, err = params.Mysqld.IsReadOnly(ctx)
+	readOnly, err := params.Mysqld.IsReadOnly(ctx)
 	if err != nil {
 		return BackupUnusable, vterrors.Wrap(err, "failed to get read_only status")
 	}

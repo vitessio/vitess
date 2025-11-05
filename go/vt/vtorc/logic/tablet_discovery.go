@@ -205,7 +205,7 @@ func OpenTabletDiscovery() <-chan time.Time {
 	if err := refreshAllInformation(ctx); err != nil {
 		log.Errorf("failed to initialize topo information: %+v", err)
 	}
-	return time.Tick(config.GetTopoInformationRefreshDuration()) //nolint SA1015: using time.Tick leaks the underlying ticker
+	return time.Tick(config.GetTopoInformationRefreshDuration())
 }
 
 // getAllTablets gets all tablets from all cells using a goroutine per cell. It returns a map of
