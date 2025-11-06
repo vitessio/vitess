@@ -536,13 +536,16 @@ func ExecuteBackupInitSQL(ctx context.Context, params *BackupParams) error {
 	if params == nil || params.InitSQL == nil || len(params.InitSQL.Queries) == 0 { // Nothing to do
 		return nil
 	}
-	if topoproto.IsTypeInList(params.TabletType, params.InitSQL.TabletTypes) {
+	if !topoproto.IsTypeInList(params.TabletType, params.InitSQL.TabletTypes) {
 		params.Logger.Infof("Skipping backup init SQL queries %s as the backup tablet type %s is not in the provided list %s", strings.Join(params.InitSQL.Queries, ", "), params.TabletType, topoproto.MakeStringTypeCSV(params.InitSQL.TabletTypes))
 		return nil
 	}
 	initTimeout, ok, err := protoutil.DurationFromProto(params.InitSQL.Timeout)
-	if err != nil || !ok {
-		return vterrors.Wrapf(err, "missing or invalid init SQL timeout value provided: %v", params.InitSQL.Timeout)
+	if err != nil {
+		return vterrors.Wrapf(err, "invalid init SQL timeout value provided: %v", params.InitSQL.Timeout)
+	}
+	if !ok {
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "missing init SQL timeout value")
 	}
 	queriesCSV := strings.Join(params.InitSQL.Queries, ", ")
 	params.Logger.Infof("Executing init SQL queries %s, with a timeout of %v and fail backup on error set to %t", queriesCSV, initTimeout, params.InitSQL.FailOnError)
@@ -554,7 +557,7 @@ func ExecuteBackupInitSQL(ctx context.Context, params *BackupParams) error {
 		}
 		select {
 		case <-ctx.Done():
-			params.Logger.Infof("Canceling init SQL work due to hitting the configured timeout of %v", initTimeout)
+			params.Logger.Infof("Canceling init SQL work due to hitting the configured timeout of %v or the the backup itself having been canceled", initTimeout)
 		default:
 			params.Logger.Infof("Failed to execute init SQL queries %s: %v", queriesCSV, err)
 		}

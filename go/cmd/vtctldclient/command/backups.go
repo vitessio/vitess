@@ -94,12 +94,27 @@ var backupOptions = struct {
 	InitSQLFailOnError   bool
 }{}
 
+func validateBackupOptions() error {
+	if len(backupOptions.InitSQLQueries) > 0 {
+		if len(backupOptions.InitSQLTabletTypes) == 0 {
+			return errors.New("backup init SQL queries provided but no tablet types on which to run them")
+		}
+		if backupOptions.InitSQLTimeout == 0 {
+			return errors.New("backup init SQL queries provided but no timeout provided -- this is dangerous and not allowed")
+		}
+	}
+	return nil
+}
+
 func commandBackup(cmd *cobra.Command, args []string) error {
 	tabletAlias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
 	if err != nil {
 		return err
 	}
 
+	if err := validateBackupOptions(); err != nil {
+		return err
+	}
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.BackupRequest{
@@ -153,6 +168,9 @@ func commandBackupShard(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if err := validateBackupOptions(); err != nil {
+		return err
+	}
 	cli.FinishedParsing(cmd)
 
 	stream, err := client.BackupShard(commandCtx, &vtctldatapb.BackupShardRequest{
