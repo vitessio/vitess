@@ -31929,6 +31929,9 @@ export namespace tabletmanagerdata {
 
         /** BackupRequest mysql_shutdown_timeout */
         mysql_shutdown_timeout?: (vttime.IDuration|null);
+
+        /** BackupRequest sql_init */
+        sql_init?: (tabletmanagerdata.BackupRequest.ISqlInit|null);
     }
 
     /** Represents a BackupRequest. */
@@ -31957,6 +31960,9 @@ export namespace tabletmanagerdata {
 
         /** BackupRequest mysql_shutdown_timeout. */
         public mysql_shutdown_timeout?: (vttime.IDuration|null);
+
+        /** BackupRequest sql_init. */
+        public sql_init?: (tabletmanagerdata.BackupRequest.ISqlInit|null);
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -32034,6 +32040,124 @@ export namespace tabletmanagerdata {
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace BackupRequest {
+
+        /** Properties of a SqlInit. */
+        interface ISqlInit {
+
+            /** SqlInit queries */
+            queries?: (string[]|null);
+
+            /** SqlInit tablet_types */
+            tablet_types?: (topodata.TabletType[]|null);
+
+            /** SqlInit timeout */
+            timeout?: (vttime.IDuration|null);
+
+            /** SqlInit fail_backup */
+            fail_backup?: (boolean|null);
+        }
+
+        /** Represents a SqlInit. */
+        class SqlInit implements ISqlInit {
+
+            /**
+             * Constructs a new SqlInit.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: tabletmanagerdata.BackupRequest.ISqlInit);
+
+            /** SqlInit queries. */
+            public queries: string[];
+
+            /** SqlInit tablet_types. */
+            public tablet_types: topodata.TabletType[];
+
+            /** SqlInit timeout. */
+            public timeout?: (vttime.IDuration|null);
+
+            /** SqlInit fail_backup. */
+            public fail_backup: boolean;
+
+            /**
+             * Creates a new SqlInit instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns SqlInit instance
+             */
+            public static create(properties?: tabletmanagerdata.BackupRequest.ISqlInit): tabletmanagerdata.BackupRequest.SqlInit;
+
+            /**
+             * Encodes the specified SqlInit message. Does not implicitly {@link tabletmanagerdata.BackupRequest.SqlInit.verify|verify} messages.
+             * @param message SqlInit message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: tabletmanagerdata.BackupRequest.ISqlInit, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified SqlInit message, length delimited. Does not implicitly {@link tabletmanagerdata.BackupRequest.SqlInit.verify|verify} messages.
+             * @param message SqlInit message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: tabletmanagerdata.BackupRequest.ISqlInit, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a SqlInit message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns SqlInit
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.BackupRequest.SqlInit;
+
+            /**
+             * Decodes a SqlInit message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns SqlInit
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.BackupRequest.SqlInit;
+
+            /**
+             * Verifies a SqlInit message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a SqlInit message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns SqlInit
+             */
+            public static fromObject(object: { [k: string]: any }): tabletmanagerdata.BackupRequest.SqlInit;
+
+            /**
+             * Creates a plain object from a SqlInit message. Also converts values to other types if specified.
+             * @param message SqlInit
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: tabletmanagerdata.BackupRequest.SqlInit, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this SqlInit to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for SqlInit
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
     }
 
     /** Properties of a BackupResponse. */

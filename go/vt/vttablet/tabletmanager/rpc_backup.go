@@ -168,11 +168,13 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 		Keyspace:             tablet.Keyspace,
 		Shard:                tablet.Shard,
 		TabletAlias:          topoproto.TabletAliasString(tablet.Alias),
+		TabletType:           tablet.Type,
 		BackupTime:           time.Now(),
 		Stats:                backupstats.BackupStats(),
 		UpgradeSafe:          req.UpgradeSafe,
 		MysqlShutdownTimeout: shutdownTimeout(l, req.MysqlShutdownTimeout),
 		BackupEngine:         backupEngine,
+		SqlInit:              req.SqlInit.CloneVT(),
 	}
 
 	returnErr := mysqlctl.Backup(ctx, backupParams)

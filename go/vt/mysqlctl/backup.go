@@ -29,6 +29,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -174,6 +175,36 @@ func Backup(ctx context.Context, params BackupParams) error {
 	}
 
 	params.Logger.Infof("Using backup engine %q", be.Name())
+
+	// Perform any requested pre backup initialization queries.
+	if params.SqlInit != nil && len(params.SqlInit.Queries) > 0 {
+		if !topoproto.IsTypeInList(params.TabletType, params.SqlInit.TabletTypes) {
+			params.Logger.Infof("Skipping SQL init queries %s as the backup tablet type %s is not in the provided list %s", strings.Join(params.SqlInit.Queries, ", "), params.TabletType, topoproto.MakeStringTypeCSV(params.SqlInit.TabletTypes))
+		} else {
+			initTimeout, ok, err := protoutil.DurationFromProto(params.SqlInit.Timeout)
+			if err != nil || !ok {
+				return vterrors.Wrapf(err, "missing or invalid SQL init timeout value provided: %v", params.SqlInit.Timeout)
+			}
+			params.Logger.Infof("Executing SQL init queries %s, with a timeout of %v", strings.Join(params.SqlInit.Queries, ", "), initTimeout)
+			optCtx, cancel := context.WithTimeout(ctx, initTimeout)
+			defer cancel()
+			for _, query := range params.SqlInit.Queries {
+				params.Logger.Infof("Executing SQL init query: %q", query)
+				if err := params.Mysqld.ExecuteSuperQuery(optCtx, query); err != nil {
+					if params.SqlInit.FailBackup {
+						return vterrors.Wrapf(err, "failed to execute SQL init queries %s and instructed to fail backup in this case", strings.Join(params.SqlInit.Queries, ", "))
+					}
+					if errors.Is(err, context.Canceled) {
+						params.Logger.Infof("Canceling SQL init work due to hitting the configured timeout of %v", initTimeout)
+						break
+					}
+					params.Logger.Infof("Failed to execute SQL init query %q: %v", query, err)
+					continue
+				}
+				params.Logger.Infof("Completed SQL init query: %q", query)
+			}
+		}
+	}
 
 	// Take the backup, and either AbortBackup or EndBackup.
 	backupResult, err := be.ExecuteBackup(ctx, beParams, bh)

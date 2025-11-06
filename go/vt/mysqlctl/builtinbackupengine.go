@@ -414,8 +414,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	// Save initial state so we can restore.
 	replicaStartRequired := false
 	sourceIsPrimary := false
-	superReadOnly := true // nolint
-	readOnly := true      // nolint
+	superReadOnly := true
 	var replicationPosition replication.Position
 	semiSyncSource, semiSyncReplica := params.Mysqld.SemiSyncEnabled(ctx)
 
@@ -433,7 +432,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	}
 
 	// get the read-only flag
-	readOnly, err = params.Mysqld.IsReadOnly(ctx)
+	readOnly, err := params.Mysqld.IsReadOnly(ctx)
 	if err != nil {
 		return BackupUnusable, vterrors.Wrap(err, "failed to get read_only status")
 	}
@@ -464,7 +463,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 			return BackupUnusable, vterrors.Wrap(err, "can't get position on primary")
 		}
 	} else {
-		// This is a replica.
+		// This is a replica
 		if err := params.Mysqld.StopReplication(ctx, params.HookExtraEnv); err != nil {
 			return BackupUnusable, vterrors.Wrapf(err, "can't stop replica")
 		}
@@ -473,27 +472,6 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 			return BackupUnusable, vterrors.Wrap(err, "can't get replica status")
 		}
 		replicationPosition = replicaStatus.Position
-		// Check to see if there are any tables we should optimize if the TBD flag has been set.
-		// Notes:
-		//   1. If innodb_file_per_table is NOT enabled, there's nothing else to do here
-		//   2. We should only examine tables in the keyspace and sidecar DBs
-		//   3. We should take steps to ensure that this tablet does not get any traffic during this time
-		//   4. If the unused space in the tablespace is > 50% of the on disk-size then it's a candidate for OPTIMIZE
-		//   5. We may want to take the size of the table into account and consider increasing: https://dev.mysql.com/doc/refman/9.5/en/innodb-parameters.html#sysvar_innodb_online_alter_log_max_size
-		//      - I don't think so though, since there should be no changes made to the table at this point...
-		//   6. What should we do if for any reason we cannot determine how valuable doing the OPTIMIZE would be?
-		//   7. We should run OPTIMIZE LOCAL TABLE <tbl> to prevent errant GTIDs
-		//   8. What should we do if the OPTIMIZE fails for any reason?
-		//   9. How should we handle general tablespaces? https://dev.mysql.com/doc/refman/9.5/en/glossary.html#glos_general_tablespace
-		//  10. Should we set a deadline by which time we abandon this work and continue with the backup?
-		// Example query:
-		//   mysql> SELECT t.TABLE_SCHEMA, t.TABLE_NAME, it.FILE_SIZE, t.DATA_FREE, (t.DATA_FREE / it.FILE_SIZE) * 100 AS opt_pct FROM information_schema.TABLES t INNER JOIN information_schema.INNODB_TABLESPACES it ON (it.NAME = CONCAT(t.TABLE_SCHEMA, "/", t.TABLE_NAME)) WHERE t.ENGINE = 'InnoDB' AND it.SPACE_TYPE = 'Single' AND t.TABLE_SCHEMA IN ('vt_commerce', '_vt') HAVING opt_pct > 50;
-		//   +--------------+------------+-----------+-----------+---------+
-		//   | TABLE_SCHEMA | TABLE_NAME | FILE_SIZE | DATA_FREE | opt_pct |
-		//   +--------------+------------+-----------+-----------+---------+
-		//   | vt_commerce  | customer   |  27262976 |  23068672 | 84.6154 |
-		//   +--------------+------------+-----------+-----------+---------+
-		//   1 row in set (0.01 sec)
 	}
 	params.Logger.Infof("using replication position: %v", replicationPosition)
 
