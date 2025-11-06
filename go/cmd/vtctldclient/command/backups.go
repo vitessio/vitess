@@ -30,6 +30,8 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -86,6 +88,10 @@ var backupOptions = struct {
 	IncrementalFromPos   string
 	UpgradeSafe          bool
 	MysqlShutdownTimeout time.Duration
+	InitSQLQueries       []string
+	InitSQLTabletTypes   []topodatapb.TabletType
+	InitSQLTimeout       time.Duration
+	InitSQLFailBackup    bool
 }{}
 
 func commandBackup(cmd *cobra.Command, args []string) error {
@@ -103,6 +109,12 @@ func commandBackup(cmd *cobra.Command, args []string) error {
 		IncrementalFromPos:   backupOptions.IncrementalFromPos,
 		UpgradeSafe:          backupOptions.UpgradeSafe,
 		MysqlShutdownTimeout: protoutil.DurationToProto(backupOptions.MysqlShutdownTimeout),
+		InitSql: &tabletmanagerdatapb.BackupRequest_InitSQL{
+			Queries:     backupOptions.InitSQLQueries,
+			TabletTypes: backupOptions.InitSQLTabletTypes,
+			Timeout:     protoutil.DurationToProto(backupOptions.InitSQLTimeout),
+			FailBackup:  backupOptions.InitSQLFailBackup,
+		},
 	}
 
 	if backupOptions.BackupEngine != "" {
@@ -300,6 +312,10 @@ func init() {
 
 	Backup.Flags().BoolVar(&backupOptions.UpgradeSafe, "upgrade-safe", false, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
 	Backup.Flags().DurationVar(&backupOptions.MysqlShutdownTimeout, "mysql-shutdown-timeout", mysqlctl.DefaultShutdownTimeout, "Timeout to use when MySQL is being shut down.")
+	Backup.Flags().StringSliceVar(&backupOptions.InitSQLQueries, "init-backup-sql-queries", nil, "Queries to execute before initializing the backup")
+	Backup.Flags().Var((*topoproto.TabletTypeListFlag)(&backupOptions.InitSQLTabletTypes), "init-backup-tablet-types", "Tablet types used for the backup where the init SQL queries (--init-backup-sql-queries) will be executed before initializing the backup")
+	Backup.Flags().DurationVar(&backupOptions.InitSQLTimeout, "init-backup-sql-timeout", backupOptions.InitSQLTimeout, "At what point should we time out the init SQL query (--init-backup-sql-queries) work and either fail the backup job (--init-backup-sql-fail-backup) or continue on with the backup")
+	Backup.Flags().BoolVar(&backupOptions.InitSQLFailBackup, "init-backup-sql-fail-backup", false, "Whether or not to fail the backup if the init SQL queries (--init-backup-sql-queries) fail, which includes if they fail to complete before the specified timeout (--init-backup-sql-timeout)")
 	Root.AddCommand(Backup)
 
 	BackupShard.Flags().BoolVar(&backupShardOptions.AllowPrimary, "allow-primary", false, "Allow the primary of a shard to be used for the backup. WARNING: If using the builtin backup engine, this will shutdown mysqld on the primary and stop writes for the duration of the backup.")
@@ -307,6 +323,10 @@ func init() {
 	BackupShard.Flags().StringVar(&backupShardOptions.IncrementalFromPos, "incremental-from-pos", "", "Position, or name of backup from which to create an incremental backup. Default: empty. If given, then this backup becomes an incremental backup from given position or given backup. If value is 'auto', this backup will be taken from the last successful backup position.")
 	BackupShard.Flags().BoolVar(&backupShardOptions.UpgradeSafe, "upgrade-safe", false, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
 	BackupShard.Flags().DurationVar(&backupShardOptions.MysqlShutdownTimeout, "mysql-shutdown-timeout", mysqlctl.DefaultShutdownTimeout, "Timeout to use when MySQL is being shut down.")
+	BackupShard.Flags().StringSliceVar(&backupOptions.InitSQLQueries, "init-backup-sql-queries", nil, "Queries to execute before initializing the backup")
+	BackupShard.Flags().Var((*topoproto.TabletTypeListFlag)(&backupOptions.InitSQLTabletTypes), "init-backup-tablet-types", "Tablet types used for the backup where the init SQL queries (--init-backup-sql-queries) will be executed before initializing the backup")
+	BackupShard.Flags().DurationVar(&backupOptions.InitSQLTimeout, "init-backup-sql-timeout", backupOptions.InitSQLTimeout, "At what point should we time out the init SQL query (--init-backup-sql-queries) work and either fail the backup job (--init-backup-sql-fail-backup) or continue on with the backup")
+	BackupShard.Flags().BoolVar(&backupOptions.InitSQLFailBackup, "init-backup-sql-fail-backup", false, "Whether or not to fail the backup if the init SQL queries (--init-backup-sql-queries) fail, which includes if they fail to complete before the specified timeout (--init-backup-sql-timeout)")
 	Root.AddCommand(BackupShard)
 
 	GetBackups.Flags().Uint32VarP(&getBackupsOptions.Limit, "limit", "l", 0, "Retrieve only the most recent N backups.")

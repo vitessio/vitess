@@ -177,33 +177,8 @@ func Backup(ctx context.Context, params BackupParams) error {
 	params.Logger.Infof("Using backup engine %q", be.Name())
 
 	// Perform any requested pre backup initialization queries.
-	if params.InitSQL != nil && len(params.InitSQL.Queries) > 0 {
-		if !topoproto.IsTypeInList(params.TabletType, params.InitSQL.TabletTypes) {
-			params.Logger.Infof("Skipping backup init SQL queries %s as the backup tablet type %s is not in the provided list %s", strings.Join(params.InitSQL.Queries, ", "), params.TabletType, topoproto.MakeStringTypeCSV(params.InitSQL.TabletTypes))
-		} else {
-			initTimeout, ok, err := protoutil.DurationFromProto(params.InitSQL.Timeout)
-			if err != nil || !ok {
-				return vterrors.Wrapf(err, "missing or invalid init SQL timeout value provided: %v", params.InitSQL.Timeout)
-			}
-			params.Logger.Infof("Executing init SQL queries %s, with a timeout of %v", strings.Join(params.InitSQL.Queries, ", "), initTimeout)
-			initCtx, cancel := context.WithTimeout(ctx, initTimeout)
-			defer cancel()
-			for _, query := range params.InitSQL.Queries {
-				params.Logger.Infof("Executing init SQL query: %q", query)
-				if err := params.Mysqld.ExecuteSuperQuery(initCtx, query); err != nil {
-					if params.InitSQL.FailBackup {
-						return vterrors.Wrapf(err, "failed to execute init SQL queries %s and instructed to fail backup in this case", strings.Join(params.InitSQL.Queries, ", "))
-					}
-					if errors.Is(err, context.Canceled) {
-						params.Logger.Infof("Canceling init SQL work due to hitting the configured timeout of %v", initTimeout)
-						break
-					}
-					params.Logger.Infof("Failed to execute init SQL query %q: %v", query, err)
-					continue
-				}
-				params.Logger.Infof("Successfully completed init SQL query: %q", query)
-			}
-		}
+	if err := ExecuteBackupInitSQL(ctx, &params); err != nil {
+		return vterrors.Wrap(err, "failed to execute backup init SQL queries")
 	}
 
 	// Take the backup, and either AbortBackup or EndBackup.
@@ -555,4 +530,37 @@ func scanLinesToLogger(prefix string, reader io.Reader, logger logutil.Logger, d
 		// returning an error. Just log it.
 		logger.Warningf("error scanning lines from %s: %v", prefix, err)
 	}
+}
+
+func ExecuteBackupInitSQL(ctx context.Context, params *BackupParams) error {
+	if params == nil || params.InitSQL == nil || len(params.InitSQL.Queries) == 0 { // Nothing to do
+		return nil
+	}
+	if topoproto.IsTypeInList(params.TabletType, params.InitSQL.TabletTypes) {
+		params.Logger.Infof("Skipping backup init SQL queries %s as the backup tablet type %s is not in the provided list %s", strings.Join(params.InitSQL.Queries, ", "), params.TabletType, topoproto.MakeStringTypeCSV(params.InitSQL.TabletTypes))
+		return nil
+	}
+	initTimeout, ok, err := protoutil.DurationFromProto(params.InitSQL.Timeout)
+	if err != nil || !ok {
+		return vterrors.Wrapf(err, "missing or invalid init SQL timeout value provided: %v", params.InitSQL.Timeout)
+	}
+	params.Logger.Infof("Executing init SQL queries %s, with a timeout of %v", strings.Join(params.InitSQL.Queries, ", "), initTimeout)
+	initCtx, cancel := context.WithTimeout(ctx, initTimeout)
+	defer cancel()
+	for _, query := range params.InitSQL.Queries {
+		params.Logger.Infof("Executing init SQL query: %q", query)
+		if err := params.Mysqld.ExecuteSuperQuery(initCtx, query); err != nil {
+			if params.InitSQL.FailBackup {
+				return vterrors.Wrapf(err, "failed to execute init SQL queries %s and instructed to fail backup in this case", strings.Join(params.InitSQL.Queries, ", "))
+			}
+			if errors.Is(err, context.Canceled) {
+				params.Logger.Infof("Canceling init SQL work due to hitting the configured timeout of %v", initTimeout)
+				break
+			}
+			params.Logger.Infof("Failed to execute init SQL query %q: %v", query, err)
+			continue
+		}
+		params.Logger.Infof("Successfully completed init SQL query: %q", query)
+	}
+	return nil
 }

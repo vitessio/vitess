@@ -55774,6 +55774,9 @@ export namespace vtctldata {
 
         /** BackupRequest mysql_shutdown_timeout */
         mysql_shutdown_timeout?: (vttime.IDuration|null);
+
+        /** BackupRequest init_sql */
+        init_sql?: (tabletmanagerdata.BackupRequest.IInitSQL|null);
     }
 
     /** Represents a BackupRequest. */
@@ -55805,6 +55808,9 @@ export namespace vtctldata {
 
         /** BackupRequest mysql_shutdown_timeout. */
         public mysql_shutdown_timeout?: (vttime.IDuration|null);
+
+        /** BackupRequest init_sql. */
+        public init_sql?: (tabletmanagerdata.BackupRequest.IInitSQL|null);
 
         /**
          * Creates a new BackupRequest instance using the specified properties.

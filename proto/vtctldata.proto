@@ -471,6 +471,8 @@ message BackupRequest {
   // starting the backup. This is available so we can override this for upgrade safe
   // backups which might take longer to shut down.
   vttime.Duration mysql_shutdown_timeout = 7;
+
+  tabletmanagerdata.BackupRequest.InitSQL init_sql = 8;
 }
 
 message BackupResponse {
