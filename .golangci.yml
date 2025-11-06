@@ -10,6 +10,8 @@ linters:
     - errcheck
     - govet
     - ineffassign
+    - mirror
+    - nolintlint
     - perfsprint
     - prealloc
     - sqlclosecheck
@@ -140,9 +142,6 @@ linters:
       - linters:
           - errcheck
         path: ^go/mysql/
-      - linters:
-          - revive
-        path: ^go/mysql/collations
       - linters:
           - errcheck
           - prealloc

@@ -1607,15 +1607,14 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.Safe
 
 	qr, err := plan.Instructions.GetFields(ctx, vcursor, bindVars)
 	logStats.ExecuteTime = time.Since(execStart)
-	var errCount uint64
 	if err != nil {
 		logStats.Error = err
-		errCount = 1 // nolint
+		plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, 0, 0, 1)
 		return nil, 0, err
 	}
 	logStats.RowsAffected = qr.RowsAffected
 
-	plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, qr.RowsAffected, uint64(len(qr.Rows)), errCount)
+	plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, qr.RowsAffected, uint64(len(qr.Rows)), 0)
 
 	return qr.Fields, plan.ParamsCount, err
 }
