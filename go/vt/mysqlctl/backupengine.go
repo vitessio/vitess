@@ -325,6 +325,8 @@ type BackupManifest struct {
 
 	TabletAlias string
 
+	Hostname string
+
 	Keyspace string
 
 	Shard string

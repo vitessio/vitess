@@ -29,6 +29,7 @@ import (
 
 	"vitess.io/vitess/go/ioutil"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -406,6 +407,10 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 		require.NoError(t, err)
 
 		require.Equal(t, mysqlShellBackupEngineName, manifest.BackupMethod)
+
+		if hostname, err := netutil.FullyQualifiedHostname(); err == nil {
+			require.Equal(t, hostname, manifest.Hostname)
+		}
 
 		// did we notice the lock was release and did we release it ours as well?
 		require.Contains(t, logger.String(), "global read lock released after",
