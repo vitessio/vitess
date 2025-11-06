@@ -118,10 +118,10 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 }
 
 func expandOrderBy(ctx *plancontext.PlanningContext, op Operator, qp *QueryProjection, derived string) Operator {
-	var newOrder []OrderBy
 	sqc := &SubQueryBuilder{}
 	proj, ok := op.(*Projection)
 
+	newOrder := make([]OrderBy, 0, len(qp.OrderExprs))
 	for _, expr := range qp.OrderExprs {
 		// Attempt to extract any subqueries within the expression
 		newExpr, subqs := sqc.pullOutValueSubqueries(ctx, expr.SimplifiedExpr, TableID(op), false)
@@ -345,8 +345,7 @@ func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProj
 }
 
 func newStarProjection(src Operator, qp *QueryProjection) *Projection {
-	var cols []sqlparser.SelectExpr
-
+	cols := make([]sqlparser.SelectExpr, 0, len(qp.SelectExprs))
 	for _, expr := range qp.SelectExprs {
 		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			_, isSubQ := node.(*sqlparser.Subquery)

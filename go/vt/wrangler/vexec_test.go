@@ -67,7 +67,7 @@ func TestVExec(t *testing.T) {
 	primaries := vx.primaries
 	require.NotNil(t, primaries)
 	require.Equal(t, len(primaries), 2)
-	var shards []string
+	shards := make([]string, 0, len(primaries))
 	for _, primary := range primaries {
 		shards = append(shards, primary.Shard)
 	}
@@ -247,7 +247,7 @@ func TestWorkflowListStreams(t *testing.T) {
 	require.Nil(t, err)
 
 	// convert map to list and sort it for comparison
-	var gotResults []string
+	gotResults := make([]string, 0, len(results))
 	for key, result := range results {
 		gotResults = append(gotResults, fmt.Sprintf("%s:%v", key.String(), result))
 	}

@@ -11,6 +11,7 @@ linters:
     - govet
     - ineffassign
     - perfsprint
+    - prealloc
     - sqlclosecheck
     - staticcheck
     - whitespace
@@ -144,6 +145,7 @@ linters:
         path: ^go/mysql/collations
       - linters:
           - errcheck
+          - prealloc
         path: ^go/pools/.*_test.go
       - linters:
           - errcheck
@@ -156,6 +158,7 @@ linters:
         path: ^go/stats/statsd/
       - linters:
           - errcheck
+          - prealloc
           - sqlclosecheck
         path: ^go/test/
       - linters:
@@ -178,9 +181,11 @@ linters:
         path: ^go/vt/sqlparser/goyacc
       - linters:
           - errcheck
+          - prealloc
         path: ^go/vt/throttler/.*_test.go
       - linters:
           - errcheck
+          - prealloc
         path: ^go/vt/topo/.*/*._test.go
       - linters:
           - errcheck
@@ -196,12 +201,14 @@ linters:
         path: ^go/vt/vtctl/grpcvtctlserver/
       - linters:
           - errcheck
+          - prealloc
         path: ^go/vt/vtctld/(schema|.*_test).go
       - linters:
           - errcheck
         path: ^go/vt/vtexplain/
       - linters:
           - errcheck
+          - prealloc
         path: ^go/vt/vtgate/.*_test.go
       - linters:
           - errcheck
@@ -214,9 +221,11 @@ linters:
         path: ^go/vt/vttablet/tabletmanager/vreplication
       - linters:
           - errcheck
+          - prealloc
         path: ^go/vt/vttablet/(.*endtoend.*|.*_test.go)
       - linters:
           - errcheck
+          - prealloc
         path: ^go/vt/vttest
       - linters:
           - errcheck

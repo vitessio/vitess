@@ -633,7 +633,7 @@ func (vrw *VReplicationWorkflow) GetCopyProgress() (*CopyProgress, error) {
 	if len(tables) == 0 {
 		return nil, nil
 	}
-	var tableList []string
+	tableList := make([]string, 0, len(tables))
 	targetRowCounts := make(map[string]int64)
 	sourceRowCounts := make(map[string]int64)
 	targetTableSizes := make(map[string]int64)

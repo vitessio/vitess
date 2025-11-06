@@ -135,7 +135,7 @@ func reloadTablesDataInDB(ctx context.Context, conn *connpool.Conn, tables []*Ta
 	bv := map[string]*querypb.BindVariable{"tableNames": tablesBV}
 
 	// Get the create statements for all the tables that are modified.
-	var createStatements []string
+	createStatements := make([]string, 0, len(tables))
 	for _, table := range tables {
 		cs, err := getCreateStatement(ctx, conn, sqlparser.String(table.Name))
 		if err != nil {
@@ -220,7 +220,7 @@ func reloadViewsDataInDB(ctx context.Context, conn *connpool.Conn, views []*Tabl
 	bv := map[string]*querypb.BindVariable{"viewNames": viewsBV}
 
 	// Get the create statements for all the views that are modified.
-	var createStatements []string
+	createStatements := make([]string, 0, len(views))
 	for _, view := range views {
 		cs, err := getCreateStatement(ctx, conn, sqlparser.String(view.Name))
 		if err != nil {

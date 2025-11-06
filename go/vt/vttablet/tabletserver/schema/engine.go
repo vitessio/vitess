@@ -982,7 +982,7 @@ func (se *Engine) RegisterNotifier(name string, f notifier, runNotifier bool) {
 	defer se.notifierMu.Unlock()
 
 	se.notifiers[name] = f
-	var created []*Table
+	created := make([]*Table, 0, len(se.tables))
 	for _, table := range se.tables {
 		created = append(created, table)
 	}
@@ -1136,7 +1136,7 @@ func (se *Engine) Environment() *vtenv.Environment {
 }
 
 func extractNamesFromTablesList(tables []*Table) []string {
-	var tableNames []string
+	tableNames := make([]string, 0, len(tables))
 	for _, table := range tables {
 		tableNames = append(tableNames, table.Name.String())
 	}

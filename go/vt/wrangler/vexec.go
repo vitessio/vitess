@@ -100,12 +100,12 @@ func (wr *Wrangler) QueryResultForRowsAffected(results map[*topo.TabletInfo]*sql
 		Name: "RowsAffected",
 		Type: sqltypes.Uint64,
 	}}
-	var row2 []sqltypes.Value
+	row2 := make([]sqltypes.Value, 0, 2)
 	for tablet, result := range results {
-		row2 = nil
 		row2 = append(row2, sqltypes.NewVarBinary(tablet.AliasString()))
 		row2 = append(row2, sqltypes.NewUint64(result.RowsAffected))
 		qr.Rows = append(qr.Rows, row2)
+		row2 = row2[:0] // reset the slice
 	}
 	return qr
 }
@@ -296,8 +296,8 @@ func (vx *vexec) getPrimaries(shards []string) error {
 		return err
 	}
 
-	var allPrimaries []*topo.TabletInfo
 	var primary *topo.TabletInfo
+	allPrimaries := make([]*topo.TabletInfo, 0, len(shards))
 	for _, shard := range shards {
 		if primary, err = vx.getPrimaryForShard(shard); err != nil {
 			return err

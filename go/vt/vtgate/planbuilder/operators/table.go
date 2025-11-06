@@ -43,7 +43,7 @@ type (
 
 // Clone implements the Operator interface
 func (to *Table) Clone([]Operator) Operator {
-	var columns []*sqlparser.ColName
+	columns := make([]*sqlparser.ColName, 0, len(to.Columns))
 	for _, name := range to.Columns {
 		columns = append(columns, sqlparser.Clone(name))
 	}

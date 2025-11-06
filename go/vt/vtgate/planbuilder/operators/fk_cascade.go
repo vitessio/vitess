@@ -50,7 +50,7 @@ var _ Operator = (*FkCascade)(nil)
 
 // Inputs implements the Operator interface
 func (fkc *FkCascade) Inputs() []Operator {
-	var inputs []Operator
+	inputs := make([]Operator, 0, 2+len(fkc.Children))
 	inputs = append(inputs, fkc.Parent)
 	inputs = append(inputs, fkc.Selection)
 	for _, child := range fkc.Children {

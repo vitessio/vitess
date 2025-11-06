@@ -939,8 +939,8 @@ func (tpb *tablePlanBuilder) generatePKConstraint(buf *sqlparser.TrackedBuffer, 
 		charSet   string
 		collation string
 	}
-	var charSetCollations []*charSetCollation
 	separator := "("
+	charSetCollations := make([]*charSetCollation, 0, len(tpb.lastpk.Fields))
 	for _, pkname := range tpb.lastpk.Fields {
 		charSet, collation := tpb.getCharsetAndCollation(pkname.Name)
 		charSetCollations = append(charSetCollations, &charSetCollation{charSet: charSet, collation: collation})

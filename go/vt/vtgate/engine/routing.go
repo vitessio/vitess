@@ -637,7 +637,7 @@ func generateRowColValues(ctx context.Context, vcursor VCursor, bindVars map[str
 		so that the vindex can map them into correct destination.
 	*/
 
-	var rowColValues [][]sqltypes.Value
+	rowColValues := make([][]sqltypes.Value, 0, len(multiColValues[0])+(len(multiColValues)-1))
 	for _, firstCol := range multiColValues[0] {
 		rowColValues = append(rowColValues, []sqltypes.Value{firstCol})
 	}
