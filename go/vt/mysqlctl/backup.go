@@ -544,25 +544,23 @@ func ExecuteBackupInitSQL(ctx context.Context, params *BackupParams) error {
 	if err != nil || !ok {
 		return vterrors.Wrapf(err, "missing or invalid init SQL timeout value provided: %v", params.InitSQL.Timeout)
 	}
-	params.Logger.Infof("Executing init SQL queries %s, with a timeout of %v and fail backup on error set to %t", strings.Join(params.InitSQL.Queries, ", "), initTimeout, params.InitSQL.FailOnError)
+	queriesCSV := strings.Join(params.InitSQL.Queries, ", ")
+	params.Logger.Infof("Executing init SQL queries %s, with a timeout of %v and fail backup on error set to %t", queriesCSV, initTimeout, params.InitSQL.FailOnError)
 	initCtx, cancel := context.WithTimeout(ctx, initTimeout)
 	defer cancel()
-	for _, query := range params.InitSQL.Queries {
-		params.Logger.Infof("Executing init SQL query: %q", query)
-		if err := params.Mysqld.ExecuteSuperQuery(initCtx, query); err != nil {
-			if params.InitSQL.FailOnError {
-				return vterrors.Wrapf(err, "failed to execute init SQL query %s and instructed to fail backup in this case", query)
-			}
-			select {
-			case <-ctx.Done():
-				params.Logger.Infof("Canceling init SQL work due to hitting the configured timeout of %v", initTimeout)
-				return nil
-			default:
-				params.Logger.Infof("Failed to execute init SQL query %q: %v", query, err)
-				continue
-			}
+	if err := params.Mysqld.ExecuteSuperQueryList(initCtx, params.InitSQL.Queries); err != nil {
+		if params.InitSQL.FailOnError {
+			return vterrors.Wrapf(err, "failed to execute init SQL queries %s and instructed to fail backup in this case", queriesCSV)
 		}
-		params.Logger.Infof("Successfully completed init SQL query: %q", query)
+		select {
+		case <-ctx.Done():
+			params.Logger.Infof("Canceling init SQL work due to hitting the configured timeout of %v", initTimeout)
+		default:
+			params.Logger.Infof("Failed to execute init SQL queries %s: %v", queriesCSV, err)
+		}
+		params.Logger.Infof("Continuing with backup after failed init SQL work as fail-on-error is false")
+		return nil
 	}
+	params.Logger.Infof("Successfully completed init SQL queries: %s", queriesCSV)
 	return nil
 }
