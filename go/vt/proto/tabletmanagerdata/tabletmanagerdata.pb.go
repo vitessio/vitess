@@ -5236,7 +5236,7 @@ type BackupRequest struct {
 	// MysqlShutdownTimeout is the timeout in seconds to wait for MySQL to shutdown
 	// before taking the backup. If not set, the default value is used.
 	MysqlShutdownTimeout *vttime.Duration       `protobuf:"bytes,6,opt,name=mysql_shutdown_timeout,json=mysqlShutdownTimeout,proto3" json:"mysql_shutdown_timeout,omitempty"`
-	SqlInit              *BackupRequest_SqlInit `protobuf:"bytes,7,opt,name=sql_init,json=sqlInit,proto3" json:"sql_init,omitempty"`
+	InitSql              *BackupRequest_InitSQL `protobuf:"bytes,7,opt,name=init_sql,json=initSql,proto3" json:"init_sql,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -5313,9 +5313,9 @@ func (x *BackupRequest) GetMysqlShutdownTimeout() *vttime.Duration {
 	return nil
 }
 
-func (x *BackupRequest) GetSqlInit() *BackupRequest_SqlInit {
+func (x *BackupRequest) GetInitSql() *BackupRequest_InitSQL {
 	if x != nil {
-		return x.SqlInit
+		return x.InitSql
 	}
 	return nil
 }
@@ -7910,7 +7910,7 @@ func (x *GetMaxValueForSequencesResponse) GetMaxValuesBySequenceTable() map[stri
 	return nil
 }
 
-type BackupRequest_SqlInit struct {
+type BackupRequest_InitSQL struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Queries       []string               `protobuf:"bytes,1,rep,name=queries,proto3" json:"queries,omitempty"`
 	TabletTypes   []topodata.TabletType  `protobuf:"varint,2,rep,packed,name=tablet_types,json=tabletTypes,proto3,enum=topodata.TabletType" json:"tablet_types,omitempty"`
@@ -7920,20 +7920,20 @@ type BackupRequest_SqlInit struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *BackupRequest_SqlInit) Reset() {
-	*x = BackupRequest_SqlInit{}
+func (x *BackupRequest_InitSQL) Reset() {
+	*x = BackupRequest_InitSQL{}
 	mi := &file_tabletmanagerdata_proto_msgTypes[155]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *BackupRequest_SqlInit) String() string {
+func (x *BackupRequest_InitSQL) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*BackupRequest_SqlInit) ProtoMessage() {}
+func (*BackupRequest_InitSQL) ProtoMessage() {}
 
-func (x *BackupRequest_SqlInit) ProtoReflect() protoreflect.Message {
+func (x *BackupRequest_InitSQL) ProtoReflect() protoreflect.Message {
 	mi := &file_tabletmanagerdata_proto_msgTypes[155]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -7945,33 +7945,33 @@ func (x *BackupRequest_SqlInit) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use BackupRequest_SqlInit.ProtoReflect.Descriptor instead.
-func (*BackupRequest_SqlInit) Descriptor() ([]byte, []int) {
+// Deprecated: Use BackupRequest_InitSQL.ProtoReflect.Descriptor instead.
+func (*BackupRequest_InitSQL) Descriptor() ([]byte, []int) {
 	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{110, 0}
 }
 
-func (x *BackupRequest_SqlInit) GetQueries() []string {
+func (x *BackupRequest_InitSQL) GetQueries() []string {
 	if x != nil {
 		return x.Queries
 	}
 	return nil
 }
 
-func (x *BackupRequest_SqlInit) GetTabletTypes() []topodata.TabletType {
+func (x *BackupRequest_InitSQL) GetTabletTypes() []topodata.TabletType {
 	if x != nil {
 		return x.TabletTypes
 	}
 	return nil
 }
 
-func (x *BackupRequest_SqlInit) GetTimeout() *vttime.Duration {
+func (x *BackupRequest_InitSQL) GetTimeout() *vttime.Duration {
 	if x != nil {
 		return x.Timeout
 	}
 	return nil
 }
 
-func (x *BackupRequest_SqlInit) GetFailBackup() bool {
+func (x *BackupRequest_InitSQL) GetFailBackup() bool {
 	if x != nil {
 		return x.FailBackup
 	}
@@ -8800,8 +8800,8 @@ const file_tabletmanagerdata_proto_rawDesc = "" +
 	"\fupgrade_safe\x18\x04 \x01(\bR\vupgradeSafe\x12(\n" +
 	"\rbackup_engine\x18\x05 \x01(\tH\x00R\fbackupEngine\x88\x01\x01\x12F\n" +
 	"\x16mysql_shutdown_timeout\x18\x06 \x01(\v2\x10.vttime.DurationR\x14mysqlShutdownTimeout\x12C\n" +
-	"\bsql_init\x18\a \x01(\v2(.tabletmanagerdata.BackupRequest.SqlInitR\asqlInit\x1a\xa9\x01\n" +
-	"\aSqlInit\x12\x18\n" +
+	"\binit_sql\x18\a \x01(\v2(.tabletmanagerdata.BackupRequest.InitSQLR\ainitSql\x1a\xa9\x01\n" +
+	"\aInitSQL\x12\x18\n" +
 	"\aqueries\x18\x01 \x03(\tR\aqueries\x127\n" +
 	"\ftablet_types\x18\x02 \x03(\x0e2\x14.topodata.TabletTypeR\vtabletTypes\x12*\n" +
 	"\atimeout\x18\x03 \x01(\v2\x10.vttime.DurationR\atimeout\x12\x1f\n" +
@@ -9285,7 +9285,7 @@ var file_tabletmanagerdata_proto_goTypes = []any{
 	nil,                                             // 154: tabletmanagerdata.DbPermission.PrivilegesEntry
 	nil,                                             // 155: tabletmanagerdata.ExecuteHookRequest.ExtraEnvEntry
 	nil,                                             // 156: tabletmanagerdata.GetGlobalStatusVarsResponse.StatusValuesEntry
-	(*BackupRequest_SqlInit)(nil),                   // 157: tabletmanagerdata.BackupRequest.SqlInit
+	(*BackupRequest_InitSQL)(nil),                   // 157: tabletmanagerdata.BackupRequest.InitSQL
 	nil,                                             // 158: tabletmanagerdata.DeleteTableDataRequest.TableFiltersEntry
 	(*ReadVReplicationWorkflowResponse_Stream)(nil), // 159: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream
 	nil,                                   // 160: tabletmanagerdata.ReadVReplicationWorkflowResponse.ConfigOverridesEntry
@@ -9369,7 +9369,7 @@ var file_tabletmanagerdata_proto_depIdxs = []int32{
 	188, // 36: tabletmanagerdata.StopReplicationAndGetStatusRequest.stop_replication_mode:type_name -> replicationdata.StopReplicationMode
 	189, // 37: tabletmanagerdata.StopReplicationAndGetStatusResponse.status:type_name -> replicationdata.StopReplicationStatus
 	190, // 38: tabletmanagerdata.BackupRequest.mysql_shutdown_timeout:type_name -> vttime.Duration
-	157, // 39: tabletmanagerdata.BackupRequest.sql_init:type_name -> tabletmanagerdata.BackupRequest.SqlInit
+	157, // 39: tabletmanagerdata.BackupRequest.init_sql:type_name -> tabletmanagerdata.BackupRequest.InitSQL
 	191, // 40: tabletmanagerdata.BackupResponse.event:type_name -> logutil.Event
 	192, // 41: tabletmanagerdata.RestoreFromBackupRequest.backup_time:type_name -> vttime.Time
 	192, // 42: tabletmanagerdata.RestoreFromBackupRequest.restore_to_timestamp:type_name -> vttime.Time
@@ -9420,8 +9420,8 @@ var file_tabletmanagerdata_proto_depIdxs = []int32{
 	175, // 87: tabletmanagerdata.UpdateSequenceTablesRequest.sequences:type_name -> tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadata
 	176, // 88: tabletmanagerdata.GetMaxValueForSequencesRequest.sequences:type_name -> tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadata
 	177, // 89: tabletmanagerdata.GetMaxValueForSequencesResponse.max_values_by_sequence_table:type_name -> tabletmanagerdata.GetMaxValueForSequencesResponse.MaxValuesBySequenceTableEntry
-	179, // 90: tabletmanagerdata.BackupRequest.SqlInit.tablet_types:type_name -> topodata.TabletType
-	190, // 91: tabletmanagerdata.BackupRequest.SqlInit.timeout:type_name -> vttime.Duration
+	179, // 90: tabletmanagerdata.BackupRequest.InitSQL.tablet_types:type_name -> topodata.TabletType
+	190, // 91: tabletmanagerdata.BackupRequest.InitSQL.timeout:type_name -> vttime.Duration
 	193, // 92: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.bls:type_name -> binlogdata.BinlogSource
 	192, // 93: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.time_updated:type_name -> vttime.Time
 	192, // 94: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.transaction_timestamp:type_name -> vttime.Time

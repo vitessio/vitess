@@ -97,7 +97,7 @@ type BackupParams struct {
 	// BackupEngine allows us to override which backup engine should be used for a request
 	BackupEngine string
 	// Any SQL that you would like to run before initializing the backup.
-	SqlInit *tabletmanagerdatapb.BackupRequest_SqlInit
+	InitSQL *tabletmanagerdatapb.BackupRequest_InitSQL
 }
 
 func (b *BackupParams) Copy() BackupParams {
@@ -111,12 +111,13 @@ func (b *BackupParams) Copy() BackupParams {
 		Keyspace:             b.Keyspace,
 		Shard:                b.Shard,
 		TabletAlias:          b.TabletAlias,
+		TabletType:           b.TabletType,
 		BackupTime:           b.BackupTime,
 		IncrementalFromPos:   b.IncrementalFromPos,
 		Stats:                b.Stats,
 		UpgradeSafe:          b.UpgradeSafe,
 		MysqlShutdownTimeout: b.MysqlShutdownTimeout,
-		SqlInit:              b.SqlInit,
+		InitSQL:              b.InitSQL,
 	}
 }
 

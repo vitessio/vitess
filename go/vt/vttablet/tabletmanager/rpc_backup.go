@@ -174,7 +174,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 		UpgradeSafe:          req.UpgradeSafe,
 		MysqlShutdownTimeout: shutdownTimeout(l, req.MysqlShutdownTimeout),
 		BackupEngine:         backupEngine,
-		SqlInit:              req.SqlInit.CloneVT(),
+		InitSQL:              req.InitSql.CloneVT(),
 	}
 
 	returnErr := mysqlctl.Backup(ctx, backupParams)

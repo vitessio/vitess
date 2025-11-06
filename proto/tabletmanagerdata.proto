@@ -568,7 +568,7 @@ message PromoteReplicaResponse {
 // Backup / Restore related messages
 
 message BackupRequest {
-  message SqlInit {
+  message InitSQL {
     repeated string queries = 1;
     repeated topodata.TabletType tablet_types = 2;
     vttime.Duration timeout = 3;
@@ -587,7 +587,7 @@ message BackupRequest {
   // MysqlShutdownTimeout is the timeout in seconds to wait for MySQL to shutdown
   // before taking the backup. If not set, the default value is used.
   vttime.Duration mysql_shutdown_timeout = 6;
-  SqlInit sql_init = 7;
+  InitSQL init_sql = 7;
 }
 
 message BackupResponse {

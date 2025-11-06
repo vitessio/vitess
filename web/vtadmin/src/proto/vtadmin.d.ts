@@ -31930,8 +31930,8 @@ export namespace tabletmanagerdata {
         /** BackupRequest mysql_shutdown_timeout */
         mysql_shutdown_timeout?: (vttime.IDuration|null);
 
-        /** BackupRequest sql_init */
-        sql_init?: (tabletmanagerdata.BackupRequest.ISqlInit|null);
+        /** BackupRequest init_sql */
+        init_sql?: (tabletmanagerdata.BackupRequest.IInitSQL|null);
     }
 
     /** Represents a BackupRequest. */
@@ -31961,8 +31961,8 @@ export namespace tabletmanagerdata {
         /** BackupRequest mysql_shutdown_timeout. */
         public mysql_shutdown_timeout?: (vttime.IDuration|null);
 
-        /** BackupRequest sql_init. */
-        public sql_init?: (tabletmanagerdata.BackupRequest.ISqlInit|null);
+        /** BackupRequest init_sql. */
+        public init_sql?: (tabletmanagerdata.BackupRequest.IInitSQL|null);
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -32044,115 +32044,115 @@ export namespace tabletmanagerdata {
 
     namespace BackupRequest {
 
-        /** Properties of a SqlInit. */
-        interface ISqlInit {
+        /** Properties of an InitSQL. */
+        interface IInitSQL {
 
-            /** SqlInit queries */
+            /** InitSQL queries */
             queries?: (string[]|null);
 
-            /** SqlInit tablet_types */
+            /** InitSQL tablet_types */
             tablet_types?: (topodata.TabletType[]|null);
 
-            /** SqlInit timeout */
+            /** InitSQL timeout */
             timeout?: (vttime.IDuration|null);
 
-            /** SqlInit fail_backup */
+            /** InitSQL fail_backup */
             fail_backup?: (boolean|null);
         }
 
-        /** Represents a SqlInit. */
-        class SqlInit implements ISqlInit {
+        /** Represents an InitSQL. */
+        class InitSQL implements IInitSQL {
 
             /**
-             * Constructs a new SqlInit.
+             * Constructs a new InitSQL.
              * @param [properties] Properties to set
              */
-            constructor(properties?: tabletmanagerdata.BackupRequest.ISqlInit);
+            constructor(properties?: tabletmanagerdata.BackupRequest.IInitSQL);
 
-            /** SqlInit queries. */
+            /** InitSQL queries. */
             public queries: string[];
 
-            /** SqlInit tablet_types. */
+            /** InitSQL tablet_types. */
             public tablet_types: topodata.TabletType[];
 
-            /** SqlInit timeout. */
+            /** InitSQL timeout. */
             public timeout?: (vttime.IDuration|null);
 
-            /** SqlInit fail_backup. */
+            /** InitSQL fail_backup. */
             public fail_backup: boolean;
 
             /**
-             * Creates a new SqlInit instance using the specified properties.
+             * Creates a new InitSQL instance using the specified properties.
              * @param [properties] Properties to set
-             * @returns SqlInit instance
+             * @returns InitSQL instance
              */
-            public static create(properties?: tabletmanagerdata.BackupRequest.ISqlInit): tabletmanagerdata.BackupRequest.SqlInit;
+            public static create(properties?: tabletmanagerdata.BackupRequest.IInitSQL): tabletmanagerdata.BackupRequest.InitSQL;
 
             /**
-             * Encodes the specified SqlInit message. Does not implicitly {@link tabletmanagerdata.BackupRequest.SqlInit.verify|verify} messages.
-             * @param message SqlInit message or plain object to encode
+             * Encodes the specified InitSQL message. Does not implicitly {@link tabletmanagerdata.BackupRequest.InitSQL.verify|verify} messages.
+             * @param message InitSQL message or plain object to encode
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encode(message: tabletmanagerdata.BackupRequest.ISqlInit, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encode(message: tabletmanagerdata.BackupRequest.IInitSQL, writer?: $protobuf.Writer): $protobuf.Writer;
 
             /**
-             * Encodes the specified SqlInit message, length delimited. Does not implicitly {@link tabletmanagerdata.BackupRequest.SqlInit.verify|verify} messages.
-             * @param message SqlInit message or plain object to encode
+             * Encodes the specified InitSQL message, length delimited. Does not implicitly {@link tabletmanagerdata.BackupRequest.InitSQL.verify|verify} messages.
+             * @param message InitSQL message or plain object to encode
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encodeDelimited(message: tabletmanagerdata.BackupRequest.ISqlInit, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encodeDelimited(message: tabletmanagerdata.BackupRequest.IInitSQL, writer?: $protobuf.Writer): $protobuf.Writer;
 
             /**
-             * Decodes a SqlInit message from the specified reader or buffer.
+             * Decodes an InitSQL message from the specified reader or buffer.
              * @param reader Reader or buffer to decode from
              * @param [length] Message length if known beforehand
-             * @returns SqlInit
+             * @returns InitSQL
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.BackupRequest.SqlInit;
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.BackupRequest.InitSQL;
 
             /**
-             * Decodes a SqlInit message from the specified reader or buffer, length delimited.
+             * Decodes an InitSQL message from the specified reader or buffer, length delimited.
              * @param reader Reader or buffer to decode from
-             * @returns SqlInit
+             * @returns InitSQL
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.BackupRequest.SqlInit;
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.BackupRequest.InitSQL;
 
             /**
-             * Verifies a SqlInit message.
+             * Verifies an InitSQL message.
              * @param message Plain object to verify
              * @returns `null` if valid, otherwise the reason why it is not
              */
             public static verify(message: { [k: string]: any }): (string|null);
 
             /**
-             * Creates a SqlInit message from a plain object. Also converts values to their respective internal types.
+             * Creates an InitSQL message from a plain object. Also converts values to their respective internal types.
              * @param object Plain object
-             * @returns SqlInit
+             * @returns InitSQL
              */
-            public static fromObject(object: { [k: string]: any }): tabletmanagerdata.BackupRequest.SqlInit;
+            public static fromObject(object: { [k: string]: any }): tabletmanagerdata.BackupRequest.InitSQL;
 
             /**
-             * Creates a plain object from a SqlInit message. Also converts values to other types if specified.
-             * @param message SqlInit
+             * Creates a plain object from an InitSQL message. Also converts values to other types if specified.
+             * @param message InitSQL
              * @param [options] Conversion options
              * @returns Plain object
              */
-            public static toObject(message: tabletmanagerdata.BackupRequest.SqlInit, options?: $protobuf.IConversionOptions): { [k: string]: any };
+            public static toObject(message: tabletmanagerdata.BackupRequest.InitSQL, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
             /**
-             * Converts this SqlInit to JSON.
+             * Converts this InitSQL to JSON.
              * @returns JSON object
              */
             public toJSON(): { [k: string]: any };
 
             /**
-             * Gets the default type url for SqlInit
+             * Gets the default type url for InitSQL
              * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
              * @returns The default type url
              */

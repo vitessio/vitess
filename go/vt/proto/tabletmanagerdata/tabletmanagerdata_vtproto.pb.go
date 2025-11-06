@@ -2045,11 +2045,11 @@ func (m *PromoteReplicaResponse) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
-func (m *BackupRequest_SqlInit) CloneVT() *BackupRequest_SqlInit {
+func (m *BackupRequest_InitSQL) CloneVT() *BackupRequest_InitSQL {
 	if m == nil {
-		return (*BackupRequest_SqlInit)(nil)
+		return (*BackupRequest_InitSQL)(nil)
 	}
-	r := new(BackupRequest_SqlInit)
+	r := new(BackupRequest_InitSQL)
 	r.Timeout = m.Timeout.CloneVT()
 	r.FailBackup = m.FailBackup
 	if rhs := m.Queries; rhs != nil {
@@ -2069,7 +2069,7 @@ func (m *BackupRequest_SqlInit) CloneVT() *BackupRequest_SqlInit {
 	return r
 }
 
-func (m *BackupRequest_SqlInit) CloneMessageVT() proto.Message {
+func (m *BackupRequest_InitSQL) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
@@ -2083,7 +2083,7 @@ func (m *BackupRequest) CloneVT() *BackupRequest {
 	r.IncrementalFromPos = m.IncrementalFromPos
 	r.UpgradeSafe = m.UpgradeSafe
 	r.MysqlShutdownTimeout = m.MysqlShutdownTimeout.CloneVT()
-	r.SqlInit = m.SqlInit.CloneVT()
+	r.InitSql = m.InitSql.CloneVT()
 	if rhs := m.BackupEngine; rhs != nil {
 		tmpVal := *rhs
 		r.BackupEngine = &tmpVal
@@ -7983,7 +7983,7 @@ func (m *PromoteReplicaResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error
 	return len(dAtA) - i, nil
 }
 
-func (m *BackupRequest_SqlInit) MarshalVT() (dAtA []byte, err error) {
+func (m *BackupRequest_InitSQL) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -7996,12 +7996,12 @@ func (m *BackupRequest_SqlInit) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *BackupRequest_SqlInit) MarshalToVT(dAtA []byte) (int, error) {
+func (m *BackupRequest_InitSQL) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *BackupRequest_SqlInit) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *BackupRequest_InitSQL) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -8096,8 +8096,8 @@ func (m *BackupRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.SqlInit != nil {
-		size, err := m.SqlInit.MarshalToSizedBufferVT(dAtA[:i])
+	if m.InitSql != nil {
+		size, err := m.InitSql.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
 			return 0, err
 		}
@@ -12911,7 +12911,7 @@ func (m *PromoteReplicaResponse) SizeVT() (n int) {
 	return n
 }
 
-func (m *BackupRequest_SqlInit) SizeVT() (n int) {
+func (m *BackupRequest_InitSQL) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -12968,8 +12968,8 @@ func (m *BackupRequest) SizeVT() (n int) {
 		l = m.MysqlShutdownTimeout.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
-	if m.SqlInit != nil {
-		l = m.SqlInit.SizeVT()
+	if m.InitSql != nil {
+		l = m.InitSql.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -24019,7 +24019,7 @@ func (m *PromoteReplicaResponse) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *BackupRequest_SqlInit) UnmarshalVT(dAtA []byte) error {
+func (m *BackupRequest_InitSQL) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -24042,10 +24042,10 @@ func (m *BackupRequest_SqlInit) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: BackupRequest_SqlInit: wiretype end group for non-group")
+			return fmt.Errorf("proto: BackupRequest_InitSQL: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: BackupRequest_SqlInit: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: BackupRequest_InitSQL: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -24418,7 +24418,7 @@ func (m *BackupRequest) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 7:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field SqlInit", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field InitSql", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -24445,10 +24445,10 @@ func (m *BackupRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.SqlInit == nil {
-				m.SqlInit = &BackupRequest_SqlInit{}
+			if m.InitSql == nil {
+				m.InitSql = &BackupRequest_InitSQL{}
 			}
-			if err := m.SqlInit.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+			if err := m.InitSql.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
