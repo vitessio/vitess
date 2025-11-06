@@ -7915,7 +7915,7 @@ type BackupRequest_InitSQL struct {
 	Queries       []string               `protobuf:"bytes,1,rep,name=queries,proto3" json:"queries,omitempty"`
 	TabletTypes   []topodata.TabletType  `protobuf:"varint,2,rep,packed,name=tablet_types,json=tabletTypes,proto3,enum=topodata.TabletType" json:"tablet_types,omitempty"`
 	Timeout       *vttime.Duration       `protobuf:"bytes,3,opt,name=timeout,proto3" json:"timeout,omitempty"`
-	FailBackup    bool                   `protobuf:"varint,4,opt,name=fail_backup,json=failBackup,proto3" json:"fail_backup,omitempty"`
+	FailOnError   bool                   `protobuf:"varint,4,opt,name=fail_on_error,json=failOnError,proto3" json:"fail_on_error,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7971,9 +7971,9 @@ func (x *BackupRequest_InitSQL) GetTimeout() *vttime.Duration {
 	return nil
 }
 
-func (x *BackupRequest_InitSQL) GetFailBackup() bool {
+func (x *BackupRequest_InitSQL) GetFailOnError() bool {
 	if x != nil {
-		return x.FailBackup
+		return x.FailOnError
 	}
 	return false
 }
@@ -8792,7 +8792,7 @@ const file_tabletmanagerdata_proto_rawDesc = "" +
 	"\x15PromoteReplicaRequest\x12\x1a\n" +
 	"\bsemiSync\x18\x01 \x01(\bR\bsemiSync\"4\n" +
 	"\x16PromoteReplicaResponse\x12\x1a\n" +
-	"\bposition\x18\x01 \x01(\tR\bposition\"\xa0\x04\n" +
+	"\bposition\x18\x01 \x01(\tR\bposition\"\xa3\x04\n" +
 	"\rBackupRequest\x12 \n" +
 	"\vconcurrency\x18\x01 \x01(\x05R\vconcurrency\x12#\n" +
 	"\rallow_primary\x18\x02 \x01(\bR\fallowPrimary\x120\n" +
@@ -8800,13 +8800,12 @@ const file_tabletmanagerdata_proto_rawDesc = "" +
 	"\fupgrade_safe\x18\x04 \x01(\bR\vupgradeSafe\x12(\n" +
 	"\rbackup_engine\x18\x05 \x01(\tH\x00R\fbackupEngine\x88\x01\x01\x12F\n" +
 	"\x16mysql_shutdown_timeout\x18\x06 \x01(\v2\x10.vttime.DurationR\x14mysqlShutdownTimeout\x12C\n" +
-	"\binit_sql\x18\a \x01(\v2(.tabletmanagerdata.BackupRequest.InitSQLR\ainitSql\x1a\xa9\x01\n" +
+	"\binit_sql\x18\a \x01(\v2(.tabletmanagerdata.BackupRequest.InitSQLR\ainitSql\x1a\xac\x01\n" +
 	"\aInitSQL\x12\x18\n" +
 	"\aqueries\x18\x01 \x03(\tR\aqueries\x127\n" +
 	"\ftablet_types\x18\x02 \x03(\x0e2\x14.topodata.TabletTypeR\vtabletTypes\x12*\n" +
-	"\atimeout\x18\x03 \x01(\v2\x10.vttime.DurationR\atimeout\x12\x1f\n" +
-	"\vfail_backup\x18\x04 \x01(\bR\n" +
-	"failBackupB\x10\n" +
+	"\atimeout\x18\x03 \x01(\v2\x10.vttime.DurationR\atimeout\x12\"\n" +
+	"\rfail_on_error\x18\x04 \x01(\bR\vfailOnErrorB\x10\n" +
 	"\x0e_backup_engine\"6\n" +
 	"\x0eBackupResponse\x12$\n" +
 	"\x05event\x18\x01 \x01(\v2\x0e.logutil.EventR\x05event\"\xfe\x01\n" +

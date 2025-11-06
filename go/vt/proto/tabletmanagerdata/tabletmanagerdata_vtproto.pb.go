@@ -2051,7 +2051,7 @@ func (m *BackupRequest_InitSQL) CloneVT() *BackupRequest_InitSQL {
 	}
 	r := new(BackupRequest_InitSQL)
 	r.Timeout = m.Timeout.CloneVT()
-	r.FailBackup = m.FailBackup
+	r.FailOnError = m.FailOnError
 	if rhs := m.Queries; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
@@ -8013,9 +8013,9 @@ func (m *BackupRequest_InitSQL) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.FailBackup {
+	if m.FailOnError {
 		i--
-		if m.FailBackup {
+		if m.FailOnError {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -12934,7 +12934,7 @@ func (m *BackupRequest_InitSQL) SizeVT() (n int) {
 		l = m.Timeout.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
-	if m.FailBackup {
+	if m.FailOnError {
 		n += 2
 	}
 	n += len(m.unknownFields)
@@ -24187,7 +24187,7 @@ func (m *BackupRequest_InitSQL) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 4:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field FailBackup", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field FailOnError", wireType)
 			}
 			var v int
 			for shift := uint(0); ; shift += 7 {
@@ -24204,7 +24204,7 @@ func (m *BackupRequest_InitSQL) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-			m.FailBackup = bool(v != 0)
+			m.FailOnError = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

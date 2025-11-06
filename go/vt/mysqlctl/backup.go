@@ -544,14 +544,14 @@ func ExecuteBackupInitSQL(ctx context.Context, params *BackupParams) error {
 	if err != nil || !ok {
 		return vterrors.Wrapf(err, "missing or invalid init SQL timeout value provided: %v", params.InitSQL.Timeout)
 	}
-	params.Logger.Infof("Executing init SQL queries %s, with a timeout of %v", strings.Join(params.InitSQL.Queries, ", "), initTimeout)
+	params.Logger.Infof("Executing init SQL queries %s, with a timeout of %v and fail backup on error set to %t", strings.Join(params.InitSQL.Queries, ", "), initTimeout, params.InitSQL.FailOnError)
 	initCtx, cancel := context.WithTimeout(ctx, initTimeout)
 	defer cancel()
 	for _, query := range params.InitSQL.Queries {
 		params.Logger.Infof("Executing init SQL query: %q", query)
 		if err := params.Mysqld.ExecuteSuperQuery(initCtx, query); err != nil {
-			if params.InitSQL.FailBackup {
-				return vterrors.Wrapf(err, "failed to execute init SQL queries %s and instructed to fail backup in this case", strings.Join(params.InitSQL.Queries, ", "))
+			if params.InitSQL.FailOnError {
+				return vterrors.Wrapf(err, "failed to execute init SQL query %s and instructed to fail backup in this case", query)
 			}
 			select {
 			case <-ctx.Done():

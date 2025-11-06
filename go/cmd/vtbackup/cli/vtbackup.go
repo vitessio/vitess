@@ -85,7 +85,7 @@ var (
 	initSQLQueries      []string
 	initSQLTabletTypes  []topodatapb.TabletType
 	initSQLTimeout      time.Duration
-	initSQLFailBackup   bool
+	initSQLFailOnError  bool
 
 	// vttablet-like flags
 	initDbNameOverride string
@@ -217,8 +217,8 @@ func init() {
 	Main.Flags().BoolVar(&upgradeSafe, "upgrade-safe", upgradeSafe, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
 	Main.Flags().StringSliceVar(&initSQLQueries, "init-backup-sql-queries", nil, "Queries to execute before initializing the backup")
 	Main.Flags().Var((*topoproto.TabletTypeListFlag)(&initSQLTabletTypes), "init-backup-tablet-types", "Tablet types used for the backup where the init SQL queries (--init-backup-sql-queries) will be executed before initializing the backup")
-	Main.Flags().DurationVar(&initSQLTimeout, "init-backup-sql-timeout", initSQLTimeout, "At what point should we time out the init SQL query (--init-backup-sql-queries) work and either fail the backup job (--init-backup-sql-fail-backup) or continue on with the backup")
-	Main.Flags().BoolVar(&initSQLFailBackup, "init-backup-sql-fail-backup", false, "Whether or not to fail the backup if the init SQL queries (--init-backup-sql-queries) fail, which includes if they fail to complete before the specified timeout (--init-backup-sql-timeout)")
+	Main.Flags().DurationVar(&initSQLTimeout, "init-backup-sql-timeout", initSQLTimeout, "At what point should we time out the init SQL query (--init-backup-sql-queries) work and either fail the backup job (--init-backup-sql-fail-on-error) or continue on with the backup")
+	Main.Flags().BoolVar(&initSQLFailOnError, "init-backup-sql-fail-on-error", false, "Whether or not to fail the backup if the init SQL queries (--init-backup-sql-queries) fail, which includes if they fail to complete before the specified timeout (--init-backup-sql-timeout)")
 
 	// vttablet-like flags
 	utils.SetFlagStringVar(Main.Flags(), &initDbNameOverride, "init-db-name-override", initDbNameOverride, "(init parameter) override the name of the db used by vttablet")
@@ -413,7 +413,7 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 			Queries:     initSQLQueries,
 			TabletTypes: initSQLTabletTypes,
 			Timeout:     protoutil.DurationToProto(initSQLTimeout),
-			FailBackup:  initSQLFailBackup,
+			FailOnError: initSQLFailOnError,
 		},
 	}
 	// In initial_backup mode, just take a backup of this empty database.

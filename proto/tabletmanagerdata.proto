@@ -572,7 +572,7 @@ message BackupRequest {
     repeated string queries = 1;
     repeated topodata.TabletType tablet_types = 2;
     vttime.Duration timeout = 3;
-    bool fail_backup = 4;
+    bool fail_on_error = 4;
   }
   int32 concurrency = 1;
   bool allow_primary = 2;

@@ -32056,8 +32056,8 @@ export namespace tabletmanagerdata {
             /** InitSQL timeout */
             timeout?: (vttime.IDuration|null);
 
-            /** InitSQL fail_backup */
-            fail_backup?: (boolean|null);
+            /** InitSQL fail_on_error */
+            fail_on_error?: (boolean|null);
         }
 
         /** Represents an InitSQL. */
@@ -32078,8 +32078,8 @@ export namespace tabletmanagerdata {
             /** InitSQL timeout. */
             public timeout?: (vttime.IDuration|null);
 
-            /** InitSQL fail_backup. */
-            public fail_backup: boolean;
+            /** InitSQL fail_on_error. */
+            public fail_on_error: boolean;
 
             /**
              * Creates a new InitSQL instance using the specified properties.
