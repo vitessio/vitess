@@ -431,7 +431,7 @@ func (svss *SysVarSetAware) Execute(ctx context.Context, vcursor VCursor, env *e
 		if err != nil {
 			return err
 		}
-		vcursor.Session().SetSQLSelectLimit(intValue) // nolint:errcheck
+		vcursor.Session().SetSQLSelectLimit(intValue) //nolint:errcheck
 	case sysvars.TransactionMode.Name:
 		str, err := svss.evalAsString(env, vcursor)
 		if err != nil {

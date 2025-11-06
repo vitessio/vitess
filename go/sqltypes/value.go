@@ -831,7 +831,7 @@ func encodeBinarySQLBytes2(val []byte, buf *bytes2.Buffer) {
 }
 
 func encodeBinarySQLStringBuilder(val []byte, buf *strings.Builder) {
-	buf.Write([]byte("_binary"))
+	buf.WriteString("_binary")
 	encodeBytesSQLStringBuilder(val, buf)
 }
 

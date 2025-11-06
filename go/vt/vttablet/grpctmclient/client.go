@@ -1284,7 +1284,7 @@ func (client *Client) StopReplicationAndGetStatus(ctx context.Context, tablet *t
 	if err != nil {
 		return nil, vterrors.FromGRPC(err)
 	}
-	return &replicationdatapb.StopReplicationStatus{ // nolint
+	return &replicationdatapb.StopReplicationStatus{
 		Before: response.Status.Before,
 		After:  response.Status.After,
 	}, nil

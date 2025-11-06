@@ -79,7 +79,7 @@ func TestVtclient(t *testing.T) {
 	if err := cluster.Setup(); err != nil {
 		t.Fatalf("InitSchemas failed: %v", err)
 	}
-	defer cluster.TearDown() // nolint:errcheck
+	defer cluster.TearDown()
 
 	vtgateAddr := fmt.Sprintf("localhost:%v", cluster.Env.PortForProtocol("vtcombo", "grpc"))
 	queries := []struct {

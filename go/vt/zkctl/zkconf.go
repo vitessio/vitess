@@ -38,7 +38,7 @@ import (
 )
 
 type zkServerAddr struct {
-	ServerId     uint32 // nolint:revive
+	ServerId     uint32
 	Hostname     string
 	LeaderPort   int
 	ElectionPort int
@@ -46,7 +46,7 @@ type zkServerAddr struct {
 }
 
 type ZkConfig struct {
-	ServerId   uint32 // nolint:revive
+	ServerId   uint32
 	ClientPort int
 	Servers    []zkServerAddr
 	Extra      []string

@@ -14,7 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// nolint
 package integration
 
 import (
@@ -110,7 +109,7 @@ func (r *RefContainer) String() string {
 	if r == nil {
 		return "nil"
 	}
-	var astType = ""
+	var astType string
 	if r.ASTType == nil {
 		astType = "nil"
 	} else {

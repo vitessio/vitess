@@ -526,6 +526,13 @@ func TestSQLSelectLimit(t *testing.T) {
 		utils.AssertMatches(t, conn, "select uid, msg from t7_xxhash order by uid", `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")]]`)
 		utils.AssertMatches(t, conn, "(select uid, msg from t7_xxhash order by uid)", `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")]]`)
 		utils.AssertMatches(t, conn, "select uid, msg from t7_xxhash order by uid limit 4", `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")] [VARCHAR("3") NULL] [VARCHAR("4") VARCHAR("a")]]`)
+
+		// Don't LIMIT subqueries
+		utils.AssertMatches(t, conn, "select count(*) from (select uid, msg from t7_xxhash order by uid) as subquery", `[[INT64(6)]]`)
+		utils.AssertMatches(t, conn, "select count(*) from (select 1 union all select 2 union all select 3) as subquery", `[[INT64(3)]]`)
+
+		utils.AssertMatches(t, conn, "select 1 union all select 2 union all select 3", `[[INT64(1)] [INT64(2)]]`)
+
 		/*
 			planner does not support query with order by in union query. without order by the results are not deterministic for testing purpose
 			utils.AssertMatches(t, conn, "select uid, msg from t7_xxhash union all select uid, msg from t7_xxhash order by uid", ``)
