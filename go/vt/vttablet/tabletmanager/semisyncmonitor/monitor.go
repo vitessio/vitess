@@ -19,6 +19,7 @@ package semisyncmonitor
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/constants/sidecar"
@@ -32,7 +33,6 @@ import (
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
@@ -82,7 +82,7 @@ type Monitor struct {
 	// isWriting stores if the monitor is currently writing to the DB.
 	// We don't want two different threads initiating writes, so we use this
 	// for synchronization.
-	isWriting bool
+	isWriting atomic.Bool
 	// inProgressWriteCount is the number of writes currently in progress.
 	// The writes from the monitor themselves might get blocked and hence a count for them is required.
 	// After enough writes are blocked, we want to notify VTOrc to run an ERS.
@@ -180,7 +180,7 @@ func (m *Monitor) Close() {
 // be called multiple times in parallel.
 func (m *Monitor) checkAndFixSemiSyncBlocked() {
 	// Check if semi-sync is blocked or not
-	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), m.ticks.Interval())
 	defer cancel()
 	isBlocked, err := m.isSemiSyncBlocked(ctx)
 	if err != nil {
@@ -197,7 +197,7 @@ func (m *Monitor) checkAndFixSemiSyncBlocked() {
 		// That function is re-entrant. If we are already writing, then it will just return.
 		// We start it in a go-routine, because we want to continue to check for when
 		// we get unblocked.
-		go m.startWrites()
+		go m.startWrites(ctx)
 	}
 }
 
@@ -270,25 +270,17 @@ func (m *Monitor) stillBlocked() bool {
 // checkAndSetIsWriting checks if the monitor is already writing to the DB.
 // If it is not, then it sets the isWriting field and signals the caller.
 func (m *Monitor) checkAndSetIsWriting() bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.isWriting {
-		return false
-	}
-	m.isWriting = true
-	return true
+	return m.isWriting.CompareAndSwap(false, true)
 }
 
 // clearIsWriting clears the isWriting field.
 func (m *Monitor) clearIsWriting() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.isWriting = false
+	m.isWriting.Store(false)
 }
 
 // startWrites starts writing to the DB.
 // It is re-entrant and will return if we are already writing.
-func (m *Monitor) startWrites() {
+func (m *Monitor) startWrites(ctx context.Context) {
 	// If we are already writing, then we can just return.
 	if !m.checkAndSetIsWriting() {
 		return
@@ -298,13 +290,27 @@ func (m *Monitor) startWrites() {
 
 	// Check if we need to continue writing or not.
 	for m.stillBlocked() {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			// We only need to do another write if there were no other successful
+			// writes and we're indeed still blocked.
+			blocked, err := m.isSemiSyncBlocked(ctx)
+			if err != nil {
+				return
+			}
+			if !blocked {
+				m.setIsBlocked(false)
+				return
+			}
+		}
 		// We do the writes in a go-routine because if the network disruption
 		// is somewhat long-lived, then the writes themselves can also block.
 		// By doing them in a go-routine we give the system more time to recover while
 		// exponentially backing off. We will not do more than maxWritesPermitted writes and once
 		// all maxWritesPermitted writes are blocked, we'll wait for VTOrc to run an ERS.
 		go m.write()
-		time.Sleep(waitBetweenWrites)
 	}
 }
 
@@ -328,7 +334,7 @@ func (m *Monitor) incrementWriteCount() bool {
 func (m *Monitor) AllWritesBlocked() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.isOpen && m.inProgressWriteCount == maxWritesPermitted
+	return m.isOpen && m.isBlocked && m.inProgressWriteCount == maxWritesPermitted
 }
 
 // decrementWriteCount decrements the write count.
@@ -347,7 +353,7 @@ func (m *Monitor) write() {
 	}
 	defer m.decrementWriteCount()
 	// Get a connection from the pool
-	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), waitBetweenWrites)
 	defer cancel()
 	conn, err := m.appPool.Get(ctx)
 	if err != nil {
@@ -438,10 +444,10 @@ func getSemiSyncStats(conn *dbconnpool.PooledDBConnection) (semiSyncStats, error
 		if err != nil {
 			return stats, vterrors.Wrapf(err, "unexpected results for semi-sync stats query %s: %v", semiSyncStatsQuery, res.Rows)
 		}
-		switch {
-		case name == "Rpl_semi_sync_master_wait_sessions" || name == "Rpl_semi_sync_source_wait_sessions":
+		switch name {
+		case "Rpl_semi_sync_master_wait_sessions", "Rpl_semi_sync_source_wait_sessions":
 			stats.waitingSessions = value
-		case name == "Rpl_semi_sync_master_yes_tx" || name == "Rpl_semi_sync_source_yes_tx":
+		case "Rpl_semi_sync_master_yes_tx", "Rpl_semi_sync_source_yes_tx":
 			stats.ackedTrxs = value
 		default:
 			return stats, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected results for semi-sync stats query %s: %v", semiSyncStatsQuery, res.Rows)

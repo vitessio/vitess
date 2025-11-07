@@ -75,23 +75,18 @@ func TestMonitorIsSemiSyncBlocked(t *testing.T) {
 			want: false,
 		},
 		{
-			name:    "incorrect number of rows",
-			res:     sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "1", "1"),
-			wantErr: "Row count exceeded 1",
-		},
-		{
-			name:    "incorrect number of fields",
-			res:     sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value|a", "varchar|varchar"), "1|2"),
-			wantErr: `unexpected number of rows received - [[VARCHAR("1") VARCHAR("2")]]`,
+			name:    "incorrect results",
+			res:     sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"), "foo|3", "foo|3"),
+			wantErr: "unexpected results for semi-sync stats query select variable_name, variable_value from performance_schema.global_status where regexp_like(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)'): [[VARCHAR(\"foo\") VARCHAR(\"3\")] [VARCHAR(\"foo\") VARCHAR(\"3\")]]",
 		},
 		{
 			name: "Unblocked",
-			res:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "0"),
+			res:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"), "Rpl_semi_sync_source_wait_sessions|0", "Rpl_semi_sync_source_yes_tx|1"),
 			want: false,
 		},
 		{
 			name: "Blocked",
-			res:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "1"),
+			res:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"), "Rpl_semi_sync_source_wait_sessions|1", "Rpl_semi_sync_source_yes_tx|1"),
 			want: true,
 		},
 	}
@@ -103,7 +98,7 @@ func TestMonitorIsSemiSyncBlocked(t *testing.T) {
 				m.Close()
 				waitUntilWritingStopped(t, m)
 			}()
-			db.AddQuery(semiSyncWaitSessionsRead, tt.res)
+			db.AddQuery(semiSyncStatsQuery, tt.res)
 			got, err := m.isSemiSyncBlocked(context.Background())
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
@@ -299,6 +294,9 @@ func TestMonitorAllWritesBlocked(t *testing.T) {
 			}()
 			m.mu.Lock()
 			m.inProgressWriteCount = tt.initVal
+			if m.inProgressWriteCount == tt.initVal {
+				m.isBlocked = true
+			}
 			m.mu.Unlock()
 			require.EqualValues(t, tt.expected, m.AllWritesBlocked())
 		})
@@ -412,38 +410,39 @@ func TestIsWriting(t *testing.T) {
 
 	// Check the initial value of the isWriting field.
 	m.mu.Lock()
-	require.False(t, m.isWriting)
+	require.False(t, m.isWriting.Load())
 	m.mu.Unlock()
 
 	// Clearing a false field does nothing.
 	m.clearIsWriting()
 	m.mu.Lock()
-	require.False(t, m.isWriting)
+	require.False(t, m.isWriting.Load())
 	m.mu.Unlock()
 
 	// Check and set should set the field.
 	set := m.checkAndSetIsWriting()
 	require.True(t, set)
 	m.mu.Lock()
-	require.True(t, m.isWriting)
+	require.True(t, m.isWriting.Load())
 	m.mu.Unlock()
 
 	// Checking and setting shouldn't do anything.
 	set = m.checkAndSetIsWriting()
 	require.False(t, set)
 	m.mu.Lock()
-	require.True(t, m.isWriting)
+	require.True(t, m.isWriting.Load())
 	m.mu.Unlock()
 
 	// Clearing should now make the field false.
 	m.clearIsWriting()
 	m.mu.Lock()
-	require.False(t, m.isWriting)
+	require.False(t, m.isWriting.Load())
 	m.mu.Unlock()
 }
 
 func TestStartWrites(t *testing.T) {
 	defer utils.EnsureNoLeaks(t)
+	ctx := t.Context()
 	initialVal := waitBetweenWrites
 	waitBetweenWrites = 250 * time.Millisecond
 	defer func() {
@@ -463,7 +462,7 @@ func TestStartWrites(t *testing.T) {
 	})
 
 	// If we aren't blocked, then start writes doesn't do anything.
-	m.startWrites()
+	m.startWrites(ctx)
 	require.EqualValues(t, "", db.QueryLog())
 
 	// Now we set the monitor to be blocked.
@@ -471,7 +470,7 @@ func TestStartWrites(t *testing.T) {
 
 	var writesFinished atomic.Bool
 	go func() {
-		m.startWrites()
+		m.startWrites(ctx)
 		writesFinished.Store(true)
 	}()
 
@@ -483,7 +482,7 @@ func TestStartWrites(t *testing.T) {
 	}, 2*time.Second, 100*time.Millisecond)
 
 	// Once the writes have started, another call to startWrites shouldn't do anything
-	m.startWrites()
+	m.startWrites(ctx)
 
 	// We should continue to see the number of writes blocked increase.
 	require.Eventually(t, func() bool {
@@ -526,7 +525,7 @@ func TestCheckAndFixSemiSyncBlocked(t *testing.T) {
 	}()
 
 	// Initially everything is unblocked.
-	db.AddQuery(semiSyncWaitSessionsRead, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "0"))
+	db.AddQuery(semiSyncStatsQuery, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "0"))
 	// Add a universal insert query pattern that would block until we make it unblock.
 	ch := make(chan int)
 	db.AddQueryPatternWithCallback("^INSERT INTO.*", sqltypes.MakeTestResult(nil), func(s string) {
@@ -540,7 +539,7 @@ func TestCheckAndFixSemiSyncBlocked(t *testing.T) {
 	m.mu.Unlock()
 
 	// Now we set the monitor to be blocked.
-	db.AddQuery(semiSyncWaitSessionsRead, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "2"))
+	db.AddQuery(semiSyncStatsQuery, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "2"))
 	m.checkAndFixSemiSyncBlocked()
 
 	m.mu.Lock()
@@ -561,7 +560,7 @@ func TestCheckAndFixSemiSyncBlocked(t *testing.T) {
 	}, 2*time.Second, 100*time.Millisecond)
 
 	// Now we set the monitor to be unblocked.
-	db.AddQuery(semiSyncWaitSessionsRead, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "0"))
+	db.AddQuery(semiSyncStatsQuery, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "0"))
 	close(ch)
 	m.checkAndFixSemiSyncBlocked()
 
@@ -572,7 +571,7 @@ func TestCheckAndFixSemiSyncBlocked(t *testing.T) {
 	require.Eventually(t, func() bool {
 		m.mu.Lock()
 		defer m.mu.Unlock()
-		return m.inProgressWriteCount == 0 && m.isWriting == false
+		return m.inProgressWriteCount == 0 && m.isWriting.Load() == false
 	}, 2*time.Second, 100*time.Millisecond)
 }
 
@@ -592,7 +591,7 @@ func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
 
 	db.SetNeverFail(true)
 	// Initially everything is unblocked.
-	db.AddQuery(semiSyncWaitSessionsRead, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "0"))
+	db.AddQuery(semiSyncStatsQuery, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "0"))
 
 	// When everything is unblocked, then this should return without blocking.
 	err := m.WaitUntilSemiSyncUnblocked(context.Background())
@@ -604,7 +603,7 @@ func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
 		<-ch
 	})
 	// Now we set the monitor to be blocked.
-	db.AddQuery(semiSyncWaitSessionsRead, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "3"))
+	db.AddQuery(semiSyncStatsQuery, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "3"))
 
 	// wg is used to keep track of all the go routines.
 	wg := sync.WaitGroup{}
@@ -634,7 +633,7 @@ func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
 	require.Eventually(t, func() bool {
 		m.mu.Lock()
 		defer m.mu.Unlock()
-		return m.isWriting
+		return m.isWriting.Load()
 	}, 2*time.Second, 100*time.Millisecond)
 
 	// Now we cancel the context. This should fail the first wait.
@@ -650,7 +649,7 @@ func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
 	mu.Unlock()
 
 	// Now we set the monitor to be unblocked.
-	db.AddQuery(semiSyncWaitSessionsRead, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "0"))
+	db.AddQuery(semiSyncStatsQuery, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "0"))
 	close(ch)
 	err = m.WaitUntilSemiSyncUnblocked(context.Background())
 	require.NoError(t, err)
@@ -660,7 +659,7 @@ func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
 	require.Eventually(t, func() bool {
 		m.mu.Lock()
 		defer m.mu.Unlock()
-		return !m.isWriting
+		return !m.isWriting.Load()
 	}, 2*time.Second, 100*time.Millisecond)
 
 	// Also verify that if the monitor is closed, we don't wait.
@@ -691,7 +690,7 @@ func TestDeadlockOnClose(t *testing.T) {
 
 	// Set up for semisync to be blocked
 	db.SetNeverFail(true)
-	db.AddQuery(semiSyncWaitSessionsRead, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "1"))
+	db.AddQuery(semiSyncStatsQuery, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "1"))
 
 	// Open the monitor
 	m.Open()
@@ -752,7 +751,7 @@ func TestSemiSyncMonitor(t *testing.T) {
 
 	db.SetNeverFail(true)
 	// Initially everything is unblocked.
-	db.AddQuery(semiSyncWaitSessionsRead, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "0"))
+	db.AddQuery(semiSyncStatsQuery, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "0"))
 
 	// Open the monitor.
 	m.Open()
@@ -770,7 +769,7 @@ func TestSemiSyncMonitor(t *testing.T) {
 		<-ch
 	})
 	// Now we set the monitor to be blocked.
-	db.AddQuery(semiSyncWaitSessionsRead, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "1"))
+	db.AddQuery(semiSyncStatsQuery, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "1"))
 
 	// Start a go routine waiting for semi-sync being unblocked.
 	var waitFinished atomic.Bool
@@ -785,7 +784,7 @@ func TestSemiSyncMonitor(t *testing.T) {
 	require.False(t, waitFinished.Load())
 
 	// If we unblock the semi-sync, then the wait should finish.
-	db.AddQuery(semiSyncWaitSessionsRead, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "0"))
+	db.AddQuery(semiSyncStatsQuery, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "0"))
 	close(ch)
 	require.Eventually(t, func() bool {
 		return waitFinished.Load()
@@ -798,7 +797,7 @@ func TestSemiSyncMonitor(t *testing.T) {
 		<-ch
 	})
 	// We block the semi-sync again.
-	db.AddQuery(semiSyncWaitSessionsRead, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "1"))
+	db.AddQuery(semiSyncStatsQuery, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "1"))
 
 	// Start another go routine, also waiting for semi-sync being unblocked.
 	waitFinished.Store(false)
@@ -818,7 +817,7 @@ func TestSemiSyncMonitor(t *testing.T) {
 
 	// Now we unblock the writes and semi-sync.
 	close(ch)
-	db.AddQuery(semiSyncWaitSessionsRead, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "0"))
+	db.AddQuery(semiSyncStatsQuery, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "0"))
 
 	// The wait should now finish.
 	require.Eventually(t, func() bool {
@@ -832,7 +831,7 @@ func TestSemiSyncMonitor(t *testing.T) {
 	require.Eventually(t, func() bool {
 		m.mu.Lock()
 		defer m.mu.Unlock()
-		return !m.isWriting
+		return !m.isWriting.Load()
 	}, 2*time.Second, 100*time.Millisecond)
 }
 
@@ -852,7 +851,7 @@ func waitUntilWritingStopped(t *testing.T, m *Monitor) {
 			t.Fatalf("Timed out waiting for writing to stop: %v", ctx.Err())
 		case <-tick.C:
 			m.mu.Lock()
-			if !m.isWriting {
+			if !m.isWriting.Load() {
 				m.mu.Unlock()
 				return
 			}
