@@ -180,9 +180,7 @@ func (m *Monitor) Close() {
 // be called multiple times in parallel.
 func (m *Monitor) checkAndFixSemiSyncBlocked() {
 	// Check if semi-sync is blocked or not
-	ctx, cancel := context.WithTimeout(context.Background(), m.ticks.Interval())
-	defer cancel()
-	isBlocked, err := m.isSemiSyncBlocked(ctx)
+	isBlocked, err := m.isSemiSyncBlocked()
 	if err != nil {
 		m.errorCount.Add(1)
 		// If we are unable to determine whether the primary is blocked or not,
@@ -197,12 +195,14 @@ func (m *Monitor) checkAndFixSemiSyncBlocked() {
 		// That function is re-entrant. If we are already writing, then it will just return.
 		// We start it in a go-routine, because we want to continue to check for when
 		// we get unblocked.
-		go m.startWrites(ctx)
+		go m.startWrites()
 	}
 }
 
 // isSemiSyncBlocked checks if the primary is blocked on semi-sync.
-func (m *Monitor) isSemiSyncBlocked(ctx context.Context) (bool, error) {
+func (m *Monitor) isSemiSyncBlocked() (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), m.ticks.Interval())
+	defer cancel()
 	// Get a connection from the pool
 	conn, err := m.appPool.Get(ctx)
 	if err != nil {
@@ -280,7 +280,9 @@ func (m *Monitor) clearIsWriting() {
 
 // startWrites starts writing to the DB.
 // It is re-entrant and will return if we are already writing.
-func (m *Monitor) startWrites(ctx context.Context) {
+func (m *Monitor) startWrites() {
+	ctx, cancel := context.WithTimeout(context.Background(), m.ticks.Interval())
+	defer cancel()
 	// If we are already writing, then we can just return.
 	if !m.checkAndSetIsWriting() {
 		return
@@ -296,7 +298,7 @@ func (m *Monitor) startWrites(ctx context.Context) {
 		default:
 			// We only need to do another write if there were no other successful
 			// writes and we're indeed still blocked.
-			blocked, err := m.isSemiSyncBlocked(ctx)
+			blocked, err := m.isSemiSyncBlocked()
 			if err != nil {
 				return
 			}
