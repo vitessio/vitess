@@ -106,7 +106,7 @@ func (ec *expressionConverter) source(vschema plancontext.VSchema) (engine.Primi
 		return nil, err
 	}
 
-	var expr []string
+	expr := make([]string, 0, len(ec.tabletExpressions))
 	for _, e := range ec.tabletExpressions {
 		expr = append(expr, sqlparser.String(e))
 	}

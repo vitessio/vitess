@@ -861,7 +861,7 @@ func handleComparisonExpr(cursor *sqlparser.Cursor, node *sqlparser.ComparisonEx
 	if !lftOK || !rgtOK || len(lft) != len(rgt) || node.Operator != sqlparser.EqualOp {
 		return nil
 	}
-	var predicates []sqlparser.Expr
+	predicates := make([]sqlparser.Expr, 0, len(lft))
 	for i, l := range lft {
 		r := rgt[i]
 		predicates = append(predicates, &sqlparser.ComparisonExpr{
@@ -1021,7 +1021,7 @@ func findTablesWithColumn(b *binder, join *sqlparser.JoinTableExpr, column sqlpa
 	if leftTableInfo == nil || rightTableInfo == nil {
 		return nil, ShardedError{Inner: vterrors.VT09015()}
 	}
-	var tableNames []sqlparser.TableName
+	tableNames := make([]sqlparser.TableName, 0, len(leftTableInfo))
 	for _, info := range leftTableInfo {
 		nm, err := info.Name()
 		if err != nil {
