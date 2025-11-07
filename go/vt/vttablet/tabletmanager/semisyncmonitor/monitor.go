@@ -18,7 +18,6 @@ package semisyncmonitor
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -30,19 +29,25 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 const (
-	semiSyncWaitSessionsRead = "select variable_value from performance_schema.global_status where regexp_like(variable_name, 'Rpl_semi_sync_(source|master)_wait_sessions')"
-	semiSyncHeartbeatWrite   = "INSERT INTO %s.semisync_heartbeat (ts) VALUES (NOW())"
-	semiSyncHeartbeatClear   = "TRUNCATE TABLE %s.semisync_heartbeat"
-	maxWritesPermitted       = 15
-	clearTimerDuration       = 24 * time.Hour
+	semiSyncStatsQuery     = "select variable_name, variable_value from performance_schema.global_status where regexp_like(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')"
+	semiSyncHeartbeatWrite = "INSERT INTO %s.semisync_heartbeat (ts) VALUES (NOW())"
+	semiSyncHeartbeatClear = "TRUNCATE TABLE %s.semisync_heartbeat"
+	maxWritesPermitted     = 15
+	clearTimerDuration     = 24 * time.Hour
 )
+
+type semiSyncStats struct {
+	waitingSessions, ackedTrxs int64
+}
 
 var (
 	// waitBetweenWrites is the time to wait between consecutive writes.
@@ -205,23 +210,16 @@ func (m *Monitor) isSemiSyncBlocked(ctx context.Context) (bool, error) {
 	}
 	defer conn.Recycle()
 
-	// Execute the query to check if the primary is blocked on semi-sync.
-	res, err := conn.Conn.ExecuteFetch(semiSyncWaitSessionsRead, 1, false)
-	if err != nil {
+	stats, err := getSemiSyncStats(conn)
+	if err != nil || stats.waitingSessions == 0 {
 		return false, err
 	}
-	// If we have no rows, then the primary doesn't have semi-sync enabled.
-	// It then follows, that the primary isn't blocked :)
-	if len(res.Rows) == 0 {
-		return false, nil
+	time.Sleep(waitBetweenWrites)
+	followUpStats, err := getSemiSyncStats(conn)
+	if err != nil || followUpStats.waitingSessions == 0 || followUpStats.ackedTrxs > stats.ackedTrxs {
+		return false, err
 	}
-
-	// Read the status value and check if it is non-zero.
-	if len(res.Rows) != 1 || len(res.Rows[0]) != 1 {
-		return false, fmt.Errorf("unexpected number of rows received - %v", res.Rows)
-	}
-	value, err := res.Rows[0][0].ToCastInt64()
-	return value != 0, err
+	return true, nil
 }
 
 // isClosed returns if the monitor is currently closed or not.
@@ -415,4 +413,39 @@ func (m *Monitor) addWaiter() chan struct{} {
 // bindSideCarDBName binds the sidecar db name to the query.
 func (m *Monitor) bindSideCarDBName(query string) string {
 	return sqlparser.BuildParsedQuery(query, sidecar.GetIdentifier()).Query
+}
+
+func getSemiSyncStats(conn *dbconnpool.PooledDBConnection) (semiSyncStats, error) {
+	stats := semiSyncStats{}
+	// Execute the query to check if the primary is blocked on semi-sync.
+	res, err := conn.Conn.ExecuteFetch(semiSyncStatsQuery, 2, false)
+	if err != nil {
+		return stats, err
+	}
+	// If we have no rows, then the primary doesn't have semi-sync enabled.
+	// It then follows, that the primary isn't blocked :)
+	if len(res.Rows) == 0 {
+		return stats, nil
+	}
+
+	// Read the status value and check if it is non-zero.
+	if len(res.Rows) != 2 {
+		return stats, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected number of rows received, expected 2 but got %d, for semi-sync stats query %s", len(res.Rows), semiSyncStatsQuery)
+	}
+	for i := range len(res.Rows) {
+		name := res.Rows[i][0].ToString()
+		value, err := res.Rows[i][1].ToCastInt64()
+		if err != nil {
+			return stats, vterrors.Wrapf(err, "unexpected results for semi-sync stats query %s: %v", semiSyncStatsQuery, res.Rows)
+		}
+		switch {
+		case name == "Rpl_semi_sync_master_wait_sessions" || name == "Rpl_semi_sync_source_wait_sessions":
+			stats.waitingSessions = value
+		case name == "Rpl_semi_sync_master_yes_tx" || name == "Rpl_semi_sync_source_yes_tx":
+			stats.ackedTrxs = value
+		default:
+			return stats, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected results for semi-sync stats query %s: %v", semiSyncStatsQuery, res.Rows)
+		}
+	}
+	return stats, nil
 }
