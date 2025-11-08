@@ -460,6 +460,9 @@ func getSemiSyncStats(conn *dbconnpool.PooledDBConnection) (semiSyncStats, error
 	if len(res.Rows) != 2 {
 		return stats, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected number of rows received, expected 2 but got %d, for semi-sync stats query %s", len(res.Rows), semiSyncStatsQuery)
 	}
+	if len(res.Rows[0]) != 2 {
+		return stats, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected number of columns received, expected 2 but got %d, for semi-sync stats query %s", len(res.Rows[0]), semiSyncStatsQuery)
+	}
 	for i := range len(res.Rows) {
 		name := res.Rows[i][0].ToString()
 		value, err := res.Rows[i][1].ToCastInt64()

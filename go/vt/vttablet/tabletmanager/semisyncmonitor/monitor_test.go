@@ -150,9 +150,9 @@ func TestMonitorIsSemiSyncBlockedConnectionError(t *testing.T) {
 	require.False(t, got)
 }
 
-// TestMonitorIsSemiSyncBlockedWithWrongRowCount tests error handling when
-// the query returns an unexpected number of rows.
-func TestMonitorIsSemiSyncBlockedWithWrongRowCount(t *testing.T) {
+// TestMonitorIsSemiSyncBlockedWithBadResults tests error handling when
+// the query returns an unexpected result.
+func TestMonitorIsSemiSyncBlockedWithBadResults(t *testing.T) {
 	defer utils.EnsureNoLeaks(t)
 
 	tests := []struct {
@@ -164,6 +164,11 @@ func TestMonitorIsSemiSyncBlockedWithWrongRowCount(t *testing.T) {
 			name:    "one row instead of two",
 			res:     sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"), "Rpl_semi_sync_source_wait_sessions|1"),
 			wantErr: "unexpected number of rows received, expected 2 but got 1",
+		},
+		{
+			name:    "one column instead of two",
+			res:     sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "1", "1"),
+			wantErr: "unexpected number of columns received, expected 2 but got 1",
 		},
 		{
 			name: "three rows instead of two",
