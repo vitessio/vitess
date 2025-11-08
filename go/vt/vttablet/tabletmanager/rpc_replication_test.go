@@ -131,12 +131,14 @@ func TestDemotePrimaryWaitingForSemiSyncUnblock(t *testing.T) {
 
 	tm.SemiSyncMonitor.Open()
 	// Add a universal insert query pattern that would block until we make it unblock.
+	// ExecuteFetchMulti will execute each statement separately, so we need to add SET query.
+	fakeDb.AddQueryPattern("SET SESSION lock_wait_timeout=.*", &sqltypes.Result{})
 	ch := make(chan int)
 	fakeDb.AddQueryPatternWithCallback("^INSERT INTO.*", sqltypes.MakeTestResult(nil), func(s string) {
 		<-ch
 	})
 	// Add a fake query that makes the semi-sync monitor believe that the tablet is blocked on semi-sync ACKs.
-	fakeDb.AddQuery("select variable_name, variable_value from performance_schema.global_status where regexp_like(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
+	fakeDb.AddQuery("SELECT variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 		"Rpl_semi_sync_source_wait_sessions|1",
 		"Rpl_semi_sync_source_yes_tx|5"))
@@ -164,7 +166,7 @@ func TestDemotePrimaryWaitingForSemiSyncUnblock(t *testing.T) {
 	require.False(t, fakeMysqlDaemon.SuperReadOnly.Load())
 
 	// Now we unblock the semi-sync monitor.
-	fakeDb.AddQuery("select variable_name, variable_value from performance_schema.global_status where regexp_like(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
+	fakeDb.AddQuery("SELECT variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 		"Rpl_semi_sync_source_wait_sessions|0",
 		"Rpl_semi_sync_source_yes_tx|5"))
@@ -199,14 +201,14 @@ func TestDemotePrimaryWithSemiSyncProgressDetection(t *testing.T) {
 	// We add the query result multiple times. The fakesqldb will return them in order (FIFO).
 	// First few calls: waiting sessions present, ackedTrxs=5.
 	for i := 0; i < 3; i++ {
-		fakeDb.AddQuery("select variable_name, variable_value from performance_schema.global_status where regexp_like(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
+		fakeDb.AddQuery("SELECT variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 			"Rpl_semi_sync_source_wait_sessions|1",
 			"Rpl_semi_sync_source_yes_tx|5"))
 	}
 	// Next calls: waiting sessions present, but ackedTrxs=6 (progress!).
 	for i := 0; i < 10; i++ {
-		fakeDb.AddQuery("select variable_name, variable_value from performance_schema.global_status where regexp_like(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
+		fakeDb.AddQuery("SELECT variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 			"Rpl_semi_sync_source_wait_sessions|1",
 			"Rpl_semi_sync_source_yes_tx|6"))
@@ -258,13 +260,13 @@ func TestDemotePrimaryWhenSemiSyncBecomesUnblockedBetweenChecks(t *testing.T) {
 	// This simulates the semi-sync becoming unblocked between the two checks.
 	// The fakesqldb returns results in FIFO order.
 	// First call: waiting sessions present.
-	fakeDb.AddQuery("select variable_name, variable_value from performance_schema.global_status where regexp_like(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
+	fakeDb.AddQuery("SELECT variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 		"Rpl_semi_sync_source_wait_sessions|2",
 		"Rpl_semi_sync_source_yes_tx|5"))
 	// Second and subsequent calls: no waiting sessions (unblocked!).
 	for i := 0; i < 10; i++ {
-		fakeDb.AddQuery("select variable_name, variable_value from performance_schema.global_status where regexp_like(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
+		fakeDb.AddQuery("SELECT variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 			"Rpl_semi_sync_source_wait_sessions|0",
 			"Rpl_semi_sync_source_yes_tx|5"))

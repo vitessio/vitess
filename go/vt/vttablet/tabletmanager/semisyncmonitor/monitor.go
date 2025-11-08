@@ -18,6 +18,7 @@ package semisyncmonitor
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -38,7 +39,19 @@ import (
 )
 
 const (
-	semiSyncStatsQuery     = "select variable_name, variable_value from performance_schema.global_status where regexp_like(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')"
+	// How many seconds we should wait for table/metadata locks.
+	// We do NOT want our TRUNCATE statement to block things indefinitely, and
+	// we do NOT want our INSERTs blocking indefinitely on any locks to appear
+	// as though they are blocking on a semi-sync ACK, which is what we really
+	// care about in the monitor as when we hit the limit of writers blocked
+	// on semi-sync ACKs we signal to VTOrc that we need help to unblock
+	// things and it will perform an ERS to do so.
+	// Note: this is something we are entirely fine being set in all of the
+	// monitor connection pool sessions, so we do not ever bother to set the
+	// session value back to the global default.
+	setTimeoutQuery = "SET SESSION lock_wait_timeout=%d"
+
+	semiSyncStatsQuery     = "SELECT variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')"
 	semiSyncHeartbeatWrite = "INSERT INTO %s.semisync_heartbeat (ts) VALUES (NOW())"
 	semiSyncHeartbeatClear = "TRUNCATE TABLE %s.semisync_heartbeat"
 	maxWritesPermitted     = 15
@@ -48,12 +61,6 @@ const (
 type semiSyncStats struct {
 	waitingSessions, ackedTrxs int64
 }
-
-var (
-	// waitBetweenWrites is the time to wait between consecutive writes.
-	// This is a variable instead of a constant only to be tweaked in tests.
-	waitBetweenWrites = 1 * time.Second
-)
 
 // Monitor is a monitor that checks if the primary tablet
 // is blocked on a semi-sync ack from the replica.
@@ -96,6 +103,11 @@ type Monitor struct {
 	// errorCount is the number of errors that the semi-sync monitor ran into.
 	// We ignore some of the errors, so the counter is a good way to track how many errors we have seen.
 	errorCount *stats.Counter
+
+	// actionDelay is the time to wait between various actions.
+	actionDelay time.Duration
+	// actionTimeout is when we should time out a given action.
+	actionTimeout time.Duration
 }
 
 // NewMonitor creates a new Monitor.
@@ -110,6 +122,8 @@ func NewMonitor(config *tabletenv.TabletConfig, exporter *servenv.Exporter) *Mon
 		errorCount:         exporter.NewCounter("SemiSyncMonitorErrorCount", "Number of errors encountered by the semi-sync monitor"),
 		appPool:            dbconnpool.NewConnectionPool("SemiSyncMonitorAppPool", exporter, maxWritesPermitted+5, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
 		waiters:            make([]chan struct{}, 0),
+		actionDelay:        config.SemiSyncMonitor.Interval / 10,
+		actionTimeout:      config.SemiSyncMonitor.Interval / 2,
 	}
 }
 
@@ -179,7 +193,7 @@ func (m *Monitor) Close() {
 // and manufactures a write to unblock the primary. This function is safe to
 // be called multiple times in parallel.
 func (m *Monitor) checkAndFixSemiSyncBlocked() {
-	// Check if semi-sync is blocked or not
+	// Check if semi-sync is blocked or not.
 	isBlocked, err := m.isSemiSyncBlocked()
 	if err != nil {
 		m.errorCount.Add(1)
@@ -214,7 +228,7 @@ func (m *Monitor) isSemiSyncBlocked() (bool, error) {
 	if err != nil || stats.waitingSessions == 0 {
 		return false, err
 	}
-	time.Sleep(waitBetweenWrites)
+	time.Sleep(m.actionDelay)
 	followUpStats, err := getSemiSyncStats(conn)
 	if err != nil || followUpStats.waitingSessions == 0 || followUpStats.ackedTrxs > stats.ackedTrxs {
 		return false, err
@@ -349,13 +363,12 @@ func (m *Monitor) decrementWriteCount() {
 
 // write writes a heartbeat to unblock semi-sync being stuck.
 func (m *Monitor) write() {
-	shouldWrite := m.incrementWriteCount()
-	if !shouldWrite {
+	if shouldWrite := m.incrementWriteCount(); !shouldWrite {
 		return
 	}
 	defer m.decrementWriteCount()
 	// Get a connection from the pool
-	ctx, cancel := context.WithTimeout(context.Background(), waitBetweenWrites)
+	ctx, cancel := context.WithTimeout(context.Background(), m.actionTimeout)
 	defer cancel()
 	conn, err := m.appPool.Get(ctx)
 	if err != nil {
@@ -363,7 +376,7 @@ func (m *Monitor) write() {
 		log.Errorf("SemiSync Monitor: failed to get a connection when writing to semisync_heartbeat table: %v", err)
 		return
 	}
-	_, err = conn.Conn.ExecuteFetch(m.bindSideCarDBName(semiSyncHeartbeatWrite), 0, false)
+	err = conn.Conn.ExecuteFetchMultiDrain(m.addLockTimeout(m.bindSideCarDBName(semiSyncHeartbeatWrite)))
 	conn.Recycle()
 	if err != nil {
 		m.errorCount.Add(1)
@@ -394,14 +407,16 @@ func (m *Monitor) setIsBlocked(val bool) {
 // consumes too much space on the MySQL instance.
 func (m *Monitor) clearAllData() {
 	// Get a connection from the pool
-	conn, err := m.appPool.Get(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), m.actionTimeout)
+	defer cancel()
+	conn, err := m.appPool.Get(ctx)
 	if err != nil {
 		m.errorCount.Add(1)
 		log.Errorf("SemiSync Monitor: failed get a connection to clear semisync_heartbeat table: %v", err)
 		return
 	}
 	defer conn.Recycle()
-	_, err = conn.Conn.ExecuteFetch(m.bindSideCarDBName(semiSyncHeartbeatClear), 0, false)
+	_, _, err = conn.Conn.ExecuteFetchMulti(m.addLockTimeout(m.bindSideCarDBName(semiSyncHeartbeatClear)), 0, false)
 	if err != nil {
 		m.errorCount.Add(1)
 		log.Errorf("SemiSync Monitor: failed to clear semisync_heartbeat table: %v", err)
@@ -421,6 +436,11 @@ func (m *Monitor) addWaiter() chan struct{} {
 // bindSideCarDBName binds the sidecar db name to the query.
 func (m *Monitor) bindSideCarDBName(query string) string {
 	return sqlparser.BuildParsedQuery(query, sidecar.GetIdentifier()).Query
+}
+
+func (m *Monitor) addLockTimeout(query string) string {
+	timeoutQuery := fmt.Sprintf(setTimeoutQuery, int(m.actionTimeout.Seconds()))
+	return fmt.Sprintf("%s;%s", timeoutQuery, query)
 }
 
 func getSemiSyncStats(conn *dbconnpool.PooledDBConnection) (semiSyncStats, error) {
