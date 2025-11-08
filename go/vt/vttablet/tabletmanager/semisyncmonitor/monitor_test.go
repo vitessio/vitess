@@ -100,6 +100,11 @@ func TestMonitorIsSemiSyncBlocked(t *testing.T) {
 			// With fakesqldb limitation, second call returns same result, so it appears blocked.
 			want: true,
 		},
+		{
+			name:    "invalid variable value",
+			result:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"), "Rpl_semi_sync_source_wait_sessions|not_a_number", "Rpl_semi_sync_source_yes_tx|5"),
+			wantErr: "unexpected results for semi-sync stats query",
+		},
 	}
 
 	for _, tt := range tests {
@@ -127,8 +132,8 @@ func TestMonitorIsSemiSyncBlocked(t *testing.T) {
 	}
 }
 
-// TestMonitorIsSemiSyncBlockedConnectionError tests error handling when
-// getting a connection from the pool fails.
+// TestMonitorIsSemiSyncBlockedConnectionError tests that we do not
+// consider semi-sync blocked when we encounter an error trying to check.
 func TestMonitorIsSemiSyncBlockedConnectionError(t *testing.T) {
 	defer utils.EnsureNoLeaks(t)
 	db, m := createFakeDBAndMonitor(t)
@@ -197,31 +202,6 @@ func TestMonitorIsSemiSyncBlockedWithBadResults(t *testing.T) {
 			require.Contains(t, err.Error(), tt.wantErr)
 		})
 	}
-}
-
-// TestMonitorIsSemiSyncBlockedWithInvalidValues tests error handling when
-// the query returns non-numeric values.
-func TestMonitorIsSemiSyncBlockedWithInvalidValues(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
-
-	db, m := createFakeDBAndMonitor(t)
-	m.actionDelay = 10 * time.Millisecond
-	m.actionTimeout = 1 * time.Second
-	defer db.Close()
-	defer func() {
-		m.Close()
-		waitUntilWritingStopped(t, m)
-	}()
-
-	db.AddQuery(semiSyncStatsQuery, sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
-		"Rpl_semi_sync_source_wait_sessions|not_a_number",
-		"Rpl_semi_sync_source_yes_tx|5"))
-
-	got, err := m.isSemiSyncBlocked()
-	require.Error(t, err)
-	require.False(t, got)
-	require.Contains(t, err.Error(), "unexpected results for semi-sync stats query")
 }
 
 // TestMonitorIsSemiSyncBlockedProgressDetection tests various scenarios
@@ -622,31 +602,21 @@ func TestMonitorAllWritesBlocked(t *testing.T) {
 func TestMonitorWrite(t *testing.T) {
 	defer utils.EnsureNoLeaks(t)
 	tests := []struct {
-		initVal      int
-		shouldWrite  bool
-		expectSetCmd bool
-		expectInsert bool
+		initVal     int
+		shouldWrite bool
 	}{
 		{
-			initVal:      maxWritesPermitted - 2,
-			shouldWrite:  true,
-			expectSetCmd: true,
-			expectInsert: true,
+			initVal:     maxWritesPermitted - 2,
+			shouldWrite: true,
 		}, {
-			initVal:      maxWritesPermitted - 1,
-			shouldWrite:  true,
-			expectSetCmd: true,
-			expectInsert: true,
+			initVal:     maxWritesPermitted - 1,
+			shouldWrite: true,
 		}, {
-			initVal:      maxWritesPermitted,
-			shouldWrite:  false,
-			expectSetCmd: false,
-			expectInsert: false,
+			initVal:     maxWritesPermitted,
+			shouldWrite: false,
 		}, {
-			initVal:      0,
-			shouldWrite:  true,
-			expectSetCmd: true,
-			expectInsert: true,
+			initVal:     0,
+			shouldWrite: true,
 		},
 	}
 	for _, tt := range tests {
@@ -671,13 +641,10 @@ func TestMonitorWrite(t *testing.T) {
 			require.EqualValues(t, tt.initVal, m.writesBlockedGauge.Get())
 			m.mu.Unlock()
 			queryLog := db.QueryLog()
-			if tt.expectSetCmd {
+			if tt.shouldWrite {
 				require.Contains(t, queryLog, "set session lock_wait_timeout=5")
-			}
-			if tt.expectInsert {
 				require.Contains(t, queryLog, "insert into _vt.semisync_heartbeat (ts) values (now())")
-			}
-			if !tt.shouldWrite {
+			} else {
 				require.Equal(t, "", queryLog)
 			}
 		})
@@ -703,8 +670,8 @@ func TestMonitorWriteBlocked(t *testing.T) {
 
 	// ExecuteFetchMulti will execute each statement separately, so we need to add SET query and INSERT query.
 	// Add them multiple times so the writes can execute.
-	for i := 0; i < 20; i++ {
-		db.AddQuery("SET SESSION lock_wait_timeout=5", &sqltypes.Result{})
+	for range maxWritesPermitted {
+		db.AddQuery("SET SESSION lock_wait_timeout=1", &sqltypes.Result{})
 		db.AddQuery("INSERT INTO _vt.semisync_heartbeat (ts) VALUES (NOW())", &sqltypes.Result{})
 	}
 
@@ -714,16 +681,24 @@ func TestMonitorWriteBlocked(t *testing.T) {
 		m.write()
 		writeFinished.Store(true)
 	}()
-	// We should see the number of writes to increase (briefly, before it completes).
-	// Since writes now complete quickly without blocking, we check that the write finishes successfully.
+
+	// We should see the number of writers increase briefly, before it completes.
+	require.Zero(t, m.errorCount.Get())
+	require.Eventually(t, func() bool {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		return m.inProgressWriteCount > 0
+	}, 2*time.Second, 5*time.Microsecond)
+
+	// Check that the writes finished successfully.
 	require.Eventually(t, func() bool {
 		return writeFinished.Load()
 	}, 2*time.Second, 100*time.Millisecond)
 
 	// After write completes, count should be back to zero.
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	require.EqualValues(t, 0, m.inProgressWriteCount)
-	m.mu.Unlock()
 }
 
 // TestIsWriting checks the transitions for the isWriting field.
@@ -788,8 +763,8 @@ func TestStartWrites(t *testing.T) {
 
 	// ExecuteFetchMulti will execute each statement separately.
 	// Use patterns for both SET and INSERT since they can be called multiple times.
-	db.AddQueryPattern("SET SESSION lock_wait_timeout=.*", &sqltypes.Result{})
-	db.AddQueryPattern("INSERT INTO.*", &sqltypes.Result{})
+	db.AddQuery("SET SESSION lock_wait_timeout=1", &sqltypes.Result{})
+	db.AddQuery("INSERT INTO _vt.semisync_heartbeat (ts) VALUES (NOW())", &sqltypes.Result{})
 
 	// If we aren't blocked, then start writes doesn't do anything.
 	m.startWrites()
@@ -801,18 +776,19 @@ func TestStartWrites(t *testing.T) {
 	// Start writes and wait for them to complete
 	m.startWrites()
 
-	// Wait a bit to let writes execute
-	time.Sleep(500 * time.Millisecond)
+	// Check that some writes are in progress.
+	require.Eventually(t, func() bool {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		return m.inProgressWriteCount > 0
+	}, 2*time.Second, 5*time.Microsecond)
 
-	// Verify the query log shows the writes were executed
+	// Verify the query log shows the writes were executed.
 	queryLog := db.QueryLog()
 	require.Contains(t, queryLog, "insert into _vt.semisync_heartbeat")
 
 	// Make the monitor unblocked. This should stop the writes.
 	m.setIsBlocked(false)
-
-	// Wait a bit to ensure cleanup happens
-	time.Sleep(200 * time.Millisecond)
 
 	// Check that no writes are in progress anymore.
 	require.Eventually(t, func() bool {
@@ -842,8 +818,8 @@ func TestCheckAndFixSemiSyncBlocked(t *testing.T) {
 
 	// ExecuteFetchMulti will execute each statement separately
 	// Use patterns for both SET and INSERT since they can be called multiple times
-	db.AddQueryPattern("SET SESSION lock_wait_timeout=.*", &sqltypes.Result{})
-	db.AddQueryPattern("INSERT INTO.*", &sqltypes.Result{})
+	db.AddQuery("SET SESSION lock_wait_timeout=1", &sqltypes.Result{})
+	db.AddQuery("INSERT INTO _vt.semisync_heartbeat (ts) VALUES (NOW())", &sqltypes.Result{})
 
 	// Check that the monitor thinks we are unblocked.
 	m.checkAndFixSemiSyncBlocked()
@@ -953,8 +929,8 @@ func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
 
 	// ExecuteFetchMulti will execute each statement separately
 	// Use patterns for both SET and INSERT since they can be called multiple times
-	db.AddQueryPattern("SET SESSION lock_wait_timeout=.*", &sqltypes.Result{})
-	db.AddQueryPattern("INSERT INTO.*", &sqltypes.Result{})
+	db.AddQuery("SET SESSION lock_wait_timeout=1", &sqltypes.Result{})
+	db.AddQuery("INSERT INTO _vt.semisync_heartbeat (ts) VALUES (NOW())", &sqltypes.Result{})
 
 	// Open the monitor so the periodic timer runs
 	m.Open()
@@ -967,16 +943,13 @@ func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
 	handler.semisyncBlocked.Store(true)
 
 	// Wait until the writes have started.
-	// Note: With the timer-based approach, checkAndFixSemiSyncBlocked is called periodically
-	// and spawns startWrites with a context that expires. So writes may start and stop repeatedly.
 	require.Eventually(t, func() bool {
 		m.mu.Lock()
 		defer m.mu.Unlock()
 		// Check if we have any in-progress writes, which indicates writing has started.
 		return m.inProgressWriteCount > 0 || m.isWriting.Load()
-	}, 15*time.Second, 100*time.Millisecond)
+	}, 5*time.Second, 5*time.Microsecond)
 
-	// wg is used to keep track of all the go routines.
 	wg := sync.WaitGroup{}
 	// Start a cancellable context and use that to wait.
 	ctx, cancel := context.WithCancel(context.Background())
@@ -993,12 +966,10 @@ func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
 	}()
 
 	// Start another go routine, also waiting for semi-sync being unblocked, but not using the cancellable context.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		err := m.WaitUntilSemiSyncUnblocked(context.Background())
 		require.NoError(t, err)
-	}()
+	})
 
 	// Now we cancel the context. This should fail the first wait.
 	cancel()
@@ -1069,7 +1040,7 @@ func TestDeadlockOnClose(t *testing.T) {
 	finishCh := make(chan int)
 	go func() {
 		count := 100
-		for i := 0; i < count; i++ {
+		for range count {
 			m.Close()
 			m.Open()
 			time.Sleep(20 * time.Millisecond)
@@ -1132,8 +1103,8 @@ func TestSemiSyncMonitor(t *testing.T) {
 
 	// ExecuteFetchMulti will execute each statement separately
 	// Use patterns for both SET and INSERT since they can be called multiple times.
-	db.AddQueryPattern("SET SESSION lock_wait_timeout=.*", &sqltypes.Result{})
-	db.AddQueryPattern("INSERT INTO.*", &sqltypes.Result{})
+	db.AddQuery("SET SESSION lock_wait_timeout=1", &sqltypes.Result{})
+	db.AddQuery("INSERT INTO _vt.semisync_heartbeat (ts) VALUES (NOW())", &sqltypes.Result{})
 
 	// Open the monitor.
 	m.Open()
@@ -1149,19 +1120,16 @@ func TestSemiSyncMonitor(t *testing.T) {
 	// We don't need to test the blocking behavior in detail since TestWaitUntilSemiSyncUnblocked covers that.
 	// This test just verifies the basic black-box behavior.
 
-	// Set to blocked state
+	// Set to blocked state.
 	handler.semisyncBlocked.Store(true)
 
-	// Start a waiter
+	// Start a waiter.
 	var waitFinished atomic.Bool
 	go func() {
 		err := m.WaitUntilSemiSyncUnblocked(context.Background())
 		require.NoError(t, err)
 		waitFinished.Store(true)
 	}()
-
-	// Give it a moment to start.
-	time.Sleep(200 * time.Millisecond)
 
 	// Now unblock and verify the wait completes.
 	handler.semisyncBlocked.Store(false)

@@ -200,14 +200,14 @@ func TestDemotePrimaryWithSemiSyncProgressDetection(t *testing.T) {
 	// The monitor makes TWO calls to getSemiSyncStats with a sleep between them.
 	// We add the query result multiple times. The fakesqldb will return them in order (FIFO).
 	// First few calls: waiting sessions present, ackedTrxs=5.
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		fakeDb.AddQuery("SELECT variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 			"Rpl_semi_sync_source_wait_sessions|1",
 			"Rpl_semi_sync_source_yes_tx|5"))
 	}
 	// Next calls: waiting sessions present, but ackedTrxs=6 (progress!).
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		fakeDb.AddQuery("SELECT variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 			"Rpl_semi_sync_source_wait_sessions|1",
@@ -265,7 +265,7 @@ func TestDemotePrimaryWhenSemiSyncBecomesUnblockedBetweenChecks(t *testing.T) {
 		"Rpl_semi_sync_source_wait_sessions|2",
 		"Rpl_semi_sync_source_yes_tx|5"))
 	// Second and subsequent calls: no waiting sessions (unblocked!).
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		fakeDb.AddQuery("SELECT variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 			"Rpl_semi_sync_source_wait_sessions|0",
