@@ -409,7 +409,7 @@ func getForeignKeys(tblSpec *sqlparser.TableSpec) []*sqlparser.ForeignKeyDefinit
 	if tblSpec.Constraints == nil {
 		return nil
 	}
-	var fks []*sqlparser.ForeignKeyDefinition
+	fks := make([]*sqlparser.ForeignKeyDefinition, 0, len(tblSpec.Constraints))
 	for _, constraint := range tblSpec.Constraints {
 		fkDef, ok := constraint.Details.(*sqlparser.ForeignKeyDefinition)
 		if !ok {

@@ -381,22 +381,24 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 	}
 
 	// Attach unknown Vindex params to the response.
-	var vdxNames []string
-	var unknownVindexParams []string
+	vdxNames := make([]string, 0, len(ksVs.Vindexes))
+	unknownVindexParams := make([]string, 0, len(vdxNames))
 	for name := range ksVs.Vindexes {
 		vdxNames = append(vdxNames, name)
 	}
 	sort.Strings(vdxNames)
 	for _, name := range vdxNames {
 		vdx := ksVs.Vindexes[name]
-		if val, ok := vdx.(vindexes.ParamValidating); ok {
-			ups := val.UnknownParams()
-			if len(ups) == 0 {
-				continue
-			}
-			response.UnknownVindexParams[name] = &vtctldatapb.ApplyVSchemaResponse_ParamList{Params: ups}
-			unknownVindexParams = append(unknownVindexParams, fmt.Sprintf("%s (%s)", name, strings.Join(ups, ", ")))
+		val, ok := vdx.(vindexes.ParamValidating)
+		if !ok {
+			continue
 		}
+		ups := val.UnknownParams()
+		if len(ups) == 0 {
+			continue
+		}
+		response.UnknownVindexParams[name] = &vtctldatapb.ApplyVSchemaResponse_ParamList{Params: ups}
+		unknownVindexParams = append(unknownVindexParams, fmt.Sprintf("%s (%s)", name, strings.Join(ups, ", ")))
 	}
 
 	if req.Strict && len(unknownVindexParams) > 0 { // return early if unknown params found in strict mode

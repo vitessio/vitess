@@ -503,7 +503,7 @@ func (call *builtinMultiComparison) compile(c *compiler) (ctype, error) {
 		text      int
 		binary    int
 		json      int
-		args      []ctype
+		args      = make([]ctype, 0)
 		nullable  bool
 		prec      int
 	)

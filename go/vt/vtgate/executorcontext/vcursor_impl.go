@@ -430,7 +430,7 @@ func (vc *VCursorImpl) UnresolvedTransactions(ctx context.Context, keyspace stri
 	if err != nil {
 		return nil, err
 	}
-	var targets []*querypb.Target
+	targets := make([]*querypb.Target, 0, len(rss))
 	for _, rs := range rss {
 		targets = append(targets, rs.Target)
 	}
@@ -666,7 +666,7 @@ func (vc *VCursorImpl) AllKeyspace() ([]*vindexes.Keyspace, error) {
 	if len(vc.vschema.Keyspaces) == 0 {
 		return nil, errNoDbAvailable
 	}
-	var kss []*vindexes.Keyspace
+	kss := make([]*vindexes.Keyspace, 0, len(vc.vschema.Keyspaces))
 	for _, ks := range vc.vschema.Keyspaces {
 		kss = append(kss, ks.Keyspace)
 	}

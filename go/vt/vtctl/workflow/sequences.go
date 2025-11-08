@@ -111,7 +111,7 @@ func (sm *sequenceMetadata) escapeValues() error {
 }
 
 func (ts *trafficSwitcher) getMaxSequenceValues(ctx context.Context, sequences map[string]*sequenceMetadata) (map[string]int64, error) {
-	var sequencesMetadata []*tabletmanagerdatapb.GetMaxValueForSequencesRequest_SequenceMetadata
+	sequencesMetadata := make([]*tabletmanagerdatapb.GetMaxValueForSequencesRequest_SequenceMetadata, 0, len(sequences))
 	for _, seq := range sequences {
 		if err := seq.escapeValues(); err != nil {
 			return nil, err

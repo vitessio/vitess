@@ -692,7 +692,7 @@ func (mz *materializer) filterSourceShards(targetShard *topo.ShardInfo) []*topo.
 		return mz.sourceShards
 	}
 	// Use intersecting source shards.
-	var filteredSourceShards []*topo.ShardInfo
+	filteredSourceShards := make([]*topo.ShardInfo, 0, len(mz.sourceShards))
 	for _, sourceShard := range mz.sourceShards {
 		if !key.KeyRangeIntersect(sourceShard.KeyRange, targetShard.KeyRange) {
 			continue
