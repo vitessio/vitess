@@ -926,14 +926,14 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 		},
 	}
 
-	// Test case for context cancellation during query execution
+	// Test case for context cancellation during query execution.
 	t.Run("parent context canceled with query failure", func(t *testing.T) {
 		sqldb := fakesqldb.New(t)
 		defer sqldb.Close()
 		mysqld := NewFakeMysqlDaemon(sqldb)
 		defer mysqld.Close()
 
-		// Set up to fail the query
+		// Set up to fail the query.
 		mysqld.ExpectedExecuteSuperQueryList = []string{"DIFFERENT QUERY"}
 		logger := logutil.NewMemoryLogger()
 
@@ -955,7 +955,7 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 		err := ExecuteBackupInitSQL(ctx, params)
 		require.NoError(t, err) // Should not error because FailOnError is false
 
-		// Check that the appropriate log message was generated
+		// Check that the appropriate log message was generated.
 		found := false
 		for _, event := range logger.Events {
 			if strings.Contains(event.Value, "Canceling init SQL work due to hitting the configured timeout") {

@@ -507,7 +507,7 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 		}
 	}
 
-	// Perform any requested init queries.
+	// Perform any requested pre backup initialization queries.
 	if err := mysqlctl.ExecuteBackupInitSQL(ctx, &backupParams); err != nil {
 		return vterrors.Wrap(err, "failed to execute backup init SQL queries")
 	}
