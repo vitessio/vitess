@@ -181,6 +181,12 @@ func commandBackupShard(cmd *cobra.Command, args []string) error {
 		IncrementalFromPos:   backupShardOptions.IncrementalFromPos,
 		UpgradeSafe:          backupShardOptions.UpgradeSafe,
 		MysqlShutdownTimeout: protoutil.DurationToProto(backupShardOptions.MysqlShutdownTimeout),
+		InitSql: &tabletmanagerdatapb.BackupRequest_InitSQL{
+			Queries:     backupOptions.InitSQLQueries,
+			TabletTypes: backupOptions.InitSQLTabletTypes,
+			Timeout:     protoutil.DurationToProto(backupOptions.InitSQLTimeout),
+			FailOnError: backupOptions.InitSQLFailOnError,
+		},
 	})
 	if err != nil {
 		return err

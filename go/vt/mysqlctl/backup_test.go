@@ -822,7 +822,7 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 				}
 			},
 			wantErr:    false,
-			wantLogMsg: "Successfully completed init SQL queries: OPTIMIZE LOCAL TABLE foo",
+			wantLogMsg: "Successfully completed init SQL queries: \"OPTIMIZE LOCAL TABLE foo\"",
 		},
 		{
 			name: "successful execution with multiple queries in order",

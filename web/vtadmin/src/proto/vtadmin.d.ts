@@ -56028,6 +56028,9 @@ export namespace vtctldata {
 
         /** BackupShardRequest mysql_shutdown_timeout */
         mysql_shutdown_timeout?: (vttime.IDuration|null);
+
+        /** BackupShardRequest init_sql */
+        init_sql?: (tabletmanagerdata.BackupRequest.IInitSQL|null);
     }
 
     /** Represents a BackupShardRequest. */
@@ -56059,6 +56062,9 @@ export namespace vtctldata {
 
         /** BackupShardRequest mysql_shutdown_timeout. */
         public mysql_shutdown_timeout?: (vttime.IDuration|null);
+
+        /** BackupShardRequest init_sql. */
+        public init_sql?: (tabletmanagerdata.BackupRequest.IInitSQL|null);
 
         /**
          * Creates a new BackupShardRequest instance using the specified properties.

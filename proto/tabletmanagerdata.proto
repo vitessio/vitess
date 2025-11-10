@@ -569,9 +569,13 @@ message PromoteReplicaResponse {
 
 message BackupRequest {
   message InitSQL {
+    // The queries to run on the mysqld instance prior to backing it up.
     repeated string queries = 1;
+    // The tablet types to run the queries on.
     repeated topodata.TabletType tablet_types = 2;
+    // At what point to time out the init SQL query work.
     vttime.Duration timeout = 3;
+    // Should the backup fail if the SQL init work fails?
     bool fail_on_error = 4;
   }
   int32 concurrency = 1;

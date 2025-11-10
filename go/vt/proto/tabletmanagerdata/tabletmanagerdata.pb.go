@@ -7911,11 +7911,15 @@ func (x *GetMaxValueForSequencesResponse) GetMaxValuesBySequenceTable() map[stri
 }
 
 type BackupRequest_InitSQL struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Queries       []string               `protobuf:"bytes,1,rep,name=queries,proto3" json:"queries,omitempty"`
-	TabletTypes   []topodata.TabletType  `protobuf:"varint,2,rep,packed,name=tablet_types,json=tabletTypes,proto3,enum=topodata.TabletType" json:"tablet_types,omitempty"`
-	Timeout       *vttime.Duration       `protobuf:"bytes,3,opt,name=timeout,proto3" json:"timeout,omitempty"`
-	FailOnError   bool                   `protobuf:"varint,4,opt,name=fail_on_error,json=failOnError,proto3" json:"fail_on_error,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The queries to run on the mysqld instance prior to backing it up.
+	Queries []string `protobuf:"bytes,1,rep,name=queries,proto3" json:"queries,omitempty"`
+	// The tablet types to run the queries on.
+	TabletTypes []topodata.TabletType `protobuf:"varint,2,rep,packed,name=tablet_types,json=tabletTypes,proto3,enum=topodata.TabletType" json:"tablet_types,omitempty"`
+	// At what point to time out the init SQL query work.
+	Timeout *vttime.Duration `protobuf:"bytes,3,opt,name=timeout,proto3" json:"timeout,omitempty"`
+	// Should the backup fail if the SQL init work fails?
+	FailOnError   bool `protobuf:"varint,4,opt,name=fail_on_error,json=failOnError,proto3" json:"fail_on_error,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }

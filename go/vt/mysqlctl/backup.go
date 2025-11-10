@@ -540,7 +540,7 @@ func ExecuteBackupInitSQL(ctx context.Context, params *BackupParams) error {
 		return errors.New("backup init SQL queries provided but no tablet types on which to run them")
 	}
 	if !topoproto.IsTypeInList(params.TabletType, params.InitSQL.TabletTypes) {
-		params.Logger.Infof("Skipping backup init SQL queries %s as the backup tablet type %s is not in the provided list %s", strings.Join(params.InitSQL.Queries, ", "), params.TabletType, topoproto.MakeStringTypeCSV(params.InitSQL.TabletTypes))
+		params.Logger.Infof("Skipping backup init SQL queries %q as the backup tablet type %s is not in the provided list %s", strings.Join(params.InitSQL.Queries, ", "), params.TabletType, topoproto.MakeStringTypeCSV(params.InitSQL.TabletTypes))
 		return nil
 	}
 	initTimeout, ok, err := protoutil.DurationFromProto(params.InitSQL.Timeout)
@@ -551,22 +551,22 @@ func ExecuteBackupInitSQL(ctx context.Context, params *BackupParams) error {
 		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "backup init SQL queries provided but no timeout provided -- this is dangerous and not allowed")
 	}
 	queriesCSV := strings.Join(params.InitSQL.Queries, ", ")
-	params.Logger.Infof("Executing init SQL queries %s, with a timeout of %v and fail backup on error set to %t", queriesCSV, initTimeout, params.InitSQL.FailOnError)
+	params.Logger.Infof("Executing init SQL queries %q, with a timeout of %v and fail backup on error set to %t", queriesCSV, initTimeout, params.InitSQL.FailOnError)
 	initCtx, cancel := context.WithTimeout(ctx, initTimeout)
 	defer cancel()
 	if err := params.Mysqld.ExecuteSuperQueryList(initCtx, params.InitSQL.Queries); err != nil {
 		if params.InitSQL.FailOnError {
-			return vterrors.Wrapf(err, "failed to execute init SQL queries %s and instructed to fail backup in this case", queriesCSV)
+			return vterrors.Wrapf(err, "failed to execute init SQL queries %q and instructed to fail backup in this case", queriesCSV)
 		}
 		select {
 		case <-ctx.Done():
 			params.Logger.Infof("Canceling init SQL work due to hitting the configured timeout of %v or the the backup itself having been canceled", initTimeout)
 		default:
-			params.Logger.Infof("Failed to execute init SQL queries %s: %v", queriesCSV, err)
+			params.Logger.Infof("Failed to execute init SQL queries %q: %v", queriesCSV, err)
 		}
 		params.Logger.Infof("Continuing with backup after failed init SQL work as fail-on-error is false")
 		return nil
 	}
-	params.Logger.Infof("Successfully completed init SQL queries: %s", queriesCSV)
+	params.Logger.Infof("Successfully completed init SQL queries: %q", queriesCSV)
 	return nil
 }
