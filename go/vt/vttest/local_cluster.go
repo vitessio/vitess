@@ -158,6 +158,9 @@ type Config struct {
 
 	VtgateTabletRefreshInterval time.Duration
 
+	// Gateway initial tablet timeout - how long VTGate waits for tablets at startup
+	VtgateGatewayInitialTabletTimeout time.Duration
+
 	// Set the planner to fail on scatter queries
 	NoScatter bool
 }
