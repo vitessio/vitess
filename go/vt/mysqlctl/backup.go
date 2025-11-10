@@ -176,11 +176,6 @@ func Backup(ctx context.Context, params BackupParams) error {
 
 	params.Logger.Infof("Using backup engine %q", be.Name())
 
-	// Perform any requested pre backup initialization queries.
-	if err := ExecuteBackupInitSQL(ctx, &params); err != nil {
-		return vterrors.Wrap(err, "failed to execute backup init SQL queries")
-	}
-
 	// Take the backup, and either AbortBackup or EndBackup.
 	backupResult, err := be.ExecuteBackup(ctx, beParams, bh)
 	logger := params.Logger

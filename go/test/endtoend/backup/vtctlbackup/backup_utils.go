@@ -505,13 +505,29 @@ func primaryBackup(t *testing.T) {
 	// And only 1 record after we restore using the first backup timestamp
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
-	err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", "--allow-primary", primary.Alias)
+	sqlInitTestTable := "init_test"
+	err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", "--allow-primary",
+		// Test init SQL.
+		"--init-backup-sql-queries", fmt.Sprintf("create table `%s`.%s (id int),optimize table `%s`.%s",
+			primary.VttabletProcess.DbName, sqlInitTestTable, primary.VttabletProcess.DbName, sqlInitTestTable),
+		"--init-backup-sql-timeout=10m",
+		"--init-backup-tablet-types=primary",
+		"--init-backup-sql-fail-on-error",
+		primary.Alias,
+	)
 	require.NoError(t, err)
 
 	backups = localCluster.VerifyBackupCount(t, shardKsName, 2)
 	assert.Contains(t, backups[1], primary.Alias)
 
 	verifyTabletBackupStats(t, primary.VttabletProcess.GetVars())
+
+	// Confirm that the init SQL query table was created.
+	_, err = primary.VttabletProcess.QueryTablet("SELECT * FROM "+sqlInitTestTable, keyspaceName, true)
+	require.NoError(t, err)
+	// Now get rid of it for subsequent tests.
+	_, err = primary.VttabletProcess.QueryTablet("DROP TABLE "+sqlInitTestTable, keyspaceName, true)
+	require.NoError(t, err)
 
 	// Perform PRS to demote the primary tablet (primary) so that we can do a restore there and verify we don't have the
 	// data from after the older/first backup
