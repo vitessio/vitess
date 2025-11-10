@@ -508,8 +508,8 @@ func primaryBackup(t *testing.T) {
 	sqlInitTestTable := "init_test"
 	err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", "--allow-primary",
 		// Test init SQL.
-		"--init-backup-sql-queries", fmt.Sprintf("create table `%s`.%s (id int),optimize table `%s`.%s",
-			primary.VttabletProcess.DbName, sqlInitTestTable, primary.VttabletProcess.DbName, sqlInitTestTable),
+		"--init-backup-sql-queries", fmt.Sprintf("create table `%s`.%s (id int),optimize table `%s`.%s,insert into `%s`.%s (id) values (1)",
+			primary.VttabletProcess.DbName, sqlInitTestTable, primary.VttabletProcess.DbName, sqlInitTestTable, primary.VttabletProcess.DbName, sqlInitTestTable),
 		"--init-backup-sql-timeout=10m",
 		"--init-backup-tablet-types=primary",
 		"--init-backup-sql-fail-on-error",
@@ -522,10 +522,11 @@ func primaryBackup(t *testing.T) {
 
 	verifyTabletBackupStats(t, primary.VttabletProcess.GetVars())
 
-	// Confirm that the init SQL query table was created.
-	_, err = primary.VttabletProcess.QueryTablet("SELECT * FROM "+sqlInitTestTable, keyspaceName, true)
+	// Confirm that the init SQL quereies were run: the table was created and we inserted a row.
+	res, err := primary.VttabletProcess.QueryTablet("SELECT * FROM "+sqlInitTestTable, keyspaceName, true)
 	require.NoError(t, err)
-	// Now get rid of it for subsequent tests.
+	require.Len(t, res.Rows, 1)
+	// Now get rid of the init_test table as its purpose has ended.
 	_, err = primary.VttabletProcess.QueryTablet("DROP TABLE "+sqlInitTestTable, keyspaceName, true)
 	require.NoError(t, err)
 
