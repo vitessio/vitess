@@ -29,14 +29,13 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
-
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // ReplicationStatus returns the replication status
@@ -980,6 +979,9 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 	// returns an error, so a user can optionally inspect the status before a stop was called.
 	rs, err := tm.MysqlDaemon.ReplicationStatus(ctx)
 	if err != nil {
+		if sqlErr, ok := err.(*sqlerror.SQLError); ok {
+			return StopReplicationAndGetStatusResponse{}, vterrors.New(sqlErr.VtRpcErrorCode(), err.Error())
+		}
 		return StopReplicationAndGetStatusResponse{}, vterrors.Wrap(err, "before status failed")
 	}
 	before := replication.ReplicationStatusToProto(rs)

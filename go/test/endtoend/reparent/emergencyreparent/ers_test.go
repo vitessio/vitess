@@ -96,6 +96,32 @@ func TestReparentIgnoreReplicas(t *testing.T) {
 	utils.ResurrectTablet(ctx, t, clusterInstance, tablets[0])
 }
 
+func TestReparentIgnoreMySQLDownReplica(t *testing.T) {
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
+	defer utils.TeardownCluster(clusterInstance)
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	var err error
+
+	ctx := context.Background()
+
+	insertVal := utils.ConfirmReplication(t, tablets[0], tablets[1:])
+
+	// Make the current primary agent and database unavailable.
+	utils.StopTablet(t, tablets[0], true)
+
+	// Take down MySQL (but not vttablet) on a replica.
+	utils.StopTabletMySQL(t, tablets[1])
+
+	// We expect this ERS to succeed because we ignored the tablet with MySQL down.
+	out, err := utils.Ers(clusterInstance, nil, "60s", "30s")
+	require.Nil(t, err, out)
+
+	newPrimary := utils.GetNewPrimary(t, clusterInstance)
+	// Check new primary has latest transaction.
+	err = utils.CheckInsertedValues(ctx, t, newPrimary, insertVal)
+	require.Nil(t, err)
+}
+
 func TestReparentDownPrimary(t *testing.T) {
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
