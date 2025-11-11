@@ -221,6 +221,11 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 		// Send SIGSTOP to primary to simulate it being unresponsive.
 		tablets[0].VttabletProcess.Stop()
 
+		// Confirm the primary is unreachable. .VttabletProcess.GetStatus() returns "" when vttablet is down.
+		require.EventuallyWithT(t, func(c *assert.CollectT) {
+			require.Empty(c, tablets[0].VttabletProcess.GetStatus())
+		}, time.Second*15, time.Second, "could not validate primary tablet stopped")
+
 		// Run forced reparent operation, this should now proceed unimpeded.
 		out, err := utils.Ers(clusterInstance, tablets[1], "15s", waitReplicasTimeout.String())
 		require.NoError(t, err, out)
