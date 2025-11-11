@@ -86,18 +86,26 @@ func TestGRPCErrorCode_UNAVAILABLE(t *testing.T) {
 	err = clusterInstance.StartVttablet(tablet, false, "SERVING", false, cell, "dbtest", hostname, "0")
 	require.NoError(t, err)
 
+	vttablet := getTablet(tablet.GrpcPort)
+
+	// test FullStatus before stopping mysql
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+	res, err := tmClient.FullStatus(ctx, vttablet)
+	require.NotNil(t, res)
+	require.Equal(t, vtrpcpb.Code_OK, vterrors.Code(err))
+
 	// kill the mysql process
 	err = tablet.MysqlctlProcess.Stop()
 	require.NoError(t, err)
 
 	// confirm we get vtrpcpb.Code_UNAVAILABLE when calling FullStatus,
 	// because this will try and fail to connect to mysql
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
+	ctx2, cancel2 := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel2()
 	tmClient := tmc.NewClient()
-	vttablet := getTablet(tablet.GrpcPort)
-	_, err = tmClient.FullStatus(ctx, vttablet)
-	assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
+	_, err = tmClient.FullStatus(ctx2, vttablet)
+	require.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
 }
 
 // TestResetReplicationParameters tests that the RPC ResetReplicationParameters works as intended.
