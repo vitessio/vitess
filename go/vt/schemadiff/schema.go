@@ -144,7 +144,9 @@ func getViewDependentTableNames(createView *sqlparser.CreateView) (names []strin
 				cteMap[node.ID.String()] = true
 			}
 		case *sqlparser.TableName:
-			names = append(names, node.Name.String())
+			if _, isCte := cteMap[node.Name.String()]; !isCte {
+				names = append(names, node.Name.String())
+			}
 		case *sqlparser.AliasedTableExpr:
 			if tableName, ok := node.Expr.(sqlparser.TableName); ok {
 				if _, isCte := cteMap[tableName.Name.String()]; !isCte {
