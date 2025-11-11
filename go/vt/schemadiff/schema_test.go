@@ -176,6 +176,13 @@ func TestNewSchemaFromQueriesViewFromDualImplicit(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestNewSchemaFromQueriesViewWithCTEFail(t *testing.T) {
+	queries := []string{"create view v30 as with vcte as (select 1) select * from vcte2"}
+	_, err := NewSchemaFromQueries(NewTestEnv(), queries)
+	assert.Error(t, err)
+	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v30", MissingReferencedEntities: []string{"dual", "vcte2"}}).Error())
+}
+
 func TestNewSchemaFromQueriesViewWithCTE(t *testing.T) {
 	tcases := []struct {
 		name    string
