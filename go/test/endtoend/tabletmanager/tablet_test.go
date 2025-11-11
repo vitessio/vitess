@@ -68,9 +68,9 @@ func TestEnsureDB(t *testing.T) {
 	killTablets(tablet)
 }
 
-// TestGRPCErrorCode_UNAVAILABLE tests that vttablet returns correct gRPC codes,
-// in this case codes.Unavailable/vtrpcpb.Code_UNAVAILABLE when mysqld is down.
-func TestGRPCErrorCode_UNAVAILABLE(t *testing.T) {
+// TestGRPCErrorCode_MySQLDown tests that vttablet returns the correct vtrpcpb error code
+// (vtrpcpb.Code_UNAVAILABLE) when mysqld is down but vttablet is still up.
+func TestGRPCErrorCode_MySQLDown(t *testing.T) {
 	// Create new tablet
 	tablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 	defer killTablets(tablet)
