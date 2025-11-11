@@ -100,9 +100,6 @@ func TestReparentIgnoreMySQLDownReplica(t *testing.T) {
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
-	var err error
-
-	ctx := context.Background()
 
 	insertVal := utils.ConfirmReplication(t, tablets[0], tablets[1:])
 
@@ -118,7 +115,7 @@ func TestReparentIgnoreMySQLDownReplica(t *testing.T) {
 
 	newPrimary := utils.GetNewPrimary(t, clusterInstance)
 	// Check new primary has latest transaction.
-	err = utils.CheckInsertedValues(ctx, t, newPrimary, insertVal)
+	err = utils.CheckInsertedValues(context.Background(), t, newPrimary, insertVal)
 	require.Nil(t, err)
 }
 
