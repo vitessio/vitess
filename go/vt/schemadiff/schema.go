@@ -1176,6 +1176,9 @@ func (s *Schema) getViewColumnNames(v *CreateViewEntity, schemaInformation *decl
 				}
 			}
 			if len(columnNames) == 0 && len(cteNames) == 0 {
+				// *-expressions that do not resolve to any columns are invalid in views.
+				// For CTEs, schemadiff does not analyze the list of columns returned by the CTE (even if the CTE defines it).
+				// TODO(shlomi): analyze CTE columns as well.
 				return nil, &InvalidStarExprInViewError{View: v.Name()}
 			}
 		case *sqlparser.AliasedExpr:
