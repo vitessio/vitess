@@ -1816,7 +1816,11 @@ func (node TableName) FormatFast(buf *TrackedBuffer) {
 		node.Qualifier.FormatFast(buf)
 		buf.WriteByte('.')
 	}
-	node.Name.FormatFast(buf)
+	if node.Qualifier.IsEmpty() && node.Name.String() == "dual" {
+		buf.WriteString("dual")
+	} else {
+		node.Name.FormatFast(buf)
+	}
 }
 
 // FormatFast formats the node.
