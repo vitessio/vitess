@@ -842,6 +842,7 @@ func CheckReplicationStatus(ctx context.Context, t *testing.T, tablet *cluster.V
 	}
 }
 
+// WaitForTabletToBeServing waits for a tablet to reach a serving state.
 func WaitForTabletToBeServing(ctx context.Context, t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet, timeout time.Duration) {
 	vTablet, err := clusterInstance.VtctldClientProcess.GetTablet(tablet.Alias)
 	require.NoError(t, err)
@@ -863,30 +864,21 @@ func WaitForTabletToBeServing(ctx context.Context, t *testing.T, clusterInstance
 	}
 }
 
+// WaitForQueryWithStateInProcesslist waits for a query to be present in the processlist with a specific state.
 func WaitForQueryWithStateInProcesslist(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, sql, state string, timeout time.Duration) {
-	assert.EventuallyWithT(t, func(c *assert.CollectT) {
-		qr := RunSQL(ctx, t, "show full processlist", tablet)
-		var commandIdx, infoIdx, stateIdx int
-		for i, field := range qr.Fields {
-			switch field.GetName() {
-			case "Command":
-				commandIdx = i
-			case "Info":
-				infoIdx = i // Info == the SQL being ran
-			case "State":
-				stateIdx = i
-			}
-		}
-		var found bool
+	require.Eventually(t, func() bool {
+		qr := RunSQL(ctx, t, "select Command, State, Info from information_schema.processlist", tablet)
 		for _, row := range qr.Rows {
-			if row[commandIdx].ToString() != "Query" {
+			if len(row) != 3 {
 				continue
 			}
-			if row[stateIdx].ToString() == state && row[infoIdx].ToString() == sql {
-				found = true
-				break
+			if row[0].ToString() != "Query" {
+				continue
+			}
+			if row[1].ToString() == state && row[2].ToString() == sql {
+				return true
 			}
 		}
-		assert.True(c, found, "query with state not in processlist")
-	}, timeout, time.Second)
+		return false
+	}, timeout, time.Second, "query with state not in processlist")
 }
