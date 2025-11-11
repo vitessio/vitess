@@ -176,6 +176,45 @@ func TestNewSchemaFromQueriesViewFromDualImplicit(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestNewSchemaFromQueriesViewWithCTE(t *testing.T) {
+	tcases := []struct {
+		name    string
+		queries []string
+	}{
+		{
+			"no table",
+			[]string{"create view v20 as with vcte as (select 1) select * from vcte"},
+		},
+		{
+			"with table",
+			[]string{
+				"create table orders (id int primary key, info int not null)",
+				"create view v21 as with vcte as (select * from orders) select * from vcte",
+			},
+		},
+		{
+			"with table and column aliasing",
+			[]string{
+				"create table orders (id int primary key, info int not null)",
+				"create view v22 as with vcte as (select id, info as val from orders) select * from vcte",
+			},
+		},
+		{
+			"with table and select all from cte",
+			[]string{
+				"create table orders (id int primary key, info int not null)",
+				"create view v22 as with vcte as (select id, info as val from orders) select vcte.* from vcte",
+			},
+		},
+	}
+	for _, tc := range tcases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := NewSchemaFromQueries(NewTestEnv(), tc.queries)
+			assert.NoError(t, err)
+		})
+	}
+}
+
 func TestNewSchemaFromQueriesLoop(t *testing.T) {
 	// v7 and v8 depend on each other
 	queries := append(schemaTestCreateQueries,
@@ -213,6 +252,7 @@ func TestGetViewDependentTableNames(t *testing.T) {
 		name   string
 		view   string
 		tables []string
+		ctes   []string
 	}{
 		{
 			view:   "create view v6 as select * from v4",
@@ -242,6 +282,16 @@ func TestGetViewDependentTableNames(t *testing.T) {
 			view:   "create view v9 as select 1",
 			tables: []string{"dual"},
 		},
+		{
+			view:   "create view v20 as with vcte as (select 1) select * from vcte",
+			tables: []string{"dual"},
+			ctes:   []string{"vcte"},
+		},
+		{
+			view:   "create view v21 as with vcte as (select * from orders) select * from vcte",
+			tables: []string{"orders"},
+			ctes:   []string{"vcte"},
+		},
 	}
 	for _, ts := range tt {
 		t.Run(ts.view, func(t *testing.T) {
@@ -250,8 +300,9 @@ func TestGetViewDependentTableNames(t *testing.T) {
 			createView, ok := stmt.(*sqlparser.CreateView)
 			require.True(t, ok)
 
-			tables := getViewDependentTableNames(createView)
+			tables, ctes := getViewDependentTableNames(createView)
 			assert.Equal(t, ts.tables, tables)
+			assert.Equal(t, ts.ctes, ctes)
 		})
 	}
 }
