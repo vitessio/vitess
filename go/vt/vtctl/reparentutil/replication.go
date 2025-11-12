@@ -254,7 +254,7 @@ func stopReplicationAndBuildStatusMaps(
 			// If we receive a vtrpcpb.Code_UNAVAILABLE error code from the StopReplicationAndGetStatus RPC,
 			// this means the call was received by vttablet but the backend mysqld is down/unreachable. We log
 			// and skip tablets in this state because we are reasonably sure they cannot be the most advanced
-			// because mysqld is (likely) down. In some cases this may not be true and mysqld IS running, most
+			// because mysqld is (likely) down. In some cases this may not be true and mysqld IS running + most
 			// advanced but somehow vttablet sees it as down, but this should be a very rare exception, meaning
 			// we prioritize completing the reparent (availability) for the common case. If this edge case were
 			// to occur, errant GTID(s) will be produced; if this happens often we should return UNAVAILABLE
