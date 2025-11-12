@@ -277,7 +277,7 @@ func TestERSPromoteRdonly(t *testing.T) {
 
 	// We expect this one to fail because we have ignored all the replicas and have only the rdonly's which should not be promoted
 	out, err := utils.ErsIgnoreTablet(clusterInstance, nil, "30s", "30s", []*cluster.Vttablet{tablets[3]}, false)
-	require.NoError(t, err, out)
+	require.Error(t, err, out)
 
 	out, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetShard", utils.KeyspaceShard)
 	require.NoError(t, err)
