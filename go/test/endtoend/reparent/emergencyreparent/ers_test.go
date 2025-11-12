@@ -73,7 +73,7 @@ func TestReparentIgnoreReplicas(t *testing.T) {
 
 	// We expect this one to fail because we have an unreachable replica
 	out, err := utils.Ers(clusterInstance, nil, "60s", "30s")
-	require.NoError(t, err, out)
+	require.Error(t, err, out)
 
 	// Now let's run it again, but set the command to ignore the unreachable replica.
 	out, err = utils.ErsIgnoreTablet(clusterInstance, nil, "60s", "30s", []*cluster.Vttablet{tablets[2]}, false)
