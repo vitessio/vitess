@@ -254,6 +254,21 @@ func TestCanGetKeyspaces(t *testing.T) {
 	assertGetKeyspaces(ctx, t, clusterInstance)
 }
 
+func TestGatewayInitialTabletTimeout(t *testing.T) {
+	conf := config
+	defer resetConfig(conf)
+
+	// Start cluster with custom gateway tablet timeout and verify it starts successfully
+	cluster, err := startCluster("--gateway-initial-tablet-timeout=1s")
+	require.NoError(t, err)
+	defer cluster.TearDown()
+
+	// Verify the cluster is functional by getting keyspaces
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	assertGetKeyspaces(ctx, t, cluster)
+}
+
 func TestExternalTopoServerConsul(t *testing.T) {
 	conf := config
 	defer resetConfig(conf)
