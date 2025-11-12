@@ -115,7 +115,8 @@ func TestReparentIgnoreMySQLDownReplica(t *testing.T) {
 
 	// Confirm the primary alias changed.
 	newPrimary := utils.GetNewPrimary(t, clusterInstance)
-	require.NotEqualValues(t, tablets[0].Alias, newPrimary.Alias)
+	require.NotEqualValues(t, tablets[0].Alias, newPrimary.Alias) // original primary
+	require.NotEqualValues(t, tablets[1].Alias, newPrimary.Alias) // replica w/mysqld down
 
 	// Check new primary has latest transaction.
 	err = utils.CheckInsertedValues(context.Background(), t, newPrimary, insertVal)
