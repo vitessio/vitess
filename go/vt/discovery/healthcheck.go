@@ -380,12 +380,11 @@ func NewHealthCheck(
 
 	hc.logger().Infof("loading tablets for cells: %v", cellsToWatch)
 
-	var topoWatchers []*TopologyWatcher
 	cells := strings.Split(cellsToWatch, ",")
 	if cellsToWatch == "" {
 		cells = append(cells, localCell)
 	}
-
+	topoWatchers := make([]*TopologyWatcher, 0, len(cells))
 	for _, c := range cells {
 		hc.logger().Infof("Setting up healthcheck for cell: %v", c)
 		if c == "" {
@@ -796,10 +795,10 @@ func (hc *HealthCheckImpl) GetHealthyTabletStats(target *query.Target) []*Tablet
 // For TabletType_PRIMARY, this will only return at most one entry,
 // the most recent tablet of type primary.
 func (hc *HealthCheckImpl) GetTabletStats(target *query.Target) []*TabletHealth {
-	var result []*TabletHealth
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 	ths := hc.healthData[KeyFromTarget(target)]
+	result := make([]*TabletHealth, 0, len(ths))
 	for _, th := range ths {
 		result = append(result, th)
 	}

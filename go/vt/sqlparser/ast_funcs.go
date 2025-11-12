@@ -3156,8 +3156,8 @@ func (node *ValuesStatement) GetColumnCount() int {
 }
 
 func (node *ValuesStatement) GetColumns() []SelectExpr {
-	var sel []SelectExpr
 	columnCount := node.GetColumnCount()
+	sel := make([]SelectExpr, 0, columnCount)
 	for i := range columnCount {
 		sel = append(sel, &AliasedExpr{Expr: NewColName(fmt.Sprintf("column_%d", i))})
 	}

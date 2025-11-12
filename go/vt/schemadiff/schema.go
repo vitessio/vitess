@@ -509,7 +509,7 @@ func (s *Schema) Entities() []Entity {
 
 // EntityNames is a convenience function that returns just the names of entities, in good order
 func (s *Schema) EntityNames() []string {
-	var names []string
+	names := make([]string, 0, len(s.Entities()))
 	for _, e := range s.Entities() {
 		names = append(names, e.Name())
 	}
@@ -518,7 +518,7 @@ func (s *Schema) EntityNames() []string {
 
 // Tables returns this schema's tables in good order (may be applied without error)
 func (s *Schema) Tables() []*CreateTableEntity {
-	var tables []*CreateTableEntity
+	tables := make([]*CreateTableEntity, 0, len(s.sorted))
 	for _, entity := range s.sorted {
 		if table, ok := entity.(*CreateTableEntity); ok {
 			tables = append(tables, table)
@@ -529,7 +529,7 @@ func (s *Schema) Tables() []*CreateTableEntity {
 
 // TableNames is a convenience function that returns just the names of tables, in good order
 func (s *Schema) TableNames() []string {
-	var names []string
+	names := make([]string, 0, len(s.Tables()))
 	for _, e := range s.Tables() {
 		names = append(names, e.Name())
 	}
@@ -538,7 +538,7 @@ func (s *Schema) TableNames() []string {
 
 // Views returns this schema's views in good order (may be applied without error)
 func (s *Schema) Views() []*CreateViewEntity {
-	var views []*CreateViewEntity
+	views := make([]*CreateViewEntity, 0, len(s.sorted))
 	for _, entity := range s.sorted {
 		if view, ok := entity.(*CreateViewEntity); ok {
 			views = append(views, view)
@@ -549,7 +549,7 @@ func (s *Schema) Views() []*CreateViewEntity {
 
 // ViewNames is a convenience function that returns just the names of views, in good order
 func (s *Schema) ViewNames() []string {
-	var names []string
+	names := make([]string, 0, len(s.Views()))
 	for _, e := range s.Views() {
 		names = append(names, e.Name())
 	}
