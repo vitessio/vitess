@@ -200,9 +200,3 @@ func TestUndoDemotePrimaryStateChange(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, isReadOnly)
 }
-
-// TestStopReplicationAndGetStatus tests that StopReplicationAndGetStatus
-// is able to stop replication and handle errors.
-func TestStopReplicationAndGetStatus(t *testing.T) {
-	t.Skip("TODO: implement test")
-}
