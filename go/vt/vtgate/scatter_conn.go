@@ -859,6 +859,13 @@ func requireNewQS(err error, target *querypb.Target) bool {
 // actionInfo looks at the current session, and returns information about what needs to be done for this tablet
 func actionInfo(ctx context.Context, target *querypb.Target, session *econtext.SafeSession, autocommit bool, txMode vtgatepb.TransactionMode) (*shardActionInfo, *vtgatepb.Session_ShardSession, error) {
 	if !(session.InTransaction() || session.InReservedConn()) {
+		// Check for tablet-specific routing for non-transactional queries
+		if alias := session.GetTargetTabletAlias(); alias != nil {
+			return &shardActionInfo{
+				actionNeeded: nothing,
+				alias:        alias,
+			}, nil, nil
+		}
 		return &shardActionInfo{}, nil, nil
 	}
 	ignoreSession := ctx.Value(engine.IgnoreReserveTxn)
@@ -895,6 +902,10 @@ func actionInfo(ctx context.Context, target *querypb.Target, session *econtext.S
 		info.reservedID = shardSession.ReservedId
 		info.alias = shardSession.TabletAlias
 		info.rowsAffected = shardSession.RowsAffected
+	}
+	// Override alias if tablet-specific routing is set
+	if targetAlias := session.GetTargetTabletAlias(); targetAlias != nil {
+		info.alias = targetAlias
 	}
 	return info, shardSession, nil
 }
