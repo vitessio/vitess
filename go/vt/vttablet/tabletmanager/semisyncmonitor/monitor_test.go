@@ -122,8 +122,7 @@ func TestMonitorIsSemiSyncBlocked(t *testing.T) {
 
 			got, err := m.isSemiSyncBlocked()
 			if tt.wantErr != "" {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), tt.wantErr)
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 			require.NoError(t, err)
@@ -197,9 +196,8 @@ func TestMonitorIsSemiSyncBlockedWithBadResults(t *testing.T) {
 			db.AddQuery(semiSyncStatsQuery, tt.res)
 
 			got, err := m.isSemiSyncBlocked()
-			require.Error(t, err)
 			require.False(t, got)
-			require.Contains(t, err.Error(), tt.wantErr)
+			require.ErrorContains(t, err, tt.wantErr)
 		})
 	}
 }
@@ -391,8 +389,7 @@ func TestGetSemiSyncStats(t *testing.T) {
 
 			stats, err := getSemiSyncStats(conn)
 			if tt.wantErr != "" {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), tt.wantErr)
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 			require.NoError(t, err)
@@ -840,7 +837,11 @@ func TestCheckAndFixSemiSyncBlocked(t *testing.T) {
 	m.startWrites()
 
 	// Wait a bit to let writes execute
-	time.Sleep(500 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		return m.inProgressWriteCount == 0
+	}, 2*time.Second, 5*time.Microsecond)
 
 	// Verify the query log shows the writes were executed
 	queryLog := db.QueryLog()
