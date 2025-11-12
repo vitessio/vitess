@@ -256,7 +256,7 @@ func stopReplicationAndBuildStatusMaps(
 			// tablets in this state because we are reasonable sure they cannot be the most advanced, because mysqld is
 			// likely down. In some cases this may not be true and mysqld IS the most advanced but somehow vttablet sees it
 			// as down, but this should an exception, meaning we prioritize availability for the common case. If this edge
-			// case were to occur, an errant GTID will be produced.
+			// case were to occur an errant GTID will be produced.
 			if vterrors.Code(err) == vtrpcpb.Code_UNAVAILABLE {
 				logger.Warningf("replica %v is reachable but mysqld is unavailable", alias)
 				mustWaitForTablet = false
