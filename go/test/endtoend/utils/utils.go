@@ -465,11 +465,15 @@ func RunSQLs(t *testing.T, sqls []string, tablet *cluster.Vttablet, db string) e
 // RunSQL is used to run a SQL statement on the given tablet
 func RunSQL(t *testing.T, sql string, tablet *cluster.Vttablet, db string) (*sqltypes.Result, error) {
 	// Get Connection
+	var err error
+	var conn *mysql.Conn
 	tabletParams := getMysqlConnParam(tablet, db)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	conn, err := mysql.Connect(ctx, &tabletParams)
-	require.Nil(t, err)
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		conn, err = mysql.Connect(ctx, &tabletParams)
+		require.NoError(c, err)
+	}, time.Second*10, time.Second, "could not get mysql connection")
 	defer conn.Close()
 
 	// RunSQL

@@ -172,7 +172,7 @@ func TestDemotePrimaryWaitingForSemiSyncUnblock(t *testing.T) {
 }
 
 // TestUndoDemotePrimaryStateChange tests that UndoDemotePrimary
-// if able to change the state of the tablet to Primary if there
+// is able to change the state of the tablet to Primary if there
 // is a mismatch with the tablet record.
 func TestUndoDemotePrimaryStateChange(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
