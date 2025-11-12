@@ -259,7 +259,7 @@ func stopReplicationAndBuildStatusMaps(
 			// prioritize completing the reparent (availability) for the common case. If this edge case were to
 			// occur an errant GTID will be produced; if this happens often we should return UNAVAILABLE from
 			// vttablet using more criteria (check the pidfile + running PID, etc).
-			if vterrors.Code(err) == vtrpcpb.Code_UNAVAILABLE {
+			if topo.IsReplicaType(tabletInfo.Tablet.Type) && vterrors.Code(err) == vtrpcpb.Code_UNAVAILABLE {
 				logger.Warningf("replica %v is reachable but mysql is unavailable: %v", alias, err)
 				mustWaitForTablet = false // used in defer
 				err = nil                 // used in defer
