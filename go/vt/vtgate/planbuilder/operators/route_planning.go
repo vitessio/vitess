@@ -250,6 +250,10 @@ func findBestJoin(
 				continue
 			}
 			plan := getJoinFor(ctx, planCache, lhs, rhs, joinPredicates)
+			if _, ok := plan.(*Route); ok {
+				// we were able to merge the two inputs - we're done for now
+				return plan, i, j
+			}
 			if bestPlan == nil || CostOf(plan) < CostOf(bestPlan) {
 				bestPlan = plan
 				// remember which plans we based on, so we can remove them later
