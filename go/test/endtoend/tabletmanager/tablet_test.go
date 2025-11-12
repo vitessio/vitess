@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
-	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -103,7 +102,6 @@ func TestGRPCErrorCode_MySQLDown(t *testing.T) {
 	// because this will try and fail to connect to mysql
 	ctx2, cancel2 := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel2()
-	tmClient := tmc.NewClient()
 	_, err = tmClient.FullStatus(ctx2, vttablet)
 	require.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
 }

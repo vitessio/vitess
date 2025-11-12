@@ -251,16 +251,18 @@ func stopReplicationAndBuildStatusMaps(
 
 		stopReplicationStatus, err := tmc.StopReplicationAndGetStatus(groupCtx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
 		if err != nil {
-			// If we receive a vtrpcpb.Code_UNAVAILABLE code and error from the StopReplicationAndGetStatus RPC, this means
-			// the call was successfully received by vttablet but the backend mysqld is down/unreachable. We log and skip
-			// tablets in this state because we are reasonable sure they cannot be the most advanced, because mysqld is
-			// likely down. In some cases this may not be true and mysqld IS the most advanced but somehow vttablet sees it
-			// as down, but this should an exception, meaning we prioritize availability for the common case. If this edge
-			// case were to occur an errant GTID will be produced.
+			// If we receive a vtrpcpb.Code_UNAVAILABLE error code from the StopReplicationAndGetStatus RPC,
+			// this means the call was received by vttablet but the backend mysqld is down/unreachable. We log
+			// and skip tablets in this state because we are reasonably sure they cannot be the most advanced
+			// because mysqld is (likely) down. In some cases this may not be true and mysqld IS running, most
+			// advanced but somehow vttablet sees it as down, but this should a very rare exception, meaning we
+			// prioritize completing the reparent (availability) for the common case. If this edge case were to
+			// occur an errant GTID will be produced; if this happens often we should return UNAVAILABLE from
+			// vttablet using more criteria (check the pidfile + running PID, etc).
 			if vterrors.Code(err) == vtrpcpb.Code_UNAVAILABLE {
-				logger.Warningf("replica %v is reachable but mysqld is unavailable", alias)
-				mustWaitForTablet = false
-				err = nil
+				logger.Warningf("replica %v is reachable but mysql is unavailable: %v", alias, err)
+				mustWaitForTablet = false // used in defer
+				err = nil                 // used in defer
 				return
 			}
 

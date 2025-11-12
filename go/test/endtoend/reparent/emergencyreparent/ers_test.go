@@ -96,11 +96,20 @@ func TestReparentIgnoreReplicas(t *testing.T) {
 	utils.ResurrectTablet(ctx, t, clusterInstance, tablets[0])
 }
 
+// TestReparentIgnoreMySQLDownReplica tests that reachable vttablets with mysqld crashed/down (reporting
+// vtrpcpb.Code_UNAVAILABLE error code) are ignored in EmergencyReparentShard actions (requires v24+).
 func TestReparentIgnoreMySQLDownReplica(t *testing.T) {
+	// Skip test on vttablet versions < v24.
+	vttabletMajorVer, err := cluster.GetMajorVersion("vttablet")
+	require.NoError(t, err)
+	if vttabletMajorVer < 24 {
+		t.Skip("Skipping test since `StopReplicationAndGetStatus` does not provide the required error codes on vttablet < v24")
+	}
+
+	// Setup reparent cluster.
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
-
 	insertVal := utils.ConfirmReplication(t, tablets[0], tablets[1:])
 
 	// Make the current primary agent and database unavailable.
