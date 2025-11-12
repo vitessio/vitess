@@ -856,9 +856,6 @@ func TestCheckAndFixSemiSyncBlocked(t *testing.T) {
 	// Make the monitor unblocked. This should stop the writes.
 	m.setIsBlocked(false)
 
-	// Wait a bit to ensure cleanup happens
-	time.Sleep(200 * time.Millisecond)
-
 	// Check that no writes are in progress anymore.
 	require.Eventually(t, func() bool {
 		m.mu.Lock()
