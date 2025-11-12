@@ -1266,7 +1266,7 @@ func tmRPCTestInitReplicaPanic(ctx context.Context, t *testing.T, client tmclien
 	expectHandleRPCPanic(t, "InitReplica", true /*verbose*/, err)
 }
 
-func (fra *fakeRPCTM) DemotePrimary(ctx context.Context) (*replicationdatapb.PrimaryStatus, error) {
+func (fra *fakeRPCTM) DemotePrimary(ctx context.Context, force bool) (*replicationdatapb.PrimaryStatus, error) {
 	if fra.panics {
 		panic(errors.New("test-triggered panic"))
 	}
@@ -1274,12 +1274,12 @@ func (fra *fakeRPCTM) DemotePrimary(ctx context.Context) (*replicationdatapb.Pri
 }
 
 func tmRPCTestDemotePrimary(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	PrimaryStatus, err := client.DemotePrimary(ctx, tablet)
+	PrimaryStatus, err := client.DemotePrimary(ctx, tablet, false)
 	compareError(t, "DemotePrimary", err, PrimaryStatus.Position, testPrimaryStatus.Position)
 }
 
 func tmRPCTestDemotePrimaryPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	_, err := client.DemotePrimary(ctx, tablet)
+	_, err := client.DemotePrimary(ctx, tablet, false)
 	expectHandleRPCPanic(t, "DemotePrimary", true /*verbose*/, err)
 }
 

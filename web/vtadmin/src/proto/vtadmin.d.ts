@@ -30189,6 +30189,9 @@ export namespace tabletmanagerdata {
 
     /** Properties of a DemotePrimaryRequest. */
     interface IDemotePrimaryRequest {
+
+        /** DemotePrimaryRequest force */
+        force?: (boolean|null);
     }
 
     /** Represents a DemotePrimaryRequest. */
@@ -30199,6 +30202,9 @@ export namespace tabletmanagerdata {
          * @param [properties] Properties to set
          */
         constructor(properties?: tabletmanagerdata.IDemotePrimaryRequest);
+
+        /** DemotePrimaryRequest force. */
+        public force: boolean;
 
         /**
          * Creates a new DemotePrimaryRequest instance using the specified properties.
