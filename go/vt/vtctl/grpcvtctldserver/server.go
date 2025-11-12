@@ -525,6 +525,7 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 		IncrementalFromPos:   req.IncrementalFromPos,
 		UpgradeSafe:          req.UpgradeSafe,
 		MysqlShutdownTimeout: req.MysqlShutdownTimeout,
+		InitSql:              req.InitSql,
 	}
 	err = s.backupTablet(ctx, backupTablet, r, stream)
 	return err
@@ -541,6 +542,7 @@ func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tabl
 		BackupEngine:         req.BackupEngine,
 		UpgradeSafe:          req.UpgradeSafe,
 		MysqlShutdownTimeout: req.MysqlShutdownTimeout,
+		InitSql:              req.InitSql,
 	}
 	logStream, err := s.tmc.Backup(ctx, tablet, r)
 	if err != nil {

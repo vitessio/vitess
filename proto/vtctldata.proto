@@ -471,6 +471,10 @@ message BackupRequest {
   // starting the backup. This is available so we can override this for upgrade safe
   // backups which might take longer to shut down.
   vttime.Duration mysql_shutdown_timeout = 7;
+
+  // Optional queries to run on the mysqld instance prior to the backup and fields
+  // to control the related behavior.
+  tabletmanagerdata.BackupRequest.InitSQL init_sql = 8;
 }
 
 message BackupResponse {
@@ -500,6 +504,10 @@ message BackupShardRequest {
   // starting the backup. This is available so we can override this for upgrade safe
   // backups which might take longer to shut down.
   vttime.Duration mysql_shutdown_timeout = 7;
+
+  // Optional queries to run on the mysqld instance prior to the backup and fields
+  // to control the related behavior.
+  tabletmanagerdata.BackupRequest.InitSQL init_sql = 8;
 }
 
 message CancelSchemaMigrationRequest {
