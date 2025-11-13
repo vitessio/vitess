@@ -20,8 +20,10 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
+	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -43,6 +45,10 @@ func insertInitialData(t *testing.T) {
 			`[[VARCHAR("Monoprice") VARCHAR("eléctronics")] [VARCHAR("newegg") VARCHAR("elec†ronics")]]`)
 
 		insertJSONValues(t)
+
+		// Insert a large transaction to ensure VStream chunking is triggered with 1KB threshold
+		insertLargeTransactionForChunkTesting(t, vtgateConn, defaultSourceKs+":0", 50000)
+		log.Infof("Inserted large transaction for chunking tests")
 	})
 }
 
@@ -139,4 +145,21 @@ func insertIntoBlobTable(t *testing.T) {
 	for _, query := range blobTableQueries {
 		execVtgateQuery(t, vtgateConn, defaultSourceKs+":0", query)
 	}
+}
+
+// insertLargeTransactionForChunkTesting inserts a transaction with data large enough
+// to exceed the 1KB chunking threshold used in e2e tests. This ensures chunking is
+// actually triggered and tested across all VStream tests.
+// Inserts 10 rows of ~2KB each = ~20KB total transaction.
+func insertLargeTransactionForChunkTesting(t *testing.T, vtgateConn *mysql.Conn, keyspace string, startID int) {
+	// Create 2KB of data per row to ensure we exceed the 1KB chunk threshold
+	largeData := strings.Repeat("x", 2048)
+
+	execVtgateQuery(t, vtgateConn, keyspace, "BEGIN")
+	for i := 0; i < 10; i++ {
+		query := fmt.Sprintf("INSERT INTO customer (cid, name) VALUES (%d, 'large_chunk_test_%d_%s')",
+			startID+i, startID+i, largeData)
+		execVtgateQuery(t, vtgateConn, keyspace, query)
+	}
+	execVtgateQuery(t, vtgateConn, keyspace, "COMMIT")
 }
