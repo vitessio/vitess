@@ -80,7 +80,8 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 		},
 	}
 	flags := &vtgatepb.VStreamFlags{
-		TablesToCopy: []string{"product", "customer"},
+		TablesToCopy:         []string{"product", "customer"},
+		TransactionChunkSize: 1024, // 1KB - test chunking for all transactions
 	}
 	id := 0
 	vtgateConn := vc.GetVTGateConn(t)
@@ -239,7 +240,10 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 			Filter: "select * from customer",
 		}},
 	}
-	flags := &vtgatepb.VStreamFlags{HeartbeatInterval: 3600}
+	flags := &vtgatepb.VStreamFlags{
+		HeartbeatInterval:    3600,
+		TransactionChunkSize: 1024, // 1KB - test chunking for all transactions
+	}
 	done := atomic.Bool{}
 	done.Store(false)
 
@@ -441,7 +445,11 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 			Filter: "select * from customer",
 		}},
 	}
-	flags := &vtgatepb.VStreamFlags{HeartbeatInterval: 3600, StopOnReshard: stopOnReshard}
+	flags := &vtgatepb.VStreamFlags{
+		HeartbeatInterval:    3600,
+		StopOnReshard:        stopOnReshard,
+		TransactionChunkSize: 1024, // 1KB - test chunking for all transactions
+	}
 	done := false
 
 	id := 1000
@@ -581,7 +589,9 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEven
 			Match: "/customer.*/",
 		}},
 	}
-	flags := &vtgatepb.VStreamFlags{}
+	flags := &vtgatepb.VStreamFlags{
+		TransactionChunkSize: 1024, // 1KB - test chunking for all transactions
+	}
 	done := false
 
 	id := 1000
@@ -765,6 +775,7 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 	}
 	flags := &vtgatepb.VStreamFlags{
 		IncludeReshardJournalEvents: true,
+		TransactionChunkSize:        1024, // 1KB - test chunking for all transactions
 	}
 	journalEvents := 0
 
@@ -962,7 +973,8 @@ func TestMultiVStreamsKeyspaceStopOnReshard(t *testing.T) {
 		}},
 	}
 	flags := &vtgatepb.VStreamFlags{
-		StopOnReshard: true,
+		StopOnReshard:        true,
+		TransactionChunkSize: 1024, // 1KB - test chunking for all transactions
 	}
 
 	// Stream events but stop once we have a VGTID with positions for the old/original shards.
@@ -1233,6 +1245,7 @@ func TestVStreamHeartbeats(t *testing.T) {
 			name: "With Keyspace Heartbeats On",
 			flags: &vtgatepb.VStreamFlags{
 				StreamKeyspaceHeartbeats: true,
+				TransactionChunkSize:     1024, // 1KB - test chunking for all transactions
 			},
 			expectedHeartbeats: numExpectedHeartbeats,
 		},
@@ -1363,7 +1376,9 @@ func runVStreamAndGetNumOfRowEvents(t *testing.T, ctx context.Context, vstreamCo
 	vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, done chan struct{}) (copyPhaseRowEvents int, runningPhaseRowEvents int) {
 	copyPhase := true
 	func() {
-		reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, &vtgatepb.VStreamFlags{})
+		reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, &vtgatepb.VStreamFlags{
+			TransactionChunkSize: 1024, // 1KB - test chunking for all transactions
+		})
 		require.NoError(t, err)
 		for {
 			evs, err := reader.Recv()
