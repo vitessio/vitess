@@ -150,15 +150,17 @@ func insertIntoBlobTable(t *testing.T) {
 // insertLargeTransactionForChunkTesting inserts a transaction with data large enough
 // to exceed the 1KB chunking threshold used in e2e tests. This ensures chunking is
 // actually triggered and tested across all VStream tests.
-// Inserts 10 rows of ~2KB each = ~20KB total transaction.
+// Inserts 15 rows of ~100 bytes each = ~1.5KB total transaction (exceeds 1KB threshold).
+// The customer.name column is varbinary(128), so we use 100 bytes to fit safely.
 func insertLargeTransactionForChunkTesting(t *testing.T, vtgateConn *mysql.Conn, keyspace string, startID int) {
-	// Create 2KB of data per row to ensure we exceed the 1KB chunk threshold
-	largeData := strings.Repeat("x", 2048)
+	// Create 100 bytes of data per row (fits in varbinary(128) column)
+	// 15 rows × 100 bytes = 1500 bytes total, which exceeds the 1KB chunk threshold
+	largeData := strings.Repeat("x", 100)
 
 	execVtgateQuery(t, vtgateConn, keyspace, "BEGIN")
-	for i := 0; i < 10; i++ {
-		query := fmt.Sprintf("INSERT INTO customer (cid, name) VALUES (%d, 'large_chunk_test_%d_%s')",
-			startID+i, startID+i, largeData)
+	for i := 0; i < 15; i++ {
+		query := fmt.Sprintf("INSERT INTO customer (cid, name) VALUES (%d, '%s')",
+			startID+i, largeData)
 		execVtgateQuery(t, vtgateConn, keyspace, query)
 	}
 	execVtgateQuery(t, vtgateConn, keyspace, "COMMIT")
