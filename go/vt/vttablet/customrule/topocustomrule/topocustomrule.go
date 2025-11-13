@@ -192,7 +192,6 @@ func (cr *topoCustomRule) oneWatch() error {
 			}
 			return err
 		}
-
 	}
 
 	return errors.New("watch terminated with no error")

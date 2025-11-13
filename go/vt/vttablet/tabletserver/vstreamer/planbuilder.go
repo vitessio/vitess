@@ -324,7 +324,6 @@ func (plan *Plan) shouldFilter(values []sqltypes.Value, charsets []collations.ID
 // filtering cannot be performed in-place. The result argument must be a slice of
 // length equal to ColExprs
 func (plan *Plan) mapValues(values []sqltypes.Value) ([]sqltypes.Value, error) {
-
 	result := make([]sqltypes.Value, len(plan.ColExprs))
 
 	for i, colExpr := range plan.ColExprs {

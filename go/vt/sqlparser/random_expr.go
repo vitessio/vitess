@@ -17,8 +17,8 @@ limitations under the License.
 package sqlparser
 
 import (
-	"fmt"
 	"math/rand/v2"
+	"strconv"
 )
 
 // This file is used to generate random expressions to be used for testing
@@ -376,7 +376,7 @@ func (g *Generator) randomBool(prob float32) bool {
 }
 
 func (g *Generator) intLiteral() Expr {
-	t := fmt.Sprintf("%d", rand.IntN(100)-rand.IntN(100)) // nolint SA4000
+	t := strconv.Itoa(rand.IntN(100) - rand.IntN(100)) //nolint:staticcheck
 
 	return NewIntLiteral(t)
 }

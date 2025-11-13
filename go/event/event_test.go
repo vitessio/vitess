@@ -174,7 +174,6 @@ func TestDispatchPointerToValueInterfaceListener(t *testing.T) {
 	})
 	Dispatch(&testEvent1{})
 	assert.True(t, triggered, "Dispatch by pointer failed to trigger interface listener")
-
 }
 
 func TestDispatchValueToValueInterfaceListener(t *testing.T) {
@@ -195,7 +194,6 @@ func TestDispatchPointerToPointerInterfaceListener(t *testing.T) {
 	AddListener(func(testInterface2) { triggered = true })
 	Dispatch(&testEvent2{})
 	assert.True(t, triggered, "interface listener failed to trigger for pointer")
-
 }
 
 func TestDispatchValueToPointerInterfaceListener(t *testing.T) {

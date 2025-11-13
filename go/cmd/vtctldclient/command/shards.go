@@ -325,7 +325,6 @@ func commandGetShardReplication(cmd *cobra.Command, args []string) error {
 	fmt.Printf("%s\n", data)
 
 	return nil
-
 }
 
 var removeShardCellOptions = struct {
@@ -548,7 +547,7 @@ func commandSourceShardAdd(cmd *cobra.Command, args []string) error {
 
 	uid, err := strconv.ParseInt(cmd.Flags().Arg(1), 10, 32)
 	if err != nil {
-		return fmt.Errorf("Failed to parse SourceShard uid: %w", err) // nolint
+		return fmt.Errorf("Failed to parse SourceShard uid: %w", err)
 	}
 
 	sks, sshard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(2))
@@ -602,7 +601,7 @@ func commandSourceShardDelete(cmd *cobra.Command, args []string) error {
 
 	uid, err := strconv.ParseInt(cmd.Flags().Arg(1), 10, 32)
 	if err != nil {
-		return fmt.Errorf("Failed to parse SourceShard uid: %w", err) // nolint
+		return fmt.Errorf("Failed to parse SourceShard uid: %w", err)
 	}
 
 	cli.FinishedParsing(cmd)

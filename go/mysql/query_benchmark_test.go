@@ -100,7 +100,6 @@ func benchmarkQuery(b *testing.B, threads int, query string, mkCfg mkListenerCfg
 				// generate random query
 				n := rand.IntN(maxPacketSize-len(benchmarkQueryPrefix)) + 1
 				execQuery = benchmarkQueryPrefix + strings.Repeat("x", n)
-
 			}
 			if _, err := conn.ExecuteFetch(execQuery, 1000, true); err != nil {
 				b.Fatalf("ExecuteFetch failed: %v", err)

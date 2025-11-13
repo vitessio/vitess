@@ -58,7 +58,6 @@ func createFakeDBAndMonitor(t *testing.T) (*fakesqldb.DB, *Monitor) {
 	monitor.isOpen = true
 	monitor.appPool.Open(config.DB.AppWithDB())
 	return db, monitor
-
 }
 
 // TestMonitorIsSemiSyncBlocked tests the functionality of isSemiSyncBlocked.

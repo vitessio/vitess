@@ -276,7 +276,6 @@ func TestRewriteVisitRefContainerReplace(t *testing.T) {
 }
 
 func TestRewriteVisitValueContainerReplace(t *testing.T) {
-
 	ast := ValueContainer{
 		ASTType:               ValueContainer{NotASTType: 12},
 		ASTImplementationType: &Leaf{2},
@@ -294,7 +293,6 @@ func TestRewriteVisitValueContainerReplace(t *testing.T) {
 		}
 		return true
 	}, nil)
-
 }
 
 func TestRewriteVisitValueContainerReplace2(t *testing.T) {
@@ -458,5 +456,4 @@ func assertStepsEqual(t *testing.T, walk, expected []step) {
 	if expectedSize > walkSize {
 		t.Errorf("❌️ - Expected more elements %v", expected[walkSize:])
 	}
-
 }

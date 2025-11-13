@@ -1556,7 +1556,7 @@ func (s *VtctldServer) GetBackups(ctx context.Context, req *vtctldatapb.GetBacku
 		bi.Shard = req.Shard
 
 		if req.Detailed {
-			if i >= backupsToSkipDetails { // nolint:staticcheck
+			if i >= backupsToSkipDetails { //nolint:staticcheck
 				// (TODO:@ajm188) Update backupengine/backupstorage implementations
 				// to get Status info for backups.
 			}
@@ -1879,7 +1879,6 @@ func (s *VtctldServer) GetSchemaMigrations(ctx context.Context, req *vtctldatapb
 		results = map[string]*sqltypes.Result{}
 	)
 	for _, tablet := range tabletsResp.Tablets {
-
 		wg.Add(1)
 		go func(tablet *topodatapb.Tablet) {
 			defer wg.Done()

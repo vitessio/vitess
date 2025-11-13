@@ -222,7 +222,6 @@ func TestAggrOnJoin(t *testing.T) {
 		mcmp.AssertMatches(`select a1.val1, avg(a1.val2) from aggr_test a1 join aggr_test a2 on a1.val2 = a2.id join t3 t on a2.val2 = t.id7 group by a1.val1`,
 			`[[VARCHAR("a") DECIMAL(1.0000)] [VARCHAR("b") DECIMAL(1.0000)] [VARCHAR("c") DECIMAL(3.0000)]]`)
 	})
-
 }
 
 func TestNotEqualFilterOnScatter(t *testing.T) {
@@ -426,7 +425,6 @@ func TestEmptyTableAggr(t *testing.T) {
 			})
 		})
 	}
-
 }
 
 func TestOrderByCount(t *testing.T) {
@@ -515,7 +513,6 @@ func TestScalarAggregate(t *testing.T) {
 			clusterInstance.RestartVtgate())
 		//  update vtgate params
 		vtParams = clusterInstance.GetVTParams(keyspaceName)
-
 	}()
 
 	mcmp, closer := start(t)

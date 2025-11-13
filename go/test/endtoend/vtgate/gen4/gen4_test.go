@@ -518,5 +518,4 @@ func TestDualJoinQueries(t *testing.T) {
 
 	// left join with a dual table on right
 	mcmp.Exec("select t.title, t2.id from t2 left join (select 'ABC' as title) as t on t.title = t2.tcol1")
-
 }

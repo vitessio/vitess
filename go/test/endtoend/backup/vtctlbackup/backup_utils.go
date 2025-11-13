@@ -1084,8 +1084,8 @@ func terminateBackup(t *testing.T, alias string) {
 		text := scanner.Text()
 		if strings.Contains(text, stopBackupMsg) {
 			tmpProcess.Process.Signal(syscall.SIGTERM)
-			found = true // nolint
-			return
+			found = true
+			break
 		}
 	}
 	assert.True(t, found, "backup message not found")
@@ -1425,7 +1425,6 @@ func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
 	if backupstorage.BackupStorageImplementation == "file" {
 		require.Contains(t, bd, "BackupStorage.File.File:Write")
 	}
-
 }
 
 func verifyRestorePositionAndTimeStats(t *testing.T, vars map[string]any) {

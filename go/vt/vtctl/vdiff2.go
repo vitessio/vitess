@@ -526,7 +526,6 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 							TableName: table,
 							State:     vdiff.UnknownState,
 						}
-
 					}
 					ts := tableSummaryMap[table]
 					// This is the shard level VDiff table state

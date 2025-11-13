@@ -298,7 +298,6 @@ func (cluster *LocalProcessCluster) StartUnshardedKeyspace(keyspace Keyspace, re
 }
 
 func (cluster *LocalProcessCluster) startPartialKeyspace(keyspace Keyspace, shardNames []string, movedShard string, replicaCount int, rdonly bool, customizers ...any) (err error) {
-
 	cluster.HasPartialKeyspaces = true
 	routedKeyspace := &Keyspace{
 		Name:             keyspace.Name + "_routed",
@@ -454,6 +453,7 @@ func (cluster *LocalProcessCluster) AddShard(keyspaceName string, shardName stri
 			HTTPPort:  cluster.GetAndReservePort(),
 			GrpcPort:  cluster.GetAndReservePort(),
 			MySQLPort: cluster.GetAndReservePort(),
+			Cell:      cluster.Cell,
 			Alias:     fmt.Sprintf("%s-%010d", cluster.Cell, tabletUID),
 		}
 		if i == 0 { // Make the first one as primary
@@ -1175,7 +1175,6 @@ func (cluster *LocalProcessCluster) StartVtbackup(newInitDBFile string, initialB
 		initialBackup)
 	cluster.VtbackupProcess.ExtraArgs = extraArgs
 	return cluster.VtbackupProcess.Setup()
-
 }
 
 // GetAndReservePort gives port for required process

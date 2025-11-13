@@ -1078,7 +1078,6 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 
 // BeginExecute combines Begin and Execute.
 func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Target, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (queryservice.TransactionState, *sqltypes.Result, error) {
-
 	// Disable hot row protection in case of reserve connection.
 	if tsv.enableHotRowProtection && reservedID == 0 {
 		txDone, err := tsv.beginWaitForSameRangeTransactions(ctx, target, options, sql, bindVariables)
@@ -1431,7 +1430,6 @@ func (tsv *TabletServer) ReserveBeginStreamExecute(
 
 // ReserveExecute implements the QueryService interface
 func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Target, settings []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (state queryservice.ReservedState, result *sqltypes.Result, err error) {
-
 	result, err = tsv.executeWithSettings(ctx, target, settings, sql, bindVariables, transactionID, options)
 	// If there is an error and the error message is about allowing query in reserved connection only,
 	// then we do not return an error from here and continue to use the reserved connection path.

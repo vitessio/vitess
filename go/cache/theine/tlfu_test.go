@@ -94,7 +94,6 @@ func TestTlfu(t *testing.T) {
 		tlfu.slru.protected.display()
 		tlfu.slru.protected.displayReverse()
 	}
-
 }
 
 func TestEvictEntries(t *testing.T) {
@@ -153,5 +152,4 @@ func TestEvictEntries(t *testing.T) {
 	require.Equal(t, 1, len(removed))
 	require.Equal(t, 0, tlfu.slru.probation.len)
 	require.Equal(t, 0, tlfu.slru.protected.len)
-
 }

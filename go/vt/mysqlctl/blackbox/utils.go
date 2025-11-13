@@ -187,7 +187,7 @@ func createBackupFiles(root string, fileCount int, ext string) error {
 		if err != nil {
 			return err
 		}
-		if _, err := f.Write([]byte("hello, world!")); err != nil {
+		if _, err := f.WriteString("hello, world!"); err != nil {
 			return err
 		}
 		defer f.Close()

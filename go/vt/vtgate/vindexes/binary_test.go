@@ -150,7 +150,6 @@ func TestBinaryReverseMap(t *testing.T) {
 // TestBinaryRangeMap takes start and env values,
 // and checks against a destination keyrange.
 func TestBinaryRangeMap(t *testing.T) {
-
 	startInterval := "0x01"
 	endInterval := "0x10"
 
@@ -159,5 +158,4 @@ func TestBinaryRangeMap(t *testing.T) {
 	require.NoError(t, err)
 	want := "DestinationKeyRange(01-10)"
 	assert.Equal(t, want, got[0].String())
-
 }

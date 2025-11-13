@@ -28,7 +28,6 @@ import (
 )
 
 func TestEtcdServer(t *testing.T) {
-
 	// Confirm the basic etcd cluster health.
 	etcdHealthURL := fmt.Sprintf("http://%s:%d/health", clusterInstance.Hostname, clusterInstance.TopoPort)
 	testURL(t, etcdHealthURL, "generic etcd health url")

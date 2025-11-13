@@ -135,7 +135,6 @@ type streamerPlan struct {
 func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, stopPos string,
 	filter *binlogdatapb.Filter, vschema *localVSchema, throttlerApp throttlerapp.Name,
 	send func([]*binlogdatapb.VEvent) error, phase string, vse *Engine, options *binlogdatapb.VStreamOptions) *vstreamer {
-
 	config, err := GetVReplicationConfig(options)
 	if err != nil {
 		return nil

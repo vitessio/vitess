@@ -869,7 +869,6 @@ func tmRPCTestExecuteFetch(ctx context.Context, t *testing.T, client tmclient.Ta
 		ReloadSchema: true,
 	})
 	compareError(t, "ExecuteFetchAsAllPrivs", err, qr, testExecuteFetchResult)
-
 }
 
 func tmRPCTestExecuteFetchPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {

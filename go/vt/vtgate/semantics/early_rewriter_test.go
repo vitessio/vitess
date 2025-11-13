@@ -304,7 +304,6 @@ func TestRewriteJoinUsingColumns(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestGroupByColumnName(t *testing.T) {

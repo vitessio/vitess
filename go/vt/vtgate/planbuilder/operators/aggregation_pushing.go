@@ -250,7 +250,6 @@ func pushAggregationThroughFilter(
 	aggregator *Aggregator,
 	filter *Filter,
 ) (Operator, *ApplyResult) {
-
 	columnsNeeded := collectColNamesNeeded(ctx, filter)
 	pushedAggr := aggregator.SplitAggregatorBelowOperators(ctx, []Operator{filter.Source})
 withNextColumn:

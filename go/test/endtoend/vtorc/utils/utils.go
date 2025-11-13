@@ -615,7 +615,6 @@ func execute(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, er
 
 // StartVttablet is used to start a vttablet from the given cell and type
 func StartVttablet(t *testing.T, clusterInfo *VTOrcClusterInfo, cell string, isRdonly bool) *cluster.Vttablet {
-
 	var tablet *cluster.Vttablet
 	for _, cellInfo := range clusterInfo.CellInfos {
 		if cellInfo.CellName == cell {

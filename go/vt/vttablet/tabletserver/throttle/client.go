@@ -120,7 +120,6 @@ func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName throttlera
 	}
 	c.lastSuccessfulThrottle[checkApp.String()] = atomic.LoadInt64(&throttleTicks)
 	return checkResult, true
-
 }
 
 // ThrottleCheckOKOrWait checks the throttler; if throttler is satisfied, the function returns 'true' immediately,

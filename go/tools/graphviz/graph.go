@@ -73,7 +73,6 @@ node [shape=record, fontsize=10]
 			} else {
 				labels += "|" + attr
 			}
-
 		}
 		labels += "}"
 		if node.tooltip != "" {
@@ -145,7 +144,6 @@ const htmlTemplate = `
 `
 
 func (g *Graph) Render() error {
-
 	dot := g.produceDot()
 
 	browsers := func() []string {

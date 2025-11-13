@@ -98,7 +98,6 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitcode)
 	}
-
 }
 
 func TestSchemaChange(t *testing.T) {
@@ -118,12 +117,11 @@ func TestSchemaChange(t *testing.T) {
 
 func testWithInitialSchema(t *testing.T) {
 	// Create 4 tables
-	var sqlQuery = "" // nolint
+	var sqlQuery string
 	for i := 0; i < totalTableCount; i++ {
 		sqlQuery = fmt.Sprintf(createTable, fmt.Sprintf("vt_select_test_%02d", i))
 		err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, sqlQuery)
 		require.Nil(t, err)
-
 	}
 
 	// Check if 4 tables are created

@@ -38,7 +38,6 @@ func TestInsertOnDuplicateKey(t *testing.T) {
 	utils.Exec(t, conn, "insert into t11(id, sharding_key, col1, col2, col3) values(1, 2, 'a', 1, 2)")
 	utils.Exec(t, conn, "insert into t11(id, sharding_key, col1, col2, col3) values(1, 2, 'a', 1, 2) on duplicate key update id=10;")
 	utils.AssertMatches(t, conn, "select id, sharding_key from t11 where id=10", "[[INT64(10) INT64(2)]]")
-
 }
 
 func TestInsertNeg(t *testing.T) {
@@ -381,7 +380,6 @@ func TestFlushLock(t *testing.T) {
 		case <-timeout:
 			t.Fatalf("test timeout waiting for select query to complete")
 		default:
-
 		}
 	}
 }
@@ -528,6 +526,13 @@ func TestSQLSelectLimit(t *testing.T) {
 		utils.AssertMatches(t, conn, "select uid, msg from t7_xxhash order by uid", `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")]]`)
 		utils.AssertMatches(t, conn, "(select uid, msg from t7_xxhash order by uid)", `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")]]`)
 		utils.AssertMatches(t, conn, "select uid, msg from t7_xxhash order by uid limit 4", `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")] [VARCHAR("3") NULL] [VARCHAR("4") VARCHAR("a")]]`)
+
+		// Don't LIMIT subqueries
+		utils.AssertMatches(t, conn, "select count(*) from (select uid, msg from t7_xxhash order by uid) as subquery", `[[INT64(6)]]`)
+		utils.AssertMatches(t, conn, "select count(*) from (select 1 union all select 2 union all select 3) as subquery", `[[INT64(3)]]`)
+
+		utils.AssertMatches(t, conn, "select 1 union all select 2 union all select 3", `[[INT64(1)] [INT64(2)]]`)
+
 		/*
 			planner does not support query with order by in union query. without order by the results are not deterministic for testing purpose
 			utils.AssertMatches(t, conn, "select uid, msg from t7_xxhash union all select uid, msg from t7_xxhash order by uid", ``)

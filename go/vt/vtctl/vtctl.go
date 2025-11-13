@@ -2074,7 +2074,6 @@ func getSourceKeyspace(clusterKeyspace string) (clusterName string, sourceKeyspa
 // FIXME: this function needs a refactor. Also validations for params should to be done per workflow type
 func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string,
 	workflowType wrangler.VReplicationWorkflowType) error {
-
 	const defaultWaitTime = time.Duration(30 * time.Second)
 	// for backward compatibility we default the lag to match the timeout for switching primary traffic
 	// this should probably be much smaller so that target and source are almost in sync before switching traffic
