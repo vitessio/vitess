@@ -1344,9 +1344,10 @@ type VStreamFlags struct {
 	// Exclude the keyspace from the table name that is sent to the vstream client
 	ExcludeKeyspaceFromTableName bool `protobuf:"varint,10,opt,name=exclude_keyspace_from_table_name,json=excludeKeyspaceFromTableName,proto3" json:"exclude_keyspace_from_table_name,omitempty"`
 	// Transaction chunk threshold in bytes. When a transaction exceeds this size,
-	// VTGate will acquire a lock to ensure atomic delivery and send events in chunks
-	// to prevent OOM. Transactions smaller than this are sent without locking for
-	// Default: 10MB.
+	// VTGate will acquire a lock to ensure contiguous, non-interleaved delivery
+	// (BEGIN...ROW...COMMIT sent sequentially without mixing events from other shards).
+	// Events are still chunked to prevent OOM. Transactions smaller than this are sent
+	// without locking for better parallelism. Default: 10MB.
 	TransactionChunkSize int64 `protobuf:"varint,11,opt,name=transaction_chunk_size,json=transactionChunkSize,proto3" json:"transaction_chunk_size,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
