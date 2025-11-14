@@ -152,13 +152,14 @@ func insertIntoBlobTable(t *testing.T) {
 // actually triggered and tested across all VStream tests.
 // Inserts 15 rows of ~100 bytes each = ~1.5KB total transaction (exceeds 1KB threshold).
 // The customer.name column is varbinary(128), so we use 100 bytes to fit safely.
+// Each row has a unique name to allow unique index creation in tests.
 func insertLargeTransactionForChunkTesting(t *testing.T, vtgateConn *mysql.Conn, keyspace string, startID int) {
-	// Create 100 bytes of data per row (fits in varbinary(128) column)
-	// 15 rows × 100 bytes = 1500 bytes total, which exceeds the 1KB chunk threshold
-	largeData := strings.Repeat("x", 100)
-
 	execVtgateQuery(t, vtgateConn, keyspace, "BEGIN")
 	for i := 0; i < 15; i++ {
+		// Create ~100 bytes of unique data per row (fits in varbinary(128) column)
+		// Format: "x" repeated 94 times + 6-character unique suffix (e.g., "_00000")
+		// This ensures each name is unique while maintaining the target size
+		largeData := strings.Repeat("x", 94) + fmt.Sprintf("_%05d", i)
 		query := fmt.Sprintf("INSERT INTO customer (cid, name) VALUES (%d, '%s')",
 			startID+i, largeData)
 		execVtgateQuery(t, vtgateConn, keyspace, query)
