@@ -962,45 +962,62 @@ func grantAllPrivilegesToUser(t *testing.T, connParams mysql.ConnParams, testUse
 	conn.Close()
 }
 
-func TestInitTabletTypeLookup_PreservesRDONLY(t *testing.T) {
+func TestInitTabletTypeLookup_PreservesTabletTypes(t *testing.T) {
 	defer func(saved bool) { initTabletTypeLookup = saved }(initTabletTypeLookup)
 	defer func(saved time.Duration) { rebuildKeyspaceRetryInterval = saved }(rebuildKeyspaceRetryInterval)
 	rebuildKeyspaceRetryInterval = 10 * time.Millisecond
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	cell := "cell1"
-	ts := memorytopo.NewServer(ctx, cell)
-	alias := &topodatapb.TabletAlias{
-		Cell: "cell1",
-		Uid:  1,
+	tests := []struct {
+		name          string
+		preservedType topodatapb.TabletType
+	}{
+		{
+			name:          "RDONLY",
+			preservedType: topodatapb.TabletType_RDONLY,
+		},
+		{
+			name:          "DRAINED",
+			preservedType: topodatapb.TabletType_DRAINED,
+		},
 	}
 
-	// 1. Initialize tablet as REPLICA (normal startup) with flag disabled
-	initTabletTypeLookup = false
-	tm := newTestTM(t, ts, 1, "ks", "0", nil)
-	tablet := tm.Tablet()
-	ensureSrvKeyspace(t, ctx, ts, cell, "ks")
-	ti, err := ts.GetTablet(ctx, alias)
-	require.NoError(t, err)
-	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
-	tm.Stop()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			cell := "cell1"
+			ts := memorytopo.NewServer(ctx, cell)
+			alias := &topodatapb.TabletAlias{
+				Cell: "cell1",
+				Uid:  1,
+			}
 
-	// 2. Simulate operator changing tablet to RDONLY in topology
-	_, err = ts.UpdateTabletFields(ctx, alias, func(t *topodatapb.Tablet) error {
-		t.Type = topodatapb.TabletType_RDONLY
-		return nil
-	})
-	require.NoError(t, err)
+			// 1. Initialize tablet as REPLICA (normal startup) with flag disabled
+			initTabletTypeLookup = false
+			tm := newTestTM(t, ts, int(alias.Uid), "ks", "0", nil)
+			tablet := tm.Tablet()
+			ensureSrvKeyspace(t, ctx, ts, cell, "ks")
+			ti, err := ts.GetTablet(ctx, alias)
+			require.NoError(t, err)
+			assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
+			tm.Stop()
 
-	// 3. Restart with flag enabled - should preserve RDONLY
-	initTabletTypeLookup = true
-	err = tm.Start(tablet, nil)
-	require.NoError(t, err)
-	ti, err = ts.GetTablet(ctx, alias)
-	require.NoError(t, err)
-	assert.Equal(t, topodatapb.TabletType_RDONLY, ti.Type)
-	tm.Stop()
+			// 2. Simulate operator changing tablet type in topology
+			_, err = ts.UpdateTabletFields(ctx, alias, func(t *topodatapb.Tablet) error {
+				t.Type = tt.preservedType
+				return nil
+			})
+			require.NoError(t, err)
+
+			// 3. Restart with flag enabled - should preserve the tablet type
+			initTabletTypeLookup = true
+			err = tm.Start(tablet, nil)
+			require.NoError(t, err)
+			defer tm.Stop()
+			ti, err = ts.GetTablet(ctx, alias)
+			require.NoError(t, err)
+			assert.Equal(t, tt.preservedType, ti.Type)
+		})
+	}
 }
 
 func TestInitTabletTypeLookup_PreservesPrimaryWithTermTime(t *testing.T) {
@@ -1008,8 +1025,7 @@ func TestInitTabletTypeLookup_PreservesPrimaryWithTermTime(t *testing.T) {
 	defer func(saved time.Duration) { rebuildKeyspaceRetryInterval = saved }(rebuildKeyspaceRetryInterval)
 	rebuildKeyspaceRetryInterval = 10 * time.Millisecond
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
 	alias := &topodatapb.TabletAlias{
@@ -1019,7 +1035,7 @@ func TestInitTabletTypeLookup_PreservesPrimaryWithTermTime(t *testing.T) {
 
 	// 1. Initialize tablet as REPLICA with flag disabled
 	initTabletTypeLookup = false
-	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+	tm := newTestTM(t, ts, int(alias.Uid), "ks", "0", nil)
 	tablet := tm.Tablet()
 	ensureSrvKeyspace(t, ctx, ts, cell, "ks")
 	ti, err := ts.GetTablet(ctx, alias)
@@ -1048,12 +1064,12 @@ func TestInitTabletTypeLookup_PreservesPrimaryWithTermTime(t *testing.T) {
 	initTabletTypeLookup = true
 	err = tm.Start(tablet, nil)
 	require.NoError(t, err)
+	defer tm.Stop()
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
 	// Should be promoted to PRIMARY by checkPrimaryShip and preserve the term start time
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
 	assert.Equal(t, now.Unix(), ti.GetPrimaryTermStartTime().Unix())
-	tm.Stop()
 }
 
 func TestInitTabletTypeLookup_FallbackWhenNoTopoRecord(t *testing.T) {
@@ -1061,8 +1077,7 @@ func TestInitTabletTypeLookup_FallbackWhenNoTopoRecord(t *testing.T) {
 	defer func(saved time.Duration) { rebuildKeyspaceRetryInterval = saved }(rebuildKeyspaceRetryInterval)
 	rebuildKeyspaceRetryInterval = 10 * time.Millisecond
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
 	alias := &topodatapb.TabletAlias{
@@ -1072,13 +1087,13 @@ func TestInitTabletTypeLookup_FallbackWhenNoTopoRecord(t *testing.T) {
 
 	// Start new tablet with flag enabled but no existing topo record
 	initTabletTypeLookup = true
-	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+	tm := newTestTM(t, ts, int(alias.Uid), "ks", "0", nil)
+	defer tm.Stop()
 	ensureSrvKeyspace(t, ctx, ts, cell, "ks")
 	ti, err := ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
 	// Should use initTabletType (REPLICA)
 	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
-	tm.Stop()
 }
 
 func TestInitTabletTypeLookup_DisabledUsesInitType(t *testing.T) {
@@ -1086,8 +1101,7 @@ func TestInitTabletTypeLookup_DisabledUsesInitType(t *testing.T) {
 	defer func(saved time.Duration) { rebuildKeyspaceRetryInterval = saved }(rebuildKeyspaceRetryInterval)
 	rebuildKeyspaceRetryInterval = 10 * time.Millisecond
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
 	alias := &topodatapb.TabletAlias{
@@ -1097,7 +1111,7 @@ func TestInitTabletTypeLookup_DisabledUsesInitType(t *testing.T) {
 
 	// 1. Initialize tablet as REPLICA with flag disabled
 	initTabletTypeLookup = false
-	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+	tm := newTestTM(t, ts, int(alias.Uid), "ks", "0", nil)
 	tablet := tm.Tablet()
 	ensureSrvKeyspace(t, ctx, ts, cell, "ks")
 	ti, err := ts.GetTablet(ctx, alias)
@@ -1116,137 +1130,70 @@ func TestInitTabletTypeLookup_DisabledUsesInitType(t *testing.T) {
 	initTabletTypeLookup = false
 	err = tm.Start(tablet, nil)
 	require.NoError(t, err)
+	defer tm.Stop()
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
 	// Topo record should be overwritten with REPLICA
 	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
-	tm.Stop()
 }
 
-func TestInitTabletTypeLookup_SkipsTransientBackupType(t *testing.T) {
+func TestInitTabletTypeLookup_SkipsTransientTypes(t *testing.T) {
 	defer func(saved bool) { initTabletTypeLookup = saved }(initTabletTypeLookup)
 	defer func(saved time.Duration) { rebuildKeyspaceRetryInterval = saved }(rebuildKeyspaceRetryInterval)
 	rebuildKeyspaceRetryInterval = 10 * time.Millisecond
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	cell := "cell1"
-	ts := memorytopo.NewServer(ctx, cell)
-	alias := &topodatapb.TabletAlias{
-		Cell: "cell1",
-		Uid:  1,
+	tests := []struct {
+		name          string
+		transientType topodatapb.TabletType
+	}{
+		{
+			name:          "BACKUP",
+			transientType: topodatapb.TabletType_BACKUP,
+		},
+		{
+			name:          "RESTORE",
+			transientType: topodatapb.TabletType_RESTORE,
+		},
 	}
 
-	// 1. Initialize tablet as REPLICA with flag disabled
-	initTabletTypeLookup = false
-	tm := newTestTM(t, ts, 1, "ks", "0", nil)
-	tablet := tm.Tablet()
-	ensureSrvKeyspace(t, ctx, ts, cell, "ks")
-	ti, err := ts.GetTablet(ctx, alias)
-	require.NoError(t, err)
-	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
-	tm.Stop()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			cell := "cell1"
+			ts := memorytopo.NewServer(ctx, cell)
+			alias := &topodatapb.TabletAlias{
+				Cell: "cell1",
+				Uid:  1,
+			}
 
-	// 2. Simulate crash during backup (tablet type is BACKUP in topo)
-	_, err = ts.UpdateTabletFields(ctx, alias, func(t *topodatapb.Tablet) error {
-		t.Type = topodatapb.TabletType_BACKUP
-		return nil
-	})
-	require.NoError(t, err)
+			// 1. Initialize tablet as REPLICA with flag disabled
+			initTabletTypeLookup = false
+			tm := newTestTM(t, ts, int(alias.Uid), "ks", "0", nil)
+			tablet := tm.Tablet()
+			ensureSrvKeyspace(t, ctx, ts, cell, "ks")
+			ti, err := ts.GetTablet(ctx, alias)
+			require.NoError(t, err)
+			assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
+			tm.Stop()
 
-	// 3. Restart with flag enabled - should skip BACKUP and use initTabletType
-	initTabletTypeLookup = true
-	err = tm.Start(tablet, nil)
-	require.NoError(t, err)
-	ti, err = ts.GetTablet(ctx, alias)
-	require.NoError(t, err)
-	// Should use initTabletType (REPLICA), not preserve BACKUP
-	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
-	tm.Stop()
-}
+			// 2. Simulate crash during backup/restore (tablet type is transient in topo)
+			_, err = ts.UpdateTabletFields(ctx, alias, func(t *topodatapb.Tablet) error {
+				t.Type = tt.transientType
+				return nil
+			})
+			require.NoError(t, err)
 
-func TestInitTabletTypeLookup_SkipsTransientRestoreType(t *testing.T) {
-	defer func(saved bool) { initTabletTypeLookup = saved }(initTabletTypeLookup)
-	defer func(saved time.Duration) { rebuildKeyspaceRetryInterval = saved }(rebuildKeyspaceRetryInterval)
-	rebuildKeyspaceRetryInterval = 10 * time.Millisecond
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	cell := "cell1"
-	ts := memorytopo.NewServer(ctx, cell)
-	alias := &topodatapb.TabletAlias{
-		Cell: "cell1",
-		Uid:  1,
+			// 3. Restart with flag enabled - should skip transient type and use initTabletType
+			initTabletTypeLookup = true
+			err = tm.Start(tablet, nil)
+			require.NoError(t, err)
+			defer tm.Stop()
+			ti, err = ts.GetTablet(ctx, alias)
+			require.NoError(t, err)
+			// Should use initTabletType (REPLICA), not preserve transient type
+			assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
+		})
 	}
-
-	// 1. Initialize tablet as REPLICA with flag disabled
-	initTabletTypeLookup = false
-	tm := newTestTM(t, ts, 1, "ks", "0", nil)
-	tablet := tm.Tablet()
-	ensureSrvKeyspace(t, ctx, ts, cell, "ks")
-	ti, err := ts.GetTablet(ctx, alias)
-	require.NoError(t, err)
-	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
-	tm.Stop()
-
-	// 2. Simulate crash during restore (tablet type is RESTORE in topo)
-	_, err = ts.UpdateTabletFields(ctx, alias, func(t *topodatapb.Tablet) error {
-		t.Type = topodatapb.TabletType_RESTORE
-		return nil
-	})
-	require.NoError(t, err)
-
-	// 3. Restart with flag enabled - should skip RESTORE and use initTabletType
-	initTabletTypeLookup = true
-	err = tm.Start(tablet, nil)
-	require.NoError(t, err)
-	ti, err = ts.GetTablet(ctx, alias)
-	require.NoError(t, err)
-	// Should use initTabletType (REPLICA), not preserve RESTORE
-	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
-	tm.Stop()
-}
-
-func TestInitTabletTypeLookup_PreservesDrained(t *testing.T) {
-	defer func(saved bool) { initTabletTypeLookup = saved }(initTabletTypeLookup)
-	defer func(saved time.Duration) { rebuildKeyspaceRetryInterval = saved }(rebuildKeyspaceRetryInterval)
-	rebuildKeyspaceRetryInterval = 10 * time.Millisecond
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	cell := "cell1"
-	ts := memorytopo.NewServer(ctx, cell)
-	alias := &topodatapb.TabletAlias{
-		Cell: "cell1",
-		Uid:  1,
-	}
-
-	// 1. Initialize tablet as REPLICA with flag disabled
-	initTabletTypeLookup = false
-	tm := newTestTM(t, ts, 1, "ks", "0", nil)
-	tablet := tm.Tablet()
-	ensureSrvKeyspace(t, ctx, ts, cell, "ks")
-	ti, err := ts.GetTablet(ctx, alias)
-	require.NoError(t, err)
-	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
-	tm.Stop()
-
-	// 2. Admin sets type to DRAINED for maintenance
-	_, err = ts.UpdateTabletFields(ctx, alias, func(t *topodatapb.Tablet) error {
-		t.Type = topodatapb.TabletType_DRAINED
-		return nil
-	})
-	require.NoError(t, err)
-
-	// 3. Restart with flag enabled - should preserve DRAINED
-	initTabletTypeLookup = true
-	err = tm.Start(tablet, nil)
-	require.NoError(t, err)
-	ti, err = ts.GetTablet(ctx, alias)
-	require.NoError(t, err)
-	// Should preserve DRAINED from topology
-	assert.Equal(t, topodatapb.TabletType_DRAINED, ti.Type)
-	tm.Stop()
 }
 
 func TestInitTabletTypeLookup_InteractionWithCheckPrimaryShip(t *testing.T) {
@@ -1254,8 +1201,7 @@ func TestInitTabletTypeLookup_InteractionWithCheckPrimaryShip(t *testing.T) {
 	defer func(saved time.Duration) { rebuildKeyspaceRetryInterval = saved }(rebuildKeyspaceRetryInterval)
 	rebuildKeyspaceRetryInterval = 10 * time.Millisecond
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
 	alias := &topodatapb.TabletAlias{
@@ -1265,7 +1211,7 @@ func TestInitTabletTypeLookup_InteractionWithCheckPrimaryShip(t *testing.T) {
 
 	// 1. Initialize tablet as REPLICA with flag disabled
 	initTabletTypeLookup = false
-	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+	tm := newTestTM(t, ts, int(alias.Uid), "ks", "0", nil)
 	tablet := tm.Tablet()
 	ensureSrvKeyspace(t, ctx, ts, cell, "ks")
 	ti, err := ts.GetTablet(ctx, alias)
@@ -1286,9 +1232,9 @@ func TestInitTabletTypeLookup_InteractionWithCheckPrimaryShip(t *testing.T) {
 	initTabletTypeLookup = true
 	err = tm.Start(tablet, nil)
 	require.NoError(t, err)
+	defer tm.Stop()
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
 	// Should be PRIMARY due to checkPrimaryShip logic
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
-	tm.Stop()
 }
