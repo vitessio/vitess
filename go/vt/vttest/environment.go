@@ -21,13 +21,23 @@ import (
 	"net"
 	"os"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"vitess.io/vitess/go/vt/proto/vttest"
 
 	// we use gRPC everywhere, so import the vtgate client.
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
+)
+
+var (
+	// randomPortsMu provides synchronization for randomPorts().
+	randomPortsMu sync.Mutex
+
+	// usedRandomPorts stores ports that have been used by remotePort().
+	usedRandomPorts []int
 )
 
 // Environment is the interface that customizes the global settings for
@@ -235,12 +245,18 @@ func tmpdir(dataroot string) (dir string, err error) {
 // randomPort gets a random port that is available for a TCP connection.
 // After we generate a random port, we try to establish tcp connections on it and the next 5 values.
 // If any of them fail, then we try a different port.
-func randomPort() int {
+func randomPort() (port int) {
 	for {
-		port := int(rand.Int32N(20000) + 10000)
+		randomPortsMu.Lock()
+		portBase := int(rand.Int32N(20000) + 10000)
 		portInUse := false
 		for i := 0; i < 6; i++ {
-			ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port+i)))
+			port = portBase + i
+			if slices.Contains(usedRandomPorts, port) {
+				portInUse = true
+				break
+			}
+			ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
 			if err != nil {
 				portInUse = true
 				break
@@ -248,8 +264,11 @@ func randomPort() int {
 			ln.Close()
 		}
 		if portInUse {
+			randomPortsMu.Unlock()
 			continue
 		}
+		usedRandomPorts = append(usedRandomPorts, port)
+		randomPortsMu.Unlock()
 		return port
 	}
 }
