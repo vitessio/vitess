@@ -246,8 +246,9 @@ func tmpdir(dataroot string) (dir string, err error) {
 // After we generate a random port, we try to establish tcp connections on it and the next 5 values.
 // If any of them fail, then we try a different port.
 func randomPort() (port int) {
+	randomPortsMu.Lock()
+	defer randomPortsMu.Unlock()
 	for {
-		randomPortsMu.Lock()
 		portBase := int(rand.Int32N(20000) + 10000)
 		portInUse := false
 		for i := 0; i < 6; i++ {
@@ -264,11 +265,9 @@ func randomPort() (port int) {
 			ln.Close()
 		}
 		if portInUse {
-			randomPortsMu.Unlock()
 			continue
 		}
 		usedRandomPorts = append(usedRandomPorts, port)
-		randomPortsMu.Unlock()
 		return port
 	}
 }
