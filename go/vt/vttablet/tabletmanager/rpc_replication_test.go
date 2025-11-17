@@ -138,7 +138,7 @@ func TestDemotePrimaryWaitingForSemiSyncUnblock(t *testing.T) {
 		<-ch
 	})
 	// Add a fake query that makes the semi-sync monitor believe that the tablet is blocked on semi-sync ACKs.
-	fakeDb.AddQuery("SELECT variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
+	fakeDb.AddQuery("SELECT /*+ MAX_EXECUTION_TIME(1000) */ variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 		"Rpl_semi_sync_source_wait_sessions|1",
 		"Rpl_semi_sync_source_yes_tx|5"))
