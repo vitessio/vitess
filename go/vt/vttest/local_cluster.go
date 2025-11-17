@@ -23,11 +23,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -800,7 +802,7 @@ func (db *LocalCluster) VTProcess() *VtProcess {
 // a pointer to the interface. To read this vschema, the caller must convert it to a map
 func (vt *VtProcess) ReadVSchema() (*interface{}, error) {
 	httpClient := &http.Client{Timeout: 5 * time.Second}
-	resp, err := httpClient.Get(fmt.Sprintf("http://%s:%d/debug/vschema", vt.BindAddress, vt.Port))
+	resp, err := httpClient.Get(fmt.Sprintf("http://%s/debug/vschema", net.JoinHostPort(vt.BindAddress, strconv.Itoa(vt.Port))))
 	if err != nil {
 		return nil, err
 	}
