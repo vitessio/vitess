@@ -96,7 +96,7 @@ func getTextFromWikipedia(lang testutil.Lang, article string) (string, error) {
 		return "", err
 	}
 
-	var chunks []string
+	chunks := make([]string, 0, len(response.Query.Pages))
 	for _, page := range response.Query.Pages {
 		chunks = append(chunks, page.Extract)
 	}

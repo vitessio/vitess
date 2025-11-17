@@ -92,7 +92,7 @@ func (g *Generator) WriteToFile(out string) {
 	fmt.Fprintf(&file, "package %s\n\n", g.local.Name())
 	fmt.Fprintf(&file, "import (\n")
 
-	var sortedPackages []Package
+	sortedPackages := make([]Package, 0, len(g.imported))
 	for pkg := range g.imported {
 		sortedPackages = append(sortedPackages, pkg)
 	}

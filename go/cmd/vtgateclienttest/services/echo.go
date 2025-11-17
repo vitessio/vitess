@@ -53,8 +53,9 @@ func newEchoClient(fallback vtgateservice.VTGateService) *echoClient {
 }
 
 func printSortedMap(val reflect.Value) []byte {
-	var keys []string
-	for _, key := range val.MapKeys() {
+	mapKeys := val.MapKeys()
+	keys := make([]string, 0, len(mapKeys))
+	for _, key := range mapKeys {
 		keys = append(keys, key.String())
 	}
 	sort.Strings(keys)
@@ -73,7 +74,7 @@ func printSortedMap(val reflect.Value) []byte {
 func echoQueryResult(vals map[string]any) *sqltypes.Result {
 	qr := &sqltypes.Result{}
 
-	var row []sqltypes.Value
+	row := make([]sqltypes.Value, 0, len(vals)+2)
 
 	// The first two returned fields are always a field with a MySQL NULL value,
 	// and another field with a zero-length string.

@@ -251,7 +251,7 @@ func (tg *TableGenerator) writePage(g *Generator, p *page, layout uca.Layout) st
 }
 
 func (tg *TableGenerator) WriteTables(g *Generator, layout uca.Layout) {
-	var pagePtrs []string
+	pagePtrs := make([]string, 0, len(tg.pages))
 	for _, page := range tg.pages {
 		pagePtrs = append(pagePtrs, tg.writePage(g, &page, layout))
 	}

@@ -512,12 +512,12 @@ func binparserString(_ jsonDataType, data []byte, pos int) (node *json.Value, er
 // arrays are stored thus:
 // | type_identifier(one of [2,3]) | elem count | obj size | list of offsets+lengths of values | actual values |
 func binparserArray(typ jsonDataType, data []byte, pos int) (node *json.Value, err error) {
-	var nodes []*json.Value
 	var elem *json.Value
 	var elementCount int
 	large := typ == jsonLargeArray
 	elementCount, pos = readInt(data, pos, large)
 	_, pos = readInt(data, pos, large)
+	nodes := make([]*json.Value, 0, elementCount)
 	for range elementCount {
 		elem, pos, err = binparserElement(data, pos, large)
 		if err != nil {

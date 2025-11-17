@@ -117,7 +117,7 @@ func makeversions(output string) {
 		}
 	}
 
-	var versions []string
+	versions := make([]string, 0, len(versionfiles))
 	for _, versionCsv := range versionfiles {
 		base := filepath.Base(versionCsv)
 		base = strings.TrimPrefix(base, "collations_")
@@ -158,7 +158,7 @@ func makeversions(output string) {
 	g.P()
 	g.P("var globalVersionInfo = map[ID]struct{alias []collalias; isdefault collver}{")
 
-	var sorted []*versionInfo
+	sorted := make([]*versionInfo, 0, len(versioninfo))
 	for _, vi := range versioninfo {
 		sorted = append(sorted, vi)
 	}

@@ -148,8 +148,7 @@ func (p *pathGen) basicMethod(t types.Type, basic *types.Basic, spi generatorSPI
 }
 
 func (p *pathGen) debugString() *jen.Statement {
-	var switchCases []jen.Code
-
+	switchCases := make([]jen.Code, 0, len(p.steps)+1)
 	for _, step := range p.steps {
 		stepName := step.AsEnum()
 
@@ -230,8 +229,7 @@ func (p *pathGen) generateGetNodeFromPath(spi generatorSPI) *jen.Statement {
 }
 
 func (p *pathGen) generateWalkCases(spi generatorSPI) []jen.Code {
-	var cases []jen.Code
-
+	cases := make([]jen.Code, 0, len(p.steps)+2)
 	for _, step := range p.steps {
 		stepName := step.AsEnum()
 

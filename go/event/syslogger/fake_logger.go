@@ -77,7 +77,7 @@ func (tl *testLogger) getLog() loggerMsg {
 }
 
 func (tl *testLogger) GetAllLogs() []string {
-	var logs []string
+	logs := make([]string, 0, len(tl.logs))
 	for _, l := range tl.logs {
 		logs = append(logs, l.level+":"+l.msg)
 	}

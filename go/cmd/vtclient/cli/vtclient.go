@@ -430,7 +430,7 @@ func (r *results) print(w io.Writer) {
 		code  vtrpcpb.Code
 		count int
 	}
-	var counts []errorCounts
+	counts := make([]errorCounts, 0, len(r.errorCount))
 	for code, count := range r.errorCount {
 		counts = append(counts, errorCounts{code, count})
 	}

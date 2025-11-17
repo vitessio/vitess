@@ -177,7 +177,7 @@ func commandExecuteMultiFetchAsDBA(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	var qrs []*sqltypes.Result
+	qrs := make([]*sqltypes.Result, 0, len(resp.Results))
 	for _, result := range resp.Results {
 		qr := sqltypes.Proto3ToResult(result)
 		qrs = append(qrs, qr)

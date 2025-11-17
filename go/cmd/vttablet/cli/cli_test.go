@@ -53,7 +53,7 @@ func TestRunFailsToStartTabletManager(t *testing.T) {
 		"--init-tablet-type":           "replica",
 	}
 
-	var flagArgs []string
+	flagArgs := make([]string, 0, len(flags))
 	for flag, value := range flags {
 		flagArgs = append(flagArgs, flag, value)
 	}
