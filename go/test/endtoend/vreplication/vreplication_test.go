@@ -835,7 +835,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		// This prevents them from being replicated to subsequent workflows
 		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 		defer vtgateConn.Close()
-		execVtgateQuery(t, vtgateConn, defaultSourceKs, "delete from customer where cid >= 50000")
+		execVtgateQuery(t, vtgateConn, defaultSourceKs, "delete from customer where cid >= 50000 and cid < 50100")
 		waitForRowCount(t, vtgateConn, defaultSourceKs, "customer", 3)
 
 		// The wait in the next code block which checks that customer.dec80 is updated, also confirms that the
@@ -1028,7 +1028,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			require.True(t, found)
 
 			// Clean up chunk testing rows now that they've been copied and tested chunking
-			execVtgateQuery(t, vtgateConn, defaultTargetKs, "delete from customer where cid >= 50000")
+			execVtgateQuery(t, vtgateConn, defaultTargetKs, "delete from customer where cid >= 50000 and cid < 50100")
 			waitForRowCount(t, vtgateConn, defaultTargetKs, "customer", 3)
 
 			insertQuery2 = "insert into customer(name, cid) values('tempCustomer8', 103)" // ID 103, hence due to reverse_bits in shard 80-
