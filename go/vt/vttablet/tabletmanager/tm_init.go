@@ -388,7 +388,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 		// If we found an existing tablet record, determine which type to use
 		switch {
 		case err != nil:
-			// No existing tablet found, use init-tablet-type
+			// No existing tablet record found, use init-tablet-type
 			log.Infof("No existing tablet record found, using init-tablet-type: %v", tablet.Type)
 		case existingTablet.Type == topodatapb.TabletType_PRIMARY:
 			// Don't set to PRIMARY yet - let checkPrimaryShip() validate and decide
