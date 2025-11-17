@@ -18,6 +18,7 @@ package semisyncmonitor
 
 import (
 	"context"
+	"fmt"
 	"runtime"
 	"strconv"
 	"sync"
@@ -118,7 +119,7 @@ func TestMonitorIsSemiSyncBlocked(t *testing.T) {
 				waitUntilWritingStopped(t, m)
 			}()
 
-			db.AddQuery(semiSyncStatsQuery, tt.result)
+			db.AddQuery(fmt.Sprintf(semiSyncStatsQuery, m.actionTimeout.Milliseconds()), tt.result)
 
 			got, err := m.isSemiSyncBlocked()
 			if tt.wantErr != "" {
@@ -193,7 +194,7 @@ func TestMonitorIsSemiSyncBlockedWithBadResults(t *testing.T) {
 				waitUntilWritingStopped(t, m)
 			}()
 
-			db.AddQuery(semiSyncStatsQuery, tt.res)
+			db.AddQuery(fmt.Sprintf(semiSyncStatsQuery, m.actionTimeout.Milliseconds()), tt.res)
 
 			got, err := m.isSemiSyncBlocked()
 			require.False(t, got)
@@ -382,12 +383,12 @@ func TestGetSemiSyncStats(t *testing.T) {
 				waitUntilWritingStopped(t, m)
 			}()
 
-			db.AddQuery(semiSyncStatsQuery, tt.res)
+			db.AddQuery(fmt.Sprintf(semiSyncStatsQuery, m.actionTimeout.Milliseconds()), tt.res)
 			conn, err := m.appPool.Get(context.Background())
 			require.NoError(t, err)
 			defer conn.Recycle()
 
-			stats, err := getSemiSyncStats(conn)
+			stats, err := m.getSemiSyncStats(conn)
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
 				return
@@ -751,9 +752,9 @@ func TestStartWrites(t *testing.T) {
 		waitUntilWritingStopped(t, m)
 	}()
 
-	// Set up semi-sync stats query to return blocked state (waiting sessions > 0, no progress)
-	// This is what isSemiSyncBlocked will check inside startWrites
-	db.AddQuery(semiSyncStatsQuery, sqltypes.MakeTestResult(
+	// Set up semi-sync stats query to return blocked state (waiting sessions > 0, no progress).
+	// This is what isSemiSyncBlocked will check inside startWrites.
+	db.AddQuery(fmt.Sprintf(semiSyncStatsQuery, m.actionTimeout.Milliseconds()), sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 		"Rpl_semi_sync_source_wait_sessions|2",
 		"Rpl_semi_sync_source_yes_tx|100"))
@@ -770,7 +771,7 @@ func TestStartWrites(t *testing.T) {
 	// Now we set the monitor to be blocked.
 	m.setIsBlocked(true)
 
-	// Start writes and wait for them to complete
+	// Start writes and wait for them to complete.
 	m.startWrites()
 
 	// Check that some writes are in progress.
@@ -808,13 +809,13 @@ func TestCheckAndFixSemiSyncBlocked(t *testing.T) {
 
 	db.SetNeverFail(true)
 	// Initially everything is unblocked (zero waiting sessions).
-	db.AddQuery(semiSyncStatsQuery, sqltypes.MakeTestResult(
+	db.AddQuery(fmt.Sprintf(semiSyncStatsQuery, m.actionTimeout.Milliseconds()), sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 		"Rpl_semi_sync_source_wait_sessions|0",
 		"Rpl_semi_sync_source_yes_tx|10"))
 
-	// ExecuteFetchMulti will execute each statement separately
-	// Use patterns for both SET and INSERT since they can be called multiple times
+	// ExecuteFetchMulti will execute each statement separately.
+	// Use patterns for both SET and INSERT since they can be called multiple times.
 	db.AddQuery("SET SESSION lock_wait_timeout=1", &sqltypes.Result{})
 	db.AddQuery("INSERT INTO _vt.semisync_heartbeat (ts) VALUES (NOW())", &sqltypes.Result{})
 
@@ -825,7 +826,7 @@ func TestCheckAndFixSemiSyncBlocked(t *testing.T) {
 	m.mu.Unlock()
 
 	// Now we set the monitor to be blocked (waiting sessions > 0, no progress).
-	db.AddQuery(semiSyncStatsQuery, sqltypes.MakeTestResult(
+	db.AddQuery(fmt.Sprintf(semiSyncStatsQuery, m.actionTimeout.Milliseconds()), sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 		"Rpl_semi_sync_source_wait_sessions|2",
 		"Rpl_semi_sync_source_yes_tx|10"))
@@ -833,7 +834,7 @@ func TestCheckAndFixSemiSyncBlocked(t *testing.T) {
 	// Manually set isBlocked and start writes like the monitor would do.
 	m.setIsBlocked(true)
 
-	// Start writes and wait for them to complete
+	// Start writes and wait for them to complete.
 	m.startWrites()
 
 	// Wait a bit to let writes execute
@@ -843,12 +844,12 @@ func TestCheckAndFixSemiSyncBlocked(t *testing.T) {
 		return m.inProgressWriteCount == 0
 	}, 2*time.Second, 5*time.Microsecond)
 
-	// Verify the query log shows the writes were executed
+	// Verify the query log shows the writes were executed.
 	queryLog := db.QueryLog()
 	require.Contains(t, queryLog, "insert into _vt.semisync_heartbeat")
 
 	// Now we set the monitor to be unblocked (waiting sessions = 0).
-	db.AddQuery(semiSyncStatsQuery, sqltypes.MakeTestResult(
+	db.AddQuery(fmt.Sprintf(semiSyncStatsQuery, m.actionTimeout.Milliseconds()), sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 		"Rpl_semi_sync_source_wait_sessions|0",
 		"Rpl_semi_sync_source_yes_tx|10"))
@@ -912,7 +913,7 @@ func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
 	// Set up a custom query handler that returns different results based on state
 	handler := &statefulQueryHandler{
 		db:                 db,
-		semiSyncStatsQuery: semiSyncStatsQuery,
+		semiSyncStatsQuery: fmt.Sprintf(semiSyncStatsQuery, m.actionTimeout.Milliseconds()),
 		blockedResult: sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 			"Rpl_semi_sync_source_wait_sessions|3",
@@ -930,14 +931,14 @@ func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
 	db.AddQuery("SET SESSION lock_wait_timeout=1", &sqltypes.Result{})
 	db.AddQuery("INSERT INTO _vt.semisync_heartbeat (ts) VALUES (NOW())", &sqltypes.Result{})
 
-	// Open the monitor so the periodic timer runs
+	// Open the monitor so the periodic timer runs.
 	m.Open()
 
 	// When everything is unblocked, then this should return without blocking.
 	err := m.WaitUntilSemiSyncUnblocked(context.Background())
 	require.NoError(t, err)
 
-	// Now we set the monitor to be blocked by changing the state
+	// Now we set the monitor to be blocked by changing the state.
 	handler.semisyncBlocked.Store(true)
 
 	// Wait until the writes have started.
@@ -1025,7 +1026,7 @@ func TestDeadlockOnClose(t *testing.T) {
 
 	// Set up for semisync to be blocked
 	db.SetNeverFail(true)
-	db.AddQuery(semiSyncStatsQuery, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"), "Rpl_semi_sync_source_wait_sessions|1", "Rpl_semi_sync_source_yes_tx|1"))
+	db.AddQuery(fmt.Sprintf(semiSyncStatsQuery, m.actionTimeout.Milliseconds()), sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"), "Rpl_semi_sync_source_wait_sessions|1", "Rpl_semi_sync_source_yes_tx|1"))
 
 	// Open the monitor
 	m.Open()
@@ -1086,7 +1087,7 @@ func TestSemiSyncMonitor(t *testing.T) {
 	// Set up a custom query handler that returns different results based on state.
 	handler := &statefulQueryHandler{
 		db:                 db,
-		semiSyncStatsQuery: semiSyncStatsQuery,
+		semiSyncStatsQuery: fmt.Sprintf(semiSyncStatsQuery, m.actionDelay.Milliseconds()),
 		blockedResult: sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 			"Rpl_semi_sync_source_wait_sessions|1",

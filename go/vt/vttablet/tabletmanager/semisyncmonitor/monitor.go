@@ -51,7 +51,7 @@ const (
 	// session value back to the global default.
 	setTimeoutQuery = "SET SESSION lock_wait_timeout=%d"
 
-	semiSyncStatsQuery     = "SELECT variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')"
+	semiSyncStatsQuery     = "SELECT /*+ MAX_EXECUTION_TIME(%d) */ variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')"
 	semiSyncHeartbeatWrite = "INSERT INTO %s.semisync_heartbeat (ts) VALUES (NOW())"
 	semiSyncHeartbeatClear = "TRUNCATE TABLE %s.semisync_heartbeat"
 	maxWritesPermitted     = 15
@@ -224,12 +224,12 @@ func (m *Monitor) isSemiSyncBlocked() (bool, error) {
 	}
 	defer conn.Recycle()
 
-	stats, err := getSemiSyncStats(conn)
+	stats, err := m.getSemiSyncStats(conn)
 	if err != nil || stats.waitingSessions == 0 {
 		return false, err
 	}
 	time.Sleep(m.actionDelay)
-	followUpStats, err := getSemiSyncStats(conn)
+	followUpStats, err := m.getSemiSyncStats(conn)
 	if err != nil || followUpStats.waitingSessions == 0 || followUpStats.ackedTrxs > stats.ackedTrxs {
 		return false, err
 	}
@@ -440,13 +440,13 @@ func (m *Monitor) bindSideCarDBName(query string) string {
 
 func (m *Monitor) addLockTimeout(query string) string {
 	timeoutQuery := fmt.Sprintf(setTimeoutQuery, int(m.actionTimeout.Seconds()))
-	return fmt.Sprintf("%s;%s", timeoutQuery, query)
+	return timeoutQuery + ";" + query
 }
 
-func getSemiSyncStats(conn *dbconnpool.PooledDBConnection) (semiSyncStats, error) {
+func (m *Monitor) getSemiSyncStats(conn *dbconnpool.PooledDBConnection) (semiSyncStats, error) {
 	stats := semiSyncStats{}
 	// Execute the query to check if the primary is blocked on semi-sync.
-	res, err := conn.Conn.ExecuteFetch(semiSyncStatsQuery, 2, false)
+	res, err := conn.Conn.ExecuteFetch(fmt.Sprintf(semiSyncStatsQuery, m.actionTimeout.Milliseconds()), 2, false)
 	if err != nil {
 		return stats, err
 	}
