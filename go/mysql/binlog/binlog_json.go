@@ -517,10 +517,10 @@ func binparserArray(typ jsonDataType, data []byte, pos int) (node *json.Value, e
 	large := typ == jsonLargeArray
 	elementCount, pos = readInt(data, pos, large)
 	_, pos = readInt(data, pos, large)
-	nodes := make([]*json.Value, 0, elementCount)
 	if elementCount == 0 {
-		nodes = nil
+		return json.NewArray(nil), nil
 	}
+	nodes := make([]*json.Value, 0, elementCount)
 	for range elementCount {
 		elem, pos, err = binparserElement(data, pos, large)
 		if err != nil {
