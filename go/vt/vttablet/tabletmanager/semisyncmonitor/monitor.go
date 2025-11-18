@@ -49,7 +49,7 @@ const (
 	// Note: this is something we are entirely fine being set in all of the
 	// monitor connection pool sessions, so we do not ever bother to set the
 	// session value back to the global default.
-	setTimeoutQuery = "SET SESSION lock_wait_timeout=%d"
+	setLockWaitTimeoutQuery = "SET SESSION lock_wait_timeout=%d"
 
 	semiSyncStatsQuery     = "SELECT /*+ MAX_EXECUTION_TIME(%d) */ variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')"
 	semiSyncHeartbeatWrite = "INSERT INTO %s.semisync_heartbeat (ts) VALUES (NOW())"
@@ -376,7 +376,7 @@ func (m *Monitor) write() {
 		log.Errorf("SemiSync Monitor: failed to get a connection when writing to semisync_heartbeat table: %v", err)
 		return
 	}
-	err = conn.Conn.ExecuteFetchMultiDrain(m.addLockTimeout(m.bindSideCarDBName(semiSyncHeartbeatWrite)))
+	err = conn.Conn.ExecuteFetchMultiDrain(m.addLockWaitTimeout(m.bindSideCarDBName(semiSyncHeartbeatWrite)))
 	conn.Recycle()
 	if err != nil {
 		m.errorCount.Add(1)
@@ -416,7 +416,7 @@ func (m *Monitor) clearAllData() {
 		return
 	}
 	defer conn.Recycle()
-	_, _, err = conn.Conn.ExecuteFetchMulti(m.addLockTimeout(m.bindSideCarDBName(semiSyncHeartbeatClear)), 0, false)
+	_, _, err = conn.Conn.ExecuteFetchMulti(m.addLockWaitTimeout(m.bindSideCarDBName(semiSyncHeartbeatClear)), 0, false)
 	if err != nil {
 		m.errorCount.Add(1)
 		log.Errorf("SemiSync Monitor: failed to clear semisync_heartbeat table: %v", err)
@@ -438,15 +438,16 @@ func (m *Monitor) bindSideCarDBName(query string) string {
 	return sqlparser.BuildParsedQuery(query, sidecar.GetIdentifier()).Query
 }
 
-func (m *Monitor) addLockTimeout(query string) string {
-	timeoutQuery := fmt.Sprintf(setTimeoutQuery, int(m.actionTimeout.Seconds()))
+func (m *Monitor) addLockWaitTimeout(query string) string {
+	timeoutQuery := fmt.Sprintf(setLockWaitTimeoutQuery, int(m.actionTimeout.Seconds()))
 	return timeoutQuery + ";" + query
 }
 
 func (m *Monitor) getSemiSyncStats(conn *dbconnpool.PooledDBConnection) (semiSyncStats, error) {
 	stats := semiSyncStats{}
 	// Execute the query to check if the primary is blocked on semi-sync.
-	res, err := conn.Conn.ExecuteFetch(fmt.Sprintf(semiSyncStatsQuery, m.actionTimeout.Milliseconds()), 2, false)
+	query := fmt.Sprintf(semiSyncStatsQuery, m.actionTimeout.Milliseconds())
+	res, err := conn.Conn.ExecuteFetch(query, 2, false)
 	if err != nil {
 		return stats, err
 	}
@@ -458,16 +459,16 @@ func (m *Monitor) getSemiSyncStats(conn *dbconnpool.PooledDBConnection) (semiSyn
 
 	// Read the status value and check if it is non-zero.
 	if len(res.Rows) != 2 {
-		return stats, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected number of rows received, expected 2 but got %d, for semi-sync stats query %s", len(res.Rows), semiSyncStatsQuery)
+		return stats, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected number of rows received, expected 2 but got %d, for semi-sync stats query %s", len(res.Rows), query)
 	}
 	if len(res.Rows[0]) != 2 {
-		return stats, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected number of columns received, expected 2 but got %d, for semi-sync stats query %s", len(res.Rows[0]), semiSyncStatsQuery)
+		return stats, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected number of columns received, expected 2 but got %d, for semi-sync stats query %s", len(res.Rows[0]), query)
 	}
 	for i := range len(res.Rows) {
 		name := res.Rows[i][0].ToString()
 		value, err := res.Rows[i][1].ToCastInt64()
 		if err != nil {
-			return stats, vterrors.Wrapf(err, "unexpected results for semi-sync stats query %s: %v", semiSyncStatsQuery, res.Rows)
+			return stats, vterrors.Wrapf(err, "unexpected results for semi-sync stats query %s: %v", query, res.Rows)
 		}
 		switch name {
 		case "Rpl_semi_sync_master_wait_sessions", "Rpl_semi_sync_source_wait_sessions":
@@ -475,7 +476,7 @@ func (m *Monitor) getSemiSyncStats(conn *dbconnpool.PooledDBConnection) (semiSyn
 		case "Rpl_semi_sync_master_yes_tx", "Rpl_semi_sync_source_yes_tx":
 			stats.ackedTrxs = value
 		default:
-			return stats, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected results for semi-sync stats query %s: %v", semiSyncStatsQuery, res.Rows)
+			return stats, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected results for semi-sync stats query %s: %v", query, res.Rows)
 		}
 	}
 	return stats, nil
