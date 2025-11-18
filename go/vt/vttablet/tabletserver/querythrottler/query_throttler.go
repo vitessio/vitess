@@ -186,7 +186,7 @@ func (qt *QueryThrottler) startConfigRefreshLoop() {
 			case <-configRefreshTicker.C:
 				newCfg, err := qt.cfgLoader.Load(qt.ctx)
 				if err != nil {
-					log.Errorf("Error loading config: %v", err)
+					//log.Errorf("Error loading config: %v", err)
 					continue
 				}
 
