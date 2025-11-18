@@ -19,11 +19,6 @@ package semisyncmonitor
 import (
 	"context"
 	"fmt"
-<<<<<<< HEAD
-=======
-	"runtime"
-	"strconv"
->>>>>>> 413ff5db4c (Improve Semi-Sync Monitor Behavior to Prevent Errant ERS (#18884))
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -34,6 +29,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -68,11 +64,8 @@ func createFakeDBAndMonitor(t *testing.T) (*fakesqldb.DB, *Monitor) {
 // NOTE: This test focuses on the first getSemiSyncStats call and early-return logic.
 // The full two-call behavior is tested in TestMonitorIsSemiSyncBlockedProgressDetection.
 func TestMonitorIsSemiSyncBlocked(t *testing.T) {
-<<<<<<< HEAD
-=======
 	defer utils.EnsureNoLeaks(t)
 
->>>>>>> 413ff5db4c (Improve Semi-Sync Monitor Behavior to Prevent Errant ERS (#18884))
 	tests := []struct {
 		name    string
 		result  *sqltypes.Result
@@ -383,11 +376,6 @@ func TestGetSemiSyncStats(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			db, m := createFakeDBAndMonitor(t)
 			defer db.Close()
-<<<<<<< HEAD
-			defer m.Close()
-			db.AddQuery(semiSyncWaitSessionsRead, tt.res)
-			got, err := m.isSemiSyncBlocked(context.Background())
-=======
 			defer func() {
 				m.Close()
 				waitUntilWritingStopped(t, m)
@@ -399,7 +387,6 @@ func TestGetSemiSyncStats(t *testing.T) {
 			defer conn.Recycle()
 
 			stats, err := m.getSemiSyncStats(conn)
->>>>>>> 413ff5db4c (Improve Semi-Sync Monitor Behavior to Prevent Errant ERS (#18884))
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
 				return
@@ -637,15 +624,7 @@ func TestMonitorWrite(t *testing.T) {
 
 // TestMonitorWriteBlocked tests the write function when the writes are blocked.
 func TestMonitorWriteBlocked(t *testing.T) {
-<<<<<<< HEAD
-	initialVal := waitBetweenWrites
-	waitBetweenWrites = 250 * time.Millisecond
-	defer func() {
-		waitBetweenWrites = initialVal
-	}()
-=======
 	defer utils.EnsureNoLeaks(t)
->>>>>>> 413ff5db4c (Improve Semi-Sync Monitor Behavior to Prevent Errant ERS (#18884))
 	db, m := createFakeDBAndMonitor(t)
 	m.actionDelay = 10 * time.Millisecond
 	m.actionTimeout = 1 * time.Second
@@ -729,15 +708,7 @@ func TestIsWriting(t *testing.T) {
 }
 
 func TestStartWrites(t *testing.T) {
-<<<<<<< HEAD
-	initialVal := waitBetweenWrites
-	waitBetweenWrites = 250 * time.Millisecond
-	defer func() {
-		waitBetweenWrites = initialVal
-	}()
-=======
 	defer utils.EnsureNoLeaks(t)
->>>>>>> 413ff5db4c (Improve Semi-Sync Monitor Behavior to Prevent Errant ERS (#18884))
 	db, m := createFakeDBAndMonitor(t)
 	m.actionDelay = 10 * time.Millisecond
 	m.actionTimeout = 1 * time.Second
@@ -789,76 +760,7 @@ func TestStartWrites(t *testing.T) {
 }
 
 func TestCheckAndFixSemiSyncBlocked(t *testing.T) {
-<<<<<<< HEAD
-	initialVal := waitBetweenWrites
-	waitBetweenWrites = 250 * time.Millisecond
-	defer func() {
-		waitBetweenWrites = initialVal
-	}()
-	db, m := createFakeDBAndMonitor(t)
-	defer db.Close()
-	defer m.Close()
-
-	// Initially everything is unblocked.
-	db.AddQuery(semiSyncWaitSessionsRead, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "0"))
-	// Add a universal insert query pattern that would block until we make it unblock.
-	ch := make(chan int)
-	db.AddQueryPatternWithCallback("^INSERT INTO.*", sqltypes.MakeTestResult(nil), func(s string) {
-		<-ch
-	})
-
-	// Check that the monitor thinks we are unblocked.
-	m.checkAndFixSemiSyncBlocked()
-	m.mu.Lock()
-	require.False(t, m.isBlocked)
-	m.mu.Unlock()
-
-	// Now we set the monitor to be blocked.
-	db.AddQuery(semiSyncWaitSessionsRead, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "2"))
-	m.checkAndFixSemiSyncBlocked()
-
-	m.mu.Lock()
-	require.True(t, m.isBlocked)
-	m.mu.Unlock()
-
-	// Checking again shouldn't make a difference.
-	m.checkAndFixSemiSyncBlocked()
-	m.mu.Lock()
-	require.True(t, m.isBlocked)
-	m.mu.Unlock()
-
-	// Meanwhile writes should have started and should be getting blocked.
-	require.Eventually(t, func() bool {
-		m.mu.Lock()
-		defer m.mu.Unlock()
-		return m.inProgressWriteCount >= 2
-	}, 2*time.Second, 100*time.Millisecond)
-
-	// Now we set the monitor to be unblocked.
-	db.AddQuery(semiSyncWaitSessionsRead, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "0"))
-	close(ch)
-	m.checkAndFixSemiSyncBlocked()
-
-	// We expect the writes to clear out and also the monitor should think its unblocked.
-	m.mu.Lock()
-	require.False(t, m.isBlocked)
-	m.mu.Unlock()
-	require.Eventually(t, func() bool {
-		m.mu.Lock()
-		defer m.mu.Unlock()
-		return m.inProgressWriteCount == 0 && m.isWriting == false
-	}, 2*time.Second, 100*time.Millisecond)
-}
-
-func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
-	initialVal := waitBetweenWrites
-	waitBetweenWrites = 250 * time.Millisecond
-	defer func() {
-		waitBetweenWrites = initialVal
-	}()
-=======
 	defer utils.EnsureNoLeaks(t)
->>>>>>> 413ff5db4c (Improve Semi-Sync Monitor Behavior to Prevent Errant ERS (#18884))
 	db, m := createFakeDBAndMonitor(t)
 	m.actionDelay = 10 * time.Millisecond
 	m.actionTimeout = 1 * time.Second
@@ -1023,10 +925,12 @@ func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
 	}()
 
 	// Start another go routine, also waiting for semi-sync being unblocked, but not using the cancellable context.
-	wg.Go(func() {
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
 		err := m.WaitUntilSemiSyncUnblocked(context.Background())
 		require.NoError(t, err)
-	})
+	}()
 
 	// Now we cancel the context. This should fail the first wait.
 	cancel()
@@ -1113,15 +1017,7 @@ func TestDeadlockOnClose(t *testing.T) {
 // TestSemiSyncMonitor tests the semi-sync monitor as a black box.
 // It only calls the exported methods to see they work as intended.
 func TestSemiSyncMonitor(t *testing.T) {
-<<<<<<< HEAD
-	initialVal := waitBetweenWrites
-	waitBetweenWrites = 250 * time.Millisecond
-	defer func() {
-		waitBetweenWrites = initialVal
-	}()
-=======
 	defer utils.EnsureNoLeaks(t)
->>>>>>> 413ff5db4c (Improve Semi-Sync Monitor Behavior to Prevent Errant ERS (#18884))
 	db := fakesqldb.New(t)
 	defer db.Close()
 	params := db.ConnParams()
@@ -1134,16 +1030,12 @@ func TestSemiSyncMonitor(t *testing.T) {
 		},
 	}
 	m := NewMonitor(config, exporter)
-<<<<<<< HEAD
-	defer m.Close()
-=======
 	m.actionDelay = 10 * time.Millisecond
 	m.actionTimeout = 1 * time.Second
 	defer func() {
 		m.Close()
 		waitUntilWritingStopped(t, m)
 	}()
->>>>>>> 413ff5db4c (Improve Semi-Sync Monitor Behavior to Prevent Errant ERS (#18884))
 
 	db.SetNeverFail(true)
 
@@ -1209,8 +1101,6 @@ func TestSemiSyncMonitor(t *testing.T) {
 		return !m.isWriting.Load()
 	}, 2*time.Second, 100*time.Millisecond)
 }
-<<<<<<< HEAD
-=======
 
 // waitUntilWritingStopped is a utility functions that waits until all the go-routines of a semi-sync monitor
 // have stopped. This is useful to prevent data-race errors. After a monitor has been closed, it stops writing
@@ -1236,4 +1126,3 @@ func waitUntilWritingStopped(t *testing.T, m *Monitor) {
 		}
 	}
 }
->>>>>>> 413ff5db4c (Improve Semi-Sync Monitor Behavior to Prevent Errant ERS (#18884))
