@@ -190,7 +190,7 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	tsv.rt = repltracker.NewReplTracker(tsv, alias)
 	tsv.lagThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias, tsv.rt.HeartbeatWriter(), tabletTypeFunc, throttlerPoolName)
 	tsv.qThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias, tsv.rt.HeartbeatWriter(), tabletTypeFunc, queryThrottlerPoolName)
-	tsv.queryThrottler = querythrottler.NewQueryThrottler(ctx, tsv.qThrottler, querythrottler.NewFileBasedConfigLoader(), tsv)
+	tsv.queryThrottler = querythrottler.NewQueryThrottler(ctx, tsv.qThrottler, querythrottler.NewFileBasedConfigLoader(), tsv, alias, srvTopoServer)
 
 	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, tsv.lagThrottler, alias.Cell)
 	tsv.tracker = schema.NewTracker(tsv, tsv.vstreamer, tsv.se)

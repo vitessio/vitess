@@ -57,7 +57,7 @@ type ThrottleDecision struct {
 // StrategyConfig defines the configuration interface that strategy implementations
 // must satisfy. This avoids circular imports by using a generic interface.
 type StrategyConfig interface {
-	GetStrategy() ThrottlingStrategy
+	GetStrategyName() ThrottlingStrategy
 }
 
 // Deps holds the dependencies required by strategy factories.
