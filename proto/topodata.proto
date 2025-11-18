@@ -28,6 +28,8 @@ package topodata;
 
 import "vtorcdata.proto";
 import "vttime.proto";
+import "querythrottler.proto";
+
 
 // KeyRange describes a range of sharding keys, when range-based
 // sharding is used.
@@ -305,6 +307,9 @@ message Keyspace {
 
   // Vtorc is the vtorc keyspace config/state for the keyspace.
   vtorcdata.Keyspace vtorc_state = 11;
+
+  // QueryThrottler provides a flexible throttling configuration that supports multiple throttling strategies beyond the standard tablet throttling.
+  querythrottler.Config incoming_query_throttler_config = 20000;
 }
 
 // ShardReplication describes the MySQL replication relationships
@@ -437,6 +442,10 @@ message SrvKeyspace {
   // shards and tablets. This is copied from the global keyspace
   // object.
   ThrottlerConfig throttler_config = 6;
+
+  // QueryThrottler provides a flexible throttling configuration that supports multiple throttling strategies beyond the standard tablet throttling.
+  querythrottler.Config incoming_query_throttler_config = 20000;
+
 }
 
 // CellInfo contains information about a cell. CellInfo objects are
