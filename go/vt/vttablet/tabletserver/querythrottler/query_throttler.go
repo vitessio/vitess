@@ -57,14 +57,12 @@ type QueryThrottler struct {
 	mu sync.RWMutex
 	// cfg holds the current configuration for the throttler.
 	cfg Config
-	// cfgLoader is responsible for loading the configuration.
-	cfgLoader ConfigLoader
 	// strategyHandlerInstance is the current throttling strategy handler instance
 	strategyHandlerInstance registry.ThrottlingStrategyHandler
 }
 
 // NewQueryThrottler creates a new  query throttler.
-func NewQueryThrottler(ctx context.Context, throttler *throttle.Throttler, cfgLoader ConfigLoader, env tabletenv.Env, alias *topodatapb.TabletAlias, srvTopoServer srvtopo.Server) *QueryThrottler {
+func NewQueryThrottler(ctx context.Context, throttler *throttle.Throttler, env tabletenv.Env, alias *topodatapb.TabletAlias, srvTopoServer srvtopo.Server) *QueryThrottler {
 	client := throttle.NewBackgroundClient(throttler, throttlerapp.QueryThrottlerName, base.UndefinedScope)
 
 	qt := &QueryThrottler{
@@ -74,7 +72,6 @@ func NewQueryThrottler(ctx context.Context, throttler *throttle.Throttler, cfgLo
 		cell:                    alias.GetCell(),
 		srvTopoServer:           srvTopoServer,
 		cfg:                     Config{},
-		cfgLoader:               cfgLoader,
 		strategyHandlerInstance: &registry.NoOpStrategy{}, // default strategy until config is loaded
 	}
 
