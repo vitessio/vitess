@@ -26,6 +26,8 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/srvtopo/fakesrvtopo"
+	"vitess.io/vitess/go/vt/topo"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler/registry"
 
@@ -36,43 +38,6 @@ import (
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 )
-
-func TestNewQueryThrottler_ConfigRefresh(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	config := &tabletenv.TabletConfig{
-		QueryThrottlerConfigRefreshInterval: 10 * time.Millisecond,
-	}
-	env := tabletenv.NewEnv(vtenv.NewTestEnv(), config, "TestThrottler")
-
-	throttler := &throttle.Throttler{} // use mock if needed
-	iqt := NewQueryThrottler(ctx, throttler, newFakeConfigLoader(Config{
-		Enabled:  true,
-		Strategy: registry.ThrottlingStrategyTabletThrottler,
-	}), env)
-
-	// Assert initial state (should be NoOpStrategy)
-	require.NotNil(t, iqt)
-	iqt.mu.RLock()
-	initialStrategy := iqt.strategy
-	iqt.mu.RUnlock()
-	require.IsType(t, &registry.NoOpStrategy{}, initialStrategy)
-
-	require.Eventually(t, func() bool {
-		iqt.mu.RLock()
-		defer iqt.mu.RUnlock()
-
-		// Assert updated cfg and strategy after config refresh
-		if !iqt.cfg.Enabled {
-			return false
-		}
-		if iqt.cfg.Strategy != registry.ThrottlingStrategyTabletThrottler {
-			return false
-		}
-		return true
-	}, 1*time.Second, 10*time.Millisecond, "Config should be refreshed and strategy should be updated")
-}
 
 func TestSelectThrottlingStrategy(t *testing.T) {
 	tests := []struct {
@@ -95,7 +60,7 @@ func TestSelectThrottlingStrategy(t *testing.T) {
 				QueryThrottlerConfigRefreshInterval: 10 * time.Millisecond,
 			}
 
-			strategy := selectThrottlingStrategy(Config{Enabled: true, Strategy: tt.giveThrottlingStrategy}, mockClient, config)
+			strategy := selectThrottlingStrategy(Config{Enabled: true, StrategyName: tt.giveThrottlingStrategy}, mockClient, config)
 
 			require.IsType(t, tt.expectedType, strategy)
 		})
@@ -115,19 +80,19 @@ func TestQueryThrottler_StrategyLifecycleManagement(t *testing.T) {
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), config, "TestThrottler")
 
 	iqt := NewQueryThrottler(ctx, throttler, newFakeConfigLoader(Config{
-		Enabled:  true,
-		Strategy: registry.ThrottlingStrategyTabletThrottler,
-	}), env)
+		Enabled:      true,
+		StrategyName: registry.ThrottlingStrategyTabletThrottler,
+	}), env, &topodatapb.TabletAlias{Cell: "test-cell", Uid: uint32(123)}, &fakesrvtopo.FakeSrvTopo{})
 
 	// Verify initial strategy was started (NoOpStrategy in this case)
-	require.NotNil(t, iqt.strategy)
+	require.NotNil(t, iqt.strategyHandlerInstance)
 
 	// Test Shutdown properly stops the strategy
 	iqt.Shutdown()
 
 	// After shutdown, the strategy should have been stopped
 	// In a real test, we would verify the strategy's Stop method was called
-	require.NotNil(t, iqt.strategy) // Strategy reference should still exist but be stopped
+	require.NotNil(t, iqt.strategyHandlerInstance) // Strategy reference should still exist but be stopped
 }
 
 // TestQueryThrottler_Shutdown tests the Shutdown method.
@@ -142,9 +107,9 @@ func TestQueryThrottler_Shutdown(t *testing.T) {
 
 	throttler := &throttle.Throttler{}
 	iqt := NewQueryThrottler(ctx, throttler, newFakeConfigLoader(Config{
-		Enabled:  false,
-		Strategy: registry.ThrottlingStrategyTabletThrottler,
-	}), env)
+		Enabled:      false,
+		StrategyName: registry.ThrottlingStrategyTabletThrottler,
+	}), env, &topodatapb.TabletAlias{Cell: "test-cell", Uid: uint32(123)}, &fakesrvtopo.FakeSrvTopo{})
 
 	// Should not panic when called multiple times
 	iqt.Shutdown()
@@ -152,7 +117,7 @@ func TestQueryThrottler_Shutdown(t *testing.T) {
 
 	// Should still be able to check the strategy reference
 	iqt.mu.RLock()
-	strategy := iqt.strategy
+	strategy := iqt.strategyHandlerInstance
 	iqt.mu.RUnlock()
 	require.NotNil(t, strategy)
 }
@@ -259,7 +224,7 @@ func TestIncomingQueryThrottler_DryRunMode(t *testing.T) {
 					Enabled: tt.enabled,
 					DryRun:  tt.dryRun,
 				},
-				strategy: mockStrategy,
+				strategyHandlerInstance: mockStrategy,
 			}
 
 			// Capture log output
@@ -450,6 +415,349 @@ func TestQueryThrottler_extractPriority(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := extractPriority(tt.options)
 			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// TestQueryThrottler_HandleConfigUpdate_ErrorHandling verifies callback behavior for different error types.
+func TestQueryThrottler_HandleConfigUpdate_ErrorHandling(t *testing.T) {
+	tests := []struct {
+		name           string
+		inputErr       error
+		expectedResult bool
+		description    string
+	}{
+		{
+			name:           "ContextCanceledError",
+			inputErr:       context.Canceled,
+			expectedResult: false,
+			description:    "callback should return false to stop watching on context cancellation",
+		},
+		{
+			name:           "TransientTopoError",
+			inputErr:       fmt.Errorf("transient network error"),
+			expectedResult: true,
+			description:    "callback should return true and continue watching on transient errors",
+		},
+		{
+			name:           "NoNodeError",
+			inputErr:       topo.NewError(topo.NoNode, "keyspace/test_keyspace"),
+			expectedResult: false,
+			description:    "callback should return false to stop watching when keyspace is deleted (NoNode)",
+		},
+		{
+			name:           "InterruptedError",
+			inputErr:       topo.NewError(topo.Interrupted, "watch interrupted"),
+			expectedResult: false,
+			description:    "callback should return false to stop watching on Interrupted error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			qt := &QueryThrottler{
+				ctx:                     ctx,
+				keyspace:                "test-keyspace",
+				cfg:                     Config{Enabled: true, StrategyName: registry.ThrottlingStrategyTabletThrottler},
+				strategyHandlerInstance: &registry.NoOpStrategy{},
+				tabletConfig:            &tabletenv.TabletConfig{},
+			}
+
+			// Create a valid SrvKeyspace matching the test setup (errors are checked before srvks is used)
+			srvks := createTestSrvKeyspace(true, registry.ThrottlingStrategyTabletThrottler, false)
+
+			result := qt.HandleConfigUpdate(srvks, tt.inputErr)
+
+			require.Equal(t, tt.expectedResult, result, tt.description)
+		})
+	}
+}
+
+// TestQueryThrottler_HandleConfigUpdate__ConfigExtraction verifies config is properly extracted from SrvKeyspace.
+func TestQueryThrottler_HandleConfigUpdate__ConfigExtraction(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	oldCfg := Config{Enabled: false, StrategyName: registry.ThrottlingStrategyTabletThrottler, DryRun: false}
+	oldStrategy := &registry.NoOpStrategy{}
+
+	qt := &QueryThrottler{
+		ctx:                     ctx,
+		cfg:                     oldCfg,
+		strategyHandlerInstance: oldStrategy,
+		tabletConfig:            &tabletenv.TabletConfig{},
+		throttleClient:          &throttle.Client{},
+	}
+
+	// Create SrvKeyspace with different config values
+	srvks := createTestSrvKeyspace(true, registry.ThrottlingStrategyTabletThrottler, true)
+
+	result := qt.HandleConfigUpdate(srvks, nil)
+
+	// Should return true to continue watching, config should be extracted from SrvKeyspace
+	require.True(t, result, "callback should return true and continue watching")
+
+	qt.mu.RLock()
+	require.True(t, qt.cfg.Enabled, "Enabled should be updated from SrvKeyspace")
+	require.True(t, qt.cfg.DryRun, "DryRun should be updated from SrvKeyspace")
+	require.Equal(t, registry.ThrottlingStrategyTabletThrottler, qt.cfg.StrategyName, "strategy should remain TabletThrottler")
+	qt.mu.RUnlock()
+}
+
+// TestQueryThrottler_HandleConfigUpdate__SuccessfulConfigUpdate tests successful config update when strategy doesn't change.
+func TestQueryThrottler_HandleConfigUpdate__SuccessfulConfigUpdate(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Use a mock strategy to track state changes
+	oldStrategy := &mockThrottlingStrategy{}
+
+	// Both initial and new config have the same strategy TYPE (no swap expected)
+	unchangedStrategyType := registry.ThrottlingStrategyTabletThrottler
+
+	qt := &QueryThrottler{
+		ctx:                     ctx,
+		cfg:                     Config{Enabled: true, StrategyName: unchangedStrategyType, DryRun: false},
+		strategyHandlerInstance: oldStrategy,
+		tabletConfig:            &tabletenv.TabletConfig{},
+	}
+
+	// Create SrvKeyspace with same strategy but DryRun changed
+	srvks := createTestSrvKeyspace(true, unchangedStrategyType, true)
+
+	result := qt.HandleConfigUpdate(srvks, nil)
+
+	require.True(t, result, "callback should return true")
+
+	qt.mu.RLock()
+	require.True(t, qt.cfg.DryRun, "DryRun config should be updated")
+	require.Equal(t, unchangedStrategyType, qt.cfg.GetStrategyName(), "strategy type should remain the same")
+	require.Equal(t, oldStrategy, qt.strategyHandlerInstance, "strategy instance should not change when type is same")
+	// Verify the old strategy was NOT stopped (no swap occurred)
+	require.False(t, oldStrategy.stopped, "old strategy should NOT be stopped when type doesn't change")
+	qt.mu.RUnlock()
+}
+
+// TestQueryThrottler_HandleConfigUpdate__StrategySwitch tests that strategy is properly switched when strategy type changes.
+func TestQueryThrottler_HandleConfigUpdate__StrategySwitch(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	oldStrategy := &mockThrottlingStrategy{}
+
+	qt := &QueryThrottler{
+		ctx:                     ctx,
+		cfg:                     Config{Enabled: true, StrategyName: registry.ThrottlingStrategyTabletThrottler},
+		strategyHandlerInstance: oldStrategy,
+		tabletConfig:            &tabletenv.TabletConfig{},
+		throttleClient:          &throttle.Client{},
+	}
+
+	srvks := createTestSrvKeyspace(true, registry.ThrottlingStrategyUnknown, false)
+
+	result := qt.HandleConfigUpdate(srvks, nil)
+
+	// Strategy should be switched
+	require.True(t, result, "callback should return true")
+
+	qt.mu.RLock()
+	require.Equal(t, registry.ThrottlingStrategyUnknown, qt.cfg.GetStrategyName(), "config strategy should be updated")
+	// Old strategy should have been stopped (mocked strategy tracks this)
+	require.True(t, oldStrategy.stopped, "old strategy should be stopped")
+	// New strategy should be different instance
+	newStrategyInstance := qt.strategyHandlerInstance
+	qt.mu.RUnlock()
+
+	require.NotEqual(t, fmt.Sprintf("%p", oldStrategy), fmt.Sprintf("%p", newStrategyInstance),
+		"strategy instance should be different after type change")
+}
+
+// TestQueryThrottler_HandleConfigUpdate__NoChange tests that nothing changes when the config is identical.
+func TestQueryThrottler_HandleConfigUpdate__NoChange(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	unchangedCfg := Config{Enabled: true, StrategyName: registry.ThrottlingStrategyTabletThrottler, DryRun: false}
+	oldStrategy := &registry.NoOpStrategy{}
+
+	qt := &QueryThrottler{
+		ctx:                     ctx,
+		cfg:                     unchangedCfg,
+		strategyHandlerInstance: oldStrategy,
+		tabletConfig:            &tabletenv.TabletConfig{},
+	}
+
+	// Create SrvKeyspace with identical config
+	srvks := createTestSrvKeyspace(true, registry.ThrottlingStrategyTabletThrottler, false)
+
+	result := qt.HandleConfigUpdate(srvks, nil)
+
+	// Config and strategy should remain same
+	require.True(t, result, "callback should return true")
+
+	qt.mu.RLock()
+	require.Equal(t, unchangedCfg, qt.cfg, "config should remain unchanged")
+	require.Equal(t, oldStrategy, qt.strategyHandlerInstance, "strategy should remain unchanged")
+	qt.mu.RUnlock()
+}
+
+// TestIsConfigUpdateRequired tests the isConfigUpdateRequired function.
+func TestIsConfigUpdateRequired(t *testing.T) {
+	tests := []struct {
+		name     string
+		oldCfg   Config
+		newCfg   Config
+		expected bool
+	}{
+		{
+			name: "No changes - configs identical",
+			oldCfg: Config{
+				Enabled:      true,
+				StrategyName: registry.ThrottlingStrategyTabletThrottler,
+				DryRun:       false,
+			},
+			newCfg: Config{
+				Enabled:      true,
+				StrategyName: registry.ThrottlingStrategyTabletThrottler,
+				DryRun:       false,
+			},
+			expected: false,
+		},
+		{
+			name: "Enabled changed from true to false",
+			oldCfg: Config{
+				Enabled:      true,
+				StrategyName: registry.ThrottlingStrategyTabletThrottler,
+				DryRun:       false,
+			},
+			newCfg: Config{
+				Enabled:      false,
+				StrategyName: registry.ThrottlingStrategyTabletThrottler,
+				DryRun:       false,
+			},
+			expected: true,
+		},
+		{
+			name: "Enabled changed from false to true",
+			oldCfg: Config{
+				Enabled:      false,
+				StrategyName: registry.ThrottlingStrategyTabletThrottler,
+				DryRun:       false,
+			},
+			newCfg: Config{
+				Enabled:      true,
+				StrategyName: registry.ThrottlingStrategyTabletThrottler,
+				DryRun:       false,
+			},
+			expected: true,
+		},
+		{
+			name: "DryRun changed from false to true",
+			oldCfg: Config{
+				Enabled:      true,
+				StrategyName: registry.ThrottlingStrategyTabletThrottler,
+				DryRun:       false,
+			},
+			newCfg: Config{
+				Enabled:      true,
+				StrategyName: registry.ThrottlingStrategyTabletThrottler,
+				DryRun:       true,
+			},
+			expected: true,
+		},
+		{
+			name: "DryRun changed from true to false",
+			oldCfg: Config{
+				Enabled:      true,
+				StrategyName: registry.ThrottlingStrategyTabletThrottler,
+				DryRun:       true,
+			},
+			newCfg: Config{
+				Enabled:      true,
+				StrategyName: registry.ThrottlingStrategyTabletThrottler,
+				DryRun:       false,
+			},
+			expected: true,
+		},
+		{
+			name: "Multiple fields changed - Enabled and DryRun",
+			oldCfg: Config{
+				Enabled:      true,
+				StrategyName: registry.ThrottlingStrategyTabletThrottler,
+				DryRun:       false,
+			},
+			newCfg: Config{
+				Enabled:      false,
+				StrategyName: registry.ThrottlingStrategyTabletThrottler,
+				DryRun:       true,
+			},
+			expected: true,
+		},
+		{
+			name: "Multiple fields changed - Enabled and StrategyName",
+			oldCfg: Config{
+				Enabled:      true,
+				StrategyName: registry.ThrottlingStrategyTabletThrottler,
+				DryRun:       false,
+			},
+			newCfg: Config{
+				Enabled:      false,
+				StrategyName: registry.ThrottlingStrategyUnknown,
+				DryRun:       false,
+			},
+			expected: true,
+		},
+		{
+			name: "Multiple fields changed - StrategyName and DryRun",
+			oldCfg: Config{
+				Enabled:      true,
+				StrategyName: registry.ThrottlingStrategyTabletThrottler,
+				DryRun:       false,
+			},
+			newCfg: Config{
+				Enabled:      true,
+				StrategyName: registry.ThrottlingStrategyUnknown,
+				DryRun:       true,
+			},
+			expected: true,
+		},
+		{
+			name: "All three fields changed",
+			oldCfg: Config{
+				Enabled:      true,
+				StrategyName: registry.ThrottlingStrategyTabletThrottler,
+				DryRun:       false,
+			},
+			newCfg: Config{
+				Enabled:      false,
+				StrategyName: registry.ThrottlingStrategyUnknown,
+				DryRun:       true,
+			},
+			expected: true,
+		},
+		{
+			name: "All fields false/empty - no change",
+			oldCfg: Config{
+				Enabled:      false,
+				StrategyName: "",
+				DryRun:       false,
+			},
+			newCfg: Config{
+				Enabled:      false,
+				StrategyName: "",
+				DryRun:       false,
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isConfigUpdateRequired(tt.oldCfg, tt.newCfg)
+			require.Equal(t, tt.expected, result)
 		})
 	}
 }
