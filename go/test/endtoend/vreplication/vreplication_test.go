@@ -831,16 +831,8 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		catchup(t, customerTab1, workflow, workflowType)
 		catchup(t, customerTab2, workflow, workflowType)
 
-		// Clean up chunk testing rows from source keyspace now that they've been copied
-		// This prevents them from being replicated to subsequent workflows
 		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 		defer vtgateConn.Close()
-		execVtgateQuery(t, vtgateConn, defaultSourceKs, "delete from customer where cid >= 50000 and cid < 50100")
-		waitForRowCount(t, vtgateConn, defaultSourceKs, "customer", 3)
-		// Wait for the deletes to replicate to target before subsequent tests check row counts
-		catchup(t, customerTab1, workflow, workflowType)
-		catchup(t, customerTab2, workflow, workflowType)
-		waitForRowCount(t, vtgateConn, defaultTargetKs, "customer", 3)
 
 		// The wait in the next code block which checks that customer.dec80 is updated, also confirms that the
 		// blob-related dmls we execute here are vreplicated.

@@ -49,6 +49,11 @@ func insertInitialData(t *testing.T) {
 		// Insert a large transaction to ensure VStream chunking is triggered with 1KB threshold
 		insertLargeTransactionForChunkTesting(t, vtgateConn, defaultSourceKs+":0", 50000)
 		log.Infof("Inserted large transaction for chunking tests")
+
+		// Clean up chunk testing rows immediately. VStream will still pick them up from the binlog
+		// during replication, but they won't pollute row count assertions in tests.
+		execVtgateQuery(t, vtgateConn, defaultSourceKs, "delete from customer where cid >= 50000 and cid < 50100")
+		log.Infof("Cleaned up chunk testing rows from source keyspace")
 	})
 }
 
