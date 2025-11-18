@@ -79,10 +79,7 @@ func TestQueryThrottler_StrategyLifecycleManagement(t *testing.T) {
 	}
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), config, "TestThrottler")
 
-	iqt := NewQueryThrottler(ctx, throttler, newFakeConfigLoader(Config{
-		Enabled:      true,
-		StrategyName: registry.ThrottlingStrategyTabletThrottler,
-	}), env, &topodatapb.TabletAlias{Cell: "test-cell", Uid: uint32(123)}, &fakesrvtopo.FakeSrvTopo{})
+	iqt := NewQueryThrottler(ctx, throttler, env, &topodatapb.TabletAlias{Cell: "test-cell", Uid: uint32(123)}, &fakesrvtopo.FakeSrvTopo{})
 
 	// Verify initial strategy was started (NoOpStrategy in this case)
 	require.NotNil(t, iqt.strategyHandlerInstance)
@@ -106,10 +103,7 @@ func TestQueryThrottler_Shutdown(t *testing.T) {
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), config, "TestThrottler")
 
 	throttler := &throttle.Throttler{}
-	iqt := NewQueryThrottler(ctx, throttler, newFakeConfigLoader(Config{
-		Enabled:      false,
-		StrategyName: registry.ThrottlingStrategyTabletThrottler,
-	}), env, &topodatapb.TabletAlias{Cell: "test-cell", Uid: uint32(123)}, &fakesrvtopo.FakeSrvTopo{})
+	iqt := NewQueryThrottler(ctx, throttler, env, &topodatapb.TabletAlias{Cell: "test-cell", Uid: uint32(123)}, &fakesrvtopo.FakeSrvTopo{})
 
 	// Should not panic when called multiple times
 	iqt.Shutdown()
@@ -266,38 +260,6 @@ func TestIncomingQueryThrottler_DryRunMode(t *testing.T) {
 			}
 		})
 	}
-}
-
-// mockThrottlingStrategy is a test strategy that allows us to control throttling decisions
-type mockThrottlingStrategy struct {
-	decision registry.ThrottleDecision
-	started  bool
-	stopped  bool
-}
-
-func (m *mockThrottlingStrategy) Evaluate(ctx context.Context, targetTabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, transactionID int64, attrs registry.QueryAttributes) registry.ThrottleDecision {
-	return m.decision
-}
-
-func (m *mockThrottlingStrategy) Start() {
-	m.started = true
-}
-
-func (m *mockThrottlingStrategy) Stop() {
-	m.stopped = true
-}
-
-func (m *mockThrottlingStrategy) GetStrategyName() string {
-	return "MockStrategy"
-}
-
-// testLogCapture captures log output for testing
-type testLogCapture struct {
-	logs []string
-}
-
-func (lc *testLogCapture) captureLog(msg string, args ...interface{}) {
-	lc.logs = append(lc.logs, fmt.Sprintf(msg, args...))
 }
 
 func TestQueryThrottler_extractWorkloadName(t *testing.T) {
