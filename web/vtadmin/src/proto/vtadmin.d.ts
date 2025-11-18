@@ -18944,8 +18944,8 @@ export namespace topodata {
         /** Keyspace vtorc_state */
         vtorc_state?: (vtorcdata.IKeyspace|null);
 
-        /** Keyspace incoming_query_throttler_config */
-        incoming_query_throttler_config?: (querythrottler.IConfig|null);
+        /** Keyspace query_throttler_config */
+        query_throttler_config?: (querythrottler.IConfig|null);
     }
 
     /** Represents a Keyspace. */
@@ -18978,8 +18978,8 @@ export namespace topodata {
         /** Keyspace vtorc_state. */
         public vtorc_state?: (vtorcdata.IKeyspace|null);
 
-        /** Keyspace incoming_query_throttler_config. */
-        public incoming_query_throttler_config?: (querythrottler.IConfig|null);
+        /** Keyspace query_throttler_config. */
+        public query_throttler_config?: (querythrottler.IConfig|null);
 
         /**
          * Creates a new Keyspace instance using the specified properties.
@@ -19938,8 +19938,8 @@ export namespace topodata {
         /** SrvKeyspace throttler_config */
         throttler_config?: (topodata.IThrottlerConfig|null);
 
-        /** SrvKeyspace incoming_query_throttler_config */
-        incoming_query_throttler_config?: (querythrottler.IConfig|null);
+        /** SrvKeyspace query_throttler_config */
+        query_throttler_config?: (querythrottler.IConfig|null);
     }
 
     /** Represents a SrvKeyspace. */
@@ -19957,8 +19957,8 @@ export namespace topodata {
         /** SrvKeyspace throttler_config. */
         public throttler_config?: (topodata.IThrottlerConfig|null);
 
-        /** SrvKeyspace incoming_query_throttler_config. */
-        public incoming_query_throttler_config?: (querythrottler.IConfig|null);
+        /** SrvKeyspace query_throttler_config. */
+        public query_throttler_config?: (querythrottler.IConfig|null);
 
         /**
          * Creates a new SrvKeyspace instance using the specified properties.
