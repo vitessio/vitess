@@ -76,7 +76,7 @@ type testConfig struct {
 	strategy ThrottlingStrategy
 }
 
-func (c testConfig) GetStrategy() ThrottlingStrategy {
+func (c testConfig) GetStrategyName() ThrottlingStrategy {
 	return c.strategy
 }
 
