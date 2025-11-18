@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/proto/querythrottler"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler/registry"
 )
