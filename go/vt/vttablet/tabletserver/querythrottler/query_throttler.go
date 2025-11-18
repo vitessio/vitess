@@ -21,6 +21,7 @@ import (
 	"errors"
 	"strconv"
 	"sync"
+	"sync/atomic"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -44,17 +45,19 @@ const (
 )
 
 type QueryThrottler struct {
-	ctx            context.Context
+	ctx                context.Context
+	cancelWatchContext context.CancelFunc
+
 	throttleClient *throttle.Client
 	tabletConfig   *tabletenv.TabletConfig
 
-	keyspace string
-	cell     string
-
-	// TODO(Siddharth) convert `srvtopo.Server` to a interface so that it can be mocked for testing.
+	keyspace      string
+	cell          string
 	srvTopoServer srvtopo.Server
 
-	mu sync.RWMutex
+	mu           sync.RWMutex
+	watchStarted atomic.Bool
+
 	// cfg holds the current configuration for the throttler.
 	cfg Config
 	// strategyHandlerInstance is the current throttling strategy handler instance
@@ -151,6 +154,59 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 
 	// Normal throttling: return an error to reject the query
 	return vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, decision.Message)
+}
+
+// startSrvKeyspaceWatch starts watching the SrvKeyspace for event-driven config updates.
+// This method performs two critical operations:
+//  1. Initial Configuration Load (with retry):
+//     Fetches the current SrvKeyspace configuration from the topology server using GetSrvKeyspace.
+//     This is essential for tablets starting up or restarting, as they need immediate access to
+//     throttling rules without waiting for a configuration change event.
+//  2. Watch Establishment:
+//     Starts a background goroutine that watches for future SrvKeyspace changes using WatchSrvKeyspace.
+//     This ensures the tablet receives real-time configuration updates throughout its lifecycle.
+//
+// Thread Safety: This method uses the watchStarted atomic flag to ensure it only runs once, even if called
+// concurrently. Only the first caller will actually start the watch; subsequent calls return early.
+func (qt *QueryThrottler) startSrvKeyspaceWatch() {
+	// Pre-flight validation: ensure required fields are set
+	if qt.srvTopoServer == nil || qt.keyspace == "" {
+		log.Errorf("QueryThrottler: cannot start SrvKeyspace watch, srvTopoServer=%v, keyspace=%s", qt.srvTopoServer != nil, qt.keyspace)
+		return
+	}
+
+	// Phase 1: Load initial configuration with retry logic
+	// This ensures tablets have the correct throttling config immediately after startup/restart.
+	// TODO(Siddharth) add retry for this initial load
+	srvKS, err := qt.srvTopoServer.GetSrvKeyspace(qt.ctx, qt.cell, qt.keyspace)
+	if err != nil {
+		log.Warningf("QueryThrottler: failed to load initial config for keyspace=%s (GetSrvKeyspace): %v", qt.keyspace, err)
+	}
+	if srvKS == nil {
+		log.Warningf("QueryThrottler: srv keyspace fetched is nil for keyspace=%s ", qt.keyspace)
+	}
+	qt.HandleConfigUpdate(srvKS, nil)
+
+	// Phase 2: Start the watch for future configuration updates
+	// Always start the watch, even if initial load failed, to enable recovery when config becomes available
+
+	// Only start the watch once (protected by atomic flag)
+	if !qt.watchStarted.CompareAndSwap(false, true) {
+		log.Infof("QueryThrottler: SrvKeyspace watch already started for keyspace=%s", qt.keyspace)
+		return
+	}
+	watchCtx, cancel := context.WithCancel(qt.ctx)
+	qt.cancelWatchContext = cancel
+
+	go func() {
+		// WatchSrvKeyspace will:
+		// 1. Provide the current value immediately (may duplicate our GetSrvKeyspace result, but deduped)
+		// 2. Stream future configuration updates via the callback
+		// 3. Automatically retry on transient errors (handled by resilient watcher)
+		qt.srvTopoServer.WatchSrvKeyspace(watchCtx, qt.cell, qt.keyspace, qt.HandleConfigUpdate)
+	}()
+
+	log.Infof("QueryThrottler: started event-driven watch for SrvKeyspace keyspace=%s cell=%s", qt.keyspace, qt.cell)
 }
 
 // extractWorkloadName extracts the workload name from ExecuteOptions.
