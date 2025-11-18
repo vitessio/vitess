@@ -18,6 +18,7 @@ package querythrottler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -397,7 +398,7 @@ func TestQueryThrottler_HandleConfigUpdate_ErrorHandling(t *testing.T) {
 		},
 		{
 			name:           "TransientTopoError",
-			inputErr:       fmt.Errorf("transient network error"),
+			inputErr:       errors.New("topo error: transient error"),
 			expectedResult: true,
 			description:    "callback should return true and continue watching on transient errors",
 		},
