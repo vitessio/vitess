@@ -837,6 +837,10 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		defer vtgateConn.Close()
 		execVtgateQuery(t, vtgateConn, defaultSourceKs, "delete from customer where cid >= 50000 and cid < 50100")
 		waitForRowCount(t, vtgateConn, defaultSourceKs, "customer", 3)
+		// Wait for the deletes to replicate to target before subsequent tests check row counts
+		catchup(t, customerTab1, workflow, workflowType)
+		catchup(t, customerTab2, workflow, workflowType)
+		waitForRowCount(t, vtgateConn, defaultTargetKs, "customer", 3)
 
 		// The wait in the next code block which checks that customer.dec80 is updated, also confirms that the
 		// blob-related dmls we execute here are vreplicated.
@@ -1026,10 +1030,6 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			found, err = checkIfTableExists(t, vc, "zone1-200", "customer")
 			assert.NoError(t, err, "Customer table not deleted from zone1-200")
 			require.True(t, found)
-
-			// Clean up chunk testing rows now that they've been copied and tested chunking
-			execVtgateQuery(t, vtgateConn, defaultTargetKs, "delete from customer where cid >= 50000 and cid < 50100")
-			waitForRowCount(t, vtgateConn, defaultTargetKs, "customer", 3)
 
 			insertQuery2 = "insert into customer(name, cid) values('tempCustomer8', 103)" // ID 103, hence due to reverse_bits in shard 80-
 			assertQueryDoesNotExecutesOnTablet(t, vtgateConn, productTab, defaultTargetKs, insertQuery2, matchInsertQuery2)
