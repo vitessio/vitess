@@ -209,7 +209,7 @@ func (m *Keyspace) CloneVT() *Keyspace {
 	r.ThrottlerConfig = m.ThrottlerConfig.CloneVT()
 	r.SidecarDbName = m.SidecarDbName
 	r.VtorcState = m.VtorcState.CloneVT()
-	r.IncomingQueryThrottlerConfig = m.IncomingQueryThrottlerConfig.CloneVT()
+	r.QueryThrottlerConfig = m.QueryThrottlerConfig.CloneVT()
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -435,7 +435,7 @@ func (m *SrvKeyspace) CloneVT() *SrvKeyspace {
 	}
 	r := new(SrvKeyspace)
 	r.ThrottlerConfig = m.ThrottlerConfig.CloneVT()
-	r.IncomingQueryThrottlerConfig = m.IncomingQueryThrottlerConfig.CloneVT()
+	r.QueryThrottlerConfig = m.QueryThrottlerConfig.CloneVT()
 	if rhs := m.Partitions; rhs != nil {
 		tmpContainer := make([]*SrvKeyspace_KeyspacePartition, len(rhs))
 		for k, v := range rhs {
@@ -1069,8 +1069,8 @@ func (m *Keyspace) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.IncomingQueryThrottlerConfig != nil {
-		size, err := m.IncomingQueryThrottlerConfig.MarshalToSizedBufferVT(dAtA[:i])
+	if m.QueryThrottlerConfig != nil {
+		size, err := m.QueryThrottlerConfig.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
 			return 0, err
 		}
@@ -1716,8 +1716,8 @@ func (m *SrvKeyspace) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.IncomingQueryThrottlerConfig != nil {
-		size, err := m.IncomingQueryThrottlerConfig.MarshalToSizedBufferVT(dAtA[:i])
+	if m.QueryThrottlerConfig != nil {
+		size, err := m.QueryThrottlerConfig.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
 			return 0, err
 		}
@@ -2221,8 +2221,8 @@ func (m *Keyspace) SizeVT() (n int) {
 		l = m.VtorcState.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
-	if m.IncomingQueryThrottlerConfig != nil {
-		l = m.IncomingQueryThrottlerConfig.SizeVT()
+	if m.QueryThrottlerConfig != nil {
+		l = m.QueryThrottlerConfig.SizeVT()
 		n += 3 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -2453,8 +2453,8 @@ func (m *SrvKeyspace) SizeVT() (n int) {
 		l = m.ThrottlerConfig.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
-	if m.IncomingQueryThrottlerConfig != nil {
-		l = m.IncomingQueryThrottlerConfig.SizeVT()
+	if m.QueryThrottlerConfig != nil {
+		l = m.QueryThrottlerConfig.SizeVT()
 		n += 3 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -4277,7 +4277,7 @@ func (m *Keyspace) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 20000:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field IncomingQueryThrottlerConfig", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field QueryThrottlerConfig", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -4304,10 +4304,10 @@ func (m *Keyspace) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.IncomingQueryThrottlerConfig == nil {
-				m.IncomingQueryThrottlerConfig = &querythrottler.Config{}
+			if m.QueryThrottlerConfig == nil {
+				m.QueryThrottlerConfig = &querythrottler.Config{}
 			}
-			if err := m.IncomingQueryThrottlerConfig.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+			if err := m.QueryThrottlerConfig.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
@@ -5839,7 +5839,7 @@ func (m *SrvKeyspace) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 20000:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field IncomingQueryThrottlerConfig", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field QueryThrottlerConfig", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -5866,10 +5866,10 @@ func (m *SrvKeyspace) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.IncomingQueryThrottlerConfig == nil {
-				m.IncomingQueryThrottlerConfig = &querythrottler.Config{}
+			if m.QueryThrottlerConfig == nil {
+				m.QueryThrottlerConfig = &querythrottler.Config{}
 			}
-			if err := m.IncomingQueryThrottlerConfig.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+			if err := m.QueryThrottlerConfig.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

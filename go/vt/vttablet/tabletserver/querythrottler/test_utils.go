@@ -37,7 +37,7 @@ func createTestSrvKeyspace(enabled bool, strategy registry.ThrottlingStrategy, d
 	}
 
 	return &topodatapb.SrvKeyspace{
-		IncomingQueryThrottlerConfig: &querythrottler.Config{
+		QueryThrottlerConfig: &querythrottler.Config{
 			Enabled:  enabled,
 			Strategy: protoStrategy,
 			DryRun:   dryRun,
