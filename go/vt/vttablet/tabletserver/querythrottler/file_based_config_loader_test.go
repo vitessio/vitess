@@ -54,8 +54,8 @@ func TestFileBasedConfigLoader_Load(t *testing.T) {
 				return json.Unmarshal(data, v)
 			},
 			expectedConfig: Config{
-				Enabled:  true,
-				Strategy: registry.ThrottlingStrategyTabletThrottler,
+				Enabled:      true,
+				StrategyName: registry.ThrottlingStrategyTabletThrottler,
 			},
 		},
 		{
@@ -69,8 +69,8 @@ func TestFileBasedConfigLoader_Load(t *testing.T) {
 				return json.Unmarshal(data, v)
 			},
 			expectedConfig: Config{
-				Enabled:  false,
-				Strategy: registry.ThrottlingStrategyTabletThrottler,
+				Enabled:      false,
+				StrategyName: registry.ThrottlingStrategyTabletThrottler,
 			},
 		},
 		{
@@ -97,9 +97,9 @@ func TestFileBasedConfigLoader_Load(t *testing.T) {
 				return json.Unmarshal(data, v)
 			},
 			expectedConfig: Config{
-				Enabled:  true,
-				Strategy: registry.ThrottlingStrategyTabletThrottler,
-				DryRun:   true,
+				Enabled:      true,
+				StrategyName: registry.ThrottlingStrategyTabletThrottler,
+				DryRun:       true,
 			},
 		},
 		{
@@ -152,8 +152,8 @@ func TestFileBasedConfigLoader_Load(t *testing.T) {
 				return json.Unmarshal(data, v)
 			},
 			expectedConfig: Config{
-				Enabled:  false,
-				Strategy: "",
+				Enabled:      false,
+				StrategyName: "",
 			},
 		},
 	}
