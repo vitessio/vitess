@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/constants/sidecar"
@@ -30,25 +31,36 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 const (
-	semiSyncWaitSessionsRead = "select variable_value from performance_schema.global_status where regexp_like(variable_name, 'Rpl_semi_sync_(source|master)_wait_sessions')"
-	semiSyncHeartbeatWrite   = "INSERT INTO %s.semisync_heartbeat (ts) VALUES (NOW())"
-	semiSyncHeartbeatClear   = "TRUNCATE TABLE %s.semisync_heartbeat"
-	maxWritesPermitted       = 15
-	clearTimerDuration       = 24 * time.Hour
+	// How many seconds we should wait for table/metadata locks.
+	// We do NOT want our TRUNCATE statement to block things indefinitely, and
+	// we do NOT want our INSERTs blocking indefinitely on any locks to appear
+	// as though they are blocking on a semi-sync ACK, which is what we really
+	// care about in the monitor as when we hit the limit of writers blocked
+	// on semi-sync ACKs we signal to VTOrc that we need help to unblock
+	// things and it will perform an ERS to do so.
+	// Note: this is something we are entirely fine being set in all of the
+	// monitor connection pool sessions, so we do not ever bother to set the
+	// session value back to the global default.
+	setLockWaitTimeoutQuery = "SET SESSION lock_wait_timeout=%d"
+
+	semiSyncStatsQuery     = "SELECT /*+ MAX_EXECUTION_TIME(%d) */ variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')"
+	semiSyncHeartbeatWrite = "INSERT INTO %s.semisync_heartbeat (ts) VALUES (NOW())"
+	semiSyncHeartbeatClear = "TRUNCATE TABLE %s.semisync_heartbeat"
+	maxWritesPermitted     = 15
+	clearTimerDuration     = 24 * time.Hour
 )
 
-var (
-	// waitBetweenWrites is the time to wait between consecutive writes.
-	// This is a variable instead of a constant only to be tweaked in tests.
-	waitBetweenWrites = 1 * time.Second
-)
+type semiSyncStats struct {
+	waitingSessions, ackedTrxs int64
+}
 
 // Monitor is a monitor that checks if the primary tablet
 // is blocked on a semi-sync ack from the replica.
@@ -77,7 +89,7 @@ type Monitor struct {
 	// isWriting stores if the monitor is currently writing to the DB.
 	// We don't want two different threads initiating writes, so we use this
 	// for synchronization.
-	isWriting bool
+	isWriting atomic.Bool
 	// inProgressWriteCount is the number of writes currently in progress.
 	// The writes from the monitor themselves might get blocked and hence a count for them is required.
 	// After enough writes are blocked, we want to notify VTOrc to run an ERS.
@@ -91,6 +103,11 @@ type Monitor struct {
 	// errorCount is the number of errors that the semi-sync monitor ran into.
 	// We ignore some of the errors, so the counter is a good way to track how many errors we have seen.
 	errorCount *stats.Counter
+
+	// actionDelay is the time to wait between various actions.
+	actionDelay time.Duration
+	// actionTimeout is when we should time out a given action.
+	actionTimeout time.Duration
 }
 
 // NewMonitor creates a new Monitor.
@@ -105,6 +122,8 @@ func NewMonitor(config *tabletenv.TabletConfig, exporter *servenv.Exporter) *Mon
 		errorCount:         exporter.NewCounter("SemiSyncMonitorErrorCount", "Number of errors encountered by the semi-sync monitor"),
 		appPool:            dbconnpool.NewConnectionPool("SemiSyncMonitorAppPool", exporter, maxWritesPermitted+5, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
 		waiters:            make([]chan struct{}, 0),
+		actionDelay:        config.SemiSyncMonitor.Interval / 10,
+		actionTimeout:      config.SemiSyncMonitor.Interval / 2,
 	}
 }
 
@@ -174,10 +193,8 @@ func (m *Monitor) Close() {
 // and manufactures a write to unblock the primary. This function is safe to
 // be called multiple times in parallel.
 func (m *Monitor) checkAndFixSemiSyncBlocked() {
-	// Check if semi-sync is blocked or not
-	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
-	defer cancel()
-	isBlocked, err := m.isSemiSyncBlocked(ctx)
+	// Check if semi-sync is blocked or not.
+	isBlocked, err := m.isSemiSyncBlocked()
 	if err != nil {
 		m.errorCount.Add(1)
 		// If we are unable to determine whether the primary is blocked or not,
@@ -197,7 +214,9 @@ func (m *Monitor) checkAndFixSemiSyncBlocked() {
 }
 
 // isSemiSyncBlocked checks if the primary is blocked on semi-sync.
-func (m *Monitor) isSemiSyncBlocked(ctx context.Context) (bool, error) {
+func (m *Monitor) isSemiSyncBlocked() (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), m.ticks.Interval())
+	defer cancel()
 	// Get a connection from the pool
 	conn, err := m.appPool.Get(ctx)
 	if err != nil {
@@ -205,23 +224,16 @@ func (m *Monitor) isSemiSyncBlocked(ctx context.Context) (bool, error) {
 	}
 	defer conn.Recycle()
 
-	// Execute the query to check if the primary is blocked on semi-sync.
-	res, err := conn.Conn.ExecuteFetch(semiSyncWaitSessionsRead, 1, false)
-	if err != nil {
+	stats, err := m.getSemiSyncStats(conn)
+	if err != nil || stats.waitingSessions == 0 {
 		return false, err
 	}
-	// If we have no rows, then the primary doesn't have semi-sync enabled.
-	// It then follows, that the primary isn't blocked :)
-	if len(res.Rows) == 0 {
-		return false, nil
+	time.Sleep(m.actionDelay)
+	followUpStats, err := m.getSemiSyncStats(conn)
+	if err != nil || followUpStats.waitingSessions == 0 || followUpStats.ackedTrxs > stats.ackedTrxs {
+		return false, err
 	}
-
-	// Read the status value and check if it is non-zero.
-	if len(res.Rows) != 1 || len(res.Rows[0]) != 1 {
-		return false, fmt.Errorf("unexpected number of rows received - %v", res.Rows)
-	}
-	value, err := res.Rows[0][0].ToCastInt64()
-	return value != 0, err
+	return true, nil
 }
 
 // isClosed returns if the monitor is currently closed or not.
@@ -272,25 +284,19 @@ func (m *Monitor) stillBlocked() bool {
 // checkAndSetIsWriting checks if the monitor is already writing to the DB.
 // If it is not, then it sets the isWriting field and signals the caller.
 func (m *Monitor) checkAndSetIsWriting() bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.isWriting {
-		return false
-	}
-	m.isWriting = true
-	return true
+	return m.isWriting.CompareAndSwap(false, true)
 }
 
 // clearIsWriting clears the isWriting field.
 func (m *Monitor) clearIsWriting() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.isWriting = false
+	m.isWriting.Store(false)
 }
 
 // startWrites starts writing to the DB.
 // It is re-entrant and will return if we are already writing.
 func (m *Monitor) startWrites() {
+	ctx, cancel := context.WithTimeout(context.Background(), m.ticks.Interval())
+	defer cancel()
 	// If we are already writing, then we can just return.
 	if !m.checkAndSetIsWriting() {
 		return
@@ -300,13 +306,27 @@ func (m *Monitor) startWrites() {
 
 	// Check if we need to continue writing or not.
 	for m.stillBlocked() {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			// We only need to do another write if there were no other successful
+			// writes and we're indeed still blocked.
+			blocked, err := m.isSemiSyncBlocked()
+			if err != nil {
+				return
+			}
+			if !blocked {
+				m.setIsBlocked(false)
+				return
+			}
+		}
 		// We do the writes in a go-routine because if the network disruption
 		// is somewhat long-lived, then the writes themselves can also block.
 		// By doing them in a go-routine we give the system more time to recover while
 		// exponentially backing off. We will not do more than maxWritesPermitted writes and once
 		// all maxWritesPermitted writes are blocked, we'll wait for VTOrc to run an ERS.
 		go m.write()
-		time.Sleep(waitBetweenWrites)
 	}
 }
 
@@ -330,7 +350,7 @@ func (m *Monitor) incrementWriteCount() bool {
 func (m *Monitor) AllWritesBlocked() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.isOpen && m.inProgressWriteCount == maxWritesPermitted
+	return m.isOpen && m.isBlocked && m.inProgressWriteCount == maxWritesPermitted
 }
 
 // decrementWriteCount decrements the write count.
@@ -343,13 +363,12 @@ func (m *Monitor) decrementWriteCount() {
 
 // write writes a heartbeat to unblock semi-sync being stuck.
 func (m *Monitor) write() {
-	shouldWrite := m.incrementWriteCount()
-	if !shouldWrite {
+	if shouldWrite := m.incrementWriteCount(); !shouldWrite {
 		return
 	}
 	defer m.decrementWriteCount()
 	// Get a connection from the pool
-	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), m.actionTimeout)
 	defer cancel()
 	conn, err := m.appPool.Get(ctx)
 	if err != nil {
@@ -357,7 +376,7 @@ func (m *Monitor) write() {
 		log.Errorf("SemiSync Monitor: failed to get a connection when writing to semisync_heartbeat table: %v", err)
 		return
 	}
-	_, err = conn.Conn.ExecuteFetch(m.bindSideCarDBName(semiSyncHeartbeatWrite), 0, false)
+	err = conn.Conn.ExecuteFetchMultiDrain(m.addLockWaitTimeout(m.bindSideCarDBName(semiSyncHeartbeatWrite)))
 	conn.Recycle()
 	if err != nil {
 		m.errorCount.Add(1)
@@ -388,14 +407,16 @@ func (m *Monitor) setIsBlocked(val bool) {
 // consumes too much space on the MySQL instance.
 func (m *Monitor) clearAllData() {
 	// Get a connection from the pool
-	conn, err := m.appPool.Get(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), m.actionTimeout)
+	defer cancel()
+	conn, err := m.appPool.Get(ctx)
 	if err != nil {
 		m.errorCount.Add(1)
 		log.Errorf("SemiSync Monitor: failed get a connection to clear semisync_heartbeat table: %v", err)
 		return
 	}
 	defer conn.Recycle()
-	_, err = conn.Conn.ExecuteFetch(m.bindSideCarDBName(semiSyncHeartbeatClear), 0, false)
+	_, _, err = conn.Conn.ExecuteFetchMulti(m.addLockWaitTimeout(m.bindSideCarDBName(semiSyncHeartbeatClear)), 0, false)
 	if err != nil {
 		m.errorCount.Add(1)
 		log.Errorf("SemiSync Monitor: failed to clear semisync_heartbeat table: %v", err)
@@ -415,4 +436,48 @@ func (m *Monitor) addWaiter() chan struct{} {
 // bindSideCarDBName binds the sidecar db name to the query.
 func (m *Monitor) bindSideCarDBName(query string) string {
 	return sqlparser.BuildParsedQuery(query, sidecar.GetIdentifier()).Query
+}
+
+func (m *Monitor) addLockWaitTimeout(query string) string {
+	timeoutQuery := fmt.Sprintf(setLockWaitTimeoutQuery, int(m.actionTimeout.Seconds()))
+	return timeoutQuery + ";" + query
+}
+
+func (m *Monitor) getSemiSyncStats(conn *dbconnpool.PooledDBConnection) (semiSyncStats, error) {
+	stats := semiSyncStats{}
+	// Execute the query to check if the primary is blocked on semi-sync.
+	query := fmt.Sprintf(semiSyncStatsQuery, m.actionTimeout.Milliseconds())
+	res, err := conn.Conn.ExecuteFetch(query, 2, false)
+	if err != nil {
+		return stats, err
+	}
+	// If we have no rows, then the primary doesn't have semi-sync enabled.
+	// It then follows, that the primary isn't blocked :)
+	if len(res.Rows) == 0 {
+		return stats, nil
+	}
+
+	// Read the status value and check if it is non-zero.
+	if len(res.Rows) != 2 {
+		return stats, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected number of rows received, expected 2 but got %d, for semi-sync stats query %s", len(res.Rows), query)
+	}
+	if len(res.Rows[0]) != 2 {
+		return stats, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected number of columns received, expected 2 but got %d, for semi-sync stats query %s", len(res.Rows[0]), query)
+	}
+	for i := range len(res.Rows) {
+		name := res.Rows[i][0].ToString()
+		value, err := res.Rows[i][1].ToCastInt64()
+		if err != nil {
+			return stats, vterrors.Wrapf(err, "unexpected results for semi-sync stats query %s: %v", query, res.Rows)
+		}
+		switch name {
+		case "Rpl_semi_sync_master_wait_sessions", "Rpl_semi_sync_source_wait_sessions":
+			stats.waitingSessions = value
+		case "Rpl_semi_sync_master_yes_tx", "Rpl_semi_sync_source_yes_tx":
+			stats.ackedTrxs = value
+		default:
+			return stats, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected results for semi-sync stats query %s: %v", query, res.Rows)
+		}
+	}
+	return stats, nil
 }
