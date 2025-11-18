@@ -288,7 +288,7 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 	}
 
 	// Get the query throttler configuration from the SrvKeyspace that the QueryThrottler uses to manage its throttling behavior.
-	iqtConfig := srvks.GetIncomingQueryThrottlerConfig()
+	iqtConfig := srvks.GetQueryThrottlerConfig()
 	newCfg := ConfigFromProto(iqtConfig)
 
 	// If the config is not changed, return early.
