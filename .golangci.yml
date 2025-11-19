@@ -10,7 +10,11 @@ linters:
     - errcheck
     - govet
     - ineffassign
+    - mirror
+    - nolintlint
+    - nosprintfhostport
     - perfsprint
+    - sqlclosecheck
     - staticcheck
     - whitespace
   settings:
@@ -139,9 +143,6 @@ linters:
           - errcheck
         path: ^go/mysql/
       - linters:
-          - revive
-        path: ^go/mysql/collations
-      - linters:
           - errcheck
         path: ^go/pools/.*_test.go
       - linters:
@@ -155,6 +156,8 @@ linters:
         path: ^go/stats/statsd/
       - linters:
           - errcheck
+          - nosprintfhostport
+          - sqlclosecheck
         path: ^go/test/
       - linters:
           - errcheck

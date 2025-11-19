@@ -42,7 +42,8 @@ import (
 
 // VDiff operation and table states:
 // pending/started/stopped/completed/error/unknown
-type VDiffState string //nolint
+type VDiffState string
+
 const (
 	PendingState    VDiffState = "pending"
 	StartedState    VDiffState = "started"
