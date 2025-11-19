@@ -872,10 +872,10 @@ func WaitForQueryWithStateInProcesslist(ctx context.Context, t *testing.T, table
 			if len(row) != 3 {
 				continue
 			}
-			if row[0].ToString() != "Query" {
+			if strings.EqualFold(row[0].ToString(), "Query") {
 				continue
 			}
-			if row[1].ToString() == state && row[2].ToString() == sql {
+			if strings.EqualFold(row[1].ToString(), state) && strings.EqualFold(row[2].ToString(), sql) {
 				return true
 			}
 		}
