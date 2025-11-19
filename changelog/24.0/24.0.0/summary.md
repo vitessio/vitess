@@ -13,8 +13,8 @@
 
 #### <a id="vtgate-new-default-legacy-replication-lag-algorithm"/>Deprecation of `--legacy-replication-lag-algorithm` flag</a>
 
-The VTGate flag `--legacy-replication-lag-algorithm` now defaults to `false`, disabling the legacy approach to handling replication lag.
+The VTGate flag `--legacy-replication-lag-algorithm` now defaults to `false`, disabling the legacy approach to handling replication lag by default.
 
 Instead, a simpler algorithm purely based on low lag, high lag and minimum number of tablets is used, which has proven to be more stable in many production environments. A detailed explanation of the two approaches [is explained in this code comment](https://github.com/vitessio/vitess/blob/main/go/vt/discovery/replicationlag.go#L125-L149).
 
-In v25 this flag will become deprecated and in the following release it will be removed. This deprecation is tracked in https://github.com/vitessio/vitess/issues/18914.
+In v25 this flag will become deprecated and in the following release it will be removed. In the meantime, the legacy behaviour can be used by setting `--legacy-replication-lag-algorithm=true`. This deprecation is tracked in https://github.com/vitessio/vitess/issues/18914.
