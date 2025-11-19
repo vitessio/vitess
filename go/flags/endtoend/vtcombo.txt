@@ -132,6 +132,7 @@ Flags:
       --external-topo-server                                             Should vtcombo use an external topology server instead of starting its own in-memory topology server. If true, vtcombo will use the flags defined in topo/server.go to open topo server
       --foreign-key-mode string                                          This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow (default "allow")
       --gate-query-cache-memory int                                      gate server query cache size in bytes, maximum amount of memory to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache. (default 33554432)
+      --gateway-initial-tablet-timeout duration                          At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type (default 30s)
       --gc-check-interval duration                                       Interval between garbage collection checks (default 1h0m0s)
       --gc-purge-check-interval duration                                 Interval between purge discovery checks (default 1m0s)
       --grpc-auth-mode string                                            Which auth plugin implementation to use (eg: static)
