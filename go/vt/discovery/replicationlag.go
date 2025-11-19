@@ -57,7 +57,7 @@ var (
 		"discovery_legacy_replication_lag_algorithm",
 		viperutil.Options[bool]{
 			FlagName: "legacy-replication-lag-algorithm",
-			Default:  true,
+			Default:  false,
 		},
 	)
 )
