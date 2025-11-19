@@ -628,6 +628,23 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		return nil, err
 	}
 
+	// `force` is true when `DemotePrimary` is called for `EmergencyReparentShard` or when a primary notices
+	// that a different tablet has been promoted to primary and demotes itself.
+	//
+	// In both cases, the reason for semi sync being blocked is very likely that there's no replica
+	// connected that can send semi-sync ACKs, so we need to disable semi-sync to enable read-only mode.
+	// And in either of these cases, it's almost guaranteed that no semi-sync enabled replica will connect
+	// to this tablet again.
+	//
+	// The only way for us to finish the demotion in this scenario is to disable semi-sync - otherwise
+	// enabling ``super_read_only` will end up waiting indefinitely for in-flight transactions
+	// to complete, which won't happen as they are waiting for semi-sync ACKs.
+	//
+	// By disabling semi-sync, we allow the blocking in-flight transactions to complete. Note that at this point,
+	// the query service is already disabled, so the original sessions that issued those writes
+	// will never have seen their transactions commit - they will already have received an error.
+	//
+	// The demoted primary will end up with errant GTIDs, but that's unavoidable in this scenario.
 	if force && isSemiSyncBlocked {
 		if tm.isPrimarySideSemiSyncEnabled(ctx) {
 			// Disable the primary side semi-sync to unblock the writes.
@@ -644,10 +661,22 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 			}()
 		}
 	} else {
-		// TODO: Shouldn't we better just fail here?
-
-		// Now we know no writes are in-flight and no new writes can occur.
-		// We just need to wait for no write being blocked on semi-sync ACKs.
+		// If `force` is false, we're demoting this primary as part of a `PlannedReparentShard` operation,
+		// but we might be blocked on semi-sync ACKs.
+		//
+		// If there's any in-flight transactions waiting for semi-sync ACKs,
+		// we won't be able to change the MySQL `super_read_only` because turning on
+		// read only mode requires all in-flight transactions to complete.
+		//
+		// So we're doing a last-ditch effort here trying to wait for in-flight transactions to complete.
+		// This will only be successful if at least one semi-sync enabled replica connects back to this primary
+		// and a new transaction commit unblocks the semi-sync wait.
+		//
+		// The scenario where this could happen is some sort of network hiccup during a
+		// `PlannedReparentShard` call, where the primary temporarily loses connectivity to
+		// all semi-sync enabled replicas.
+		//
+		// If we can't unblock within the context timeout, the `PlannedReparentShard` operation will fail.
 		err = tm.SemiSyncMonitor.WaitUntilSemiSyncUnblocked(ctx)
 		if err != nil {
 			return nil, err
