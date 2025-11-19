@@ -70,7 +70,7 @@ func registerReplicationFlags(fs *pflag.FlagSet) {
 	fs.Duration("discovery-low-replication-lag", lowReplicationLag.Default(), "Threshold below which replication lag is considered low enough to be healthy.")
 	fs.Duration("discovery-high-replication-lag-minimum-serving", highReplicationLagMinServing.Default(), "Threshold above which replication lag is considered too high when applying the min_number_serving_vttablets flag.")
 	fs.Int("min-number-serving-vttablets", minNumTablets.Default(), "The minimum number of vttablets for each replicating tablet_type (e.g. replica, rdonly) that will be continue to be used even with replication lag above discovery_low_replication_lag, but still below discovery_high_replication_lag_minimum_serving.")
-	fs.Bool("legacy-replication-lag-algorithm", legacyReplicationLagAlgorithm.Default(), "Use the legacy algorithm when selecting vttablets for serving.")
+	fs.Bool("legacy-replication-lag-algorithm", legacyReplicationLagAlgorithm.Default(), "(DEPRECATED) Use the legacy algorithm when selecting vttablets for serving.")
 
 	viperutil.BindFlags(fs,
 		lowReplicationLag,
