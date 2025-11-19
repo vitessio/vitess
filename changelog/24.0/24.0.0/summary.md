@@ -11,7 +11,7 @@
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
-#### <a id="vtgate-new-default-legacy-replication-lag-algorithm"/>Deprecation of `--legacy-replication-lag-algorithm` flag</a>
+#### <a id="vtgate-new-default-legacy-replication-lag-algorithm"/>New default for `--legacy-replication-lag-algorithm` flag</a>
 
 The VTGate flag `--legacy-replication-lag-algorithm` now defaults to `false`, disabling the legacy approach to handling replication lag by default.
 
