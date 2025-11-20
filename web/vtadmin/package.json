@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=22.13.0",
-    "npm": ">=10.9.2"
+    "node": ">=25.2.1",
+    "npm": ">=11.6.0"
   },
   "dependencies": {
     "@bugsnag/js": "^7.20.0",
@@ -90,7 +90,7 @@
     "i": "^0.3.7",
     "jsdom": "^21.1.1",
     "msw": "^2.5.2",
-    "npm": "^10.9.2",
+    "npm": "^11.6.0",
     "postcss": "^8.4.31",
     "prettier": "^2.2.1",
     "protobufjs-cli": "^1.1.3",

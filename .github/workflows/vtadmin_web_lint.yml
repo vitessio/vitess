@@ -40,7 +40,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           # node-version should match package.json
-          node-version: '22.13.1'
+          node-version: '25.2.1'
 
       - name: Install dependencies
         run: cd ./web/vtadmin && npm ci

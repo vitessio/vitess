@@ -2,8 +2,8 @@
 
 ## Prerequisites
 
-- [node](https://nodejs.org) >= 22.13.1 LTS
-- npm >= 10.9.2 (comes with node)
+- [node](https://nodejs.org) >= 25.2.1 LTS
+- npm >= 11.6.0 (comes with node)
 
 ## Available scripts
 
