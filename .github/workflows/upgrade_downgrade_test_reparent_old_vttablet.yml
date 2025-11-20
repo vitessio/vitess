@@ -70,13 +70,6 @@ jobs:
       if: steps.changes.outputs.end_to_end == 'true'
       uses: ./.github/actions/tune-os
 
-    - name: Set up Go
-      if: steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
-      with:
-        go-version-file: go.mod
-        cache: false
-
     - name: Set up python
       if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
@@ -97,9 +90,6 @@ jobs:
         sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
         
         sudo service etcd stop
-
-        # install JUnit report formatter
-        go install github.com/vitessio/go-junit-report@HEAD
 
     # Checkout to the last release of Vitess
     - name: Check out other version's code (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
