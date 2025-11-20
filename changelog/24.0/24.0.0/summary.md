@@ -4,10 +4,19 @@
 ### Table of Contents
 
 - **[Minor Changes](#minor-changes)**
+    - **[VTAdmin](#minor.change-vtadmin)**
+        - [Updated to node v25.2.1](#vtadmin-updated-node)
     - **[VTGate](#minor-changes-vtgate)**
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
 
 ## <a id="minor-changes"/>Minor Changes</a>
+
+### <a id="minor-changes-vtadmin"/>VTAdmin</a>
+
+#### <a id="vtadmin-updated-node"/>Updated to node v25.2.1</a>
+
+Building `vtadmin-web` now requires node >= v25.2.1 (LTS). Breaking changes from v22 to v25 can be found at https://nodejs.org/en/blog/release/v25.2.1 -- with no known issues that apply to VTAdmin.
+Full details on the node v25.2.1 release can be found at https://nodejs.org/en/blog/release/v25.2.1.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
