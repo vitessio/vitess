@@ -66,25 +66,26 @@ jobs:
             - 'bootstrap.sh'
             - '.github/workflows/upgrade_downgrade_test_query_serving_queries.yml'
 
-    - name: Set up Go
+    - name: Tune the OS
       if: steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
-      with:
-        go-version: 1.24.7
+      uses: ./.github/actions/tune-os
 
     - name: Set up python
       if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
-
-    - name: Tune the OS
-      if: steps.changes.outputs.end_to_end == 'true'
-      uses: ./.github/actions/tune-os
 
     - name: Setup MySQL
       if: steps.changes.outputs.end_to_end == 'true'
       uses: ./.github/actions/setup-mysql
       with:
         flavor: mysql-8.4
+
+    - name: Set up Go
+      if: steps.changes.outputs.end_to_end == 'true'
+      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      with:
+        go-version-file: go.mod
+        cache: false
 
     - name: Get base dependencies
       timeout-minutes: 10
@@ -123,6 +124,13 @@ jobs:
       with:
         ref: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
         persist-credentials: 'false'
+
+    - name: Set up Go
+      if: steps.changes.outputs.end_to_end == 'true'
+      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      with:
+        go-version-file: go.mod
+        cache: false
 
     - name: Get dependencies for the last release
       if: steps.changes.outputs.end_to_end == 'true'

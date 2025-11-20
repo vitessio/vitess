@@ -81,7 +81,7 @@ jobs:
         flavor: mysql-8.4
 
     - name: Set up Go
-      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
       with:
         go-version-file: go.mod
@@ -126,7 +126,7 @@ jobs:
         persist-credentials: 'false'
 
     - name: Set up Go
-      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
       with:
         go-version-file: go.mod
