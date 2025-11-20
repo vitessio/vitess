@@ -191,6 +191,7 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           args: --timeout 10m
+          install-mode: "goinstall"
           skip-cache: true
           version: v2.1.6
 
