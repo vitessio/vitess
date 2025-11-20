@@ -138,12 +138,12 @@ func NewGauge(name string, help string) *Gauge {
 
 // Set overwrites the current value.
 func (v *Gauge) Set(value int64) {
-	v.Counter.i.Store(value)
+	v.i.Store(value)
 }
 
 // Add adds the provided value to the Gauge.
 func (v *Gauge) Add(delta int64) {
-	v.Counter.i.Add(delta)
+	v.i.Add(delta)
 }
 
 // GaugeFunc is the same as CounterFunc but meant for gauges.

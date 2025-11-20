@@ -560,7 +560,7 @@ func (st *SemTable) CopySemanticInfo(from, to sqlparser.SQLNode) {
 func (st *SemTable) Cloned(from, to sqlparser.SQLNode) {
 	f, fromOK := from.(sqlparser.Expr)
 	t, toOK := to.(sqlparser.Expr)
-	if !(fromOK && toOK) {
+	if !fromOK || !toOK {
 		return
 	}
 	st.CopyDependencies(f, t)
