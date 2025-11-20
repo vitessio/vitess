@@ -64,7 +64,7 @@ jobs:
         if: steps.changes.outputs.end_to_end == 'true'
         run: |
           # Install everything we need, and configure
-          sudo apt-get install -y make
+          sudo apt-get install -y libatomic1 make
           go mod download
 
       # needed for vtctldclient
