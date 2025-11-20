@@ -193,6 +193,7 @@ jobs:
           args: --timeout 10m
           install-mode: "goinstall"
           skip-cache: true
+          working-directory: go
           version: v2.1.6
 
       - name: Run go mod tidy
