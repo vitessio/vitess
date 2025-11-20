@@ -198,6 +198,7 @@ jobs:
         if: steps.changes.outputs.go_files == 'true'
         uses: golangci/golangci-lint-action@v9
         with:
+          args: --timeout 10m
           version: v2.1.6
 
       - name: Run go mod tidy
