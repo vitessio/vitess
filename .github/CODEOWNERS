@@ -24,7 +24,7 @@ go.sum @harshit-gangal @mattlord @rohit-nayak-ps @systay @frouioui @timvaillanco
 /go/internal/flag @rohit-nayak-ps
 /go/mysql @harshit-gangal @systay @mattlord
 /go/pools @harshit-gangal
-/go/protoutil @mattlord
+/go/protoutil @mattlord @timvaillancourt
 /go/sqltypes @harshit-gangal @shlomi-noach
 /go/test/endtoend/onlineddl @rohit-nayak-ps @shlomi-noach
 /go/test/endtoend/messaging @mattlord @rohit-nayak-ps @derekperkins
@@ -41,7 +41,7 @@ go.sum @harshit-gangal @mattlord @rohit-nayak-ps @systay @frouioui @timvaillanco
 /go/vt/proto @harshit-gangal @mattlord
 /go/vt/proto/vtadmin @beingnoble03
 /go/vt/schema @mattlord @shlomi-noach
-/go/vt/servenv @dbussink
+/go/vt/servenv @dbussink @timvaillancourt
 /go/vt/schemadiff @shlomi-noach @mattlord
 /go/vt/sqlparser @harshit-gangal @systay
 /go/vt/srvtopo @mattlord @timvaillancourt

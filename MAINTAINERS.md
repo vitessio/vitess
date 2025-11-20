@@ -55,7 +55,7 @@ beingnoble03, rohit-nayak-ps
 ### Messaging
 derekperkins, mattlord
 
-### High-availability
+### High Availability
 mattlord, timvaillancourt
 
 ## Past Maintainers
