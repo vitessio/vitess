@@ -1,6 +1,7 @@
 bootstrap.sh @frouioui
-go.mod @harshit-gangal @mattlord @rohit-nayak-ps @systay @frouioui
-go.sum @harshit-gangal @mattlord @rohit-nayak-ps @systay @frouioui
+go.mod @harshit-gangal @mattlord @rohit-nayak-ps @systay @frouioui @timvaillancourt
+go.sum @harshit-gangal @mattlord @rohit-nayak-ps @systay @frouioui @timvaillancourt
+/.golangci.yml @timvaillancourt
 /.github/ @mattlord @rohit-nayak-ps @frouioui
 /.github/ISSUE_TEMPLATE/ @frouioui @mattlord
 /.github/workflows/ @frouioui @mattlord @rohit-nayak-ps
