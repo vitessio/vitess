@@ -51,7 +51,6 @@ func (v *Counter) Add(delta int64) {
 		logCounterNegative.Warningf("Adding a negative value to a counter, %v should be a gauge instead", v)
 	}
 	v.i.Add(delta)
-
 }
 
 // Set overwrites the current value.
