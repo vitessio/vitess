@@ -186,19 +186,12 @@ jobs:
           git status
           test -z "$(git diff-index --name-only HEAD --)" || exit 1
 
-      - name: Clean Env
-        if: steps.changes.outputs.go_files == 'true'
-        run: $(go env GOPATH)/bin/golangci-lint cache clean
-
-      - name: Print linter version
-        if: steps.changes.outputs.go_files == 'true'
-        run: $(go env GOPATH)/bin/golangci-lint --version
-
       - name: Run golangci-lint
         if: steps.changes.outputs.go_files == 'true'
         uses: golangci/golangci-lint-action@v9
         with:
           args: --timeout 10m
+          skip-cache: true
           version: v2.1.6
 
       - name: Run go mod tidy
