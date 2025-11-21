@@ -460,6 +460,13 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		defer connCountByTLSVer.Add(versionNoTLS, -1)
 	}
 
+	// If the username ends with `@<keyspace>:<shard>`, we need to extract the keyspace and shard information.
+	// TODO: Make this more robust, and maybe hide this behind a flag so that users can decide whether this should be supported.
+	if userParts := strings.SplitN(user, "@", 2); len(userParts) == 2 {
+		user = userParts[0]
+		c.schemaName = userParts[1]
+	}
+
 	// See what auth method the AuthServer wants to use for that user.
 	negotiatedAuthMethod, err := negotiateAuthMethod(c, l.authServer, user, clientAuthMethod)
 
