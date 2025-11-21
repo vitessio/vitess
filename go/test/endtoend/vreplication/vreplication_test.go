@@ -831,12 +831,11 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		catchup(t, customerTab1, workflow, workflowType)
 		catchup(t, customerTab2, workflow, workflowType)
 
-		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
-		defer vtgateConn.Close()
-
 		// The wait in the next code block which checks that customer.dec80 is updated, also confirms that the
 		// blob-related dmls we execute here are vreplicated.
 		insertIntoBlobTable(t)
+		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+		defer vtgateConn.Close()
 		// Confirm that the 0 scale decimal field, dec80, is replicated correctly
 		execVtgateQuery(t, vtgateConn, defaultSourceKs, "update customer set dec80 = 0")
 		execVtgateQuery(t, vtgateConn, defaultSourceKs, "update customer set blb = \"new blob data\" where cid=3")
