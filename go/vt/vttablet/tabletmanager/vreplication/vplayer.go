@@ -233,7 +233,7 @@ func (vp *vplayer) updateFKCheck(ctx context.Context, flags2 uint32) error {
 	if !mustUpdate {
 		return nil
 	}
-	dbForeignKeyChecksEnabled := !(flags2&NoForeignKeyCheckFlagBitmask == NoForeignKeyCheckFlagBitmask)
+	dbForeignKeyChecksEnabled := flags2&NoForeignKeyCheckFlagBitmask != NoForeignKeyCheckFlagBitmask
 
 	if vp.foreignKeyChecksStateInitialized /* already set earlier */ &&
 		dbForeignKeyChecksEnabled == vp.foreignKeyChecksEnabled /* no change in the state, no need to update */ {
@@ -577,7 +577,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 					// If the batch consists only of throttled heartbeat events then we cannot
 					// determine the actual lag, as the vstreamer is fully throttled, and we
 					// will estimate it after processing the batch.
-					if !(event.Type == binlogdatapb.VEventType_HEARTBEAT && event.Throttled) {
+					if event.Type != binlogdatapb.VEventType_HEARTBEAT || !event.Throttled {
 						vp.lastTimestampNs = event.Timestamp * 1e9
 						now := time.Now().UnixNano()
 						vp.timeOffsetNs = now - event.CurrentTime

@@ -77,8 +77,8 @@ func checkShard(t *testing.T, ctx context.Context, ts *topo.Server) {
 	if err != nil {
 		t.Fatalf("GetShard: %v", err)
 	}
-	if !proto.Equal(si.Shard.PrimaryAlias, other) {
-		t.Fatalf("shard.PrimaryAlias = %v, want %v", si.Shard.PrimaryAlias, other)
+	if !proto.Equal(si.PrimaryAlias, other) {
+		t.Fatalf("shard.PrimaryAlias = %v, want %v", si.PrimaryAlias, other)
 	}
 
 	// Test FindAllShardsInKeyspace.

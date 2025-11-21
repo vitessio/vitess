@@ -32,7 +32,7 @@ type MaxReplicationLagModuleConfig struct {
 }
 
 func (cfg MaxReplicationLagModuleConfig) Clone() MaxReplicationLagModuleConfig {
-	return MaxReplicationLagModuleConfig{cfg.Configuration.CloneVT()}
+	return MaxReplicationLagModuleConfig{cfg.CloneVT()}
 }
 
 // Most of the values are based on the assumption that vttablet is started

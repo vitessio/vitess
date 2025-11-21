@@ -207,7 +207,7 @@ func (m *MaxReplicationLagModule) applyLatestConfig() {
 func (m *MaxReplicationLagModule) getConfiguration() *throttlerdatapb.Configuration {
 	m.mutableConfigMu.Lock()
 	defer m.mutableConfigMu.Unlock()
-	return m.mutableConfig.Configuration.CloneVT()
+	return m.mutableConfig.CloneVT()
 }
 
 func (m *MaxReplicationLagModule) updateConfiguration(configuration *throttlerdatapb.Configuration, copyZeroValues bool) error {

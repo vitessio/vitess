@@ -327,7 +327,7 @@ func newFakeTopo(t *testing.T) *topo.Server {
 		require.NoError(t, err)
 
 		_, err = ts.UpdateShardFields(ctx, "test_keyspace", shard, func(si *topo.ShardInfo) error {
-			si.Shard.PrimaryAlias = tablet.Alias
+			si.PrimaryAlias = tablet.Alias
 			return nil
 		})
 		require.NoError(t, err)
@@ -351,7 +351,7 @@ func newFakeTopo(t *testing.T) *topo.Server {
 	require.NoError(t, err)
 
 	_, err = ts.UpdateShardFields(ctx, "unsharded_keyspace", "0", func(si *topo.ShardInfo) error {
-		si.Shard.PrimaryAlias = tablet.Alias
+		si.PrimaryAlias = tablet.Alias
 		return nil
 	})
 	require.NoError(t, err)
