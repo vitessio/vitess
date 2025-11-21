@@ -338,6 +338,13 @@ func (q *query) StreamHealth(request *querypb.StreamHealthRequest, stream querys
 	return vterrors.ToGRPC(err)
 }
 
+// DumpBinlog is part of the queryservice.QueryServer interface
+func (q *query) DumpBinlog(request *binlogdatapb.DumpBinlogRequest, stream queryservicepb.Query_DumpBinlogServer) (err error) {
+	defer q.server.HandlePanic(&err)
+	err = q.server.DumpBinlog(stream.Context(), request, stream.Send)
+	return vterrors.ToGRPC(err)
+}
+
 // VStream is part of the queryservice.QueryServer interface
 func (q *query) VStream(request *binlogdatapb.VStreamRequest, stream queryservicepb.Query_VStreamServer) (err error) {
 	defer q.server.HandlePanic(&err)

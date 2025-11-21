@@ -85,6 +85,8 @@ type QueryClient interface {
 	VStreamTables(ctx context.Context, in *binlogdata.VStreamTablesRequest, opts ...grpc.CallOption) (Query_VStreamTablesClient, error)
 	// VStreamResults streams results along with the gtid of the snapshot.
 	VStreamResults(ctx context.Context, in *binlogdata.VStreamResultsRequest, opts ...grpc.CallOption) (Query_VStreamResultsClient, error)
+	// DumpBinlog streams binlog data
+	DumpBinlog(ctx context.Context, in *binlogdata.DumpBinlogRequest, opts ...grpc.CallOption) (Query_DumpBinlogClient, error)
 	// GetSchema returns the schema information.
 	GetSchema(ctx context.Context, in *query.GetSchemaRequest, opts ...grpc.CallOption) (Query_GetSchemaClient, error)
 }
@@ -579,8 +581,40 @@ func (x *queryVStreamResultsClient) Recv() (*binlogdata.VStreamResultsResponse, 
 	return m, nil
 }
 
+func (c *queryClient) DumpBinlog(ctx context.Context, in *binlogdata.DumpBinlogRequest, opts ...grpc.CallOption) (Query_DumpBinlogClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Query_ServiceDesc.Streams[10], "/queryservice.Query/DumpBinlog", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &queryDumpBinlogClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Query_DumpBinlogClient interface {
+	Recv() (*binlogdata.DumpBinlogResponse, error)
+	grpc.ClientStream
+}
+
+type queryDumpBinlogClient struct {
+	grpc.ClientStream
+}
+
+func (x *queryDumpBinlogClient) Recv() (*binlogdata.DumpBinlogResponse, error) {
+	m := new(binlogdata.DumpBinlogResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func (c *queryClient) GetSchema(ctx context.Context, in *query.GetSchemaRequest, opts ...grpc.CallOption) (Query_GetSchemaClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Query_ServiceDesc.Streams[10], "/queryservice.Query/GetSchema", opts...)
+	stream, err := c.cc.NewStream(ctx, &Query_ServiceDesc.Streams[11], "/queryservice.Query/GetSchema", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -676,6 +710,8 @@ type QueryServer interface {
 	VStreamTables(*binlogdata.VStreamTablesRequest, Query_VStreamTablesServer) error
 	// VStreamResults streams results along with the gtid of the snapshot.
 	VStreamResults(*binlogdata.VStreamResultsRequest, Query_VStreamResultsServer) error
+	// DumpBinlog streams binlog data
+	DumpBinlog(*binlogdata.DumpBinlogRequest, Query_DumpBinlogServer) error
 	// GetSchema returns the schema information.
 	GetSchema(*query.GetSchemaRequest, Query_GetSchemaServer) error
 	mustEmbedUnimplementedQueryServer()
@@ -768,6 +804,9 @@ func (UnimplementedQueryServer) VStreamTables(*binlogdata.VStreamTablesRequest, 
 }
 func (UnimplementedQueryServer) VStreamResults(*binlogdata.VStreamResultsRequest, Query_VStreamResultsServer) error {
 	return status.Errorf(codes.Unimplemented, "method VStreamResults not implemented")
+}
+func (UnimplementedQueryServer) DumpBinlog(*binlogdata.DumpBinlogRequest, Query_DumpBinlogServer) error {
+	return status.Errorf(codes.Unimplemented, "method DumpBinlog not implemented")
 }
 func (UnimplementedQueryServer) GetSchema(*query.GetSchemaRequest, Query_GetSchemaServer) error {
 	return status.Errorf(codes.Unimplemented, "method GetSchema not implemented")
@@ -1319,6 +1358,27 @@ func (x *queryVStreamResultsServer) Send(m *binlogdata.VStreamResultsResponse) e
 	return x.ServerStream.SendMsg(m)
 }
 
+func _Query_DumpBinlog_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(binlogdata.DumpBinlogRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(QueryServer).DumpBinlog(m, &queryDumpBinlogServer{stream})
+}
+
+type Query_DumpBinlogServer interface {
+	Send(*binlogdata.DumpBinlogResponse) error
+	grpc.ServerStream
+}
+
+type queryDumpBinlogServer struct {
+	grpc.ServerStream
+}
+
+func (x *queryDumpBinlogServer) Send(m *binlogdata.DumpBinlogResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 func _Query_GetSchema_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(query.GetSchemaRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -1469,6 +1529,11 @@ var Query_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "VStreamResults",
 			Handler:       _Query_VStreamResults_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "DumpBinlog",
+			Handler:       _Query_DumpBinlog_Handler,
 			ServerStreams: true,
 		},
 		{

@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
 	"os"
@@ -32,9 +33,12 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
@@ -1332,6 +1336,58 @@ func (tsv *TabletServer) VStreamResults(ctx context.Context, target *querypb.Tar
 		return err
 	}
 	return tsv.vstreamer.StreamResults(ctx, query, send)
+}
+
+// DumpBinlog streams the binlog from the requested position.
+func (tsv *TabletServer) DumpBinlog(ctx context.Context, request *binlogdatapb.DumpBinlogRequest, send func(*binlogdatapb.DumpBinlogResponse) error) error {
+	if err := tsv.sm.VerifyTarget(ctx, request.Target); err != nil {
+		return err
+	}
+
+	pos, err := replication.DecodePosition(request.Gtid)
+	if err != nil {
+		return vterrors.Wrap(err, "could not decode position")
+	}
+
+	connector := tsv.Config().DB.FilteredWithDB()
+	conn, err := binlog.NewBinlogConnection(connector)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	// Tell the server that we understand the format of events
+	// that will be used if binlog_checksum is enabled on the server.
+	if _, err := conn.ExecuteFetch("SET @source_binlog_checksum = @@global.binlog_checksum, @master_binlog_checksum=@@global.binlog_checksum", 0, false); err != nil {
+		return fmt.Errorf("failed to set @source_binlog_checksum=@@global.binlog_checksum: %v", err)
+	}
+
+	err = conn.SendBinlogDumpCommand(conn.GetServerID(), "", pos)
+	if err != nil {
+		return fmt.Errorf("failed to send binlog dump command: %v", err)
+	}
+
+	// Start reading raw mysql packets and just forward them to the client.
+	for {
+		var resp binlogdatapb.DumpBinlogResponse
+		resp.Data, err = conn.ReadPacket()
+
+		log.Errorf("Received MySQL packet: %v", resp.Data)
+
+		ev := mysql.NewMysql56BinlogEventWithSemiSyncInfo(resp.Data[1:], false)
+		log.Errorf("IsValid: %v", ev.IsValid())
+
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return fmt.Errorf("error reading binlog event: %v", err)
+		}
+
+		if err = send(&resp); err != nil {
+			return fmt.Errorf("error sending binlog event: %v", err)
+		}
+	}
 }
 
 // ReserveBeginExecute implements the QueryService interface
