@@ -42,8 +42,7 @@ func (value StringListValue) Get() any {
 
 func parseListWithEscapes(v string, delimiter rune) (value []string) {
 	var escaped, lastWasDelimiter bool
-	var current []rune
-
+	current := make([]rune, 0, len(v))
 	for _, r := range v {
 		lastWasDelimiter = false
 		if !escaped {

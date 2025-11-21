@@ -231,9 +231,10 @@ func (tc *tableCollector) handleDefaultColumns(origTableInfo TableInfo) ([]strin
 	if !origTableInfo.authoritative() {
 		return nil, nil, vterrors.VT09015()
 	}
-	var colNames []string
-	var types []evalengine.Type
-	for _, column := range origTableInfo.getColumns(true /* ignoreInvisibleCol */) {
+	cols := origTableInfo.getColumns(true /* ignoreInvisibleCol */)
+	colNames := make([]string, 0, len(cols))
+	types := make([]evalengine.Type, 0, len(cols))
+	for _, column := range cols {
 		colNames = append(colNames, column.Name)
 		types = append(types, column.Type)
 	}
@@ -242,9 +243,9 @@ func (tc *tableCollector) handleDefaultColumns(origTableInfo TableInfo) ([]strin
 
 // handleInsertColumns have explicit column list on the insert statement and no column list on the row alias
 func (tc *tableCollector) handleInsertColumns(ins *sqlparser.Insert, origTableInfo TableInfo) ([]string, []evalengine.Type) {
-	var colNames []string
-	var types []evalengine.Type
 	origCols := origTableInfo.getColumns(false /* ignoreInvisbleCol */)
+	colNames := make([]string, 0, len(ins.Columns))
+	types := make([]evalengine.Type, 0, len(ins.Columns))
 for2:
 	for _, column := range ins.Columns {
 		colNames = append(colNames, column.String())
@@ -268,8 +269,8 @@ func (tc *tableCollector) handleRowAliasColumns(origTableInfo TableInfo, rowAlia
 	if len(rowAlias.Columns) != len(origCols) {
 		return nil, nil, vterrors.VT03033()
 	}
-	var colNames []string
-	var types []evalengine.Type
+	colNames := make([]string, 0, len(rowAlias.Columns))
+	types := make([]evalengine.Type, 0, len(rowAlias.Columns))
 	for idx, column := range rowAlias.Columns {
 		colNames = append(colNames, column.String())
 		types = append(types, origCols[idx].Type)

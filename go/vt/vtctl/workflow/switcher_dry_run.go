@@ -66,7 +66,7 @@ func (dr *switcherDryRun) deleteKeyspaceRoutingRules(ctx context.Context) error 
 }
 
 func (dr *switcherDryRun) mirrorTableTraffic(ctx context.Context, types []topodatapb.TabletType, percent float32) error {
-	var tabletTypes []string
+	tabletTypes := make([]string, 0, len(types))
 	for _, servedType := range types {
 		tabletTypes = append(tabletTypes, servedType.String())
 	}
@@ -77,7 +77,7 @@ func (dr *switcherDryRun) mirrorTableTraffic(ctx context.Context, types []topoda
 }
 
 func (dr *switcherDryRun) switchKeyspaceReads(ctx context.Context, types []topodatapb.TabletType) error {
-	var tabletTypes []string
+	tabletTypes := make([]string, 0, len(types))
 	for _, servedType := range types {
 		tabletTypes = append(tabletTypes, servedType.String())
 	}
@@ -113,7 +113,7 @@ func (dr *switcherDryRun) switchTableReads(ctx context.Context, cells []string, 
 	if direction == DirectionBackward {
 		ks = dr.ts.SourceKeyspaceName()
 	}
-	var tabletTypes []string
+	tabletTypes := make([]string, 0, len(servedTypes))
 	for _, servedType := range servedTypes {
 		tabletTypes = append(tabletTypes, servedType.String())
 	}
@@ -144,20 +144,18 @@ func (dr *switcherDryRun) allowTargetWrites(ctx context.Context) error {
 
 func (dr *switcherDryRun) changeRouting(ctx context.Context) error {
 	dr.drLog.Logf("Switch routing from keyspace %s to keyspace %s", dr.ts.SourceKeyspaceName(), dr.ts.TargetKeyspaceName())
-	var deleteLogs, addLogs []string
 	if dr.ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 		sort.Strings(dr.ts.Tables()) // For deterministic output
 		tables := strings.Join(dr.ts.Tables(), ",")
 		dr.drLog.Logf("Routing rules for tables [%s] will be updated", tables)
 		return nil
 	}
-	deleteLogs = nil
-	addLogs = nil
 	sources := maps.Values(dr.ts.Sources())
 	// Sort the slice for deterministic output.
 	sort.Slice(sources, func(i, j int) bool {
 		return sources[i].GetPrimary().Alias.Uid < sources[j].GetPrimary().Alias.Uid
 	})
+	deleteLogs := make([]string, 0, len(sources))
 	for _, source := range sources {
 		deleteLogs = append(deleteLogs, fmt.Sprintf("shard:%s;tablet:%d", source.GetShard().ShardName(), source.GetShard().PrimaryAlias.Uid))
 	}
@@ -166,6 +164,7 @@ func (dr *switcherDryRun) changeRouting(ctx context.Context) error {
 	sort.Slice(targets, func(i, j int) bool {
 		return targets[i].GetPrimary().Alias.Uid < targets[j].GetPrimary().Alias.Uid
 	})
+	addLogs := make([]string, 0, len(targets))
 	for _, target := range targets {
 		addLogs = append(addLogs, fmt.Sprintf("shard:%s;tablet:%d", target.GetShard().ShardName(), target.GetShard().PrimaryAlias.Uid))
 	}
