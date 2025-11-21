@@ -331,3 +331,10 @@ func TestDurabilityTest(t *testing.T) {
 		})
 	}
 }
+
+func TestHasSemiSync(t *testing.T) {
+	require.False(t, HasSemiSync(&durabilityNone{}))
+	require.False(t, HasSemiSync(&durabilityTest{}))
+	require.True(t, HasSemiSync(&durabilitySemiSync{}))
+	require.True(t, HasSemiSync(&durabilityCrossCell{}))
+}

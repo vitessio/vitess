@@ -32,16 +32,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/utils"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
-	"vitess.io/vitess/go/vt/vttablet/tabletconn"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/utils"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 )
 
 var (
@@ -843,6 +842,7 @@ func CheckReplicationStatus(ctx context.Context, t *testing.T, tablet *cluster.V
 	}
 }
 
+// WaitForTabletToBeServing waits for a tablet to reach a serving state.
 func WaitForTabletToBeServing(ctx context.Context, t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet, timeout time.Duration) {
 	vTablet, err := clusterInstance.VtctldClientProcess.GetTablet(tablet.Alias)
 	require.NoError(t, err)
@@ -862,4 +862,23 @@ func WaitForTabletToBeServing(ctx context.Context, t *testing.T, clusterInstance
 	if err != nil && !strings.Contains(err.Error(), "context canceled") {
 		t.Fatal(err.Error())
 	}
+}
+
+// WaitForQueryWithStateInProcesslist waits for a query to be present in the processlist with a specific state.
+func WaitForQueryWithStateInProcesslist(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, sql, state string, timeout time.Duration) {
+	require.Eventually(t, func() bool {
+		qr := RunSQL(ctx, t, "select Command, State, Info from information_schema.processlist", tablet)
+		for _, row := range qr.Rows {
+			if len(row) != 3 {
+				continue
+			}
+			if strings.EqualFold(row[0].ToString(), "Query") {
+				continue
+			}
+			if strings.EqualFold(row[1].ToString(), state) && strings.EqualFold(row[2].ToString(), sql) {
+				return true
+			}
+		}
+		return false
+	}, timeout, time.Second, "query with state not in processlist")
 }

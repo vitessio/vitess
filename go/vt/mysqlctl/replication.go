@@ -819,3 +819,30 @@ func (mysqld *Mysqld) SemiSyncExtensionLoaded(ctx context.Context) (mysql.SemiSy
 
 	return conn.Conn.SemiSyncExtensionLoaded()
 }
+
+func (mysqld *Mysqld) IsSemiSyncBlocked(ctx context.Context) (bool, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return false, err
+	}
+	defer conn.Recycle()
+
+	// Execute the query to check if the primary is blocked on semi-sync.
+	semiSyncWaitSessionsRead := "select variable_value from performance_schema.global_status where regexp_like(variable_name, 'Rpl_semi_sync_(source|master)_wait_sessions')"
+	res, err := conn.Conn.ExecuteFetch(semiSyncWaitSessionsRead, 1, false)
+	if err != nil {
+		return false, err
+	}
+	// If we have no rows, then the primary doesn't have semi-sync enabled.
+	// It then follows, that the primary isn't blocked :)
+	if len(res.Rows) == 0 {
+		return false, nil
+	}
+
+	// Read the status value and check if it is non-zero.
+	if len(res.Rows) != 1 || len(res.Rows[0]) != 1 {
+		return false, fmt.Errorf("unexpected number of rows received - %v", res.Rows)
+	}
+	value, err := res.Rows[0][0].ToCastInt64()
+	return value != 0, err
+}

@@ -554,7 +554,7 @@ func (fake *TabletManagerClient) ChangeType(ctx context.Context, tablet *topodat
 }
 
 // DemotePrimary is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+func (fake *TabletManagerClient) DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet, force bool) (*replicationdatapb.PrimaryStatus, error) {
 	if fake.DemotePrimaryResults == nil {
 		return nil, assert.AnError
 	}
