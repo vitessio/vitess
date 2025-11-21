@@ -64,19 +64,13 @@ jobs:
             - 'bootstrap.sh'
             - '.github/workflows/upgrade_downgrade_test_backups_e2e_next_release.yml'
 
-    - name: Set up Go
+    - name: Tune the OS
       if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
-      with:
-        go-version-file: go.mod
+      uses: ./.github/actions/tune-os
 
     - name: Set up python
       if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
-
-    - name: Tune the OS
-      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
-      uses: ./.github/actions/tune-os
 
     - name: Setup MySQL
       if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
@@ -95,11 +89,6 @@ jobs:
 
         sudo service etcd stop
 
-        go mod download
-
-        # install JUnit report formatter
-        go install github.com/vitessio/go-junit-report@HEAD
-
         wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get install -y gnupg2
         sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
@@ -114,6 +103,13 @@ jobs:
       with:
         ref: ${{ steps.output-next-release-ref.outputs.next_release_ref }}
         persist-credentials: 'false'
+
+    - name: Set up Go
+      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
+      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      with:
+        go-version-file: go.mod
+        cache: false
 
     - name: Get dependencies for the next release
       if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
@@ -136,6 +132,13 @@ jobs:
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         persist-credentials: 'false'
+
+    - name: Set up Go
+      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
+      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      with:
+        go-version-file: go.mod
+        cache: false
 
     - name: Get dependencies for this commit
       if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
