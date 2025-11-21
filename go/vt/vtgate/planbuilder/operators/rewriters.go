@@ -342,6 +342,13 @@ func topDown(
 		return newOp, anythingChanged
 	}
 
+	// If the rewriter replaced the operator with a different one, we need to re-visit
+	// the new operator to give it a chance to be processed
+	if anythingChanged.Changed() && newOp != root {
+		revisitedOp, revisitChanged := topDown(newOp, rootID, resolveID, rewriter, shouldVisit, isRoot)
+		return revisitedOp, anythingChanged.Merge(revisitChanged)
+	}
+
 	if anythingChanged.Changed() {
 		root = newOp
 	}
