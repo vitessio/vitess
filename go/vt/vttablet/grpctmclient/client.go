@@ -103,7 +103,13 @@ type tmc struct {
 	client tabletmanagerservicepb.TabletManagerClient
 }
 
-type addrTmcMap map[string]*tmc
+type tmcEntry struct {
+	once sync.Once
+	tmc  *tmc
+	err  error
+}
+
+type addrTmcMap map[string]*tmcEntry
 
 // grpcClient implements both dialer and poolDialer.
 type grpcClient struct {
@@ -220,30 +226,40 @@ func (client *grpcClient) dialDedicatedPool(ctx context.Context, dialPoolGroup D
 	}
 
 	client.dedicatedPoolMu.Lock()
-	defer client.dedicatedPoolMu.Unlock()
+
 	if client.rpcDialPoolMap == nil {
 		client.rpcDialPoolMap = make(map[DialPoolGroup]addrTmcMap)
 	}
 	if _, ok := client.rpcDialPoolMap[dialPoolGroup]; !ok {
 		client.rpcDialPoolMap[dialPoolGroup] = make(addrTmcMap)
 	}
+
 	m := client.rpcDialPoolMap[dialPoolGroup]
-	if _, ok := m[addr]; !ok {
-		tm, err := client.createTmc(ctx, addr, opt)
-		if err != nil {
-			return nil, nil, err
-		}
-		m[addr] = tm
+	entry, ok := m[addr]
+	if !ok {
+		entry = &tmcEntry{}
+		m[addr] = entry
 	}
+	client.dedicatedPoolMu.Unlock()
+
+	// Initialize connection exactly once, without holding the mutex
+	entry.once.Do(func() {
+		entry.tmc, entry.err = client.createTmc(ctx, addr, opt)
+	})
+
+	if entry.err != nil {
+		return nil, nil, entry.err
+	}
+
 	invalidator := func() {
 		client.dedicatedPoolMu.Lock()
 		defer client.dedicatedPoolMu.Unlock()
-		if tm := m[addr]; tm != nil && tm.cc != nil {
-			tm.cc.Close()
+		if entry.tmc != nil && entry.tmc.cc != nil {
+			entry.tmc.cc.Close()
 		}
 		delete(m, addr)
 	}
-	return m[addr].client, invalidator, nil
+	return entry.tmc.client, invalidator, nil
 }
 
 // Close is part of the tmclient.TabletManagerClient interface.
@@ -262,8 +278,8 @@ func (client *grpcClient) Close() {
 	client.dedicatedPoolMu.Lock()
 	for _, addrMap := range client.rpcDialPoolMap {
 		for _, tm := range addrMap {
-			if tm != nil && tm.cc != nil {
-				tm.cc.Close()
+			if tm != nil && tm.tmc.cc != nil {
+				tm.tmc.cc.Close()
 			}
 		}
 	}

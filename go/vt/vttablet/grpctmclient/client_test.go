@@ -65,11 +65,12 @@ func TestDialDedicatedPool(t *testing.T) {
 		assert.NotEmpty(t, rpcClient.rpcDialPoolMap[dialPoolGroupThrottler])
 		assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupVTOrc])
 
-		c := rpcClient.rpcDialPoolMap[dialPoolGroupThrottler][addr]
-		assert.NotNil(t, c)
-		assert.Contains(t, []connectivity.State{connectivity.Connecting, connectivity.TransientFailure}, c.cc.GetState())
+		entry := rpcClient.rpcDialPoolMap[dialPoolGroupThrottler][addr]
+		assert.NotNil(t, entry)
+		assert.NotNil(t, entry.tmc)
+		assert.Contains(t, []connectivity.State{connectivity.Connecting, connectivity.TransientFailure}, entry.tmc.cc.GetState())
 
-		cachedTmc = c
+		cachedTmc = entry.tmc
 	})
 
 	t.Run("CheckThrottler", func(t *testing.T) {
