@@ -20,8 +20,10 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
+	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -43,6 +45,15 @@ func insertInitialData(t *testing.T) {
 			`[[VARCHAR("Monoprice") VARCHAR("eléctronics")] [VARCHAR("newegg") VARCHAR("elec†ronics")]]`)
 
 		insertJSONValues(t)
+
+		// Insert a large transaction to ensure VStream chunking is triggered with 1KB threshold
+		insertLargeTransactionForChunkTesting(t, vtgateConn, defaultSourceKs+":0", 50000)
+		log.Infof("Inserted large transaction for chunking tests")
+
+		// Clean up chunk testing rows immediately. VStream will still pick them up from the binlog
+		// during replication, but they won't pollute row count assertions in tests.
+		execVtgateQuery(t, vtgateConn, defaultSourceKs, "delete from customer where cid >= 50000 and cid < 50100")
+		log.Infof("Cleaned up chunk testing rows from source keyspace")
 	})
 }
 
@@ -139,4 +150,24 @@ func insertIntoBlobTable(t *testing.T) {
 	for _, query := range blobTableQueries {
 		execVtgateQuery(t, vtgateConn, defaultSourceKs+":0", query)
 	}
+}
+
+// insertLargeTransactionForChunkTesting inserts a transaction with data large enough
+// to exceed the 1KB chunking threshold used in e2e tests. This ensures chunking is
+// actually triggered and tested across all VStream tests.
+// Inserts 15 rows of ~100 bytes each = ~1.5KB total transaction (exceeds 1KB threshold).
+// The customer.name column is varbinary(128), so we use 100 bytes to fit safely.
+// Each row has a unique name to allow unique index creation in tests.
+func insertLargeTransactionForChunkTesting(t *testing.T, vtgateConn *mysql.Conn, keyspace string, startID int) {
+	execVtgateQuery(t, vtgateConn, keyspace, "BEGIN")
+	for i := 0; i < 15; i++ {
+		// Create ~100 bytes of unique data per row (fits in varbinary(128) column)
+		// Format: "x" repeated 94 times + 6-character unique suffix (e.g., "_00000")
+		// This ensures each name is unique while maintaining the target size
+		largeData := strings.Repeat("x", 94) + fmt.Sprintf("_%05d", i)
+		query := fmt.Sprintf("INSERT INTO customer (cid, name) VALUES (%d, '%s')",
+			startID+i, largeData)
+		execVtgateQuery(t, vtgateConn, keyspace, query)
+	}
+	execVtgateQuery(t, vtgateConn, keyspace, "COMMIT")
 }
