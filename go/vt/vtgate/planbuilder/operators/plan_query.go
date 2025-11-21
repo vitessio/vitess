@@ -80,7 +80,9 @@ func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (resu
 	return op, nil
 }
 
-// checkSingleRouteError checks if the query has a NotSingleRouteErr and more than one route, and returns an error if it does
+// checkSingleRouteError validates single-route requirements for queries.
+// Window functions and UNION ALL queries receive special handling to allow
+// multi-shard operations with proper validation.
 func checkSingleRouteError(ctx *plancontext.PlanningContext, op Operator) error {
 	if ctx.SemTable.NotSingleRouteErr == nil && ctx.SemTable.NotSingleShardErr == nil {
 		return nil
@@ -89,14 +91,20 @@ func checkSingleRouteError(ctx *plancontext.PlanningContext, op Operator) error 
 	if err == nil {
 		err = ctx.SemTable.NotSingleShardErr
 	}
-	routes := 0
-	var singleShard bool
+
+	var routes []*Route
+	var hasUnion bool
+	allSingleShard := true
+
 	visitF := func(op Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
 		switch op := op.(type) {
 		case *Route:
-
-			routes++
-			singleShard = op.IsSingleShard()
+			routes = append(routes, op)
+			if !op.IsSingleShard() {
+				allSingleShard = false
+			}
+		case *Union:
+			hasUnion = true
 		}
 		return op, NoRewrite
 	}
@@ -104,11 +112,21 @@ func checkSingleRouteError(ctx *plancontext.PlanningContext, op Operator) error 
 	// we'll walk the tree and count the number of routes
 	TopDown(op, TableID, visitF, stopAtRoute)
 
-	if routes > 1 {
+	// Reject multiple routes for non-UNION queries early
+	if len(routes) > 1 && !hasUnion {
 		return err
 	}
 
-	if ctx.SemTable.NotSingleShardErr != nil && !singleShard {
+	hasWindowFuncs := hasWindowFunctions(ctx)
+	hasShardingViolation := ctx.SemTable.NotSingleShardErr != nil && !allSingleShard
+
+	// Handle window functions with special validation
+	if hasWindowFuncs && (hasUnion || hasShardingViolation) {
+		return validateWindowFunctionsForMultiShard(ctx, op, routes)
+	}
+
+	// Handle single-shard violations for non-window function queries
+	if ctx.SemTable.NotSingleShardErr != nil && !allSingleShard {
 		return ctx.SemTable.NotSingleShardErr
 	}
 	return nil
