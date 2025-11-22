@@ -45,7 +45,7 @@ const (
 )
 
 const (
-	GCTableNameExpression string = `^_vt_(HOLD|PURGE|EVAC|DROP)_([0-f]{32})_([0-9]{14})$`
+	GCTableNameExpression string = `^_vt_(HOLD|PURGE|EVAC|DROP|hold|purge|evac|drop)_([0-f]{32})_([0-9]{14})$`
 	// NewGCTableNameExpression parses new intrnal table name format, e.g. _vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_
 	NewGCTableNameExpression string = `^_vt_(hld|prg|evc|drp)_([0-f]{32})_([0-9]{14})_$`
 )
@@ -55,14 +55,18 @@ var (
 	gcTableNameRegexp = regexp.MustCompile(GCTableNameExpression)
 
 	gcStates = map[string]TableGCState{
-		string(HoldTableGCState):  HoldTableGCState,
+		string(HoldTableGCState):                  HoldTableGCState,
+		strings.ToLower(string(HoldTableGCState)): HoldTableGCState,
 		"hld":                     HoldTableGCState,
 		string(PurgeTableGCState): PurgeTableGCState,
-		"prg":                     PurgeTableGCState,
-		string(EvacTableGCState):  EvacTableGCState,
-		"evc":                     EvacTableGCState,
-		string(DropTableGCState):  DropTableGCState,
-		"drp":                     DropTableGCState,
+		strings.ToLower(string(PurgeTableGCState)): PurgeTableGCState,
+		"prg":                    PurgeTableGCState,
+		string(EvacTableGCState): EvacTableGCState,
+		strings.ToLower(string(EvacTableGCState)): EvacTableGCState,
+		"evc":                    EvacTableGCState,
+		string(DropTableGCState): DropTableGCState,
+		strings.ToLower(string(DropTableGCState)): DropTableGCState,
+		"drp": DropTableGCState,
 	}
 )
 
