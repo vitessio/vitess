@@ -109,6 +109,8 @@ func buildDDLPlans(ctx context.Context, sql string, ddlStatement sqlparser.DDLSt
 		if err != nil {
 			return nil, nil, err
 		}
+		// Remove keyspace qualifiers from all table references (including foreign key references).
+		sqlparser.RemoveSpecificKeyspace(ddlStatement, keyspace.Name)
 		err = checkFKError(vschema, ddlStatement, keyspace)
 	case *sqlparser.CreateView:
 		destination, keyspace, err = buildCreateViewCommon(ctx, vschema, reservedVars, cfg, ddl.Select, ddl)
