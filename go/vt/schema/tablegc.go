@@ -52,7 +52,7 @@ func (s TableGCState) TableHint() InternalTableHint {
 }
 
 const (
-	OldGCTableNameExpression string = `^_vt_(HOLD|PURGE|EVAC|DROP)_([0-f]{32})_([0-9]{14})$`
+	OldGCTableNameExpression string = `^_vt_(HOLD|PURGE|EVAC|DROP|hold|purge|evac|drop)_([0-f]{32})_([0-9]{14})$`
 	// GCTableNameExpression parses new internal table name format, e.g. _vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_
 	GCTableNameExpression string = `^_vt_(hld|prg|evc|drp)_([0-f]{32})_([0-9]{14})_$`
 )
@@ -72,6 +72,7 @@ func init() {
 	gcStatesTableHints[DropTableGCState] = InternalTableGCDropHint
 	for _, gcState := range []TableGCState{HoldTableGCState, PurgeTableGCState, EvacTableGCState, DropTableGCState} {
 		gcStates[string(gcState)] = gcState
+		gcStates[strings.ToLower(string(gcState))] = gcState
 		gcStates[gcState.TableHint().String()] = gcState
 	}
 }

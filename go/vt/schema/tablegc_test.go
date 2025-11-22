@@ -65,6 +65,11 @@ func TestIsGCTableName(t *testing.T) {
 			"_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
 			"_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
 			"_vt_drp_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+			// Test lowercase variants for lower_case_table_names=1 compatibility
+			"_vt_drop_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+			"_vt_hold_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+			"_vt_purge_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+			"_vt_evac_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
 		}
 		for _, tableName := range names {
 			t.Run(tableName, func(t *testing.T) {
@@ -182,6 +187,31 @@ func TestAnalyzeGCTableName(t *testing.T) {
 		{
 			tableName: "_vt_xyz_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
 			isGC:      false,
+		},
+		// Test lowercase variants for lower_case_table_names=1 compatibility
+		{
+			tableName: "_vt_drop_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+			state:     DropTableGCState,
+			t:         baseTime,
+			isGC:      true,
+		},
+		{
+			tableName: "_vt_hold_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+			state:     HoldTableGCState,
+			t:         baseTime,
+			isGC:      true,
+		},
+		{
+			tableName: "_vt_purge_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+			state:     PurgeTableGCState,
+			t:         baseTime,
+			isGC:      true,
+		},
+		{
+			tableName: "_vt_evac_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+			state:     EvacTableGCState,
+			t:         baseTime,
+			isGC:      true,
 		},
 	}
 	for _, ts := range tt {
