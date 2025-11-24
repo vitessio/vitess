@@ -19,7 +19,6 @@ package grpcvtgateconn
 
 import (
 	"context"
-	"time"
 
 	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
@@ -118,7 +117,6 @@ func (conn *vtgateConn) Execute(
 	bindVars map[string]*querypb.BindVariable,
 	prepared bool,
 ) (*vtgatepb.Session, *sqltypes.Result, error) {
-	time.Sleep(500 * time.Microsecond)
 	request := &vtgatepb.ExecuteRequest{
 		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		Session:  session,
@@ -139,7 +137,6 @@ func (conn *vtgateConn) Execute(
 }
 
 func (conn *vtgateConn) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, queryList []string, bindVarsList []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
-	time.Sleep(500 * time.Microsecond)
 	queries := make([]*querypb.BoundQuery, len(queryList))
 	for i, query := range queryList {
 		bq := &querypb.BoundQuery{Sql: query}
@@ -189,7 +186,6 @@ func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
 }
 
 func (conn *vtgateConn) StreamExecute(ctx context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable, processResponse func(response *vtgatepb.StreamExecuteResponse)) (sqltypes.ResultStream, error) {
-	time.Sleep(500 * time.Microsecond)
 	req := &vtgatepb.StreamExecuteRequest{
 		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		Query: &querypb.BoundQuery{
@@ -216,7 +212,6 @@ func (conn *vtgateConn) StreamExecute(ctx context.Context, session *vtgatepb.Ses
 
 // ExecuteMulti executes multiple non-streaming queries.
 func (conn *vtgateConn) ExecuteMulti(ctx context.Context, session *vtgatepb.Session, sqlString string) (newSession *vtgatepb.Session, qrs []*sqltypes.Result, err error) {
-	time.Sleep(500 * time.Microsecond)
 	request := &vtgatepb.ExecuteMultiRequest{
 		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		Session:  session,
@@ -279,7 +274,6 @@ func (conn *vtgateConn) StreamExecuteMulti(ctx context.Context, session *vtgatep
 }
 
 func (conn *vtgateConn) Prepare(ctx context.Context, session *vtgatepb.Session, query string) (*vtgatepb.Session, []*querypb.Field, uint16, error) {
-	time.Sleep(500 * time.Microsecond)
 	request := &vtgatepb.PrepareRequest{
 		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		Session:  session,
@@ -326,7 +320,6 @@ func (a *vstreamAdapter) Recv() ([]*binlogdatapb.VEvent, error) {
 
 func (conn *vtgateConn) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid,
 	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags) (vtgateconn.VStreamReader, error) {
-	time.Sleep(500 * time.Microsecond)
 	req := &vtgatepb.VStreamRequest{
 		CallerId:   callerid.EffectiveCallerIDFromContext(ctx),
 		TabletType: tabletType,
