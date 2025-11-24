@@ -24,7 +24,7 @@
 source build.env
 
 # Use this to debug issues. It will print the commands as they run
-# set -x
+set -x
 shopt -s expand_aliases
 alias vtctlclient="vtctlclient --server=localhost:15999"
 alias vtctldclient="vtctldclient --server=localhost:15999"

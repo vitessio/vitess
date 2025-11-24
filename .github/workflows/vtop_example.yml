@@ -14,7 +14,7 @@ concurrency:
 jobs:
   build:
     name: VTop Example
-    runs-on: oracle-vm-32cpu-128gb-x86-64
+    runs-on: oracle-vm-8cpu-32gb-x86-64
 
     steps:
       - name: Skip CI
@@ -59,6 +59,12 @@ jobs:
       - name: Tune the OS
         if: steps.changes.outputs.end_to_end == 'true'
         uses: ./.github/actions/tune-os
+
+      - name: Setup MySQL
+        if: steps.changes.outputs.end_to_end == 'true'
+        uses: ./.github/actions/setup-mysql
+        with:
+          flavor: mysql-8.4
 
       - name: Get dependencies
         if: steps.changes.outputs.end_to_end == 'true'
