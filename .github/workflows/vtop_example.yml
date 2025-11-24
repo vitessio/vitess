@@ -14,7 +14,7 @@ concurrency:
 jobs:
   build:
     name: VTop Example
-    runs-on: oracle-vm-16cpu-64gb-x86-64
+    runs-on: oracle-vm-32cpu-128gb-x86-64
 
     steps:
       - name: Skip CI
