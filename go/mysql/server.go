@@ -125,7 +125,7 @@ type Handler interface {
 	ComBinlogDump(c *Conn, logFile string, binlogPos uint32) error
 
 	// ComBinlogDumpGTID is called when a connection receives a ComBinlogDumpGTID request
-	ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error
+	ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet, nonBlock bool) error
 
 	// WarningCount is called at the end of each query to obtain
 	// the value to be returned to the client in the EOF packet.
@@ -458,6 +458,13 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		}
 		connCountByTLSVer.Add(versionNoTLS, 1)
 		defer connCountByTLSVer.Add(versionNoTLS, -1)
+	}
+
+	// If the username ends with `@<keyspace>:<shard>`, we need to extract the keyspace and shard information.
+	// TODO: Make this more robust, and maybe hide this behind a flag so that users can decide whether this should be supported.
+	if userParts := strings.SplitN(user, "@", 2); len(userParts) == 2 {
+		user = userParts[0]
+		c.schemaName = userParts[1]
 	}
 
 	// See what auth method the AuthServer wants to use for that user.

@@ -856,6 +856,42 @@ func (conn *gRPCQueryClient) VStreamResults(ctx context.Context, target *querypb
 	}
 }
 
+// BinlogDump streams data from the binlog.
+func (conn *gRPCQueryClient) DumpBinlog(ctx context.Context, request *binlogdatapb.DumpBinlogRequest, send func(*binlogdatapb.DumpBinlogResponse) error) error {
+	stream, err := func() (queryservicepb.Query_DumpBinlogClient, error) {
+		conn.mu.RLock()
+		defer conn.mu.RUnlock()
+
+		if conn.cc == nil {
+			return nil, tabletconn.ConnClosed
+		}
+
+		req := &binlogdatapb.DumpBinlogRequest{
+			Target:            request.Target,
+			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+			Gtid:              request.Gtid,
+		}
+		stream, err := conn.c.DumpBinlog(ctx, req)
+		if err != nil {
+			return nil, tabletconn.ErrorFromGRPC(err)
+		}
+		return stream, nil
+	}()
+	if err != nil {
+		return err
+	}
+	for {
+		r, err := stream.Recv()
+		if err != nil {
+			return tabletconn.ErrorFromGRPC(err)
+		}
+		if err := send(r); err != nil {
+			return err
+		}
+	}
+}
+
 // HandlePanic is a no-op.
 func (conn *gRPCQueryClient) HandlePanic(err *error) {
 }

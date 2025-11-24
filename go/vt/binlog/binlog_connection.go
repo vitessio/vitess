@@ -306,3 +306,7 @@ func (bc *BinlogConnection) Close() {
 		serverIDPool.Put(bc.serverID)
 	}
 }
+
+func (bc *BinlogConnection) GetServerID() uint32 {
+	return bc.serverID
+}
