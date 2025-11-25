@@ -1,5 +1,6 @@
 #!/bin/bash
 # shellcheck disable=SC2164
+# testy
 
 # Copyright 2019 The Vitess Authors.
 #
