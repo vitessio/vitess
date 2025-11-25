@@ -146,24 +146,31 @@ func TestDialPool(t *testing.T) {
 		_, err := client.CheckThrottler(ctx, tablet, req)
 		assert.Error(t, err)
 	})
+
 	t.Run("post throttler maps", func(t *testing.T) {
 		rpcClient, ok := client.dialer.(*grpcClient)
 		require.True(t, ok)
 
-		rpcClient.rpcDialPoolMapMu.Lock()
+		func() {
+			rpcClient.rpcDialPoolMapMu.Lock()
+			defer rpcClient.rpcDialPoolMapMu.Unlock()
 
-		assert.NotEmpty(t, rpcClient.rpcDialPoolMap)
-		assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupThrottler])
-		assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupVTOrc])
-		rpcClient.rpcDialPoolMapMu.Unlock()
+			assert.NotEmpty(t, rpcClient.rpcDialPoolMap)
+			assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupThrottler])
+			assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupVTOrc])
+		}()
 
-		rpcClient.rpcClientMapMu.Lock()
-		assert.NotEmpty(t, rpcClient.rpcClientMap)
-		assert.NotEmpty(t, rpcClient.rpcClientMap[addr])
-		rpcClient.rpcClientMapMu.Unlock()
+		func() {
+			rpcClient.rpcClientMapMu.Lock()
+			defer rpcClient.rpcClientMapMu.Unlock()
+
+			assert.NotEmpty(t, rpcClient.rpcClientMap)
+			assert.NotEmpty(t, rpcClient.rpcClientMap[addr])
+		}()
 
 		assert.Contains(t, []connectivity.State{connectivity.Connecting, connectivity.TransientFailure}, cachedTmc.cc.GetState())
 	})
+
 	t.Run("ExecuteFetchAsDba", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
@@ -177,17 +184,22 @@ func TestDialPool(t *testing.T) {
 		rpcClient, ok := client.dialer.(*grpcClient)
 		require.True(t, ok)
 
-		rpcClient.rpcDialPoolMapMu.Lock()
-		assert.NotEmpty(t, rpcClient.rpcDialPoolMap)
-		assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupThrottler])
-		assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupVTOrc])
-		rpcClient.rpcDialPoolMapMu.Unlock()
+		func() {
+			rpcClient.rpcDialPoolMapMu.Lock()
+			defer rpcClient.rpcDialPoolMapMu.Unlock()
 
-		rpcClient.rpcClientMapMu.Lock()
-		// The default pools are unaffected. Invalidator does not run, connections are not closed.
-		assert.NotEmpty(t, rpcClient.rpcClientMap)
-		assert.NotEmpty(t, rpcClient.rpcClientMap[addr])
-		rpcClient.rpcClientMapMu.Unlock()
+			assert.NotEmpty(t, rpcClient.rpcDialPoolMap)
+			assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupThrottler])
+			assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupVTOrc])
+		}()
+
+		func() {
+			rpcClient.rpcClientMapMu.Lock()
+			defer rpcClient.rpcClientMapMu.Unlock()
+			// The default pools are unaffected. Invalidator does not run, connections are not closed.
+			assert.NotEmpty(t, rpcClient.rpcClientMap)
+			assert.NotEmpty(t, rpcClient.rpcClientMap[addr])
+		}()
 
 		assert.NotNil(t, cachedTmc)
 		assert.Contains(t, []connectivity.State{connectivity.Connecting, connectivity.TransientFailure}, cachedTmc.cc.GetState())
