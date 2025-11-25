@@ -67,7 +67,7 @@ fi
 all_except_flaky_tests=$(echo "$packages_with_tests" | grep -vE ".+ .+_flaky_test\.go" | cut -d" " -f1 | grep -v "endtoend")
 flaky_tests=$(echo "$packages_with_tests" | grep -E ".+ .+_flaky_test\.go" | cut -d" " -f1)
 
-go test $VT_GO_PARALLEL -v -count=1 $all_except_flaky_tests
+go test $VT_GO_PARALLEL -v -count=1 $all_except_flaky_tests -shuffle=on
 if [ $? -ne 0 ]; then
   echo "ERROR: Go unit tests failed. See above for errors."
   echo
