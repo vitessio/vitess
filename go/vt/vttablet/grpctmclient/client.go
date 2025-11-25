@@ -226,22 +226,25 @@ func (client *grpcClient) dialDedicatedPool(ctx context.Context, dialPoolGroup D
 		return nil, nil, err
 	}
 
-	client.rpcDialPoolMapMu.Lock()
+	entry, poolEntries := func() (*tmcEntry, addrTmcMap) {
+		client.rpcDialPoolMapMu.Lock()
+		defer client.rpcDialPoolMapMu.Unlock()
 
-	if client.rpcDialPoolMap == nil {
-		client.rpcDialPoolMap = make(map[DialPoolGroup]addrTmcMap)
-	}
-	if _, ok := client.rpcDialPoolMap[dialPoolGroup]; !ok {
-		client.rpcDialPoolMap[dialPoolGroup] = make(addrTmcMap)
-	}
+		if client.rpcDialPoolMap == nil {
+			client.rpcDialPoolMap = make(map[DialPoolGroup]addrTmcMap)
+		}
+		if _, ok := client.rpcDialPoolMap[dialPoolGroup]; !ok {
+			client.rpcDialPoolMap[dialPoolGroup] = make(addrTmcMap)
+		}
 
-	m := client.rpcDialPoolMap[dialPoolGroup]
-	entry, ok := m[addr]
-	if !ok {
-		entry = &tmcEntry{}
-		m[addr] = entry
-	}
-	client.rpcDialPoolMapMu.Unlock()
+		poolEntries := client.rpcDialPoolMap[dialPoolGroup]
+		entry, ok := poolEntries[addr]
+		if !ok {
+			entry = &tmcEntry{}
+			poolEntries[addr] = entry
+		}
+		return entry, poolEntries
+	}()
 
 	// Initialize connection exactly once, without holding the mutex
 	entry.once.Do(func() {
@@ -258,7 +261,7 @@ func (client *grpcClient) dialDedicatedPool(ctx context.Context, dialPoolGroup D
 		if entry.tmc != nil && entry.tmc.cc != nil {
 			entry.tmc.cc.Close()
 		}
-		delete(m, addr)
+		delete(poolEntries, addr)
 	}
 	return entry.tmc.client, invalidator, nil
 }
