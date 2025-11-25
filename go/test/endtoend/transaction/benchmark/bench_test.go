@@ -130,7 +130,7 @@ func BenchmarkTwoPCCommit(b *testing.B) {
 	for _, tc := range testCases {
 		for _, commitMode := range []string{"twopc", "multi"} {
 			conn, _ := start(b)
-			_, err := conn.ExecuteFetch(fmt.Sprintf("set transaction_mode = %s", commitMode), 0, false)
+			_, err := conn.ExecuteFetch("set transaction_mode = "+commitMode, 0, false)
 			if err != nil {
 				b.Fatal(err)
 			}

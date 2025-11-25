@@ -223,7 +223,6 @@ func vtgateExec(t *testing.T, query string, expectError string) *sqltypes.Result
 }
 
 func TestInitialThrottler(t *testing.T) {
-
 	t.Run("validating OK response from disabled throttler", func(t *testing.T) {
 		waitForThrottleCheckStatus(t, primaryTablet, tabletmanagerdatapb.CheckThrottlerResponseCode_OK)
 	})
@@ -408,7 +407,6 @@ func TestThrottleViaApplySchema(t *testing.T) {
 }
 
 func TestThrottlerAfterMetricsCollected(t *testing.T) {
-
 	// By this time metrics will have been collected. We expect no lag, and something like:
 	// {"StatusCode":200,"Value":0.282278,"Threshold":1,"Message":""}
 	t.Run("validating throttler OK", func(t *testing.T) {
@@ -578,7 +576,6 @@ func TestNoReplicas(t *testing.T) {
 }
 
 func TestCustomQuery(t *testing.T) {
-
 	t.Run("enabling throttler with custom query and threshold", func(t *testing.T) {
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Enable: true, Threshold: customThreshold, CustomQuery: customQuery}
 		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
@@ -637,7 +634,6 @@ func TestCustomQuery(t *testing.T) {
 }
 
 func TestRestoreDefaultQuery(t *testing.T) {
-
 	// Validate going back from custom-query to default-query (replication lag) still works.
 	t.Run("enabling throttler with default query and threshold", func(t *testing.T) {
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Enable: true, Threshold: throttler.DefaultThreshold.Seconds()}

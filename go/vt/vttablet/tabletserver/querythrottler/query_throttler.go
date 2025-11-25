@@ -18,6 +18,7 @@ package querythrottler
 
 import (
 	"context"
+	"strconv"
 	"sync"
 	"time"
 
@@ -33,6 +34,11 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
+)
+
+const (
+	// defaultPriority is the default priority value when none is specified
+	defaultPriority = 100 // sqlparser.MaxPriorityValue
 )
 
 type QueryThrottler struct {
@@ -95,8 +101,14 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 		return nil
 	}
 
+	// Extract query attributes once to avoid re computation in strategies
+	attrs := registry.QueryAttributes{
+		WorkloadName: extractWorkloadName(options),
+		Priority:     extractPriority(options),
+	}
+
 	// Evaluate the throttling decision
-	decision := qt.strategy.Evaluate(ctx, tabletType, parsedQuery, transactionID, options)
+	decision := qt.strategy.Evaluate(ctx, tabletType, parsedQuery, transactionID, attrs)
 
 	// If no throttling is needed, allow the query
 	if !decision.Throttle {
@@ -111,6 +123,43 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 
 	// Normal throttling: return an error to reject the query
 	return vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, decision.Message)
+}
+
+// extractWorkloadName extracts the workload name from ExecuteOptions.
+// If no workload name is provided, returns a default value.
+func extractWorkloadName(options *querypb.ExecuteOptions) string {
+	if options == nil {
+		return "unknown"
+	}
+
+	if options.WorkloadName != "" {
+		return options.WorkloadName
+	}
+
+	return "default"
+}
+
+// extractPriority extracts the priority from ExecuteOptions.
+// Priority is stored as a string but represents an integer value (0-100).
+// If no priority is provided, returns the default priority.
+func extractPriority(options *querypb.ExecuteOptions) int {
+	if options == nil {
+		return defaultPriority
+	}
+
+	if options.Priority == "" {
+		return defaultPriority
+	}
+
+	optionsPriority, err := strconv.Atoi(options.Priority)
+	// This should never error out, as the value for Priority has been validated in the vtgate already.
+	// Still, handle it just to make sure.
+	if err != nil || optionsPriority < 0 || optionsPriority > 100 {
+		log.Warningf("Invalid priority value '%s' in ExecuteOptions, expected integer 0-100, using default priority %d", options.Priority, defaultPriority)
+		return defaultPriority
+	}
+
+	return optionsPriority
 }
 
 // selectThrottlingStrategy returns the appropriate strategy implementation based on the config.
@@ -137,7 +186,6 @@ func (qt *QueryThrottler) startConfigRefreshLoop() {
 			case <-configRefreshTicker.C:
 				newCfg, err := qt.cfgLoader.Load(qt.ctx)
 				if err != nil {
-					log.Errorf("Error loading config: %v", err)
 					continue
 				}
 

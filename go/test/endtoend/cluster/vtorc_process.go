@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -121,7 +122,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 		"--topo-global-server-address": orc.TopoGlobalAddress,
 		"--topo-global-root":           orc.TopoGlobalRoot,
 		"--config-file":                orc.ConfigPath,
-		"--port":                       fmt.Sprintf("%d", orc.Port),
+		"--port":                       strconv.Itoa(orc.Port),
 		"--bind-address":               "127.0.0.1",
 	}
 

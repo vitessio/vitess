@@ -21,6 +21,7 @@ package vtctl
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"reflect"
@@ -201,7 +202,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 	case vdiff.ShowAction:
 		if output == nil {
 			// should not happen
-			return fmt.Errorf("invalid (empty) response from show command")
+			return errors.New("invalid (empty) response from show command")
 		}
 		if err := displayVDiff2ShowResponse(wr, format, keyspace, workflowName, actionArg, output, *verbose); err != nil {
 			return err
@@ -525,7 +526,6 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 							TableName: table,
 							State:     vdiff.UnknownState,
 						}
-
 					}
 					ts := tableSummaryMap[table]
 					// This is the shard level VDiff table state

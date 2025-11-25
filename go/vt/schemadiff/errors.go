@@ -89,7 +89,7 @@ type UnsupportedStatementError struct {
 }
 
 func (e *UnsupportedStatementError) Error() string {
-	return fmt.Sprintf("unsupported statement: %s", e.Statement)
+	return "unsupported statement: " + e.Statement
 }
 
 type UnsupportedApplyOperationError struct {
@@ -97,7 +97,7 @@ type UnsupportedApplyOperationError struct {
 }
 
 func (e *UnsupportedApplyOperationError) Error() string {
-	return fmt.Sprintf("unsupported operation: %s", e.Statement)
+	return "unsupported operation: " + e.Statement
 }
 
 type ApplyTableNotFoundError struct {
@@ -150,7 +150,7 @@ type ApplyDuplicateEntityError struct {
 }
 
 func (e *ApplyDuplicateEntityError) Error() string {
-	return fmt.Sprintf("duplicate entity %s", sqlescape.EscapeID(e.Entity))
+	return "duplicate entity " + sqlescape.EscapeID(e.Entity)
 }
 
 type ApplyDuplicateKeyError struct {
@@ -212,7 +212,7 @@ type ApplyNoPartitionsError struct {
 }
 
 func (e *ApplyNoPartitionsError) Error() string {
-	return fmt.Sprintf("no partitions in table %s", sqlescape.EscapeID(e.Table))
+	return "no partitions in table " + sqlescape.EscapeID(e.Table)
 }
 
 type InvalidColumnInKeyError struct {

@@ -18,7 +18,6 @@ package engine
 
 import (
 	"context"
-	"fmt"
 	"io"
 
 	"vitess.io/vitess/go/vt/vterrors"
@@ -59,7 +58,7 @@ func (v *VStream) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVar
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match:  v.TableName,
-			Filter: fmt.Sprintf("select * from %s", v.TableName),
+			Filter: "select * from " + v.TableName,
 		}},
 	}
 	var lastFields []*querypb.Field

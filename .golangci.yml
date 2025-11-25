@@ -1,15 +1,22 @@
 version: "2"
 run:
-  go: "1.24"
+  go: "1.25"
 linters:
   default: none
   enable:
     - bodyclose
+    - copyloopvar
     - depguard
     - errcheck
     - govet
     - ineffassign
+    - mirror
+    - nolintlint
+    - nosprintfhostport
+    - perfsprint
+    - sqlclosecheck
     - staticcheck
+    - whitespace
   settings:
     depguard:
       rules:
@@ -98,11 +105,6 @@ linters:
         - (*vitess.io/vitess/go/bytes2.Buffer).WriteByte
         - (*vitess.io/vitess/go/bytes2.Buffer).WriteString
         - (vitess.io/vitess/go/sqltypes.BinWriter).Write
-        - vitess.io/vitess/go/vt/orchestrator/external/golib/log.Errore
-        - vitess.io/vitess/go/vt/orchestrator/external/golib/log.Errorf
-        - vitess.io/vitess/go/vt/orchestrator/external/golib/log.Fatal
-        - vitess.io/vitess/go/vt/orchestrator/external/golib/log.Fatale
-        - vitess.io/vitess/go/vt/orchestrator/external/golib/log.Fatalf
         - (*vitess.io/vitess/go/vt/vttest.LocalCluster).TearDown
     govet:
       disable:
@@ -135,13 +137,11 @@ linters:
         path: ^go/vt/proto/
       - linters:
           - errcheck
+          - whitespace
         path: ^go/cmd/(vtcombo|vtgateclienttest|vtorc)/
       - linters:
           - errcheck
         path: ^go/mysql/
-      - linters:
-          - revive
-        path: ^go/mysql/collations
       - linters:
           - errcheck
         path: ^go/pools/.*_test.go
@@ -149,10 +149,15 @@ linters:
           - errcheck
         path: ^go/sqltypes/
       - linters:
+          - whitespace
+        path: ^go/vt/sqlparser/ast_format_fast.go
+      - linters:
           - errcheck
         path: ^go/stats/statsd/
       - linters:
           - errcheck
+          - nosprintfhostport
+          - sqlclosecheck
         path: ^go/test/
       - linters:
           - errcheck
@@ -160,12 +165,6 @@ linters:
       - linters:
           - errcheck
         path: ^go/vt/mysqlctl/
-      - linters:
-          - errcheck
-        path: ^go/vt/orchestrator/
-      - linters:
-          - errcheck
-        path: ^go/vt/orchestrator/external/
       - linters:
           - errcheck
         path: ^go/vt/schemamanager/

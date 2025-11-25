@@ -221,7 +221,6 @@ func registerFlags() {
 
 	// Register TLS flags for gRPC connections to vtctld
 	grpcclientcommon.RegisterFlags(rootCmd.Flags())
-
 }
 
 func main() {

@@ -73,6 +73,7 @@ var (
 	TxReadOnly                  = SystemVariable{Name: "tx_read_only", IsBoolean: true, Default: off}
 	Workload                    = SystemVariable{Name: "workload", IdentifierAsString: true}
 	QueryTimeout                = SystemVariable{Name: "query_timeout"}
+	TransactionTimeout          = SystemVariable{Name: "transaction_timeout"}
 
 	// Online DDL
 	DDLStrategy      = SystemVariable{Name: "ddl_strategy", IdentifierAsString: true}
@@ -109,6 +110,7 @@ var (
 		ReadAfterWriteTimeOut,
 		SessionTrackGTIDs,
 		QueryTimeout,
+		TransactionTimeout,
 	}
 
 	ReadOnly = []SystemVariable{

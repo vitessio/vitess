@@ -58,7 +58,7 @@ func TestFKWorkflow(t *testing.T) {
 	defer vc.TearDown()
 
 	cell := vc.Cells[cellName]
-	vc.AddKeyspace(t, []*Cell{cell}, sourceKeyspace, shardName, initialFKSourceVSchema, initialFKSchema, 0, 0, 100, sourceKsOpts)
+	vc.AddKeyspace(t, []*Cell{cell}, sourceKeyspace, shardName, initialFKSourceVSchema, initialFKSchema, 0, 0, 100, defaultSourceKsOpts)
 
 	verifyClusterHealth(t, vc)
 	insertInitialFKData(t)
@@ -82,7 +82,7 @@ func TestFKWorkflow(t *testing.T) {
 
 	targetKeyspace := "fktarget"
 	targetTabletId := 200
-	vc.AddKeyspace(t, []*Cell{cell}, targetKeyspace, shardName, initialFKTargetVSchema, "", 0, 0, targetTabletId, sourceKsOpts)
+	vc.AddKeyspace(t, []*Cell{cell}, targetKeyspace, shardName, initialFKTargetVSchema, "", 0, 0, targetTabletId, defaultSourceKsOpts)
 
 	testFKCancel(t, vc)
 
@@ -183,7 +183,6 @@ func TestFKWorkflow(t *testing.T) {
 		// Check for the secondary key
 		confirmTablesHaveSecondaryKeys(t, []*cluster.VttabletProcess{targetTab}, targetKeyspace, "parent")
 	}
-
 }
 
 func insertInitialFKData(t *testing.T) {

@@ -21,10 +21,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -291,8 +291,8 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 
 	// Set up local backup directory
-	id := fmt.Sprintf("%d", time.Now().UnixNano())
-	backupRoot := fmt.Sprintf("testdata/builtinbackup_test_%s", id)
+	id := strconv.FormatInt(time.Now().UnixNano(), 10)
+	backupRoot := "testdata/builtinbackup_test_" + id
 	filebackupstorage.FileBackupStorageRoot = backupRoot
 	require.NoError(t, createBackupDir(backupRoot, "innodb", "log", "datadir"))
 	dataDir := path.Join(backupRoot, "datadir")
@@ -380,8 +380,8 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 
 	// Set up local backup directory
-	id := fmt.Sprintf("%d", time.Now().UnixNano())
-	backupRoot := fmt.Sprintf("testdata/builtinbackup_test_%s", id)
+	id := strconv.FormatInt(time.Now().UnixNano(), 10)
+	backupRoot := "testdata/builtinbackup_test_" + id
 	filebackupstorage.FileBackupStorageRoot = backupRoot
 	require.NoError(t, createBackupDir(backupRoot, "innodb", "log", "datadir"))
 	dataDir := path.Join(backupRoot, "datadir")

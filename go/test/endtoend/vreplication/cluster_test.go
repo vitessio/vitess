@@ -25,6 +25,7 @@ import (
 	"os/exec"
 	"path"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -216,7 +217,7 @@ func getDBTypeVersionInUse() (string, error) {
 	}
 	majorVersion := fmt.Sprintf("%d.%d", version.Major, version.Minor)
 	if flavor == mysqlctl.FlavorMySQL || flavor == mysqlctl.FlavorPercona {
-		dbTypeMajorVersion = fmt.Sprintf("mysql-%s", majorVersion)
+		dbTypeMajorVersion = "mysql-" + majorVersion
 	} else {
 		dbTypeMajorVersion = fmt.Sprintf("%s-%s", strings.ToLower(string(flavor)), majorVersion)
 	}
@@ -360,7 +361,7 @@ func getClusterOptions(opts *clusterOptions) *clusterOptions {
 		opts = &clusterOptions{}
 	}
 	if opts.cells == nil {
-		opts.cells = []string{"zone1"}
+		opts.cells = []string{defaultCellName}
 	}
 	if opts.clusterConfig == nil {
 		opts.clusterConfig = mainClusterConfig
@@ -626,7 +627,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 					// Kill any process we own that's listening on the port we
 					// want to use as that is the most common problem.
 					tablets[ind].DbServer.Stop()
-					if _, err = exec.Command("fuser", "-n", "tcp", "-k", fmt.Sprintf("%d", tablets[ind].DbServer.MySQLPort)).Output(); err != nil {
+					if _, err = exec.Command("fuser", "-n", "tcp", "-k", strconv.Itoa(tablets[ind].DbServer.MySQLPort)).Output(); err != nil {
 						log.Errorf("Failed to kill process listening on port %d: %v", tablets[ind].DbServer.MySQLPort, err)
 					}
 					// Sleep for the kernel's TCP TIME_WAIT timeout to avoid the
@@ -742,7 +743,6 @@ func (vc *VitessCluster) DeleteShard(t testing.TB, cellName string, ksName strin
 	if output, err := vc.VtctldClient.ExecuteCommandWithOutput("DeleteShard", "--recursive", "--even-if-serving", ksName+"/"+shardName); err != nil {
 		t.Fatalf("DeleteShard command failed with error %+v and output %s\n", err, output)
 	}
-
 }
 
 // StartVtgate starts a vtgate process
@@ -954,7 +954,7 @@ func setupDBTypeVersion(t *testing.T, value string) func() {
 		t.Logf("Requsted database version %s is already installed, doing nothing.", dbTypeMajorVersion)
 		return func() {}
 	}
-	path := fmt.Sprintf("/tmp/%s", dbTypeMajorVersion)
+	path := "/tmp/" + dbTypeMajorVersion
 	// Set the root path and create it if needed
 	if err := setVtMySQLRoot(path); err != nil {
 		t.Fatalf("Could not set VT_MYSQL_ROOT to %s, error: %v", path, err)

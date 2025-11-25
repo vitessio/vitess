@@ -169,7 +169,7 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 	errorChan := make(chan error, 32)
 
 	if tabletAlias == "" {
-		return instance, fmt.Errorf("ReadTopologyInstance will not act on empty tablet alias")
+		return instance, errors.New("ReadTopologyInstance will not act on empty tablet alias")
 	}
 
 	lastAttemptedCheckTimer := time.AfterFunc(time.Second, func() {
@@ -413,27 +413,32 @@ func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error
 		// This is because vtorc may pool primary and replica at an inconvenient timing,
 		// such that the replica may _seems_ to have more entries than the primary, when in fact
 		// it's just that the primary's probing is stale.
-		redactedExecutedGtidSet, _ := NewOracleGtidSet(instance.ExecutedGtidSet)
+		redactedExecutedGtidSet, _ := replication.ParseMysql56GTIDSet(instance.ExecutedGtidSet)
 		for _, uuid := range strings.Split(instance.AncestryUUID, ",") {
+			uuidSID, err := replication.ParseSID(uuid)
+			if err != nil {
+				continue
+			}
 			if uuid != instance.ServerUUID {
-				redactedExecutedGtidSet.RemoveUUID(uuid)
+				redactedExecutedGtidSet = redactedExecutedGtidSet.RemoveUUID(uuidSID)
 			}
 			if instance.IsCoPrimary && uuid == instance.ServerUUID {
 				// If this is a co-primary, then this server is likely to show its own generated GTIDs as errant,
 				// because its co-primary has not applied them yet
-				redactedExecutedGtidSet.RemoveUUID(uuid)
+				redactedExecutedGtidSet = redactedExecutedGtidSet.RemoveUUID(uuidSID)
 			}
 		}
-		// Avoid querying the database if there's no point:
-		if !redactedExecutedGtidSet.IsEmpty() {
-			redactedPrimaryExecutedGtidSet, _ := NewOracleGtidSet(instance.primaryExecutedGtidSet)
-			redactedPrimaryExecutedGtidSet.RemoveUUID(instance.SourceUUID)
+		if !redactedExecutedGtidSet.Empty() {
+			redactedPrimaryExecutedGtidSet, _ := replication.ParseMysql56GTIDSet(instance.primaryExecutedGtidSet)
+			if sourceSID, err := replication.ParseSID(instance.SourceUUID); err == nil {
+				redactedPrimaryExecutedGtidSet = redactedPrimaryExecutedGtidSet.RemoveUUID(sourceSID)
+			}
 
-			instance.GtidErrant, err = replication.Subtract(redactedExecutedGtidSet.String(), redactedPrimaryExecutedGtidSet.String())
-			if err == nil {
-				var gtidCount int64
-				gtidCount, err = replication.GTIDCount(instance.GtidErrant)
-				currentErrantGTIDCount.Set(instance.InstanceAlias, gtidCount)
+			// find errant gtid positions
+			errantGtidSet := redactedExecutedGtidSet.Difference(redactedPrimaryExecutedGtidSet)
+			if !errantGtidSet.Empty() {
+				instance.GtidErrant = errantGtidSet.String()
+				currentErrantGTIDCount.Set(instance.InstanceAlias, errantGtidSet.Count())
 			}
 		}
 	}
@@ -513,7 +518,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 
 	instance.Hostname = m.GetString("hostname")
 	instance.Port = m.GetInt("port")
-	instance.TabletType = topodatapb.TabletType(m.GetInt("tablet_type"))
+	instance.TabletType = topodatapb.TabletType(m.GetInt32("tablet_type"))
 	instance.Cell = m.GetString("cell")
 	instance.ServerID = m.GetUint("server_id")
 	instance.ServerUUID = m.GetString("server_uuid")

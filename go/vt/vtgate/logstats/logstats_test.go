@@ -34,7 +34,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/hack"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callinfo"

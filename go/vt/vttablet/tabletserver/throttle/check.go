@@ -43,6 +43,7 @@ package throttle
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -97,7 +98,7 @@ func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName s
 	}
 	value, err := metricResult.Get()
 	if appName == "" {
-		return NewCheckResult(tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED, value, threshold, "", fmt.Errorf("no app indicated"))
+		return NewCheckResult(tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED, value, threshold, "", errors.New("no app indicated"))
 	}
 
 	var responseCode tabletmanagerdatapb.CheckThrottlerResponseCode
@@ -263,11 +264,8 @@ func (check *ThrottlerCheck) SelfChecks(ctx context.Context) {
 				return
 			case <-selfCheckTicker.C:
 				for metricName, metricResult := range check.AggregatedMetrics(ctx) {
-					aggregatedMetricName := metricName
-					metricResult := metricResult
-
-					go check.localCheck(ctx, aggregatedMetricName)
-					go check.reportAggregated(aggregatedMetricName, metricResult)
+					go check.localCheck(ctx, metricName)
+					go check.reportAggregated(metricName, metricResult)
 				}
 			}
 		}

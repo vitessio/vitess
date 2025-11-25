@@ -430,7 +430,6 @@ func UnthrottleAllMigrations(t *testing.T, vtParams *mysql.ConnParams) {
 
 // CheckThrottledApps checks for existence or non-existence of an app in the throttled apps list
 func CheckThrottledApps(t *testing.T, vtParams *mysql.ConnParams, throttlerApp throttlerapp.Name, expectFind bool) bool {
-
 	ctx, cancel := context.WithTimeout(context.Background(), ThrottledAppsTimeout)
 	defer cancel()
 

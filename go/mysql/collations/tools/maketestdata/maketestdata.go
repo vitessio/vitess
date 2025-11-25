@@ -25,6 +25,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -76,7 +77,7 @@ func getTextFromWikipedia(lang testutil.Lang, article string) (string, error) {
 		"prop":          "extracts",
 		"titles":        article,
 		"formatversion": "2",
-		"exchars":       fmt.Sprintf("%d", MaxChars),
+		"exchars":       strconv.Itoa(MaxChars),
 		// "exsentences":     "5",
 		"explaintext":     "1",
 		"exsectionformat": "plain",

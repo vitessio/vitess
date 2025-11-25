@@ -18,7 +18,7 @@ package binlog
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -362,7 +362,7 @@ func TestStreamerParseEventsSendErrorXID(t *testing.T) {
 	errs := make(chan error)
 
 	sendTransaction := func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
-		return fmt.Errorf("foobar")
+		return errors.New("foobar")
 	}
 
 	// Set mock mysql.ConnParams and dbconfig
@@ -408,7 +408,7 @@ func TestStreamerParseEventsSendErrorCommit(t *testing.T) {
 	errs := make(chan error)
 
 	sendTransaction := func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
-		return fmt.Errorf("foobar")
+		return errors.New("foobar")
 	}
 
 	// Set mock mysql.ConnParams and dbconfig

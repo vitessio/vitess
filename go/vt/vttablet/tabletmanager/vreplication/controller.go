@@ -19,6 +19,7 @@ package vreplication
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -136,7 +137,6 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	if state == binlogdatapb.VReplicationWorkflowState_Stopped.String() || state == binlogdatapb.VReplicationWorkflowState_Error.String() {
 		ct.cancel = func() {}
 		close(ct.done)
-		blpStats.Stop()
 		return ct, nil
 	}
 
@@ -320,7 +320,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		return err
 	}
 	ct.blpStats.ErrorCounts.Add([]string{"Invalid Source"}, 1)
-	return fmt.Errorf("missing source")
+	return errors.New("missing source")
 }
 
 func (ct *controller) setMessage(dbClient binlogplayer.DBClient, message string) error {
@@ -352,19 +352,24 @@ func (ct *controller) pickSourceTablet(ctx context.Context, dbClient binlogplaye
 		case <-ctx.Done():
 		default:
 			ct.blpStats.ErrorCounts.Add([]string{"No Source Tablet Found"}, 1)
-			ct.setMessage(dbClient, fmt.Sprintf("Error picking tablet: %s", err.Error()))
+			ct.setMessage(dbClient, "Error picking tablet: "+err.Error())
 		}
 		return tablet, err
 	}
-	ct.setMessage(dbClient, fmt.Sprintf("Picked source tablet: %s", tablet.Alias.String()))
+	ct.setMessage(dbClient, "Picked source tablet: "+tablet.Alias.String())
 	log.Infof("Found eligible source tablet %s for vreplication stream id %d for workflow %s",
 		tablet.Alias.String(), ct.id, ct.workflow)
 	ct.sourceTablet.Store(tablet.Alias)
 	return tablet, err
 }
 
-func (ct *controller) Stop() {
+// Stop stops the controller and optionally stops its stats. The stats
+// should only be stopped if they will never be re-used as the timeseries
+// stats (Rates and Gauges) will be cleared and cannot be restarted.
+func (ct *controller) Stop(stopStats bool) {
 	ct.cancel()
-	ct.blpStats.Stop()
+	if stopStats {
+		ct.blpStats.Stop()
+	}
 	<-ct.done
 }

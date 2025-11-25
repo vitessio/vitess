@@ -17,14 +17,16 @@ limitations under the License.
 package common
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/exp/maps"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/vt/key"
@@ -112,7 +114,7 @@ func ParseCells(cmd *cobra.Command) error {
 	cf := cmd.Flags().Lookup("cells")
 	af := cmd.Flags().Lookup("all-cells")
 	if cf != nil && cf.Changed && af != nil && af.Changed {
-		return fmt.Errorf("cannot specify both --cells and --all-cells")
+		return errors.New("cannot specify both --cells and --all-cells")
 	}
 	if cf.Changed { // Validate the provided value(s)
 		for i, cell := range CreateOptions.Cells { // Which only means trimming whitespace
@@ -135,12 +137,12 @@ func ParseCells(cmd *cobra.Command) error {
 func ParseTabletTypes(cmd *cobra.Command) error {
 	ttf := cmd.Flags().Lookup("tablet-types")
 	if ttf == nil {
-		return fmt.Errorf("no tablet-types flag found")
+		return errors.New("no tablet-types flag found")
 	}
 	if !ttf.Changed {
 		CreateOptions.TabletTypes = tabletTypesDefault
 	} else if strings.TrimSpace(ttf.Value.String()) == "" {
-		return fmt.Errorf("invalid tablet-types value, at least one valid tablet type must be specified")
+		return errors.New("invalid tablet-types value, at least one valid tablet type must be specified")
 	}
 	return nil
 }
@@ -149,17 +151,17 @@ func ParseTableMaterializeSettings(tableSettings string, parser *sqlparser.Parse
 	tableMaterializeSettings := make([]*vtctldatapb.TableMaterializeSettings, 0)
 	err := json.Unmarshal([]byte(tableSettings), &tableMaterializeSettings)
 	if err != nil {
-		return tableMaterializeSettings, fmt.Errorf("table-settings is not valid JSON")
+		return tableMaterializeSettings, errors.New("table-settings is not valid JSON")
 	}
 	if len(tableMaterializeSettings) == 0 {
-		return tableMaterializeSettings, fmt.Errorf("empty table-settings")
+		return tableMaterializeSettings, errors.New("empty table-settings")
 	}
 
 	// Validate the provided queries.
 	seenSourceTables := make(map[string]bool)
 	for _, tms := range tableMaterializeSettings {
 		if tms.TargetTable == "" || tms.SourceExpression == "" {
-			return tableMaterializeSettings, fmt.Errorf("missing target_table or source_expression")
+			return tableMaterializeSettings, errors.New("missing target_table or source_expression")
 		}
 		// Validate that the query is valid.
 		stmt, err := parser.Parse(tms.SourceExpression)
@@ -259,29 +261,54 @@ func GetTabletSelectionPreference(cmd *cobra.Command) tabletmanagerdatapb.Tablet
 }
 
 func OutputStatusResponse(resp *vtctldatapb.WorkflowStatusResponse, format string) error {
-	var output []byte
-	var err error
 	if format == "json" {
-		output, err = cli.MarshalJSONPretty(resp)
+		output, err := cli.MarshalJSONPretty(resp)
 		if err != nil {
 			return err
 		}
-	} else {
-		tout := bytes.Buffer{}
-		tout.WriteString(fmt.Sprintf("The following vreplication streams exist for workflow %s.%s:\n\n",
-			BaseOptions.TargetKeyspace, BaseOptions.Workflow))
-		for _, shardstreams := range resp.ShardStreams {
-			for _, shardstream := range shardstreams.Streams {
-				tablet := fmt.Sprintf("%s-%d", shardstream.Tablet.Cell, shardstream.Tablet.Uid)
-				tout.WriteString(fmt.Sprintf("id=%d on %s/%s: Status: %s. %s.\n",
-					shardstream.Id, BaseOptions.TargetKeyspace, tablet, shardstream.Status, shardstream.Info))
+		fmt.Println(string(output))
+		return nil
+	}
+
+	// Plain text formatted output.
+	tout := strings.Builder{}
+	tout.WriteString(fmt.Sprintf("The following vreplication streams exist for workflow %s.%s:\n\n",
+		BaseOptions.TargetKeyspace, BaseOptions.Workflow))
+	for _, shardstreams := range resp.ShardStreams {
+		for _, shardstream := range shardstreams.Streams {
+			tablet := fmt.Sprintf("%s-%d", shardstream.Tablet.Cell, shardstream.Tablet.Uid)
+			tout.WriteString(fmt.Sprintf("id=%d on %s/%s: Status: %s. %s.\n",
+				shardstream.Id, BaseOptions.TargetKeyspace, tablet, shardstream.Status, shardstream.Info))
+		}
+	}
+	if len(resp.TableCopyState) > 0 {
+		tables := maps.Keys(resp.TableCopyState)
+		sort.Strings(tables) // Ensure that the output is intuitive and consistent
+		tout.WriteString("\nTable Copy Status:")
+		for _, table := range tables {
+			// Unfortunately we cannot use the prototext marshaler here as it has no option
+			// to emit unpopulated fields.
+			tcs := resp.TableCopyState[table]
+			tout.WriteString("\n\t")
+			tout.WriteString(table)
+			tout.WriteString(": ")
+			tout.WriteString(fmt.Sprintf("RowsCopied:%d, ", tcs.RowsCopied))
+			tout.WriteString(fmt.Sprintf("RowsTotal:%d, ", tcs.RowsTotal))
+			tout.WriteString(fmt.Sprintf("RowsPercentage:%.2f, ", tcs.RowsPercentage))
+			tout.WriteString(fmt.Sprintf("BytesCopied:%d, ", tcs.BytesCopied))
+			tout.WriteString(fmt.Sprintf("BytesTotal:%d, ", tcs.BytesTotal))
+			tout.WriteString(fmt.Sprintf("BytesPercentage:%.2f", tcs.BytesPercentage))
+			// If we're talking to an older server it won't provide this field. We should
+			// not show a wrong or confusing value in this case so elide it from the output.
+			if tcs.Phase != vtctldatapb.TableCopyPhase_UNKNOWN {
+				tout.WriteString(fmt.Sprintf(", Phase:%s", tcs.Phase))
 			}
 		}
-		tout.WriteString("\nTraffic State: ")
-		tout.WriteString(resp.TrafficState)
-		output = tout.Bytes()
+		tout.WriteString("\n")
 	}
-	fmt.Println(string(output))
+	tout.WriteString("\nTraffic State: ")
+	tout.WriteString(resp.TrafficState)
+	fmt.Println(tout.String())
 	return nil
 }
 

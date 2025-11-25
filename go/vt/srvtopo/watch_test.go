@@ -18,7 +18,7 @@ package srvtopo
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -90,7 +90,7 @@ func TestWatcherOutageBehavior(t *testing.T) {
 	require.NotNil(t, vschema)
 
 	// Simulate topo outage
-	factory.SetError(fmt.Errorf("simulated topo error"))
+	factory.SetError(errors.New("simulated topo error"))
 
 	// Get should still work from cache during outage
 	vschema, err = rs.GetSrvVSchema(ctx, "test_cell")
@@ -169,7 +169,7 @@ func TestVSchemaWatcherCacheExpiryBehavior(t *testing.T) {
 	time.Sleep(srvTopoCacheTTL + 10*time.Millisecond)
 
 	// Set a non-topo error (like 500 HTTP error)
-	nonTopoErr := fmt.Errorf("HTTP 500 internal server error")
+	nonTopoErr := errors.New("HTTP 500 internal server error")
 	factory.SetError(nonTopoErr)
 
 	// Get VSchema after TTL expiry with non-topo error

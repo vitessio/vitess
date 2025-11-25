@@ -146,9 +146,9 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 		xtrabackupArgs := []string{
 			vtutils.GetFlagVariantForTests("--backup-engine-implementation"), "xtrabackup",
 			fmt.Sprintf("%s=%s", vtutils.GetFlagVariantForTests("--xtrabackup-stream-mode"), streamMode),
-			fmt.Sprintf("%s=vt_dba", vtutils.GetFlagVariantForTests("--xtrabackup-user")),
+			vtutils.GetFlagVariantForTests("--xtrabackup-user") + "=vt_dba",
 			fmt.Sprintf("%s=%d", vtutils.GetFlagVariantForTests("--xtrabackup-stripes"), stripes),
-			vtutils.GetFlagVariantForTests("--xtrabackup-backup-flags"), fmt.Sprintf("--password=%s", dbPassword),
+			vtutils.GetFlagVariantForTests("--xtrabackup-backup-flags"), "--password=" + dbPassword,
 		}
 
 		// if streamMode is xbstream, add some additional args to test other xtrabackup flags
@@ -295,19 +295,19 @@ func getCompressorArgs(cDetails *CompressionDetails) []string {
 	}
 
 	if cDetails.CompressorEngineName != "" {
-		args = append(args, fmt.Sprintf("--compression-engine-name=%s", cDetails.CompressorEngineName))
+		args = append(args, "--compression-engine-name="+cDetails.CompressorEngineName)
 	}
 	if cDetails.ExternalCompressorCmd != "" {
-		args = append(args, fmt.Sprintf("--external-compressor=%s", cDetails.ExternalCompressorCmd))
+		args = append(args, "--external-compressor="+cDetails.ExternalCompressorCmd)
 	}
 	if cDetails.ExternalCompressorExt != "" {
-		args = append(args, fmt.Sprintf("--external-compressor-extension=%s", cDetails.ExternalCompressorExt))
+		args = append(args, "--external-compressor-extension="+cDetails.ExternalCompressorExt)
 	}
 	if cDetails.ExternalDecompressorCmd != "" {
-		args = append(args, fmt.Sprintf("--external-decompressor=%s", cDetails.ExternalDecompressorCmd))
+		args = append(args, "--external-decompressor="+cDetails.ExternalDecompressorCmd)
 	}
 	if cDetails.ManifestExternalDecompressorCmd != "" {
-		args = append(args, fmt.Sprintf("--manifest-external-decompressor=%s", cDetails.ManifestExternalDecompressorCmd))
+		args = append(args, "--manifest-external-decompressor="+cDetails.ManifestExternalDecompressorCmd)
 	}
 
 	return args
@@ -358,7 +358,7 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDe
 			return nil
 		}
 	default:
-		require.FailNow(t, fmt.Sprintf("Unsupported xtrabackup stream mode: %s", streamMode))
+		require.FailNow(t, "Unsupported xtrabackup stream mode: "+streamMode)
 	}
 
 	testMethods := []struct {
@@ -1084,8 +1084,8 @@ func terminateBackup(t *testing.T, alias string) {
 		text := scanner.Text()
 		if strings.Contains(text, stopBackupMsg) {
 			tmpProcess.Process.Signal(syscall.SIGTERM)
-			found = true // nolint
-			return
+			found = true
+			break
 		}
 	}
 	assert.True(t, found, "backup message not found")
@@ -1425,7 +1425,6 @@ func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
 	if backupstorage.BackupStorageImplementation == "file" {
 		require.Contains(t, bd, "BackupStorage.File.File:Write")
 	}
-
 }
 
 func verifyRestorePositionAndTimeStats(t *testing.T, vars map[string]any) {

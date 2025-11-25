@@ -186,7 +186,7 @@ func (nz *normalizer) walkDown(node, _ SQLNode) bool {
 		nz.inDerived++
 	case *Select:
 		nz.inSelect++
-		if nz.selectLimit > 0 && node.Limit == nil {
+		if nz.selectLimit > 0 && node.Limit == nil && nz.inSelect == 1 {
 			node.Limit = &Limit{Rowcount: NewIntLiteral(strconv.Itoa(nz.selectLimit))}
 		}
 	case *AliasedExpr:
@@ -591,7 +591,7 @@ func shouldRewriteDatabaseFunc(in Statement) bool {
 
 // rewriteUnion sets the SELECT limit for UNION statements if not already set.
 func (nz *normalizer) rewriteUnion(node *Union) {
-	if nz.selectLimit > 0 && node.Limit == nil {
+	if nz.selectLimit > 0 && node.Limit == nil && nz.inSelect == 0 {
 		node.Limit = &Limit{Rowcount: NewIntLiteral(strconv.Itoa(nz.selectLimit))}
 	}
 }
@@ -743,6 +743,7 @@ func (nz *normalizer) sysVarRewrite(cursor *Cursor, node *Variable) {
 		sysvars.Version.Name,
 		sysvars.VersionComment.Name,
 		sysvars.QueryTimeout.Name,
+		sysvars.TransactionTimeout.Name,
 		sysvars.Workload.Name:
 		found = true
 	}

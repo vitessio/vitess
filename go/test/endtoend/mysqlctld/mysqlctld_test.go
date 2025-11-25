@@ -149,7 +149,6 @@ func TestRestart(t *testing.T) {
 }
 
 func TestAutoDetect(t *testing.T) {
-
 	err := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.Setup()
 	require.Nil(t, err, "error should be nil")
 	err = clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].VttabletProcess.Setup()

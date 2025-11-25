@@ -223,7 +223,7 @@ func ReadRecentRecoveries(page int) ([]*TopologyRecovery, error) {
 	whereClause := ""
 	var args []any
 	if len(whereConditions) > 0 {
-		whereClause = fmt.Sprintf("WHERE %s", strings.Join(whereConditions, " AND "))
+		whereClause = "WHERE " + strings.Join(whereConditions, " AND ")
 	}
 	limit := `LIMIT ? OFFSET ?`
 	args = append(args, config.AuditPageSize, page*config.AuditPageSize)

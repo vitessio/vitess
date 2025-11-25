@@ -16,32 +16,44 @@ limitations under the License.
 
 package vreplication
 
+import "fmt"
+
+const (
+	// Defaults used for all tests.
+	defaultSourceKs          = "test-product"
+	defaultTargetKs          = "test-customer"
+	defaultWorkflowName      = "wf1"
+	defaultKsWorkflow        = defaultTargetKs + "." + defaultWorkflowName
+	defaultReverseKsWorkflow = defaultSourceKs + "." + defaultWorkflowName + "_reverse"
+	defaultCellName          = "zone1"
+)
+
 var dryRunResultsSwitchWritesCustomerShard = []string{
-	"Lock keyspace product",
-	"Lock keyspace customer",
-	"Mirroring 0.00 percent of traffic from keyspace product to keyspace customer for tablet types [PRIMARY]",
-	"/Stop writes on keyspace product for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order]: [keyspace:product;shard:0;position:",
+	"Lock keyspace " + defaultSourceKs,
+	"Lock keyspace " + defaultTargetKs,
+	fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [PRIMARY]", defaultSourceKs, defaultTargetKs),
+	fmt.Sprintf("/Stop writes on keyspace %s for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order]: [keyspace:%s;shard:0;position:", defaultSourceKs, defaultSourceKs),
 	"Wait for vreplication on stopped streams to catchup for up to 30s",
 	"Create reverse vreplication workflow p2c_reverse",
 	"Create journal entries on source databases",
-	"Enable writes on keyspace customer for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order]",
-	"Switch routing from keyspace product to keyspace customer",
+	fmt.Sprintf("Enable writes on keyspace %s for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order]", defaultTargetKs),
+	fmt.Sprintf("Switch routing from keyspace %s to keyspace %s", defaultSourceKs, defaultTargetKs),
 	"Routing rules for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order] will be updated",
 	"Switch writes completed, freeze and delete vreplication streams on: [tablet:200,tablet:300]",
 	"Start reverse vreplication streams on: [tablet:100]",
-	"Mark vreplication streams frozen on: [keyspace:customer;shard:-80;tablet:200;workflow:p2c;dbname:vt_customer,keyspace:customer;shard:80-;tablet:300;workflow:p2c;dbname:vt_customer]",
-	"Unlock keyspace customer",
-	"Unlock keyspace product",
+	fmt.Sprintf("Mark vreplication streams frozen on: [keyspace:%s;shard:-80;tablet:200;workflow:p2c;dbname:vt_%s,keyspace:%s;shard:80-;tablet:300;workflow:p2c;dbname:vt_%s]", defaultTargetKs, defaultTargetKs, defaultTargetKs, defaultTargetKs),
+	"Unlock keyspace " + defaultTargetKs,
+	"Unlock keyspace " + defaultSourceKs,
 	"", // Additional empty newline in the output
 }
 
 var dryRunResultsReadCustomerShard = []string{
-	"Lock keyspace product",
-	"Mirroring 0.00 percent of traffic from keyspace product to keyspace customer for tablet types [RDONLY,REPLICA]",
-	"Switch reads for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order] to keyspace customer for tablet types [RDONLY,REPLICA]",
+	"Lock keyspace " + defaultSourceKs,
+	fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [RDONLY,REPLICA]", defaultSourceKs, defaultTargetKs),
+	fmt.Sprintf("Switch reads for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order] to keyspace %s for tablet types [RDONLY,REPLICA]", defaultTargetKs),
 	"Routing rules for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order] will be updated",
-	"Serving VSchema will be rebuilt for the customer keyspace",
-	"Unlock keyspace product",
+	fmt.Sprintf("Serving VSchema will be rebuilt for the %s keyspace", defaultTargetKs),
+	"Unlock keyspace " + defaultSourceKs,
 	"", // Additional empty newline in the output
 }
 

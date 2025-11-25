@@ -93,14 +93,14 @@ func (c *Conn) WriteComBinlogDumpGTID(serverID uint32, binlogFilename string, bi
 		4 + // data-size
 		len(sidBlock) // data
 	data, pos := c.startEphemeralPacketWithHeader(length)
-	pos = writeByte(data, pos, ComBinlogDumpGTID)             // nolint
-	pos = writeUint16(data, pos, flags)                       // nolint
-	pos = writeUint32(data, pos, serverID)                    // nolint
-	pos = writeUint32(data, pos, uint32(len(binlogFilename))) // nolint
-	pos = writeEOFString(data, pos, binlogFilename)           // nolint
-	pos = writeUint64(data, pos, binlogPos)                   // nolint
-	pos = writeUint32(data, pos, uint32(len(sidBlock)))       // nolint
-	pos += copy(data[pos:], sidBlock)                         // nolint
+	pos = writeByte(data, pos, ComBinlogDumpGTID)
+	pos = writeUint16(data, pos, flags)
+	pos = writeUint32(data, pos, serverID)
+	pos = writeUint32(data, pos, uint32(len(binlogFilename)))
+	pos = writeEOFString(data, pos, binlogFilename)
+	pos = writeUint64(data, pos, binlogPos)
+	pos = writeUint32(data, pos, uint32(len(sidBlock)))
+	pos += copy(data[pos:], sidBlock) //nolint
 	if err := c.writeEphemeralPacket(); err != nil {
 		return sqlerror.NewSQLErrorf(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "%v", err)
 	}
@@ -123,7 +123,6 @@ func (c *Conn) SendSemiSyncAck(binlogFilename string, binlogPos uint64) error {
 		return sqlerror.NewSQLErrorf(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "%v", err)
 	}
 	return nil
-
 }
 
 // WriteBinlogEvent writes a binlog event as part of a replication stream

@@ -1330,7 +1330,7 @@ func TestGetCellInfos(t *testing.T) {
 					Response *vtctldatapb.GetCellInfoNamesResponse
 					Error    error
 				}{
-					Error: fmt.Errorf("getcellinfonames failed"),
+					Error: errors.New("getcellinfonames failed"),
 				},
 			},
 			req:       &vtadminpb.GetCellInfosRequest{},
@@ -1399,7 +1399,7 @@ func TestGetCellInfos(t *testing.T) {
 					Error    error
 				}{
 					"c1": {
-						Error: fmt.Errorf("GetCellInfo(c1) fail"),
+						Error: errors.New("GetCellInfo(c1) fail"),
 					},
 					"c2": {
 						Response: &vtctldatapb.GetCellInfoResponse{
@@ -1541,7 +1541,7 @@ func TestGetCellsAliases(t *testing.T) {
 					Response *vtctldatapb.GetCellsAliasesResponse
 					Error    error
 				}{
-					Error: fmt.Errorf("this should fail"),
+					Error: errors.New("this should fail"),
 				},
 			},
 			shouldErr: true,
@@ -1694,7 +1694,6 @@ func TestGetSchema(t *testing.T) {
 	ctx := context.Background()
 
 	for i, tt := range tests {
-		i := i
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -3399,7 +3398,7 @@ func TestSetWritable(t *testing.T) {
 				},
 				VtctldClient: &fakevtctldclient.VtctldClient{
 					SetWritableResults: map[string]error{
-						"zone1-0000000100": fmt.Errorf("some error"),
+						"zone1-0000000100": errors.New("some error"),
 					},
 				},
 			},
@@ -3456,10 +3455,10 @@ func TestToggleTabletReplication(t *testing.T) {
 				VtctldClient: &fakevtctldclient.VtctldClient{
 					StartReplicationResults: map[string]error{
 						"zone1-0000000100": nil,
-						"zone1-0000000101": fmt.Errorf("some error"),
+						"zone1-0000000101": errors.New("some error"),
 					},
 					StopReplicationResults: map[string]error{
-						"zone1-0000000100": fmt.Errorf("some error"),
+						"zone1-0000000100": errors.New("some error"),
 						"zone1-0000000101": nil,
 					},
 				},
@@ -3482,11 +3481,11 @@ func TestToggleTabletReplication(t *testing.T) {
 				Cluster: testClusterProto,
 				VtctldClient: &fakevtctldclient.VtctldClient{
 					StartReplicationResults: map[string]error{
-						"zone1-0000000100": fmt.Errorf("some error"),
+						"zone1-0000000100": errors.New("some error"),
 						"zone1-0000000101": nil,
 					},
 					StopReplicationResults: map[string]error{
-						"zone1-0000000100": fmt.Errorf("some error"),
+						"zone1-0000000100": errors.New("some error"),
 						"zone1-0000000101": nil,
 					},
 				},
@@ -3509,12 +3508,12 @@ func TestToggleTabletReplication(t *testing.T) {
 				Cluster: testClusterProto,
 				VtctldClient: &fakevtctldclient.VtctldClient{
 					StartReplicationResults: map[string]error{
-						"zone1-0000000100": fmt.Errorf("some error"),
+						"zone1-0000000100": errors.New("some error"),
 						"zone1-0000000101": nil,
 					},
 					StopReplicationResults: map[string]error{
 						"zone1-0000000100": nil,
-						"zone1-0000000101": fmt.Errorf("some error"),
+						"zone1-0000000101": errors.New("some error"),
 					},
 				},
 			},
@@ -3536,11 +3535,11 @@ func TestToggleTabletReplication(t *testing.T) {
 				Cluster: testClusterProto,
 				VtctldClient: &fakevtctldclient.VtctldClient{
 					StartReplicationResults: map[string]error{
-						"zone1-0000000100": fmt.Errorf("some error"),
+						"zone1-0000000100": errors.New("some error"),
 						"zone1-0000000101": nil,
 					},
 					StopReplicationResults: map[string]error{
-						"zone1-0000000100": fmt.Errorf("some error"),
+						"zone1-0000000100": errors.New("some error"),
 						"zone1-0000000101": nil,
 					},
 				},

@@ -238,6 +238,15 @@ func TestEvaluate(t *testing.T) {
 		expression: "(1,2) in ((1,null), (2,3))",
 		expected:   NULL,
 	}, {
+		expression: "1 IN ::tuple_bind_variable",
+		expected:   True,
+	}, {
+		expression: "3 IN ::tuple_bind_variable",
+		expected:   True,
+	}, {
+		expression: "4 IN ::tuple_bind_variable",
+		expected:   False,
+	}, {
 		expression: "(1,(1,2,3),(1,(1,2),4),2) = (1,(1,2,3),(1,(1,2),4),2)",
 		expected:   True,
 	}, {
@@ -319,6 +328,14 @@ func TestEvaluate(t *testing.T) {
 				"uint32_bind_variable": sqltypes.Uint32BindVariable(21),
 				"uint64_bind_variable": sqltypes.Uint64BindVariable(22),
 				"float_bind_variable":  sqltypes.Float64BindVariable(2.2),
+				"tuple_bind_variable": {
+					Type: sqltypes.Tuple,
+					Values: []*querypb.Value{
+						{Type: sqltypes.Int64, Value: []byte("1")},
+						{Type: sqltypes.Int64, Value: []byte("2")},
+						{Type: sqltypes.Int64, Value: []byte("3")},
+					},
+				},
 			}, NewEmptyVCursor(venv, time.Local))
 
 			// When
@@ -403,7 +420,6 @@ func TestTranslationFailures(t *testing.T) {
 			require.EqualError(t, err, testcase.expectedErr)
 		})
 	}
-
 }
 
 func TestCardinalityWithBindVariables(t *testing.T) {

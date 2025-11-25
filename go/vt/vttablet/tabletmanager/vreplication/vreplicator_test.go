@@ -666,7 +666,7 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		err := vr.execPostCopyActions(ctx, tableName)
-		assert.True(t, strings.EqualFold(err.Error(), fmt.Sprintf("EOF (errno 2013) (sqlstate HY000) during query: %s", alter)))
+		assert.True(t, strings.EqualFold(err.Error(), "EOF (errno 2013) (sqlstate HY000) during query: "+alter))
 	}()
 
 	// Confirm that the expected ALTER query is being attempted.

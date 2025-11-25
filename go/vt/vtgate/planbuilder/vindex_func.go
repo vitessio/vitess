@@ -17,8 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"fmt"
-
 	"vitess.io/vitess/go/mysql/collations"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -65,7 +63,7 @@ type UnsupportedSupplyWeightString struct {
 
 // Error function implements the error interface
 func (err UnsupportedSupplyWeightString) Error() string {
-	return fmt.Sprintf("cannot do collation on %s", err.Type)
+	return "cannot do collation on " + err.Type
 }
 
 func vindexColumnToIndex(column *sqlparser.ColName) int {

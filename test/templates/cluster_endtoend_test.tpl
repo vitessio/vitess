@@ -39,7 +39,7 @@ jobs:
       run: |
         totalMem=$(free -g | awk 'NR==2 {print $2}')
         echo "total memory $totalMem GB"
-        if [[ "$totalMem" -lt 15 ]]; then 
+        if [[ "$totalMem" -lt 15 ]]; then
           echo "Less memory than required"
           exit 1
         fi
@@ -94,19 +94,15 @@ jobs:
 
     - name: Tune the OS
       if: steps.changes.outputs.end_to_end == 'true'
-      run: |
-        # Limit local port range to not use ports that overlap with server side
-        # ports that we listen on.
-        sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
+      uses: ./.github/actions/tune-os
 
-        # Increase the asynchronous non-blocking I/O. More information at https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_use_native_aio
-        echo "fs.aio-max-nr = 1048576" | sudo tee -a /etc/sysctl.conf
-        sudo sysctl -p /etc/sysctl.conf
-
-        # Don't waste a bunch of time processing man-db triggers
-        echo "set man-db/auto-update false" | sudo debconf-communicate
-        sudo dpkg-reconfigure man-db
-
+    {{if not .InstallXtraBackup}}
+    - name: Setup MySQL
+      if: steps.changes.outputs.end_to_end == 'true'
+      uses: ./.github/actions/setup-mysql
+      with:
+        flavor: mysql-8.4
+    {{ end }}
 
     - name: Get dependencies
       if: steps.changes.outputs.end_to_end == 'true'
@@ -116,52 +112,36 @@ jobs:
 
         # Setup Percona Server for MySQL 8.0
         sudo apt-get -qq update
-        sudo apt-get -qq install -y lsb-release gnupg2 curl
+        sudo apt-get -qq install -y lsb-release gnupg2
         wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
         sudo percona-release setup ps80
         sudo apt-get -qq update
 
-        # Install everything else we need, and configure
-        sudo apt-get -qq install -y percona-server-server percona-server-client make unzip g++ etcd-client etcd-server git wget eatmydata xz-utils libncurses6
-
-        {{else}}
-
-        # Get key to latest MySQL repo
-        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
-        # Setup MySQL 8.4
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.34-1_all.deb
-        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.4-lts | sudo debconf-set-selections
-        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
-        sudo apt-get -qq update
-
-        # We have to install this old version of libaio1 in case we end up testing with MySQL 5.7. See also:
-        # https://bugs.launchpad.net/ubuntu/+source/libaio/+bug/2067501
-        curl -L -O http://mirrors.kernel.org/ubuntu/pool/main/liba/libaio/libaio1_0.3.112-13build1_amd64.deb
-        sudo dpkg -i libaio1_0.3.112-13build1_amd64.deb
-        # libtinfo5 is also needed for older MySQL 5.7 builds.
-        curl -L -O http://mirrors.kernel.org/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb
-        sudo dpkg -i libtinfo5_6.3-2ubuntu0.1_amd64.deb
-
-        # Install everything else we need, and configure
-        sudo apt-get -qq install -y mysql-server mysql-shell mysql-client make unzip g++ etcd-client etcd-server curl git wget eatmydata xz-utils libncurses6
-
-        {{end}}
+        sudo apt-get -qq install -y percona-server-server percona-server-client
 
         sudo service mysql stop
-        sudo service etcd stop
+
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
-        go mod download
-
-        # install JUnit report formatter
-        go install github.com/vitessio/go-junit-report@HEAD
-
-        {{if .InstallXtraBackup}}
 
         sudo apt-get -qq install -y percona-xtrabackup-80 lz4
 
+        {{else}}
+
+        sudo apt-get -qq install -y mysql-shell
+
         {{end}}
+
+        # Install everything else we need, and configure
+        sudo apt-get -qq install -y make unzip g++ etcd-client etcd-server curl git wget xz-utils libncurses6
+
+        sudo service etcd stop
+
+        go mod download
+
+        # install JUnit report formatter
+        go install github.com/vitessio/go-junit-report@{{.GoJunitReportSHA}}
 
     {{if .NeedsMinio }}
     - name: Install Minio
@@ -238,7 +218,7 @@ jobs:
         # Some of these tests require specific locales to be installed.
         # See https://github.com/cncf/automation/commit/49f2ad7a791a62ff7d038002bbb2b1f074eed5d5
         # run the tests however you normally do, then produce a JUnit XML file
-        eatmydata -- go run test.go -docker={{if .Docker}}true -flavor={{.Platform}}{{else}}false{{end}} -follow -shard {{.Shard}}{{if .PartialKeyspace}} -partial-keyspace=true {{end}}{{if .BuildTag}} -build-tag={{.BuildTag}} {{end}} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        go run test.go -docker={{if .Docker}}true -flavor={{.Platform}}{{else}}false{{end}} -follow -shard {{.Shard}}{{if .PartialKeyspace}} -partial-keyspace=true {{end}}{{if .BuildTag}} -build-tag={{.BuildTag}} {{end}} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Record test results in launchable if PR is not a draft
       if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main' && !cancelled()

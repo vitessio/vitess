@@ -321,7 +321,6 @@ func TestVTGateBindVarError(t *testing.T) {
 }
 
 func testErrorPropagation(t *testing.T, ctx context.Context, vtg *VTGate, sbcs []*sandboxconn.SandboxConn, before func(sbc *sandboxconn.SandboxConn), after func(sbc *sandboxconn.SandboxConn), expected vtrpcpb.Code) {
-
 	// Execute
 	for _, sbc := range sbcs {
 		before(sbc)

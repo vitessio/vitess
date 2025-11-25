@@ -35,6 +35,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -204,6 +205,12 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 	}
 	defer closeFile(mwc, backupManifestFileName, params.Logger, &finalErr)
 
+	// Get the hostname
+	hostname, err := netutil.FullyQualifiedHostname()
+	if err != nil {
+		hostname = ""
+	}
+
 	// JSON-encode and write the MANIFEST
 	bm := &MySQLShellBackupManifest{
 		// Common base fields
@@ -218,6 +225,7 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 			FinishedTime:   FormatRFC3339(time.Now().UTC()),
 			ServerUUID:     serverUUID,
 			TabletAlias:    params.TabletAlias,
+			Hostname:       hostname,
 			Keyspace:       params.Keyspace,
 			Shard:          params.Shard,
 			MySQLVersion:   mysqlVersion,
@@ -514,7 +522,6 @@ func releaseReadLock(ctx context.Context, reader io.Reader, params BackupParams,
 		line := scanner.Text()
 
 		if !released {
-
 			if !strings.Contains(line, mysqlShellLockMessage) {
 				continue
 			}

@@ -17,7 +17,6 @@ limitations under the License.
 package replication
 
 import (
-	"fmt"
 	"maps"
 	"reflect"
 	"strings"
@@ -155,7 +154,6 @@ func TestMysql56GTIDSetString(t *testing.T) {
 	for want, input := range table {
 		got := strings.ToLower(input.String())
 		assert.Equal(t, want, got, "%#v.String() = %#v, want %#v", input, got, want)
-
 	}
 }
 
@@ -232,7 +230,6 @@ func TestMysql56GTIDSetContains(t *testing.T) {
 
 	for _, other := range contained {
 		assert.True(t, set.Contains(other), "Contains(%#v) = false, want true", other)
-
 	}
 
 	// Test cases that should return Contains() = false.
@@ -314,7 +311,6 @@ func TestMysql56GTIDSetEqual(t *testing.T) {
 		assert.True(t, set.Equal(other), "%#v.Equal(%#v) = false, want true", set, other)
 		// Equality should be transitive.
 		assert.True(t, other.Equal(set), "%#v.Equal(%#v) = false, want true", other, set)
-
 	}
 
 	// Test cases that should return Equal() = false.
@@ -510,7 +506,6 @@ func TestMysql56GTIDSetUnion(t *testing.T) {
 		sid3: []interval{{1, 45}},
 	}
 	assert.True(t, got.Equal(want), "set1: %#v, set1.Union(%#v) = %#v, want %#v", set1, set2, got, want)
-
 }
 
 func TestMysql56GTIDSetInPlaceUnion(t *testing.T) {
@@ -539,7 +534,6 @@ func TestMysql56GTIDSetInPlaceUnion(t *testing.T) {
 	assert.Equal(t, set1, got) // Because this is in-place
 	assert.Equal(t, want, got)
 	assert.True(t, got.Equal(want), "set1: %#v, set1.Union(%#v) = %#v, want %#v", set1, set2, got, want)
-
 }
 
 func BenchmarkMysql56GTIDSetAdd(b *testing.B) {
@@ -669,7 +663,6 @@ func TestMysql56GTIDSetDifference(t *testing.T) {
 	got = set10.Difference(set11)
 	want = Mysql56GTIDSet{}
 	assert.True(t, got.Equal(want), "got %#v; want %#v", got, want)
-
 }
 
 func TestMysql56GTIDSetSIDBlock(t *testing.T) {
@@ -711,7 +704,6 @@ func TestMysql56GTIDSetSIDBlock(t *testing.T) {
 	set, err := NewMysql56GTIDSetFromSIDBlock(want)
 	require.NoError(t, err, "Reconstructing Mysql56GTIDSet from SID block failed: %v", err)
 	assert.True(t, reflect.DeepEqual(set, input), "NewMysql56GTIDSetFromSIDBlock(%#v) = %#v, want %#v", want, set, input)
-
 }
 
 func TestMySQL56GTIDSetLast(t *testing.T) {
@@ -747,104 +739,6 @@ func TestMySQL56GTIDSetLast(t *testing.T) {
 	}
 }
 
-func TestSubtract(t *testing.T) {
-	tests := []struct {
-		name       string
-		lhs        string
-		rhs        string
-		difference string
-		wantErr    string
-	}{
-		{
-			name:       "Extra GTID set on left side",
-			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1",
-			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
-			difference: "8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1",
-		}, {
-			name:       "Extra GTID set on right side",
-			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
-			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1",
-			difference: "",
-		}, {
-			name:       "Empty left side",
-			lhs:        "",
-			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
-			difference: "",
-		}, {
-			name:       "Empty right side",
-			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1",
-			rhs:        "",
-			difference: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1",
-		}, {
-			name:       "Equal sets",
-			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1",
-			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1",
-			difference: "",
-		}, {
-			name:       "subtract prefix",
-			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
-			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-3",
-			difference: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:4-8",
-		}, {
-			name:       "subtract mid",
-			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
-			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:2-3",
-			difference: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1:4-8",
-		}, {
-			name:       "subtract suffix",
-			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
-			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:7-8",
-			difference: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-6",
-		}, {
-			name:       "subtract complex range 1",
-			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8:12-17",
-			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:7-8",
-			difference: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-6:12-17",
-		}, {
-			name:       "subtract complex range 2",
-			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8:12-17",
-			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:12-13",
-			difference: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8:14-17",
-		}, {
-			name:       "subtract complex range 3",
-			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8:12-17",
-			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:7-13",
-			difference: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-6:14-17",
-		}, {
-			name:       "subtract repeating uuid",
-			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:12-17",
-			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:7-13",
-			difference: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-6:14-17",
-		}, {
-			name:       "subtract repeating uuid in descending order",
-			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:12-17,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
-			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:7-13",
-			difference: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-6:14-17",
-		}, {
-			name:    "parsing error in left set",
-			lhs:     "incorrect set",
-			rhs:     "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
-			wantErr: `invalid MySQL 5.6 GTID set ("incorrect set"): expected uuid:interval`,
-		}, {
-			name:    "parsing error in right set",
-			lhs:     "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
-			rhs:     "incorrect set",
-			wantErr: `invalid MySQL 5.6 GTID set ("incorrect set"): expected uuid:interval`,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(fmt.Sprintf("%s: %s-%s", tt.name, tt.lhs, tt.rhs), func(t *testing.T) {
-			got, err := Subtract(tt.lhs, tt.rhs)
-			if tt.wantErr != "" {
-				assert.EqualError(t, err, tt.wantErr)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.difference, got)
-			}
-		})
-	}
-}
-
 func BenchmarkMySQL56GTIDParsing(b *testing.B) {
 	var Inputs = []string{
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5",
@@ -867,12 +761,11 @@ func BenchmarkMySQL56GTIDParsing(b *testing.B) {
 	}
 }
 
-func TestGTIDCount(t *testing.T) {
+func TestMySQL56GTIDSetCount(t *testing.T) {
 	tests := []struct {
 		name      string
 		gtidStr   string
 		wantCount int64
-		wantErr   string
 	}{
 		{
 			name:      "Empty GTID String",
@@ -894,21 +787,12 @@ func TestGTIDCount(t *testing.T) {
 			name:      "Multiple UUIDs",
 			gtidStr:   "00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:10-20,00010203-0405-0607-0809-0a0b0c0d0eff:1-5:50",
 			wantCount: 22,
-		}, {
-			name:    "Parsing error",
-			gtidStr: "incorrect set",
-			wantErr: "invalid MySQL 5.6 GTID set",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			count, err := GTIDCount(tt.gtidStr)
-			require.EqualValues(t, tt.wantCount, count)
-			if tt.wantErr != "" {
-				require.ErrorContains(t, err, tt.wantErr)
-			} else {
-				require.NoError(t, err)
-			}
+			gtidSet, _ := ParseMysql56GTIDSet(tt.gtidStr)
+			require.EqualValues(t, tt.wantCount, gtidSet.Count())
 		})
 	}
 }
@@ -980,7 +864,6 @@ func TestErrantGTIDsOnReplica(t *testing.T) {
 				require.NoError(t, err)
 				require.EqualValues(t, tt.errantGtidWanted, errantGTIDs)
 			}
-
 		})
 	}
 }

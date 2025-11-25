@@ -124,12 +124,7 @@ jobs:
 
       - name: Tune the OS
         if: steps.changes.outputs.go_files == 'true'
-        run: |
-          sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
-
-          # Don't waste a bunch of time processing man-db triggers
-          echo "set man-db/auto-update false" | sudo debconf-communicate
-          sudo dpkg-reconfigure man-db
+        uses: ./.github/actions/tune-os
 
       - name: Run go fmt
         if: steps.changes.outputs.go_files == 'true'
@@ -191,21 +186,15 @@ jobs:
           git status
           test -z "$(git diff-index --name-only HEAD --)" || exit 1
 
-      - name: Install golangci-lint
-        if: steps.changes.outputs.go_files == 'true'
-        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.0.2
-
-      - name: Clean Env
-        if: steps.changes.outputs.go_files == 'true'
-        run: $(go env GOPATH)/bin/golangci-lint cache clean
-
-      - name: Print linter version
-        if: steps.changes.outputs.go_files == 'true'
-        run: $(go env GOPATH)/bin/golangci-lint --version
-
       - name: Run golangci-lint
         if: steps.changes.outputs.go_files == 'true'
-        run: $(go env GOPATH)/bin/golangci-lint run go/... --timeout 10m || exit 1
+        uses: golangci/golangci-lint-action@v9
+        with:
+          args: --timeout 10m
+          install-mode: "goinstall"
+          skip-cache: true
+          working-directory: go
+          version: v2.1.6
 
       - name: Run go mod tidy
         if: steps.changes.outputs.go_files == 'true'

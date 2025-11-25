@@ -28,8 +28,8 @@ Flags:
       --allow-kill-statement                                             Allows the execution of kill statement
       --allowed-tablet-types strings                                     Specifies the tablet types this vtgate is allowed to route queries to. Should be provided as a comma-separated set of tablet types.
       --alsologtostderr                                                  log to standard error as well as files
-      --balancer-keyspaces strings                                       When in balanced mode, a comma-separated list of keyspaces for which to use the balancer (optional)
-      --balancer-vtgate-cells strings                                    When in balanced mode, a comma-separated list of cells that contain vtgates (required)
+      --balancer-keyspaces strings                                       Comma-separated list of keyspaces for which to use the balancer (optional). If empty, applies to all keyspaces.
+      --balancer-vtgate-cells strings                                    Comma-separated list of cells that contain vttablets. For 'prefer-cell' mode, this is required. For 'random' mode, this is optional and filters tablets to those cells.
       --bind-address string                                              Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
       --buffer-drain-concurrency int                                     Maximum number of requests retried simultaneously. More concurrency will increase the load on the PRIMARY vttablet when draining the buffer. (default 1)
       --buffer-keyspace-shards string                                    If not empty, limit buffering to these entries (comma separated). Entry format: keyspace or keyspace/shard. Requires --enable_buffer=true.
@@ -49,13 +49,14 @@ Flags:
       --consul-auth-static-file string                                   JSON File to read the topos/tokens from.
       --datadog-agent-host string                                        host to send spans to. if empty, no tracing will be done
       --datadog-agent-port string                                        port to send spans to. if empty, no tracing will be done
+      --datadog-trace-debug-mode                                         enable debug mode for datadog tracing
       --dbddl-plugin string                                              controls how to handle CREATE/DROP DATABASE. use it if you are using your own database provisioning service (default "fail")
       --ddl-strategy string                                              Set default strategy for DDL statements. Override with @@ddl_strategy session variable (default "direct")
       --default-tablet-type topodatapb.TabletType                        The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
       --discovery-high-replication-lag-minimum-serving duration          Threshold above which replication lag is considered too high when applying the min_number_serving_vttablets flag. (default 2h0m0s)
       --discovery-low-replication-lag duration                           Threshold below which replication lag is considered low enough to be healthy. (default 30s)
       --emit-stats                                                       If set, emit stats to push-based monitoring and stats backends
-      --enable-balancer                                                  Enable the tablet balancer to evenly spread query load for a given tablet type
+      --enable-balancer                                                  (DEPRECATED: use --vtgate-balancer-mode instead) Enable the tablet balancer to evenly spread query load for a given tablet type
       --enable-buffer                                                    Enable buffering (stalling) of primary traffic during failovers.
       --enable-buffer-dry-run                                            Detect and log failover events, but do not actually buffer requests.
       --enable-direct-ddl                                                Allow users to submit direct DDL statements (default true)
@@ -108,7 +109,7 @@ Flags:
       --keep-logs-by-mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
       --keyspaces-to-watch strings                                       Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema.
       --lameduck-period duration                                         keep running at least this long after SIGTERM before stopping (default 50ms)
-      --legacy-replication-lag-algorithm                                 Use the legacy algorithm when selecting vttablets for serving. (default true)
+      --legacy-replication-lag-algorithm                                 (DEPRECATED) Use the legacy algorithm when selecting vttablets for serving.
       --lock-heartbeat-time duration                                     If there is lock function used. This will keep the lock connection active by using this heartbeat (default 5s)
       --lock-timeout duration                                            Maximum time to wait when attempting to acquire a lock from the topo server (default 45s)
       --log-err-stacks                                                   log stack traces for errors
@@ -245,6 +246,7 @@ Flags:
   -v, --version                                                          print binary version
       --vmodule vModuleFlag                                              comma-separated list of pattern=N settings for file-filtered logging
       --vschema-ddl-authorized-users string                              List of users authorized to execute vschema ddl operations, or '%' to allow all users.
+      --vtgate-balancer-mode string                                      Tablet balancer mode (options: cell, prefer-cell, random). Defaults to 'cell' which shuffles tablets in the local cell.
       --vtgate-config-terse-errors                                       prevent bind vars from escaping in returned errors
       --warming-reads-concurrency int                                    Number of concurrent warming reads allowed (default 500)
       --warming-reads-percent int                                        Percentage of reads on the primary to forward to replicas. Useful for keeping buffer pools warm

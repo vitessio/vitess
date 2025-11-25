@@ -94,7 +94,6 @@ func TestMain(m *testing.M) {
 
 // TestVtadminAPIs tests the vtadmin APIs.
 func TestVtadminAPIs(t *testing.T) {
-
 	// Test the vtadmin APIs
 	t.Run("keyspaces api", func(t *testing.T) {
 		resp := clusterInstance.VtadminProcess.MakeAPICallRetry(t, "api/keyspaces")

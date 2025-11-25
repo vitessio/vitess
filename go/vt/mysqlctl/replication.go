@@ -549,10 +549,10 @@ func (mysqld *Mysqld) ResetReplicationParameters(ctx context.Context) error {
 //
 // Array indices for the results of SHOW PROCESSLIST.
 const (
-	colConnectionID = iota //nolint
-	colUsername            //nolint
+	colConnectionID = iota
+	colUsername
 	colClientAddr
-	colDbName //nolint
+	colDbName
 	colCommand
 )
 
@@ -650,7 +650,7 @@ func (mysqld *Mysqld) GetPreviousGTIDs(ctx context.Context, binlog string) (prev
 		}
 	}
 	if !previousGtidsFound {
-		return previousGtids, fmt.Errorf("GetPreviousGTIDs: previous GTIDs not found")
+		return previousGtids, errors.New("GetPreviousGTIDs: previous GTIDs not found")
 	}
 	return previousGtids, nil
 }

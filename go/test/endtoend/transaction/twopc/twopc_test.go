@@ -1513,7 +1513,7 @@ func TestReadTransactionStatus(t *testing.T) {
 	// Also try running the RPC from vtctld and verify we see the same values.
 	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("DistributedTransaction",
 		"Read",
-		fmt.Sprintf(`--dtid=%s`, unresTransaction.Dtid),
+		"--dtid="+unresTransaction.Dtid,
 	)
 	require.NoError(t, err)
 	require.Contains(t, out, "insert into twopc_t1(id, col) values (9, 4)")

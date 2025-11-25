@@ -317,7 +317,6 @@ func (fz *fuzzer) runFuzzerThread(t *testing.T, keyspace string, fuzzerThreadId 
 		default:
 			panic("Unknown query format")
 		}
-
 	}
 }
 

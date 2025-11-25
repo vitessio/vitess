@@ -17,7 +17,6 @@ limitations under the License.
 package workflow
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -109,8 +108,8 @@ func (s *State) String() string {
 		// at the shard level, so reads are effectively switched on the
 		// shard when writes are switched.
 		if len(s.ShardsAlreadySwitched) > 0 && len(s.ShardsNotYetSwitched) > 0 {
-			stateInfo = append(stateInfo, fmt.Sprintf("Reads partially switched, for shards: %s", strings.Join(s.ShardsAlreadySwitched, ",")))
-			stateInfo = append(stateInfo, fmt.Sprintf("Writes partially switched, for shards: %s", strings.Join(s.ShardsAlreadySwitched, ",")))
+			stateInfo = append(stateInfo, "Reads partially switched, for shards: "+strings.Join(s.ShardsAlreadySwitched, ","))
+			stateInfo = append(stateInfo, "Writes partially switched, for shards: "+strings.Join(s.ShardsAlreadySwitched, ","))
 		} else {
 			if len(s.ShardsAlreadySwitched) == 0 {
 				stateInfo = append(stateInfo, "Reads Not Switched")

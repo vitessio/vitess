@@ -5,9 +5,10 @@
   <parent>
     <groupId>io.vitess</groupId>
     <artifactId>vitess-parent</artifactId>
-    <version>23.0.0-SNAPSHOT</version>
+    <version>24.0.0-SNAPSHOT</version>
   </parent>
   <artifactId>vitess-grpc-client</artifactId>
+  <name>Vitess gRPC Client</name>
 
   <dependencies>
     <dependency>

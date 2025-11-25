@@ -19,7 +19,6 @@ package reparentutil
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -4119,7 +4118,7 @@ func TestPlannedReparenter_verifyAllTabletsReachable(t *testing.T) {
 					Error    error
 				}{
 					"zone1-0000000200": {
-						Error: fmt.Errorf("primary status failed"),
+						Error: errors.New("primary status failed"),
 					},
 					"zone1-0000000201": {
 						Statuses: map[string]string{

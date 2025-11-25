@@ -273,7 +273,7 @@ func (tsv *TabletServer) loadQueryTimeoutWithTxAndOptions(txID int64, options *q
 	}
 
 	// fetch the transaction timeout.
-	txTimeout := tsv.config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP)
+	txTimeout := getTransactionTimeout(options, tsv.config, querypb.ExecuteOptions_OLTP)
 
 	// Use the smaller of the two values (0 means infinity).
 	return smallerTimeout(timeout, txTimeout)
@@ -295,7 +295,7 @@ func (tsv *TabletServer) loadQueryTimeoutWithOptions(options *querypb.ExecuteOpt
 //     for all new queries (see Execute() function and call to GetPlan())
 //  2. affecting already existing rules: a Rule has a context.WithCancel, that is cancelled by onlineDDLExecutor
 func (tsv *TabletServer) onlineDDLExecutorToggleTableBuffer(bufferingCtx context.Context, tableName string, timeout time.Duration, bufferQueries bool) {
-	queryRuleSource := fmt.Sprintf("onlineddl/%s", tableName)
+	queryRuleSource := "onlineddl/" + tableName
 
 	if bufferQueries {
 		tsv.RegisterQueryRuleSource(queryRuleSource)
@@ -1024,7 +1024,7 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 		allowOnShutdown = true
 		// Use the transaction timeout. StreamExecute calls happen for OLAP only,
 		// so we can directly fetch the OLAP TX timeout.
-		timeout = tsv.config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLAP)
+		timeout = getTransactionTimeout(options, tsv.config, querypb.ExecuteOptions_OLAP)
 	}
 
 	return tsv.execRequest(
@@ -1078,7 +1078,6 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 
 // BeginExecute combines Begin and Execute.
 func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Target, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (queryservice.TransactionState, *sqltypes.Result, error) {
-
 	// Disable hot row protection in case of reserve connection.
 	if tsv.enableHotRowProtection && reservedID == 0 {
 		txDone, err := tsv.beginWaitForSameRangeTransactions(ctx, target, options, sql, bindVariables)
@@ -1431,7 +1430,6 @@ func (tsv *TabletServer) ReserveBeginStreamExecute(
 
 // ReserveExecute implements the QueryService interface
 func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Target, settings []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (state queryservice.ReservedState, result *sqltypes.Result, err error) {
-
 	result, err = tsv.executeWithSettings(ctx, target, settings, sql, bindVariables, transactionID, options)
 	// If there is an error and the error message is about allowing query in reserved connection only,
 	// then we do not return an error from here and continue to use the reserved connection path.
@@ -1814,7 +1812,7 @@ func (tsv *TabletServer) healthzHandler(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "500 internal server error: vttablet is not serving", http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Length", fmt.Sprintf("%v", len(okMessage)))
+	w.Header().Set("Content-Length", strconv.Itoa(len(okMessage)))
 	w.WriteHeader(http.StatusOK)
 	w.Write(okMessage)
 }

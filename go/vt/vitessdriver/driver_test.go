@@ -569,6 +569,7 @@ func TestTx(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer s.Close()
 
 	_, err = s.Exec(int64(0))
 	if err != nil {
@@ -594,10 +595,12 @@ func TestTx(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.Query(int64(0))
+	defer s.Close()
+	r, err := s.Query(int64(0))
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer r.Close()
 	err = tx.Rollback()
 	if err != nil {
 		t.Fatal(err)
@@ -648,6 +651,7 @@ func TestSessionToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer s.Close()
 
 	_, err = s.Exec(int64(0))
 	if err != nil {
@@ -674,6 +678,7 @@ func TestSessionToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer newS.Close()
 
 	_, err = newS.Exec(int64(1))
 	if err != nil {

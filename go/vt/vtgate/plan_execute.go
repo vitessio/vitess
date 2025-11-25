@@ -285,7 +285,7 @@ func (e *Executor) insideTransaction(ctx context.Context, safeSession *econtext.
 		}
 		// The defer acts as a failsafe. If commit was successful,
 		// the rollback will be a no-op.
-		defer e.txConn.Rollback(ctx, safeSession) // nolint:errcheck
+		defer e.txConn.Rollback(ctx, safeSession) //nolint:errcheck
 	}
 
 	// The SetAutocommitable flag should be same as mustCommit.
@@ -327,7 +327,6 @@ func (e *Executor) executePlan(
 	logStats *logstats.LogStats,
 	execStart time.Time,
 ) (*sqltypes.Result, error) {
-
 	// 4: Execute!
 	qr, err := vcursor.ExecutePrimitive(ctx, plan.Instructions, bindVars, true)
 

@@ -98,7 +98,7 @@ var (
 
 	replicationConnectRetry = 10 * time.Second
 
-	versionRegex = regexp.MustCompile(fmt.Sprintf(`%s([0-9]+)\.([0-9]+)\.([0-9]+)`, versionStringPrefix))
+	versionRegex = regexp.MustCompile(versionStringPrefix + "([0-9]+)\\.([0-9]+)\\.([0-9]+)")
 	// versionSQLQuery will return a version string directly from
 	// a MySQL server that is compatible with what we expect from
 	// mysqld --version and matches the versionRegex. Example
@@ -355,7 +355,7 @@ func (mysqld *Mysqld) startNoWait(cnf *Mycnf, mysqldArgs ...string) error {
 	switch hr := hook.NewHook("mysqld_start", mysqldArgs).Execute(); hr.ExitStatus {
 	case hook.HOOK_SUCCESS:
 		// hook exists and worked, we can keep going
-		name = "mysqld_start hook" // nolint
+		name = "mysqld_start hook" //nolint:ineffassign
 	case hook.HOOK_DOES_NOT_EXIST:
 		// hook doesn't exist, run mysqld_safe ourselves
 		log.Infof("%v: No mysqld_start hook, running mysqld_safe directly", ts)
@@ -461,7 +461,7 @@ func (mysqld *Mysqld) startNoWait(cnf *Mycnf, mysqldArgs ...string) error {
 }
 
 func cleanupLockfile(socket string, ts string) error {
-	lockPath := fmt.Sprintf("%s.lock", socket)
+	lockPath := socket + ".lock"
 	pid, err := os.ReadFile(lockPath)
 	if errors.Is(err, os.ErrNotExist) {
 		log.Infof("%v: no stale lock file at %s", ts, lockPath)
@@ -1216,7 +1216,7 @@ socket=%v
 		return "", err
 	}
 	name := tmpfile.Name()
-	if _, err := tmpfile.Write([]byte(contents)); err != nil {
+	if _, err := tmpfile.WriteString(contents); err != nil {
 		tmpfile.Close()
 		os.Remove(name)
 		return "", err

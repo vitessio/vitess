@@ -28253,6 +28253,194 @@ export namespace tabletmanagerdata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a RestartReplicationRequest. */
+    interface IRestartReplicationRequest {
+
+        /** RestartReplicationRequest semiSync */
+        semiSync?: (boolean|null);
+    }
+
+    /** Represents a RestartReplicationRequest. */
+    class RestartReplicationRequest implements IRestartReplicationRequest {
+
+        /**
+         * Constructs a new RestartReplicationRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IRestartReplicationRequest);
+
+        /** RestartReplicationRequest semiSync. */
+        public semiSync: boolean;
+
+        /**
+         * Creates a new RestartReplicationRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RestartReplicationRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IRestartReplicationRequest): tabletmanagerdata.RestartReplicationRequest;
+
+        /**
+         * Encodes the specified RestartReplicationRequest message. Does not implicitly {@link tabletmanagerdata.RestartReplicationRequest.verify|verify} messages.
+         * @param message RestartReplicationRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IRestartReplicationRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RestartReplicationRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.RestartReplicationRequest.verify|verify} messages.
+         * @param message RestartReplicationRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IRestartReplicationRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RestartReplicationRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RestartReplicationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.RestartReplicationRequest;
+
+        /**
+         * Decodes a RestartReplicationRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RestartReplicationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.RestartReplicationRequest;
+
+        /**
+         * Verifies a RestartReplicationRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RestartReplicationRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RestartReplicationRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.RestartReplicationRequest;
+
+        /**
+         * Creates a plain object from a RestartReplicationRequest message. Also converts values to other types if specified.
+         * @param message RestartReplicationRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.RestartReplicationRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RestartReplicationRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RestartReplicationRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a RestartReplicationResponse. */
+    interface IRestartReplicationResponse {
+    }
+
+    /** Represents a RestartReplicationResponse. */
+    class RestartReplicationResponse implements IRestartReplicationResponse {
+
+        /**
+         * Constructs a new RestartReplicationResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IRestartReplicationResponse);
+
+        /**
+         * Creates a new RestartReplicationResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RestartReplicationResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IRestartReplicationResponse): tabletmanagerdata.RestartReplicationResponse;
+
+        /**
+         * Encodes the specified RestartReplicationResponse message. Does not implicitly {@link tabletmanagerdata.RestartReplicationResponse.verify|verify} messages.
+         * @param message RestartReplicationResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IRestartReplicationResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RestartReplicationResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.RestartReplicationResponse.verify|verify} messages.
+         * @param message RestartReplicationResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IRestartReplicationResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RestartReplicationResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RestartReplicationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.RestartReplicationResponse;
+
+        /**
+         * Decodes a RestartReplicationResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RestartReplicationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.RestartReplicationResponse;
+
+        /**
+         * Verifies a RestartReplicationResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RestartReplicationResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RestartReplicationResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.RestartReplicationResponse;
+
+        /**
+         * Creates a plain object from a RestartReplicationResponse message. Also converts values to other types if specified.
+         * @param message RestartReplicationResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.RestartReplicationResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RestartReplicationResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RestartReplicationResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a StartReplicationUntilAfterRequest. */
     interface IStartReplicationUntilAfterRequest {
 
@@ -41905,6 +42093,9 @@ export namespace query {
 
         /** ExecuteOptions in_dml_execution */
         in_dml_execution?: (boolean|null);
+
+        /** ExecuteOptions transaction_timeout */
+        transaction_timeout?: (number|Long|null);
     }
 
     /** Represents an ExecuteOptions. */
@@ -41960,6 +42151,9 @@ export namespace query {
 
         /** ExecuteOptions in_dml_execution. */
         public in_dml_execution: boolean;
+
+        /** ExecuteOptions transaction_timeout. */
+        public transaction_timeout?: (number|Long|null);
 
         /** ExecuteOptions timeout. */
         public timeout?: "authoritative_timeout";
@@ -80575,6 +80769,14 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** TableCopyPhase enum. */
+    enum TableCopyPhase {
+        UNKNOWN = 0,
+        NOT_STARTED = 1,
+        IN_PROGRESS = 2,
+        COMPLETE = 3
+    }
+
     /** Properties of a WorkflowStatusResponse. */
     interface IWorkflowStatusResponse {
 
@@ -80706,6 +80908,9 @@ export namespace vtctldata {
 
             /** TableCopyState bytes_percentage */
             bytes_percentage?: (number|null);
+
+            /** TableCopyState phase */
+            phase?: (vtctldata.TableCopyPhase|null);
         }
 
         /** Represents a TableCopyState. */
@@ -80734,6 +80939,9 @@ export namespace vtctldata {
 
             /** TableCopyState bytes_percentage. */
             public bytes_percentage: number;
+
+            /** TableCopyState phase. */
+            public phase: vtctldata.TableCopyPhase;
 
             /**
              * Creates a new TableCopyState instance using the specified properties.

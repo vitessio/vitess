@@ -443,7 +443,6 @@ func TestExecutorUnresolvedTransactions(t *testing.T) {
 			require.WithinDuration(t, timeCreated, tcase.expected, 10*time.Millisecond)
 		})
 	}
-
 }
 
 func convertNanoStringToTime(t *testing.T, unixNanoStr string) time.Time {

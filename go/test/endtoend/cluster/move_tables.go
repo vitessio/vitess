@@ -17,7 +17,6 @@ limitations under the License.
 package cluster
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -95,7 +94,7 @@ func (mtw *MoveTablesWorkflow) WaitForVreplCatchup(timeToWait time.Duration) {
 		}
 		for _, shard := range ks.Shards {
 			vttablet := shard.PrimaryTablet().VttabletProcess
-			vttablet.WaitForVReplicationToCatchup(mtw.t, mtw.workflowName, fmt.Sprintf("vt_%s", vttablet.Keyspace), "", timeToWait)
+			vttablet.WaitForVReplicationToCatchup(mtw.t, mtw.workflowName, "vt_"+vttablet.Keyspace, "", timeToWait)
 		}
 	}
 }

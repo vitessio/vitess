@@ -18,6 +18,7 @@ package smartconnpool
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"sync"
@@ -83,7 +84,7 @@ func (tr *TestConn) ResetSetting(ctx context.Context) error {
 
 func (tr *TestConn) ApplySetting(ctx context.Context, setting *Setting) error {
 	if tr.failApply {
-		return fmt.Errorf("ApplySetting failed")
+		return errors.New("ApplySetting failed")
 	}
 	tr.setting = setting
 	return nil
@@ -109,7 +110,7 @@ func newConnector(state *TestState) Connector[*TestConn] {
 			time.Sleep(state.chaos.delayConnect)
 		}
 		if state.chaos.failConnect.Load() {
-			return nil, fmt.Errorf("failed to connect: forced failure")
+			return nil, errors.New("failed to connect: forced failure")
 		}
 		return &TestConn{
 			num:         state.lastID.Add(1),
@@ -619,7 +620,6 @@ func TestConnReopen(t *testing.T) {
 	time.Sleep(300 * time.Millisecond)
 	// no active connection should be left.
 	assert.Zero(t, p.Active())
-
 }
 
 func TestIdleTimeout(t *testing.T) {
@@ -969,7 +969,6 @@ func TestTimeout(t *testing.T) {
 		_, err = p.Get(newctx, setting)
 		cancel()
 		assert.EqualError(t, err, "connection pool timed out")
-
 	}
 
 	// put the connection take was taken initially.
@@ -1239,5 +1238,84 @@ func TestGetSpike(t *testing.T) {
 		}
 
 		close(errs)
+	}
+}
+
+// TestCloseDuringWaitForConn confirms that we do not get hung when the pool gets
+// closed while we are waiting for a connection from it.
+func TestCloseDuringWaitForConn(t *testing.T) {
+	ctx := context.Background()
+	goRoutineCnt := 50
+	getTimeout := 2000 * time.Millisecond
+
+	for range 50 {
+		hung := make(chan (struct{}), goRoutineCnt)
+		var state TestState
+		p := NewPool(&Config[*TestConn]{
+			Capacity:     1,
+			MaxIdleCount: 1,
+			IdleTimeout:  time.Second,
+			LogWait:      state.LogWait,
+		}).Open(newConnector(&state), nil)
+
+		closed := atomic.Bool{}
+		wg := sync.WaitGroup{}
+		var count atomic.Int64
+
+		fmt.Println("Starting TestCloseDuringWaitForConn")
+
+		// Spawn multiple goroutines to perform Get and Put operations, but only
+		// allow connections to be checked out until `closed` has been set to true.
+		for range goRoutineCnt {
+			wg.Go(func() {
+				for !closed.Load() {
+					timeout := time.After(getTimeout)
+					getCtx, getCancel := context.WithTimeout(ctx, getTimeout/3)
+					defer getCancel()
+					done := make(chan struct{})
+					go func() {
+						defer close(done)
+						r, err := p.Get(getCtx, nil)
+						if err != nil {
+							return
+						}
+						count.Add(1)
+						r.Recycle()
+					}()
+					select {
+					case <-timeout:
+						hung <- struct{}{}
+						return
+					case <-done:
+					}
+				}
+			})
+		}
+
+		// Let the go-routines get up and running.
+		for count.Load() < 5000 {
+			time.Sleep(1 * time.Millisecond)
+		}
+
+		// Close the pool, which should allow all goroutines to finish.
+		closeCtx, closeCancel := context.WithTimeout(ctx, 1*time.Second)
+		defer closeCancel()
+		err := p.CloseWithContext(closeCtx)
+		closed.Store(true)
+		require.NoError(t, err, "Failed to close pool")
+
+		// Wait for all goroutines to finish.
+		wg.Wait()
+		select {
+		case <-hung:
+			require.FailNow(t, "Race encountered and deadlock detected")
+		default:
+		}
+
+		fmt.Println("Count of connections checked out:", count.Load())
+		// Check that the pool is closed and no connections are available.
+		require.EqualValues(t, 0, p.Capacity())
+		require.EqualValues(t, 0, p.Available())
+		require.EqualValues(t, 0, state.open.Load())
 	}
 }

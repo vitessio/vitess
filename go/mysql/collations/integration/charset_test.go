@@ -114,7 +114,6 @@ func TestCJKStress(t *testing.T) {
 						input := string(cp)
 						ours, theirs := convert([]byte(input))
 						require.True(t, bytes.Equal(ours, theirs), "%s: bad conversion for %q (U+%04X). ours: %#v, theirs: %#v", local.Name(), input, cp, ours, theirs)
-
 					}
 					panic("???")
 				}
@@ -127,7 +126,6 @@ func TestCJKStress(t *testing.T) {
 
 						ours2, theirs2 := unconvert(ours)
 						require.True(t, bytes.Equal(ours2, theirs2), "%s: bad return conversion for %q (U+%04X) %#v. ours: %#v, theirs: %#v", local.Name(), input, cp, ours, ours2, theirs2)
-
 					}
 					panic("???")
 				}

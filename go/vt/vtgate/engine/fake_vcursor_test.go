@@ -321,6 +321,8 @@ func (t *noopVCursor) SetClientFoundRows(context.Context, bool) error {
 func (t *noopVCursor) SetQueryTimeout(maxExecutionTime int64) {
 }
 
+func (t *noopVCursor) SetTransactionTimeout(timeout int64) {}
+
 func (t *noopVCursor) SetSkipQueryPlanCache(context.Context, bool) error {
 	panic("implement me")
 }
@@ -414,6 +416,7 @@ func (t *noopVCursor) DisableLogging()        {}
 func (t *noopVCursor) GetVExplainLogs() []ExecuteEntry {
 	return nil
 }
+
 func (t *noopVCursor) GetLogs() ([]ExecuteEntry, error) {
 	return nil, nil
 }
@@ -572,7 +575,7 @@ func (f *loggingVCursor) Session() SessionActions {
 }
 
 func (f *loggingVCursor) SetTarget(target string) error {
-	f.log = append(f.log, fmt.Sprintf("Target set to %s", target))
+	f.log = append(f.log, "Target set to "+target)
 	return nil
 }
 

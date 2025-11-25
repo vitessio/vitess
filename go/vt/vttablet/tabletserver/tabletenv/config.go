@@ -959,6 +959,11 @@ func (c *TabletConfig) checkConnectionForExternalMysql() error {
 		Uname:      c.DB.App.User,
 		Pass:       c.DB.App.Password,
 		UnixSocket: c.DB.Socket,
+		SslMode:    c.DB.SslMode,
+		SslCa:      c.DB.SslCa,
+		SslCaPath:  c.DB.SslCaPath,
+		SslCert:    c.DB.SslCert,
+		SslKey:     c.DB.SslKey,
 	}
 
 	conn, err := mysql.Connect(context.Background(), &params)
@@ -996,7 +1001,7 @@ func (c *TabletConfig) verifyTransactionLimitConfig() error {
 		return fmt.Errorf("--transaction-limit-per-user should be a fraction within range (0, 1) (specified value: %v)", v)
 	}
 	if limit := int(c.TransactionLimitPerUser * float64(c.TxPool.Size)); limit == 0 {
-		return fmt.Errorf("effective transaction limit per user is 0 due to rounding, increase --transaction-limit-per-user")
+		return errors.New("effective transaction limit per user is 0 due to rounding, increase --transaction-limit-per-user")
 	}
 	return nil
 }
