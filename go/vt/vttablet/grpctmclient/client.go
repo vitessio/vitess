@@ -301,7 +301,7 @@ func (client *grpcClient) Close() {
 
 		for _, addrMap := range client.rpcDialPoolMap {
 			for _, tm := range addrMap {
-				if tm != nil && tm.tmc.cc != nil {
+				if tm != nil && tm.tmc != nil && tm.tmc.cc != nil {
 					tm.tmc.cc.Close()
 				}
 			}
