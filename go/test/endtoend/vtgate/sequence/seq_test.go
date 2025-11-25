@@ -384,7 +384,7 @@ func TestLastInsertIDWithSequence(t *testing.T) {
 			"LAST_INSERT_ID() should not be 0 after INSERT with sequence in sharded keyspace")
 
 		// Verify the inserted row has the same ID
-		qr = utils.Exec(t, conn, fmt.Sprintf("select id from allDefaults where id = %s", lastInsertID))
+		qr = utils.Exec(t, conn, "select id from allDefaults where id = "+lastInsertID)
 		assert.Equal(t, 1, len(qr.Rows),
 			"should be able to find the row by the LAST_INSERT_ID value")
 	})
