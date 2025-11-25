@@ -69,7 +69,9 @@ func BenchmarkThrottler_100kQPS(b *testing.B) {
 
 // benchmarkThrottler shows that Throttler actually throttles requests.
 func benchmarkThrottler(b *testing.B, qps int64) {
-	throttler, _ := NewThrottler("test", "queries", 1, qps, ReplicationLagModuleDisabled)
+	throttler, err := NewThrottler("test", "queries", 1, qps, ReplicationLagModuleDisabled)
+	require.NoError(b, err)
+
 	defer throttler.Close()
 	backoffs := 0
 	b.ResetTimer()
@@ -109,7 +111,9 @@ func BenchmarkThrottlerParallel_100kQPS(b *testing.B) {
 // to the value of benchmarkThrottler.
 func benchmarkThrottlerParallel(b *testing.B, qps int64) {
 	threadCount := runtime.GOMAXPROCS(0)
-	throttler, _ := NewThrottler("test", "queries", threadCount, qps, ReplicationLagModuleDisabled)
+	throttler, err := NewThrottler("test", "queries", threadCount, qps, ReplicationLagModuleDisabled)
+	require.NoError(b, err)
+
 	defer throttler.Close()
 	threadIDs := make(chan int, threadCount)
 	for id := 0; id < threadCount; id++ {
@@ -142,7 +146,9 @@ func benchmarkThrottlerParallel(b *testing.B, qps int64) {
 // BenchmarkThrottlerDisabled is the unthrottled version of
 // BenchmarkThrottler. It should report a much lower ns/op value.
 func BenchmarkThrottlerDisabled(b *testing.B) {
-	throttler, _ := NewThrottler("test", "queries", 1, MaxRateModuleDisabled, ReplicationLagModuleDisabled)
+	throttler, err := NewThrottler("test", "queries", 1, MaxRateModuleDisabled, ReplicationLagModuleDisabled)
+	require.NoError(b, err)
+
 	defer throttler.Close()
 	b.ResetTimer()
 
@@ -182,7 +188,9 @@ func newThrottlerWithClock(name, unit string, threadCount int, maxRate int64, ma
 func TestThrottle(t *testing.T) {
 	fc := &fakeClock{}
 	// 1 Thread, 2 QPS.
-	throttler, _ := newThrottlerWithClock("test", "queries", 1, 2, ReplicationLagModuleDisabled, fc.now)
+	throttler, err := newThrottlerWithClock("test", "queries", 1, 2, ReplicationLagModuleDisabled, fc.now)
+	require.NoError(t, err)
+
 	defer throttler.Close()
 
 	fc.setNow(1000 * time.Millisecond)
@@ -218,7 +226,9 @@ func TestThrottle(t *testing.T) {
 func TestThrottle_RateRemainderIsDistributedAcrossThreads(t *testing.T) {
 	fc := &fakeClock{}
 	// 3 Threads, 5 QPS.
-	throttler, _ := newThrottlerWithClock("test", "queries", 3, 5, ReplicationLagModuleDisabled, fc.now)
+	throttler, err := newThrottlerWithClock("test", "queries", 3, 5, ReplicationLagModuleDisabled, fc.now)
+	require.NoError(t, err)
+
 	defer throttler.Close()
 
 	fc.setNow(1000 * time.Millisecond)
@@ -254,7 +264,9 @@ func TestThrottle_RateRemainderIsDistributedAcrossThreads(t *testing.T) {
 func TestThreadFinished(t *testing.T) {
 	fc := &fakeClock{}
 	// 2 Threads, 2 QPS.
-	throttler, _ := newThrottlerWithClock("test", "queries", 2, 2, ReplicationLagModuleDisabled, fc.now)
+	throttler, err := newThrottlerWithClock("test", "queries", 2, 2, ReplicationLagModuleDisabled, fc.now)
+	require.NoError(t, err)
+
 	defer throttler.Close()
 
 	// [1000ms, 2000ms):  Each thread consumes their 1 QPS.
@@ -319,7 +331,9 @@ func TestThreadFinished(t *testing.T) {
 func TestThrottle_MaxRateIsZero(t *testing.T) {
 	fc := &fakeClock{}
 	// 1 Thread, 0 QPS.
-	throttler, _ := newThrottlerWithClock("test", "queries", 1, ZeroRateNoProgess, ReplicationLagModuleDisabled, fc.now)
+	throttler, err := newThrottlerWithClock("test", "queries", 1, ZeroRateNoProgess, ReplicationLagModuleDisabled, fc.now)
+	require.NoError(t, err)
+
 	defer throttler.Close()
 
 	fc.setNow(1000 * time.Millisecond)
@@ -340,7 +354,9 @@ func TestThrottle_MaxRateIsZero(t *testing.T) {
 
 func TestThrottle_MaxRateDisabled(t *testing.T) {
 	fc := &fakeClock{}
-	throttler, _ := newThrottlerWithClock("test", "queries", 1, MaxRateModuleDisabled, ReplicationLagModuleDisabled, fc.now)
+	throttler, err := newThrottlerWithClock("test", "queries", 1, MaxRateModuleDisabled, ReplicationLagModuleDisabled, fc.now)
+	require.NoError(t, err)
+
 	defer throttler.Close()
 
 	fc.setNow(1000 * time.Millisecond)
@@ -357,7 +373,9 @@ func TestThrottle_MaxRateDisabled(t *testing.T) {
 func TestThrottle_MaxRateLowerThanThreadCount(t *testing.T) {
 	fc := &fakeClock{}
 	// 2 Thread, 1 QPS.
-	throttler, _ := newThrottlerWithClock("test", "queries", 2, 1, ReplicationLagModuleDisabled, fc.now)
+	throttler, err := newThrottlerWithClock("test", "queries", 2, 1, ReplicationLagModuleDisabled, fc.now)
+	require.NoError(t, err)
+
 	defer throttler.Close()
 
 	// 2 QPS instead of configured 1 QPS allowed since there are 2 threads which
@@ -376,7 +394,9 @@ func TestThrottle_MaxRateLowerThanThreadCount(t *testing.T) {
 
 func TestUpdateMaxRate_AllThreadsFinished(t *testing.T) {
 	fc := &fakeClock{}
-	throttler, _ := newThrottlerWithClock("test", "queries", 2, 1e9, ReplicationLagModuleDisabled, fc.now)
+	throttler, err := newThrottlerWithClock("test", "queries", 2, 1e9, ReplicationLagModuleDisabled, fc.now)
+	require.NoError(t, err)
+
 	defer throttler.Close()
 
 	throttler.ThreadFinished(0)
@@ -391,7 +411,9 @@ func TestUpdateMaxRate_AllThreadsFinished(t *testing.T) {
 
 func TestClose(t *testing.T) {
 	fc := &fakeClock{}
-	throttler, _ := newThrottlerWithClock("test", "queries", 1, 1, ReplicationLagModuleDisabled, fc.now)
+	throttler, err := newThrottlerWithClock("test", "queries", 1, 1, ReplicationLagModuleDisabled, fc.now)
+	require.NoError(t, err)
+
 	throttler.Close()
 
 	defer func() {
@@ -404,7 +426,11 @@ func TestClose(t *testing.T) {
 
 func TestThreadFinished_SecondCallPanics(t *testing.T) {
 	fc := &fakeClock{}
-	throttler, _ := newThrottlerWithClock("test", "queries", 1, 1, ReplicationLagModuleDisabled, fc.now)
+	throttler, err := newThrottlerWithClock("test", "queries", 1, 1, ReplicationLagModuleDisabled, fc.now)
+
+	require.NoError(t, err)
+	defer throttler.Close()
+
 	throttler.ThreadFinished(0)
 
 	defer func() {
