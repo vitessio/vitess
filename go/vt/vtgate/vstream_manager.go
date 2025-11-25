@@ -146,10 +146,8 @@ type vstream struct {
 	// At what point, without any activity in the stream, should we consider it dead.
 	streamLivenessTimer *time.Timer
 
-	// When a transaction exceeds this size, the VStream will acquire a lock to ensure contiguous,
-	// non-interleaved delivery of the transaction's events (BEGIN...ROW...COMMIT are sent sequentially
-	// without events from other shards of the vstream mixed in between).
-	// Transactions smaller than this threshold are sent without locking for better parallelism.
+	// When a transaction exceeds this size, VStream acquires a lock to ensure contiguous delivery.
+	// Smaller transactions are sent without locking for better parallelism.
 	transactionChunkSizeBytes int
 
 	flags *vtgatepb.VStreamFlags
@@ -702,18 +700,13 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			Options:      options,
 		}
 		log.Infof("Starting to vstream from %s, with req %+v", tabletAliasString, req)
-		// Track if we're holding the lock across callbacks for a chunked transaction
 		var txLockHeld bool
-		// Track if we're in the middle of a transaction across callbacks
 		var inTransaction bool
-		// Track accumulated transaction size across callbacks
 		var accumulatedSize int
 
 		err = tabletConn.VStream(ctx, req, func(events []*binlogdatapb.VEvent) error {
-			// We received a valid event. Reset error count.
 			errCount = 0
 
-			// Release lock on any return from this callback
 			defer func() {
 				if txLockHeld {
 					vs.mu.Unlock()
@@ -744,9 +737,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 
 			sendevents := make([]*binlogdatapb.VEvent, 0, len(events))
 			for i, event := range events {
-				vs.streamLivenessTimer.Reset(livenessTimeout) // Any event in the stream demonstrates liveness
-
-				// Track event size for transaction limit detection
+				vs.streamLivenessTimer.Reset(livenessTimeout)
 				accumulatedSize += event.SizeVT()
 
 				switch event.Type {
@@ -759,7 +750,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 				case binlogdatapb.VEventType_ROW:
 					ev := maybeUpdateTableName(event, sgtid.Keyspace, vs.flags.GetExcludeKeyspaceFromTableName(), extractRowTableName)
 					sendevents = append(sendevents, ev)
-				case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER:
+				case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER, binlogdatapb.VEventType_ROLLBACK:
 					inTransaction = false
 					accumulatedSize = 0
 					sendevents = append(sendevents, event)
@@ -875,15 +866,11 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 				eventss = append(eventss, sendevents)
 			}
 
-			// Release lock if transaction completed in this callback (safety check)
-			// This handles cases where the lock wasn't released in the COMMIT handler
 			if !inTransaction && txLockHeld {
 				vs.mu.Unlock()
 				txLockHeld = false
 			}
 
-			// Send accumulated events only if holding lock (large chunked transaction in progress)
-			// If not holding lock, all events were already sent by COMMIT/DDL/OTHER handlers
 			if len(eventss) > 0 && txLockHeld {
 				if err := vs.sendEventsLocked(ctx, sgtid, eventss); err != nil {
 					log.Infof("vstream for %s/%s, error in sendAll at end of callback: %v", sgtid.Keyspace, sgtid.Shard, err)
@@ -893,13 +880,10 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			}
 
 			if inTransaction && !txLockHeld && accumulatedSize > vs.transactionChunkSizeBytes {
-				// Large incomplete transaction detected - acquire lock to prevent interleaving
-				// Lock will be held across subsequent callbacks until transaction completes
 				log.Infof("vstream for %s/%s: transaction size %d bytes exceeds chunk size %d bytes, acquiring lock for contiguous delivery",
 					sgtid.Keyspace, sgtid.Shard, accumulatedSize, vs.transactionChunkSizeBytes)
 				vs.mu.Lock()
 				txLockHeld = true
-				// Send accumulated events immediately now that we have the lock
 				if len(eventss) > 0 {
 					if err := vs.sendEventsLocked(ctx, sgtid, eventss); err != nil {
 						log.Infof("vstream for %s/%s, error sending events after acquiring lock: %v", sgtid.Keyspace, sgtid.Shard, err)
@@ -1028,7 +1012,6 @@ func (vs *vstream) sendAll(ctx context.Context, sgtid *binlogdatapb.ShardGtid, e
 }
 
 // sendEventsLocked sends events assuming vs.mu is already held by the caller.
-// This is used when sending events while holding the transaction lock.
 func (vs *vstream) sendEventsLocked(ctx context.Context, sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdatapb.VEvent) error {
 	labelValues := []string{sgtid.Keyspace, sgtid.Shard, vs.tabletType.String()}
 

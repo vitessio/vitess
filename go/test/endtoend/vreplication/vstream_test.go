@@ -96,7 +96,6 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 		execVtgateQuery(t, vtgateConn, defaultSourceKs, fmt.Sprintf("insert into merchant (mname, category) values ('mname%d', 'category%d')", id+100, id))
 	}
 
-	// Insert a large transaction to ensure chunking is triggered with 1KB threshold
 	insertLargeTransactionForChunkTesting(t, vtgateConn, defaultSourceKs, 10000)
 
 	// Stream events from the VStream API
@@ -166,7 +165,6 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 			execVtgateQuery(t, vtgateConn, defaultSourceKs, fmt.Sprintf("insert into product (pid, description) values (%d, 'description%d')", id+100, id))
 			execVtgateQuery(t, vtgateConn, defaultSourceKs, fmt.Sprintf("insert into merchant (mname, category) values ('mname%d', 'category%d')", id+100, id))
 			insertCount++
-			// Periodically insert a large transaction to test chunking
 			if insertCount%5 == 0 {
 				insertLargeTransactionForChunkTesting(t, vtgateConn, defaultSourceKs, 20000+insertCount*10)
 			}
@@ -276,7 +274,6 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 			id++
 			execVtgateQuery(t, vtgateConn, defaultSourceKs, fmt.Sprintf("insert into customer (cid, name) values (%d, 'customer%d')", id+100, id))
 			insertCount++
-			// Periodically insert a large transaction to test chunking
 			if insertCount%3 == 0 {
 				insertLargeTransactionForChunkTesting(t, vtgateConn, defaultSourceKs, 40000+insertCount*10)
 			}
