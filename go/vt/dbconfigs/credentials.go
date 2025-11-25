@@ -60,6 +60,7 @@ var (
 		"mysqlctl",
 		"mysqlctld",
 		"vtbackup",
+		"vtbench",
 		"vtcombo",
 		"vttablet",
 	}

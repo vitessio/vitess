@@ -41,7 +41,7 @@ systay, harshit-gangal, frouioui, dbussink
 shlomi-noach, dbussink
 
 ### Cluster Management
-dbussink
+dbussink, timvaillancourt
 
 ### Java
 harshit-gangal
@@ -54,6 +54,9 @@ beingnoble03, rohit-nayak-ps
 
 ### Messaging
 derekperkins, mattlord
+
+### High Availability
+mattlord, timvaillancourt
 
 ## Past Maintainers
 We thank the following past maintainers for their contributions.

@@ -109,7 +109,7 @@ Flags:
       --keep-logs-by-mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
       --keyspaces-to-watch strings                                       Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema.
       --lameduck-period duration                                         keep running at least this long after SIGTERM before stopping (default 50ms)
-      --legacy-replication-lag-algorithm                                 Use the legacy algorithm when selecting vttablets for serving. (default true)
+      --legacy-replication-lag-algorithm                                 (DEPRECATED) Use the legacy algorithm when selecting vttablets for serving.
       --lock-heartbeat-time duration                                     If there is lock function used. This will keep the lock connection active by using this heartbeat (default 5s)
       --lock-timeout duration                                            Maximum time to wait when attempting to acquire a lock from the topo server (default 45s)
       --log-err-stacks                                                   log stack traces for errors

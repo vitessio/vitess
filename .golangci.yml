@@ -12,6 +12,7 @@ linters:
     - ineffassign
     - mirror
     - nolintlint
+    - nosprintfhostport
     - perfsprint
     - sqlclosecheck
     - staticcheck
@@ -155,6 +156,7 @@ linters:
         path: ^go/stats/statsd/
       - linters:
           - errcheck
+          - nosprintfhostport
           - sqlclosecheck
         path: ^go/test/
       - linters:
