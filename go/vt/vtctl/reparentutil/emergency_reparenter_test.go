@@ -18,7 +18,11 @@ package reparentutil
 
 import (
 	"context"
+<<<<<<< HEAD
 	"fmt"
+=======
+	"errors"
+>>>>>>> 1f49de43ad (Add new `force` flag to `DemotePrimary` to force a demotion even when blocked on waiting for semi-sync acks (#18714))
 	"slices"
 	"testing"
 	"time"
@@ -4615,7 +4619,7 @@ func getRelayLogPosition(gtidSets ...string) string {
 			res += ","
 		}
 		first = false
-		res += fmt.Sprintf("%s:%s", uuids[idx], set)
+		res += uuids[idx] + ":" + set
 	}
 	return res
 }

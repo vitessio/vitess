@@ -4380,6 +4380,7 @@ func (*InitReplicaResponse) Descriptor() ([]byte, []int) {
 
 type DemotePrimaryRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	Force         bool                   `protobuf:"varint,1,opt,name=force,proto3" json:"force,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4412,6 +4413,13 @@ func (x *DemotePrimaryRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use DemotePrimaryRequest.ProtoReflect.Descriptor instead.
 func (*DemotePrimaryRequest) Descriptor() ([]byte, []int) {
 	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{90}
+}
+
+func (x *DemotePrimaryRequest) GetForce() bool {
+	if x != nil {
+		return x.Force
+	}
+	return false
 }
 
 type DemotePrimaryResponse struct {
@@ -8041,6 +8049,7 @@ func (x *GetThrottlerStatusResponse_RecentApp) GetResponseCode() CheckThrottlerR
 
 var File_tabletmanagerdata_proto protoreflect.FileDescriptor
 
+<<<<<<< HEAD
 var file_tabletmanagerdata_proto_rawDesc = string([]byte{
 	0x0a, 0x17, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x6d, 0x61, 0x6e, 0x61, 0x67, 0x65, 0x72, 0x64,
 	0x61, 0x74, 0x61, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x12, 0x11, 0x74, 0x61, 0x62, 0x6c, 0x65,
@@ -9226,6 +9235,594 @@ var file_tabletmanagerdata_proto_rawDesc = string([]byte{
 	0x62, 0x6c, 0x65, 0x74, 0x6d, 0x61, 0x6e, 0x61, 0x67, 0x65, 0x72, 0x64, 0x61, 0x74, 0x61, 0x62,
 	0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 })
+=======
+const file_tabletmanagerdata_proto_rawDesc = "" +
+	"\n" +
+	"\x17tabletmanagerdata.proto\x12\x11tabletmanagerdata\x1a\x10binlogdata.proto\x1a\vquery.proto\x1a\x0etopodata.proto\x1a\x15replicationdata.proto\x1a\rlogutil.proto\x1a\fvttime.proto\x1a\vvtrpc.proto\x1a\x0emysqlctl.proto\"\xff\x01\n" +
+	"\x0fTableDefinition\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n" +
+	"\x06schema\x18\x02 \x01(\tR\x06schema\x12\x18\n" +
+	"\acolumns\x18\x03 \x03(\tR\acolumns\x12.\n" +
+	"\x13primary_key_columns\x18\x04 \x03(\tR\x11primaryKeyColumns\x12\x12\n" +
+	"\x04type\x18\x05 \x01(\tR\x04type\x12\x1f\n" +
+	"\vdata_length\x18\x06 \x01(\x04R\n" +
+	"dataLength\x12\x1b\n" +
+	"\trow_count\x18\a \x01(\x04R\browCount\x12$\n" +
+	"\x06fields\x18\b \x03(\v2\f.query.FieldR\x06fields\"\x92\x01\n" +
+	"\x10SchemaDefinition\x12'\n" +
+	"\x0fdatabase_schema\x18\x01 \x01(\tR\x0edatabaseSchema\x12O\n" +
+	"\x11table_definitions\x18\x02 \x03(\v2\".tabletmanagerdata.TableDefinitionR\x10tableDefinitionsJ\x04\b\x03\x10\x04\"\xa6\x01\n" +
+	"\x12SchemaChangeResult\x12H\n" +
+	"\rbefore_schema\x18\x01 \x01(\v2#.tabletmanagerdata.SchemaDefinitionR\fbeforeSchema\x12F\n" +
+	"\fafter_schema\x18\x02 \x01(\v2#.tabletmanagerdata.SchemaDefinitionR\vafterSchema\"\xf7\x01\n" +
+	"\x0eUserPermission\x12\x12\n" +
+	"\x04host\x18\x01 \x01(\tR\x04host\x12\x12\n" +
+	"\x04user\x18\x02 \x01(\tR\x04user\x12+\n" +
+	"\x11password_checksum\x18\x03 \x01(\x04R\x10passwordChecksum\x12Q\n" +
+	"\n" +
+	"privileges\x18\x04 \x03(\v21.tabletmanagerdata.UserPermission.PrivilegesEntryR\n" +
+	"privileges\x1a=\n" +
+	"\x0fPrivilegesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xd6\x01\n" +
+	"\fDbPermission\x12\x12\n" +
+	"\x04host\x18\x01 \x01(\tR\x04host\x12\x0e\n" +
+	"\x02db\x18\x02 \x01(\tR\x02db\x12\x12\n" +
+	"\x04user\x18\x03 \x01(\tR\x04user\x12O\n" +
+	"\n" +
+	"privileges\x18\x04 \x03(\v2/.tabletmanagerdata.DbPermission.PrivilegesEntryR\n" +
+	"privileges\x1a=\n" +
+	"\x0fPrivilegesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xa3\x01\n" +
+	"\vPermissions\x12L\n" +
+	"\x10user_permissions\x18\x01 \x03(\v2!.tabletmanagerdata.UserPermissionR\x0fuserPermissions\x12F\n" +
+	"\x0edb_permissions\x18\x02 \x03(\v2\x1f.tabletmanagerdata.DbPermissionR\rdbPermissions\"'\n" +
+	"\vPingRequest\x12\x18\n" +
+	"\apayload\x18\x01 \x01(\tR\apayload\"(\n" +
+	"\fPingResponse\x12\x18\n" +
+	"\apayload\x18\x01 \x01(\tR\apayload\"*\n" +
+	"\fSleepRequest\x12\x1a\n" +
+	"\bduration\x18\x01 \x01(\x03R\bduration\"\x0f\n" +
+	"\rSleepResponse\"\xd7\x01\n" +
+	"\x12ExecuteHookRequest\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1e\n" +
+	"\n" +
+	"parameters\x18\x02 \x03(\tR\n" +
+	"parameters\x12P\n" +
+	"\textra_env\x18\x03 \x03(\v23.tabletmanagerdata.ExecuteHookRequest.ExtraEnvEntryR\bextraEnv\x1a;\n" +
+	"\rExtraEnvEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"f\n" +
+	"\x13ExecuteHookResponse\x12\x1f\n" +
+	"\vexit_status\x18\x01 \x01(\x03R\n" +
+	"exitStatus\x12\x16\n" +
+	"\x06stdout\x18\x02 \x01(\tR\x06stdout\x12\x16\n" +
+	"\x06stderr\x18\x03 \x01(\tR\x06stderr\"\xa2\x01\n" +
+	"\x10GetSchemaRequest\x12\x16\n" +
+	"\x06tables\x18\x01 \x03(\tR\x06tables\x12#\n" +
+	"\rinclude_views\x18\x02 \x01(\bR\fincludeViews\x12%\n" +
+	"\x0eexclude_tables\x18\x03 \x03(\tR\rexcludeTables\x12*\n" +
+	"\x11table_schema_only\x18\x04 \x01(\bR\x0ftableSchemaOnly\"e\n" +
+	"\x11GetSchemaResponse\x12P\n" +
+	"\x11schema_definition\x18\x01 \x01(\v2#.tabletmanagerdata.SchemaDefinitionR\x10schemaDefinition\"\x17\n" +
+	"\x15GetPermissionsRequest\"Z\n" +
+	"\x16GetPermissionsResponse\x12@\n" +
+	"\vpermissions\x18\x01 \x01(\v2\x1e.tabletmanagerdata.PermissionsR\vpermissions\":\n" +
+	"\x1aGetGlobalStatusVarsRequest\x12\x1c\n" +
+	"\tvariables\x18\x01 \x03(\tR\tvariables\"\xc5\x01\n" +
+	"\x1bGetGlobalStatusVarsResponse\x12e\n" +
+	"\rstatus_values\x18\x01 \x03(\v2@.tabletmanagerdata.GetGlobalStatusVarsResponse.StatusValuesEntryR\fstatusValues\x1a?\n" +
+	"\x11StatusValuesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x14\n" +
+	"\x12SetReadOnlyRequest\"\x15\n" +
+	"\x13SetReadOnlyResponse\"\x15\n" +
+	"\x13SetReadWriteRequest\"\x16\n" +
+	"\x14SetReadWriteResponse\"f\n" +
+	"\x11ChangeTypeRequest\x125\n" +
+	"\vtablet_type\x18\x01 \x01(\x0e2\x14.topodata.TabletTypeR\n" +
+	"tabletType\x12\x1a\n" +
+	"\bsemiSync\x18\x02 \x01(\bR\bsemiSync\"\x14\n" +
+	"\x12ChangeTypeResponse\"\x15\n" +
+	"\x13RefreshStateRequest\"\x16\n" +
+	"\x14RefreshStateResponse\"\x17\n" +
+	"\x15RunHealthCheckRequest\"\x18\n" +
+	"\x16RunHealthCheckResponse\":\n" +
+	"\x13ReloadSchemaRequest\x12#\n" +
+	"\rwait_position\x18\x01 \x01(\tR\fwaitPosition\"\x16\n" +
+	"\x14ReloadSchemaResponse\"2\n" +
+	"\x16PreflightSchemaRequest\x12\x18\n" +
+	"\achanges\x18\x01 \x03(\tR\achanges\"g\n" +
+	"\x17PreflightSchemaResponse\x12L\n" +
+	"\x0echange_results\x18\x01 \x03(\v2%.tabletmanagerdata.SchemaChangeResultR\rchangeResults\"\xf2\x02\n" +
+	"\x12ApplySchemaRequest\x12\x10\n" +
+	"\x03sql\x18\x01 \x01(\tR\x03sql\x12\x14\n" +
+	"\x05force\x18\x02 \x01(\bR\x05force\x12+\n" +
+	"\x11allow_replication\x18\x03 \x01(\bR\x10allowReplication\x12H\n" +
+	"\rbefore_schema\x18\x04 \x01(\v2#.tabletmanagerdata.SchemaDefinitionR\fbeforeSchema\x12F\n" +
+	"\fafter_schema\x18\x05 \x01(\v2#.tabletmanagerdata.SchemaDefinitionR\vafterSchema\x12\x19\n" +
+	"\bsql_mode\x18\x06 \x01(\tR\asqlMode\x12\x1d\n" +
+	"\n" +
+	"batch_size\x18\a \x01(\x03R\tbatchSize\x12;\n" +
+	"\x1adisable_foreign_key_checks\x18\b \x01(\bR\x17disableForeignKeyChecks\"\xa7\x01\n" +
+	"\x13ApplySchemaResponse\x12H\n" +
+	"\rbefore_schema\x18\x01 \x01(\v2#.tabletmanagerdata.SchemaDefinitionR\fbeforeSchema\x12F\n" +
+	"\fafter_schema\x18\x02 \x01(\v2#.tabletmanagerdata.SchemaDefinitionR\vafterSchema\"\x13\n" +
+	"\x11LockTablesRequest\"\x14\n" +
+	"\x12LockTablesResponse\"\x15\n" +
+	"\x13UnlockTablesRequest\"\x16\n" +
+	"\x14UnlockTablesResponse\"\x8d\x01\n" +
+	"\x13ExecuteQueryRequest\x12\x14\n" +
+	"\x05query\x18\x01 \x01(\fR\x05query\x12\x17\n" +
+	"\adb_name\x18\x02 \x01(\tR\x06dbName\x12\x19\n" +
+	"\bmax_rows\x18\x03 \x01(\x04R\amaxRows\x12,\n" +
+	"\tcaller_id\x18\x04 \x01(\v2\x0f.vtrpc.CallerIDR\bcallerId\"B\n" +
+	"\x14ExecuteQueryResponse\x12*\n" +
+	"\x06result\x18\x01 \x01(\v2\x12.query.QueryResultR\x06result\"\xef\x01\n" +
+	"\x18ExecuteFetchAsDbaRequest\x12\x14\n" +
+	"\x05query\x18\x01 \x01(\fR\x05query\x12\x17\n" +
+	"\adb_name\x18\x02 \x01(\tR\x06dbName\x12\x19\n" +
+	"\bmax_rows\x18\x03 \x01(\x04R\amaxRows\x12'\n" +
+	"\x0fdisable_binlogs\x18\x04 \x01(\bR\x0edisableBinlogs\x12#\n" +
+	"\rreload_schema\x18\x05 \x01(\bR\freloadSchema\x12;\n" +
+	"\x1adisable_foreign_key_checks\x18\x06 \x01(\bR\x17disableForeignKeyChecks\"G\n" +
+	"\x19ExecuteFetchAsDbaResponse\x12*\n" +
+	"\x06result\x18\x01 \x01(\v2\x12.query.QueryResultR\x06result\"\xf0\x01\n" +
+	"\x1dExecuteMultiFetchAsDbaRequest\x12\x10\n" +
+	"\x03sql\x18\x01 \x01(\fR\x03sql\x12\x17\n" +
+	"\adb_name\x18\x02 \x01(\tR\x06dbName\x12\x19\n" +
+	"\bmax_rows\x18\x03 \x01(\x04R\amaxRows\x12'\n" +
+	"\x0fdisable_binlogs\x18\x04 \x01(\bR\x0edisableBinlogs\x12#\n" +
+	"\rreload_schema\x18\x05 \x01(\bR\freloadSchema\x12;\n" +
+	"\x1adisable_foreign_key_checks\x18\x06 \x01(\bR\x17disableForeignKeyChecks\"N\n" +
+	"\x1eExecuteMultiFetchAsDbaResponse\x12,\n" +
+	"\aresults\x18\x01 \x03(\v2\x12.query.QueryResultR\aresults\"\x8e\x01\n" +
+	"\x1dExecuteFetchAsAllPrivsRequest\x12\x14\n" +
+	"\x05query\x18\x01 \x01(\fR\x05query\x12\x17\n" +
+	"\adb_name\x18\x02 \x01(\tR\x06dbName\x12\x19\n" +
+	"\bmax_rows\x18\x03 \x01(\x04R\amaxRows\x12#\n" +
+	"\rreload_schema\x18\x04 \x01(\bR\freloadSchema\"L\n" +
+	"\x1eExecuteFetchAsAllPrivsResponse\x12*\n" +
+	"\x06result\x18\x01 \x01(\v2\x12.query.QueryResultR\x06result\"K\n" +
+	"\x18ExecuteFetchAsAppRequest\x12\x14\n" +
+	"\x05query\x18\x01 \x01(\fR\x05query\x12\x19\n" +
+	"\bmax_rows\x18\x02 \x01(\x04R\amaxRows\"G\n" +
+	"\x19ExecuteFetchAsAppResponse\x12*\n" +
+	"\x06result\x18\x01 \x01(\v2\x12.query.QueryResultR\x06result\"C\n" +
+	" GetUnresolvedTransactionsRequest\x12\x1f\n" +
+	"\vabandon_age\x18\x01 \x01(\x03R\n" +
+	"abandonAge\"c\n" +
+	"!GetUnresolvedTransactionsResponse\x12>\n" +
+	"\ftransactions\x18\x01 \x03(\v2\x1a.query.TransactionMetadataR\ftransactions\",\n" +
+	"\x16ReadTransactionRequest\x12\x12\n" +
+	"\x04dtid\x18\x01 \x01(\tR\x04dtid\"W\n" +
+	"\x17ReadTransactionResponse\x12<\n" +
+	"\vtransaction\x18\x01 \x01(\v2\x1a.query.TransactionMetadataR\vtransaction\"/\n" +
+	"\x19GetTransactionInfoRequest\x12\x12\n" +
+	"\x04dtid\x18\x01 \x01(\tR\x04dtid\"\x8f\x01\n" +
+	"\x1aGetTransactionInfoResponse\x12\x14\n" +
+	"\x05state\x18\x01 \x01(\tR\x05state\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12!\n" +
+	"\ftime_created\x18\x03 \x01(\x03R\vtimeCreated\x12\x1e\n" +
+	"\n" +
+	"statements\x18\x04 \x03(\tR\n" +
+	"statements\"@\n" +
+	"\x1aConcludeTransactionRequest\x12\x12\n" +
+	"\x04dtid\x18\x01 \x01(\tR\x04dtid\x12\x0e\n" +
+	"\x02mm\x18\x02 \x01(\bR\x02mm\"\x1d\n" +
+	"\x1bConcludeTransactionResponse\"\x19\n" +
+	"\x17MysqlHostMetricsRequest\"[\n" +
+	"\x18MysqlHostMetricsResponse\x12?\n" +
+	"\vHostMetrics\x18\x01 \x01(\v2\x1d.mysqlctl.HostMetricsResponseR\vHostMetrics\"\x1a\n" +
+	"\x18ReplicationStatusRequest\"L\n" +
+	"\x19ReplicationStatusResponse\x12/\n" +
+	"\x06status\x18\x01 \x01(\v2\x17.replicationdata.StatusR\x06status\"\x16\n" +
+	"\x14PrimaryStatusRequest\"O\n" +
+	"\x15PrimaryStatusResponse\x126\n" +
+	"\x06status\x18\x01 \x01(\v2\x1e.replicationdata.PrimaryStatusR\x06status\"\x18\n" +
+	"\x16PrimaryPositionRequest\"5\n" +
+	"\x17PrimaryPositionResponse\x12\x1a\n" +
+	"\bposition\x18\x01 \x01(\tR\bposition\"4\n" +
+	"\x16WaitForPositionRequest\x12\x1a\n" +
+	"\bposition\x18\x01 \x01(\tR\bposition\"\x19\n" +
+	"\x17WaitForPositionResponse\"\x18\n" +
+	"\x16StopReplicationRequest\"\x19\n" +
+	"\x17StopReplicationResponse\"^\n" +
+	"\x1dStopReplicationMinimumRequest\x12\x1a\n" +
+	"\bposition\x18\x01 \x01(\tR\bposition\x12!\n" +
+	"\fwait_timeout\x18\x02 \x01(\x03R\vwaitTimeout\"<\n" +
+	"\x1eStopReplicationMinimumResponse\x12\x1a\n" +
+	"\bposition\x18\x01 \x01(\tR\bposition\"5\n" +
+	"\x17StartReplicationRequest\x12\x1a\n" +
+	"\bsemiSync\x18\x01 \x01(\bR\bsemiSync\"\x1a\n" +
+	"\x18StartReplicationResponse\"7\n" +
+	"\x19RestartReplicationRequest\x12\x1a\n" +
+	"\bsemiSync\x18\x01 \x01(\bR\bsemiSync\"\x1c\n" +
+	"\x1aRestartReplicationResponse\"b\n" +
+	"!StartReplicationUntilAfterRequest\x12\x1a\n" +
+	"\bposition\x18\x01 \x01(\tR\bposition\x12!\n" +
+	"\fwait_timeout\x18\x02 \x01(\x03R\vwaitTimeout\"$\n" +
+	"\"StartReplicationUntilAfterResponse\"\x14\n" +
+	"\x12GetReplicasRequest\"+\n" +
+	"\x13GetReplicasResponse\x12\x14\n" +
+	"\x05addrs\x18\x01 \x03(\tR\x05addrs\"\x19\n" +
+	"\x17ResetReplicationRequest\"\x1a\n" +
+	"\x18ResetReplicationResponse\"/\n" +
+	"\x17VReplicationExecRequest\x12\x14\n" +
+	"\x05query\x18\x01 \x01(\tR\x05query\"F\n" +
+	"\x18VReplicationExecResponse\x12*\n" +
+	"\x06result\x18\x01 \x01(\v2\x12.query.QueryResultR\x06result\"K\n" +
+	"\x1dVReplicationWaitForPosRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x05R\x02id\x12\x1a\n" +
+	"\bposition\x18\x02 \x01(\tR\bposition\" \n" +
+	"\x1eVReplicationWaitForPosResponse\"0\n" +
+	"\x12InitPrimaryRequest\x12\x1a\n" +
+	"\bsemiSync\x18\x01 \x01(\bR\bsemiSync\"1\n" +
+	"\x13InitPrimaryResponse\x12\x1a\n" +
+	"\bposition\x18\x01 \x01(\tR\bposition\"\xd8\x01\n" +
+	"\x1ePopulateReparentJournalRequest\x12&\n" +
+	"\x0ftime_created_ns\x18\x01 \x01(\x03R\rtimeCreatedNs\x12\x1f\n" +
+	"\vaction_name\x18\x02 \x01(\tR\n" +
+	"actionName\x12:\n" +
+	"\rprimary_alias\x18\x03 \x01(\v2\x15.topodata.TabletAliasR\fprimaryAlias\x121\n" +
+	"\x14replication_position\x18\x04 \x01(\tR\x13replicationPosition\"!\n" +
+	"\x1fPopulateReparentJournalResponse\" \n" +
+	"\x1eReadReparentJournalInfoRequest\"9\n" +
+	"\x1fReadReparentJournalInfoResponse\x12\x16\n" +
+	"\x06length\x18\x01 \x01(\x05R\x06length\"\xba\x01\n" +
+	"\x12InitReplicaRequest\x12-\n" +
+	"\x06parent\x18\x01 \x01(\v2\x15.topodata.TabletAliasR\x06parent\x121\n" +
+	"\x14replication_position\x18\x02 \x01(\tR\x13replicationPosition\x12&\n" +
+	"\x0ftime_created_ns\x18\x03 \x01(\x03R\rtimeCreatedNs\x12\x1a\n" +
+	"\bsemiSync\x18\x04 \x01(\bR\bsemiSync\"\x15\n" +
+	"\x13InitReplicaResponse\",\n" +
+	"\x14DemotePrimaryRequest\x12\x14\n" +
+	"\x05force\x18\x01 \x01(\bR\x05force\"d\n" +
+	"\x15DemotePrimaryResponse\x12E\n" +
+	"\x0eprimary_status\x18\x02 \x01(\v2\x1e.replicationdata.PrimaryStatusR\rprimaryStatusJ\x04\b\x01\x10\x02\"6\n" +
+	"\x18UndoDemotePrimaryRequest\x12\x1a\n" +
+	"\bsemiSync\x18\x01 \x01(\bR\bsemiSync\"\x1b\n" +
+	"\x19UndoDemotePrimaryResponse\"\x1b\n" +
+	"\x19ReplicaWasPromotedRequest\"\x1c\n" +
+	"\x1aReplicaWasPromotedResponse\"#\n" +
+	"!ResetReplicationParametersRequest\"$\n" +
+	"\"ResetReplicationParametersResponse\"\x13\n" +
+	"\x11FullStatusRequest\"I\n" +
+	"\x12FullStatusResponse\x123\n" +
+	"\x06status\x18\x01 \x01(\v2\x1b.replicationdata.FullStatusR\x06status\"\x9c\x02\n" +
+	"\x1bSetReplicationSourceRequest\x12-\n" +
+	"\x06parent\x18\x01 \x01(\v2\x15.topodata.TabletAliasR\x06parent\x12&\n" +
+	"\x0ftime_created_ns\x18\x02 \x01(\x03R\rtimeCreatedNs\x126\n" +
+	"\x17force_start_replication\x18\x03 \x01(\bR\x15forceStartReplication\x12#\n" +
+	"\rwait_position\x18\x04 \x01(\tR\fwaitPosition\x12\x1a\n" +
+	"\bsemiSync\x18\x05 \x01(\bR\bsemiSync\x12-\n" +
+	"\x12heartbeat_interval\x18\x06 \x01(\x01R\x11heartbeatInterval\"\x1e\n" +
+	"\x1cSetReplicationSourceResponse\"K\n" +
+	"\x1aReplicaWasRestartedRequest\x12-\n" +
+	"\x06parent\x18\x01 \x01(\v2\x15.topodata.TabletAliasR\x06parent\"\x1d\n" +
+	"\x1bReplicaWasRestartedResponse\"~\n" +
+	"\"StopReplicationAndGetStatusRequest\x12X\n" +
+	"\x15stop_replication_mode\x18\x01 \x01(\x0e2$.replicationdata.StopReplicationModeR\x13stopReplicationMode\"k\n" +
+	"#StopReplicationAndGetStatusResponse\x12>\n" +
+	"\x06status\x18\x02 \x01(\v2&.replicationdata.StopReplicationStatusR\x06statusJ\x04\b\x01\x10\x02\"3\n" +
+	"\x15PromoteReplicaRequest\x12\x1a\n" +
+	"\bsemiSync\x18\x01 \x01(\bR\bsemiSync\"4\n" +
+	"\x16PromoteReplicaResponse\x12\x1a\n" +
+	"\bposition\x18\x01 \x01(\tR\bposition\"\xaf\x02\n" +
+	"\rBackupRequest\x12 \n" +
+	"\vconcurrency\x18\x01 \x01(\x05R\vconcurrency\x12#\n" +
+	"\rallow_primary\x18\x02 \x01(\bR\fallowPrimary\x120\n" +
+	"\x14incremental_from_pos\x18\x03 \x01(\tR\x12incrementalFromPos\x12!\n" +
+	"\fupgrade_safe\x18\x04 \x01(\bR\vupgradeSafe\x12(\n" +
+	"\rbackup_engine\x18\x05 \x01(\tH\x00R\fbackupEngine\x88\x01\x01\x12F\n" +
+	"\x16mysql_shutdown_timeout\x18\x06 \x01(\v2\x10.vttime.DurationR\x14mysqlShutdownTimeoutB\x10\n" +
+	"\x0e_backup_engine\"6\n" +
+	"\x0eBackupResponse\x12$\n" +
+	"\x05event\x18\x01 \x01(\v2\x0e.logutil.EventR\x05event\"\xfe\x01\n" +
+	"\x18RestoreFromBackupRequest\x12-\n" +
+	"\vbackup_time\x18\x01 \x01(\v2\f.vttime.TimeR\n" +
+	"backupTime\x12$\n" +
+	"\x0erestore_to_pos\x18\x02 \x01(\tR\frestoreToPos\x12\x17\n" +
+	"\adry_run\x18\x03 \x01(\bR\x06dryRun\x12>\n" +
+	"\x14restore_to_timestamp\x18\x04 \x01(\v2\f.vttime.TimeR\x12restoreToTimestamp\x124\n" +
+	"\x16allowed_backup_engines\x18\x05 \x03(\tR\x14allowedBackupEngines\"A\n" +
+	"\x19RestoreFromBackupResponse\x12$\n" +
+	"\x05event\x18\x01 \x01(\v2\x0e.logutil.EventR\x05event\"\xee\x04\n" +
+	"!CreateVReplicationWorkflowRequest\x12\x1a\n" +
+	"\bworkflow\x18\x01 \x01(\tR\bworkflow\x12=\n" +
+	"\rbinlog_source\x18\x02 \x03(\v2\x18.binlogdata.BinlogSourceR\fbinlogSource\x12\x14\n" +
+	"\x05cells\x18\x03 \x03(\tR\x05cells\x127\n" +
+	"\ftablet_types\x18\x04 \x03(\x0e2\x14.topodata.TabletTypeR\vtabletTypes\x12l\n" +
+	"\x1btablet_selection_preference\x18\x05 \x01(\x0e2,.tabletmanagerdata.TabletSelectionPreferenceR\x19tabletSelectionPreference\x12I\n" +
+	"\rworkflow_type\x18\x06 \x01(\x0e2$.binlogdata.VReplicationWorkflowTypeR\fworkflowType\x12S\n" +
+	"\x11workflow_sub_type\x18\a \x01(\x0e2'.binlogdata.VReplicationWorkflowSubTypeR\x0fworkflowSubType\x120\n" +
+	"\x14defer_secondary_keys\x18\b \x01(\bR\x12deferSecondaryKeys\x12\x1d\n" +
+	"\n" +
+	"auto_start\x18\t \x01(\bR\tautoStart\x12&\n" +
+	"\x0fstop_after_copy\x18\n" +
+	" \x01(\bR\rstopAfterCopy\x12\x18\n" +
+	"\aoptions\x18\v \x01(\tR\aoptions\"P\n" +
+	"\"CreateVReplicationWorkflowResponse\x12*\n" +
+	"\x06result\x18\x01 \x01(\v2\x12.query.QueryResultR\x06result\"\xda\x01\n" +
+	"\x16DeleteTableDataRequest\x12`\n" +
+	"\rtable_filters\x18\x01 \x03(\v2;.tabletmanagerdata.DeleteTableDataRequest.TableFiltersEntryR\ftableFilters\x12\x1d\n" +
+	"\n" +
+	"batch_size\x18\x02 \x01(\x03R\tbatchSize\x1a?\n" +
+	"\x11TableFiltersEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x19\n" +
+	"\x17DeleteTableDataResponse\"?\n" +
+	"!DeleteVReplicationWorkflowRequest\x12\x1a\n" +
+	"\bworkflow\x18\x01 \x01(\tR\bworkflow\"P\n" +
+	"\"DeleteVReplicationWorkflowResponse\x12*\n" +
+	"\x06result\x18\x01 \x01(\v2\x12.query.QueryResultR\x06result\"!\n" +
+	"\x1fHasVReplicationWorkflowsRequest\"4\n" +
+	" HasVReplicationWorkflowsResponse\x12\x10\n" +
+	"\x03has\x18\x01 \x01(\bR\x03has\"\xe0\x02\n" +
+	" ReadVReplicationWorkflowsRequest\x12\x1f\n" +
+	"\vinclude_ids\x18\x01 \x03(\x05R\n" +
+	"includeIds\x12+\n" +
+	"\x11include_workflows\x18\x02 \x03(\tR\x10includeWorkflows\x12L\n" +
+	"\x0einclude_states\x18\x03 \x03(\x0e2%.binlogdata.VReplicationWorkflowStateR\rincludeStates\x12+\n" +
+	"\x11exclude_workflows\x18\x04 \x03(\tR\x10excludeWorkflows\x12L\n" +
+	"\x0eexclude_states\x18\x05 \x03(\x0e2%.binlogdata.VReplicationWorkflowStateR\rexcludeStates\x12%\n" +
+	"\x0eexclude_frozen\x18\x06 \x01(\bR\rexcludeFrozen\"v\n" +
+	"!ReadVReplicationWorkflowsResponse\x12Q\n" +
+	"\tworkflows\x18\x01 \x03(\v23.tabletmanagerdata.ReadVReplicationWorkflowResponseR\tworkflows\"=\n" +
+	"\x1fReadVReplicationWorkflowRequest\x12\x1a\n" +
+	"\bworkflow\x18\x01 \x01(\tR\bworkflow\"\xe7\n" +
+	"\n" +
+	" ReadVReplicationWorkflowResponse\x12\x1a\n" +
+	"\bworkflow\x18\x02 \x01(\tR\bworkflow\x12\x14\n" +
+	"\x05cells\x18\x03 \x01(\tR\x05cells\x127\n" +
+	"\ftablet_types\x18\x04 \x03(\x0e2\x14.topodata.TabletTypeR\vtabletTypes\x12l\n" +
+	"\x1btablet_selection_preference\x18\x05 \x01(\x0e2,.tabletmanagerdata.TabletSelectionPreferenceR\x19tabletSelectionPreference\x12\x17\n" +
+	"\adb_name\x18\x06 \x01(\tR\x06dbName\x12\x12\n" +
+	"\x04tags\x18\a \x01(\tR\x04tags\x12I\n" +
+	"\rworkflow_type\x18\b \x01(\x0e2$.binlogdata.VReplicationWorkflowTypeR\fworkflowType\x12S\n" +
+	"\x11workflow_sub_type\x18\t \x01(\x0e2'.binlogdata.VReplicationWorkflowSubTypeR\x0fworkflowSubType\x120\n" +
+	"\x14defer_secondary_keys\x18\n" +
+	" \x01(\bR\x12deferSecondaryKeys\x12T\n" +
+	"\astreams\x18\v \x03(\v2:.tabletmanagerdata.ReadVReplicationWorkflowResponse.StreamR\astreams\x12\x18\n" +
+	"\aoptions\x18\f \x01(\tR\aoptions\x12s\n" +
+	"\x10config_overrides\x18\r \x03(\v2H.tabletmanagerdata.ReadVReplicationWorkflowResponse.ConfigOverridesEntryR\x0fconfigOverrides\x1a\xc1\x04\n" +
+	"\x06Stream\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x05R\x02id\x12*\n" +
+	"\x03bls\x18\x02 \x01(\v2\x18.binlogdata.BinlogSourceR\x03bls\x12\x10\n" +
+	"\x03pos\x18\x03 \x01(\tR\x03pos\x12\x19\n" +
+	"\bstop_pos\x18\x04 \x01(\tR\astopPos\x12\x17\n" +
+	"\amax_tps\x18\x05 \x01(\x03R\x06maxTps\x12.\n" +
+	"\x13max_replication_lag\x18\x06 \x01(\x03R\x11maxReplicationLag\x12/\n" +
+	"\ftime_updated\x18\a \x01(\v2\f.vttime.TimeR\vtimeUpdated\x12A\n" +
+	"\x15transaction_timestamp\x18\b \x01(\v2\f.vttime.TimeR\x14transactionTimestamp\x12;\n" +
+	"\x05state\x18\t \x01(\x0e2%.binlogdata.VReplicationWorkflowStateR\x05state\x12\x18\n" +
+	"\amessage\x18\n" +
+	" \x01(\tR\amessage\x12\x1f\n" +
+	"\vrows_copied\x18\v \x01(\x03R\n" +
+	"rowsCopied\x123\n" +
+	"\x0etime_heartbeat\x18\f \x01(\v2\f.vttime.TimeR\rtimeHeartbeat\x123\n" +
+	"\x0etime_throttled\x18\r \x01(\v2\f.vttime.TimeR\rtimeThrottled\x12/\n" +
+	"\x13component_throttled\x18\x0e \x01(\tR\x12componentThrottled\x1aB\n" +
+	"\x14ConfigOverridesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"(\n" +
+	"&ValidateVReplicationPermissionsRequest\"c\n" +
+	"'ValidateVReplicationPermissionsResponse\x12\x12\n" +
+	"\x04user\x18\x01 \x01(\tR\x04user\x12\x0e\n" +
+	"\x02ok\x18\x02 \x01(\bR\x02ok\x12\x14\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\"\xd7\x01\n" +
+	"\fVDiffRequest\x12\x1a\n" +
+	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x1a\n" +
+	"\bworkflow\x18\x02 \x01(\tR\bworkflow\x12\x16\n" +
+	"\x06action\x18\x03 \x01(\tR\x06action\x12\x1d\n" +
+	"\n" +
+	"action_arg\x18\x04 \x01(\tR\tactionArg\x12\x1d\n" +
+	"\n" +
+	"vdiff_uuid\x18\x05 \x01(\tR\tvdiffUuid\x129\n" +
+	"\aoptions\x18\x06 \x01(\v2\x1f.tabletmanagerdata.VDiffOptionsR\aoptions\"j\n" +
+	"\rVDiffResponse\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12*\n" +
+	"\x06output\x18\x02 \x01(\v2\x12.query.QueryResultR\x06output\x12\x1d\n" +
+	"\n" +
+	"vdiff_uuid\x18\x03 \x01(\tR\tvdiffUuid\"y\n" +
+	"\x12VDiffPickerOptions\x12!\n" +
+	"\ftablet_types\x18\x01 \x01(\tR\vtabletTypes\x12\x1f\n" +
+	"\vsource_cell\x18\x02 \x01(\tR\n" +
+	"sourceCell\x12\x1f\n" +
+	"\vtarget_cell\x18\x03 \x01(\tR\n" +
+	"targetCell\"\xce\x01\n" +
+	"\x12VDiffReportOptions\x12\x19\n" +
+	"\bonly_pks\x18\x01 \x01(\bR\aonlyPks\x12\x1f\n" +
+	"\vdebug_query\x18\x02 \x01(\bR\n" +
+	"debugQuery\x12\x16\n" +
+	"\x06format\x18\x03 \x01(\tR\x06format\x12&\n" +
+	"\x0fmax_sample_rows\x18\x04 \x01(\x03R\rmaxSampleRows\x12<\n" +
+	"\x1brow_diff_column_truncate_at\x18\x05 \x01(\x03R\x17rowDiffColumnTruncateAt\"\x8d\x03\n" +
+	"\x10VDiffCoreOptions\x12\x16\n" +
+	"\x06tables\x18\x01 \x01(\tR\x06tables\x12\x1d\n" +
+	"\n" +
+	"auto_retry\x18\x02 \x01(\bR\tautoRetry\x12\x19\n" +
+	"\bmax_rows\x18\x03 \x01(\x03R\amaxRows\x12\x1a\n" +
+	"\bchecksum\x18\x04 \x01(\bR\bchecksum\x12\x1d\n" +
+	"\n" +
+	"sample_pct\x18\x05 \x01(\x03R\tsamplePct\x12'\n" +
+	"\x0ftimeout_seconds\x18\x06 \x01(\x03R\x0etimeoutSeconds\x128\n" +
+	"\x19max_extra_rows_to_compare\x18\a \x01(\x03R\x15maxExtraRowsToCompare\x12,\n" +
+	"\x12update_table_stats\x18\b \x01(\bR\x10updateTableStats\x12(\n" +
+	"\x10max_diff_seconds\x18\t \x01(\x03R\x0emaxDiffSeconds\x12\"\n" +
+	"\n" +
+	"auto_start\x18\n" +
+	" \x01(\bH\x00R\tautoStart\x88\x01\x01B\r\n" +
+	"\v_auto_start\"\xf2\x01\n" +
+	"\fVDiffOptions\x12L\n" +
+	"\x0epicker_options\x18\x01 \x01(\v2%.tabletmanagerdata.VDiffPickerOptionsR\rpickerOptions\x12F\n" +
+	"\fcore_options\x18\x02 \x01(\v2#.tabletmanagerdata.VDiffCoreOptionsR\vcoreOptions\x12L\n" +
+	"\x0ereport_options\x18\x03 \x01(\v2%.tabletmanagerdata.VDiffReportOptionsR\rreportOptions\"z\n" +
+	"\x10VDiffTableLastPK\x12*\n" +
+	"\x06target\x18\x01 \x01(\v2\x12.query.QueryResultR\x06target\x12/\n" +
+	"\x06source\x18\x02 \x01(\v2\x12.query.QueryResultH\x00R\x06source\x88\x01\x01B\t\n" +
+	"\a_source\"\xdf\x05\n" +
+	"!UpdateVReplicationWorkflowRequest\x12\x1a\n" +
+	"\bworkflow\x18\x01 \x01(\tR\bworkflow\x12\x14\n" +
+	"\x05cells\x18\x02 \x03(\tR\x05cells\x127\n" +
+	"\ftablet_types\x18\x03 \x03(\x0e2\x14.topodata.TabletTypeR\vtabletTypes\x12q\n" +
+	"\x1btablet_selection_preference\x18\x04 \x01(\x0e2,.tabletmanagerdata.TabletSelectionPreferenceH\x00R\x19tabletSelectionPreference\x88\x01\x01\x123\n" +
+	"\x06on_ddl\x18\x05 \x01(\x0e2\x17.binlogdata.OnDDLActionH\x01R\x05onDdl\x88\x01\x01\x12@\n" +
+	"\x05state\x18\x06 \x01(\x0e2%.binlogdata.VReplicationWorkflowStateH\x02R\x05state\x88\x01\x01\x12\x16\n" +
+	"\x06shards\x18\a \x03(\tR\x06shards\x12t\n" +
+	"\x10config_overrides\x18\b \x03(\v2I.tabletmanagerdata.UpdateVReplicationWorkflowRequest.ConfigOverridesEntryR\x0fconfigOverrides\x12\x1d\n" +
+	"\amessage\x18\t \x01(\tH\x03R\amessage\x88\x01\x01\x123\n" +
+	"\ffilter_rules\x18\n" +
+	" \x03(\v2\x10.binlogdata.RuleR\vfilterRules\x1aB\n" +
+	"\x14ConfigOverridesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x1e\n" +
+	"\x1c_tablet_selection_preferenceB\t\n" +
+	"\a_on_ddlB\b\n" +
+	"\x06_stateB\n" +
+	"\n" +
+	"\b_message\"P\n" +
+	"\"UpdateVReplicationWorkflowResponse\x12*\n" +
+	"\x06result\x18\x01 \x01(\v2\x12.query.QueryResultR\x06result\"\xd6\x02\n" +
+	"\"UpdateVReplicationWorkflowsRequest\x12#\n" +
+	"\rall_workflows\x18\x01 \x01(\bR\fallWorkflows\x12+\n" +
+	"\x11include_workflows\x18\x02 \x03(\tR\x10includeWorkflows\x12+\n" +
+	"\x11exclude_workflows\x18\x03 \x03(\tR\x10excludeWorkflows\x12@\n" +
+	"\x05state\x18\x04 \x01(\x0e2%.binlogdata.VReplicationWorkflowStateH\x00R\x05state\x88\x01\x01\x12\x1d\n" +
+	"\amessage\x18\x05 \x01(\tH\x01R\amessage\x88\x01\x01\x12(\n" +
+	"\rstop_position\x18\x06 \x01(\tH\x02R\fstopPosition\x88\x01\x01B\b\n" +
+	"\x06_stateB\n" +
+	"\n" +
+	"\b_messageB\x10\n" +
+	"\x0e_stop_position\"Q\n" +
+	"#UpdateVReplicationWorkflowsResponse\x12*\n" +
+	"\x06result\x18\x01 \x01(\v2\x12.query.QueryResultR\x06result\"/\n" +
+	"\x15ResetSequencesRequest\x12\x16\n" +
+	"\x06tables\x18\x01 \x03(\tR\x06tables\"\x18\n" +
+	"\x16ResetSequencesResponse\"\xc6\x01\n" +
+	"\x15CheckThrottlerRequest\x12\x19\n" +
+	"\bapp_name\x18\x01 \x01(\tR\aappName\x12\x14\n" +
+	"\x05scope\x18\x02 \x01(\tR\x05scope\x126\n" +
+	"\x17skip_request_heartbeats\x18\x03 \x01(\bR\x15skipRequestHeartbeats\x12'\n" +
+	"\x10ok_if_not_exists\x18\x04 \x01(\bR\rokIfNotExistsJ\x04\b\x05\x10\x06R\x15multi_metrics_enabled\"\xf6\x05\n" +
+	"\x16CheckThrottlerResponse\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x01R\x05value\x12\x1c\n" +
+	"\tthreshold\x18\x03 \x01(\x01R\tthreshold\x12\x14\n" +
+	"\x05error\x18\x04 \x01(\tR\x05error\x12\x18\n" +
+	"\amessage\x18\x05 \x01(\tR\amessage\x12)\n" +
+	"\x10recently_checked\x18\x06 \x01(\bR\x0frecentlyChecked\x12P\n" +
+	"\ametrics\x18\a \x03(\v26.tabletmanagerdata.CheckThrottlerResponse.MetricsEntryR\ametrics\x12\x19\n" +
+	"\bapp_name\x18\b \x01(\tR\aappName\x12\x18\n" +
+	"\asummary\x18\t \x01(\tR\asummary\x12R\n" +
+	"\rresponse_code\x18\n" +
+	" \x01(\x0e2-.tabletmanagerdata.CheckThrottlerResponseCodeR\fresponseCode\x1a\xf0\x01\n" +
+	"\x06Metric\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
+	"\x05value\x18\x03 \x01(\x01R\x05value\x12\x1c\n" +
+	"\tthreshold\x18\x04 \x01(\x01R\tthreshold\x12\x14\n" +
+	"\x05error\x18\x05 \x01(\tR\x05error\x12\x18\n" +
+	"\amessage\x18\x06 \x01(\tR\amessage\x12\x14\n" +
+	"\x05scope\x18\a \x01(\tR\x05scope\x12R\n" +
+	"\rresponse_code\x18\b \x01(\x0e2-.tabletmanagerdata.CheckThrottlerResponseCodeR\fresponseCodeJ\x04\b\x02\x10\x03\x1al\n" +
+	"\fMetricsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12F\n" +
+	"\x05value\x18\x02 \x01(\v20.tabletmanagerdata.CheckThrottlerResponse.MetricR\x05value:\x028\x01J\x04\b\x01\x10\x02R\vstatus_code\"\x1b\n" +
+	"\x19GetThrottlerStatusRequest\"\x9b\x10\n" +
+	"\x1aGetThrottlerStatusResponse\x12!\n" +
+	"\ftablet_alias\x18\x01 \x01(\tR\vtabletAlias\x12\x1a\n" +
+	"\bkeyspace\x18\x02 \x01(\tR\bkeyspace\x12\x14\n" +
+	"\x05shard\x18\x03 \x01(\tR\x05shard\x12\x1b\n" +
+	"\tis_leader\x18\x04 \x01(\bR\bisLeader\x12\x17\n" +
+	"\ais_open\x18\x05 \x01(\bR\x06isOpen\x12\x1d\n" +
+	"\n" +
+	"is_enabled\x18\x06 \x01(\bR\tisEnabled\x12\x1d\n" +
+	"\n" +
+	"is_dormant\x18\a \x01(\bR\tisDormant\x12(\n" +
+	"\x10lag_metric_query\x18\b \x01(\tR\x0elagMetricQuery\x12.\n" +
+	"\x13custom_metric_query\x18\t \x01(\tR\x11customMetricQuery\x12+\n" +
+	"\x11default_threshold\x18\n" +
+	" \x01(\x01R\x10defaultThreshold\x12<\n" +
+	"\x1bmetric_name_used_as_default\x18\v \x01(\tR\x17metricNameUsedAsDefault\x12s\n" +
+	"\x12aggregated_metrics\x18\f \x03(\v2D.tabletmanagerdata.GetThrottlerStatusResponse.AggregatedMetricsEntryR\x11aggregatedMetrics\x12p\n" +
+	"\x11metric_thresholds\x18\r \x03(\v2C.tabletmanagerdata.GetThrottlerStatusResponse.MetricThresholdsEntryR\x10metricThresholds\x12g\n" +
+	"\x0emetrics_health\x18\x0e \x03(\v2@.tabletmanagerdata.GetThrottlerStatusResponse.MetricsHealthEntryR\rmetricsHealth\x12g\n" +
+	"\x0ethrottled_apps\x18\x0f \x03(\v2@.tabletmanagerdata.GetThrottlerStatusResponse.ThrottledAppsEntryR\rthrottledApps\x12t\n" +
+	"\x13app_checked_metrics\x18\x10 \x03(\v2D.tabletmanagerdata.GetThrottlerStatusResponse.AppCheckedMetricsEntryR\x11appCheckedMetrics\x12)\n" +
+	"\x10recently_checked\x18\x11 \x01(\bR\x0frecentlyChecked\x12^\n" +
+	"\vrecent_apps\x18\x12 \x03(\v2=.tabletmanagerdata.GetThrottlerStatusResponse.RecentAppsEntryR\n" +
+	"recentApps\x1a:\n" +
+	"\fMetricResult\x12\x14\n" +
+	"\x05value\x18\x01 \x01(\x01R\x05value\x12\x14\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error\x1a\x80\x01\n" +
+	"\x16AggregatedMetricsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12P\n" +
+	"\x05value\x18\x02 \x01(\v2:.tabletmanagerdata.GetThrottlerStatusResponse.MetricResultR\x05value:\x028\x01\x1aC\n" +
+	"\x15MetricThresholdsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01\x1a\x81\x01\n" +
+	"\fMetricHealth\x124\n" +
+	"\x0flast_healthy_at\x18\x01 \x01(\v2\f.vttime.TimeR\rlastHealthyAt\x12;\n" +
+	"\x1aseconds_since_last_healthy\x18\x02 \x01(\x03R\x17secondsSinceLastHealthy\x1a|\n" +
+	"\x12MetricsHealthEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12P\n" +
+	"\x05value\x18\x02 \x01(\v2:.tabletmanagerdata.GetThrottlerStatusResponse.MetricHealthR\x05value:\x028\x01\x1a\\\n" +
+	"\x12ThrottledAppsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x120\n" +
+	"\x05value\x18\x02 \x01(\v2\x1a.topodata.ThrottledAppRuleR\x05value:\x028\x01\x1aD\n" +
+	"\x16AppCheckedMetricsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a\x92\x01\n" +
+	"\tRecentApp\x12+\n" +
+	"\n" +
+	"checked_at\x18\x01 \x01(\v2\f.vttime.TimeR\tcheckedAt\x12R\n" +
+	"\rresponse_code\x18\x03 \x01(\x0e2-.tabletmanagerdata.CheckThrottlerResponseCodeR\fresponseCodeJ\x04\b\x02\x10\x03\x1av\n" +
+	"\x0fRecentAppsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12M\n" +
+	"\x05value\x18\x02 \x01(\v27.tabletmanagerdata.GetThrottlerStatusResponse.RecentAppR\x05value:\x028\x01\"\xaa\x01\n" +
+	"\x11ChangeTagsRequest\x12B\n" +
+	"\x04tags\x18\x01 \x03(\v2..tabletmanagerdata.ChangeTagsRequest.TagsEntryR\x04tags\x12\x18\n" +
+	"\areplace\x18\x02 \x01(\bR\areplace\x1a7\n" +
+	"\tTagsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x92\x01\n" +
+	"\x12ChangeTagsResponse\x12C\n" +
+	"\x04tags\x18\x01 \x03(\v2/.tabletmanagerdata.ChangeTagsResponse.TagsEntryR\x04tags\x1a7\n" +
+	"\tTagsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8f\x02\n" +
+	"\x1bUpdateSequenceTablesRequest\x12]\n" +
+	"\tsequences\x18\x01 \x03(\v2?.tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadataR\tsequences\x1a\x90\x01\n" +
+	"\x10SequenceMetadata\x12,\n" +
+	"\x12backing_table_name\x18\x01 \x01(\tR\x10backingTableName\x121\n" +
+	"\x15backing_table_db_name\x18\x02 \x01(\tR\x12backingTableDbName\x12\x1b\n" +
+	"\tmax_value\x18\x03 \x01(\x03R\bmaxValue\"\x1e\n" +
+	"\x1cUpdateSequenceTablesResponse\"\xe8\x02\n" +
+	"\x1eGetMaxValueForSequencesRequest\x12`\n" +
+	"\tsequences\x18\x01 \x03(\v2B.tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadataR\tsequences\x1a\xe3\x01\n" +
+	"\x10SequenceMetadata\x12,\n" +
+	"\x12backing_table_name\x18\x01 \x01(\tR\x10backingTableName\x12*\n" +
+	"\x11using_col_escaped\x18\x02 \x01(\tR\x0fusingColEscaped\x127\n" +
+	"\x18using_table_name_escaped\x18\x03 \x01(\tR\x15usingTableNameEscaped\x12<\n" +
+	"\x1busing_table_db_name_escaped\x18\x04 \x01(\tR\x17usingTableDbNameEscaped\"\x81\x02\n" +
+	"\x1fGetMaxValueForSequencesResponse\x12\x90\x01\n" +
+	"\x1cmax_values_by_sequence_table\x18\x01 \x03(\v2P.tabletmanagerdata.GetMaxValueForSequencesResponse.MaxValuesBySequenceTableEntryR\x18maxValuesBySequenceTable\x1aK\n" +
+	"\x1dMaxValuesBySequenceTableEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01*>\n" +
+	"\x19TabletSelectionPreference\x12\a\n" +
+	"\x03ANY\x10\x00\x12\v\n" +
+	"\aINORDER\x10\x01\x12\v\n" +
+	"\aUNKNOWN\x10\x03*\x83\x01\n" +
+	"\x1aCheckThrottlerResponseCode\x12\r\n" +
+	"\tUNDEFINED\x10\x00\x12\x06\n" +
+	"\x02OK\x10\x01\x12\x16\n" +
+	"\x12THRESHOLD_EXCEEDED\x10\x02\x12\x0e\n" +
+	"\n" +
+	"APP_DENIED\x10\x03\x12\x12\n" +
+	"\x0eUNKNOWN_METRIC\x10\x04\x12\x12\n" +
+	"\x0eINTERNAL_ERROR\x10\x05B0Z.vitess.io/vitess/go/vt/proto/tabletmanagerdatab\x06proto3"
+>>>>>>> 1f49de43ad (Add new `force` flag to `DemotePrimary` to force a demotion even when blocked on waiting for semi-sync acks (#18714))
 
 var (
 	file_tabletmanagerdata_proto_rawDescOnce sync.Once
