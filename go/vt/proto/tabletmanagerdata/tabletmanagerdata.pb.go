@@ -4460,6 +4460,7 @@ func (*InitReplicaResponse) Descriptor() ([]byte, []int) {
 
 type DemotePrimaryRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	Force         bool                   `protobuf:"varint,1,opt,name=force,proto3" json:"force,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4492,6 +4493,13 @@ func (x *DemotePrimaryRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use DemotePrimaryRequest.ProtoReflect.Descriptor instead.
 func (*DemotePrimaryRequest) Descriptor() ([]byte, []int) {
 	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{92}
+}
+
+func (x *DemotePrimaryRequest) GetForce() bool {
+	if x != nil {
+		return x.Force
+	}
+	return false
 }
 
 type DemotePrimaryResponse struct {
@@ -8684,8 +8692,9 @@ const file_tabletmanagerdata_proto_rawDesc = "" +
 	"\x14replication_position\x18\x02 \x01(\tR\x13replicationPosition\x12&\n" +
 	"\x0ftime_created_ns\x18\x03 \x01(\x03R\rtimeCreatedNs\x12\x1a\n" +
 	"\bsemiSync\x18\x04 \x01(\bR\bsemiSync\"\x15\n" +
-	"\x13InitReplicaResponse\"\x16\n" +
-	"\x14DemotePrimaryRequest\"d\n" +
+	"\x13InitReplicaResponse\",\n" +
+	"\x14DemotePrimaryRequest\x12\x14\n" +
+	"\x05force\x18\x01 \x01(\bR\x05force\"d\n" +
 	"\x15DemotePrimaryResponse\x12E\n" +
 	"\x0eprimary_status\x18\x02 \x01(\v2\x1e.replicationdata.PrimaryStatusR\rprimaryStatusJ\x04\b\x01\x10\x02\"6\n" +
 	"\x18UndoDemotePrimaryRequest\x12\x1a\n" +

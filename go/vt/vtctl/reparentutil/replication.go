@@ -255,7 +255,7 @@ func stopReplicationAndBuildStatusMaps(
 			if isSQLErr && sqlErr != nil && sqlErr.Number() == sqlerror.ERNotReplica {
 				var primaryStatus *replicationdatapb.PrimaryStatus
 
-				primaryStatus, err = tmc.DemotePrimary(groupCtx, tabletInfo.Tablet)
+				primaryStatus, err = tmc.DemotePrimary(groupCtx, tabletInfo.Tablet, true /* force */)
 				if err != nil {
 					msg := "replica %v thinks it's primary but we failed to demote it: %v"
 					err = vterrors.Wrapf(err, msg, alias, err)
