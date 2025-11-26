@@ -94,6 +94,14 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 		extracted = append(extracted, "Projection")
 	}
 
+	if qp.HasWindow {
+		// Window functions are evaluated after aggregation but before ordering and limit.
+		// We wrap the current operator (which is either a Projection or Aggregation)
+		// with the Window operator to handle these calculations.
+		op = newWindow(op, qp)
+		extracted = append(extracted, "Window")
+	}
+
 	if qp.NeedsDistinct() {
 		op = newDistinct(op, qp, true)
 		extracted = append(extracted, "Distinct")

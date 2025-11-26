@@ -91,6 +91,8 @@ func recursiveTransform(ctx *plancontext.PlanningContext, op operators.Operator)
 		return transformDMLWithInput(ctx, op)
 	case *operators.RecurseCTE:
 		return transformRecurseCTE(ctx, op)
+	case *operators.Window:
+		return transformWindow(ctx, op)
 	case *operators.PercentBasedMirror:
 		return transformPercentBasedMirror(ctx, op)
 	}
@@ -1058,4 +1060,24 @@ func generateQuery(statement sqlparser.Statement) string {
 	buf := sqlparser.NewTrackedBuffer(dmlFormatter)
 	statement.Format(buf)
 	return buf.String()
+}
+
+func isSingleShard(prim engine.Primitive) bool {
+	switch p := prim.(type) {
+	case *engine.Route:
+		return p.Opcode.IsSingleShard() || p.Opcode == engine.ByDestination
+	case *engine.PlanSwitcher:
+		return isSingleShard(p.Optimized)
+	case *engine.Filter:
+		return isSingleShard(p.Input)
+	case *engine.Limit:
+		return isSingleShard(p.Input)
+	case *engine.MemorySort:
+		return isSingleShard(p.Input)
+	case *engine.Projection:
+		return isSingleShard(p.Input)
+	case *engine.SimpleProjection:
+		return isSingleShard(p.Input)
+	}
+	return false
 }
