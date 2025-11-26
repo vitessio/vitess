@@ -1347,7 +1347,7 @@ type VStreamFlags struct {
 	// VTGate will acquire a lock to ensure contiguous, non-interleaved delivery
 	// (BEGIN...ROW...COMMIT sent sequentially without mixing events from other shards).
 	// Events are still chunked to prevent OOM. Transactions smaller than this are sent
-	// without locking for better parallelism. Default: 10MB.
+	// without locking for better parallelism.
 	TransactionChunkSize int64 `protobuf:"varint,11,opt,name=transaction_chunk_size,json=transactionChunkSize,proto3" json:"transaction_chunk_size,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
