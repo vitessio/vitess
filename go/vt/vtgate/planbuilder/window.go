@@ -31,14 +31,19 @@ func transformWindow(ctx *plancontext.PlanningContext, op *operators.Window) (en
 		return nil, err
 	}
 
-	// Check if this is a multi-shard route - window functions are only supported for single-shard queries
+	// Multi-source primitives (Join, HashJoin, ValuesJoin, SemiJoin, Concatenate, Sequential)
+	// cannot guarantee partitions stay on single shard
+	switch prim.(type) {
+	case *engine.Join, *engine.HashJoin, *engine.ValuesJoin, *engine.SemiJoin, *engine.Concatenate, *engine.Sequential:
+		return nil, vterrors.VT12001("window functions are only supported for single-shard queries")
+	}
+
+	// Multi-shard routes OK only if partitioned by sharding key (guarantees same-shard partition rows)
+	// E.g., PARTITION BY id (sharding key) OK; PARTITION BY region NOT OK
 	if route, ok := prim.(*engine.Route); ok && !isSingleShardPrimitive(route) {
-		// For multi-shard routes, we can allow window functions if they're partitioned by a sharding key.
-		// This applies to all multi-shard route types (Scatter, IN, Between, etc.) because the safety
-		// criterion is the same: all rows in a partition must be on the same shard.
 		if routeOp, ok := op.Source.(*operators.Route); ok {
 			if canPushDownWindow(op, routeOp) {
-				// Window functions are safe to execute - partition covers a sharding key
+				// Partition is based on sharding key - safe to execute on multi-shard route
 				return prim, nil
 			}
 		}
@@ -60,51 +65,15 @@ type windowTableInfo struct {
 	alias  sqlparser.IdentifierCS
 }
 
-// canPushDownWindow checks if a window function can be safely pushed down (executed on) a single shard.
-// It validates that all window functions in the query partition by columns that cover a sharding key,
-// ensuring all rows for any partition will be on the same shard.
+// canPushDownWindow checks if a window function partitions by a sharding key.
+// Returns false if PARTITION BY is missing or covers non-sharding-key columns.
+// Examples:
 //
-// WINDOW FUNCTION SCENARIO MATRIX:
-// ================================
-//
-// Route Type | PARTITION BY    | Can Push Down | Reason
-// -----------+-----------------+--------------+------------------------------------------------------------
-// Single*    | Any column      |  YES          | Only one shard involved, no cross-shard coordination needed
-// IN         | Sharding Key    |  YES          | All rows with same key value go to same shard
-// IN         | Non-Key Column  |  NO           | Partition spans multiple shards - REJECTED as unsupported
-// Scatter    | Sharding Key    |  YES          | All rows with same key value on same shard
-// Scatter    | Non-Key Column  |  NO           | Partition spans multiple shards - REJECTED as unsupported
-// Scatter    | No PARTITION BY |  NO           | Global window requires all data - REJECTED as unsupported
-// Between    | Sharding Key    |  YES          | All rows in range on same shard(s)
-// Between    | Non-Key Column  |  NO           | Partition spans multiple shards - REJECTED as unsupported
-//
-// *Single-shard routes: EqualUnique (WHERE id = x), Unsharded, Reference
-//
-// EXAMPLES:
-// ========
-//
-//	SAFE - Single Shard:
-//	  SELECT id, ROW_NUMBER() OVER (PARTITION BY id ORDER BY col) FROM user WHERE id = 1
-//
-//	SAFE - IN with Sharding Key:
-//	  SELECT id, RANK() OVER (PARTITION BY id ORDER BY col) FROM user WHERE id IN (1,2,3)
-//
-//	SAFE - Scatter with Sharding Key:
-//	  SELECT id, DENSE_RANK() OVER (PARTITION BY id ORDER BY col) FROM user
-//
-//	REJECTED - Scatter with Non-Sharding Key:
-//	  SELECT id, ROW_NUMBER() OVER (PARTITION BY region ORDER BY col) FROM user
-//	  (region values scattered across all shards - cannot push down, cannot compute in VTGate)
-//
-//	REJECTED - IN with Non-Sharding Key:
-//	  SELECT id, LAG(col) OVER (PARTITION BY region ORDER BY col) FROM user WHERE id IN (1,2,3)
-//	  (partition spans multiple shards - cannot push down, cannot compute in VTGate)
-//
-//	REJECTED - Scatter without PARTITION BY:
-//	  SELECT id, ROW_NUMBER() OVER (ORDER BY col) FROM user
-//	  (Global window requires all rows on one node - unsupported)
+//	OK: SELECT ... FROM user WHERE id=1 PARTITION BY id (single shard)
+//	OK: SELECT ... FROM user PARTITION BY id (id is sharding key, same-shard partitions)
+//	NO: SELECT ... FROM user PARTITION BY region (region scattered across shards)
 func canPushDownWindow(op *operators.Window, route *operators.Route) bool {
-	// 1. Find all tables in the route with their aliases
+	// Collect tables with their aliases
 	var tables []windowTableInfo
 	_ = operators.Visit(route, func(o operators.Operator) error {
 		if t, ok := o.(*operators.Table); ok && t.VTable != nil {
@@ -121,7 +90,7 @@ func canPushDownWindow(op *operators.Window, route *operators.Route) bool {
 		return false
 	}
 
-	// 2. Get all window functions
+	// Collect window functions from SELECT expressions
 	var windowFuncs []sqlparser.WindowFunc
 	for _, expr := range op.QP.SelectExprs {
 		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
@@ -136,7 +105,7 @@ func canPushDownWindow(op *operators.Window, route *operators.Route) bool {
 		return true
 	}
 
-	// 3. Check each window function
+	// Validate each window function partitions by sharding key
 	for _, wf := range windowFuncs {
 		if !isPartitionedByShardingKey(wf, tables) {
 			return false
@@ -146,12 +115,9 @@ func canPushDownWindow(op *operators.Window, route *operators.Route) bool {
 	return true
 }
 
-// isPartitionedByShardingKey checks if a window function's PARTITION BY clause covers a sharding key.
-// It supports two cases:
-//  1. Primary Vindex (index 0): If partition covers all columns of the primary vindex, all rows for
-//     a partition are guaranteed to be on the same shard (since primary vindex determines shard routing).
-//  2. Unique Vindexes (index 1+): If partition covers all columns of a unique vindex, each partition
-//     contains at most one row.
+// isPartitionedByShardingKey checks if a window function's PARTITION BY covers:
+//  1. Primary vindex columns (ensures same-shard partitions), or
+//  2. Unique vindex columns (each partition has ≤1 row, trivially single-shard)
 func isPartitionedByShardingKey(wf sqlparser.WindowFunc, tables []windowTableInfo) bool {
 	overClause := wf.GetOverClause()
 	if overClause == nil || overClause.WindowSpec == nil || len(overClause.WindowSpec.PartitionClause) == 0 {
@@ -165,7 +131,16 @@ func isPartitionedByShardingKey(wf sqlparser.WindowFunc, tables []windowTableInf
 			continue
 		}
 
-		// Optimization: Build a set of column names from partitionBy that match the table
+		// Pre-build column lookup map for column validation
+		var columnSet map[string]bool
+		if table.vTable.ColumnListAuthoritative {
+			columnSet = make(map[string]bool, len(table.vTable.Columns))
+			for _, col := range table.vTable.Columns {
+				columnSet[col.Name.Lowered()] = true
+			}
+		}
+
+		// Build set of partition columns matching this table - O(p) where p = partition columns
 		coveredCols := make(map[string]bool)
 		for _, pExpr := range partitionBy {
 			colName, ok := pExpr.(*sqlparser.ColName)
@@ -173,27 +148,15 @@ func isPartitionedByShardingKey(wf sqlparser.WindowFunc, tables []windowTableInf
 				continue
 			}
 
-			// If the column is qualified, check if it matches the table alias
+			// Skip if qualified to different table
 			if !colName.Qualifier.IsEmpty() && colName.Qualifier.Name.String() != table.alias.String() {
 				continue
 			}
 
-			// Check if the column exists in the table schema
-			if table.vTable.ColumnListAuthoritative {
-				found := false
-				for _, col := range table.vTable.Columns {
-					if col.Name.Equal(colName.Name) {
-						found = true
-						break
-					}
-				}
-				if !found {
-					// If the column is qualified and not found, it's an error (or at least not this table's column)
-					// If it's unqualified and not found, it belongs to another table
-					if !colName.Qualifier.IsEmpty() {
-						return false
-					}
-					if len(tables) == 1 {
+			// Validate column exists in schema if authoritative - O(1) lookup instead of O(c)
+			if columnSet != nil {
+				if !columnSet[colName.Name.Lowered()] {
+					if !colName.Qualifier.IsEmpty() || len(tables) == 1 {
 						return false
 					}
 					continue
@@ -212,17 +175,13 @@ func isPartitionedByShardingKey(wf sqlparser.WindowFunc, tables []windowTableInf
 			return true
 		}
 
-		// 1. Check Primary Vindex (Sharding Key), which is always at index 0.
-		// We don't check IsUnique() here because even if it's not unique,
-		// it determines the shard, so all rows for a partition will be on the same shard.
+		// Check primary vindex (determines shard routing)
 		primaryVindex := table.vTable.ColumnVindexes[0]
 		if checkVindex(primaryVindex) {
 			return true
 		}
 
-		// 2. Check other Unique Vindexes.
-		// If a partition covers a unique vindex, the partition contains at most one row,
-		// which is trivially single-shard.
+		// Check unique vindexes (each partition has ≤1 row)
 		for _, vindex := range table.vTable.ColumnVindexes[1:] {
 			if vindex.IsUnique() && checkVindex(vindex) {
 				return true

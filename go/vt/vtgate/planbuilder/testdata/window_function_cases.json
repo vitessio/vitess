@@ -997,5 +997,165 @@
         "main.unsharded"
       ]
     }
+  },
+  {
+    "comment": "Window Function on Sharded Join - Cross-Shard Join (should be rejected)",
+    "query": "select a.id, row_number() over (partition by a.id order by b.intcol) from user a, user b where a.id = ? and b.id = ?",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Window Function on Sharded Join - Partition by Non-Sharding Key (should be rejected)",
+    "query": "select a.id, row_number() over (partition by a.textcol1 order by b.intcol) from user a, user b where a.id = ? and b.id = ?",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Window Function on Sharded Join - No PARTITION BY (Global Window, should be rejected)",
+    "query": "select a.id, row_number() over (order by a.intcol) from user a, user b where a.id = ? and b.id = ?",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Window Function on Self-Join - Same Table with Different Aliases (should be rejected)",
+    "query": "select e.id, s.id, row_number() over (partition by e.age order by s.textcol1 desc) as age_rank from user e, user s where e.id = ? and s.id = ?",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Window Function on Three-Way Sharded Join (should be rejected)",
+    "query": "select a.id, row_number() over (partition by a.id order by b.intcol) from user a, user b, user c where a.id = ? and b.id = ? and c.id = ?",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Window Function on Sharded Join - Multiple Window Functions (should be rejected)",
+    "query": "select a.id, row_number() over (order by a.intcol) as rn, rank() over (partition by a.textcol1 order by b.intcol) as rnk from user a, user b where a.id = ? and b.id = ?",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "UNION: Both branches single-shard EqualUnique (WORKS - window partitioned by sharding key)",
+    "query": "select Id, intcol, row_number() over (partition by Id order by intcol) as rn from user where Id = 1 union all select Id, intcol, row_number() over (partition by Id order by intcol) as rn from user where Id = 2",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select Id, intcol, row_number() over (partition by Id order by intcol) as rn from user where Id = 1 union all select Id, intcol, row_number() over (partition by Id order by intcol) as rn from user where Id = 2",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select Id, intcol, row_number() over ( partition by Id order by intcol asc) as rn from `user` where 1 != 1",
+            "Query": "select Id, intcol, row_number() over ( partition by Id order by intcol asc) as rn from `user` where Id = 1",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select Id, intcol, row_number() over ( partition by Id order by intcol asc) as rn from `user` where 1 != 1",
+            "Query": "select Id, intcol, row_number() over ( partition by Id order by intcol asc) as rn from `user` where Id = 2",
+            "Values": [
+              "2"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "UNION: Both branches unsharded (WORKS - window on unsharded)",
+    "query": "select predef1, row_number() over (partition by predef1 order by predef1) as rn from unsharded union all select predef1, row_number() over (partition by predef1 order by predef1) as rn from unsharded",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select predef1, row_number() over (partition by predef1 order by predef1) as rn from unsharded union all select predef1, row_number() over (partition by predef1 order by predef1) as rn from unsharded",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select predef1, row_number() over ( partition by predef1 order by predef1 asc) as rn from unsharded where 1 != 1 union all select predef1, row_number() over ( partition by predef1 order by predef1 asc) as rn from unsharded where 1 != 1",
+        "Query": "select predef1, row_number() over ( partition by predef1 order by predef1 asc) as rn from unsharded union all select predef1, row_number() over ( partition by predef1 order by predef1 asc) as rn from unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "UNION: One sharded single-shard (EqualUnique), one unsharded (WORKS - both single-shard routes)",
+    "query": "select Id, col, row_number() over (partition by Id order by col) as rn from user where Id = 1 union all select 0 as Id, col, row_number() over (order by col) as rn from unsharded_a",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select Id, col, row_number() over (partition by Id order by col) as rn from user where Id = 1 union all select 0 as Id, col, row_number() over (order by col) as rn from unsharded_a",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select Id, col, row_number() over ( partition by Id order by col asc) as rn from `user` where 1 != 1",
+            "Query": "select Id, col, row_number() over ( partition by Id order by col asc) as rn from `user` where Id = 1",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 0 as Id, col, row_number() over ( order by col asc) as rn from unsharded_a where 1 != 1",
+            "Query": "select 0 as Id, col, row_number() over ( order by col asc) as rn from unsharded_a"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded_a",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "UNION: Partitioned by non-sharding key on scatter (FAILS - partitions span multiple shards)",
+    "query": "select Id, textcol1, row_number() over (partition by textcol1 order by Id) as rn from user union all select Id, textcol1, row_number() over (partition by textcol1 order by Id) as rn from user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "UNION: Global window without PARTITION BY on scatter (FAILS - spans all shards)",
+    "query": "select Id, intcol, row_number() over (order by intcol) as rn from user union all select Id, intcol, row_number() over (order by intcol) as rn from user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "IN route: Partitioned by non-sharding key (FAILS - partitions span multiple shards)",
+    "query": "select Id, textcol1, row_number() over (partition by textcol1 order by Id) as rn from user where Id in (1, 2)",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Join: Optimizes to Route - inner join of single-shard branches, window partitioned by sharding key",
+    "query": "select e.Id, e.Name, s.intcol, row_number() over (partition by e.Id order by s.Name desc) as name_rank from user e, user s where e.Id = 1 and s.Id = 1",
+    "skip": true,
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
   }
 ]
