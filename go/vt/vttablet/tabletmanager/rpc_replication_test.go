@@ -98,7 +98,7 @@ func TestDemotePrimaryStalled(t *testing.T) {
 	}
 
 	go func() {
-		tm.demotePrimary(context.Background(), false)
+		tm.demotePrimary(context.Background(), false /* revertPartialFailure */, false /* force */)
 	}()
 	// We make IsServing stall by making it wait on a channel.
 	// This should cause the demote primary operation to be stalled.
@@ -149,7 +149,7 @@ func TestDemotePrimaryWaitingForSemiSyncUnblock(t *testing.T) {
 	// Start the demote primary operation in a go routine.
 	var demotePrimaryFinished atomic.Bool
 	go func() {
-		_, err := tm.demotePrimary(ctx, false)
+		_, err := tm.demotePrimary(ctx, false /* revertPartialFailure */, false /* force */)
 		require.NoError(t, err)
 		demotePrimaryFinished.Store(true)
 	}()
@@ -220,7 +220,7 @@ func TestDemotePrimaryWithSemiSyncProgressDetection(t *testing.T) {
 	// Start the demote primary operation in a go routine.
 	var demotePrimaryFinished atomic.Bool
 	go func() {
-		_, err := tm.demotePrimary(ctx, false)
+		_, err := tm.demotePrimary(ctx, false /* revertPartialFailure */, false /* force */)
 		require.NoError(t, err)
 		demotePrimaryFinished.Store(true)
 	}()
@@ -278,7 +278,7 @@ func TestDemotePrimaryWhenSemiSyncBecomesUnblockedBetweenChecks(t *testing.T) {
 	// Start the demote primary operation in a go routine.
 	var demotePrimaryFinished atomic.Bool
 	go func() {
-		_, err := tm.demotePrimary(ctx, false)
+		_, err := tm.demotePrimary(ctx, false /* revertPartialFailure */, false /* force */)
 		require.NoError(t, err)
 		demotePrimaryFinished.Store(true)
 	}()

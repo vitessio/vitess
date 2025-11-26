@@ -19,7 +19,6 @@ package reparentutil
 import (
 	"context"
 	"errors"
-	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -4673,7 +4672,7 @@ func getRelayLogPosition(gtidSets ...string) string {
 			res += ","
 		}
 		first = false
-		res += fmt.Sprintf("%s:%s", uuids[idx], set)
+		res += uuids[idx] + ":" + set
 	}
 	return res
 }
