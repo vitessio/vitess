@@ -769,6 +769,11 @@ func (fmd *FakeMysqlDaemon) SemiSyncReplicationStatus(ctx context.Context) (bool
 	return fmd.SemiSyncReplicaEnabled, nil
 }
 
+// IsSemiSyncBlocked is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) IsSemiSyncBlocked(ctx context.Context) (bool, error) {
+	return false, nil
+}
+
 // GetVersionString is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetVersionString(ctx context.Context) (string, error) {
 	return fmd.Version, nil
