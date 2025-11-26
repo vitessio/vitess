@@ -31,18 +31,28 @@ func transformWindow(ctx *plancontext.PlanningContext, op *operators.Window) (en
 		return nil, err
 	}
 
-	if isSingleShard(prim) {
-		return prim, nil
-	}
-
-	// If not single shard, check if we can push down based on partitioning
-	if routeOp, ok := op.Source.(*operators.Route); ok {
-		if canPushDownWindow(op, routeOp) {
-			return prim, nil
+	// Check if this is a multi-shard route - window functions are only supported for single-shard queries
+	if route, ok := prim.(*engine.Route); ok && !isSingleShardPrimitive(route) {
+		// For multi-shard routes, we can allow window functions if they're partitioned by a sharding key.
+		// This applies to all multi-shard route types (Scatter, IN, Between, etc.) because the safety
+		// criterion is the same: all rows in a partition must be on the same shard.
+		if routeOp, ok := op.Source.(*operators.Route); ok {
+			if canPushDownWindow(op, routeOp) {
+				// Window functions are safe to execute - partition covers a sharding key
+				return prim, nil
+			}
 		}
+		return nil, vterrors.VT12001("window functions are only supported for single-shard queries")
 	}
 
-	return nil, vterrors.VT12001("window functions are only supported for single-shard queries")
+	return prim, nil
+}
+
+func isSingleShardPrimitive(route *engine.Route) bool {
+	if route == nil || route.RoutingParameters == nil {
+		return false
+	}
+	return route.RoutingParameters.Opcode.IsSingleShard()
 }
 
 type windowTableInfo struct {
@@ -53,6 +63,46 @@ type windowTableInfo struct {
 // canPushDownWindow checks if a window function can be safely pushed down (executed on) a single shard.
 // It validates that all window functions in the query partition by columns that cover a sharding key,
 // ensuring all rows for any partition will be on the same shard.
+//
+// WINDOW FUNCTION SCENARIO MATRIX:
+// ================================
+//
+// Route Type | PARTITION BY    | Can Push Down | Reason
+// -----------+-----------------+--------------+------------------------------------------------------------
+// Single*    | Any column      |  YES          | Only one shard involved, no cross-shard coordination needed
+// IN         | Sharding Key    |  YES          | All rows with same key value go to same shard
+// IN         | Non-Key Column  |  NO           | Partition spans multiple shards - REJECTED as unsupported
+// Scatter    | Sharding Key    |  YES          | All rows with same key value on same shard
+// Scatter    | Non-Key Column  |  NO           | Partition spans multiple shards - REJECTED as unsupported
+// Scatter    | No PARTITION BY |  NO           | Global window requires all data - REJECTED as unsupported
+// Between    | Sharding Key    |  YES          | All rows in range on same shard(s)
+// Between    | Non-Key Column  |  NO           | Partition spans multiple shards - REJECTED as unsupported
+//
+// *Single-shard routes: EqualUnique (WHERE id = x), Unsharded, Reference
+//
+// EXAMPLES:
+// ========
+//
+//	SAFE - Single Shard:
+//	  SELECT id, ROW_NUMBER() OVER (PARTITION BY id ORDER BY col) FROM user WHERE id = 1
+//
+//	SAFE - IN with Sharding Key:
+//	  SELECT id, RANK() OVER (PARTITION BY id ORDER BY col) FROM user WHERE id IN (1,2,3)
+//
+//	SAFE - Scatter with Sharding Key:
+//	  SELECT id, DENSE_RANK() OVER (PARTITION BY id ORDER BY col) FROM user
+//
+//	REJECTED - Scatter with Non-Sharding Key:
+//	  SELECT id, ROW_NUMBER() OVER (PARTITION BY region ORDER BY col) FROM user
+//	  (region values scattered across all shards - cannot push down, cannot compute in VTGate)
+//
+//	REJECTED - IN with Non-Sharding Key:
+//	  SELECT id, LAG(col) OVER (PARTITION BY region ORDER BY col) FROM user WHERE id IN (1,2,3)
+//	  (partition spans multiple shards - cannot push down, cannot compute in VTGate)
+//
+//	REJECTED - Scatter without PARTITION BY:
+//	  SELECT id, ROW_NUMBER() OVER (ORDER BY col) FROM user
+//	  (Global window requires all rows on one node - unsupported)
 func canPushDownWindow(op *operators.Window, route *operators.Route) bool {
 	// 1. Find all tables in the route with their aliases
 	var tables []windowTableInfo

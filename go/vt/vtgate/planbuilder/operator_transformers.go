@@ -1061,23 +1061,3 @@ func generateQuery(statement sqlparser.Statement) string {
 	statement.Format(buf)
 	return buf.String()
 }
-
-func isSingleShard(prim engine.Primitive) bool {
-	switch p := prim.(type) {
-	case *engine.Route:
-		return p.Opcode.IsSingleShard() || p.Opcode == engine.ByDestination
-	case *engine.PlanSwitcher:
-		return isSingleShard(p.Optimized)
-	case *engine.Filter:
-		return isSingleShard(p.Input)
-	case *engine.Limit:
-		return isSingleShard(p.Input)
-	case *engine.MemorySort:
-		return isSingleShard(p.Input)
-	case *engine.Projection:
-		return isSingleShard(p.Input)
-	case *engine.SimpleProjection:
-		return isSingleShard(p.Input)
-	}
-	return false
-}
