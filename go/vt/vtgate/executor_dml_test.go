@@ -1843,6 +1843,8 @@ func TestInsertGeneratorSharded(t *testing.T) {
 		InsertIDChanged: true,
 	}
 	utils.MustMatch(t, wantResult, result)
+	// Verify that LastInsertId is set in the session (regression test for #18946)
+	assert.EqualValues(t, 1, session.LastInsertId)
 }
 
 func TestInsertAutoincSharded(t *testing.T) {
@@ -1899,6 +1901,8 @@ func TestInsertGeneratorUnsharded(t *testing.T) {
 		RowsAffected:    1,
 	}
 	utils.MustMatch(t, wantResult, result)
+	// Verify that LastInsertId is set in the session (regression test for #18946)
+	assert.EqualValues(t, 1, session.LastInsertId)
 }
 
 func TestInsertAutoincUnsharded(t *testing.T) {
