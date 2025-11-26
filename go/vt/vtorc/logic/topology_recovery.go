@@ -424,7 +424,7 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 	// Find the primary tablet for semi-sync policy determination
 	var primaryTablet *topodatapb.Tablet
 	for _, tabletInfo := range tablets {
-		tabletAlias := topoproto.TabletAliasString(tabletInfo.Tablet.Alias)
+		tabletAlias := topoproto.TabletAliasString(tabletInfo.Alias)
 		if tabletAlias == analysisEntry.AnalyzedInstanceAlias {
 			primaryTablet = tabletInfo.Tablet
 			break

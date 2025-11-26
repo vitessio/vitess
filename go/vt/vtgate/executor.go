@@ -1483,7 +1483,7 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econ
 	// The mysql plugin runs an implicit rollback whenever a connection closes.
 	// To avoid spamming the log with no-op rollback records, ignore it if
 	// it was a no-op record (i.e. didn't issue any queries)
-	if !(logStats.StmtType == "ROLLBACK" && logStats.ShardQueries == 0) {
+	if logStats.StmtType != "ROLLBACK" || logStats.ShardQueries != 0 {
 		logStats.SaveEndTime()
 		e.queryLogger.Send(logStats)
 	}

@@ -44,7 +44,7 @@ func pushDerived(ctx *plancontext.PlanningContext, op *Horizon) (Operator, *Appl
 		return op, NoRewrite
 	}
 
-	if !(innerRoute.Routing.OpCode() == engine.EqualUnique) && !op.IsMergeable(ctx) {
+	if (innerRoute.Routing.OpCode() != engine.EqualUnique) && !op.IsMergeable(ctx) {
 		// no need to check anything if we are sure that we will only hit a single shard
 		return op, NoRewrite
 	}

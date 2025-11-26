@@ -623,7 +623,7 @@ func buildKeyspaceReferences(vschema *VSchema, ksvschema *KeyspaceSchema) error 
 		}
 
 		// Validate source table types.
-		if !(sourceT.Type == "" || sourceT.Type == TypeReference) {
+		if sourceT.Type != "" && sourceT.Type != TypeReference {
 			return vterrors.Errorf(
 				vtrpcpb.Code_UNIMPLEMENTED,
 				"source %q may not reference a table of type %q: %s",

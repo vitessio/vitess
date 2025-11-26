@@ -102,7 +102,7 @@ func connectForReplication(cp dbconfigs.Connector) (*mysql.Conn, error) {
 func (bc *BinlogConnection) StartBinlogDumpFromCurrent(ctx context.Context) (replication.Position, <-chan mysql.BinlogEvent, <-chan error, error) {
 	ctx, bc.cancel = context.WithCancel(ctx)
 
-	position, err := bc.Conn.PrimaryPosition()
+	position, err := bc.PrimaryPosition()
 	if err != nil {
 		return replication.Position{}, nil, nil, fmt.Errorf("failed to get primary position: %v", err)
 	}
@@ -150,7 +150,7 @@ func (bc *BinlogConnection) streamEvents(ctx context.Context) (chan mysql.Binlog
 			bc.wg.Done()
 		}()
 		for {
-			event, err := bc.Conn.ReadBinlogEvent()
+			event, err := bc.ReadBinlogEvent()
 			if err != nil {
 				select {
 				case errChan <- err:
@@ -216,7 +216,7 @@ func (bc *BinlogConnection) StartBinlogDumpFromBinlogBeforeTimestamp(ctx context
 	// Start dumping the logs. The position is '4' to skip the
 	// Binlog File Header. See this page for more info:
 	// https://dev.mysql.com/doc/internals/en/binlog-file.html
-	if err := bc.Conn.WriteComBinlogDump(bc.serverID, filename, 4, 0); err != nil {
+	if err := bc.WriteComBinlogDump(bc.serverID, filename, 4, 0); err != nil {
 		return nil, nil, fmt.Errorf("failed to send the ComBinlogDump command: %v", err)
 	}
 	e, c := bc.streamEvents(ctx)
@@ -225,7 +225,7 @@ func (bc *BinlogConnection) StartBinlogDumpFromBinlogBeforeTimestamp(ctx context
 
 func (bc *BinlogConnection) findFileBeforeTimestamp(ctx context.Context, timestamp int64) (filename string, err error) {
 	// List the binlogs.
-	binlogs, err := bc.Conn.ExecuteFetch("SHOW BINARY LOGS", 1000, false)
+	binlogs, err := bc.ExecuteFetch("SHOW BINARY LOGS", 1000, false)
 	if err != nil {
 		return "", fmt.Errorf("failed to SHOW BINARY LOGS: %v", err)
 	}

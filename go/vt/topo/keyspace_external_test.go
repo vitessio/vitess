@@ -194,7 +194,7 @@ func TestServerGetServingShards(t *testing.T) {
 			require.Len(t, shardInfos, tt.shards)
 			for _, shardName := range shardNames {
 				f := func(si *topo.ShardInfo) bool {
-					return key.KeyRangeString(si.Shard.KeyRange) == shardName
+					return key.KeyRangeString(si.KeyRange) == shardName
 				}
 				require.True(t, slices.ContainsFunc(shardInfos, f), "shard %q was not found in the results",
 					shardName)
