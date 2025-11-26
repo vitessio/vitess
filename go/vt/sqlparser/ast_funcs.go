@@ -2135,6 +2135,14 @@ func RemoveKeyspace(in SQLNode) {
 	}, in)
 }
 
+// RemoveSpecificKeyspace removes the keyspace qualifier from all ColName and TableName
+// when it matches the keyspace provided
+func RemoveSpecificKeyspace(in SQLNode, keyspace string) {
+	removeKeyspace(in, func(qualifier string) bool {
+		return qualifier == keyspace // Remove only if it matches the provided keyspace
+	})
+}
+
 // RemoveKeyspaceInTables removes the database qualifier for all table names in the AST
 func RemoveKeyspaceInTables(in SQLNode) {
 	Rewrite(in, nil, func(cursor *Cursor) bool {
@@ -2143,6 +2151,23 @@ func RemoveKeyspaceInTables(in SQLNode) {
 			cursor.Replace(tbl)
 		}
 
+		return true
+	})
+}
+
+func removeKeyspace(in SQLNode, shouldRemove func(qualifier string) bool) {
+	Rewrite(in, nil, func(cursor *Cursor) bool {
+		switch expr := cursor.Node().(type) {
+		case *ColName:
+			if shouldRemove(expr.Qualifier.Qualifier.String()) {
+				expr.Qualifier.Qualifier = NewIdentifierCS("")
+			}
+		case TableName:
+			if shouldRemove(expr.Qualifier.String()) {
+				expr.Qualifier = NewIdentifierCS("")
+				cursor.Replace(expr)
+			}
+		}
 		return true
 	})
 }

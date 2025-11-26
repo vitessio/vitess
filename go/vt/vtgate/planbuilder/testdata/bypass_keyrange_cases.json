@@ -164,5 +164,22 @@
         "Query": "create /* test */ table t1(id bigint, primary key(id)) /* comments */"
       }
     }
+  },
+  {
+    "comment": "remove the matching keyspace from shard targeted query",
+    "query": "select count(*), col from `main`.unsharded join vt_main.t1 where exists (select 1 from main.t2 join information_schema.tables where table_name = 't3')",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(*), col from `main`.unsharded join vt_main.t1 where exists (select 1 from main.t2 join information_schema.tables where table_name = 't3')",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "ExactKeyRange(-)",
+        "Query": "select count(*), col from unsharded join vt_main.t1 where exists (select 1 from t2 join information_schema.`tables` where table_name = 't3')"
+      }
+    }
   }
 ]
