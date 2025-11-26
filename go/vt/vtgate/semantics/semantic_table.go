@@ -88,6 +88,7 @@ type (
 		Union           bool
 		RecursiveCTE    bool
 		LastInsertIDArg bool // LastInsertIDArg is true if the query has a LAST_INSERT_ID(x) with an argument
+		WindowFunc      bool
 	}
 
 	// MirrorInfo stores information used to produce mirror

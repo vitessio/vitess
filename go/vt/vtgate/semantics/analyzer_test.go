@@ -1554,3 +1554,52 @@ func tableT3() *vindexes.BaseTable {
 		Keyspace:                ks3,
 	}
 }
+
+// TestQuerySignatureWindowFunc verifies that the analyzer correctly identifies
+// window functions and aggregates in the query signature.
+// It specifically checks that aggregates with an OVER clause are treated as window functions.
+func TestQuerySignatureWindowFunc(t *testing.T) {
+	queries := []struct {
+		query       string
+		isWindow    bool
+		isAggregate bool
+	}{
+		{
+			query:       "select sum(id) from t1",
+			isWindow:    false,
+			isAggregate: true,
+		},
+		{
+			query:       "select sum(id) over () from t1",
+			isWindow:    true,
+			isAggregate: false,
+		},
+		{
+			query:       "select rank() over () from t1",
+			isWindow:    true,
+			isAggregate: false,
+		},
+		{
+			query:       "select sum(id), rank() over () from t1",
+			isWindow:    true,
+			isAggregate: true,
+		},
+		{
+			query:       "select sum(id) over (), count(*) from t1",
+			isWindow:    true,
+			isAggregate: true,
+		},
+	}
+
+	for _, tc := range queries {
+		t.Run(tc.query, func(t *testing.T) {
+			ast, err := sqlparser.NewTestParser().Parse(tc.query)
+			require.NoError(t, err)
+
+			st, err := AnalyzeStrict(ast, "dbName", fakeSchemaInfo())
+			require.NoError(t, err)
+			require.Equal(t, tc.isWindow, st.QuerySignature.WindowFunc, "WindowFunc mismatch")
+			require.Equal(t, tc.isAggregate, st.QuerySignature.Aggregation, "Aggregation mismatch")
+		})
+	}
+}
