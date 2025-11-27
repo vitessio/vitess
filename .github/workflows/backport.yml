@@ -214,7 +214,7 @@ jobs:
 
               # Create PR body
               PR_BODY="## Description
-This is a $PORT_TYPE of #${PR_NUMBER}"
+          This is a $PORT_TYPE of #${PR_NUMBER}"
 
               # Determine if PR should be draft
               DRAFT_FLAG=""
@@ -293,15 +293,15 @@ This is a $PORT_TYPE of #${PR_NUMBER}"
             if [ "$CONFLICT" = true ]; then
               CONFLICT_COMMENT="Hello @${PR_AUTHOR}, there are conflicts in this ${PORT_TYPE}.
 
-Please address them in order to merge this Pull Request. You can execute the snippet below to reset your branch and resolve the conflict manually.
+          Please address them in order to merge this Pull Request. You can execute the snippet below to reset your branch and resolve the conflict manually.
 
-Make sure you replace \`origin\` by the name of the ${{ github.repository_owner }}/${{ github.event.repository.name }} remote
-\`\`\`
-git fetch --all
-gh pr checkout ${NEW_PR_NUMBER} -R ${{ github.repository }}
-git reset --hard origin/${BRANCH}
-git cherry-pick -m 1 ${MERGE_COMMIT_SHA}
-\`\`\`"
+          Make sure you replace \`origin\` by the name of the ${{ github.repository_owner }}/${{ github.event.repository.name }} remote
+          \`\`\`
+          git fetch --all
+          gh pr checkout ${NEW_PR_NUMBER} -R ${{ github.repository }}
+          git reset --hard origin/${BRANCH}
+          git cherry-pick -m 1 ${MERGE_COMMIT_SHA}
+          \`\`\`"
 
               if [ "$DRY_RUN" = "true" ]; then
                 echo ""
@@ -447,7 +447,7 @@ git cherry-pick -m 1 ${MERGE_COMMIT_SHA}
 
               # Create PR body
               PR_BODY="## Description
-This is a $PORT_TYPE of #${PR_NUMBER}"
+          This is a $PORT_TYPE of #${PR_NUMBER}"
 
               # Determine if PR should be draft
               DRAFT_FLAG=""
@@ -526,15 +526,15 @@ This is a $PORT_TYPE of #${PR_NUMBER}"
             if [ "$CONFLICT" = true ]; then
               CONFLICT_COMMENT="Hello @${PR_AUTHOR}, there are conflicts in this ${PORT_TYPE}.
 
-Please address them in order to merge this Pull Request. You can execute the snippet below to reset your branch and resolve the conflict manually.
+          Please address them in order to merge this Pull Request. You can execute the snippet below to reset your branch and resolve the conflict manually.
 
-Make sure you replace \`origin\` by the name of the ${{ github.repository_owner }}/${{ github.event.repository.name }} remote
-\`\`\`
-git fetch --all
-gh pr checkout ${NEW_PR_NUMBER} -R ${{ github.repository }}
-git reset --hard origin/${BRANCH}
-git cherry-pick -m 1 ${MERGE_COMMIT_SHA}
-\`\`\`"
+          Make sure you replace \`origin\` by the name of the ${{ github.repository_owner }}/${{ github.event.repository.name }} remote
+          \`\`\`
+          git fetch --all
+          gh pr checkout ${NEW_PR_NUMBER} -R ${{ github.repository }}
+          git reset --hard origin/${BRANCH}
+          git cherry-pick -m 1 ${MERGE_COMMIT_SHA}
+          \`\`\`"
 
               if [ "$DRY_RUN" = "true" ]; then
                 echo ""
