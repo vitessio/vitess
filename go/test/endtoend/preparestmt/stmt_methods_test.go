@@ -567,7 +567,11 @@ func validateBaselineErrSpecializedPlan(t *testing.T, p map[string]any) {
 	require.True(t, ok, "plan is not of type map[string]any")
 	require.EqualValues(t, "PlanSwitcher", pm["OperatorType"])
 	baselineErr := pm["BaselineErr"].(string)
-	require.Contains(t, baselineErr, "VT12001")
+	// Accept both old and new error messages for backward compatibility during upgrade/downgrade tests
+	require.True(t,
+		baselineErr == "VT12001: unsupported: window functions are only supported for single-shard queries" ||
+			baselineErr == "VT12001: unsupported: OVER CLAUSE with sharded keyspace",
+		"unexpected error message: %s", baselineErr)
 
 	pd, err := engine.PrimitiveDescriptionFromMap(plan.(map[string]any))
 	require.NoError(t, err)
