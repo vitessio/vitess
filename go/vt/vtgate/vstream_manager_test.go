@@ -472,6 +472,157 @@ func TestVStreamChunks(t *testing.T) {
 	require.Equal(t, 100, ddlCount)
 }
 
+// Verifies that large chunked transactions from one shard
+// are not interleaved with events from other shards.
+func TestVStreamChunksOverSizeThreshold(t *testing.T) {
+	ctx := t.Context()
+	ks := "TestVStream"
+	cell := "aa"
+	_ = createSandbox(ks)
+	hc := discovery.NewFakeHealthCheck(nil)
+	st := getSandboxTopo(ctx, cell, ks, []string{"-20", "20-40"})
+	vsm := newTestVStreamManager(ctx, hc, st, cell)
+	sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
+	sbc1 := hc.AddTestTablet("aa", "1.1.1.1", 1002, ks, "20-40", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	addTabletToSandboxTopo(t, ctx, st, ks, "20-40", sbc1.Tablet())
+
+	rowData := make([]byte, 100)
+	for i := range rowData {
+		rowData[i] = byte(i % 256)
+	}
+
+	sbc0.AddVStreamEvents([]*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_BEGIN}}, nil)
+	for range 50 {
+		sbc0.AddVStreamEvents([]*binlogdatapb.VEvent{{
+			Type: binlogdatapb.VEventType_ROW,
+			RowEvent: &binlogdatapb.RowEvent{
+				TableName: "shard0_table",
+				RowChanges: []*binlogdatapb.RowChange{{
+					After: &querypb.Row{
+						Lengths: []int64{int64(len(rowData))},
+						Values:  rowData,
+					},
+				}},
+			},
+		}}, nil)
+	}
+
+	sbc1.AddVStreamEvents([]*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_BEGIN}}, nil)
+	sbc1.AddVStreamEvents([]*binlogdatapb.VEvent{{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{
+			TableName: "shard0_table",
+			RowChanges: []*binlogdatapb.RowChange{{
+				After: &querypb.Row{
+					Lengths: []int64{8},
+					Values:  rowData[:8],
+				},
+			}},
+		},
+	}}, nil)
+	sbc1.AddVStreamEvents([]*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_COMMIT}}, nil)
+
+	for range 50 {
+		sbc0.AddVStreamEvents([]*binlogdatapb.VEvent{{
+			Type: binlogdatapb.VEventType_ROW,
+			RowEvent: &binlogdatapb.RowEvent{
+				TableName: "shard0_table",
+				RowChanges: []*binlogdatapb.RowChange{{
+					After: &querypb.Row{
+						Lengths: []int64{int64(len(rowData))},
+						Values:  rowData,
+					},
+				}},
+			},
+		}}, nil)
+	}
+	sbc0.AddVStreamEvents([]*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_COMMIT}}, nil)
+
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: ks,
+			Shard:    "-20",
+			Gtid:     "pos",
+		}, {
+			Keyspace: ks,
+			Shard:    "20-40",
+			Gtid:     "pos",
+		}},
+	}
+
+	vstreamCtx, vstreamCancel := context.WithCancel(ctx)
+	defer vstreamCancel()
+
+	// Track transaction states
+	type txState struct {
+		shard     string
+		hasBegin  bool
+		hasCommit bool
+		rowCount  int
+	}
+	var currentTx *txState
+	var completedTxs []*txState
+
+	flags := &vtgatepb.VStreamFlags{
+		TransactionChunkSize: 1024,
+	}
+
+	err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, flags, func(events []*binlogdatapb.VEvent) error {
+		for _, event := range events {
+			switch event.Type {
+			case binlogdatapb.VEventType_VGTID:
+				if event.Keyspace != "" && event.Shard != "" {
+					shard := event.Keyspace + "/" + event.Shard
+					if currentTx != nil && currentTx.shard != "" && currentTx.shard != shard {
+						return fmt.Errorf("VGTID from shard %s while transaction from shard %s is in progress (interleaving detected)", shard, currentTx.shard)
+					}
+					if currentTx != nil && currentTx.shard == "" {
+						currentTx.shard = shard
+					}
+				}
+			case binlogdatapb.VEventType_BEGIN:
+				if currentTx != nil && !currentTx.hasCommit {
+					return fmt.Errorf("BEGIN received while transaction %s is still open (interleaving detected)", currentTx.shard)
+				}
+				currentTx = &txState{hasBegin: true}
+			case binlogdatapb.VEventType_ROW:
+				if currentTx == nil {
+					return errors.New("ROW event outside transaction")
+				}
+				currentTx.rowCount++
+			case binlogdatapb.VEventType_COMMIT:
+				if currentTx == nil {
+					return errors.New("COMMIT without BEGIN")
+				}
+				currentTx.hasCommit = true
+				completedTxs = append(completedTxs, currentTx)
+				t.Logf("COMMIT transaction for shard %s (rows=%d, completed_txs=%d)", currentTx.shard, currentTx.rowCount, len(completedTxs))
+				currentTx = nil
+			default:
+			}
+		}
+
+		if len(completedTxs) == 2 {
+			vstreamCancel()
+		}
+
+		return nil
+	})
+
+	require.Error(t, err)
+	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
+	require.Equal(t, 2, len(completedTxs), "Should receive both transactions")
+
+	var rowCounts []int
+	for _, tx := range completedTxs {
+		require.True(t, tx.hasBegin, "Transaction should have BEGIN")
+		require.True(t, tx.hasCommit, "Transaction should have COMMIT")
+		rowCounts = append(rowCounts, tx.rowCount)
+	}
+	require.ElementsMatch(t, []int{1, 100}, rowCounts, "Should have one transaction with 1 row and one with 100 rows")
+}
+
 func TestVStreamMulti(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

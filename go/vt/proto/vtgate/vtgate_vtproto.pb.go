@@ -436,6 +436,7 @@ func (m *VStreamFlags) CloneVT() *VStreamFlags {
 	r.StreamKeyspaceHeartbeats = m.StreamKeyspaceHeartbeats
 	r.IncludeReshardJournalEvents = m.IncludeReshardJournalEvents
 	r.ExcludeKeyspaceFromTableName = m.ExcludeKeyspaceFromTableName
+	r.TransactionChunkSize = m.TransactionChunkSize
 	if rhs := m.TablesToCopy; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
@@ -1847,6 +1848,11 @@ func (m *VStreamFlags) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.TransactionChunkSize != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.TransactionChunkSize))
+		i--
+		dAtA[i] = 0x58
+	}
 	if m.ExcludeKeyspaceFromTableName {
 		i--
 		if m.ExcludeKeyspaceFromTableName {
@@ -2793,6 +2799,9 @@ func (m *VStreamFlags) SizeVT() (n int) {
 	}
 	if m.ExcludeKeyspaceFromTableName {
 		n += 2
+	}
+	if m.TransactionChunkSize != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.TransactionChunkSize))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -6518,6 +6527,25 @@ func (m *VStreamFlags) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.ExcludeKeyspaceFromTableName = bool(v != 0)
+		case 11:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TransactionChunkSize", wireType)
+			}
+			m.TransactionChunkSize = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.TransactionChunkSize |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
