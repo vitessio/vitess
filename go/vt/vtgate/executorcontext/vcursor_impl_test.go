@@ -393,7 +393,7 @@ func (f fakeExecutor) SetVitessMetadata(ctx context.Context, name, value string)
 	panic("implement me")
 }
 
-func (f fakeExecutor) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.ShardDestination, error) {
+func (f fakeExecutor) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.ShardDestination, *topodatapb.TabletAlias, error) {
 	// TODO implement me
 	panic("implement me")
 }
