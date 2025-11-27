@@ -60,6 +60,7 @@ jobs:
             - '.github/workflows/upgrade_downgrade_test_onlineddl_flow.yml'
 
     - name: Set output with latest release branch
+      if: steps.changes.outputs.end_to_end == 'true'
       id: output-previous-release-ref
       run: |
         previous_release_ref=$(./tools/get_previous_release.sh ${{github.base_ref}} ${{github.ref}})
@@ -67,25 +68,20 @@ jobs:
         echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
 
     - name: Set output with next release branch
+      if: steps.changes.outputs.end_to_end == 'true'
       id: output-next-release-ref
       run: |
         next_release_ref=$(./tools/get_next_release.sh ${{github.base_ref}} ${{github.ref}})
         echo $next_release_ref
         echo "next_release_ref=${next_release_ref}" >> $GITHUB_OUTPUT
 
-    - name: Set up Go
+    - name: Tune the OS
       if: steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
-      with:
-        go-version: 1.24.7
+      uses: ./.github/actions/tune-os
 
     - name: Set up python
       if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
-
-    - name: Tune the OS
-      if: steps.changes.outputs.end_to_end == 'true'
-      uses: ./.github/actions/tune-os
 
     - name: Setup MySQL
       if: steps.changes.outputs.end_to_end == 'true'
@@ -104,9 +100,6 @@ jobs:
         
         sudo service etcd stop
 
-        # install JUnit report formatter
-        go install github.com/vitessio/go-junit-report@HEAD
-
     # Checkout to the last release of Vitess
     - name: Check out last version's code (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
       if: steps.changes.outputs.end_to_end == 'true'
@@ -114,6 +107,13 @@ jobs:
       with:
         ref: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
         persist-credentials: 'false'
+
+    - name: Set up Go
+      if: steps.changes.outputs.end_to_end == 'true'
+      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      with:
+        go-version-file: go.mod
+        cache: false
 
     - name: Get dependencies for the last release
       if: steps.changes.outputs.end_to_end == 'true'
@@ -139,6 +139,13 @@ jobs:
         ref: ${{ steps.output-next-release-ref.outputs.next_release_ref }}
         persist-credentials: 'false'
 
+    - name: Set up Go
+      if: steps.changes.outputs.end_to_end == 'true'
+      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      with:
+        go-version-file: go.mod
+        cache: false
+
     - name: Get dependencies for the next release
       if: steps.changes.outputs.end_to_end == 'true'
       run: |
@@ -161,6 +168,13 @@ jobs:
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         persist-credentials: 'false'
+
+    - name: Set up Go
+      if: steps.changes.outputs.end_to_end == 'true'
+      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      with:
+        go-version-file: go.mod
+        cache: false
 
     - name: Get dependencies for this commit
       if: steps.changes.outputs.end_to_end == 'true'
