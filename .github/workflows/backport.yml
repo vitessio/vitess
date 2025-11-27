@@ -31,6 +31,11 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Configure Git
+        run: |
+          git config --global user.name "vitess-bot[bot]"
+          git config --global user.email "108069721+vitess-bot[bot]@users.noreply.github.com"
+
       - name: Get PR information
         id: pr-info
         env:
