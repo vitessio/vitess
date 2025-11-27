@@ -206,7 +206,7 @@ func (pr *PlannedReparenter) preflightChecks(
 	// where they require 2 semi-sync acks but from cross-cell replicas.
 	// Let's say they have 3 replicas A in zone 1 and B and C in zone 2. In this case, A is the only
 	// eligible primary elect. Both B and C won't be able to make forward progress if they are promoted.
-	var tabletsReachable []*topodatapb.Tablet
+	tabletsReachable := make([]*topodatapb.Tablet, 0, len(tabletMap))
 	for _, info := range tabletMap {
 		tabletsReachable = append(tabletsReachable, info.Tablet)
 	}

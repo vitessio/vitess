@@ -651,7 +651,7 @@ func buildEnginesPlan() (engine.Primitive, error) {
 
 func buildVschemaKeyspacesPlan(vschema plancontext.VSchema) (engine.Primitive, error) {
 	vs := vschema.GetVSchema()
-	var rows [][]sqltypes.Value
+	rows := make([][]sqltypes.Value, 0, len(vs.Keyspaces))
 	for ksName, ks := range vs.Keyspaces {
 		var row []sqltypes.Value
 		row = append(row, sqltypes.NewVarChar(ksName))
@@ -680,7 +680,7 @@ func buildVschemaTablesPlan(vschema plancontext.VSchema) (engine.Primitive, erro
 		return nil, vterrors.VT05003(ks.Name)
 	}
 
-	var tables []string
+	tables := make([]string, 0, len(schemaKs.Tables))
 	for name := range schemaKs.Tables {
 		tables = append(tables, name)
 	}

@@ -180,11 +180,12 @@ func ParseTabletType(param string) (topodatapb.TabletType, error) {
 
 // ParseTabletTypes parses a comma separated list of tablet types and returns a slice with the respective enums.
 func ParseTabletTypes(param string) ([]topodatapb.TabletType, error) {
-	var tabletTypes []topodatapb.TabletType
 	if param == "" {
-		return tabletTypes, nil
+		return nil, nil
 	}
-	for _, typeStr := range strings.Split(param, ",") {
+	params := strings.Split(param, ",")
+	tabletTypes := make([]topodatapb.TabletType, 0, len(params))
+	for _, typeStr := range params {
 		t, err := ParseTabletType(typeStr)
 		if err != nil {
 			return nil, err

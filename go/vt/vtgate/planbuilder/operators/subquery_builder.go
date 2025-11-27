@@ -343,8 +343,8 @@ func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 	if sqe == nil {
 		return nil, nil
 	}
-	var newSubqs []*SubQuery
 
+	newSubqs := make([]*SubQuery, 0, len(sqe.subq))
 	for idx, subq := range sqe.subq {
 		sqInner := createSubquery(ctx, original, subq, outerID, original, sqe.cols[idx], sqe.pullOutCode[idx], true)
 		newSubqs = append(newSubqs, sqInner)

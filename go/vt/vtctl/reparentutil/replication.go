@@ -226,7 +226,7 @@ func stopReplicationAndBuildStatusMaps(
 	var (
 		m          sync.Mutex
 		errChan    = make(chan concurrency.Error)
-		allTablets []*topodatapb.Tablet
+		allTablets = make([]*topodatapb.Tablet, 0, len(tabletMap))
 		res        = &replicationSnapshot{
 			statusMap:          map[string]*replicationdatapb.StopReplicationStatus{},
 			primaryStatusMap:   map[string]*replicationdatapb.PrimaryStatus{},

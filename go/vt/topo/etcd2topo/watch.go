@@ -177,8 +177,7 @@ func (s *Server) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.Wa
 		return nil, nil, convertError(err, nodePath)
 	}
 
-	var initialwd []*topo.WatchDataRecursive
-
+	initialwd := make([]*topo.WatchDataRecursive, 0, len(initial.Kvs))
 	for _, kv := range initial.Kvs {
 		var wd topo.WatchDataRecursive
 		wd.Path = string(kv.Key)

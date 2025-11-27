@@ -1677,7 +1677,7 @@ func (e *Executor) ExecuteVStream(ctx context.Context, rss []*srvtopo.ResolvedSh
 }
 
 func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error {
-	var shardGtids []*binlogdatapb.ShardGtid
+	shardGtids := make([]*binlogdatapb.ShardGtid, 0, len(rss))
 	for _, rs := range rss {
 		shardGtid := &binlogdatapb.ShardGtid{
 			Keyspace: rs.Target.Keyspace,

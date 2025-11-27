@@ -124,7 +124,7 @@ func (c *DBDDL) createDatabase(ctx context.Context, vcursor VCursor, plugin DBDD
 		case <-time.After(dbDDLDefaultTimeout): // timeout
 		}
 	}
-	var queries []*querypb.BoundQuery
+	queries := make([]*querypb.BoundQuery, 0, len(destinations))
 	for range destinations {
 		queries = append(queries, &querypb.BoundQuery{
 			Sql:           "select 42 from dual where null",
