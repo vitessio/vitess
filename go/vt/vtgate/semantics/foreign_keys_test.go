@@ -40,8 +40,8 @@ var tbl = map[string]TableInfo{
 			Name:     sqlparser.NewIdentifierCS("t0"),
 			Keyspace: &vindexes.Keyspace{Name: "ks"},
 			ChildForeignKeys: []vindexes.ChildFKInfo{
-				ckInfo(parentTbl, []string{"col"}, []string{"col"}, sqlparser.Restrict),
-				ckInfo(parentTbl, []string{"col1", "col2"}, []string{"ccol1", "ccol2"}, sqlparser.SetNull),
+				ckInfo(parentTbl, []string{"col"}, []string{"col"}, sqlparser.Restrict, sqlparser.Restrict),
+				ckInfo(parentTbl, []string{"col1", "col2"}, []string{"ccol1", "ccol2"}, sqlparser.SetNull, sqlparser.SetNull),
 			},
 			ParentForeignKeys: []vindexes.ParentFKInfo{
 				pkInfo(parentTbl, []string{"colb"}, []string{"colb"}),
@@ -54,8 +54,8 @@ var tbl = map[string]TableInfo{
 			Name:     sqlparser.NewIdentifierCS("t1"),
 			Keyspace: &vindexes.Keyspace{Name: "ks_unmanaged", Sharded: true},
 			ChildForeignKeys: []vindexes.ChildFKInfo{
-				ckInfo(parentTbl, []string{"cola"}, []string{"cola"}, sqlparser.Restrict),
-				ckInfo(parentTbl, []string{"cola1", "cola2"}, []string{"ccola1", "ccola2"}, sqlparser.SetNull),
+				ckInfo(parentTbl, []string{"cola"}, []string{"cola"}, sqlparser.Restrict, sqlparser.Restrict),
+				ckInfo(parentTbl, []string{"cola1", "cola2"}, []string{"ccola1", "ccola2"}, sqlparser.SetNull, sqlparser.SetNull),
 			},
 		},
 	},
@@ -76,10 +76,10 @@ var tbl = map[string]TableInfo{
 			Name:     sqlparser.NewIdentifierCS("t4"),
 			Keyspace: &vindexes.Keyspace{Name: "ks"},
 			ChildForeignKeys: []vindexes.ChildFKInfo{
-				ckInfo(parentTbl, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
-				ckInfo(parentTbl, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
-				ckInfo(parentTbl, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
-				ckInfo(parentTbl, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
+				ckInfo(parentTbl, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict, sqlparser.Restrict),
+				ckInfo(parentTbl, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull, sqlparser.SetNull),
+				ckInfo(parentTbl, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade, sqlparser.Cascade),
+				ckInfo(parentTbl, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict, sqlparser.Restrict),
 			},
 			ParentForeignKeys: []vindexes.ParentFKInfo{
 				pkInfo(parentTbl, []string{"pcola", "pcolx"}, []string{"cola", "colx"}),
@@ -96,9 +96,9 @@ var tbl = map[string]TableInfo{
 			Name:     sqlparser.NewIdentifierCS("t5"),
 			Keyspace: &vindexes.Keyspace{Name: "ks"},
 			ChildForeignKeys: []vindexes.ChildFKInfo{
-				ckInfo(parentTbl, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
-				ckInfo(parentTbl, []string{"colc", "colx"}, []string{"child_colc", "child_colx"}, sqlparser.SetNull),
-				ckInfo(parentTbl, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
+				ckInfo(parentTbl, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict, sqlparser.Restrict),
+				ckInfo(parentTbl, []string{"colc", "colx"}, []string{"child_colc", "child_colx"}, sqlparser.SetNull, sqlparser.SetNull),
+				ckInfo(parentTbl, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade, sqlparser.Cascade),
 			},
 			ParentForeignKeys: []vindexes.ParentFKInfo{
 				pkInfo(parentTbl, []string{"pcolc", "pcolx"}, []string{"colc", "colx"}),
@@ -114,12 +114,12 @@ var tbl = map[string]TableInfo{
 			Name:     sqlparser.NewIdentifierCS("t6"),
 			Keyspace: &vindexes.Keyspace{Name: "ks"},
 			ChildForeignKeys: []vindexes.ChildFKInfo{
-				ckInfo(parentTbl, []string{"col"}, []string{"col"}, sqlparser.Restrict),
-				ckInfo(parentTbl, []string{"col1", "col2"}, []string{"ccol1", "ccol2"}, sqlparser.SetNull),
-				ckInfo(parentTbl, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
-				ckInfo(parentTbl, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
-				ckInfo(parentTbl, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
-				ckInfo(parentTbl, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
+				ckInfo(parentTbl, []string{"col"}, []string{"col"}, sqlparser.Restrict, sqlparser.Restrict),
+				ckInfo(parentTbl, []string{"col1", "col2"}, []string{"ccol1", "ccol2"}, sqlparser.SetNull, sqlparser.SetNull),
+				ckInfo(parentTbl, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict, sqlparser.Restrict),
+				ckInfo(parentTbl, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull, sqlparser.SetNull),
+				ckInfo(parentTbl, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade, sqlparser.Cascade),
+				ckInfo(parentTbl, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict, sqlparser.Restrict),
 			},
 			ParentForeignKeys: []vindexes.ParentFKInfo{
 				pkInfo(parentTbl, []string{"colb"}, []string{"colb"}),
@@ -154,8 +154,8 @@ func TestGetAllManagedForeignKeys(t *testing.T) {
 			},
 			childFkWanted: map[TableSet][]vindexes.ChildFKInfo{
 				SingleTableSet(0): {
-					ckInfo(parentTbl, []string{"col"}, []string{"col"}, sqlparser.Restrict),
-					ckInfo(parentTbl, []string{"col1", "col2"}, []string{"ccol1", "ccol2"}, sqlparser.SetNull),
+					ckInfo(parentTbl, []string{"col"}, []string{"col"}, sqlparser.Restrict, sqlparser.Restrict),
+					ckInfo(parentTbl, []string{"col1", "col2"}, []string{"ccol1", "ccol2"}, sqlparser.SetNull, sqlparser.SetNull),
 				},
 			},
 			parentFkWanted: map[TableSet][]vindexes.ParentFKInfo{
@@ -261,12 +261,12 @@ func TestFilterForeignKeysUsingUpdateExpressions(t *testing.T) {
 			updExprs: updateExprs,
 			childFksWanted: map[TableSet][]vindexes.ChildFKInfo{
 				SingleTableSet(0): {
-					ckInfo(parentTbl, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
-					ckInfo(parentTbl, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
+					ckInfo(parentTbl, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict, sqlparser.Restrict),
+					ckInfo(parentTbl, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull, sqlparser.SetNull),
 				},
 				SingleTableSet(1): {
-					ckInfo(parentTbl, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
-					ckInfo(parentTbl, []string{"colc", "colx"}, []string{"child_colc", "child_colx"}, sqlparser.SetNull),
+					ckInfo(parentTbl, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict, sqlparser.Restrict),
+					ckInfo(parentTbl, []string{"colc", "colx"}, []string{"child_colc", "child_colx"}, sqlparser.SetNull, sqlparser.SetNull),
 				},
 			},
 			parentFksWanted: map[TableSet][]vindexes.ParentFKInfo{},
@@ -349,8 +349,8 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 			},
 			childFksWanted: map[TableSet][]vindexes.ChildFKInfo{
 				SingleTableSet(0): {
-					ckInfo(parentTbl, []string{"col"}, []string{"col"}, sqlparser.Restrict),
-					ckInfo(parentTbl, []string{"col1", "col2"}, []string{"ccol1", "ccol2"}, sqlparser.SetNull),
+					ckInfo(parentTbl, []string{"col"}, []string{"col"}, sqlparser.Restrict, sqlparser.Restrict),
+					ckInfo(parentTbl, []string{"col1", "col2"}, []string{"ccol1", "ccol2"}, sqlparser.SetNull, sqlparser.SetNull),
 				},
 			},
 		},
@@ -385,12 +385,12 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 			},
 			childFksWanted: map[TableSet][]vindexes.ChildFKInfo{
 				SingleTableSet(0): {
-					ckInfo(parentTbl, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
-					ckInfo(parentTbl, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
+					ckInfo(parentTbl, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict, sqlparser.Restrict),
+					ckInfo(parentTbl, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull, sqlparser.SetNull),
 				},
 				SingleTableSet(1): {
-					ckInfo(parentTbl, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
-					ckInfo(parentTbl, []string{"colc", "colx"}, []string{"child_colc", "child_colx"}, sqlparser.SetNull),
+					ckInfo(parentTbl, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict, sqlparser.Restrict),
+					ckInfo(parentTbl, []string{"colc", "colx"}, []string{"child_colc", "child_colx"}, sqlparser.SetNull, sqlparser.SetNull),
 				},
 			},
 			parentFksWanted: map[TableSet][]vindexes.ParentFKInfo{
@@ -428,8 +428,8 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 			},
 			childFksWanted: map[TableSet][]vindexes.ChildFKInfo{
 				SingleTableSet(0): {
-					ckInfo(parentTbl, []string{"col"}, []string{"col"}, sqlparser.Restrict),
-					ckInfo(parentTbl, []string{"col1", "col2"}, []string{"ccol1", "ccol2"}, sqlparser.SetNull),
+					ckInfo(parentTbl, []string{"col"}, []string{"col"}, sqlparser.Restrict, sqlparser.Restrict),
+					ckInfo(parentTbl, []string{"col1", "col2"}, []string{"ccol1", "ccol2"}, sqlparser.SetNull, sqlparser.SetNull),
 				},
 			},
 			parentFksWanted: map[TableSet][]vindexes.ParentFKInfo{
@@ -491,8 +491,8 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 			},
 			childFksWanted: map[TableSet][]vindexes.ChildFKInfo{
 				SingleTableSet(0): {
-					ckInfo(parentTbl, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
-					ckInfo(parentTbl, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
+					ckInfo(parentTbl, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict, sqlparser.Restrict),
+					ckInfo(parentTbl, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull, sqlparser.SetNull),
 				},
 			},
 			parentFksWanted: map[TableSet][]vindexes.ParentFKInfo{
@@ -552,12 +552,13 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 	}
 }
 
-func ckInfo(cTable *vindexes.BaseTable, pCols []string, cCols []string, refAction sqlparser.ReferenceAction) vindexes.ChildFKInfo {
+func ckInfo(cTable *vindexes.BaseTable, pCols []string, cCols []string, onDelete, onUpdate sqlparser.ReferenceAction) vindexes.ChildFKInfo {
 	return vindexes.ChildFKInfo{
 		Table:         cTable,
 		ParentColumns: sqlparser.MakeColumns(pCols...),
 		ChildColumns:  sqlparser.MakeColumns(cCols...),
-		OnDelete:      refAction,
+		OnDelete:      onDelete,
+		OnUpdate:      onUpdate,
 	}
 }
 
