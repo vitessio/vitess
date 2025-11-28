@@ -574,7 +574,6 @@ func validateBaselineErrSpecializedPlan(t *testing.T, p map[string]any) {
 	if clusterInstance.VtGateMajorVersion < 24 {
 		expectedErr = "VT12001: unsupported: OVER CLAUSE with sharded keyspace"
 	}
-	expectedErr = fmt.Sprintf("%s (VtGateMajorVersion: %d)", expectedErr, clusterInstance.VtGateMajorVersion)
 
 	require.EqualValues(t, expectedErr, baselineErr)
 
