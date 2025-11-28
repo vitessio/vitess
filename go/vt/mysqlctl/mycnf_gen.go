@@ -58,7 +58,7 @@ const (
 var tabletDir string
 
 func init() {
-	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtcombo", "vttablet", "vttestserver", "vtctld", "vtctldclient"} {
+	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtcombo", "vttablet", "vttestserver", "vtctld", "vtctldclient", "vtbackup"} {
 		servenv.OnParseFor(cmd, registerMyCnfFlags)
 	}
 }
