@@ -38,12 +38,12 @@ func transformWindow(ctx *plancontext.PlanningContext, op *operators.Window) (en
 		return nil, vterrors.VT12001("window functions are only supported for single-shard queries")
 	}
 
-	// Multi-shard routes OK only if partitioned by sharding key (guarantees same-shard partition rows)
-	// E.g., PARTITION BY id (sharding key) OK; PARTITION BY region NOT OK
+	// Multi-shard routes OK only if partitioned by unique vindex (guarantees same-shard partition rows)
+	// E.g., PARTITION BY id (primary vindex) OK; PARTITION BY region NOT OK
 	if route, ok := prim.(*engine.Route); ok && !isSingleShardPrimitive(route) {
 		if routeOp, ok := op.Source.(*operators.Route); ok {
 			if canPushDownWindow(op, routeOp) {
-				// Partition is based on sharding key - safe to execute on multi-shard route
+				// Partition is based on unique vindex - safe to execute on multi-shard route
 				return prim, nil
 			}
 		}
@@ -65,12 +65,12 @@ type windowTableInfo struct {
 	alias  sqlparser.IdentifierCS
 }
 
-// canPushDownWindow checks if a window function partitions by a sharding key.
-// Returns false if PARTITION BY is missing or covers non-sharding-key columns.
+// canPushDownWindow checks if a window function partitions by a unique vindex.
+// Returns false if PARTITION BY is missing or covers non-vindex columns.
 // Examples:
 //
 //	OK: SELECT ... FROM user WHERE id=1 PARTITION BY id (single shard)
-//	OK: SELECT ... FROM user PARTITION BY id (id is sharding key, same-shard partitions)
+//	OK: SELECT ... FROM user PARTITION BY id (id is primary vindex, same-shard partitions)
 //	NO: SELECT ... FROM user PARTITION BY region (region scattered across shards)
 func canPushDownWindow(op *operators.Window, route *operators.Route) bool {
 	// Collect tables with their aliases
@@ -85,10 +85,6 @@ func canPushDownWindow(op *operators.Window, route *operators.Route) bool {
 		}
 		return nil
 	})
-
-	if len(tables) == 0 {
-		return false
-	}
 
 	// Collect window functions from SELECT expressions
 	var windowFuncs []sqlparser.WindowFunc
@@ -105,9 +101,9 @@ func canPushDownWindow(op *operators.Window, route *operators.Route) bool {
 		return true
 	}
 
-	// Validate each window function partitions by sharding key
+	// Validate each window function partitions by unique vindex
 	for _, wf := range windowFuncs {
-		if !isPartitionedByShardingKey(wf, tables) {
+		if !isPartitionedByUniqueVindex(wf, tables) {
 			return false
 		}
 	}
@@ -115,10 +111,10 @@ func canPushDownWindow(op *operators.Window, route *operators.Route) bool {
 	return true
 }
 
-// isPartitionedByShardingKey checks if a window function's PARTITION BY covers:
+// isPartitionedByUniqueVindex checks if a window function's PARTITION BY covers:
 //  1. Primary vindex columns (ensures same-shard partitions), or
 //  2. Unique vindex columns (each partition has ≤1 row, trivially single-shard)
-func isPartitionedByShardingKey(wf sqlparser.WindowFunc, tables []windowTableInfo) bool {
+func isPartitionedByUniqueVindex(wf sqlparser.WindowFunc, tables []windowTableInfo) bool {
 	overClause := wf.GetOverClause()
 	if overClause == nil || overClause.WindowSpec == nil || len(overClause.WindowSpec.PartitionClause) == 0 {
 		return false

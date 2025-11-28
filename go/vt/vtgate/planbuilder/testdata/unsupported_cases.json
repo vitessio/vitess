@@ -400,12 +400,12 @@
     "plan": "VT12001: unsupported: ANY/ALL/SOME comparison operator"
   },
   {
-    "comment": "Window function PARTITION BY non-sharding key in multi-shard query",
+    "comment": "Window function PARTITION BY non-unique vindex in multi-shard query",
     "query": "SELECT id, textcol1, ROW_NUMBER() OVER (PARTITION BY textcol1 ORDER BY id) as rn FROM user",
     "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
   },
   {
-    "comment": "Window function PARTITION BY non-sharding key with WHERE clause",
+    "comment": "Window function PARTITION BY non-unique vindex with WHERE clause",
     "query": "SELECT id, intcol, RANK() OVER (PARTITION BY intcol ORDER BY id) as rnk FROM user WHERE id IN (1,2) ",
     "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
   },

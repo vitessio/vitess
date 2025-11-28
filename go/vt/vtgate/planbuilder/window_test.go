@@ -122,17 +122,17 @@ func TestWindowFunctions(t *testing.T) {
 			isSingleShard: true,
 		},
 		{
-			name:          "Authoritative Table - Partition By Sharding Key",
+			name:          "Authoritative Table - Partition By Primary Vindex",
 			sql:           "select rank() over (partition by user_id) from authoritative",
 			isSingleShard: true,
 		},
 		{
-			name:          "Authoritative Table - Partition By Sharding Key and Valid Column",
+			name:          "Authoritative Table - Partition By Primary Vindex and Valid Column",
 			sql:           "select rank() over (partition by user_id, col1) from authoritative",
 			isSingleShard: true,
 		},
 		{
-			name:          "Authoritative Table - Partition By Sharding Key and Invalid Column",
+			name:          "Authoritative Table - Partition By Primary Vindex and Invalid Column",
 			sql:           "select rank() over (partition by user_id, invalid_col) from authoritative",
 			isSingleShard: false,
 		},

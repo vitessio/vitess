@@ -6211,7 +6211,7 @@
     }
   },
   {
-    "comment": "UNION ALL with window functions - each branch has window function with different sharding key values",
+    "comment": "UNION ALL with window functions - each branch has window function with different primary vindex values",
     "query": "SELECT id, intcol, ROW_NUMBER() OVER (PARTITION BY id ORDER BY intcol) as rn FROM user WHERE id = 1 UNION ALL SELECT id, intcol, ROW_NUMBER() OVER (PARTITION BY id ORDER BY intcol) as rn FROM user WHERE id = 2",
     "plan": {
       "Type": "Complex",
@@ -6256,7 +6256,7 @@
     }
   },
   {
-    "comment": "Window function with RANK on single shard - PARTITION BY includes sharding key",
+    "comment": "Window function with RANK on single shard - PARTITION BY includes primary vindex",
     "query": "SELECT id, textcol1, RANK() OVER (PARTITION BY id, textcol1 ORDER BY id) as rnk FROM user WHERE id = 5",
     "plan": {
       "Type": "Passthrough",
@@ -6308,7 +6308,7 @@
     }
   },
   {
-    "comment": "Window function with composite vindex (multi-column) - PARTITION BY includes all sharding key columns",
+    "comment": "Window function with composite vindex (multi-column) - PARTITION BY includes all primary vindex columns",
     "query": "SELECT cola, colb, colc, RANK() OVER (PARTITION BY cola, colb ORDER BY colc) as rnk FROM multicol_tbl WHERE cola = 'A' AND colb = 'B'",
     "plan": {
       "Type": "Passthrough",

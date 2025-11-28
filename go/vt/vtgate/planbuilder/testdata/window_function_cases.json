@@ -665,7 +665,7 @@
     }
   },
   {
-    "comment": "Authoritative Table - Partition By Sharding Key",
+    "comment": "Authoritative Table - Partition By Primary Vindex",
     "query": "select rank() over (partition by user_id) from authoritative",
     "plan": {
       "Type": "Scatter",
@@ -687,7 +687,7 @@
     }
   },
   {
-    "comment": "Authoritative Table - Partition By Sharding Key and Valid Column",
+    "comment": "Authoritative Table - Partition By Primary Vindex and Valid Column",
     "query": "select rank() over (partition by user_id, col1) from authoritative",
     "plan": {
       "Type": "Scatter",
@@ -709,7 +709,7 @@
     }
   },
   {
-    "comment": "Multi-Shard - IN clause with Partition By Sharding Key",
+    "comment": "Multi-Shard - IN clause with Partition By Primary Vindex",
     "query": "SELECT id, intcol, ROW_NUMBER() OVER (PARTITION BY id ORDER BY intcol) as rn FROM user WHERE id IN (1,2,3,4)",
     "plan": {
       "Type": "MultiShard",
@@ -735,7 +735,7 @@
     }
   },
   {
-    "comment": "Multi-Shard - IN clause with Partition By Sharding Key and Additional Column",
+    "comment": "Multi-Shard - IN clause with Partition By Primary Vindex and Additional Column",
     "query": "SELECT id, textcol1, intcol, RANK() OVER (PARTITION BY id, textcol1 ORDER BY intcol) as rnk FROM user WHERE id IN (1,2)",
     "plan": {
       "Type": "MultiShard",
@@ -761,7 +761,7 @@
     }
   },
   {
-    "comment": "Scatter - Partition by Sharding Key (Authoritative Table allows push-down)",
+    "comment": "Scatter - Partition by Primary Vindex (Authoritative Table allows push-down)",
     "query": "SELECT user_id, DENSE_RANK() OVER (PARTITION BY user_id ORDER BY col1) as dr FROM authoritative",
     "plan": {
       "Type": "Scatter",
@@ -783,7 +783,7 @@
     }
   },
   {
-    "comment": "Scatter - Partition by Non-Sharding Key (should be rejected)",
+    "comment": "Scatter - Partition by Non-Vindex Column (should be rejected)",
     "query": "SELECT Id, textcol1, ROW_NUMBER() OVER (PARTITION BY textcol1 ORDER BY intcol) as rn FROM user",
     "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
   },
@@ -798,12 +798,12 @@
     "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
   },
   {
-    "comment": "IN clause - Partition by Non-Sharding Key (should be rejected)",
+    "comment": "IN clause - Partition by Non-Vindex Column (should be rejected)",
     "query": "SELECT Id, textcol1, LAG(intcol) OVER (PARTITION BY textcol1 ORDER BY intcol) as lag_val FROM user WHERE Id IN (1,2,3)",
     "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
   },
   {
-    "comment": "Scatter - Between Route would also need partition by sharding key",
+    "comment": "Scatter - Between Route would also need partition by primary vindex",
     "query": "SELECT id, intcol, RANK() OVER (PARTITION BY id ORDER BY intcol) as rnk FROM user WHERE id BETWEEN 1 AND 10",
     "plan": {
       "Type": "Scatter",
@@ -877,7 +877,7 @@
     }
   },
   {
-    "comment": "Scatter with Qualified Column Partition By Sharding Key",
+    "comment": "Scatter with Qualified Column Partition By Primary Vindex",
     "query": "select a.user_id, row_number() over (partition by a.user_id order by a.col1) from authoritative a",
     "plan": {
       "Type": "Scatter",
@@ -899,7 +899,7 @@
     }
   },
   {
-    "comment": "Multi-Shard - Partition by Multiple Columns including Sharding Key",
+    "comment": "Multi-Shard - Partition by Multiple Columns including Primary Vindex",
     "query": "select id, textcol1, rank() over (partition by id, textcol1 order by col) from user where id in (1,2)",
     "plan": {
       "Type": "MultiShard",
@@ -1004,7 +1004,7 @@
     "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
   },
   {
-    "comment": "Window Function on Sharded Join - Partition by Non-Sharding Key (should be rejected)",
+    "comment": "Window Function on Sharded Join - Partition by Non-Vindex Column (should be rejected)",
     "query": "select a.id, row_number() over (partition by a.textcol1 order by b.intcol) from user a, user b where a.id = ? and b.id = ?",
     "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
   },
@@ -1029,7 +1029,7 @@
     "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
   },
   {
-    "comment": "UNION: Both branches single-shard EqualUnique (WORKS - window partitioned by sharding key)",
+    "comment": "UNION: Both branches single-shard EqualUnique (WORKS - window partitioned by primary vindex)",
     "query": "select Id, intcol, row_number() over (partition by Id order by intcol) as rn from user where Id = 1 union all select Id, intcol, row_number() over (partition by Id order by intcol) as rn from user where Id = 2",
     "plan": {
       "Type": "Complex",
@@ -1138,7 +1138,7 @@
     }
   },
   {
-    "comment": "UNION: Partitioned by non-sharding key on scatter (FAILS - partitions span multiple shards)",
+    "comment": "UNION: Partitioned by non-vindex column on scatter (FAILS - partitions span multiple shards)",
     "query": "select Id, textcol1, row_number() over (partition by textcol1 order by Id) as rn from user union all select Id, textcol1, row_number() over (partition by textcol1 order by Id) as rn from user",
     "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
   },
@@ -1148,12 +1148,12 @@
     "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
   },
   {
-    "comment": "IN route: Partitioned by non-sharding key (FAILS - partitions span multiple shards)",
+    "comment": "IN route: Partitioned by non-vindex column (FAILS - partitions span multiple shards)",
     "query": "select Id, textcol1, row_number() over (partition by textcol1 order by Id) as rn from user where Id in (1, 2)",
     "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
   },
   {
-    "comment": "Join: Optimizes to Route - inner join of single-shard branches, window partitioned by sharding key",
+    "comment": "Join: Optimizes to Route - inner join of single-shard branches, window partitioned by primary vindex",
     "query": "select e.Id, e.Name, s.intcol, row_number() over (partition by e.Id order by s.Name desc) as name_rank from user e, user s where e.Id = 1 and s.Id = 1",
     "skip": true,
     "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
