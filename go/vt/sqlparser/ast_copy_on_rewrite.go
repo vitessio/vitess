@@ -8353,6 +8353,64 @@ func (c *cow) copyOnRewriteTableStatement(n TableStatement, parent SQLNode) (out
 		return nil, false
 	}
 }
+func (c *cow) copyOnRewriteWindowFunc(n WindowFunc, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	switch n := n.(type) {
+	case *ArgumentLessWindowExpr:
+		return c.copyOnRewriteRefOfArgumentLessWindowExpr(n, parent)
+	case *Avg:
+		return c.copyOnRewriteRefOfAvg(n, parent)
+	case *BitAnd:
+		return c.copyOnRewriteRefOfBitAnd(n, parent)
+	case *BitOr:
+		return c.copyOnRewriteRefOfBitOr(n, parent)
+	case *BitXor:
+		return c.copyOnRewriteRefOfBitXor(n, parent)
+	case *Count:
+		return c.copyOnRewriteRefOfCount(n, parent)
+	case *CountStar:
+		return c.copyOnRewriteRefOfCountStar(n, parent)
+	case *FirstOrLastValueExpr:
+		return c.copyOnRewriteRefOfFirstOrLastValueExpr(n, parent)
+	case *JSONArrayAgg:
+		return c.copyOnRewriteRefOfJSONArrayAgg(n, parent)
+	case *JSONObjectAgg:
+		return c.copyOnRewriteRefOfJSONObjectAgg(n, parent)
+	case *LagLeadExpr:
+		return c.copyOnRewriteRefOfLagLeadExpr(n, parent)
+	case *Max:
+		return c.copyOnRewriteRefOfMax(n, parent)
+	case *Min:
+		return c.copyOnRewriteRefOfMin(n, parent)
+	case *NTHValueExpr:
+		return c.copyOnRewriteRefOfNTHValueExpr(n, parent)
+	case *NtileExpr:
+		return c.copyOnRewriteRefOfNtileExpr(n, parent)
+	case *Std:
+		return c.copyOnRewriteRefOfStd(n, parent)
+	case *StdDev:
+		return c.copyOnRewriteRefOfStdDev(n, parent)
+	case *StdPop:
+		return c.copyOnRewriteRefOfStdPop(n, parent)
+	case *StdSamp:
+		return c.copyOnRewriteRefOfStdSamp(n, parent)
+	case *Sum:
+		return c.copyOnRewriteRefOfSum(n, parent)
+	case *VarPop:
+		return c.copyOnRewriteRefOfVarPop(n, parent)
+	case *VarSamp:
+		return c.copyOnRewriteRefOfVarSamp(n, parent)
+	case *Variance:
+		return c.copyOnRewriteRefOfVariance(n, parent)
+	case Visitable:
+		return c.copyOnRewriteVisitable(n, parent)
+	default:
+		// this should never happen
+		return nil, false
+	}
+}
 func (c *cow) copyOnRewriteAlgorithmValue(n AlgorithmValue, parent SQLNode) (out SQLNode, changed bool) {
 	if c.cursor.stop {
 		return n, false

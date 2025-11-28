@@ -3123,6 +3123,74 @@ var (
 		input:  "SELECT JSON_PRETTY(@j)",
 		output: "select json_pretty(@j) from dual",
 	}, {
+		// Window Functions
+		input:  "select row_number() over () from t",
+		output: "select row_number() over () from t",
+	}, {
+		input:  "select rank() over w from t window w as (partition by a order by b)",
+		output: "select rank() over w from t window w AS ( partition by a order by b asc)",
+	}, {
+		input:  "select dense_rank() over (partition by a order by b) from t",
+		output: "select dense_rank() over ( partition by a order by b asc) from t",
+	}, {
+		input:  "select ntile(4) over (order by a) from t",
+		output: "select ntile(4) over ( order by a asc) from t",
+	}, {
+		input:  "select first_value(a) over (partition by b order by c rows between unbounded preceding and current row) from t",
+		output: "select first_value(a) over ( partition by b order by c asc rows between unbounded preceding and current row) from t",
+	}, {
+		input:  "select last_value(a) over (partition by b order by c range between interval 1 day preceding and interval 1 day following) from t",
+		output: "select last_value(a) over ( partition by b order by c asc range between interval 1 day preceding and interval 1 day following) from t",
+	}, {
+		input:  "select nth_value(a, 1) over (order by b rows unbounded preceding) from t",
+		output: "select nth_value(a, 1) over ( order by b asc rows unbounded preceding) from t",
+	}, {
+		input:  "select lag(a, 1, 0) over (order by b) from t",
+		output: "select lag(a, 1, 0) over ( order by b asc) from t",
+	}, {
+		input:  "select lead(a, 1) over (order by b) from t",
+		output: "select lead(a, 1) over ( order by b asc) from t",
+	}, {
+		input:  "select sum(a) over (partition by b) from t",
+		output: "select sum(a) over ( partition by b) from t",
+	}, {
+		input:  "select sum(a) over (rows 5 preceding) from t",
+		output: "select sum(a) over ( rows 5 preceding) from t",
+	}, {
+		input:  "select a, rank() over w1, dense_rank() over w2 from t window w1 as (partition by b), window w2 as (w1 order by c)",
+		output: "select a, rank() over w1, dense_rank() over w2 from t window w1 AS ( partition by b), window w2 AS ( w1 order by c asc)",
+	}, {
+		input:  "select first_value(a) ignore nulls over (order by b) from t",
+		output: "select first_value(a) ignore nulls over ( order by b asc) from t",
+	}, {
+		input:  "select last_value(a) respect nulls over (order by b) from t",
+		output: "select last_value(a) respect nulls over ( order by b asc) from t",
+	}, {
+		input:  "select nth_value(a, 1) ignore nulls over (order by b) from t",
+		output: "select nth_value(a, 1) ignore nulls over ( order by b asc) from t",
+	}, {
+		// Window Frames
+		input:  "select sum(a) over (order by b rows unbounded preceding) from t",
+		output: "select sum(a) over ( order by b asc rows unbounded preceding) from t",
+	}, {
+		input:  "select sum(a) over (order by b rows between unbounded preceding and current row) from t",
+		output: "select sum(a) over ( order by b asc rows between unbounded preceding and current row) from t",
+	}, {
+		input:  "select sum(a) over (order by b rows between 1 preceding and 1 following) from t",
+		output: "select sum(a) over ( order by b asc rows between 1 preceding and 1 following) from t",
+	}, {
+		input:  "select sum(a) over (order by b range unbounded preceding) from t",
+		output: "select sum(a) over ( order by b asc range unbounded preceding) from t",
+	}, {
+		input:  "select sum(a) over (order by b range between unbounded preceding and current row) from t",
+		output: "select sum(a) over ( order by b asc range between unbounded preceding and current row) from t",
+	}, {
+		input:  "select sum(a) over (order by b range between interval 1 day preceding and interval 1 day following) from t",
+		output: "select sum(a) over ( order by b asc range between interval 1 day preceding and interval 1 day following) from t",
+	}, {
+		input:  "select sum(a) over (order by b range between current row and unbounded following) from t",
+		output: "select sum(a) over ( order by b asc range between current row and unbounded following) from t",
+	}, {
 		input:  "SELECT jcol, JSON_STORAGE_SIZE(jcol) AS Size FROM jtable",
 		output: "select jcol, json_storage_size(jcol) as Size from jtable",
 	}, {

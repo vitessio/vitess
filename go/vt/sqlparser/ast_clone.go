@@ -4645,6 +4645,64 @@ func CloneTableStatement(in TableStatement) TableStatement {
 	}
 }
 
+// CloneWindowFunc creates a deep clone of the input.
+func CloneWindowFunc(in WindowFunc) WindowFunc {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *ArgumentLessWindowExpr:
+		return CloneRefOfArgumentLessWindowExpr(in)
+	case *Avg:
+		return CloneRefOfAvg(in)
+	case *BitAnd:
+		return CloneRefOfBitAnd(in)
+	case *BitOr:
+		return CloneRefOfBitOr(in)
+	case *BitXor:
+		return CloneRefOfBitXor(in)
+	case *Count:
+		return CloneRefOfCount(in)
+	case *CountStar:
+		return CloneRefOfCountStar(in)
+	case *FirstOrLastValueExpr:
+		return CloneRefOfFirstOrLastValueExpr(in)
+	case *JSONArrayAgg:
+		return CloneRefOfJSONArrayAgg(in)
+	case *JSONObjectAgg:
+		return CloneRefOfJSONObjectAgg(in)
+	case *LagLeadExpr:
+		return CloneRefOfLagLeadExpr(in)
+	case *Max:
+		return CloneRefOfMax(in)
+	case *Min:
+		return CloneRefOfMin(in)
+	case *NTHValueExpr:
+		return CloneRefOfNTHValueExpr(in)
+	case *NtileExpr:
+		return CloneRefOfNtileExpr(in)
+	case *Std:
+		return CloneRefOfStd(in)
+	case *StdDev:
+		return CloneRefOfStdDev(in)
+	case *StdPop:
+		return CloneRefOfStdPop(in)
+	case *StdSamp:
+		return CloneRefOfStdSamp(in)
+	case *Sum:
+		return CloneRefOfSum(in)
+	case *VarPop:
+		return CloneRefOfVarPop(in)
+	case *VarSamp:
+		return CloneRefOfVarSamp(in)
+	case *Variance:
+		return CloneRefOfVariance(in)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
 // CloneSliceOfRefOfColumnDefinition creates a deep clone of the input.
 func CloneSliceOfRefOfColumnDefinition(n []*ColumnDefinition) []*ColumnDefinition {
 	if n == nil {

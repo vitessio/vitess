@@ -99,6 +99,7 @@ type LocalProcessCluster struct {
 	// major version numbers
 	VtTabletMajorVersion int
 	VtctlMajorVersion    int
+	VtGateMajorVersion   int
 
 	// standalone executable
 	VtctldClientProcess VtctldClientProcess
@@ -836,6 +837,10 @@ func (cluster *LocalProcessCluster) populateVersionInfo() error {
 		return err
 	}
 	cluster.VtctlMajorVersion, err = GetMajorVersion("vtctl")
+	if err != nil {
+		return err
+	}
+	cluster.VtGateMajorVersion, err = GetMajorVersion("vtgate")
 	return err
 }
 
