@@ -17,7 +17,6 @@ limitations under the License.
 package vtbackup
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -34,6 +33,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/stats/opentsdb"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/env"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/utils"
@@ -254,16 +254,23 @@ func startVtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disabl
 		extraArgs = append(extraArgs, "--disable-redo-log")
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	extraArgs = append(extraArgs, "--keep-alive-timeout", "15s")
 
-	if !initialBackup && disableRedoLog {
-		go verifyDisableEnableRedoLogs(ctx, t, mysqlSocket.Name())
-	}
+	// We want to look at the MySQL error log to see if redo log was disabled/enabled.
+	extraArgs = append(extraArgs, "--tablet-dir", "vtbackup", "--keep-tablet-dir")
 
 	log.Infof("starting backup tablet %s", time.Now())
 	err = localCluster.StartVtbackup(newInitDBFile, initialBackup, keyspaceName, shardName, cell, extraArgs...)
 	if err != nil {
+		return nil, err
+	}
+
+	if !initialBackup && disableRedoLog {
+		verifyDisableEnableRedoLogs(t, path.Join(env.VtDataRoot(), "vtbackup"))
+	}
+
+	// Delete the data in the tablet dir after we are done with vtbackup
+	if err := os.RemoveAll(path.Join(env.VtDataRoot(), "vtbackup")); err != nil {
 		return nil, err
 	}
 
@@ -413,51 +420,15 @@ func tearDown(t *testing.T, initMysql bool) {
 	}
 }
 
-func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket string) {
-	params := cluster.NewConnParams(0, dbPassword, mysqlSocket, keyspaceName)
+func verifyDisableEnableRedoLogs(t *testing.T, tabletDir string) {
+	// Check if a error.log file exists in the given tablet dir
+	errorLogPath := path.Join(tabletDir, "error.log")
 
-	for {
-		select {
-		case <-time.After(100 * time.Millisecond):
-			// Connect to vtbackup mysqld.
-			conn, err := mysql.Connect(ctx, &params)
-			if err != nil {
-				// Keep trying, vtbackup mysqld may not be ready yet.
-				continue
-			}
+	data, err := os.ReadFile(errorLogPath)
+	require.NoError(t, err)
 
-			// Check if server supports disable/enable redo log.
-			qr, err := conn.ExecuteFetch("SELECT 1 FROM performance_schema.global_status WHERE variable_name = 'innodb_redo_log_enabled'", 1, false)
-			require.NoError(t, err)
-			// If not, there's nothing to test.
-			if len(qr.Rows) == 0 {
-				return
-			}
-
-			// MY-013600
-			// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_disabled
-			qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE error_code = 'MY-013600'", 1, false)
-			require.NoError(t, err)
-			if len(qr.Rows) != 1 {
-				// Keep trying, possible we haven't disabled yet.
-				continue
-			}
-
-			// MY-013601
-			// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_enabled
-			qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE error_code = 'MY-013601'", 1, false)
-			require.NoError(t, err)
-			if len(qr.Rows) != 1 {
-				// Keep trying, possible we haven't disabled yet.
-				continue
-			}
-
-			// Success
-			return
-		case <-ctx.Done():
-			require.Fail(t, "Failed to verify disable/enable redo log.")
-		}
-	}
+	require.Contains(t, string(data), "[InnoDB] InnoDB redo logging is disabled.")
+	require.Contains(t, string(data), "[InnoDB] InnoDB redo logging is enabled.")
 }
 
 // This helper function wait for all replicas to catch-up the replication.
