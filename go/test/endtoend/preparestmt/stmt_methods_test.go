@@ -574,9 +574,9 @@ func validateBaselineErrSpecializedPlan(t *testing.T, p map[string]any) {
 	vtgateVer, err := cluster.GetMajorVersion("vtgate")
 	require.NoError(t, err)
 
-	expectedErr := "VT12001: unsupported: OVER CLAUSE with sharded keyspace"
-	if vtgateVer >= 24 {
-		expectedErr = "VT12001: unsupported: window functions are only supported for single-shard queries"
+	expectedErr := "VT12001: unsupported: window functions are only supported for single-shard queries"
+	if vtgateVer < 24 {
+		expectedErr = "VT12001: unsupported: OVER CLAUSE with sharded keyspace"
 	}
 
 	require.EqualValues(t, expectedErr, baselineErr)
