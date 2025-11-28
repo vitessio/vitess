@@ -116,10 +116,10 @@ type grpcClient struct {
 	// This cache of connections is to maximize QPS for ExecuteFetchAs{Dba,App},
 	// CheckThrottler and FullStatus. Note we'll keep the clients open and close them upon Close() only.
 	// But that's OK because usually the tasks that use them are one-purpose only.
-	// rpcClientMapMu protects rpcClientMap, rpcDialPoolMapMu protects rpcDialPoolMap.
+	// rpcClientMapMu protects rpcClientMap.
 	rpcClientMapMu sync.Mutex
 	rpcClientMap   map[string]chan *tmc
-
+	// rpcDialPoolMapMu protects rpcDialPoolMap.
 	rpcDialPoolMapMu sync.Mutex
 	rpcDialPoolMap   map[DialPoolGroup]addrTmcMap
 }
