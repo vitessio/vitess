@@ -571,12 +571,11 @@ func validateBaselineErrSpecializedPlan(t *testing.T, p map[string]any) {
 	// v24+ uses new error message format
 	// v23 and earlier uses old format
 	expectedErr := "VT12001: unsupported: window functions are only supported for single-shard queries"
-	t.Logf("VtGateMajorVersion: %d", clusterInstance.VtGateMajorVersion)
 	if clusterInstance.VtGateMajorVersion < 24 {
 		expectedErr = "VT12001: unsupported: OVER CLAUSE with sharded keyspace"
 	}
 
-	require.EqualValues(t, expectedErr, baselineErr)
+	require.EqualValues(t, expectedErr, baselineErr, "VtGateMajorVersion: %d", clusterInstance.VtGateMajorVersion)
 
 	pd, err := engine.PrimitiveDescriptionFromMap(plan.(map[string]any))
 	require.NoError(t, err)
