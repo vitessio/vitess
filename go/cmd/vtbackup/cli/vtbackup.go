@@ -96,6 +96,7 @@ var (
 	detachedMode         bool
 	keepAliveTimeout     time.Duration
 	disableRedoLog       bool
+	keepTabletDir        = false
 
 	collationEnv *collations.Environment
 
@@ -226,6 +227,8 @@ func init() {
 	Main.Flags().DurationVar(&keepAliveTimeout, "keep-alive-timeout", keepAliveTimeout, "Wait until timeout elapses after a successful backup before shutting down.")
 	Main.Flags().BoolVar(&disableRedoLog, "disable-redo-log", disableRedoLog, "Disable InnoDB redo log during replication-from-primary phase of backup.")
 
+	Main.Flags().BoolVar(&keepTabletDir, "keep-tablet-dir", keepTabletDir, "Keep the temporary tablet directory after vtbackup finishes. Useful for debugging.")
+
 	acl.RegisterFlags(Main.Flags())
 
 	collationEnv = collations.NewEnvironment(servenv.MySQLServerVersion())
@@ -329,16 +332,18 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 		Uid:  uint32(bigN.Uint64()),
 	}
 
-	// Clean up our temporary data dir if we exit for any reason, to make sure
-	// every invocation of vtbackup starts with a clean slate, and it does not
-	// accumulate garbage (and run out of disk space) if it's restarted.
-	tabletDir := mysqlctl.TabletDir(tabletAlias.Uid)
-	defer func() {
-		log.Infof("Removing temporary tablet directory: %v", tabletDir)
-		if err := os.RemoveAll(tabletDir); err != nil {
-			log.Warningf("Failed to remove temporary tablet directory: %v", err)
-		}
-	}()
+	if !keepTabletDir {
+		// Clean up our temporary data dir if we exit for any reason, to make sure
+		// every invocation of vtbackup starts with a clean slate, and it does not
+		// accumulate garbage (and run out of disk space) if it's restarted.
+		tabletDir := mysqlctl.TabletDir(tabletAlias.Uid)
+		defer func() {
+			log.Infof("Removing temporary tablet directory: %v", tabletDir)
+			if err := os.RemoveAll(tabletDir); err != nil {
+				log.Warningf("Failed to remove temporary tablet directory: %v", err)
+			}
+		}()
+	}
 
 	// Start up mysqld as if we are mysqlctld provisioning a fresh tablet.
 	mysqld, mycnf, err := mysqlctl.CreateMysqldAndMycnf(tabletAlias.Uid, mysqlSocket, mysqlPort, collationEnv)
