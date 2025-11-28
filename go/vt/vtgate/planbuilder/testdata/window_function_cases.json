@@ -1155,7 +1155,27 @@
   {
     "comment": "Join: Optimizes to Route - inner join of single-shard branches, window partitioned by primary vindex",
     "query": "select e.Id, e.Name, s.intcol, row_number() over (partition by e.Id order by s.Name desc) as name_rank from user e, user s where e.Id = 1 and s.Id = 1",
-    "skip": true,
-    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select e.Id, e.Name, s.intcol, row_number() over (partition by e.Id order by s.Name desc) as name_rank from user e, user s where e.Id = 1 and s.Id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select e.Id, e.`Name`, s.intcol, row_number() over ( partition by e.Id order by s.`Name` desc) as name_rank from `user` as e, `user` as s where 1 != 1",
+        "Query": "select e.Id, e.`Name`, s.intcol, row_number() over ( partition by e.Id order by s.`Name` desc) as name_rank from `user` as e, `user` as s where e.Id = 1 and s.Id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]
