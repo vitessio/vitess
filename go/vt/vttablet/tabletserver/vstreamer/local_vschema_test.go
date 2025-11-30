@@ -17,6 +17,7 @@ limitations under the License.
 package vstreamer
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -237,4 +238,33 @@ func TestFindTable(t *testing.T) {
 		assert.NoError(t, err, tcase.keyspace, tcase.tablename)
 		assert.Equal(t, table.Name.String(), tcase.tablename, tcase.keyspace, tcase.tablename)
 	}
+}
+
+func TestFindTableWithKeyspaceError(t *testing.T) {
+	// Test that when a keyspace has an error (e.g., vindex initialization failed
+	// due to missing config file), the error message includes that context
+	// to help users diagnose issues like missing region_json config files.
+	testSrvVSchema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"ks_with_error": {
+				Tables: map[string]*vschemapb.Table{},
+			},
+		},
+	}
+	vschema := vindexes.BuildVSchema(testSrvVSchema, sqlparser.NewTestParser())
+
+	// Simulate a keyspace that had an error during vindex initialization
+	// (e.g., region_json vindex couldn't load its config file)
+	vschema.Keyspaces["ks_with_error"].Error = errors.New("open /mnt/lolo_volume/countries.json: no such file or directory")
+
+	lvs := &localVSchema{
+		keyspace: "ks_with_error",
+		vschema:  vschema,
+	}
+
+	_, err := lvs.findTable("customer")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "table customer not found in keyspace ks_with_error")
+	assert.Contains(t, err.Error(), "keyspace has error")
+	assert.Contains(t, err.Error(), "no such file or directory")
 }
