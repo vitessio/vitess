@@ -32,7 +32,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/utils"
 )
 
 // VTOrcProcess is a test struct for running
@@ -125,10 +124,6 @@ func (orc *VTOrcProcess) Setup() (err error) {
 		"--port":                       strconv.Itoa(orc.Port),
 		"--bind-address":               "127.0.0.1",
 	}
-
-	utils.SetFlagVariantsForTests(flags, "--topo-implementation", orc.TopoImplementation)
-	utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", orc.TopoGlobalAddress)
-	utils.SetFlagVariantsForTests(flags, "--topo-global-root", orc.TopoGlobalRoot)
 
 	orc.proc = exec.Command(orc.Binary)
 	for flag, value := range flags {

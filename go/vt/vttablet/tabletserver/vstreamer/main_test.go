@@ -35,7 +35,6 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
@@ -326,15 +325,12 @@ func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogda
 
 	// Some unit tests currently change the packet size options for the scope of those tests. We want to pass those
 	// values to the VStreamer for the duration of this test.
-	var options binlogdatapb.VStreamOptions
-	options.ConfigOverrides = make(map[string]string)
-	dynamicPacketSize := strconv.FormatBool(vttablet.VStreamerUseDynamicPacketSize)
-	packetSize := strconv.Itoa(vttablet.VStreamerDefaultPacketSize)
-
-	// Support both formats for backwards compatibility
-	// TODO(v25): Remove underscore versions
-	utils.SetFlagVariantsForTests(options.ConfigOverrides, "vstream-dynamic-packet-size", dynamicPacketSize)
-	utils.SetFlagVariantsForTests(options.ConfigOverrides, "vstream-packet-size", packetSize)
+	options := binlogdatapb.VStreamOptions{
+		ConfigOverrides: map[string]string{
+			"vstream-dynamic-packet-size": strconv.FormatBool(vttablet.VStreamerUseDynamicPacketSize),
+			"vstream-packet-size":         strconv.Itoa(vttablet.VStreamerDefaultPacketSize),
+		},
+	}
 
 	appName := throttlerapp.VStreamerName
 	if fullyThrottle {

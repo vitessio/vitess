@@ -67,20 +67,3 @@ func TestSetFlagIntVar(t *testing.T) {
 func TestSetFlagBoolVar(t *testing.T) {
 	testFlagVar(t, "bool-flag", true, "a boolean flag", SetFlagBoolVar)
 }
-
-func TestSetFlagVariantsForTests(t *testing.T) {
-	m := make(map[string]string)
-	key := "test-flag"
-	value := "some-value"
-
-	SetFlagVariantsForTests(m, key, value)
-
-	underscored, dashed := flagVariants(key)
-	if m[underscored] != value && m[dashed] != value {
-		t.Errorf("Expected either m[%q] or m[%q] to be %q, but got neither", underscored, dashed, value)
-	}
-
-	if m[underscored] == value && m[dashed] == value {
-		t.Errorf("Expected only one variant to be set, but both were set")
-	}
-}
