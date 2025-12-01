@@ -715,6 +715,9 @@ func (vc *VCursorImpl) ExecutePrimitive(ctx context.Context, primitive engine.Pr
 			continue
 		}
 		vc.logOpTraffic(primitive, res)
+		if res != nil && res.InsertIDUpdated() {
+			vc.SafeSession.LastInsertId = res.InsertID
+		}
 		return res, err
 	}
 	return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "upstream shards are not available")

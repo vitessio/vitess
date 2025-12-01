@@ -254,7 +254,7 @@ type TabletManagerClient interface {
 
 	// DemotePrimary tells the soon-to-be-former primary it's going to change,
 	// and it should go read-only and return its current position.
-	DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error)
+	DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet, force bool) (*replicationdatapb.PrimaryStatus, error)
 
 	// UndoDemotePrimary reverts all changes made by DemotePrimary
 	// To be used if we are unable to promote the chosen new primary

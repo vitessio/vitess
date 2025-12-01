@@ -419,6 +419,20 @@ func (vttablet *VttabletProcess) TearDown() error {
 	return vttablet.TearDownWithTimeout(vttabletStateTimeout)
 }
 
+func (vttablet *VttabletProcess) Stop() {
+	if vttablet.proc == nil || vttablet.exit == nil {
+		return
+	}
+	vttablet.proc.Process.Signal(syscall.SIGSTOP)
+}
+
+func (vttablet *VttabletProcess) Resume() {
+	if vttablet.proc == nil || vttablet.exit == nil {
+		return
+	}
+	vttablet.proc.Process.Signal(syscall.SIGCONT)
+}
+
 // Kill shuts down the running vttablet service immediately.
 func (vttablet *VttabletProcess) Kill() error {
 	if vttablet.proc == nil || vttablet.exit == nil {
