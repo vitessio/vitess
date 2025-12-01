@@ -140,6 +140,7 @@ func (m *Shard_TabletControl) CloneVT() *Shard_TabletControl {
 	r := new(Shard_TabletControl)
 	r.TabletType = m.TabletType
 	r.Frozen = m.Frozen
+	r.AllowReads = m.AllowReads
 	if rhs := m.Cells; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
@@ -892,6 +893,16 @@ func (m *Shard_TabletControl) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.AllowReads {
+		i--
+		if m.AllowReads {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x30
 	}
 	if m.Frozen {
 		i--
@@ -2110,6 +2121,9 @@ func (m *Shard_TabletControl) SizeVT() (n int) {
 		}
 	}
 	if m.Frozen {
+		n += 2
+	}
+	if m.AllowReads {
 		n += 2
 	}
 	n += len(m.unknownFields)
@@ -3679,6 +3693,26 @@ func (m *Shard_TabletControl) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.Frozen = bool(v != 0)
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AllowReads", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.AllowReads = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
