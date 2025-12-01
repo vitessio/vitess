@@ -67,9 +67,16 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
+	sqlUpdateMigrationStatusFinal = `UPDATE _vt.schema_migrations
+			SET migration_status=%a,
+			dependent_migrations=''
+		WHERE
+			migration_uuid=%a
+	`
 	sqlUpdateMigrationStatusFailedOrCancelled = `UPDATE _vt.schema_migrations
 			SET migration_status=IF(cancelled_timestamp IS NULL, 'failed', 'cancelled'),
-			completed_timestamp=NOW(6)
+			completed_timestamp=NOW(6),
+			dependent_migrations=''
 		WHERE
 			migration_uuid=%a
 	`
@@ -316,7 +323,8 @@ const (
 			completed_timestamp=NULL,
 			last_cutover_attempt_timestamp=NULL,
 			shadow_analyzed_timestamp=NULL,
-			cleanup_timestamp=NULL
+			cleanup_timestamp=NULL,
+			dependent_migrations=%a
 		WHERE
 			migration_status IN ('failed', 'cancelled')
 			AND migration_uuid=%a
