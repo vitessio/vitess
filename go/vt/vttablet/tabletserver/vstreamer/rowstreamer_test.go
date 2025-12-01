@@ -26,8 +26,6 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/utils"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -534,13 +532,12 @@ func TestStreamRowsCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	var options binlogdatapb.VStreamOptions
-	options.ConfigOverrides = make(map[string]string)
-
-	// Support both formats for backwards compatibility
-	// TODO(v25): Remove underscore versions
-	utils.SetFlagVariantsForTests(options.ConfigOverrides, "vstream-dynamic-packet-size", "false")
-	utils.SetFlagVariantsForTests(options.ConfigOverrides, "vstream-packet-size", "10")
+	options := binlogdatapb.VStreamOptions{
+		ConfigOverrides: map[string]string{
+			"vstream-dynamic-packet-size": "false",
+			"vstream-packet-size":         "10",
+		},
+	}
 
 	err := engine.StreamRows(ctx, "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		cancel()
@@ -633,13 +630,13 @@ func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantQuery 
 	go func() {
 		first := true
 		defer close(ch)
-		var options binlogdatapb.VStreamOptions
-		options.ConfigOverrides = make(map[string]string)
 
-		// Support both formats for backwards compatibility
-		// TODO(v25): Remove underscore versions
-		utils.SetFlagVariantsForTests(options.ConfigOverrides, "vstream-dynamic-packet-size", strconv.FormatBool(vttablet.VStreamerUseDynamicPacketSize))
-		utils.SetFlagVariantsForTests(options.ConfigOverrides, "vstream-packet-size", strconv.Itoa(vttablet.VStreamerDefaultPacketSize))
+		options := binlogdatapb.VStreamOptions{
+			ConfigOverrides: map[string]string{
+				"vstream-dynamic-packet-size": strconv.FormatBool(vttablet.VStreamerUseDynamicPacketSize),
+				"vstream-packet-size":         strconv.Itoa(vttablet.VStreamerDefaultPacketSize),
+			},
+		}
 
 		err := engine.StreamRows(context.Background(), query, lastpk, func(rows *binlogdatapb.VStreamRowsResponse) error {
 			if first {

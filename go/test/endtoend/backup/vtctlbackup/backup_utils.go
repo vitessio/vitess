@@ -46,7 +46,6 @@ import (
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
-	vtutils "vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -144,16 +143,16 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 	switch setupType {
 	case XtraBackup:
 		xtrabackupArgs := []string{
-			vtutils.GetFlagVariantForTests("--backup-engine-implementation"), "xtrabackup",
-			fmt.Sprintf("%s=%s", vtutils.GetFlagVariantForTests("--xtrabackup-stream-mode"), streamMode),
-			vtutils.GetFlagVariantForTests("--xtrabackup-user") + "=vt_dba",
-			fmt.Sprintf("%s=%d", vtutils.GetFlagVariantForTests("--xtrabackup-stripes"), stripes),
-			vtutils.GetFlagVariantForTests("--xtrabackup-backup-flags"), "--password=" + dbPassword,
+			"--backup-engine-implementation", "xtrabackup",
+			fmt.Sprintf("%s=%s", "--xtrabackup-stream-mode", streamMode),
+			"--xtrabackup-user" + "=vt_dba",
+			fmt.Sprintf("%s=%d", "--xtrabackup-stripes", stripes),
+			"--xtrabackup-backup-flags", "--password=" + dbPassword,
 		}
 
 		// if streamMode is xbstream, add some additional args to test other xtrabackup flags
 		if streamMode == "xbstream" {
-			xtrabackupArgs = append(xtrabackupArgs, vtutils.GetFlagVariantForTests("--xtrabackup-prepare-flags"), "--use-memory=100M")
+			xtrabackupArgs = append(xtrabackupArgs, "--xtrabackup-prepare-flags", "--use-memory=100M")
 		}
 
 		commonTabletArg = append(commonTabletArg, xtrabackupArgs...)
@@ -165,7 +164,7 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 		}
 
 		mysqlShellArgs := []string{
-			vtutils.GetFlagVariantForTests("--backup-engine-implementation"), "mysqlshell",
+			"--backup-engine-implementation", "mysqlshell",
 			"--mysql-shell-backup-location", mysqlShellBackupLocation,
 			"--mysql-shell-speedup-restore=true",
 		}
@@ -990,10 +989,10 @@ func restoreWaitForBackup(t *testing.T, tabletType string, cDetails *Compression
 		replicaTabletArgs = updateCompressorArgs(replicaTabletArgs, cDetails)
 	}
 	if fakeImpl {
-		replicaTabletArgs = append(replicaTabletArgs, vtutils.GetFlagVariantForTests("--backup-engine-implementation"), "fake_implementation")
+		replicaTabletArgs = append(replicaTabletArgs, "--backup-engine-implementation", "fake_implementation")
 	}
-	replicaTabletArgs = append(replicaTabletArgs, vtutils.GetFlagVariantForTests("--wait-for-backup-interval"), "1s")
-	replicaTabletArgs = append(replicaTabletArgs, vtutils.GetFlagVariantForTests("--init-tablet-type"), tabletType)
+	replicaTabletArgs = append(replicaTabletArgs, "--wait-for-backup-interval", "1s")
+	replicaTabletArgs = append(replicaTabletArgs, "--init-tablet-type", tabletType)
 	replica2.VttabletProcess.ExtraArgs = replicaTabletArgs
 	replica2.VttabletProcess.ServingStatus = ""
 	err := replica2.VttabletProcess.Setup()
@@ -1491,12 +1490,12 @@ func verifyTabletRestoreStats(t *testing.T, vars map[string]any) {
 
 func getDefaultCommonArgs() []string {
 	return []string{
-		vtutils.GetFlagVariantForTests("--vreplication-retry-delay"), "1s",
-		vtutils.GetFlagVariantForTests("--degraded-threshold"), "5s",
-		vtutils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
-		vtutils.GetFlagVariantForTests("--watch-replication-stream"),
-		vtutils.GetFlagVariantForTests("--enable-replication-reporter"),
-		vtutils.GetFlagVariantForTests("--serving-state-grace-period"), "1s",
+		"--vreplication-retry-delay", "1s",
+		"--degraded-threshold", "5s",
+		"--lock-tables-timeout", "5s",
+		"--watch-replication-stream",
+		"--enable-replication-reporter",
+		"--serving-state-grace-period", "1s",
 	}
 }
 

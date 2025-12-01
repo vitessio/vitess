@@ -32,7 +32,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -64,7 +63,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{vtutils.GetFlagVariantForTests("--dbddl-plugin"), "noop", vtutils.GetFlagVariantForTests("--mysql-server-query-timeout"), "60s"}
+		clusterInstance.VtGateExtraArgs = []string{"--dbddl-plugin", "noop", "--mysql-server-query-timeout", "60s"}
 		vtgateProcess := clusterInstance.NewVtgateInstance()
 		vtgateProcess.SysVarSetEnabled = true
 		if err := vtgateProcess.Setup(); err != nil {

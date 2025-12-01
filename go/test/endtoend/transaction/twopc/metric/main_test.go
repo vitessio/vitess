@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	twopcutil "vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
-	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
 
@@ -67,10 +66,10 @@ func TestMain(m *testing.M) {
 		// Set extra args for twopc
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
 			"--transaction-mode", "TWOPC",
-			utils.GetFlagVariantForTests("--grpc-use-effective-callerid"),
+			"--grpc-use-effective-callerid",
 		)
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-			utils.GetFlagVariantForTests("--twopc-abandon-age"), "1",
+			"--twopc-abandon-age", "1",
 			"--queryserver-config-transaction-cap", "100",
 		)
 
