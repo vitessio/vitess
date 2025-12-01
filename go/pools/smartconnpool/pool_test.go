@@ -1351,9 +1351,6 @@ func TestIdleTimeoutConnectionLeak(t *testing.T) {
 	require.EqualValues(t, 0, p.InUse())
 	require.EqualValues(t, 2, p.Available())
 
-	t.Logf("Initial state - Active: %d, InUse: %d, Available: %d",
-		p.Active(), p.InUse(), p.Available())
-
 	// Wait for idle timeout to kick in and start expiring connections
 	time.Sleep(70 * time.Millisecond)
 
@@ -1376,22 +1373,15 @@ func TestIdleTimeoutConnectionLeak(t *testing.T) {
 	time.Sleep(400 * time.Millisecond)
 
 	// Check the pool state
-	active := p.Active()
-	inUse := p.InUse()
-	available := p.Available()
-	idleClosed := p.Metrics.IdleClosed()
-	lastID := state.lastID.Load()
+	assert.Equal(t, int64(2), p.Active())
+	assert.Equal(t, int64(0), p.InUse())
+	assert.Equal(t, int64(2), p.Available())
+	assert.Equal(t, int64(2), p.Metrics.IdleClosed())
 
-	t.Logf("After Get attempts - Active: %d, InUse: %d, Available: %d, IdleClosed: %d, TotalCreated: %d",
-		active, inUse, available, idleClosed, lastID)
-
-	// The bug: connections were discarded but active wasn't decremented
-	// So we might have Active > 0 but Available < Active - InUse
-	expectedAvailable := active - inUse
-	if available < expectedAvailable {
-		t.Fatalf("BUG DETECTED: Active=%d, InUse=%d, Available=%d, but expected Available >= %d\nThis means %d connection(s) leaked!",
-			active, inUse, available, expectedAvailable, expectedAvailable-available)
-	}
+	// Check the actual number of currently open connections
+	assert.Equal(t, int64(2), state.open.Load())
+	// Check the total number of closed connections
+	assert.Equal(t, int64(2), state.close.Load())
 
 	// Try to close the pool - if there are leaked connections, this will timeout
 	closeCtx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
@@ -1401,6 +1391,11 @@ func TestIdleTimeoutConnectionLeak(t *testing.T) {
 	require.NoError(t, err)
 
 	// Pool should be completely closed now
-	require.EqualValues(t, 0, p.Active())
-	require.EqualValues(t, 0, p.Available())
+	assert.Equal(t, int64(0), p.Active())
+	assert.Equal(t, int64(0), p.InUse())
+	assert.Equal(t, int64(0), p.Available())
+	assert.Equal(t, int64(2), p.Metrics.IdleClosed())
+
+	assert.Equal(t, int64(0), state.open.Load())
+	assert.Equal(t, int64(4), state.close.Load())
 }
