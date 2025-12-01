@@ -20,6 +20,11 @@ linters:
   settings:
     depguard:
       rules:
+        use_modern_packages:
+          list-mode: lax
+          deny:
+            - pkg: math/rand$
+              desc: Please use math/rand/v2
         mysql_package_restrictions:
           list-mode: lax
           files:
