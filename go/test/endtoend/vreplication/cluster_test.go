@@ -39,7 +39,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -56,10 +55,10 @@ var (
 	sidecarDBIdentifier   = sqlparser.String(sqlparser.NewIdentifierCS(sidecarDBName))
 	mainClusterConfig     *ClusterConfig
 	externalClusterConfig *ClusterConfig
-	extraVTGateArgs       = []string{utils.GetFlagVariantForTests("--tablet-refresh-interval"), "10ms", "--enable_buffer", utils.GetFlagVariantForTests("--buffer-window"), loadTestBufferingWindowDuration.String(),
-		utils.GetFlagVariantForTests("--buffer-size"), "250000", utils.GetFlagVariantForTests("--buffer-min-time-between-failovers"), "1s", utils.GetFlagVariantForTests("--buffer-max-failover-duration"), loadTestBufferingWindowDuration.String(),
-		utils.GetFlagVariantForTests("--buffer-drain-concurrency"), "10"}
-	extraVtctldArgs = []string{utils.GetFlagVariantForTests("--remote-operation-timeout"), "600s", "--topo-etcd-lease-ttl", "120"}
+	extraVTGateArgs       = []string{"--tablet-refresh-interval", "10ms", "--enable_buffer", "--buffer-window", loadTestBufferingWindowDuration.String(),
+		"--buffer-size", "250000", "--buffer-min-time-between-failovers", "1s", "--buffer-max-failover-duration", loadTestBufferingWindowDuration.String(),
+		"--buffer-drain-concurrency", "10"}
+	extraVtctldArgs = []string{"--remote-operation-timeout", "600s", "--topo-etcd-lease-ttl", "120"}
 	// This variable can be used within specific tests to alter vttablet behavior.
 	extraVTTabletArgs = []string{}
 
@@ -496,8 +495,8 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 	tablet := &Tablet{}
 	var options []string
 	defaultHeartbeatOptions := []string{
-		utils.GetFlagVariantForTests("--heartbeat-on-demand-duration"), "5s",
-		utils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
+		"--heartbeat-on-demand-duration", "5s",
+		"--heartbeat-interval", "250ms",
 	}
 	if !mainClusterConfig.overrideHeartbeatOptions {
 		options = append(options, defaultHeartbeatOptions...)

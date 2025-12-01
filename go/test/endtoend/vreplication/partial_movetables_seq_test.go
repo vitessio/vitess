@@ -28,7 +28,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/utils"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -395,7 +394,7 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 	origExtraVTGateArgs := extraVTGateArgs
 	extraVTGateArgs = append(extraVTGateArgs, []string{
 		"--enable-partial-keyspace-migration",
-		utils.GetFlagVariantForTests("--schema-change-signal") + "=false"}...)
+		"--schema-change-signal" + "=false"}...)
 	defer func() {
 		extraVTGateArgs = origExtraVTGateArgs
 	}()

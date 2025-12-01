@@ -36,7 +36,6 @@ import (
 	"vitess.io/vitess/go/test/endtoend/utils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 // TabletReshuffle test if a vttablet can be pointed at an existing mysql
@@ -64,10 +63,10 @@ func TestTabletReshuffle(t *testing.T) {
 	// We have to disable active reparenting to prevent the tablet from trying to fix replication.
 	// We also have to disable replication reporting because we're pointed at the primary.
 	clusterInstance.VtTabletExtraArgs = []string{
-		vtutils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
-		vtutils.GetFlagVariantForTests("--mycnf-server-id"), strconv.Itoa(rTablet.TabletUID),
-		vtutils.GetFlagVariantForTests("--db-socket"), primaryTablet.VttabletProcess.Directory + "/mysql.sock",
-		vtutils.GetFlagVariantForTests("--enable-replication-reporter") + "=false",
+		"--lock-tables-timeout", "5s",
+		"--mycnf-server-id", strconv.Itoa(rTablet.TabletUID),
+		"--db-socket", primaryTablet.VttabletProcess.Directory + "/mysql.sock",
+		"--enable-replication-reporter" + "=false",
 	}
 	defer func() { clusterInstance.VtTabletExtraArgs = []string{} }()
 

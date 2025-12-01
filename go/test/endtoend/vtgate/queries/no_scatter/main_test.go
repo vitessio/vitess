@@ -24,7 +24,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -59,7 +58,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: schemaSQL,
 			VSchema:   vschema,
 		}
-		clusterInstance.VtGateExtraArgs = []string{utils.GetFlagVariantForTests("--no-scatter") + "=true"}
+		clusterInstance.VtGateExtraArgs = []string{"--no-scatter" + "=true"}
 		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false)
 		if err != nil {
 			return 1

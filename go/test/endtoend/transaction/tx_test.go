@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
-	vtutils "vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
 
@@ -58,7 +57,7 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtgateGrpcPort = clusterInstance.GetAndReservePort()
 		// Set extra tablet args for twopc
 		clusterInstance.VtTabletExtraArgs = []string{
-			vtutils.GetFlagVariantForTests("--twopc-abandon-age"), "3600",
+			"--twopc-abandon-age", "3600",
 		}
 
 		// Start topo server

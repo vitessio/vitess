@@ -33,7 +33,6 @@ import (
 	"vitess.io/vitess/go/test/endtoend/recovery"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
-	vtutils "vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
@@ -53,10 +52,10 @@ var (
 	shardName        = "0"
 	commonTabletArg  = []string{
 		"--vreplication-retry-delay", "1s",
-		vtutils.GetFlagVariantForTests("--degraded-threshold"), "5s",
-		vtutils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
-		vtutils.GetFlagVariantForTests("--watch-replication-stream"),
-		vtutils.GetFlagVariantForTests("--serving-state-grace-period"), "1s"}
+		"--degraded-threshold", "5s",
+		"--lock-tables-timeout", "5s",
+		"--watch-replication-stream",
+		"--serving-state-grace-period", "1s"}
 	recoveryKS1  = "recovery_ks1"
 	recoveryKS2  = "recovery_ks2"
 	vtInsertTest = `create table vt_insert_test (

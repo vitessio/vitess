@@ -124,17 +124,6 @@ func SetFlagVariantsForTests(m map[string]string, key, value string) {
 	}
 }
 
-// GetFlagVariantForTests randomly returns either the underscored or dashed version of the flag name.
-func GetFlagVariantForTests(flagName string) string {
-	underscored, dashed := flagVariants(flagName)
-	if rand.Int()%2 == 0 {
-		// fmt.Print("Using flag variant: ", underscored, "\n")
-		return underscored
-	}
-	// fmt.Print("Using flag variant: ", dashed, "\n")
-	return dashed
-}
-
 func GetFlagVariantForTestsByVersion(flagName string, majorVersion int) string {
 	underscored, dashed := flagVariants(flagName)
 	if majorVersion > 22 {

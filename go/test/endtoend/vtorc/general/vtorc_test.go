@@ -31,7 +31,6 @@ import (
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtutils "vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/logic"
 )
@@ -662,7 +661,7 @@ func TestDurabilityPolicySetLater(t *testing.T) {
 func TestFullStatusConnectionPooling(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 4, 0, []string{
-		vtutils.GetFlagVariantForTests("--tablet-manager-grpc-concurrency") + "=1",
+		"--tablet-manager-grpc-concurrency" + "=1",
 	}, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
 	}, 1, "")

@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
-	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -61,7 +60,7 @@ func setupCluster(t *testing.T) (*cluster.LocalProcessCluster, mysql.ConnParams)
 	require.NoError(t, err)
 
 	// Start vtgate
-	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--mysql-server-drain-onterm", vtutils.GetFlagVariantForTests("--onterm-timeout"), "30s")
+	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--mysql-server-drain-onterm", "--onterm-timeout", "30s")
 	err = clusterInstance.StartVtgate()
 	require.NoError(t, err)
 

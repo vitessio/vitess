@@ -44,7 +44,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
-	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 // This endtoend test is designd to validate VTGate's FOREIGN KEY implementation for unsharded/single-sharded/shard-scope, meaning
@@ -355,11 +354,11 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			vtutils.GetFlagVariantForTests("--heartbeat-enable"),
-			vtutils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
-			vtutils.GetFlagVariantForTests("--heartbeat-on-demand-duration"), "5s",
-			vtutils.GetFlagVariantForTests("--migration-check-interval"), "3s",
-			vtutils.GetFlagVariantForTests("--watch-replication-stream"),
+			"--heartbeat-enable",
+			"--heartbeat-interval", "250ms",
+			"--heartbeat-on-demand-duration", "5s",
+			"--migration-check-interval", "3s",
+			"--watch-replication-stream",
 		}
 		clusterInstance.VtGateExtraArgs = []string{}
 

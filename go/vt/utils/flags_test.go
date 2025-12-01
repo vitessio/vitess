@@ -84,25 +84,3 @@ func TestSetFlagVariantsForTests(t *testing.T) {
 		t.Errorf("Expected only one variant to be set, but both were set")
 	}
 }
-
-// TestGetFlagVariantForTests checks that GetFlagVariantForTests returns either the underscored or dashed variant.
-func TestGetFlagVariantForTests(t *testing.T) {
-	tests := []struct {
-		input string
-	}{
-		{"a-b"},     // expects either "a_b" or "a-b"
-		{"--a_b"},   // expects either "--a_b" or "--a-b"
-		{"example"}, // expects "example"
-	}
-
-	for _, tc := range tests {
-		underscored, dashed := flagVariants(tc.input)
-		result := GetFlagVariantForTests(tc.input)
-		if result != underscored && result != dashed {
-			t.Errorf(
-				"Expected either %q or %q for input %q, got %q",
-				underscored, dashed, tc.input, result,
-			)
-		}
-	}
-}

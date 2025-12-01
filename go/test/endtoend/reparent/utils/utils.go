@@ -38,7 +38,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 )
@@ -85,11 +84,11 @@ func SetupShardedReparentCluster(t *testing.T, durability string, extraVttabletF
 	require.NoError(t, err)
 
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-		utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
+		"--lock-tables-timeout", "5s",
 		// Fast health checks help find corner cases.
-		utils.GetFlagVariantForTests("--health-check-interval"), "1s",
-		utils.GetFlagVariantForTests("--track-schema-versions")+"=true",
-		utils.GetFlagVariantForTests("--queryserver-enable-online-ddl")+"=false")
+		"--health-check-interval", "1s",
+		"--track-schema-versions"+"=true",
+		"--queryserver-enable-online-ddl"+"=false")
 
 	if len(extraVttabletFlags) > 0 {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, extraVttabletFlags...)
@@ -98,9 +97,9 @@ func SetupShardedReparentCluster(t *testing.T, durability string, extraVttabletF
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
 		"--enable_buffer",
 		// Long timeout in case failover is slow.
-		utils.GetFlagVariantForTests("--buffer-window"), "10m",
-		utils.GetFlagVariantForTests("--buffer-max-failover-duration"), "10m",
-		utils.GetFlagVariantForTests("--buffer-min-time-between-failovers"), "20m",
+		"--buffer-window", "10m",
+		"--buffer-max-failover-duration", "10m",
+		"--buffer-min-time-between-failovers", "20m",
 	)
 
 	// Start keyspace

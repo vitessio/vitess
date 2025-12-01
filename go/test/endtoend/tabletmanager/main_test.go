@@ -28,7 +28,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/utils"
 	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
@@ -100,12 +99,12 @@ func TestMain(m *testing.M) {
 		}
 		// Set extra tablet args for lock timeout
 		clusterInstance.VtTabletExtraArgs = []string{
-			utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
-			utils.GetFlagVariantForTests("--watch-replication-stream"),
-			utils.GetFlagVariantForTests("--heartbeat-enable"),
-			utils.GetFlagVariantForTests("--health-check-interval"), tabletHealthcheckRefreshInterval.String(),
-			utils.GetFlagVariantForTests("--unhealthy-threshold"), tabletUnhealthyThreshold.String(),
-			utils.GetFlagVariantForTests("--twopc-abandon-age"), "200",
+			"--lock-tables-timeout", "5s",
+			"--watch-replication-stream",
+			"--heartbeat-enable",
+			"--health-check-interval", tabletHealthcheckRefreshInterval.String(),
+			"--unhealthy-threshold", tabletUnhealthyThreshold.String(),
+			"--twopc-abandon-age", "200",
 		}
 
 		// Start keyspace

@@ -31,7 +31,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -97,7 +96,7 @@ func createCluster(extraVTGateArgs []string) (*cluster.LocalProcessCluster, int)
 
 	vtGateArgs := []string{
 		"--mysql-auth-server-static-file", clusterInstance.TmpDirectory + "/" + mysqlAuthServerStatic,
-		utils.GetFlagVariantForTests("--keyspaces-to-watch"), keyspaceUnshardedName,
+		"--keyspaces-to-watch", keyspaceUnshardedName,
 	}
 
 	if extraVTGateArgs != nil {

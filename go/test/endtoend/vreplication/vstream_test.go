@@ -31,7 +31,6 @@ import (
 
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/utils"
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
@@ -1103,7 +1102,7 @@ func TestVStreamStopOnReshardFalse(t *testing.T) {
 
 func TestVStreamWithKeyspacesToWatch(t *testing.T) {
 	extraVTGateArgs = append(extraVTGateArgs, []string{
-		utils.GetFlagVariantForTests("--keyspaces-to-watch"), defaultSourceKs,
+		"--keyspaces-to-watch", defaultSourceKs,
 	}...)
 
 	testVStreamWithFailover(t, false)
@@ -1198,9 +1197,9 @@ func doVStream(t *testing.T, vc *VitessCluster, flags *vtgatepb.VStreamFlags) (n
 func TestVStreamHeartbeats(t *testing.T) {
 	// Enable continuous heartbeats.
 	extraVTTabletArgs = append(extraVTTabletArgs,
-		utils.GetFlagVariantForTests("--heartbeat-enable"),
-		utils.GetFlagVariantForTests("--heartbeat-interval"), "1s",
-		utils.GetFlagVariantForTests("--heartbeat-on-demand-duration"), "0",
+		"--heartbeat-enable",
+		"--heartbeat-interval", "1s",
+		"--heartbeat-on-demand-duration", "0",
 	)
 	setSidecarDBName("_vt")
 	config := *mainClusterConfig

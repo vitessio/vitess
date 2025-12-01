@@ -31,7 +31,6 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
-	vtutils "vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/logic"
 )
@@ -44,7 +43,7 @@ func TestDownPrimary(t *testing.T) {
 	// We specify the --wait-replicas-timeout to a small value because we spawn a cross-cell replica later in the test.
 	// If that replica is more advanced than the same-cell-replica, then we try to promote the cross-cell replica as an intermediate source.
 	// If we don't specify a small value of --wait-replicas-timeout, then we would end up waiting for 30 seconds for the dead-primary to respond, failing this test.
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{vtutils.GetFlagVariantForTests("--remote-operation-timeout") + "=10s", "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote-operation-timeout" + "=10s", "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
 	}, 1, policy.DurabilitySemiSync)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
@@ -118,7 +117,7 @@ func TestDownPrimary(t *testing.T) {
 // confirm no ERS occurs.
 func TestDownPrimary_KeyspaceEmergencyReparentDisabled(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{vtutils.GetFlagVariantForTests("--remote-operation-timeout") + "=10s", "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{}, 1, policy.DurabilityNone)
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote-operation-timeout" + "=10s", "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{}, 1, policy.DurabilityNone)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -235,7 +234,7 @@ func TestDownPrimaryBeforeVTOrc(t *testing.T) {
 	require.NoError(t, err)
 
 	// Start a VTOrc instance
-	utils.StartVTOrcs(t, clusterInfo, []string{vtutils.GetFlagVariantForTests("--remote-operation-timeout") + "=10s"}, cluster.VTOrcConfiguration{
+	utils.StartVTOrcs(t, clusterInfo, []string{"--remote-operation-timeout" + "=10s"}, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
 	}, 1)
 
@@ -258,7 +257,7 @@ func TestDownPrimaryBeforeVTOrc(t *testing.T) {
 // delete the primary record and let vtorc repair.
 func TestDeletedPrimaryTablet(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{vtutils.GetFlagVariantForTests("--remote-operation-timeout") + "=10s"}, cluster.VTOrcConfiguration{}, 1, policy.DurabilityNone)
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote-operation-timeout" + "=10s"}, cluster.VTOrcConfiguration{}, 1, policy.DurabilityNone)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo

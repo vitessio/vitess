@@ -23,7 +23,6 @@ import (
 	"time"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	"vitess.io/vitess/go/vt/utils"
 
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
@@ -101,7 +100,7 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 	// unknown symbol before attempting to route the query.
 	extraVTGateArgs = append(extraVTGateArgs, []string{
 		"--enable-partial-keyspace-migration",
-		utils.GetFlagVariantForTests("--schema-change-signal") + "=false",
+		"--schema-change-signal" + "=false",
 	}...)
 	defer func() {
 		extraVTGateArgs = origExtraVTGateArgs

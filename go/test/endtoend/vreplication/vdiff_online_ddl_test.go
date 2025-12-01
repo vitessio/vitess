@@ -15,7 +15,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/utils"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -89,7 +88,7 @@ func onlineDDLShow(t *testing.T, keyspace, uuid string) *vtctldata.GetSchemaMigr
 }
 
 func execOnlineDDL(t *testing.T, strategy, keyspace, query string) string {
-	output, err := vc.VtctldClient.ExecuteCommandWithOutput("ApplySchema", utils.GetFlagVariantForTests("--ddl-strategy"), strategy, "--sql", query, keyspace)
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput("ApplySchema", "--ddl-strategy", strategy, "--sql", query, keyspace)
 	require.NoError(t, err, output)
 	output = strings.TrimSpace(output)
 	if strategy != "direct" {

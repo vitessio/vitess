@@ -32,7 +32,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -218,7 +217,7 @@ func testDropNonExistentTables(t *testing.T) {
 func testCreateInvalidView(t *testing.T) {
 	for _, ddlStrategy := range []string{"direct", "direct -allow-zero-in-date"} {
 		createInvalidView := "CREATE OR REPLACE VIEW invalid_view AS SELECT * FROM nonexistent_table;"
-		output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ApplySchema", utils.GetFlagVariantForTests("--ddl-strategy"), ddlStrategy, "--sql", createInvalidView, keyspaceName)
+		output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ApplySchema", "--ddl-strategy", ddlStrategy, "--sql", createInvalidView, keyspaceName)
 		require.Error(t, err)
 		assert.Contains(t, output, "doesn't exist (errno 1146)")
 	}
@@ -239,7 +238,7 @@ func testApplySchemaBatch(t *testing.T) {
 	}
 	{
 		sqls := "create table batch1(id int primary key);create table batch2(id int primary key);create table batch3(id int primary key);create table batch4(id int primary key);create table batch5(id int primary key);"
-		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ApplySchema", utils.GetFlagVariantForTests("--ddl-strategy"), "direct --allow-zero-in-date", "--sql", sqls, "--batch-size", "2", keyspaceName)
+		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ApplySchema", "--ddl-strategy", "direct --allow-zero-in-date", "--sql", sqls, "--batch-size", "2", keyspaceName)
 		require.NoError(t, err)
 		checkTables(t, totalTableCount+5)
 	}
@@ -257,12 +256,12 @@ func testUnsafeAllowForeignKeys(t *testing.T) {
 		create table t12 (id int primary key, i int, constraint f1201 foreign key (i) references t11 (id) on delete set null);
 	`
 	{
-		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ApplySchema", utils.GetFlagVariantForTests("--ddl-strategy"), "direct --allow-zero-in-date", "--sql", sqls, keyspaceName)
+		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ApplySchema", "--ddl-strategy", "direct --allow-zero-in-date", "--sql", sqls, keyspaceName)
 		assert.Error(t, err)
 		checkTables(t, totalTableCount)
 	}
 	{
-		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ApplySchema", utils.GetFlagVariantForTests("--ddl-strategy"), "direct --unsafe-allow-foreign-keys --allow-zero-in-date", "--sql", sqls, keyspaceName)
+		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ApplySchema", "--ddl-strategy", "direct --unsafe-allow-foreign-keys --allow-zero-in-date", "--sql", sqls, keyspaceName)
 		require.NoError(t, err)
 		checkTables(t, totalTableCount+2)
 	}
