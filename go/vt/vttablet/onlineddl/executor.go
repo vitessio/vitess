@@ -4141,7 +4141,7 @@ func (e *Executor) RetryMigration(ctx context.Context, uuid string) (result *sql
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, err.Error())
 	}
 
-	dependentMigrations := make([]string, 0)
+	var dependentMigrations []string
 	if onlineDDL.StrategySetting().IsInOrderCompletion() {
 		pendingMigrationsUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
 		if err != nil {
