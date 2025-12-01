@@ -52613,6 +52613,9 @@ export namespace vtctldata {
 
         /** SchemaMigration removed_foreign_key_names */
         removed_foreign_key_names?: (string|null);
+
+        /** SchemaMigration dependent_migrations */
+        dependent_migrations?: (string|null);
     }
 
     /** Represents a SchemaMigration. */
@@ -52785,6 +52788,9 @@ export namespace vtctldata {
 
         /** SchemaMigration removed_foreign_key_names. */
         public removed_foreign_key_names: string;
+
+        /** SchemaMigration dependent_migrations. */
+        public dependent_migrations: string;
 
         /**
          * Creates a new SchemaMigration instance using the specified properties.

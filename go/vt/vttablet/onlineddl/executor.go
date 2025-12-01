@@ -1864,6 +1864,34 @@ func (e *Executor) reviewImmediateOperations(
 	return false, nil
 }
 
+// reviewMigrationDependencies reviews a migration and determines which migrations, if any, are dependencies
+// for the provided migration to begin execution. This is a noop if the migration does not use the in order
+// completion option.
+func (e *Executor) reviewMigrationDependencies(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
+	if !onlineDDL.StrategySetting().IsInOrderCompletion() {
+		return nil
+	}
+
+	pendingMigrationsUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
+	if err != nil {
+		return err
+	}
+
+	dependentMigrations := make([]string, 0, len(pendingMigrationsUUIDs))
+	for _, pendingMigrationsUUID := range pendingMigrationsUUIDs {
+		if pendingMigrationsUUID == onlineDDL.UUID {
+			// found all dependencies if we found ourself
+			break
+		}
+		dependentMigrations = append(dependentMigrations, pendingMigrationsUUID)
+	}
+
+	if len(dependentMigrations) > 0 {
+		_ = e.updateDependentMigrations(ctx, onlineDDL.UUID, dependentMigrations)
+	}
+	return nil
+}
+
 // reviewQueuedMigration investigates a single migration found in `queued` state.
 // It analyzes whether the migration can & should be fulfilled immediately (e.g. via INSTANT DDL or just because it's a CREATE or DROP),
 // or backfills necessary information if it's a REVERT.
@@ -1901,6 +1929,12 @@ func (e *Executor) reviewQueuedMigration(ctx context.Context, uuid string, capab
 			return err
 		}
 	}
+
+	// Find conditions where migrations are dependent
+	if err = e.reviewMigrationDependencies(ctx, onlineDDL); err != nil {
+		return err
+	}
+
 	// Find conditions where the migration cannot take place:
 	switch onlineDDL.Strategy {
 	case schema.DDLStrategyMySQL:
@@ -3216,6 +3250,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					// Avoid creating a 0000-00-00 00:00:00 timestamp
 					_ = e.updateMigrationLastThrottled(ctx, uuid, time.Unix(s.timeThrottled, 0), s.componentThrottled, s.reasonThrottled)
 				}
+
 				if onlineDDL.StrategySetting().IsInOrderCompletion() {
 					// We will fail an in-order migration if there's _prior_ migrations within the same migration-context
 					// which have failed.
@@ -3225,6 +3260,11 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					}
 					if wasFailed {
 						return nil
+					}
+
+					// Find conditions where migrations are dependent.
+					if err = e.reviewMigrationDependencies(ctx, onlineDDL); err != nil {
+						return err
 					}
 				}
 
@@ -4054,6 +4094,22 @@ func (e *Executor) updateMigrationReadyToComplete(ctx context.Context, uuid stri
 func (e *Executor) updateMigrationUserThrottleRatio(ctx context.Context, uuid string, ratio float64) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationUserThrottleRatio,
 		sqltypes.Float64BindVariable(ratio),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+func (e *Executor) updateDependentMigrations(
+	ctx context.Context,
+	uuid string,
+	dependentMigrations []string,
+) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateDependentMigrations,
+		sqltypes.StringBindVariable(strings.Join(dependentMigrations, ",")),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {

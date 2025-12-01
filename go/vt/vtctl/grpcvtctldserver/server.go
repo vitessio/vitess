@@ -1807,7 +1807,7 @@ func (s *VtctldServer) GetSchema(ctx context.Context, req *vtctldatapb.GetSchema
 }
 
 func (s *VtctldServer) GetSchemaMigrations(ctx context.Context, req *vtctldatapb.GetSchemaMigrationsRequest) (resp *vtctldatapb.GetSchemaMigrationsResponse, err error) {
-	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetShard")
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetSchemaMigrations")
 	defer span.Finish()
 
 	defer panicHandler(&err)

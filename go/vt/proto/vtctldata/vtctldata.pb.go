@@ -846,6 +846,7 @@ type SchemaMigration struct {
 	ReviewedAt                  *vttime.Time             `protobuf:"bytes,52,opt,name=reviewed_at,json=reviewedAt,proto3" json:"reviewed_at,omitempty"`
 	ReadyToCompleteAt           *vttime.Time             `protobuf:"bytes,53,opt,name=ready_to_complete_at,json=readyToCompleteAt,proto3" json:"ready_to_complete_at,omitempty"`
 	RemovedForeignKeyNames      string                   `protobuf:"bytes,54,opt,name=removed_foreign_key_names,json=removedForeignKeyNames,proto3" json:"removed_foreign_key_names,omitempty"`
+	DependentMigrations         string                   `protobuf:"bytes,55,opt,name=dependent_migrations,json=dependentMigrations,proto3" json:"dependent_migrations,omitempty"`
 	unknownFields               protoimpl.UnknownFields
 	sizeCache                   protoimpl.SizeCache
 }
@@ -1254,6 +1255,13 @@ func (x *SchemaMigration) GetReadyToCompleteAt() *vttime.Time {
 func (x *SchemaMigration) GetRemovedForeignKeyNames() string {
 	if x != nil {
 		return x.RemovedForeignKeyNames
+	}
+	return ""
+}
+
+func (x *SchemaMigration) GetDependentMigrations() string {
+	if x != nil {
+		return x.DependentMigrations
 	}
 	return ""
 }
@@ -17437,7 +17445,7 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x10reference_tables\x18\x12 \x03(\tR\x0freferenceTables\"N\n" +
 	"\bKeyspace\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12.\n" +
-	"\bkeyspace\x18\x02 \x01(\v2\x12.topodata.KeyspaceR\bkeyspace\"\xb6\x13\n" +
+	"\bkeyspace\x18\x02 \x01(\v2\x12.topodata.KeyspaceR\bkeyspace\"\xe9\x13\n" +
 	"\x0fSchemaMigration\x12\x12\n" +
 	"\x04uuid\x18\x01 \x01(\tR\x04uuid\x12\x1a\n" +
 	"\bkeyspace\x18\x02 \x01(\tR\bkeyspace\x12\x14\n" +
@@ -17499,7 +17507,8 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\vreviewed_at\x184 \x01(\v2\f.vttime.TimeR\n" +
 	"reviewedAt\x12=\n" +
 	"\x14ready_to_complete_at\x185 \x01(\v2\f.vttime.TimeR\x11readyToCompleteAt\x129\n" +
-	"\x19removed_foreign_key_names\x186 \x01(\tR\x16removedForeignKeyNames\"I\n" +
+	"\x19removed_foreign_key_names\x186 \x01(\tR\x16removedForeignKeyNames\x121\n" +
+	"\x14dependent_migrations\x187 \x01(\tR\x13dependentMigrations\"I\n" +
 	"\bStrategy\x12\n" +
 	"\n" +
 	"\x06VITESS\x10\x00\x12\n" +

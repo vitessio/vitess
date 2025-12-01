@@ -139,6 +139,11 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
+	sqlUpdateDependentMigrations = `UPDATE _vt.schema_migrations
+			SET dependent_migrations=%a
+		WHERE
+			migration_uuid=%a
+	`
 	sqlUpdateArtifacts = `UPDATE _vt.schema_migrations
 			SET artifacts=concat(%a, ',', artifacts), cleanup_timestamp=NULL
 		WHERE

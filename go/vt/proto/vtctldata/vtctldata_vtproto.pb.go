@@ -214,6 +214,7 @@ func (m *SchemaMigration) CloneVT() *SchemaMigration {
 	r.ReviewedAt = m.ReviewedAt.CloneVT()
 	r.ReadyToCompleteAt = m.ReadyToCompleteAt.CloneVT()
 	r.RemovedForeignKeyNames = m.RemovedForeignKeyNames
+	r.DependentMigrations = m.DependentMigrations
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -6449,6 +6450,15 @@ func (m *SchemaMigration) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.DependentMigrations) > 0 {
+		i -= len(m.DependentMigrations)
+		copy(dAtA[i:], m.DependentMigrations)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.DependentMigrations)))
+		i--
+		dAtA[i] = 0x3
+		i--
+		dAtA[i] = 0xba
 	}
 	if len(m.RemovedForeignKeyNames) > 0 {
 		i -= len(m.RemovedForeignKeyNames)
@@ -22906,6 +22916,10 @@ func (m *SchemaMigration) SizeVT() (n int) {
 	if l > 0 {
 		n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
+	l = len(m.DependentMigrations)
+	if l > 0 {
+		n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -31338,6 +31352,38 @@ func (m *SchemaMigration) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.RemovedForeignKeyNames = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 55:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DependentMigrations", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.DependentMigrations = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
