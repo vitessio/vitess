@@ -1925,7 +1925,7 @@ func (e *Executor) reviewQueuedMigration(ctx context.Context, uuid string, capab
 		}
 	}
 
-	// Find conditions where migrations are dependent
+	// Find conditions where migrations are dependent due to --in-order-completion.
 	if err = e.reviewMigrationDependencies(ctx, onlineDDL, pendingMigrationsUUIDs); err != nil {
 		return err
 	}
@@ -3262,7 +3262,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 						return nil
 					}
 
-					// Find conditions where migrations are dependent.
+					// Find conditions where migrations are dependent due to --in-order-completion.
 					if err = e.reviewMigrationDependencies(ctx, onlineDDL, pendingMigrationsUUIDs); err != nil {
 						return err
 					}
