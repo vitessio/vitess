@@ -3100,10 +3100,10 @@ func shouldCutOverAccordingToBackoff(
 
 // getDependentMigrations returns a slice of migrations that must cut-over in-order, before the provided
 // migration.
-func getDependentMigrations(uuid string, pendingMigrationsUUIDs []string) []string {
+func getDependentMigrations(onlineDDL *schema.OnlineDDL, pendingMigrationsUUIDs []string) []string {
 	dependentMigrations := make([]string, 0, len(pendingMigrationsUUIDs))
 	for _, pendingMigrationsUUID := range pendingMigrationsUUIDs {
-		if pendingMigrationsUUID == uuid {
+		if pendingMigrationsUUID == onlineDDL.UUID {
 			// found all dependencies if we found ourself
 			break
 		}
@@ -3259,21 +3259,22 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				// In the case of a postponed migration, we will not complete it, but the user will
 				// understand whether "now is a good time" or "not there yet"
 				_ = e.updateMigrationReadyToComplete(ctx, uuid, isReady)
-				if !isReady {
-					return nil
-				}
-				if postponeCompletion {
-					// override. Even if migration is ready, we do not complete it.
-					return nil
-				}
+				var postponeInOrderCompletion bool
 				if strategySetting.IsInOrderCompletion() {
 					if len(pendingMigrationsUUIDs) > 0 && pendingMigrationsUUIDs[0] != onlineDDL.UUID {
-						if err = e.updateDependentMigrations(ctx, onlineDDL.UUID, getDependentMigrations(onlineDDL.UUID, pendingMigrationsUUIDs)); err != nil {
+						if err = e.updateDependentMigrations(ctx, onlineDDL.UUID, getDependentMigrations(onlineDDL, pendingMigrationsUUIDs)); err != nil {
 							return err
 						}
-						// wait for earlier pending migrations to complete
-						return nil
+						postponeInOrderCompletion = true
 					}
+				}
+				if !isReady {
+					// The migration is not ready yet.
+					return nil
+				}
+				if postponeCompletion || postponeInOrderCompletion {
+					// override. Even if migration is ready, we do not complete it.
+					return nil
 				}
 				shouldCutOver, shouldForceCutOver := shouldCutOverAccordingToBackoff(
 					shouldForceCutOver, forceCutOverAfter, sinceReadyToComplete, sinceLastCutoverAttempt, cutoverAttempts,
@@ -4135,11 +4136,19 @@ func (e *Executor) RetryMigration(ctx context.Context, uuid string) (result *sql
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	pendingMigrationsUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
+	onlineDDL, _, err := e.readMigration(ctx, uuid)
 	if err != nil {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, err.Error())
 	}
-	dependentMigrations := getDependentMigrations(uuid, pendingMigrationsUUIDs)
+
+	dependentMigrations := make([]string, 0)
+	if onlineDDL.StrategySetting().IsInOrderCompletion() {
+		pendingMigrationsUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
+		if err != nil {
+			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, err.Error())
+		}
+		dependentMigrations = getDependentMigrations(onlineDDL, pendingMigrationsUUIDs)
+	}
 
 	query, err := sqlparser.ParseAndBind(sqlRetryMigration,
 		sqltypes.StringBindVariable(e.TabletAliasString()),
@@ -4635,7 +4644,7 @@ func (e *Executor) SubmitMigration(
 		if err != nil {
 			return nil, err
 		}
-		dependentMigrations = getDependentMigrations(onlineDDL.UUID, pendingMigrationsUUIDs)
+		dependentMigrations = getDependentMigrations(onlineDDL, pendingMigrationsUUIDs)
 	}
 
 	revertedUUID, _ := onlineDDL.GetRevertUUID(e.env.Environment().Parser()) // Empty value if the migration is not actually a REVERT. Safe to ignore error.
