@@ -1319,3 +1319,86 @@ func TestCloseDuringWaitForConn(t *testing.T) {
 		require.EqualValues(t, 0, state.open.Load())
 	}
 }
+
+// TestIdleTimeoutConnectionLeak checks for leaked connections after idle timeout
+func TestIdleTimeoutConnectionLeak(t *testing.T) {
+	var state TestState
+
+	ctx := context.Background()
+
+	// Slow connection creation to ensure idle timeout happens during reopening
+	state.chaos.delayConnect = 300 * time.Millisecond
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    2,
+		IdleTimeout: 50 * time.Millisecond,
+		LogWait:     state.LogWait,
+	}).Open(newConnector(&state), nil)
+
+	// Get and return two connections
+	conn1, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+	conn2, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+
+	p.put(conn1)
+	p.put(conn2)
+
+	// At this point: Active=2, InUse=0, Available=2
+	require.EqualValues(t, 2, p.Active())
+	require.EqualValues(t, 0, p.InUse())
+	require.EqualValues(t, 2, p.Available())
+
+	t.Logf("Initial state - Active: %d, InUse: %d, Available: %d",
+		p.Active(), p.InUse(), p.Available())
+
+	// Wait for idle timeout to kick in and start expiring connections
+	time.Sleep(70 * time.Millisecond)
+
+	// At this point, the idle timeout worker has expired the connections
+	// and is trying to reopen them (which takes 300ms due to delayConnect)
+
+	// Try to get connections while they're being reopened
+	// This should trigger the bug where connections get discarded
+	for i := 0; i < 2; i++ {
+		getCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+		defer cancel()
+
+		conn, err := p.Get(getCtx, nil)
+		require.NoError(t, err)
+
+		p.put(conn)
+	}
+
+	// Wait a moment for all reopening to complete
+	time.Sleep(400 * time.Millisecond)
+
+	// Check the pool state
+	active := p.Active()
+	inUse := p.InUse()
+	available := p.Available()
+	idleClosed := p.Metrics.IdleClosed()
+	lastID := state.lastID.Load()
+
+	t.Logf("After Get attempts - Active: %d, InUse: %d, Available: %d, IdleClosed: %d, TotalCreated: %d",
+		active, inUse, available, idleClosed, lastID)
+
+	// The bug: connections were discarded but active wasn't decremented
+	// So we might have Active > 0 but Available < Active - InUse
+	expectedAvailable := active - inUse
+	if available < expectedAvailable {
+		t.Fatalf("BUG DETECTED: Active=%d, InUse=%d, Available=%d, but expected Available >= %d\nThis means %d connection(s) leaked!",
+			active, inUse, available, expectedAvailable, expectedAvailable-available)
+	}
+
+	// Try to close the pool - if there are leaked connections, this will timeout
+	closeCtx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	err = p.CloseWithContext(closeCtx)
+	require.NoError(t, err)
+
+	// Pool should be completely closed now
+	require.EqualValues(t, 0, p.Active())
+	require.EqualValues(t, 0, p.Available())
+}
