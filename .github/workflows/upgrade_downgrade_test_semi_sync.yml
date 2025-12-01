@@ -34,13 +34,6 @@ jobs:
           fetch-depth: 0
           persist-credentials: 'false'
 
-      - name: Set output with latest release branch
-        id: output-previous-release-ref
-        run: |
-          previous_release_ref=$(./tools/get_previous_release.sh ${{github.base_ref}} ${{github.ref}})
-          echo $previous_release_ref
-          echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
-
       - name: Check for changes in relevant files
         uses: dorny/paths-filter@ebc4d7e9ebcb0b1eb21480bb8f43113e996ac77a # v3.0.1
         id: changes
@@ -62,19 +55,21 @@ jobs:
               - 'bootstrap.sh'
               - '.github/workflows/upgrade_downgrade_test_semi_sync.yml'
 
-      - name: Set up Go
+      - name: Set output with latest release branch
+        id: output-previous-release-ref
         if: steps.changes.outputs.end_to_end == 'true'
-        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
-        with:
-          go-version: 1.24.7
-
-      - name: Set up python
-        if: steps.changes.outputs.end_to_end == 'true'
-        uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
+        run: |
+          previous_release_ref=$(./tools/get_previous_release.sh ${{github.base_ref}} ${{github.ref}})
+          echo $previous_release_ref
+          echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
 
       - name: Tune the OS
         if: steps.changes.outputs.end_to_end == 'true'
         uses: ./.github/actions/tune-os
+
+      - name: Set up python
+        if: steps.changes.outputs.end_to_end == 'true'
+        uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
 
       - name: Setup MySQL
         if: steps.changes.outputs.end_to_end == 'true'
@@ -92,11 +87,6 @@ jobs:
           sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget grep
 
           sudo service etcd stop
-
-          go mod download
-
-          # install JUnit report formatter
-          go install github.com/vitessio/go-junit-report@HEAD
           
           wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
           sudo apt-get install -y gnupg2
@@ -112,6 +102,13 @@ jobs:
         with:
           ref: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
           persist-credentials: 'false'
+
+      - name: Set up Go
+        if: steps.changes.outputs.end_to_end == 'true'
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: go.mod
+          cache: false
 
       - name: Get dependencies for the last release
         if: steps.changes.outputs.end_to_end == 'true'
@@ -134,6 +131,13 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: 'false'
+
+      - name: Set up Go
+        if: steps.changes.outputs.end_to_end == 'true'
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: go.mod
+          cache: false
 
       - name: Get dependencies for this commit
         if: steps.changes.outputs.end_to_end == 'true'

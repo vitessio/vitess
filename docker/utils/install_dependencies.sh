@@ -133,6 +133,15 @@ percona80)
         percona-xtrabackup-80
     )
     ;;
+percona84)
+    PACKAGES=(
+        libperconaserverclient22
+        percona-telemetry-agent
+        percona-server-rocksdb
+        percona-server-server
+        percona-xtrabackup-84
+    )
+    ;;
 *)
     echo "Unknown flavor ${FLAVOR}"
     exit 1
@@ -169,6 +178,12 @@ percona80)
     echo 'deb http://repo.percona.com/apt bookworm main' > /etc/apt/sources.list.d/percona.list
     echo 'deb http://repo.percona.com/ps-80/apt bookworm main' > /etc/apt/sources.list.d/percona80.list
     ;;
+percona84)
+    echo 'deb http://repo.percona.com/apt bookworm main' > /etc/apt/sources.list.d/percona.list
+    echo 'deb http://repo.percona.com/pxb-84-lts/apt bookworm main' >> /etc/apt/sources.list.d/percona.list
+    echo 'deb http://repo.percona.com/telemetry/apt bookworm main' > /etc/apt/sources.list.d/percona-telemetry.list
+    echo 'deb http://repo.percona.com/ps-84-lts/apt bookworm main' > /etc/apt/sources.list.d/percona84.list
+    ;;
 esac
 
 # Pre-fill values for installation prompts that are normally interactive.
@@ -178,6 +193,13 @@ percona80)
 debconf debconf/frontend select Noninteractive
 percona-server-server-8.0 percona-server-server/root_password password 'unused'
 percona-server-server-8.0 percona-server-server/root_password_again password 'unused'
+EOF
+    ;;
+percona84)
+    debconf-set-selections <<EOF
+debconf debconf/frontend select Noninteractive
+percona-server-server-8.4 percona-server-server/root_password password 'unused'
+percona-server-server-8.4 percona-server-server/root_password_again password 'unused'
 EOF
     ;;
 esac
