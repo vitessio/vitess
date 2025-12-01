@@ -1865,16 +1865,11 @@ func (e *Executor) reviewImmediateOperations(
 }
 
 // reviewMigrationDependencies reviews a migration and determines which migrations, if any, are dependencies
-// for the provided migration to begin execution. This is a noop if the migration does not use the in order
+// for the provided migration to begin cut-over. This is a noop if the migration does not use the in order
 // completion option.
-func (e *Executor) reviewMigrationDependencies(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
+func (e *Executor) reviewMigrationDependencies(ctx context.Context, onlineDDL *schema.OnlineDDL, pendingMigrationsUUIDs []string) error {
 	if !onlineDDL.StrategySetting().IsInOrderCompletion() {
 		return nil
-	}
-
-	pendingMigrationsUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
-	if err != nil {
-		return err
 	}
 
 	dependentMigrations := make([]string, 0, len(pendingMigrationsUUIDs))
@@ -1896,7 +1891,7 @@ func (e *Executor) reviewMigrationDependencies(ctx context.Context, onlineDDL *s
 // It analyzes whether the migration can & should be fulfilled immediately (e.g. via INSTANT DDL or just because it's a CREATE or DROP),
 // or backfills necessary information if it's a REVERT.
 // If all goes well, it sets `reviewed_timestamp` which then allows the state machine to schedule the migration.
-func (e *Executor) reviewQueuedMigration(ctx context.Context, uuid string, capableOf capabilities.CapableOf) error {
+func (e *Executor) reviewQueuedMigration(ctx context.Context, uuid string, capableOf capabilities.CapableOf, pendingMigrationsUUIDs []string) error {
 	onlineDDL, row, err := e.readMigration(ctx, uuid)
 	if err != nil {
 		return err
@@ -1931,7 +1926,7 @@ func (e *Executor) reviewQueuedMigration(ctx context.Context, uuid string, capab
 	}
 
 	// Find conditions where migrations are dependent
-	if err = e.reviewMigrationDependencies(ctx, onlineDDL); err != nil {
+	if err = e.reviewMigrationDependencies(ctx, onlineDDL, pendingMigrationsUUIDs); err != nil {
 		return err
 	}
 
@@ -1976,9 +1971,14 @@ func (e *Executor) reviewQueuedMigrations(ctx context.Context) error {
 		return err
 	}
 
+	pendingMigrationsUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
+	if err != nil {
+		return err
+	}
+
 	for _, uuidRow := range r.Named().Rows {
 		uuid := uuidRow["migration_uuid"].ToString()
-		if err := e.reviewQueuedMigration(ctx, uuid, capableOf); err != nil {
+		if err := e.reviewQueuedMigration(ctx, uuid, capableOf, pendingMigrationsUUIDs); err != nil {
 			e.failMigration(ctx, &schema.OnlineDDL{UUID: uuid}, err)
 		}
 	}
@@ -3263,7 +3263,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					}
 
 					// Find conditions where migrations are dependent.
-					if err = e.reviewMigrationDependencies(ctx, onlineDDL); err != nil {
+					if err = e.reviewMigrationDependencies(ctx, onlineDDL, pendingMigrationsUUIDs); err != nil {
 						return err
 					}
 				}
