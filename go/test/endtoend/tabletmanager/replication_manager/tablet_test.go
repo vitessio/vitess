@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/sidecardb"
-	"vitess.io/vitess/go/vt/utils"
 
 	"github.com/stretchr/testify/require"
 
@@ -131,7 +130,7 @@ func getTablet(tabletGrpcPort int) *tabletpb.Tablet {
 func resurrectTablet(t *testing.T, tab cluster.Vttablet) {
 	// initialize config again to regenerate the my.cnf file which has the port to use
 	_, err := tab.MysqlctlProcess.ExecuteCommandWithOutput("--log_dir", tab.MysqlctlProcess.LogDirectory,
-		utils.GetFlagVariantForTestsByVersion("--tablet-uid", tab.MysqlctlProcess.MajorVersion), strconv.Itoa(tab.MysqlctlProcess.TabletUID),
+		"--tablet-uid", strconv.Itoa(tab.MysqlctlProcess.TabletUID),
 		"--mysql-port", strconv.Itoa(tab.MysqlctlProcess.MySQLPort),
 		"init_config")
 	require.NoError(t, err)
