@@ -3311,7 +3311,7 @@ func TestPrepareWithUnsupportedQuery(t *testing.T) {
 		{Name: "a", Type: querypb.Type_NULL_TYPE},
 		{Name: "b", Type: querypb.Type_NULL_TYPE},
 		{Name: "c", Type: querypb.Type_NULL_TYPE},
-		{Name: "row_number() over ( partition by x)", Type: querypb.Type_NULL_TYPE},
+		{Name: "row_number() over (partition by x)", Type: querypb.Type_NULL_TYPE},
 	}
 	require.Equal(t, wantFields, fields)
 

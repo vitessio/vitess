@@ -280,7 +280,7 @@ func (code WindowOpcode) SQLType(typ querypb.Type) querypb.Type {
 	case WindowPercentRank, WindowCumeDist:
 		return sqltypes.Float64
 	default:
-		panic(code.String()) // we have a unit test checking we never reach here
+		panic("invalid window function found") // we have a unit test checking we never reach here
 	}
 }
 

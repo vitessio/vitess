@@ -203,7 +203,7 @@ func TestWindowType_Panic(t *testing.T) {
 		if r := recover(); r != nil {
 			errMsg, ok := r.(string)
 			assert.True(t, ok, "Expected a string panic message")
-			assert.Contains(t, errMsg, "ERROR", "Expected panic message containing 'ERROR'")
+			assert.Contains(t, errMsg, "invalid window function found", "Expected panic message containing 'invalid window function found'")
 		}
 	}()
 	WindowOpcode(999).SQLType(sqltypes.VarChar)
