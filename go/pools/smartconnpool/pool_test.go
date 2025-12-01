@@ -1352,7 +1352,12 @@ func TestIdleTimeoutConnectionLeak(t *testing.T) {
 	require.EqualValues(t, 2, p.Available())
 
 	// Wait for idle timeout to kick in and start expiring connections
-	time.Sleep(70 * time.Millisecond)
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		// Check the actual number of currently open connections
+		assert.Equal(c, int64(2), state.open.Load())
+		// Check the total number of closed connections
+		assert.Equal(c, int64(1), state.close.Load())
+	}, 100*time.Millisecond, 10*time.Millisecond)
 
 	// At this point, the idle timeout worker has expired the connections
 	// and is trying to reopen them (which takes 300ms due to delayConnect)
@@ -1370,18 +1375,18 @@ func TestIdleTimeoutConnectionLeak(t *testing.T) {
 	}
 
 	// Wait a moment for all reopening to complete
-	time.Sleep(400 * time.Millisecond)
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		// Check the actual number of currently open connections
+		require.Equal(c, int64(2), state.open.Load())
+		// Check the total number of closed connections
+		require.Equal(c, int64(2), state.close.Load())
+	}, 400*time.Millisecond, 10*time.Millisecond)
 
 	// Check the pool state
 	assert.Equal(t, int64(2), p.Active())
 	assert.Equal(t, int64(0), p.InUse())
 	assert.Equal(t, int64(2), p.Available())
 	assert.Equal(t, int64(2), p.Metrics.IdleClosed())
-
-	// Check the actual number of currently open connections
-	assert.Equal(t, int64(2), state.open.Load())
-	// Check the total number of closed connections
-	assert.Equal(t, int64(2), state.close.Load())
 
 	// Try to close the pool - if there are leaked connections, this will timeout
 	closeCtx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
