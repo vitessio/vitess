@@ -1871,7 +1871,6 @@ func (e *Executor) reviewMigrationDependencies(ctx context.Context, onlineDDL *s
 	if !onlineDDL.StrategySetting().IsInOrderCompletion() {
 		return nil
 	}
-
 	dependentMigrations := make([]string, 0, len(pendingMigrationsUUIDs))
 	for _, pendingMigrationsUUID := range pendingMigrationsUUIDs {
 		if pendingMigrationsUUID == onlineDDL.UUID {
@@ -1880,11 +1879,7 @@ func (e *Executor) reviewMigrationDependencies(ctx context.Context, onlineDDL *s
 		}
 		dependentMigrations = append(dependentMigrations, pendingMigrationsUUID)
 	}
-
-	if len(dependentMigrations) > 0 {
-		_ = e.updateDependentMigrations(ctx, onlineDDL.UUID, dependentMigrations)
-	}
-	return nil
+	return e.updateDependentMigrations(ctx, onlineDDL.UUID, dependentMigrations)
 }
 
 // reviewQueuedMigration investigates a single migration found in `queued` state.
@@ -4108,6 +4103,9 @@ func (e *Executor) updateDependentMigrations(
 	uuid string,
 	dependentMigrations []string,
 ) error {
+	if len(dependentMigrations) == 0 {
+		return nil
+	}
 	query, err := sqlparser.ParseAndBind(sqlUpdateDependentMigrations,
 		sqltypes.StringBindVariable(strings.Join(dependentMigrations, ",")),
 		sqltypes.StringBindVariable(uuid),
