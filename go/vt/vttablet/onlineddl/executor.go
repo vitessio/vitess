@@ -1864,24 +1864,6 @@ func (e *Executor) reviewImmediateOperations(
 	return false, nil
 }
 
-// reviewMigrationDependencies reviews a migration and determines which migrations, if any, are dependencies
-// for the provided migration to begin cut-over. This is a noop if the migration does not use the in order
-// completion option.
-func (e *Executor) reviewMigrationDependencies(ctx context.Context, onlineDDL *schema.OnlineDDL, pendingMigrationsUUIDs []string) error {
-	if !onlineDDL.StrategySetting().IsInOrderCompletion() {
-		return nil
-	}
-	dependentMigrations := make([]string, 0, len(pendingMigrationsUUIDs))
-	for _, pendingMigrationsUUID := range pendingMigrationsUUIDs {
-		if pendingMigrationsUUID == onlineDDL.UUID {
-			// found all dependencies if we found ourself
-			break
-		}
-		dependentMigrations = append(dependentMigrations, pendingMigrationsUUID)
-	}
-	return e.updateDependentMigrations(ctx, onlineDDL.UUID, dependentMigrations)
-}
-
 // reviewQueuedMigration investigates a single migration found in `queued` state.
 // It analyzes whether the migration can & should be fulfilled immediately (e.g. via INSTANT DDL or just because it's a CREATE or DROP),
 // or backfills necessary information if it's a REVERT.
@@ -1918,11 +1900,6 @@ func (e *Executor) reviewQueuedMigration(ctx context.Context, uuid string, capab
 		if err := e.updateMigrationSetImmediateOperation(ctx, onlineDDL.UUID); err != nil {
 			return err
 		}
-	}
-
-	// Find conditions where migrations are dependent due to --in-order-completion.
-	if err = e.reviewMigrationDependencies(ctx, onlineDDL, pendingMigrationsUUIDs); err != nil {
-		return err
 	}
 
 	// Find conditions where the migration cannot take place:
@@ -3127,6 +3104,20 @@ func shouldCutOverAccordingToBackoff(
 	return false, false
 }
 
+// getDependentMigrations returns a slice of migrations that must cut-over in-order, before the provided
+// migration.
+func getDependentMigrations(onlineDDL *schema.OnlineDDL, pendingMigrationsUUIDs []string) []string {
+	dependentMigrations := make([]string, 0, len(pendingMigrationsUUIDs))
+	for _, pendingMigrationsUUID := range pendingMigrationsUUIDs {
+		if pendingMigrationsUUID == onlineDDL.UUID {
+			// found all dependencies if we found ourself
+			break
+		}
+		dependentMigrations = append(dependentMigrations, pendingMigrationsUUID)
+	}
+	return dependentMigrations
+}
+
 // reviewRunningMigrations iterates migrations in 'running' state. Normally there's only one running, which was
 // spawned by this tablet; but vreplication migrations could also resume from failure.
 func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning int, cancellable []*cancellableMigration, err error) {
@@ -3256,11 +3247,6 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					if wasFailed {
 						return nil
 					}
-
-					// Find conditions where migrations are dependent due to --in-order-completion.
-					if err = e.reviewMigrationDependencies(ctx, onlineDDL, pendingMigrationsUUIDs); err != nil {
-						return err
-					}
 				}
 
 				// Check if the migration is ready to cut-over, and proceed to do so if it is.
@@ -3289,6 +3275,9 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				}
 				if strategySetting.IsInOrderCompletion() {
 					if len(pendingMigrationsUUIDs) > 0 && pendingMigrationsUUIDs[0] != onlineDDL.UUID {
+						if err = e.updateDependentMigrations(ctx, onlineDDL.UUID, getDependentMigrations(onlineDDL, pendingMigrationsUUIDs)); err != nil {
+							return err
+						}
 						// wait for earlier pending migrations to complete
 						return nil
 					}
@@ -4631,6 +4620,15 @@ func (e *Executor) SubmitMigration(
 	}
 	log.Infof("SubmitMigration: request to submit migration %s; action=%s, table=%s", onlineDDL.UUID, actionStr, onlineDDL.Table)
 
+	var dependentMigrations []string
+	if onlineDDL.StrategySetting().IsInOrderCompletion() {
+		pendingMigrationsUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
+		if err != nil {
+			return nil, err
+		}
+		dependentMigrations = getDependentMigrations(onlineDDL, pendingMigrationsUUIDs)
+	}
+
 	revertedUUID, _ := onlineDDL.GetRevertUUID(e.env.Environment().Parser()) // Empty value if the migration is not actually a REVERT. Safe to ignore error.
 	retainArtifactsSeconds := int64((retainOnlineDDLTables).Seconds())
 	if retainArtifacts, _ := onlineDDL.StrategySetting().RetainArtifactsDuration(); retainArtifacts != 0 {
@@ -4666,6 +4664,7 @@ func (e *Executor) SubmitMigration(
 		sqltypes.BoolBindVariable(allowConcurrentMigration),
 		sqltypes.StringBindVariable(revertedUUID),
 		sqltypes.BoolBindVariable(onlineDDL.IsView(e.env.Environment().Parser())),
+		sqltypes.StringBindVariable(strings.Join(dependentMigrations, ",")),
 	)
 	if err != nil {
 		return nil, err

@@ -37,9 +37,10 @@ const (
 		postpone_completion,
 		allow_concurrent,
 		reverted_uuid,
-		is_view
+		is_view,
+		dependent_migrations
 	) VALUES (
-		%a, %a, %a, %a, %a, %a, %a, %a, %a, NOW(6), %a, %a, %a, %a, %a, %a, %a, %a, %a, %a
+		%a, %a, %a, %a, %a, %a, %a, %a, %a, NOW(6), %a, %a, %a, %a, %a, %a, %a, %a, %a, %a, %a
 	)`
 
 	sqlSelectQueuedMigrations = `SELECT
