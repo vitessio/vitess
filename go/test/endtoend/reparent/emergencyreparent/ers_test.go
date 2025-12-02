@@ -112,7 +112,7 @@ func TestReparentIgnoreMySQLDownReplica(t *testing.T) {
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	insertVal := utils.ConfirmReplication(t, tablets[0], tablets[1:])
 
-	// Make the current primary agent and database unavailable.
+	// Make the current primary tablet and database unavailable.
 	utils.StopTablet(t, tablets[0], true)
 
 	// Take down MySQL (but not vttablet) on a replica.
