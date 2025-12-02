@@ -2381,3 +2381,30 @@ func TestFilteredIsNullOperator(t *testing.T) {
 		})
 	}
 }
+
+func TestUVStreamerNoCopyWithGTID(t *testing.T) {
+	execStatements(t, []string{
+		"create table t1(id int, val varchar(128), primary key(id))",
+		"insert into t1 values (1, 'val1')",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	ctx := context.Background()
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1",
+		}},
+	}
+	pos := primaryPosition(t)
+	options := &binlogdatapb.VStreamOptions{
+		TablesToCopy: []string{"t1"},
+	}
+	uvs := newUVStreamer(ctx, engine, env.Dbcfgs.DbaWithDB(), env.SchemaEngine, pos,
+		nil, filter, testLocalVSchema, throttlerapp.VStreamerName,
+		func([]*binlogdatapb.VEvent) error { return nil }, options)
+	err := uvs.init()
+	require.NoError(t, err)
+	require.Empty(t, uvs.plans, "Should not build table plans when startPos is set")
+}

@@ -460,9 +460,13 @@ func (pool *ConnPool[C]) pop(stack *connStack[C]) *Pooled[C] {
 	// to expire this connection (even if it's still visible to them), so it's
 	// safe to return it
 	for conn, ok := stack.Pop(); ok; conn, ok = stack.Pop() {
-		if conn.timeUsed.borrow() {
-			return conn
+		if !conn.timeUsed.borrow() {
+			// Ignore the connection that couldn't be borrowed;
+			// it's being closed by the idle worker and replaced by a new connection.
+			continue
 		}
+
+		return conn
 	}
 	return nil
 }
@@ -787,11 +791,23 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 		for conn := s.Peek(); conn != nil; conn = conn.next.Load() {
 			if conn.timeUsed.expired(mono, timeout) {
 				pool.Metrics.idleClosed.Add(1)
+
 				conn.Close()
+				pool.closedConn()
+
 				// Using context.Background() is fine since MySQL connection already enforces
 				// a connect timeout via the `db-connect-timeout-ms` config param.
-				if err := pool.connReopen(context.Background(), conn, mono); err != nil {
-					pool.closedConn()
+				c, err := pool.getNew(context.Background())
+				if err != nil {
+					// If we couldn't open a new connection, just continue
+					continue
+				}
+
+				// opening a new connection might have raced with other goroutines,
+				// so it's possible that we got back `nil` here
+				if c != nil {
+					// Return the new connection to the pool
+					pool.tryReturnConn(c)
 				}
 			}
 		}

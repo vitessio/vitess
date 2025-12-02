@@ -103,17 +103,25 @@ type tmc struct {
 	client tabletmanagerservicepb.TabletManagerClient
 }
 
-type addrTmcMap map[string]*tmc
+type tmcEntry struct {
+	once sync.Once
+	tmc  *tmc
+	err  error
+}
+
+type addrTmcMap map[string]*tmcEntry
 
 // grpcClient implements both dialer and poolDialer.
 type grpcClient struct {
 	// This cache of connections is to maximize QPS for ExecuteFetchAs{Dba,App},
 	// CheckThrottler and FullStatus. Note we'll keep the clients open and close them upon Close() only.
 	// But that's OK because usually the tasks that use them are one-purpose only.
-	// The map is protected by the mutex.
-	mu             sync.Mutex
+	// rpcClientMapMu protects rpcClientMap.
+	rpcClientMapMu sync.Mutex
 	rpcClientMap   map[string]chan *tmc
-	rpcDialPoolMap map[DialPoolGroup]addrTmcMap
+	// rpcDialPoolMapMu protects rpcDialPoolMap.
+	rpcDialPoolMapMu sync.Mutex
+	rpcDialPoolMap   map[DialPoolGroup]addrTmcMap
 }
 
 type dialer interface {
@@ -185,16 +193,25 @@ func (client *grpcClient) dialPool(ctx context.Context, tablet *topodatapb.Table
 		return nil, vterrors.FromGRPC(err)
 	}
 
-	client.mu.Lock()
-	if client.rpcClientMap == nil {
-		client.rpcClientMap = make(map[string]chan *tmc)
-	}
-	c, ok := client.rpcClientMap[addr]
-	if !ok {
+	c, isEmpty := func() (chan *tmc, bool) {
+		client.rpcClientMapMu.Lock()
+		defer client.rpcClientMapMu.Unlock()
+
+		if client.rpcClientMap == nil {
+			client.rpcClientMap = make(map[string]chan *tmc)
+		}
+		c, ok := client.rpcClientMap[addr]
+		if ok {
+			return c, false
+		}
+
 		c = make(chan *tmc, concurrency)
 		client.rpcClientMap[addr] = c
-		client.mu.Unlock()
+		return c, true
+	}()
 
+	// If the channel is empty, populate it with connections.
+	if isEmpty {
 		for i := 0; i < cap(c); i++ {
 			tm, err := client.createTmc(ctx, addr, opt)
 			if err != nil {
@@ -202,8 +219,6 @@ func (client *grpcClient) dialPool(ctx context.Context, tablet *topodatapb.Table
 			}
 			c <- tm
 		}
-	} else {
-		client.mu.Unlock()
 	}
 
 	result := <-c
@@ -218,44 +233,81 @@ func (client *grpcClient) dialDedicatedPool(ctx context.Context, dialPoolGroup D
 		return nil, nil, err
 	}
 
-	client.mu.Lock()
-	defer client.mu.Unlock()
-	if client.rpcDialPoolMap == nil {
-		client.rpcDialPoolMap = make(map[DialPoolGroup]addrTmcMap)
-	}
-	if _, ok := client.rpcDialPoolMap[dialPoolGroup]; !ok {
-		client.rpcDialPoolMap[dialPoolGroup] = make(addrTmcMap)
-	}
-	m := client.rpcDialPoolMap[dialPoolGroup]
-	if _, ok := m[addr]; !ok {
-		tm, err := client.createTmc(ctx, addr, opt)
-		if err != nil {
-			return nil, nil, err
+	entry := func() *tmcEntry {
+		client.rpcDialPoolMapMu.Lock()
+		defer client.rpcDialPoolMapMu.Unlock()
+
+		if client.rpcDialPoolMap == nil {
+			client.rpcDialPoolMap = make(map[DialPoolGroup]addrTmcMap)
 		}
-		m[addr] = tm
+		if _, ok := client.rpcDialPoolMap[dialPoolGroup]; !ok {
+			client.rpcDialPoolMap[dialPoolGroup] = make(addrTmcMap)
+		}
+
+		poolEntries := client.rpcDialPoolMap[dialPoolGroup]
+		entry, ok := poolEntries[addr]
+		if ok {
+			return entry
+		}
+
+		entry = &tmcEntry{}
+		poolEntries[addr] = entry
+		return entry
+	}()
+
+	// Initialize connection exactly once, without holding the mutex
+	entry.once.Do(func() {
+		entry.tmc, entry.err = client.createTmc(ctx, addr, opt)
+	})
+
+	if entry.err != nil {
+		return nil, nil, entry.err
 	}
+
 	invalidator := func() {
-		client.mu.Lock()
-		defer client.mu.Unlock()
-		if tm := m[addr]; tm != nil && tm.cc != nil {
-			tm.cc.Close()
+		client.rpcDialPoolMapMu.Lock()
+		defer client.rpcDialPoolMapMu.Unlock()
+
+		if entry.tmc != nil && entry.tmc.cc != nil {
+			entry.tmc.cc.Close()
 		}
-		delete(m, addr)
+
+		if poolEntries, ok := client.rpcDialPoolMap[dialPoolGroup]; ok {
+			delete(poolEntries, addr)
+		}
 	}
-	return m[addr].client, invalidator, nil
+	return entry.tmc.client, invalidator, nil
 }
 
 // Close is part of the tmclient.TabletManagerClient interface.
 func (client *grpcClient) Close() {
-	client.mu.Lock()
-	defer client.mu.Unlock()
-	for _, c := range client.rpcClientMap {
-		close(c)
-		for ch := range c {
-			ch.cc.Close()
+	func() {
+		client.rpcClientMapMu.Lock()
+		defer client.rpcClientMapMu.Unlock()
+
+		for _, c := range client.rpcClientMap {
+			close(c)
+			for ch := range c {
+				ch.cc.Close()
+			}
 		}
-	}
-	client.rpcClientMap = nil
+		client.rpcClientMap = nil
+	}()
+
+	// Close dedicated pools
+	func() {
+		client.rpcDialPoolMapMu.Lock()
+		defer client.rpcDialPoolMapMu.Unlock()
+
+		for _, addrMap := range client.rpcDialPoolMap {
+			for _, tm := range addrMap {
+				if tm != nil && tm.tmc != nil && tm.tmc.cc != nil {
+					tm.tmc.cc.Close()
+				}
+			}
+		}
+		client.rpcDialPoolMap = nil
+	}()
 }
 
 //
@@ -1191,13 +1243,13 @@ func (client *Client) InitReplica(ctx context.Context, tablet *topodatapb.Tablet
 }
 
 // DemotePrimary is part of the tmclient.TabletManagerClient interface.
-func (client *Client) DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+func (client *Client) DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet, force bool) (*replicationdatapb.PrimaryStatus, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
 	}
 	defer closer.Close()
-	response, err := c.DemotePrimary(ctx, &tabletmanagerdatapb.DemotePrimaryRequest{})
+	response, err := c.DemotePrimary(ctx, &tabletmanagerdatapb.DemotePrimaryRequest{Force: force})
 	if err != nil {
 		return nil, vterrors.FromGRPC(err)
 	}

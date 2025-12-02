@@ -1,0 +1,594 @@
+name: Backport and Forwardport PRs
+
+on:
+  # pull_request:
+  #   types: [closed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'Pull Request number to backport/forwardport'
+        required: true
+        type: number
+      dry_run:
+        description: 'Dry run mode - show what would happen without making changes'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  backport:
+    name: Backport/Forwardport PR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "vitess-bot[bot]"
+          git config --global user.email "108069721+vitess-bot[bot]@users.noreply.github.com"
+
+      - name: Get PR information
+        id: pr-info
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Determine PR number and dry-run mode based on trigger type
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            PR_NUMBER="${{ inputs.pr_number }}"
+            DRY_RUN="${{ inputs.dry_run }}"
+          else
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+            DRY_RUN="false"
+          fi
+
+          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          echo "dry_run=$DRY_RUN" >> $GITHUB_OUTPUT
+
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "🔍 DRY RUN MODE ENABLED - No changes will be made"
+            echo "=================================================="
+          fi
+
+          # Fetch PR details from API
+          PR_DATA=$(gh pr view "$PR_NUMBER" --json number,title,author,mergeCommit,merged,state,repository)
+
+          # Extract PR details
+          PR_TITLE=$(echo "$PR_DATA" | jq -r '.title')
+          PR_AUTHOR=$(echo "$PR_DATA" | jq -r '.author.login')
+          MERGE_COMMIT_SHA=$(echo "$PR_DATA" | jq -r '.mergeCommit.oid')
+          IS_MERGED=$(echo "$PR_DATA" | jq -r '.merged')
+          REPO_OWNER=$(echo "$PR_DATA" | jq -r '.repository.owner.login')
+          REPO_NAME=$(echo "$PR_DATA" | jq -r '.repository.name')
+
+          # Validate PR is merged
+          if [ "$IS_MERGED" != "true" ]; then
+            echo "Error: PR #$PR_NUMBER is not merged. Cannot backport unmerged PRs."
+            exit 1
+          fi
+
+          # Validate repository (only vitess)
+          if [ "$REPO_NAME" != "vitess" ]; then
+            echo "Error: PR #$PR_NUMBER is from repository $REPO_OWNER/$REPO_NAME, not vitess. This workflow only supports vitessio/vitess."
+            exit 1
+          fi
+
+          # Export PR information
+          echo "pr_title=$PR_TITLE" >> $GITHUB_OUTPUT
+          echo "pr_author=$PR_AUTHOR" >> $GITHUB_OUTPUT
+          echo "merge_commit_sha=$MERGE_COMMIT_SHA" >> $GITHUB_OUTPUT
+          echo "repo_owner=$REPO_OWNER" >> $GITHUB_OUTPUT
+          echo "repo_name=$REPO_NAME" >> $GITHUB_OUTPUT
+
+          echo "Processing PR #$PR_NUMBER: $PR_TITLE"
+          echo "Author: $PR_AUTHOR"
+          echo "Merge commit: $MERGE_COMMIT_SHA"
+
+      - name: Extract backport and forwardport labels
+        id: extract-labels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ steps.pr-info.outputs.pr_number }}"
+
+          # Get all labels from the PR
+          LABELS=$(gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name')
+
+          # Extract backport branches
+          BACKPORT_BRANCHES=$(echo "$LABELS" | grep "^Backport to: " | sed 's/^Backport to: //' || true)
+          FORWARDPORT_BRANCHES=$(echo "$LABELS" | grep "^Forwardport to: " | sed 's/^Forwardport to: //' || true)
+
+          # Extract other labels (excluding backport/forwardport labels)
+          OTHER_LABELS=$(echo "$LABELS" | grep -v "^Backport to: " | grep -v "^Forwardport to: " | jq -R -s -c 'split("\n") | map(select(length > 0))' || echo '[]')
+
+          # Export as outputs
+          echo "backport_branches<<EOF" >> $GITHUB_OUTPUT
+          echo "$BACKPORT_BRANCHES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          echo "forwardport_branches<<EOF" >> $GITHUB_OUTPUT
+          echo "$FORWARDPORT_BRANCHES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          echo "other_labels=$OTHER_LABELS" >> $GITHUB_OUTPUT
+
+          if [ -n "$BACKPORT_BRANCHES" ]; then
+            echo "Will backport PR #$PR_NUMBER to branches: $BACKPORT_BRANCHES"
+          fi
+          if [ -n "$FORWARDPORT_BRANCHES" ]; then
+            echo "Will forwardport PR #$PR_NUMBER to branches: $FORWARDPORT_BRANCHES"
+          fi
+
+      - name: Process backports
+        if: steps.extract-labels.outputs.backport_branches != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ steps.pr-info.outputs.pr_number }}"
+          PR_TITLE="${{ steps.pr-info.outputs.pr_title }}"
+          PR_AUTHOR="${{ steps.pr-info.outputs.pr_author }}"
+          MERGE_COMMIT_SHA="${{ steps.pr-info.outputs.merge_commit_sha }}"
+          OTHER_LABELS='${{ steps.extract-labels.outputs.other_labels }}'
+          DRY_RUN="${{ steps.pr-info.outputs.dry_run }}"
+
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "🔍 DRY RUN: Backport Processing"
+            echo "================================"
+          fi
+
+          # Read backport branches
+          BACKPORT_BRANCHES="${{ steps.extract-labels.outputs.backport_branches }}"
+
+          # Process each backport branch
+          while IFS= read -r BRANCH; do
+            [ -z "$BRANCH" ] && continue
+
+            echo "Processing backport to branch: $BRANCH"
+
+            PORT_TYPE="backport"
+            NEW_BRANCH="${PORT_TYPE}-${PR_NUMBER}-to-${BRANCH}"
+
+            # Fetch the target branch
+            git fetch origin "$BRANCH:$BRANCH" || {
+              echo "Error: Failed to fetch branch $BRANCH"
+              continue
+            }
+
+            # Create and checkout new branch from target branch
+            git checkout -b "$NEW_BRANCH" "$BRANCH" || {
+              echo "Error: Failed to create branch $NEW_BRANCH"
+              continue
+            }
+
+            # Attempt cherry-pick
+            CONFLICT=false
+            if ! git cherry-pick -m 1 "$MERGE_COMMIT_SHA" 2>&1; then
+              # Check if there are conflicts
+              if git status | grep -q "Unmerged paths\|both modified"; then
+                echo "Conflicts detected during cherry-pick"
+                CONFLICT=true
+
+                # Stage all changes
+                git add .
+
+                # Commit with conflict message
+                git commit --author="vitess-bot[bot] <108069721+vitess-bot[bot]@users.noreply.github.com>" \
+                  -m "Cherry-pick $MERGE_COMMIT_SHA with conflicts" || {
+                  echo "Error: Failed to commit conflicts"
+                  git checkout main
+                  git branch -D "$NEW_BRANCH" 2>/dev/null || true
+                  continue
+                }
+              else
+                echo "Error: Cherry-pick failed with non-conflict error"
+                git cherry-pick --abort 2>/dev/null || true
+                git checkout main
+                git branch -D "$NEW_BRANCH" 2>/dev/null || true
+                continue
+              fi
+            else
+              # Cherry-pick succeeded, amend to update author
+              git commit --amend --no-edit --author="vitess-bot[bot] <108069721+vitess-bot[bot]@users.noreply.github.com>" || {
+                echo "Error: Failed to amend commit"
+                git checkout main
+                git branch -D "$NEW_BRANCH" 2>/dev/null || true
+                continue
+              }
+            fi
+
+            # Push the new branch
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "  [DRY RUN] Would push branch: $NEW_BRANCH"
+              echo "  Command: git push -f origin $NEW_BRANCH"
+              NEW_PR_NUMBER="<dry-run>"
+            else
+              git push -f origin "$NEW_BRANCH" || {
+                echo "Error: Failed to push branch $NEW_BRANCH"
+                git checkout main
+                git branch -D "$NEW_BRANCH" 2>/dev/null || true
+                continue
+              }
+
+              # Create PR body
+              PR_BODY="## Description
+          This is a $PORT_TYPE of #${PR_NUMBER}"
+
+              # Determine if PR should be draft
+              DRAFT_FLAG=""
+              if [ "$CONFLICT" = true ]; then
+                DRAFT_FLAG="--draft"
+              fi
+
+              echo "  Creating pull request..."
+              # Create the pull request
+              NEW_PR_NUMBER=$(gh pr create \
+                --title "[$BRANCH] $PR_TITLE (#$PR_NUMBER)" \
+                --body "$PR_BODY" \
+                --base "$BRANCH" \
+                --head "$NEW_BRANCH" \
+                $DRAFT_FLAG \
+                --repo "${{ github.repository }}" \
+                --json number --jq '.number' 2>/dev/null || echo "")
+
+              if [ -z "$NEW_PR_NUMBER" ]; then
+                echo "Error: Failed to create PR for branch $NEW_BRANCH"
+                git checkout main
+                continue
+              fi
+
+              echo "Created backport PR #$NEW_PR_NUMBER"
+            fi
+
+            # Display PR information (for both dry-run and real mode)
+            if [ "$DRY_RUN" = "true" ]; then
+              echo ""
+              echo "  [DRY RUN] Would create PR with:"
+              echo "  --------------------------------"
+              echo "  Title: [$BRANCH] $PR_TITLE (#$PR_NUMBER)"
+              echo "  Body: ## Description"
+              echo "        This is a $PORT_TYPE of #${PR_NUMBER}"
+              echo "  Base: $BRANCH"
+              echo "  Head: $NEW_BRANCH"
+              if [ "$CONFLICT" = true ]; then
+                echo "  Draft: true (due to conflicts)"
+              else
+                echo "  Draft: false"
+              fi
+              echo "  Repository: ${{ github.repository }}"
+            fi
+
+            # Add labels - build array from OTHER_LABELS and add port type specific labels
+            LABELS_ARRAY=()
+
+            # Add labels from original PR
+            while IFS= read -r label; do
+              [ -n "$label" ] && LABELS_ARRAY+=("$label")
+            done < <(echo "$OTHER_LABELS" | jq -r '.[]' 2>/dev/null || true)
+
+            # Add conflict-specific labels
+            if [ "$CONFLICT" = true ]; then
+              LABELS_ARRAY+=("Merge Conflict" "Skip CI" "Backport")
+            else
+              LABELS_ARRAY+=("Backport")
+            fi
+
+            # Apply labels
+            if [ "$DRY_RUN" = "true" ]; then
+              echo ""
+              echo "  [DRY RUN] Would add labels:"
+              for label in "${LABELS_ARRAY[@]}"; do
+                echo "    - $label"
+              done
+            else
+              # Apply labels one by one to handle potential issues
+              for label in "${LABELS_ARRAY[@]}"; do
+                gh pr edit "$NEW_PR_NUMBER" --add-label "$label" --repo "${{ github.repository }}" 2>/dev/null || echo "Warning: Could not add label '$label'"
+              done
+            fi
+
+            # Add conflict comment if there were conflicts
+            if [ "$CONFLICT" = true ]; then
+              CONFLICT_COMMENT="Hello @${PR_AUTHOR}, there are conflicts in this ${PORT_TYPE}.
+
+          Please address them in order to merge this Pull Request. You can execute the snippet below to reset your branch and resolve the conflict manually.
+
+          Make sure you replace \`origin\` by the name of the ${{ github.repository_owner }}/${{ github.event.repository.name }} remote
+          \`\`\`
+          git fetch --all
+          gh pr checkout ${NEW_PR_NUMBER} -R ${{ github.repository }}
+          git reset --hard origin/${BRANCH}
+          git cherry-pick -m 1 ${MERGE_COMMIT_SHA}
+          \`\`\`"
+
+              if [ "$DRY_RUN" = "true" ]; then
+                echo ""
+                echo "  [DRY RUN] Would add conflict resolution comment:"
+                echo "  ------------------------------------------------"
+                echo "$CONFLICT_COMMENT" | sed 's/^/  /'
+              else
+                gh pr comment "$NEW_PR_NUMBER" --body "$CONFLICT_COMMENT" --repo "${{ github.repository }}" || true
+              fi
+            fi
+
+            # Get reviewers from original PR and add original author
+            if [ "$DRY_RUN" = "true" ]; then
+              REVIEWER_USERS=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/requested_reviewers" \
+                --jq '.users[].login' 2>/dev/null || true)
+              REVIEWER_TEAMS=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/requested_reviewers" \
+                --jq '.teams[].slug' 2>/dev/null || true)
+
+              echo ""
+              echo "  [DRY RUN] Would request reviews from:"
+              [ -n "$REVIEWER_USERS" ] && echo "$REVIEWER_USERS" | while read -r user; do
+                [ -n "$user" ] && echo "    - $user (user)"
+              done
+              [ -n "$REVIEWER_TEAMS" ] && echo "$REVIEWER_TEAMS" | while read -r team; do
+                [ -n "$team" ] && echo "    - $team (team)"
+              done
+              echo "    - $PR_AUTHOR (original PR author)"
+            else
+              REVIEWER_USERS=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/requested_reviewers" \
+                --jq '.users[].login' 2>/dev/null || true)
+              REVIEWER_TEAMS=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/requested_reviewers" \
+                --jq '.teams[].slug' 2>/dev/null || true)
+
+              # Build reviewers list including original author
+              REVIEWERS=()
+              while IFS= read -r reviewer; do
+                [ -n "$reviewer" ] && REVIEWERS+=("$reviewer")
+              done < <(echo "$REVIEWER_USERS")
+              while IFS= read -r team; do
+                [ -n "$team" ] && REVIEWERS+=("$team")
+              done < <(echo "$REVIEWER_TEAMS")
+              REVIEWERS+=("$PR_AUTHOR")
+
+              # Request reviewers
+              for reviewer in "${REVIEWERS[@]}"; do
+                gh pr edit "$NEW_PR_NUMBER" --add-reviewer "$reviewer" --repo "${{ github.repository }}" 2>/dev/null || echo "Note: Could not add reviewer '$reviewer' (may be PR author or have insufficient permissions)"
+              done
+            fi
+
+            # Return to main branch for next iteration
+            git checkout main
+          done <<< "$BACKPORT_BRANCHES"
+
+      - name: Process forwardports
+        if: steps.extract-labels.outputs.forwardport_branches != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ steps.pr-info.outputs.pr_number }}"
+          PR_TITLE="${{ steps.pr-info.outputs.pr_title }}"
+          PR_AUTHOR="${{ steps.pr-info.outputs.pr_author }}"
+          MERGE_COMMIT_SHA="${{ steps.pr-info.outputs.merge_commit_sha }}"
+          OTHER_LABELS='${{ steps.extract-labels.outputs.other_labels }}'
+          DRY_RUN="${{ steps.pr-info.outputs.dry_run }}"
+
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "🔍 DRY RUN: Forwardport Processing"
+            echo "==================================="
+          fi
+
+          # Read forwardport branches
+          FORWARDPORT_BRANCHES="${{ steps.extract-labels.outputs.forwardport_branches }}"
+
+          # Process each forwardport branch
+          while IFS= read -r BRANCH; do
+            [ -z "$BRANCH" ] && continue
+
+            echo "Processing forwardport to branch: $BRANCH"
+
+            PORT_TYPE="forwardport"
+            NEW_BRANCH="${PORT_TYPE}-${PR_NUMBER}-to-${BRANCH}"
+
+            # Fetch the target branch
+            git fetch origin "$BRANCH:$BRANCH" || {
+              echo "Error: Failed to fetch branch $BRANCH"
+              continue
+            }
+
+            # Create and checkout new branch from target branch
+            git checkout -b "$NEW_BRANCH" "$BRANCH" || {
+              echo "Error: Failed to create branch $NEW_BRANCH"
+              continue
+            }
+
+            # Attempt cherry-pick
+            CONFLICT=false
+            if ! git cherry-pick -m 1 "$MERGE_COMMIT_SHA" 2>&1; then
+              # Check if there are conflicts
+              if git status | grep -q "Unmerged paths\|both modified"; then
+                echo "Conflicts detected during cherry-pick"
+                CONFLICT=true
+
+                # Stage all changes
+                git add .
+
+                # Commit with conflict message
+                git commit --author="vitess-bot[bot] <108069721+vitess-bot[bot]@users.noreply.github.com>" \
+                  -m "Cherry-pick $MERGE_COMMIT_SHA with conflicts" || {
+                  echo "Error: Failed to commit conflicts"
+                  git checkout main
+                  git branch -D "$NEW_BRANCH" 2>/dev/null || true
+                  continue
+                }
+              else
+                echo "Error: Cherry-pick failed with non-conflict error"
+                git cherry-pick --abort 2>/dev/null || true
+                git checkout main
+                git branch -D "$NEW_BRANCH" 2>/dev/null || true
+                continue
+              fi
+            else
+              # Cherry-pick succeeded, amend to update author
+              git commit --amend --no-edit --author="vitess-bot[bot] <108069721+vitess-bot[bot]@users.noreply.github.com>" || {
+                echo "Error: Failed to amend commit"
+                git checkout main
+                git branch -D "$NEW_BRANCH" 2>/dev/null || true
+                continue
+              }
+            fi
+
+            # Push the new branch
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "  [DRY RUN] Would push branch: $NEW_BRANCH"
+              echo "  Command: git push -f origin $NEW_BRANCH"
+              NEW_PR_NUMBER="<dry-run>"
+            else
+              git push -f origin "$NEW_BRANCH" || {
+                echo "Error: Failed to push branch $NEW_BRANCH"
+                git checkout main
+                git branch -D "$NEW_BRANCH" 2>/dev/null || true
+                continue
+              }
+
+              # Create PR body
+              PR_BODY="## Description
+          This is a $PORT_TYPE of #${PR_NUMBER}"
+
+              # Determine if PR should be draft
+              DRAFT_FLAG=""
+              if [ "$CONFLICT" = true ]; then
+                DRAFT_FLAG="--draft"
+              fi
+
+              echo "  Creating pull request..."
+              # Create the pull request
+              NEW_PR_NUMBER=$(gh pr create \
+                --title "[$BRANCH] $PR_TITLE (#$PR_NUMBER)" \
+                --body "$PR_BODY" \
+                --base "$BRANCH" \
+                --head "$NEW_BRANCH" \
+                $DRAFT_FLAG \
+                --repo "${{ github.repository }}" \
+                --json number --jq '.number' 2>/dev/null || echo "")
+
+              if [ -z "$NEW_PR_NUMBER" ]; then
+                echo "Error: Failed to create PR for branch $NEW_BRANCH"
+                git checkout main
+                continue
+              fi
+
+              echo "Created forwardport PR #$NEW_PR_NUMBER"
+            fi
+
+            # Display PR information (for both dry-run and real mode)
+            if [ "$DRY_RUN" = "true" ]; then
+              echo ""
+              echo "  [DRY RUN] Would create PR with:"
+              echo "  --------------------------------"
+              echo "  Title: [$BRANCH] $PR_TITLE (#$PR_NUMBER)"
+              echo "  Body: ## Description"
+              echo "        This is a $PORT_TYPE of #${PR_NUMBER}"
+              echo "  Base: $BRANCH"
+              echo "  Head: $NEW_BRANCH"
+              if [ "$CONFLICT" = true ]; then
+                echo "  Draft: true (due to conflicts)"
+              else
+                echo "  Draft: false"
+              fi
+              echo "  Repository: ${{ github.repository }}"
+            fi
+
+            # Add labels - build array from OTHER_LABELS and add port type specific labels
+            LABELS_ARRAY=()
+
+            # Add labels from original PR
+            while IFS= read -r label; do
+              [ -n "$label" ] && LABELS_ARRAY+=("$label")
+            done < <(echo "$OTHER_LABELS" | jq -r '.[]' 2>/dev/null || true)
+
+            # Add conflict-specific labels
+            if [ "$CONFLICT" = true ]; then
+              LABELS_ARRAY+=("Merge Conflict" "Skip CI" "Forwardport")
+            else
+              LABELS_ARRAY+=("Forwardport")
+            fi
+
+            # Apply labels
+            if [ "$DRY_RUN" = "true" ]; then
+              echo ""
+              echo "  [DRY RUN] Would add labels:"
+              for label in "${LABELS_ARRAY[@]}"; do
+                echo "    - $label"
+              done
+            else
+              # Apply labels one by one to handle potential issues
+              for label in "${LABELS_ARRAY[@]}"; do
+                gh pr edit "$NEW_PR_NUMBER" --add-label "$label" --repo "${{ github.repository }}" 2>/dev/null || echo "Warning: Could not add label '$label'"
+              done
+            fi
+
+            # Add conflict comment if there were conflicts
+            if [ "$CONFLICT" = true ]; then
+              CONFLICT_COMMENT="Hello @${PR_AUTHOR}, there are conflicts in this ${PORT_TYPE}.
+
+          Please address them in order to merge this Pull Request. You can execute the snippet below to reset your branch and resolve the conflict manually.
+
+          Make sure you replace \`origin\` by the name of the ${{ github.repository_owner }}/${{ github.event.repository.name }} remote
+          \`\`\`
+          git fetch --all
+          gh pr checkout ${NEW_PR_NUMBER} -R ${{ github.repository }}
+          git reset --hard origin/${BRANCH}
+          git cherry-pick -m 1 ${MERGE_COMMIT_SHA}
+          \`\`\`"
+
+              if [ "$DRY_RUN" = "true" ]; then
+                echo ""
+                echo "  [DRY RUN] Would add conflict resolution comment:"
+                echo "  ------------------------------------------------"
+                echo "$CONFLICT_COMMENT" | sed 's/^/  /'
+              else
+                gh pr comment "$NEW_PR_NUMBER" --body "$CONFLICT_COMMENT" --repo "${{ github.repository }}" || true
+              fi
+            fi
+
+            # Get reviewers from original PR and add original author
+            if [ "$DRY_RUN" = "true" ]; then
+              REVIEWER_USERS=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/requested_reviewers" \
+                --jq '.users[].login' 2>/dev/null || true)
+              REVIEWER_TEAMS=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/requested_reviewers" \
+                --jq '.teams[].slug' 2>/dev/null || true)
+
+              echo ""
+              echo "  [DRY RUN] Would request reviews from:"
+              [ -n "$REVIEWER_USERS" ] && echo "$REVIEWER_USERS" | while read -r user; do
+                [ -n "$user" ] && echo "    - $user (user)"
+              done
+              [ -n "$REVIEWER_TEAMS" ] && echo "$REVIEWER_TEAMS" | while read -r team; do
+                [ -n "$team" ] && echo "    - $team (team)"
+              done
+              echo "    - $PR_AUTHOR (original PR author)"
+            else
+              REVIEWER_USERS=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/requested_reviewers" \
+                --jq '.users[].login' 2>/dev/null || true)
+              REVIEWER_TEAMS=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/requested_reviewers" \
+                --jq '.teams[].slug' 2>/dev/null || true)
+
+              # Build reviewers list including original author
+              REVIEWERS=()
+              while IFS= read -r reviewer; do
+                [ -n "$reviewer" ] && REVIEWERS+=("$reviewer")
+              done < <(echo "$REVIEWER_USERS")
+              while IFS= read -r team; do
+                [ -n "$team" ] && REVIEWERS+=("$team")
+              done < <(echo "$REVIEWER_TEAMS")
+              REVIEWERS+=("$PR_AUTHOR")
+
+              # Request reviewers
+              for reviewer in "${REVIEWERS[@]}"; do
+                gh pr edit "$NEW_PR_NUMBER" --add-reviewer "$reviewer" --repo "${{ github.repository }}" 2>/dev/null || echo "Note: Could not add reviewer '$reviewer' (may be PR author or have insufficient permissions)"
+              done
+            fi
+
+            # Return to main branch for next iteration
+            git checkout main
+          done <<< "$FORWARDPORT_BRANCHES"

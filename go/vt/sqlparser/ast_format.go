@@ -1399,7 +1399,11 @@ func (node TableName) Format(buf *TrackedBuffer) {
 	if node.Qualifier.NotEmpty() {
 		buf.astPrintf(node, "%v.", node.Qualifier)
 	}
-	buf.astPrintf(node, "%v", node.Name)
+	if node.Qualifier.IsEmpty() && node.Name.String() == "dual" {
+		buf.WriteString("dual")
+	} else {
+		buf.astPrintf(node, "%v", node.Name)
+	}
 }
 
 // Format formats the node.
