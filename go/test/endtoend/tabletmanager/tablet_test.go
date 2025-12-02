@@ -88,7 +88,7 @@ func TestGRPCErrorCode_MySQLDown(t *testing.T) {
 	vttablet := getTablet(tablet.GrpcPort)
 
 	// test FullStatus before stopping mysql
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
 	defer cancel()
 	res, err := tmClient.FullStatus(ctx, vttablet)
 	require.NotNil(t, res)
@@ -100,7 +100,7 @@ func TestGRPCErrorCode_MySQLDown(t *testing.T) {
 
 	// confirm we get vtrpcpb.Code_UNAVAILABLE when calling FullStatus,
 	// because this will try and fail to connect to mysql
-	ctx2, cancel2 := context.WithTimeout(context.Background(), time.Second*10)
+	ctx2, cancel2 := context.WithTimeout(t.Context(), time.Second*10)
 	defer cancel2()
 	_, err = tmClient.FullStatus(ctx2, vttablet)
 	require.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
