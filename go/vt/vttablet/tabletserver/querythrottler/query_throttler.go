@@ -90,6 +90,14 @@ func (qt *QueryThrottler) Shutdown() {
 	qt.mu.Lock()
 	defer qt.mu.Unlock()
 
+	// Cancel the watch context to stop the watch goroutine
+	if qt.cancelWatchContext != nil {
+		qt.cancelWatchContext()
+	}
+
+	// Reset the watch started flag to allow restarting the watch if needed
+	qt.watchStarted.Store(false)
+
 	// Stop the current strategy to clean up any background processes
 	if qt.strategyHandlerInstance != nil {
 		qt.strategyHandlerInstance.Stop()
@@ -116,7 +124,7 @@ func (qt *QueryThrottler) InitDBConfig(keyspace string) {
 	log.Infof("QueryThrottler: initialized with keyspace=%s", keyspace)
 
 	// Start the topo server watch post the keyspace is set.
-	//qt.startSrvKeyspaceWatch()
+	qt.startSrvKeyspaceWatch()
 }
 
 // Throttle checks if the tablet is under heavy load
