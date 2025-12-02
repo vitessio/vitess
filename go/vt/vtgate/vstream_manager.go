@@ -52,11 +52,12 @@ type vstreamManager struct {
 	toposerv srvtopo.Server
 	cell     string
 
-	vstreamsCreated         *stats.CountersWithMultiLabels
-	vstreamsLag             *stats.GaugesWithMultiLabels
-	vstreamsCount           *stats.CountersWithMultiLabels
-	vstreamsEventsStreamed  *stats.CountersWithMultiLabels
-	vstreamsEndedWithErrors *stats.CountersWithMultiLabels
+	vstreamsCreated             *stats.CountersWithMultiLabels
+	vstreamsLag                 *stats.GaugesWithMultiLabels
+	vstreamsCount               *stats.CountersWithMultiLabels
+	vstreamsEventsStreamed      *stats.CountersWithMultiLabels
+	vstreamsEndedWithErrors     *stats.CountersWithMultiLabels
+	vstreamsTransactionsChunked *stats.CountersWithMultiLabels
 }
 
 // maxSkewTimeoutSeconds is the maximum allowed skew between two streams when the MinimizeSkew flag is set
@@ -146,7 +147,7 @@ type vstream struct {
 	// At what point, without any activity in the stream, should we consider it dead.
 	streamLivenessTimer *time.Timer
 
-	// When a transaction exceeds this size, VStream acquires a lock to ensure contiguous delivery.
+	// When a transaction exceeds this size, VStream acquires a lock to ensure contiguous, chunked delivery.
 	// Smaller transactions are sent without locking for better parallelism.
 	transactionChunkSizeBytes int
 
@@ -187,6 +188,10 @@ func newVStreamManager(resolver *srvtopo.Resolver, serv srvtopo.Server, cell str
 			"VStreamsEndedWithErrors",
 			"Number of vstreams that ended with errors",
 			labels),
+		vstreamsTransactionsChunked: exporter.NewCountersWithMultiLabels(
+			"VStreamsTransactionsChunked",
+			"Number of transactions that exceeded TransactionChunkSize threshold and required locking for contiguous, chunked delivery",
+			labels),
 	}
 }
 
@@ -196,6 +201,9 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 	if err != nil {
 		return vterrors.Wrap(err, "failed to resolve vstream parameters")
 	}
+	log.Infof("VStream flags: minimize_skew=%v, heartbeat_interval=%v, stop_on_reshard=%v, cells=%v, cell_preference=%v, tablet_order=%v, stream_keyspace_heartbeats=%v, include_reshard_journal_events=%v, tables_to_copy=%v, exclude_keyspace_from_table_name=%v, transaction_chunk_size=%v",
+		flags.GetMinimizeSkew(), flags.GetHeartbeatInterval(), flags.GetStopOnReshard(), flags.Cells, flags.CellPreference, flags.TabletOrder,
+		flags.GetStreamKeyspaceHeartbeats(), flags.GetIncludeReshardJournalEvents(), flags.TablesToCopy, flags.GetExcludeKeyspaceFromTableName(), flags.TransactionChunkSize)
 	ts, err := vsm.toposerv.GetTopoServer()
 	if err != nil {
 		return vterrors.Wrap(err, "failed to get topology server")
@@ -207,6 +215,9 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 	transactionChunkSizeBytes := defaultTransactionChunkSizeBytes
 	if flags.TransactionChunkSize > 0 {
 		transactionChunkSizeBytes = int(flags.TransactionChunkSize)
+	}
+	if flags.GetMinimizeSkew() && flags.TransactionChunkSize > 0 {
+		log.Warning("Minimize skew cannot be set with transaction chunk size (can cause deadlock), ignorin transaction chunk size.")
 	}
 
 	vs := &vstream{
@@ -742,6 +753,8 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 
 				switch event.Type {
 				case binlogdatapb.VEventType_BEGIN:
+					// Mark the start of a transaction.
+					// Also queue the events for sending to the client.
 					inTransaction = true
 					sendevents = append(sendevents, event)
 				case binlogdatapb.VEventType_FIELD:
@@ -756,6 +769,8 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 					sendevents = append(sendevents, event)
 					eventss = append(eventss, sendevents)
 
+					// If MinimizeSkew is enabled, then perform stream alignment, before acquiring the transaction lock.
+					// This ensures that we will not hold the lock while we are waiting for streams to align.
 					if err := vs.alignStreams(ctx, event, sgtid.Keyspace, sgtid.Shard); err != nil {
 						return vterrors.Wrap(err, aligningStreamsErr)
 					}
@@ -879,9 +894,10 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 				eventss = nil
 			}
 
-			if inTransaction && !txLockHeld && accumulatedSize > vs.transactionChunkSizeBytes {
-				log.Infof("vstream for %s/%s: transaction size %d bytes exceeds chunk size %d bytes, acquiring lock for contiguous delivery",
+			if inTransaction && !txLockHeld && accumulatedSize > vs.transactionChunkSizeBytes && !vs.minimizeSkew {
+				log.Infof("vstream for %s/%s: transaction size %d bytes exceeds chunk size %d bytes, acquiring lock for contiguous, chunked delivery",
 					sgtid.Keyspace, sgtid.Shard, accumulatedSize, vs.transactionChunkSizeBytes)
+				vs.vsm.vstreamsTransactionsChunked.Add(labelValues, 1)
 				vs.mu.Lock()
 				txLockHeld = true
 				if len(eventss) > 0 {

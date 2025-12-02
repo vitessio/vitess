@@ -482,6 +482,7 @@ func TestVStreamChunksOverSizeThreshold(t *testing.T) {
 	hc := discovery.NewFakeHealthCheck(nil)
 	st := getSandboxTopo(ctx, cell, ks, []string{"-20", "20-40"})
 	vsm := newTestVStreamManager(ctx, hc, st, cell)
+	vsm.vstreamsTransactionsChunked.ResetAll()
 	sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
 	sbc1 := hc.AddTestTablet("aa", "1.1.1.1", 1002, ks, "20-40", topodatapb.TabletType_PRIMARY, true, 1, nil)
@@ -621,6 +622,10 @@ func TestVStreamChunksOverSizeThreshold(t *testing.T) {
 		rowCounts = append(rowCounts, tx.rowCount)
 	}
 	require.ElementsMatch(t, []int{1, 100}, rowCounts, "Should have one transaction with 1 row and one with 100 rows")
+
+	chunkedCounts := vsm.vstreamsTransactionsChunked.Counts()
+	require.Contains(t, chunkedCounts, "TestVStream.-20.PRIMARY", "Should have chunked transaction metric for -20 shard")
+	require.GreaterOrEqual(t, chunkedCounts["TestVStream.-20.PRIMARY"], int64(1), "Should have at least one chunked transaction")
 }
 
 func TestVStreamMulti(t *testing.T) {
