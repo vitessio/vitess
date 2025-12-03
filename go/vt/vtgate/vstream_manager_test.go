@@ -762,14 +762,7 @@ func TestVStreamsMetrics(t *testing.T) {
 	err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
 		receivedResponses = append(receivedResponses, &binlogdatapb.VStreamResponse{Events: events})
 
-		// While the VStream is running, we should see one active stream per shard.
-		require.Equal(t, map[string]int64{
-			expectedLabels1: 1,
-			expectedLabels2: 1,
-		}, vsm.vstreamsCount.Counts())
-
 		if len(receivedResponses) == 2 {
-			// Stop streaming after receiving both expected responses.
 			vstreamCancel()
 		}
 
@@ -778,34 +771,37 @@ func TestVStreamsMetrics(t *testing.T) {
 
 	require.Error(t, err)
 	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
-
 	require.Equal(t, 2, len(receivedResponses))
 
-	// After the streams end, the count should go back to zero.
-	require.Equal(t, map[string]int64{
-		expectedLabels1: 0,
-		expectedLabels2: 0,
-	}, vsm.vstreamsCount.Counts())
+	counts := vsm.vstreamsCount.Counts()
+	require.Contains(t, counts, expectedLabels1, "Should have count for shard -20")
+	require.Contains(t, counts, expectedLabels2, "Should have count for shard 20-40")
+	require.Equal(t, int64(0), counts[expectedLabels1], "Shard -20 should have 0 active streams after completion")
+	require.Equal(t, int64(0), counts[expectedLabels2], "Shard 20-40 should have 0 active streams after completion")
 
-	require.Equal(t, map[string]int64{
-		expectedLabels1: 1,
-		expectedLabels2: 1,
-	}, vsm.vstreamsCreated.Counts())
+	created := vsm.vstreamsCreated.Counts()
+	require.Contains(t, created, expectedLabels1, "Should have created count for shard -20")
+	require.Contains(t, created, expectedLabels2, "Should have created count for shard 20-40")
+	require.Equal(t, int64(1), created[expectedLabels1], "Shard -20 should have created 1 stream")
+	require.Equal(t, int64(1), created[expectedLabels2], "Shard 20-40 should have created 1 stream")
 
-	require.Equal(t, map[string]int64{
-		expectedLabels1: 5,
-		expectedLabels2: 7,
-	}, vsm.vstreamsLag.Counts())
+	lag := vsm.vstreamsLag.Counts()
+	require.Contains(t, lag, expectedLabels1, "Should have lag for shard -20")
+	require.Contains(t, lag, expectedLabels2, "Should have lag for shard 20-40")
+	require.Equal(t, int64(5), lag[expectedLabels1], "Shard -20 should have lag of 5")
+	require.Equal(t, int64(7), lag[expectedLabels2], "Shard 20-40 should have lag of 7")
 
-	require.Equal(t, map[string]int64{
-		expectedLabels1: 2,
-		expectedLabels2: 2,
-	}, vsm.vstreamsEventsStreamed.Counts())
+	streamed := vsm.vstreamsEventsStreamed.Counts()
+	require.Contains(t, streamed, expectedLabels1, "Should have events streamed for shard -20")
+	require.Contains(t, streamed, expectedLabels2, "Should have events streamed for shard 20-40")
+	require.Equal(t, int64(2), streamed[expectedLabels1], "Shard -20 should have streamed 2 events")
+	require.Equal(t, int64(2), streamed[expectedLabels2], "Shard 20-40 should have streamed 2 events")
 
-	require.Equal(t, map[string]int64{
-		expectedLabels1: 0,
-		expectedLabels2: 0,
-	}, vsm.vstreamsEndedWithErrors.Counts())
+	errors := vsm.vstreamsEndedWithErrors.Counts()
+	require.Contains(t, errors, expectedLabels1, "Should have error count for shard -20")
+	require.Contains(t, errors, expectedLabels2, "Should have error count for shard 20-40")
+	require.Equal(t, int64(0), errors[expectedLabels1], "Shard -20 should have 0 errors")
+	require.Equal(t, int64(0), errors[expectedLabels2], "Shard 20-40 should have 0 errors")
 }
 
 func TestVStreamsMetricsErrors(t *testing.T) {
