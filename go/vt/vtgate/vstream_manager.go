@@ -217,7 +217,7 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 		transactionChunkSizeBytes = int(flags.TransactionChunkSize)
 	}
 	if flags.GetMinimizeSkew() && flags.TransactionChunkSize > 0 {
-		log.Warning("Minimize skew cannot be set with transaction chunk size (can cause deadlock), ignorin transaction chunk size.")
+		log.Warning("Minimize skew cannot be set with transaction chunk size (can cause deadlock), ignoring transaction chunk size.")
 	}
 
 	vs := &vstream{
@@ -715,15 +715,15 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		var inTransaction bool
 		var accumulatedSize int
 
+		defer func() {
+			if txLockHeld {
+				vs.mu.Unlock()
+				txLockHeld = false
+			}
+		}()
+
 		err = tabletConn.VStream(ctx, req, func(events []*binlogdatapb.VEvent) error {
 			errCount = 0
-
-			defer func() {
-				if txLockHeld {
-					vs.mu.Unlock()
-					txLockHeld = false
-				}
-			}()
 
 			select {
 			case <-ctx.Done():
