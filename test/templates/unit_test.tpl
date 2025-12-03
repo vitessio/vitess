@@ -105,7 +105,7 @@ jobs:
         go install golang.org/x/tools/cmd/goimports@{{.GoimportsSHA}} # {{.GoimportsTag}}
 
         # install JUnit report formatter
-        go install github.com/vitessio/go-junit-report@{{.GoJunitReportSHA}}
+        go install github.com/vitessio/go-junit-report@{{.GoJunitReportSHA}} # {{.GoJunitReportTag}}
 
     - name: Run make tools
       if: steps.changes.outputs.unit_tests == 'true'

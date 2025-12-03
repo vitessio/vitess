@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"golang.org/x/sync/errgroup"
+
 	"vitess.io/vitess/go/gitutil"
 )
 
@@ -190,6 +191,7 @@ type GitMeta struct {
 	GoimportsSHA     string
 	GoimportsTag     string
 	GoJunitReportSHA string
+	GoJunitReportTag string
 }
 
 type unitTest struct {
@@ -225,8 +227,8 @@ type vitessTesterTest struct {
 
 // getGitMeta concurrently fetches Git SHAs of workflow dependencies.
 func getGitMeta(ctx context.Context) (*GitMeta, error) {
-	var shasMu sync.Mutex
-	var shas GitMeta
+	var metaMu sync.Mutex
+	var meta GitMeta
 
 	eg, egCtx := errgroup.WithContext(ctx)
 
@@ -234,9 +236,10 @@ func getGitMeta(ctx context.Context) (*GitMeta, error) {
 	eg.Go(func() error {
 		sha, err := gitutil.GetGitHeadSHAString(egCtx, "https://github.com/vitessio/go-junit-report")
 		if err == nil {
-			shasMu.Lock()
-			shas.GoJunitReportSHA = sha
-			shasMu.Unlock()
+			metaMu.Lock()
+			meta.GoJunitReportSHA = sha
+			meta.GoJunitReportTag = "HEAD"
+			metaMu.Unlock()
 		}
 		return err
 	})
@@ -245,15 +248,15 @@ func getGitMeta(ctx context.Context) (*GitMeta, error) {
 	eg.Go(func() error {
 		sha, err := gitutil.GetGitTagSHAString(egCtx, "https://go.googlesource.com/tools", goimportsTag)
 		if err == nil {
-			shasMu.Lock()
-			shas.GoimportsSHA = sha
-			shas.GoimportsTag = goimportsTag
-			shasMu.Unlock()
+			metaMu.Lock()
+			meta.GoimportsSHA = sha
+			meta.GoimportsTag = goimportsTag
+			metaMu.Unlock()
 		}
 		return err
 	})
 
-	return &shas, eg.Wait()
+	return &meta, eg.Wait()
 }
 
 // clusterMySQLVersions return list of mysql versions (one or more) that this cluster needs to test against
