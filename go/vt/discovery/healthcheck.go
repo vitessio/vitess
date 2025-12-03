@@ -252,7 +252,7 @@ type HealthCheck interface {
 	Unsubscribe(c chan *TabletHealth)
 
 	// GetLoadTabletsTrigger returns a channel that is used to inform when to load tablets.
-	GetLoadTabletsTrigger() chan struct{}
+	GetLoadTabletsTrigger() chan topo.KeyspaceShard
 }
 
 var _ HealthCheck = (*HealthCheckImpl)(nil)
@@ -302,8 +302,8 @@ type HealthCheckImpl struct {
 	subMu sync.Mutex
 	// subscribers
 	subscribers map[chan *TabletHealth]struct{}
-	// loadTablets trigger is used to immediately load a new primary tablet when the current one has been demoted
-	loadTabletsTrigger chan struct{}
+	// loadTabletsTrigger is used to immediately load information about tablets of a specific shard.
+	loadTabletsTrigger chan topo.KeyspaceShard
 	// healthCheckDialSem is used to limit how many healthcheck connections can be opened to tablets at once.
 	healthCheckDialSem *semaphore.Weighted
 }
@@ -371,7 +371,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		healthy:            make(map[KeyspaceShardTabletType][]*TabletHealth),
 		subscribers:        make(map[chan *TabletHealth]struct{}),
 		cellAliases:        make(map[string]string),
-		loadTabletsTrigger: make(chan struct{}, 1),
+		loadTabletsTrigger: make(chan topo.KeyspaceShard, 1024),
 	}
 	var topoWatchers []*TopologyWatcher
 	cells := strings.Split(cellsToWatch, ",")
@@ -543,18 +543,21 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 		}
 
 		// If the previous tablet type was primary, we need to check if the next new primary has already been assigned.
-		// If no new primary has been assigned, we will trigger a `loadTablets` call to immediately redirect traffic to the new primary.
+		// If no new primary has been assigned, we will trigger loading of tablets for this keyspace shard to immediately redirect traffic to the new primary.
 		//
 		// This is to avoid a situation where a newly primary tablet for a shard has just been started and the tableRefreshInterval has not yet passed,
 		// causing an interruption where no primary is assigned to the shard.
 		if prevTarget.TabletType == topodata.TabletType_PRIMARY {
 			if primaries := hc.healthData[oldTargetKey]; len(primaries) == 0 {
 				log.Infof("We will have no health data for the next new primary tablet after demoting the tablet: %v, so start loading tablets now", topotools.TabletIdent(th.Tablet))
-				// We want to trigger a loadTablets call, but if the channel is not empty
-				// then a trigger is already scheduled, we don't need to trigger another one.
-				// This also prevents the code from deadlocking as described in https://github.com/vitessio/vitess/issues/16994.
+				// We want to trigger a call to load tablets for this keyspace-shard,
+				// but we want this to be non-blocking to prevent the code from deadlocking as described in https://github.com/vitessio/vitess/issues/16994.
+				// If the buffer is exhausted, then we'll just receive the update when all the tablets are loaded on the ticker.
 				select {
-				case hc.loadTabletsTrigger <- struct{}{}:
+				case hc.loadTabletsTrigger <- topo.KeyspaceShard{
+					Keyspace: prevTarget.Keyspace,
+					Shard:    prevTarget.Shard,
+				}:
 				default:
 				}
 			}
@@ -670,7 +673,7 @@ func (hc *HealthCheckImpl) broadcast(th *TabletHealth) {
 }
 
 // GetLoadTabletsTrigger returns a channel that is used to inform when to load tablets.
-func (hc *HealthCheckImpl) GetLoadTabletsTrigger() chan struct{} {
+func (hc *HealthCheckImpl) GetLoadTabletsTrigger() chan topo.KeyspaceShard {
 	return hc.loadTabletsTrigger
 }
 
