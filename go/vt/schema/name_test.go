@@ -40,21 +40,14 @@ func TestNameIsGCTableName(t *testing.T) {
 		"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114013_new",
 		"_table_old",
 		"__table_old",
-	}
-	for _, tableName := range irrelevantNames {
-		t.Run(tableName, func(t *testing.T) {
-			assert.False(t, IsGCTableName(tableName))
-		})
-	}
-	relevantNames := []string{
 		"_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
 		"_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
 		"_vt_EVAC_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
 		"_vt_PURGE_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
 	}
-	for _, tableName := range relevantNames {
+	for _, tableName := range irrelevantNames {
 		t.Run(tableName, func(t *testing.T) {
-			assert.True(t, IsGCTableName(tableName))
+			assert.False(t, IsGCTableName(tableName))
 		})
 	}
 }
@@ -67,10 +60,6 @@ func TestIsInternalOperationTableName(t *testing.T) {
 		"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114013_new",
 		"_table_old",
 		"__table_old",
-		"_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
-		"_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
-		"_vt_EVAC_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
-		"_vt_PURGE_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
 		"_vt_drp_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
 		"_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
 		"_vt_prg_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
@@ -91,6 +80,10 @@ func TestIsInternalOperationTableName(t *testing.T) {
 		"_table_ghc",
 		"_table_del",
 		"table_old",
+		"_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+		"_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+		"_vt_EVAC_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+		"_vt_PURGE_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
 		"_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_202009151204100",
 		"_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915120410 ",
 		"__vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
