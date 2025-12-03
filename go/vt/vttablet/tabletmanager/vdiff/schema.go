@@ -40,7 +40,7 @@ const (
 						vd.started_at as started_at, vdt.rows_compared as rows_compared, vd.completed_at as completed_at,
 						IF(vdt.mismatch = 1, 1, 0) as has_mismatch, vdt.report as report
 						from _vt.vdiff as vd left join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
-						where vd.id = %a order by table_name`
+						where vd.id = %a`
 	// sqlUpdateVDiffState has a penultimate placeholder for any additional columns you want to update, e.g. `, foo = 1`.
 	// It also truncates the error if needed to ensure that we can save the state when the error text is very long.
 	sqlUpdateVDiffState   = "update _vt.vdiff set state = %s, last_error = left(%s, 1024) %s where id = %d"
