@@ -1650,21 +1650,21 @@ func TestOnlineDDLTables(t *testing.T) {
 	execStatements(t, []string{
 		"create table vitess_test(id int, val varbinary(128), primary key(id))",
 		"create table _1e275eef_3b20_11eb_a38f_04ed332e05c2_20201210204529_gho(id int, val varbinary(128), primary key(id))",
-		"create table _vt_PURGE_1f9194b43b2011eb8a0104ed332e05c2_20201210194431(id int, val varbinary(128), primary key(id))",
+		"create table _vt_prg_1f9194b43b2011eb8a0104ed332e05c2_20201210194431_(id int, val varbinary(128), primary key(id))",
 		"create table _product_old(id int, val varbinary(128), primary key(id))",
 	})
 	position := primaryPosition(t)
 	execStatements(t, []string{
 		"insert into vitess_test values(1, 'abc')",
 		"insert into _1e275eef_3b20_11eb_a38f_04ed332e05c2_20201210204529_gho values(1, 'abc')",
-		"insert into _vt_PURGE_1f9194b43b2011eb8a0104ed332e05c2_20201210194431 values(1, 'abc')",
+		"insert into _vt_prg_1f9194b43b2011eb8a0104ed332e05c2_20201210194431_ values(1, 'abc')",
 		"insert into _product_old values(1, 'abc')",
 	})
 
 	defer execStatements(t, []string{
 		"drop table vitess_test",
 		"drop table _1e275eef_3b20_11eb_a38f_04ed332e05c2_20201210204529_gho",
-		"drop table _vt_PURGE_1f9194b43b2011eb8a0104ed332e05c2_20201210194431",
+		"drop table _vt_prg_1f9194b43b2011eb8a0104ed332e05c2_20201210194431_",
 		"drop table _product_old",
 	})
 	testcases := []testcase{{

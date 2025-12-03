@@ -845,7 +845,7 @@ func TestVSchemaUpdateWithFKReferenceToInternalTables(t *testing.T) {
 			Columns: cols1,
 			ForeignKeys: []*sqlparser.ForeignKeyDefinition{
 				createFkDefinition([]string{"id"}, "t1", []string{"id"}, sqlparser.Cascade, sqlparser.SetNull),
-				createFkDefinition([]string{"id"}, "_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410", []string{"id"}, sqlparser.Cascade, sqlparser.SetNull),
+				createFkDefinition([]string{"id"}, "_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_", []string{"id"}, sqlparser.Cascade, sqlparser.SetNull),
 			},
 		},
 	}}

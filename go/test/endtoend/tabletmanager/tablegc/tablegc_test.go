@@ -383,7 +383,7 @@ func TestEvac(t *testing.T) {
 	t.Run("validating rows evacuated", func(t *testing.T) {
 		// We're now both beyond table's timestamp as well as a tableGC interval
 		validateTableDoesNotExist(t, tableName)
-		// Table should be renamed as _vt_DROP_... and then dropped!
+		// Table should be renamed as _vt_drp_... and then dropped!
 		validateAnyState(t, 0, schema.DropTableGCState, schema.TableDroppedGCState)
 	})
 }
