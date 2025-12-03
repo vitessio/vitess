@@ -116,7 +116,7 @@ jobs:
         sudo service etcd stop
 
         # install JUnit report formatter
-        go install github.com/vitessio/go-junit-report@{{.GoJunitReportSHA}} # {{.GoJunitReportTag}}
+        go install github.com/vitessio/go-junit-report@{{.GoJunitReport.SHA}} # {{.GoJunitReport.Tag}}
 
         {{if .InstallXtraBackup}}
 
