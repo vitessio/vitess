@@ -19,16 +19,17 @@ package main
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"os"
 	"path"
 	"strings"
+	"sync"
 	"text/template"
 	"time"
 
-	"github.com/google/go-github/v76/github"
+	"golang.org/x/sync/errgroup"
+	"vitess.io/vitess/go/gitutil"
 )
 
 type mysqlVersion string
@@ -51,20 +52,14 @@ var (
 	unitTestDatabases = []mysqlVersion{mysql57, mysql80, mysql84}
 )
 
-var (
-	ghClient         = github.NewClient(nil)
-	ghClientTimeout  = time.Second * 10
-	goJunitReportSHA string
-)
+var gitTimeout = time.Second * 10
 
 const (
 	oracleCloudRunner = "oracle-vm-16cpu-64gb-x86-64"
 	githubRunner      = "gh-hosted-runners-16cores-1-24.04"
 	cores16RunnerName = oracleCloudRunner
 	defaultRunnerName = "ubuntu-24.04"
-
-	githubOrg         = "vitessio"
-	goJunitReportRepo = "go-junit-report"
+	goimportsTag      = "v0.39.0"
 )
 
 // To support a private git repository, set goPrivate to a repo in
@@ -191,17 +186,24 @@ var (
 	}
 )
 
+type GitMeta struct {
+	GoimportsSHA     string
+	GoimportsTag     string
+	GoJunitReportSHA string
+}
+
 type unitTest struct {
-	Name, RunsOn, Platform, FileName, GoPrivate, GoJunitReportSHA, Evalengine string
+	*GitMeta
+	Name, RunsOn, Platform, FileName, GoPrivate, Evalengine string
 }
 
 type clusterTest struct {
+	*GitMeta
 	Name, Shard, Platform              string
 	FileName                           string
 	BuildTag                           string
 	RunsOn                             string
 	GoPrivate                          string
-	GoJunitReportSHA                   string
 	MemoryCheck                        bool
 	MakeTools, InstallXtraBackup       bool
 	Docker                             bool
@@ -213,12 +215,45 @@ type clusterTest struct {
 }
 
 type vitessTesterTest struct {
-	FileName         string
-	Name             string
-	RunsOn           string
-	GoPrivate        string
-	GoJunitReportSHA string
-	Path             string
+	*GitMeta
+	FileName  string
+	Name      string
+	RunsOn    string
+	GoPrivate string
+	Path      string
+}
+
+// getGitMeta concurrently fetches Git SHAs of workflow dependencies.
+func getGitMeta(ctx context.Context) (*GitMeta, error) {
+	var shasMu sync.Mutex
+	var shas GitMeta
+
+	eg, egCtx := errgroup.WithContext(ctx)
+
+	// vitessio/go-junit-report (uses HEAD)
+	eg.Go(func() error {
+		sha, err := gitutil.GetGitHeadSHAString(egCtx, "https://github.com/vitessio/go-junit-report")
+		if err == nil {
+			shasMu.Lock()
+			shas.GoJunitReportSHA = sha
+			shasMu.Unlock()
+		}
+		return err
+	})
+
+	// goimports tool
+	eg.Go(func() error {
+		sha, err := gitutil.GetGitTagSHAString(egCtx, "https://go.googlesource.com/tools", goimportsTag)
+		if err == nil {
+			shasMu.Lock()
+			shas.GoimportsSHA = sha
+			shas.GoimportsTag = goimportsTag
+			shasMu.Unlock()
+		}
+		return err
+	})
+
+	return &shas, eg.Wait()
 }
 
 // clusterMySQLVersions return list of mysql versions (one or more) that this cluster needs to test against
@@ -255,16 +290,18 @@ func mergeBlankLines(buf *bytes.Buffer) string {
 }
 
 func main() {
-	var err error
-	goJunitReportSHA, err = getRepoHeadSHA1(githubOrg, goJunitReportRepo)
+	ctx, cancel := context.WithTimeout(context.Background(), gitTimeout)
+	defer cancel()
+
+	gitMeta, err := getGitMeta(ctx)
 	if err != nil {
-		log.Fatalf("failed to get HEAD SHA1 of %s/%s: %v", githubOrg, goJunitReportRepo, err)
+		log.Fatalf("failed to get all Git SHAs: %v", err)
 	}
 
-	generateUnitTestWorkflows()
-	generateVitessTesterWorkflows(vitessTesterMap, clusterVitessTesterTemplate)
-	generateClusterWorkflows(clusterList, clusterTestTemplate)
-	generateClusterWorkflows(clusterDockerList, clusterTestDockerTemplate)
+	generateUnitTestWorkflows(gitMeta)
+	generateVitessTesterWorkflows(vitessTesterMap, clusterVitessTesterTemplate, gitMeta)
+	generateClusterWorkflows(clusterList, clusterTestTemplate, gitMeta)
+	generateClusterWorkflows(clusterDockerList, clusterTestDockerTemplate, gitMeta)
 }
 
 func canonnizeList(list []string) []string {
@@ -277,24 +314,14 @@ func canonnizeList(list []string) []string {
 	return output
 }
 
-func getRepoHeadSHA1(owner, repo string) (string, error) {
-	if ghClient == nil || ghClient.Repositories == nil {
-		return "", errors.New("invalid github client")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), ghClientTimeout)
-	defer cancel()
-	sha, _, err := ghClient.Repositories.GetCommitSHA1(ctx, owner, repo, "HEAD", "")
-	return sha, err
-}
-
-func generateVitessTesterWorkflows(mp map[string]string, tpl string) {
+func generateVitessTesterWorkflows(mp map[string]string, tpl string, gitMeta *GitMeta) {
 	for test, testPath := range mp {
 		tt := &vitessTesterTest{
-			Name:             fmt.Sprintf("Vitess Tester (%v)", test),
-			RunsOn:           defaultRunnerName,
-			GoPrivate:        goPrivate,
-			GoJunitReportSHA: goJunitReportSHA,
-			Path:             testPath,
+			Name:      fmt.Sprintf("Vitess Tester (%v)", test),
+			RunsOn:    defaultRunnerName,
+			GoPrivate: goPrivate,
+			Path:      testPath,
+			GitMeta:   gitMeta,
 		}
 
 		templateFileName := tpl
@@ -307,17 +334,17 @@ func generateVitessTesterWorkflows(mp map[string]string, tpl string) {
 	}
 }
 
-func generateClusterWorkflows(list []string, tpl string) {
+func generateClusterWorkflows(list []string, tpl string, gitMeta *GitMeta) {
 	clusters := canonnizeList(list)
 	for _, cluster := range clusters {
 		for _, mysqlVersion := range clusterMySQLVersions() {
 			test := &clusterTest{
-				Name:             fmt.Sprintf("Cluster (%s)", cluster),
-				Shard:            cluster,
-				BuildTag:         buildTag[cluster],
-				RunsOn:           defaultRunnerName,
-				GoPrivate:        goPrivate,
-				GoJunitReportSHA: goJunitReportSHA,
+				Name:      fmt.Sprintf("Cluster (%s)", cluster),
+				Shard:     cluster,
+				BuildTag:  buildTag[cluster],
+				RunsOn:    defaultRunnerName,
+				GoPrivate: goPrivate,
+				GitMeta:   gitMeta,
 			}
 			cores16Clusters := canonnizeList(clusterRequiring16CoresMachines)
 			for _, cores16Cluster := range cores16Clusters {
@@ -389,16 +416,16 @@ func generateClusterWorkflows(list []string, tpl string) {
 	}
 }
 
-func generateUnitTestWorkflows() {
+func generateUnitTestWorkflows(gitMeta *GitMeta) {
 	for _, platform := range unitTestDatabases {
 		for _, evalengine := range []string{"1", "0"} {
 			test := &unitTest{
-				Name:             fmt.Sprintf("Unit Test (%s%s)", evalengineToString(evalengine), platform),
-				RunsOn:           defaultRunnerName,
-				Platform:         string(platform),
-				GoPrivate:        goPrivate,
-				GoJunitReportSHA: goJunitReportSHA,
-				Evalengine:       evalengine,
+				Name:       fmt.Sprintf("Unit Test (%s%s)", evalengineToString(evalengine), platform),
+				RunsOn:     defaultRunnerName,
+				Platform:   string(platform),
+				GoPrivate:  goPrivate,
+				Evalengine: evalengine,
+				GitMeta:    gitMeta,
 			}
 			test.FileName = fmt.Sprintf("unit_test_%s%s.yml", evalengineToString(evalengine), platform)
 			path := fmt.Sprintf("%s/%s", workflowConfigDir, test.FileName)
