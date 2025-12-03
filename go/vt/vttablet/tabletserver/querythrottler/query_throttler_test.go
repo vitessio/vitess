@@ -273,10 +273,10 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 				strategy: mockStrategy,
 				env:      env,
 				stats: Stats{
-					requestsTotal:     env.Exporter().NewCountersWithMultiLabels(_queryThrottleAppName+"Requests", "TestThrottler requests", []string{"strategy", "workload", "priority"}),
-					requestsThrottled: env.Exporter().NewCountersWithMultiLabels(_queryThrottleAppName+"Throttled", "TestThrottler throttled", []string{"strategy", "workload", "priority", "metric_name", "metric_value", "dry_run"}),
-					totalLatency:      env.Exporter().NewMultiTimings(_queryThrottleAppName+"TotalLatencyMs", "Total latency of QueryThrottler.Throttle in milliseconds", []string{"strategy", "workload", "priority"}),
-					evaluateLatency:   env.Exporter().NewMultiTimings(_queryThrottleAppName+"EvaluateLatencyMs", "Latency from Throttle entry to completion of Evaluate in milliseconds", []string{"strategy", "workload", "priority"}),
+					requestsTotal:     env.Exporter().NewCountersWithMultiLabels(_queryThrottlerAppName+"Requests", "TestThrottler requests", []string{"strategy", "workload", "priority"}),
+					requestsThrottled: env.Exporter().NewCountersWithMultiLabels(_queryThrottlerAppName+"Throttled", "TestThrottler throttled", []string{"strategy", "workload", "priority", "metric_name", "metric_value", "dry_run"}),
+					totalLatency:      env.Exporter().NewMultiTimings(_queryThrottlerAppName+"TotalLatencyMs", "Total latency of QueryThrottler.Throttle in milliseconds", []string{"strategy", "workload", "priority"}),
+					evaluateLatency:   env.Exporter().NewMultiTimings(_queryThrottlerAppName+"EvaluateLatencyMs", "Latency from Throttle entry to completion of Evaluate in milliseconds", []string{"strategy", "workload", "priority"}),
 				},
 			}
 
