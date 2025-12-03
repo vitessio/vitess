@@ -39,7 +39,7 @@ import (
 )
 
 const (
-	_queryThrottleAppName = "QueryThrottler"
+	_queryThrottlerAppName = "QueryThrottler"
 	// defaultPriority is the default priority value when none is specified
 	defaultPriority = 100 // sqlparser.MaxPriorityValue
 )
@@ -79,10 +79,10 @@ func NewQueryThrottler(ctx context.Context, throttler *throttle.Throttler, cfgLo
 		strategy:       &registry.NoOpStrategy{}, // default strategy until config is loaded
 		env:            env,
 		stats: Stats{
-			requestsTotal:     env.Exporter().NewCountersWithMultiLabels(_queryThrottleAppName+"Requests", "query throttler requests", []string{"strategy", "workload", "priority"}),
-			requestsThrottled: env.Exporter().NewCountersWithMultiLabels(_queryThrottleAppName+"Throttled", "query throttler requests throttled", []string{"strategy", "workload", "priority", "metric_name", "metric_value", "dry_run"}),
-			totalLatency:      env.Exporter().NewMultiTimings(_queryThrottleAppName+"TotalLatencyNs", "Total latency of QueryThrottler.Throttle in nanoseconds", []string{"strategy", "workload", "priority"}),
-			evaluateLatency:   env.Exporter().NewMultiTimings(_queryThrottleAppName+"EvaluateLatencyNs", "Latency from Throttle entry to completion of Evaluate in nanoseconds", []string{"strategy", "workload", "priority"}),
+			requestsTotal:     env.Exporter().NewCountersWithMultiLabels(_queryThrottlerAppName+"Requests", "query throttler requests", []string{"Strategy", "Workload", "Priority"}),
+			requestsThrottled: env.Exporter().NewCountersWithMultiLabels(_queryThrottlerAppName+"Throttled", "query throttler requests throttled", []string{"Strategy", "Workload", "Priority", "MetricName", "MetricValue", "DryRun"}),
+			totalLatency:      env.Exporter().NewMultiTimings(_queryThrottlerAppName+"TotalLatencyNs", "Total time each request takes in query throttling including evaluation, metric checks, and other overhead (nanoseconds)", []string{"Strategy", "Workload", "Priority"}),
+			evaluateLatency:   env.Exporter().NewMultiTimings(_queryThrottlerAppName+"EvaluateLatencyNs", "Time each request takes to make the throttling decision (nanoseconds)", []string{"Strategy", "Workload", "Priority"}),
 		},
 	}
 
