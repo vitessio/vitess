@@ -3098,18 +3098,20 @@ func shouldCutOverAccordingToBackoff(
 	return false, false
 }
 
-// getDependentMigrations returns a slice of migrations that must cut-over in-order, before the provided
-// migration.
-func getDependentMigrations(onlineDDL *schema.OnlineDDL, pendingMigrationsUUIDs []string) []string {
-	dependentMigrations := make([]string, 0, len(pendingMigrationsUUIDs))
+// getInOrderCompletionPendingCount returns a count of migrations that must cut-over in-order, before the
+// provided migration is able to proceed. This count is relevant only if the migration uses the
+// --in-order-completion option.
+func getInOrderCompletionPendingCount(onlineDDL *schema.OnlineDDL, pendingMigrationsUUIDs []string) uint64 {
+	var pendingCount uint64
 	for _, pendingMigrationsUUID := range pendingMigrationsUUIDs {
 		if pendingMigrationsUUID == onlineDDL.UUID {
-			// found all dependencies if we found ourself
+			// found all migrations we must wait for if
+			// we found ourself in the pending list.
 			break
 		}
-		dependentMigrations = append(dependentMigrations, pendingMigrationsUUID)
+		pendingCount++
 	}
-	return dependentMigrations
+	return pendingCount
 }
 
 // reviewRunningMigrations iterates migrations in 'running' state. Normally there's only one running, which was
@@ -3259,20 +3261,21 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				// In the case of a postponed migration, we will not complete it, but the user will
 				// understand whether "now is a good time" or "not there yet"
 				_ = e.updateMigrationReadyToComplete(ctx, uuid, isReady)
-				var postponeInOrderCompletion bool
-				if strategySetting.IsInOrderCompletion() {
-					if len(pendingMigrationsUUIDs) > 0 && pendingMigrationsUUIDs[0] != onlineDDL.UUID {
-						if err = e.updateDependentMigrations(ctx, onlineDDL.UUID, getDependentMigrations(onlineDDL, pendingMigrationsUUIDs)); err != nil {
-							return err
-						}
-						postponeInOrderCompletion = true
-					}
-				}
 				if !isReady {
 					// The migration is not ready yet.
 					return nil
 				}
-				if postponeCompletion || postponeInOrderCompletion {
+				if strategySetting.IsInOrderCompletion() {
+					var pendingMigrationsCount uint64
+					if len(pendingMigrationsUUIDs) > 0 && pendingMigrationsUUIDs[0] != onlineDDL.UUID {
+						pendingMigrationsCount = getInOrderCompletionPendingCount(onlineDDL, pendingMigrationsUUIDs)
+						postponeCompletion = true
+					}
+					if err = e.updatePostponedByInOrderCompletions(ctx, onlineDDL.UUID, pendingMigrationsCount); err != nil {
+						return err
+					}
+				}
+				if postponeCompletion {
 					// override. Even if migration is ready, we do not complete it.
 					return nil
 				}
@@ -3791,17 +3794,8 @@ func (e *Executor) updateMigrationStatusFailedOrCancelled(ctx context.Context, u
 }
 
 func (e *Executor) updateMigrationStatus(ctx context.Context, uuid string, status schema.OnlineDDLStatus) error {
-	var sqlUpdate string
-	switch status {
-	case schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled:
-		// sqlUpdateMigrationStatusFinal represents a final update to migration status.
-		sqlUpdate = sqlUpdateMigrationStatusFinal
-	default:
-		sqlUpdate = sqlUpdateMigrationStatus
-	}
-
 	log.Infof("updateMigrationStatus: transitioning migration: %s into status: %s", uuid, string(status))
-	query, err := sqlparser.ParseAndBind(sqlUpdate,
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationStatus,
 		sqltypes.StringBindVariable(string(status)),
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -4090,17 +4084,15 @@ func (e *Executor) updateMigrationUserThrottleRatio(ctx context.Context, uuid st
 	return err
 }
 
-func (e *Executor) updateDependentMigrations(
+func (e *Executor) updatePostponedByInOrderCompletions(
 	ctx context.Context,
 	uuid string,
-	dependentMigrations []string,
+	pendingCompletions uint64,
 ) error {
-	if len(dependentMigrations) == 0 {
-		return nil
-	}
-	query, err := sqlparser.ParseAndBind(sqlUpdateDependentMigrations,
-		sqltypes.StringBindVariable(strings.Join(dependentMigrations, ",")),
+	query, err := sqlparser.ParseAndBind(sqlUpdatePostponedByInOrderCompletions,
+		sqltypes.Uint64BindVariable(pendingCompletions),
 		sqltypes.StringBindVariable(uuid),
+		sqltypes.Uint64BindVariable(pendingCompletions),
 	)
 	if err != nil {
 		return err
@@ -4136,23 +4128,8 @@ func (e *Executor) RetryMigration(ctx context.Context, uuid string) (result *sql
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	onlineDDL, _, err := e.readMigration(ctx, uuid)
-	if err != nil {
-		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, err.Error())
-	}
-
-	var dependentMigrations []string
-	if onlineDDL.StrategySetting().IsInOrderCompletion() {
-		pendingMigrationsUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
-		if err != nil {
-			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, err.Error())
-		}
-		dependentMigrations = getDependentMigrations(onlineDDL, pendingMigrationsUUIDs)
-	}
-
 	query, err := sqlparser.ParseAndBind(sqlRetryMigration,
 		sqltypes.StringBindVariable(e.TabletAliasString()),
-		sqltypes.StringBindVariable(strings.Join(dependentMigrations, ",")),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
@@ -4638,15 +4615,6 @@ func (e *Executor) SubmitMigration(
 	}
 	log.Infof("SubmitMigration: request to submit migration %s; action=%s, table=%s", onlineDDL.UUID, actionStr, onlineDDL.Table)
 
-	var dependentMigrations []string
-	if onlineDDL.StrategySetting().IsInOrderCompletion() {
-		pendingMigrationsUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
-		if err != nil {
-			return nil, err
-		}
-		dependentMigrations = getDependentMigrations(onlineDDL, pendingMigrationsUUIDs)
-	}
-
 	revertedUUID, _ := onlineDDL.GetRevertUUID(e.env.Environment().Parser()) // Empty value if the migration is not actually a REVERT. Safe to ignore error.
 	retainArtifactsSeconds := int64((retainOnlineDDLTables).Seconds())
 	if retainArtifacts, _ := onlineDDL.StrategySetting().RetainArtifactsDuration(); retainArtifacts != 0 {
@@ -4682,7 +4650,6 @@ func (e *Executor) SubmitMigration(
 		sqltypes.BoolBindVariable(allowConcurrentMigration),
 		sqltypes.StringBindVariable(revertedUUID),
 		sqltypes.BoolBindVariable(onlineDDL.IsView(e.env.Environment().Parser())),
-		sqltypes.StringBindVariable(strings.Join(dependentMigrations, ",")),
 	)
 	if err != nil {
 		return nil, err

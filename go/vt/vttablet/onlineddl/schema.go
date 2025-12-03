@@ -37,10 +37,9 @@ const (
 		postpone_completion,
 		allow_concurrent,
 		reverted_uuid,
-		is_view,
-		dependent_migrations
+		is_view
 	) VALUES (
-		%a, %a, %a, %a, %a, %a, %a, %a, %a, NOW(6), %a, %a, %a, %a, %a, %a, %a, %a, %a, %a, %a
+		%a, %a, %a, %a, %a, %a, %a, %a, %a, NOW(6), %a, %a, %a, %a, %a, %a, %a, %a, %a, %a
 	)`
 
 	sqlSelectQueuedMigrations = `SELECT
@@ -67,16 +66,9 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
-	sqlUpdateMigrationStatusFinal = `UPDATE _vt.schema_migrations
-			SET migration_status=%a,
-			dependent_migrations=''
-		WHERE
-			migration_uuid=%a
-	`
 	sqlUpdateMigrationStatusFailedOrCancelled = `UPDATE _vt.schema_migrations
 			SET migration_status=IF(cancelled_timestamp IS NULL, 'failed', 'cancelled'),
-			completed_timestamp=NOW(6),
-			dependent_migrations=''
+			completed_timestamp=NOW(6)
 		WHERE
 			migration_uuid=%a
 	`
@@ -147,10 +139,11 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
-	sqlUpdateDependentMigrations = `UPDATE _vt.schema_migrations
-			SET dependent_migrations=%a
+	sqlUpdatePostponedByInOrderCompletions = `UPDATE _vt.schema_migrations
+			SET postponed_by_in_order_completions=%a
 		WHERE
-			migration_uuid=%a
+			migration_uuid=%a AND
+			postponed_by_in_order_completions!=%a
 	`
 	sqlUpdateArtifacts = `UPDATE _vt.schema_migrations
 			SET artifacts=concat(%a, ',', artifacts), cleanup_timestamp=NULL
@@ -301,7 +294,8 @@ const (
 			completed_timestamp=NULL,
 			last_cutover_attempt_timestamp=NULL,
 			shadow_analyzed_timestamp=NULL,
-			cleanup_timestamp=NULL
+			cleanup_timestamp=NULL,
+			postponed_by_in_order_completions=0
 		WHERE
 			migration_status IN ('failed', 'cancelled')
 			AND (%s)
@@ -324,7 +318,7 @@ const (
 			last_cutover_attempt_timestamp=NULL,
 			shadow_analyzed_timestamp=NULL,
 			cleanup_timestamp=NULL,
-			dependent_migrations=%a
+			postponed_by_in_order_completions=0
 		WHERE
 			migration_status IN ('failed', 'cancelled')
 			AND migration_uuid=%a

@@ -52614,8 +52614,8 @@ export namespace vtctldata {
         /** SchemaMigration removed_foreign_key_names */
         removed_foreign_key_names?: (string|null);
 
-        /** SchemaMigration dependent_migrations */
-        dependent_migrations?: (string|null);
+        /** SchemaMigration postponed_by_in_order_completions */
+        postponed_by_in_order_completions?: (number|Long|null);
     }
 
     /** Represents a SchemaMigration. */
@@ -52789,8 +52789,8 @@ export namespace vtctldata {
         /** SchemaMigration removed_foreign_key_names. */
         public removed_foreign_key_names: string;
 
-        /** SchemaMigration dependent_migrations. */
-        public dependent_migrations: string;
+        /** SchemaMigration postponed_by_in_order_completions. */
+        public postponed_by_in_order_completions: (number|Long);
 
         /**
          * Creates a new SchemaMigration instance using the specified properties.
