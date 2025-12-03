@@ -22,6 +22,8 @@ This release introduces an optimization that allows window functions to be pushe
 
 Previously, all window function queries required single-shard routing, which limited their applicability on sharded tables. With this change, queries where the `PARTITION BY` clause aligns with a unique vindex can now be pushed down and executed on each shard.
 
+For examples and more details, see the [documentation](https://vitess.io/docs/24.0/reference/compatibility/mysql-compatibility/#window-functions).
+
 ## <a id="minor-changes"/>Minor Changes</a>
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
