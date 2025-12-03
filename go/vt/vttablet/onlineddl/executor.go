@@ -3271,6 +3271,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 						pendingMigrationsCount = getInOrderCompletionPendingCount(onlineDDL, pendingMigrationsUUIDs)
 						postponeCompletion = true
 					}
+					// Update the new count field if we are waiting or if we find we are no longer waiting (0).
 					if err = e.updatePostponedByInOrderCompletions(ctx, onlineDDL.UUID, pendingMigrationsCount); err != nil {
 						return err
 					}
