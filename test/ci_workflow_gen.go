@@ -188,8 +188,8 @@ var (
 )
 
 type GitMeta struct {
-	SHA string
-	Tag string
+	SHA     string
+	Comment string
 }
 
 type GitMetas struct {
@@ -240,7 +240,7 @@ func getGitMetas(ctx context.Context) (*GitMetas, error) {
 		sha, err := gitutil.GetGitHeadSHAString(egCtx, "https://github.com/vitessio/go-junit-report")
 		if err == nil {
 			metasMu.Lock()
-			metas.GoJunitReport = &GitMeta{SHA: sha, Tag: "HEAD"}
+			metas.GoJunitReport = &GitMeta{SHA: sha, Comment: "HEAD"}
 			metasMu.Unlock()
 		}
 		return err
@@ -251,7 +251,7 @@ func getGitMetas(ctx context.Context) (*GitMetas, error) {
 		sha, err := gitutil.GetGitTagSHAString(egCtx, "https://go.googlesource.com/tools", goimportsTag)
 		if err == nil {
 			metasMu.Lock()
-			metas.Goimports = &GitMeta{SHA: sha, Tag: goimportsTag}
+			metas.Goimports = &GitMeta{SHA: sha, Comment: goimportsTag}
 			metasMu.Unlock()
 		}
 		return err
