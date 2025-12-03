@@ -47,11 +47,7 @@ func TestIsGCTableName(t *testing.T) {
 	states := []TableGCState{HoldTableGCState, PurgeTableGCState, EvacTableGCState, DropTableGCState}
 	for _, state := range states {
 		for i := 0; i < 10; i++ {
-			tableName, err := generateGCTableNameOldFormat(state, "", tm)
-			assert.NoError(t, err)
-			assert.Truef(t, IsGCTableName(tableName), "table name: %s", tableName)
-
-			tableName, err = generateGCTableName(state, "6ace8bcef73211ea87e9f875a4d24e90", tm)
+			tableName, err := generateGCTableName(state, "6ace8bcef73211ea87e9f875a4d24e90", tm)
 			assert.NoError(t, err)
 			assert.Truef(t, IsGCTableName(tableName), "table name: %s", tableName)
 
@@ -62,8 +58,6 @@ func TestIsGCTableName(t *testing.T) {
 	}
 	t.Run("accept", func(t *testing.T) {
 		names := []string{
-			"_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
-			"_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
 			"_vt_drp_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
 		}
 		for _, tableName := range names {
@@ -74,6 +68,8 @@ func TestIsGCTableName(t *testing.T) {
 	})
 	t.Run("reject", func(t *testing.T) {
 		names := []string{
+			"_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+			"_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
 			"_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_202009151204100",
 			"_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915120410 ",
 			"__vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
@@ -135,28 +131,24 @@ func TestAnalyzeGCTableName(t *testing.T) {
 		isGC      bool
 	}{
 		{
+			// old format no longer recognized
 			tableName: "_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
-			state:     DropTableGCState,
-			t:         baseTime,
-			isGC:      true,
+			isGC:      false,
 		},
 		{
+			// old format no longer recognized
 			tableName: "_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
-			state:     HoldTableGCState,
-			t:         baseTime,
-			isGC:      true,
+			isGC:      false,
 		},
 		{
+			// old format no longer recognized
 			tableName: "_vt_EVAC_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
-			state:     EvacTableGCState,
-			t:         baseTime,
-			isGC:      true,
+			isGC:      false,
 		},
 		{
+			// old format no longer recognized
 			tableName: "_vt_PURGE_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
-			state:     PurgeTableGCState,
-			t:         baseTime,
-			isGC:      true,
+			isGC:      false,
 		},
 		{
 			tableName: "_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915999999", // time error
