@@ -142,6 +142,15 @@ jobs:
       run: |
         find ./go/test/endtoend -name '*.go' -exec sed -i 's/ErrorContains/Error/g' {} +
         find ./go/test/endtoend -name '*.go' -exec sed -i 's/EqualError/Error/g' {} +
+        # Relax TestSpecializedPlan for < v24 due to window functions error message change.
+        # <= v23: "VT12001: unsupported: OVER CLAUSE with sharded keyspace"
+        # >= v24: "VT12001: unsupported: window functions are only supported for single-shard queries"
+        # Use Contains check to accept both versions.
+        ref="${{ steps.output-previous-release-ref.outputs.previous_release_ref }}"
+        version=$(echo "$ref" | sed 's/release-//' | cut -d. -f1)
+        if [ "$version" -lt 24 ]; then
+          sed -i 's/require\.EqualValues(t, "VT12001: unsupported: OVER CLAUSE with sharded keyspace", pm\["BaselineErr"\])/require.Contains(t, pm["BaselineErr"].(string), "VT12001: unsupported:")/' go/test/endtoend/preparestmt/stmt_methods_test.go
+        fi
 
     # Swap the binaries in the bin. Use vtgate version n-1 and keep vttablet at version n
     - name: Use last release's VTGate
