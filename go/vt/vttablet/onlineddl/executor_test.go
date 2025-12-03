@@ -241,6 +241,10 @@ func TestGetInOrderCompletionPendingCount(t *testing.T) {
 		require.Zero(t, getInOrderCompletionPendingCount(onlineDDL, []string{}))
 	}
 	{
+		pendingMigrationsUUIDs := []string{t.Name()}
+		require.Zero(t, getInOrderCompletionPendingCount(onlineDDL, pendingMigrationsUUIDs))
+	}
+	{
 		pendingMigrationsUUIDs := []string{"a", "b", "c", t.Name(), "x"}
 		require.Equal(t, uint64(3), getInOrderCompletionPendingCount(onlineDDL, pendingMigrationsUUIDs))
 	}
