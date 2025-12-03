@@ -3102,6 +3102,9 @@ func shouldCutOverAccordingToBackoff(
 // provided migration is able to proceed. This count is relevant only if the migration uses the
 // --in-order-completion option.
 func getInOrderCompletionPendingCount(onlineDDL *schema.OnlineDDL, pendingMigrationsUUIDs []string) uint64 {
+	if len(pendingMigrationsUUIDs) == 0 {
+		return 0
+	}
 	var pendingCount uint64
 	for _, pendingMigrationsUUID := range pendingMigrationsUUIDs {
 		if pendingMigrationsUUID == onlineDDL.UUID {
