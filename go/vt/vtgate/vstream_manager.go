@@ -75,8 +75,9 @@ const stopOnReshardDelay = 500 * time.Millisecond
 // no events, including heartbeats, from any of the shards.
 var livenessTimeout = 10 * time.Minute
 
-// defaultTransactionChunkSizeBytes is the default threshold for accumulated transaction size in bytes.
-const defaultTransactionChunkSizeBytes = 128 * 1024 * 1024 // 128MB
+// defaultTransactionChunkSizeBytes is the default threshold for chunking transactions.
+// 0 (the default value for protobuf int64) means disabled, clients must explicitly set a value to opt in for chunking.
+const defaultTransactionChunkSizeBytes = 0
 
 // vstream contains the metadata for one VStream request.
 type vstream struct {
@@ -152,6 +153,10 @@ type vstream struct {
 	transactionChunkSizeBytes int
 
 	flags *vtgatepb.VStreamFlags
+}
+
+func (vs *vstream) isChunkingEnabled() bool {
+	return vs.transactionChunkSizeBytes > 0
 }
 
 type journalEvent struct {
@@ -723,6 +728,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		}()
 
 		err = tabletConn.VStream(ctx, req, func(events []*binlogdatapb.VEvent) error {
+			// We received a valid event. Reset error count.
 			errCount = 0
 
 			select {
@@ -748,9 +754,8 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 
 			sendevents := make([]*binlogdatapb.VEvent, 0, len(events))
 			for i, event := range events {
-				vs.streamLivenessTimer.Reset(livenessTimeout)
+				vs.streamLivenessTimer.Reset(livenessTimeout) // Any event in the stream demonstrates liveness
 				accumulatedSize += event.SizeVT()
-
 				switch event.Type {
 				case binlogdatapb.VEventType_BEGIN:
 					// Mark the start of a transaction.
@@ -769,18 +774,18 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 					sendevents = append(sendevents, event)
 					eventss = append(eventss, sendevents)
 
-					// If MinimizeSkew is enabled, then perform stream alignment, before acquiring the transaction lock.
-					// This ensures that we will not hold the lock while we are waiting for streams to align.
 					if err := vs.alignStreams(ctx, event, sgtid.Keyspace, sgtid.Shard); err != nil {
 						return vterrors.Wrap(err, aligningStreamsErr)
 					}
 
 					var sendErr error
-					if txLockHeld {
+					if vs.isChunkingEnabled() && txLockHeld {
+						// If chunking is enabled and we are holding the lock (only possible to acquire lock when chunking is enabled), then send the events.
 						sendErr = vs.sendEventsLocked(ctx, sgtid, eventss)
 						vs.mu.Unlock()
 						txLockHeld = false
 					} else {
+						// If chunking is not enabled or this transaction was small enough to not need chunking, fall back to default behavior of sending entire transaction atomically.
 						sendErr = vs.sendAll(ctx, sgtid, eventss)
 					}
 					if sendErr != nil {
@@ -881,12 +886,16 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 				eventss = append(eventss, sendevents)
 			}
 
-			if !inTransaction && txLockHeld {
+			// If chunking is enabled, and we are holding the lock (only possible when enabled), and we are not in a transaction
+			// release the lock (this should not ever execute, acts as a safety check).
+			if vs.isChunkingEnabled() && txLockHeld && !inTransaction {
+				log.Warning("Detected held lock but not in a transaction, releasing the lock")
 				vs.mu.Unlock()
 				txLockHeld = false
 			}
 
-			if len(eventss) > 0 && txLockHeld {
+			// If chunking is enabled, and we are holding the lock (only possible when chunking is enabled), send the events.
+			if vs.isChunkingEnabled() && txLockHeld && len(eventss) > 0 {
 				if err := vs.sendEventsLocked(ctx, sgtid, eventss); err != nil {
 					log.Infof("vstream for %s/%s, error in sendAll at end of callback: %v", sgtid.Keyspace, sgtid.Shard, err)
 					return vterrors.Wrap(err, sendingEventsErr)
@@ -894,7 +903,9 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 				eventss = nil
 			}
 
-			if inTransaction && !txLockHeld && accumulatedSize > vs.transactionChunkSizeBytes && !vs.minimizeSkew {
+			// If chunking is enabled and minimize skew is disabled, and we are in a transaction, and we do not yet hold the lock, and the accumulated size is greater than our chunk size
+			// then acquire the lock, so that we can send the events, and begin chunking the transaction.
+			if vs.isChunkingEnabled() && !vs.minimizeSkew && inTransaction && !txLockHeld && accumulatedSize > vs.transactionChunkSizeBytes {
 				log.Infof("vstream for %s/%s: transaction size %d bytes exceeds chunk size %d bytes, acquiring lock for contiguous, chunked delivery",
 					sgtid.Keyspace, sgtid.Shard, accumulatedSize, vs.transactionChunkSizeBytes)
 				vs.vsm.vstreamsTransactionsChunked.Add(labelValues, 1)
