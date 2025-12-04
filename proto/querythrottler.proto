@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package querythrottler;
+
+option go_package = "vitess.io/vitess/go/vt/proto/querythrottler";
+
+// ThrottlingStrategy represents the strategy used to apply throttling
+enum ThrottlingStrategy {
+  UNKNOWN = 0;
+  TABLET_THROTTLER = 1;
+}
+
+// Config defines the runtime configuration for the IncomingQueryThrottler
+message Config {
+  bool enabled = 1;
+  ThrottlingStrategy strategy = 2;
+  TabletStrategyConfig tablet_strategy_config = 3;
+  bool dry_run = 4;
+}
+
+// TabletStrategyConfig holds per-tablet-type throttling rules
+message TabletStrategyConfig {
+  map<string, StatementRuleSet> tablet_rules = 1;
+}
+
+// StatementRuleSet maps SQL statement types to metric rules
+message StatementRuleSet {
+  map<string, MetricRuleSet> statement_rules = 1;
+}
+
+// MetricRuleSet maps metric names to their throttling rules
+message MetricRuleSet {
+  map<string, MetricRule> metric_rules = 1;
+}
+
+// MetricRule defines how to throttle based on a specific metric
+message MetricRule {
+  repeated ThrottleThreshold thresholds = 1;
+}
+
+// ThrottleThreshold defines a condition for throttling
+message ThrottleThreshold {
+  double above = 1;
+  int32 throttle = 2;
+}

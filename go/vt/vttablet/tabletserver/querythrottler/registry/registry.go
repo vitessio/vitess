@@ -60,15 +60,15 @@ func CreateStrategy(cfg StrategyConfig, deps Deps) ThrottlingStrategyHandler {
 	// The design intent is:
 	// Every “real” strategy must self-register to opt-in.
 	// NoOpStrategy must always be available—even before any registration happens—so the registry itself can safely fall back on it.
-	factory, ok := Get(cfg.GetStrategy())
+	factory, ok := Get(cfg.GetStrategyName())
 	if !ok {
-		log.Warningf("Unknown strategy %s, using NoOp", cfg.GetStrategy())
+		log.Warningf("Unknown strategy %s, using NoOp", cfg.GetStrategyName())
 		return &NoOpStrategy{}
 	}
 
 	strategy, err := factory.New(deps, cfg)
 	if err != nil {
-		log.Errorf("Strategy %s failed to init: %v, using NoOp", cfg.GetStrategy(), err)
+		log.Errorf("Strategy %s failed to init: %v, using NoOp", cfg.GetStrategyName(), err)
 		return &NoOpStrategy{}
 	}
 
