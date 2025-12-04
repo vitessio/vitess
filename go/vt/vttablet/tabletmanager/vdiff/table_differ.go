@@ -947,6 +947,8 @@ func (td *tableDiffer) getSourcePKCols() error {
 	if len(sourceSchema.TableDefinitions) == 0 {
 		// The table no longer exists on the source. So there will only be extra rows on the
 		// target if it still exists there.
+		log.Warningf("The %s table was not found on source tablet %s during VDiff for the %s workflow",
+			td.table.Name, topoproto.TabletAliasString(sourceTablet.Tablet.Alias), td.wd.ct.workflow)
 		return nil
 	}
 	sourceTable := sourceSchema.TableDefinitions[0]
