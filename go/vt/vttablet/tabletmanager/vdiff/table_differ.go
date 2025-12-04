@@ -944,6 +944,11 @@ func (td *tableDiffer) getSourcePKCols() error {
 		return vterrors.Wrapf(err, "failed to get the schema for table %s from source tablet %s",
 			td.table.Name, topoproto.TabletAliasString(sourceTablet.Tablet.Alias))
 	}
+	if len(sourceSchema.TableDefinitions) == 0 {
+		// The table no longer exists on the source. So there will only be extra rows on the
+		// target if it still exists there.
+		return nil
+	}
 	sourceTable := sourceSchema.TableDefinitions[0]
 	if len(sourceTable.PrimaryKeyColumns) == 0 {
 		// We use the columns from a PKE if there is one.
