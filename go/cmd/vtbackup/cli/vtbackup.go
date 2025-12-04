@@ -405,7 +405,7 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 		Keyspace:             initKeyspace,
 		Shard:                initShard,
 		TabletAlias:          topoproto.TabletAliasString(tabletAlias),
-		TabletType:           topodatapb.TabletType_REPLICA,
+		TabletType:           topodatapb.TabletType_BACKUP,
 		Stats:                backupstats.BackupStats(),
 		UpgradeSafe:          upgradeSafe,
 		MysqlShutdownTimeout: mysqlShutdownTimeout,
