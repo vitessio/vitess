@@ -77,7 +77,6 @@ import (
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -904,15 +903,10 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, probe 
 		metrics := make(base.ThrottleMetrics)
 
 		req := &tabletmanagerdatapb.CheckThrottlerRequest{} // We leave AppName empty; it will default to VitessName anyway, and we can save some proto space
-		resp, gRPCErr := tmClient.CheckThrottler(ctx, probe.Tablet, req)
-		if gRPCErr != nil {
-			if vtErrCode := vterrors.Code(gRPCErr); vtErrCode != vtrpcpb.Code_UNKNOWN {
-				gRPCErr = vterrors.Errorf(vtErrCode, "gRPC error accessing tablet %v. Err=%s", probe.Alias, gRPCErr.Error())
-			} else {
-				// TODO: remove after v24+ when all errors are vterrors/vtrpc-based
-				gRPCErr = fmt.Errorf("gRPC error accessing tablet %v. Err=%w", probe.Alias, gRPCErr)
-			}
-			return metricsWithError(gRPCErr)
+		resp, err := tmClient.CheckThrottler(ctx, probe.Tablet, req)
+		if err != nil {
+			err = vterrors.Errorf(vterrors.Code(err), "gRPC error accessing tablet %v. Err=%s", probe.Alias, err.Error())
+			return metricsWithError(err)
 		}
 		throttleMetric.Value = resp.Value
 		if resp.ResponseCode == tabletmanagerdatapb.CheckThrottlerResponseCode_INTERNAL_ERROR {
