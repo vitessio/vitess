@@ -273,10 +273,10 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 				strategy: mockStrategy,
 				env:      env,
 				stats: Stats{
-					requestsTotal:     env.Exporter().NewCountersWithMultiLabels(_queryThrottlerAppName+"Requests", "TestThrottler requests", []string{"strategy", "workload", "priority"}),
-					requestsThrottled: env.Exporter().NewCountersWithMultiLabels(_queryThrottlerAppName+"Throttled", "TestThrottler throttled", []string{"strategy", "workload", "priority", "metric_name", "metric_value", "dry_run"}),
-					totalLatency:      env.Exporter().NewMultiTimings(_queryThrottlerAppName+"TotalLatencyMs", "Total latency of QueryThrottler.Throttle in milliseconds", []string{"strategy", "workload", "priority"}),
-					evaluateLatency:   env.Exporter().NewMultiTimings(_queryThrottlerAppName+"EvaluateLatencyMs", "Latency from Throttle entry to completion of Evaluate in milliseconds", []string{"strategy", "workload", "priority"}),
+					requestsTotal:     env.Exporter().NewCountersWithMultiLabels(_queryThrottlerAppName+"Requests", "TestThrottler requests", []string{"Strategy", "Workload", "Priority"}),
+					requestsThrottled: env.Exporter().NewCountersWithMultiLabels(_queryThrottlerAppName+"Throttled", "TestThrottler throttled", []string{"Strategy", "Workload", "Priority", "MetricName", "MetricValue", "DryRun"}),
+					totalLatency:      env.Exporter().NewMultiTimings(_queryThrottlerAppName+"TotalLatencyMs", "Total latency of QueryThrottler.Throttle in milliseconds", []string{"Strategy", "Workload", "Priority"}),
+					evaluateLatency:   env.Exporter().NewMultiTimings(_queryThrottlerAppName+"EvaluateLatencyMs", "Latency from Throttle entry to completion of Evaluate in milliseconds", []string{"Strategy", "Workload", "Priority"}),
 				},
 			}
 
@@ -322,8 +322,8 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 			}
 
 			// Verify stats expectation
-			totalRequests := stats.CounterForDimension(iqt.stats.requestsTotal, "strategy")
-			throttledRequests := stats.CounterForDimension(iqt.stats.requestsThrottled, "strategy")
+			totalRequests := stats.CounterForDimension(iqt.stats.requestsTotal, "Strategy")
+			throttledRequests := stats.CounterForDimension(iqt.stats.requestsThrottled, "Strategy")
 			require.Equal(t, tt.expectedTotalRequests, totalRequests.Counts()["MockStrategy"], "Total requests should match expected")
 			require.Equal(t, tt.expectedThrottledRequests, throttledRequests.Counts()["MockStrategy"], "Throttled requests should match expected")
 		})
