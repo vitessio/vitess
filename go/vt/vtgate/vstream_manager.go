@@ -77,6 +77,7 @@ var livenessTimeout = 10 * time.Minute
 
 // defaultTransactionChunkSizeBytes is the default threshold for chunking transactions.
 // 0 (the default value for protobuf int64) means disabled, clients must explicitly set a value to opt in for chunking.
+// Eventually we plan to enable chunking by default, for now set to 0, which is the same as the protobuf default.
 const defaultTransactionChunkSizeBytes = 0
 
 // vstream contains the metadata for one VStream request.
@@ -218,11 +219,10 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unable to get topoology server")
 	}
 	transactionChunkSizeBytes := defaultTransactionChunkSizeBytes
-	if flags.TransactionChunkSize > 0 {
-		transactionChunkSizeBytes = int(flags.TransactionChunkSize)
-	}
-	if flags.GetMinimizeSkew() && flags.TransactionChunkSize > 0 {
+	if flags.TransactionChunkSize > 0 && flags.GetMinimizeSkew() {
 		log.Warning("Minimize skew cannot be set with transaction chunk size (can cause deadlock), ignoring transaction chunk size.")
+	} else if flags.TransactionChunkSize > 0 {
+		transactionChunkSizeBytes = int(flags.TransactionChunkSize)
 	}
 
 	vs := &vstream{
@@ -785,7 +785,8 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 						vs.mu.Unlock()
 						txLockHeld = false
 					} else {
-						// If chunking is not enabled or this transaction was small enough to not need chunking, fall back to default behavior of sending entire transaction atomically.
+						// If chunking is not enabled or this transaction was small enough to not need chunking,
+						// fall back to default behavior of sending entire transaction atomically.
 						sendErr = vs.sendAll(ctx, sgtid, eventss)
 					}
 					if sendErr != nil {
@@ -903,9 +904,9 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 				eventss = nil
 			}
 
-			// If chunking is enabled and minimize skew is disabled, and we are in a transaction, and we do not yet hold the lock, and the accumulated size is greater than our chunk size
+			// If chunking is enabled and we are in a transaction, and we do not yet hold the lock, and the accumulated size is greater than our chunk size
 			// then acquire the lock, so that we can send the events, and begin chunking the transaction.
-			if vs.isChunkingEnabled() && !vs.minimizeSkew && inTransaction && !txLockHeld && accumulatedSize > vs.transactionChunkSizeBytes {
+			if vs.isChunkingEnabled() && inTransaction && !txLockHeld && accumulatedSize > vs.transactionChunkSizeBytes {
 				log.Infof("vstream for %s/%s: transaction size %d bytes exceeds chunk size %d bytes, acquiring lock for contiguous, chunked delivery",
 					sgtid.Keyspace, sgtid.Shard, accumulatedSize, vs.transactionChunkSizeBytes)
 				vs.vsm.vstreamsTransactionsChunked.Add(labelValues, 1)
