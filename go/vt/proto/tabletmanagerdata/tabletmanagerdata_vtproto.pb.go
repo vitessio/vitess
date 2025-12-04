@@ -1799,10 +1799,11 @@ func (m *BackupRequest) CloneVT() *BackupRequest {
 		return (*BackupRequest)(nil)
 	}
 	r := &BackupRequest{
-		Concurrency:        m.Concurrency,
-		AllowPrimary:       m.AllowPrimary,
-		IncrementalFromPos: m.IncrementalFromPos,
-		UpgradeSafe:        m.UpgradeSafe,
+		Concurrency:         m.Concurrency,
+		AllowPrimary:        m.AllowPrimary,
+		IncrementalFromPos:  m.IncrementalFromPos,
+		UpgradeSafe:         m.UpgradeSafe,
+		S3BackupStorageRoot: m.S3BackupStorageRoot,
 	}
 	if rhs := m.BackupEngine; rhs != nil {
 		tmpVal := *rhs
@@ -1842,10 +1843,11 @@ func (m *RestoreFromBackupRequest) CloneVT() *RestoreFromBackupRequest {
 		return (*RestoreFromBackupRequest)(nil)
 	}
 	r := &RestoreFromBackupRequest{
-		BackupTime:         m.BackupTime.CloneVT(),
-		RestoreToPos:       m.RestoreToPos,
-		DryRun:             m.DryRun,
-		RestoreToTimestamp: m.RestoreToTimestamp.CloneVT(),
+		BackupTime:          m.BackupTime.CloneVT(),
+		RestoreToPos:        m.RestoreToPos,
+		DryRun:              m.DryRun,
+		RestoreToTimestamp:  m.RestoreToTimestamp.CloneVT(),
+		S3BackupStorageRoot: m.S3BackupStorageRoot,
 	}
 	if rhs := m.AllowedBackupEngines; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
@@ -6446,6 +6448,13 @@ func (m *BackupRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.S3BackupStorageRoot) > 0 {
+		i -= len(m.S3BackupStorageRoot)
+		copy(dAtA[i:], m.S3BackupStorageRoot)
+		i = encodeVarint(dAtA, i, uint64(len(m.S3BackupStorageRoot)))
+		i--
+		dAtA[i] = 0x32
+	}
 	if m.BackupEngine != nil {
 		i -= len(*m.BackupEngine)
 		copy(dAtA[i:], *m.BackupEngine)
@@ -6560,6 +6569,13 @@ func (m *RestoreFromBackupRequest) MarshalToSizedBufferVT(dAtA []byte) (int, err
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.S3BackupStorageRoot) > 0 {
+		i -= len(m.S3BackupStorageRoot)
+		copy(dAtA[i:], m.S3BackupStorageRoot)
+		i = encodeVarint(dAtA, i, uint64(len(m.S3BackupStorageRoot)))
+		i--
+		dAtA[i] = 0x32
 	}
 	if len(m.AllowedBackupEngines) > 0 {
 		for iNdEx := len(m.AllowedBackupEngines) - 1; iNdEx >= 0; iNdEx-- {
@@ -9468,6 +9484,10 @@ func (m *BackupRequest) SizeVT() (n int) {
 		l = len(*m.BackupEngine)
 		n += 1 + l + sov(uint64(l))
 	}
+	l = len(m.S3BackupStorageRoot)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -9512,6 +9532,10 @@ func (m *RestoreFromBackupRequest) SizeVT() (n int) {
 			l = len(s)
 			n += 1 + l + sov(uint64(l))
 		}
+	}
+	l = len(m.S3BackupStorageRoot)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -18638,6 +18662,38 @@ func (m *BackupRequest) UnmarshalVT(dAtA []byte) error {
 			s := string(dAtA[iNdEx:postIndex])
 			m.BackupEngine = &s
 			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field S3BackupStorageRoot", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.S3BackupStorageRoot = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -18931,6 +18987,38 @@ func (m *RestoreFromBackupRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.AllowedBackupEngines = append(m.AllowedBackupEngines, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field S3BackupStorageRoot", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.S3BackupStorageRoot = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

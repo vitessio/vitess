@@ -27,8 +27,9 @@ import (
 // while keeping policies (metric names and labels, logging destination, etc.)
 // in the control of in-tree components and Vitess users.
 type Params struct {
-	Logger logutil.Logger
-	Stats  backupstats.Stats
+	Logger              logutil.Logger
+	Stats               backupstats.Stats
+	S3BackupStorageRoot string
 }
 
 // NoParams gives BackupStorage components way to log and generate stats

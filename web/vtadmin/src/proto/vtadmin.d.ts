@@ -27112,6 +27112,9 @@ export namespace tabletmanagerdata {
 
         /** BackupRequest backup_engine */
         backup_engine?: (string|null);
+
+        /** BackupRequest s3_backup_storage_root */
+        s3_backup_storage_root?: (string|null);
     }
 
     /** Represents a BackupRequest. */
@@ -27137,6 +27140,9 @@ export namespace tabletmanagerdata {
 
         /** BackupRequest backup_engine. */
         public backup_engine?: (string|null);
+
+        /** BackupRequest s3_backup_storage_root. */
+        public s3_backup_storage_root: string;
 
         /** BackupRequest _backup_engine. */
         public _backup_engine?: "backup_engine";
@@ -27333,6 +27339,9 @@ export namespace tabletmanagerdata {
 
         /** RestoreFromBackupRequest allowed_backup_engines */
         allowed_backup_engines?: (string[]|null);
+
+        /** RestoreFromBackupRequest s3_backup_storage_root */
+        s3_backup_storage_root?: (string|null);
     }
 
     /** Represents a RestoreFromBackupRequest. */
@@ -27358,6 +27367,9 @@ export namespace tabletmanagerdata {
 
         /** RestoreFromBackupRequest allowed_backup_engines. */
         public allowed_backup_engines: string[];
+
+        /** RestoreFromBackupRequest s3_backup_storage_root. */
+        public s3_backup_storage_root: string;
 
         /**
          * Creates a new RestoreFromBackupRequest instance using the specified properties.

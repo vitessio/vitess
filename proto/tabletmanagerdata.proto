@@ -502,6 +502,9 @@ message BackupRequest {
   bool upgrade_safe = 4;
   // BackupEngine specifies if we want to use a particular backup engine for this backup request
   optional string backup_engine = 5;
+  // S3BackupStorageRoot overrides the --s3_backup_storage_root flag for this specific backup.
+  // If not specified, the flag value will be used.
+  string s3_backup_storage_root = 6;
 }
 
 message BackupResponse {
@@ -521,6 +524,9 @@ message RestoreFromBackupRequest {
   vttime.Time restore_to_timestamp = 4;
   // AllowedBackupEngines, if present will filter out any backups taken with engines not included in the list
   repeated string allowed_backup_engines = 5;
+  // S3BackupStorageRoot overrides the --s3_backup_storage_root flag for this specific restore operation.
+  // If not specified, the flag value will be used.
+  string s3_backup_storage_root = 6;
 }
 
 message RestoreFromBackupResponse {

@@ -170,6 +170,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 		UpgradeSafe:          req.UpgradeSafe,
 		MysqlShutdownTimeout: mysqlShutdownTimeout,
 		BackupEngine:         backupEngine,
+		S3BackupStorageRoot:  req.S3BackupStorageRoot,
 	}
 
 	returnErr := mysqlctl.Backup(ctx, backupParams)

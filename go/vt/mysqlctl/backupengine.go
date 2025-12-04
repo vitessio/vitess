@@ -91,6 +91,8 @@ type BackupParams struct {
 	MysqlShutdownTimeout time.Duration
 	// BackupEngine allows us to override which backup engine should be used for a request
 	BackupEngine string
+	// S3BackupStorageRoot overrides the --s3_backup_storage_root flag for this backup operation
+	S3BackupStorageRoot string
 }
 
 func (b *BackupParams) Copy() BackupParams {
@@ -109,6 +111,7 @@ func (b *BackupParams) Copy() BackupParams {
 		Stats:                b.Stats,
 		UpgradeSafe:          b.UpgradeSafe,
 		MysqlShutdownTimeout: b.MysqlShutdownTimeout,
+		S3BackupStorageRoot:  b.S3BackupStorageRoot,
 	}
 }
 
@@ -149,6 +152,8 @@ type RestoreParams struct {
 	MysqlShutdownTimeout time.Duration
 	// AllowedBackupEngines if present will filter out any backups taken with engines not included in the list
 	AllowedBackupEngines []string
+	// S3BackupStorageRoot overrides the --s3_backup_storage_root flag for this restore operation
+	S3BackupStorageRoot string
 }
 
 func (p *RestoreParams) Copy() RestoreParams {
@@ -168,6 +173,7 @@ func (p *RestoreParams) Copy() RestoreParams {
 		DryRun:               p.DryRun,
 		Stats:                p.Stats,
 		MysqlShutdownTimeout: p.MysqlShutdownTimeout,
+		S3BackupStorageRoot:  p.S3BackupStorageRoot,
 	}
 }
 

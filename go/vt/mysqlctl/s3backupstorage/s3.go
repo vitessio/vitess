@@ -132,6 +132,15 @@ type S3BackupHandle struct {
 	waitGroup sync.WaitGroup
 }
 
+// objName returns the S3 object name for the given parts, using the root prefix from params if available.
+func (bh *S3BackupHandle) objName(parts ...string) *string {
+	rootPrefix := root
+	if bh.bs.params.S3BackupStorageRoot != "" {
+		rootPrefix = bh.bs.params.S3BackupStorageRoot
+	}
+	return objNameWithRoot(rootPrefix, parts...)
+}
+
 // Directory is part of the backupstorage.BackupHandle interface.
 func (bh *S3BackupHandle) Directory() string {
 	return bh.dir
@@ -179,7 +188,7 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 		uploader := s3manager.NewUploaderWithClient(bh.client, func(u *s3manager.Uploader) {
 			u.PartSize = partSizeBytes
 		})
-		object := objName(bh.dir, bh.name, filename)
+		object := bh.objName(bh.dir, bh.name, filename)
 		sendStats := bh.bs.params.Stats.Scope(stats.Operation("AWS:Request:Send"))
 		// Using UploadWithContext breaks uploading to Minio and Ceph https://github.com/vitessio/vitess/issues/14188
 		_, err := uploader.Upload(&s3manager.UploadInput{
@@ -252,7 +261,7 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 	if !bh.readOnly {
 		return nil, fmt.Errorf("ReadFile cannot be called on read-write backup")
 	}
-	object := objName(bh.dir, bh.name, filename)
+	object := bh.objName(bh.dir, bh.name, filename)
 	sendStats := bh.bs.params.Stats.Scope(stats.Operation("AWS:Request:Send"))
 	out, err := bh.client.GetObjectWithContext(ctx, &s3.GetObjectInput{
 		Bucket:               &bucket,
@@ -322,6 +331,15 @@ type S3BackupStorage struct {
 	transport *http.Transport
 }
 
+// objName returns the S3 object name for the given parts, using the root prefix from params if available.
+func (bs *S3BackupStorage) objName(parts ...string) *string {
+	rootPrefix := root
+	if bs.params.S3BackupStorageRoot != "" {
+		rootPrefix = bs.params.S3BackupStorageRoot
+	}
+	return objNameWithRoot(rootPrefix, parts...)
+}
+
 func newS3BackupStorage() *S3BackupStorage {
 	// This initialises a new transport based off http.DefaultTransport the first time and returns the same
 	// transport on subsequent calls so connections can be reused as part of the same transport.
@@ -342,9 +360,9 @@ func (bs *S3BackupStorage) ListBackups(ctx context.Context, dir string) ([]backu
 
 	var searchPrefix *string
 	if dir == "/" {
-		searchPrefix = objName("")
+		searchPrefix = bs.objName("")
 	} else {
-		searchPrefix = objName(dir, "")
+		searchPrefix = bs.objName(dir, "")
 	}
 	log.Infof("objName: %v", *searchPrefix)
 
@@ -416,7 +434,7 @@ func (bs *S3BackupStorage) RemoveBackup(ctx context.Context, dir, name string) e
 
 	query := &s3.ListObjectsV2Input{
 		Bucket: &bucket,
-		Prefix: objName(dir, name),
+		Prefix: bs.objName(dir, name),
 	}
 
 	for {
@@ -531,9 +549,13 @@ func (bs *S3BackupStorage) client() (*s3.S3, error) {
 }
 
 func objName(parts ...string) *string {
+	return objNameWithRoot(root, parts...)
+}
+
+func objNameWithRoot(rootPrefix string, parts ...string) *string {
 	res := ""
-	if root != "" {
-		res += root + delimiter
+	if rootPrefix != "" {
+		res += rootPrefix + delimiter
 	}
 	res += strings.Join(parts, delimiter)
 	return &res

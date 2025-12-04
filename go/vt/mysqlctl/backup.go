@@ -144,8 +144,9 @@ func Backup(ctx context.Context, params BackupParams) error {
 		),
 	)
 	bs = bs.WithParams(backupstorage.Params{
-		Logger: params.Logger,
-		Stats:  bsStats,
+		Logger:              params.Logger,
+		Stats:               bsStats,
+		S3BackupStorageRoot: params.S3BackupStorageRoot,
 	})
 
 	bh, err := bs.StartBackup(ctx, backupDir, name)
@@ -388,8 +389,9 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		),
 	)
 	bs = bs.WithParams(backupstorage.Params{
-		Logger: params.Logger,
-		Stats:  bsStats,
+		Logger:              params.Logger,
+		Stats:               bsStats,
+		S3BackupStorageRoot: params.S3BackupStorageRoot,
 	})
 
 	// Backups are stored in a directory structure that starts with

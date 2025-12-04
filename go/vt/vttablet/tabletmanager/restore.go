@@ -236,6 +236,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		Stats:                backupstats.RestoreStats(),
 		MysqlShutdownTimeout: mysqlShutdownTimeout,
 		AllowedBackupEngines: request.AllowedBackupEngines,
+		S3BackupStorageRoot:  request.S3BackupStorageRoot,
 	}
 	restoreToTimestamp := protoutil.TimeFromProto(request.RestoreToTimestamp).UTC()
 	if request.RestoreToPos != "" && !restoreToTimestamp.IsZero() {
