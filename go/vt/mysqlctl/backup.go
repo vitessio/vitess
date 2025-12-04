@@ -554,7 +554,7 @@ func ExecuteBackupInitSQL(ctx context.Context, params *BackupParams) error {
 			return vterrors.Wrapf(err, "failed to execute init SQL queries %q and instructed to fail backup in this case", queriesCSV)
 		}
 		select {
-		case <-ctx.Done():
+		case <-initCtx.Done():
 			params.Logger.Infof("Canceling init SQL work due to hitting the configured timeout of %v or the the backup itself having been canceled", initTimeout)
 		default:
 			params.Logger.Infof("Failed to execute init SQL queries %q: %v", queriesCSV, err)
