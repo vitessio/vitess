@@ -903,9 +903,15 @@ func actionInfo(ctx context.Context, target *querypb.Target, session *econtext.S
 		info.alias = shardSession.TabletAlias
 		info.rowsAffected = shardSession.RowsAffected
 	}
-	// Override alias if tablet-specific routing is set
+	// Set tablet alias for routing if tablet-specific targeting is active
 	if targetAlias := session.GetTargetTabletAlias(); targetAlias != nil {
-		info.alias = targetAlias
+		if info.alias == nil {
+			info.alias = targetAlias
+		} else if !proto.Equal(info.alias, targetAlias) {
+			return nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+				"cannot change tablet target mid-transaction: session has %v, target is %v",
+				topoproto.TabletAliasString(info.alias), topoproto.TabletAliasString(targetAlias))
+		}
 	}
 	return info, shardSession, nil
 }

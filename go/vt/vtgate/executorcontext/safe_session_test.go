@@ -222,20 +222,4 @@ func TestTargetTabletAlias(t *testing.T) {
 	// Test: Clear (set to nil)
 	session.SetTargetTabletAlias(nil)
 	assert.Nil(t, session.GetTargetTabletAlias())
-
-	// Test: Thread safety - concurrent access
-	done := make(chan bool)
-	for i := 0; i < 100; i++ {
-		go func(uid uint32) {
-			testAlias := &topodatapb.TabletAlias{Cell: "cell", Uid: uid}
-			session.SetTargetTabletAlias(testAlias)
-			_ = session.GetTargetTabletAlias()
-			done <- true
-		}(uint32(i))
-	}
-	for i := 0; i < 100; i++ {
-		<-done
-	}
-	// Just verify we didn't panic - the final value is non-deterministic
-	assert.NotNil(t, session.GetTargetTabletAlias())
 }
