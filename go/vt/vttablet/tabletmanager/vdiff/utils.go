@@ -20,16 +20,14 @@ import (
 	"context"
 	"fmt"
 
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
-
-	"vitess.io/vitess/go/sqltypes"
-
-	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 // newMergeSorter creates an engine.MergeSort based on the shard streamers and pk columns
@@ -95,4 +93,9 @@ func copyNonKeyRangeExpressions(where *sqlparser.Where) *sqlparser.Where {
 		newWhere.Expr = sqlparser.AndExpressions(newWhere.Expr, expr)
 	}
 	return newWhere
+}
+
+func isReadOnlyError(err error) bool {
+	sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
+	return isSQLErr && sqlErr.Num == sqlerror.EROptionPreventsStatement
 }
