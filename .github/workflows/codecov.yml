@@ -16,7 +16,7 @@ permissions: read-all
 jobs:
   test:
     name: Code Coverage
-    runs-on: ubuntu-24.04
+    runs-on: oracle-vm-8cpu-32gb-x86-64
 
     steps:
     - name: Check out code
