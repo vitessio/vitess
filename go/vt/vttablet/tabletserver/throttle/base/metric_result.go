@@ -18,7 +18,6 @@ package base
 
 import (
 	"errors"
-	"net"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -56,23 +55,20 @@ var ErrAppDenied = errors.New("app denied")
 // ErrInvalidCheckType is an internal error indicating an unknown check type
 var ErrInvalidCheckType = errors.New("unknown throttler check type")
 
-// IsDialTCPError sees if the given error indicates a TCP issue
-func IsDialTCPError(err error) bool {
+// IsTabletRPCError sees if the given error indicates an issue performing an RPC call
+// to the tabletmanager service of a tablet. This is used to parse errors returned by
+// the CheckThrottler RPC.
+func IsTabletRPCError(err error) bool {
 	if err == nil {
 		return false
 	}
 
-	// match vterror/vtrpc-style errors (v23+).
-	// v22 (and below) tablets will return vtrpcpb.Code_UNKNOWN
+	// the tmclient returns vterrors-style errors.
 	switch vterrors.Code(err) {
-	case vtrpcpb.Code_UNAVAILABLE, vtrpcpb.Code_DEADLINE_EXCEEDED:
+	case vtrpcpb.Code_UNAVAILABLE, vtrpcpb.Code_DEADLINE_EXCEEDED, vtrpcpb.Code_CANCELED, vtrpcpb.Code_UNKNOWN:
 		return true
 	}
 
-	switch err := err.(type) {
-	case *net.OpError:
-		return err.Op == "dial" && err.Net == "tcp"
-	}
 	return false
 }
 

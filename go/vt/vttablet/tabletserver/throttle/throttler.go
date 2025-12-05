@@ -331,7 +331,7 @@ func (throttler *Throttler) initConfig() {
 
 	throttler.configSettings = &config.ConfigurationSettings{
 		MySQLStore: config.MySQLConfigurationSettings{
-			IgnoreDialTCPErrors: true,
+			IgnoreTabletRPCErrors: true,
 		},
 	}
 }
@@ -905,7 +905,7 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, probe 
 		req := &tabletmanagerdatapb.CheckThrottlerRequest{} // We leave AppName empty; it will default to VitessName anyway, and we can save some proto space
 		resp, err := tmClient.CheckThrottler(ctx, probe.Tablet, req)
 		if err != nil {
-			err = vterrors.Errorf(vterrors.Code(err), "gRPC error accessing tablet %v. Err=%s", probe.Alias, err.Error())
+			err = vterrors.Wrapf(err, "gRPC error accessing tablet %v. Err=%s", probe.Alias, err.Error())
 			return metricsWithError(err)
 		}
 		throttleMetric.Value = resp.Value
@@ -1167,9 +1167,9 @@ func (throttler *Throttler) aggregateMetrics() error {
 	aggregateTabletsMetrics := func(scope base.Scope, metricName base.MetricName, tabletResultsMap base.TabletResultMap) {
 		ignoreHostsCount := throttler.inventory.IgnoreHostsCount
 		ignoreHostsThreshold := throttler.inventory.IgnoreHostsThreshold
-		ignoreDialTCPErrors := throttler.configSettings.MySQLStore.IgnoreDialTCPErrors
+		ignoreTabletRPCErrors := (throttler.configSettings.MySQLStore.IgnoreTabletRPCErrors || throttler.configSettings.MySQLStore.IgnoreDialTCPErrors)
 
-		aggregatedMetric := base.AggregateTabletMetricResults(metricName, tabletResultsMap, ignoreHostsCount, ignoreDialTCPErrors, ignoreHostsThreshold)
+		aggregatedMetric := base.AggregateTabletMetricResults(metricName, tabletResultsMap, ignoreHostsCount, ignoreTabletRPCErrors, ignoreHostsThreshold)
 		aggregatedMetricName := metricName.AggregatedName(scope)
 		throttler.aggregatedMetrics.Set(aggregatedMetricName, aggregatedMetric, cache.DefaultExpiration)
 		if metricName == metricNameUsedAsDefault {
