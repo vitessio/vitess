@@ -121,11 +121,34 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 
 	targetKeyspace := td.wd.ct.vde.thisTablet.Keyspace
 	lockName := fmt.Sprintf("%s/%s", targetKeyspace, td.wd.ct.workflow)
-	log.Infof("Locking workflow %s", lockName)
-	ctx, unlock, lockErr := td.wd.ct.ts.LockName(ctx, lockName, "vdiff")
-	if lockErr != nil {
-		log.Errorf("Locking workfkow %s failed: %v", lockName, lockErr)
-		return lockErr
+	log.Infof("Locking workflow %s for VDiff %s", lockName, td.wd.ct.uuid)
+	// We attempt to get the lock until we can, using an exponential backoff.
+	var (
+		vctx          context.Context
+		unlock        func(*error)
+		lockErr       error
+		retryDelay    = 100 * time.Millisecond
+		maxRetryDelay = topo.LockTimeout
+		backoffFactor = 1.5
+	)
+	for {
+		vctx, unlock, lockErr = td.wd.ct.ts.LockName(ctx, lockName, "vdiff")
+		if lockErr == nil {
+			break
+		}
+		log.Warningf("Locking workfkow %s for VDiff %s initialization (stream ID: %d) failed, will wait %v before retrying: %v",
+			lockName, td.wd.ct.uuid, td.wd.ct.id, retryDelay, lockErr)
+		select {
+		case <-ctx.Done():
+			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "engine is shutting down")
+		case <-td.wd.ct.done:
+			return ErrVDiffStoppedByUser
+		case <-time.After(retryDelay):
+			if retryDelay < maxRetryDelay {
+				retryDelay = min(time.Duration(float64(retryDelay)*backoffFactor), maxRetryDelay)
+			}
+			continue
+		}
 	}
 
 	var err error
@@ -136,7 +159,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 		}
 	}()
 
-	if err := td.stopTargetVReplicationStreams(ctx, dbClient); err != nil {
+	if err := td.stopTargetVReplicationStreams(vctx, dbClient); err != nil {
 		return err
 	}
 	defer func() {
@@ -151,18 +174,18 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 		}
 	}()
 
-	td.shardStreamsCtx, td.shardStreamsCancel = context.WithCancel(ctx)
+	td.shardStreamsCtx, td.shardStreamsCancel = context.WithCancel(vctx)
 
-	if err := td.selectTablets(ctx); err != nil {
+	if err := td.selectTablets(vctx); err != nil {
 		return err
 	}
-	if err := td.syncSourceStreams(ctx); err != nil {
+	if err := td.syncSourceStreams(vctx); err != nil {
 		return err
 	}
 	if err := td.startSourceDataStreams(td.shardStreamsCtx); err != nil {
 		return err
 	}
-	if err := td.syncTargetStreams(ctx); err != nil {
+	if err := td.syncTargetStreams(vctx); err != nil {
 		return err
 	}
 	if err := td.startTargetDataStream(td.shardStreamsCtx); err != nil {
