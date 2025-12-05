@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path"
 	"strings"
 	"sync"
@@ -29,8 +30,6 @@ import (
 	"time"
 
 	"golang.org/x/sync/errgroup"
-
-	"vitess.io/vitess/go/gitutil"
 )
 
 type mysqlVersion string
@@ -228,6 +227,27 @@ type vitessTesterTest struct {
 	Path      string
 }
 
+// getGitRefSHA fetches the HEAD SHA of a git repo + branch using the "git" command.
+func getGitRefSHA(ctx context.Context, url, branchOrTag string) (string, error) {
+	var stdout bytes.Buffer
+	cmd := exec.CommandContext(ctx, "git", "ls-remote", url, branchOrTag)
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = &stdout
+	if err := cmd.Run(); err != nil {
+		return "", err
+	}
+
+	// git ls-remote returns two text columns: a commit SHA and a reference.
+	// Example:
+	//    $ git ls-remote https://github.com/vitessio/go-junit-report HEAD
+	//    99fa7f0daf16db969f54a49139a14471e633e6e8	HEAD
+	fields := strings.Fields(stdout.String())
+	if len(fields) != 2 {
+		return "", fmt.Errorf("cannot parse output of 'git ls-remote' for %q", url)
+	}
+	return fields[0], nil
+}
+
 // getGitMetas concurrently fetches Git metadata for workflow dependencies.
 func getGitMetas(ctx context.Context) (*GitMetas, error) {
 	var metasMu sync.Mutex
@@ -235,25 +255,27 @@ func getGitMetas(ctx context.Context) (*GitMetas, error) {
 
 	eg, egCtx := errgroup.WithContext(ctx)
 
-	// vitessio/go-junit-report (uses HEAD)
+	// vitessio/go-junit-report
 	eg.Go(func() error {
-		sha, err := gitutil.GetGitHeadSHAString(egCtx, "https://github.com/vitessio/go-junit-report")
+		sha, err := getGitRefSHA(egCtx, "https://github.com/vitessio/go-junit-report", "HEAD")
 		if err != nil {
-		    return err
-	    }
+			return err
+		}
 		metasMu.Lock()
 		defer metasMu.Unlock()
 		metas.GoJunitReport = &GitMeta{SHA: sha, Comment: "HEAD"}
+		return err
 	})
 
 	// goimports tool
 	eg.Go(func() error {
-		sha, err := gitutil.GetGitTagSHAString(egCtx, "https://go.googlesource.com/tools", goimportsTag)
-		if err == nil {
-			metasMu.Lock()
-			metas.Goimports = &GitMeta{SHA: sha, Comment: goimportsTag}
-			metasMu.Unlock()
+		sha, err := getGitRefSHA(egCtx, "https://go.googlesource.com/tools", goimportsTag)
+		if err != nil {
+			return err
 		}
+		metasMu.Lock()
+		defer metasMu.Unlock()
+		metas.Goimports = &GitMeta{SHA: sha, Comment: goimportsTag}
 		return err
 	})
 
