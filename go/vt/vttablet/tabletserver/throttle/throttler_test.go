@@ -843,38 +843,38 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 func TestIsTabletRPCError(t *testing.T) {
 	c := grpctmclient.NewClient()
 
-	// simulate an RPC cancellation using .Ping().
+	// simulate an RPC cancellation using .CheckThrottler().
 	t.Run("CANCELLED", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
-		cancel() // cancel
+		cancel() // cancel before check
 
-		err := c.Ping(ctx, &topodatapb.Tablet{
+		_, err := c.CheckThrottler(ctx, &topodatapb.Tablet{
 			Hostname: "this.should.fail",
 			PortMap: map[string]int32{
 				"grpc": 12345,
 			},
-		})
+		}, &tabletmanagerdatapb.CheckThrottlerRequest{})
 		require.Equal(t, vtrpcpb.Code_CANCELED, vterrors.Code(err))
 		require.True(t, base.IsTabletRPCError(err))
 	})
 
-	// simulate an RPC failure (dial error) using .Ping() to a host we cannot resolve.
+	// simulate an RPC failure (dial error) using .CheckThrottler() to a host we cannot resolve.
 	t.Run("DEADLINE_EXCEEDED", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 		defer cancel()
 
-		err := c.Ping(ctx, &topodatapb.Tablet{
+		_, err := c.CheckThrottler(ctx, &topodatapb.Tablet{
 			Hostname: "this.should.fail",
 			PortMap: map[string]int32{
 				"grpc": 12345,
 			},
-		})
+		}, &tabletmanagerdatapb.CheckThrottlerRequest{})
 		require.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, vterrors.Code(err))
 		require.True(t, base.IsTabletRPCError(err))
 		require.ErrorContains(t, err, "dial tcp: lookup this.should.fail: no such host")
 	})
 
-	// simulate an RPC failure (not found).
+	// simulate hypothetical NOT_FOUND RPC failure.
 	t.Run("NOT_FOUND", func(t *testing.T) {
 		nonDialErr := vterrors.New(vtrpcpb.Code_NOT_FOUND, "rpc error: code = NotFound desc = method not found")
 		require.False(t, base.IsTabletRPCError(nonDialErr))
