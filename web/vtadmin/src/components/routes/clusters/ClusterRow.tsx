@@ -7,6 +7,8 @@ import { useValidate } from '../../../hooks/api';
 import { Label } from '../../inputs/Label';
 import Toggle from '../../toggle/Toggle';
 import ValidationResults from '../../ValidationResults';
+import { formatDashboardUrl } from '../../../util/dashboards';
+import { getVTClusterMonitoringTemplate } from '../../../util/env';
 
 interface Props {
     cluster: pb.Cluster;
@@ -86,6 +88,24 @@ const ClusterRow: React.FC<Props> = ({ cluster }) => {
                     Validate
                 </button>
             </DataCell>
+            {getVTClusterMonitoringTemplate() && (
+                <DataCell>
+                    <a
+                        href={
+                            formatDashboardUrl(getVTClusterMonitoringTemplate(), {
+                                cluster: cluster.name,
+                                cluster_id: cluster.id,
+                                id: cluster.id,
+                            }) || '#'
+                        }
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn btn-secondary btn-sm"
+                    >
+                        {cluster.name as string}-metrics
+                    </a>
+                </DataCell>
+            )}
         </tr>
     );
 };
