@@ -57,19 +57,15 @@ var ErrInvalidCheckType = errors.New("unknown throttler check type")
 
 // IsTabletRPCError sees if the given error indicates an issue performing an RPC call
 // to the tabletmanager service of a tablet. This is used to parse errors returned by
-// the CheckThrottler RPC.
+// the CheckThrottler RPC of grpctmclient.
 func IsTabletRPCError(err error) bool {
 	if err == nil {
 		return false
 	}
 
-	// the tmclient returns vterrors-style errors.
-	switch vterrors.Code(err) {
-	case vtrpcpb.Code_UNAVAILABLE, vtrpcpb.Code_DEADLINE_EXCEEDED, vtrpcpb.Code_CANCELED, vtrpcpb.Code_UNKNOWN:
-		return true
-	}
-
-	return false
+	// The tmclient returns vterrors-style errors. Any
+	// error code other than "OK" indicates a problem.
+	return vterrors.Code(err) != vtrpcpb.Code_OK
 }
 
 type noHostsMetricResult struct{}

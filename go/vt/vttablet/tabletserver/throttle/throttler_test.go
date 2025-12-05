@@ -877,7 +877,7 @@ func TestIsTabletRPCError(t *testing.T) {
 	// simulate hypothetical NOT_FOUND RPC failure.
 	t.Run("NOT_FOUND", func(t *testing.T) {
 		nonDialErr := vterrors.New(vtrpcpb.Code_NOT_FOUND, "rpc error: code = NotFound desc = method not found")
-		require.False(t, base.IsTabletRPCError(nonDialErr))
+		require.True(t, base.IsTabletRPCError(nonDialErr))
 	})
 }
 
