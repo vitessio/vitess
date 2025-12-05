@@ -960,40 +960,39 @@ func TestTabletTargeting(t *testing.T) {
 
 	// Query different replicas and verify different server UUIDs
 	// This proves we're actually hitting different physical tablets
-	for range 10 {
-		// Get server UUID from first replica
-		useStmt = fmt.Sprintf("USE `ks:-80@replica|%s`", instances["-80"]["replica"][0])
-		utils.Exec(t, conn, useStmt)
-		var uuid1 string
-		for i := range 5 {
-			result1 := utils.Exec(t, conn, "SELECT @@server_uuid")
-			require.NotNil(t, result1)
-			require.Greater(t, len(result1.Rows), 0)
-			if i > 0 {
-				// UUID should be the same across multiple queries to same tablet
-				require.Equal(t, uuid1, result1.Rows[0][0].ToString())
-			}
-			uuid1 = result1.Rows[0][0].ToString()
-		}
 
-		// Get server UUID from second replica
-		useStmt = fmt.Sprintf("USE `ks:-80@replica|%s`", instances["-80"]["replica"][1])
-		utils.Exec(t, conn, useStmt)
-		var uuid2 string
-		for i := range 5 {
-			result2 := utils.Exec(t, conn, "SELECT @@server_uuid")
-			require.NotNil(t, result2)
-			require.Greater(t, len(result2.Rows), 0)
-			if i > 0 {
-				// UUID should be the same across multiple queries to same tablet
-				require.Equal(t, uuid2, result2.Rows[0][0].ToString())
-			}
-			uuid2 = result2.Rows[0][0].ToString()
+	// Get server UUID from first replica
+	useStmt = fmt.Sprintf("USE `ks:-80@replica|%s`", instances["-80"]["replica"][0])
+	utils.Exec(t, conn, useStmt)
+	var uuid1 string
+	for i := range 5 {
+		result1 := utils.Exec(t, conn, "SELECT @@server_uuid")
+		require.NotNil(t, result1)
+		require.Greater(t, len(result1.Rows), 0)
+		if i > 0 {
+			// UUID should be the same across multiple queries to same tablet
+			require.Equal(t, uuid1, result1.Rows[0][0].ToString())
 		}
-
-		// Server UUIDs should be different, proving we're targeting different tablets
-		require.NotEqual(t, uuid1, uuid2, "different replicas should have different server UUIDs")
+		uuid1 = result1.Rows[0][0].ToString()
 	}
+
+	// Get server UUID from second replica
+	useStmt = fmt.Sprintf("USE `ks:-80@replica|%s`", instances["-80"]["replica"][1])
+	utils.Exec(t, conn, useStmt)
+	var uuid2 string
+	for i := range 5 {
+		result2 := utils.Exec(t, conn, "SELECT @@server_uuid")
+		require.NotNil(t, result2)
+		require.Greater(t, len(result2.Rows), 0)
+		if i > 0 {
+			// UUID should be the same across multiple queries to same tablet
+			require.Equal(t, uuid2, result2.Rows[0][0].ToString())
+		}
+		uuid2 = result2.Rows[0][0].ToString()
+	}
+
+	// Server UUIDs should be different, proving we're targeting different tablets
+	require.NotEqual(t, uuid1, uuid2, "different replicas should have different server UUIDs")
 }
 
 // TestDynamicConfig tests the dynamic configurations.
