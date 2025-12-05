@@ -141,6 +141,10 @@ func (ct *controller) run(ctx context.Context) {
 		}
 		log.Infof("%s vdiff %s", action, ct.uuid)
 		if err := ct.start(ctx, dbClient); err != nil {
+			if isReadOnlyError(err) {
+				log.Warningf("VDiff %s stopped due to tablet becoming read-only, will retry on new primary", ct.uuid)
+				return
+			}
 			log.Errorf("Encountered an error for vdiff %s: %s", ct.uuid, err)
 			if err := ct.saveErrorState(ctx, err); err != nil {
 				log.Errorf("Unable to save error state for vdiff %s; giving up because %s", ct.uuid, err.Error())
