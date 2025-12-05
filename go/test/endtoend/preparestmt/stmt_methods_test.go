@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
@@ -564,13 +565,25 @@ func validateJoinSpecializedPlan(t *testing.T, p map[string]any) {
 
 func validateBaselineErrSpecializedPlan(t *testing.T, p map[string]any) {
 	t.Helper()
+
+	vtgateVer, err := cluster.GetMajorVersion("vtgate")
+	require.NoError(t, err)
+
+	// v24+ uses the following error message due to the work in:
+	// https://github.com/vitessio/vitess/pull/18903
+	expectedErr := "VT12001: unsupported: window functions are only supported for single-shard queries"
+	if vtgateVer < 24 {
+		// v23 and earlier uses the old error which reflected the limitation before that work.
+		expectedErr = "VT12001: unsupported: OVER CLAUSE with sharded keyspace"
+	}
+
 	plan, exist := p["Instructions"]
 	require.True(t, exist, "plan Instructions not found")
 
 	pm, ok := plan.(map[string]any)
 	require.True(t, ok, "plan is not of type map[string]any")
 	require.EqualValues(t, "PlanSwitcher", pm["OperatorType"])
-	require.EqualValues(t, "VT12001: unsupported: OVER CLAUSE with sharded keyspace", pm["BaselineErr"])
+	require.EqualValues(t, expectedErr, pm["BaselineErr"])
 
 	pd, err := engine.PrimitiveDescriptionFromMap(plan.(map[string]any))
 	require.NoError(t, err)
