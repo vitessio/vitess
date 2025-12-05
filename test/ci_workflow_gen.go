@@ -238,12 +238,12 @@ func getGitMetas(ctx context.Context) (*GitMetas, error) {
 	// vitessio/go-junit-report (uses HEAD)
 	eg.Go(func() error {
 		sha, err := gitutil.GetGitHeadSHAString(egCtx, "https://github.com/vitessio/go-junit-report")
-		if err == nil {
-			metasMu.Lock()
-			metas.GoJunitReport = &GitMeta{SHA: sha, Comment: "HEAD"}
-			metasMu.Unlock()
-		}
-		return err
+		if err != nil {
+		    return err
+	    }
+		metasMu.Lock()
+		defer metasMu.Unlock()
+		metas.GoJunitReport = &GitMeta{SHA: sha, Comment: "HEAD"}
 	})
 
 	// goimports tool
