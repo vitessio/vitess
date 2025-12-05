@@ -871,7 +871,7 @@ func TestIsTabletRPCError(t *testing.T) {
 		}, &tabletmanagerdatapb.CheckThrottlerRequest{})
 		require.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, vterrors.Code(err))
 		require.True(t, base.IsTabletRPCError(err))
-		require.ErrorContains(t, err, "dial tcp: lookup this.should.fail: no such host")
+		require.ErrorContains(t, err, "rpc error: code = DeadlineExceeded desc = latest balancer error: connection error")
 	})
 
 	// simulate hypothetical NOT_FOUND RPC failure.
