@@ -91,3 +91,8 @@ func TestNoOpStrategy_Evaluate(t *testing.T) {
 		})
 	}
 }
+
+func TestNoOpStrategy_GetStrategyName(t *testing.T) {
+	strategy := &NoOpStrategy{}
+	require.Equal(t, string(ThrottlingStrategyUnknown), strategy.GetStrategyName())
+}
