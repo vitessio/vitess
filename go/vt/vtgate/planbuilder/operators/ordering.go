@@ -81,8 +81,7 @@ func (o *Ordering) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 }
 
 func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) Operator {
-	var weightStrings []*OrderBy
-
+	weightStrings := make([]*OrderBy, 0, len(o.Order))
 	for _, order := range o.Order {
 		offset := o.Source.AddColumn(ctx, true, false, aeWrap(order.SimplifiedExpr))
 		o.Offset = append(o.Offset, offset)

@@ -816,7 +816,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 	}
 
 	// We use all the candidates with the maximum length of the reparent journal to find the errant GTIDs amongst them.
-	var maxLenPositions []replication.Position
+	maxLenPositions := make([]replication.Position, 0, len(maxLenCandidates))
 	updatedValidCandidates := make(map[string]*RelayLogPositions)
 	for _, candidate := range maxLenCandidates {
 		candidatePositions := validCandidates[candidate]

@@ -1,9 +1,6 @@
-Godeps/_workspace/pkg
-Godeps/_workspace/bin
 _test
 java/*/target
 java/*/bin
-php/vendor
 releases
 /dist/
 /vthook/

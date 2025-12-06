@@ -122,7 +122,7 @@ func transformDMLWithInput(ctx *plancontext.PlanningContext, op *operators.DMLWi
 		return nil, err
 	}
 
-	var dmls []engine.Primitive
+	dmls := make([]engine.Primitive, 0, len(op.DML))
 	for _, dml := range op.DML {
 		del, err := transformToPrimitive(ctx, dml)
 		if err != nil {
@@ -165,7 +165,7 @@ func transformOneUpsert(ctx *plancontext.PlanningContext, source operators.Upser
 }
 
 func transformSequential(ctx *plancontext.PlanningContext, op *operators.Sequential) (engine.Primitive, error) {
-	var prims []engine.Primitive
+	prims := make([]engine.Primitive, 0, len(op.Sources))
 	for _, source := range op.Sources {
 		prim, err := transformToPrimitive(ctx, source)
 		if err != nil {
@@ -175,10 +175,8 @@ func transformSequential(ctx *plancontext.PlanningContext, op *operators.Sequent
 		if ok {
 			ins.PreventAutoCommit = true
 		}
-
 		prims = append(prims, prim)
 	}
-
 	return engine.NewSequential(prims), nil
 }
 
@@ -239,7 +237,7 @@ func transformFkCascade(ctx *plancontext.PlanningContext, fkc *operators.FkCasca
 	}
 
 	// Go over the children and convert them to Primitives too.
-	var children []*engine.FkChild
+	children := make([]*engine.FkChild, 0, len(fkc.Children))
 	for _, child := range fkc.Children {
 		childLP, err := transformToPrimitive(ctx, child.Op)
 		if err != nil {
@@ -307,7 +305,7 @@ func transformFkVerify(ctx *plancontext.PlanningContext, fkv *operators.FkVerify
 	ctx.SemTable = nil
 
 	// Go over the children and convert them to Primitives too.
-	var verify []*engine.Verify
+	verify := make([]*engine.Verify, 0, len(fkv.Verify))
 	for _, v := range fkv.Verify {
 		lp, err := transformToPrimitive(ctx, v.Op)
 		if err != nil {
@@ -334,9 +332,7 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 		return nil, err
 	}
 
-	var aggregates []*engine.AggregateParams
-	var groupByKeys []*engine.GroupByParams
-
+	aggregates := make([]*engine.AggregateParams, 0, len(op.Aggregations))
 	for _, aggr := range op.Aggregations {
 		switch aggr.OpCode {
 		case opcode.AggregateUnassigned:
@@ -372,6 +368,7 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 		aggregates = append(aggregates, aggrParam)
 	}
 
+	groupByKeys := make([]*engine.GroupByParams, 0, len(op.Grouping))
 	for _, groupBy := range op.Grouping {
 		typ, _ := ctx.TypeForExpr(groupBy.Inner)
 		groupByKeys = append(groupByKeys, &engine.GroupByParams{
@@ -461,8 +458,8 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 		return nil, err
 	}
 
-	var evalengineExprs []evalengine.Expr
-	var columnNames []string
+	evalengineExprs := make([]evalengine.Expr, 0, len(ap))
+	columnNames := make([]string, 0, len(ap))
 	for _, pe := range ap {
 		ee, err := getEvalEngineExpr(ctx, pe)
 		if err != nil {
@@ -892,7 +889,7 @@ func getAllTableNames(op *operators.Route) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	var tableNames []string
+	tableNames := make([]string, 0, len(tableNameMap))
 	for name := range tableNameMap {
 		tableNames = append(tableNames, name)
 	}

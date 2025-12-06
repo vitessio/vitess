@@ -149,7 +149,7 @@ func (rp *ReplicatorPlan) buildFromFields(tableName string, lastpk *sqltypes.Res
 
 // MarshalJSON performs a custom JSON Marshalling.
 func (rp *ReplicatorPlan) MarshalJSON() ([]byte, error) {
-	var targets []string
+	targets := make([]string, 0, len(rp.TargetTables))
 	for k := range rp.TargetTables {
 		targets = append(targets, k)
 	}

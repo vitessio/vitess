@@ -891,7 +891,7 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		values = append(values, "DATETIME('now')")
 	}
 
-	var args []any
+	args := make([]any, 0)
 	for _, instance := range instances {
 		// number of columns minus 2 as last_checked and last_attempted_check
 		// updated with NOW()
@@ -1194,7 +1194,7 @@ func GetDatabaseState() (string, error) {
 		Rows      []sqlutils.RowMap
 	}
 
-	var dbState []tableState
+	dbState := make([]tableState, 0, len(db.TableNames))
 	for _, tableName := range db.TableNames {
 		ts := tableState{
 			TableName: tableName,

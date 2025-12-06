@@ -1304,7 +1304,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 			return nil, err
 		}
 	}
-	var targetShards []string
+	targetShards := make([]string, 0, len(mz.targetShards))
 	for _, shard := range mz.targetShards {
 		targetShards = append(targetShards, shard.ShardName())
 	}

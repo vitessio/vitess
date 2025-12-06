@@ -203,7 +203,7 @@ func (sbc *SandboxConn) GetFinalQueries() ([]string, error) {
 		sbc.queriesMu.Lock()
 		defer sbc.queriesMu.Unlock()
 	}
-	var queries []string
+	queries := make([]string, 0, len(sbc.Queries))
 	for _, q := range sbc.Queries {
 		stmt, err := sbc.parser.Parse(q.Sql)
 		if err != nil {
