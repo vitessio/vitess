@@ -239,13 +239,16 @@ func getGitRefSHA(ctx context.Context, url, branchOrTag string) (string, error) 
 
 	// 'git ls-remote <url> <branchOrTag>' returns two text columns: a commit
 	// SHA and a reference. We expect the stdout to be a single line, which
-	// should always be true (but we still validate).
+	// should always be true but we still validate.
 	// Example:
 	//    $ git ls-remote https://github.com/vitessio/go-junit-report HEAD
 	//    99fa7f0daf16db969f54a49139a14471e633e6e8	HEAD
 	for line := range strings.Lines(stdout.String()) {
 		fields := strings.Fields(line)
-		if len(fields) == 2 {
+		if len(fields) != 2 {
+			continue
+		}
+		if strings.Contains(fields[1], branchOrTag) {
 			return fields[0], nil
 		}
 	}
@@ -268,7 +271,7 @@ func getGitMetas(ctx context.Context) (*GitMetas, error) {
 		metasMu.Lock()
 		defer metasMu.Unlock()
 		metas.GoJunitReport = &GitMeta{SHA: sha, Comment: "HEAD"}
-		return err
+		return nil
 	})
 
 	// goimports tool
@@ -280,7 +283,7 @@ func getGitMetas(ctx context.Context) (*GitMetas, error) {
 		metasMu.Lock()
 		defer metasMu.Unlock()
 		metas.Goimports = &GitMeta{SHA: sha, Comment: goimportsTag}
-		return err
+		return nil
 	})
 
 	return &metas, eg.Wait()
