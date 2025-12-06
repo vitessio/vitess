@@ -3098,6 +3098,25 @@ func shouldCutOverAccordingToBackoff(
 	return false, false
 }
 
+// getInOrderCompletionPendingCount returns a count of migrations that must cut-over in-order, before the
+// provided migration is able to proceed. This count is relevant only if the migration uses the
+// --in-order-completion option.
+func getInOrderCompletionPendingCount(onlineDDL *schema.OnlineDDL, pendingMigrationsUUIDs []string) uint64 {
+	if len(pendingMigrationsUUIDs) == 0 {
+		return 0
+	}
+	var pendingCount uint64
+	for _, pendingMigrationsUUID := range pendingMigrationsUUIDs {
+		if pendingMigrationsUUID == onlineDDL.UUID {
+			// found all migrations we must wait for if
+			// we found ourself in the pending list.
+			break
+		}
+		pendingCount++
+	}
+	return pendingCount
+}
+
 // reviewRunningMigrations iterates migrations in 'running' state. Normally there's only one running, which was
 // spawned by this tablet; but vreplication migrations could also resume from failure.
 func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning int, cancellable []*cancellableMigration, err error) {
@@ -3246,17 +3265,23 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				// understand whether "now is a good time" or "not there yet"
 				_ = e.updateMigrationReadyToComplete(ctx, uuid, isReady)
 				if !isReady {
+					// The migration is not ready yet.
 					return nil
+				}
+				if strategySetting.IsInOrderCompletion() {
+					var pendingMigrationsCount uint64
+					if len(pendingMigrationsUUIDs) > 0 && pendingMigrationsUUIDs[0] != onlineDDL.UUID {
+						pendingMigrationsCount = getInOrderCompletionPendingCount(onlineDDL, pendingMigrationsUUIDs)
+						postponeCompletion = true
+					}
+					// Update postponed_by_in_order_completion state if we are waiting or if we find we are no longer waiting (0).
+					if err = e.updatePostponedByInOrderCompletions(ctx, onlineDDL.UUID, pendingMigrationsCount); err != nil {
+						return err
+					}
 				}
 				if postponeCompletion {
 					// override. Even if migration is ready, we do not complete it.
 					return nil
-				}
-				if strategySetting.IsInOrderCompletion() {
-					if len(pendingMigrationsUUIDs) > 0 && pendingMigrationsUUIDs[0] != onlineDDL.UUID {
-						// wait for earlier pending migrations to complete
-						return nil
-					}
 				}
 				shouldCutOver, shouldForceCutOver := shouldCutOverAccordingToBackoff(
 					shouldForceCutOver, forceCutOverAfter, sinceReadyToComplete, sinceLastCutoverAttempt, cutoverAttempts,
@@ -4055,6 +4080,23 @@ func (e *Executor) updateMigrationUserThrottleRatio(ctx context.Context, uuid st
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationUserThrottleRatio,
 		sqltypes.Float64BindVariable(ratio),
 		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+func (e *Executor) updatePostponedByInOrderCompletions(
+	ctx context.Context,
+	uuid string,
+	pendingCompletions uint64,
+) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdatePostponedByInOrderCompletions,
+		sqltypes.Uint64BindVariable(pendingCompletions),
+		sqltypes.StringBindVariable(uuid),
+		sqltypes.Uint64BindVariable(pendingCompletions),
 	)
 	if err != nil {
 		return err
