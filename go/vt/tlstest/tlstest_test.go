@@ -341,8 +341,7 @@ func assertTLSHandshakeFails(t *testing.T, serverConfig, clientConfig *tls.Confi
 
 	err = serverConn.(*tls.Conn).Handshake()
 	if err != nil {
-		if !(strings.Contains(err.Error(), "Certificate revoked: CommonName=") ||
-			strings.Contains(err.Error(), "remote error: tls: bad certificate")) {
+		if !strings.Contains(err.Error(), "Certificate revoked: CommonName=") && !strings.Contains(err.Error(), "remote error: tls: bad certificate") {
 			t.Fatalf("Wrong error returned: %v", err)
 		}
 	} else {

@@ -136,7 +136,7 @@ func Init(ctx context.Context) (*Env, error) {
 		Config: cfg,
 	}
 	if err := te.cluster.Setup(); err != nil {
-		os.RemoveAll(te.cluster.Config.SchemaDir)
+		os.RemoveAll(te.cluster.SchemaDir)
 		return nil, fmt.Errorf("could not launch mysql: %v", err)
 	}
 	te.Dbcfgs = dbconfigs.NewTestDBConfigs(te.cluster.MySQLConnParams(), te.cluster.MySQLAppDebugConnParams(), te.cluster.DbName())
@@ -195,7 +195,7 @@ func (te *Env) Close() {
 	te.SchemaEngine.Close()
 	te.Mysqld.Close()
 	te.cluster.TearDown()
-	os.RemoveAll(te.cluster.Config.SchemaDir)
+	os.RemoveAll(te.cluster.SchemaDir)
 }
 
 // SetVSchema sets the vschema for the test keyspace.

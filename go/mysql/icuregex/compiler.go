@@ -2278,7 +2278,7 @@ func (c *compiler) buildOp(typ opcode, val int) instruction {
 		panic("bad argument to buildOp")
 	}
 	if val < 0 {
-		if !(typ == urxReservedOpN || typ == urxReservedOp) {
+		if typ != urxReservedOpN && typ != urxReservedOp {
 			panic("bad value to buildOp")
 		}
 		typ = urxReservedOpN
@@ -3540,7 +3540,7 @@ func addIdentifierIgnorable(set *uset.UnicodeSet) error {
 func (c *compiler) scanPosixProp() *uset.UnicodeSet {
 	var set *uset.UnicodeSet
 
-	if !(c.c.char == chColon) {
+	if c.c.char != chColon {
 		panic("assertion failed: c.lastChar == ':'")
 	}
 

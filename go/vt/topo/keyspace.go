@@ -168,7 +168,7 @@ func (ts *Server) UpdateKeyspace(ctx context.Context, ki *KeyspaceInfo) error {
 		return err
 	}
 
-	data, err := ki.Keyspace.MarshalVT()
+	data, err := ki.MarshalVT()
 	if err != nil {
 		return err
 	}

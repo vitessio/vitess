@@ -942,7 +942,7 @@ func (td *tableDiffer) getSourcePKCols() error {
 	})
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to get the schema for table %s from source tablet %s",
-			td.table.Name, topoproto.TabletAliasString(sourceTablet.Tablet.Alias))
+			td.table.Name, topoproto.TabletAliasString(sourceTablet.Alias))
 	}
 	if len(sourceSchema.TableDefinitions) == 0 {
 		// The table no longer exists on the source. Any rows that exist on the target will be
@@ -961,14 +961,14 @@ func (td *tableDiffer) getSourcePKCols() error {
 			})
 			if err != nil {
 				return nil, vterrors.Wrapf(err, "failed to query the %s source tablet in order to get a primary key equivalent for the %s table",
-					topoproto.TabletAliasString(sourceTablet.Tablet.Alias), td.table.Name)
+					topoproto.TabletAliasString(sourceTablet.Alias), td.table.Name)
 			}
 			return sqltypes.Proto3ToResult(res), nil
 		}
 		pkeCols, _, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, executeFetch, sourceTablet.DbName(), td.table.Name)
 		if err != nil {
 			return vterrors.Wrapf(err, "failed to get a primary key equivalent for the %s table from source tablet %s",
-				td.table.Name, topoproto.TabletAliasString(sourceTablet.Tablet.Alias))
+				td.table.Name, topoproto.TabletAliasString(sourceTablet.Alias))
 		}
 		if len(pkeCols) > 0 {
 			log.Infof("Using primary key equivalent columns %+v for table %s", pkeCols, td.table.Name)

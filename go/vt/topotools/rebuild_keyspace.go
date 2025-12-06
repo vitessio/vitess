@@ -156,7 +156,7 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 			}
 		}
 
-		if !(ki.KeyspaceType == topodatapb.KeyspaceType_SNAPSHOT && allowPartial) {
+		if ki.KeyspaceType != topodatapb.KeyspaceType_SNAPSHOT || !allowPartial {
 			// skip this check for SNAPSHOT keyspaces so that incomplete keyspaces can still serve
 			if err := topo.OrderAndCheckPartitions(cell, srvKeyspace); err != nil {
 				return err

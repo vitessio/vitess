@@ -1023,7 +1023,7 @@ func (df *vdiff) syncTargets(ctx context.Context, filteredReplicationWaitTime ti
 			return err
 		}
 		if err := df.ts.TabletManagerClient().VReplicationWaitForPos(waitCtx, target.GetPrimary().Tablet, uid, pos); err != nil {
-			return vterrors.Wrapf(err, "VReplicationWaitForPos for tablet %v", topoproto.TabletAliasString(target.GetPrimary().Tablet.Alias))
+			return vterrors.Wrapf(err, "VReplicationWaitForPos for tablet %v", topoproto.TabletAliasString(target.GetPrimary().Alias))
 		}
 		return nil
 	})

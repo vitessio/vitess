@@ -326,7 +326,7 @@ func (tc *tableCollector) handleTableName(node *sqlparser.AliasedTableExpr, t sq
 
 	tableInfo, found = tc.done[node]
 	if !found {
-		tableInfo, err = tc.earlyTableCollector.getTableInfo(node, t, tc.scoper)
+		tableInfo, err = tc.getTableInfo(node, t, tc.scoper)
 		if err != nil {
 			return err
 		}

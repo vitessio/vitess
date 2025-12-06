@@ -3483,17 +3483,17 @@ func TestValidateEmptyTables(t *testing.T) {
 	require.NoError(t, err)
 
 	s1, err := ts.UpdateShardFields(ctx, ks, shard1, func(si *topo.ShardInfo) error {
-		si.Shard.PrimaryAlias = tablet1.Alias
+		si.PrimaryAlias = tablet1.Alias
 		return nil
 	})
 	require.NoError(t, err)
 	s2, err := ts.UpdateShardFields(ctx, ks, shard2, func(si *topo.ShardInfo) error {
-		si.Shard.PrimaryAlias = tablet2.Alias
+		si.PrimaryAlias = tablet2.Alias
 		return nil
 	})
 	require.NoError(t, err)
 	s3, err := ts.UpdateShardFields(ctx, ks, shard3, func(si *topo.ShardInfo) error {
-		si.Shard.PrimaryAlias = tablet3.Alias
+		si.PrimaryAlias = tablet3.Alias
 		return nil
 	})
 	require.NoError(t, err)

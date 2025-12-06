@@ -398,7 +398,7 @@ func (ts *TestSpec) Run() {
 				continue
 			case tq.events != nil && // when we define the actual events either as a serialized string or as a TestRowEvent
 				(len(tq.events) > 0 &&
-					!(len(tq.events) == 1 && tq.events[0].event == "" && tq.events[0].spec == nil)):
+					(len(tq.events) != 1 || tq.events[0].event != "" || tq.events[0].spec != nil)):
 				for _, e := range tq.events {
 					if e.restart {
 						tc.output = append(tc.output, output)

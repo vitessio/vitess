@@ -3936,7 +3936,7 @@ type loggerWriter struct {
 }
 
 func (lw loggerWriter) Write(p []byte) (int, error) {
-	lw.Logger.Printf("%s", p)
+	lw.Printf("%s", p)
 	return len(p), nil
 }
 
