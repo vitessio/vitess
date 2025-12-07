@@ -1037,22 +1037,10 @@ func (vc *VCursorImpl) SetTarget(target string) error {
 		return err
 	}
 
-	// Clear any existing tablet-specific routing if not specified
-	if tabletAlias == nil {
-		vc.SafeSession.SetTargetTabletAlias(nil)
-	} else {
-		// Tablet targeting must be set before starting a transaction, not during.
-		// The feature is designed to pick a specific tablet and do work there,
-		// not to switch tablets mid-transaction.
-		if vc.SafeSession.InTransaction() {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
-				"cannot set tablet target while in a transaction")
-		}
-
-		// Store tablet alias in session for routing
-		// Note: We don't validate the tablet exists here - if it doesn't exist or is
-		// unreachable, the query will fail during execution with a clear error message
-		vc.SafeSession.SetTargetTabletAlias(tabletAlias)
+	// Tablet targeting must be set before starting a transaction, not during.
+	if tabletAlias != nil && vc.SafeSession.InTransaction() {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"cannot set tablet target while in a transaction")
 	}
 
 	if _, ok := vc.vschema.Keyspaces[keyspace]; !ignoreKeyspace(keyspace) && !ok {
