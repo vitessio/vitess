@@ -667,7 +667,7 @@ func TestActionInfoWithTabletAlias(t *testing.T) {
 		assert.Equal(t, tabletAlias, info.alias)
 	})
 
-	t.Run("existing transaction with tablet alias", func(t *testing.T) {
+	t.Run("existing transaction with different tablet alias errors", func(t *testing.T) {
 		session := econtext.NewSafeSession(&vtgatepb.Session{
 			InTransaction: true,
 			ShardSessions: []*vtgatepb.Session_ShardSession{{
@@ -676,15 +676,11 @@ func TestActionInfoWithTabletAlias(t *testing.T) {
 				TabletAlias:   &topodatapb.TabletAlias{Cell: "zone1", Uid: 50},
 			}},
 		})
-		session.SetTargetTabletAlias(tabletAlias)
+		session.SetTargetTabletAlias(tabletAlias) // zone1-100, different from zone1-50
 
-		info, shardSession, err := actionInfo(ctx, target, session, false, vtgatepb.TransactionMode_MULTI)
-		require.NoError(t, err)
-		assert.NotNil(t, shardSession)
-		assert.Equal(t, int64(12345), info.transactionID)
-		assert.Equal(t, nothing, info.actionNeeded)
-		// Tablet alias should be overridden
-		assert.Equal(t, tabletAlias, info.alias)
+		_, _, err := actionInfo(ctx, target, session, false, vtgatepb.TransactionMode_MULTI)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "cannot change tablet target mid-transaction")
 	})
 
 	t.Run("no tablet alias - existing behavior", func(t *testing.T) {
