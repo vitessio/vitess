@@ -114,7 +114,20 @@ func simplifyPredicates(ctx *plancontext.PlanningContext, in sqlparser.Expr) sql
 			replace = nil
 		}
 	}
-	output := sqlparser.CopyOnRewrite(in, pre, post, ctx.SemTable.CopySemanticInfo).(sqlparser.Expr)
+	// Custom clone function for CopyOnRewrite that preserves correct constant detection.
+	// When we replace complex expressions with constant literals during simplification,
+	// we intentionally skip copying semantic info (like table dependencies). For example,
+	// when "col = 1 AND 1 = 0" simplifies to "0", the "0" must not inherit dependencies
+	// from "col". Otherwise, IsConstantBool won't recognize it as constant, breaking
+	// routing optimization.
+	cloned := func(from, to sqlparser.SQLNode) {
+		// Don't copy semantic info if the replacement is a constant literal
+		if _, isLiteral := to.(*sqlparser.Literal); isLiteral {
+			return
+		}
+		ctx.SemTable.CopySemanticInfo(from, to)
+	}
+	output := sqlparser.CopyOnRewrite(in, pre, post, cloned).(sqlparser.Expr)
 	if in != output {
 		// we need to do this, since one simplification might lead to another
 		return simplifyPredicates(ctx, output)
