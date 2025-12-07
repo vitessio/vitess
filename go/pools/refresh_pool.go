@@ -36,6 +36,7 @@ type (
 		refreshTicker   *time.Ticker
 		refreshStop     chan struct{}
 		refreshWg       sync.WaitGroup
+		mu              sync.Mutex
 
 		pool refreshPool
 	}
@@ -64,6 +65,9 @@ func (pr *poolRefresh) startRefreshTicker() {
 	if pr == nil {
 		return
 	}
+	pr.mu.Lock()
+	defer pr.mu.Unlock()
+
 	pr.refreshTicker = time.NewTicker(pr.refreshInterval)
 	pr.refreshStop = make(chan struct{})
 	pr.refreshWg.Add(1)
@@ -88,10 +92,16 @@ func (pr *poolRefresh) startRefreshTicker() {
 }
 
 func (pr *poolRefresh) stop() {
-	if pr == nil || pr.refreshTicker == nil {
+	if pr == nil {
+		return
+	}
+	pr.mu.Lock()
+	if pr.refreshTicker == nil {
+		pr.mu.Unlock()
 		return
 	}
 	pr.refreshTicker.Stop()
 	close(pr.refreshStop)
+	pr.mu.Unlock()
 	pr.refreshWg.Wait()
 }
