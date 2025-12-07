@@ -16,7 +16,10 @@ limitations under the License.
 
 package querythrottler
 
-import "vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler/registry"
+import (
+	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler/registry"
+)
 
 // Compile-time interface compliance check
 var _ registry.StrategyConfig = (*Config)(nil)
@@ -32,11 +35,30 @@ type Config struct {
 	// throttling decision is logged for observability.
 	DryRun bool `json:"dry_run"`
 
-	// Strategy selects which throttling strategy should be used.
-	Strategy registry.ThrottlingStrategy `json:"strategy"`
+	// StrategyName name of the strategy to use for throttling.
+	StrategyName registry.ThrottlingStrategy `json:"strategy"`
 }
 
-// GetStrategy implements registry.StrategyConfig interface
-func (c Config) GetStrategy() registry.ThrottlingStrategy {
-	return c.Strategy
+// GetStrategyName implements registry.StrategyConfig interface
+func (c Config) GetStrategyName() registry.ThrottlingStrategy {
+	return c.StrategyName
+}
+
+// ConfigFromProto converts a protobuf QueryThrottler configuration into its internal Config representation.
+// It processes the incoming configuration and creates a complete Config struct with all necessary mappings for tablet rules, statement rules, and metric rules.
+func ConfigFromProto(queryThrottlerConfig *querythrottlerpb.Config) Config {
+	return Config{
+		Enabled:      queryThrottlerConfig.GetEnabled(),
+		DryRun:       queryThrottlerConfig.GetDryRun(),
+		StrategyName: ThrottlingStrategyFromProto(queryThrottlerConfig.GetStrategy()),
+	}
+}
+
+func ThrottlingStrategyFromProto(strategy querythrottlerpb.ThrottlingStrategy) registry.ThrottlingStrategy {
+	switch strategy {
+	case querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER:
+		return registry.ThrottlingStrategyTabletThrottler
+	default:
+		return registry.ThrottlingStrategyUnknown
+	}
 }
