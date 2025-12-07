@@ -249,15 +249,17 @@ func getGitRefSHA(ctx context.Context, url, branchOrTag string) (string, error) 
 		if len(fields) != 2 {
 			continue
 		}
-		sha := fields[0]
-		if strings.Contains(fields[1], branchOrTag) {
-			// git SHA1 hashes are 40 hex characters.
-			match, err := regexp.MatchString(`^[a-zA-Z0-9]{40}$`, sha)
-			if !match || err != nil {
-				continue
-			}
-			return sha, nil
+		if fields[1] != branchOrTag && !strings.HasSuffix(fields[1], "/"+branchOrTag) {
+			continue
 		}
+
+		// git SHA1 hashes are 40 hex characters.
+		sha := fields[0]
+		match, err := regexp.MatchString(`^[a-zA-Z0-9]{40}$`, sha)
+		if !match || err != nil {
+			continue
+		}
+		return sha, nil
 	}
 	return "", fmt.Errorf("cannot parse output of 'git ls-remote' for %q", url)
 }
