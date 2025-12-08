@@ -6,6 +6,7 @@
 - **[Major Changes](#major-changes)**
     - **[New Support](#new-support)**
         - [Window function pushdown for sharded keyspaces](#window-function-pushdown)
+        - [Tablet targeting via USE statement](#tablet-targeting)
 - **[Minor Changes](#minor-changes)**
     - **[VTGate](#minor-changes-vtgate)**
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
@@ -23,6 +24,22 @@ This release introduces an optimization that allows window functions to be pushe
 Previously, all window function queries required single-shard routing, which limited their applicability on sharded tables. With this change, queries where the `PARTITION BY` clause aligns with a unique vindex can now be pushed down and executed on each shard.
 
 For examples and more details, see the [documentation](https://vitess.io/docs/24.0/reference/compatibility/mysql-compatibility/#window-functions).
+
+#### <a id="tablet-targeting"/>Tablet targeting via USE statement</a>
+
+VTGate now supports routing queries to a specific tablet by alias using an extended `USE` statement syntax:
+
+```sql
+USE keyspace:shard@tablet_type|tablet_alias;
+```
+
+For example, to target a specific primary tablet:
+
+```sql
+USE commerce:-80@primary|zone1-0000000100;
+```
+
+Once set, all subsequent queries in the session route to the specified tablet until cleared with a standard `USE keyspace` or `USE keyspace@tablet_type` statement. This is useful for debugging, per-tablet monitoring, cache warming, and other operational tasks where targeting a specific tablet is required.
 
 ## <a id="minor-changes"/>Minor Changes</a>
 
