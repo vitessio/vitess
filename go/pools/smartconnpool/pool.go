@@ -781,35 +781,36 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 	mono := monotonicFromTime(now)
 
 	closeInStack := func(s *connStack[C]) {
-		// Do a read-only best effort iteration of all the connection in this
-		// stack and atomically attempt to mark them as expired.
-		// Any connections that are marked as expired are _not_ removed from
-		// the stack; it's generally unsafe to remove nodes from the stack
-		// besides the head. When clients pop from the stack, they'll immediately
-		// notice the expired connection and ignore it.
-		// see: timestamp.expired
-		for conn := s.Peek(); conn != nil; conn = conn.next.Load() {
+		expiredConnections := make([]*Pooled[C], 0)
+		validConnections := make([]*Pooled[C], 0)
+
+		// Pop out connections from the stack until we get a `nil` connection
+		for conn, ok := s.Pop(); ok; conn, ok = s.Pop() {
 			if conn.timeUsed.expired(mono, timeout) {
-				pool.Metrics.idleClosed.Add(1)
-
-				conn.Close()
-				pool.closedConn()
-
-				// Using context.Background() is fine since MySQL connection already enforces
-				// a connect timeout via the `db-connect-timeout-ms` config param.
-				c, err := pool.getNew(context.Background())
-				if err != nil {
-					// If we couldn't open a new connection, just continue
-					continue
-				}
-
-				// opening a new connection might have raced with other goroutines,
-				// so it's possible that we got back `nil` here
-				if c != nil {
-					// Return the new connection to the pool
-					pool.tryReturnConn(c)
-				}
+				expiredConnections = append(expiredConnections, conn)
+			} else {
+				validConnections = append(validConnections, conn)
 			}
+		}
+
+		// Return all the valid connections back to waiters or the stack
+		for _, conn := range validConnections {
+			pool.tryReturnConn(conn)
+		}
+
+		// Close all the expired connections and open new ones to replace them
+		for _, conn := range expiredConnections {
+			pool.Metrics.idleClosed.Add(1)
+
+			conn.Close()
+
+			err := pool.connReopen(context.Background(), conn, mono)
+			if err != nil {
+				pool.closedConn()
+				continue
+			}
+
+			pool.tryReturnConn(conn)
 		}
 	}
 
