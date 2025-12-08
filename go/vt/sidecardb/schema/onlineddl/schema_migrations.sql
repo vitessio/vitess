@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations
     `last_cutover_attempt_timestamp`    timestamp        NULL DEFAULT NULL,
     `force_cutover`                     tinyint unsigned NOT NULL DEFAULT '0',
     `cutover_threshold_seconds`         int unsigned     NOT NULL DEFAULT '0',
-    `postponed_by_in_order_completions` int unsigned     NOT NULL DEFAULT '0',
+    `in_order_completion_pending_count` int unsigned     NOT NULL DEFAULT '0',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uuid_idx` (`migration_uuid`),
     KEY `keyspace_shard_idx` (`keyspace`(64), `shard`(64)),

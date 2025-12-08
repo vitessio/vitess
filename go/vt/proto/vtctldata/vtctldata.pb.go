@@ -846,7 +846,7 @@ type SchemaMigration struct {
 	ReviewedAt                    *vttime.Time             `protobuf:"bytes,52,opt,name=reviewed_at,json=reviewedAt,proto3" json:"reviewed_at,omitempty"`
 	ReadyToCompleteAt             *vttime.Time             `protobuf:"bytes,53,opt,name=ready_to_complete_at,json=readyToCompleteAt,proto3" json:"ready_to_complete_at,omitempty"`
 	RemovedForeignKeyNames        string                   `protobuf:"bytes,54,opt,name=removed_foreign_key_names,json=removedForeignKeyNames,proto3" json:"removed_foreign_key_names,omitempty"`
-	PostponedByInOrderCompletions uint64                   `protobuf:"varint,55,opt,name=postponed_by_in_order_completions,json=postponedByInOrderCompletions,proto3" json:"postponed_by_in_order_completions,omitempty"`
+	InOrderCompletionPendingCount uint64                   `protobuf:"varint,55,opt,name=in_order_completion_pending_count,json=inOrderCompletionPendingCount,proto3" json:"in_order_completion_pending_count,omitempty"`
 	unknownFields                 protoimpl.UnknownFields
 	sizeCache                     protoimpl.SizeCache
 }
@@ -1259,9 +1259,9 @@ func (x *SchemaMigration) GetRemovedForeignKeyNames() string {
 	return ""
 }
 
-func (x *SchemaMigration) GetPostponedByInOrderCompletions() uint64 {
+func (x *SchemaMigration) GetInOrderCompletionPendingCount() uint64 {
 	if x != nil {
-		return x.PostponedByInOrderCompletions
+		return x.InOrderCompletionPendingCount
 	}
 	return 0
 }
@@ -17508,7 +17508,7 @@ const file_vtctldata_proto_rawDesc = "" +
 	"reviewedAt\x12=\n" +
 	"\x14ready_to_complete_at\x185 \x01(\v2\f.vttime.TimeR\x11readyToCompleteAt\x129\n" +
 	"\x19removed_foreign_key_names\x186 \x01(\tR\x16removedForeignKeyNames\x12H\n" +
-	"!postponed_by_in_order_completions\x187 \x01(\x04R\x1dpostponedByInOrderCompletions\"I\n" +
+	"!in_order_completion_pending_count\x187 \x01(\x04R\x1dinOrderCompletionPendingCount\"I\n" +
 	"\bStrategy\x12\n" +
 	"\n" +
 	"\x06VITESS\x10\x00\x12\n" +

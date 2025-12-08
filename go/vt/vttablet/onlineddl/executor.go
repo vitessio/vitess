@@ -3269,13 +3269,12 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					return nil
 				}
 				if strategySetting.IsInOrderCompletion() {
-					var pendingMigrationsCount uint64
-					if len(pendingMigrationsUUIDs) > 0 && pendingMigrationsUUIDs[0] != onlineDDL.UUID {
-						pendingMigrationsCount = getInOrderCompletionPendingCount(onlineDDL, pendingMigrationsUUIDs)
+					pendingMigrationsCount := getInOrderCompletionPendingCount(onlineDDL, pendingMigrationsUUIDs)
+					if pendingMigrationsCount > 0 {
 						postponeCompletion = true
 					}
-					// Update postponed_by_in_order_completion state if we are waiting or if we find we are no longer waiting (0).
-					if err = e.updatePostponedByInOrderCompletions(ctx, onlineDDL.UUID, pendingMigrationsCount); err != nil {
+					// Update in_order_completion_pending_count state if we are waiting or if we find we are no longer waiting (0).
+					if err = e.updateInOrderCompletionPendingCount(ctx, onlineDDL.UUID, pendingMigrationsCount); err != nil {
 						return err
 					}
 				}
@@ -4088,12 +4087,12 @@ func (e *Executor) updateMigrationUserThrottleRatio(ctx context.Context, uuid st
 	return err
 }
 
-func (e *Executor) updatePostponedByInOrderCompletions(
+func (e *Executor) updateInOrderCompletionPendingCount(
 	ctx context.Context,
 	uuid string,
 	pendingCompletions uint64,
 ) error {
-	query, err := sqlparser.ParseAndBind(sqlUpdatePostponedByInOrderCompletions,
+	query, err := sqlparser.ParseAndBind(sqlUpdateInOrderCompletionPendingCount,
 		sqltypes.Uint64BindVariable(pendingCompletions),
 		sqltypes.StringBindVariable(uuid),
 		sqltypes.Uint64BindVariable(pendingCompletions),

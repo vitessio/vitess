@@ -214,7 +214,7 @@ func (m *SchemaMigration) CloneVT() *SchemaMigration {
 	r.ReviewedAt = m.ReviewedAt.CloneVT()
 	r.ReadyToCompleteAt = m.ReadyToCompleteAt.CloneVT()
 	r.RemovedForeignKeyNames = m.RemovedForeignKeyNames
-	r.PostponedByInOrderCompletions = m.PostponedByInOrderCompletions
+	r.InOrderCompletionPendingCount = m.InOrderCompletionPendingCount
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -6451,8 +6451,8 @@ func (m *SchemaMigration) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.PostponedByInOrderCompletions != 0 {
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.PostponedByInOrderCompletions))
+	if m.InOrderCompletionPendingCount != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.InOrderCompletionPendingCount))
 		i--
 		dAtA[i] = 0x3
 		i--
@@ -22914,8 +22914,8 @@ func (m *SchemaMigration) SizeVT() (n int) {
 	if l > 0 {
 		n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
-	if m.PostponedByInOrderCompletions != 0 {
-		n += 2 + protohelpers.SizeOfVarint(uint64(m.PostponedByInOrderCompletions))
+	if m.InOrderCompletionPendingCount != 0 {
+		n += 2 + protohelpers.SizeOfVarint(uint64(m.InOrderCompletionPendingCount))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -31352,9 +31352,9 @@ func (m *SchemaMigration) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 55:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field PostponedByInOrderCompletions", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field InOrderCompletionPendingCount", wireType)
 			}
-			m.PostponedByInOrderCompletions = 0
+			m.InOrderCompletionPendingCount = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return protohelpers.ErrIntOverflow
@@ -31364,7 +31364,7 @@ func (m *SchemaMigration) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.PostponedByInOrderCompletions |= uint64(b&0x7F) << shift
+				m.InOrderCompletionPendingCount |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
