@@ -922,8 +922,11 @@ func TestTabletTargeting(t *testing.T) {
 	useStmt = fmt.Sprintf("USE `ks:-80@replica|%s`", replicaAlias)
 	utils.Exec(t, conn, useStmt)
 
-	// Reads should work on replica
-	utils.AssertMatches(t, conn, "select id1 from t1 where id1 in (1, 2, 4, 10) order by id1", "[[INT64(1)] [INT64(2)] [INT64(4)] [INT64(10)]]")
+	// Reads should work on replica (wait for replication)
+	require.Eventually(t, func() bool {
+		result, err := conn.ExecuteFetch("select id1 from t1 where id1 in (1, 2, 4, 10) order by id1", 10, false)
+		return err == nil && len(result.Rows) == 4
+	}, 15*time.Second, 100*time.Millisecond, "replication did not catch up for first replica read")
 
 	// Writes should fail on replica (replicas are read-only)
 	_, err = conn.ExecuteFetch("insert into t1(id1, id2) values(99, 999)", 1, false)
@@ -935,8 +938,11 @@ func TestTabletTargeting(t *testing.T) {
 	useStmt = fmt.Sprintf("USE `ks:-80@replica|%s`", secondReplicaAlias)
 	utils.Exec(t, conn, useStmt)
 
-	// Should still be able to read from this different replica
-	utils.AssertMatches(t, conn, "select id1 from t1 where id1 in (1, 2, 4, 10) order by id1", "[[INT64(1)] [INT64(2)] [INT64(4)] [INT64(10)]]")
+	// Should still be able to read from this different replica (wait for replication)
+	require.Eventually(t, func() bool {
+		result, err := conn.ExecuteFetch("select id1 from t1 where id1 in (1, 2, 4, 10) order by id1", 10, false)
+		return err == nil && len(result.Rows) == 4
+	}, 15*time.Second, 100*time.Millisecond, "replication did not catch up for second replica read")
 
 	// Writes should still fail
 	_, err = conn.ExecuteFetch("insert into t1(id1, id2) values(98, 998)", 1, false)
@@ -954,9 +960,11 @@ func TestTabletTargeting(t *testing.T) {
 	replicaAlias = instances["-80"]["replica"][0]
 	useStmt = fmt.Sprintf("USE `ks:-80@replica|%s`", replicaAlias)
 	utils.Exec(t, conn, useStmt)
-	// Give replication a moment to catch up
-	time.Sleep(100 * time.Millisecond)
-	utils.AssertMatches(t, conn, "select id1 from t1 where id1=50", "[[INT64(50)]]")
+	// Wait for replication to catch up
+	require.Eventually(t, func() bool {
+		result, err := conn.ExecuteFetch("select id1 from t1 where id1=50", 1, false)
+		return err == nil && len(result.Rows) == 1
+	}, 15*time.Second, 100*time.Millisecond, "replication did not catch up")
 
 	// Query different replicas and verify different server UUIDs
 	// This proves we're actually hitting different physical tablets
