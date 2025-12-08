@@ -4411,7 +4411,7 @@
       ]
     }
   },
-  {
+    {
     "comment": "Subquery with `IN` condition using columns with matching lookup vindexes, with inner scatter query",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.foo = 'bar') AND music.user_id IN (3, 4, 5)",
     "plan": {
@@ -4437,6 +4437,85 @@
       ]
     },
     "skip_e2e": true
+  },
+  {
+    "comment": "Subquery with `IN` condition using columns with matching lookup vindexes, impossible conditions and limit clause",
+    "query": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3) AND 1 = 0 AND music.foo = 'bar' LIMIT 0, 100) _inner)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3) AND 1 = 0 AND music.foo = 'bar' LIMIT 0, 100) _inner)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values",
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Limit",
+            "Count": "100",
+            "Offset": "0",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "None",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id from (select music.id from music where 1 != 1) as _inner where 1 != 1",
+                "Query": "select id from (select music.id from music where 0) as _inner limit 100"
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "VindexLookup",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "Values": [
+              "::__sq1"
+            ],
+            "Vindex": "music_user_map",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "IN",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                "Values": [
+                  "::name"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "ByDestination",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select music.id from music where 1 != 1",
+                "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
   },
   {
     "comment": "Subquery with `IN` condition using columns with matching lookup vindexes",
@@ -6372,10 +6451,10 @@
         },
         "FieldQuery": "select r from (select rank() over (partition by col) as r from `user` where 1 != 1) as t where 1 != 1",
         "Query": "select r from (select rank() over (partition by col) as r from `user` where id = 1) as t",
-        "Vindex": "user_index",
         "Values": [
           "1"
-        ]
+        ],
+        "Vindex": "user_index"
       },
       "TablesUsed": [
         "user.user"

@@ -544,7 +544,20 @@ func (st *SemTable) CopySemanticInfo(from, to sqlparser.SQLNode) {
 		if !ok {
 			return
 		}
-		st.CopyDependencies(f, t)
+
+		// Not all expressions are valid map keys
+		if !ValidAsMapKey(t) || !ValidAsMapKey(f) {
+			return
+		}
+
+		if _, ok := t.(*sqlparser.ColName); ok {
+			// If this is introducing a new column, we should copy all dependencies over
+			// as we can't recalculate them later
+			st.CopyDependencies(f, t)
+		} else {
+			// Otherwise, we only copy over the type information
+			st.ExprTypes[t] = st.ExprTypes[f]
+		}
 	case *sqlparser.Union:
 		t, ok := to.(*sqlparser.Union)
 		if !ok {
