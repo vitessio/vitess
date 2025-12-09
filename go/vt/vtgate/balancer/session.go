@@ -61,7 +61,7 @@ func (b *SessionBalancer) Pick(target *querypb.Target, tablets []*discovery.Tabl
 			continue
 		}
 
-		weight := weight(alias, opts.SessionUUID)
+		weight := tabletWeight(alias, opts.SessionUUID)
 
 		if b.isLocal(tablet) && ((maxLocalTablet == nil) || (weight > maxLocalWeight)) {
 			maxLocalWeight = weight
@@ -85,9 +85,13 @@ func (b *SessionBalancer) Pick(target *querypb.Target, tablets []*discovery.Tabl
 	return maxExternalTablet
 }
 
-// weight computes the weight of a tablet by hashing its alias and the session UUID together.
-func weight(alias string, sessionUUID string) uint64 {
-	return xxhash.Sum64String(alias + "#" + sessionUUID)
+// tabletWeight computes the weight of a tablet by hashing its alias and the session UUID together.
+func tabletWeight(alias string, sessionUUID string) uint64 {
+	h := xxhash.New()
+	_, _ = h.WriteString(alias)
+	_, _ = h.WriteString("#")
+	_, _ = h.WriteString(sessionUUID)
+	return h.Sum64()
 }
 
 // tabletAlias returns the tablet's alias as a string.
