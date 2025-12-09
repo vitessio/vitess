@@ -151,6 +151,7 @@ type PickOpts struct {
 //   - "prefer-cell": Flow-based balancer that maintains cell affinity while balancing load
 //   - See the RFC here: https://github.com/vitessio/vitess/issues/12241
 //   - "random": Random balancer that uniformly distributes load without cell affinity
+//   - "session": Session balancer that pins a session to the same tablet for the duration of the session.
 //
 // Note: "cell" mode is handled by the gateway and does not create a balancer instance.
 // operates as a round robin inside of the vtgate's cell
