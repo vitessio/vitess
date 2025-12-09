@@ -100,6 +100,7 @@ type tableDiffer struct {
 	wgShardStreamers   sync.WaitGroup
 	shardStreamsCtx    context.Context
 	shardStreamsCancel context.CancelFunc
+	shardStreamsErrCh  chan error
 }
 
 func newTableDiffer(wd *workflowDiffer, table *tabletmanagerdatapb.TableDefinition, sourceQuery string) *tableDiffer {
@@ -152,6 +153,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 	}()
 
 	td.shardStreamsCtx, td.shardStreamsCancel = context.WithCancel(ctx)
+	td.shardStreamsErrCh = make(chan error, 1)
 
 	if err := td.selectTablets(ctx); err != nil {
 		return err
@@ -400,7 +402,7 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 	td.wgShardStreamers.Add(1)
 
 	defer func() {
-		log.Infof("streamOneShard End on %s", participant.tablet.Alias.String())
+		log.Infof("streamOneShard End on %s (err: %v)", participant.tablet.Alias.String(), participant.err)
 		select {
 		case <-ctx.Done():
 		default:
@@ -408,6 +410,10 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 			close(gtidch)
 		}
 		td.wgShardStreamers.Done()
+		if participant.err != nil {
+			td.shardStreamsErrCh <- vterrors.Wrapf(participant.err, "error encountered in vstream from the %s tablet in shard %s",
+				participant.tablet, participant.shard)
+		}
 	}()
 
 	participant.err = func() error {
@@ -551,6 +557,18 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
 		lastProcessedRow = sourceRow
 
 		select {
+		case serr := <-td.shardStreamsErrCh:
+			// Read all errors in the channel and accumulate them across the streams.
+			shardStreamErrs := concurrency.AllErrorRecorder{}
+			shardStreamErrs.RecordError(serr)
+			for {
+				select {
+				case serr := <-td.shardStreamsErrCh:
+					shardStreamErrs.RecordError(serr)
+				default:
+					return nil, shardStreamErrs.Error()
+				}
+			}
 		case <-ctx.Done():
 			return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 		case <-td.wd.ct.done:
