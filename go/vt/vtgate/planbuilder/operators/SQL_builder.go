@@ -41,7 +41,6 @@ type (
 
 func (qb *queryBuilder) asSelectStatement() sqlparser.TableStatement {
 	return qb.stmt.(sqlparser.TableStatement)
-
 }
 func (qb *queryBuilder) asOrderAndLimit() sqlparser.OrderAndLimit {
 	return qb.stmt.(sqlparser.OrderAndLimit)
@@ -55,6 +54,7 @@ func ToSQL(ctx *plancontext.PlanningContext, op Operator) (_ sqlparser.Statement
 	if ctx.SemTable != nil {
 		q.sortTables()
 	}
+	sqlparser.RemoveKeyspaceIgnoreSysSchema(q.stmt)
 	return q.stmt, q.dmlOperator, nil
 }
 
@@ -361,7 +361,6 @@ func (qb *queryBuilder) sortTables() {
 		sort.Sort(ts)
 		return true, nil
 	}, qb.stmt)
-
 }
 
 type tableSorter struct {
@@ -395,15 +394,6 @@ func (ts *tableSorter) Swap(i, j int) {
 	ts.sel.From[i], ts.sel.From[j] = ts.sel.From[j], ts.sel.From[i]
 }
 
-func removeKeyspaceFromSelectExpr(expr sqlparser.SelectExpr) {
-	switch expr := expr.(type) {
-	case *sqlparser.AliasedExpr:
-		sqlparser.RemoveKeyspaceInCol(expr.Expr)
-	case *sqlparser.StarExpr:
-		expr.TableName.Qualifier = sqlparser.NewIdentifierCS("")
-	}
-}
-
 func stripDownQuery(from, to sqlparser.TableStatement) {
 	switch node := from.(type) {
 	case *sqlparser.Select:
@@ -418,9 +408,6 @@ func stripDownQuery(from, to sqlparser.TableStatement) {
 		toNode.Comments = node.Comments
 		toNode.Limit = node.Limit
 		toNode.SelectExprs = node.SelectExprs
-		for _, expr := range toNode.SelectExprs.Exprs {
-			removeKeyspaceFromSelectExpr(expr)
-		}
 	case *sqlparser.Union:
 		toNode, ok := to.(*sqlparser.Union)
 		if !ok {
@@ -666,8 +653,6 @@ func buildFilter(op *Filter, qb *queryBuilder) {
 func buildDerived(op *Horizon, qb *queryBuilder) {
 	buildQuery(op.Source, qb)
 
-	sqlparser.RemoveKeyspaceInCol(op.Query)
-
 	stmt := qb.stmt
 	qb.stmt = nil
 	switch sel := stmt.(type) {
@@ -718,7 +703,6 @@ func buildDerivedSelect(op *Horizon, qb *queryBuilder, sel *sqlparser.Select) {
 func buildHorizon(op *Horizon, qb *queryBuilder) {
 	buildQuery(op.Source, qb)
 	stripDownQuery(op.Query, qb.asSelectStatement())
-	sqlparser.RemoveKeyspaceInCol(qb.stmt)
 }
 
 func buildRecursiveCTE(op *RecurseCTE, qb *queryBuilder) {

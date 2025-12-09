@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -225,7 +226,7 @@ func (fmd *FakeMysqlDaemon) DB() *fakesqldb.DB {
 // Start is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) Start(ctx context.Context, cnf *Mycnf, mysqldArgs ...string) error {
 	if fmd.Running {
-		return fmt.Errorf("fake mysql daemon already running")
+		return errors.New("fake mysql daemon already running")
 	}
 
 	if fmd.StartupTime > 0 {
@@ -243,7 +244,7 @@ func (fmd *FakeMysqlDaemon) Start(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 // Shutdown is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bool, mysqlShutdownTimeout time.Duration) error {
 	if !fmd.Running {
-		return fmt.Errorf("fake mysql daemon not running")
+		return errors.New("fake mysql daemon not running")
 	}
 
 	if fmd.ShutdownTime > 0 {
@@ -295,7 +296,7 @@ func (fmd *FakeMysqlDaemon) WaitForDBAGrants(ctx context.Context, waitTime time.
 // GetMysqlPort is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetMysqlPort(ctx context.Context) (int32, error) {
 	if fmd.MysqlPort.Load() == -1 {
-		return 0, fmt.Errorf("FakeMysqlDaemon.GetMysqlPort returns an error")
+		return 0, errors.New("FakeMysqlDaemon.GetMysqlPort returns an error")
 	}
 	return fmd.MysqlPort.Load(), nil
 }
@@ -328,8 +329,8 @@ func (fmd *FakeMysqlDaemon) ReplicationStatus(ctx context.Context) (replication.
 		ReplicationLagSeconds:                  fmd.ReplicationLagSeconds,
 		// Implemented as AND to avoid changing all tests that were
 		// previously using Replicating = false.
-		IOState:    replication.ReplicationStatusToState(fmt.Sprintf("%v", fmd.Replicating && fmd.IOThreadRunning)),
-		SQLState:   replication.ReplicationStatusToState(fmt.Sprintf("%v", fmd.Replicating)),
+		IOState:    replication.ReplicationStatusToState(strconv.FormatBool(fmd.Replicating && fmd.IOThreadRunning)),
+		SQLState:   replication.ReplicationStatusToState(strconv.FormatBool(fmd.Replicating)),
 		SourceHost: fmd.CurrentSourceHost,
 		SourcePort: fmd.CurrentSourcePort,
 	}, nil
@@ -653,7 +654,7 @@ func (fmd *FakeMysqlDaemon) GetSchema(ctx context.Context, dbName string, reques
 		return fmd.SchemaFunc()
 	}
 	if fmd.Schema == nil {
-		return nil, fmt.Errorf("no schema defined")
+		return nil, errors.New("no schema defined")
 	}
 	return tmutils.FilterTables(fmd.Schema, request.Tables, request.ExcludeTables, request.IncludeViews)
 }
@@ -676,7 +677,7 @@ func (fmd *FakeMysqlDaemon) GetPrimaryKeyEquivalentColumns(ctx context.Context, 
 // PreflightSchemaChange is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) PreflightSchemaChange(ctx context.Context, dbName string, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
 	if fmd.PreflightSchemaChangeResult == nil {
-		return nil, fmt.Errorf("no preflight result defined")
+		return nil, errors.New("no preflight result defined")
 	}
 	return fmd.PreflightSchemaChangeResult, nil
 }
@@ -721,6 +722,11 @@ func (fmd *FakeMysqlDaemon) GetAllPrivsConnection(ctx context.Context) (*dbconnp
 	return dbconnpool.NewDBConnection(ctx, dbconfigs.New(fmd.db.ConnParams()))
 }
 
+// GetFilteredConnection is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) GetFilteredConnection(ctx context.Context) (*dbconnpool.DBConnection, error) {
+	return dbconnpool.NewDBConnection(ctx, dbconfigs.New(fmd.db.ConnParams()))
+}
+
 // SetSemiSyncEnabled is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) SetSemiSyncEnabled(ctx context.Context, primary, replica bool) error {
 	fmd.SemiSyncPrimaryEnabled = primary
@@ -761,6 +767,11 @@ func (fmd *FakeMysqlDaemon) SemiSyncSettings(ctx context.Context) (timeout uint6
 func (fmd *FakeMysqlDaemon) SemiSyncReplicationStatus(ctx context.Context) (bool, error) {
 	// The fake assumes the status worked.
 	return fmd.SemiSyncReplicaEnabled, nil
+}
+
+// IsSemiSyncBlocked is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) IsSemiSyncBlocked(ctx context.Context) (bool, error) {
+	return false, nil
 }
 
 // GetVersionString is part of the MysqlDaemon interface.

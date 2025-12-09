@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -82,7 +83,7 @@ func TestMain(m *testing.M) {
 			vtutils.GetFlagVariantForTests("--grpc-use-effective-callerid"),
 		)
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-			"--twopc_abandon_age", "1",
+			vtutils.GetFlagVariantForTests("--twopc-abandon-age"), "1",
 			"--queryserver-config-transaction-cap", "3",
 			"--queryserver-config-transaction-timeout", "400s",
 			"--queryserver-config-query-timeout", "9000s",
@@ -235,7 +236,7 @@ func getStatement(stmt string) string {
 
 	sid, exists := sm.stmt[sKey]
 	if !exists {
-		sid = fmt.Sprintf("%d", len(sm.stmt)+1)
+		sid = strconv.Itoa(len(sm.stmt) + 1)
 		sm.stmt[sKey] = sid
 	}
 	return prefix + sid

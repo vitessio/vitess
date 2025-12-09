@@ -173,6 +173,7 @@ type (
 		vm                  VSchemaOperator
 		semTable            *semantics.SemTable
 		queryTimeout        time.Duration
+		transactionTimeout  time.Duration
 
 		warnings []*querypb.QueryWarning // any warnings that are accumulated during the planning phase are stored here
 
@@ -297,7 +298,7 @@ func (vc *VCursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 	callerId := callerid.EffectiveCallerIDFromContext(ctx)
 	immediateCallerId := callerid.ImmediateCallerIDFromContext(ctx)
 
-	timedCtx, _ := context.WithTimeout(context.Background(), vc.config.WarmingReadsTimeout) // nolint
+	timedCtx, _ := context.WithTimeout(context.Background(), vc.config.WarmingReadsTimeout) //nolint
 	clonedCtx := callerid.NewContext(timedCtx, callerId, immediateCallerId)
 
 	v := &VCursorImpl{
@@ -714,6 +715,9 @@ func (vc *VCursorImpl) ExecutePrimitive(ctx context.Context, primitive engine.Pr
 			continue
 		}
 		vc.logOpTraffic(primitive, res)
+		if res != nil && res.InsertIDUpdated() {
+			vc.SafeSession.LastInsertId = res.InsertID
+		}
 		return res, err
 	}
 	return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "upstream shards are not available")
@@ -838,7 +842,7 @@ func (vc *VCursorImpl) markSavepoint(ctx context.Context, needsRollbackOnParialE
 	if !needsRollbackOnParialExec || !vc.SafeSession.CanAddSavepoint() {
 		return nil
 	}
-	uID := fmt.Sprintf("_vt%s", strings.ReplaceAll(uuid.NewString(), "-", "_"))
+	uID := "_vt" + strings.ReplaceAll(uuid.NewString(), "-", "_")
 	spQuery := fmt.Sprintf("%ssavepoint %s%s", vc.marginComments.Leading, uID, vc.marginComments.Trailing)
 	vc.SafeSession.SetExecReadQuery(true)
 	_, err := vc.executor.Execute(ctx, nil, "MarkSavepoint", vc.SafeSession, spQuery, bindVars, false)
@@ -1150,6 +1154,11 @@ func (vc *VCursorImpl) SetAutocommit(ctx context.Context, autocommit bool) error
 // SetQueryTimeout implements the SessionActions interface
 func (vc *VCursorImpl) SetQueryTimeout(maxExecutionTime int64) {
 	vc.SafeSession.QueryTimeout = maxExecutionTime
+}
+
+// SetTransactionTimeout implements the SessionActions interface
+func (vc *VCursorImpl) SetTransactionTimeout(transactionTimeout int64) {
+	vc.SafeSession.GetOrCreateOptions().TransactionTimeout = &transactionTimeout
 }
 
 // SetClientFoundRows implements the SessionActions interface

@@ -19,7 +19,7 @@ package cli
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
 	"os"
 	"os/signal"
 	"path"
@@ -66,7 +66,7 @@ func (t *topoFlags) buildTopology() (*vttestpb.VTTestTopology, error) {
 	keyspaces := t.keyspaces
 	shardCounts := t.shards
 	if len(keyspaces) != len(shardCounts) {
-		return nil, fmt.Errorf("--keyspaces must be same length as --shards")
+		return nil, errors.New("--keyspaces must be same length as --shards")
 	}
 
 	for i := range keyspaces {
@@ -120,7 +120,7 @@ func New() (cmd *cobra.Command) {
 		"Define the fake cluster topology as a compact text format encoded"+
 			" vttest proto. See vttest.proto for more information.")
 
-	cmd.Flags().StringVar(&config.SchemaDir, "schema_dir", "",
+	utils.SetFlagStringVar(cmd.Flags(), &config.SchemaDir, "schema-dir", "",
 		"Directory for initial schema files. Within this dir,"+
 			" there should be a subdir for each keyspace. Within"+
 			" each keyspace dir, each file is executed as SQL"+
@@ -128,25 +128,25 @@ func New() (cmd *cobra.Command) {
 			" If the directory contains a vschema.json file, it"+
 			" will be used as the vschema for the V3 API.")
 
-	cmd.Flags().StringVar(&config.DefaultSchemaDir, "default_schema_dir", "",
+	utils.SetFlagStringVar(cmd.Flags(), &config.DefaultSchemaDir, "default-schema-dir", "",
 		"Default directory for initial schema files. If no schema is found"+
-			" in schema_dir, default to this location.")
+			" in schema-dir, default to this location.")
 
-	cmd.Flags().StringVar(&config.DataDir, "data_dir", "",
+	utils.SetFlagStringVar(cmd.Flags(), &config.DataDir, "data-dir", "",
 		"Directory where the data files will be placed, defaults to a random "+
 			"directory under /vt/vtdataroot")
 
-	cmd.Flags().BoolVar(&config.OnlyMySQL, "mysql_only", false,
+	utils.SetFlagBoolVar(cmd.Flags(), &config.OnlyMySQL, "mysql-only", false,
 		"If this flag is set only mysql is initialized."+
 			" The rest of the vitess components are not started."+
 			" Also, the output specifies the mysql unix socket"+
 			" instead of the vtgate port.")
 
-	cmd.Flags().BoolVar(&config.PersistentMode, "persistent_mode", false,
+	utils.SetFlagBoolVar(cmd.Flags(), &config.PersistentMode, "persistent-mode", false,
 		"If this flag is set, the MySQL data directory is not cleaned up"+
 			" when LocalCluster.TearDown() is called. This is useful for running"+
 			" vttestserver as a database container in local developer environments. Note"+
-			" that db migration files (--schema_dir option) and seeding of"+
+			" that db migration files (--schema-dir option) and seeding of"+
 			" random data (--initialize-with-random-data option) will only run during"+
 			" cluster startup if the data directory does not already exist. "+
 			" Changes to VSchema are persisted across cluster restarts using a simple"+
@@ -157,72 +157,74 @@ func New() (cmd *cobra.Command) {
 			" with random data. See also the 'rng_seed' and 'min_shard_size'"+
 			" and 'max_shard_size' flags.")
 
-	cmd.Flags().IntVar(&seed.RngSeed, "rng_seed", 123,
+	utils.SetFlagIntVar(cmd.Flags(), &seed.RngSeed, "rng-seed", 123,
 		"The random number generator seed to use when initializing"+
 			" with random data (see also --initialize-with-random-data)."+
 			" Multiple runs with the same seed will result with the same"+
 			" initial data.")
 
-	cmd.Flags().IntVar(&seed.MinSize, "min_table_shard_size", 1000,
+	utils.SetFlagIntVar(cmd.Flags(), &seed.MinSize, "min-table-shard-size", 1000,
 		"The minimum number of initial rows in a table shard. Ignored if"+
 			"--initialize-with-random-data is false. The actual number is chosen"+
 			" randomly.")
 
-	cmd.Flags().IntVar(&seed.MaxSize, "max_table_shard_size", 10000,
+	utils.SetFlagIntVar(cmd.Flags(), &seed.MaxSize, "max-table-shard-size", 10000,
 		"The maximum number of initial rows in a table shard. Ignored if"+
 			"--initialize-with-random-data is false. The actual number is chosen"+
 			" randomly")
 
-	cmd.Flags().Float64Var(&seed.NullProbability, "null_probability", 0.1,
+	utils.SetFlagFloat64Var(cmd.Flags(), &seed.NullProbability, "null-probability", 0.1,
 		"The probability to initialize a field with 'NULL' "+
 			" if --initialize-with-random-data is true. Only applies to fields"+
 			" that can contain NULL values.")
 
-	cmd.Flags().StringVar(&config.MySQLBindHost, "mysql_bind_host", "localhost",
+	utils.SetFlagStringVar(cmd.Flags(), &config.MySQLBindHost, "mysql-bind-host", "localhost",
 		"which host to bind vtgate mysql listener to")
 
 	cmd.Flags().StringVar(&config.VtComboBindAddress, "vtcombo-bind-host", "localhost",
 		"which host to bind vtcombo servenv listener to")
 
-	cmd.Flags().StringVar(&mycnf, "extra_my_cnf", "",
+	utils.SetFlagStringVar(cmd.Flags(), &mycnf, "extra-my-cnf", "",
 		"extra files to add to the config, separated by ':'")
 
 	cmd.Flags().StringSliceVar(&topo.cells, "cells", []string{"test"}, "Comma separated list of cells")
 	cmd.Flags().StringSliceVar(&topo.keyspaces, "keyspaces", []string{"test_keyspace"},
 		"Comma separated list of keyspaces")
-	cmd.Flags().StringSliceVar(&topo.shards, "num_shards", []string{"2"},
+	utils.SetFlagStringSliceVar(cmd.Flags(), &topo.shards, "num-shards", []string{"2"},
 		"Comma separated shard count (one per keyspace)")
-	cmd.Flags().IntVar(&topo.replicas, "replica_count", 2,
+	utils.SetFlagIntVar(cmd.Flags(), &topo.replicas, "replica-count", 2,
 		"Replica tablets per shard (includes primary)")
-	cmd.Flags().IntVar(&topo.rdonly, "rdonly_count", 1,
+	utils.SetFlagIntVar(cmd.Flags(), &topo.rdonly, "rdonly-count", 1,
 		"Rdonly tablets per shard")
 
 	cmd.Flags().StringVar(&config.Charset, "charset", "utf8mb4", "MySQL charset")
 
 	cmd.Flags().StringVar(&config.PlannerVersion, "planner-version", "", "Sets the default planner to use when the session has not changed it. Valid values are: Gen4, Gen4Greedy, Gen4Left2Right")
 
-	cmd.Flags().StringVar(&config.SnapshotFile, "snapshot_file", "",
+	utils.SetFlagStringVar(cmd.Flags(), &config.SnapshotFile, "snapshot-file", "",
 		"A MySQL DB snapshot file")
 
-	cmd.Flags().BoolVar(&config.EnableSystemSettings, "enable_system_settings", true, "This will enable the system settings to be changed per session at the database connection level")
+	utils.SetFlagBoolVar(cmd.Flags(), &config.EnableSystemSettings, "enable-system-settings", true, "This will enable the system settings to be changed per session at the database connection level")
 
-	cmd.Flags().StringVar(&config.TransactionMode, "transaction_mode", "MULTI", "Transaction mode MULTI (default), SINGLE or TWOPC ")
+	utils.SetFlagStringVar(cmd.Flags(), &config.TransactionMode, "transaction-mode", "MULTI", "Transaction mode MULTI (default), SINGLE or TWOPC ")
 	cmd.Flags().DurationVar(&config.TransactionTimeout, "queryserver-config-transaction-timeout", 30*time.Second, "query server transaction timeout, a transaction will be killed if it takes longer than this value")
 
 	utils.SetFlagStringVar(cmd.Flags(), &config.TabletHostName, "tablet-hostname", "localhost", "The hostname to use for the tablet otherwise it will be derived from OS' hostname")
 
-	cmd.Flags().StringVar(&config.VSchemaDDLAuthorizedUsers, "vschema_ddl_authorized_users", "", "Comma separated list of users authorized to execute vschema ddl operations via vtgate")
+	utils.SetFlagStringVar(cmd.Flags(), &config.VSchemaDDLAuthorizedUsers, "vschema-ddl-authorized-users", "", "Comma separated list of users authorized to execute vschema ddl operations via vtgate")
 
 	utils.SetFlagStringVar(cmd.Flags(), &config.ForeignKeyMode, "foreign-key-mode", "allow", "This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow")
-	cmd.Flags().BoolVar(&config.EnableOnlineDDL, "enable_online_ddl", true, "Allow users to submit, review and control Online DDL")
-	cmd.Flags().BoolVar(&config.EnableDirectDDL, "enable_direct_ddl", true, "Allow users to submit direct DDL statements")
+	utils.SetFlagBoolVar(cmd.Flags(), &config.EnableOnlineDDL, "enable-online-ddl", true, "Allow users to submit, review and control Online DDL")
+	utils.SetFlagBoolVar(cmd.Flags(), &config.EnableDirectDDL, "enable-direct-ddl", true, "Allow users to submit direct DDL statements")
 
 	// flags for using an actual topo implementation for vtcombo instead of in-memory topo. useful for test setup where an external topo server is shared across multiple vtcombo processes or other components
-	cmd.Flags().StringVar(&config.ExternalTopoImplementation, "external_topo_implementation", "", "the topology implementation to use for vtcombo process")
-	cmd.Flags().StringVar(&config.ExternalTopoGlobalServerAddress, "external_topo_global_server_address", "", "the address of the global topology server for vtcombo process")
-	cmd.Flags().StringVar(&config.ExternalTopoGlobalRoot, "external_topo_global_root", "", "the path of the global topology data in the global topology server for vtcombo process")
+	utils.SetFlagStringVar(cmd.Flags(), &config.ExternalTopoImplementation, "external-topo-implementation", "", "the topology implementation to use for vtcombo process")
+	utils.SetFlagStringVar(cmd.Flags(), &config.ExternalTopoGlobalServerAddress, "external-topo-global-server-address", "", "the address of the global topology server for vtcombo process")
+	utils.SetFlagStringVar(cmd.Flags(), &config.ExternalTopoGlobalRoot, "external-topo-global-root", "", "the path of the global topology data in the global topology server for vtcombo process")
 
 	utils.SetFlagDurationVar(cmd.Flags(), &config.VtgateTabletRefreshInterval, "tablet-refresh-interval", 10*time.Second, "Interval at which vtgate refreshes tablet information from topology server.")
+
+	utils.SetFlagDurationVar(cmd.Flags(), &config.VtgateGatewayInitialTabletTimeout, "gateway-initial-tablet-timeout", 30*time.Second, "At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type")
 
 	cmd.Flags().BoolVar(&doCreateTCPUser, "initialize-with-vt-dba-tcp", false, "If this flag is enabled, MySQL will be initialized with an additional user named vt_dba_tcp, who will have access via TCP/IP connection.")
 

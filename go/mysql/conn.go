@@ -127,6 +127,10 @@ type Conn struct {
 	// It is set during the initial handshake.
 	UserData Getter
 
+	// ConnectionAttributes stores arbitrary client-supplied attributes sent in the
+	// connection handshake.
+	Attributes ConnectionAttributes
+
 	bufferedReader *bufio.Reader
 	flushTimer     *time.Timer
 	flushDelay     time.Duration
@@ -1355,7 +1359,6 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 			// packet for this query.
 			needsEndPacket = true
 			if len(qr.QueryResult.Fields) == 0 {
-
 				// A successful callback with no fields means that this was a
 				// DML or other write-only operation.
 				//

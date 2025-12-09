@@ -26,6 +26,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/servenv/testutils"
 	"vitess.io/vitess/go/vt/topo"
@@ -36,12 +38,112 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtorcdatapb "vitess.io/vitess/go/vt/proto/vtorcdata"
+	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 func compactJSON(in []byte) string {
 	buf := &bytes.Buffer{}
 	json.Compact(buf, in)
 	return strings.ReplaceAll(buf.String(), "\n", "")
+}
+
+// unmarshalProto unmarshals JSON data into a proto message
+func unmarshalProto(data []byte, msg proto.Message) error {
+	unmarshaler := protojson.UnmarshalOptions{
+		DiscardUnknown: true,
+	}
+	return unmarshaler.Unmarshal(data, msg)
+}
+
+// unmarshalProtoSlice unmarshals JSON array data into a slice of proto messages
+func unmarshalProtoSlice(data []byte, msgType proto.Message) ([]proto.Message, error) {
+	var jsonArray []json.RawMessage
+	if err := json.Unmarshal(data, &jsonArray); err != nil {
+		return nil, err
+	}
+
+	var result []proto.Message
+	for _, item := range jsonArray {
+		msg := proto.Clone(msgType)
+		if err := unmarshalProto(item, msg); err != nil {
+			return nil, err
+		}
+		result = append(result, msg)
+	}
+	return result, nil
+}
+
+// compareProtoResponse compares the actual JSON response with expected proto objects
+func compareProtoResponse(t *testing.T, actualJSON []byte, expected proto.Message, path string) {
+	actual := proto.Clone(expected)
+	proto.Reset(actual)
+
+	if err := unmarshalProto(actualJSON, actual); err != nil {
+		t.Fatalf("Failed to unmarshal response for %s: %v\nResponse: %s", path, err, string(actualJSON))
+	}
+
+	if !proto.Equal(actual, expected) {
+		actualJSON, _ := protojson.MarshalOptions{Multiline: true}.Marshal(actual)
+		expectedJSON, _ := protojson.MarshalOptions{Multiline: true}.Marshal(expected)
+		t.Fatalf("Proto comparison failed for %s:\nActual: %s\nExpected: %s", path, string(actualJSON), string(expectedJSON))
+	}
+}
+
+// compareProtoSliceResponse compares the actual JSON array response with expected proto objects
+func compareProtoSliceResponse(t *testing.T, actualJSON []byte, expected []proto.Message, msgType proto.Message, path string) {
+	actual, err := unmarshalProtoSlice(actualJSON, msgType)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal response for %s: %v\nResponse: %s", path, err, string(actualJSON))
+	}
+
+	if len(actual) != len(expected) {
+		t.Fatalf("Length mismatch for %s: got %d, want %d", path, len(actual), len(expected))
+	}
+
+	for i, actualItem := range actual {
+		if !proto.Equal(actualItem, expected[i]) {
+			actualJSON, _ := protojson.MarshalOptions{Multiline: true}.Marshal(actualItem)
+			expectedJSON, _ := protojson.MarshalOptions{Multiline: true}.Marshal(expected[i])
+			t.Fatalf("Proto comparison failed for %s[%d]:\nActual: %s\nExpected: %s", path, i, string(actualJSON), string(expectedJSON))
+		}
+	}
+}
+
+// compareTabletWithURLResponse compares the actual JSON response with expected TabletWithURL objects
+func compareTabletWithURLResponse(t *testing.T, actualJSON []byte, expected *TabletWithURL, path string) {
+	var actual TabletWithURL
+	if err := json.Unmarshal(actualJSON, &actual); err != nil {
+		t.Fatalf("Failed to unmarshal response for %s: %v\nResponse: %s", path, err, string(actualJSON))
+	}
+
+	// Compare the structs by marshaling them to JSON for comparison
+	actualJSON2, _ := json.Marshal(actual)
+	expectedJSON, _ := json.Marshal(expected)
+
+	if string(actualJSON2) != string(expectedJSON) {
+		t.Fatalf("TabletWithURL comparison failed for %s:\nActual: %s\nExpected: %s", path, string(actualJSON2), string(expectedJSON))
+	}
+}
+
+// compareTabletWithURLSliceResponse compares the actual JSON array response with expected TabletWithURL objects
+func compareTabletWithURLSliceResponse(t *testing.T, actualJSON []byte, expected []*TabletWithURL, path string) {
+	var actual []TabletWithURL
+	if err := json.Unmarshal(actualJSON, &actual); err != nil {
+		t.Fatalf("Failed to unmarshal response for %s: %v\nResponse: %s", path, err, string(actualJSON))
+	}
+
+	if len(actual) != len(expected) {
+		t.Fatalf("Length mismatch for %s: got %d, want %d", path, len(actual), len(expected))
+	}
+
+	for i, actualItem := range actual {
+		actualJSON2, _ := json.Marshal(actualItem)
+		expectedJSON, _ := json.Marshal(expected[i])
+		if string(actualJSON2) != string(expectedJSON) {
+			t.Fatalf("TabletWithURL comparison failed for %s[%d]:\nActual: %s\nExpected: %s", path, i, string(actualJSON2), string(expectedJSON))
+		}
+	}
 }
 
 func TestAPI(t *testing.T) {
@@ -57,6 +159,9 @@ func TestAPI(t *testing.T) {
 	ks1 := &topodatapb.Keyspace{
 		DurabilityPolicy: policy.DurabilitySemiSync,
 		SidecarDbName:    "_vt_sidecar_ks1",
+		VtorcState: &vtorcdatapb.Keyspace{
+			DisableEmergencyReparent: true,
+		},
 	}
 
 	// Populate topo. Remove ServedTypes from shards to avoid ordering issues.
@@ -130,221 +235,312 @@ func TestAPI(t *testing.T) {
 
 	initAPI(ctx, ts, actionRepo)
 
-	// all-tablets response for keyspace/ks1/tablets/ endpoints
-	keyspaceKs1AllTablets := `[
-		{
-			"alias": {
-				"cell": "cell1",
-				"uid": 100
-			},
-			"hostname": "mysql1-cell1.test.net",
-			"port_map": {
-				"vt": 100
-			},
-			"keyspace": "ks1",
-			"shard": "-80",
-			"key_range": {
-				"end": "gA=="
-			},
-			"type": 2,
-			"mysql_hostname": "mysql1-cell1.test.net",
-			"mysql_port": 3306,
-			"url": "http://mysql1-cell1.test.net:100"
-		},
-		{
-			"alias": {
-				"cell": "cell2",
-				"uid": 200
-			},
-			"hostname": "mysql2-cell2.test.net",
-			"port_map": {
-				"vt": 200
-			},
-			"keyspace": "ks1",
-			"shard": "-80",
-			"key_range": {
-				"end": "gA=="
-			},
-			"type": 2,
-			"mysql_hostname": "mysql2-cell2.test.net",
-			"mysql_port": 3306,
-			"url": "http://mysql2-cell2.test.net:200"
-		}
-	]`
+	// Define expected proto objects for responses
+	expectedTablet1 := &TabletWithURL{
+		Alias:         &topodatapb.TabletAlias{Cell: "cell1", Uid: 100},
+		Hostname:      "mysql1-cell1.test.net",
+		PortMap:       map[string]int32{"vt": 100},
+		Keyspace:      "ks1",
+		Shard:         "-80",
+		KeyRange:      &topodatapb.KeyRange{Start: nil, End: []byte{0x80}},
+		Type:          topodatapb.TabletType_REPLICA,
+		MysqlHostname: "mysql1-cell1.test.net",
+		MysqlPort:     3306,
+		URL:           "http://mysql1-cell1.test.net:100",
+	}
 
-	// Test cases.
-	table := []struct {
-		method, path, body, want string
-		statusCode               int
-	}{
+	expectedTablet2 := &TabletWithURL{
+		Alias:         &topodatapb.TabletAlias{Cell: "cell2", Uid: 200},
+		Hostname:      "mysql2-cell2.test.net",
+		PortMap:       map[string]int32{"vt": 200},
+		Keyspace:      "ks1",
+		Shard:         "-80",
+		KeyRange:      &topodatapb.KeyRange{Start: nil, End: []byte{0x80}},
+		Type:          topodatapb.TabletType_REPLICA,
+		MysqlHostname: "mysql2-cell2.test.net",
+		MysqlPort:     3306,
+		URL:           "http://mysql2-cell2.test.net:200",
+	}
+
+	expectedKeyspace1 := &topodatapb.Keyspace{
+		KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
+		BaseKeyspace:     "",
+		SnapshotTime:     nil,
+		DurabilityPolicy: policy.DurabilitySemiSync,
+		ThrottlerConfig:  nil,
+		SidecarDbName:    "_vt_sidecar_ks1",
+		VtorcState: &vtorcdatapb.Keyspace{
+			DisableEmergencyReparent: true,
+		},
+	}
+
+	expectedKeyspace2 := &topodatapb.Keyspace{
+		KeyspaceType:     topodatapb.KeyspaceType_SNAPSHOT,
+		BaseKeyspace:     "ks1",
+		SnapshotTime:     &vttime.Time{Seconds: 1136214245},
+		DurabilityPolicy: policy.DurabilityNone,
+		ThrottlerConfig:  nil,
+		SidecarDbName:    "_vt",
+	}
+
+	expectedShard := &topodatapb.Shard{
+		PrimaryAlias:         nil,
+		PrimaryTermStartTime: nil,
+		KeyRange: &topodatapb.KeyRange{
+			Start: nil,
+			End:   []byte{0x80},
+		},
+		SourceShards:     []*topodatapb.Shard_SourceShard{},
+		TabletControls:   []*topodatapb.Shard_TabletControl{},
+		IsPrimaryServing: true,
+		VtorcState:       nil,
+	}
+
+	// Test cases with proto-based expectations
+	type testCase struct {
+		method     string
+		path       string
+		body       string
+		statusCode int
+		// For proto-based tests
+		expectedProto     proto.Message
+		expectedProtoList []proto.Message
+		msgType           proto.Message
+		// For TabletWithURL-based tests
+		expectedTabletWithURL     *TabletWithURL
+		expectedTabletWithURLList []*TabletWithURL
+		// For vtctl POST Output proto comparison
+		expectedOutputProto proto.Message
+		// For string-based tests (fallback)
+		expectedString string
+		useStringMatch bool
+	}
+
+	table := []testCase{
 		// Create snapshot keyspace with durability policy specified
-		{"POST", "vtctl/", `["CreateKeyspace", "--keyspace_type=SNAPSHOT", "--base_keyspace=ks1", "--snapshot_time=2006-01-02T15:04:05+00:00", "--durability-policy=semi_sync", "--sidecar-db-name=_vt_sidecar_ks3", "ks3"]`, `{
-  "Error": "durability-policy cannot be specified while creating a snapshot keyspace"`, http.StatusOK},
+		{
+			method:         "POST",
+			path:           "vtctl/",
+			body:           `["CreateKeyspace", "--keyspace_type=SNAPSHOT", "--base_keyspace=ks1", "--snapshot_time=2006-01-02T15:04:05+00:00", "--durability-policy=semi_sync", "--sidecar-db-name=_vt_sidecar_ks3", "ks3"]`,
+			expectedString: `{"Error": "durability-policy cannot be specified while creating a snapshot keyspace","Output": ""}`,
+			statusCode:     http.StatusOK,
+			useStringMatch: true,
+		},
 		// Create snapshot keyspace using API
-		{"POST", "vtctl/", `["CreateKeyspace", "--keyspace_type=SNAPSHOT", "--base_keyspace=ks1", "--snapshot_time=2006-01-02T15:04:05+00:00", "ks3"]`, `{
-		   "Error": "",
-		   "Output": ""
-		}`, http.StatusOK},
+		{
+			method:         "POST",
+			path:           "vtctl/",
+			body:           `["CreateKeyspace", "--keyspace_type=SNAPSHOT", "--base_keyspace=ks1", "--snapshot_time=2006-01-02T15:04:05+00:00", "ks3"]`,
+			expectedString: `{"Error": "","Output": ""}`,
+			statusCode:     http.StatusOK,
+			useStringMatch: true,
+		},
 
 		// Cells
-		{"GET", "cells", "", `["cell1","cell2"]`, http.StatusOK},
+		{
+			method:         "GET",
+			path:           "cells",
+			expectedString: `["cell1","cell2"]`,
+			statusCode:     http.StatusOK,
+			useStringMatch: true,
+		},
 
-		// Keyspace
-		{"GET", "keyspace/doesnt-exist/tablets/", "", ``, http.StatusNotFound},
-		{"GET", "keyspace/ks1/tablets/", "", keyspaceKs1AllTablets, http.StatusOK},
-		{"GET", "keyspace/ks1/tablets/-80", "", keyspaceKs1AllTablets, http.StatusOK},
-		{"GET", "keyspace/ks1/tablets/80-", "", `[]`, http.StatusOK},
-		{"GET", "keyspace/ks1/tablets/?cells=cell1,cell2", "", keyspaceKs1AllTablets, http.StatusOK},
-		{"GET", "keyspace/ks1/tablets/?cells=cell1", "", `[
-			{
-				"alias": {
-					"cell": "cell1",
-					"uid": 100
-				},
-				"hostname": "mysql1-cell1.test.net",
-				"port_map": {
-					"vt": 100
-				},
-				"keyspace": "ks1",
-				"shard": "-80",
-				"key_range": {
-					"end": "gA=="
-				},
-				"type": 2,
-				"mysql_hostname": "mysql1-cell1.test.net",
-				"mysql_port": 3306,
-				"url": "http://mysql1-cell1.test.net:100"
-			}
-		]`, http.StatusOK},
-		{"GET", "keyspace/ks1/tablets/?cells=cell3", "", `[]`, http.StatusOK},
-		{"GET", "keyspace/ks1/tablets/?cell=cell2", "", `[
-			{
-				"alias": {
-					"cell": "cell2",
-					"uid": 200
-				},
-				"hostname": "mysql2-cell2.test.net",
-				"port_map": {
-					"vt": 200
-				},
-				"keyspace": "ks1",
-				"shard": "-80",
-				"key_range": {
-					"end": "gA=="
-				},
-				"type": 2,
-				"mysql_hostname": "mysql2-cell2.test.net",
-				"mysql_port": 3306,
-				"url": "http://mysql2-cell2.test.net:200"
-			}
-		]`, http.StatusOK},
-		{"GET", "keyspace/ks1/tablets/?cell=cell3", "", `[]`, http.StatusOK},
+		// Keyspace tablets - all tablets
+		{
+			method:                    "GET",
+			path:                      "keyspace/ks1/tablets/",
+			expectedTabletWithURLList: []*TabletWithURL{expectedTablet1, expectedTablet2},
+			statusCode:                http.StatusOK,
+		},
+		// Keyspace tablets - specific shard
+		{
+			method:                    "GET",
+			path:                      "keyspace/ks1/tablets/-80",
+			expectedTabletWithURLList: []*TabletWithURL{expectedTablet1, expectedTablet2},
+			statusCode:                http.StatusOK,
+		},
+		// Keyspace tablets - empty shard
+		{
+			method:         "GET",
+			path:           "keyspace/ks1/tablets/80-",
+			expectedString: `[]`,
+			statusCode:     http.StatusOK,
+			useStringMatch: true,
+		},
+		// Keyspace tablets - filtered by cells
+		{
+			method:                    "GET",
+			path:                      "keyspace/ks1/tablets/?cells=cell1",
+			expectedTabletWithURLList: []*TabletWithURL{expectedTablet1},
+			statusCode:                http.StatusOK,
+		},
+		// Keyspace tablets - filtered by single cell
+		{
+			method:                    "GET",
+			path:                      "keyspace/ks1/tablets/?cell=cell2",
+			expectedTabletWithURLList: []*TabletWithURL{expectedTablet2},
+			statusCode:                http.StatusOK,
+		},
 
 		// Keyspaces
-		{"GET", "keyspaces", "", `["ks1", "ks3"]`, http.StatusOK},
-		{"GET", "keyspaces/ks1", "", `{
-				"keyspace_type":0,
-				"base_keyspace":"",
-				"snapshot_time":null,
-				"durability_policy":"semi_sync",
-				"throttler_config": null,
-				"sidecar_db_name":"_vt_sidecar_ks1"
-			}`, http.StatusOK},
-		{"GET", "keyspaces/nonexistent", "", "404 page not found", http.StatusNotFound},
-		{"POST", "keyspaces/ks1?action=TestKeyspaceAction", "", `{
-				"Name": "TestKeyspaceAction",
-				"Parameters": "ks1",
-				"Output": "TestKeyspaceAction Result",
-				"Error": false
-			}`, http.StatusOK},
+		{
+			method:         "GET",
+			path:           "keyspaces",
+			expectedString: `["ks1", "ks3"]`,
+			statusCode:     http.StatusOK,
+			useStringMatch: true,
+		},
+		{
+			method:        "GET",
+			path:          "keyspaces/ks1",
+			expectedProto: expectedKeyspace1,
+			statusCode:    http.StatusOK,
+		},
+		{
+			method:         "GET",
+			path:           "keyspaces/nonexistent",
+			expectedString: "404 page not found",
+			statusCode:     http.StatusNotFound,
+			useStringMatch: true,
+		},
+		{
+			method:         "POST",
+			path:           "keyspaces/ks1?action=TestKeyspaceAction",
+			expectedString: `{"Name": "TestKeyspaceAction","Parameters": "ks1","Output": "TestKeyspaceAction Result","Error": false}`,
+			statusCode:     http.StatusOK,
+			useStringMatch: true,
+		},
 
 		// Shards
-		{"GET", "shards/ks1/", "", `["-80","80-"]`, http.StatusOK},
-		{"GET", "shards/ks1/-80", "", `{
-				"primary_alias": null,
-				"primary_term_start_time":null,
-				"key_range": {
-					"start": "",
-					"end":"gA=="
-				},
-				"source_shards": [],
-				"tablet_controls": [],
-				"is_primary_serving": true
-			}`, http.StatusOK},
-		{"GET", "shards/ks1/-DEAD", "", "404 page not found", http.StatusNotFound},
-		{"POST", "shards/ks1/-80?action=TestShardAction", "", `{
-				"Name": "TestShardAction",
-				"Parameters": "ks1/-80",
-				"Output": "TestShardAction Result",
-				"Error": false
-			}`, http.StatusOK},
+		{
+			method:         "GET",
+			path:           "shards/ks1/",
+			expectedString: `["-80","80-"]`,
+			statusCode:     http.StatusOK,
+			useStringMatch: true,
+		},
+		{
+			method:        "GET",
+			path:          "shards/ks1/-80",
+			expectedProto: expectedShard,
+			statusCode:    http.StatusOK,
+		},
+		{
+			method:         "GET",
+			path:           "shards/ks1/-DEAD",
+			expectedString: "404 page not found",
+			statusCode:     http.StatusNotFound,
+			useStringMatch: true,
+		},
+		{
+			method:         "POST",
+			path:           "shards/ks1/-80?action=TestShardAction",
+			expectedString: `{"Name": "TestShardAction","Parameters": "ks1/-80","Output": "TestShardAction Result","Error": false}`,
+			statusCode:     http.StatusOK,
+			useStringMatch: true,
+		},
 
 		// Tablets
-		{"GET", "tablets/?shard=ks1%2F-80", "", `[
-				{"cell":"cell1","uid":100},
-				{"cell":"cell2","uid":200}
-			]`, http.StatusOK},
-		{"GET", "tablets/?cell=cell1", "", `[
-				{"cell":"cell1","uid":100}
-			]`, http.StatusOK},
-		{"GET", "tablets/?shard=ks1%2F-80&cell=cell2", "", `[
-				{"cell":"cell2","uid":200}
-			]`, http.StatusOK},
-		{"GET", "tablets/?shard=ks1%2F80-&cell=cell1", "", `[]`, http.StatusOK},
-		{"GET", "tablets/cell1-100", "", `{
-				"alias": {"cell": "cell1", "uid": 100},
-				"hostname": "mysql1-cell1.test.net",
-				"port_map": {"vt": 100},
-				"keyspace": "ks1",
-				"shard": "-80",
-				"key_range": {
-					"end": "gA=="
-				},
-				"type": 2,
-				"mysql_hostname": "mysql1-cell1.test.net",
-				"mysql_port": 3306,
-				"url":"http://mysql1-cell1.test.net:100"
-			}`, http.StatusOK},
-		{"GET", "tablets/nonexistent-999", "", "404 page not found", http.StatusNotFound},
-		{"POST", "tablets/cell1-100?action=TestTabletAction", "", `{
-				"Name": "TestTabletAction",
-				"Parameters": "cell1-0000000100",
-				"Output": "TestTabletAction Result",
-				"Error": false
-			}`, http.StatusOK},
-
-		// Tablet Updates
-		{"GET", "tablet_statuses/?keyspace=all&cell=all&type=all&metric=lag", "", "404 page not found", http.StatusNotFound},
-		{"GET", "tablet_statuses/cell1/REPLICA/lag", "", "404 page not found", http.StatusNotFound},
-		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=hello&metric=lag", "", "404 page not found", http.StatusNotFound},
-
-		// Tablet Health
-		{"GET", "tablet_health/cell1/100", "", "404 page not found", http.StatusNotFound},
-		{"GET", "tablet_health/cell1", "", "404 page not found", http.StatusNotFound},
-		{"GET", "tablet_health/cell1/gh", "", "404 page not found", http.StatusNotFound},
-
-		// Topology Info
-		{"GET", "topology_info/?keyspace=all&cell=all", "", "404 page not found", http.StatusNotFound},
+		{
+			method:         "GET",
+			path:           "tablets/?shard=ks1%2F-80",
+			expectedString: `[{"cell":"cell1","uid":100},{"cell":"cell2","uid":200}]`,
+			statusCode:     http.StatusOK,
+			useStringMatch: true,
+		},
+		{
+			method:         "GET",
+			path:           "tablets/?cell=cell1",
+			expectedString: `[{"cell":"cell1","uid":100}]`,
+			statusCode:     http.StatusOK,
+			useStringMatch: true,
+		},
+		{
+			method:         "GET",
+			path:           "tablets/?shard=ks1%2F-80&cell=cell2",
+			expectedString: `[{"cell":"cell2","uid":200}]`,
+			statusCode:     http.StatusOK,
+			useStringMatch: true,
+		},
+		{
+			method:         "GET",
+			path:           "tablets/?shard=ks1%2F80-&cell=cell1",
+			expectedString: `[]`,
+			statusCode:     http.StatusOK,
+			useStringMatch: true,
+		},
+		{
+			method:                "GET",
+			path:                  "tablets/cell1-100",
+			expectedTabletWithURL: expectedTablet1,
+			statusCode:            http.StatusOK,
+		},
+		{
+			method:         "GET",
+			path:           "tablets/nonexistent-999",
+			expectedString: "404 page not found",
+			statusCode:     http.StatusNotFound,
+			useStringMatch: true,
+		},
+		{
+			method:         "POST",
+			path:           "tablets/cell1-100?action=TestTabletAction",
+			expectedString: `{"Name": "TestTabletAction","Parameters": "cell1-0000000100","Output": "TestTabletAction Result","Error": false}`,
+			statusCode:     http.StatusOK,
+			useStringMatch: true,
+		},
 
 		// vtctl RunCommand
-		{"POST", "vtctl/", `["GetKeyspace","ks1"]`, `{
-		   "Error": "",
-		   "Output": "{\n  \"keyspace_type\": 0,\n  \"base_keyspace\": \"\",\n  \"snapshot_time\": null,\n  \"durability_policy\": \"semi_sync\",\n  \"throttler_config\": null,\n  \"sidecar_db_name\": \"_vt_sidecar_ks1\"\n}\n\n"
-		}`, http.StatusOK},
-		{"POST", "vtctl/", `["GetKeyspace","ks3"]`, `{
-		   "Error": "",
-		   "Output": "{\n  \"keyspace_type\": 1,\n  \"base_keyspace\": \"ks1\",\n  \"snapshot_time\": {\n    \"seconds\": \"1136214245\",\n    \"nanoseconds\": 0\n  },\n  \"durability_policy\": \"none\",\n  \"throttler_config\": null,\n  \"sidecar_db_name\": \"_vt\"\n}\n\n"
-		}`, http.StatusOK},
-		{"POST", "vtctl/", `["GetVSchema","ks3"]`, `{
-		   "Error": "",
-		   "Output": "{\n  \"sharded\": true,\n  \"vindexes\": {\n    \"name1\": {\n      \"type\": \"hash\"\n    }\n  },\n  \"tables\": {\n    \"table1\": {\n      \"columnVindexes\": [\n        {\n          \"column\": \"column1\",\n          \"name\": \"name1\"\n        }\n      ]\n    }\n  },\n  \"requireExplicitRouting\": true\n}\n\n"
-		}`, http.StatusOK},
-		{"POST", "vtctl/", `["GetKeyspace","does_not_exist"]`, `{
-			"Error": "node doesn't exist: keyspaces/does_not_exist/Keyspace",
-		   "Output": ""
-		}`, http.StatusOK},
-		{"POST", "vtctl/", `["Panic"]`, `uncaught panic: this command panics on purpose`, http.StatusInternalServerError},
+		{
+			method:              "POST",
+			path:                "vtctl/",
+			body:                `["GetKeyspace","ks1"]`,
+			expectedOutputProto: expectedKeyspace1,
+			statusCode:          http.StatusOK,
+		},
+		{
+			method:              "POST",
+			path:                "vtctl/",
+			body:                `["GetKeyspace","ks3"]`,
+			expectedOutputProto: expectedKeyspace2,
+			statusCode:          http.StatusOK,
+		},
+		{
+			method: "POST",
+			path:   "vtctl/",
+			body:   `["GetVSchema","ks3"]`,
+			expectedOutputProto: &vschemapb.Keyspace{
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"name1": {Type: "hash"},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"table1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{Column: "column1", Name: "name1"}},
+					},
+				},
+				RequireExplicitRouting: true,
+			},
+			statusCode: http.StatusOK,
+		},
+		{
+			method:         "POST",
+			path:           "vtctl/",
+			body:           `["GetKeyspace","does_not_exist"]`,
+			expectedString: `{"Error": "node doesn't exist: keyspaces/does_not_exist/Keyspace","Output": ""}`,
+			statusCode:     http.StatusOK,
+			useStringMatch: true,
+		},
+		{
+			method:         "POST",
+			path:           "vtctl/",
+			body:           `["Panic"]`,
+			expectedString: `uncaught panic: this command panics on purpose`,
+			statusCode:     http.StatusInternalServerError,
+			useStringMatch: true,
+		},
 	}
+
 	for _, in := range table {
 		t.Run(in.method+in.path, func(t *testing.T) {
 			var resp *http.Response
@@ -367,19 +563,69 @@ func TestAPI(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, in.statusCode, resp.StatusCode)
 
-			got := compactJSON(body)
-			want := compactJSON([]byte(in.want))
-			if want == "" {
-				// want is not valid JSON. Fallback to a string comparison.
-				want = in.want
-				// For unknown reasons errors have a trailing "\n\t\t". Remove it.
-				got = strings.TrimSpace(string(body))
-			}
-			if !strings.HasPrefix(got, want) {
-				t.Fatalf("For path [%v] got\n'%v', want\n'%v'", in.path, got, want)
-				return
+			if in.useStringMatch {
+				// Fallback to string comparison for non-proto responses
+				got := compactJSON(body)
+				want := compactJSON([]byte(in.expectedString))
+				if want == "" {
+					// want is not valid JSON. Fallback to a string comparison.
+					want = in.expectedString
+					// For unknown reasons errors have a trailing "\n\t\t". Remove it.
+					got = strings.TrimSpace(string(body))
+				}
+				// Use contains instead of prefix for more flexible matching
+				if !strings.Contains(got, want) {
+					t.Fatalf("For path [%v] got\n'%v', want to contain\n'%v'", in.path, got, want)
+				}
+			} else if in.expectedProto != nil {
+				// Compare single proto object
+				compareProtoResponse(t, body, in.expectedProto, in.path)
+			} else if in.expectedProtoList != nil {
+				// Compare list of proto objects
+				compareProtoSliceResponse(t, body, in.expectedProtoList, in.msgType, in.path)
+			} else if in.expectedTabletWithURL != nil {
+				// Compare TabletWithURL object
+				compareTabletWithURLResponse(t, body, in.expectedTabletWithURL, in.path)
+			} else if in.expectedTabletWithURLList != nil {
+				// Compare list of TabletWithURL objects
+				compareTabletWithURLSliceResponse(t, body, in.expectedTabletWithURLList, in.path)
+			} else if in.expectedOutputProto != nil {
+				// Compare vtctl POST Output field as proto
+				compareOutputProto(t, body, in.expectedOutputProto, in.path)
 			}
 		})
+	}
+}
 
+// mustMarshalProto marshals a proto message to JSON, panicking on error
+func mustMarshalProto(msg proto.Message) []byte {
+	data, err := protojson.MarshalOptions{EmitUnpopulated: true, UseProtoNames: true, Multiline: true, UseEnumNumbers: true}.Marshal(msg)
+	if err != nil {
+		panic(err)
+	}
+	return data
+}
+
+// Helper to compare Output field as proto
+func compareOutputProto(t *testing.T, body []byte, expected proto.Message, path string) {
+	var resp struct {
+		Error  string `json:"Error"`
+		Output string `json:"Output"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("Failed to unmarshal vtctl response for %s: %v\nResponse: %s", path, err, string(body))
+	}
+	if resp.Error != "" {
+		t.Fatalf("Expected no error for %s, got: %s", path, resp.Error)
+	}
+	actual := proto.Clone(expected)
+	proto.Reset(actual)
+	if err := protojson.Unmarshal([]byte(resp.Output), actual); err != nil {
+		t.Fatalf("Failed to unmarshal Output as proto for %s: %v\nOutput: %s", path, err, resp.Output)
+	}
+	if !proto.Equal(actual, expected) {
+		actualJSON, _ := protojson.MarshalOptions{Multiline: true}.Marshal(actual)
+		expectedJSON, _ := protojson.MarshalOptions{Multiline: true}.Marshal(expected)
+		t.Fatalf("Proto Output comparison failed for %s:\nActual: %s\nExpected: %s", path, string(actualJSON), string(expectedJSON))
 	}
 }

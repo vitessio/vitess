@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	vtutils "vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
 
@@ -57,7 +58,7 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtgateGrpcPort = clusterInstance.GetAndReservePort()
 		// Set extra tablet args for twopc
 		clusterInstance.VtTabletExtraArgs = []string{
-			"--twopc_abandon_age", "3600",
+			vtutils.GetFlagVariantForTests("--twopc-abandon-age"), "3600",
 		}
 
 		// Start topo server
@@ -94,7 +95,6 @@ func TestMain(m *testing.M) {
 
 // TestTransactionModes tests transactions using twopc mode
 func TestTransactionModes(t *testing.T) {
-
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)

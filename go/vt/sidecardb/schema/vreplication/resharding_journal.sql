@@ -18,6 +18,6 @@ CREATE TABLE IF NOT EXISTS resharding_journal
 (
     `id`      bigint NOT NULL,
     `db_name` varbinary(255) DEFAULT NULL,
-    `val`     blob,
+    `val`     longblob,
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB CHARSET = utf8mb4

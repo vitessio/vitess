@@ -167,7 +167,7 @@ func TestAllocateFlows(t *testing.T) {
 
 		// Run the balancer over each vtgate cell
 		for _, localCell := range vtGateCells {
-			b := NewTabletBalancer(localCell, vtGateCells).(*tabletBalancer)
+			b := newFlowBalancer(localCell, vtGateCells).(*flowBalancer)
 			a := b.allocateFlows(tablets)
 			b.allocations[discovery.KeyFromTarget(target)] = a
 
@@ -295,7 +295,7 @@ func TestBalancedPick(t *testing.T) {
 		// Run the algorithm a bunch of times to get a random enough sample
 		N := 1000000
 		for _, localCell := range vtGateCells {
-			b := NewTabletBalancer(localCell, vtGateCells).(*tabletBalancer)
+			b := newFlowBalancer(localCell, vtGateCells).(*flowBalancer)
 
 			for i := 0; i < N/len(vtGateCells); i++ {
 				th := b.Pick(target, tablets, PickOpts{})
@@ -327,7 +327,7 @@ func TestTopologyChanged(t *testing.T) {
 	}
 	target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA}
 
-	b := NewTabletBalancer("b", []string{"a", "b"}).(*tabletBalancer)
+	b := newFlowBalancer("b", []string{"a", "b"}).(*flowBalancer)
 
 	N := 1
 

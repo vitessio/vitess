@@ -84,11 +84,12 @@ const (
 	ERKeyDoesNotExist       = ErrorCode(1176)
 
 	// permissions
-	ERDBAccessDenied            = ErrorCode(1044)
-	ERAccessDeniedError         = ErrorCode(1045)
-	ERKillDenied                = ErrorCode(1095)
-	ERNoPermissionToCreateUsers = ErrorCode(1211)
-	ERSpecifiedAccessDenied     = ErrorCode(1227)
+	ERDBAccessDenied               = ErrorCode(1044)
+	ERAccessDeniedError            = ErrorCode(1045)
+	ERKillDenied                   = ErrorCode(1095)
+	ERNoPermissionToCreateUsers    = ErrorCode(1211)
+	ERSpecifiedAccessDenied        = ErrorCode(1227)
+	ERBinlogCreateRoutineNeedSuper = ErrorCode(1419)
 
 	// failed precondition
 	ERNoDb                          = ErrorCode(1046)
@@ -97,6 +98,7 @@ const (
 	ERTableNotLockedForWrite        = ErrorCode(1099)
 	ERTableNotLocked                = ErrorCode(1100)
 	ERTooBigSelect                  = ErrorCode(1104)
+	ERTableAccessDenied             = ErrorCode(1142)
 	ERNotAllowedCommand             = ErrorCode(1148)
 	ERTooLongString                 = ErrorCode(1162)
 	ERDelayedInsertTableLocked      = ErrorCode(1165)
@@ -123,6 +125,7 @@ const (
 	ErSPNotVarArg                   = ErrorCode(1414)
 	ERRowIsReferenced2              = ErrorCode(1451)
 	ErNoReferencedRow2              = ErrorCode(1452)
+	ERSourceHasPurgedRequiredGtids  = ErrorCode(1789)
 	ERInnodbIndexCorrupt            = ErrorCode(1817)
 	ERDupIndex                      = ErrorCode(1831)
 	ERInnodbReadOnly                = ErrorCode(1874)

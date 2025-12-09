@@ -161,3 +161,103 @@ func TestIsDistinct(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckAllWindowOpCodes(t *testing.T) {
+	// This test is just checking that we never reach the panic when using Type() on valid opcodes
+	for i := WindowOpcode(0); i < _NumOfWindowOpCodes; i++ {
+		i.SQLType(sqltypes.Null)
+	}
+}
+
+func TestWindowType(t *testing.T) {
+	tt := []struct {
+		opcode WindowOpcode
+		typ    querypb.Type
+		out    querypb.Type
+	}{
+		{WindowUnassigned, sqltypes.VarChar, sqltypes.Null},
+		{WindowRowNumber, sqltypes.VarChar, sqltypes.Int64},
+		{WindowRank, sqltypes.VarChar, sqltypes.Int64},
+		{WindowDenseRank, sqltypes.VarChar, sqltypes.Int64},
+		{WindowPercentRank, sqltypes.VarChar, sqltypes.Float64},
+		{WindowCumeDist, sqltypes.VarChar, sqltypes.Float64},
+		{WindowNtile, sqltypes.VarChar, sqltypes.Int64},
+		{WindowFirstValue, sqltypes.Int64, sqltypes.Int64},
+		{WindowFirstValue, sqltypes.VarChar, sqltypes.VarChar},
+		{WindowLastValue, sqltypes.Int64, sqltypes.Int64},
+		{WindowNthValue, sqltypes.Int64, sqltypes.Int64},
+		{WindowLead, sqltypes.Int64, sqltypes.Int64},
+		{WindowLag, sqltypes.Int64, sqltypes.Int64},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.opcode.String()+"_"+tc.typ.String(), func(t *testing.T) {
+			out := tc.opcode.SQLType(tc.typ)
+			assert.Equal(t, tc.out, out)
+		})
+	}
+}
+
+func TestWindowType_Panic(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			errMsg, ok := r.(string)
+			assert.True(t, ok, "Expected a string panic message")
+			assert.Contains(t, errMsg, "invalid window function found", "Expected panic message containing 'invalid window function found'")
+		}
+	}()
+	WindowOpcode(999).SQLType(sqltypes.VarChar)
+}
+
+func TestWindowOpcode_MarshalJSON(t *testing.T) {
+	tt := []struct {
+		opcode WindowOpcode
+		out    string
+	}{
+		{WindowRowNumber, "\"row_number\""},
+		{WindowRank, "\"rank\""},
+		{WindowDenseRank, "\"dense_rank\""},
+		{WindowPercentRank, "\"percent_rank\""},
+		{WindowCumeDist, "\"cume_dist\""},
+		{WindowNtile, "\"ntile\""},
+		{WindowLead, "\"lead\""},
+		{WindowLag, "\"lag\""},
+		{WindowFirstValue, "\"first_value\""},
+		{WindowLastValue, "\"last_value\""},
+		{WindowNthValue, "\"nth_value\""},
+		{999, "\"ERROR\""},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.opcode.String(), func(t *testing.T) {
+			out, err := json.Marshal(tc.opcode)
+			require.NoError(t, err, "Unexpected error")
+			assert.Equal(t, tc.out, string(out))
+		})
+	}
+}
+
+func TestWindowNullable(t *testing.T) {
+	tt := []struct {
+		opcode   WindowOpcode
+		nullable bool
+	}{
+		{WindowRowNumber, false},
+		{WindowRank, false},
+		{WindowDenseRank, false},
+		{WindowPercentRank, false},
+		{WindowCumeDist, false},
+		{WindowNtile, false},
+		{WindowLead, true},
+		{WindowLag, true},
+		{WindowFirstValue, true},
+		{WindowLastValue, true},
+		{WindowNthValue, true},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.opcode.String(), func(t *testing.T) {
+			assert.Equal(t, tc.nullable, tc.opcode.Nullable())
+		})
+	}
+}

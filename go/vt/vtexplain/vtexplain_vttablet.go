@@ -664,7 +664,6 @@ func (t *explainTablet) handleSelect(query string) (*sqltypes.Result, error) {
 			}
 			colTypeMap[k] = v
 		}
-
 	}
 
 	colNames, colTypes := t.analyzeExpressions(selStmt, tableColumnMap)

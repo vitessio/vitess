@@ -18,11 +18,13 @@ package binlog
 
 import (
 	"bytes"
-	"fmt"
+	"strconv"
 	"testing"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCellLengthAndData(t *testing.T) {
@@ -54,37 +56,37 @@ func TestCellLengthAndData(t *testing.T) {
 		styp: querypb.Type_UINT16,
 		data: []byte{0x82, 0x81},
 		out: sqltypes.MakeTrusted(querypb.Type_UINT16,
-			[]byte(fmt.Sprintf("%v", 0x8182))),
+			[]byte(strconv.Itoa(0x8182))),
 	}, {
 		typ:  TypeShort,
 		styp: querypb.Type_INT16,
 		data: []byte{0xfe, 0xff},
 		out: sqltypes.MakeTrusted(querypb.Type_INT16,
-			[]byte(fmt.Sprintf("%v", -1-int32(0x0001)))),
+			[]byte(strconv.Itoa(int(-1-int32(0x0001))))),
 	}, {
 		typ:  TypeInt24,
 		styp: querypb.Type_UINT24,
 		data: []byte{0x83, 0x82, 0x81},
 		out: sqltypes.MakeTrusted(querypb.Type_UINT24,
-			[]byte(fmt.Sprintf("%v", 0x818283))),
+			[]byte(strconv.Itoa(0x818283))),
 	}, {
 		typ:  TypeInt24,
 		styp: querypb.Type_INT24,
 		data: []byte{0xfd, 0xfe, 0xff},
 		out: sqltypes.MakeTrusted(querypb.Type_INT24,
-			[]byte(fmt.Sprintf("%v", -1-int32(0x000102)))),
+			[]byte(strconv.Itoa(int(-1-int32(0x000102))))),
 	}, {
 		typ:  TypeLong,
 		styp: querypb.Type_UINT32,
 		data: []byte{0x84, 0x83, 0x82, 0x81},
 		out: sqltypes.MakeTrusted(querypb.Type_UINT32,
-			[]byte(fmt.Sprintf("%v", uint32(0x81828384)))),
+			[]byte(strconv.FormatUint(uint64(uint32(0x81828384)), 10))),
 	}, {
 		typ:  TypeLong,
 		styp: querypb.Type_INT32,
 		data: []byte{0xfc, 0xfd, 0xfe, 0xff},
 		out: sqltypes.MakeTrusted(querypb.Type_INT32,
-			[]byte(fmt.Sprintf("%v", -1-int32(0x00010203)))),
+			[]byte(strconv.Itoa(int(-1-int32(0x00010203))))),
 	}, {
 		// 3.1415927E+00 = 0x40490fdb
 		typ:  TypeFloat,
@@ -108,13 +110,13 @@ func TestCellLengthAndData(t *testing.T) {
 		styp: querypb.Type_UINT64,
 		data: []byte{0x88, 0x87, 0x86, 0x85, 0x84, 0x83, 0x82, 0x81},
 		out: sqltypes.MakeTrusted(querypb.Type_UINT64,
-			[]byte(fmt.Sprintf("%v", uint64(0x8182838485868788)))),
+			[]byte(strconv.FormatUint(uint64(0x8182838485868788), 10))),
 	}, {
 		typ:  TypeLongLong,
 		styp: querypb.Type_INT64,
 		data: []byte{0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff},
 		out: sqltypes.MakeTrusted(querypb.Type_INT64,
-			[]byte(fmt.Sprintf("%v", -1-int64(0x0001020304050607)))),
+			[]byte(strconv.FormatInt(-1-int64(0x0001020304050607), 10))),
 	}, {
 		typ: TypeDate,
 		// 2010 << 9 + 10 << 5 + 3 = 1029443 = 0x0fb543
@@ -425,7 +427,7 @@ func TestCellLengthAndData(t *testing.T) {
 		metadata: 2,
 		data:     []byte{0x01, 0x02},
 		out: sqltypes.MakeTrusted(querypb.Type_ENUM,
-			[]byte(fmt.Sprintf("%v", 0x0201))),
+			[]byte(strconv.Itoa(0x0201))),
 	}, {
 		typ:      TypeSet,
 		metadata: 2,
@@ -556,4 +558,11 @@ func TestCellLengthAndData(t *testing.T) {
 				tcase.typ, tcase.data, out, l, err, tcase.out, len(tcase.data), tcase.out.Raw(), out.Raw())
 		}
 	}
+}
+
+func TestPrintTimestamp(t *testing.T) {
+	var timestamp uint32 = 1741794544
+
+	result := printTimestamp(timestamp).String()
+	assert.Equal(t, "2025-03-12 15:49:04", result)
 }

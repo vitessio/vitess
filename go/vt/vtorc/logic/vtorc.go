@@ -29,23 +29,16 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vtorc/collection"
 	"vitess.io/vitess/go/vt/vtorc/config"
-	"vitess.io/vitess/go/vt/vtorc/discovery"
 	"vitess.io/vitess/go/vt/vtorc/inst"
-	ometrics "vitess.io/vitess/go/vt/vtorc/metrics"
 	"vitess.io/vitess/go/vt/vtorc/process"
 	"vitess.io/vitess/go/vt/vtorc/util"
 )
 
-const (
-	DiscoveryMetricsName = "DISCOVERY_METRICS"
-)
-
-// discoveryQueue is a channel of deduplicated instanceKey-s
-// that were requested for discovery.  It can be continuously updated
+// discoveryQueue is a channel of deduplicated tablets that were
+// requested for discovery. It can be continuously updated
 // as discovery process progresses.
-var discoveryQueue *discovery.Queue
+var discoveryQueue *DiscoveryQueue
 var snapshotDiscoveryKeys chan string
 var snapshotDiscoveryKeysMutex sync.Mutex
 var hasReceivedSIGTERM int32
@@ -59,21 +52,21 @@ var (
 	discoveryWorkersGauge              = stats.NewGauge("DiscoveryWorkers", "Number of discovery workers")
 	discoveryWorkersActiveGauge        = stats.NewGauge("DiscoveryWorkersActive", "Number of discovery workers actively discovering tablets")
 
-	discoverInstanceTimingsActions = []string{"Backend", "Instance", "Other"}
-	discoverInstanceTimings        = stats.NewTimings("DiscoverInstanceTimings", "Timings for instance discovery actions", "Action", discoverInstanceTimingsActions...)
+	discoveryInstanceTimingsActions = []string{"Backend", "Instance", "Other"}
+	discoveryInstanceTimings        = stats.NewTimings("DiscoveryInstanceTimings", "Timings for instance discovery actions", "Action", discoveryInstanceTimingsActions...)
+	// TODO: deprecate in v24
+	discoverInstanceTimings = stats.NewTimings("DiscoverInstanceTimings", "Timings for instance discovery actions", "Action", discoveryInstanceTimingsActions...)
 )
-
-var discoveryMetrics = collection.CreateOrReturnCollection(DiscoveryMetricsName)
 
 var recentDiscoveryOperationKeys *cache.Cache
 
 func init() {
 	snapshotDiscoveryKeys = make(chan string, 10)
 
-	ometrics.OnMetricsTick(func() {
+	onMetricsTick(func() {
 		discoveryQueueLengthGauge.Set(int64(discoveryQueue.QueueLen()))
 	})
-	ometrics.OnMetricsTick(func() {
+	onMetricsTick(func() {
 		if recentDiscoveryOperationKeys == nil {
 			return
 		}
@@ -85,7 +78,6 @@ func init() {
 func closeVTOrc() {
 	log.Infof("Starting VTOrc shutdown")
 	atomic.StoreInt32(&hasReceivedSIGTERM, 1)
-	discoveryMetrics.StopAutoExpiration()
 	// Poke other go routines to stop cleanly here ...
 	_ = inst.AuditOperation("shutdown", "", "Triggered via SIGTERM")
 	// wait for the locks to be released
@@ -116,7 +108,7 @@ func waitForLocksRelease() {
 // handleDiscoveryRequests iterates the discoveryQueue channel and calls upon
 // instance discovery per entry.
 func handleDiscoveryRequests() {
-	discoveryQueue = discovery.NewQueue()
+	discoveryQueue = NewDiscoveryQueue()
 	// create a pool of discovery workers
 	for i := uint(0); i < config.GetDiscoveryWorkers(); i++ {
 		discoveryWorkersGauge.Add(1)
@@ -153,16 +145,12 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 		"instance",
 		"total"})
 	latency.Start("total") // start the total stopwatch (not changed anywhere else)
-	var metric *discovery.Metric
 	defer func() {
 		latency.Stop("total")
 		discoveryTime := latency.Elapsed("total")
 		if discoveryTime > config.GetInstancePollTime() {
 			instancePollSecondsExceededCounter.Add(1)
 			log.Warningf("discoverInstance exceeded InstancePollSeconds for %+v, took %.4fs", tabletAlias, discoveryTime.Seconds())
-			if metric != nil {
-				metric.InstancePollSecondsDurationCount = 1
-			}
 		}
 	}()
 
@@ -197,9 +185,14 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 	instanceLatency := latency.Elapsed("instance")
 	otherLatency := totalLatency - (backendLatency + instanceLatency)
 
+	// TODO: deprecate in v24
 	discoverInstanceTimings.Add("Backend", backendLatency)
 	discoverInstanceTimings.Add("Instance", instanceLatency)
 	discoverInstanceTimings.Add("Other", otherLatency)
+
+	discoveryInstanceTimings.Add("Backend", backendLatency)
+	discoveryInstanceTimings.Add("Instance", instanceLatency)
+	discoveryInstanceTimings.Add("Other", otherLatency)
 
 	if forceDiscovery {
 		log.Infof("Force discovered - %+v, err - %v", instance, err)
@@ -207,15 +200,6 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 
 	if instance == nil {
 		failedDiscoveriesCounter.Add(1)
-		metric = &discovery.Metric{
-			Timestamp:       time.Now(),
-			TabletAlias:     tabletAlias,
-			TotalLatency:    totalLatency,
-			BackendLatency:  backendLatency,
-			InstanceLatency: instanceLatency,
-			Err:             err,
-		}
-		_ = discoveryMetrics.Append(metric)
 		if util.ClearToLog("discoverInstance", tabletAlias) {
 			log.Warningf(" DiscoverInstance(%+v) instance is nil in %.3fs (Backend: %.3fs, Instance: %.3fs), error=%+v",
 				tabletAlias,
@@ -226,16 +210,6 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 		}
 		return
 	}
-
-	metric = &discovery.Metric{
-		Timestamp:       time.Now(),
-		TabletAlias:     tabletAlias,
-		TotalLatency:    totalLatency,
-		BackendLatency:  backendLatency,
-		InstanceLatency: instanceLatency,
-		Err:             nil,
-	}
-	_ = discoveryMetrics.Append(metric)
 }
 
 // onHealthTick handles the actions to take to discover/poll instances
@@ -269,7 +243,6 @@ func onHealthTick() {
 // ContinuousDiscovery starts an asynchronous infinite discovery process where instances are
 // periodically investigated and their status captured, and long since unseen instances are
 // purged and forgotten.
-// nolint SA1015: using time.Tick leaks the underlying ticker
 func ContinuousDiscovery() {
 	log.Infof("continuous discovery: setting up")
 	recentDiscoveryOperationKeys = cache.New(config.GetInstancePollTime(), time.Second)
@@ -295,7 +268,7 @@ func ContinuousDiscovery() {
 	}
 
 	go func() {
-		_ = ometrics.InitMetrics()
+		_ = initMetrics()
 	}()
 	// On termination of the server, we should close VTOrc cleanly
 	servenv.OnTermSync(closeVTOrc)
@@ -309,6 +282,7 @@ func ContinuousDiscovery() {
 			}()
 		case <-caretakingTick:
 			// Various periodic internal maintenance tasks
+			//nolint:errcheck
 			go func() {
 				go inst.ForgetLongUnseenInstances()
 				go inst.ExpireAudit()
@@ -319,7 +293,7 @@ func ContinuousDiscovery() {
 			}()
 		case <-recoveryTick:
 			go func() {
-				go inst.ExpireInstanceAnalysisChangelog()
+				go inst.ExpireInstanceAnalysisChangelog() //nolint:errcheck
 
 				go func() {
 					// This function is non re-entrant (it can only be running once at any point in time)
@@ -332,9 +306,7 @@ func ContinuousDiscovery() {
 				}()
 			}()
 		case <-snapshotTopologiesTick:
-			go func() {
-				go inst.SnapshotTopologies()
-			}()
+			go inst.SnapshotTopologies() //nolint:errcheck
 		case <-tabletTopoTick:
 			ctx, cancel := context.WithTimeout(context.Background(), config.GetTopoInformationRefreshDuration())
 			if err := refreshAllInformation(ctx); err != nil {

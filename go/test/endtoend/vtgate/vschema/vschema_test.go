@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	vtutils "vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtgate"
 )
 
@@ -73,6 +74,11 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
+		vtgateVer, err := cluster.GetMajorVersion("vtgate")
+		if err != nil {
+			return 1, err
+		}
+
 		// List of users authorized to execute vschema ddl operations
 		if utils.BinaryIsAtLeastAtVersion(22, "vtgate") {
 			timeNow := time.Now().Unix()
@@ -85,9 +91,9 @@ func TestMain(m *testing.M) {
 			}
 			defer os.Remove(configFile)
 
-			clusterInstance.VtGateExtraArgs = []string{fmt.Sprintf("--config-file=%s", configFile), "--schema_change_signal=false"}
+			clusterInstance.VtGateExtraArgs = []string{"--config-file=" + configFile, vtutils.GetFlagVariantForTestsByVersion("--schema-change-signal", vtgateVer) + "=false"}
 		} else {
-			clusterInstance.VtGateExtraArgs = []string{"--vschema_ddl_authorized_users=%", "--schema_change_signal=false"}
+			clusterInstance.VtGateExtraArgs = []string{"--vschema-ddl-authorized-users=%", "--schema-change-signal=false"}
 		}
 
 		// Start keyspace
@@ -115,7 +121,6 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitcode)
 	}
-
 }
 
 func writeConfig(path string, cfg map[string]string) error {
@@ -227,13 +232,13 @@ func TestVSchemaSQLAPIConcurrency(t *testing.T) {
 			defer wg.Done()
 			time.Sleep(time.Duration(rand.IntN(100) * int(time.Nanosecond)))
 			tableName := fmt.Sprintf("%s%d", baseTableName, i)
-			_, err = mysqlConns[i].ExecuteFetch(fmt.Sprintf("ALTER VSCHEMA ADD TABLE %s", tableName), -1, false)
+			_, err = mysqlConns[i].ExecuteFetch("ALTER VSCHEMA ADD TABLE "+tableName, -1, false)
 			if isVersionMismatchErr(err) {
 				preventedLostWrites.Store(true)
 			} else {
 				require.NoError(t, err)
 				time.Sleep(time.Duration(rand.IntN(75) * int(time.Nanosecond)))
-				_, err = mysqlConns[i].ExecuteFetch(fmt.Sprintf("ALTER VSCHEMA DROP TABLE %s", tableName), -1, false)
+				_, err = mysqlConns[i].ExecuteFetch("ALTER VSCHEMA DROP TABLE "+tableName, -1, false)
 				if isVersionMismatchErr(err) {
 					preventedLostWrites.Store(true)
 				} else {
@@ -249,7 +254,7 @@ func TestVSchemaSQLAPIConcurrency(t *testing.T) {
 	// failed due to a bad node version.
 	for i := 0; i < numTables; i++ {
 		tableName := fmt.Sprintf("%s%d", baseTableName, i)
-		_, _ = mysqlConns[i].ExecuteFetch(fmt.Sprintf("ALTER VSCHEMA DROP TABLE %s", tableName), -1, false)
+		_, _ = mysqlConns[i].ExecuteFetch("ALTER VSCHEMA DROP TABLE "+tableName, -1, false)
 	}
 	// Confirm that we're back to the initial state.
 	utils.AssertMatches(t, conn, "SHOW VSCHEMA TABLES", fmt.Sprintf("%v", initialVSchema.Rows))

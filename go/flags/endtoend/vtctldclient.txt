@@ -90,6 +90,7 @@ Available Commands:
   SetKeyspaceDurabilityPolicy Sets the durability-policy used by the specified keyspace.
   SetShardIsPrimaryServing    Add or remove a shard from serving. This is meant as an emergency function. It does not rebuild any serving graphs; i.e. it does not run `RebuildKeyspaceGraph`.
   SetShardTabletControl       Sets the TabletControl record for a shard and tablet type. Only use this for an emergency fix or after a finished MoveTables.
+  SetVtorcEmergencyReparent   Enable/disables the use of EmergencyReparentShard in VTOrc recoveries for a given keyspace or keyspace/shard.
   SetWritable                 Sets the specified tablet as writable or read-only.
   ShardReplicationFix         Walks through a ShardReplication object and fixes the first error encountered.
   ShardReplicationPositions   
@@ -118,7 +119,7 @@ Available Commands:
   help                        Help about any command
 
 Flags:
-      --action_timeout duration                  timeout to use for the command (default 1h0m0s)
+      --action-timeout duration                  timeout to use for the command (default 1h0m0s)
       --alsologtostderr                          log to standard error as well as files
       --compact                                  use compact format for otherwise verbose outputs
       --grpc-auth-static-client-creds string     When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
@@ -139,7 +140,7 @@ Flags:
       --log_link string                          If non-empty, add symbolic links in this directory to the log files
       --logbuflevel int                          Buffer log messages logged at this level or lower (-1 means don't buffer; 0 means buffer INFO only; ...). Has limited applicability on non-prod platforms.
       --logtostderr                              log to standard error instead of files
-      --mysql-server-version string              MySQL server version to advertise. (default "8.0.40-Vitess")
+      --mysql-server-version string              MySQL server version to advertise. (default "8.4.6-Vitess")
       --purge-logs-interval duration             how often try to remove old logs (default 1h0m0s)
       --security-policy string                   the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --server string                            server to use for the connection (required)

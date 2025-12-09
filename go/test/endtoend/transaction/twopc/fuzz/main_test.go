@@ -66,12 +66,12 @@ func TestMain(m *testing.M) {
 
 		// Set extra args for twopc
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-			"--transaction_mode", "TWOPC",
+			"--transaction-mode", "TWOPC",
 			vtutils.GetFlagVariantForTests("--grpc-use-effective-callerid"),
 			vtutils.GetFlagVariantForTests("--tablet-refresh-interval"), "2s",
 		)
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-			"--twopc_abandon_age", "1",
+			"--twopc-abandon-age", "1",
 			vtutils.GetFlagVariantForTests("--migration-check-interval"), "2s",
 		)
 
@@ -122,7 +122,6 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 }
 
 func cleanup(t *testing.T) {
-
 	utils.ClearOutTable(t, vtParams, "twopc_fuzzer_insert")
 	utils.ClearOutTable(t, vtParams, "twopc_fuzzer_update")
 	utils.ClearOutTable(t, vtParams, "twopc_fuzzer_multi")

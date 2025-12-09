@@ -1,5 +1,12 @@
 name: endtoend
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - "main"
+      - "release-[0-9]+.[0-9]"
+    tags: '**'
+  pull_request:
+    branches: '**'
 permissions: read-all
 jobs:
 
@@ -14,24 +21,12 @@ jobs:
           exit 1
         fi
 
-    - name: Check if workflow needs to be skipped
-      id: skip-workflow
-      run: |
-        skip='false'
-        if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
-          skip='true'
-        fi
-        echo Skip ${skip}
-        echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
-
     - name: Check out code
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         persist-credentials: 'false'
 
     - name: Check for changes in relevant files
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: dorny/paths-filter@ebc4d7e9ebcb0b1eb21480bb8f43113e996ac77a # v3.0.1
       id: changes
       with:
@@ -51,44 +46,47 @@ jobs:
             - '.github/workflows/endtoend.yml'
 
     - name: Set up Go
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
+      if: steps.changes.outputs.end_to_end == 'true'
+      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
       with:
         go-version-file: go.mod
 
     - name: Tune the OS
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      run: |
-        sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
+      if: steps.changes.outputs.end_to_end == 'true'
+      uses: ./.github/actions/tune-os
+
+    - name: Setup MySQL
+      if: steps.changes.outputs.end_to_end == 'true'
+      uses: ./.github/actions/setup-mysql
+      with:
+        flavor: mysql-8.0
 
     - name: Get dependencies
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         sudo apt-get update
-        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd-client etcd-server curl git wget
+        sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
         
-        sudo service mysql stop
         sudo service etcd stop
-        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+
         go mod download
 
     - name: Run make minimaltools
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         make minimaltools
 
     - name: Build
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         NOVTADMINBUILD=1 make build
 
     - name: endtoend
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 30
       run: |
         # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
         # which musn't be more than 107 characters long.
         export VTDATAROOT="/tmp/"
 
-        eatmydata -- tools/e2e_test_runner.sh
+        tools/e2e_test_runner.sh

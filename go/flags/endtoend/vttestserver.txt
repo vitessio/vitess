@@ -28,21 +28,22 @@ Flags:
       --config-persistence-min-interval duration                         minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                               Config file type (omit to infer config type from file extension).
       --consul-auth-static-file string                                   JSON File to read the topos/tokens from.
-      --data_dir string                                                  Directory where the data files will be placed, defaults to a random directory under /vt/vtdataroot
+      --data-dir string                                                  Directory where the data files will be placed, defaults to a random directory under /vt/vtdataroot
       --dba-idle-timeout duration                                        Idle timeout for dba connections (default 1m0s)
       --dba-pool-size int                                                Size of the connection pool for dba connections (default 20)
-      --default_schema_dir string                                        Default directory for initial schema files. If no schema is found in schema_dir, default to this location.
-      --enable_direct_ddl                                                Allow users to submit direct DDL statements (default true)
-      --enable_online_ddl                                                Allow users to submit, review and control Online DDL (default true)
-      --enable_system_settings                                           This will enable the system settings to be changed per session at the database connection level (default true)
+      --default-schema-dir string                                        Default directory for initial schema files. If no schema is found in schema-dir, default to this location.
+      --enable-direct-ddl                                                Allow users to submit direct DDL statements (default true)
+      --enable-online-ddl                                                Allow users to submit, review and control Online DDL (default true)
+      --enable-system-settings                                           This will enable the system settings to be changed per session at the database connection level (default true)
       --external-compressor string                                       command with arguments to use when compressing a backup.
       --external-compressor-extension string                             extension to use when using an external compressor.
       --external-decompressor string                                     command with arguments to use when decompressing a backup.
-      --external_topo_global_root string                                 the path of the global topology data in the global topology server for vtcombo process
-      --external_topo_global_server_address string                       the address of the global topology server for vtcombo process
-      --external_topo_implementation string                              the topology implementation to use for vtcombo process
-      --extra_my_cnf string                                              extra files to add to the config, separated by ':'
+      --external-topo-global-root string                                 the path of the global topology data in the global topology server for vtcombo process
+      --external-topo-global-server-address string                       the address of the global topology server for vtcombo process
+      --external-topo-implementation string                              the topology implementation to use for vtcombo process
+      --extra-my-cnf string                                              extra files to add to the config, separated by ':'
       --foreign-key-mode string                                          This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow (default "allow")
+      --gateway-initial-tablet-timeout duration                          At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type (default 30s)
       --grpc-auth-mode string                                            Which auth plugin implementation to use (eg: static)
       --grpc-auth-mtls-allowed-substrings string                         List of substrings of at least one of the client certificate names (separated by colon).
       --grpc-auth-static-client-creds string                             When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
@@ -87,25 +88,25 @@ Flags:
       --logtostderr                                                      log to standard error instead of files
       --manifest-external-decompressor string                            command with arguments to store in the backup manifest when compressing a backup with an external compression engine.
       --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
-      --max_table_shard_size int                                         The maximum number of initial rows in a table shard. Ignored if--initialize-with-random-data is false. The actual number is chosen randomly (default 10000)
-      --min_table_shard_size int                                         The minimum number of initial rows in a table shard. Ignored if--initialize-with-random-data is false. The actual number is chosen randomly. (default 1000)
-      --mysql-server-version string                                      MySQL server version to advertise. (default "8.0.40-Vitess")
+      --max-table-shard-size int                                         The maximum number of initial rows in a table shard. Ignored if--initialize-with-random-data is false. The actual number is chosen randomly (default 10000)
+      --min-table-shard-size int                                         The minimum number of initial rows in a table shard. Ignored if--initialize-with-random-data is false. The actual number is chosen randomly. (default 1000)
+      --mysql-bind-host string                                           which host to bind vtgate mysql listener to (default "localhost")
+      --mysql-only                                                       If this flag is set only mysql is initialized. The rest of the vitess components are not started. Also, the output specifies the mysql unix socket instead of the vtgate port.
+      --mysql-server-version string                                      MySQL server version to advertise. (default "8.4.6-Vitess")
       --mysql-shell-backup-location string                               location where the backup will be stored
       --mysql-shell-dump-flags string                                    flags to pass to mysql shell dump utility. This should be a JSON string and will be saved in the MANIFEST (default "{\"threads\": 4}")
       --mysql-shell-flags string                                         execution flags to pass to mysqlsh binary to be used during dump/load (default "--defaults-file=/dev/null --js -h localhost")
       --mysql-shell-load-flags string                                    flags to pass to mysql shell load utility. This should be a JSON string (default "{\"threads\": 4, \"loadUsers\": true, \"updateGtidSet\": \"replace\", \"skipBinlog\": true, \"progressFile\": \"\"}")
       --mysql-shell-should-drain                                         decide if we should drain while taking a backup or continue to serving traffic
       --mysql-shell-speedup-restore                                      speed up restore by disabling redo logging and double write buffer during the restore process
-      --mysql_bind_host string                                           which host to bind vtgate mysql listener to (default "localhost")
-      --mysql_only                                                       If this flag is set only mysql is initialized. The rest of the vitess components are not started. Also, the output specifies the mysql unix socket instead of the vtgate port.
       --mysqlctl-mycnf-template string                                   template file to use for generating the my.cnf file during server init
       --mysqlctl-socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
       --no-scatter                                                       when set to true, the planner will fail instead of producing a plan that includes scatter queries
-      --null_probability float                                           The probability to initialize a field with 'NULL'  if --initialize-with-random-data is true. Only applies to fields that can contain NULL values. (default 0.1)
-      --num_shards strings                                               Comma separated shard count (one per keyspace) (default [2])
+      --null-probability float                                           The probability to initialize a field with 'NULL'  if --initialize-with-random-data is true. Only applies to fields that can contain NULL values. (default 0.1)
+      --num-shards strings                                               Comma separated shard count (one per keyspace) (default [2])
       --onclose-timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)
       --onterm-timeout duration                                          wait no more than this for OnTermSync handlers before stopping (default 10s)
-      --persistent_mode                                                  If this flag is set, the MySQL data directory is not cleaned up when LocalCluster.TearDown() is called. This is useful for running vttestserver as a database container in local developer environments. Note that db migration files (--schema_dir option) and seeding of random data (--initialize-with-random-data option) will only run during cluster startup if the data directory does not already exist.  Changes to VSchema are persisted across cluster restarts using a simple watcher if the --data_dir argument is specified.
+      --persistent-mode                                                  If this flag is set, the MySQL data directory is not cleaned up when LocalCluster.TearDown() is called. This is useful for running vttestserver as a database container in local developer environments. Note that db migration files (--schema-dir option) and seeding of random data (--initialize-with-random-data option) will only run during cluster startup if the data directory does not already exist.  Changes to VSchema are persisted across cluster restarts using a simple watcher if the --data_dir argument is specified.
       --pid-file string                                                  If set, the process will write its pid to the named file, and delete it on graceful shutdown.
       --planner-version string                                           Sets the default planner to use when the session has not changed it. Valid values are: Gen4, Gen4Greedy, Gen4Left2Right
       --pool-hostname-resolve-interval duration                          if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)
@@ -115,14 +116,14 @@ Flags:
       --proto-topo string                                                Define the fake cluster topology as a compact text format encoded vttest proto. See vttest.proto for more information.
       --purge-logs-interval duration                                     how often try to remove old logs (default 1h0m0s)
       --queryserver-config-transaction-timeout duration                  query server transaction timeout, a transaction will be killed if it takes longer than this value (default 30s)
-      --rdonly_count int                                                 Rdonly tablets per shard (default 1)
-      --replica_count int                                                Replica tablets per shard (includes primary) (default 2)
+      --rdonly-count int                                                 Rdonly tablets per shard (default 1)
+      --replica-count int                                                Replica tablets per shard (includes primary) (default 2)
       --replication-connect-retry duration                               how long to wait in between replica reconnect attempts. Only precise to the second. (default 10s)
-      --rng_seed int                                                     The random number generator seed to use when initializing with random data (see also --initialize-with-random-data). Multiple runs with the same seed will result with the same initial data. (default 123)
-      --schema_dir string                                                Directory for initial schema files. Within this dir, there should be a subdir for each keyspace. Within each keyspace dir, each file is executed as SQL after the database is created on each shard. If the directory contains a vschema.json file, it will be used as the vschema for the V3 API.
+      --rng-seed int                                                     The random number generator seed to use when initializing with random data (see also --initialize-with-random-data). Multiple runs with the same seed will result with the same initial data. (default 123)
+      --schema-dir string                                                Directory for initial schema files. Within this dir, there should be a subdir for each keyspace. Within each keyspace dir, each file is executed as SQL after the database is created on each shard. If the directory contains a vschema.json file, it will be used as the vschema for the V3 API.
       --security-policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --service-map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
-      --snapshot_file string                                             A MySQL DB snapshot file
+      --snapshot-file string                                             A MySQL DB snapshot file
       --sql-max-length-errors int                                        truncate queries in error logs to the given length (default unlimited)
       --sql-max-length-ui int                                            truncate queries in debug UIs to the given length (default 512) (default 512)
       --stderrthreshold severityFlag                                     logs at or above this threshold go to stderr (default 1)
@@ -148,11 +149,11 @@ Flags:
       --topo-zk-tls-ca string                                            the server ca to use to validate servers when connecting to the zk topo server
       --topo-zk-tls-cert string                                          the cert to use to connect to the zk topo server, requires topo-zk-tls-key, enables TLS
       --topo-zk-tls-key string                                           the key to use to connect to the zk topo server, enables TLS
-      --transaction_mode string                                          Transaction mode MULTI (default), SINGLE or TWOPC  (default "MULTI")
+      --transaction-mode string                                          Transaction mode MULTI (default), SINGLE or TWOPC  (default "MULTI")
       --v Level                                                          log level for V logs
   -v, --version                                                          print binary version
       --vmodule vModuleFlag                                              comma-separated list of pattern=N settings for file-filtered logging
-      --vschema_ddl_authorized_users string                              Comma separated list of users authorized to execute vschema ddl operations via vtgate
+      --vschema-ddl-authorized-users string                              Comma separated list of users authorized to execute vschema ddl operations via vtgate
       --vtcombo-bind-host string                                         which host to bind vtcombo servenv listener to (default "localhost")
       --vtctl-client-protocol string                                     Protocol to use to talk to the vtctl server. (default "grpc")
       --vtctld-grpc-ca string                                            the server ca to use to validate servers when connecting
@@ -163,6 +164,7 @@ Flags:
       --vtgate-grpc-ca string                                            the server ca to use to validate servers when connecting
       --vtgate-grpc-cert string                                          the cert to use to connect
       --vtgate-grpc-crl string                                           the server crl to use to validate server certificates when connecting
+      --vtgate-grpc-fail-fast                                            whether to enable grpc fail fast when connecting
       --vtgate-grpc-key string                                           the key to use to connect
       --vtgate-grpc-server-name string                                   the server name to use to validate server certificate
       --xbstream-restore-flags string                                    Flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt

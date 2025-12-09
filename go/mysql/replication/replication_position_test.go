@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPositionEqual(t *testing.T) {
@@ -181,33 +182,159 @@ func TestPositionIsNotZero(t *testing.T) {
 }
 
 func TestPositionAppend(t *testing.T) {
-	input1 := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
-	input2 := MariadbGTID{Domain: 3, Server: 5555, Sequence: 1235}
-	want := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1235}}}
+	t.Run("MariaDB", func(t *testing.T) {
+		input1 := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
+		input2 := MariadbGTID{Domain: 3, Server: 5555, Sequence: 1235}
+		want := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1235}}}
 
-	if got := AppendGTID(input1, input2); !got.Equal(want) {
-		t.Errorf("AppendGTID(%#v, %#v) = %#v, want %#v", input1, input2, got, want)
-	}
+		if got := AppendGTID(input1, input2); !got.Equal(want) {
+			t.Errorf("AppendGTID(%#v, %#v) = %#v, want %#v", input1, input2, got, want)
+		}
+	})
+	t.Run("MySQL56", func(t *testing.T) {
+		gtidset, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615")
+		require.NoError(t, err)
+		gtid, err := parseMysql56GTID("16b1039f-22b6-11ed-b765-0a43f95f28a3:616")
+		require.NoError(t, err)
+		want, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-616")
+		require.NoError(t, err)
+
+		pos := Position{GTIDSet: gtidset}
+		wantPos := Position{GTIDSet: want}
+
+		gotPos := AppendGTID(pos, gtid)
+		assert.Equal(t, wantPos, gotPos, "got=%v", gotPos)
+		assert.NotEqual(t, pos, gotPos)
+
+		gotPos = AppendGTIDInPlace(pos, gtid)
+		assert.Equal(t, wantPos, gotPos)
+		assert.Equal(t, wantPos, pos)
+	})
+}
+
+func TestPositionAppendBefore(t *testing.T) {
+	t.Run("MySQL56", func(t *testing.T) {
+		gtidset, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:10-615")
+		require.NoError(t, err)
+		gtid, err := parseMysql56GTID("16b1039f-22b6-11ed-b765-0a43f95f28a3:9")
+		require.NoError(t, err)
+		want, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:9-615")
+		require.NoError(t, err)
+
+		pos := Position{GTIDSet: gtidset}
+		wantPos := Position{GTIDSet: want}
+
+		gotPos := AppendGTID(pos, gtid)
+		assert.Equal(t, wantPos, gotPos, "got=%v", gotPos)
+		assert.NotEqual(t, pos, gotPos)
+
+		gotPos = AppendGTIDInPlace(pos, gtid)
+		assert.Equal(t, wantPos, gotPos)
+		assert.Equal(t, wantPos, pos)
+	})
+}
+
+func TestPositionAppendNewInterval(t *testing.T) {
+	t.Run("MySQL56", func(t *testing.T) {
+		gtidset, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615")
+		require.NoError(t, err)
+		gtid, err := parseMysql56GTID("16b1039f-22b6-11ed-b765-0a43f95f28a3:620")
+		require.NoError(t, err)
+		want, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615:620")
+		require.NoError(t, err)
+
+		pos := Position{GTIDSet: gtidset}
+		wantPos := Position{GTIDSet: want}
+
+		gotPos := AppendGTID(pos, gtid)
+		assert.Equal(t, wantPos, gotPos, "got=%v", gotPos)
+		assert.NotEqual(t, pos, gotPos)
+
+		gotPos = AppendGTIDInPlace(pos, gtid)
+		assert.Equal(t, wantPos, gotPos)
+		assert.Equal(t, wantPos, pos)
+	})
+}
+
+func TestPositionAppendContains(t *testing.T) {
+	t.Run("MySQL56", func(t *testing.T) {
+		gtidset, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615")
+		require.NoError(t, err)
+		gtid, err := parseMysql56GTID("16b1039f-22b6-11ed-b765-0a43f95f28a3:600")
+		require.NoError(t, err)
+		want, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615")
+		require.NoError(t, err)
+
+		pos := Position{GTIDSet: gtidset}
+		wantPos := Position{GTIDSet: want}
+
+		gotPos := AppendGTID(pos, gtid)
+		assert.Equal(t, wantPos, gotPos, "got=%v", gotPos)
+		assert.Equal(t, pos, gotPos)
+
+		gotPos = AppendGTIDInPlace(pos, gtid)
+		assert.Equal(t, wantPos, gotPos)
+		assert.Equal(t, wantPos, pos)
+	})
 }
 
 func TestPositionAppendNil(t *testing.T) {
-	input1 := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
-	input2 := GTID(nil)
-	want := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
+	t.Run("MariaDB", func(t *testing.T) {
+		input1 := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
+		input2 := GTID(nil)
+		want := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
 
-	if got := AppendGTID(input1, input2); !got.Equal(want) {
-		t.Errorf("AppendGTID(%#v, %#v) = %#v, want %#v", input1, input2, got, want)
-	}
+		if got := AppendGTID(input1, input2); !got.Equal(want) {
+			t.Errorf("AppendGTID(%#v, %#v) = %#v, want %#v", input1, input2, got, want)
+		}
+	})
+	t.Run("MySQL56", func(t *testing.T) {
+		gtidset, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615")
+		require.NoError(t, err)
+		gtid := GTID(nil)
+		require.NoError(t, err)
+		want, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615")
+		require.NoError(t, err)
+
+		pos := Position{GTIDSet: gtidset}
+		wantPos := Position{GTIDSet: want}
+
+		gotPos := AppendGTID(pos, gtid)
+		assert.Equal(t, wantPos, gotPos, "got=%v", gotPos)
+		assert.Equal(t, pos, gotPos)
+
+		gotPos = AppendGTIDInPlace(pos, gtid)
+		assert.Equal(t, wantPos, gotPos)
+		assert.Equal(t, wantPos, pos)
+	})
 }
 
 func TestPositionAppendToZero(t *testing.T) {
-	input1 := Position{}
-	input2 := MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}
-	want := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
+	t.Run("MariaDB", func(t *testing.T) {
+		input1 := Position{}
+		input2 := MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}
+		want := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
 
-	if got := AppendGTID(input1, input2); !got.Equal(want) {
-		t.Errorf("AppendGTID(%#v, %#v) = %#v, want %#v", input1, input2, got, want)
-	}
+		if got := AppendGTID(input1, input2); !got.Equal(want) {
+			t.Errorf("AppendGTID(%#v, %#v) = %#v, want %#v", input1, input2, got, want)
+		}
+	})
+	t.Run("MySQL56", func(t *testing.T) {
+		gtid, err := parseMysql56GTID("16b1039f-22b6-11ed-b765-0a43f95f28a3:616")
+		require.NoError(t, err)
+		want, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:616")
+		require.NoError(t, err)
+
+		pos := Position{}
+		wantPos := Position{GTIDSet: want}
+
+		gotPos := AppendGTID(pos, gtid)
+		assert.Equal(t, wantPos, gotPos, "got=%v", gotPos)
+		assert.NotEqual(t, pos, gotPos)
+
+		gotPos = AppendGTIDInPlace(pos, gtid)
+		assert.Equal(t, wantPos, gotPos)
+	})
 }
 
 func TestMustParsePosition(t *testing.T) {
@@ -269,7 +396,6 @@ func TestDecodePosition(t *testing.T) {
 	got, err := DecodePosition(input)
 	assert.NoError(t, err, "unexpected error: %v", err)
 	assert.True(t, got.Equal(want), "DecodePosition(%#v) = %#v, want %#v", input, got, want)
-
 }
 
 func TestDecodePositionDefaultFlavor(t *testing.T) {
@@ -297,7 +423,6 @@ func TestDecodePositionZero(t *testing.T) {
 	got, err := DecodePosition(input)
 	assert.NoError(t, err, "unexpected error: %v", err)
 	assert.True(t, got.Equal(want), "DecodePosition(%#v) = %#v, want %#v", input, got, want)
-
 }
 
 func TestDecodePositionNoFlavor(t *testing.T) {
@@ -310,7 +435,6 @@ func TestDecodePositionNoFlavor(t *testing.T) {
 	got, err := DecodePosition(input)
 	assert.NoError(t, err, "unexpected error: %v", err)
 	assert.True(t, got.Equal(want), "DecodePosition(%#v) = %#v, want %#v", input, got, want)
-
 }
 
 func TestJsonMarshalPosition(t *testing.T) {
@@ -348,7 +472,6 @@ func TestJsonUnmarshalPosition(t *testing.T) {
 	err := json.Unmarshal([]byte(input), &got)
 	assert.NoError(t, err, "unexpected error: %v", err)
 	assert.True(t, got.Equal(want), "json.Unmarshal(%#v) = %#v, want %#v", input, got, want)
-
 }
 
 func TestJsonMarshalPositionInStruct(t *testing.T) {
@@ -405,5 +528,4 @@ func TestJsonUnmarshalPositionZero(t *testing.T) {
 	err := json.Unmarshal([]byte(input), &got)
 	assert.NoError(t, err, "unexpected error: %v", err)
 	assert.True(t, got.Equal(want), "json.Unmarshal(%#v) = %#v, want %#v", input, got, want)
-
 }

@@ -19,10 +19,13 @@ package utils
 import (
 	"fmt"
 	"math/rand/v2"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/flagutil"
 	// "vitess.io/vitess/go/vt/log"
 )
 
@@ -49,16 +52,11 @@ func flagVariants(name string) (underscored, dashed string) {
 // setFunc should be a function with signature func(fs *pflag.FlagSet, p *T, name string, def T, usage string)
 func setFlagVar[T any](fs *pflag.FlagSet, p *T, name string, def T, usage string,
 	setFunc func(fs *pflag.FlagSet, p *T, name string, def T, usage string)) {
-
-	underscored, dashed := flagVariants(name)
-	if name == underscored {
+	if strings.Contains(name, "_") {
 		fmt.Printf("[WARNING] Please use flag names with dashes instead of underscores, preparing for deprecation of underscores in flag names")
 	}
 
-	setFunc(fs, p, dashed, def, usage)
-	setFunc(fs, p, underscored, def, "")
-	_ = fs.MarkHidden(underscored)
-	_ = fs.MarkDeprecated(underscored, fmt.Sprintf("use %s instead", dashed))
+	setFunc(fs, p, name, def, usage)
 }
 
 func SetFlagIntVar(fs *pflag.FlagSet, p *int, name string, def int, usage string) {
@@ -79,6 +77,10 @@ func SetFlagStringVar(fs *pflag.FlagSet, p *string, name string, def string, usa
 
 func SetFlagDurationVar(fs *pflag.FlagSet, p *time.Duration, name string, def time.Duration, usage string) {
 	setFlagVar(fs, p, name, def, usage, (*pflag.FlagSet).DurationVar)
+}
+
+func SetFlagFloatDurationVar(fs *pflag.FlagSet, p *time.Duration, name string, def time.Duration, usage string) {
+	setFlagVar(fs, p, name, def, usage, flagutil.FloatDuration)
 }
 
 func SetFlagUint32Var(fs *pflag.FlagSet, p *uint32, name string, def uint32, usage string) {
@@ -105,14 +107,10 @@ func SetFlagFloat64Var(fs *pflag.FlagSet, p *float64, name string, def float64, 
 // using both the dashed and underscored versions of the flag name.
 // The underscored version is hidden and marked as deprecated.
 func SetFlagVar(fs *pflag.FlagSet, value pflag.Value, name, usage string) {
-	underscored, dashed := flagVariants(name)
-	if name == underscored {
+	if strings.Contains(name, "_") {
 		fmt.Printf("[WARNING] Please use flag names with dashes instead of underscores, preparing for deprecation of underscores in flag names")
 	}
-	fs.Var(value, dashed, usage)
-	fs.Var(value, underscored, "")
-	_ = fs.MarkHidden(underscored)
-	_ = fs.MarkDeprecated(underscored, fmt.Sprintf("use %s instead", dashed))
+	fs.Var(value, name, usage)
 }
 
 // SetFlagVariantsForTests randomly assigns either the underscored or dashed version of the flag name to the map.
@@ -135,4 +133,39 @@ func GetFlagVariantForTests(flagName string) string {
 	}
 	// fmt.Print("Using flag variant: ", dashed, "\n")
 	return dashed
+}
+
+func GetFlagVariantForTestsByVersion(flagName string, majorVersion int) string {
+	underscored, dashed := flagVariants(flagName)
+	if majorVersion > 22 {
+		return dashed
+	}
+	return underscored
+}
+
+var (
+	deprecationWarningsEmitted = make(map[string]bool)
+)
+
+// Translate flag names from underscores to dashes and print a deprecation warning.
+func NormalizeUnderscoresToDashes(f *pflag.FlagSet, name string) pflag.NormalizedName {
+	// `log_dir`, `log_link` and `log_backtrace_at` are exceptions because they are used by glog.
+	if name == "log_dir" || name == "log_link" || name == "log_backtrace_at" {
+		return pflag.NormalizedName(name)
+	}
+
+	// We only want to normalize flags that purely use underscores.
+	if !strings.Contains(name, "_") || strings.Contains(name, "-") {
+		return pflag.NormalizedName(name)
+	}
+
+	normalizedName := strings.ReplaceAll(name, "_", "-")
+
+	// Only emit a warning if we haven't emitted one yet
+	if !deprecationWarningsEmitted[name] {
+		deprecationWarningsEmitted[name] = true
+		fmt.Fprintf(os.Stderr, "Flag --%s has been deprecated, use --%s instead \n", name, normalizedName)
+	}
+
+	return pflag.NormalizedName(normalizedName)
 }

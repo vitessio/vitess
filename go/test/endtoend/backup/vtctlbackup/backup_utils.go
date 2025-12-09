@@ -146,9 +146,9 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 		xtrabackupArgs := []string{
 			vtutils.GetFlagVariantForTests("--backup-engine-implementation"), "xtrabackup",
 			fmt.Sprintf("%s=%s", vtutils.GetFlagVariantForTests("--xtrabackup-stream-mode"), streamMode),
-			fmt.Sprintf("%s=vt_dba", vtutils.GetFlagVariantForTests("--xtrabackup-user")),
+			vtutils.GetFlagVariantForTests("--xtrabackup-user") + "=vt_dba",
 			fmt.Sprintf("%s=%d", vtutils.GetFlagVariantForTests("--xtrabackup-stripes"), stripes),
-			vtutils.GetFlagVariantForTests("--xtrabackup-backup-flags"), fmt.Sprintf("--password=%s", dbPassword),
+			vtutils.GetFlagVariantForTests("--xtrabackup-backup-flags"), "--password=" + dbPassword,
 		}
 
 		// if streamMode is xbstream, add some additional args to test other xtrabackup flags
@@ -295,19 +295,19 @@ func getCompressorArgs(cDetails *CompressionDetails) []string {
 	}
 
 	if cDetails.CompressorEngineName != "" {
-		args = append(args, fmt.Sprintf("--compression-engine-name=%s", cDetails.CompressorEngineName))
+		args = append(args, "--compression-engine-name="+cDetails.CompressorEngineName)
 	}
 	if cDetails.ExternalCompressorCmd != "" {
-		args = append(args, fmt.Sprintf("--external-compressor=%s", cDetails.ExternalCompressorCmd))
+		args = append(args, "--external-compressor="+cDetails.ExternalCompressorCmd)
 	}
 	if cDetails.ExternalCompressorExt != "" {
-		args = append(args, fmt.Sprintf("--external-compressor-extension=%s", cDetails.ExternalCompressorExt))
+		args = append(args, "--external-compressor-extension="+cDetails.ExternalCompressorExt)
 	}
 	if cDetails.ExternalDecompressorCmd != "" {
-		args = append(args, fmt.Sprintf("--external-decompressor=%s", cDetails.ExternalDecompressorCmd))
+		args = append(args, "--external-decompressor="+cDetails.ExternalDecompressorCmd)
 	}
 	if cDetails.ManifestExternalDecompressorCmd != "" {
-		args = append(args, fmt.Sprintf("--manifest-external-decompressor=%s", cDetails.ManifestExternalDecompressorCmd))
+		args = append(args, "--manifest-external-decompressor="+cDetails.ManifestExternalDecompressorCmd)
 	}
 
 	return args
@@ -358,7 +358,7 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDe
 			return nil
 		}
 	default:
-		require.FailNow(t, fmt.Sprintf("Unsupported xtrabackup stream mode: %s", streamMode))
+		require.FailNow(t, "Unsupported xtrabackup stream mode: "+streamMode)
 	}
 
 	testMethods := []struct {
@@ -505,13 +505,30 @@ func primaryBackup(t *testing.T) {
 	// And only 1 record after we restore using the first backup timestamp
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
-	err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", "--allow-primary", primary.Alias)
+	sqlInitTestTable := "init_test"
+	err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", "--allow-primary",
+		// Test init SQL.
+		"--init-backup-sql-queries", fmt.Sprintf("create table `%s`.%s (id int),optimize table `%s`.%s,insert into `%s`.%s (id) values (1)",
+			primary.VttabletProcess.DbName, sqlInitTestTable, primary.VttabletProcess.DbName, sqlInitTestTable, primary.VttabletProcess.DbName, sqlInitTestTable),
+		"--init-backup-sql-timeout=10m",
+		"--init-backup-tablet-types=primary",
+		"--init-backup-sql-fail-on-error",
+		primary.Alias,
+	)
 	require.NoError(t, err)
 
 	backups = localCluster.VerifyBackupCount(t, shardKsName, 2)
 	assert.Contains(t, backups[1], primary.Alias)
 
 	verifyTabletBackupStats(t, primary.VttabletProcess.GetVars())
+
+	// Confirm that the init SQL quereies were run: the table was created and we inserted a row.
+	res, err := primary.VttabletProcess.QueryTablet("SELECT * FROM "+sqlInitTestTable, keyspaceName, true)
+	require.NoError(t, err)
+	require.Len(t, res.Rows, 1)
+	// Now get rid of the init_test table as its purpose has ended.
+	_, err = primary.VttabletProcess.QueryTablet("DROP TABLE "+sqlInitTestTable, keyspaceName, true)
+	require.NoError(t, err)
 
 	// Perform PRS to demote the primary tablet (primary) so that we can do a restore there and verify we don't have the
 	// data from after the older/first backup
@@ -1084,8 +1101,8 @@ func terminateBackup(t *testing.T, alias string) {
 		text := scanner.Text()
 		if strings.Contains(text, stopBackupMsg) {
 			tmpProcess.Process.Signal(syscall.SIGTERM)
-			found = true // nolint
-			return
+			found = true
+			break
 		}
 	}
 	assert.True(t, found, "backup message not found")
@@ -1425,7 +1442,6 @@ func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
 	if backupstorage.BackupStorageImplementation == "file" {
 		require.Contains(t, bd, "BackupStorage.File.File:Write")
 	}
-
 }
 
 func verifyRestorePositionAndTimeStats(t *testing.T, vars map[string]any) {
@@ -1497,7 +1513,7 @@ func getDefaultCommonArgs() []string {
 		vtutils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
 		vtutils.GetFlagVariantForTests("--watch-replication-stream"),
 		vtutils.GetFlagVariantForTests("--enable-replication-reporter"),
-		"--serving_state_grace_period", "1s",
+		vtutils.GetFlagVariantForTests("--serving-state-grace-period"), "1s",
 	}
 }
 

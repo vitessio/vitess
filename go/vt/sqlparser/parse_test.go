@@ -1452,6 +1452,9 @@ var (
 		input:  "set names utf8 collate 'foo'",
 		output: "set names 'utf8'",
 	}, {
+		input:  "set names binary",
+		output: "set names 'binary'",
+	}, {
 		input:  "set character set utf8",
 		output: "set charset 'utf8'",
 	}, {
@@ -3120,6 +3123,74 @@ var (
 		input:  "SELECT JSON_PRETTY(@j)",
 		output: "select json_pretty(@j) from dual",
 	}, {
+		// Window Functions
+		input:  "select row_number() over () from t",
+		output: "select row_number() over () from t",
+	}, {
+		input:  "select rank() over w from t window w as (partition by a order by b)",
+		output: "select rank() over w from t window w AS (partition by a order by b asc)",
+	}, {
+		input:  "select dense_rank() over (partition by a order by b) from t",
+		output: "select dense_rank() over (partition by a order by b asc) from t",
+	}, {
+		input:  "select ntile(4) over (order by a) from t",
+		output: "select ntile(4) over (order by a asc) from t",
+	}, {
+		input:  "select first_value(a) over (partition by b order by c rows between unbounded preceding and current row) from t",
+		output: "select first_value(a) over (partition by b order by c asc rows between unbounded preceding and current row) from t",
+	}, {
+		input:  "select last_value(a) over (partition by b order by c range between interval 1 day preceding and interval 1 day following) from t",
+		output: "select last_value(a) over (partition by b order by c asc range between interval 1 day preceding and interval 1 day following) from t",
+	}, {
+		input:  "select nth_value(a, 1) over (order by b rows unbounded preceding) from t",
+		output: "select nth_value(a, 1) over (order by b asc rows unbounded preceding) from t",
+	}, {
+		input:  "select lag(a, 1, 0) over (order by b) from t",
+		output: "select lag(a, 1, 0) over (order by b asc) from t",
+	}, {
+		input:  "select lead(a, 1) over (order by b) from t",
+		output: "select lead(a, 1) over (order by b asc) from t",
+	}, {
+		input:  "select sum(a) over (partition by b) from t",
+		output: "select sum(a) over (partition by b) from t",
+	}, {
+		input:  "select sum(a) over (rows 5 preceding) from t",
+		output: "select sum(a) over (rows 5 preceding) from t",
+	}, {
+		input:  "select a, rank() over w1, dense_rank() over w2 from t window w1 as (partition by b), window w2 as (w1 order by c)",
+		output: "select a, rank() over w1, dense_rank() over w2 from t window w1 AS (partition by b), window w2 AS (w1 order by c asc)",
+	}, {
+		input:  "select first_value(a) ignore nulls over (order by b) from t",
+		output: "select first_value(a) ignore nulls over (order by b asc) from t",
+	}, {
+		input:  "select last_value(a) respect nulls over (order by b) from t",
+		output: "select last_value(a) respect nulls over (order by b asc) from t",
+	}, {
+		input:  "select nth_value(a, 1) ignore nulls over (order by b) from t",
+		output: "select nth_value(a, 1) ignore nulls over (order by b asc) from t",
+	}, {
+		// Window Frames
+		input:  "select sum(a) over (order by b rows unbounded preceding) from t",
+		output: "select sum(a) over (order by b asc rows unbounded preceding) from t",
+	}, {
+		input:  "select sum(a) over (order by b rows between unbounded preceding and current row) from t",
+		output: "select sum(a) over (order by b asc rows between unbounded preceding and current row) from t",
+	}, {
+		input:  "select sum(a) over (order by b rows between 1 preceding and 1 following) from t",
+		output: "select sum(a) over (order by b asc rows between 1 preceding and 1 following) from t",
+	}, {
+		input:  "select sum(a) over (order by b range unbounded preceding) from t",
+		output: "select sum(a) over (order by b asc range unbounded preceding) from t",
+	}, {
+		input:  "select sum(a) over (order by b range between unbounded preceding and current row) from t",
+		output: "select sum(a) over (order by b asc range between unbounded preceding and current row) from t",
+	}, {
+		input:  "select sum(a) over (order by b range between interval 1 day preceding and interval 1 day following) from t",
+		output: "select sum(a) over (order by b asc range between interval 1 day preceding and interval 1 day following) from t",
+	}, {
+		input:  "select sum(a) over (order by b range between current row and unbounded following) from t",
+		output: "select sum(a) over (order by b asc range between current row and unbounded following) from t",
+	}, {
 		input:  "SELECT jcol, JSON_STORAGE_SIZE(jcol) AS Size FROM jtable",
 		output: "select jcol, json_storage_size(jcol) as Size from jtable",
 	}, {
@@ -3716,13 +3787,13 @@ var (
 		output: "select `year`, country, product, profit, cume_dist() over () as total_profit from sales",
 	}, {
 		input:  "SELECT val, CUME_DIST() OVER (ORDER BY val) AS 'cd' FROM numbers",
-		output: "select val, cume_dist() over ( order by val asc) as cd from numbers",
+		output: "select val, cume_dist() over (order by val asc) as cd from numbers",
 	}, {
 		input:  "SELECT val, CUME_DIST() OVER (PARTITION BY z ORDER BY val, subject DESC ROWS CURRENT ROW) AS 'cd' FROM numbers",
-		output: "select val, cume_dist() over ( partition by z order by val asc, subject desc rows current row) as cd from numbers",
+		output: "select val, cume_dist() over (partition by z order by val asc, subject desc rows current row) as cd from numbers",
 	}, {
 		input:  "SELECT val, CUME_DIST() OVER (val PARTITION BY z, subject ORDER BY val, subject DESC ROWS CURRENT ROW) AS 'cd' FROM numbers",
-		output: "select val, cume_dist() over ( val partition by z, subject order by val asc, subject desc rows current row) as cd from numbers",
+		output: "select val, cume_dist() over (val partition by z, subject order by val asc, subject desc rows current row) as cd from numbers",
 	}, {
 		input:  "SELECT val, FIRST_VALUE(val) OVER w FROM numbers",
 		output: "select val, first_value(val) over w from numbers",
@@ -3755,25 +3826,25 @@ var (
 		output: "select lag(val, 10) over w, lead('val', null) over w, lead(val, 1, ASCII(1)) over w from numbers",
 	}, {
 		input:  "SELECT val, ROW_NUMBER() OVER (ORDER BY val) AS 'row_number' FROM numbers WINDOW w AS (ORDER BY val);",
-		output: "select val, row_number() over ( order by val asc) as `row_number` from numbers window w AS ( order by val asc)",
+		output: "select val, row_number() over (order by val asc) as `row_number` from numbers window w AS (order by val asc)",
 	}, {
 		input:  "SELECT time, subject, val, FIRST_VALUE(val)  OVER w AS 'first', LAST_VALUE(val) OVER w AS 'last', NTH_VALUE(val, 2) OVER w AS 'second', NTH_VALUE(val, 4) OVER w AS 'fourth' FROM observations WINDOW w AS (PARTITION BY subject ORDER BY time ROWS UNBOUNDED PRECEDING);",
-		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS ( partition by subject order by `time` asc rows unbounded preceding)",
+		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS (partition by subject order by `time` asc rows unbounded preceding)",
 	}, {
 		input:  "SELECT time, subject, val, FIRST_VALUE(val)  OVER w AS 'first', LAST_VALUE(val) OVER w AS 'last', NTH_VALUE(val, 2) OVER w AS 'second', NTH_VALUE(val, 4) OVER w AS 'fourth' FROM observations WINDOW w AS (PARTITION BY subject ORDER BY time RANGE 10 PRECEDING);",
-		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS ( partition by subject order by `time` asc range 10 preceding)",
+		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS (partition by subject order by `time` asc range 10 preceding)",
 	}, {
 		input:  "SELECT time, subject, val, FIRST_VALUE(val)  OVER w AS 'first', LAST_VALUE(val) OVER w AS 'last', NTH_VALUE(val, 2) OVER w AS 'second', NTH_VALUE(val, 4) OVER w AS 'fourth' FROM observations WINDOW w AS (PARTITION BY subject ORDER BY time ROWS INTERVAL 5 DAY PRECEDING);",
-		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS ( partition by subject order by `time` asc rows interval 5 day preceding)",
+		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS (partition by subject order by `time` asc rows interval 5 day preceding)",
 	}, {
 		input:  "SELECT time, subject, val, FIRST_VALUE(val)  OVER w AS 'first', LAST_VALUE(val) OVER w AS 'last', NTH_VALUE(val, 2) OVER w AS 'second', NTH_VALUE(val, 4) OVER w AS 'fourth' FROM observations WINDOW w AS (PARTITION BY subject ORDER BY time RANGE 5 FOLLOWING);",
-		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS ( partition by subject order by `time` asc range 5 following)",
+		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS (partition by subject order by `time` asc range 5 following)",
 	}, {
 		input:  "SELECT time, subject, val, FIRST_VALUE(val)  OVER w AS 'first', LAST_VALUE(val) OVER w AS 'last', NTH_VALUE(val, 2) OVER w AS 'second', NTH_VALUE(val, 4) OVER w AS 'fourth' FROM observations WINDOW w AS (PARTITION BY subject ORDER BY time ROWS INTERVAL '2:30' MINUTE_SECOND FOLLOWING);",
-		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS ( partition by subject order by `time` asc rows interval '2:30' minute_second following)",
+		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS (partition by subject order by `time` asc rows interval '2:30' minute_second following)",
 	}, {
 		input:  "SELECT time, subject, val, FIRST_VALUE(val)  OVER w AS 'first', LAST_VALUE(val) OVER w AS 'last', NTH_VALUE(val, 2) OVER w AS 'second', NTH_VALUE(val, 4) OVER w AS 'fourth' FROM observations WINDOW w AS (PARTITION BY subject ORDER BY time ASC RANGE BETWEEN 10 PRECEDING AND 10 FOLLOWING);",
-		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS ( partition by subject order by `time` asc range between 10 preceding and 10 following)",
+		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS (partition by subject order by `time` asc range between 10 preceding and 10 following)",
 	}, {
 		input:  "SELECT ExtractValue('<a><b/></a>', '/a/b')",
 		output: "select extractvalue('<a><b/></a>', '/a/b') from dual",
@@ -3917,55 +3988,55 @@ var (
 		output: "select _ascii 'bac' from dual",
 	}, {
 		input:  "SELECT time, subject, AVG(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-		output: "select `time`, subject, avg(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+		output: "select `time`, subject, avg(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 	}, {
 		input:  "SELECT time, subject, BIT_AND(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-		output: "select `time`, subject, bit_and(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+		output: "select `time`, subject, bit_and(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 	}, {
 		input:  "SELECT time, subject, BIT_OR(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-		output: "select `time`, subject, bit_or(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+		output: "select `time`, subject, bit_or(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 	}, {
 		input:  "SELECT time, subject, BIT_XOR(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-		output: "select `time`, subject, bit_xor(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+		output: "select `time`, subject, bit_xor(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 	}, {
 		input:  "SELECT time, subject, COUNT(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-		output: "select `time`, subject, count(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+		output: "select `time`, subject, count(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 	}, {
 		input:  "SELECT time, subject, COUNT(*) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-		output: "select `time`, subject, count(*) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+		output: "select `time`, subject, count(*) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 	}, {
 		input:  "SELECT time, subject, MAX(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-		output: "select `time`, subject, max(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+		output: "select `time`, subject, max(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 	}, {
 		input:  "SELECT time, subject, MIN(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-		output: "select `time`, subject, min(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+		output: "select `time`, subject, min(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 	}, {
 		input:  "SELECT time, subject, STD(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-		output: "select `time`, subject, std(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+		output: "select `time`, subject, std(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 	}, {
 		input:  "SELECT time, subject, STDDEV(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-		output: "select `time`, subject, stddev(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+		output: "select `time`, subject, stddev(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 	}, {
 		input:  "SELECT time, subject, STDDEV_POP(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-		output: "select `time`, subject, stddev_pop(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+		output: "select `time`, subject, stddev_pop(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 	}, {
 		input:  "SELECT time, subject, STDDEV_SAMP(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-		output: "select `time`, subject, stddev_samp(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+		output: "select `time`, subject, stddev_samp(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 	}, {
 		input:  "SELECT time, subject, SUM(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-		output: "select `time`, subject, sum(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+		output: "select `time`, subject, sum(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 	}, {
 		input:  "SELECT time, subject, VAR_POP(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-		output: "select `time`, subject, var_pop(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+		output: "select `time`, subject, var_pop(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 	}, {
 		input:  "SELECT time, subject, VAR_SAMP(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-		output: "select `time`, subject, var_samp(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+		output: "select `time`, subject, var_samp(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 	}, {
 		input:  "SELECT time, subject, VARIANCE(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
-		output: "select `time`, subject, variance(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+		output: "select `time`, subject, variance(val) over (partition by `time`, subject) as window_result from observations group by `time`, subject",
 	}, {
 		input:  "SELECT id, coalesce( (SELECT Json_arrayagg(Json_array(id)) FROM (SELECT *, Row_number() over (ORDER BY users.order ASC) FROM unsharded as users WHERE users.purchaseorderid = orders.id) users), json_array()) AS users, coalesce( (SELECT json_arrayagg(json_array(id)) FROM (SELECT *, row_number() over (ORDER BY tests.order ASC) FROM unsharded as tests WHERE tests.purchaseorderid = orders.id) tests), json_array()) AS tests FROM unsharded as orders WHERE orders.id = 'xxx'",
-		output: "select id, coalesce((select json_arrayagg(json_array(id)) from (select *, row_number() over ( order by users.`order` asc) from unsharded as users where users.purchaseorderid = orders.id) as users), json_array()) as users, coalesce((select json_arrayagg(json_array(id)) from (select *, row_number() over ( order by tests.`order` asc) from unsharded as tests where tests.purchaseorderid = orders.id) as tests), json_array()) as tests from unsharded as orders where orders.id = 'xxx'",
+		output: "select id, coalesce((select json_arrayagg(json_array(id)) from (select *, row_number() over (order by users.`order` asc) from unsharded as users where users.purchaseorderid = orders.id) as users), json_array()) as users, coalesce((select json_arrayagg(json_array(id)) from (select *, row_number() over (order by tests.`order` asc) from unsharded as tests where tests.purchaseorderid = orders.id) as tests), json_array()) as tests from unsharded as orders where orders.id = 'xxx'",
 	}, {
 		input: `kill connection 18446744073709551615`,
 	}, {
@@ -4842,7 +4913,6 @@ func TestPositionedErr(t *testing.T) {
 }
 
 func TestSubStr(t *testing.T) {
-
 	validSQL := []struct {
 		input  string
 		output string
@@ -6630,7 +6700,6 @@ func BenchmarkParseTraces(b *testing.B) {
 			}
 		})
 	}
-
 }
 
 func BenchmarkParseStress(b *testing.B) {
@@ -6900,7 +6969,7 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 	name = locateFile(name)
 	fd, err := os.OpenFile(name, os.O_RDONLY, 0)
 	if err != nil {
-		panic(fmt.Sprintf("Could not open file %s", name))
+		panic("Could not open file " + name)
 	}
 
 	testCaseIterator = make(chan testCase)

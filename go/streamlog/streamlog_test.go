@@ -19,6 +19,7 @@ package streamlog
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -292,6 +293,7 @@ func TestShouldEmitLog(t *testing.T) {
 		totalTime         time.Duration
 		errored           bool
 		ok                bool
+		emitReason        string
 	}{
 		{
 			sql:               "queryLogRowThreshold smaller than affected and returned",
@@ -303,6 +305,7 @@ func TestShouldEmitLog(t *testing.T) {
 			rowsReturned:      7,
 			totalTime:         1000,
 			ok:                true,
+			emitReason:        "row",
 		},
 		{
 			sql:               "queryLogRowThreshold greater than affected and returned",
@@ -314,6 +317,7 @@ func TestShouldEmitLog(t *testing.T) {
 			rowsReturned:      17,
 			totalTime:         1000,
 			ok:                false,
+			emitReason:        "",
 		},
 		{
 			sql:               "queryLogTimeThreshold smaller than total time and returned",
@@ -325,6 +329,7 @@ func TestShouldEmitLog(t *testing.T) {
 			rowsReturned:      7,
 			totalTime:         1000,
 			ok:                true,
+			emitReason:        "time",
 		},
 		{
 			sql:               "queryLogTimeThreshold greater than total time and returned",
@@ -336,6 +341,7 @@ func TestShouldEmitLog(t *testing.T) {
 			rowsReturned:      17,
 			totalTime:         1000,
 			ok:                false,
+			emitReason:        "",
 		},
 		{
 			sql:               "this doesn't contains queryFilterTag: TAG",
@@ -347,6 +353,7 @@ func TestShouldEmitLog(t *testing.T) {
 			rowsReturned:      17,
 			totalTime:         1000,
 			ok:                false,
+			emitReason:        "",
 		},
 		{
 			sql:               "this contains queryFilterTag: TAG",
@@ -358,6 +365,7 @@ func TestShouldEmitLog(t *testing.T) {
 			rowsReturned:      17,
 			totalTime:         1000,
 			ok:                true,
+			emitReason:        "filtertag",
 		},
 		{
 			sql:               "this contains querySampleRate: 1.0",
@@ -369,6 +377,7 @@ func TestShouldEmitLog(t *testing.T) {
 			rowsReturned:      17,
 			totalTime:         1000,
 			ok:                true,
+			emitReason:        "sample",
 		},
 		{
 			sql:               "this contains querySampleRate: 1.0 without expected queryFilterTag",
@@ -380,18 +389,21 @@ func TestShouldEmitLog(t *testing.T) {
 			rowsReturned:      17,
 			totalTime:         1000,
 			ok:                true,
+			emitReason:        "sample",
 		},
 		{
-			sql:      "log only error - no error",
-			qLogMode: "error",
-			errored:  false,
-			ok:       false,
+			sql:        "log only error - no error",
+			qLogMode:   "error",
+			errored:    false,
+			ok:         false,
+			emitReason: "",
 		},
 		{
-			sql:      "log only error - errored",
-			qLogMode: "error",
-			errored:  true,
-			ok:       true,
+			sql:        "log only error - errored",
+			qLogMode:   "error",
+			errored:    true,
+			ok:         true,
+			emitReason: "error",
 		},
 	}
 
@@ -404,7 +416,165 @@ func TestShouldEmitLog(t *testing.T) {
 				sampleRate:    tt.qLogSampleRate,
 				Mode:          tt.qLogMode,
 			}
-			require.Equal(t, tt.ok, qlConfig.ShouldEmitLog(tt.sql, tt.rowsAffected, tt.rowsReturned, tt.totalTime, tt.errored))
+			shouldEmit, emitReason := qlConfig.ShouldEmitLog(tt.sql, tt.rowsAffected, tt.rowsReturned, tt.totalTime, tt.errored)
+			require.Equal(t, tt.ok, shouldEmit)
+			require.Equal(t, tt.emitReason, emitReason)
+		})
+	}
+}
+
+func TestShouldEmitAnyLog(t *testing.T) {
+	tests := []struct {
+		sql               string
+		qLogFilterTag     string
+		qLogRowThreshold  uint64
+		qLogTimeThreshold time.Duration
+		qLogSampleRate    float64
+		qLogMode          string
+		rowsAffected      uint64
+		rowsReturned      uint64
+		totalTime         time.Duration
+		errored           bool
+		ok                bool
+		emitReason        string
+	}{
+		{
+			sql:               "queryLogRowThreshold smaller than affected and returned",
+			qLogFilterTag:     "",
+			qLogRowThreshold:  2,
+			qLogTimeThreshold: 0,
+			qLogSampleRate:    0.0,
+			rowsAffected:      7,
+			rowsReturned:      7,
+			totalTime:         1000,
+			ok:                true,
+			emitReason:        "row",
+		},
+		{
+			sql:               "queryLogRowThreshold greater than affected and returned",
+			qLogFilterTag:     "",
+			qLogRowThreshold:  27,
+			qLogTimeThreshold: 0,
+			qLogSampleRate:    0.0,
+			rowsAffected:      7,
+			rowsReturned:      17,
+			totalTime:         1000,
+			ok:                false,
+			emitReason:        "",
+		},
+		{
+			sql:               "queryLogTimeThreshold smaller than total time and returned",
+			qLogFilterTag:     "",
+			qLogRowThreshold:  0,
+			qLogTimeThreshold: 10,
+			qLogSampleRate:    0.0,
+			rowsAffected:      7,
+			rowsReturned:      7,
+			totalTime:         1000,
+			ok:                true,
+			emitReason:        "time",
+		},
+		{
+			sql:               "queryLogTimeThreshold greater than total time and returned",
+			qLogFilterTag:     "",
+			qLogRowThreshold:  100,
+			qLogTimeThreshold: 10000,
+			qLogSampleRate:    0.0,
+			rowsAffected:      7,
+			rowsReturned:      17,
+			totalTime:         1000,
+			ok:                false,
+			emitReason:        "",
+		},
+		{
+			sql:               "this doesn't contains queryFilterTag: TAG",
+			qLogFilterTag:     "special tag",
+			qLogRowThreshold:  10,
+			qLogTimeThreshold: 0,
+			qLogSampleRate:    0.0,
+			rowsAffected:      7,
+			rowsReturned:      17,
+			totalTime:         1000,
+			ok:                true,
+			emitReason:        "row",
+		},
+		{
+			sql:               "this contains queryFilterTag: TAG",
+			qLogFilterTag:     "TAG",
+			qLogRowThreshold:  100,
+			qLogTimeThreshold: 0,
+			qLogSampleRate:    0.0,
+			rowsAffected:      7,
+			rowsReturned:      17,
+			totalTime:         1000,
+			ok:                true,
+			emitReason:        "filtertag",
+		},
+		{
+			sql:               "this contains queryFilterTag: TAG and queryLogTimeThreshold",
+			qLogFilterTag:     "TAG",
+			qLogRowThreshold:  100,
+			qLogTimeThreshold: 10,
+			qLogSampleRate:    0.0,
+			rowsAffected:      7,
+			rowsReturned:      17,
+			totalTime:         20,
+			ok:                true,
+			emitReason:        "filtertag,time",
+		},
+		{
+			sql:               "this contains querySampleRate: 1.0",
+			qLogFilterTag:     "",
+			qLogRowThreshold:  0,
+			qLogTimeThreshold: 0,
+			qLogSampleRate:    1.0,
+			rowsAffected:      7,
+			rowsReturned:      17,
+			totalTime:         1000,
+			ok:                true,
+			emitReason:        "sample",
+		},
+		{
+			sql:               "this contains querySampleRate: 1.0 without expected queryFilterTag",
+			qLogFilterTag:     "TAG",
+			qLogRowThreshold:  0,
+			qLogTimeThreshold: 0,
+			qLogSampleRate:    1.0,
+			rowsAffected:      7,
+			rowsReturned:      17,
+			totalTime:         1000,
+			ok:                true,
+			emitReason:        "sample",
+		},
+		{
+			sql:        "log only error - no error",
+			qLogMode:   "error",
+			errored:    false,
+			ok:         false,
+			emitReason: "",
+		},
+		{
+			sql:        "log only error - errored",
+			qLogMode:   "error",
+			errored:    true,
+			ok:         true,
+			emitReason: "error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.sql, func(t *testing.T) {
+			qlConfig := QueryLogConfig{
+				FilterTag:             tt.qLogFilterTag,
+				RowThreshold:          tt.qLogRowThreshold,
+				TimeThreshold:         tt.qLogTimeThreshold,
+				sampleRate:            tt.qLogSampleRate,
+				Mode:                  tt.qLogMode,
+				EmitOnAnyConditionMet: true,
+			}
+			shouldEmit, emitReason := qlConfig.ShouldEmitLog(tt.sql, tt.rowsAffected, tt.rowsReturned, tt.totalTime, tt.errored)
+			require.Equal(t, tt.ok, shouldEmit)
+			require.Equal(t, tt.emitReason, emitReason)
 		})
 	}
 }
@@ -438,7 +608,7 @@ func TestGetFormatter(t *testing.T) {
 			params: url.Values{
 				"keys": []string{"key1", "key2"},
 			},
-			val:         &mockFormatter{err: fmt.Errorf("formatter error")},
+			val:         &mockFormatter{err: errors.New("formatter error")},
 			expectedErr: "formatter error",
 		},
 	}

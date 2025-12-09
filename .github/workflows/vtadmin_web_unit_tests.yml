@@ -4,10 +4,15 @@ name: vtadmin-web unit tests
 # See https://github.community/t/trigger-a-workflow-on-change-to-the-yml-file-itself/17792/4)
 on:
   push:
+    branches:
+      - "main"
+      - "release-[0-9]+.[0-9]"
+    tags: '**'
     paths:
       - '.github/workflows/vtadmin_web_unit_tests.yml'
       - 'web/vtadmin/**'
   pull_request:
+    branches: '**'
     paths:
       - '.github/workflows/vtadmin_web_unit_tests.yml'
       - 'web/vtadmin/**'
@@ -25,33 +30,22 @@ jobs:
             exit 1
           fi
 
-      - name: Check if workflow needs to be skipped
-        id: skip-workflow
-        run: |
-          skip='false'
-          if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
-          skip='true'
-          fi
-          echo Skip ${skip}
-          echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
-
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        if: steps.skip-workflow.outputs.skip-workflow == 'false'
         with:
           persist-credentials: 'false'
 
+      - name: Tune the OS
+        uses: ./.github/actions/tune-os
+
       - uses: actions/setup-node@v4
-        if: steps.skip-workflow.outputs.skip-workflow == 'false'
         with:
           # node-version should match package.json
           node-version: '22.13.1'
 
       - name: Install dependencies
-        if: steps.skip-workflow.outputs.skip-workflow == 'false'
         run: cd ./web/vtadmin && npm ci
 
       - name: Run unit tests
-        if: steps.skip-workflow.outputs.skip-workflow == 'false'
         run: cd ./web/vtadmin && CI=true npm run test
         
     # Cancel pending and in-progress runs of this workflow if a newer ref is pushed to CI.

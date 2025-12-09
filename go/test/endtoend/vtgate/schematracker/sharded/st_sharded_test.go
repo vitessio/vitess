@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -83,8 +84,8 @@ func TestMain(m *testing.M) {
 			SidecarDBName: sidecarDBName,
 		}
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-			"--schema_change_signal",
-			"--vschema_ddl_authorized_users", "%")
+			vtutils.GetFlagVariantForTestsByVersion("--schema-change-signal", vtgateVer),
+			vtutils.GetFlagVariantForTestsByVersion("--vschema-ddl-authorized-users", vtgateVer), "%")
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-config-schema-change-signal")
 
 		if vtgateVer >= 16 && vttabletVer >= 16 {
@@ -216,7 +217,6 @@ func TestInitAndUpdate(t *testing.T) {
 		100*time.Millisecond,
 		30*time.Second,
 		"test_sc and test_sc_1 should not be in vschema tables")
-
 }
 
 func TestDMLOnNewTable(t *testing.T) {

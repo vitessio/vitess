@@ -18,10 +18,9 @@ package base
 
 import (
 	"errors"
-	"net"
 
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // MetricResult is what we expect our probes to return. This can be a numeric result, or
@@ -56,21 +55,17 @@ var ErrAppDenied = errors.New("app denied")
 // ErrInvalidCheckType is an internal error indicating an unknown check type
 var ErrInvalidCheckType = errors.New("unknown throttler check type")
 
-// IsDialTCPError sees if the given error indicates a TCP issue
-func IsDialTCPError(err error) bool {
+// IsTabletRPCError sees if the given error indicates an issue performing an RPC call
+// to the tabletmanager service of a tablet. This is used to parse errors returned by
+// the CheckThrottler RPC of grpctmclient.
+func IsTabletRPCError(err error) bool {
 	if err == nil {
 		return false
 	}
 
-	if s, ok := status.FromError(err); ok {
-		return s.Code() == codes.Unavailable || s.Code() == codes.DeadlineExceeded
-	}
-
-	switch err := err.(type) {
-	case *net.OpError:
-		return err.Op == "dial" && err.Net == "tcp"
-	}
-	return false
+	// The tmclient returns vterrors-style errors. Any
+	// error code other than "OK" indicates a problem.
+	return vterrors.Code(err) != vtrpcpb.Code_OK
 }
 
 type noHostsMetricResult struct{}

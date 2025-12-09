@@ -24,16 +24,36 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"regexp"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
+
+	vtutils "vitess.io/vitess/go/vt/utils"
 
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 )
+
+var versionRegex = regexp.MustCompile(`Version: ([0-9]+)\.([0-9]+)\.([0-9]+)`)
+
+// getMajorVersion extracts the major version from a binary by running binaryName --version
+func getMajorVersion(binaryName string) (int, error) {
+	version, err := exec.Command(binaryName, "--version").Output()
+	if err != nil {
+		return 0, err
+	}
+	v := versionRegex.FindStringSubmatch(string(version))
+	if len(v) != 4 {
+		return 0, fmt.Errorf("could not parse server version from: %s", version)
+	}
+
+	return strconv.Atoi(v[1])
+}
 
 // HealthChecker is a callback that impements a service-specific health check
 // It must return true if the service at the given `addr` is reachable, false
@@ -129,7 +149,7 @@ func (vtp *VtProcess) WaitTerminate() error {
 func (vtp *VtProcess) WaitStart() (err error) {
 	vtp.proc = exec.Command(
 		vtp.Binary,
-		"--port", fmt.Sprintf("%d", vtp.Port),
+		"--port", strconv.Itoa(vtp.Port),
 		"--bind-address", vtp.BindAddress,
 		"--log_dir", vtp.LogDirectory,
 		"--alsologtostderr",
@@ -137,7 +157,7 @@ func (vtp *VtProcess) WaitStart() (err error) {
 
 	if vtp.PortGrpc != 0 {
 		vtp.proc.Args = append(vtp.proc.Args, "--grpc-port")
-		vtp.proc.Args = append(vtp.proc.Args, fmt.Sprintf("%d", vtp.PortGrpc))
+		vtp.proc.Args = append(vtp.proc.Args, strconv.Itoa(vtp.PortGrpc))
 	}
 
 	if vtp.BindAddressGprc != "" {
@@ -232,22 +252,22 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	protoTopo, _ := prototext.Marshal(args.Topology)
 	vt.ExtraArgs = append(vt.ExtraArgs, []string{
 		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--db_charset", charset,
-		"--db_app_user", user,
-		"--db_app_password", pass,
-		"--db_dba_user", user,
-		"--db_dba_password", pass,
-		"--proto_topo", string(protoTopo),
+		"--db-charset", charset,
+		"--db-app-user", user,
+		"--db-app-password", pass,
+		"--db-dba-user", user,
+		"--db-dba-password", pass,
+		"--proto-topo", string(protoTopo),
 		"--mycnf-server-id", "1",
 		"--mycnf-socket-file", socket,
-		"--normalize_queries",
-		"--dbddl_plugin", "vttest",
-		"--foreign_key_mode", args.ForeignKeyMode,
+		"--normalize-queries",
+		"--dbddl-plugin", "vttest",
+		"--foreign-key-mode", args.ForeignKeyMode,
 		"--planner-version", args.PlannerVersion,
-		fmt.Sprintf("--enable_online_ddl=%t", args.EnableOnlineDDL),
-		fmt.Sprintf("--enable_direct_ddl=%t", args.EnableDirectDDL),
-		fmt.Sprintf("--enable_system_settings=%t", args.EnableSystemSettings),
-		fmt.Sprintf("--no_scatter=%t", args.NoScatter),
+		fmt.Sprintf("--enable-online-ddl=%t", args.EnableOnlineDDL),
+		fmt.Sprintf("--enable-direct-ddl=%t", args.EnableDirectDDL),
+		fmt.Sprintf("--enable-system-settings=%t", args.EnableSystemSettings),
+		fmt.Sprintf("--no-scatter=%t", args.NoScatter),
 	}...)
 
 	// If topo tablet refresh interval is not defined then we will give it value of 10s. Please note
@@ -259,17 +279,26 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		vt.ExtraArgs = append(vt.ExtraArgs, fmt.Sprintf("--tablet-refresh-interval=%v", args.VtgateTabletRefreshInterval))
 	}
 
+	// If gateway initial tablet timeout is not defined then we will give it value of 30s (vtcombo default).
+	// Setting it to a lower value will reduce the time VTGate waits for tablets at startup.
+	if args.VtgateGatewayInitialTabletTimeout <= 0 {
+		vt.ExtraArgs = append(vt.ExtraArgs, fmt.Sprintf("--gateway-initial-tablet-timeout=%v", 30*time.Second))
+	} else {
+		vt.ExtraArgs = append(vt.ExtraArgs, fmt.Sprintf("--gateway-initial-tablet-timeout=%v", args.VtgateGatewayInitialTabletTimeout))
+	}
+
 	vt.ExtraArgs = append(vt.ExtraArgs, QueryServerArgs...)
 	vt.ExtraArgs = append(vt.ExtraArgs, environment.VtcomboArguments()...)
 
+	//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 	if args.SchemaDir != "" {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--schema_dir", args.SchemaDir}...)
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--schema-dir", args.SchemaDir}...)
 	}
 	if args.PersistentMode && args.DataDir != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--vschema-persistence-dir", path.Join(args.DataDir, "vschema_data")}...)
 	}
 	if args.TransactionMode != "" {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--transaction_mode", args.TransactionMode}...)
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--transaction-mode", args.TransactionMode}...)
 	}
 	if args.TransactionTimeout != 0 {
 		vt.ExtraArgs = append(vt.ExtraArgs, "--queryserver-config-transaction-timeout", fmt.Sprintf("%v", args.TransactionTimeout))
@@ -280,8 +309,12 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	if servenv.GRPCAuth() == "mtls" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--grpc-auth-mode", servenv.GRPCAuth(), "--grpc-key", servenv.GRPCKey(), "--grpc-cert", servenv.GRPCCert(), "--grpc-ca", servenv.GRPCCertificateAuthority(), "--grpc-auth-mtls-allowed-substrings", servenv.ClientCertSubstrings()}...)
 	}
+	vtVer, err := getMajorVersion(vt.Binary)
+	if err != nil {
+		return nil, err
+	}
 	if args.VSchemaDDLAuthorizedUsers != "" {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--vschema_ddl_authorized_users", args.VSchemaDDLAuthorizedUsers}...)
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{vtutils.GetFlagVariantForTestsByVersion("--vschema-ddl-authorized-users", vtVer), args.VSchemaDDLAuthorizedUsers}...)
 	}
 	vt.ExtraArgs = append(vt.ExtraArgs, "--mysql-server-version", servenv.MySQLServerVersion())
 	if socket != "" {
@@ -290,7 +323,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		}...)
 	} else {
 		hostname, p := mysql.Address()
-		port := fmt.Sprintf("%d", p)
+		port := strconv.Itoa(p)
 
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{
 			"--db-host", hostname,
@@ -306,7 +339,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 
 	vt.ExtraArgs = append(vt.ExtraArgs, []string{
 		"--mysql-auth-server-impl", "none",
-		"--mysql-server-port", fmt.Sprintf("%d", vtcomboMysqlPort),
+		"--mysql-server-port", strconv.Itoa(vtcomboMysqlPort),
 		"--mysql-server-bind-address", vtcomboMysqlBindAddress,
 	}...)
 

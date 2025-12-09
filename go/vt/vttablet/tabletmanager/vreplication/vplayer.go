@@ -144,10 +144,10 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		// immediately so we use ExecuteFetch directly.
 		res, err := vr.dbClient.ExecuteFetch(SqlMaxAllowedPacket, 1)
 		if err != nil {
-			log.Errorf("Error getting max_allowed_packet, will use the relay_log_max_size value of %d bytes: %v", vr.workflowConfig.RelayLogMaxSize, err)
+			log.Errorf("Error getting max_allowed_packet, will use the relay-log-max-size value of %d bytes: %v", vr.workflowConfig.RelayLogMaxSize, err)
 		} else {
 			if maxAllowedPacket, err = res.Rows[0][0].ToInt64(); err != nil {
-				log.Errorf("Error getting max_allowed_packet, will use the relay_log_max_size value of %d bytes: %v", vr.workflowConfig.RelayLogMaxSize, err)
+				log.Errorf("Error getting max_allowed_packet, will use the relay-log-max-size value of %d bytes: %v", vr.workflowConfig.RelayLogMaxSize, err)
 			}
 		}
 		// Leave 64 bytes of room for the commit to be sure that we have a more than
@@ -482,16 +482,17 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 
 	estimateLag := func() {
 		behind := time.Now().UnixNano() - vp.lastTimestampNs - vp.timeOffsetNs
-		vp.vr.stats.ReplicationLagSeconds.Store(behind / 1e9)
-		vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(behind/1e9)*time.Second)
+		behindSecs := behind / 1e9
+		vp.vr.stats.ReplicationLagSeconds.Store(behindSecs)
+		vp.vr.stats.VReplicationLagGauges.Set(strconv.Itoa(int(vp.vr.id)), behindSecs)
 	}
 
 	// If we're not running, set ReplicationLagSeconds to be very high.
 	// TODO(sougou): if we also stored the time of the last event, we
 	// can estimate this value more accurately.
 	defer vp.vr.stats.ReplicationLagSeconds.Store(math.MaxInt64)
-	defer vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), math.MaxInt64)
-	var lagSecs int64
+	defer vp.vr.stats.VReplicationLagGauges.Set(strconv.Itoa(int(vp.vr.id)), math.MaxInt64)
+	var lag int64
 	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -525,21 +526,9 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 			}
 		}
 
-		lagSecs = -1
+		lag = -1
 		for i, events := range items {
 			for j, event := range events {
-				if event.Timestamp != 0 {
-					// If the event is a heartbeat sent while throttled then do not update
-					// the lag based on it.
-					// If the batch consists only of throttled heartbeat events then we cannot
-					// determine the actual lag, as the vstreamer is fully throttled, and we
-					// will estimate it after processing the batch.
-					if !(event.Type == binlogdatapb.VEventType_HEARTBEAT && event.Throttled) {
-						vp.lastTimestampNs = event.Timestamp * 1e9
-						vp.timeOffsetNs = time.Now().UnixNano() - event.CurrentTime
-						lagSecs = event.CurrentTime/1e9 - event.Timestamp
-					}
-				}
 				mustSave := false
 				switch event.Type {
 				case binlogdatapb.VEventType_COMMIT:
@@ -570,23 +559,38 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 							table = event.GetRowEvent().TableName
 						}
 						if table != "" {
-							tableLogMsg = fmt.Sprintf(" for table %s", table)
+							tableLogMsg = " for table " + table
 						}
 						pos := getNextPosition(items, i, j+1)
 						if pos != "" {
-							gtidLogMsg = fmt.Sprintf(" while processing position %s", pos)
+							gtidLogMsg = " while processing position " + pos
 						}
 						log.Errorf("Error applying event%s%s: %s", tableLogMsg, gtidLogMsg, err.Error())
 						err = vterrors.Wrapf(err, "error applying event%s%s", tableLogMsg, gtidLogMsg)
 					}
 					return err
 				}
+				// Calculate the lag now that we've applied the event.
+				if event.Timestamp != 0 {
+					// If the event is a heartbeat sent while throttled then do not update
+					// the lag based on it.
+					// If the batch consists only of throttled heartbeat events then we cannot
+					// determine the actual lag, as the vstreamer is fully throttled, and we
+					// will estimate it after processing the batch.
+					if !(event.Type == binlogdatapb.VEventType_HEARTBEAT && event.Throttled) {
+						vp.lastTimestampNs = event.Timestamp * 1e9
+						now := time.Now().UnixNano()
+						vp.timeOffsetNs = now - event.CurrentTime
+						lag = now - vp.lastTimestampNs - vp.timeOffsetNs
+					}
+				}
 			}
 		}
 
-		if lagSecs >= 0 {
+		if lag >= 0 {
+			lagSecs := lag / 1e9
 			vp.vr.stats.ReplicationLagSeconds.Store(lagSecs)
-			vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(lagSecs)*time.Second)
+			vp.vr.stats.VReplicationLagGauges.Set(strconv.Itoa(int(vp.vr.id)), lagSecs)
 		} else { // We couldn't determine the lag, so we need to estimate it
 			estimateLag()
 		}
@@ -765,7 +769,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if _, err := vp.updatePos(ctx, event.Timestamp); err != nil {
 				return err
 			}
-			if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at DDL %s", event.Statement)); err != nil {
+			if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, "Stopped at DDL "+event.Statement); err != nil {
 				return err
 			}
 			if err := vp.commit(); err != nil {
@@ -781,7 +785,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 				return err
 			}
 			if stats != nil {
-				stats.Send(fmt.Sprintf("%v", event.Statement))
+				stats.Send(event.Statement)
 			}
 			posReached, err := vp.updatePos(ctx, event.Timestamp)
 			if err != nil {
@@ -795,7 +799,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 				log.Infof("Ignoring error: %v for DDL: %s", err, event.Statement)
 			}
 			if stats != nil {
-				stats.Send(fmt.Sprintf("%v", event.Statement))
+				stats.Send(event.Statement)
 			}
 			posReached, err := vp.updatePos(ctx, event.Timestamp)
 			if err != nil {

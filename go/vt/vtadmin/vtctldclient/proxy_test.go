@@ -19,16 +19,19 @@ package vtctldclient
 import (
 	"context"
 	"net"
+	"os"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
+	"vitess.io/vitess/go/vt/vtctl/grpcclientcommon"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -227,4 +230,81 @@ func TestRedial(t *testing.T) {
 	resp, err = proxy.GetKeyspace(context.Background(), &vtctldatapb.GetKeyspaceRequest{})
 	require.NoError(t, err)
 	assert.Equal(t, nextAddr, resp.Keyspace.Name)
+}
+
+func TestDialSecureDialOptionError(t *testing.T) {
+	// Test that grpcclientcommon.SecureDialOption() returning an error in proxy.dial()
+
+	// Create temporary files with invalid content that will cause TLS parsing to fail
+	tmpCert, err := os.CreateTemp("", "invalid-cert-*.pem")
+	require.NoError(t, err)
+	defer os.Remove(tmpCert.Name())
+
+	// Write invalid certificate content
+	_, err = tmpCert.WriteString("invalid certificate data")
+	require.NoError(t, err)
+	tmpCert.Close()
+
+	tmpKey, err := os.CreateTemp("", "invalid-key-*.pem")
+	require.NoError(t, err)
+	defer os.Remove(tmpKey.Name())
+
+	// Write invalid key content
+	_, err = tmpKey.WriteString("invalid key data")
+	require.NoError(t, err)
+	tmpKey.Close()
+
+	// Now test by using command line arguments to trigger the same error in proxy.dial()
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	// Set args that would cause SecureDialOption to fail
+	os.Args = []string{
+		"vtadmin",
+		"--vtctld-grpc-cert=" + tmpCert.Name(),
+		"--vtctld-grpc-key=" + tmpKey.Name(),
+	}
+
+	// Create a custom flag set and parse it to set the grpcclientcommon variables
+	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	grpcclientcommon.RegisterFlags(fs)
+
+	// Parse the flags which will set the cert and key variables in grpcclientcommon
+	err = fs.Parse(os.Args[1:])
+	require.NoError(t, err)
+	// reset flags after test
+	defer func() {
+		_ = fs.Parse([]string{
+			"vtadmin",
+			"--vtctld-grpc-cert=",
+			"--vtctld-grpc-key=",
+		})
+	}()
+
+	// Now when we create a proxy, it should fail at line 116
+	disco := fakediscovery.New()
+	disco.AddTaggedVtctlds(nil, &vtadminpb.Vtctld{
+		Hostname: "localhost:15999",
+	})
+
+	cfg := &Config{
+		Cluster: &vtadminpb.Cluster{
+			Id:   "test",
+			Name: "testcluster",
+		},
+		ResolverOptions: &resolver.Options{
+			Discovery:        disco,
+			DiscoveryTimeout: 50 * time.Millisecond,
+		},
+	}
+
+	// This should fail during New() -> dial() -> grpcclientcommon.SecureDialOption() -> line 116
+	proxy, err := New(context.Background(), cfg)
+
+	// Verify that the error comes from TLS configuration
+	assert.Error(t, err, "New should fail with invalid TLS files")
+	assert.Nil(t, proxy, "proxy should be nil when New fails")
+
+	// The error should be from certificate parsing
+	assert.Contains(t, err.Error(), "tls")
 }

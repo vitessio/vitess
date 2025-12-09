@@ -102,7 +102,8 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 		expectedLog: []string{
 			"FindTable(`schema`.`table`)",
 			"ResolveDestinations routedKeyspace [] Destinations:DestinationAnyShard()",
-			"ExecuteMultiShard routedKeyspace.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" table_name: type:VARCHAR value:\"routedTable\"} false false"},
+			fmt.Sprintf("ExecuteMultiShard routedKeyspace.1: dummy_select {__replacevtschemaname: %v table_name: %v} false false", sqltypes.Int64BindVariable(1), &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("routedTable")}),
+		},
 	}, {
 		testName:    "both schema and table predicates - not routed",
 		tableSchema: []string{"schema"},
@@ -111,7 +112,8 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 		expectedLog: []string{
 			"FindTable(`schema`.`table`)",
 			"ResolveDestinations schema [] Destinations:DestinationAnyShard()",
-			"ExecuteMultiShard schema.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" table_name: type:VARCHAR value:\"table\"} false false"},
+			fmt.Sprintf("ExecuteMultiShard schema.1: dummy_select {__replacevtschemaname: %v table_name: %v} false false", sqltypes.Int64BindVariable(1), &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("table")}),
+		},
 	}, {
 		testName:    "multiple schema and table predicates",
 		tableSchema: []string{"schema", "schema", "schema"},
@@ -122,7 +124,8 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 			"FindTable(`schema`.`table`)",
 			"FindTable(`schema`.`table`)",
 			"ResolveDestinations schema [] Destinations:DestinationAnyShard()",
-			"ExecuteMultiShard schema.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" t1: type:VARCHAR value:\"table\" t2: type:VARCHAR value:\"table\" t3: type:VARCHAR value:\"table\"} false false"},
+			fmt.Sprintf("ExecuteMultiShard schema.1: dummy_select {__replacevtschemaname: %v t1: %v t2: %v t3: %v} false false", sqltypes.Int64BindVariable(1), &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("table")}, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("table")}, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("table")}),
+		},
 	}, {
 		testName:  "table name predicate - routed table",
 		tableName: map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("tableName"), collations.SystemCollation)},
@@ -130,7 +133,8 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 		expectedLog: []string{
 			"FindTable(tableName)",
 			"ResolveDestinations routedKeyspace [] Destinations:DestinationAnyShard()",
-			"ExecuteMultiShard routedKeyspace.1: dummy_select {__vtschemaname: type:VARCHAR table_name: type:VARCHAR value:\"routedTable\"} false false"},
+			fmt.Sprintf("ExecuteMultiShard routedKeyspace.1: dummy_select {__vtschemaname: type:VARCHAR table_name: %v} false false", &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("routedTable")}),
+		},
 	}, {
 		testName:  "table name predicate - not routed",
 		tableName: map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("tableName"), collations.SystemCollation)},
@@ -138,24 +142,28 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 		expectedLog: []string{
 			"FindTable(tableName)",
 			"ResolveDestinations ks [] Destinations:DestinationAnyShard()",
-			"ExecuteMultiShard ks.1: dummy_select {__vtschemaname: type:VARCHAR table_name: type:VARCHAR value:\"tableName\"} false false"},
+			fmt.Sprintf("ExecuteMultiShard ks.1: dummy_select {__vtschemaname: type:VARCHAR table_name: %v} false false", &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("tableName")}),
+		},
 	}, {
 		testName:    "schema predicate",
 		tableSchema: []string{"myKeyspace"},
 		expectedLog: []string{
 			"ResolveDestinations myKeyspace [] Destinations:DestinationAnyShard()",
-			"ExecuteMultiShard myKeyspace.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\"} false false"},
+			fmt.Sprintf("ExecuteMultiShard myKeyspace.1: dummy_select {__replacevtschemaname: %v} false false", sqltypes.Int64BindVariable(1)),
+		},
 	}, {
 		testName:    "multiple schema predicates",
 		tableSchema: []string{"myKeyspace", "myKeyspace", "myKeyspace", "myKeyspace"},
 		expectedLog: []string{
 			"ResolveDestinations myKeyspace [] Destinations:DestinationAnyShard()",
-			"ExecuteMultiShard myKeyspace.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\"} false false"},
+			fmt.Sprintf("ExecuteMultiShard myKeyspace.1: dummy_select {__replacevtschemaname: %v} false false", sqltypes.Int64BindVariable(1)),
+		},
 	}, {
 		testName: "no predicates",
 		expectedLog: []string{
 			"ResolveDestinations ks [] Destinations:DestinationAnyShard()",
-			"ExecuteMultiShard ks.1: dummy_select {} false false"},
+			"ExecuteMultiShard ks.1: dummy_select {} false false",
+		},
 	}}
 	for _, tc := range tests {
 		t.Run(tc.testName, func(t *testing.T) {
@@ -246,7 +254,7 @@ func TestSelectEqualUnique(t *testing.T) {
 	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		fmt.Sprintf(`ResolveDestinations ks [%v] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`, sqltypes.Int64BindVariable(1)),
 		`ExecuteMultiShard ks.-20: dummy_select {} false false`,
 	})
 	expectResult(t, result, defaultSelectResult)
@@ -255,7 +263,7 @@ func TestSelectEqualUnique(t *testing.T) {
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		fmt.Sprintf(`ResolveDestinations ks [%v] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`, sqltypes.Int64BindVariable(1)),
 		`StreamExecuteMulti dummy_select ks.-20: {} `,
 	})
 	expectResult(t, result, defaultSelectResult)
@@ -340,7 +348,7 @@ func TestSelectEqualUniqueScatter(t *testing.T) {
 	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationKeyRange(-)`,
+		fmt.Sprintf(`ResolveDestinations ks [%v] Destinations:DestinationKeyRange(-)`, sqltypes.Int64BindVariable(1)),
 		`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
 	})
 	expectResult(t, result, defaultSelectResult)
@@ -349,7 +357,7 @@ func TestSelectEqualUniqueScatter(t *testing.T) {
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationKeyRange(-)`,
+		fmt.Sprintf(`ResolveDestinations ks [%v] Destinations:DestinationKeyRange(-)`, sqltypes.Int64BindVariable(1)),
 		`StreamExecuteMulti dummy_select ks.-20: {} ks.20-: {} `,
 	})
 	expectResult(t, result, defaultSelectResult)
@@ -391,8 +399,8 @@ func TestSelectEqual(t *testing.T) {
 	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:{type:INT64 value:"1"} false`,
-		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationKeyspaceIDs(00,80)`,
+		fmt.Sprintf(`Execute select from, toc from lkp where from in ::from from: %v false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("1")}}}),
+		fmt.Sprintf(`ResolveDestinations ks [%v] Destinations:DestinationKeyspaceIDs(00,80)`, sqltypes.Int64BindVariable(1)),
 		`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
 	})
 	expectResult(t, result, defaultSelectResult)
@@ -401,8 +409,8 @@ func TestSelectEqual(t *testing.T) {
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:{type:INT64 value:"1"} false`,
-		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationKeyspaceIDs(00,80)`,
+		fmt.Sprintf(`Execute select from, toc from lkp where from in ::from from: %v false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("1")}}}),
+		fmt.Sprintf(`ResolveDestinations ks [%v] Destinations:DestinationKeyspaceIDs(00,80)`, sqltypes.Int64BindVariable(1)),
 		`StreamExecuteMulti dummy_select ks.-20: {} ks.20-: {} `,
 	})
 	expectResult(t, result, defaultSelectResult)
@@ -432,8 +440,8 @@ func TestSelectEqualNoRoute(t *testing.T) {
 	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:{type:INT64 value:"1"} false`,
-		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationNone()`,
+		fmt.Sprintf(`Execute select from, toc from lkp where from in ::from from: %v false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("1")}}}),
+		fmt.Sprintf(`ResolveDestinations ks [%v] Destinations:DestinationNone()`, sqltypes.Int64BindVariable(1)),
 	})
 	expectResult(t, result, &sqltypes.Result{})
 
@@ -441,8 +449,8 @@ func TestSelectEqualNoRoute(t *testing.T) {
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:{type:INT64 value:"1"} false`,
-		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationNone()`,
+		fmt.Sprintf(`Execute select from, toc from lkp where from in ::from from: %v false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("1")}}}),
+		fmt.Sprintf(`ResolveDestinations ks [%v] Destinations:DestinationNone()`, sqltypes.Int64BindVariable(1)),
 	})
 	require.Nil(t, result)
 
@@ -453,8 +461,8 @@ func TestSelectEqualNoRoute(t *testing.T) {
 	result, err = sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:{type:INT64 value:"1"} false`,
-		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationNone()`,
+		fmt.Sprintf(`Execute select from, toc from lkp where from in ::from from: %v false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("1")}}}),
+		fmt.Sprintf(`ResolveDestinations ks [%v] Destinations:DestinationNone()`, sqltypes.Int64BindVariable(1)),
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		`ExecuteMultiShard ks.-20: dummy_select {} false false`,
 	})
@@ -464,8 +472,8 @@ func TestSelectEqualNoRoute(t *testing.T) {
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:{type:INT64 value:"1"} false`,
-		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationNone()`,
+		fmt.Sprintf(`Execute select from, toc from lkp where from in ::from from: %v false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("1")}}}),
+		fmt.Sprintf(`ResolveDestinations ks [%v] Destinations:DestinationNone()`, sqltypes.Int64BindVariable(1)),
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		`StreamExecuteMulti dummy_select ks.-20: {} `,
 	})
@@ -499,10 +507,10 @@ func TestINUnique(t *testing.T) {
 	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [type:INT64 value:"1" type:INT64 value:"2" type:INT64 value:"4"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(d2fd8867d50d2dfe)`,
+		fmt.Sprintf(`ResolveDestinations ks [%v %v %v] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(d2fd8867d50d2dfe)`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(2), sqltypes.Int64BindVariable(4)),
 		`ExecuteMultiShard ` +
-			`ks.-20: dummy_select {__vals: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"}} ` +
-			`ks.20-: dummy_select {__vals: type:TUPLE values:{type:INT64 value:"4"}} ` +
+			fmt.Sprintf(`ks.-20: dummy_select {__vals: %v} `, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("1")}, {Type: sqltypes.Int64, Value: []byte("2")}}}) +
+			fmt.Sprintf(`ks.20-: dummy_select {__vals: %v} `, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("4")}}}) +
 			`false false`,
 	})
 	expectResult(t, result, defaultSelectResult)
@@ -511,8 +519,8 @@ func TestINUnique(t *testing.T) {
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [type:INT64 value:"1" type:INT64 value:"2" type:INT64 value:"4"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(d2fd8867d50d2dfe)`,
-		`StreamExecuteMulti dummy_select ks.-20: {__vals: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"}} ks.20-: {__vals: type:TUPLE values:{type:INT64 value:"4"}} `,
+		fmt.Sprintf(`ResolveDestinations ks [%v %v %v] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(d2fd8867d50d2dfe)`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(2), sqltypes.Int64BindVariable(4)),
+		fmt.Sprintf(`StreamExecuteMulti dummy_select ks.-20: {__vals: %v} ks.20-: {__vals: %v} `, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("1")}, {Type: sqltypes.Int64, Value: []byte("2")}}}, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("4")}}}),
 	})
 	expectResult(t, result, defaultSelectResult)
 }
@@ -564,11 +572,11 @@ func TestINNonUnique(t *testing.T) {
 	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"} values:{type:INT64 value:"4"} false`,
-		`ResolveDestinations ks [type:INT64 value:"1" type:INT64 value:"2" type:INT64 value:"4"] Destinations:DestinationKeyspaceIDs(00,80),DestinationKeyspaceIDs(00),DestinationKeyspaceIDs(80)`,
+		fmt.Sprintf(`Execute select from, toc from lkp where from in ::from from: %v false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("1")}, {Type: sqltypes.Int64, Value: []byte("2")}, {Type: sqltypes.Int64, Value: []byte("4")}}}),
+		fmt.Sprintf(`ResolveDestinations ks [%v %v %v] Destinations:DestinationKeyspaceIDs(00,80),DestinationKeyspaceIDs(00),DestinationKeyspaceIDs(80)`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(2), sqltypes.Int64BindVariable(4)),
 		`ExecuteMultiShard ` +
-			`ks.-20: dummy_select {__vals: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"}} ` +
-			`ks.20-: dummy_select {__vals: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"4"}} ` +
+			fmt.Sprintf(`ks.-20: dummy_select {__vals: %v} `, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("1")}, {Type: sqltypes.Int64, Value: []byte("2")}}}) +
+			fmt.Sprintf(`ks.20-: dummy_select {__vals: %v} `, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("1")}, {Type: sqltypes.Int64, Value: []byte("4")}}}) +
 			`false false`,
 	})
 	expectResult(t, result, defaultSelectResult)
@@ -577,9 +585,9 @@ func TestINNonUnique(t *testing.T) {
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"} values:{type:INT64 value:"4"} false`,
-		`ResolveDestinations ks [type:INT64 value:"1" type:INT64 value:"2" type:INT64 value:"4"] Destinations:DestinationKeyspaceIDs(00,80),DestinationKeyspaceIDs(00),DestinationKeyspaceIDs(80)`,
-		`StreamExecuteMulti dummy_select ks.-20: {__vals: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"}} ks.20-: {__vals: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"4"}} `,
+		fmt.Sprintf(`Execute select from, toc from lkp where from in ::from from: %v false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("1")}, {Type: sqltypes.Int64, Value: []byte("2")}, {Type: sqltypes.Int64, Value: []byte("4")}}}),
+		fmt.Sprintf(`ResolveDestinations ks [%v %v %v] Destinations:DestinationKeyspaceIDs(00,80),DestinationKeyspaceIDs(00),DestinationKeyspaceIDs(80)`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(2), sqltypes.Int64BindVariable(4)),
+		fmt.Sprintf(`StreamExecuteMulti dummy_select ks.-20: {__vals: %v} ks.20-: {__vals: %v} `, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("1")}, {Type: sqltypes.Int64, Value: []byte("2")}}}, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("1")}, {Type: sqltypes.Int64, Value: []byte("4")}}}),
 	})
 	expectResult(t, result, defaultSelectResult)
 }
@@ -612,7 +620,7 @@ func TestMultiEqual(t *testing.T) {
 	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [type:INT64 value:"1" type:INT64 value:"2" type:INT64 value:"4"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(d2fd8867d50d2dfe)`,
+		fmt.Sprintf(`ResolveDestinations ks [%v %v %v] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(d2fd8867d50d2dfe)`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(2), sqltypes.Int64BindVariable(4)),
 		`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
 	})
 	expectResult(t, result, defaultSelectResult)
@@ -621,7 +629,7 @@ func TestMultiEqual(t *testing.T) {
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [type:INT64 value:"1" type:INT64 value:"2" type:INT64 value:"4"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(d2fd8867d50d2dfe)`,
+		fmt.Sprintf(`ResolveDestinations ks [%v %v %v] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(d2fd8867d50d2dfe)`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(2), sqltypes.Int64BindVariable(4)),
 		`StreamExecuteMulti dummy_select ks.-20: {} ks.20-: {} `,
 	})
 	expectResult(t, result, defaultSelectResult)
@@ -659,7 +667,7 @@ func TestSelectLike(t *testing.T) {
 	// range 0c-0d hits 2 shards ks.-0c80 ks.0c80-0d;
 	// note that 0c-0d should not hit ks.0d-40
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [type:VARCHAR value:"a%"] Destinations:DestinationKeyRange(0c-0d)`,
+		fmt.Sprintf(`ResolveDestinations ks [%v] Destinations:DestinationKeyRange(0c-0d)`, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("a%")}),
 		`ExecuteMultiShard ks.-0c80: dummy_select {} ks.0c80-0d: dummy_select {} false false`,
 	})
 	expectResult(t, result, defaultSelectResult)
@@ -670,7 +678,7 @@ func TestSelectLike(t *testing.T) {
 	require.NoError(t, err)
 
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [type:VARCHAR value:"a%"] Destinations:DestinationKeyRange(0c-0d)`,
+		fmt.Sprintf(`ResolveDestinations ks [%v] Destinations:DestinationKeyRange(0c-0d)`, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("a%")}),
 		`StreamExecuteMulti dummy_select ks.-0c80: {} ks.0c80-0d: {} `,
 	})
 	expectResult(t, result, defaultSelectResult)
@@ -689,7 +697,7 @@ func TestSelectLike(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [type:VARCHAR value:"ab%"] Destinations:DestinationKeyRange(0c92-0c93)`,
+		fmt.Sprintf(`ResolveDestinations ks [%v] Destinations:DestinationKeyRange(0c92-0c93)`, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("ab%")}),
 		`ExecuteMultiShard ks.0c80-0d: dummy_select {} false false`,
 	})
 	expectResult(t, result, defaultSelectResult)
@@ -700,11 +708,10 @@ func TestSelectLike(t *testing.T) {
 	require.NoError(t, err)
 
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [type:VARCHAR value:"ab%"] Destinations:DestinationKeyRange(0c92-0c93)`,
+		fmt.Sprintf(`ResolveDestinations ks [%v] Destinations:DestinationKeyRange(0c92-0c93)`, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("ab%")}),
 		`StreamExecuteMulti dummy_select ks.0c80-0d: {} `,
 	})
 	expectResult(t, result, defaultSelectResult)
-
 }
 
 func TestSelectNext(t *testing.T) {
@@ -827,8 +834,8 @@ func TestRouteGetFields(t *testing.T) {
 	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:{type:INT64 value:"1"} false`,
-		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationNone()`,
+		fmt.Sprintf(`Execute select from, toc from lkp where from in ::from from: %v false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("1")}}}),
+		fmt.Sprintf(`ResolveDestinations ks [%v] Destinations:DestinationNone()`, sqltypes.Int64BindVariable(1)),
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		`ExecuteMultiShard ks.-20: dummy_select_field {} false false`,
 	})
@@ -838,8 +845,8 @@ func TestRouteGetFields(t *testing.T) {
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, true)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:{type:INT64 value:"1"} false`,
-		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationNone()`,
+		fmt.Sprintf(`Execute select from, toc from lkp where from in ::from from: %v false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("1")}}}),
+		fmt.Sprintf(`ResolveDestinations ks [%v] Destinations:DestinationNone()`, sqltypes.Int64BindVariable(1)),
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		`ExecuteMultiShard ks.-20: dummy_select_field {} false false`,
 	})
@@ -851,8 +858,8 @@ func TestRouteGetFields(t *testing.T) {
 	result, err = sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:{type:INT64 value:"1"} false`,
-		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationNone()`,
+		fmt.Sprintf(`Execute select from, toc from lkp where from in ::from from: %v false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("1")}}}),
+		fmt.Sprintf(`ResolveDestinations ks [%v] Destinations:DestinationNone()`, sqltypes.Int64BindVariable(1)),
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		`ExecuteMultiShard ks.-20: dummy_select {} false false`,
 	})
@@ -862,8 +869,8 @@ func TestRouteGetFields(t *testing.T) {
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, true)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:{type:INT64 value:"1"} false`,
-		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationNone()`,
+		fmt.Sprintf(`Execute select from, toc from lkp where from in ::from from: %v false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("1")}}}),
+		fmt.Sprintf(`ResolveDestinations ks [%v] Destinations:DestinationNone()`, sqltypes.Int64BindVariable(1)),
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		`StreamExecuteMulti dummy_select ks.-20: {} `,
 	})
@@ -1423,7 +1430,6 @@ func TestParamsFail(t *testing.T) {
 }
 
 func TestExecFail(t *testing.T) {
-
 	t.Run("unsharded", func(t *testing.T) {
 		// Unsharded error
 		sel := NewRoute(
@@ -1624,7 +1630,7 @@ func TestINMultiColumnVindex(t *testing.T) {
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(3)] [INT64(1) INT64(4)] [INT64(2) INT64(3)] [INT64(2) INT64(4)]] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(01d2fd8867d50d2dfe),DestinationKeyspaceID(024eb190c9a2fa169c),DestinationKeyspaceID(02d2fd8867d50d2dfe)`,
-		`ExecuteMultiShard ks.-20: dummy_select {__vals0: type:TUPLE values:{type:INT64 value:"1"} __vals1: type:TUPLE values:{type:INT64 value:"3"}} ks.20-: dummy_select {__vals0: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"} __vals1: type:TUPLE values:{type:INT64 value:"4"} values:{type:INT64 value:"3"}} false false`,
+		fmt.Sprintf(`ExecuteMultiShard ks.-20: dummy_select {__vals0: %v __vals1: %v} ks.20-: dummy_select {__vals0: %v __vals1: %v} false false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("1")}}}, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("3")}}}, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("1")}, {Type: sqltypes.Int64, Value: []byte("2")}}}, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("4")}, {Type: sqltypes.Int64, Value: []byte("3")}}}),
 	})
 	expectResult(t, result, defaultSelectResult)
 
@@ -1633,7 +1639,7 @@ func TestINMultiColumnVindex(t *testing.T) {
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(3)] [INT64(1) INT64(4)] [INT64(2) INT64(3)] [INT64(2) INT64(4)]] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(01d2fd8867d50d2dfe),DestinationKeyspaceID(024eb190c9a2fa169c),DestinationKeyspaceID(02d2fd8867d50d2dfe)`,
-		`StreamExecuteMulti dummy_select ks.-20: {__vals0: type:TUPLE values:{type:INT64 value:"1"} __vals1: type:TUPLE values:{type:INT64 value:"3"}} ks.20-: {__vals0: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"} __vals1: type:TUPLE values:{type:INT64 value:"4"} values:{type:INT64 value:"3"}} `,
+		fmt.Sprintf(`StreamExecuteMulti dummy_select ks.-20: {__vals0: %v __vals1: %v} ks.20-: {__vals0: %v __vals1: %v} `, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("1")}}}, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("3")}}}, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("1")}, {Type: sqltypes.Int64, Value: []byte("2")}}}, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("4")}, {Type: sqltypes.Int64, Value: []byte("3")}}}),
 	})
 	expectResult(t, result, defaultSelectResult)
 }
@@ -1667,7 +1673,7 @@ func TestINMixedMultiColumnComparision(t *testing.T) {
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(3)] [INT64(1) INT64(4)]] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(01d2fd8867d50d2dfe)`,
-		`ExecuteMultiShard ks.-20: dummy_select {__vals1: type:TUPLE values:{type:INT64 value:"3"}} ks.20-: dummy_select {__vals1: type:TUPLE values:{type:INT64 value:"4"}} false false`,
+		fmt.Sprintf(`ExecuteMultiShard ks.-20: dummy_select {__vals1: %v} ks.20-: dummy_select {__vals1: %v} false false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("3")}}}, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("4")}}}),
 	})
 	expectResult(t, result, defaultSelectResult)
 
@@ -1676,7 +1682,7 @@ func TestINMixedMultiColumnComparision(t *testing.T) {
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(3)] [INT64(1) INT64(4)]] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(01d2fd8867d50d2dfe)`,
-		`StreamExecuteMulti dummy_select ks.-20: {__vals1: type:TUPLE values:{type:INT64 value:"3"}} ks.20-: {__vals1: type:TUPLE values:{type:INT64 value:"4"}} `,
+		fmt.Sprintf(`StreamExecuteMulti dummy_select ks.-20: {__vals1: %v} ks.20-: {__vals1: %v} `, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("3")}}}, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("4")}}}),
 	})
 	expectResult(t, result, defaultSelectResult)
 }
@@ -1819,13 +1825,13 @@ func TestSelectTupleMultiCol(t *testing.T) {
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol user [[INT64(1) VARCHAR("a")] [INT64(4) VARCHAR("b")]] Destinations:DestinationKeyspaceID(166b40b461),DestinationKeyspaceID(d2fd886762)`,
-		`ExecuteMultiShard user.-20: select 1 from multicol_tbl where (colb, colx, cola) in ::vals {vals: type:TUPLE values:{type:TUPLE value:"\x89\x02\x011\x950\x01a"} values:{type:TUPLE value:"\x89\x02\x014\x950\x01b"}} false false`,
+		fmt.Sprintf(`ExecuteMultiShard user.-20: select 1 from multicol_tbl where (colb, colx, cola) in ::vals {vals: %v} false false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_TUPLE, Value: []byte("\x89\x02\x011\x950\x01a")}, {Type: querypb.Type_TUPLE, Value: []byte("\x89\x02\x014\x950\x01b")}}}),
 	})
 
 	vc.Rewind()
 	_, _ = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{"vals": tupleBV}, false)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol user [[INT64(1) VARCHAR("a")] [INT64(4) VARCHAR("b")]] Destinations:DestinationKeyspaceID(166b40b461),DestinationKeyspaceID(d2fd886762)`,
-		`StreamExecuteMulti select 1 from multicol_tbl where (colb, colx, cola) in ::vals user.-20: {vals: type:TUPLE values:{type:TUPLE value:"\x89\x02\x011\x950\x01a"} values:{type:TUPLE value:"\x89\x02\x014\x950\x01b"}} `,
+		fmt.Sprintf(`StreamExecuteMulti select 1 from multicol_tbl where (colb, colx, cola) in ::vals user.-20: {vals: %v} `, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_TUPLE, Value: []byte("\x89\x02\x011\x950\x01a")}, {Type: querypb.Type_TUPLE, Value: []byte("\x89\x02\x014\x950\x01b")}}}),
 	})
 }

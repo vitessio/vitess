@@ -18,6 +18,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -36,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/tableacl/simpleacl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/semisyncmonitor"
@@ -240,7 +242,7 @@ func createTabletServer(ctx context.Context, env *vtenv.Environment, config *tab
 		// To override default simpleacl, other ACL plugins must set themselves to be default ACL factory
 		tableacl.Register("simpleacl", &simpleacl.Factory{})
 	} else if enforceTableACLConfig {
-		return nil, fmt.Errorf("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
+		return nil, errors.New("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
 	}
 
 	// creates and registers the query service
@@ -274,5 +276,5 @@ func init() {
 	Main.Flags().StringVar(&tableACLConfig, "table-acl-config", tableACLConfig, "path to table access checker config file; send SIGHUP to reload this file")
 	Main.Flags().DurationVar(&tableACLConfigReloadInterval, "table-acl-config-reload-interval", tableACLConfigReloadInterval, "Ticker to reload ACLs. Duration flag, format e.g.: 30s. Default: do not reload")
 	Main.Flags().StringVar(&tabletPath, "tablet-path", tabletPath, "tablet alias")
-	Main.Flags().StringVar(&tabletConfig, "tablet_config", tabletConfig, "YAML file config for tablet")
+	utils.SetFlagStringVar(Main.Flags(), &tabletConfig, "tablet-config", tabletConfig, "YAML file config for tablet")
 }

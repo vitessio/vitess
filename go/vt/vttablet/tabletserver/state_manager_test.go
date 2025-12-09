@@ -88,8 +88,9 @@ func TestStateManagerServePrimary(t *testing.T) {
 	verifySubcomponent(t, 8, sm.te, testStatePrimary)
 	verifySubcomponent(t, 9, sm.messager, testStateOpen)
 	verifySubcomponent(t, 10, sm.throttler, testStateOpen)
-	verifySubcomponent(t, 11, sm.tableGC, testStateOpen)
-	verifySubcomponent(t, 12, sm.ddle, testStateOpen)
+	verifySubcomponent(t, 11, sm.qThrottler, testStateOpen)
+	verifySubcomponent(t, 12, sm.tableGC, testStateOpen)
+	verifySubcomponent(t, 13, sm.ddle, testStateOpen)
 
 	assert.False(t, sm.se.(*testSchemaEngine).nonPrimary)
 	assert.True(t, sm.se.(*testSchemaEngine).ensureCalled)
@@ -132,17 +133,18 @@ func TestStateManagerUnservePrimary(t *testing.T) {
 	verifySubcomponent(t, 1, sm.ddle, testStateClosed)
 	verifySubcomponent(t, 2, sm.tableGC, testStateClosed)
 	verifySubcomponent(t, 3, sm.throttler, testStateClosed)
-	verifySubcomponent(t, 4, sm.messager, testStateClosed)
-	verifySubcomponent(t, 5, sm.te, testStateClosed)
+	verifySubcomponent(t, 4, sm.qThrottler, testStateClosed)
+	verifySubcomponent(t, 5, sm.messager, testStateClosed)
+	verifySubcomponent(t, 6, sm.te, testStateClosed)
 
-	verifySubcomponent(t, 6, sm.tracker, testStateClosed)
-	verifySubcomponent(t, 7, sm.watcher, testStateClosed)
-	verifySubcomponent(t, 8, sm.se, testStateOpen)
-	verifySubcomponent(t, 9, sm.vstreamer, testStateOpen)
-	verifySubcomponent(t, 10, sm.qe, testStateOpen)
-	verifySubcomponent(t, 11, sm.txThrottler, testStateOpen)
+	verifySubcomponent(t, 7, sm.tracker, testStateClosed)
+	verifySubcomponent(t, 8, sm.watcher, testStateClosed)
+	verifySubcomponent(t, 9, sm.se, testStateOpen)
+	verifySubcomponent(t, 10, sm.vstreamer, testStateOpen)
+	verifySubcomponent(t, 11, sm.qe, testStateOpen)
+	verifySubcomponent(t, 12, sm.txThrottler, testStateOpen)
 
-	verifySubcomponent(t, 12, sm.rt, testStatePrimary)
+	verifySubcomponent(t, 13, sm.rt, testStatePrimary)
 
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, sm.target.TabletType)
 	assert.Equal(t, StateNotServing, sm.state)
@@ -189,19 +191,20 @@ func TestStateManagerUnserveNonPrimary(t *testing.T) {
 	verifySubcomponent(t, 1, sm.ddle, testStateClosed)
 	verifySubcomponent(t, 2, sm.tableGC, testStateClosed)
 	verifySubcomponent(t, 3, sm.throttler, testStateClosed)
-	verifySubcomponent(t, 4, sm.messager, testStateClosed)
-	verifySubcomponent(t, 5, sm.te, testStateClosed)
+	verifySubcomponent(t, 4, sm.qThrottler, testStateClosed)
+	verifySubcomponent(t, 5, sm.messager, testStateClosed)
+	verifySubcomponent(t, 6, sm.te, testStateClosed)
 
-	verifySubcomponent(t, 6, sm.tracker, testStateClosed)
+	verifySubcomponent(t, 7, sm.tracker, testStateClosed)
 	assert.True(t, sm.se.(*testSchemaEngine).nonPrimary)
 
-	verifySubcomponent(t, 7, sm.se, testStateOpen)
-	verifySubcomponent(t, 8, sm.vstreamer, testStateOpen)
-	verifySubcomponent(t, 9, sm.qe, testStateOpen)
-	verifySubcomponent(t, 10, sm.txThrottler, testStateOpen)
+	verifySubcomponent(t, 8, sm.se, testStateOpen)
+	verifySubcomponent(t, 9, sm.vstreamer, testStateOpen)
+	verifySubcomponent(t, 10, sm.qe, testStateOpen)
+	verifySubcomponent(t, 11, sm.txThrottler, testStateOpen)
 
-	verifySubcomponent(t, 11, sm.rt, testStateNonPrimary)
-	verifySubcomponent(t, 12, sm.watcher, testStateOpen)
+	verifySubcomponent(t, 12, sm.rt, testStateNonPrimary)
+	verifySubcomponent(t, 13, sm.watcher, testStateOpen)
 
 	assert.Equal(t, topodatapb.TabletType_RDONLY, sm.target.TabletType)
 	assert.Equal(t, StateNotServing, sm.state)
@@ -216,16 +219,17 @@ func TestStateManagerClose(t *testing.T) {
 	verifySubcomponent(t, 1, sm.ddle, testStateClosed)
 	verifySubcomponent(t, 2, sm.tableGC, testStateClosed)
 	verifySubcomponent(t, 3, sm.throttler, testStateClosed)
-	verifySubcomponent(t, 4, sm.messager, testStateClosed)
-	verifySubcomponent(t, 5, sm.te, testStateClosed)
-	verifySubcomponent(t, 6, sm.tracker, testStateClosed)
+	verifySubcomponent(t, 4, sm.qThrottler, testStateClosed)
+	verifySubcomponent(t, 5, sm.messager, testStateClosed)
+	verifySubcomponent(t, 6, sm.te, testStateClosed)
+	verifySubcomponent(t, 7, sm.tracker, testStateClosed)
 
-	verifySubcomponent(t, 7, sm.txThrottler, testStateClosed)
-	verifySubcomponent(t, 8, sm.qe, testStateClosed)
-	verifySubcomponent(t, 9, sm.watcher, testStateClosed)
-	verifySubcomponent(t, 10, sm.vstreamer, testStateClosed)
-	verifySubcomponent(t, 11, sm.rt, testStateClosed)
-	verifySubcomponent(t, 12, sm.se, testStateClosed)
+	verifySubcomponent(t, 8, sm.txThrottler, testStateClosed)
+	verifySubcomponent(t, 9, sm.qe, testStateClosed)
+	verifySubcomponent(t, 10, sm.watcher, testStateClosed)
+	verifySubcomponent(t, 11, sm.vstreamer, testStateClosed)
+	verifySubcomponent(t, 12, sm.rt, testStateClosed)
+	verifySubcomponent(t, 13, sm.se, testStateClosed)
 
 	assert.Equal(t, topodatapb.TabletType_RDONLY, sm.target.TabletType)
 	assert.Equal(t, StateNotConnected, sm.state)
@@ -514,13 +518,11 @@ func TestStateManagerCheckMySQL(t *testing.T) {
 
 	// Wait for closeAll to get under way.
 	for order.Load() < 1 {
-
 		time.Sleep(10 * time.Millisecond)
 	}
 
 	// Wait to get out of transitioning state.
 	for sm.isTransitioning() {
-
 		time.Sleep(10 * time.Millisecond)
 	}
 
@@ -823,6 +825,7 @@ func newTestStateManager() *stateManager {
 		ddle:              &testOnlineDDLExecutor{},
 		diskHealthMonitor: newNoopDiskHealthMonitor(),
 		throttler:         &testLagThrottler{},
+		qThrottler:        &testQueryThrottler{},
 		tableGC:           &testTableGC{},
 		rw:                newRequestsWaiter(),
 	}
@@ -1017,6 +1020,21 @@ func (te *testOnlineDDLExecutor) Open() error {
 }
 
 func (te *testOnlineDDLExecutor) Close() {
+	te.order = order.Add(1)
+	te.state = testStateClosed
+}
+
+type testQueryThrottler struct {
+	testOrderState
+}
+
+func (te *testQueryThrottler) Open() error {
+	te.order = order.Add(1)
+	te.state = testStateOpen
+	return nil
+}
+
+func (te *testQueryThrottler) Close() {
 	te.order = order.Add(1)
 	te.state = testStateClosed
 }

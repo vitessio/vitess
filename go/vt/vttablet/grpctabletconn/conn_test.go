@@ -18,7 +18,7 @@ package grpctabletconn
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"io"
 	"net"
 	"os"
@@ -138,47 +138,47 @@ type mockQueryClient struct {
 
 func (m *mockQueryClient) StreamExecute(ctx context.Context, in *querypb.StreamExecuteRequest, opts ...grpc.CallOption) (queryservicepb.Query_StreamExecuteClient, error) {
 	m.lastCallCtx = ctx
-	return nil, fmt.Errorf("A general error")
+	return nil, errors.New("A general error")
 }
 
 func (m *mockQueryClient) BeginStreamExecute(ctx context.Context, in *querypb.BeginStreamExecuteRequest, opts ...grpc.CallOption) (queryservicepb.Query_BeginStreamExecuteClient, error) {
 	m.lastCallCtx = ctx
-	return nil, fmt.Errorf("A general error")
+	return nil, errors.New("A general error")
 }
 
 func (m *mockQueryClient) ReserveStreamExecute(ctx context.Context, in *querypb.ReserveStreamExecuteRequest, opts ...grpc.CallOption) (queryservicepb.Query_ReserveStreamExecuteClient, error) {
 	m.lastCallCtx = ctx
-	return nil, fmt.Errorf("A general error")
+	return nil, errors.New("A general error")
 }
 
 func (m *mockQueryClient) ReserveBeginStreamExecute(ctx context.Context, in *querypb.ReserveBeginStreamExecuteRequest, opts ...grpc.CallOption) (queryservicepb.Query_ReserveBeginStreamExecuteClient, error) {
 	m.lastCallCtx = ctx
-	return nil, fmt.Errorf("A general error")
+	return nil, errors.New("A general error")
 }
 
 func (m *mockQueryClient) VStream(ctx context.Context, in *binlogdatapb.VStreamRequest, opts ...grpc.CallOption) (queryservicepb.Query_VStreamClient, error) {
 	m.lastCallCtx = ctx
-	return nil, fmt.Errorf("A general error")
+	return nil, errors.New("A general error")
 }
 
 func (m *mockQueryClient) VStreamRows(ctx context.Context, in *binlogdatapb.VStreamRowsRequest, opts ...grpc.CallOption) (queryservicepb.Query_VStreamRowsClient, error) {
 	m.lastCallCtx = ctx
-	return nil, fmt.Errorf("A general error")
+	return nil, errors.New("A general error")
 }
 
 func (m *mockQueryClient) VStreamTables(ctx context.Context, in *binlogdatapb.VStreamTablesRequest, opts ...grpc.CallOption) (queryservicepb.Query_VStreamTablesClient, error) {
 	m.lastCallCtx = ctx
-	return nil, fmt.Errorf("A general error")
+	return nil, errors.New("A general error")
 }
 
 func (m *mockQueryClient) VStreamResults(ctx context.Context, in *binlogdatapb.VStreamResultsRequest, opts ...grpc.CallOption) (queryservicepb.Query_VStreamResultsClient, error) {
 	m.lastCallCtx = ctx
-	return nil, fmt.Errorf("A general error")
+	return nil, errors.New("A general error")
 }
 
 func (m *mockQueryClient) GetSchema(ctx context.Context, in *querypb.GetSchemaRequest, opts ...grpc.CallOption) (queryservicepb.Query_GetSchemaClient, error) {
 	m.lastCallCtx = ctx
-	return nil, fmt.Errorf("A general error")
+	return nil, errors.New("A general error")
 }
 
 var _ queryservicepb.QueryClient = (*mockQueryClient)(nil)

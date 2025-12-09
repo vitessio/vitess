@@ -19,9 +19,11 @@ package emergencyreparent
 import (
 	"context"
 	"os/exec"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -29,6 +31,8 @@ import (
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 func TestTrivialERS(t *testing.T) {
@@ -129,6 +133,138 @@ func TestReparentDownPrimary(t *testing.T) {
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
 	utils.ConfirmReplication(t, tablets[1], []*cluster.Vttablet{tablets[2], tablets[3]})
 	utils.ResurrectTablet(ctx, t, clusterInstance, tablets[0])
+}
+
+func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
+	defer utils.TeardownCluster(clusterInstance)
+
+	if clusterInstance.VtTabletMajorVersion < 24 {
+		t.Skip("Skipping test since `DemotePrimary` on earlier versions does not handle blocked primaries correctly")
+	}
+
+	// start vtgate w/disabled buffering
+	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
+		"--enable_buffer=false",
+		"--query-timeout", "3000")
+	err := clusterInstance.StartVtgate()
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	conn, err := mysql.Connect(ctx, &mysql.ConnParams{
+		Host: clusterInstance.Hostname,
+		Port: clusterInstance.VtgateMySQLPort,
+	})
+	require.NoError(t, err)
+	defer conn.Close()
+
+	_, err = conn.ExecuteFetch("CREATE TABLE test (id INT PRIMARY KEY, msg VARCHAR(64))", 0, false)
+	require.NoError(t, err)
+
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+
+	// Simulate no semi-sync replicas being available by disabling semi-sync on all replicas
+	for _, tablet := range tablets[1:] {
+		utils.RunSQL(ctx, t, "STOP REPLICA IO_THREAD", tablet)
+
+		// Disable semi-sync on replicas to simulate blocking
+		semisyncType, err := utils.SemiSyncExtensionLoaded(context.Background(), tablet)
+		require.NoError(t, err)
+		switch semisyncType {
+		case mysql.SemiSyncTypeSource:
+			utils.RunSQL(context.Background(), t, "SET GLOBAL rpl_semi_sync_replica_enabled = false", tablet)
+		case mysql.SemiSyncTypeMaster:
+			utils.RunSQL(context.Background(), t, "SET GLOBAL rpl_semi_sync_slave_enabled = false", tablet)
+		}
+
+		utils.RunSQL(context.Background(), t, "START REPLICA IO_THREAD", tablet)
+	}
+
+	// Try performing a write and ensure that it blocks.
+	writeSQL := `insert into test(id, msg) values (1, 'test 1')`
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		// Attempt writing via vtgate against the primary. This should block (because there's no replicas to ack the semi-sync),
+		// and fail on the vtgate query timeout. Async replicas will still receive this write (probably), because it is written
+		// to the PRIMARY binlog even when no ackers exist. This means we need to disable the vtgate buffer (above), because it
+		// will attempt the write on the promoted, unblocked primary - and this will hit a dupe key error.
+		_, err := conn.ExecuteFetch(writeSQL, 0, false)
+
+		// The error here could be one of:
+		// * target: ks.0.primary: vttablet: rpc error: code = DeadlineExceeded desc = context deadline exceeded (errno 1317) (sqlstate 70100) during query: insert into test(id, msg) values (1, 'test 1')
+		// * target: ks.0.primary: vttablet: rpc error: code = DeadlineExceeded desc = stream terminated by RST_STREAM with error code: CANCEL (errno 1317) (sqlstate 70100) during query: insert into test(id, msg) values (1, 'test 1')
+		// * ...
+		//
+		// So we only check for the part of the error message that's consistent.
+		require.ErrorContains(t, err, "(errno 1317) (sqlstate 70100) during query: insert into test(id, msg) values (1, 'test 1')")
+
+		// Verify vtgate really processed the insert in case something unrelated caused the deadline exceeded.
+		vtgateVars := clusterInstance.VtgateProcess.GetVars()
+		require.NotNil(t, vtgateVars)
+		require.NotNil(t, vtgateVars["QueryRoutes"])
+		require.NotNil(t, vtgateVars["VtgateApiErrorCounts"])
+		require.EqualValues(t, map[string]interface{}{
+			"DDL.DirectDDL.PRIMARY":      float64(1),
+			"INSERT.Passthrough.PRIMARY": float64(1),
+		}, vtgateVars["QueryRoutes"])
+		require.EqualValues(t, map[string]interface{}{
+			"Execute.ks.primary.DEADLINE_EXCEEDED": float64(1),
+		}, vtgateVars["VtgateApiErrorCounts"])
+	}()
+
+	wg.Add(1)
+	waitReplicasTimeout := time.Second * 10
+	go func() {
+		defer wg.Done()
+
+		// Ensure the write (other goroutine above) is blocked waiting on ACKs on the primary.
+		utils.WaitForQueryWithStateInProcesslist(context.Background(), t, tablets[0], writeSQL, "Waiting for semi-sync ACK from replica", time.Second*20)
+
+		// Send SIGSTOP to primary to simulate it being unresponsive.
+		tablets[0].VttabletProcess.Stop()
+
+		// Run forced reparent operation, this should now proceed unimpeded.
+		out, err := utils.Ers(clusterInstance, tablets[1], "15s", waitReplicasTimeout.String())
+		require.NoError(t, err, out)
+	}()
+
+	wg.Wait()
+
+	// We need to wait at least 10 seconds here to ensure the wait-for-replicas-timeout has passed,
+	// before we resume the old primary - otherwise the old primary will receive a `SetReplicationSource` call.
+	time.Sleep(waitReplicasTimeout * 2)
+
+	// Bring back the demoted primary
+	tablets[0].VttabletProcess.Resume()
+
+	// Give the old primary some time to realize it's no longer the primary,
+	// and for a new primary to be promoted.
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		// Ensure the old primary was demoted correctly
+		tabletInfo, err := clusterInstance.VtctldClientProcess.GetTablet(tablets[0].Alias)
+		require.NoError(c, err)
+
+		// The old primary should have noticed there's a new primary tablet now and should
+		// have demoted itself to REPLICA.
+		require.Equal(c, topodatapb.TabletType_REPLICA, tabletInfo.GetType())
+
+		// The old primary should be in not serving mode because we should be unable to re-attach it
+		// as a replica due to the errant GTID caused by semi-sync writes that were never replicated out.
+		//
+		// Note: The writes that were not replicated were caused by the semi sync unblocker, which
+		//       performed writes after ERS.
+		require.Equal(c, "NOT_SERVING", tablets[0].VttabletProcess.GetTabletStatus())
+		require.Equal(c, "replica", tablets[0].VttabletProcess.GetTabletType())
+
+		// Check the 2nd tablet becomes PRIMARY.
+		require.Equal(c, "SERVING", tablets[1].VttabletProcess.GetTabletStatus())
+		require.Equal(c, "primary", tablets[1].VttabletProcess.GetTabletType())
+	}, 30*time.Second, time.Second, "could not validate primary was demoted")
 }
 
 func TestReparentNoChoiceDownPrimary(t *testing.T) {

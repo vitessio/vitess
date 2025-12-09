@@ -18,6 +18,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -95,7 +96,7 @@ func CheckCellFlags(ctx context.Context, serv srvtopo.Server, cell string, cells
 			return fmt.Errorf("Unable to create gateway: %w", err)
 		}
 	} else {
-		return fmt.Errorf("topo server cannot be nil")
+		return errors.New("topo server cannot be nil")
 	}
 	cellsInTopo, err := topoServer.GetKnownCells(ctx)
 	if err != nil {
@@ -163,7 +164,7 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(tabletTypes) == 0 {
-		return fmt.Errorf("tablet-types-to-wait must contain at least one serving tablet type")
+		return errors.New("tablet-types-to-wait must contain at least one serving tablet type")
 	}
 
 	err := CheckCellFlags(ctx, resilientServer, cell, vtgate.CellsToWatch)
@@ -213,7 +214,5 @@ func init() {
 	Main.Flags().StringVar(&plannerName, "planner-version", plannerName, "Sets the default planner to use when the session has not changed it. Valid values are: Gen4, Gen4Greedy, Gen4Left2Right")
 
 	// Support both variants until v25
-	// Main.MarkFlagRequired("tablet-types-to-wait")
-	Main.MarkFlagsOneRequired("tablet-types-to-wait", "tablet_types_to_wait")
-
+	Main.MarkFlagsOneRequired("tablet-types-to-wait")
 }

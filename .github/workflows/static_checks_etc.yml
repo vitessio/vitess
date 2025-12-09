@@ -1,8 +1,13 @@
 name: Static Code Checks, Etc.
 
 on:
-  - pull_request
-  - push
+  push:
+    branches:
+      - "main"
+      - "release-[0-9]+.[0-9]"
+    tags: '**'
+  pull_request:
+    branches: '**'
 
 permissions: read-all
 
@@ -19,18 +24,7 @@ jobs:
             exit 1
           fi
 
-      - name: Check if workflow needs to be skipped
-        id: skip-workflow
-        run: |
-          skip='false'
-          if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
-            skip='true'
-          fi
-          echo Skip ${skip}
-          echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT  
-
       - name: Checkout code
-        if: steps.skip-workflow.outputs.skip-workflow == 'false'
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: 'false'
@@ -43,7 +37,6 @@ jobs:
           github-token: ${{ github.token }}
 
       - name: Check for changes in Go files
-        if: steps.skip-workflow.outputs.skip-workflow == 'false'
         uses: dorny/paths-filter@ebc4d7e9ebcb0b1eb21480bb8f43113e996ac77a # v3.0.1
         id: changes
         with:
@@ -124,34 +117,33 @@ jobs:
               - '.github/workflows/static_checks_etc.yml'
 
       - name: Set up Go
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true')
-        uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
+        if: (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true')
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
           go-version-file: go.mod
 
       - name: Tune the OS
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
-        run: |
-          sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
+        if: steps.changes.outputs.go_files == 'true'
+        uses: ./.github/actions/tune-os
 
       - name: Run go fmt
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
+        if: steps.changes.outputs.go_files == 'true'
         run: |
           gofmt -l . | grep -vF vendor/ && exit 1 || echo "All files formatted correctly"
 
       - name: Install goimports
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.visitor == 'true')
+        if: (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.visitor == 'true')
         run: |
           go install golang.org/x/tools/cmd/goimports@latest
 
       - name: Run goimports
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
+        if: steps.changes.outputs.go_files == 'true'
         run: |
           out=$(goimports -local vitess.io/vitess -l -w $(find . -name "*.go" | grep -v ".pb.go"))
           echo $out | grep go > /dev/null && echo -e "The following files are malformatted:\n$out" && exit 1 || echo "All the files are formatted correctly"
 
       - name: Get dependencies
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
+        if: (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
         run: |
           sudo apt-get update
           sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
@@ -159,60 +151,53 @@ jobs:
           go mod download
 
       - name: Run make minimaltools
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
+        if: (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
         run: |
           make minimaltools
 
       - name: check_go_versions
-        if: steps.skip-workflow.outputs.skip-workflow == 'false'
         run:
           tools/check_go_versions.sh || exit 1
 
       - name: check_make_parser
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
+        if: (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
         run: |
           tools/check_make_parser.sh || exit 1
 
       - name: check_make_sizegen
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.sizegen == 'true' || steps.changes.outputs.go_files == 'true')
+        if: (steps.changes.outputs.sizegen == 'true' || steps.changes.outputs.go_files == 'true')
         run: |
           tools/check_make_sizegen.sh || exit 1
 
       - name: check_make_visitor
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.visitor == 'true' || steps.changes.outputs.go_files == 'true')
+        if: (steps.changes.outputs.visitor == 'true' || steps.changes.outputs.go_files == 'true')
         run: |
           misc/git/hooks/asthelpers || exit 1
           
       - name: check_ast_format_fast
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.astfmt == 'true' || steps.changes.outputs.go_files == 'true')
+        if: (steps.changes.outputs.astfmt == 'true' || steps.changes.outputs.go_files == 'true')
         run: |
           ./tools/check_astfmtgen.sh || exit 1
 
       - name: run ensure_bootstrap_version
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+        if: steps.changes.outputs.end_to_end == 'true'
         run: |
           make ensure_bootstrap_version
           git status
           test -z "$(git diff-index --name-only HEAD --)" || exit 1
 
-      - name: Install golangci-lint
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
-        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.0.2
-
-      - name: Clean Env
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
-        run: $(go env GOPATH)/bin/golangci-lint cache clean
-
-      - name: Print linter version
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
-        run: $(go env GOPATH)/bin/golangci-lint --version
-
       - name: Run golangci-lint
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
-        run: $(go env GOPATH)/bin/golangci-lint run go/... --timeout 10m || exit 1
+        if: steps.changes.outputs.go_files == 'true'
+        uses: golangci/golangci-lint-action@v9
+        with:
+          args: --timeout 10m
+          install-mode: "goinstall"
+          skip-cache: true
+          working-directory: go
+          version: v2.1.6
 
       - name: Run go mod tidy
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
+        if: steps.changes.outputs.go_files == 'true'
         run: |
           set -e
           go mod tidy
@@ -226,24 +211,24 @@ jobs:
           exit 1
 
       - name: Setup Node
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'
+        if: steps.changes.outputs.proto_changes == 'true'
         uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4.0.3
         with:
           # make proto requires newer node than the pre-installed one
           node-version: '22.13.1'
 
       - name: check_make_proto
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'
+        if: steps.changes.outputs.proto_changes == 'true'
         run: |
           tools/check_make_proto.sh || exit 1
 
       - name: Check test/config.json
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.ci_config == 'true')
+        if: (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.ci_config == 'true')
         run: |
           go run ./go/tools/ci-config/main.go || exit 1
 
       - name: Check changelog
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.release_notes == 'true'
+        if: steps.changes.outputs.release_notes == 'true'
         run: |
           set -e
           go run ./go/tools/releases/releases.go
@@ -258,7 +243,6 @@ jobs:
           exit 1
 
       - name: Check make generate_ci_workflows
-        if: steps.skip-workflow.outputs.skip-workflow == 'false'
         run: |
           set -e
           make generate_ci_workflows

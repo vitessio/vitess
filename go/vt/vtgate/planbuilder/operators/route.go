@@ -572,8 +572,6 @@ func createProjection(ctx *plancontext.PlanningContext, src Operator, derivedNam
 }
 
 func (r *Route) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
-	removeKeyspaceFromSelectExpr(expr)
-
 	if reuse {
 		offset := r.FindCol(ctx, expr.Expr, true)
 		if offset != -1 {
@@ -618,7 +616,6 @@ func addColumnToInput(
 	var src Operator
 	var updateSrc func(Operator)
 	switch op := operator.(type) {
-
 	// Pass through operators - we can just add the columns to their source
 	case *SubQuery:
 		src, updateSrc = op.Outer, func(newSrc Operator) { op.Outer = newSrc }

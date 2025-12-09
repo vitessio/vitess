@@ -19,9 +19,11 @@ package vstreamer
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -50,16 +52,23 @@ import (
 )
 
 const (
-	trxHistoryLenQuery = `select count as history_len from information_schema.INNODB_METRICS where name = 'trx_rseg_history_len'`
-	replicaLagQuery    = `show replica status`
-	legacyLagQuery     = `show slave status`
-	hostQuery          = `select @@hostname as hostname, @@port as port`
+	trxHistoryLenQuery        = `select count as history_len from information_schema.INNODB_METRICS where name = 'trx_rseg_history_len'`
+	replicaLagQuery           = `show replica status`
+	legacyLagQuery            = `show slave status`
+	hostQuery                 = `select @@hostname as hostname, @@port as port`
+	fullyThrottledMetricLabel = "FullyThrottledTimeout"
 )
 
 // HeartbeatTime is set to slightly below 1s, compared to idleTimeout
 // set by VPlayer at slightly above 1s. This minimizes conflicts
 // between the two timeouts.
 var HeartbeatTime = 900 * time.Millisecond
+
+// How long we can be fully throttled before returning an error.
+// If we hit this then we can surface a metric for operators and we can run the tablet picker again
+// to try and pick another tablet which is perhaps less burdened. Running the tablet picker also gives
+// us a natural backoff period.
+var fullyThrottledTimeout = 10 * time.Minute
 
 // vstreamer is for serving a single vreplication stream on the source side.
 type vstreamer struct {
@@ -80,9 +89,12 @@ type vstreamer struct {
 	versionTableID uint64
 
 	// format and pos are updated by parseEvent.
-	format  mysql.BinlogFormat
-	pos     replication.Position
-	stopPos string
+	format         mysql.BinlogFormat
+	pos            replication.Position
+	stopPos        string
+	commitParent   int64
+	sequenceNumber int64
+	eventGTID      replication.GTID
 
 	phase   string
 	vse     *Engine
@@ -123,7 +135,6 @@ type streamerPlan struct {
 func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, stopPos string,
 	filter *binlogdatapb.Filter, vschema *localVSchema, throttlerApp throttlerapp.Name,
 	send func([]*binlogdatapb.VEvent) error, phase string, vse *Engine, options *binlogdatapb.VStreamOptions) *vstreamer {
-
 	config, err := GetVReplicationConfig(options)
 	if err != nil {
 		return nil
@@ -238,6 +249,11 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		vevent.Shard = vs.vse.shard
 
 		switch vevent.Type {
+		case binlogdatapb.VEventType_PREVIOUS_GTIDS:
+			// At this time do nothing. Ideally we would issue a `bufferedEvents = append(bufferedEvents, vevent)`,
+			// ie merged into the `case` clause below.
+			// But at this time the tests will fail as this event is unexpected. This is a TODO for the earliest
+			// opportunity to work on this.
 		case binlogdatapb.VEventType_GTID, binlogdatapb.VEventType_BEGIN, binlogdatapb.VEventType_FIELD,
 			binlogdatapb.VEventType_JOURNAL:
 			// We never have to send GTID, BEGIN, FIELD events on their own.
@@ -319,9 +335,12 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	logger := logutil.NewThrottledLogger(vs.vse.GetTabletInfo(), throttledLoggerInterval)
 	wfNameLog := ""
 	if vs.filter != nil && vs.filter.WorkflowName != "" {
-		wfNameLog = fmt.Sprintf(" in workflow %s", vs.filter.WorkflowName)
+		wfNameLog = " in workflow " + vs.filter.WorkflowName
 	}
+	throttlerErrs := make(chan error, 1) // How we share the error when we've been fully throttled too long
+	defer close(throttlerErrs)
 	throttleEvents := func(throttledEvents chan mysql.BinlogEvent) {
+		throttledTime := atomic.Int64{}
 		for {
 			// Check throttler.
 			if checkResult, ok := vs.vse.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vs.throttlerApp); !ok {
@@ -332,9 +351,17 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				default:
 					// Do nothing special.
 				}
+				curtime := time.Now().Unix()
+				if !throttledTime.CompareAndSwap(0, curtime) {
+					if curtime-throttledTime.Load() > int64(fullyThrottledTimeout.Seconds()) {
+						throttlerErrs <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vstreamer has been fully throttled for more than %v, giving up so that we can retry", fullyThrottledTimeout)
+						return
+					}
+				}
 				logger.Infof("vstreamer throttled%s: %s.", wfNameLog, checkResult.Summary())
 				continue
 			}
+			throttledTime.Store(0) // We are no longer fully throttled
 			select {
 			case ev, ok := <-events:
 				if ok {
@@ -405,6 +432,9 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			}
 		case err := <-errs:
 			return err
+		case throttlerErr := <-throttlerErrs:
+			vs.vse.errorCounts.Add(fullyThrottledMetricLabel, 1)
+			return throttlerErr
 		case <-ctx.Done():
 			return nil
 		case <-hbTimer.C:
@@ -439,6 +469,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		if err != nil {
 			return nil, fmt.Errorf("can't parse FORMAT_DESCRIPTION_EVENT: %v, event data: %#v", err, ev)
 		}
+		vs.eventGTID = nil
 		return nil, nil
 	}
 
@@ -460,19 +491,32 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		return nil, fmt.Errorf("can't strip checksum from binlog event: %v, event data: %#v", err, ev)
 	}
 
+	timeNowUnixNano := time.Now().UnixNano()
 	var vevents []*binlogdatapb.VEvent
 	switch {
+	case ev.IsRotate(), ev.IsStop():
+		vs.eventGTID = nil
+	case ev.IsPreviousGTIDs():
+		vevents = append(vevents, &binlogdatapb.VEvent{
+			Type: binlogdatapb.VEventType_PREVIOUS_GTIDS,
+		})
+		vs.eventGTID = nil
 	case ev.IsGTID():
-		gtid, hasBegin, err := ev.GTID(vs.format)
+		gtid, hasBegin, commitParent, sequenceNumber, err := ev.GTID(vs.format)
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "failed to get GTID from binlog event: %#v", ev)
 		}
 		if hasBegin {
 			vevents = append(vevents, &binlogdatapb.VEvent{
-				Type: binlogdatapb.VEventType_BEGIN,
+				Type:           binlogdatapb.VEventType_BEGIN,
+				CommitParent:   commitParent,
+				SequenceNumber: sequenceNumber,
 			})
 		}
 		vs.pos = replication.AppendGTID(vs.pos, gtid)
+		vs.commitParent = commitParent
+		vs.sequenceNumber = sequenceNumber
+		vs.eventGTID = gtid
 	case ev.IsXID():
 		vevents = append(vevents, &binlogdatapb.VEvent{
 			Type: binlogdatapb.VEventType_GTID,
@@ -695,7 +739,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 				}
 				for _, tpvevent := range tpvevents {
 					tpvevent.Timestamp = int64(ev.Timestamp())
-					tpvevent.CurrentTime = time.Now().UnixNano()
+					tpvevent.CurrentTime = timeNowUnixNano
 					if err := bufferAndTransmit(tpvevent); err != nil {
 						if err == io.EOF {
 							return nil, nil
@@ -710,9 +754,18 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		}
 		vs.vse.vstreamerCompressedTransactionsDecoded.Add(1)
 	}
+	vsEventGTIDString := ""
+	if vs.eventGTID != nil {
+		vsEventGTIDString = vs.eventGTID.String()
+	}
 	for _, vevent := range vevents {
 		vevent.Timestamp = int64(ev.Timestamp())
-		vevent.CurrentTime = time.Now().UnixNano()
+		vevent.CurrentTime = timeNowUnixNano
+		vevent.SequenceNumber = vs.sequenceNumber
+		vevent.CommitParent = vs.commitParent
+		if vs.eventGTID != nil {
+			vevent.EventGtid = vsEventGTIDString
+		}
 	}
 	return vevents, nil
 }
@@ -885,9 +938,11 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 		return fields, nil
 	}
 
-	// Check if the schema returned by schema.Engine matches with row.
+	// Check if the schema returned by schema.Engine is compatible with the row.
+	// If not then we rely on the TableMap event alone. This will prevent us from
+	// being able to handle filters with colum names (in planbuilder.findColumn()).
 	for i := range tm.Types {
-		if !sqltypes.AreTypesEquivalent(fields[i].Type, st.Fields[i].Type) {
+		if !sqltypes.AreTypesCompatible(fields[i].Type, st.Fields[i].Type) {
 			return fields, nil
 		}
 	}
@@ -1139,7 +1194,7 @@ func (vs *vstreamer) getValues(plan *streamerPlan, data []byte,
 	for colNum := 0; colNum < dataColumns.Count(); colNum++ {
 		if !dataColumns.Bit(colNum) {
 			if vs.config.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage == 0 {
-				return nil, nil, false, fmt.Errorf("partial row image encountered: ensure binlog_row_image is set to 'full'")
+				return nil, nil, false, errors.New("partial row image encountered: ensure binlog_row_image is set to 'full'")
 			} else {
 				partial = true
 			}
@@ -1308,10 +1363,10 @@ func wrapError(err error, stopPos replication.Position, vse *Engine) error {
 	if err != nil {
 		vse.vstreamersEndedWithErrors.Add(1)
 		vse.errorCounts.Add("StreamEnded", 1)
-		err = fmt.Errorf("stream (at source tablet) error @ %v: %v", stopPos, err)
+		err = fmt.Errorf("stream (at source tablet) error @ (including the GTID we failed to process) %v: %v", stopPos, err)
 		log.Error(err)
 		return err
 	}
-	log.Infof("stream (at source tablet) ended @ %v", stopPos)
+	log.Infof("stream (at source tablet) ended @ (including the GTID we failed to process) %v", stopPos)
 	return nil
 }

@@ -471,6 +471,10 @@ message BackupRequest {
   // starting the backup. This is available so we can override this for upgrade safe
   // backups which might take longer to shut down.
   vttime.Duration mysql_shutdown_timeout = 7;
+
+  // Optional queries to run on the mysqld instance prior to the backup and fields
+  // to control the related behavior.
+  tabletmanagerdata.BackupRequest.InitSQL init_sql = 8;
 }
 
 message BackupResponse {
@@ -500,6 +504,10 @@ message BackupShardRequest {
   // starting the backup. This is available so we can override this for upgrade safe
   // backups which might take longer to shut down.
   vttime.Duration mysql_shutdown_timeout = 7;
+
+  // Optional queries to run on the mysqld instance prior to the backup and fields
+  // to control the related behavior.
+  tabletmanagerdata.BackupRequest.InitSQL init_sql = 8;
 }
 
 message CancelSchemaMigrationRequest {
@@ -2177,6 +2185,13 @@ message WorkflowStatusRequest {
   repeated string shards = 3;
 }
 
+enum TableCopyPhase {
+  UNKNOWN = 0;
+  NOT_STARTED = 1;
+  IN_PROGRESS = 2;
+  COMPLETE = 3;
+}
+
 message WorkflowStatusResponse {
   message TableCopyState {
     int64 rows_copied = 1;
@@ -2185,6 +2200,7 @@ message WorkflowStatusResponse {
     int64 bytes_copied = 4;
     int64 bytes_total = 5;
     float bytes_percentage = 6;
+    TableCopyPhase phase = 7;
   }
   message ShardStreamState {
     int32 id = 1;
@@ -2261,4 +2277,13 @@ message WorkflowMirrorTrafficResponse {
   string summary = 1;
   string start_state = 2;
   string current_state = 3;
+}
+
+message SetVtorcEmergencyReparentRequest {
+  string keyspace = 1;
+  string shard = 2;
+  bool disable = 3;
+}
+
+message SetVtorcEmergencyReparentResponse {
 }

@@ -76,7 +76,6 @@ func (bv *TupleBindVariable) eval(env *ExpressionEnv) (eval, error) {
 				return
 			}
 			tuple = append(tuple, e)
-
 		})
 		if err = errors.Join(loopErr, evalErr); err != nil {
 			return nil, err

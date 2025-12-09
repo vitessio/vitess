@@ -30,9 +30,10 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
 // TestInsertWithFK tests that insertions work as expected when foreign key management is enabled in Vitess.
@@ -1503,4 +1504,65 @@ create table temp2(id bigint auto_increment primary key, col varchar(20) not nul
 	mcmp.Exec(`insert into temp2(col) values('a'), ('b'), ('c') `)
 	mcmp.Exec(`insert into temp1(col) values('a') `)
 	mcmp.ExecAllowAndCompareError(`insert into temp1(col) values('d') `, utils.CompareOptions{})
+}
+
+// TestForeignKeyWithKeyspaceQualifier tests that CREATE TABLE with foreign key references
+// that include keyspace qualifiers work correctly. This addresses bug #18889 where keyspace
+// names were not being stripped before being sent to MySQL, causing failures because MySQL
+// expects database names (vt_<keyspace>) not keyspace names.
+func TestForeignKeyWithKeyspaceQualifier(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, mcmp.VtConn, `use uks`)
+
+	// Create the parent table.
+	utils.Exec(t, mcmp.VtConn, `create table fk_parent(id bigint primary key)`)
+
+	// Create the child table with keyspace-qualified foreign key reference.
+	utils.Exec(t, mcmp.VtConn, `create table fk_child(id bigint primary key, parent_id bigint, foreign key (parent_id) references uks.fk_parent(id))`)
+
+	// Verify that the foreign key constraint works.
+	utils.Exec(t, mcmp.VtConn, `insert into fk_parent(id) values (1), (2)`)
+	utils.Exec(t, mcmp.VtConn, `insert into fk_child(id, parent_id) values (100, 1)`)
+
+	// This should fail due to FK constraint.
+	_, err := utils.ExecAllowError(t, mcmp.VtConn, `insert into fk_child(id, parent_id) values (101, 999)`)
+	assert.ErrorContains(t, err, "Cannot add or update a child row: a foreign key constraint fails")
+
+	// Test ALTER TABLE with keyspace-qualified foreign key.
+	utils.Exec(t, mcmp.VtConn, `create table fk_child2(id bigint primary key, parent_id bigint)`)
+	utils.Exec(t, mcmp.VtConn, `alter table fk_child2 add foreign key (parent_id) references uks.fk_parent(id)`)
+
+	// Verify the constraint works for the altered table.
+	utils.Exec(t, mcmp.VtConn, `insert into fk_child2(id, parent_id) values (200, 2)`)
+	_, err = utils.ExecAllowError(t, mcmp.VtConn, `insert into fk_child2(id, parent_id) values (201, 888)`)
+	assert.ErrorContains(t, err, "Cannot add or update a child row: a foreign key constraint fails")
+
+	// Clean up.
+	utils.Exec(t, mcmp.VtConn, `drop table fk_child`)
+	utils.Exec(t, mcmp.VtConn, `drop table fk_child2`)
+	utils.Exec(t, mcmp.VtConn, `drop table fk_parent`)
+}
+
+// TestRestrictFkOnNonStandardKey verifies that restrict_fk_on_non_standard_key is set to off
+func TestRestrictFkOnNonStandardKey(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	// First check MySQL version to ensure we're on 8.4+
+	versionResult := utils.Exec(t, mcmp.MySQLConn, `SELECT VERSION()`)
+	require.Equal(t, 1, len(versionResult.Rows), "Expected exactly one row for VERSION()")
+	version := versionResult.Rows[0][0].ToString()
+	t.Logf("MySQL version: %s", version)
+
+	// Check if we're on MySQL 8.4+
+	if !strings.HasPrefix(version, "8.4") && !strings.Contains(version, "8.4") {
+		t.Skipf("Skipping test - restrict_fk_on_non_standard_key is only available in MySQL 8.4+, current version: %s", version)
+	}
+
+	// Check the setting on the MySQL side - this verifies that our extra_my.cnf is being applied
+	result := utils.Exec(t, mcmp.MySQLConn, `SHOW VARIABLES LIKE 'restrict_fk_on_non_standard_key'`)
+	require.Equal(t, 1, len(result.Rows), "Expected exactly one row for restrict_fk_on_non_standard_key variable")
+	require.Equal(t, "OFF", result.Rows[0][1].ToString(), "Expected restrict_fk_on_non_standard_key to be OFF")
 }

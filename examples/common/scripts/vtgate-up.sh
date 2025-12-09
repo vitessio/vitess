@@ -30,18 +30,18 @@ echo "Starting vtgate..."
 vtgate \
   $TOPOLOGY_FLAGS \
   --log_dir $VTDATAROOT/tmp \
-  --log_queries_to_file $VTDATAROOT/tmp/vtgate_querylog.txt \
+  --log-queries-to-file $VTDATAROOT/tmp/vtgate_querylog.txt \
   --port $web_port \
-  --grpc_port $grpc_port \
-  --mysql_server_port $mysql_server_port \
-  --mysql_server_socket_path $mysql_server_socket_path \
+  --grpc-port $grpc_port \
+  --mysql-server-port $mysql_server_port \
+  --mysql-server-socket-path $mysql_server_socket_path \
   --cell $cell \
-  --cells_to_watch $cell \
+  --cells-to-watch $cell \
   --tablet-types-to-wait PRIMARY,REPLICA \
-  --service_map 'grpc-vtgateservice' \
-  --pid_file $VTDATAROOT/tmp/vtgate.pid \
-  --enable_buffer \
-  --mysql_auth_server_impl none \
+  --service-map 'grpc-vtgateservice' \
+  --pid-file $VTDATAROOT/tmp/vtgate.pid \
+  --enable-buffer \
+  --mysql-auth-server-impl none \
   --pprof-http \
   > $VTDATAROOT/tmp/vtgate.out 2>&1 &
 

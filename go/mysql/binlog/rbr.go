@@ -164,11 +164,9 @@ func printTimestamp(v uint32) *bytes.Buffer {
 	}
 
 	t := time.Unix(int64(v), 0).UTC()
-	year, month, day := t.Date()
-	hour, minute, second := t.Clock()
 
 	result := &bytes.Buffer{}
-	fmt.Fprintf(result, "%04d-%02d-%02d %02d:%02d:%02d", year, int(month), day, hour, minute, second)
+	result.Write(t.AppendFormat(nil, sqltypes.TimestampFormat))
 	return result
 }
 
@@ -627,7 +625,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 			}
 			s = strings.TrimLeft(s, "0")
 			if isNegative {
-				s = fmt.Sprintf("-%s", s)
+				s = "-" + s
 			}
 			return []byte(s)
 		}

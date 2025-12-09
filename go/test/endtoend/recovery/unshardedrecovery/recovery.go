@@ -56,7 +56,7 @@ var (
 		vtutils.GetFlagVariantForTests("--degraded-threshold"), "5s",
 		vtutils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
 		vtutils.GetFlagVariantForTests("--watch-replication-stream"),
-		"--serving_state_grace_period", "1s"}
+		vtutils.GetFlagVariantForTests("--serving-state-grace-period"), "1s"}
 	recoveryKS1  = "recovery_ks1"
 	recoveryKS2  = "recovery_ks2"
 	vtInsertTest = `create table vt_insert_test (
@@ -179,7 +179,6 @@ func TestMainImpl(m *testing.M) {
 	} else {
 		os.Exit(exitCode)
 	}
-
 }
 
 // TestRecoveryImpl does following

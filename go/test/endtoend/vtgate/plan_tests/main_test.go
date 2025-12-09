@@ -88,7 +88,7 @@ func TestMain(m *testing.M) {
 		// TODO: (@GuptaManan100/@systay): Also run the tests with normalizer on.
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
 			vtutils.GetFlagVariantForTests("--normalize-queries")+"=false",
-			"--schema_change_signal=true",
+			vtutils.GetFlagVariantForTests("--schema-change-signal")+"=true",
 		)
 
 		// Start vtgate

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -64,8 +65,8 @@ func TestTabletReshuffle(t *testing.T) {
 	// We also have to disable replication reporting because we're pointed at the primary.
 	clusterInstance.VtTabletExtraArgs = []string{
 		vtutils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
-		vtutils.GetFlagVariantForTests("--mycnf-server-id"), fmt.Sprintf("%d", rTablet.TabletUID),
-		vtutils.GetFlagVariantForTests("--db-socket"), fmt.Sprintf("%s/mysql.sock", primaryTablet.VttabletProcess.Directory),
+		vtutils.GetFlagVariantForTests("--mycnf-server-id"), strconv.Itoa(rTablet.TabletUID),
+		vtutils.GetFlagVariantForTests("--db-socket"), primaryTablet.VttabletProcess.Directory + "/mysql.sock",
 		vtutils.GetFlagVariantForTests("--enable-replication-reporter") + "=false",
 	}
 	defer func() { clusterInstance.VtTabletExtraArgs = []string{} }()
@@ -148,7 +149,7 @@ func TestHealthCheck(t *testing.T) {
 
 	// stop the replica's source mysqld instance to break replication
 	// and test that the replica tablet becomes unhealthy and non-serving after crossing
-	// the tablet's --unhealthy_threshold and the gateway's --discovery_low_replication_lag
+	// the tablet's --unhealthy-threshold and the gateway's --discovery-low-replication-lag
 	err = primaryTablet.MysqlctlProcess.Stop()
 	require.NoError(t, err)
 
@@ -351,7 +352,7 @@ func checkTabletType(t *testing.T, tabletAlias string, typeWant string) {
 	got := fmt.Sprintf("%d", actualType)
 
 	tabletType := topodatapb.TabletType_value[typeWant]
-	want := fmt.Sprintf("%d", tabletType)
+	want := strconv.Itoa(int(tabletType))
 
 	assert.Equal(t, want, got)
 }

@@ -20,6 +20,7 @@ package filebackupstorage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -27,13 +28,14 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/os2"
-	"vitess.io/vitess/go/vt/mysqlctl/errors"
-
+	"vitess.io/vitess/go/fileutil"
 	"vitess.io/vitess/go/ioutil"
+	"vitess.io/vitess/go/os2"
 	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	mysqlctlerrors "vitess.io/vitess/go/vt/mysqlctl/errors"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -45,7 +47,7 @@ var (
 )
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&FileBackupStorageRoot, "file_backup_storage_root", "", "Root directory for the file backup storage.")
+	utils.SetFlagStringVar(fs, &FileBackupStorageRoot, "file-backup-storage-root", "", "Root directory for the file backup storage.")
 }
 
 func init() {
@@ -61,7 +63,7 @@ type FileBackupHandle struct {
 	dir      string
 	name     string
 	readOnly bool
-	errors.PerFileErrorRecorder
+	mysqlctlerrors.PerFileErrorRecorder
 }
 
 func NewBackupHandle(
@@ -94,7 +96,7 @@ func (fbh *FileBackupHandle) Name() string {
 // AddFile is part of the BackupHandle interface
 func (fbh *FileBackupHandle) AddFile(ctx context.Context, filename string, filesize int64) (io.WriteCloser, error) {
 	if fbh.readOnly {
-		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
+		return nil, errors.New("AddFile cannot be called on read-only backup")
 	}
 	p := path.Join(FileBackupStorageRoot, fbh.dir, fbh.name, filename)
 	f, err := os2.Create(p)
@@ -108,7 +110,7 @@ func (fbh *FileBackupHandle) AddFile(ctx context.Context, filename string, files
 // EndBackup is part of the BackupHandle interface
 func (fbh *FileBackupHandle) EndBackup(ctx context.Context) error {
 	if fbh.readOnly {
-		return fmt.Errorf("EndBackup cannot be called on read-only backup")
+		return errors.New("EndBackup cannot be called on read-only backup")
 	}
 	return nil
 }
@@ -116,7 +118,7 @@ func (fbh *FileBackupHandle) EndBackup(ctx context.Context) error {
 // AbortBackup is part of the BackupHandle interface
 func (fbh *FileBackupHandle) AbortBackup(ctx context.Context) error {
 	if fbh.readOnly {
-		return fmt.Errorf("AbortBackup cannot be called on read-only backup")
+		return errors.New("AbortBackup cannot be called on read-only backup")
 	}
 	return fbh.fbs.RemoveBackup(ctx, fbh.dir, fbh.name)
 }
@@ -124,9 +126,12 @@ func (fbh *FileBackupHandle) AbortBackup(ctx context.Context) error {
 // ReadFile is part of the BackupHandle interface
 func (fbh *FileBackupHandle) ReadFile(ctx context.Context, filename string) (io.ReadCloser, error) {
 	if !fbh.readOnly {
-		return nil, fmt.Errorf("ReadFile cannot be called on read-write backup")
+		return nil, errors.New("ReadFile cannot be called on read-write backup")
 	}
-	p := path.Join(FileBackupStorageRoot, fbh.dir, fbh.name, filename)
+	p, err := fileutil.SafePathJoin(FileBackupStorageRoot, fbh.dir, fbh.name, filename)
+	if err != nil {
+		return nil, err
+	}
 	f, err := os.Open(p)
 	if err != nil {
 		return nil, err
@@ -146,9 +151,13 @@ func newFileBackupStorage(params backupstorage.Params) *FileBackupStorage {
 
 // ListBackups is part of the BackupStorage interface
 func (fbs *FileBackupStorage) ListBackups(ctx context.Context, dir string) ([]backupstorage.BackupHandle, error) {
-	// ReadDir already sorts the results
-	p := path.Join(FileBackupStorageRoot, dir)
-	fi, err := os.ReadDir(p)
+	// Check dir is not a directory traversal.
+	path, err := fileutil.SafePathJoin(FileBackupStorageRoot, dir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse backup path %q: %w", path, err)
+	}
+
+	fi, err := os.ReadDir(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
@@ -172,14 +181,17 @@ func (fbs *FileBackupStorage) ListBackups(ctx context.Context, dir string) ([]ba
 // StartBackup is part of the BackupStorage interface
 func (fbs *FileBackupStorage) StartBackup(ctx context.Context, dir, name string) (backupstorage.BackupHandle, error) {
 	// Make sure the directory exists.
-	p := path.Join(FileBackupStorageRoot, dir)
-	if err := os2.MkdirAll(p); err != nil {
+	p, err := fileutil.SafePathJoin(FileBackupStorageRoot, dir)
+	if err != nil {
+		return nil, err
+	}
+	if err = os2.MkdirAll(p); err != nil {
 		return nil, err
 	}
 
 	// Create the subdirectory for this named backup.
 	p = path.Join(p, name)
-	if err := os2.Mkdir(p); err != nil {
+	if err = os2.Mkdir(p); err != nil {
 		return nil, err
 	}
 
@@ -188,7 +200,10 @@ func (fbs *FileBackupStorage) StartBackup(ctx context.Context, dir, name string)
 
 // RemoveBackup is part of the BackupStorage interface
 func (fbs *FileBackupStorage) RemoveBackup(ctx context.Context, dir, name string) error {
-	p := path.Join(FileBackupStorageRoot, dir, name)
+	p, err := fileutil.SafePathJoin(FileBackupStorageRoot, dir, name)
+	if err != nil {
+		return err
+	}
 	return os.RemoveAll(p)
 }
 

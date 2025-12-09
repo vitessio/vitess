@@ -285,7 +285,7 @@ func (e *Executor) insideTransaction(ctx context.Context, safeSession *econtext.
 		}
 		// The defer acts as a failsafe. If commit was successful,
 		// the rollback will be a no-op.
-		defer e.txConn.Rollback(ctx, safeSession) // nolint:errcheck
+		defer e.txConn.Rollback(ctx, safeSession) //nolint:errcheck
 	}
 
 	// The SetAutocommitable flag should be same as mustCommit.
@@ -327,7 +327,6 @@ func (e *Executor) executePlan(
 	logStats *logstats.LogStats,
 	execStart time.Time,
 ) (*sqltypes.Result, error) {
-
 	// 4: Execute!
 	qr, err := vcursor.ExecutePrimitive(ctx, plan.Instructions, bindVars, true)
 
@@ -409,7 +408,6 @@ func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *econtex
 func (e *Executor) setLogStats(logStats *logstats.LogStats, plan *engine.Plan, vcursor *econtext.VCursorImpl, execStart time.Time, err error, qr *sqltypes.Result) {
 	logStats.StmtType = plan.QueryType.String()
 	logStats.ActiveKeyspace = vcursor.GetKeyspace()
-	logStats.TablesUsed = plan.TablesUsed
 	logStats.TabletType = vcursor.TabletType().String()
 	errCount := e.logExecutionEnd(logStats, execStart, plan, vcursor, err, qr)
 	plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, logStats.RowsAffected, logStats.RowsReturned, errCount)
@@ -418,8 +416,6 @@ func (e *Executor) setLogStats(logStats *logstats.LogStats, plan *engine.Plan, v
 func (e *Executor) logExecutionEnd(logStats *logstats.LogStats, execStart time.Time, plan *engine.Plan, vcursor *econtext.VCursorImpl, err error, qr *sqltypes.Result) uint64 {
 	logStats.ExecuteTime = time.Since(execStart)
 
-	e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vcursor.TabletType().String(), int64(logStats.ShardQueries), plan.TablesUsed)
-
 	var errCount uint64
 	if err != nil {
 		logStats.Error = err
@@ -427,7 +423,12 @@ func (e *Executor) logExecutionEnd(logStats *logstats.LogStats, execStart time.T
 	} else {
 		logStats.RowsAffected = qr.RowsAffected
 		logStats.RowsReturned = uint64(len(qr.Rows))
+		// log the tables used in the plan for successful query execution.
+		logStats.TablesUsed = plan.TablesUsed
 	}
+
+	e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vcursor.TabletType().String(), int64(logStats.ShardQueries), logStats.TablesUsed)
+
 	return errCount
 }
 

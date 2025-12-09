@@ -22,6 +22,7 @@ package topocustomrule
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"sync"
@@ -32,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 )
@@ -43,8 +45,8 @@ var (
 )
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&ruleCell, "topocustomrule_cell", ruleCell, "topo cell for customrules file.")
-	fs.StringVar(&rulePath, "topocustomrule_path", rulePath, "path for customrules file. Disabled if empty.")
+	utils.SetFlagStringVar(fs, &ruleCell, "topocustomrule-cell", ruleCell, "topo cell for customrules file.")
+	utils.SetFlagStringVar(fs, &rulePath, "topocustomrule-path", rulePath, "path for customrules file. Disabled if empty.")
 }
 
 func init() {
@@ -190,10 +192,9 @@ func (cr *topoCustomRule) oneWatch() error {
 			}
 			return err
 		}
-
 	}
 
-	return fmt.Errorf("watch terminated with no error")
+	return errors.New("watch terminated with no error")
 }
 
 // activateTopoCustomRules activates topo dynamic custom rule mechanism.

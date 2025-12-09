@@ -109,10 +109,10 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtGateExtraArgs = []string{
-			"--vschema_ddl_authorized_users=%",
+			"--vschema-ddl-authorized-users=%",
 			utils.GetFlagVariantForTests("--mysql-server-query-timeout"), "1s",
 			utils.GetFlagVariantForTests("--mysql-auth-server-impl"), "static",
-			"--mysql_auth_server_static_file", clusterInstance.TmpDirectory + mysqlAuthServerStatic,
+			"--mysql-auth-server-static-file", clusterInstance.TmpDirectory + mysqlAuthServerStatic,
 			utils.GetFlagVariantForTests("--mysql-server-version"), "8.0.16-7",
 			utils.GetFlagVariantForTests("--warn-sharded-only") + "=true",
 		}
@@ -156,5 +156,4 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitcode)
 	}
-
 }

@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -64,7 +65,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-
 	exitCode := func() int {
 		clusterInstance = cluster.NewCluster(cell, "localhost")
 		defer clusterInstance.Teardown()
@@ -81,7 +81,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: schemaSQL,
 			VSchema:   vschema,
 		}
-		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal"}
+		clusterInstance.VtGateExtraArgs = []string{vtutils.GetFlagVariantForTests("--schema-change-signal")}
 		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal"}
 		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false)
 		if err != nil {

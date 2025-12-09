@@ -63,6 +63,7 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
+	vtorcdatapb "vitess.io/vitess/go/vt/proto/vtorcdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/schemamanager"
@@ -256,7 +257,7 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 
 	migrationContext := req.MigrationContext
 	if migrationContext == "" {
-		migrationContext = fmt.Sprintf("vtctl:%s", executionUUID)
+		migrationContext = "vtctl:" + executionUUID
 	}
 
 	waitReplicasTimeout, ok, err := protoutil.DurationFromProto(req.WaitReplicasTimeout)
@@ -524,6 +525,7 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 		IncrementalFromPos:   req.IncrementalFromPos,
 		UpgradeSafe:          req.UpgradeSafe,
 		MysqlShutdownTimeout: req.MysqlShutdownTimeout,
+		InitSql:              req.InitSql,
 	}
 	err = s.backupTablet(ctx, backupTablet, r, stream)
 	return err
@@ -540,6 +542,7 @@ func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tabl
 		BackupEngine:         req.BackupEngine,
 		UpgradeSafe:          req.UpgradeSafe,
 		MysqlShutdownTimeout: req.MysqlShutdownTimeout,
+		InitSql:              req.InitSql,
 	}
 	logStream, err := s.tmc.Backup(ctx, tablet, r)
 	if err != nil {
@@ -1555,7 +1558,7 @@ func (s *VtctldServer) GetBackups(ctx context.Context, req *vtctldatapb.GetBacku
 		bi.Shard = req.Shard
 
 		if req.Detailed {
-			if i >= backupsToSkipDetails { // nolint:staticcheck
+			if i >= backupsToSkipDetails { //nolint:staticcheck
 				// (TODO:@ajm188) Update backupengine/backupstorage implementations
 				// to get Status info for backups.
 			}
@@ -1878,7 +1881,6 @@ func (s *VtctldServer) GetSchemaMigrations(ctx context.Context, req *vtctldatapb
 		results = map[string]*sqltypes.Result{}
 	)
 	for _, tablet := range tabletsResp.Tablets {
-
 		wg.Add(1)
 		go func(tablet *topodatapb.Tablet) {
 			defer wg.Done()
@@ -2073,7 +2075,7 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 	defer panicHandler(&err)
 
 	if req.Enable && req.Disable {
-		return nil, fmt.Errorf("--enable and --disable are mutually exclusive")
+		return nil, errors.New("--enable and --disable are mutually exclusive")
 	}
 
 	if req.MetricName != "" && !base.KnownMetricNames.Contains(base.MetricName(req.MetricName)) {
@@ -2994,7 +2996,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	// assume that whatever data is on all the replicas is what they intended.
 	// If the database doesn't exist, it means the user intends for these tablets
 	// to begin serving with no data (i.e. first time initialization).
-	createDB := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", sqlescape.EscapeID(topoproto.TabletDbName(primaryElectTabletInfo.Tablet)))
+	createDB := "CREATE DATABASE IF NOT EXISTS " + sqlescape.EscapeID(topoproto.TabletDbName(primaryElectTabletInfo.Tablet))
 	if _, err := tmc.ExecuteFetchAsDba(ctx, primaryElectTabletInfo.Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
 		Query:        []byte(createDB),
 		MaxRows:      1,
@@ -3983,6 +3985,64 @@ func (s *VtctldServer) SetShardTabletControl(ctx context.Context, req *vtctldata
 	return &vtctldatapb.SetShardTabletControlResponse{
 		Shard: si.Shard,
 	}, nil
+}
+
+// SetVtorcEmergencyReparent enable/disables the use of EmergencyReparentShard in VTOrc recoveries for a given keyspace or keyspace/shard.
+func (s *VtctldServer) SetVtorcEmergencyReparent(ctx context.Context, req *vtctldatapb.SetVtorcEmergencyReparentRequest) (resp *vtctldatapb.SetVtorcEmergencyReparentResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.SetVtorcEmergencyReparent")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("disable", req.Disable)
+
+	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "SetVtorcEmergencyReparent")
+	if lockErr != nil {
+		err = lockErr
+		return nil, err
+	}
+
+	defer unlock(&err)
+
+	// set ERS-disabled on the shard record unless it is undef
+	// or "0"/- (unsharded/full-keyspace). otherwise set
+	// ERS-disabled on the keyspace record.
+	if req.Shard != "" && req.Shard != "0" && req.Shard != "-" {
+		_, err := s.ts.UpdateShardFields(ctx, req.Keyspace, req.Shard, func(si *topo.ShardInfo) error {
+			if si.VtorcState != nil {
+				si.VtorcState.DisableEmergencyReparent = req.Disable
+			} else if req.Disable {
+				si.VtorcState = &vtorcdatapb.Shard{
+					DisableEmergencyReparent: req.Disable,
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		ki, err := s.ts.GetKeyspace(ctx, req.Keyspace)
+		if err != nil {
+			return nil, err
+		}
+
+		if ki.VtorcState != nil {
+			ki.VtorcState.DisableEmergencyReparent = req.Disable
+		} else if req.Disable {
+			ki.VtorcState = &vtorcdatapb.Keyspace{
+				DisableEmergencyReparent: req.Disable,
+			}
+		}
+
+		if err = s.ts.UpdateKeyspace(ctx, ki); err != nil {
+			return nil, err
+		}
+	}
+
+	return &vtctldatapb.SetVtorcEmergencyReparentResponse{}, nil
 }
 
 // SetWritable is part of the vtctldservicepb.VtctldServer interface.

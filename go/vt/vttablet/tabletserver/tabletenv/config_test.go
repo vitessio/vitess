@@ -17,6 +17,7 @@ limitations under the License.
 package tabletenv
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -495,11 +496,28 @@ func TestVerifyUnmanagedTabletConfig(t *testing.T) {
 	err = config.verifyUnmanagedTabletConfig()
 	assert.Nil(t, err)
 
-	dbconfigs.SetDbCredentialsFilePath("./data/db_credentials.json")
-	defer dbconfigs.SetDbCredentialsFilePath("")
-	config.DB.App.Password = ""
+	// creates a temporary credentials file.
+	tmpFile, err := os.CreateTemp("", "db_credentials.json")
+	require.NoError(t, err)
+	_, err = tmpFile.WriteString(`{"testUser": ["testPassword"], "testUserWithEmptyPassword": [""]}`)
+	require.NoError(t, err)
+	require.NoError(t, tmpFile.Close())
+	defer os.Remove(tmpFile.Name())
 
+	// use this same json file for the following test cases because the file is read only once.
+	dbconfigs.SetDbCredentialsFilePath(tmpFile.Name())
+	defer dbconfigs.SetDbCredentialsFilePath("")
+
+	// verify password from credentials file is used
+	config.DB.App.Password = ""
 	err = config.verifyUnmanagedTabletConfig()
 	assert.Nil(t, err)
 	assert.Equal(t, "testPassword", config.DB.App.Password)
+
+	// verify empty password from credentials file is accepted
+	config.DB.App.User = "testUserWithEmptyPassword"
+	config.DB.App.Password = ""
+	err = config.verifyUnmanagedTabletConfig()
+	assert.Nil(t, err)
+	assert.Equal(t, "", config.DB.App.Password)
 }

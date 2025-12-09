@@ -98,6 +98,7 @@ func (s *planTestSuite) TestPlan() {
 	s.testFile("filter_cases.json", vw, false)
 	s.testFile("postprocess_cases.json", vw, false)
 	s.testFile("select_cases.json", vw, false)
+	s.testFile("window_function_cases.json", vw, false)
 	s.testFile("symtab_cases.json", vw, false)
 	s.testFile("unsupported_cases.json", vw, false)
 	s.testFile("unknown_schema_cases.json", vw, false)
@@ -200,16 +201,17 @@ func (s *planTestSuite) setFks(vschema *vindexes.VSchema) {
 			"multicol_tbl1", "multicol_tbl2", "tbl_auth", "tblrefDef", "tbl20"})
 	}
 	if vschema.Keyspaces["unsharded_fk_allow"] != nil {
-		// u_tbl2(col2)  -> u_tbl1(col1)  Cascade.
-		// u_tbl4(col41) -> u_tbl1(col14) Restrict.
-		// u_tbl9(col9)  -> u_tbl1(col1)  Cascade Null.
-		// u_tbl3(col2)  -> u_tbl2(col2)  Cascade Null.
-		// u_tbl4(col4)  -> u_tbl3(col3)  Restrict.
-		// u_tbl6(col6)  -> u_tbl5(col5)  Restrict.
-		// u_tbl8(col8)  -> u_tbl9(col9)  Null Null.
-		// u_tbl8(col8)  -> u_tbl6(col6)  Cascade Null.
-		// u_tbl4(col4)  -> u_tbl7(col7)  Cascade Cascade.
-		// u_tbl9(col9)  -> u_tbl4(col4)  Restrict Restrict.
+		// u_tbl2(col2)  				-> u_tbl1(col1)  				Cascade.
+		// u_tbl4(col41) 				-> u_tbl1(col14) 				Restrict.
+		// u_tbl9(col9)  				-> u_tbl1(col1)  				Cascade Null.
+		// u_tbl3(col2)  				-> u_tbl2(col2)  				Cascade Null.
+		// u_tbl4(col4)  				-> u_tbl3(col3)  				Restrict.
+		// u_tbl6(col6)  				-> u_tbl5(col5)  				Restrict.
+		// u_tbl8(col8)  				-> u_tbl9(col9)  				Null Null.
+		// u_tbl8(col8)  				-> u_tbl6(col6)  				Cascade Null.
+		// u_tbl4(col4)  				-> u_tbl7(col7)  				Cascade Cascade.
+		// u_tbl9(col9)  				-> u_tbl4(col4)  				Restrict Restrict.
+		// u_tbl12(parent_id) 			-> u_tbl12(id)  				Restrict Restrict.
 		// u_multicol_tbl2(cola, colb)  -> u_multicol_tbl1(cola, colb)  Null Null.
 		// u_multicol_tbl3(cola, colb)  -> u_multicol_tbl2(cola, colb)  Cascade Cascade.
 
@@ -236,7 +238,10 @@ func (s *planTestSuite) setFks(vschema *vindexes.VSchema) {
 		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", []sqlparser.Expr{sqlparser.NewColName("bar"), sqlparser.NewColName("col9")})
 		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl8", []sqlparser.Expr{sqlparser.NewColName("col8")})
 
-		s.addPKs(vschema, "unsharded_fk_allow", []string{"u_tbl1", "u_tbl2", "u_tbl3", "u_tbl4", "u_tbl5", "u_tbl6", "u_tbl7", "u_tbl8", "u_tbl9", "u_tbl10", "u_tbl11",
+		// FK from u_tbl12 that is self-referential.
+		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl12", createFkDefinition([]string{"parent_id"}, "u_tbl12", []string{"id"}, sqlparser.Restrict, sqlparser.Restrict))
+
+		s.addPKs(vschema, "unsharded_fk_allow", []string{"u_tbl1", "u_tbl2", "u_tbl3", "u_tbl4", "u_tbl5", "u_tbl6", "u_tbl7", "u_tbl8", "u_tbl9", "u_tbl10", "u_tbl11", "u_tbl12",
 			"u_multicol_tbl1", "u_multicol_tbl2", "u_multicol_tbl3"})
 	}
 }

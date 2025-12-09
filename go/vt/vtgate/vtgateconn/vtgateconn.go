@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -37,7 +38,7 @@ import (
 var vtgateProtocol = "grpc"
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&vtgateProtocol, "vtgate_protocol", vtgateProtocol, "how to talk to vtgate")
+	utils.SetFlagStringVar(fs, &vtgateProtocol, "vtgate-protocol", vtgateProtocol, "how to talk to vtgate")
 }
 
 func init() {
@@ -171,6 +172,11 @@ func (sn *VTGateSession) Prepare(ctx context.Context, query string) ([]*querypb.
 	return fields, paramsCount, err
 }
 
+// CloseSession closes the session provided by rolling back any active transaction.
+func (sn *VTGateSession) CloseSession(ctx context.Context) error {
+	return sn.impl.CloseSession(ctx, sn.session)
+}
+
 //
 // The rest of this file is for the protocol implementations.
 //
@@ -260,4 +266,15 @@ func DialProtocol(ctx context.Context, protocol string, address string) (*VTGate
 // the *VTGateConn.
 func Dial(ctx context.Context, address string) (*VTGateConn, error) {
 	return DialProtocol(ctx, vtgateProtocol, address)
+}
+
+// DialCustom creates a new VTGateConn with the given DialerFunc.
+func DialCustom(ctx context.Context, dialer DialerFunc, address string) (*VTGateConn, error) {
+	impl, err := dialer(ctx, address)
+	if err != nil {
+		return nil, err
+	}
+	return &VTGateConn{
+		impl: impl,
+	}, nil
 }

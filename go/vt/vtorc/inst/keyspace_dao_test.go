@@ -22,9 +22,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtorcdatapb "vitess.io/vitess/go/vt/proto/vtorcdata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	vtorcconfig "vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 )
 
@@ -50,7 +52,11 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 				DurabilityPolicy: policy.DurabilitySemiSync,
 			},
-			keyspaceWanted:       nil,
+			keyspaceWanted: &topodatapb.Keyspace{
+				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
+				DurabilityPolicy: policy.DurabilitySemiSync,
+				VtorcState:       vtorcconfig.DefaultKeyspaceTopoConfig,
+			},
 			semiSyncAckersWanted: 1,
 		}, {
 			name:         "Success with keyspaceType and no durability",
@@ -58,7 +64,10 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 			keyspace: &topodatapb.Keyspace{
 				KeyspaceType: topodatapb.KeyspaceType_NORMAL,
 			},
-			keyspaceWanted:        nil,
+			keyspaceWanted: &topodatapb.Keyspace{
+				KeyspaceType: topodatapb.KeyspaceType_NORMAL,
+				VtorcState:   vtorcconfig.DefaultKeyspaceTopoConfig,
+			},
 			errInDurabilityPolicy: "durability policy  not found",
 		}, {
 			name:         "Success with snapshot keyspaceType",
@@ -66,7 +75,10 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 			keyspace: &topodatapb.Keyspace{
 				KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT,
 			},
-			keyspaceWanted: nil,
+			keyspaceWanted: &topodatapb.Keyspace{
+				KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT,
+				VtorcState:   vtorcconfig.DefaultKeyspaceTopoConfig,
+			},
 		}, {
 			name:         "Success with fields that are not stored",
 			keyspaceName: "ks4",
@@ -78,6 +90,25 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 			keyspaceWanted: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 				DurabilityPolicy: policy.DurabilityNone,
+				VtorcState:       vtorcconfig.DefaultKeyspaceTopoConfig,
+			},
+			semiSyncAckersWanted: 0,
+		}, {
+			name:         "Success with ERS disabled in Vtorc",
+			keyspaceName: "ks4",
+			keyspace: &topodatapb.Keyspace{
+				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
+				DurabilityPolicy: policy.DurabilityNone,
+				VtorcState: &vtorcdatapb.Keyspace{
+					DisableEmergencyReparent: true,
+				},
+			},
+			keyspaceWanted: &topodatapb.Keyspace{
+				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
+				DurabilityPolicy: policy.DurabilityNone,
+				VtorcState: &vtorcdatapb.Keyspace{
+					DisableEmergencyReparent: true,
+				},
 			},
 			semiSyncAckersWanted: 0,
 		}, {
@@ -90,10 +121,6 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.keyspaceWanted == nil {
-				tt.keyspaceWanted = tt.keyspace
-			}
-
 			if tt.keyspace != nil {
 				keyspaceInfo := &topo.KeyspaceInfo{
 					Keyspace: tt.keyspace,

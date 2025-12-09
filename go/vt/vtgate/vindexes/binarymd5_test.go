@@ -118,7 +118,7 @@ func TestBinaryMD5Map(t *testing.T) {
 func TestBinaryMD5Verify(t *testing.T) {
 	hexValStr := "21cf"
 	hexValStrSQL := fmt.Sprintf("x'%s'", hexValStr)
-	hexNumStrSQL := fmt.Sprintf("0x%s", hexValStr)
+	hexNumStrSQL := "0x" + hexValStr
 	hexBytes, _ := hex.DecodeString(hexValStr)
 	ids := []sqltypes.Value{sqltypes.NewVarBinary("Test"), sqltypes.NewVarBinary("TEst"), sqltypes.NewHexVal([]byte(hexValStrSQL)), sqltypes.NewHexNum([]byte(hexNumStrSQL))}
 	ksids := [][]byte{[]byte("\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za["), []byte("\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za["), vMD5Hash(hexBytes), vMD5Hash(hexBytes)}
@@ -160,11 +160,10 @@ func BenchmarkMD5Hash(b *testing.B) {
 			input[i] = byte(i)
 		}
 
-		name := fmt.Sprintf("md5Hash,direct,bytes,n=%s", benchSize.name)
+		name := "md5Hash,direct,bytes,n=" + benchSize.name
 		b.Run(name, func(b *testing.B) {
 			benchmarkMD5HashBytes(b, input)
 		})
-
 	}
 }
 

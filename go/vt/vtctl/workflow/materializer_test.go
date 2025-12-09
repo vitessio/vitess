@@ -593,8 +593,6 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 			require.NoError(t, err)
 			sourceShard, err := env.topoServ.GetShardNames(ctx, ms.SourceKeyspace)
 			require.NoError(t, err)
-			want := fmt.Sprintf("shard_streams:{key:\"%s/%s\" value:{streams:{id:1 tablet:{cell:\"%s\" uid:200} source_shard:\"%s/%s\" position:\"%s\" status:\"Running\" info:\"VStream Lag: 0s\"}}} traffic_state:\"Reads Not Switched. Writes Not Switched\"",
-				ms.TargetKeyspace, targetShard[0], env.cell, ms.SourceKeyspace, sourceShard[0], gtid(position))
 
 			res, err := env.ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
 				Workflow:       ms.Workflow,
@@ -603,8 +601,29 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 				IncludeTables:  []string{"t1"},
 				OnDdl:          onDDLAction,
 			})
+			key := fmt.Sprintf("%s/%s", ms.TargetKeyspace, targetShard[0])
+			want := &vtctldatapb.WorkflowStatusResponse{
+				ShardStreams: map[string]*vtctldatapb.WorkflowStatusResponse_ShardStreams{
+					key: {
+						Streams: []*vtctldatapb.WorkflowStatusResponse_ShardStreamState{
+							{
+								Id: 1,
+								Tablet: &topodatapb.TabletAlias{
+									Cell: env.cell,
+									Uid:  200,
+								},
+								SourceShard: fmt.Sprintf("%s/%s", ms.SourceKeyspace, sourceShard[0]),
+								Position:    gtid(position),
+								Status:      "Running",
+								Info:        "VStream Lag: 0s",
+							},
+						},
+					},
+				},
+				TrafficState: "Reads Not Switched. Writes Not Switched",
+			}
 			require.NoError(t, err)
-			require.Equal(t, want, fmt.Sprintf("%+v", res))
+			require.Equal(t, want, res)
 		})
 	}
 }
@@ -626,7 +645,7 @@ func TestShardedAutoIncHandling(t *testing.T) {
 		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
 			TargetTable:      tableName,
 			CreateDdl:        tableDDL,
-			SourceExpression: fmt.Sprintf("select * from %s", tableName),
+			SourceExpression: "select * from " + tableName,
 		}},
 		WorkflowOptions: &vtctldatapb.WorkflowOptions{},
 	}
@@ -788,7 +807,7 @@ func TestShardedAutoIncHandling(t *testing.T) {
 						},
 						AutoIncrement: &vschemapb.AutoIncrement{ // AutoIncrement definition exists
 							Column:   "id",
-							Sequence: fmt.Sprintf("%s_non_default_seq_name", tableName),
+							Sequence: tableName + "_non_default_seq_name",
 						},
 					},
 				},
@@ -811,7 +830,7 @@ func TestShardedAutoIncHandling(t *testing.T) {
 						},
 						AutoIncrement: &vschemapb.AutoIncrement{ // AutoIncrement definition left alone
 							Column:   "id",
-							Sequence: fmt.Sprintf("%s_non_default_seq_name", tableName),
+							Sequence: tableName + "_non_default_seq_name",
 						},
 					},
 				},
@@ -1403,7 +1422,7 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 				"v": {
 					Type: "lookup_unique",
 					Params: map[string]string{
-						"table": fmt.Sprintf("%s.lkp", ms.TargetKeyspace),
+						"table": ms.TargetKeyspace + ".lkp",
 						"from":  "c1",
 						"to":    "c2",
 					},
@@ -1428,7 +1447,7 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 						"v": {
 							Type: "lookup_unique",
 							Params: map[string]string{
-								"table":      fmt.Sprintf("%s.lkp", ms.TargetKeyspace),
+								"table":      ms.TargetKeyspace + ".lkp",
 								"from":       "c1",
 								"to":         "c2",
 								"write_only": "true", // It has not been externalized yet
@@ -1466,7 +1485,7 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 				"v": {
 					Type: "lookup_unique",
 					Params: map[string]string{
-						"table": fmt.Sprintf("%s.lkp", ms.TargetKeyspace),
+						"table": ms.TargetKeyspace + ".lkp",
 						"from":  "c1",
 						"to":    "c2",
 					},
@@ -1492,7 +1511,7 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 						"v": {
 							Type: "lookup_unique",
 							Params: map[string]string{
-								"table":      fmt.Sprintf("%s.lkp", ms.TargetKeyspace),
+								"table":      ms.TargetKeyspace + ".lkp",
 								"from":       "c1",
 								"to":         "c2",
 								"write_only": "false", // This vindex has been externalized
@@ -1518,7 +1537,7 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 				"v": {
 					Type: "lookup_unique",
 					Params: map[string]string{
-						"table": fmt.Sprintf("%s.lkp", ms.TargetKeyspace),
+						"table": ms.TargetKeyspace + ".lkp",
 						"from":  "c1",
 						"to":    "c2",
 					},
@@ -1566,7 +1585,7 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 				"v": {
 					Type: "lookup_unique",
 					Params: map[string]string{
-						"table": fmt.Sprintf("%s.lkp", ms.TargetKeyspace),
+						"table": ms.TargetKeyspace + ".lkp",
 						"from":  "c1",
 						"to":    "c2",
 					},
@@ -1598,7 +1617,7 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 				"v": {
 					Type: "lookup_unique",
 					Params: map[string]string{
-						"table": fmt.Sprintf("%s.lkp", ms.TargetKeyspace),
+						"table": ms.TargetKeyspace + ".lkp",
 						"from":  "c1",
 						"to":    "c2",
 					},
@@ -1632,7 +1651,7 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 				"v": {
 					Type: "lookup",
 					Params: map[string]string{
-						"table": fmt.Sprintf("%s.lkp", ms.TargetKeyspace),
+						"table": ms.TargetKeyspace + ".lkp",
 						"from":  "c1,c2",
 						"to":    "c3",
 					},
@@ -1667,7 +1686,7 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 				"v": {
 					Type: "lookup_unique",
 					Params: map[string]string{
-						"table": fmt.Sprintf("%s.lkp", ms.TargetKeyspace),
+						"table": ms.TargetKeyspace + ".lkp",
 						"from":  "c1",
 						"to":    "c2",
 					},
@@ -1697,7 +1716,7 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 				"v": {
 					Type: "lookup_unique",
 					Params: map[string]string{
-						"table": fmt.Sprintf("%s.lkp", ms.TargetKeyspace),
+						"table": ms.TargetKeyspace + ".lkp",
 						"from":  "c1",
 						"to":    "c2",
 					},
@@ -2736,7 +2755,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 		"v": {
 			Type: "lookup_unique",
 			Params: map[string]string{
-				"table": fmt.Sprintf("%s.t", ms.TargetKeyspace),
+				"table": ms.TargetKeyspace + ".t",
 				"from":  "c1",
 				"to":    "c2",
 			},
@@ -2752,7 +2771,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 			"v1": {
 				Type: "lookup_unique",
 				Params: map[string]string{
-					"table":      fmt.Sprintf("%s.t", ms.TargetKeyspace),
+					"table":      ms.TargetKeyspace + ".t",
 					"from":       "c1",
 					"to":         "c2",
 					"write_only": "true",
@@ -2821,7 +2840,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					"v": {
 						Type: "lookup_unique",
 						Params: map[string]string{
-							"table": fmt.Sprintf("%s.t", ms.TargetKeyspace),
+							"table": ms.TargetKeyspace + ".t",
 							"from":  "c1,c2",
 							"to":    "c3",
 						},
@@ -2837,7 +2856,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					"v": {
 						Type: "lookup",
 						Params: map[string]string{
-							"table": fmt.Sprintf("%s.t", ms.TargetKeyspace),
+							"table": ms.TargetKeyspace + ".t",
 							"from":  "c1",
 							"to":    "c2",
 						},
@@ -2853,7 +2872,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					"v": {
 						Type: "lookup_noexist",
 						Params: map[string]string{
-							"table": fmt.Sprintf("%s.t", ms.TargetKeyspace),
+							"table": ms.TargetKeyspace + ".t",
 							"from":  "c1,c2",
 							"to":    "c2",
 						},
@@ -2877,7 +2896,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					"v": {
 						Type: "lookup_unique",
 						Params: map[string]string{
-							"table": fmt.Sprintf("%s.t", ms.TargetKeyspace),
+							"table": ms.TargetKeyspace + ".t",
 							"from":  "c1",
 							"to":    "c2",
 						},
@@ -2937,7 +2956,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					"v": {
 						Type: "lookup_unique",
 						Params: map[string]string{
-							"table": fmt.Sprintf("%s.t", ms.TargetKeyspace),
+							"table": ms.TargetKeyspace + ".t",
 							"from":  "c1",
 							"to":    "c2",
 						},
@@ -2990,7 +3009,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					"xxhash": {
 						Type: "lookup_unique",
 						Params: map[string]string{
-							"table": fmt.Sprintf("%s.t", ms.TargetKeyspace),
+							"table": ms.TargetKeyspace + ".t",
 							"from":  "c1",
 							"to":    "c2",
 						},
@@ -3030,7 +3049,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					"v2": {
 						Type: "consistent_lookup_unique",
 						Params: map[string]string{
-							"table": fmt.Sprintf("%s.t1_lkp", ms.TargetKeyspace),
+							"table": ms.TargetKeyspace + ".t1_lkp",
 							"from":  "c1",
 							"to":    "keyspace_id",
 						},
@@ -3122,7 +3141,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 	table := "t1"
 	tableSettings := []*vtctldatapb.TableMaterializeSettings{{
 		TargetTable:      table,
-		SourceExpression: fmt.Sprintf("select * from %s", table),
+		SourceExpression: "select * from " + table,
 	}}
 	targetVSchema := &vschemapb.Keyspace{
 		Sharded: true,
@@ -3179,7 +3198,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 								Rules: []*binlogdatapb.Rule{
 									{
 										Match:  table,
-										Filter: fmt.Sprintf("select * from %s", table),
+										Filter: "select * from " + table,
 									},
 								},
 							},
@@ -3313,7 +3332,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 								Rules: []*binlogdatapb.Rule{
 									{
 										Match:  table,
-										Filter: fmt.Sprintf("select * from %s", table),
+										Filter: "select * from " + table,
 									},
 								},
 							},
@@ -3333,7 +3352,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 								Rules: []*binlogdatapb.Rule{
 									{
 										Match:  table,
-										Filter: fmt.Sprintf("select * from %s", table),
+										Filter: "select * from " + table,
 									},
 								},
 							},

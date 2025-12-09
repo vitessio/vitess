@@ -99,6 +99,7 @@ func TestAPIEndpoints(t *testing.T) {
 		"TableName": "vitess_keyspace",
 		"Rows": [
 			{
+				"disable_emergency_reparent": "0",
 				"durability_policy": "none",
 				"keyspace": "ks",
 				"keyspace_type": "0"
@@ -110,24 +111,49 @@ func TestAPIEndpoints(t *testing.T) {
 	t.Run("Check Vars and Metrics", func(t *testing.T) {
 		utils.CheckVarExists(t, vtorc, "AnalysisChangeWrite")
 		utils.CheckVarExists(t, vtorc, "AuditWrite")
+		utils.CheckVarExists(t, vtorc, "CurrentErrantGTIDCount")
+		utils.CheckVarExists(t, vtorc, "DetectedProblems")
 		utils.CheckVarExists(t, vtorc, "DiscoveriesAttempt")
 		utils.CheckVarExists(t, vtorc, "DiscoveriesFail")
 		utils.CheckVarExists(t, vtorc, "DiscoveriesInstancePollSecondsExceeded")
 		utils.CheckVarExists(t, vtorc, "DiscoveriesQueueLength")
 		utils.CheckVarExists(t, vtorc, "DiscoveriesRecentCount")
+		utils.CheckVarExists(t, vtorc, "DiscoveryWorkers")
+		utils.CheckVarExists(t, vtorc, "DiscoveryWorkersActive")
+		utils.CheckVarExists(t, vtorc, "DiscoveryInstanceTimings")
+		utils.CheckVarExists(t, vtorc, "FailedRecoveries")
 		utils.CheckVarExists(t, vtorc, "InstanceRead")
 		utils.CheckVarExists(t, vtorc, "InstanceReadTopology")
+		utils.CheckVarExists(t, vtorc, "PendingRecoveries")
+		utils.CheckVarExists(t, vtorc, "RecoveriesCount")
+		utils.CheckVarExists(t, vtorc, "ShardLocksActive")
+		utils.CheckVarExists(t, vtorc, "ShardLockTimings")
+		utils.CheckVarExists(t, vtorc, "SuccessfulRecoveries")
+		utils.CheckVarExists(t, vtorc, "TabletsWatchedByCell")
+		utils.CheckVarExists(t, vtorc, "TabletsWatchedByShard")
 
 		// Metrics registered in prometheus
 		utils.CheckMetricExists(t, vtorc, "vtorc_analysis_change_write")
 		utils.CheckMetricExists(t, vtorc, "vtorc_audit_write")
+		utils.CheckMetricExists(t, vtorc, "vtorc_detected_problems")
 		utils.CheckMetricExists(t, vtorc, "vtorc_discoveries_attempt")
 		utils.CheckMetricExists(t, vtorc, "vtorc_discoveries_fail")
 		utils.CheckMetricExists(t, vtorc, "vtorc_discoveries_instance_poll_seconds_exceeded")
 		utils.CheckMetricExists(t, vtorc, "vtorc_discoveries_queue_length")
 		utils.CheckMetricExists(t, vtorc, "vtorc_discoveries_recent_count")
+		utils.CheckMetricExists(t, vtorc, "vtorc_discovery_instance_timings_bucket")
+		utils.CheckMetricExists(t, vtorc, "vtorc_discovery_workers")
+		utils.CheckMetricExists(t, vtorc, "vtorc_discovery_workers_active")
+		utils.CheckMetricExists(t, vtorc, "vtorc_errant_gtid_tablet_count")
 		utils.CheckMetricExists(t, vtorc, "vtorc_instance_read")
 		utils.CheckMetricExists(t, vtorc, "vtorc_instance_read_topology")
+		utils.CheckMetricExists(t, vtorc, "vtorc_pending_recoveries")
+		utils.CheckMetricExists(t, vtorc, "vtorc_recoveries_count")
+		utils.CheckMetricExists(t, vtorc, "vtorc_shard_locks_active")
+		utils.CheckMetricExists(t, vtorc, "vtorc_shard_lock_timings_bucket")
+		utils.CheckMetricExists(t, vtorc, "vtorc_successful_recoveries")
+		utils.CheckMetricExists(t, vtorc, "vtorc_tablets_watched_by_cell")
+		utils.CheckMetricExists(t, vtorc, "vtorc_tablets_watched_by_shard")
 	})
 
 	t.Run("Disable Recoveries API", func(t *testing.T) {

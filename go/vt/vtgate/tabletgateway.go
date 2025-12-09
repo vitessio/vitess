@@ -24,6 +24,7 @@ import (
 	"runtime/debug"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -38,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/balancer"
 	"vitess.io/vitess/go/vt/vtgate/buffer"
@@ -58,24 +60,31 @@ var (
 	retryCount = 2
 
 	// configuration flags for the tablet balancer
-	balancerEnabled     bool
+	balancerEnabled     bool // deprecated: use balancerMode instead
+	balancerModeFlag    string
 	balancerVtgateCells []string
 	balancerKeyspaces   []string
-	balancerType        string
 
 	logCollations = logutil.NewThrottledLogger("CollationInconsistent", 1*time.Minute)
 )
 
+func registerTabletGatewayFlags(fs *pflag.FlagSet) {
+	utils.SetFlagStringVar(fs, &CellsToWatch, "cells-to-watch", "", "comma-separated list of cells for watching tablets")
+	utils.SetFlagDurationVar(fs, &initialTabletTimeout, "gateway-initial-tablet-timeout", 30*time.Second, "At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type")
+	fs.IntVar(&retryCount, "retry-count", 2, "retry count")
+	fs.BoolVar(&balancerEnabled, "enable-balancer", false, "(DEPRECATED: use --vtgate-balancer-mode instead) Enable the tablet balancer to evenly spread query load for a given tablet type")
+	fs.StringVar(&balancerModeFlag, "vtgate-balancer-mode", "", fmt.Sprintf("Tablet balancer mode (options: %s). Defaults to 'cell' which shuffles tablets in the local cell.", strings.Join(balancer.GetAvailableModeNames(), ", ")))
+	fs.StringSliceVar(&balancerVtgateCells, "balancer-vtgate-cells", []string{}, "Comma-separated list of cells that contain vttablets. For 'prefer-cell' mode, this is required. For 'random' mode, this is optional and filters tablets to those cells.")
+	fs.StringSliceVar(&balancerKeyspaces, "balancer-keyspaces", []string{}, "Comma-separated list of keyspaces for which to use the balancer (optional). If empty, applies to all keyspaces.")
+}
+
+func registerVtcomboTabletGatewayFlags(fs *pflag.FlagSet) {
+	utils.SetFlagDurationVar(fs, &initialTabletTimeout, "gateway-initial-tablet-timeout", 30*time.Second, "At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type")
+}
+
 func init() {
-	servenv.OnParseFor("vtgate", func(fs *pflag.FlagSet) {
-		fs.StringVar(&CellsToWatch, "cells_to_watch", "", "comma-separated list of cells for watching tablets")
-		fs.DurationVar(&initialTabletTimeout, "gateway_initial_tablet_timeout", 30*time.Second, "At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type")
-		fs.IntVar(&retryCount, "retry-count", 2, "retry count")
-		fs.BoolVar(&balancerEnabled, "enable-balancer", false, "Enable the tablet balancer to evenly spread query load for a given tablet type")
-		fs.StringSliceVar(&balancerVtgateCells, "balancer-vtgate-cells", []string{}, "When in balanced mode, a comma-separated list of cells that contain vtgates (required)")
-		fs.StringSliceVar(&balancerKeyspaces, "balancer-keyspaces", []string{}, "When in balanced mode, a comma-separated list of keyspaces for which to use the balancer (optional)")
-		fs.StringVar(&balancerType, "balancer-type", "balanced", `When in balanced mode, selects the type of balancer to use. "balanced" balances connections evenly, "session" pins a connection to a given tablet for its duration. (default: "balanced") (optional)`)
-	})
+	servenv.OnParseFor("vtgate", registerTabletGatewayFlags)
+	servenv.OnParseFor("vtcombo", registerVtcomboTabletGatewayFlags)
 }
 
 // TabletGateway implements the Gateway interface.
@@ -132,9 +141,7 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 		statusAggregators: make(map[string]*TabletStatusAggregator),
 	}
 	gw.setupBuffering(ctx)
-	if balancerEnabled {
-		gw.setupBalancer()
-	}
+	gw.setupBalancer()
 	gw.QueryService = queryservice.Wrap(nil, gw.withRetry)
 	return gw
 }
@@ -169,21 +176,44 @@ func (gw *TabletGateway) setupBuffering(ctx context.Context) {
 }
 
 func (gw *TabletGateway) setupBalancer() {
-	if len(balancerVtgateCells) == 0 {
-		log.Exitf("balancer-vtgate-cells is required for balanced mode")
+	// Check for conflicting flags
+	if balancerEnabled && balancerModeFlag != "" {
+		log.Exitf("Cannot use both --enable-balancer and --vtgate-balancer-mode flags. Please use --vtgate-balancer-mode only.")
 	}
 
-	switch balancerType {
-	case "session":
-		gw.balancer = balancer.NewSessionBalancer(gw.localCell)
-	default:
-		if balancerType != "balanced" {
-			log.Warningf("Unrecognized balancer type %q, using default \"balanced\"", balancerType)
-			balancerType = "balanced"
-		}
-
-		gw.balancer = balancer.NewTabletBalancer(gw.localCell, balancerVtgateCells)
+	// Determine the effective mode: new flag takes precedence, then deprecated flag, then default
+	var mode balancer.Mode
+	if balancerModeFlag != "" {
+		// Explicit new flag
+		mode = balancer.ParseMode(balancerModeFlag)
+	} else if balancerEnabled {
+		// Deprecated flag for backwards compatibility
+		log.Warning("Flag --enable-balancer is deprecated. Please use --vtgate-balancer-mode=prefer-cell instead.")
+		mode = balancer.ModePreferCell
+	} else {
+		// Default: no flags set
+		mode = balancer.ModeCell
 	}
+
+	// Cell mode uses the default shuffleTablets behavior, no balancer needed
+	if mode == balancer.ModeCell {
+		log.Info("Tablet balancer using 'cell' mode (shuffle tablets in local cell)")
+		return
+	}
+
+	// Validate mode-specific requirements
+	if mode == balancer.ModePreferCell && len(balancerVtgateCells) == 0 {
+		log.Exitf("--balancer-vtgate-cells is required when using --vtgate-balancer-mode=prefer-cell")
+	}
+
+	// Create the balancer for prefer-cell or random modes
+	var err error
+	gw.balancer, err = balancer.NewTabletBalancer(mode, gw.localCell, balancerVtgateCells)
+	if err != nil {
+		log.Exitf("Failed to create tablet balancer: %v", err)
+	}
+
+	log.Infof("Tablet balancer enabled with mode: %s", mode)
 }
 
 // QueryServiceByAlias satisfies the Gateway interface
@@ -275,11 +305,11 @@ func (gw *TabletGateway) CacheStatus() TabletCacheStatusList {
 }
 
 func (gw *TabletGateway) DebugBalancerHandler(w http.ResponseWriter, r *http.Request) {
-	if balancerEnabled {
+	if gw.balancer != nil {
 		gw.balancer.DebugHandler(w, r)
 	} else {
 		w.Header().Set("Content-Type", "text/plain")
-		w.Write([]byte("not enabled"))
+		w.Write([]byte("Balancer mode: cell (default shuffle, no balancer instance)"))
 	}
 }
 
@@ -292,8 +322,7 @@ func (gw *TabletGateway) DebugBalancerHandler(w http.ResponseWriter, r *http.Req
 // withRetry also adds shard information to errors returned from the inner QueryService, so
 // withShardError should not be combined with withRetry.
 func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, _ queryservice.QueryService,
-	_ string, opts queryservice.WrapOpts, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error),
-) error {
+	_ string, opts queryservice.WrapOpts, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
 	// for transactions, we connect to a specific tablet instead of letting gateway choose one
 	if opts.InTransaction && target.TabletType != topodatapb.TabletType_PRIMARY {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "tabletGateway's query service can only be used for non-transactional queries on replicas")
@@ -409,8 +438,9 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 func (gw *TabletGateway) getBalancerTablet(target *querypb.Target, tablets []*discovery.TabletHealth, invalidTablets map[string]bool, opts queryservice.WrapOpts) *discovery.TabletHealth {
 	var tablet *discovery.TabletHealth
 
-	useBalancer := balancerEnabled
-	if balancerEnabled && len(balancerKeyspaces) > 0 {
+	// Determine if we should use the balancer for this target
+	useBalancer := gw.balancer != nil
+	if useBalancer && len(balancerKeyspaces) > 0 {
 		useBalancer = slices.Contains(balancerKeyspaces, target.Keyspace)
 	}
 
@@ -429,8 +459,8 @@ func (gw *TabletGateway) getBalancerTablet(target *querypb.Target, tablets []*di
 			sessionUUID = opts.Options.SessionUUID
 		}
 
-		opts := balancer.PickOpts{SessionUUID: sessionUUID, InvalidTablets: invalidTablets}
-		tablet = gw.balancer.Pick(target, tablets, opts)
+		pickOpts := balancer.PickOpts{SessionUUID: sessionUUID, InvalidTablets: invalidTablets}
+		tablet = gw.balancer.Pick(target, tablets, pickOpts)
 	}
 
 	if tablet != nil {

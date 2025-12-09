@@ -24,6 +24,7 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -55,6 +56,7 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/dynamicconfig"
@@ -93,7 +95,7 @@ const (
 
 func init() {
 	registerTabletTypeFlag := func(fs *pflag.FlagSet) {
-		fs.Var((*topoproto.TabletTypeFlag)(&defaultTabletType), "default_tablet_type", "The default tablet type to set for queries, when one is not explicitly selected.")
+		utils.SetFlagVar(fs, (*topoproto.TabletTypeFlag)(&defaultTabletType), "default-tablet-type", "The default tablet type to set for queries, when one is not explicitly selected.")
 	}
 
 	servenv.OnParseFor("vtgate", registerTabletTypeFlag)
@@ -488,6 +490,12 @@ func (e *Executor) addNeededBindVars(vcursor *econtext.VCursorImpl, bindVarNeeds
 			bindVars[key] = sqltypes.BoolBindVariable(session.Autocommit)
 		case sysvars.QueryTimeout.Name:
 			bindVars[key] = sqltypes.Int64BindVariable(session.GetQueryTimeout())
+		case sysvars.TransactionTimeout.Name:
+			var v int64
+			ifOptionsExist(session, func(options *querypb.ExecuteOptions) {
+				v = options.GetTransactionTimeout()
+			})
+			bindVars[key] = sqltypes.Int64BindVariable(v)
 		case sysvars.ClientFoundRows.Name:
 			var v bool
 			ifOptionsExist(session, func(options *querypb.ExecuteOptions) {
@@ -1022,7 +1030,7 @@ func (e *Executor) ShowVitessReplicationStatus(ctx context.Context, filter *sqlp
 				// estimated lag value when replication is not running (based
 				// on how long we've seen that it's not been running).
 				if ts.Stats != nil && ts.Stats.ReplicationLagSeconds > 0 { // Use the value we get from the ReplicationTracker
-					replLag = fmt.Sprintf("%d", ts.Stats.ReplicationLagSeconds)
+					replLag = strconv.FormatUint(uint64(ts.Stats.ReplicationLagSeconds), 10)
 				} else { // Use the value from mysqld
 					if row[secondsBehindSourceField].IsNull() {
 						replLag = strings.ToUpper(sqltypes.NullStr) // Uppercase to match mysqld's output in SHOW REPLICA STATUS
@@ -1599,15 +1607,14 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.Safe
 
 	qr, err := plan.Instructions.GetFields(ctx, vcursor, bindVars)
 	logStats.ExecuteTime = time.Since(execStart)
-	var errCount uint64
 	if err != nil {
 		logStats.Error = err
-		errCount = 1 // nolint
+		plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, 0, 0, 1)
 		return nil, 0, err
 	}
 	logStats.RowsAffected = qr.RowsAffected
 
-	plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, qr.RowsAffected, uint64(len(qr.Rows)), errCount)
+	plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, qr.RowsAffected, uint64(len(qr.Rows)), 0)
 
 	return qr.Fields, plan.ParamsCount, err
 }
@@ -1823,7 +1830,6 @@ func fkMode(foreignkey string) vschemapb.Keyspace_ForeignKeyMode {
 		return vschemapb.Keyspace_managed
 	case "unmanaged":
 		return vschemapb.Keyspace_unmanaged
-
 	}
 	return vschemapb.Keyspace_unspecified
 }

@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -488,6 +489,90 @@ func TestClientFoundRows(t *testing.T) {
 	c.Close()
 }
 
+func TestConnAttrs(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
+		Password: "password1",
+		UserData: "userData1",
+	}}
+	defer authServer.close()
+
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err, "NewListener failed")
+	host, port := getHostPort(t, l.Addr())
+
+	// Test with attrs.
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+
+	attributes := ConnectionAttributes{
+		"key1": "value1",
+		"k2":   "v2",
+	}
+
+	go l.Accept()
+	defer cleanupListener(ctx, l, params)
+
+	clientConn, err := ConnectWithAttributes(ctx, params, attributes)
+	require.NoError(t, err, "Connect failed")
+
+	serverConn := th.LastConn()
+	assert.Equal(t, uint32(CapabilityClientConnAttr), clientConn.Capabilities&CapabilityClientConnAttr, "ConnAttr flag: %x, bit must be set", th.LastConn().Capabilities)
+	assert.Equal(t, serverConn.Attributes, attributes, "attributes should be sent and parsed")
+
+	clientConn.Close()
+	assert.True(t, clientConn.IsClosed(), "IsClosed should be true on Close-d connection.")
+
+	// Empty attrs do not even set the capability flag
+	params = &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+
+	clientConn, err = Connect(ctx, params)
+	require.NoError(t, err, "Connect failed")
+
+	serverConn = th.LastConn()
+	assert.Equal(t, uint32(0), clientConn.Capabilities&CapabilityClientConnAttr, "ConnAttr flag: %x, bit must not be set", th.LastConn().Capabilities)
+	assert.Equal(t, 0, len(serverConn.Attributes), "attributes should be empty")
+
+	clientConn.Close()
+	assert.True(t, clientConn.IsClosed(), "IsClosed should be true on Close-d connection.")
+
+	// Test long attributes more than 255 bytes
+	params = &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+
+	longAttributes := ConnectionAttributes{
+		"short":  strings.Repeat("a", 10),
+		"long":   strings.Repeat("b", 256),
+		"longer": strings.Repeat("c", 1024*1024),
+	}
+
+	clientConn, err = ConnectWithAttributes(ctx, params, longAttributes)
+	require.NoError(t, err, "Connect failed")
+
+	serverConn = th.LastConn()
+	assert.Equal(t, uint32(CapabilityClientConnAttr), clientConn.Capabilities&CapabilityClientConnAttr, "ConnAttr flag: %x, bit must be set", th.LastConn().Capabilities)
+	assert.Equal(t, serverConn.Attributes, longAttributes, "attributes should be sent and parsed")
+
+	clientConn.Close()
+	assert.True(t, clientConn.IsClosed(), "IsClosed should be true on Close-d connection.")
+}
+
 func TestConnCounts(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 	th := &testHandler{}
@@ -928,7 +1013,6 @@ func TestTLSServer(t *testing.T) {
 
 	checkCountForTLSVer(t, tlsVersionToString(tlsVersion), 1)
 	conn.Close()
-
 }
 
 // TestTLSRequired creates a Server with TLS required, then tests that an insecure mysql
@@ -1318,7 +1402,6 @@ func runMysql(t *testing.T, params *ConnParams, command string) (string, bool) {
 		return output, false
 	}
 	return output, true
-
 }
 func runMysqlWithErr(t *testing.T, params *ConnParams, command string) (string, error) {
 	dir, err := venv.VtMysqlRoot()
@@ -1344,7 +1427,7 @@ func runMysqlWithErr(t *testing.T, params *ConnParams, command string) (string, 
 		} else {
 			args = append(args,
 				"-h", params.Host,
-				"-P", fmt.Sprintf("%v", params.Port))
+				"-P", strconv.Itoa(params.Port))
 		}
 		if params.Uname != "" {
 			args = append(args, "-u", params.Uname)

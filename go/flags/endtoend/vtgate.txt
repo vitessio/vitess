@@ -28,9 +28,8 @@ Flags:
       --allow-kill-statement                                             Allows the execution of kill statement
       --allowed-tablet-types strings                                     Specifies the tablet types this vtgate is allowed to route queries to. Should be provided as a comma-separated set of tablet types.
       --alsologtostderr                                                  log to standard error as well as files
-      --balancer-keyspaces strings                                       When in balanced mode, a comma-separated list of keyspaces for which to use the balancer (optional)
-      --balancer-type string                                             When in balanced mode, selects the type of balancer to use. "balanced" balances connections evenly, "session" pins a connection to a given tablet for its duration. (default: "balanced") (optional) (default "balanced")
-      --balancer-vtgate-cells strings                                    When in balanced mode, a comma-separated list of cells that contain vtgates (required)
+      --balancer-keyspaces strings                                       Comma-separated list of keyspaces for which to use the balancer (optional). If empty, applies to all keyspaces.
+      --balancer-vtgate-cells strings                                    Comma-separated list of cells that contain vttablets. For 'prefer-cell' mode, this is required. For 'random' mode, this is optional and filters tablets to those cells.
       --bind-address string                                              Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
       --buffer-drain-concurrency int                                     Maximum number of requests retried simultaneously. More concurrency will increase the load on the PRIMARY vttablet when draining the buffer. (default 1)
       --buffer-keyspace-shards string                                    If not empty, limit buffering to these entries (comma separated). Entry format: keyspace or keyspace/shard. Requires --enable_buffer=true.
@@ -40,7 +39,7 @@ Flags:
       --buffer-window duration                                           Duration for how long a request should be buffered at most. (default 10s)
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
       --cell string                                                      cell to use
-      --cells_to_watch string                                            comma-separated list of cells for watching tablets
+      --cells-to-watch string                                            comma-separated list of cells for watching tablets
       --config-file string                                               Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
       --config-file-not-found-handling ConfigFileNotFoundHandling        Behavior when a config file is not found. (Options: error, exit, ignore, warn) (default warn)
       --config-name string                                               Name of the config file (without extension) to search for. (default "vtconfig")
@@ -50,24 +49,25 @@ Flags:
       --consul-auth-static-file string                                   JSON File to read the topos/tokens from.
       --datadog-agent-host string                                        host to send spans to. if empty, no tracing will be done
       --datadog-agent-port string                                        port to send spans to. if empty, no tracing will be done
+      --datadog-trace-debug-mode                                         enable debug mode for datadog tracing
       --dbddl-plugin string                                              controls how to handle CREATE/DROP DATABASE. use it if you are using your own database provisioning service (default "fail")
       --ddl-strategy string                                              Set default strategy for DDL statements. Override with @@ddl_strategy session variable (default "direct")
-      --default_tablet_type topodatapb.TabletType                        The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
-      --discovery_high_replication_lag_minimum_serving duration          Threshold above which replication lag is considered too high when applying the min_number_serving_vttablets flag. (default 2h0m0s)
-      --discovery_low_replication_lag duration                           Threshold below which replication lag is considered low enough to be healthy. (default 30s)
+      --default-tablet-type topodatapb.TabletType                        The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
+      --discovery-high-replication-lag-minimum-serving duration          Threshold above which replication lag is considered too high when applying the min_number_serving_vttablets flag. (default 2h0m0s)
+      --discovery-low-replication-lag duration                           Threshold below which replication lag is considered low enough to be healthy. (default 30s)
       --emit-stats                                                       If set, emit stats to push-based monitoring and stats backends
-      --enable-balancer                                                  Enable the tablet balancer to evenly spread query load for a given tablet type
+      --enable-balancer                                                  (DEPRECATED: use --vtgate-balancer-mode instead) Enable the tablet balancer to evenly spread query load for a given tablet type
+      --enable-buffer                                                    Enable buffering (stalling) of primary traffic during failovers.
       --enable-buffer-dry-run                                            Detect and log failover events, but do not actually buffer requests.
+      --enable-direct-ddl                                                Allow users to submit direct DDL statements (default true)
+      --enable-online-ddl                                                Allow users to submit, review and control Online DDL (default true)
       --enable-partial-keyspace-migration                                (Experimental) Follow shard routing rules: enable only while migrating a keyspace shard by shard. See documentation on Partial MoveTables for more. (default false)
       --enable-set-var                                                   This will enable the use of MySQL's SET_VAR query hint for certain system variables instead of using reserved connections (default true)
+      --enable-system-settings                                           This will enable the system settings to be changed per session at the database connection level (default true)
       --enable-views                                                     Enable views support in vtgate. (default true)
-      --enable_buffer                                                    Enable buffering (stalling) of primary traffic during failovers.
-      --enable_direct_ddl                                                Allow users to submit direct DDL statements (default true)
-      --enable_online_ddl                                                Allow users to submit, review and control Online DDL (default true)
-      --enable_system_settings                                           This will enable the system settings to be changed per session at the database connection level (default true)
       --foreign-key-mode string                                          This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow (default "allow")
       --gate-query-cache-memory int                                      gate server query cache size in bytes, maximum amount of memory to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache. (default 33554432)
-      --gateway_initial_tablet_timeout duration                          At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type (default 30s)
+      --gateway-initial-tablet-timeout duration                          At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type (default 30s)
       --grpc-auth-mode string                                            Which auth plugin implementation to use (eg: static)
       --grpc-auth-mtls-allowed-substrings string                         List of substrings of at least one of the client certificate names (separated by colon).
       --grpc-auth-static-client-creds string                             When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
@@ -109,7 +109,7 @@ Flags:
       --keep-logs-by-mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
       --keyspaces-to-watch strings                                       Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema.
       --lameduck-period duration                                         keep running at least this long after SIGTERM before stopping (default 50ms)
-      --legacy_replication_lag_algorithm                                 Use the legacy algorithm when selecting vttablets for serving. (default true)
+      --legacy-replication-lag-algorithm                                 (DEPRECATED) Use the legacy algorithm when selecting vttablets for serving.
       --lock-heartbeat-time duration                                     If there is lock function used. This will keep the lock connection active by using this heartbeat (default 5s)
       --lock-timeout duration                                            Maximum time to wait when attempting to acquire a lock from the topo server (default 45s)
       --log-err-stacks                                                   log stack traces for errors
@@ -122,10 +122,26 @@ Flags:
       --max-payload-size int                                             The threshold for query payloads in bytes. A payload greater than this threshold will result in a failure to handle the query.
       --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
       --message-stream-grace-period duration                             the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent. (default 30s)
-      --min_number_serving_vttablets int                                 The minimum number of vttablets for each replicating tablet_type (e.g. replica, rdonly) that will be continue to be used even with replication lag above discovery_low_replication_lag, but still below discovery_high_replication_lag_minimum_serving. (default 2)
+      --min-number-serving-vttablets int                                 The minimum number of vttablets for each replicating tablet_type (e.g. replica, rdonly) that will be continue to be used even with replication lag above discovery_low_replication_lag, but still below discovery_high_replication_lag_minimum_serving. (default 2)
       --mysql-allow-clear-text-without-tls                               If set, the server will allow the use of a clear text password over non-SSL connections.
       --mysql-auth-server-impl string                                    Which auth server implementation to use. Options: none, ldap, clientcert, static, vault. (default "static")
+      --mysql-auth-server-static-file string                             JSON File to read the users/passwords from.
+      --mysql-auth-server-static-string string                           JSON representation of the users/passwords config.
+      --mysql-auth-static-reload-interval duration                       Ticker to reload credentials
+      --mysql-auth-vault-addr string                                     URL to Vault server
+      --mysql-auth-vault-path string                                     Vault path to vtgate credentials JSON blob, e.g.: secret/data/prod/vtgatecreds
+      --mysql-auth-vault-role-mountpoint string                          Vault AppRole mountpoint; can also be passed using VAULT_MOUNTPOINT environment variable (default "approle")
+      --mysql-auth-vault-role-secretidfile string                        Path to file containing Vault AppRole secret_id; can also be passed using VAULT_SECRETID environment variable
+      --mysql-auth-vault-roleid string                                   Vault AppRole id; can also be passed using VAULT_ROLEID environment variable
+      --mysql-auth-vault-timeout duration                                Timeout for vault API operations (default 10s)
+      --mysql-auth-vault-tls-ca string                                   Path to CA PEM for validating Vault server certificate
+      --mysql-auth-vault-tokenfile string                                Path to file containing Vault auth token; token can also be passed using VAULT_TOKEN environment variable
+      --mysql-auth-vault-ttl duration                                    How long to cache vtgate credentials from the Vault server (default 30m0s)
+      --mysql-clientcert-auth-method string                              client-side authentication method to use. Supported values: mysql_clear_password, dialog. (default "mysql_clear_password")
       --mysql-default-workload string                                    Default session workload (OLTP, OLAP, DBA) (default "OLTP")
+      --mysql-ldap-auth-config-file string                               JSON File from which to read LDAP server config.
+      --mysql-ldap-auth-config-string string                             JSON representation of LDAP server config.
+      --mysql-ldap-auth-method string                                    client-side authentication method to use. Supported values: mysql_clear_password, dialog. (default "mysql_clear_password")
       --mysql-server-bind-address string                                 Binds on this address when listening to MySQL binary protocol. Useful to restrict listening to 'localhost' only for instance.
       --mysql-server-drain-onterm                                        If set, the server waits for --onterm-timeout for already connected clients to complete their in flight work
       --mysql-server-flush-delay duration                                Delay after which buffered response will be flushed to the client. (default 100ms)
@@ -143,26 +159,10 @@ Flags:
       --mysql-server-ssl-key string                                      Path to ssl key for mysql server plugin SSL
       --mysql-server-ssl-server-ca string                                path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients
       --mysql-server-tls-min-version string                              Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
-      --mysql-server-version string                                      MySQL server version to advertise. (default "8.0.40-Vitess")
+      --mysql-server-version string                                      MySQL server version to advertise. (default "8.4.6-Vitess")
       --mysql-server-write-timeout duration                              connection write timeout
       --mysql-slow-connect-warn-threshold duration                       Warn if it takes more than the given threshold for a mysql connection to establish
       --mysql-tcp-version string                                         Select tcp, tcp4, or tcp6 to control the socket type. (default "tcp")
-      --mysql_auth_server_static_file string                             JSON File to read the users/passwords from.
-      --mysql_auth_server_static_string string                           JSON representation of the users/passwords config.
-      --mysql_auth_static_reload_interval duration                       Ticker to reload credentials
-      --mysql_auth_vault_addr string                                     URL to Vault server
-      --mysql_auth_vault_path string                                     Vault path to vtgate credentials JSON blob, e.g.: secret/data/prod/vtgatecreds
-      --mysql_auth_vault_role_mountpoint string                          Vault AppRole mountpoint; can also be passed using VAULT_MOUNTPOINT environment variable (default "approle")
-      --mysql_auth_vault_role_secretidfile string                        Path to file containing Vault AppRole secret_id; can also be passed using VAULT_SECRETID environment variable
-      --mysql_auth_vault_roleid string                                   Vault AppRole id; can also be passed using VAULT_ROLEID environment variable
-      --mysql_auth_vault_timeout duration                                Timeout for vault API operations (default 10s)
-      --mysql_auth_vault_tls_ca string                                   Path to CA PEM for validating Vault server certificate
-      --mysql_auth_vault_tokenfile string                                Path to file containing Vault auth token; token can also be passed using VAULT_TOKEN environment variable
-      --mysql_auth_vault_ttl duration                                    How long to cache vtgate credentials from the Vault server (default 30m0s)
-      --mysql_clientcert_auth_method string                              client-side authentication method to use. Supported values: mysql_clear_password, dialog. (default "mysql_clear_password")
-      --mysql_ldap_auth_config_file string                               JSON File from which to read LDAP server config.
-      --mysql_ldap_auth_config_string string                             JSON representation of LDAP server config.
-      --mysql_ldap_auth_method string                                    client-side authentication method to use. Supported values: mysql_clear_password, dialog. (default "mysql_clear_password")
       --no-scatter                                                       when set to true, the planner will fail instead of producing a plan that includes scatter queries
       --normalize-queries                                                Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars. (default true)
       --onclose-timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)
@@ -177,6 +177,7 @@ Flags:
       --purge-logs-interval duration                                     how often try to remove old logs (default 1h0m0s)
       --query-timeout int                                                Sets the default query timeout (in ms). Can be overridden by session variable (query_timeout) or comment directive (QUERY_TIMEOUT_MS)
       --querylog-buffer-size int                                         Maximum number of buffered query logs before throttling log output (default 10)
+      --querylog-emit-on-any-condition-met                               Emit to query log when any of the conditions (row-threshold, time-threshold, filter-tag) is met (default false)
       --querylog-filter-tag string                                       string that must be present in the query for it to be logged; if using a value as the tag, you need to disable query normalization
       --querylog-format string                                           format for query logs ("text" or "json") (default "text")
       --querylog-mode string                                             Mode for logging queries. "error" will only log queries that return an error. Otherwise all queries will be logged. (default "all")
@@ -186,7 +187,7 @@ Flags:
       --redact-debug-ui-queries                                          redact full queries and bind variables from debug UI
       --remote-operation-timeout duration                                time to wait for a remote operation (default 15s)
       --retry-count int                                                  retry count (default 2)
-      --schema_change_signal                                             Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work (default true)
+      --schema-change-signal                                             Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work (default true)
       --security-policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --service-map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
       --sql-max-length-errors int                                        truncate queries in error logs to the given length (default unlimited)
@@ -199,12 +200,13 @@ Flags:
       --stats-common-tags strings                                        Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
       --stats-drop-variables string                                      Variables to be dropped from the list of exported variables.
       --stats-emit-period duration                                       Interval between emitting stats to all registered backends (default 1m0s)
-      --statsd_address string                                            Address for statsd client
-      --statsd_sample_rate float                                         Sample rate for statsd metrics (default 1)
+      --statsd-address string                                            Address for statsd client
+      --statsd-sample-rate float                                         Sample rate for statsd metrics (default 1)
       --stderrthreshold severityFlag                                     logs at or above this threshold go to stderr (default 1)
-      --stream_buffer_size int                                           the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size. (default 32768)
+      --stream-buffer-size int                                           the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size. (default 32768)
       --table-refresh-interval int                                       interval in milliseconds to refresh tables in status page with refreshRequired class
       --tablet-filter-tags StringMap                                     Specifies a comma-separated list of tablet tags (as key:value pairs) to filter the tablets to watch.
+      --tablet-filters strings                                           Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch.
       --tablet-grpc-ca string                                            the server ca to use to validate servers when connecting
       --tablet-grpc-cert string                                          the cert to use to connect
       --tablet-grpc-crl string                                           the server crl to use to validate server certificates when connecting
@@ -215,7 +217,6 @@ Flags:
       --tablet-refresh-known-tablets                                     Whether to reload the tablet's address/port map from topo in case they change. (default true)
       --tablet-types-to-wait strings                                     Wait till connected for specified tablet types during Gateway initialization. Should be provided as a comma-separated set of tablet types.
       --tablet-url-template string                                       Format string describing debug tablet url formatting. See getTabletDebugURL() for how to customize this. (default "http://{{ "{{.GetTabletHostPort}}" }}")
-      --tablet_filters strings                                           Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch.
       --topo-consul-lock-delay duration                                  LockDelay for consul session. (default 15s)
       --topo-consul-lock-session-checks string                           List of checks for consul session. (default "serfHealth")
       --topo-consul-lock-session-ttl string                              TTL for consul session.
@@ -239,12 +240,13 @@ Flags:
       --tracing-sampling-rate float                                      sampling rate for the probabilistic jaeger sampler (default 0.1)
       --tracing-sampling-type string                                     sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default "const")
       --track-udfs                                                       Track UDFs in vtgate.
-      --transaction_mode string                                          SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit (default "MULTI")
+      --transaction-mode string                                          SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit (default "MULTI")
       --truncate-error-len int                                           truncate errors sent to client if they are longer than this value (0 means do not truncate)
       --v Level                                                          log level for V logs
   -v, --version                                                          print binary version
       --vmodule vModuleFlag                                              comma-separated list of pattern=N settings for file-filtered logging
-      --vschema_ddl_authorized_users string                              List of users authorized to execute vschema ddl operations, or '%' to allow all users.
+      --vschema-ddl-authorized-users string                              List of users authorized to execute vschema ddl operations, or '%' to allow all users.
+      --vtgate-balancer-mode string                                      Tablet balancer mode (options: cell, prefer-cell, random). Defaults to 'cell' which shuffles tablets in the local cell.
       --vtgate-config-terse-errors                                       prevent bind vars from escaping in returned errors
       --warming-reads-concurrency int                                    Number of concurrent warming reads allowed (default 500)
       --warming-reads-percent int                                        Percentage of reads on the primary to forward to replicas. Useful for keeping buffer pools warm

@@ -1,5 +1,12 @@
 name: check_make_vtadmin_authz_testgen
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - "main"
+      - "release-[0-9]+.[0-9]"
+    tags: '**'
+  pull_request:
+    branches: '**'
 
 permissions: read-all
 
@@ -15,24 +22,12 @@ jobs:
           exit 1
         fi
 
-    - name: Check if workflow needs to be skipped
-      id: skip-workflow
-      run: |
-        skip='false'
-        if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
-          skip='true'
-        fi
-        echo Skip ${skip}
-        echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
-
     - name: Check out code
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         persist-credentials: 'false'
 
     - name: Check for changes in relevant files
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: dorny/paths-filter@ebc4d7e9ebcb0b1eb21480bb8f43113e996ac77a # v3.0.1
       id: changes
       with:
@@ -48,19 +43,18 @@ jobs:
             - 'go/vt/vtadmin/**'
             - '.github/workflows/check_make_vtadmin_authz_testgen.yml'
 
+    - name: Tune the OS
+      if: steps.changes.outputs.vtadmin_changes == 'true'
+      uses: ./.github/actions/tune-os
+
     - name: Set up Go
-      uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.vtadmin_changes == 'true'
+      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      if: steps.changes.outputs.vtadmin_changes == 'true'
       with:
         go-version-file: go.mod
 
-    - name: Tune the OS
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.vtadmin_changes == 'true'
-      run: |
-        sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
-
     - name: Get dependencies
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.vtadmin_changes == 'true'
+      if: steps.changes.outputs.vtadmin_changes == 'true'
       run: |
         sudo apt-get update
         sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
@@ -69,11 +63,11 @@ jobs:
         go install golang.org/x/tools/cmd/goimports@latest
 
     - name: Run make minimaltools
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.vtadmin_changes == 'true'
+      if: steps.changes.outputs.vtadmin_changes == 'true'
       run: |
         make minimaltools
 
     - name: check_make_vtadmin_authz_testgen
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.vtadmin_changes == 'true'
+      if: steps.changes.outputs.vtadmin_changes == 'true'
       run: |
         tools/check_make_vtadmin_authz_testgen.sh

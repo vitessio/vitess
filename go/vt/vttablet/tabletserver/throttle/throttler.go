@@ -65,6 +65,8 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/utils"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/heartbeat"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -114,7 +116,7 @@ func init() {
 }
 
 func registerThrottlerFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&throttleTabletTypes, "throttle_tablet_types", throttleTabletTypes, "Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' always implicitly included")
+	utils.SetFlagStringVar(fs, &throttleTabletTypes, "throttle-tablet-types", throttleTabletTypes, "Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' always implicitly included")
 }
 
 var (
@@ -216,7 +218,7 @@ type ThrottlerStatus struct {
 }
 
 // NewThrottler creates a Throttler
-func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, heartbeatWriter heartbeat.HeartbeatWriter, tabletTypeFunc func() topodatapb.TabletType) *Throttler {
+func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, heartbeatWriter heartbeat.HeartbeatWriter, tabletTypeFunc func() topodatapb.TabletType, connectionPoolName string) *Throttler {
 	throttler := &Throttler{
 		tabletAlias:     tabletAlias,
 		env:             env,
@@ -224,7 +226,7 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 		srvTopoServer:   srvTopoServer,
 		ts:              ts,
 		heartbeatWriter: heartbeatWriter,
-		pool: connpool.NewPool(env, "ThrottlerPool", tabletenv.ConnPoolConfig{
+		pool: connpool.NewPool(env, connectionPoolName, tabletenv.ConnPoolConfig{
 			Size:        2,
 			IdleTimeout: env.Config().OltpReadPool.IdleTimeout,
 		}),
@@ -278,7 +280,7 @@ func (throttler *Throttler) StoreMetricsThreshold(threshold float64) {
 	throttler.MetricsThreshold.Store(math.Float64bits(threshold))
 }
 
-// initThrottleTabletTypes reads the user supplied throttle_tablet_types and sets these
+// initThrottleTabletTypes reads the user supplied throttle-tablet-types and sets these
 // for the duration of this tablet's lifetime
 func (throttler *Throttler) initThrottleTabletTypes() {
 	throttler.throttleTabletTypesMap = make(map[topodatapb.TabletType]bool)
@@ -329,7 +331,7 @@ func (throttler *Throttler) initConfig() {
 
 	throttler.configSettings = &config.ConfigurationSettings{
 		MySQLStore: config.MySQLConfigurationSettings{
-			IgnoreDialTCPErrors: true,
+			IgnoreTabletRPCErrors: true,
 		},
 	}
 }
@@ -829,7 +831,6 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 								})
 						}
 					}
-
 				}
 			case <-dormantCollectTicker.C:
 				if throttler.IsOpen() {
@@ -902,9 +903,10 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, probe 
 		metrics := make(base.ThrottleMetrics)
 
 		req := &tabletmanagerdatapb.CheckThrottlerRequest{} // We leave AppName empty; it will default to VitessName anyway, and we can save some proto space
-		resp, gRPCErr := tmClient.CheckThrottler(ctx, probe.Tablet, req)
-		if gRPCErr != nil {
-			return metricsWithError(fmt.Errorf("gRPC error accessing tablet %v. Err=%w", probe.Alias, gRPCErr))
+		resp, err := tmClient.CheckThrottler(ctx, probe.Tablet, req)
+		if err != nil {
+			err = vterrors.Wrapf(err, "gRPC error accessing tablet %v. Err=%s", probe.Alias, err.Error())
+			return metricsWithError(err)
 		}
 		throttleMetric.Value = resp.Value
 		if resp.ResponseCode == tabletmanagerdatapb.CheckThrottlerResponseCode_INTERNAL_ERROR {
@@ -1165,9 +1167,9 @@ func (throttler *Throttler) aggregateMetrics() error {
 	aggregateTabletsMetrics := func(scope base.Scope, metricName base.MetricName, tabletResultsMap base.TabletResultMap) {
 		ignoreHostsCount := throttler.inventory.IgnoreHostsCount
 		ignoreHostsThreshold := throttler.inventory.IgnoreHostsThreshold
-		ignoreDialTCPErrors := throttler.configSettings.MySQLStore.IgnoreDialTCPErrors
+		ignoreTabletRPCErrors := (throttler.configSettings.MySQLStore.IgnoreTabletRPCErrors || throttler.configSettings.MySQLStore.IgnoreDialTCPErrors)
 
-		aggregatedMetric := base.AggregateTabletMetricResults(metricName, tabletResultsMap, ignoreHostsCount, ignoreDialTCPErrors, ignoreHostsThreshold)
+		aggregatedMetric := base.AggregateTabletMetricResults(metricName, tabletResultsMap, ignoreHostsCount, ignoreTabletRPCErrors, ignoreHostsThreshold)
 		aggregatedMetricName := metricName.AggregatedName(scope)
 		throttler.aggregatedMetrics.Set(aggregatedMetricName, aggregatedMetric, cache.DefaultExpiration)
 		if metricName == metricNameUsedAsDefault {

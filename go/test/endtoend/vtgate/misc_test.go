@@ -38,7 +38,6 @@ func TestInsertOnDuplicateKey(t *testing.T) {
 	utils.Exec(t, conn, "insert into t11(id, sharding_key, col1, col2, col3) values(1, 2, 'a', 1, 2)")
 	utils.Exec(t, conn, "insert into t11(id, sharding_key, col1, col2, col3) values(1, 2, 'a', 1, 2) on duplicate key update id=10;")
 	utils.AssertMatches(t, conn, "select id, sharding_key from t11 where id=10", "[[INT64(10) INT64(2)]]")
-
 }
 
 func TestInsertNeg(t *testing.T) {
@@ -381,7 +380,6 @@ func TestFlushLock(t *testing.T) {
 		case <-timeout:
 			t.Fatalf("test timeout waiting for select query to complete")
 		default:
-
 		}
 	}
 }
@@ -501,7 +499,7 @@ func TestRenameFieldsOnOLAP(t *testing.T) {
 
 	qr := utils.Exec(t, conn, "show tables")
 	require.Equal(t, 1, len(qr.Fields))
-	assert.Equal(t, `Tables_in_ks`, fmt.Sprintf("%v", qr.Fields[0].Name))
+	assert.Equal(t, `Tables_in_ks`, qr.Fields[0].Name)
 	_ = utils.Exec(t, conn, "use mysql")
 	qr = utils.Exec(t, conn, "select @@workload")
 	assert.Equal(t, `[[VARCHAR("OLAP")]]`, fmt.Sprintf("%v", qr.Rows))
@@ -523,11 +521,18 @@ func TestSQLSelectLimit(t *testing.T) {
 	utils.Exec(t, conn, "insert into t7_xxhash(uid, msg) values(1, 'a'), (2, 'b'), (3, null), (4, 'a'), (5, 'a'), (6, 'b')")
 
 	for _, workload := range []string{"olap", "oltp"} {
-		utils.Exec(t, conn, fmt.Sprintf("set workload = %s", workload))
+		utils.Exec(t, conn, "set workload = "+workload)
 		utils.Exec(t, conn, "set sql_select_limit = 2")
 		utils.AssertMatches(t, conn, "select uid, msg from t7_xxhash order by uid", `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")]]`)
 		utils.AssertMatches(t, conn, "(select uid, msg from t7_xxhash order by uid)", `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")]]`)
 		utils.AssertMatches(t, conn, "select uid, msg from t7_xxhash order by uid limit 4", `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")] [VARCHAR("3") NULL] [VARCHAR("4") VARCHAR("a")]]`)
+
+		// Don't LIMIT subqueries
+		utils.AssertMatches(t, conn, "select count(*) from (select uid, msg from t7_xxhash order by uid) as subquery", `[[INT64(6)]]`)
+		utils.AssertMatches(t, conn, "select count(*) from (select 1 union all select 2 union all select 3) as subquery", `[[INT64(3)]]`)
+
+		utils.AssertMatches(t, conn, "select 1 union all select 2 union all select 3", `[[INT64(1)] [INT64(2)]]`)
+
 		/*
 			planner does not support query with order by in union query. without order by the results are not deterministic for testing purpose
 			utils.AssertMatches(t, conn, "select uid, msg from t7_xxhash union all select uid, msg from t7_xxhash order by uid", ``)
@@ -569,7 +574,7 @@ func TestSQLSelectLimitWithPlanCache(t *testing.T) {
 		out:   `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")] [VARCHAR("3") NULL]]`,
 	}}
 	for _, workload := range []string{"olap", "oltp"} {
-		utils.Exec(t, conn, fmt.Sprintf("set workload = %s", workload))
+		utils.Exec(t, conn, "set workload = "+workload)
 		for _, tcase := range tcases {
 			utils.Exec(t, conn, fmt.Sprintf("set sql_select_limit = %d", tcase.limit))
 			utils.AssertMatches(t, conn, "select uid, msg from t7_xxhash order by uid", tcase.out)
@@ -744,6 +749,27 @@ func TestFilterAfterLeftJoin(t *testing.T) {
 
 	query := "select /*vt+ PLANNER=gen4 */ A.id1, A.id2 from t1 as A left join t1 as B on A.id1 = B.id2 WHERE B.id1 IS NULL"
 	utils.AssertMatches(t, conn, query, `[[INT64(1) INT64(10)]]`)
+}
+
+func TestFilterWithINAfterLeftJoin(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, conn, "insert into t1 (id1,id2) values (1, 10)")
+	utils.Exec(t, conn, "insert into t1 (id1,id2) values (2, 3)")
+	utils.Exec(t, conn, "insert into t1 (id1,id2) values (3, 2)")
+	utils.Exec(t, conn, "insert into t1 (id1,id2) values (4, 5)")
+
+	query := "select a.id1, b.id3 from t1 as a left outer join t2 as b on a.id2 = b.id4 WHERE a.id2 = 10 AND (b.id3 IS NULL OR b.id3 IN (1))"
+	utils.AssertMatches(t, conn, query, `[[INT64(1) NULL]]`)
+
+	utils.Exec(t, conn, "insert into t2 (id3,id4) values (1, 10)")
+
+	query = "select a.id1, b.id3 from t1 as a left outer join t2 as b on a.id2 = b.id4 WHERE a.id2 = 10 AND (b.id3 IS NULL OR b.id3 IN (1))"
+	utils.AssertMatches(t, conn, query, `[[INT64(1) INT64(1)]]`)
+
+	query = "select a.id1, b.id3 from t1 as a left outer join t2 as b on a.id2 = b.id4 WHERE a.id2 = 10 AND (b.id3 IS NULL OR (b.id3, b.id4) IN ((1, 10)))"
+	utils.AssertMatches(t, conn, query, `[[INT64(1) INT64(1)]]`)
 }
 
 func TestDescribeVindex(t *testing.T) {
@@ -1006,6 +1032,38 @@ func TestQueryProcessedMetric(t *testing.T) {
 			initialQP, initialQR, initialQT = updatedQP, updatedQR, updatedQT
 		})
 	}
+}
+
+// TestQueryProcessedMetric verifies that query metrics are correctly published.
+func TestMetricForExplain(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	initialQP := getQPMetric(t, "QueryExecutions")
+	initialQT := getQPMetric(t, "QueryExecutionsByTable")
+	t.Run("explain t1", func(t *testing.T) {
+		utils.Exec(t, conn, "explain t1")
+		updatedQP := getQPMetric(t, "QueryExecutions")
+		updatedQT := getQPMetric(t, "QueryExecutionsByTable")
+		assert.EqualValuesf(t, 1, getValue(updatedQP, "EXPLAIN.Passthrough.PRIMARY")-getValue(initialQP, "EXPLAIN.Passthrough.PRIMARY"), "queryExecutions metric: %s", "explain")
+		assert.EqualValuesf(t, 1, getValue(updatedQT, "EXPLAIN.ks_t1")-getValue(initialQT, "EXPLAIN.ks_t1"), "queryExecutionsByTable metric: %s", "asdasd")
+	})
+
+	t.Run("explain `select id1, id2 from t1`", func(t *testing.T) {
+		utils.ExecAllowError(t, conn, "explain `select id1, id2 from t1`")
+		updatedQP := getQPMetric(t, "QueryExecutions")
+		updatedQT := getQPMetric(t, "QueryExecutionsByTable")
+		assert.EqualValuesf(t, 1, getValue(updatedQP, "EXPLAIN.Passthrough.PRIMARY")-getValue(initialQP, "EXPLAIN.Passthrough.PRIMARY"), "queryExecutions metric: %s", "explain")
+		assert.EqualValuesf(t, 1, getValue(updatedQT, "EXPLAIN.ks_t1")-getValue(initialQT, "EXPLAIN.ks_t1"), "queryExecutionsByTable metric: %s", "asdasd")
+	})
+
+	t.Run("explain select id1, id2 from t1", func(t *testing.T) {
+		utils.Exec(t, conn, "explain select id1, id2 from t1")
+		updatedQP := getQPMetric(t, "QueryExecutions")
+		updatedQT := getQPMetric(t, "QueryExecutionsByTable")
+		assert.EqualValuesf(t, 2, getValue(updatedQP, "EXPLAIN.Passthrough.PRIMARY")-getValue(initialQP, "EXPLAIN.Passthrough.PRIMARY"), "queryExecutions metric: %s", "explain")
+		assert.EqualValuesf(t, 2, getValue(updatedQT, "EXPLAIN.ks_t1")-getValue(initialQT, "EXPLAIN.ks_t1"), "queryExecutionsByTable metric: %s", "asdasd")
+	})
 }
 
 func getQPMetric(t *testing.T, metric string) map[string]any {

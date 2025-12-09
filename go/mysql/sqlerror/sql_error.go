@@ -93,6 +93,67 @@ func (se *SQLError) SQLState() string {
 	return se.State
 }
 
+// VtRpcErrorCode returns the vtrpcpb.Code for the error.
+func (se *SQLError) VtRpcErrorCode() vtrpcpb.Code {
+	switch se.Number() {
+	case ERNotSupportedYet:
+		return vtrpcpb.Code_UNIMPLEMENTED
+	case ERDiskFull, EROutOfMemory, EROutOfSortMemory, ERConCount, EROutOfResources, ERRecordFileFull, ERHostIsBlocked,
+		ERCantCreateThread, ERTooManyDelayedThreads, ERNetPacketTooLarge, ERTooManyUserConnections, ERLockTableFull, ERUserLimitReached:
+		return vtrpcpb.Code_RESOURCE_EXHAUSTED
+	case ERLockWaitTimeout:
+		return vtrpcpb.Code_DEADLINE_EXCEEDED
+	case CRServerGone, ERServerShutdown, ERServerIsntAvailable, CRConnectionError, CRConnHostError:
+		return vtrpcpb.Code_UNAVAILABLE
+	case ERFormNotFound, ERKeyNotFound, ERBadFieldError, ERNoSuchThread, ERUnknownTable, ERCantFindUDF, ERNonExistingGrant,
+		ERNoSuchTable, ERNonExistingTableGrant, ERKeyDoesNotExist:
+		return vtrpcpb.Code_NOT_FOUND
+	case ERDBAccessDenied, ERAccessDeniedError, ERKillDenied, ERNoPermissionToCreateUsers:
+		return vtrpcpb.Code_PERMISSION_DENIED
+	case ERNoDb, ERNoSuchIndex, ERCantDropFieldOrKey, ERTableNotLockedForWrite, ERTableNotLocked, ERTooBigSelect, ERNotAllowedCommand,
+		ERTooLongString, ERDelayedInsertTableLocked, ERDupUnique, ERRequiresPrimaryKey, ERCantDoThisDuringAnTransaction, ERReadOnlyTransaction,
+		ERCannotAddForeign, ERNoReferencedRow, ERRowIsReferenced, ERCantUpdateWithReadLock, ERNoDefault, EROperandColumns,
+		ERSubqueryNo1Row, ERNonUpdateableTable, ERFeatureDisabled, ERDuplicatedValueInType, ERRowIsReferenced2,
+		ErNoReferencedRow2, ERWarnDataOutOfRange, ERInnodbIndexCorrupt:
+		return vtrpcpb.Code_FAILED_PRECONDITION
+	case EROptionPreventsStatement:
+		return vtrpcpb.Code_CLUSTER_EVENT
+	case ERTableExists, ERDupEntry, ERFileExists, ERUDFExists:
+		return vtrpcpb.Code_ALREADY_EXISTS
+	case ERGotSignal, ERForcingClose, ERAbortingConnection, ERLockDeadlock:
+		// For ERLockDeadlock, a deadlock rolls back the transaction.
+		return vtrpcpb.Code_ABORTED
+	case ERUnknownComError, ERBadNullError, ERBadDb, ERBadTable, ERNonUniq, ERWrongFieldWithGroup, ERWrongGroupField,
+		ERWrongSumSelect, ERWrongValueCount, ERTooLongIdent, ERDupFieldName, ERDupKeyName, ERWrongFieldSpec, ERParseError,
+		EREmptyQuery, ERNonUniqTable, ERInvalidDefault, ERMultiplePriKey, ERTooManyKeys, ERTooManyKeyParts, ERTooLongKey,
+		ERKeyColumnDoesNotExist, ERBlobUsedAsKey, ERTooBigFieldLength, ERWrongAutoKey, ERWrongFieldTerminators, ERBlobsAndNoTerminated,
+		ERTextFileNotReadable, ERWrongSubKey, ERCantRemoveAllFields, ERUpdateTableUsed, ERNoTablesUsed, ERTooBigSet,
+		ERBlobCantHaveDefault, ERWrongDbName, ERWrongTableName, ERUnknownProcedure, ERWrongParamCountToProcedure,
+		ERWrongParametersToProcedure, ERFieldSpecifiedTwice, ERInvalidGroupFuncUse, ERTableMustHaveColumns, ERUnknownCharacterSet,
+		ERTooManyTables, ERTooManyFields, ERTooBigRowSize, ERWrongOuterJoin, ERNullColumnInIndex, ERFunctionNotDefined,
+		ERWrongValueCountOnRow, ERInvalidUseOfNull, ERRegexpError, ERMixOfGroupFuncAndFields, ERIllegalGrantForTable, ERSyntaxError,
+		ERWrongColumnName, ERWrongKeyColumn, ERBlobKeyWithoutLength, ERPrimaryCantHaveNull, ERTooManyRows, ERUnknownSystemVariable,
+		ERSetConstantsOnly, ERWrongArguments, ERWrongUsage, ERWrongNumberOfColumnsInSelect, ERDupArgument, ERLocalVariable,
+		ERGlobalVariable, ERWrongValueForVar, ERWrongTypeForVar, ERVarCantBeRead, ERCantUseOptionHere, ERIncorrectGlobalLocalVar,
+		ERWrongFKDef, ERKeyRefDoNotMatchTableRef, ERCyclicReference, ERCollationCharsetMismatch, ERCantAggregate2Collations,
+		ERCantAggregate3Collations, ERCantAggregateNCollations, ERVariableIsNotStruct, ERUnknownCollation, ERWrongNameForIndex,
+		ERWrongNameForCatalog, ERBadFTColumn, ERTruncatedWrongValue, ERTooMuchAutoTimestampCols, ERInvalidOnUpdate, ERUnknownTimeZone,
+		ERInvalidCharacterString, ERIllegalReference, ERDerivedMustHaveAlias, ERTableNameNotAllowedHere, ERDataTooLong, ERDataOutOfRange,
+		ERTruncatedWrongValueForField, ERIllegalValueForType, ERWrongValue, ERWrongParamcountToNativeFct:
+		return vtrpcpb.Code_INVALID_ARGUMENT
+	case ERSpecifiedAccessDenied:
+		if strings.Contains(se.Message, "failover in progress") {
+			return vtrpcpb.Code_FAILED_PRECONDITION
+		}
+		return vtrpcpb.Code_PERMISSION_DENIED
+	case CRServerLost:
+		// Query was killed.
+		return vtrpcpb.Code_CANCELED
+	default:
+		return vterrors.Code(se)
+	}
+}
+
 var errExtract = regexp.MustCompile(`\(errno ([0-9]*)\) \(sqlstate ([0-9a-zA-Z]{5})\)`)
 
 // NewSQLErrorFromError returns a *SQLError from the provided error.
@@ -306,14 +367,14 @@ func convertToMysqlError(err error) error {
 	if !ok {
 		return err
 	}
-	return NewSQLError(mysqlCode.num, mysqlCode.state, err.Error()) //nolint:govet
+	return NewSQLError(mysqlCode.num, mysqlCode.state, err.Error())
 }
 
 var isGRPCOverflowRE = regexp.MustCompile(`.*?grpc: (received|trying to send) message larger than max \(\d+ vs. \d+\)`)
 
 func demuxResourceExhaustedErrors(msg string) ErrorCode {
 	switch {
-	case isGRPCOverflowRE.Match([]byte(msg)):
+	case isGRPCOverflowRE.MatchString(msg):
 		return ERNetPacketTooLarge
 	case strings.Contains(msg, "Transaction throttled"):
 		return EROutOfResources

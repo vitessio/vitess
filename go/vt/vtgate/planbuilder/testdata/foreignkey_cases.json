@@ -494,7 +494,7 @@
                 "Inputs": [
                   {
                     "OperatorType": "Filter",
-                    "Predicate": "tbl3.col is null",
+                    "Predicate": "parent.col is null",
                     "Inputs": [
                       {
                         "OperatorType": "Join",
@@ -508,8 +508,8 @@
                               "Name": "sharded_fk_allow",
                               "Sharded": true
                             },
-                            "FieldQuery": "select 1 from tbl10 where 1 != 1",
-                            "Query": "select 1 from tbl10 where not (tbl10.col) <=> ('foo') for share"
+                            "FieldQuery": "select 1 from tbl10 as child where 1 != 1",
+                            "Query": "select 1 from tbl10 as child where not (child.col) <=> ('foo') for share"
                           },
                           {
                             "OperatorType": "Route",
@@ -518,8 +518,8 @@
                               "Name": "sharded_fk_allow",
                               "Sharded": true
                             },
-                            "FieldQuery": "select tbl3.col from tbl3 where 1 != 1",
-                            "Query": "select tbl3.col from tbl3 where tbl3.col = 'foo' for share"
+                            "FieldQuery": "select parent.col from tbl3 as parent where 1 != 1",
+                            "Query": "select parent.col from tbl3 as parent where parent.col = 'foo' for share"
                           }
                         ]
                       }
@@ -763,8 +763,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select 1 from u_tbl2 left join u_tbl1 on u_tbl1.col1 = cast(u_tbl2.col1 + 'bar' as CHAR) where 1 != 1",
-            "Query": "select 1 from u_tbl2 left join u_tbl1 on u_tbl1.col1 = cast(u_tbl2.col1 + 'bar' as CHAR) where u_tbl1.col1 is null and cast(u_tbl2.col1 + 'bar' as CHAR) is not null and not (u_tbl2.col2) <=> (cast(u_tbl2.col1 + 'bar' as CHAR)) and u_tbl2.id = 1 limit 1 for share"
+            "FieldQuery": "select 1 from u_tbl2 as child left join u_tbl1 as parent on parent.col1 = cast(child.col1 + 'bar' as CHAR) where 1 != 1",
+            "Query": "select 1 from u_tbl2 as child left join u_tbl1 as parent on parent.col1 = cast(child.col1 + 'bar' as CHAR) where parent.col1 is null and cast(child.col1 + 'bar' as CHAR) is not null and not (child.col2) <=> (cast(child.col1 + 'bar' as CHAR)) and child.id = 1 limit 1 for share"
           },
           {
             "InputName": "PostVerify",
@@ -1253,14 +1253,14 @@
                 "Inputs": [
                   {
                     "OperatorType": "Filter",
-                    "Predicate": "tbl1.t1col1 is null",
+                    "Predicate": "parent.t1col1 is null",
                     "Inputs": [
                       {
                         "OperatorType": "Join",
                         "Variant": "LeftJoin",
                         "JoinColumnIndexes": "R:0",
                         "JoinVars": {
-                          "tbl3_colx": 0
+                          "child_colx": 0
                         },
                         "Inputs": [
                           {
@@ -1270,8 +1270,8 @@
                               "Name": "sharded_fk_allow",
                               "Sharded": true
                             },
-                            "FieldQuery": "select tbl3.colx from tbl3 where 1 != 1",
-                            "Query": "select tbl3.colx from tbl3 where tbl3.colx + 10 is not null and not (tbl3.coly) <=> (tbl3.colx + 10) and tbl3.coly = 10 for share"
+                            "FieldQuery": "select child.colx from tbl3 as child where 1 != 1",
+                            "Query": "select child.colx from tbl3 as child where child.colx + 10 is not null and not (child.coly) <=> (child.colx + 10) and child.coly = 10 for share"
                           },
                           {
                             "OperatorType": "Route",
@@ -1280,8 +1280,8 @@
                               "Name": "sharded_fk_allow",
                               "Sharded": true
                             },
-                            "FieldQuery": "select tbl1.t1col1 from tbl1 where 1 != 1",
-                            "Query": "select tbl1.t1col1 from tbl1 where tbl1.t1col1 = :tbl3_colx + 10 for share"
+                            "FieldQuery": "select parent.t1col1 from tbl1 as parent where 1 != 1",
+                            "Query": "select parent.t1col1 from tbl1 as parent where parent.t1col1 = :child_colx + 10 for share"
                           }
                         ]
                       }
@@ -1332,7 +1332,7 @@
                 "Inputs": [
                   {
                     "OperatorType": "Filter",
-                    "Predicate": "tbl1.t1col1 is null",
+                    "Predicate": "parent.t1col1 is null",
                     "Inputs": [
                       {
                         "OperatorType": "Join",
@@ -1346,8 +1346,8 @@
                               "Name": "sharded_fk_allow",
                               "Sharded": true
                             },
-                            "FieldQuery": "select 1 from tbl3 where 1 != 1",
-                            "Query": "select 1 from tbl3 where not (tbl3.coly) <=> (20) and tbl3.coly = 10 for share"
+                            "FieldQuery": "select 1 from tbl3 as child where 1 != 1",
+                            "Query": "select 1 from tbl3 as child where not (child.coly) <=> (20) and child.coly = 10 for share"
                           },
                           {
                             "OperatorType": "Route",
@@ -1356,8 +1356,8 @@
                               "Name": "sharded_fk_allow",
                               "Sharded": true
                             },
-                            "FieldQuery": "select tbl1.t1col1 from tbl1 where 1 != 1",
-                            "Query": "select tbl1.t1col1 from tbl1 where tbl1.t1col1 = 20 for share"
+                            "FieldQuery": "select parent.t1col1 from tbl1 as parent where 1 != 1",
+                            "Query": "select parent.t1col1 from tbl1 as parent where parent.t1col1 = 20 for share"
                           }
                         ]
                       }
@@ -1422,8 +1422,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select 1 from u_tbl8 left join u_tbl9 on u_tbl9.col9 = cast('foo' as CHAR) where 1 != 1",
-                "Query": "select 1 from u_tbl8 left join u_tbl9 on u_tbl9.col9 = cast('foo' as CHAR) where u_tbl9.col9 is null and not (u_tbl8.col8) <=> (cast('foo' as CHAR)) and (u_tbl8.col8) in ::fkc_vals limit 1 for share nowait"
+                "FieldQuery": "select 1 from u_tbl8 as child left join u_tbl9 as parent on parent.col9 = cast('foo' as CHAR) where 1 != 1",
+                "Query": "select 1 from u_tbl8 as child left join u_tbl9 as parent on parent.col9 = cast('foo' as CHAR) where parent.col9 is null and not (child.col8) <=> (cast('foo' as CHAR)) and (child.col8) in ::fkc_vals limit 1 for share nowait"
               },
               {
                 "InputName": "PostVerify",
@@ -1493,8 +1493,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast('foo' as CHAR) where 1 != 1",
-                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast('foo' as CHAR) where u_tbl3.col3 is null and not (u_tbl4.col4) <=> (cast('foo' as CHAR)) and (u_tbl4.col4) in ::fkc_vals limit 1 for share"
+                "FieldQuery": "select 1 from u_tbl4 as child left join u_tbl3 as parent on parent.col3 = cast('foo' as CHAR) where 1 != 1",
+                "Query": "select 1 from u_tbl4 as child left join u_tbl3 as parent on parent.col3 = cast('foo' as CHAR) where parent.col3 is null and not (child.col4) <=> (cast('foo' as CHAR)) and (child.col4) in ::fkc_vals limit 1 for share"
               },
               {
                 "InputName": "VerifyChild-2",
@@ -1504,8 +1504,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select 1 from u_tbl4, u_tbl9 where 1 != 1",
-                "Query": "select 1 from u_tbl4, u_tbl9 where u_tbl4.col4 = u_tbl9.col9 and (u_tbl4.col4) in ::fkc_vals and (u_tbl9.col9) not in ((cast('foo' as CHAR))) limit 1 for share"
+                "FieldQuery": "select 1 from u_tbl4 as parent, u_tbl9 as child where 1 != 1",
+                "Query": "select 1 from u_tbl4 as parent, u_tbl9 as child where parent.col4 = child.col9 and (parent.col4) in ::fkc_vals and (child.col9) not in ((cast('foo' as CHAR))) limit 1 for share"
               },
               {
                 "InputName": "PostVerify",
@@ -1576,8 +1576,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast(:v1 as CHAR) where 1 != 1",
-                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast(:v1 as CHAR) where u_tbl3.col3 is null and cast(:v1 as CHAR) is not null and not (u_tbl4.col4) <=> (cast(:v1 as CHAR)) and (u_tbl4.col4) in ::fkc_vals limit 1 for share"
+                "FieldQuery": "select 1 from u_tbl4 as child left join u_tbl3 as parent on parent.col3 = cast(:v1 as CHAR) where 1 != 1",
+                "Query": "select 1 from u_tbl4 as child left join u_tbl3 as parent on parent.col3 = cast(:v1 as CHAR) where parent.col3 is null and cast(:v1 as CHAR) is not null and not (child.col4) <=> (cast(:v1 as CHAR)) and (child.col4) in ::fkc_vals limit 1 for share"
               },
               {
                 "InputName": "VerifyChild-2",
@@ -1587,8 +1587,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select 1 from u_tbl4, u_tbl9 where 1 != 1",
-                "Query": "select 1 from u_tbl4, u_tbl9 where u_tbl4.col4 = u_tbl9.col9 and (u_tbl4.col4) in ::fkc_vals and (cast(:v1 as CHAR) is null or (u_tbl9.col9) not in ((cast(:v1 as CHAR)))) limit 1 for share"
+                "FieldQuery": "select 1 from u_tbl4 as parent, u_tbl9 as child where 1 != 1",
+                "Query": "select 1 from u_tbl4 as parent, u_tbl9 as child where parent.col4 = child.col9 and (parent.col4) in ::fkc_vals and (cast(:v1 as CHAR) is null or (child.col9) not in ((cast(:v1 as CHAR)))) limit 1 for share"
               },
               {
                 "InputName": "PostVerify",
@@ -2199,8 +2199,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast(:fkc_upd as CHAR) where 1 != 1",
-                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast(:fkc_upd as CHAR) where u_tbl3.col3 is null and cast(:fkc_upd as CHAR) is not null and not (u_tbl4.col4) <=> (cast(:fkc_upd as CHAR)) and (u_tbl4.col4) in ::fkc_vals limit 1 for share"
+                "FieldQuery": "select 1 from u_tbl4 as child left join u_tbl3 as parent on parent.col3 = cast(:fkc_upd as CHAR) where 1 != 1",
+                "Query": "select 1 from u_tbl4 as child left join u_tbl3 as parent on parent.col3 = cast(:fkc_upd as CHAR) where parent.col3 is null and cast(:fkc_upd as CHAR) is not null and not (child.col4) <=> (cast(:fkc_upd as CHAR)) and (child.col4) in ::fkc_vals limit 1 for share"
               },
               {
                 "InputName": "VerifyChild-2",
@@ -2210,8 +2210,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select 1 from u_tbl4, u_tbl9 where 1 != 1",
-                "Query": "select 1 from u_tbl4, u_tbl9 where u_tbl4.col4 = u_tbl9.col9 and (u_tbl4.col4) in ::fkc_vals and (cast(:fkc_upd as CHAR) is null or (u_tbl9.col9) not in ((cast(:fkc_upd as CHAR)))) limit 1 for share"
+                "FieldQuery": "select 1 from u_tbl4 as parent, u_tbl9 as child where 1 != 1",
+                "Query": "select 1 from u_tbl4 as parent, u_tbl9 as child where parent.col4 = child.col9 and (parent.col4) in ::fkc_vals and (cast(:fkc_upd as CHAR) is null or (child.col9) not in ((cast(:fkc_upd as CHAR)))) limit 1 for share"
               },
               {
                 "InputName": "PostVerify",
@@ -2362,8 +2362,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select 1 from u_multicol_tbl2 left join u_multicol_tbl1 on u_multicol_tbl1.cola = 2 and u_multicol_tbl1.colb = u_multicol_tbl2.colc - 2 where 1 != 1",
-            "Query": "select 1 from u_multicol_tbl2 left join u_multicol_tbl1 on u_multicol_tbl1.cola = 2 and u_multicol_tbl1.colb = u_multicol_tbl2.colc - 2 where u_multicol_tbl1.cola is null and u_multicol_tbl1.colb is null and u_multicol_tbl2.colc - 2 is not null and not (u_multicol_tbl2.cola, u_multicol_tbl2.colb) <=> (2, u_multicol_tbl2.colc - 2) and u_multicol_tbl2.id = 7 limit 1 for share"
+            "FieldQuery": "select 1 from u_multicol_tbl2 as child left join u_multicol_tbl1 as parent on parent.cola = 2 and parent.colb = child.colc - 2 where 1 != 1",
+            "Query": "select 1 from u_multicol_tbl2 as child left join u_multicol_tbl1 as parent on parent.cola = 2 and parent.colb = child.colc - 2 where parent.cola is null and parent.colb is null and child.colc - 2 is not null and not (child.cola, child.colb) <=> (2, child.colc - 2) and child.id = 7 limit 1 for share"
           },
           {
             "InputName": "PostVerify",
@@ -2969,6 +2969,120 @@
     }
   },
   {
+    "comment": "Self-referential foreign key update (parent reference column) without table alias introduces new aliases",
+    "query": "UPDATE u_tbl12 SET parent_id = CASE WHEN (parent_id = 1) THEN 1 ELSE 2 END WHERE id IN (1)",
+    "plan": {
+      "Type": "ForeignKey",
+      "QueryType": "UPDATE",
+      "Original": "UPDATE u_tbl12 SET parent_id = CASE WHEN (parent_id = 1) THEN 1 ELSE 2 END WHERE id IN (1)",
+      "Instructions": {
+        "OperatorType": "FKVerify",
+        "Inputs": [
+          {
+            "InputName": "VerifyParent-1",
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 from u_tbl12 as child left join u_tbl12 as parent on parent.id = case when child.parent_id = 1 then 1 else 2 end where 1 != 1",
+            "Query": "select 1 from u_tbl12 as child left join u_tbl12 as parent on parent.id = case when child.parent_id = 1 then 1 else 2 end where parent.id is null and case when child.parent_id = 1 then 1 else 2 end is not null and not (child.parent_id) <=> (case when child.parent_id = 1 then 1 else 2 end) and child.id in (1) limit 1 for share"
+          },
+          {
+            "InputName": "PostVerify",
+            "OperatorType": "Update",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl12 set parent_id = case when parent_id = 1 then 1 else 2 end where id in (1)"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl12"
+      ]
+    }
+  },
+  {
+    "comment": "Self-referential foreign key update (parent reference column) with table alias does not introduce new aliases",
+    "query": "UPDATE u_tbl12 as foobar SET parent_id = CASE WHEN (parent_id = 1) THEN 1 ELSE 2 END WHERE id IN (1)",
+    "plan": {
+      "Type": "ForeignKey",
+      "QueryType": "UPDATE",
+      "Original": "UPDATE u_tbl12 as foobar SET parent_id = CASE WHEN (parent_id = 1) THEN 1 ELSE 2 END WHERE id IN (1)",
+      "Instructions": {
+        "OperatorType": "FKVerify",
+        "Inputs": [
+          {
+            "InputName": "VerifyParent-1",
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 from u_tbl12 as child left join u_tbl12 as parent on parent.id = case when child.parent_id = 1 then 1 else 2 end where 1 != 1",
+            "Query": "select 1 from u_tbl12 as child left join u_tbl12 as parent on parent.id = case when child.parent_id = 1 then 1 else 2 end where parent.id is null and case when child.parent_id = 1 then 1 else 2 end is not null and not (child.parent_id) <=> (case when child.parent_id = 1 then 1 else 2 end) and child.id in (1) limit 1 for share"
+          },
+          {
+            "InputName": "PostVerify",
+            "OperatorType": "Update",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl12 as foobar set parent_id = case when parent_id = 1 then 1 else 2 end where id in (1)"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl12"
+      ]
+    }
+  },
+  {
+    "comment": "self-referential foreign key update (child side column) without table aliases introduces new aliases",
+    "query": "UPDATE u_tbl12 SET id = CASE WHEN (parent_id = 1) THEN 1 ELSE 2 END WHERE id IN (1)",
+    "plan": {
+      "Type": "ForeignKey",
+      "QueryType": "UPDATE",
+      "Original": "UPDATE u_tbl12 SET id = CASE WHEN (parent_id = 1) THEN 1 ELSE 2 END WHERE id IN (1)",
+      "Instructions": {
+        "OperatorType": "FKVerify",
+        "Inputs": [
+          {
+            "InputName": "VerifyChild-1",
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 from u_tbl12 as parent, u_tbl12 as child where 1 != 1",
+            "Query": "select 1 from u_tbl12 as parent, u_tbl12 as child where parent.id = child.parent_id and parent.id in (1) and (case when parent.parent_id = 1 then 1 else 2 end is null or (child.parent_id) not in ((case when parent.parent_id = 1 then 1 else 2 end))) limit 1 for share"
+          },
+          {
+            "InputName": "PostVerify",
+            "OperatorType": "Update",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl12 set id = case when parent_id = 1 then 1 else 2 end where id in (1)"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl12"
+      ]
+    }
+  },
+  {
     "comment": "Multi table delete with using",
     "query": "delete u_tbl10 from u_tbl10 join u_tbl11 using (id) where id = 5",
     "plan": {
@@ -3283,8 +3397,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select 1 from u_tbl4 left join u_tbl1 on u_tbl1.col14 = cast(:__sq1 as SIGNED) where 1 != 1",
-                "Query": "select 1 from u_tbl4 left join u_tbl1 on u_tbl1.col14 = cast(:__sq1 as SIGNED) where u_tbl1.col14 is null and cast(:__sq1 as SIGNED) is not null and not (u_tbl4.col41) <=> (cast(:__sq1 as SIGNED)) and u_tbl4.col4 = 3 limit 1 for share"
+                "FieldQuery": "select 1 from u_tbl4 as child left join u_tbl1 as parent on parent.col14 = cast(:__sq1 as SIGNED) where 1 != 1",
+                "Query": "select 1 from u_tbl4 as child left join u_tbl1 as parent on parent.col14 = cast(:__sq1 as SIGNED) where parent.col14 is null and cast(:__sq1 as SIGNED) is not null and not (child.col41) <=> (cast(:__sq1 as SIGNED)) and child.col4 = 3 limit 1 for share"
               },
               {
                 "InputName": "PostVerify",
@@ -3717,8 +3831,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select 1 from u_tbl2 left join u_tbl1 on u_tbl1.col1 = cast(u_tbl2.id + 1 as CHAR) where 1 != 1",
-                "Query": "select 1 from u_tbl2 left join u_tbl1 on u_tbl1.col1 = cast(u_tbl2.id + 1 as CHAR) where u_tbl1.col1 is null and cast(u_tbl2.id + 1 as CHAR) is not null and not (u_tbl2.col2) <=> (cast(u_tbl2.id + 1 as CHAR)) and u_tbl2.id in ::dml_vals limit 1 for share"
+                "FieldQuery": "select 1 from u_tbl2 as child left join u_tbl1 as parent on parent.col1 = cast(child.id + 1 as CHAR) where 1 != 1",
+                "Query": "select 1 from u_tbl2 as child left join u_tbl1 as parent on parent.col1 = cast(child.id + 1 as CHAR) where parent.col1 is null and cast(child.id + 1 as CHAR) is not null and not (child.col2) <=> (cast(child.id + 1 as CHAR)) and child.id in ::dml_vals limit 1 for share"
               },
               {
                 "InputName": "PostVerify",
@@ -3816,8 +3930,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select 1 from u_tbl8 left join u_tbl9 on u_tbl9.col9 = cast('foo' as CHAR) where 1 != 1",
-                "Query": "select 1 from u_tbl8 left join u_tbl9 on u_tbl9.col9 = cast('foo' as CHAR) where u_tbl9.col9 is null and not (u_tbl8.col8) <=> (cast('foo' as CHAR)) and (u_tbl8.col8) in ::fkc_vals limit 1 for share nowait"
+                "FieldQuery": "select 1 from u_tbl8 as child left join u_tbl9 as parent on parent.col9 = cast('foo' as CHAR) where 1 != 1",
+                "Query": "select 1 from u_tbl8 as child left join u_tbl9 as parent on parent.col9 = cast('foo' as CHAR) where parent.col9 is null and not (child.col8) <=> (cast('foo' as CHAR)) and (child.col8) in ::fkc_vals limit 1 for share nowait"
               },
               {
                 "InputName": "PostVerify",

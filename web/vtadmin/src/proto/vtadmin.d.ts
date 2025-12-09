@@ -18568,6 +18568,9 @@ export namespace topodata {
 
         /** Shard is_primary_serving */
         is_primary_serving?: (boolean|null);
+
+        /** Shard vtorc_state */
+        vtorc_state?: (vtorcdata.IShard|null);
     }
 
     /** Represents a Shard. */
@@ -18596,6 +18599,9 @@ export namespace topodata {
 
         /** Shard is_primary_serving. */
         public is_primary_serving: boolean;
+
+        /** Shard vtorc_state. */
+        public vtorc_state?: (vtorcdata.IShard|null);
 
         /**
          * Creates a new Shard instance using the specified properties.
@@ -18934,6 +18940,9 @@ export namespace topodata {
 
         /** Keyspace sidecar_db_name */
         sidecar_db_name?: (string|null);
+
+        /** Keyspace vtorc_state */
+        vtorc_state?: (vtorcdata.IKeyspace|null);
     }
 
     /** Represents a Keyspace. */
@@ -18962,6 +18971,9 @@ export namespace topodata {
 
         /** Keyspace sidecar_db_name. */
         public sidecar_db_name: string;
+
+        /** Keyspace vtorc_state. */
+        public vtorc_state?: (vtorcdata.IKeyspace|null);
 
         /**
          * Creates a new Keyspace instance using the specified properties.
@@ -20623,6 +20635,204 @@ export namespace topodata {
 
         /**
          * Gets the default type url for ExternalClusters
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+}
+
+/** Namespace vtorcdata. */
+export namespace vtorcdata {
+
+    /** Properties of a Keyspace. */
+    interface IKeyspace {
+
+        /** Keyspace disable_emergency_reparent */
+        disable_emergency_reparent?: (boolean|null);
+    }
+
+    /** Represents a Keyspace. */
+    class Keyspace implements IKeyspace {
+
+        /**
+         * Constructs a new Keyspace.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtorcdata.IKeyspace);
+
+        /** Keyspace disable_emergency_reparent. */
+        public disable_emergency_reparent: boolean;
+
+        /**
+         * Creates a new Keyspace instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Keyspace instance
+         */
+        public static create(properties?: vtorcdata.IKeyspace): vtorcdata.Keyspace;
+
+        /**
+         * Encodes the specified Keyspace message. Does not implicitly {@link vtorcdata.Keyspace.verify|verify} messages.
+         * @param message Keyspace message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtorcdata.IKeyspace, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Keyspace message, length delimited. Does not implicitly {@link vtorcdata.Keyspace.verify|verify} messages.
+         * @param message Keyspace message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtorcdata.IKeyspace, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a Keyspace message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Keyspace
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtorcdata.Keyspace;
+
+        /**
+         * Decodes a Keyspace message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Keyspace
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtorcdata.Keyspace;
+
+        /**
+         * Verifies a Keyspace message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a Keyspace message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Keyspace
+         */
+        public static fromObject(object: { [k: string]: any }): vtorcdata.Keyspace;
+
+        /**
+         * Creates a plain object from a Keyspace message. Also converts values to other types if specified.
+         * @param message Keyspace
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtorcdata.Keyspace, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Keyspace to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Keyspace
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a Shard. */
+    interface IShard {
+
+        /** Shard disable_emergency_reparent */
+        disable_emergency_reparent?: (boolean|null);
+    }
+
+    /** Represents a Shard. */
+    class Shard implements IShard {
+
+        /**
+         * Constructs a new Shard.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtorcdata.IShard);
+
+        /** Shard disable_emergency_reparent. */
+        public disable_emergency_reparent: boolean;
+
+        /**
+         * Creates a new Shard instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Shard instance
+         */
+        public static create(properties?: vtorcdata.IShard): vtorcdata.Shard;
+
+        /**
+         * Encodes the specified Shard message. Does not implicitly {@link vtorcdata.Shard.verify|verify} messages.
+         * @param message Shard message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtorcdata.IShard, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Shard message, length delimited. Does not implicitly {@link vtorcdata.Shard.verify|verify} messages.
+         * @param message Shard message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtorcdata.IShard, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a Shard message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Shard
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtorcdata.Shard;
+
+        /**
+         * Decodes a Shard message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Shard
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtorcdata.Shard;
+
+        /**
+         * Verifies a Shard message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a Shard message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Shard
+         */
+        public static fromObject(object: { [k: string]: any }): vtorcdata.Shard;
+
+        /**
+         * Creates a plain object from a Shard message. Also converts values to other types if specified.
+         * @param message Shard
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtorcdata.Shard, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Shard to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Shard
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -28043,6 +28253,194 @@ export namespace tabletmanagerdata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a RestartReplicationRequest. */
+    interface IRestartReplicationRequest {
+
+        /** RestartReplicationRequest semiSync */
+        semiSync?: (boolean|null);
+    }
+
+    /** Represents a RestartReplicationRequest. */
+    class RestartReplicationRequest implements IRestartReplicationRequest {
+
+        /**
+         * Constructs a new RestartReplicationRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IRestartReplicationRequest);
+
+        /** RestartReplicationRequest semiSync. */
+        public semiSync: boolean;
+
+        /**
+         * Creates a new RestartReplicationRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RestartReplicationRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IRestartReplicationRequest): tabletmanagerdata.RestartReplicationRequest;
+
+        /**
+         * Encodes the specified RestartReplicationRequest message. Does not implicitly {@link tabletmanagerdata.RestartReplicationRequest.verify|verify} messages.
+         * @param message RestartReplicationRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IRestartReplicationRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RestartReplicationRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.RestartReplicationRequest.verify|verify} messages.
+         * @param message RestartReplicationRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IRestartReplicationRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RestartReplicationRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RestartReplicationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.RestartReplicationRequest;
+
+        /**
+         * Decodes a RestartReplicationRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RestartReplicationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.RestartReplicationRequest;
+
+        /**
+         * Verifies a RestartReplicationRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RestartReplicationRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RestartReplicationRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.RestartReplicationRequest;
+
+        /**
+         * Creates a plain object from a RestartReplicationRequest message. Also converts values to other types if specified.
+         * @param message RestartReplicationRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.RestartReplicationRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RestartReplicationRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RestartReplicationRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a RestartReplicationResponse. */
+    interface IRestartReplicationResponse {
+    }
+
+    /** Represents a RestartReplicationResponse. */
+    class RestartReplicationResponse implements IRestartReplicationResponse {
+
+        /**
+         * Constructs a new RestartReplicationResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IRestartReplicationResponse);
+
+        /**
+         * Creates a new RestartReplicationResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RestartReplicationResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IRestartReplicationResponse): tabletmanagerdata.RestartReplicationResponse;
+
+        /**
+         * Encodes the specified RestartReplicationResponse message. Does not implicitly {@link tabletmanagerdata.RestartReplicationResponse.verify|verify} messages.
+         * @param message RestartReplicationResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IRestartReplicationResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RestartReplicationResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.RestartReplicationResponse.verify|verify} messages.
+         * @param message RestartReplicationResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IRestartReplicationResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RestartReplicationResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RestartReplicationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.RestartReplicationResponse;
+
+        /**
+         * Decodes a RestartReplicationResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RestartReplicationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.RestartReplicationResponse;
+
+        /**
+         * Verifies a RestartReplicationResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RestartReplicationResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RestartReplicationResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.RestartReplicationResponse;
+
+        /**
+         * Creates a plain object from a RestartReplicationResponse message. Also converts values to other types if specified.
+         * @param message RestartReplicationResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.RestartReplicationResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RestartReplicationResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RestartReplicationResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a StartReplicationUntilAfterRequest. */
     interface IStartReplicationUntilAfterRequest {
 
@@ -29791,6 +30189,9 @@ export namespace tabletmanagerdata {
 
     /** Properties of a DemotePrimaryRequest. */
     interface IDemotePrimaryRequest {
+
+        /** DemotePrimaryRequest force */
+        force?: (boolean|null);
     }
 
     /** Represents a DemotePrimaryRequest. */
@@ -29801,6 +30202,9 @@ export namespace tabletmanagerdata {
          * @param [properties] Properties to set
          */
         constructor(properties?: tabletmanagerdata.IDemotePrimaryRequest);
+
+        /** DemotePrimaryRequest force. */
+        public force: boolean;
 
         /**
          * Creates a new DemotePrimaryRequest instance using the specified properties.
@@ -31531,6 +31935,9 @@ export namespace tabletmanagerdata {
 
         /** BackupRequest mysql_shutdown_timeout */
         mysql_shutdown_timeout?: (vttime.IDuration|null);
+
+        /** BackupRequest init_sql */
+        init_sql?: (tabletmanagerdata.BackupRequest.IInitSQL|null);
     }
 
     /** Represents a BackupRequest. */
@@ -31559,6 +31966,9 @@ export namespace tabletmanagerdata {
 
         /** BackupRequest mysql_shutdown_timeout. */
         public mysql_shutdown_timeout?: (vttime.IDuration|null);
+
+        /** BackupRequest init_sql. */
+        public init_sql?: (tabletmanagerdata.BackupRequest.IInitSQL|null);
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -31636,6 +32046,124 @@ export namespace tabletmanagerdata {
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace BackupRequest {
+
+        /** Properties of an InitSQL. */
+        interface IInitSQL {
+
+            /** InitSQL queries */
+            queries?: (string[]|null);
+
+            /** InitSQL tablet_types */
+            tablet_types?: (topodata.TabletType[]|null);
+
+            /** InitSQL timeout */
+            timeout?: (vttime.IDuration|null);
+
+            /** InitSQL fail_on_error */
+            fail_on_error?: (boolean|null);
+        }
+
+        /** Represents an InitSQL. */
+        class InitSQL implements IInitSQL {
+
+            /**
+             * Constructs a new InitSQL.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: tabletmanagerdata.BackupRequest.IInitSQL);
+
+            /** InitSQL queries. */
+            public queries: string[];
+
+            /** InitSQL tablet_types. */
+            public tablet_types: topodata.TabletType[];
+
+            /** InitSQL timeout. */
+            public timeout?: (vttime.IDuration|null);
+
+            /** InitSQL fail_on_error. */
+            public fail_on_error: boolean;
+
+            /**
+             * Creates a new InitSQL instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns InitSQL instance
+             */
+            public static create(properties?: tabletmanagerdata.BackupRequest.IInitSQL): tabletmanagerdata.BackupRequest.InitSQL;
+
+            /**
+             * Encodes the specified InitSQL message. Does not implicitly {@link tabletmanagerdata.BackupRequest.InitSQL.verify|verify} messages.
+             * @param message InitSQL message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: tabletmanagerdata.BackupRequest.IInitSQL, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified InitSQL message, length delimited. Does not implicitly {@link tabletmanagerdata.BackupRequest.InitSQL.verify|verify} messages.
+             * @param message InitSQL message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: tabletmanagerdata.BackupRequest.IInitSQL, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes an InitSQL message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns InitSQL
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.BackupRequest.InitSQL;
+
+            /**
+             * Decodes an InitSQL message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns InitSQL
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.BackupRequest.InitSQL;
+
+            /**
+             * Verifies an InitSQL message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates an InitSQL message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns InitSQL
+             */
+            public static fromObject(object: { [k: string]: any }): tabletmanagerdata.BackupRequest.InitSQL;
+
+            /**
+             * Creates a plain object from an InitSQL message. Also converts values to other types if specified.
+             * @param message InitSQL
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: tabletmanagerdata.BackupRequest.InitSQL, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this InitSQL to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for InitSQL
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
     }
 
     /** Properties of a BackupResponse. */
@@ -38304,7 +38832,8 @@ export namespace binlogdata {
         VERSION = 17,
         LASTPK = 18,
         SAVEPOINT = 19,
-        COPY_COMPLETED = 20
+        COPY_COMPLETED = 20,
+        PREVIOUS_GTIDS = 21
     }
 
     /** Properties of a RowChange. */
@@ -39283,6 +39812,15 @@ export namespace binlogdata {
 
         /** VEvent throttled_reason */
         throttled_reason?: (string|null);
+
+        /** VEvent commit_parent */
+        commit_parent?: (number|Long|null);
+
+        /** VEvent sequence_number */
+        sequence_number?: (number|Long|null);
+
+        /** VEvent event_gtid */
+        event_gtid?: (string|null);
     }
 
     /** Represents a VEvent. */
@@ -39338,6 +39876,15 @@ export namespace binlogdata {
 
         /** VEvent throttled_reason. */
         public throttled_reason: string;
+
+        /** VEvent commit_parent. */
+        public commit_parent: (number|Long);
+
+        /** VEvent sequence_number. */
+        public sequence_number: (number|Long);
+
+        /** VEvent event_gtid. */
+        public event_gtid: string;
 
         /**
          * Creates a new VEvent instance using the specified properties.
@@ -41677,6 +42224,9 @@ export namespace query {
         /** ExecuteOptions in_dml_execution */
         in_dml_execution?: (boolean|null);
 
+        /** ExecuteOptions transaction_timeout */
+        transaction_timeout?: (number|Long|null);
+
         /** ExecuteOptions SessionUUID */
         SessionUUID?: (string|null);
     }
@@ -41734,6 +42284,9 @@ export namespace query {
 
         /** ExecuteOptions in_dml_execution. */
         public in_dml_execution: boolean;
+
+        /** ExecuteOptions transaction_timeout. */
+        public transaction_timeout?: (number|Long|null);
 
         /** ExecuteOptions SessionUUID. */
         public SessionUUID: string;
@@ -55233,6 +55786,9 @@ export namespace vtctldata {
 
         /** BackupRequest mysql_shutdown_timeout */
         mysql_shutdown_timeout?: (vttime.IDuration|null);
+
+        /** BackupRequest init_sql */
+        init_sql?: (tabletmanagerdata.BackupRequest.IInitSQL|null);
     }
 
     /** Represents a BackupRequest. */
@@ -55264,6 +55820,9 @@ export namespace vtctldata {
 
         /** BackupRequest mysql_shutdown_timeout. */
         public mysql_shutdown_timeout?: (vttime.IDuration|null);
+
+        /** BackupRequest init_sql. */
+        public init_sql?: (tabletmanagerdata.BackupRequest.IInitSQL|null);
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -55481,6 +56040,9 @@ export namespace vtctldata {
 
         /** BackupShardRequest mysql_shutdown_timeout */
         mysql_shutdown_timeout?: (vttime.IDuration|null);
+
+        /** BackupShardRequest init_sql */
+        init_sql?: (tabletmanagerdata.BackupRequest.IInitSQL|null);
     }
 
     /** Represents a BackupShardRequest. */
@@ -55512,6 +56074,9 @@ export namespace vtctldata {
 
         /** BackupShardRequest mysql_shutdown_timeout. */
         public mysql_shutdown_timeout?: (vttime.IDuration|null);
+
+        /** BackupShardRequest init_sql. */
+        public init_sql?: (tabletmanagerdata.BackupRequest.IInitSQL|null);
 
         /**
          * Creates a new BackupShardRequest instance using the specified properties.
@@ -80352,6 +80917,14 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** TableCopyPhase enum. */
+    enum TableCopyPhase {
+        UNKNOWN = 0,
+        NOT_STARTED = 1,
+        IN_PROGRESS = 2,
+        COMPLETE = 3
+    }
+
     /** Properties of a WorkflowStatusResponse. */
     interface IWorkflowStatusResponse {
 
@@ -80483,6 +81056,9 @@ export namespace vtctldata {
 
             /** TableCopyState bytes_percentage */
             bytes_percentage?: (number|null);
+
+            /** TableCopyState phase */
+            phase?: (vtctldata.TableCopyPhase|null);
         }
 
         /** Represents a TableCopyState. */
@@ -80511,6 +81087,9 @@ export namespace vtctldata {
 
             /** TableCopyState bytes_percentage. */
             public bytes_percentage: number;
+
+            /** TableCopyState phase. */
+            public phase: vtctldata.TableCopyPhase;
 
             /**
              * Creates a new TableCopyState instance using the specified properties.
@@ -81811,6 +82390,206 @@ export namespace vtctldata {
 
         /**
          * Gets the default type url for WorkflowMirrorTrafficResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a SetVtorcEmergencyReparentRequest. */
+    interface ISetVtorcEmergencyReparentRequest {
+
+        /** SetVtorcEmergencyReparentRequest keyspace */
+        keyspace?: (string|null);
+
+        /** SetVtorcEmergencyReparentRequest shard */
+        shard?: (string|null);
+
+        /** SetVtorcEmergencyReparentRequest disable */
+        disable?: (boolean|null);
+    }
+
+    /** Represents a SetVtorcEmergencyReparentRequest. */
+    class SetVtorcEmergencyReparentRequest implements ISetVtorcEmergencyReparentRequest {
+
+        /**
+         * Constructs a new SetVtorcEmergencyReparentRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ISetVtorcEmergencyReparentRequest);
+
+        /** SetVtorcEmergencyReparentRequest keyspace. */
+        public keyspace: string;
+
+        /** SetVtorcEmergencyReparentRequest shard. */
+        public shard: string;
+
+        /** SetVtorcEmergencyReparentRequest disable. */
+        public disable: boolean;
+
+        /**
+         * Creates a new SetVtorcEmergencyReparentRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SetVtorcEmergencyReparentRequest instance
+         */
+        public static create(properties?: vtctldata.ISetVtorcEmergencyReparentRequest): vtctldata.SetVtorcEmergencyReparentRequest;
+
+        /**
+         * Encodes the specified SetVtorcEmergencyReparentRequest message. Does not implicitly {@link vtctldata.SetVtorcEmergencyReparentRequest.verify|verify} messages.
+         * @param message SetVtorcEmergencyReparentRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ISetVtorcEmergencyReparentRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SetVtorcEmergencyReparentRequest message, length delimited. Does not implicitly {@link vtctldata.SetVtorcEmergencyReparentRequest.verify|verify} messages.
+         * @param message SetVtorcEmergencyReparentRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ISetVtorcEmergencyReparentRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SetVtorcEmergencyReparentRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SetVtorcEmergencyReparentRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.SetVtorcEmergencyReparentRequest;
+
+        /**
+         * Decodes a SetVtorcEmergencyReparentRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SetVtorcEmergencyReparentRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.SetVtorcEmergencyReparentRequest;
+
+        /**
+         * Verifies a SetVtorcEmergencyReparentRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SetVtorcEmergencyReparentRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SetVtorcEmergencyReparentRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.SetVtorcEmergencyReparentRequest;
+
+        /**
+         * Creates a plain object from a SetVtorcEmergencyReparentRequest message. Also converts values to other types if specified.
+         * @param message SetVtorcEmergencyReparentRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.SetVtorcEmergencyReparentRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SetVtorcEmergencyReparentRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SetVtorcEmergencyReparentRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a SetVtorcEmergencyReparentResponse. */
+    interface ISetVtorcEmergencyReparentResponse {
+    }
+
+    /** Represents a SetVtorcEmergencyReparentResponse. */
+    class SetVtorcEmergencyReparentResponse implements ISetVtorcEmergencyReparentResponse {
+
+        /**
+         * Constructs a new SetVtorcEmergencyReparentResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ISetVtorcEmergencyReparentResponse);
+
+        /**
+         * Creates a new SetVtorcEmergencyReparentResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SetVtorcEmergencyReparentResponse instance
+         */
+        public static create(properties?: vtctldata.ISetVtorcEmergencyReparentResponse): vtctldata.SetVtorcEmergencyReparentResponse;
+
+        /**
+         * Encodes the specified SetVtorcEmergencyReparentResponse message. Does not implicitly {@link vtctldata.SetVtorcEmergencyReparentResponse.verify|verify} messages.
+         * @param message SetVtorcEmergencyReparentResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ISetVtorcEmergencyReparentResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SetVtorcEmergencyReparentResponse message, length delimited. Does not implicitly {@link vtctldata.SetVtorcEmergencyReparentResponse.verify|verify} messages.
+         * @param message SetVtorcEmergencyReparentResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ISetVtorcEmergencyReparentResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SetVtorcEmergencyReparentResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SetVtorcEmergencyReparentResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.SetVtorcEmergencyReparentResponse;
+
+        /**
+         * Decodes a SetVtorcEmergencyReparentResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SetVtorcEmergencyReparentResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.SetVtorcEmergencyReparentResponse;
+
+        /**
+         * Verifies a SetVtorcEmergencyReparentResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SetVtorcEmergencyReparentResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SetVtorcEmergencyReparentResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.SetVtorcEmergencyReparentResponse;
+
+        /**
+         * Creates a plain object from a SetVtorcEmergencyReparentResponse message. Also converts values to other types if specified.
+         * @param message SetVtorcEmergencyReparentResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.SetVtorcEmergencyReparentResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SetVtorcEmergencyReparentResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SetVtorcEmergencyReparentResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */

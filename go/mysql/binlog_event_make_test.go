@@ -56,7 +56,6 @@ func TestFormatDescriptionEvent(t *testing.T) {
 	gotF, err = event.Format()
 	require.NoError(t, err, "Format failed: %v", err)
 	require.True(t, reflect.DeepEqual(gotF, f), "Parsed BinlogFormat doesn't match, got:\n%v\nexpected:\n%v", gotF, f)
-
 }
 
 func TestQueryEvent(t *testing.T) {
@@ -82,7 +81,6 @@ func TestQueryEvent(t *testing.T) {
 	gotQ, err := event.Query(f)
 	require.NoError(t, err, "event.Query() failed: %v", err)
 	require.True(t, reflect.DeepEqual(gotQ, q), "event.Query() returned %v was expecting %v", gotQ, q)
-
 }
 
 func TestXIDEvent(t *testing.T) {
@@ -92,7 +90,6 @@ func TestXIDEvent(t *testing.T) {
 	event := NewXIDEvent(f, s)
 	require.True(t, event.IsValid(), "NewXIDEvent().IsValid() is false")
 	require.True(t, event.IsXID(), "NewXIDEvent().IsXID() is false")
-
 }
 
 func TestIntVarEvent(t *testing.T) {
@@ -114,7 +111,6 @@ func TestIntVarEvent(t *testing.T) {
 
 	name, value, err = event.IntVar(f)
 	require.Error(t, err, "IntVar(invalid) returned %v/%v/%v", name, value, err)
-
 }
 
 func TestInvalidEvents(t *testing.T) {
@@ -159,7 +155,7 @@ func TestMariadDBGTIDEVent(t *testing.T) {
 	event, _, err := event.StripChecksum(f)
 	require.NoError(t, err, "StripChecksum failed: %v", err)
 
-	gtid, hasBegin, err := event.GTID(f)
+	gtid, hasBegin, _, _, err := event.GTID(f)
 	require.NoError(t, err, "NewMariaDBGTIDEvent().GTID() returned error: %v", err)
 	require.True(t, hasBegin, "NewMariaDBGTIDEvent() didn't store hasBegin properly.")
 
@@ -178,7 +174,7 @@ func TestMariadDBGTIDEVent(t *testing.T) {
 	event, _, err = event.StripChecksum(f)
 	require.NoError(t, err, "StripChecksum failed: %v", err)
 
-	gtid, hasBegin, err = event.GTID(f)
+	gtid, hasBegin, _, _, err = event.GTID(f)
 	require.NoError(t, err, "NewMariaDBGTIDEvent().GTID() returned error: %v", err)
 	require.False(t, hasBegin, "NewMariaDBGTIDEvent() didn't store hasBegin properly.")
 
@@ -243,7 +239,6 @@ func TestTableMapEvent(t *testing.T) {
 	gotTm, err := event.TableMap(f)
 	require.NoError(t, err, "NewTableMapEvent().TableMapEvent() returned error: %v", err)
 	require.True(t, reflect.DeepEqual(gotTm, tm), "NewTableMapEvent().TableMapEvent() got TableMap:\n%v\nexpected:\n%v", gotTm, tm)
-
 }
 
 func TestLargeTableMapEvent(t *testing.T) {
@@ -286,7 +281,6 @@ func TestLargeTableMapEvent(t *testing.T) {
 	gotTm, err := event.TableMap(f)
 	require.NoError(t, err, "NewTableMapEvent().TableMapEvent() returned error: %v", err)
 	require.True(t, reflect.DeepEqual(gotTm, tm), "NewTableMapEvent().TableMapEvent() got TableMap:\n%v\nexpected:\n%v", gotTm, tm)
-
 }
 
 func TestRowsEvent(t *testing.T) {
@@ -502,5 +496,4 @@ func TestLargeRowsEvent(t *testing.T) {
 	gotRows, err := event.Rows(f, tm)
 	require.NoError(t, err, "NewRowsEvent().Rows() returned error: %v", err)
 	require.True(t, reflect.DeepEqual(gotRows, rows), "NewRowsEvent().Rows() got Rows:\n%v\nexpected:\n%v", gotRows, rows)
-
 }

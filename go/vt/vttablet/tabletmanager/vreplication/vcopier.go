@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -312,7 +313,7 @@ func (vc *vcopier) copyNext(ctx context.Context, settings binlogplayer.VRSetting
 		}
 	}
 	if len(copyState) == 0 {
-		return fmt.Errorf("unexpected: there are no tables to copy")
+		return errors.New("unexpected: there are no tables to copy")
 	}
 	if err := vc.catchup(ctx, copyState); err != nil {
 		return err
@@ -753,7 +754,7 @@ func (vcq *vcopierCopyWorkQueue) close() {
 // calling goroutine.
 func (vcq *vcopierCopyWorkQueue) enqueue(ctx context.Context, currT *vcopierCopyTask) error {
 	if !vcq.isOpen {
-		return fmt.Errorf("work queue is not open")
+		return errors.New("work queue is not open")
 	}
 
 	// Get a handle on an unused worker.
@@ -764,7 +765,7 @@ func (vcq *vcopierCopyWorkQueue) enqueue(ctx context.Context, currT *vcopierCopy
 
 	currW, ok := poolH.(*vcopierCopyWorker)
 	if !ok {
-		return fmt.Errorf("failed to cast pool resource to *vcopierCopyWorker")
+		return errors.New("failed to cast pool resource to *vcopierCopyWorker")
 	}
 
 	execute := func(task *vcopierCopyTask) {
@@ -962,13 +963,13 @@ func (vth *vcopierCopyTaskHooks) awaitCompletion(resultCh <-chan *vcopierCopyTas
 		select {
 		case result := <-resultCh:
 			if result == nil {
-				return fmt.Errorf("channel was closed before a result received")
+				return errors.New("channel was closed before a result received")
 			}
 			if !vcopierCopyTaskStateIsDone(result.state) {
-				return fmt.Errorf("received result is not done")
+				return errors.New("received result is not done")
 			}
 			if result.state != vcopierCopyTaskComplete {
-				return fmt.Errorf("received result is not complete")
+				return errors.New("received result is not complete")
 			}
 			return nil
 		case <-ctx.Done():

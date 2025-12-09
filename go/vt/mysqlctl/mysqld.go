@@ -98,7 +98,7 @@ var (
 
 	replicationConnectRetry = 10 * time.Second
 
-	versionRegex = regexp.MustCompile(fmt.Sprintf(`%s([0-9]+)\.([0-9]+)\.([0-9]+)`, versionStringPrefix))
+	versionRegex = regexp.MustCompile(versionStringPrefix + "([0-9]+)\\.([0-9]+)\\.([0-9]+)")
 	// versionSQLQuery will return a version string directly from
 	// a MySQL server that is compatible with what we expect from
 	// mysqld --version and matches the versionRegex. Example
@@ -355,7 +355,7 @@ func (mysqld *Mysqld) startNoWait(cnf *Mycnf, mysqldArgs ...string) error {
 	switch hr := hook.NewHook("mysqld_start", mysqldArgs).Execute(); hr.ExitStatus {
 	case hook.HOOK_SUCCESS:
 		// hook exists and worked, we can keep going
-		name = "mysqld_start hook" // nolint
+		name = "mysqld_start hook" //nolint:ineffassign
 	case hook.HOOK_DOES_NOT_EXIST:
 		// hook doesn't exist, run mysqld_safe ourselves
 		log.Infof("%v: No mysqld_start hook, running mysqld_safe directly", ts)
@@ -461,7 +461,7 @@ func (mysqld *Mysqld) startNoWait(cnf *Mycnf, mysqldArgs ...string) error {
 }
 
 func cleanupLockfile(socket string, ts string) error {
-	lockPath := fmt.Sprintf("%s.lock", socket)
+	lockPath := socket + ".lock"
 	pid, err := os.ReadFile(lockPath)
 	if errors.Is(err, os.ErrNotExist) {
 		log.Infof("%v: no stale lock file at %s", ts, lockPath)
@@ -802,15 +802,15 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 	// else, user specified an init db file
 	sqlFile, err := os.Open(initDBSQLFile)
 	if err != nil {
-		return fmt.Errorf("can't open init_db_sql_file (%v): %v", initDBSQLFile, err)
+		return fmt.Errorf("can't open init-db-sql-file (%v): %v", initDBSQLFile, err)
 	}
 	defer sqlFile.Close()
 	script, err := io.ReadAll(sqlFile)
 	if err != nil {
-		return fmt.Errorf("can't read init_db_sql_file (%v): %v", initDBSQLFile, err)
+		return fmt.Errorf("can't read init-db-sql-file (%v): %v", initDBSQLFile, err)
 	}
 	if err := mysqld.executeMysqlScript(ctx, params, string(script)); err != nil {
-		return fmt.Errorf("can't run init_db_sql_file (%v): %v", initDBSQLFile, err)
+		return fmt.Errorf("can't run init-db-sql-file (%v): %v", initDBSQLFile, err)
 	}
 	return nil
 }
@@ -978,6 +978,7 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 				log.Infof("could not open config file for mycnf: %v", path)
 				continue
 			}
+			log.Infof("loaded extra MySQL config from: %s", path)
 			myTemplateSource.WriteString("## " + path + "\n")
 			myTemplateSource.Write(data)
 		}
@@ -1215,7 +1216,7 @@ socket=%v
 		return "", err
 	}
 	name := tmpfile.Name()
-	if _, err := tmpfile.Write([]byte(contents)); err != nil {
+	if _, err := tmpfile.WriteString(contents); err != nil {
 		tmpfile.Close()
 		os.Remove(name)
 		return "", err
@@ -1243,6 +1244,11 @@ func (mysqld *Mysqld) GetAllPrivsConnection(ctx context.Context) (*dbconnpool.DB
 	return dbconnpool.NewDBConnection(ctx, mysqld.dbcfgs.AllPrivsWithDB())
 }
 
+// GetFilteredConnection creates a new DBConnection as the vt_filtered user, used primarily in VReplication.
+func (mysqld *Mysqld) GetFilteredConnection(ctx context.Context) (*dbconnpool.DBConnection, error) {
+	return dbconnpool.NewDBConnection(ctx, mysqld.dbcfgs.FilteredWithDB())
+}
+
 // Close will close this instance of Mysqld. It will wait for all dba
 // queries to be finished.
 func (mysqld *Mysqld) Close() {
@@ -1264,9 +1270,11 @@ func (mysqld *Mysqld) OnTerm(f func()) {
 }
 
 func buildLdPaths() ([]string, error) {
+	baseEnv := os.Environ()
+
 	vtMysqlRoot, err := vtenv.VtMysqlRoot()
 	if err != nil {
-		return []string{}, err
+		return baseEnv, err
 	}
 
 	ldPaths := []string{
@@ -1274,7 +1282,7 @@ func buildLdPaths() ([]string, error) {
 		os.ExpandEnv("LD_PRELOAD=$LD_PRELOAD"),
 	}
 
-	return ldPaths, nil
+	return append(baseEnv, ldPaths...), nil
 }
 
 // GetVersionString is part of the MysqlExecutor interface.

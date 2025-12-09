@@ -292,6 +292,7 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (Operato
 		!hasHaving &&
 		!needsOrdering &&
 		!qp.NeedsAggregation() &&
+		!qp.HasWindow &&
 		!isDistinctAST(in.selectStatement()) &&
 		in.selectStatement().GetLimit() == nil
 
@@ -308,6 +309,8 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (Operato
 		debugNoRewrite("horizon push blocked: query has ORDER BY")
 	} else if qp.NeedsAggregation() {
 		debugNoRewrite("horizon push blocked: query needs aggregation")
+	} else if qp.HasWindow {
+		debugNoRewrite("horizon push blocked: query has window functions")
 	} else if isDistinctAST(in.selectStatement()) {
 		debugNoRewrite("horizon push blocked: query has DISTINCT")
 	} else if in.selectStatement().GetLimit() != nil {
@@ -355,7 +358,6 @@ func tryPushLimit(ctx *plancontext.PlanningContext, in *Limit) (Operator, *Apply
 		in.AST = combinedLimit
 		in.Source = src.Source
 		return in, Rewrote("merged two limits")
-
 	}
 	return setUpperLimit(in)
 }

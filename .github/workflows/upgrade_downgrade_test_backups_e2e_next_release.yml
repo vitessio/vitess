@@ -1,7 +1,12 @@
 name: Backups - E2E - Next Release - Upgrade Downgrade Testing
 on:
   push:
+    branches:
+      - "main"
+      - "release-[0-9]+.[0-9]"
+    tags: '**'
   pull_request:
+    branches: '**'
 
 concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing - Backups - E2E - Next Release')
@@ -37,21 +42,8 @@ jobs:
         echo $next_release_ref
         echo "next_release_ref=${next_release_ref}" >> $GITHUB_OUTPUT
 
-    - name: Check if workflow needs to be skipped
-      id: skip-workflow
-      run: |
-        skip='false'
-        if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
-          skip='true'
-        fi
-        if [[ "${{steps.output-next-release-ref.outputs.next_release_ref}}" == "" ]]; then
-          skip='true'
-        fi
-        echo Skip ${skip}
-        echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
-
     - name: Check for changes in relevant files
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      if: steps.output-next-release-ref.outputs.next_release_ref != ''
       uses: dorny/paths-filter@ebc4d7e9ebcb0b1eb21480bb8f43113e996ac77a # v3.0.1
       id: changes
       with:
@@ -72,36 +64,30 @@ jobs:
             - 'bootstrap.sh'
             - '.github/workflows/upgrade_downgrade_test_backups_e2e_next_release.yml'
 
-    - name: Set up Go
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
-      with:
-        go-version-file: go.mod
+    - name: Tune the OS
+      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
+      uses: ./.github/actions/tune-os
 
     - name: Set up python
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
 
-    - name: Tune the OS
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      run: |
-        sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
+    - name: Setup MySQL
+      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
+      uses: ./.github/actions/setup-mysql
+      with:
+        flavor: mysql-8.4
 
     - name: Get base dependencies
       timeout-minutes: 10
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
       run: |
-        sudo apt-get update
-        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd-client etcd-server curl git wget eatmydata
-        
-        sudo service mysql stop
-        sudo service etcd stop
-        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
-        go mod download
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get update
 
-        # install JUnit report formatter
-        go install github.com/vitessio/go-junit-report@HEAD
+        # Install everything else we need, and configure
+        sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget grep
+
+        sudo service etcd stop
 
         wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get install -y gnupg2
@@ -112,19 +98,26 @@ jobs:
 
     # Checkout to the next release of Vitess
     - name: Check out other version's code (${{ steps.output-next-release-ref.outputs.next_release_ref }})
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         ref: ${{ steps.output-next-release-ref.outputs.next_release_ref }}
         persist-credentials: 'false'
 
+    - name: Set up Go
+      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
+      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      with:
+        go-version-file: go.mod
+        cache: false
+
     - name: Get dependencies for the next release
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
       run: |
         go mod download
 
     - name: Building next release's binaries
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
         source build.env
@@ -135,18 +128,25 @@ jobs:
 
     # Checkout to this build's commit
     - name: Check out commit's code
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         persist-credentials: 'false'
 
+    - name: Set up Go
+      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
+      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      with:
+        go-version-file: go.mod
+        cache: false
+
     - name: Get dependencies for this commit
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
       run: |
         go mod download
 
     - name: Building the binaries for this commit
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
         source build.env
@@ -156,7 +156,7 @@ jobs:
 
     # Swap binaries, use next release's VTTablet
     - name: Use next release's VTTablet
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env
 
@@ -168,17 +168,17 @@ jobs:
 
     # Run test with VTTablet at version N+1 and VTBackup at version N
     - name: Run backups tests (vttablet=N+1, vtbackup=N)
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
         set -x
         source build.env
-        eatmydata -- go run test.go -skip-build -docker=false -print-log -follow -tag upgrade_downgrade_backups
+        go run test.go -skip-build -docker=false -print-log -follow -tag upgrade_downgrade_backups
 
     # Swap binaries again, use current version's VTTablet, and next release's VTBackup
     - name: Use current version VTTablet, and other version VTBackup
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env
 
@@ -192,10 +192,10 @@ jobs:
 
     # Run test again with VTTablet at version N, and VTBackup at version N+1
     - name: Run backups tests (vttablet=N, vtbackup=N+1)
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
         set -x
         source build.env
-        eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -tag upgrade_downgrade_backups
+        go run test.go -skip-build -keep-data -docker=false -print-log -follow -tag upgrade_downgrade_backups

@@ -141,5 +141,4 @@ func TestSettingsPoolWithoutTXAndPRS(t *testing.T) {
 
 	// no error should occur and it should go to the right tablet.
 	utils.Exec(t, conn, "select id1, id2 from t1")
-
 }

@@ -48,7 +48,7 @@ Usage:
   vtbackup [flags]
 
 Flags:
-      --allow_first_backup                                          Allow this job to take the first backup of an existing shard.
+      --allow-first-backup                                          Allow this job to take the first backup of an existing shard.
       --alsologtostderr                                             log to standard error as well as files
       --azblob-backup-account-key-file string                       Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path).
       --azblob-backup-account-name string                           Azure Storage Account name for backups; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_NAME will be used.
@@ -131,7 +131,7 @@ Flags:
       --external-compressor string                                  command with arguments to use when compressing a backup.
       --external-compressor-extension string                        extension to use when using an external compressor.
       --external-decompressor string                                command with arguments to use when decompressing a backup.
-      --file_backup_storage_root string                             Root directory for the file backup storage.
+      --file-backup-storage-root string                             Root directory for the file backup storage.
       --gcs-backup-storage-bucket string                            Google Cloud Storage bucket to use for backups.
       --gcs-backup-storage-root string                              Root prefix for all backup-related object names.
       --grpc-auth-static-client-creds string                        When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
@@ -145,12 +145,16 @@ Flags:
       --grpc-max-message-size int                                   Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'. (default 16777216)
       --grpc-prometheus                                             Enable gRPC monitoring with Prometheus.
   -h, --help                                                        help for vtbackup
-      --incremental_from_pos string                                 Position, or name of backup from which to create an incremental backup. Default: empty. If given, then this backup becomes an incremental backup from given position or given backup. If value is 'auto', this backup will be taken from the last successful backup position.
+      --incremental-from-pos string                                 Position, or name of backup from which to create an incremental backup. Default: empty. If given, then this backup becomes an incremental backup from given position or given backup. If value is 'auto', this backup will be taken from the last successful backup position.
+      --init-backup-sql-fail-on-error                               Whether or not to fail the backup if the init SQL queries (--init-backup-sql-queries) fail, which includes if they fail to complete before the specified timeout (--init-backup-sql-timeout)
+      --init-backup-sql-queries strings                             Queries to execute before initializing the backup
+      --init-backup-sql-timeout duration                            At what point should we time out the init SQL query (--init-backup-sql-queries) work and either fail the backup job (--init-backup-sql-fail-on-error) or continue on with the backup
+      --init-backup-tablet-types strings                            Tablet types used for the backup where the init SQL queries (--init-backup-sql-queries) will be executed before initializing the backup
       --init-db-name-override string                                (init parameter) override the name of the db used by vttablet
+      --init-db-sql-file string                                     path to .sql file to run after mysql_install_db
       --init-keyspace string                                        (init parameter) keyspace to use for this tablet
       --init-shard string                                           (init parameter) shard to use for this tablet
-      --init_db_sql_file string                                     path to .sql file to run after mysql_install_db
-      --initial_backup                                              Instead of restoring from backup, initialize an empty database with the provided init_db_sql_file and upload a backup of that for the shard, if the shard has no backups yet. This can be used to seed a brand new shard with an initial, empty backup. If any backups already exist for the shard, this will be considered a successful no-op. This can only be done before the shard exists in topology (i.e. before any tablets are deployed).
+      --initial-backup                                              Instead of restoring from backup, initialize an empty database with the provided init-db-sql-file and upload a backup of that for the shard, if the shard has no backups yet. This can be used to seed a brand new shard with an initial, empty backup. If any backups already exist for the shard, this will be considered a successful no-op. This can only be done before the shard exists in topology (i.e. before any tablets are deployed).
       --keep-alive-timeout duration                                 Wait until timeout elapses after a successful backup before shutting down.
       --keep-logs duration                                          keep logs for this long (using ctime) (zero to keep forever)
       --keep-logs-by-mtime duration                                 keep logs for this long (using mtime) (zero to keep forever)
@@ -161,9 +165,9 @@ Flags:
       --log_dir string                                              If non-empty, write log files in this directory
       --logtostderr                                                 log to standard error instead of files
       --manifest-external-decompressor string                       command with arguments to store in the backup manifest when compressing a backup with an external compression engine.
-      --min_backup_interval duration                                Only take a new backup if it's been at least this long since the most recent backup.
-      --min_retention_count int                                     Always keep at least this many of the most recent backups in this backup storage location, even if some are older than the min_retention_time. This must be at least 1 since a backup must always exist to allow new backups to be made (default 1)
-      --min_retention_time duration                                 Keep each old backup for at least this long before removing it. Set to 0 to disable pruning of old backups.
+      --min-backup-interval duration                                Only take a new backup if it's been at least this long since the most recent backup.
+      --min-retention-count int                                     Always keep at least this many of the most recent backups in this backup storage location, even if some are older than the min_retention_time. This must be at least 1 since a backup must always exist to allow new backups to be made (default 1)
+      --min-retention-time duration                                 Keep each old backup for at least this long before removing it. Set to 0 to disable pruning of old backups.
       --mycnf-bin-log-path string                                   mysql binlog path
       --mycnf-data-dir string                                       data directory for mysql
       --mycnf-error-log-path string                                 mysql error log path
@@ -183,7 +187,7 @@ Flags:
       --mycnf-socket-file string                                    mysql socket file
       --mycnf-tmp-dir string                                        mysql tmp directory
       --mysql-port int                                              MySQL port (default 3306)
-      --mysql-server-version string                                 MySQL server version to advertise. (default "8.0.40-Vitess")
+      --mysql-server-version string                                 MySQL server version to advertise. (default "8.4.6-Vitess")
       --mysql-shell-backup-location string                          location where the backup will be stored
       --mysql-shell-dump-flags string                               flags to pass to mysql shell dump utility. This should be a JSON string and will be saved in the MANIFEST (default "{\"threads\": 4}")
       --mysql-shell-flags string                                    execution flags to pass to mysqlsh binary to be used during dump/load (default "--defaults-file=/dev/null --js -h localhost")
@@ -192,14 +196,14 @@ Flags:
       --mysql-shell-speedup-restore                                 speed up restore by disabling redo logging and double write buffer during the restore process
       --mysql-shutdown-timeout duration                             how long to wait for mysqld shutdown (default 5m0s)
       --mysql-socket string                                         Path to the mysqld socket file
-      --mysql_timeout duration                                      how long to wait for mysqld startup (default 5m0s)
+      --mysql-timeout duration                                      how long to wait for mysqld startup (default 5m0s)
       --opentsdb-uri string                                         URI of opentsdb /api/put method
       --port int                                                    port for the server
       --pprof strings                                               enable profiling
       --pprof-http                                                  enable pprof http endpoints
       --purge-logs-interval duration                                how often try to remove old logs (default 1h0m0s)
       --remote-operation-timeout duration                           time to wait for a remote operation (default 15s)
-      --restart_before_backup                                       Perform a mysqld clean/full restart after applying binlogs, but before taking the backup. Only makes sense to work around xtrabackup bugs.
+      --restart-before-backup                                       Perform a mysqld clean/full restart after applying binlogs, but before taking the backup. Only makes sense to work around xtrabackup bugs.
       --s3-backup-aws-endpoint string                               endpoint of the S3 backend (region must be provided).
       --s3-backup-aws-min-partsize int                              Minimum part size to use, defaults to 5MiB but can be increased due to the dataset size. (default 5242880)
       --s3-backup-aws-region string                                 AWS region to use. (default "us-east-1")

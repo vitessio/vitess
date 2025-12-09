@@ -136,4 +136,53 @@ func TestReplTracker(t *testing.T) {
 		assert.False(t, rt.hw.isOpen)
 		assert.False(t, rt.hr.isOpen)
 	})
+	t.Run("metric reset on promotion", func(t *testing.T) {
+		// Clean up the global metric after test
+		defer replicationLagSeconds.Reset()
+
+		rt := NewReplTracker(env, alias)
+		rt.InitDBConfig(target, mysqld)
+
+		// Start as replica
+		rt.MakeNonPrimary()
+		assert.False(t, rt.isPrimary)
+
+		// Simulate having lag (would normally be set by poller)
+		replicationLagSeconds.Set(42)
+		assert.Equal(t, int64(42), replicationLagSeconds.Get())
+
+		// Promote to primary
+		rt.MakePrimary()
+		assert.True(t, rt.isPrimary)
+
+		// Verify metric is reset
+		assert.Equal(t, int64(0), replicationLagSeconds.Get())
+
+		rt.Close()
+	})
+	t.Run("metric reset on status when primary", func(t *testing.T) {
+		// Clean up the global metric after test
+		defer replicationLagSeconds.Reset()
+
+		rt := NewReplTracker(env, alias)
+		rt.InitDBConfig(target, mysqld)
+
+		// Set as primary
+		rt.MakePrimary()
+		assert.True(t, rt.isPrimary)
+
+		// Simulate metric having a stale value (shouldn't happen, but be defensive)
+		replicationLagSeconds.Set(99)
+		assert.Equal(t, int64(99), replicationLagSeconds.Get())
+
+		// Call Status() which should reset the metric
+		lag, err := rt.Status()
+		assert.NoError(t, err)
+		assert.Equal(t, time.Duration(0), lag)
+
+		// Verify metric is reset
+		assert.Equal(t, int64(0), replicationLagSeconds.Get())
+
+		rt.Close()
+	})
 }

@@ -18,7 +18,7 @@ package mysql
 
 import (
 	"encoding/binary"
-	"fmt"
+	"errors"
 
 	"vitess.io/vitess/go/mysql/replication"
 )
@@ -40,8 +40,8 @@ func newFilePosBinlogEvent(buf []byte) *filePosBinlogEvent {
 	return &filePosBinlogEvent{binlogEvent: binlogEvent(buf)}
 }
 
-func (*filePosBinlogEvent) GTID(BinlogFormat) (replication.GTID, bool, error) {
-	return nil, false, nil
+func (*filePosBinlogEvent) GTID(BinlogFormat) (replication.GTID, bool, int64, int64, error) {
+	return nil, false, 0, 0, nil
 }
 
 // IsSemiSyncAckRequested implements BinlogEvent.IsSemiSyncAckRequested().
@@ -54,7 +54,7 @@ func (*filePosBinlogEvent) IsGTID() bool {
 }
 
 func (*filePosBinlogEvent) PreviousGTIDs(BinlogFormat) (replication.Position, error) {
-	return replication.Position{}, fmt.Errorf("filePos should not provide PREVIOUS_GTIDS_EVENT events")
+	return replication.Position{}, errors.New("filePos should not provide PREVIOUS_GTIDS_EVENT events")
 }
 
 // StripChecksum implements BinlogEvent.StripChecksum().
@@ -224,8 +224,8 @@ func (ev filePosFakeEvent) Format() (BinlogFormat, error) {
 	return BinlogFormat{}, nil
 }
 
-func (ev filePosFakeEvent) GTID(BinlogFormat) (replication.GTID, bool, error) {
-	return nil, false, nil
+func (ev filePosFakeEvent) GTID(BinlogFormat) (replication.GTID, bool, int64, int64, error) {
+	return nil, false, 0, 0, nil
 }
 
 func (ev filePosFakeEvent) Query(BinlogFormat) (Query, error) {
@@ -304,6 +304,6 @@ func (ev filePosGTIDEvent) StripChecksum(f BinlogFormat) (BinlogEvent, []byte, e
 	return ev, nil, nil
 }
 
-func (ev filePosGTIDEvent) GTID(BinlogFormat) (replication.GTID, bool, error) {
-	return ev.gtid, false, nil
+func (ev filePosGTIDEvent) GTID(BinlogFormat) (replication.GTID, bool, int64, int64, error) {
+	return ev.gtid, false, 0, 0, nil
 }

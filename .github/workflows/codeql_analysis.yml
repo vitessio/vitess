@@ -32,9 +32,12 @@ jobs:
           persist-credentials: 'false'
 
       - name: Set up Go
-        uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
           go-version-file: go.mod
+
+      - name: Tune the OS
+        uses: ./.github/actions/tune-os
 
       # Initializes the CodeQL tools for scanning.
       - name: Initialize CodeQL
@@ -48,33 +51,20 @@ jobs:
           # Details on CodeQL's query packs refer to : https://docs.github.com/en/code-security/code-scanning/automatically-scanning-your-code-for-vulnerabilities-and-errors/configuring-code-scanning#using-queries-in-ql-packs
           # queries: security-extended,security-and-quality
 
+      - name: Setup MySQL
+        uses: ./.github/actions/setup-mysql
+        with:
+          flavor: mysql-8.4
+
       - name: Get base dependencies
         timeout-minutes: 10
         run: |
           sudo DEBIAN_FRONTEND="noninteractive" apt-get update
-          # Uninstall any previously installed MySQL first
-          # sudo systemctl stop apparmor
-          sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
-          sudo apt-get -y autoremove
-          sudo apt-get -y autoclean
-          # sudo deluser mysql
-          # sudo rm -rf /var/lib/mysql
-          # sudo rm -rf /etc/mysql
-          # Install mysql80
-          sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
-          wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.33-1_all.deb
-          echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
-          sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
+
           # Install everything else we need, and configure
-          sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget eatmydata
+          sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
           
-          sudo service mysql stop
           sudo service etcd stop
-          sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
-          sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-          sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
           
           # install JUnit report formatter
           go install github.com/vitessio/go-junit-report@HEAD

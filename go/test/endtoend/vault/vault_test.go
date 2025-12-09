@@ -64,7 +64,7 @@ var (
 		// Frequently reload schema, generating some tablet traffic,
 		//   so we can speed up token refresh
 		"--queryserver-config-schema-reload-time", "5s",
-		"--serving_state_grace_period", "1s"}
+		vtutils.GetFlagVariantForTests("--serving-state-grace-period"), "1s"}
 	vaultTabletArg = []string{
 		"--db-credentials-server", "vault",
 		"--db-credentials-vault-timeout", "3s",
@@ -81,18 +81,18 @@ var (
 		"--db-credentials-vault-ttl", "21s"}
 	vaultVTGateArg = []string{
 		vtutils.GetFlagVariantForTests("--mysql-auth-server-impl"), "vault",
-		"--mysql_auth_vault_timeout", "3s",
-		"--mysql_auth_vault_path", "kv/prod/vtgatecreds",
+		"--mysql-auth-vault-timeout", "3s",
+		"--mysql-auth-vault-path", "kv/prod/vtgatecreds",
 		// This is overriden by our env VAULT_ADDR
-		"--mysql_auth_vault_addr", "https://127.0.0.1:8200",
+		"--mysql-auth-vault-addr", "https://127.0.0.1:8200",
 		// This is overriden by our env VAULT_CACERT
-		"--mysql_auth_vault_tls_ca", "/path/to/ca.pem",
+		"--mysql-auth-vault-tls-ca", "/path/to/ca.pem",
 		// This is provided by our env VAULT_ROLEID
-		//"--mysql_auth_vault_roleid", "34644576-9ffc-8bb5-d046-4a0e41194e15",
+		//"--mysql-auth-vault-roleid", "34644576-9ffc-8bb5-d046-4a0e41194e15",
 		// Contents of this file provided by our env VAULT_SECRETID
-		//"--mysql_auth_vault_role_secretidfile", "/path/to/file/containing/secret_id",
+		//"--mysql-auth-vault-role-secretidfile", "/path/to/file/containing/secret_id",
 		// Make this small, so we can get a renewal
-		"--mysql_auth_vault_ttl", "21s"}
+		"--mysql-auth-vault-ttl", "21s"}
 	mysqlctlArg = []string{
 		vtutils.GetFlagVariantForTests("--db-dba-password"), mysqlPassword}
 	vttabletLogFileName = "vttablet.INFO"
@@ -100,7 +100,6 @@ var (
 )
 
 func TestVaultAuth(t *testing.T) {
-
 	// Instantiate Vitess Cluster objects and start topo
 	initializeClusterEarly(t)
 	defer clusterInstance.Teardown()

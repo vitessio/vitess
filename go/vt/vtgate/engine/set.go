@@ -431,7 +431,7 @@ func (svss *SysVarSetAware) Execute(ctx context.Context, vcursor VCursor, env *e
 		if err != nil {
 			return err
 		}
-		vcursor.Session().SetSQLSelectLimit(intValue) // nolint:errcheck
+		vcursor.Session().SetSQLSelectLimit(intValue) //nolint:errcheck
 	case sysvars.TransactionMode.Name:
 		str, err := svss.evalAsString(env, vcursor)
 		if err != nil {
@@ -476,6 +476,12 @@ func (svss *SysVarSetAware) Execute(ctx context.Context, vcursor VCursor, env *e
 			return err
 		}
 		vcursor.Session().SetQueryTimeout(queryTimeout)
+	case sysvars.TransactionTimeout.Name:
+		transactionTimeout, err := svss.evalAsInt64(env, vcursor)
+		if err != nil {
+			return err
+		}
+		vcursor.Session().SetTransactionTimeout(transactionTimeout)
 	case sysvars.SessionEnableSystemSettings.Name:
 		err = svss.setBoolSysVar(ctx, env, vcursor.Session().SetSessionEnableSystemSettings)
 	case sysvars.Charset.Name, sysvars.Names.Name:

@@ -79,7 +79,7 @@ For example:
 // Flags
 var (
 	flavor           = flag.String("flavor", "mysql80", "comma-separated bootstrap flavor(s) to run against (when using Docker mode). Available flavors: all,"+flavors)
-	bootstrapVersion = flag.String("bootstrap-version", "46", "the version identifier to use for the docker images")
+	bootstrapVersion = flag.String("bootstrap-version", "49", "the version identifier to use for the docker images")
 	runCount         = flag.Int("runs", 1, "run each test this many times")
 	retryMax         = flag.Int("retry", 3, "max number of retries, to detect flaky tests")
 	logPass          = flag.Bool("log-pass", false, "log test output even if it passes")
@@ -114,7 +114,7 @@ const (
 	configFileName = "test/config.json"
 
 	// List of flavors for which a bootstrap Docker image is available.
-	flavors = "mysql80,mysql84,percona80"
+	flavors = "mysql80,mysql84,percona80,percona84"
 )
 
 // Config is the overall object serialized in test/config.json.

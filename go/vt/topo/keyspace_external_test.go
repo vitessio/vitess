@@ -87,7 +87,7 @@ func TestServerFindAllShardsInKeyspace(t *testing.T) {
 			// the keyspace to fetch later.
 			require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}))
 
-			shards, err := key.GenerateShardRanges(tt.shards)
+			shards, err := key.GenerateShardRanges(tt.shards, 0)
 			require.NoError(t, err)
 
 			for _, s := range shards {
@@ -133,7 +133,7 @@ func TestServerGetServingShards(t *testing.T) {
 	}{
 		{
 			shards: 0,
-			err:    fmt.Sprintf("%s has no serving shards", keyspace),
+			err:    keyspace + " has no serving shards",
 		},
 		{
 			shards: 2,
@@ -167,7 +167,7 @@ func TestServerGetServingShards(t *testing.T) {
 			require.NoError(t, err)
 			var shardNames []string
 			if tt.shards > 0 {
-				shardNames, err = key.GenerateShardRanges(tt.shards)
+				shardNames, err = key.GenerateShardRanges(tt.shards, 0)
 				require.NoError(t, err)
 				require.Equal(t, tt.shards, len(shardNames))
 				for _, shardName := range shardNames {

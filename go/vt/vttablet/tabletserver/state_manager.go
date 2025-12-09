@@ -124,6 +124,7 @@ type stateManager struct {
 	messager    subComponent
 	ddle        onlineDDLExecutor
 	throttler   lagThrottler
+	qThrottler  queryThrottler
 	tableGC     tableGarbageCollector
 
 	// hcticks starts on initialization and runs forever.
@@ -190,6 +191,11 @@ type (
 	}
 
 	tableGarbageCollector interface {
+		Open() error
+		Close()
+	}
+
+	queryThrottler interface {
 		Open() error
 		Close()
 	}
@@ -468,6 +474,7 @@ func (sm *stateManager) servePrimary() error {
 	sm.te.AcceptReadWrite()
 	sm.messager.Open()
 	sm.throttler.Open()
+	sm.qThrottler.Open()
 	sm.tableGC.Open()
 	sm.ddle.Open()
 	sm.setState(topodatapb.TabletType_PRIMARY, StateServing)
@@ -511,6 +518,7 @@ func (sm *stateManager) serveNonPrimary(wantTabletType topodatapb.TabletType) er
 	sm.rt.MakeNonPrimary()
 	sm.watcher.Open()
 	sm.throttler.Open()
+	sm.qThrottler.Open()
 	sm.setState(wantTabletType, StateServing)
 	return nil
 }
@@ -563,6 +571,8 @@ func (sm *stateManager) unserveCommon() {
 	log.Infof("Finished table garbage collector close. Started lag throttler close")
 	sm.throttler.Close()
 	log.Infof("Finished lag throttler close. Started messager close")
+	sm.qThrottler.Close()
+	log.Infof("Finished query throttler close. Started query throttler close")
 	sm.messager.Close()
 	log.Infof("Finished messager close. Started txEngine close")
 	sm.te.Close()
@@ -696,7 +706,6 @@ func (sm *stateManager) handleTransitionGracePeriod(tabletType topodatapb.Tablet
 	if tabletType == topodatapb.TabletType_PRIMARY &&
 		sm.target.TabletType != topodatapb.TabletType_PRIMARY &&
 		sm.transitionGracePeriod != 0 {
-
 		sm.alsoAllow = []topodatapb.TabletType{sm.target.TabletType}
 		// This is not a perfect solution because multiple back and forth
 		// transitions will launch multiple of these goroutines. But the

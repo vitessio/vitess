@@ -95,7 +95,6 @@ func waitForReplica(t *testing.T, replicaIndex int) int {
 // in between, it makes writes to the database, and takes notes: what data was available in what backup.
 // It then restores each and every one of those backups, in random order, and expects to find the specific data associated with the backup.
 func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase) {
-
 	t.Run(tcase.Name, func(t *testing.T) {
 		// setup cluster for the testing
 		code, err := LaunchCluster(tcase.SetupType, "xbstream", 0, tcase.ComprssDetails)
@@ -312,14 +311,14 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 		t.Run("PITR-2", func(t *testing.T) {
 			testRestores(t)
 		})
-		// Test that we can create a new tablet with --restore_from_backup --restore-to-pos and that it bootstraps
+		// Test that we can create a new tablet with --restore-from-backup --restore-to-pos and that it bootstraps
 		// via PITR and ends up in DRAINED type.
 		t.Run("init tablet PITR", func(t *testing.T) {
 			require.NotEmpty(t, sampleTestedBackupPos)
 
 			var tablet *cluster.Vttablet
 
-			t.Run(fmt.Sprintf("init from backup pos %s", sampleTestedBackupPos), func(t *testing.T) {
+			t.Run("init from backup pos "+sampleTestedBackupPos, func(t *testing.T) {
 				tablet, err = SetupReplica3Tablet([]string{"--restore-to-pos", sampleTestedBackupPos})
 				assert.NoError(t, err)
 			})
@@ -338,7 +337,6 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 
 // ExecTestIncrementalBackupAndRestoreToPos
 func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTestCase) {
-
 	var lastInsertedRowTimestamp time.Time
 	insertRowOnPrimary := func(t *testing.T, hint string) {
 		InsertRowOnPrimary(t, hint)
@@ -573,7 +571,7 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 		t.Run("PITR-2", func(t *testing.T) {
 			testRestores(t)
 		})
-		// Test that we can create a new tablet with --restore_from_backup --restore-to-timestamp and that it bootstraps
+		// Test that we can create a new tablet with --restore-from-backup --restore-to-timestamp and that it bootstraps
 		// via PITR and ends up in DRAINED type.
 		t.Run("init tablet PITR", func(t *testing.T) {
 			require.GreaterOrEqual(t, sampleTestedBackupIndex, 0)
@@ -603,7 +601,6 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 // Specifically, it's designed to test how incremental backups are taken by interleaved replicas, so that they successfully build on
 // one another.
 func ExecTestIncrementalBackupOnTwoTablets(t *testing.T, tcase *PITRTestCase) {
-
 	t.Run(tcase.Name, func(t *testing.T) {
 		// setup cluster for the testing
 		code, err := LaunchCluster(tcase.SetupType, "xbstream", 0, tcase.ComprssDetails)

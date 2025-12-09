@@ -88,7 +88,7 @@ func TestSchemaVersioning(t *testing.T) {
 				`gtid`, //gtid+other => vstream current pos
 				`other`,
 				`gtid`, //gtid+ddl => actual query
-				`type:DDL statement:"create table vitess_version (\n\tid1 int,\n\tid2 int\n)"`},
+				fmt.Sprintf("%v", &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_DDL, Statement: "create table vitess_version (\n\tid1 int,\n\tid2 int\n)"})},
 				getSchemaVersionTableCreationEvents()...),
 				`version`,
 				`gtid`,
@@ -97,38 +97,46 @@ func TestSchemaVersioning(t *testing.T) {
 		{
 			query: "insert into vitess_version values(1, 10)",
 			output: []string{
-				`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int"} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63 column_type:"int"}}`,
-				`type:ROW row_event:{table_name:"vitess_version" row_changes:{after:{lengths:1 lengths:2 values:"110"}}}`,
+				fmt.Sprintf("%v", &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_FIELD, FieldEvent: &binlogdatapb.FieldEvent{TableName: "vitess_version",
+					Fields: []*querypb.Field{{Name: "id1", Type: querypb.Type_INT32, Table: "vitess_version", OrgTable: "vitess_version", Database: "vttest", OrgName: "id1", ColumnLength: 11, Charset: 63, ColumnType: "int"},
+						{Name: "id2", Type: querypb.Type_INT32, Table: "vitess_version", OrgTable: "vitess_version", Database: "vttest", OrgName: "id2", ColumnLength: 11, Charset: 63, ColumnType: "int"}}}}),
+				fmt.Sprintf("%v", &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: "vitess_version", RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Lengths: []int64{1, 2}, Values: []byte("110")}}}}}),
 				`gtid`,
 			},
 		}, {
 			query: "alter table vitess_version add column id3 int",
 			output: []string{
 				`gtid`,
-				`type:DDL statement:"alter table vitess_version add column id3 int"`,
+				fmt.Sprintf("%v", &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_DDL, Statement: "alter table vitess_version add column id3 int"}),
 				`version`,
 				`gtid`,
 			},
 		}, {
 			query: "insert into vitess_version values(2, 20, 200)",
 			output: []string{
-				`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int"} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63 column_type:"int"} fields:{name:"id3" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id3" column_length:11 charset:63 column_type:"int"}}`,
-				`type:ROW row_event:{table_name:"vitess_version" row_changes:{after:{lengths:1 lengths:2 lengths:3 values:"220200"}}}`,
+				fmt.Sprintf("%v", &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_FIELD, FieldEvent: &binlogdatapb.FieldEvent{TableName: "vitess_version",
+					Fields: []*querypb.Field{{Name: "id1", Type: querypb.Type_INT32, Table: "vitess_version", OrgTable: "vitess_version", Database: "vttest", OrgName: "id1", ColumnLength: 11, Charset: 63, ColumnType: "int"},
+						{Name: "id2", Type: querypb.Type_INT32, Table: "vitess_version", OrgTable: "vitess_version", Database: "vttest", OrgName: "id2", ColumnLength: 11, Charset: 63, ColumnType: "int"},
+						{Name: "id3", Type: querypb.Type_INT32, Table: "vitess_version", OrgTable: "vitess_version", Database: "vttest", OrgName: "id3", ColumnLength: 11, Charset: 63, ColumnType: "int"}}}}),
+				fmt.Sprintf("%v", &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: "vitess_version", RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Lengths: []int64{1, 2, 3}, Values: []byte("220200")}}}}}),
 				`gtid`,
 			},
 		}, {
 			query: "alter table vitess_version modify column id3 varbinary(16)",
 			output: []string{
 				`gtid`,
-				`type:DDL statement:"alter table vitess_version modify column id3 varbinary(16)"`,
+				fmt.Sprintf("%v", &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_DDL, Statement: "alter table vitess_version modify column id3 varbinary(16)"}),
 				`version`,
 				`gtid`,
 			},
 		}, {
 			query: "insert into vitess_version values(3, 30, 'TTT')",
 			output: []string{
-				`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int"} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63 column_type:"int"} fields:{name:"id3" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id3" column_length:16 charset:63 column_type:"varbinary(16)"}}`,
-				`type:ROW row_event:{table_name:"vitess_version" row_changes:{after:{lengths:1 lengths:2 lengths:3 values:"330TTT"}}}`,
+				fmt.Sprintf("%v", &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_FIELD, FieldEvent: &binlogdatapb.FieldEvent{TableName: "vitess_version",
+					Fields: []*querypb.Field{{Name: "id1", Type: querypb.Type_INT32, Table: "vitess_version", OrgTable: "vitess_version", Database: "vttest", OrgName: "id1", ColumnLength: 11, Charset: 63, ColumnType: "int"},
+						{Name: "id2", Type: querypb.Type_INT32, Table: "vitess_version", OrgTable: "vitess_version", Database: "vttest", OrgName: "id2", ColumnLength: 11, Charset: 63, ColumnType: "int"},
+						{Name: "id3", Type: querypb.Type_VARBINARY, Table: "vitess_version", OrgTable: "vitess_version", Database: "vttest", OrgName: "id3", ColumnLength: 16, Charset: 63, ColumnType: "varbinary(16)"}}}}),
+				fmt.Sprintf("%v", &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: "vitess_version", RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Lengths: []int64{1, 2, 3}, Values: []byte("330TTT")}}}}}),
 				`gtid`,
 			},
 		},
@@ -365,7 +373,6 @@ func runCases(ctx context.Context, t *testing.T, tests []test, eventCh chan []*b
 				t.Fatalf("Query %s never got inserted into the schema_version table", query)
 			}
 			framework.Server.SchemaEngine().Reload(ctx)
-
 		}
 	}
 }
@@ -452,6 +459,9 @@ func expectLogs(ctx context.Context, t *testing.T, query string, eventCh chan []
 			evs[i].Timestamp = 0
 			evs[i].Keyspace = ""
 			evs[i].Shard = ""
+			evs[i].SequenceNumber = 0
+			evs[i].CommitParent = 0
+			evs[i].EventGtid = ""
 			if evs[i].Type == binlogdatapb.VEventType_FIELD {
 				for j := range evs[i].FieldEvent.Fields {
 					evs[i].FieldEvent.Fields[j].Flags = 0
@@ -475,7 +485,7 @@ func encodeString(in string) string {
 }
 
 func validateSchemaInserted(client *framework.QueryClient, ddl string) bool {
-	qr, _ := client.Execute(fmt.Sprintf("select * from _vt.schema_version where ddl = %s", encodeString(ddl)), nil)
+	qr, _ := client.Execute("select * from _vt.schema_version where ddl = "+encodeString(ddl), nil)
 	if len(qr.Rows) == 1 {
 		log.Infof("Found ddl in schema_version: %s", ddl)
 		return true

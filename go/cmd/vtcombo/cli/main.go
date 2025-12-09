@@ -105,8 +105,8 @@ func init() {
 
 	acl.RegisterFlags(Main.Flags())
 
-	Main.Flags().StringVar(&schemaDir, "schema_dir", schemaDir, "Schema base directory. Should contain one directory per keyspace, with a vschema.json file if necessary.")
-	Main.Flags().BoolVar(&startMysql, "start_mysql", startMysql, "Should vtcombo also start mysql")
+	utils.SetFlagStringVar(Main.Flags(), &schemaDir, "schema-dir", schemaDir, "Schema base directory. Should contain one directory per keyspace, with a vschema.json file if necessary.")
+	utils.SetFlagBoolVar(Main.Flags(), &startMysql, "start-mysql", startMysql, "Should vtcombo also start mysql")
 	utils.SetFlagIntVar(Main.Flags(), &mysqlPort, "mysql-port", mysqlPort, "mysql port")
 	utils.SetFlagBoolVar(Main.Flags(), &externalTopoServer, "external-topo-server", externalTopoServer, "Should vtcombo use an external topology server instead of starting its own in-memory topology server. "+
 		"If true, vtcombo will use the flags defined in topo/server.go to open topo server")
@@ -232,7 +232,6 @@ func run(cmd *cobra.Command, args []string) (err error) {
 		})
 		// We want to ensure we can write to this database
 		mysqld.SetReadOnly(ctx, false)
-
 	} else {
 		dbconfigs.GlobalDBConfigs.InitWithSocket("", env.CollationEnv())
 		mysqld.Mysqld = mysqlctl.NewMysqld(&dbconfigs.GlobalDBConfigs)

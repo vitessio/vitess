@@ -71,7 +71,7 @@ func TestMain(m *testing.M) {
 
 		// Start vtgate
 		clusterInstance.VtGatePlannerVersion = planbuilder.Gen4
-		clusterInstance.VtGateExtraArgs = []string{"--transaction_mode", "SINGLE"}
+		clusterInstance.VtGateExtraArgs = []string{"--transaction-mode", "SINGLE"}
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1
@@ -269,7 +269,6 @@ func TestOnlyMultiShardWriteFail(t *testing.T) {
 		utils.Exec(t, conn, `select * from t1 where txn_id in ("d", "e", "f")`)
 		utils.Exec(t, conn, `commit`)
 	})
-
 }
 
 func setup(t *testing.T) (*mysql.Conn, func()) {

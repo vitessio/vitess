@@ -50,6 +50,17 @@ Flags:
       --config-type string                                          Config file type (omit to infer config type from file extension).
       --count int                                                   Number of queries per thread (default 1000)
       --db string                                                   Database name to use when connecting / running the queries (e.g. @replica, keyspace, keyspace/shard etc)
+      --db-credentials-file string                                  db credentials file; send SIGHUP to reload this file
+      --db-credentials-server string                                db credentials server type ('file' - file implementation; 'vault' - HashiCorp Vault implementation) (default "file")
+      --db-credentials-vault-addr string                            URL to Vault server
+      --db-credentials-vault-path string                            Vault path to credentials JSON blob, e.g.: secret/data/prod/dbcreds
+      --db-credentials-vault-role-mountpoint string                 Vault AppRole mountpoint; can also be passed using VAULT_MOUNTPOINT environment variable (default "approle")
+      --db-credentials-vault-role-secretidfile string               Path to file containing Vault AppRole secret_id; can also be passed using VAULT_SECRETID environment variable
+      --db-credentials-vault-roleid string                          Vault AppRole id; can also be passed using VAULT_ROLEID environment variable
+      --db-credentials-vault-timeout duration                       Timeout for vault API operations (default 10s)
+      --db-credentials-vault-tls-ca string                          Path to CA PEM for validating Vault server certificate
+      --db-credentials-vault-tokenfile string                       Path to file containing Vault auth token; token can also be passed using VAULT_TOKEN environment variable
+      --db-credentials-vault-ttl duration                           How long to cache DB credentials from the Vault server (default 30m0s)
       --deadline duration                                           Maximum duration for the test run (default 5 minutes) (default 5m0s)
       --grpc-auth-static-client-creds string                        When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
       --grpc-compression string                                     Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
@@ -70,7 +81,7 @@ Flags:
       --log_backtrace_at traceLocations                             when logging hits line file:N, emit a stack trace
       --log_dir string                                              If non-empty, write log files in this directory
       --logtostderr                                                 log to standard error instead of files
-      --mysql-server-version string                                 MySQL server version to advertise. (default "8.0.40-Vitess")
+      --mysql-server-version string                                 MySQL server version to advertise. (default "8.4.6-Vitess")
       --port int                                                    VTGate port
       --pprof strings                                               enable profiling
       --pprof-http                                                  enable pprof http endpoints
@@ -87,7 +98,7 @@ Flags:
       --tablet-grpc-key string                                      the key to use to connect
       --tablet-grpc-server-name string                              the server name to use to validate server certificate
       --threads int                                                 Number of parallel threads to run (default 2)
-      --unix_socket string                                          VTGate unix socket
+      --unix-socket string                                          VTGate unix socket
       --user string                                                 Username to connect using mysql (password comes from the db-credentials-file)
       --v Level                                                     log level for V logs
   -v, --version                                                     print binary version
@@ -95,5 +106,6 @@ Flags:
       --vtgate-grpc-ca string                                       the server ca to use to validate servers when connecting
       --vtgate-grpc-cert string                                     the cert to use to connect
       --vtgate-grpc-crl string                                      the server crl to use to validate server certificates when connecting
+      --vtgate-grpc-fail-fast                                       whether to enable grpc fail fast when connecting
       --vtgate-grpc-key string                                      the key to use to connect
       --vtgate-grpc-server-name string                              the server name to use to validate server certificate

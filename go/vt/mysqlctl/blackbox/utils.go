@@ -87,8 +87,8 @@ func AssertLogs(t *testing.T, expectedLogs []string, logger *logutil.MemoryLogge
 
 func SetupCluster(ctx context.Context, t *testing.T, dirs, filesPerDir int) (backupRoot string, keyspace string, shard string, ts *topo.Server) {
 	// Set up local backup directory
-	id := fmt.Sprintf("%d", time.Now().UnixNano())
-	backupRoot = fmt.Sprintf("testdata/builtinbackup_test_%s", id)
+	id := strconv.FormatInt(time.Now().UnixNano(), 10)
+	backupRoot = "testdata/builtinbackup_test_" + id
 	filebackupstorage.FileBackupStorageRoot = backupRoot
 	require.NoError(t, createBackupDir(backupRoot, "innodb", "log", "datadir"))
 	dataDir := path.Join(backupRoot, "datadir")
@@ -187,7 +187,7 @@ func createBackupFiles(root string, fileCount int, ext string) error {
 		if err != nil {
 			return err
 		}
-		if _, err := f.Write([]byte("hello, world!")); err != nil {
+		if _, err := f.WriteString("hello, world!"); err != nil {
 			return err
 		}
 		defer f.Close()

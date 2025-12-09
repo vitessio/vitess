@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/utils"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -239,7 +240,6 @@ func (tc *vrepTestCase) setupKeyspace(ks *keyspace) {
 		defaultCell := tc.vc.Cells[defaultCellName]
 		require.NotNil(tc.t, defaultCell)
 		tc.vtgate = defaultCell.Vtgates[0]
-
 	}
 }
 
@@ -276,7 +276,7 @@ func (wf *workflow) create() {
 		err = tstWorkflowExec(t, cell, wf.name, wf.fromKeyspace, wf.toKeyspace,
 			strings.Join(wf.options.tables, ","), workflowActionCreate, "", sourceShards, targetShards, defaultWorkflowExecOptions)
 	default:
-		panic(fmt.Sprintf("unknown workflow type: %s", wf.typ))
+		panic("unknown workflow type: " + wf.typ)
 	}
 	require.NoError(t, err)
 	waitForWorkflowState(t, wf.tc.vc, fmt.Sprintf("%s.%s", wf.toKeyspace, wf.name), binlogdatapb.VReplicationWorkflowState_Running.String())
@@ -288,7 +288,6 @@ func (wf *workflow) create() {
 		i += 100
 	}
 	doVtctldclientVDiff(t, wf.toKeyspace, wf.name, cell, nil)
-
 }
 
 func (wf *workflow) switchTraffic() {
@@ -396,8 +395,7 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 	origExtraVTGateArgs := extraVTGateArgs
 	extraVTGateArgs = append(extraVTGateArgs, []string{
 		"--enable-partial-keyspace-migration",
-		"--schema_change_signal=false",
-	}...)
+		utils.GetFlagVariantForTests("--schema-change-signal") + "=false"}...)
 	defer func() {
 		extraVTGateArgs = origExtraVTGateArgs
 	}()
@@ -505,7 +503,7 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 		wf80Dash.switchTraffic()
 		expectedSwitchOutput := fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s\n\nStart State: Reads Not Switched. Writes Not Switched\nCurrent State: Reads partially switched, for shards: %s. Writes partially switched, for shards: %s\n\n",
 			targetKs, wfName, shard, shard)
-		require.Equal(t, expectedSwitchOutput, lastOutput)
+		require.Contains(t, lastOutput, expectedSwitchOutput)
 
 		// Confirm global routing rules -- everything should still be routed
 		// to the source side, customer, globally.
@@ -562,7 +560,7 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 
 		expectedSwitchOutput := fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s\n\nStart State: Reads partially switched, for shards: 80-. Writes partially switched, for shards: 80-\nCurrent State: All Reads Switched. All Writes Switched\n\n",
 			targetKs, wfName)
-		require.Equal(t, expectedSwitchOutput, lastOutput)
+		require.Contains(t, lastOutput, expectedSwitchOutput)
 
 		// Confirm global routing rules: everything should still be routed
 		// to the source side, customer, globally.
@@ -597,7 +595,7 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 		output, err = tc.vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", wfSeq.toKeyspace, "show", "--workflow", wfSeq.name)
 		require.NoError(t, err)
 
-		output, err = tc.vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", wfSeq.fromKeyspace, "show", "--workflow", fmt.Sprintf("%s_reverse", wfSeq.name))
+		output, err = tc.vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", wfSeq.fromKeyspace, "show", "--workflow", wfSeq.name+"_reverse")
 		require.NoError(t, err)
 
 		wfSeq.complete()

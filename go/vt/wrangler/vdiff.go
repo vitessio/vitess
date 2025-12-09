@@ -19,6 +19,7 @@ package wrangler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"reflect"
@@ -184,7 +185,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 		}
 		if len(cells) == 0 {
 			// Unreachable
-			return nil, fmt.Errorf("there are no cells in the topo")
+			return nil, errors.New("there are no cells in the topo")
 		}
 		sourceCell = cells[0]
 		targetCell = sourceCell
@@ -1155,7 +1156,7 @@ func (sm *shardStreamer) StreamExecute(_ context.Context, _ engine.VCursor, _ ma
 }
 
 // humanInt formats large integers to a value easier to the eye: 100000=100k 1e12=1b 234000000=234m ...
-func humanInt(n int64) string { // nolint
+func humanInt(n int64) string {
 	var val float64
 	var unit string
 	switch true {

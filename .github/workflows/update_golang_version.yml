@@ -15,7 +15,7 @@ jobs:
       pull-requests: write
     strategy:
       matrix:
-        branch: [ main, release-22.0, release-21.0, release-20.0 ]
+        branch: [ main, release-23.0, release-22.0, release-21.0, release-20.0 ]
     name: Update Golang Version
     runs-on: ubuntu-24.04
     steps:
@@ -25,7 +25,7 @@ jobs:
           ref: ${{ matrix.branch }}
 
       - name: Set up Go
-        uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
           go-version-file: go.mod
 
@@ -66,7 +66,7 @@ jobs:
 
       - name: Create Pull Request
         if: steps.detect-and-update.outputs.create-pr == 'true'
-        uses: peter-evans/create-pull-request@v4
+        uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.CREATE_PR_VITESS_BOT }}
           branch: "upgrade-go-to-${{steps.detect-and-update.outputs.go-version}}-on-${{ matrix.branch }}"

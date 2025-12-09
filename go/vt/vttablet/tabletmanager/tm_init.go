@@ -89,13 +89,14 @@ const (
 
 var (
 	// The following flags initialize the tablet record.
-	tabletHostname     string
-	initKeyspace       string
-	initShard          string
-	initTabletType     string
-	initDbNameOverride string
-	skipBuildInfoTags  = "/.*/"
-	initTags           flagutil.StringMapValue
+	tabletHostname       string
+	initKeyspace         string
+	initShard            string
+	initTabletType       string
+	initTabletTypeLookup bool
+	initDbNameOverride   string
+	skipBuildInfoTags    = "/.*/"
+	initTags             flagutil.StringMapValue
 
 	initTimeout          = 1 * time.Minute
 	mysqlShutdownTimeout = mysqlctl.DefaultShutdownTimeout
@@ -105,7 +106,8 @@ func registerInitFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &tabletHostname, "tablet-hostname", tabletHostname, "if not empty, this hostname will be assumed instead of trying to resolve it")
 	utils.SetFlagStringVar(fs, &initKeyspace, "init-keyspace", initKeyspace, "(init parameter) keyspace to use for this tablet")
 	utils.SetFlagStringVar(fs, &initShard, "init-shard", initShard, "(init parameter) shard to use for this tablet")
-	utils.SetFlagStringVar(fs, &initTabletType, "init-tablet-type", initTabletType, "(init parameter) tablet type to use for this tablet. Valid values are: PRIMARY, REPLICA, SPARE, and RDONLY. The default is REPLICA.")
+	utils.SetFlagStringVar(fs, &initTabletType, "init-tablet-type", initTabletType, "(init parameter) tablet type to use for this tablet. Valid values are: REPLICA, RDONLY, and SPARE. The default is REPLICA.")
+	fs.BoolVar(&initTabletTypeLookup, "init-tablet-type-lookup", initTabletTypeLookup, "(Experimental, init parameter) if enabled, uses tablet alias to look up the tablet type from the existing topology record on restart and use that instead of init-tablet-type. This allows tablets to maintain their changed roles (e.g., RDONLY/DRAINED) across restarts. If disabled or if no topology record exists, init-tablet-type will be used.")
 	utils.SetFlagStringVar(fs, &initDbNameOverride, "init-db-name-override", initDbNameOverride, "(init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>")
 	utils.SetFlagStringVar(fs, &skipBuildInfoTags, "vttablet-skip-buildinfo-tags", skipBuildInfoTags, "comma-separated list of buildinfo tags to skip from merging with --init-tags. each tag is either an exact match or a regular expression of the form '/regexp/'.")
 	utils.SetFlagVar(fs, &initTags, "init-tags", "(init parameter) comma separated list of key:value pairs used to tag the tablet")
@@ -239,7 +241,7 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 	}
 
 	if initKeyspace == "" || initShard == "" {
-		return nil, fmt.Errorf("init-keyspace and init-shard must be specified")
+		return nil, errors.New("init-keyspace and init-shard must be specified")
 	}
 
 	// parse and validate shard name
@@ -298,7 +300,6 @@ func getBuildTags(buildTags map[string]string, skipTagsCSV string) (map[string]s
 	skipTags := strings.Split(skipTagsCSV, ",")
 	skippers := make([]func(string) bool, len(skipTags))
 	for i, skipTag := range skipTags {
-		skipTag := skipTag // copy to preserve iteration scope in the closures below
 		if strings.HasPrefix(skipTag, "/") && strings.HasSuffix(skipTag, "/") && len(skipTag) > 1 {
 			// regexp mode
 			tagRegexp, err := regexp.Compile(skipTag[1 : len(skipTag)-1])
@@ -373,6 +374,42 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	tm.DBConfigs.DBName = topoproto.TabletDbName(tablet)
 	tm.tabletAlias = tablet.Alias
 	tm.tmc = tmclient.NewTabletManagerClient()
+
+	// Check if there's an existing tablet record in topology and use it if flag is enabled
+	if initTabletTypeLookup {
+		ctx, cancel := context.WithTimeout(tm.BatchCtx, initTimeout)
+		defer cancel()
+		existingTablet, err := tm.TopoServer.GetTablet(ctx, tablet.Alias)
+		if err != nil && !topo.IsErrType(err, topo.NoNode) {
+			// Error other than "node doesn't exist" - return it
+			return vterrors.Wrap(err, "--init-tablet-type-lookup is enabled but failed to get existing tablet record from topology, unable to determine tablet type during startup")
+		}
+
+		// If we found an existing tablet record, determine which type to use
+		switch {
+		case err != nil:
+			// No existing tablet record found, use init-tablet-type
+			log.Infof("No existing tablet record found, using init-tablet-type: %v", tablet.Type)
+		case existingTablet.Type == topodatapb.TabletType_PRIMARY:
+			// Don't set to PRIMARY yet - let checkPrimaryShip() validate and decide
+			// checkPrimaryShip() has the logic to verify shard records and determine if this tablet should really be PRIMARY
+			log.Infof("Found existing tablet record with PRIMARY type, setting to REPLICA and allowing checkPrimaryShip() to validate")
+			tablet.Type = topodatapb.TabletType_REPLICA
+		case existingTablet.Type == topodatapb.TabletType_BACKUP || existingTablet.Type == topodatapb.TabletType_RESTORE:
+			// Skip transient operational types (BACKUP, RESTORE)
+			// These are temporary states that should not be preserved across restarts
+			log.Infof("Found existing tablet record with transient type %v, using init-tablet-type %v instead",
+				existingTablet.Type, tablet.Type)
+		default:
+			// Safe to restore the type for non-PRIMARY, non-transient types
+			log.Infof("Found existing tablet record with --init-tablet-type-lookup enabled, using tablet type %v from topology instead of init-tablet-type %v",
+				existingTablet.Type, tablet.Type)
+			tablet.Type = existingTablet.Type
+		}
+	} else {
+		log.Infof("Using init-tablet-type %v", tablet.Type)
+	}
+
 	tm.tmState = newTMState(tm, tablet)
 	tm.actionSema = semaphore.NewWeighted(1)
 	tm._waitForGrantsComplete = make(chan struct{})
@@ -841,10 +878,10 @@ func (tm *TabletManager) initTablet(ctx context.Context) error {
 func (tm *TabletManager) handleRestore(ctx context.Context, config *tabletenv.TabletConfig) (bool, error) {
 	// Sanity check for inconsistent flags
 	if tm.Cnf == nil && restoreFromBackup {
-		return false, fmt.Errorf("you cannot enable --restore_from_backup without a my.cnf file")
+		return false, errors.New("you cannot enable --restore-from-backup without a my.cnf file")
 	}
 	if restoreToTimestampStr != "" && restoreToPos != "" {
-		return false, fmt.Errorf("--restore-to-timestamp and --restore-to-pos are mutually exclusive")
+		return false, errors.New("--restore-to-timestamp and --restore-to-pos are mutually exclusive")
 	}
 
 	// Restore in the background

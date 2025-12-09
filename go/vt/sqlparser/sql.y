@@ -8486,6 +8486,10 @@ charset_value:
   {
     $$ = NewStrLiteral($1)
   }
+| BINARY
+  {
+    $$ = NewStrLiteral("binary")
+  }
 | DEFAULT
   {
     $$ = &Default{}

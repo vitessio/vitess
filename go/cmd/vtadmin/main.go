@@ -36,6 +36,7 @@ import (
 	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
 	"vitess.io/vitess/go/vt/vtadmin/http/debug"
 	"vitess.io/vitess/go/vt/vtadmin/rbac"
+	"vitess.io/vitess/go/vt/vtctl/grpcclientcommon"
 	"vitess.io/vitess/go/vt/vtenv"
 )
 
@@ -160,7 +161,7 @@ func run(cmd *cobra.Command, args []string) {
 	}
 }
 
-func main() {
+func registerFlags() {
 	// Common flags
 	rootCmd.Flags().StringVar(&opts.Addr, "addr", ":15000", "address to serve on")
 	rootCmd.Flags().DurationVar(&opts.CMuxReadTimeout, "lmux-read-timeout", time.Second, "how long to spend connection muxing")
@@ -218,6 +219,14 @@ func main() {
 
 	servenv.RegisterMySQLServerFlags(rootCmd.Flags())
 
+	// Register TLS flags for gRPC connections to vtctld
+	grpcclientcommon.RegisterFlags(rootCmd.Flags())
+}
+
+func main() {
+	registerFlags()
+
+	rootCmd.SetGlobalNormalizationFunc(utils.NormalizeUnderscoresToDashes)
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)
 	}

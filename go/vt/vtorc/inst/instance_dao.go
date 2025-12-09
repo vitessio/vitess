@@ -39,10 +39,8 @@ import (
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vtorc/collection"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
-	"vitess.io/vitess/go/vt/vtorc/metrics/query"
 	"vitess.io/vitess/go/vt/vtorc/util"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -62,8 +60,6 @@ var (
 	readTopologyInstanceCounter = stats.NewCounter("InstanceReadTopology", "Number of times an instance was read from the topology")
 	readInstanceCounter         = stats.NewCounter("InstanceRead", "Number of times an instance was read")
 	currentErrantGTIDCount      = stats.NewGaugesWithSingleLabel("CurrentErrantGTIDCount", "Number of errant GTIDs a vttablet currently has", "TabletAlias")
-	backendWrites               = collection.CreateOrReturnCollection("BACKEND_WRITES")
-	writeBufferLatency          = stopwatch.NewNamedStopwatch()
 )
 
 var (
@@ -72,9 +68,6 @@ var (
 )
 
 func init() {
-	_ = writeBufferLatency.AddMany([]string{"wait", "write"})
-	writeBufferLatency.Start("wait")
-
 	go initializeInstanceDao()
 }
 
@@ -86,15 +79,12 @@ func initializeInstanceDao() {
 
 // ExecDBWriteFunc chooses how to execute a write onto the database: whether synchronously or not
 func ExecDBWriteFunc(f func() error) error {
-	m := query.NewMetric()
-
 	ctx, cancel := context.WithTimeout(context.Background(), maxBackendOpTime)
 	defer cancel()
 
 	if err := instanceWriteSem.Acquire(ctx, 1); err != nil {
 		return err
 	}
-	m.WaitLatency = time.Since(m.Timestamp)
 
 	// catch the exec time and error if there is one
 	defer func() {
@@ -102,15 +92,7 @@ func ExecDBWriteFunc(f func() error) error {
 			if _, ok := r.(runtime.Error); ok {
 				panic(r)
 			}
-
-			if s, ok := r.(string); ok {
-				m.Err = errors.New(s)
-			} else {
-				m.Err = r.(error)
-			}
 		}
-		m.ExecuteLatency = time.Since(m.Timestamp.Add(m.WaitLatency))
-		_ = backendWrites.Append(m)
 		instanceWriteSem.Release(1)
 	}()
 	res := f()
@@ -187,7 +169,7 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 	errorChan := make(chan error, 32)
 
 	if tabletAlias == "" {
-		return instance, fmt.Errorf("ReadTopologyInstance will not act on empty tablet alias")
+		return instance, errors.New("ReadTopologyInstance will not act on empty tablet alias")
 	}
 
 	lastAttemptedCheckTimer := time.AfterFunc(time.Second, func() {
@@ -431,27 +413,32 @@ func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error
 		// This is because vtorc may pool primary and replica at an inconvenient timing,
 		// such that the replica may _seems_ to have more entries than the primary, when in fact
 		// it's just that the primary's probing is stale.
-		redactedExecutedGtidSet, _ := NewOracleGtidSet(instance.ExecutedGtidSet)
+		redactedExecutedGtidSet, _ := replication.ParseMysql56GTIDSet(instance.ExecutedGtidSet)
 		for _, uuid := range strings.Split(instance.AncestryUUID, ",") {
+			uuidSID, err := replication.ParseSID(uuid)
+			if err != nil {
+				continue
+			}
 			if uuid != instance.ServerUUID {
-				redactedExecutedGtidSet.RemoveUUID(uuid)
+				redactedExecutedGtidSet = redactedExecutedGtidSet.RemoveUUID(uuidSID)
 			}
 			if instance.IsCoPrimary && uuid == instance.ServerUUID {
 				// If this is a co-primary, then this server is likely to show its own generated GTIDs as errant,
 				// because its co-primary has not applied them yet
-				redactedExecutedGtidSet.RemoveUUID(uuid)
+				redactedExecutedGtidSet = redactedExecutedGtidSet.RemoveUUID(uuidSID)
 			}
 		}
-		// Avoid querying the database if there's no point:
-		if !redactedExecutedGtidSet.IsEmpty() {
-			redactedPrimaryExecutedGtidSet, _ := NewOracleGtidSet(instance.primaryExecutedGtidSet)
-			redactedPrimaryExecutedGtidSet.RemoveUUID(instance.SourceUUID)
+		if !redactedExecutedGtidSet.Empty() {
+			redactedPrimaryExecutedGtidSet, _ := replication.ParseMysql56GTIDSet(instance.primaryExecutedGtidSet)
+			if sourceSID, err := replication.ParseSID(instance.SourceUUID); err == nil {
+				redactedPrimaryExecutedGtidSet = redactedPrimaryExecutedGtidSet.RemoveUUID(sourceSID)
+			}
 
-			instance.GtidErrant, err = replication.Subtract(redactedExecutedGtidSet.String(), redactedPrimaryExecutedGtidSet.String())
-			if err == nil {
-				var gtidCount int64
-				gtidCount, err = replication.GTIDCount(instance.GtidErrant)
-				currentErrantGTIDCount.Set(instance.InstanceAlias, gtidCount)
+			// find errant gtid positions
+			errantGtidSet := redactedExecutedGtidSet.Difference(redactedPrimaryExecutedGtidSet)
+			if !errantGtidSet.Empty() {
+				instance.GtidErrant = errantGtidSet.String()
+				currentErrantGTIDCount.Set(instance.InstanceAlias, errantGtidSet.Count())
 			}
 		}
 	}
@@ -531,7 +518,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 
 	instance.Hostname = m.GetString("hostname")
 	instance.Port = m.GetInt("port")
-	instance.TabletType = topodatapb.TabletType(m.GetInt("tablet_type"))
+	instance.TabletType = topodatapb.TabletType(m.GetInt32("tablet_type"))
 	instance.Cell = m.GetString("cell")
 	instance.ServerID = m.GetUint("server_id")
 	instance.ServerUUID = m.GetString("server_uuid")

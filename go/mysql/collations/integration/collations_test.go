@@ -45,7 +45,7 @@ var collationEnv *collations.Environment
 
 func init() {
 	// We require MySQL 8.0 collations for the comparisons in the tests
-	collationEnv = collations.NewEnvironment("8.0.40")
+	collationEnv = collations.NewEnvironment("8.4.6")
 }
 
 func getSQLQueries(t *testing.T, testfile string) []string {
@@ -243,7 +243,6 @@ func TestCollationWithSpace(t *testing.T) {
 				localWeight := colldata.Lookup(local).WeightString(nil, []byte(ExampleString), size)
 				remoteWeight := remote.WeightString(nil, []byte(ExampleString), size)
 				require.True(t, bytes.Equal(localWeight, remoteWeight), "mismatch at len=%d\ninput:    %#v\nexpected: %#v\nactual:   %#v", size, []byte(ExampleString), remoteWeight, localWeight)
-
 			}
 		})
 	}

@@ -206,6 +206,10 @@ func (set Mysql56GTIDSet) Last() string {
 // Flavor implements GTIDSet.
 func (Mysql56GTIDSet) Flavor() string { return Mysql56FlavorID }
 
+func (set Mysql56GTIDSet) Empty() bool {
+	return len(set) == 0
+}
+
 // ContainsGTID implements GTIDSet.
 func (set Mysql56GTIDSet) ContainsGTID(gtid GTID) bool {
 	gtid56, ok := gtid.(Mysql56GTID)
@@ -241,7 +245,11 @@ func (set Mysql56GTIDSet) Contains(other GTIDSet) bool {
 	// Check each SID in the other set.
 	for sid, otherIntervals := range other56 {
 		i := 0
-		intervals := set[sid]
+		intervals, ok := set[sid]
+		if !ok {
+			// other56 has a SID that `set` doesn't have.
+			return false
+		}
 		count := len(intervals)
 
 		// Check each interval for this SID in the other set.
@@ -370,6 +378,65 @@ func (set Mysql56GTIDSet) AddGTID(gtid GTID) GTIDSet {
 	return newSet
 }
 
+// AddGTID implements GTIDSet.
+func (set Mysql56GTIDSet) AddGTIDInPlace(gtid GTID) GTIDSet {
+	gtid56, ok := gtid.(Mysql56GTID)
+	if !ok {
+		return set
+	}
+
+	added := false
+	intervals, ok := set[gtid56.Server]
+	if !ok {
+		set[gtid56.Server] = []interval{{start: gtid56.Sequence, end: gtid56.Sequence}}
+		return set
+	}
+
+	var newIntervals []interval
+	// Look for the right place to add this GTID.
+	for _, iv := range intervals {
+		if gtid56.Sequence >= iv.start && gtid56.Sequence <= iv.end {
+			// GTID already exists in the set.
+			return set
+		}
+		if !added {
+			switch {
+			case gtid56.Sequence == iv.start-1:
+				// Expand the interval at the beginning.
+				iv.start = gtid56.Sequence
+				added = true
+			case gtid56.Sequence == iv.end+1:
+				// Expand the interval at the end.
+				iv.end = gtid56.Sequence
+				added = true
+			case gtid56.Sequence < iv.start-1:
+				// The next interval is beyond the new GTID, but it can't
+				// be expanded, so we have to insert a new interval.
+				newIntervals = append(newIntervals, interval{start: gtid56.Sequence, end: gtid56.Sequence})
+				added = true
+			}
+		}
+		// Check if this interval can be merged with the previous one.
+		count := len(newIntervals)
+		if count != 0 && iv.start == newIntervals[count-1].end+1 {
+			// Merge instead of appending.
+			newIntervals[count-1].end = iv.end
+		} else {
+			// Can't be merged.
+			newIntervals = append(newIntervals, iv)
+		}
+		set[gtid56.Server] = newIntervals
+	}
+
+	if !added {
+		// There wasn't any place to insert the new GTID, so just append it
+		// as a new interval.
+		set[gtid56.Server] = append(set[gtid56.Server], interval{start: gtid56.Sequence, end: gtid56.Sequence})
+	}
+
+	return set
+}
+
 // Union implements GTIDSet.Union().
 func (set Mysql56GTIDSet) Union(other GTIDSet) GTIDSet {
 	if set == nil && other != nil {
@@ -437,6 +504,63 @@ func (set Mysql56GTIDSet) Union(other GTIDSet) GTIDSet {
 	}
 
 	return newSet
+}
+
+// Union implements GTIDSet.Union().
+func (set Mysql56GTIDSet) UnionInPlace(other GTIDSet) GTIDSet {
+	if other == nil {
+		return set
+	}
+	mydbOther, ok := other.(Mysql56GTIDSet)
+	if !ok {
+		return set
+	}
+	if set == nil {
+		set = mydbOther
+		return set
+	}
+
+	var nextInterval interval
+	for otherSID, otherIntervals := range mydbOther {
+		intervals, ok := set[otherSID]
+		if !ok {
+			// No matching server id, so we must add it from other set.
+			set[otherSID] = otherIntervals
+			continue
+		}
+
+		// Found server id match between sets, so now we need to add each interval.
+		s1 := intervals
+		s2 := otherIntervals
+
+		var newIntervals = make([]interval, 0, len(s1)+len(s2)) // pre-allocation saves computation time later on
+		for popInterval(&nextInterval, &s1, &s2) {
+			if len(newIntervals) == 0 {
+				newIntervals = append(newIntervals, nextInterval)
+				continue
+			}
+
+			activeInterval := &newIntervals[len(newIntervals)-1]
+
+			if nextInterval.end <= activeInterval.end {
+				// We hit an interval whose start was after or equal to the previous interval's start, but whose
+				// end is prior to the active intervals end. Skip to next interval.
+				continue
+			}
+
+			if nextInterval.start > activeInterval.end+1 {
+				// We found a gap, so we need to start a new interval.
+				newIntervals = append(newIntervals, nextInterval)
+				continue
+			}
+
+			// Extend our active interval.
+			activeInterval.end = nextInterval.end
+		}
+		set[otherSID] = newIntervals
+	}
+
+	return set
 }
 
 // SIDBlock returns the binary encoding of a MySQL 5.6 GTID set as expected
@@ -628,6 +752,16 @@ func (set Mysql56GTIDSet) Difference(other Mysql56GTIDSet) Mysql56GTIDSet {
 	return differenceSet
 }
 
+// Count returns the number of GTIDs in a GTID set.
+func (set Mysql56GTIDSet) Count() (count int64) {
+	for _, intervals := range set {
+		for _, intvl := range intervals {
+			count += intvl.end - intvl.start + 1
+		}
+	}
+	return count
+}
+
 // NewMysql56GTIDSetFromSIDBlock builds a Mysql56GTIDSet from parsing a SID Block.
 // This is the reverse of the SIDBlock method.
 //
@@ -704,35 +838,4 @@ func init() {
 	gtidSetParsers[Mysql56FlavorID] = func(s string) (GTIDSet, error) {
 		return ParseMysql56GTIDSet(s)
 	}
-}
-
-// Subtract takes in two Mysql56GTIDSets as strings and subtracts the second from the first
-// The result is also a string.
-// An error is thrown if parsing is not possible for either GTIDSets
-func Subtract(lhs, rhs string) (string, error) {
-	lhsSet, err := ParseMysql56GTIDSet(lhs)
-	if err != nil {
-		return "", err
-	}
-	rhsSet, err := ParseMysql56GTIDSet(rhs)
-	if err != nil {
-		return "", err
-	}
-	diffSet := lhsSet.Difference(rhsSet)
-	return diffSet.String(), nil
-}
-
-// GTIDCount returns the number of GTIDs in a GTID set.
-func GTIDCount(gtidStr string) (int64, error) {
-	gtidSet, err := ParseMysql56GTIDSet(gtidStr)
-	if err != nil {
-		return 0, err
-	}
-	var count int64
-	for _, intervals := range gtidSet {
-		for _, intvl := range intervals {
-			count = count + intvl.end - intvl.start + 1
-		}
-	}
-	return count, nil
 }

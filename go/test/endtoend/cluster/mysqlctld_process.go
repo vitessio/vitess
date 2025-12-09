@@ -18,10 +18,12 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -53,8 +55,8 @@ func (mysqlctld *MysqlctldProcess) InitDb() (err error) {
 	args := []string{
 		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--log_dir", mysqlctld.LogDirectory,
-		"--tablet_uid", fmt.Sprintf("%d", mysqlctld.TabletUID),
-		"--mysql_port", fmt.Sprintf("%d", mysqlctld.MySQLPort),
+		"--tablet_uid", strconv.Itoa(mysqlctld.TabletUID),
+		"--mysql_port", strconv.Itoa(mysqlctld.MySQLPort),
 		"--init_db_sql_file", mysqlctld.InitDBFile,
 	}
 	if mysqlctld.SocketFile != "" {
@@ -70,16 +72,17 @@ func (mysqlctld *MysqlctldProcess) InitDb() (err error) {
 // Start starts the mysqlctld and returns the error.
 func (mysqlctld *MysqlctldProcess) Start() error {
 	if mysqlctld.process != nil {
-		return fmt.Errorf("process is already running")
+		return errors.New("process is already running")
 	}
 	_ = createDirectory(mysqlctld.LogDirectory, 0700)
 	args := []string{
 		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--log_dir", mysqlctld.LogDirectory,
-		"--tablet_uid", fmt.Sprintf("%d", mysqlctld.TabletUID),
-		"--mysql_port", fmt.Sprintf("%d", mysqlctld.MySQLPort),
+		"--tablet_uid", strconv.Itoa(mysqlctld.TabletUID),
+		"--mysql_port", strconv.Itoa(mysqlctld.MySQLPort),
 	}
 	if mysqlctld.SocketFile != "" {
+		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		args = append(args, "--socket_file", mysqlctld.SocketFile)
 	}
 	tempProcess := exec.Command(
@@ -91,6 +94,7 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 
 	if mysqlctld.InitMysql {
 		tempProcess.Args = append(tempProcess.Args,
+			//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 			"--init_db_sql_file", mysqlctld.InitDBFile)
 	}
 
@@ -151,7 +155,6 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 	}
 
 	return fmt.Errorf("process '%s' timed out after 60s (err: %s)", mysqlctld.Name, mysqlctld.Stop())
-
 }
 
 // Stop executes mysqlctld command to stop mysql instance
@@ -163,7 +166,7 @@ func (mysqlctld *MysqlctldProcess) Stop() error {
 	tmpProcess := exec.Command(
 		"mysqlctl",
 		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--tablet_uid", fmt.Sprintf("%d", mysqlctld.TabletUID),
+		"--tablet_uid", strconv.Itoa(mysqlctld.TabletUID),
 	)
 	tmpProcess.Args = append(tmpProcess.Args, mysqlctld.ExtraArgs...)
 	tmpProcess.Args = append(tmpProcess.Args, "shutdown")

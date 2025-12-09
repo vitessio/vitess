@@ -34,6 +34,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -76,8 +77,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// List of users authorized to execute vschema ddl operations
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--schema_change_signal")
-		// Start keyspace
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, vtutils.GetFlagVariantForTests("--schema-change-signal")) // Start keyspace
 		keyspace := &cluster.Keyspace{
 			Name:      keyspaceName,
 			SchemaSQL: sqlSchema,
@@ -135,7 +135,6 @@ func TestVSchemaTrackerInit(t *testing.T) {
 // properly handles primary tablet restarts -- meaning that we maintain
 // the exact same vschema state as before the restart.
 func TestVSchemaTrackerKeyspaceReInit(t *testing.T) {
-
 	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
 
 	// get the vschema prior to the restarts

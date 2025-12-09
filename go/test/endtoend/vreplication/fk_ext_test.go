@@ -91,7 +91,7 @@ func TestFKExt(t *testing.T) {
 		"--vstream_packet_size=256",
 		"--queryserver-config-schema-change-signal",
 		parallelInsertWorkers)
-	extraVTGateArgs = append(extraVTGateArgs, "--schema_change_signal=true", "--planner-version", "Gen4")
+	extraVTGateArgs = append(extraVTGateArgs, utils.GetFlagVariantForTests("--schema-change-signal")+"=true", "--planner-version", "Gen4")
 	defer func() { extraVTTabletArgs = nil }()
 	initFKExtConfig(t)
 
@@ -178,7 +178,6 @@ func TestFKExt(t *testing.T) {
 	t.Run("Validate materialize counts at end of test", func(t *testing.T) {
 		validateMaterializeRowCounts(t)
 	})
-
 }
 
 // checkRowCounts checks that the parent and child tables in the source and target shards have the same number of rows.
@@ -193,7 +192,7 @@ func checkRowCounts(t *testing.T, keyspace string, sourceShards, targetShards []
 	}
 
 	getCount := func(tab *cluster.VttabletProcess, table string) (int64, error) {
-		qr, err := tab.QueryTablet(fmt.Sprintf("select count(*) from %s", table), keyspace, true)
+		qr, err := tab.QueryTablet("select count(*) from "+table, keyspace, true)
 		if err != nil {
 			return 0, err
 		}

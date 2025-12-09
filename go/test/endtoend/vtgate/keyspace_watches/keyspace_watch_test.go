@@ -96,7 +96,7 @@ func createCluster(extraVTGateArgs []string) (*cluster.LocalProcessCluster, int)
 	}
 
 	vtGateArgs := []string{
-		"--mysql_auth_server_static_file", clusterInstance.TmpDirectory + "/" + mysqlAuthServerStatic,
+		"--mysql-auth-server-static-file", clusterInstance.TmpDirectory + "/" + mysqlAuthServerStatic,
 		utils.GetFlagVariantForTests("--keyspaces-to-watch"), keyspaceUnshardedName,
 	}
 
@@ -117,7 +117,6 @@ func createCluster(extraVTGateArgs []string) (*cluster.LocalProcessCluster, int)
 }
 
 func TestRoutingWithKeyspacesToWatch(t *testing.T) {
-
 	clusterInstance, exitCode := createCluster(nil)
 	defer clusterInstance.Teardown()
 
@@ -140,9 +139,8 @@ func TestRoutingWithKeyspacesToWatch(t *testing.T) {
 }
 
 func TestVSchemaDDLWithKeyspacesToWatch(t *testing.T) {
-
 	extraVTGateArgs := []string{
-		"--vschema_ddl_authorized_users", "%",
+		"--vschema-ddl-authorized-users", "%",
 	}
 	clusterInstance, exitCode := createCluster(extraVTGateArgs)
 	defer clusterInstance.Teardown()

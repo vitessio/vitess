@@ -89,7 +89,7 @@ create table customer(cid int, name varbinary(128), meta json default null, typ 
 	for _, shard := range keyspaceTgt.Shards {
 		for _, tablet := range shard.Tablets {
 			t.Logf("catchup shard=%v, tablet=%v", shard.Name, tablet.Name)
-			tablet.Vttablet.WaitForVReplicationToCatchup(t, "stress_workflow", fmt.Sprintf("vt_%s", tablet.Vttablet.Keyspace), sidecarDBName, 5*time.Minute)
+			tablet.Vttablet.WaitForVReplicationToCatchup(t, "stress_workflow", "vt_"+tablet.Vttablet.Keyspace, sidecarDBName, 5*time.Minute)
 		}
 	}
 

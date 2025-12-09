@@ -1,7 +1,12 @@
 name: Query Serving (Queries) - Upgrade Downgrade Testing
 on:
   push:
+    branches:
+      - "main"
+      - "release-[0-9]+.[0-9]"
+    tags: '**'
   pull_request:
+    branches: '**'
 
 concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing Query Serving (Queries)')
@@ -27,18 +32,7 @@ jobs:
           exit 1
         fi
 
-    - name: Check if workflow needs to be skipped
-      id: skip-workflow
-      run: |
-        skip='false'
-        if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
-          skip='true'
-        fi
-        echo Skip ${skip}
-        echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
-
     - name: Check out commit's code
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         fetch-depth: 0
@@ -46,14 +40,12 @@ jobs:
 
     - name: Set output with latest release branch
       id: output-previous-release-ref
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       run: |
         previous_release_ref=$(./tools/get_previous_release.sh ${{github.base_ref}} ${{github.ref}})
         echo $previous_release_ref
         echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
 
     - name: Check for changes in relevant files
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: dorny/paths-filter@ebc4d7e9ebcb0b1eb21480bb8f43113e996ac77a # v3.0.1
       id: changes
       with:
@@ -74,61 +66,39 @@ jobs:
             - 'bootstrap.sh'
             - '.github/workflows/upgrade_downgrade_test_query_serving_queries.yml'
 
-    - name: Set up Go
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
-      with:
-        go-version: 1.24.4
+    - name: Tune the OS
+      if: steps.changes.outputs.end_to_end == 'true'
+      uses: ./.github/actions/tune-os
 
     - name: Set up python
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
 
-    - name: Tune the OS
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      run: |
-        sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
+    - name: Setup MySQL
+      if: steps.changes.outputs.end_to_end == 'true'
+      uses: ./.github/actions/setup-mysql
+      with:
+        flavor: mysql-8.4
 
     - name: Get base dependencies
       timeout-minutes: 10
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         sudo DEBIAN_FRONTEND="noninteractive" apt-get update
-        # Uninstall any previously installed MySQL first
-        # sudo systemctl stop apparmor
-        sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
-        sudo apt-get -y autoremove
-        sudo apt-get -y autoclean
-        # sudo deluser mysql
-        sudo rm -rf /var/lib/mysql
-        sudo rm -rf /etc/mysql
-        # Install mysql80
-        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.33-1_all.deb
-        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
-        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
-        sudo apt-get update
-        sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
-        # Install everything else we need, and configure
-        sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget eatmydata
-        
-        sudo service mysql stop
-        sudo service etcd stop
-        sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
-        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
 
-        # install JUnit report formatter
-        go install github.com/vitessio/go-junit-report@HEAD
+        # Install everything else we need, and configure
+        sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
+        
+        sudo service etcd stop
 
     # Build current commit's binaries
     - name: Get dependencies for this commit
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         go mod download
 
     - name: Building the binaries for this commit
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
         source build.env
@@ -139,19 +109,26 @@ jobs:
 
     # Checkout to the last release of Vitess
     - name: Check out other version's code (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         ref: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
         persist-credentials: 'false'
 
+    - name: Set up Go
+      if: steps.changes.outputs.end_to_end == 'true'
+      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      with:
+        go-version-file: go.mod
+        cache: false
+
     - name: Get dependencies for the last release
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         go mod download
 
     - name: Building last release's binaries
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
         source build.env
@@ -161,14 +138,14 @@ jobs:
         rm -Rf bin/*
 
     - name: Convert ErrorContains checks to Error checks
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         find ./go/test/endtoend -name '*.go' -exec sed -i 's/ErrorContains/Error/g' {} +
         find ./go/test/endtoend -name '*.go' -exec sed -i 's/EqualError/Error/g' {} +
 
     # Swap the binaries in the bin. Use vtgate version n-1 and keep vttablet at version n
     - name: Use last release's VTGate
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env
 
@@ -179,17 +156,17 @@ jobs:
 
     # Running a test with vtgate at version n-1 and vttablet/vtctld at version n
     - name: Run query serving tests (vtgate=N-1, vttablet=N, vtctld=N)
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
 
         source build.env
-        eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_query_serving_queries
+        go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_query_serving_queries
 
     # Swap the binaries again. This time, vtgate will be at version n, and vttablet/vtctld will be at version n-1
     - name: Use current version VTGate, and other version VTTablet/VTctld
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env
 
@@ -209,10 +186,10 @@ jobs:
 
     # Running a test with vtgate at version n and vttablet/vtctld at version n-1
     - name: Run query serving tests (vtgate=N, vttablet=N-1, vtctld=N-1)
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
 
         source build.env
-        eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_query_serving_queries
+        go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_query_serving_queries

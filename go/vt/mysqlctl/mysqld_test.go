@@ -39,7 +39,6 @@ type testcase struct {
 }
 
 func TestParseVersionString(t *testing.T) {
-
 	var testcases = []testcase{
 
 		{
@@ -115,7 +114,6 @@ func TestParseVersionString(t *testing.T) {
 			t.Errorf("ParseVersionString failed for: %#v, Got: %#v, %#v Expected: %#v, %#v", testcase.versionString, v, f, testcase.version, testcase.flavor)
 		}
 	}
-
 }
 
 func TestRegexps(t *testing.T) {
@@ -140,7 +138,6 @@ func TestRegexps(t *testing.T) {
 		submatch := binlogEntryCommittedTimestampRegex.FindStringSubmatch(`#230608 13:14:31 server id 484362839  end_log_pos 322 CRC32 0x651af842 	Query	thread_id=62	exec_time=0	error_code=0`)
 		assert.Empty(t, submatch)
 	}
-
 }
 
 func TestParseBinlogEntryTimestamp(t *testing.T) {
@@ -349,4 +346,13 @@ func TestGetMycnfTemplateMySQL9(t *testing.T) {
 	// Should use MySQL 9.0 config for MySQL 9.x
 	assert.Contains(t, template, "# This file is auto-included when MySQL 9.0 or later is detected.")
 	assert.NotContains(t, template, "mysql_native_password = ON")
+}
+
+func TestBuildLdPathsTZ(t *testing.T) {
+	os.Setenv("TZ", "Europe/Berlin")
+	defer os.Unsetenv("TZ")
+
+	env, err := buildLdPaths()
+	assert.NoError(t, err)
+	assert.Contains(t, env, "TZ=Europe/Berlin")
 }

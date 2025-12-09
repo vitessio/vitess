@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"sort"
 	"strings"
@@ -84,6 +85,7 @@ var tabletTypeSuffixes = []string{primaryTabletSuffix, replicaTabletSuffix, rdon
 type tableCopyProgress struct {
 	TargetRowCount, TargetTableSize int64
 	SourceRowCount, SourceTableSize int64
+	Phase                           vtctldatapb.TableCopyPhase
 }
 
 // copyProgress stores the tableCopyProgress for all tables still being copied
@@ -801,7 +803,7 @@ func (s *Server) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSet
 	for _, table := range ms.ReferenceTables {
 		ms.TableSettings = append(ms.TableSettings, &vtctldatapb.TableMaterializeSettings{
 			TargetTable:      table,
-			SourceExpression: fmt.Sprintf("select * from %s", table),
+			SourceExpression: "select * from " + table,
 			CreateDdl:        createDDLAsCopyDropForeignKeys,
 		})
 	}
@@ -883,7 +885,7 @@ func (s *Server) WorkflowAddTables(ctx context.Context, req *vtctldatapb.Workflo
 		// values corresponding to a reference table.
 		for _, ts := range req.TableSettings {
 			if ts.SourceExpression == "" {
-				ts.SourceExpression = fmt.Sprintf("select * from %s", ts.TargetTable)
+				ts.SourceExpression = "select * from " + ts.TargetTable
 			}
 			if ts.CreateDdl == "" {
 				ts.CreateDdl = createDDLAsCopyDropForeignKeys
@@ -1650,11 +1652,11 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 func (s *Server) WorkflowStatus(ctx context.Context, req *vtctldatapb.WorkflowStatusRequest) (*vtctldatapb.WorkflowStatusResponse, error) {
 	ts, state, err := s.getWorkflowState(ctx, req.Keyspace, req.Workflow)
 	if err != nil {
-		return nil, err
+		return nil, vterrors.Wrapf(err, "failed to get workflow state for %s.%s workflow", req.Keyspace, req.Workflow)
 	}
-	copyProgress, err := s.GetCopyProgress(ctx, ts, state)
+	copyProgress, err := s.getCopyProgress(ctx, ts)
 	if err != nil {
-		return nil, err
+		return nil, vterrors.Wrapf(err, "failed to get copy progress for %s.%s workflow", req.Keyspace, req.Workflow)
 	}
 	resp := &vtctldatapb.WorkflowStatusResponse{
 		TrafficState: state.String(),
@@ -1674,9 +1676,13 @@ func (s *Server) WorkflowStatus(ctx context.Context, req *vtctldatapb.WorkflowSt
 			progress = *(*copyProgress)[table]
 			if progress.SourceRowCount > 0 {
 				rowCountPct = float32(100.0 * float64(progress.TargetRowCount) / float64(progress.SourceRowCount))
+			} else {
+				rowCountPct = 100.0
 			}
 			if progress.SourceTableSize > 0 {
 				tableSizePct = float32(100.0 * float64(progress.TargetTableSize) / float64(progress.SourceTableSize))
+			} else {
+				tableSizePct = 100.0
 			}
 			resp.TableCopyState[table].RowsCopied = progress.TargetRowCount
 			resp.TableCopyState[table].RowsTotal = progress.SourceRowCount
@@ -1684,6 +1690,7 @@ func (s *Server) WorkflowStatus(ctx context.Context, req *vtctldatapb.WorkflowSt
 			resp.TableCopyState[table].BytesCopied = progress.TargetTableSize
 			resp.TableCopyState[table].BytesTotal = progress.SourceTableSize
 			resp.TableCopyState[table].BytesPercentage = tableSizePct
+			resp.TableCopyState[table].Phase = progress.Phase
 		}
 	}
 
@@ -1746,8 +1753,9 @@ func (s *Server) WorkflowStatus(ctx context.Context, req *vtctldatapb.WorkflowSt
 	return resp, nil
 }
 
-// GetCopyProgress returns the progress of all tables being copied in the workflow.
-func (s *Server) GetCopyProgress(ctx context.Context, ts *trafficSwitcher, state *State) (*copyProgress, error) {
+// getCopyProgress returns the copy progress of all tables in the workflow if the copy
+// phase is still running.
+func (s *Server) getCopyProgress(ctx context.Context, ts *trafficSwitcher) (*copyProgress, error) {
 	if ts.workflowType == binlogdatapb.VReplicationWorkflowType_Migrate {
 		// The logic below expects the source primaries to be in the same cluster as the target.
 		// For now we don't report progress for Migrate workflows.
@@ -1755,62 +1763,59 @@ func (s *Server) GetCopyProgress(ctx context.Context, ts *trafficSwitcher, state
 	}
 	getTablesQuery := "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = %d"
 	getRowCountQuery := "select table_name, table_rows, data_length from information_schema.tables where table_schema = %s and table_name in (%s)"
-	tables := make(map[string]bool)
-	const MaxRows = 1000
-	sourcePrimaries := make(map[*topodatapb.TabletAlias]bool)
-	for _, target := range ts.targets {
-		for id, bls := range target.Sources {
+	var inProgressTables = make(map[string]struct{})
+	var mu sync.Mutex
+	err := ts.ForAllTargets(func(target *MigrationTarget) error {
+		for id := range target.Sources {
 			query := fmt.Sprintf(getTablesQuery, id)
-			p3qr, err := s.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, true, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+			primary := target.GetPrimary()
+			if primary == nil {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "target shard %s currently has no PRIMARY tablet", target.GetShard())
+			}
+			p3qr, err := s.tmc.ExecuteFetchAsDba(ctx, primary.Tablet, true, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
 				Query:   []byte(query),
-				MaxRows: MaxRows,
+				MaxRows: math.MaxUint64, // We can't pass -1 for no limit
 			})
 			if err != nil {
-				return nil, err
+				return err
 			}
 			if len(p3qr.Rows) < 1 {
 				continue
 			}
 			qr := sqltypes.Proto3ToResult(p3qr)
 			for i := 0; i < len(p3qr.Rows); i++ {
-				tables[qr.Rows[i][0].ToString()] = true
-			}
-			sourcesi, err := s.ts.GetShard(ctx, bls.Keyspace, bls.Shard)
-			if err != nil {
-				return nil, err
-			}
-			found := false
-			for existingSource := range sourcePrimaries {
-				if existingSource.Uid == sourcesi.PrimaryAlias.Uid {
-					found = true
-				}
-			}
-			if !found {
-				sourcePrimaries[sourcesi.PrimaryAlias] = true
+				func() {
+					mu.Lock()
+					defer mu.Unlock()
+					inProgressTables[qr.Rows[i][0].ToString()] = struct{}{}
+				}()
 			}
 		}
+		return nil
+	})
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to get information on tables still being copied")
 	}
-	if len(tables) == 0 {
+	if len(inProgressTables) == 0 { // We're done with the copy phase
 		return nil, nil
 	}
-	var tableList []string
-	targetRowCounts := make(map[string]int64)
-	sourceRowCounts := make(map[string]int64)
-	targetTableSizes := make(map[string]int64)
-	sourceTableSizes := make(map[string]int64)
+	// We want to include all tables in the workflow, even those that we've finished
+	// the copy phase for.
+	workflowTables := ts.Tables()
+	tableList := make([]string, len(workflowTables))
+	targetRowCounts := make(map[string]int64, len(workflowTables))
+	sourceRowCounts := make(map[string]int64, len(workflowTables))
+	targetTableSizes := make(map[string]int64, len(workflowTables))
+	sourceTableSizes := make(map[string]int64, len(workflowTables))
 
-	for table := range tables {
-		tableList = append(tableList, encodeString(table))
-		targetRowCounts[table] = 0
-		sourceRowCounts[table] = 0
-		targetTableSizes[table] = 0
-		sourceTableSizes[table] = 0
+	for i := range workflowTables {
+		tableList[i] = encodeString(workflowTables[i])
 	}
 
 	getTableMetrics := func(tablet *topodatapb.Tablet, query string, rowCounts *map[string]int64, tableSizes *map[string]int64) error {
 		p3qr, err := s.tmc.ExecuteFetchAsDba(ctx, tablet, true, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
 			Query:   []byte(query),
-			MaxRows: uint64(len(tables)),
+			MaxRows: uint64(len(tableList)),
 		})
 		if err != nil {
 			return err
@@ -1826,8 +1831,12 @@ func (s *Server) GetCopyProgress(ctx context.Context, ts *trafficSwitcher, state
 			if err != nil {
 				return err
 			}
-			(*rowCounts)[table] += rowCount
-			(*tableSizes)[table] += tableSize
+			func() {
+				mu.Lock()
+				defer mu.Unlock()
+				(*rowCounts)[table] += rowCount
+				(*tableSizes)[table] += tableSize
+			}()
 		}
 		return nil
 	}
@@ -1837,7 +1846,7 @@ func (s *Server) GetCopyProgress(ctx context.Context, ts *trafficSwitcher, state
 		break
 	}
 	if sourceDbName == "" {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no sources found for workflow %s.%s", state.TargetKeyspace, state.Workflow)
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no source database found")
 	}
 	targetDbName := ""
 	for _, tsTarget := range ts.targets {
@@ -1845,37 +1854,50 @@ func (s *Server) GetCopyProgress(ctx context.Context, ts *trafficSwitcher, state
 		break
 	}
 	if sourceDbName == "" || targetDbName == "" {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "workflow %s.%s is incorrectly configured", state.TargetKeyspace, state.Workflow)
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "workflow does not have a source and target database name set")
 	}
-	sort.Strings(tableList) // sort list for repeatability for mocking in tests
+	sort.Strings(tableList) // Sort list for repeatability and usability
 	tablesStr := strings.Join(tableList, ",")
 	query := fmt.Sprintf(getRowCountQuery, encodeString(targetDbName), tablesStr)
-	for _, target := range ts.targets {
-		tablet := target.GetPrimary().Tablet
-		if err := getTableMetrics(tablet, query, &targetRowCounts, &targetTableSizes); err != nil {
-			return nil, err
+	err = ts.ForAllTargets(func(target *MigrationTarget) error {
+		primary := target.GetPrimary()
+		if primary == nil {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "target shard %s currently has no PRIMARY tablet", target.GetShard())
 		}
+		return getTableMetrics(primary.Tablet, query, &targetRowCounts, &targetTableSizes)
+	})
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to get table metrics on target shards")
 	}
 
 	query = fmt.Sprintf(getRowCountQuery, encodeString(sourceDbName), tablesStr)
-	for source := range sourcePrimaries {
-		ti, err := s.ts.GetTablet(ctx, source)
-		tablet := ti.Tablet
-		if err != nil {
-			return nil, err
+	err = ts.ForAllSources(func(source *MigrationSource) error {
+		primary := source.GetPrimary()
+		if primary == nil {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "source shard %s currently has no PRIMARY tablet", source.GetShard())
 		}
-		if err := getTableMetrics(tablet, query, &sourceRowCounts, &sourceTableSizes); err != nil {
-			return nil, err
-		}
+		return getTableMetrics(source.GetPrimary().Tablet, query, &sourceRowCounts, &sourceTableSizes)
+	})
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to get table metrics on source shards")
 	}
 
 	copyProgress := copyProgress{}
 	for table, rowCount := range targetRowCounts {
+		var phase vtctldatapb.TableCopyPhase
+		if _, ok := inProgressTables[table]; !ok {
+			phase = vtctldatapb.TableCopyPhase_COMPLETE
+		} else if rowCount > 0 {
+			phase = vtctldatapb.TableCopyPhase_IN_PROGRESS
+		} else {
+			phase = vtctldatapb.TableCopyPhase_NOT_STARTED
+		}
 		copyProgress[table] = &tableCopyProgress{
 			TargetRowCount:  rowCount,
 			TargetTableSize: targetTableSizes[table],
 			SourceRowCount:  sourceRowCounts[table],
 			SourceTableSize: sourceTableSizes[table],
+			Phase:           phase,
 		}
 	}
 	return &copyProgress, nil
@@ -3042,8 +3064,8 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 
 	// Consistently handle errors by logging and returning them.
 	handleError := func(message string, err error) (int64, *[]string, error) {
+		ts.Logger().Errorf("%s: %v", message, err)
 		werr := vterrors.Wrap(err, message)
-		ts.Logger().Error(werr)
 		return 0, nil, werr
 	}
 
@@ -3278,28 +3300,48 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 	if err := confirmKeyspaceLocksHeld(); err != nil {
 		return handleError("locks were lost", err)
 	}
+	ts.logger.Infof("Creating journals for workflow %s.%s", ts.targetKeyspace, ts.workflow)
 	if err := sw.createJournals(ctx, sourceWorkflows); err != nil {
 		return handleError("failed to create the journal", err)
 	}
+	ts.logger.Infof("Created journals for workflow %s.%s", ts.targetKeyspace, ts.workflow)
+
+	ts.logger.Infof("Allowing writes on target for workflow %s.%s", ts.targetKeyspace, ts.workflow)
 	if err := sw.allowTargetWrites(ctx); err != nil {
 		return handleError(fmt.Sprintf("failed to allow writes in the %s keyspace", ts.TargetKeyspaceName()), err)
 	}
+	ts.logger.Infof("Allowed writes on target for workflow %s.%s", ts.targetKeyspace, ts.workflow)
+
+	ts.logger.Infof("Updating routing rules for workflow %s.%s", ts.targetKeyspace, ts.workflow)
 	if err := sw.changeRouting(ctx); err != nil {
 		return handleError("failed to update the routing rules", err)
 	}
+	ts.logger.Infof("Updated routing rules for workflow %s.%s", ts.targetKeyspace, ts.workflow)
+
+	ts.logger.Infof("Finalizing stream migrations for workflow %s.%s", ts.targetKeyspace, ts.workflow)
 	if err := sw.streamMigraterfinalize(ctx, ts, sourceWorkflows); err != nil {
 		return handleError("failed to finalize the traffic switch", err)
 	}
+	ts.logger.Infof("Finalized stream migrations for workflow %s.%s", ts.targetKeyspace, ts.workflow)
+
 	if req.EnableReverseReplication {
+		ts.logger.Infof("Starting reverse workflow %s on keyspace %s", ts.reverseWorkflow, ts.sourceKeyspace)
 		if err := sw.startReverseVReplication(ctx); err != nil {
 			return handleError("failed to start the reverse workflow", err)
 		}
+		ts.logger.Infof("Started reverse workflow %s on keyspace %s", ts.reverseWorkflow, ts.sourceKeyspace)
+	} else {
+		ts.logger.Infof("Reverse replication not requested, not creating reverse workflow %s on keyspace %s",
+			ts.reverseWorkflow, ts.sourceKeyspace)
 	}
 
+	ts.logger.Infof("Marking workflow frozen %s.%s", ts.targetKeyspace, ts.workflow)
 	if err := sw.freezeTargetVReplication(ctx); err != nil {
 		return handleError(fmt.Sprintf("failed to freeze the workflow in the %s keyspace", ts.TargetKeyspaceName()), err)
 	}
+	ts.logger.Infof("Marked workflow frozen %s.%s", ts.targetKeyspace, ts.workflow)
 
+	ts.logger.Infof("Switch writes completed for workflow %s.%s", ts.targetKeyspace, ts.workflow)
 	return ts.id, sw.logs(), nil
 }
 
