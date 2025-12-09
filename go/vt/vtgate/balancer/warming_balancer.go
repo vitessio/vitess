@@ -24,8 +24,10 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 // WarmingConfig holds configuration for the warming balancer.
@@ -125,6 +127,18 @@ func (b *warmingBalancer) Pick(target *querypb.Target, tablets []*discovery.Tabl
 		}
 	}
 
+	// Debug logging for tablet classification
+	if log.V(2) {
+		log.Infof("warming balancer: target=%s/%s tablets=%d old=%d new=%d warmingPeriod=%v",
+			target.Keyspace, target.Shard, len(tablets), len(oldTablets), len(newTablets), b.warmingPeriod)
+		for _, th := range tablets {
+			age := now.Sub(time.Unix(th.TabletStartTime, 0))
+			isNew := th.TabletStartTime != 0 && !time.Unix(th.TabletStartTime, 0).Before(warmingCutoff)
+			log.Infof("  tablet %s: startTime=%d age=%v isNew=%v",
+				topoproto.TabletAliasString(th.Tablet.Alias), th.TabletStartTime, age, isNew)
+		}
+	}
+
 	// Update debug stats
 	stats := &warmingPickStats{
 		Timestamp:  now,
@@ -133,23 +147,27 @@ func (b *warmingBalancer) Pick(target *querypb.Target, tablets []*discovery.Tabl
 	}
 
 	var picked *discovery.TabletHealth
+	var mode string
 
 	switch {
 	case len(oldTablets) == 0:
 		// Case 1: All tablets are new - no warming needed, pick randomly.
 		// This handles the scenario where an entire zone is recycled.
+		mode = "all-new"
 		stats.AllNewMode = true
 		picked = newTablets[rand.IntN(len(newTablets))]
 		stats.PickedNew = true
 
 	case len(newTablets) == 0:
 		// Case 2: No new tablets - pick from old tablets randomly.
+		mode = "no-new"
 		picked = oldTablets[rand.IntN(len(oldTablets))]
 		stats.PickedNew = false
 
 	default:
 		// Case 3: Mixed old and new tablets - route based on warming percentage.
 		// Roll a number 0-99; if < warmingTrafficPercent, send to new tablet.
+		mode = "mixed"
 		if rand.IntN(100) < b.warmingTrafficPercent {
 			picked = newTablets[rand.IntN(len(newTablets))]
 			stats.PickedNew = true
@@ -157,6 +175,12 @@ func (b *warmingBalancer) Pick(target *querypb.Target, tablets []*discovery.Tabl
 			picked = oldTablets[rand.IntN(len(oldTablets))]
 			stats.PickedNew = false
 		}
+	}
+
+	// Debug logging for pick decision
+	if log.V(2) {
+		log.Infof("warming balancer: picked %s (mode=%s, pickedNew=%v, warmingTrafficPercent=%d)",
+			topoproto.TabletAliasString(picked.Tablet.Alias), mode, stats.PickedNew, b.warmingTrafficPercent)
 	}
 
 	b.mu.Lock()
