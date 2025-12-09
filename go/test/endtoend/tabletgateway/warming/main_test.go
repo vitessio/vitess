@@ -21,17 +21,19 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 var (
-	clusterInstance   *cluster.LocalProcessCluster
-	vtParams          mysql.ConnParams
-	keyspaceName      = "commerce"
-	vtgateGrpcAddress string
-	cell              = "zone1"
+	clusterInstance *cluster.LocalProcessCluster
+	keyspaceName    = "commerce"
+	cell            = "zone1"
+
+	// Track tablets by their start time category for test verification
+	oldReplica *cluster.Vttablet
+	newReplica *cluster.Vttablet
 
 	sqlSchema = `
 		create table test_table (
@@ -53,57 +55,86 @@ func TestMain(m *testing.M) {
 
 	exitCode := func() int {
 		clusterInstance = cluster.NewCluster(cell, "localhost")
-
-		// Configure VTTablet with fast health checks
-		clusterInstance.VtTabletExtraArgs = []string{
-			"--health_check_interval", "1s",
-			"--shutdown_grace_period", "3s",
-		}
-
-		// Configure VTGate with warming balancer mode
-		clusterInstance.VtGateExtraArgs = []string{
-			"--vtgate-balancer-mode", "warming",
-			"--balancer-warming-period", "2m", // Short period for testing
-			"--balancer-warming-traffic-percent", "10",
-		}
-
 		defer clusterInstance.Teardown()
 
 		// Start topo server
-		err := clusterInstance.StartTopo()
-		if err != nil {
+		if err := clusterInstance.StartTopo(); err != nil {
 			fmt.Printf("Failed to start topo: %v\n", err)
 			return 1
 		}
 
-		// Start keyspace with 2 replicas for testing traffic distribution
+		// Start keyspace with standard setup (1 primary + 2 replicas)
+		// All tablets will initially have "now" as their start time
 		keyspace := &cluster.Keyspace{
 			Name:      keyspaceName,
 			SchemaSQL: sqlSchema,
 			VSchema:   vSchema,
 		}
-		// StartUnshardedKeyspace(keyspace, replicaCount, rdonly)
-		// We want 1 primary + 2 replicas for proper testing
-		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 2, false)
-		if err != nil {
+		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 2, false); err != nil {
 			fmt.Printf("Failed to start keyspace: %v\n", err)
 			return 1
 		}
 
-		// Start vtgate
+		// Find the replica tablets
+		shard := &clusterInstance.Keyspaces[0].Shards[0]
+		var replicas []*cluster.Vttablet
+		for _, tablet := range shard.Vttablets {
+			if tablet.Type == "replica" {
+				replicas = append(replicas, tablet)
+			}
+		}
+		if len(replicas) < 2 {
+			fmt.Printf("Expected 2 replicas, got %d\n", len(replicas))
+			return 1
+		}
+
+		// Keep first replica as "new" (current time)
+		newReplica = replicas[0]
+
+		// Restart second replica with "old" start time (1 hour ago)
+		oldReplica = replicas[1]
+		if err := oldReplica.VttabletProcess.TearDown(); err != nil {
+			fmt.Printf("Failed to stop old replica: %v\n", err)
+			return 1
+		}
+
+		// Recreate the vttablet process with ExtraEnv for old start time
+		oldStartTime := time.Now().Add(-1 * time.Hour).Unix()
+		oldReplica.VttabletProcess = cluster.VttabletProcessInstance(
+			oldReplica.HTTPPort,
+			oldReplica.GrpcPort,
+			oldReplica.TabletUID,
+			cell,
+			shard.Name,
+			keyspaceName,
+			clusterInstance.VtctldProcess.Port,
+			oldReplica.Type,
+			clusterInstance.TopoProcess.Port,
+			clusterInstance.Hostname,
+			clusterInstance.TmpDirectory,
+			clusterInstance.VtTabletExtraArgs,
+			clusterInstance.DefaultCharset)
+		oldReplica.VttabletProcess.ExtraEnv = []string{
+			fmt.Sprintf("VTTEST_TABLET_START_TIME=%d", oldStartTime),
+		}
+		oldReplica.VttabletProcess.ServingStatus = "SERVING"
+		if err := oldReplica.VttabletProcess.Setup(); err != nil {
+			fmt.Printf("Failed to restart old replica: %v\n", err)
+			return 1
+		}
+
+		// Start vtgate with warming balancer mode
 		vtgateInstance := clusterInstance.NewVtgateInstance()
-		err = vtgateInstance.Setup()
-		if err != nil {
+		vtgateInstance.ExtraArgs = append(vtgateInstance.ExtraArgs,
+			"--vtgate-balancer-mode", "warming",
+			"--balancer-warming-period", "30m",
+			"--balancer-warming-traffic-percent", "10",
+		)
+		if err := vtgateInstance.Setup(); err != nil {
 			fmt.Printf("Failed to start vtgate: %v\n", err)
 			return 1
 		}
 		clusterInstance.VtgateProcess = *vtgateInstance
-
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
-		vtgateGrpcAddress = fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateGrpcPort)
 
 		return m.Run()
 	}()

@@ -105,6 +105,7 @@ type TabletServer struct {
 	exporter               *servenv.Exporter
 	config                 *tabletenv.TabletConfig
 	stats                  *tabletenv.Stats
+	metadata               *tabletenv.TabletMetadata
 	QueryTimeout           atomic.Int64
 	TerseErrors            bool
 	TruncateErrorLen       int
@@ -163,6 +164,7 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	tsv := &TabletServer{
 		exporter:               exporter,
 		stats:                  tabletenv.NewStats(exporter),
+		metadata:               tabletenv.NewTabletMetadata(),
 		config:                 config,
 		TerseErrors:            config.TerseErrors,
 		TruncateErrorLen:       config.TruncateErrorLen,
@@ -351,6 +353,11 @@ func (tsv *TabletServer) Config() *tabletenv.TabletConfig {
 // Stats satisfies tabletenv.Env.
 func (tsv *TabletServer) Stats() *tabletenv.Stats {
 	return tsv.stats
+}
+
+// Metadata satisfies tabletenv.Env.
+func (tsv *TabletServer) Metadata() *tabletenv.TabletMetadata {
+	return tsv.metadata
 }
 
 // Environment satisfies tabletenv.Env.

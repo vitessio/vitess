@@ -18,11 +18,7 @@ package warming
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -30,181 +26,362 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
-// TestWarmingBalancerTabletStartTimeReported verifies that tablets report their
-// start time in the health stream and that VTGate receives this information.
-func TestWarmingBalancerTabletStartTimeReported(t *testing.T) {
-	// Wait for health checks to propagate
-	time.Sleep(2 * time.Second)
-
-	// Query VTGate debug vars to check tablet health information
-	resp, err := http.Get(clusterInstance.VtgateProcess.VerifyURL)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-
-	var debugVars map[string]any
-	err = json.Unmarshal(body, &debugVars)
-	require.NoError(t, err)
-
-	// Check that we have healthy tablets
-	healthCheck, ok := debugVars["HealthcheckConnections"]
-	require.True(t, ok, "HealthcheckConnections should be present in debug vars")
-
-	// The health check should show tablets with their information
-	t.Logf("HealthcheckConnections: %v", healthCheck)
-
-	// Verify we can connect and query
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	// Show tablets should work
-	qr := utils.Exec(t, conn, "show vitess_tablets")
-	assert.GreaterOrEqual(t, len(qr.Rows), 3, "should have at least 3 tablets (1 primary + 2 replicas)")
-
-	for _, row := range qr.Rows {
-		t.Logf("Tablet: %v", row)
-	}
-}
-
-// TestWarmingBalancerQueriesWork verifies that queries work correctly with the
-// warming balancer enabled.
-func TestWarmingBalancerQueriesWork(t *testing.T) {
-	// Wait for health checks to propagate
-	time.Sleep(2 * time.Second)
-
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	// Insert some data
-	utils.Exec(t, conn, "insert into test_table (val) values ('test1'), ('test2'), ('test3')")
-
-	// Run multiple read queries - these should be distributed according to warming logic
-	for i := 0; i < 100; i++ {
-		qr := utils.Exec(t, conn, "select * from test_table")
-		assert.Equal(t, 3, len(qr.Rows), "should return 3 rows")
+// TestWarmingBalancerTrafficDistribution verifies that the warming balancer
+// routes ~90% of traffic to old replicas and ~10% to new replicas.
+func TestWarmingBalancerTrafficDistribution(t *testing.T) {
+	vtParams := mysql.ConnParams{
+		Host: clusterInstance.Hostname,
+		Port: clusterInstance.VtgateMySQLPort,
 	}
 
-	// Clean up
-	utils.Exec(t, conn, "delete from test_table")
-}
-
-// TestWarmingBalancerDebugEndpoint verifies that the warming balancer debug
-// endpoint provides useful information.
-func TestWarmingBalancerDebugEndpoint(t *testing.T) {
-	// Wait for health checks and some queries to happen
-	time.Sleep(2 * time.Second)
-
-	// First run some queries to populate the balancer stats
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
+	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
-	// Run a few queries to trigger the balancer
-	for i := 0; i < 10; i++ {
-		utils.Exec(t, conn, "select 1")
-	}
+	// Wait for all tablets to be healthy
+	waitForHealthyTablets(t)
 
-	// Check the balancer debug endpoint
-	// The debug endpoint is typically at /debug/balancer
-	debugURL := fmt.Sprintf("http://%s:%d/debug/balancer",
-		clusterInstance.Hostname, clusterInstance.VtgateProcess.Port)
-
-	resp, err := http.Get(debugURL)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-
-	debugOutput := string(body)
-	t.Logf("Balancer debug output:\n%s", debugOutput)
-
-	// Verify the output contains warming-specific information
-	assert.Contains(t, debugOutput, "warming", "debug output should mention warming mode")
-	assert.Contains(t, debugOutput, "Warming Period", "debug output should show warming period")
-	assert.Contains(t, debugOutput, "Warming Traffic Percent", "debug output should show traffic percent")
-}
-
-// TestWarmingBalancerAllTabletsServing verifies that when all tablets are relatively
-// new (simulating a full zone recycle), queries still work correctly.
-func TestWarmingBalancerAllTabletsServing(t *testing.T) {
-	// This test verifies the "all new tablets" mode where no warming is needed
-	// because there are no old tablets to absorb traffic.
-
-	// Wait for health checks
-	time.Sleep(2 * time.Second)
-
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
+	// Get server IDs for old and new replicas
+	oldServerID := getServerID(t, oldReplica)
+	newServerID := getServerID(t, newReplica)
+	t.Logf("Old replica server_id: %d, New replica server_id: %d", oldServerID, newServerID)
 
 	// Insert test data
-	utils.Exec(t, conn, "insert into test_table (val) values ('allnew1')")
+	_, err = conn.ExecuteFetch("INSERT INTO test_table (val) VALUES ('warming_test')", 1, false)
+	require.NoError(t, err)
 
-	// Run many queries - they should all succeed
-	successCount := 0
-	for i := 0; i < 50; i++ {
-		_, err := conn.ExecuteFetch("select * from test_table", 100, false)
-		if err == nil {
-			successCount++
-		}
-	}
+	// Wait for replication
+	waitForReplication(t, "warming_test")
 
-	assert.Equal(t, 50, successCount, "all queries should succeed")
+	// Execute many queries and track distribution
+	const numQueries = 500
+	counts := executeReplicaQueries(t, conn, numQueries)
 
-	// Clean up
-	utils.Exec(t, conn, "delete from test_table")
+	oldCount := counts[oldServerID]
+	newCount := counts[newServerID]
+	t.Logf("Query distribution: old=%d (%.1f%%), new=%d (%.1f%%)",
+		oldCount, float64(oldCount)/float64(numQueries)*100,
+		newCount, float64(newCount)/float64(numQueries)*100)
+
+	// Verify distribution: old should get ~90%, new should get ~10%
+	// Use 25% tolerance for statistical variance (10% of 500 = 50 queries,
+	// so ±12 queries is reasonable variance)
+	expectedOldPercent := 0.90
+	expectedNewPercent := 0.10
+	tolerance := 0.25
+
+	actualOldPercent := float64(oldCount) / float64(numQueries)
+	actualNewPercent := float64(newCount) / float64(numQueries)
+
+	assert.InEpsilon(t, expectedOldPercent, actualOldPercent, tolerance,
+		"Old replica should receive ~90%% of traffic, got %.1f%%", actualOldPercent*100)
+	assert.InEpsilon(t, expectedNewPercent, actualNewPercent, tolerance,
+		"New replica should receive ~10%% of traffic, got %.1f%%", actualNewPercent*100)
 }
 
-// TestWarmingBalancerVtgateVars checks that VTGate exposes relevant metrics/vars
-// for monitoring the warming balancer.
-func TestWarmingBalancerVtgateVars(t *testing.T) {
-	// Wait for some activity
-	time.Sleep(2 * time.Second)
+// TestWarmingBalancerQueriesSucceed verifies queries work correctly with warming mode.
+func TestWarmingBalancerQueriesSucceed(t *testing.T) {
+	vtParams := mysql.ConnParams{
+		Host: clusterInstance.Hostname,
+		Port: clusterInstance.VtgateMySQLPort,
+	}
 
-	// Generate some query traffic
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
+	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
-	for i := 0; i < 20; i++ {
-		utils.Exec(t, conn, "select 1")
-	}
+	// Wait for all tablets to be healthy
+	waitForHealthyTablets(t)
 
-	// Fetch VTGate debug vars
-	resp, err := http.Get(clusterInstance.VtgateProcess.VerifyURL)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
+	// Insert data
+	_, err = conn.ExecuteFetch("INSERT INTO test_table (val) VALUES ('query_test')", 1, false)
 	require.NoError(t, err)
 
-	debugVarsStr := string(body)
+	// Wait for replication
+	waitForReplication(t, "query_test")
 
-	// Log the relevant parts for debugging
-	if strings.Contains(debugVarsStr, "Queries") {
-		t.Log("VTGate is tracking query counts")
-	}
-
-	// Parse and check for relevant metrics
-	var debugVars map[string]any
-	err = json.Unmarshal(body, &debugVars)
+	// Run queries - all should succeed
+	_, err = conn.ExecuteFetch("USE @replica", 1, false)
 	require.NoError(t, err)
 
-	// Log some key metrics that would be useful for monitoring warming
-	if hc, ok := debugVars["HealthcheckConnections"]; ok {
-		t.Logf("HealthcheckConnections: %v", hc)
+	for range 50 {
+		qr, err := conn.ExecuteFetch("SELECT * FROM test_table WHERE val = 'query_test'", 10, false)
+		require.NoError(t, err)
+		assert.GreaterOrEqual(t, len(qr.Rows), 1, "Expected at least 1 row")
 	}
+}
+
+// TestWarmingBalancerAllNewTablets verifies that when all tablets are "new",
+// traffic is distributed evenly (no warming needed since nothing to warm against).
+func TestWarmingBalancerAllNewTablets(t *testing.T) {
+	// Restart the "old" replica with a recent start time so both are "new"
+	restartReplicaWithStartTime(t, oldReplica, time.Now().Add(-5*time.Minute))
+	defer restartReplicaWithStartTime(t, oldReplica, time.Now().Add(-1*time.Hour)) // restore
+
+	vtParams := mysql.ConnParams{
+		Host: clusterInstance.Hostname,
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	waitForHealthyTablets(t)
+
+	// Insert data and wait for replication
+	_, err = conn.ExecuteFetch("INSERT INTO test_table (val) VALUES ('all_new_test')", 1, false)
+	require.NoError(t, err)
+	waitForReplicationOnTablets(t, "all_new_test", []*cluster.Vttablet{oldReplica, newReplica})
+
+	// Get server IDs
+	oldServerID := getServerID(t, oldReplica)
+	newServerID := getServerID(t, newReplica)
+
+	// Execute queries and verify even distribution
+	const numQueries = 500
+	counts := executeReplicaQueries(t, conn, numQueries)
+
+	oldCount := counts[oldServerID]
+	newCount := counts[newServerID]
+	t.Logf("All-new distribution: replica1=%d (%.1f%%), replica2=%d (%.1f%%)",
+		oldCount, float64(oldCount)/float64(numQueries)*100,
+		newCount, float64(newCount)/float64(numQueries)*100)
+
+	// Both should get ~50% each (random distribution)
+	expectedPercent := 0.50
+	tolerance := 0.20 // 20% tolerance for random distribution
+
+	actualOldPercent := float64(oldCount) / float64(numQueries)
+	actualNewPercent := float64(newCount) / float64(numQueries)
+
+	assert.InEpsilon(t, expectedPercent, actualOldPercent, tolerance,
+		"Replica1 should receive ~50%% of traffic in all-new mode, got %.1f%%", actualOldPercent*100)
+	assert.InEpsilon(t, expectedPercent, actualNewPercent, tolerance,
+		"Replica2 should receive ~50%% of traffic in all-new mode, got %.1f%%", actualNewPercent*100)
+}
+
+// TestWarmingBalancerOldReplicaFailure verifies that when the old replica fails,
+// queries still succeed by routing to the new replica.
+func TestWarmingBalancerOldReplicaFailure(t *testing.T) {
+	vtParams := mysql.ConnParams{
+		Host: clusterInstance.Hostname,
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	waitForHealthyTablets(t)
+
+	// Insert data and wait for replication before stopping old replica
+	_, err = conn.ExecuteFetch("INSERT INTO test_table (val) VALUES ('failover_test')", 1, false)
+	require.NoError(t, err)
+	waitForReplication(t, "failover_test")
+
+	// Get new replica server ID
+	newServerID := getServerID(t, newReplica)
+
+	// Stop the old replica
+	err = oldReplica.VttabletProcess.TearDown()
+	require.NoError(t, err)
+	defer func() {
+		// Restore old replica
+		restartReplicaWithStartTime(t, oldReplica, time.Now().Add(-1*time.Hour))
+	}()
+
+	// Wait for VTGate to notice the old replica is gone
+	shardName := clusterInstance.Keyspaces[0].Shards[0].Name
+	require.Eventually(t, func() bool {
+		err := clusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(
+			fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), 1, 5*time.Second)
+		return err == nil
+	}, 60*time.Second, 1*time.Second, "VTGate did not detect replica count change")
+
+	// All queries should succeed and go to the new replica
+	_, err = conn.ExecuteFetch("USE @replica", 1, false)
+	require.NoError(t, err)
+
+	const numQueries = 50
+	for range numQueries {
+		res, err := conn.ExecuteFetch("SELECT @@server_id FROM test_table LIMIT 1", 1, false)
+		require.NoError(t, err, "Query should succeed even with old replica down")
+		require.Len(t, res.Rows, 1)
+
+		serverID, err := res.Rows[0][0].ToInt64()
+		require.NoError(t, err)
+		assert.Equal(t, newServerID, serverID, "All queries should go to new replica")
+	}
+}
+
+// TestWarmingBalancerAllOldTablets verifies that when all tablets are "old"
+// (past the warming period), traffic is distributed evenly.
+// This also validates that warming period expiration works correctly.
+func TestWarmingBalancerAllOldTablets(t *testing.T) {
+	// Restart the "new" replica with an old start time so both are "old"
+	restartReplicaWithStartTime(t, newReplica, time.Now().Add(-1*time.Hour))
+	defer restartReplicaWithStartTime(t, newReplica, time.Now()) // restore to "new"
+
+	vtParams := mysql.ConnParams{
+		Host: clusterInstance.Hostname,
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	waitForHealthyTablets(t)
+
+	// Insert data and wait for replication
+	_, err = conn.ExecuteFetch("INSERT INTO test_table (val) VALUES ('all_old_test')", 1, false)
+	require.NoError(t, err)
+	waitForReplicationOnTablets(t, "all_old_test", []*cluster.Vttablet{oldReplica, newReplica})
+
+	// Get server IDs
+	oldServerID := getServerID(t, oldReplica)
+	newServerID := getServerID(t, newReplica)
+
+	// Execute queries and verify even distribution
+	const numQueries = 500
+	counts := executeReplicaQueries(t, conn, numQueries)
+
+	oldCount := counts[oldServerID]
+	newCount := counts[newServerID]
+	t.Logf("All-old distribution: replica1=%d (%.1f%%), replica2=%d (%.1f%%)",
+		oldCount, float64(oldCount)/float64(numQueries)*100,
+		newCount, float64(newCount)/float64(numQueries)*100)
+
+	// Both should get ~50% each (random distribution among old tablets)
+	expectedPercent := 0.50
+	tolerance := 0.20
+
+	actualOldPercent := float64(oldCount) / float64(numQueries)
+	actualNewPercent := float64(newCount) / float64(numQueries)
+
+	assert.InEpsilon(t, expectedPercent, actualOldPercent, tolerance,
+		"Replica1 should receive ~50%% of traffic in all-old mode, got %.1f%%", actualOldPercent*100)
+	assert.InEpsilon(t, expectedPercent, actualNewPercent, tolerance,
+		"Replica2 should receive ~50%% of traffic in all-old mode, got %.1f%%", actualNewPercent*100)
+}
+
+// Helper functions
+
+func waitForHealthyTablets(t *testing.T) {
+	t.Helper()
+	shardName := clusterInstance.Keyspaces[0].Shards[0].Name
+
+	// Wait for primary
+	require.Eventually(t, func() bool {
+		err := clusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(
+			fmt.Sprintf("%s.%s.primary", keyspaceName, shardName), 1, 5*time.Second)
+		return err == nil
+	}, 60*time.Second, 1*time.Second, "Primary tablet did not become healthy")
+
+	// Wait for replicas
+	require.Eventually(t, func() bool {
+		err := clusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(
+			fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), 2, 5*time.Second)
+		return err == nil
+	}, 60*time.Second, 1*time.Second, "Replica tablets did not become healthy")
+}
+
+func waitForReplication(t *testing.T, value string) {
+	t.Helper()
+	waitForReplicationOnTablets(t, value, []*cluster.Vttablet{oldReplica, newReplica})
+}
+
+func waitForReplicationOnTablets(t *testing.T, value string, replicas []*cluster.Vttablet) {
+	t.Helper()
+	query := fmt.Sprintf("SELECT count(*) FROM test_table WHERE val = '%s'", value)
+
+	require.Eventually(t, func() bool {
+		for _, replica := range replicas {
+			res, err := replica.VttabletProcess.QueryTablet(query, keyspaceName, true)
+			if err != nil || len(res.Rows) == 0 {
+				return false
+			}
+			if val, err := res.Rows[0][0].ToUint64(); err != nil || val < 1 {
+				return false
+			}
+		}
+		return true
+	}, 15*time.Second, 500*time.Millisecond, "Replication did not complete")
+}
+
+func restartReplicaWithStartTime(t *testing.T, tablet *cluster.Vttablet, startTime time.Time) {
+	t.Helper()
+
+	// Stop the tablet if running
+	_ = tablet.VttabletProcess.TearDown()
+
+	shard := &clusterInstance.Keyspaces[0].Shards[0]
+
+	// Recreate the vttablet process with new start time
+	tablet.VttabletProcess = cluster.VttabletProcessInstance(
+		tablet.HTTPPort,
+		tablet.GrpcPort,
+		tablet.TabletUID,
+		cell,
+		shard.Name,
+		keyspaceName,
+		clusterInstance.VtctldProcess.Port,
+		tablet.Type,
+		clusterInstance.TopoProcess.Port,
+		clusterInstance.Hostname,
+		clusterInstance.TmpDirectory,
+		clusterInstance.VtTabletExtraArgs,
+		clusterInstance.DefaultCharset)
+	tablet.VttabletProcess.ExtraEnv = []string{
+		fmt.Sprintf("VTTEST_TABLET_START_TIME=%d", startTime.Unix()),
+	}
+	tablet.VttabletProcess.ServingStatus = "SERVING"
+
+	err := tablet.VttabletProcess.Setup()
+	require.NoError(t, err, "Failed to restart tablet with new start time")
+
+	// Wait for tablet to be healthy
+	shardName := clusterInstance.Keyspaces[0].Shards[0].Name
+	require.Eventually(t, func() bool {
+		err := clusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(
+			fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), 2, 5*time.Second)
+		return err == nil
+	}, 60*time.Second, 1*time.Second, "Tablet did not become healthy after restart")
+}
+
+func getServerID(t *testing.T, tablet *cluster.Vttablet) int64 {
+	t.Helper()
+	res, err := tablet.VttabletProcess.QueryTablet("SELECT @@server_id", keyspaceName, false)
+	require.NoError(t, err)
+	require.Len(t, res.Rows, 1)
+	serverID, err := res.Rows[0][0].ToInt64()
+	require.NoError(t, err)
+	return serverID
+}
+
+func executeReplicaQueries(t *testing.T, conn *mysql.Conn, numQueries int) map[int64]int {
+	t.Helper()
+
+	_, err := conn.ExecuteFetch("USE @replica", 1, false)
+	require.NoError(t, err)
+	defer func() {
+		_, _ = conn.ExecuteFetch("USE @primary", 1, false)
+	}()
+
+	counts := make(map[int64]int)
+	for range numQueries {
+		res, err := conn.ExecuteFetch("SELECT @@server_id FROM test_table LIMIT 1", 1, false)
+		require.NoError(t, err)
+		require.Len(t, res.Rows, 1)
+
+		serverID, err := res.Rows[0][0].ToInt64()
+		require.NoError(t, err)
+		counts[serverID]++
+	}
+
+	return counts
 }
