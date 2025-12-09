@@ -1823,7 +1823,7 @@ func testScheduler(t *testing.T) {
 				require.NotNil(t, rs)
 				for _, row := range rs.Named().Rows {
 					inOrderCompletionPendingCount := row.AsUint64("in_order_completion_pending_count", 0)
-					assert.EqualValues(t, i, inOrderCompletionPendingCount)
+					assert.EqualValues(t, uint64(i), inOrderCompletionPendingCount)
 				}
 			}
 			t.Run("cancel 1st migration", func(t *testing.T) {
