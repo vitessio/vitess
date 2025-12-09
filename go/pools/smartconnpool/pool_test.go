@@ -1410,3 +1410,47 @@ func TestIdleTimeoutConnectionLeak(t *testing.T) {
 	assert.Equal(t, int64(0), state.open.Load())
 	assert.Equal(t, int64(4), state.close.Load())
 }
+
+func TestIdleTimeoutDoesntLeaveLingeringConnection(t *testing.T) {
+	var state TestState
+
+	ctx := context.Background()
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    10,
+		IdleTimeout: 50 * time.Millisecond,
+		LogWait:     state.LogWait,
+	}).Open(newConnector(&state), nil)
+
+	defer p.Close()
+
+	var conns []*Pooled[*TestConn]
+	for i := 0; i < 10; i++ {
+		conn, err := p.Get(ctx, nil)
+		require.NoError(t, err)
+		conns = append(conns, conn)
+	}
+
+	for _, conn := range conns {
+		p.put(conn)
+	}
+
+	require.EqualValues(t, 10, p.Active())
+	require.EqualValues(t, 10, p.Available())
+
+	// Wait a bit for the idle timeout worker to refresh connections
+	assert.Eventually(t, func() bool {
+		return p.Metrics.IdleClosed() > 10
+	}, 500*time.Millisecond, 10*time.Millisecond, "Expected at least 10 connections to be closed by idle timeout")
+
+	// Verify that new connections were created to replace the closed ones
+	require.EqualValues(t, 10, p.Active())
+	require.EqualValues(t, 10, p.Available())
+
+	// Count how many connections in the stack are closed
+	totalInStack := 0
+	for conn := p.clean.Peek(); conn != nil; conn = conn.next.Load() {
+		totalInStack++
+	}
+
+	require.Equal(t, totalInStack, 10)
+}
