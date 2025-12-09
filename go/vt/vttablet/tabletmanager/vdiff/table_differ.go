@@ -153,7 +153,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 	}()
 
 	td.shardStreamsCtx, td.shardStreamsCancel = context.WithCancel(ctx)
-	td.shardStreamsErrCh = make(chan error, 1)
+	td.shardStreamsErrCh = make(chan error, 10)
 
 	if err := td.selectTablets(ctx); err != nil {
 		return err
