@@ -157,7 +157,7 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 	qt.stats.requestsThrottled.Add([]string{strategyName, workload, priorityStr, decision.MetricName, strconv.FormatFloat(decision.MetricValue, 'f', -1, 64), strconv.FormatBool(tCfg.DryRun)}, 1)
 
 	// If dry-run mode is enabled, log the decision but don't throttle
-	if qt.cfg.DryRun {
+	if tCfg.DryRun {
 		log.Warningf("[DRY-RUN] %s, metric name: %s, metric value: %f", decision.Message, decision.MetricName, decision.MetricValue)
 		return nil
 	}
