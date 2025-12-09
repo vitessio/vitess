@@ -142,8 +142,7 @@ const (
 	sqlUpdateInOrderCompletionPendingCount = `UPDATE _vt.schema_migrations
 			SET in_order_completion_pending_count=%a
 		WHERE
-			migration_uuid=%a AND
-			in_order_completion_pending_count!=%a
+			migration_uuid=%a
 	`
 	sqlUpdateArtifacts = `UPDATE _vt.schema_migrations
 			SET artifacts=concat(%a, ',', artifacts), cleanup_timestamp=NULL
