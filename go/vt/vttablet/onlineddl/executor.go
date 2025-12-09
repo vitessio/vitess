@@ -4095,7 +4095,6 @@ func (e *Executor) updateInOrderCompletionPendingCount(
 	query, err := sqlparser.ParseAndBind(sqlUpdateInOrderCompletionPendingCount,
 		sqltypes.Uint64BindVariable(pendingCompletions),
 		sqltypes.StringBindVariable(uuid),
-		sqltypes.Uint64BindVariable(pendingCompletions),
 	)
 	if err != nil {
 		return err
