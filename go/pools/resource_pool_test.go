@@ -342,6 +342,7 @@ func TestReopen(t *testing.T) {
 		return true, nil
 	}
 	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 0, logWait, refreshCheck, 500*time.Millisecond)
+	defer p.Close()
 	var resources [10]Resource
 	for i := 0; i < 5; i++ {
 		var r Resource
@@ -366,7 +367,6 @@ func TestReopen(t *testing.T) {
 	assert.Equal(t, expected, stats)
 	assert.EqualValues(t, 5, lastID.Load())
 	assert.EqualValues(t, 0, count.Load())
-	p.Close()
 }
 
 func TestIdleTimeout(t *testing.T) {
