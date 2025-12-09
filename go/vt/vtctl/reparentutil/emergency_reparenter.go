@@ -153,6 +153,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		shardInfo                  *topo.ShardInfo
 		prevPrimary                *topodatapb.Tablet
 		tabletMap                  map[string]*topo.TabletInfo
+		isGTIDBasedMap             map[string]bool
 		validCandidates            map[string]*RelayLogPositions
 		intermediateSource         *topodatapb.Tablet
 		validCandidateTablets      []*topodatapb.Tablet
@@ -216,12 +217,13 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	// find the positions of all the valid candidates.
-	validCandidates, isGTIDBased, err = FindPositionsOfAllCandidates(stoppedReplicationSnapshot.statusMap, stoppedReplicationSnapshot.primaryStatusMap)
+	validCandidates, isGTIDBasedMap, err = FindPositionsOfAllCandidates(stoppedReplicationSnapshot.statusMap, stoppedReplicationSnapshot.primaryStatusMap)
 	if err != nil {
 		return err
 	}
+
 	// Restrict the valid candidates list. We remove any tablet which is of the type DRAINED, RESTORE or BACKUP.
-	validCandidates, err = restrictValidCandidates(validCandidates, tabletMap)
+	validCandidates, err = restrictValidCandidates(validCandidates, tabletMap, isGTIDBasedMap, erp.logger)
 	if err != nil {
 		return err
 	} else if len(validCandidates) == 0 {

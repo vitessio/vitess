@@ -64,9 +64,9 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 		// point is, the combination of (1) whether the test should error and
 		// (2) the set of keys we expect in the map is enough to fully assert on
 		// the correctness of the behavior of this functional unit.
-		expected          []string
-		expectedGTIDBased bool
-		shouldErr         bool
+		expected               []string
+		expectedIsGTIDBasedMap map[string]bool
+		shouldErr              bool
 	}{
 		{
 			name: "success",
@@ -89,9 +89,9 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 					Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 				},
 			},
-			expected:          []string{"r1", "r2", "p1"},
-			expectedGTIDBased: true,
-			shouldErr:         false,
+			expected:               []string{"r1", "r2", "p1"},
+			expectedIsGTIDBasedMap: map[string]bool{"r1": true, "r2": true, "p1": true},
+			shouldErr:              false,
 		}, {
 			name: "success for single tablet",
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
@@ -102,10 +102,10 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 					},
 				},
 			},
-			primaryStatusMap:  map[string]*replicationdatapb.PrimaryStatus{},
-			expected:          []string{"r1"},
-			expectedGTIDBased: true,
-			shouldErr:         false,
+			primaryStatusMap:       map[string]*replicationdatapb.PrimaryStatus{},
+			expected:               []string{"r1"},
+			expectedIsGTIDBasedMap: map[string]bool{"r1": true},
+			shouldErr:              false,
 		},
 		{
 			name: "mixed replication modes",
@@ -123,8 +123,9 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 					},
 				},
 			},
-			expected:  nil,
-			shouldErr: true,
+			expected:               []string{"r1", "r2"},
+			expectedIsGTIDBasedMap: map[string]bool{"r1": true},
+			shouldErr:              false,
 		},
 		{
 			name: "tablet without relay log position",
@@ -141,8 +142,9 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 					},
 				},
 			},
-			expected:  nil,
-			shouldErr: true,
+			expected:               nil,
+			expectedIsGTIDBasedMap: nil,
+			shouldErr:              true,
 		},
 		{
 			name: "non-GTID-based",
@@ -160,8 +162,9 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 					},
 				},
 			},
-			expected:  []string{"r1", "r2"},
-			shouldErr: false,
+			expected:               []string{"r1", "r2"},
+			expectedIsGTIDBasedMap: map[string]bool{},
+			shouldErr:              false,
 		},
 		{
 			name: "bad primary position fails the call",
@@ -178,8 +181,9 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 					Position: "InvalidFlavor/1234",
 				},
 			},
-			expected:  nil,
-			shouldErr: true,
+			expected:               nil,
+			expectedIsGTIDBasedMap: nil,
+			shouldErr:              true,
 		},
 	}
 
@@ -187,8 +191,8 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			actual, isGTIDBased, err := FindPositionsOfAllCandidates(tt.statusMap, tt.primaryStatusMap)
-			require.EqualValues(t, tt.expectedGTIDBased, isGTIDBased)
+			actual, isGTIDBasedMap, err := FindPositionsOfAllCandidates(tt.statusMap, tt.primaryStatusMap)
+			require.EqualValues(t, tt.expectedIsGTIDBasedMap, isGTIDBasedMap)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return

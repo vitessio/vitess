@@ -1768,6 +1768,7 @@ func TestRestrictValidCandidates(t *testing.T) {
 		name            string
 		validCandidates map[string]*RelayLogPositions
 		tabletMap       map[string]*topo.TabletInfo
+		isGTIDBasedMap  map[string]bool
 		result          map[string]*RelayLogPositions
 	}{
 		{
@@ -1836,6 +1837,92 @@ func TestRestrictValidCandidates(t *testing.T) {
 					},
 				},
 			},
+			isGTIDBasedMap: map[string]bool{
+				"zone1-0000000100": true,
+				"zone1-0000000101": true,
+				"zone1-0000000102": true,
+				"zone1-0000000103": true,
+				"zone1-0000000104": true,
+			},
+			result: map[string]*RelayLogPositions{
+				"zone1-0000000100": {},
+				"zone1-0000000101": {},
+				"zone1-0000000104": {},
+			},
+		},
+		{
+			name: "remove invalid tablets with file-based replica",
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {},
+				"zone1-0000000101": {},
+				"zone1-0000000102": {},
+				"zone1-0000000103": {},
+				"zone1-0000000104": {},
+				"zone1-0000000105": {},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_RDONLY,
+					},
+				},
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_RESTORE,
+					},
+				},
+				"zone1-0000000103": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+						Type: topodatapb.TabletType_DRAINED,
+					},
+				},
+				"zone1-0000000104": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  104,
+						},
+						Type: topodatapb.TabletType_SPARE,
+					},
+				},
+				"zone1-0000000105": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+						Type: topodatapb.TabletType_BACKUP,
+					},
+				},
+			},
+			isGTIDBasedMap: map[string]bool{
+				"zone1-0000000100": true,
+				"zone1-0000000101": true,
+				"zone1-0000000102": true,
+				"zone1-0000000103": true,
+				"zone1-0000000104": false, // file-based
+			},
 			result: map[string]*RelayLogPositions{
 				"zone1-0000000100": {},
 				"zone1-0000000101": {},
@@ -1846,7 +1933,8 @@ func TestRestrictValidCandidates(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			res, err := restrictValidCandidates(test.validCandidates, test.tabletMap)
+			logger := logutil.NewMemoryLogger()
+			res, err := restrictValidCandidates(test.validCandidates, test.tabletMap, test.isGTIDBasedMap, logger)
 			assert.NoError(t, err)
 			assert.Equal(t, res, test.result)
 		})

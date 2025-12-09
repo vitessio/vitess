@@ -316,12 +316,16 @@ func getValidCandidatesAndPositionsAsList(validCandidates map[string]*RelayLogPo
 }
 
 // restrictValidCandidates is used to restrict some candidates from being considered eligible for becoming the intermediate source or the final promotion candidate
-func restrictValidCandidates(validCandidates map[string]*RelayLogPositions, tabletMap map[string]*topo.TabletInfo) (map[string]*RelayLogPositions, error) {
+func restrictValidCandidates(validCandidates map[string]*RelayLogPositions, tabletMap map[string]*topo.TabletInfo, isGTIDBasedMap map[string]bool, logger logutil.Logger) (map[string]*RelayLogPositions, error) {
 	restrictedValidCandidates := make(map[string]*RelayLogPositions)
 	for candidate, position := range validCandidates {
 		candidateInfo, ok := tabletMap[candidate]
 		if !ok {
 			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", candidate)
+		}
+		if len(isGTIDBasedMap) > 0 && !isGTIDBasedMap[candidate] {
+			logger.Warningf("tablet %s is a member of a GTID-based shard, but it does not have GTID-based positions. Skipping", candidate)
+			continue
 		}
 		// We do not allow BACKUP, DRAINED or RESTORE type of tablets to be considered for being the replication source or the candidate for primary
 		if topoproto.IsTypeInList(candidateInfo.Type, []topodatapb.TabletType{topodatapb.TabletType_BACKUP, topodatapb.TabletType_RESTORE, topodatapb.TabletType_DRAINED}) {

@@ -5567,9 +5567,9 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			erp := &EmergencyReparenter{
 				tmc: tt.tmc,
 			}
-			validCandidates, isGtid, err := FindPositionsOfAllCandidates(tt.statusMap, tt.primaryStatusMap)
+			validCandidates, isGTIDBasedMap, err := FindPositionsOfAllCandidates(tt.statusMap, tt.primaryStatusMap)
 			require.NoError(t, err)
-			require.True(t, isGtid)
+			require.Len(t, isGTIDBasedMap, len(validCandidates))
 			candidates, err := erp.findErrantGTIDs(context.Background(), validCandidates, tt.statusMap, tt.tabletMap, 10*time.Second)
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)

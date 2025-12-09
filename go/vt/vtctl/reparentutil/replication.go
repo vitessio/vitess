@@ -88,7 +88,7 @@ func (rlp *RelayLogPositions) IsZero() bool {
 func FindPositionsOfAllCandidates(
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
 	primaryStatusMap map[string]*replicationdatapb.PrimaryStatus,
-) (map[string]*RelayLogPositions, bool, error) {
+) (map[string]*RelayLogPositions, map[string]bool, error) {
 	replicationStatusMap := make(map[string]*replication.ReplicationStatus, len(statusMap))
 	positionMap := make(map[string]*RelayLogPositions)
 
@@ -101,16 +101,13 @@ func FindPositionsOfAllCandidates(
 	// Determine if we're GTID-based. If we are, we'll need to look for errant
 	// GTIDs below.
 	var (
-		isGTIDBased                bool
-		isNonGTIDBased             bool
 		emptyRelayPosErrorRecorder concurrency.FirstErrorRecorder
+		isGTIDBasedMap             = make(map[string]bool, len(replicationStatusMap))
 	)
 
 	for alias, status := range replicationStatusMap {
 		if _, ok := status.RelayLogPosition.GTIDSet.(replication.Mysql56GTIDSet); ok {
-			isGTIDBased = true
-		} else {
-			isNonGTIDBased = true
+			isGTIDBasedMap[alias] = true
 		}
 
 		if status.RelayLogPosition.IsZero() {
@@ -119,39 +116,30 @@ func FindPositionsOfAllCandidates(
 			// here.
 			emptyRelayPosErrorRecorder.RecordError(vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "encountered tablet %v with no relay log position, when at least one other tablet in the status map has GTID based relay log positions", alias))
 		}
-	}
 
-	if isGTIDBased && emptyRelayPosErrorRecorder.HasErrors() {
-		return nil, false, emptyRelayPosErrorRecorder.Error()
-	}
-
-	if isGTIDBased && isNonGTIDBased {
-		return nil, false, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "encountered mix of GTID-based and non GTID-based relay logs")
-	}
-
-	// Store the final positions in the map.
-	for alias, status := range replicationStatusMap {
-		if !isGTIDBased {
-			positionMap[alias] = &RelayLogPositions{Combined: status.Position}
-
-			continue
-		}
 		positionMap[alias] = &RelayLogPositions{
 			Combined: status.RelayLogPosition,
 			Executed: status.Position,
 		}
 	}
 
+	if len(isGTIDBasedMap) > 0 && emptyRelayPosErrorRecorder.HasErrors() {
+		return nil, nil, emptyRelayPosErrorRecorder.Error()
+	}
+
 	for alias, primaryStatus := range primaryStatusMap {
 		executedPosition, err := replication.DecodePosition(primaryStatus.Position)
 		if err != nil {
-			return nil, false, vterrors.Wrapf(err, "could not decode a primary status executed position for tablet %v: %v", alias, err)
+			return nil, nil, vterrors.Wrapf(err, "could not decode a primary status executed position for tablet %v: %v", alias, err)
 		}
 
+		if _, ok := executedPosition.GTIDSet.(replication.Mysql56GTIDSet); ok {
+			isGTIDBasedMap[alias] = true
+		}
 		positionMap[alias] = &RelayLogPositions{Combined: executedPosition}
 	}
 
-	return positionMap, isGTIDBased, nil
+	return positionMap, isGTIDBasedMap, nil
 }
 
 // ReplicaWasRunning returns true if a StopReplicationStatus indicates that the
