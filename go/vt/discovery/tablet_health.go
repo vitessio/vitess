@@ -38,6 +38,7 @@ type TabletHealth struct {
 	Target               *query.Target
 	Stats                *query.RealtimeStats
 	PrimaryTermStartTime int64
+	TabletStartTime      int64 // Unix timestamp of when the vttablet process started
 	LastError            error
 	Serving              bool
 }
@@ -48,6 +49,7 @@ func (th *TabletHealth) MarshalJSON() ([]byte, error) {
 		Target               *query.Target
 		Serving              bool
 		PrimaryTermStartTime int64
+		TabletStartTime      int64
 		Stats                *query.RealtimeStats
 		LastError            error
 	}{
@@ -55,6 +57,7 @@ func (th *TabletHealth) MarshalJSON() ([]byte, error) {
 		Target:               th.Target,
 		Serving:              th.Serving,
 		PrimaryTermStartTime: th.PrimaryTermStartTime,
+		TabletStartTime:      th.TabletStartTime,
 		Stats:                th.Stats,
 		LastError:            th.LastError,
 	})
@@ -67,6 +70,7 @@ func (th *TabletHealth) DeepEqual(other *TabletHealth) bool {
 		proto.Equal(th.Target, other.Target) &&
 		th.Serving == other.Serving &&
 		th.PrimaryTermStartTime == other.PrimaryTermStartTime &&
+		th.TabletStartTime == other.TabletStartTime &&
 		proto.Equal(th.Stats, other.Stats) &&
 		((th.LastError == nil && other.LastError == nil) ||
 			(th.LastError != nil && other.LastError != nil && th.LastError.Error() == other.LastError.Error()))

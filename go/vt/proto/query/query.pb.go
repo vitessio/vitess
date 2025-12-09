@@ -5399,9 +5399,14 @@ type StreamHealthResponse struct {
 	// code uses it to verify that it's talking to the correct tablet and that it
 	// hasn't changed in the meantime e.g. due to tablet restarts where ports or
 	// ips have been reused but assigned differently.
-	TabletAlias   *topodata.TabletAlias `protobuf:"bytes,5,opt,name=tablet_alias,json=tabletAlias,proto3" json:"tablet_alias,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	TabletAlias *topodata.TabletAlias `protobuf:"bytes,5,opt,name=tablet_alias,json=tabletAlias,proto3" json:"tablet_alias,omitempty"`
+	// tablet_start_time is the Unix timestamp (seconds since epoch) when the
+	// vttablet process started. Used by VTGate to identify newly restored replicas
+	// for warming purposes - new replicas receive reduced traffic while their
+	// buffer pools warm up.
+	TabletStartTime int64 `protobuf:"varint,7,opt,name=tablet_start_time,json=tabletStartTime,proto3" json:"tablet_start_time,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *StreamHealthResponse) Reset() {
@@ -5467,6 +5472,13 @@ func (x *StreamHealthResponse) GetTabletAlias() *topodata.TabletAlias {
 		return x.TabletAlias
 	}
 	return nil
+}
+
+func (x *StreamHealthResponse) GetTabletStartTime() int64 {
+	if x != nil {
+		return x.TabletStartTime
+	}
+	return 0
 }
 
 // TransactionMetadata contains the metadata for a distributed transaction.
@@ -6181,13 +6193,14 @@ const file_query_proto_rawDesc = "" +
 	"\x14healthy_tablet_count\x18\x01 \x01(\x05R\x12healthyTabletCount\x124\n" +
 	"\x16unhealthy_tablet_count\x18\x02 \x01(\x05R\x14unhealthyTabletCount\x12=\n" +
 	"\x1breplication_lag_seconds_min\x18\x03 \x01(\rR\x18replicationLagSecondsMin\x12=\n" +
-	"\x1breplication_lag_seconds_max\x18\x04 \x01(\rR\x18replicationLagSecondsMax\"\x95\x02\n" +
+	"\x1breplication_lag_seconds_max\x18\x04 \x01(\rR\x18replicationLagSecondsMax\"\xc1\x02\n" +
 	"\x14StreamHealthResponse\x12%\n" +
 	"\x06target\x18\x01 \x01(\v2\r.query.TargetR\x06target\x12\x18\n" +
 	"\aserving\x18\x02 \x01(\bR\aserving\x12?\n" +
 	"\x1cprimary_term_start_timestamp\x18\x03 \x01(\x03R\x19primaryTermStartTimestamp\x12;\n" +
 	"\x0erealtime_stats\x18\x04 \x01(\v2\x14.query.RealtimeStatsR\rrealtimeStats\x128\n" +
-	"\ftablet_alias\x18\x05 \x01(\v2\x15.topodata.TabletAliasR\vtabletAliasJ\x04\b\x06\x10\a\"\xae\x01\n" +
+	"\ftablet_alias\x18\x05 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\x12*\n" +
+	"\x11tablet_start_time\x18\a \x01(\x03R\x0ftabletStartTimeJ\x04\b\x06\x10\a\"\xae\x01\n" +
 	"\x13TransactionMetadata\x12\x12\n" +
 	"\x04dtid\x18\x01 \x01(\tR\x04dtid\x12-\n" +
 	"\x05state\x18\x02 \x01(\x0e2\x17.query.TransactionStateR\x05state\x12!\n" +

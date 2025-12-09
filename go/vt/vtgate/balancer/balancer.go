@@ -96,6 +96,7 @@ const (
 	ModeCell
 	ModePreferCell
 	ModeRandom
+	ModeWarming
 )
 
 func ParseMode(ms string) Mode {
@@ -106,6 +107,8 @@ func ParseMode(ms string) Mode {
 		return ModePreferCell
 	case "random":
 		return ModeRandom
+	case "warming":
+		return ModeWarming
 	default:
 		return ModeInvalid
 	}
@@ -119,13 +122,15 @@ func (m Mode) String() string {
 		return "prefer-cell"
 	case ModeRandom:
 		return "random"
+	case ModeWarming:
+		return "warming"
 	default:
 		return "invalid"
 	}
 }
 
 func GetAvailableModeNames() []string {
-	return []string{ModeCell.String(), ModePreferCell.String(), ModeRandom.String()}
+	return []string{ModeCell.String(), ModePreferCell.String(), ModeRandom.String(), ModeWarming.String()}
 }
 
 type TabletBalancer interface {
@@ -152,6 +157,8 @@ func NewTabletBalancer(mode Mode, localCell string, vtGateCells []string) (Table
 		return newFlowBalancer(localCell, vtGateCells), nil
 	case ModeRandom:
 		return newRandomBalancer(localCell, vtGateCells), nil
+	case ModeWarming:
+		return nil, errors.New("warming mode requires additional configuration; use NewWarmingBalancer instead")
 	case ModeCell:
 		return nil, errors.New("cell mode should be handled by the gateway, not the balancer factory")
 	default:

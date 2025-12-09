@@ -65,6 +65,10 @@ var (
 	balancerVtgateCells []string
 	balancerKeyspaces   []string
 
+	// configuration flags for the warming balancer
+	warmingPeriod         = 30 * time.Minute
+	warmingTrafficPercent = 10
+
 	logCollations = logutil.NewThrottledLogger("CollationInconsistent", 1*time.Minute)
 )
 
@@ -76,6 +80,8 @@ func registerTabletGatewayFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&balancerModeFlag, "vtgate-balancer-mode", "", fmt.Sprintf("Tablet balancer mode (options: %s). Defaults to 'cell' which shuffles tablets in the local cell.", strings.Join(balancer.GetAvailableModeNames(), ", ")))
 	fs.StringSliceVar(&balancerVtgateCells, "balancer-vtgate-cells", []string{}, "Comma-separated list of cells that contain vttablets. For 'prefer-cell' mode, this is required. For 'random' mode, this is optional and filters tablets to those cells.")
 	fs.StringSliceVar(&balancerKeyspaces, "balancer-keyspaces", []string{}, "Comma-separated list of keyspaces for which to use the balancer (optional). If empty, applies to all keyspaces.")
+	fs.DurationVar(&warmingPeriod, "balancer-warming-period", 30*time.Minute, "Duration after which a tablet is considered 'warm'. New tablets receive reduced traffic during this period. Only applies to warming mode.")
+	fs.IntVar(&warmingTrafficPercent, "balancer-warming-traffic-percent", 10, "Percentage of traffic (0-100) to send to new replicas during the warming period. Only applies to warming mode.")
 }
 
 func registerVtcomboTabletGatewayFlags(fs *pflag.FlagSet) {
@@ -206,14 +212,23 @@ func (gw *TabletGateway) setupBalancer() {
 		log.Exitf("--balancer-vtgate-cells is required when using --vtgate-balancer-mode=prefer-cell")
 	}
 
-	// Create the balancer for prefer-cell or random modes
-	var err error
-	gw.balancer, err = balancer.NewTabletBalancer(mode, gw.localCell, balancerVtgateCells)
-	if err != nil {
-		log.Exitf("Failed to create tablet balancer: %v", err)
+	// Create the balancer based on mode
+	switch mode {
+	case balancer.ModeWarming:
+		config := balancer.WarmingConfig{
+			WarmingPeriod:         warmingPeriod,
+			WarmingTrafficPercent: warmingTrafficPercent,
+		}
+		gw.balancer = balancer.NewWarmingBalancer(gw.localCell, balancerVtgateCells, config)
+		log.Infof("Tablet balancer enabled with mode: %s (period: %v, traffic: %d%%)", mode, warmingPeriod, warmingTrafficPercent)
+	default:
+		var err error
+		gw.balancer, err = balancer.NewTabletBalancer(mode, gw.localCell, balancerVtgateCells)
+		if err != nil {
+			log.Exitf("Failed to create tablet balancer: %v", err)
+		}
+		log.Infof("Tablet balancer enabled with mode: %s", mode)
 	}
-
-	log.Infof("Tablet balancer enabled with mode: %s", mode)
 }
 
 // QueryServiceByAlias satisfies the Gateway interface
