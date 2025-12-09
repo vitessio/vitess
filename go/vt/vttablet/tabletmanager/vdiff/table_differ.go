@@ -412,7 +412,7 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 		td.wgShardStreamers.Done()
 		if participant.err != nil {
 			td.shardStreamsErrCh <- vterrors.Wrapf(participant.err, "error encountered in vstream from the %s tablet in shard %s",
-				participant.tablet, participant.shard)
+				topoproto.TabletAliasString(participant.tablet.Alias), participant.shard)
 		}
 	}()
 
