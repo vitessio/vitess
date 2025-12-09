@@ -28,17 +28,17 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
-func newSessionBalancer(t *testing.T) *SessionBalancer {
+func createSessionBalancer(t *testing.T) *SessionBalancer {
 	t.Helper()
 
-	b := NewSessionBalancer("local")
+	b := newSessionBalancer("local")
 	sb := b.(*SessionBalancer)
 
 	return sb
 }
 
 func TestPickNoTablets(t *testing.T) {
-	b := newSessionBalancer(t)
+	b := createSessionBalancer(t)
 
 	target := &querypb.Target{
 		Keyspace:   "keyspace",
@@ -53,7 +53,7 @@ func TestPickNoTablets(t *testing.T) {
 }
 
 func TestPickLocalOnly(t *testing.T) {
-	b := newSessionBalancer(t)
+	b := createSessionBalancer(t)
 
 	target := &querypb.Target{
 		Keyspace:   "keyspace",
@@ -117,7 +117,7 @@ func TestPickLocalOnly(t *testing.T) {
 }
 
 func TestPickPreferLocal(t *testing.T) {
-	b := newSessionBalancer(t)
+	b := createSessionBalancer(t)
 
 	target := &querypb.Target{
 		Keyspace:   "keyspace",
@@ -190,7 +190,7 @@ func TestPickPreferLocal(t *testing.T) {
 }
 
 func TestPickNoLocal(t *testing.T) {
-	b := newSessionBalancer(t)
+	b := createSessionBalancer(t)
 
 	target := &querypb.Target{
 		Keyspace:   "keyspace",
@@ -244,7 +244,7 @@ func TestPickNoLocal(t *testing.T) {
 }
 
 func TestPickNoOpts(t *testing.T) {
-	b := newSessionBalancer(t)
+	b := createSessionBalancer(t)
 
 	target := &querypb.Target{
 		Keyspace:   "keyspace",
@@ -279,7 +279,7 @@ func TestPickNoOpts(t *testing.T) {
 }
 
 func TestPickInvalidTablets(t *testing.T) {
-	b := newSessionBalancer(t)
+	b := createSessionBalancer(t)
 
 	target := &querypb.Target{
 		Keyspace:   "keyspace",

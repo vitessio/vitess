@@ -96,6 +96,7 @@ const (
 	ModeCell
 	ModePreferCell
 	ModeRandom
+	ModeSession
 )
 
 func ParseMode(ms string) Mode {
@@ -106,6 +107,8 @@ func ParseMode(ms string) Mode {
 		return ModePreferCell
 	case "random":
 		return ModeRandom
+	case "session":
+		return ModeSession
 	default:
 		return ModeInvalid
 	}
@@ -119,13 +122,15 @@ func (m Mode) String() string {
 		return "prefer-cell"
 	case ModeRandom:
 		return "random"
+	case ModeSession:
+		return "session"
 	default:
 		return "invalid"
 	}
 }
 
 func GetAvailableModeNames() []string {
-	return []string{ModeCell.String(), ModePreferCell.String(), ModeRandom.String()}
+	return []string{ModeCell.String(), ModePreferCell.String(), ModeRandom.String(), ModeSession.String()}
 }
 
 type TabletBalancer interface {
@@ -162,6 +167,8 @@ func NewTabletBalancer(mode Mode, localCell string, vtGateCells []string) (Table
 		return newFlowBalancer(localCell, vtGateCells), nil
 	case ModeRandom:
 		return newRandomBalancer(localCell, vtGateCells), nil
+	case ModeSession:
+		return newSessionBalancer(localCell), nil
 	case ModeCell:
 		return nil, errors.New("cell mode should be handled by the gateway, not the balancer factory")
 	default:
@@ -352,9 +359,6 @@ func (b *flowBalancer) allocateFlows(allTablets []*discovery.TabletHealth) *targ
 			}
 		}
 
-		// fmt.Printf("outflows %v over %v under %v\n", a.Outflows, overAllocated, underAllocated)
-
-		//
 		// For each overallocated cell, proportionally shift flow from targets that are overallocated
 		// to targets that are underallocated.
 		//
@@ -375,9 +379,6 @@ func (b *flowBalancer) allocateFlows(allTablets []*discovery.TabletHealth) *targ
 					// Note that the operator order matters -- multiplications need to occur before divisions
 					// to avoid truncating the integer values.
 					shiftFlow := overAllocatedFlow * currentFlow * underAllocatedFlow / a.Inflows[overAllocatedCell] / unbalancedFlow
-
-					//fmt.Printf("shift %d %s %s -> %s (over %d current %d in %d under %d unbalanced %d) \n", shiftFlow, vtgateCell, overAllocatedCell, underAllocatedCell,
-					//	overAllocatedFlow, currentFlow, a.Inflows[overAllocatedCell], underAllocatedFlow, unbalancedFlow)
 
 					a.Outflows[vtgateCell][overAllocatedCell] -= shiftFlow
 					a.Inflows[overAllocatedCell] -= shiftFlow

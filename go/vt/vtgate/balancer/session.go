@@ -35,8 +35,8 @@ type SessionBalancer struct {
 	localCell string
 }
 
-// NewSessionBalancer creates a new session balancer.
-func NewSessionBalancer(localCell string) TabletBalancer {
+// newSessionBalancer creates a new session balancer.
+func newSessionBalancer(localCell string) TabletBalancer {
 	return &SessionBalancer{localCell: localCell}
 }
 
