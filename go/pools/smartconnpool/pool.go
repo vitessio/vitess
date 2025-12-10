@@ -781,6 +781,8 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 	mono := monotonicFromTime(now)
 
 	closeInStack := func(s *connStack[C]) {
+		activeConnections := pool.Active()
+
 		// Only expire up to ~half of the active connections at a time. This should
 		// prevent us from closing too many connections in one go which could lead to
 		// a lot of `.Get` calls being added to the waitlist if there's a sudden spike
@@ -791,8 +793,8 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 		// that idle connections are eventually closed even in small pools.
 		//
 		// We will expire any additional connections in the next iteration of the idle closer.
-		expiredConnections := make([]*Pooled[C], 0, max(pool.Active()/2, 1))
-		validConnections := make([]*Pooled[C], 0)
+		expiredConnections := make([]*Pooled[C], 0, max(activeConnections/2, 1))
+		validConnections := make([]*Pooled[C], 0, activeConnections)
 
 		// Pop out connections from the stack until we get a `nil` connection
 		for conn, ok := s.Pop(); ok; conn, ok = s.Pop() {
