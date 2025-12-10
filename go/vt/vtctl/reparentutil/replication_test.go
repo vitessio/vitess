@@ -64,20 +64,22 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 		// point is, the combination of (1) whether the test should error and
 		// (2) the set of keys we expect in the map is enough to fully assert on
 		// the correctness of the behavior of this functional unit.
-		expected               []string
-		expectedIsGTIDBasedMap map[string]bool
-		shouldErr              bool
+		expected                 []string
+		expectedCandidateInfoMap map[string]*CandidateInfo
+		shouldErr                bool
 	}{
 		{
 			name: "success",
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 					},
 				},
 				"r2": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
@@ -89,87 +91,107 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 					Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 				},
 			},
-			expected:               []string{"r1", "r2", "p1"},
-			expectedIsGTIDBasedMap: map[string]bool{"r1": true, "r2": true, "p1": true},
-			shouldErr:              false,
+			expected: []string{"r1", "r2", "p1"},
+			expectedCandidateInfoMap: map[string]*CandidateInfo{
+				"r1": {IsGTIDBased: true},
+				"r2": {IsGTIDBased: true},
+				"p1": {IsGTIDBased: true},
+			},
+			shouldErr: false,
 		}, {
 			name: "success for single tablet",
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5,AAAAAAAA-71CA-11E1-9E33-C80AA9429562:1",
 					},
 				},
 			},
-			primaryStatusMap:       map[string]*replicationdatapb.PrimaryStatus{},
-			expected:               []string{"r1"},
-			expectedIsGTIDBasedMap: map[string]bool{"r1": true},
-			shouldErr:              false,
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
+			expected:         []string{"r1"},
+			expectedCandidateInfoMap: map[string]*CandidateInfo{
+				"r1": {IsGTIDBased: true},
+			},
+			shouldErr: false,
 		},
 		{
 			name: "mixed replication modes",
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 					},
 				},
 				"r2": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "FilePos/mysql-bin.0001:10",
 					},
 				},
 			},
-			expected:               []string{"r1", "r2"},
-			expectedIsGTIDBasedMap: map[string]bool{"r1": true},
-			shouldErr:              false,
+			expected: []string{"r1", "r2"},
+			expectedCandidateInfoMap: map[string]*CandidateInfo{
+				"r1": {IsGTIDBased: true},
+				"r2": {IsGTIDBased: false},
+			},
+			shouldErr: false,
 		},
 		{
 			name: "tablet without relay log position",
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 					},
 				},
 				"r2": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: "",
 					},
 				},
 			},
-			expected:               nil,
-			expectedIsGTIDBasedMap: nil,
-			shouldErr:              true,
+			expected:                 nil,
+			expectedCandidateInfoMap: nil,
+			shouldErr:                true,
 		},
 		{
 			name: "non-GTID-based",
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "FilePos/mysql-bin.0001:100",
 					},
 				},
 				"r2": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "FilePos/mysql-bin.0001:10",
 					},
 				},
 			},
-			expected:               []string{"r1", "r2"},
-			expectedIsGTIDBasedMap: map[string]bool{},
-			shouldErr:              false,
+			expected: []string{"r1", "r2"},
+			expectedCandidateInfoMap: map[string]*CandidateInfo{
+				"r1": {IsGTIDBased: false},
+				"r2": {IsGTIDBased: false},
+			},
+			shouldErr: false,
 		},
 		{
 			name: "bad primary position fails the call",
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
@@ -181,9 +203,24 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 					Position: "InvalidFlavor/1234",
 				},
 			},
-			expected:               nil,
-			expectedIsGTIDBasedMap: nil,
-			shouldErr:              true,
+			expected:                 nil,
+			expectedCandidateInfoMap: nil,
+			shouldErr:                true,
+		},
+		{
+			name: "unsupported replica with file positons and semi-sync",
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"r1": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: true},
+					After: &replicationdatapb.Status{
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						RelayLogPosition: "FilePos/mysql-bin.0001:10",
+					},
+				},
+			},
+			expected:                 nil,
+			expectedCandidateInfoMap: nil,
+			shouldErr:                true,
 		},
 	}
 
@@ -192,7 +229,7 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 			t.Parallel()
 
 			actual, isGTIDBasedMap, err := FindPositionsOfAllCandidates(tt.statusMap, tt.primaryStatusMap)
-			require.EqualValues(t, tt.expectedIsGTIDBasedMap, isGTIDBasedMap)
+			require.EqualValues(t, tt.expectedCandidateInfoMap, isGTIDBasedMap)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return

@@ -67,6 +67,8 @@ type ReplicationStatus struct {
 	UsingGTID             bool
 	HasReplicationFilters bool
 	SSLAllowed            bool
+	SemiSyncPrimaryStatus bool
+	SemiSyncReplicaStatus bool
 }
 
 // Running returns true if both the IO and SQL threads are running.
@@ -118,6 +120,8 @@ func ReplicationStatusToProto(s ReplicationStatus) *replicationdatapb.Status {
 		HasReplicationFilters:                  s.HasReplicationFilters,
 		AutoPosition:                           s.AutoPosition,
 		UsingGtid:                              s.UsingGTID,
+		SemiSyncPrimaryStatus:                  s.SemiSyncPrimaryStatus,
+		SemiSyncReplicaStatus:                  s.SemiSyncReplicaStatus,
 	}
 	return replstatuspb
 }
@@ -174,6 +178,8 @@ func ProtoToReplicationStatus(s *replicationdatapb.Status) ReplicationStatus {
 		HasReplicationFilters:                  s.HasReplicationFilters,
 		AutoPosition:                           s.AutoPosition,
 		UsingGTID:                              s.UsingGtid,
+		SemiSyncPrimaryStatus:                  s.SemiSyncPrimaryStatus,
+		SemiSyncReplicaStatus:                  s.SemiSyncReplicaStatus,
 	}
 	return replstatus
 }

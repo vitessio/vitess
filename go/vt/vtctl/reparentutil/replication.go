@@ -82,35 +82,51 @@ func (rlp *RelayLogPositions) IsZero() bool {
 	return rlp.Combined.IsZero()
 }
 
+type CandidateInfo struct {
+	IsGTIDBased       bool
+	IsSemiSyncReplica bool
+}
+
 // FindPositionsOfAllCandidates will find candidates for an emergency
 // reparent, and, if successful, return a mapping of those tablet aliases (as
 // raw strings) to their replication positions for later comparison.
 func FindPositionsOfAllCandidates(
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
 	primaryStatusMap map[string]*replicationdatapb.PrimaryStatus,
-) (map[string]*RelayLogPositions, map[string]bool, error) {
-	replicationStatusMap := make(map[string]*replication.ReplicationStatus, len(statusMap))
+) (map[string]*RelayLogPositions, map[string]*CandidateInfo, error) {
+	replicationStatusMapBefore := make(map[string]*replication.ReplicationStatus, len(statusMap))
+	replicationStatusMapAfter := make(map[string]*replication.ReplicationStatus, len(statusMap))
 	positionMap := make(map[string]*RelayLogPositions)
 
 	// Build out replication status list from proto types.
 	for alias, statuspb := range statusMap {
-		status := replication.ProtoToReplicationStatus(statuspb.After)
-		replicationStatusMap[alias] = &status
+		beforeStatus := replication.ProtoToReplicationStatus(statuspb.Before)
+		afterStatus := replication.ProtoToReplicationStatus(statuspb.After)
+		replicationStatusMapBefore[alias] = &beforeStatus
+		replicationStatusMapAfter[alias] = &afterStatus
 	}
 
 	// Determine if we're GTID-based. If we are, we'll need to look for errant
 	// GTIDs below.
 	var (
+		candidateInfoMap           = make(map[string]*CandidateInfo, len(replicationStatusMapAfter))
 		emptyRelayPosErrorRecorder concurrency.FirstErrorRecorder
-		isGTIDBasedMap             = make(map[string]bool, len(replicationStatusMap))
+		isGTIDBasedShard           bool
 	)
 
-	for alias, status := range replicationStatusMap {
-		if _, ok := status.RelayLogPosition.GTIDSet.(replication.Mysql56GTIDSet); ok {
-			isGTIDBasedMap[alias] = true
+	for alias, afterStatus := range replicationStatusMapAfter {
+		isSemiSyncReplica := replicationStatusMapBefore[alias].SemiSyncReplicaStatus
+		candidateInfoMap[alias] = &CandidateInfo{
+			IsSemiSyncReplica: isSemiSyncReplica,
+		}
+		if _, ok := afterStatus.RelayLogPosition.GTIDSet.(replication.Mysql56GTIDSet); ok {
+			candidateInfoMap[alias].IsGTIDBased = true
+			isGTIDBasedShard = true
+		} else if isSemiSyncReplica {
+			return nil, nil, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "semi-sync replica tablets without gtid positions is unsupported")
 		}
 
-		if status.RelayLogPosition.IsZero() {
+		if afterStatus.RelayLogPosition.IsZero() {
 			// Potentially bail. If any other tablet is detected to have
 			// GTID-based relay log positions, we will return the error recorded
 			// here.
@@ -118,12 +134,12 @@ func FindPositionsOfAllCandidates(
 		}
 
 		positionMap[alias] = &RelayLogPositions{
-			Combined: status.RelayLogPosition,
-			Executed: status.Position,
+			Combined: afterStatus.RelayLogPosition,
+			Executed: afterStatus.Position,
 		}
 	}
 
-	if len(isGTIDBasedMap) > 0 && emptyRelayPosErrorRecorder.HasErrors() {
+	if isGTIDBasedShard && emptyRelayPosErrorRecorder.HasErrors() {
 		return nil, nil, emptyRelayPosErrorRecorder.Error()
 	}
 
@@ -134,12 +150,14 @@ func FindPositionsOfAllCandidates(
 		}
 
 		if _, ok := executedPosition.GTIDSet.(replication.Mysql56GTIDSet); ok {
-			isGTIDBasedMap[alias] = true
+			candidateInfoMap[alias] = &CandidateInfo{
+				IsGTIDBased: true,
+			}
 		}
 		positionMap[alias] = &RelayLogPositions{Combined: executedPosition}
 	}
 
-	return positionMap, isGTIDBasedMap, nil
+	return positionMap, candidateInfoMap, nil
 }
 
 // ReplicaWasRunning returns true if a StopReplicationStatus indicates that the

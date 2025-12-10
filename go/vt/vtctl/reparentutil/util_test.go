@@ -1765,11 +1765,11 @@ func TestWaitForCatchUp(t *testing.T) {
 
 func TestRestrictValidCandidates(t *testing.T) {
 	tests := []struct {
-		name            string
-		validCandidates map[string]*RelayLogPositions
-		tabletMap       map[string]*topo.TabletInfo
-		isGTIDBasedMap  map[string]bool
-		result          map[string]*RelayLogPositions
+		name             string
+		validCandidates  map[string]*RelayLogPositions
+		tabletMap        map[string]*topo.TabletInfo
+		candidateInfoMap map[string]*CandidateInfo
+		result           map[string]*RelayLogPositions
 	}{
 		{
 			name: "remove invalid tablets",
@@ -1837,12 +1837,13 @@ func TestRestrictValidCandidates(t *testing.T) {
 					},
 				},
 			},
-			isGTIDBasedMap: map[string]bool{
-				"zone1-0000000100": true,
-				"zone1-0000000101": true,
-				"zone1-0000000102": true,
-				"zone1-0000000103": true,
-				"zone1-0000000104": true,
+			candidateInfoMap: map[string]*CandidateInfo{
+				"zone1-0000000100": {IsGTIDBased: true},
+				"zone1-0000000101": {IsGTIDBased: true},
+				"zone1-0000000102": {IsGTIDBased: true},
+				"zone1-0000000103": {IsGTIDBased: true},
+				"zone1-0000000104": {IsGTIDBased: true},
+				"zone1-0000000105": {IsGTIDBased: true},
 			},
 			result: map[string]*RelayLogPositions{
 				"zone1-0000000100": {},
@@ -1851,7 +1852,7 @@ func TestRestrictValidCandidates(t *testing.T) {
 			},
 		},
 		{
-			name: "remove invalid tablets with file-based replica",
+			name: "remove invalid tablets with file-based async replica",
 			validCandidates: map[string]*RelayLogPositions{
 				"zone1-0000000100": {},
 				"zone1-0000000101": {},
@@ -1916,17 +1917,17 @@ func TestRestrictValidCandidates(t *testing.T) {
 					},
 				},
 			},
-			isGTIDBasedMap: map[string]bool{
-				"zone1-0000000100": true,
-				"zone1-0000000101": true,
-				"zone1-0000000102": true,
-				"zone1-0000000103": true,
-				"zone1-0000000104": false, // file-based
+			candidateInfoMap: map[string]*CandidateInfo{
+				"zone1-0000000100": {IsGTIDBased: true},
+				"zone1-0000000101": {IsGTIDBased: true},
+				"zone1-0000000102": {IsGTIDBased: true},
+				"zone1-0000000103": {IsGTIDBased: true},
+				"zone1-0000000104": {IsGTIDBased: false}, // file-based
+				"zone1-0000000105": {IsGTIDBased: true},
 			},
 			result: map[string]*RelayLogPositions{
 				"zone1-0000000100": {},
 				"zone1-0000000101": {},
-				"zone1-0000000104": {},
 			},
 		},
 	}
@@ -1934,7 +1935,7 @@ func TestRestrictValidCandidates(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			logger := logutil.NewMemoryLogger()
-			res, err := restrictValidCandidates(test.validCandidates, test.tabletMap, test.isGTIDBasedMap, logger)
+			res, err := restrictValidCandidates(test.validCandidates, test.tabletMap, test.candidateInfoMap, logger)
 			assert.NoError(t, err)
 			assert.Equal(t, res, test.result)
 		})

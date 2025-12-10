@@ -1036,6 +1036,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 	}
 	before := replication.ReplicationStatusToProto(rs)
 	before.BackupRunning = tm.IsBackupRunning()
+	before.SemiSyncPrimaryStatus, before.SemiSyncReplicaStatus = tm.MysqlDaemon.SemiSyncStatus(ctx)
 
 	if stopReplicationMode == replicationdatapb.StopReplicationMode_IOTHREADONLY {
 		if !rs.IOHealthy() {
