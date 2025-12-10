@@ -54,8 +54,6 @@ var (
 
 	discoveryInstanceTimingsActions = []string{"Backend", "Instance", "Other"}
 	discoveryInstanceTimings        = stats.NewTimings("DiscoveryInstanceTimings", "Timings for instance discovery actions", "Action", discoveryInstanceTimingsActions...)
-	// TODO: deprecate in v24
-	discoverInstanceTimings = stats.NewTimings("DiscoverInstanceTimings", "Timings for instance discovery actions", "Action", discoveryInstanceTimingsActions...)
 )
 
 var recentDiscoveryOperationKeys *cache.Cache
@@ -185,23 +183,22 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 	instanceLatency := latency.Elapsed("instance")
 	otherLatency := totalLatency - (backendLatency + instanceLatency)
 
-	// TODO: deprecate in v24
-	discoverInstanceTimings.Add("Backend", backendLatency)
-	discoverInstanceTimings.Add("Instance", instanceLatency)
-	discoverInstanceTimings.Add("Other", otherLatency)
-
 	discoveryInstanceTimings.Add("Backend", backendLatency)
 	discoveryInstanceTimings.Add("Instance", instanceLatency)
 	discoveryInstanceTimings.Add("Other", otherLatency)
 
-	if forceDiscovery {
-		log.Infof("Force discovered - %+v, err - %v", instance, err)
+	if forceDiscovery && err == nil {
+		log.Infof("Force discovered %s - %+v", tabletAlias, instance)
+	} else if forceDiscovery && err != nil {
+		log.Errorf("Force discovered %s - %+v, err - %v", tabletAlias, instance, err)
+	} else if err != nil {
+		log.Errorf("Failed to discover %s: %v", tabletAlias, err)
 	}
 
 	if instance == nil {
 		failedDiscoveriesCounter.Add(1)
 		if util.ClearToLog("discoverInstance", tabletAlias) {
-			log.Warningf(" DiscoverInstance(%+v) instance is nil in %.3fs (Backend: %.3fs, Instance: %.3fs), error=%+v",
+			log.Warningf("DiscoverInstance(%+v) instance is nil in %.3fs (Backend: %.3fs, Instance: %.3fs), error=%+v",
 				tabletAlias,
 				totalLatency.Seconds(),
 				backendLatency.Seconds(),
