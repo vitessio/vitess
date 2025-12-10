@@ -127,7 +127,7 @@ func FindPositionsOfAllCandidates(
 
 	for alias, afterStatus := range replicationStatusMapAfter {
 		candidateInfo, ok := candidateInfoMap[alias]
-		if ok && isGTIDBasedShard && candidateInfo.IsSemiSyncReplica {
+		if ok && isGTIDBasedShard && candidateInfo.IsSemiSyncReplica && !candidateInfo.IsGTIDBased {
 			return nil, nil, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "semi-sync replica tablets without gtid positions is unsupported")
 		}
 
