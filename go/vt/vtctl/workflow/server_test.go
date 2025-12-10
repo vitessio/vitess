@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -2886,4 +2887,20 @@ func TestMaterializeAddTables(t *testing.T) {
 			assert.Empty(t, te.tmc.updateVReplicationWorklowRequests[210])
 		})
 	}
+}
+
+func TestMoveTablesCreateSourceEqualsTarget(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	ts := memorytopo.NewServer(ctx, "cell1")
+
+	_, err := NewServer(vtenv.NewTestEnv(), ts, nil).MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
+		SourceKeyspace: "ks1",
+		TargetKeyspace: "ks1",
+		Workflow:       "wf1",
+	})
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "source and target keyspace must be different")
 }
