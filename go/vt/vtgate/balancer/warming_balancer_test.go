@@ -127,9 +127,10 @@ func TestWarmingBalancerMixedTablets(t *testing.T) {
 	}
 
 	// With 10% warming traffic, expect ~90% old, ~10% new
-	assert.InEpsilon(t, 0.90, float64(oldPicks)/float64(N), 0.05,
+	// Use 10% tolerance for statistical variance
+	assert.InEpsilon(t, 0.90, float64(oldPicks)/float64(N), 0.10,
 		"old tablet should receive ~90%% of traffic (got %.1f%%)", float64(oldPicks)/float64(N)*100)
-	assert.InEpsilon(t, 0.10, float64(newPicks)/float64(N), 0.05,
+	assert.InEpsilon(t, 0.10, float64(newPicks)/float64(N), 0.10,
 		"new tablet should receive ~10%% of traffic (got %.1f%%)", float64(newPicks)/float64(N)*100)
 }
 

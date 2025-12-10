@@ -20,14 +20,11 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"net/http"
-	"sync"
 	"time"
 
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 // WarmingConfig holds configuration for the warming balancer.
@@ -68,18 +65,6 @@ type warmingBalancer struct {
 	vtGateCells           []string
 	warmingPeriod         time.Duration
 	warmingTrafficPercent int
-
-	// mu protects debug state only
-	mu            sync.Mutex
-	lastPickStats *warmingPickStats
-}
-
-type warmingPickStats struct {
-	Timestamp  time.Time
-	OldTablets int
-	NewTablets int
-	AllNewMode bool
-	PickedNew  bool
 }
 
 // Pick implements the warming logic for tablet selection.
@@ -101,96 +86,40 @@ func (b *warmingBalancer) Pick(target *querypb.Target, tablets []*discovery.Tabl
 	}
 
 	// Only apply warming logic to REPLICA tablets.
-	// PRIMARY and RDONLY use simple random distribution.
 	if target.TabletType != topodatapb.TabletType_REPLICA {
 		return tablets[rand.IntN(len(tablets))]
 	}
 
-	now := time.Now()
-	warmingCutoff := now.Add(-b.warmingPeriod)
-
+	warmingCutoff := time.Now().Add(-b.warmingPeriod)
 	var oldTablets, newTablets []*discovery.TabletHealth
 
 	for _, th := range tablets {
 		// Tablets with zero start time (old vttablets) are treated as old
-		// for backwards compatibility and safety during rolling upgrades.
-		if th.TabletStartTime == 0 {
-			oldTablets = append(oldTablets, th)
-			continue
-		}
-
-		tabletStartTime := time.Unix(th.TabletStartTime, 0)
-		if tabletStartTime.Before(warmingCutoff) {
+		// for backwards compatibility during rolling upgrades.
+		if th.TabletStartTime == 0 || time.Unix(th.TabletStartTime, 0).Before(warmingCutoff) {
 			oldTablets = append(oldTablets, th)
 		} else {
 			newTablets = append(newTablets, th)
 		}
 	}
 
-	// Debug logging for tablet classification
-	if log.V(2) {
-		log.Infof("warming balancer: target=%s/%s tablets=%d old=%d new=%d warmingPeriod=%v",
-			target.Keyspace, target.Shard, len(tablets), len(oldTablets), len(newTablets), b.warmingPeriod)
-		for _, th := range tablets {
-			age := now.Sub(time.Unix(th.TabletStartTime, 0))
-			isNew := th.TabletStartTime != 0 && !time.Unix(th.TabletStartTime, 0).Before(warmingCutoff)
-			log.Infof("  tablet %s: startTime=%d age=%v isNew=%v",
-				topoproto.TabletAliasString(th.Tablet.Alias), th.TabletStartTime, age, isNew)
-		}
-	}
-
-	// Update debug stats
-	stats := &warmingPickStats{
-		Timestamp:  now,
-		OldTablets: len(oldTablets),
-		NewTablets: len(newTablets),
-	}
-
-	var picked *discovery.TabletHealth
-	var mode string
-
 	switch {
 	case len(oldTablets) == 0:
-		// Case 1: All tablets are new - no warming needed, pick randomly.
-		// This handles the scenario where an entire zone is recycled.
-		mode = "all-new"
-		stats.AllNewMode = true
-		picked = newTablets[rand.IntN(len(newTablets))]
-		stats.PickedNew = true
-
+		// All tablets are new - pick randomly (nothing to warm against)
+		return newTablets[rand.IntN(len(newTablets))]
 	case len(newTablets) == 0:
-		// Case 2: No new tablets - pick from old tablets randomly.
-		mode = "no-new"
-		picked = oldTablets[rand.IntN(len(oldTablets))]
-		stats.PickedNew = false
-
+		// No new tablets - pick from old tablets randomly
+		return oldTablets[rand.IntN(len(oldTablets))]
 	default:
-		// Case 3: Mixed old and new tablets - route based on warming percentage.
-		// Roll a number 0-99; if < warmingTrafficPercent, send to new tablet.
-		mode = "mixed"
+		// Mixed: route warmingTrafficPercent to new, rest to old
 		if rand.IntN(100) < b.warmingTrafficPercent {
-			picked = newTablets[rand.IntN(len(newTablets))]
-			stats.PickedNew = true
-		} else {
-			picked = oldTablets[rand.IntN(len(oldTablets))]
-			stats.PickedNew = false
+			return newTablets[rand.IntN(len(newTablets))]
 		}
+		return oldTablets[rand.IntN(len(oldTablets))]
 	}
-
-	// Debug logging for pick decision
-	if log.V(2) {
-		log.Infof("warming balancer: picked %s (mode=%s, pickedNew=%v, warmingTrafficPercent=%d)",
-			topoproto.TabletAliasString(picked.Tablet.Alias), mode, stats.PickedNew, b.warmingTrafficPercent)
-	}
-
-	b.mu.Lock()
-	b.lastPickStats = stats
-	b.mu.Unlock()
-
-	return picked
 }
 
-// DebugHandler provides debug information about the warming balancer state.
+// DebugHandler provides debug information about the warming balancer configuration.
 func (b *warmingBalancer) DebugHandler(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 	fmt.Fprintf(w, "Balancer Mode: warming\r\n")
@@ -198,17 +127,4 @@ func (b *warmingBalancer) DebugHandler(w http.ResponseWriter, _ *http.Request) {
 	fmt.Fprintf(w, "VTGate Cells: %v\r\n", b.vtGateCells)
 	fmt.Fprintf(w, "Warming Period: %v\r\n", b.warmingPeriod)
 	fmt.Fprintf(w, "Warming Traffic Percent: %d%%\r\n", b.warmingTrafficPercent)
-
-	b.mu.Lock()
-	stats := b.lastPickStats
-	b.mu.Unlock()
-
-	if stats != nil {
-		fmt.Fprintf(w, "\r\nLast Pick Stats:\r\n")
-		fmt.Fprintf(w, "  Timestamp: %v\r\n", stats.Timestamp)
-		fmt.Fprintf(w, "  Old Tablets: %d\r\n", stats.OldTablets)
-		fmt.Fprintf(w, "  New Tablets: %d\r\n", stats.NewTablets)
-		fmt.Fprintf(w, "  All-New Mode: %v\r\n", stats.AllNewMode)
-		fmt.Fprintf(w, "  Picked New: %v\r\n", stats.PickedNew)
-	}
 }
