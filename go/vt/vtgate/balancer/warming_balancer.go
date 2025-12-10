@@ -24,7 +24,6 @@ import (
 
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // WarmingConfig holds configuration for the warming balancer.
@@ -70,8 +69,7 @@ type warmingBalancer struct {
 // Pick implements the warming logic for tablet selection.
 //
 // The algorithm:
-//  1. Only applies warming logic to REPLICA type tablets (PRIMARY and RDONLY
-//     use random selection)
+//  1. Prefers local cell tablets (falls back to all tablets if local cell has none)
 //  2. Separates tablets into "old" (started before warmingPeriod) and "new"
 //     (started within warmingPeriod)
 //  3. If ALL tablets are new, picks randomly (nothing to warm against)
@@ -80,14 +78,15 @@ type warmingBalancer struct {
 //
 // Tablets with TabletStartTime == 0 are treated as old for backwards compatibility
 // with older vttablets that don't report start time.
-func (b *warmingBalancer) Pick(target *querypb.Target, tablets []*discovery.TabletHealth) *discovery.TabletHealth {
+func (b *warmingBalancer) Pick(_ *querypb.Target, tablets []*discovery.TabletHealth) *discovery.TabletHealth {
 	if len(tablets) == 0 {
 		return nil
 	}
 
-	// Only apply warming logic to REPLICA tablets.
-	if target.TabletType != topodatapb.TabletType_REPLICA {
-		return tablets[rand.IntN(len(tablets))]
+	// Prefer local cell tablets (matching default cell mode behavior).
+	// Fall back to all tablets only if local cell has none.
+	if filtered := filterByCell(tablets, b.localCell); len(filtered) > 0 {
+		tablets = filtered
 	}
 
 	warmingCutoff := time.Now().Add(-b.warmingPeriod)
@@ -117,6 +116,16 @@ func (b *warmingBalancer) Pick(target *querypb.Target, tablets []*discovery.Tabl
 		}
 		return oldTablets[rand.IntN(len(oldTablets))]
 	}
+}
+
+func filterByCell(tablets []*discovery.TabletHealth, cell string) []*discovery.TabletHealth {
+	var filtered []*discovery.TabletHealth
+	for _, th := range tablets {
+		if th.Tablet.Alias.Cell == cell {
+			filtered = append(filtered, th)
+		}
+	}
+	return filtered
 }
 
 // DebugHandler provides debug information about the warming balancer configuration.

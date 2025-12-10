@@ -38,15 +38,17 @@ func TestWarmingBalancerAllOldTablets(t *testing.T) {
 	now := time.Now()
 	oldTime := now.Add(-1 * time.Hour) // 1 hour ago, well past warming period
 
-	tablets := []*discovery.TabletHealth{
-		createTestTabletWithStartTime("a", oldTime),
-		createTestTabletWithStartTime("b", oldTime),
-		createTestTabletWithStartTime("c", oldTime),
-	}
+	// All tablets in local cell "a"
+	t1 := createTestTabletWithStartTime("a", oldTime)
+	t2 := createTestTabletWithStartTime("a", oldTime)
+	t2.Tablet.Alias.Uid = 2
+	t3 := createTestTabletWithStartTime("a", oldTime)
+	t3.Tablet.Alias.Uid = 3
+	tablets := []*discovery.TabletHealth{t1, t2, t3}
 
 	target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA}
 	config := WarmingConfig{WarmingPeriod: 30 * time.Minute, WarmingTrafficPercent: 10}
-	b := NewWarmingBalancer("a", []string{"a", "b", "c"}, config)
+	b := NewWarmingBalancer("a", []string{"a"}, config)
 
 	// All picks should succeed (all old tablets, random distribution)
 	const numPicks = 10000
@@ -71,14 +73,15 @@ func TestWarmingBalancerAllNewTablets(t *testing.T) {
 	now := time.Now()
 	newTime := now.Add(-5 * time.Minute) // 5 minutes ago, within warming period
 
-	tablets := []*discovery.TabletHealth{
-		createTestTabletWithStartTime("a", newTime),
-		createTestTabletWithStartTime("b", newTime),
-	}
+	// All tablets in local cell "a"
+	t1 := createTestTabletWithStartTime("a", newTime)
+	t2 := createTestTabletWithStartTime("a", newTime)
+	t2.Tablet.Alias.Uid = 2
+	tablets := []*discovery.TabletHealth{t1, t2}
 
 	target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA}
 	config := WarmingConfig{WarmingPeriod: 30 * time.Minute, WarmingTrafficPercent: 10}
-	b := NewWarmingBalancer("a", []string{"a", "b"}, config)
+	b := NewWarmingBalancer("a", []string{"a"}, config)
 
 	// All picks should succeed - when all tablets are new, we serve normally
 	const numPicks = 10000
@@ -104,13 +107,15 @@ func TestWarmingBalancerMixedTablets(t *testing.T) {
 	oldTime := now.Add(-1 * time.Hour)
 	newTime := now.Add(-5 * time.Minute)
 
+	// Both tablets in local cell "a"
 	oldTablet := createTestTabletWithStartTime("a", oldTime)
-	newTablet := createTestTabletWithStartTime("b", newTime)
+	newTablet := createTestTabletWithStartTime("a", newTime)
+	newTablet.Tablet.Alias.Uid = 2 // Different UID
 	tablets := []*discovery.TabletHealth{oldTablet, newTablet}
 
 	target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA}
 	config := WarmingConfig{WarmingPeriod: 30 * time.Minute, WarmingTrafficPercent: 10}
-	b := NewWarmingBalancer("a", []string{"a", "b"}, config)
+	b := NewWarmingBalancer("a", []string{"a"}, config)
 
 	oldPicks := 0
 	newPicks := 0
@@ -134,49 +139,56 @@ func TestWarmingBalancerMixedTablets(t *testing.T) {
 		"new tablet should receive ~10%% of traffic (got %.1f%%)", float64(newPicks)/float64(N)*100)
 }
 
-func TestWarmingBalancerNonReplicaType(t *testing.T) {
+func TestWarmingBalancerAppliesToAllTabletTypes(t *testing.T) {
 	now := time.Now()
 	oldTime := now.Add(-1 * time.Hour)
 	newTime := now.Add(-5 * time.Minute)
 
-	tablets := []*discovery.TabletHealth{
-		createTestTabletWithStartTime("a", oldTime),
-		createTestTabletWithStartTime("b", newTime),
-	}
+	// Both tablets in local cell "a"
+	oldTablet := createTestTabletWithStartTime("a", oldTime)
+	newTablet := createTestTabletWithStartTime("a", newTime)
+	newTablet.Tablet.Alias.Uid = 2 // Different UID
+	tablets := []*discovery.TabletHealth{oldTablet, newTablet}
 
-	// RDONLY target - warming should NOT apply
+	// RDONLY target - warming SHOULD apply (same as REPLICA)
 	target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_RDONLY}
 	config := WarmingConfig{WarmingPeriod: 30 * time.Minute, WarmingTrafficPercent: 10}
-	b := NewWarmingBalancer("a", []string{"a", "b"}, config)
+	b := NewWarmingBalancer("a", []string{"a"}, config)
 
-	pickCounts := make(map[uint32]int)
+	oldPicks := 0
+	newPicks := 0
 	const N = 10000
 
 	for i := 0; i < N; i++ {
 		th := b.Pick(target, tablets)
 		require.NotNil(t, th)
-		pickCounts[th.Tablet.Alias.Uid]++
+		if th.TabletStartTime == oldTablet.TabletStartTime {
+			oldPicks++
+		} else {
+			newPicks++
+		}
 	}
 
-	// Should be ~50/50 random distribution (warming bypassed for RDONLY)
-	for _, tablet := range tablets {
-		count := pickCounts[tablet.Tablet.Alias.Uid]
-		assert.InEpsilon(t, 0.50, float64(count)/float64(N), 0.10,
-			"RDONLY should use random distribution")
-	}
+	// Should be ~90/10 distribution (warming applies to RDONLY too)
+	assert.InEpsilon(t, 0.90, float64(oldPicks)/float64(N), 0.10,
+		"old tablet should receive ~90%% of RDONLY traffic")
+	assert.InEpsilon(t, 0.10, float64(newPicks)/float64(N), 0.10,
+		"new tablet should receive ~10%% of RDONLY traffic")
 }
 
 func TestWarmingBalancerZeroStartTime(t *testing.T) {
 	now := time.Now()
 	newTime := now.Add(-5 * time.Minute)
 
+	// Both tablets in local cell "a"
 	oldTablet := createTestTablet("a") // No start time set (zero)
-	newTablet := createTestTabletWithStartTime("b", newTime)
+	newTablet := createTestTabletWithStartTime("a", newTime)
+	newTablet.Tablet.Alias.Uid = 2 // Different UID
 	tablets := []*discovery.TabletHealth{oldTablet, newTablet}
 
 	target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA}
 	config := WarmingConfig{WarmingPeriod: 30 * time.Minute, WarmingTrafficPercent: 10}
-	b := NewWarmingBalancer("a", []string{"a", "b"}, config)
+	b := NewWarmingBalancer("a", []string{"a"}, config)
 
 	oldPicks := 0
 	const N = 10000
@@ -229,17 +241,19 @@ func TestWarmingBalancerMultipleOldAndNew(t *testing.T) {
 	oldTime := now.Add(-1 * time.Hour)
 	newTime := now.Add(-5 * time.Minute)
 
-	// 2 old tablets and 2 new tablets
-	tablets := []*discovery.TabletHealth{
-		createTestTabletWithStartTime("a", oldTime),
-		createTestTabletWithStartTime("b", oldTime),
-		createTestTabletWithStartTime("c", newTime),
-		createTestTabletWithStartTime("d", newTime),
-	}
+	// 2 old tablets and 2 new tablets, all in local cell "a"
+	old1 := createTestTabletWithStartTime("a", oldTime)
+	old2 := createTestTabletWithStartTime("a", oldTime)
+	old2.Tablet.Alias.Uid = 2
+	new1 := createTestTabletWithStartTime("a", newTime)
+	new1.Tablet.Alias.Uid = 3
+	new2 := createTestTabletWithStartTime("a", newTime)
+	new2.Tablet.Alias.Uid = 4
+	tablets := []*discovery.TabletHealth{old1, old2, new1, new2}
 
 	target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA}
 	config := WarmingConfig{WarmingPeriod: 30 * time.Minute, WarmingTrafficPercent: 10}
-	b := NewWarmingBalancer("a", []string{"a", "b", "c", "d"}, config)
+	b := NewWarmingBalancer("a", []string{"a"}, config)
 
 	oldPicks := 0
 	newPicks := 0
@@ -277,4 +291,94 @@ func TestWarmingBalancerDefaultConfig(t *testing.T) {
 	config := DefaultWarmingConfig()
 	assert.Equal(t, 30*time.Minute, config.WarmingPeriod)
 	assert.Equal(t, 10, config.WarmingTrafficPercent)
+}
+
+func TestWarmingBalancerPrefersLocalCell(t *testing.T) {
+	now := time.Now()
+	oldTime := now.Add(-1 * time.Hour)
+
+	// Local cell tablet and remote cell tablet
+	localTablet := createTestTabletWithStartTime("local", oldTime)
+	remoteTablet := createTestTabletWithStartTime("remote", oldTime)
+	remoteTablet.Tablet.Alias.Uid = 2
+	tablets := []*discovery.TabletHealth{localTablet, remoteTablet}
+
+	target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA}
+	config := WarmingConfig{WarmingPeriod: 30 * time.Minute, WarmingTrafficPercent: 10}
+	b := NewWarmingBalancer("local", []string{"local", "remote"}, config)
+
+	// All picks should go to local cell tablet
+	for i := 0; i < 100; i++ {
+		th := b.Pick(target, tablets)
+		require.NotNil(t, th)
+		assert.Equal(t, "local", th.Tablet.Alias.Cell, "Should only pick from local cell")
+	}
+}
+
+func TestWarmingBalancerFallsBackToRemoteCell(t *testing.T) {
+	now := time.Now()
+	oldTime := now.Add(-1 * time.Hour)
+
+	// Only remote cell tablets, no local cell tablets
+	remote1 := createTestTabletWithStartTime("remote", oldTime)
+	remote2 := createTestTabletWithStartTime("remote", oldTime)
+	remote2.Tablet.Alias.Uid = 2
+	tablets := []*discovery.TabletHealth{remote1, remote2}
+
+	target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA}
+	config := WarmingConfig{WarmingPeriod: 30 * time.Minute, WarmingTrafficPercent: 10}
+	b := NewWarmingBalancer("local", []string{"local", "remote"}, config)
+
+	// Should fall back to remote tablets when local cell has none
+	for i := 0; i < 100; i++ {
+		th := b.Pick(target, tablets)
+		require.NotNil(t, th, "Should fall back to remote cell tablets")
+		assert.Equal(t, "remote", th.Tablet.Alias.Cell)
+	}
+}
+
+func TestWarmingBalancerLocalCellWithWarming(t *testing.T) {
+	now := time.Now()
+	oldTime := now.Add(-1 * time.Hour)
+	newTime := now.Add(-5 * time.Minute)
+
+	// Local cell: 1 old + 1 new tablet
+	// Remote cell: 1 old tablet (should be ignored)
+	localOld := createTestTabletWithStartTime("local", oldTime)
+	localNew := createTestTabletWithStartTime("local", newTime)
+	localNew.Tablet.Alias.Uid = 2
+	remoteOld := createTestTabletWithStartTime("remote", oldTime)
+	remoteOld.Tablet.Alias.Uid = 3
+	tablets := []*discovery.TabletHealth{localOld, localNew, remoteOld}
+
+	target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA}
+	config := WarmingConfig{WarmingPeriod: 30 * time.Minute, WarmingTrafficPercent: 10}
+	b := NewWarmingBalancer("local", []string{"local", "remote"}, config)
+
+	localOldPicks := 0
+	localNewPicks := 0
+	remotePicks := 0
+	const N = 10000
+
+	for i := 0; i < N; i++ {
+		th := b.Pick(target, tablets)
+		require.NotNil(t, th)
+		switch th.Tablet.Alias.Uid {
+		case localOld.Tablet.Alias.Uid:
+			localOldPicks++
+		case localNew.Tablet.Alias.Uid:
+			localNewPicks++
+		case remoteOld.Tablet.Alias.Uid:
+			remotePicks++
+		}
+	}
+
+	// Remote tablet should never be picked
+	assert.Equal(t, 0, remotePicks, "Remote tablet should never be picked when local cell has tablets")
+
+	// Local tablets should follow warming distribution (~90/10)
+	assert.InEpsilon(t, 0.90, float64(localOldPicks)/float64(N), 0.10,
+		"Local old tablet should receive ~90%% of traffic")
+	assert.InEpsilon(t, 0.10, float64(localNewPicks)/float64(N), 0.10,
+		"Local new tablet should receive ~10%% of traffic")
 }
