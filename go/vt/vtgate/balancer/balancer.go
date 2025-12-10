@@ -144,9 +144,6 @@ type TabletBalancer interface {
 
 // PickOpts are balancer options that are passed into Pick.
 type PickOpts struct {
-	// InvalidTablets is a set of tablets that should not be picked.
-	InvalidTablets map[string]bool
-
 	// SessionUUID is the the current session UUID.
 	SessionUUID string
 }

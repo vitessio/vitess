@@ -18,6 +18,7 @@ package balancer
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -331,14 +332,18 @@ func TestPickInvalidTablets(t *testing.T) {
 	tablet := b.Pick(target, tablets, opts)
 	require.NotNil(t, tablet)
 
-	// Mark returned tablet as invalid, should return other tablet
-	opts.InvalidTablets = map[string]bool{topoproto.TabletAliasString(tablet.Tablet.Alias): true}
+	// Filter out the returned tablet as invalid
+	tablets = slices.DeleteFunc(tablets, func(t *discovery.TabletHealth) bool {
+		return topoproto.TabletAliasString(t.Tablet.Alias) == topoproto.TabletAliasString(tablet.Tablet.Alias)
+	})
+
+	// Pick should now return a different tablet
 	tablet2 := b.Pick(target, tablets, opts)
+	require.NotNil(t, tablet2)
 	require.NotEqual(t, tablet, tablet2)
 
-	// Mark both as invalid, should return nil
-	opts.InvalidTablets[topoproto.TabletAliasString(tablet2.Tablet.Alias)] = true
-	tablet3 := b.Pick(target, tablets, opts)
+	// Filter out the last tablet, Pick should return nothing
+	tablet3 := b.Pick(target, []*discovery.TabletHealth{}, opts)
 	require.Nil(t, tablet3)
 }
 

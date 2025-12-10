@@ -55,12 +55,6 @@ func (b *SessionBalancer) Pick(target *querypb.Target, tablets []*discovery.Tabl
 
 	for _, tablet := range tablets {
 		alias := tabletAlias(tablet)
-
-		// Ignore invalid tablets
-		if _, invalid := opts.InvalidTablets[alias]; invalid {
-			continue
-		}
-
 		weight := tabletWeight(alias, opts.SessionUUID)
 
 		if b.isLocal(tablet) && ((maxLocalTablet == nil) || (weight > maxLocalWeight)) {
