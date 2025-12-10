@@ -97,9 +97,9 @@ func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias, engine 
 		clients:           make(map[chan *querypb.StreamHealthResponse]struct{}),
 
 		state: &querypb.StreamHealthResponse{
-			Target:           &querypb.Target{},
-			TabletAlias:      alias,
-			TabletStartTime:  env.Metadata().StartTimeUnix(),
+			Target:          &querypb.Target{},
+			TabletAlias:     alias,
+			TabletStartTime: env.Metadata().StartTimeUnix(),
 			RealtimeStats: &querypb.RealtimeStats{
 				HealthError: errUnintialized,
 			},
