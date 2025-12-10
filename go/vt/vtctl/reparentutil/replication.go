@@ -115,7 +115,7 @@ func FindPositionsOfAllCandidates(
 	)
 
 	for alias, beforeStatus := range replicationStatusMapBefore {
-		isSemiSyncReplica := beforeStatus.SemiSyncReplicaStatus
+		isSemiSyncReplica := beforeStatus.SemiSyncReplicaEnabled && beforeStatus.SemiSyncReplicaStatus
 		candidateInfoMap[alias] = &CandidateInfo{
 			IsSemiSyncReplica: isSemiSyncReplica,
 		}

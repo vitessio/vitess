@@ -49447,6 +49447,12 @@ export namespace replicationdata {
         /** Status backup_running */
         backup_running?: (boolean|null);
 
+        /** Status semi_sync_primary_enabled */
+        semi_sync_primary_enabled?: (boolean|null);
+
+        /** Status semi_sync_replica_enabled */
+        semi_sync_replica_enabled?: (boolean|null);
+
         /** Status semi_sync_primary_status */
         semi_sync_primary_status?: (boolean|null);
 
@@ -49531,6 +49537,12 @@ export namespace replicationdata {
 
         /** Status backup_running. */
         public backup_running: boolean;
+
+        /** Status semi_sync_primary_enabled. */
+        public semi_sync_primary_enabled: boolean;
+
+        /** Status semi_sync_replica_enabled. */
+        public semi_sync_replica_enabled: boolean;
 
         /** Status semi_sync_primary_status. */
         public semi_sync_primary_status: boolean;

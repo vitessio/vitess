@@ -346,9 +346,6 @@ func restrictValidCandidates(validCandidates map[string]*RelayLogPositions, tabl
 		if !ok {
 			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the candidate info map; this is an impossible situation", candidate)
 		}
-		if !isGTIDBasedShard {
-			isGTIDBasedShard = candidateInfo.IsGTIDBased
-		}
 		if isGTIDBasedShard && !candidateInfo.IsGTIDBased {
 			logger.Warningf("tablet %s is a member of a GTID-based shard, but it does not have GTID-based positions. Skipping", candidate)
 			continue
