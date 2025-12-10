@@ -781,6 +781,12 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 	mono := monotonicFromTime(now)
 
 	closeInStack := func(s *connStack[C]) {
+		conn, ok := s.Pop()
+		if !ok {
+			// Early return to skip allocating slices when the stack is empty
+			return
+		}
+
 		activeConnections := pool.Active()
 
 		// Only expire up to ~half of the active connections at a time. This should
@@ -797,7 +803,7 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 		validConnections := make([]*Pooled[C], 0, activeConnections)
 
 		// Pop out connections from the stack until we get a `nil` connection
-		for conn, ok := s.Pop(); ok; conn, ok = s.Pop() {
+		for ok {
 			if conn.timeUsed.expired(mono, timeout) {
 				expiredConnections = append(expiredConnections, conn)
 
@@ -808,6 +814,8 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 			} else {
 				validConnections = append(validConnections, conn)
 			}
+
+			conn, ok = s.Pop()
 		}
 
 		// Return all the valid connections back to waiters or the stack
