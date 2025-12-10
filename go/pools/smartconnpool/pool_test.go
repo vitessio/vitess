@@ -1462,7 +1462,7 @@ func BenchmarkPoolCleanupIdleConnectionsPerformanceNoIdleConnections(b *testing.
 
 	p := NewPool(&Config[*TestConn]{
 		Capacity:    int64(capacity),
-		IdleTimeout: 50 * time.Millisecond,
+		IdleTimeout: 30 * time.Second,
 		LogWait:     state.LogWait,
 	}).Open(newConnector(&state), nil)
 	defer p.Close()
