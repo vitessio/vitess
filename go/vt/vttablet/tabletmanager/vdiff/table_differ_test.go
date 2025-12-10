@@ -17,7 +17,6 @@ limitations under the License.
 package vdiff
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -26,11 +25,9 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestUpdateTableProgress(t *testing.T) {
@@ -163,45 +160,4 @@ func TestGetSourcePKCols_TableDroppedOnSource(t *testing.T) {
 	err := td.getSourcePKCols()
 	require.NoError(t, err)
 	require.Nil(t, td.tablePlan.sourcePkCols)
-}
-
-// TestShardStreamsErrCh tests that the error channel is properly initialized
-// and that the diff method can receive errors from vstreams.
-func TestShardStreamsErrCh_Initialization(t *testing.T) {
-	// Create a minimal setup to test the error channel initialization.
-	table := &tabletmanagerdatapb.TableDefinition{
-		Name:              "test_table",
-		Columns:           []string{"c1", "c2"},
-		PrimaryKeyColumns: []string{"c1"},
-		Fields:            sqltypes.MakeTestFields("c1|c2", "int64|varchar"),
-	}
-
-	wd := &workflowDiffer{
-		ct: &controller{},
-	}
-
-	td := newTableDiffer(wd, table, "SELECT c1, c2 FROM test_table")
-
-	// Before initialize, the channel should be nil.
-	require.Nil(t, td.shardStreamsErrCh)
-
-	// Simulate what happens during initialize().
-	ctx := context.Background()
-	td.shardStreamsCtx, td.shardStreamsCancel = context.WithCancel(ctx)
-	td.shardStreamsErrCh = make(chan error, 10)
-
-	// Verify channel is now initialized.
-	require.NotNil(t, td.shardStreamsErrCh)
-
-	// Verify we can send and receive on the channel.
-	testErr := vterrors.Errorf(vtrpcpb.Code_INTERNAL, "test error")
-	td.shardStreamsErrCh <- testErr
-
-	select {
-	case receivedErr := <-td.shardStreamsErrCh:
-		require.Error(t, receivedErr)
-		require.Contains(t, receivedErr.Error(), "test error")
-	default:
-		require.FailNow(t, "Should have received an error from the channel")
-	}
 }

@@ -172,7 +172,7 @@ func (rs *rowStreamer) buildPlan() error {
 	// filtering will work.
 	rs.plan, err = buildTablePlan(rs.se.Environment(), ti, rs.vschema, rs.query)
 	if err != nil {
-		log.Errorf("Failed to build table plan for %s in row streamer: %s", ti.Name, err.Error())
+		log.Errorf("Failed to build table plan for %s in row streamer: %v", ti.Name, err)
 		return err
 	}
 
@@ -413,8 +413,8 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 	logger := logutil.NewThrottledLogger(rs.vse.GetTabletInfo(), throttledLoggerInterval)
 	for {
 		if rs.ctx.Err() != nil {
-			log.Infof("RowStreamer stream ended because of ctx.Done")
-			return fmt.Errorf("stream ended: %v", rs.ctx.Err())
+			log.Infof("Row stream ended because of ctx.Done")
+			return fmt.Errorf("row stream ended: %v", rs.ctx.Err())
 		}
 
 		// check throttler.

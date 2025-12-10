@@ -100,7 +100,6 @@ type tableDiffer struct {
 	wgShardStreamers   sync.WaitGroup
 	shardStreamsCtx    context.Context
 	shardStreamsCancel context.CancelFunc
-	shardStreamsErrCh  chan error
 }
 
 func newTableDiffer(wd *workflowDiffer, table *tabletmanagerdatapb.TableDefinition, sourceQuery string) *tableDiffer {
@@ -153,7 +152,6 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 	}()
 
 	td.shardStreamsCtx, td.shardStreamsCancel = context.WithCancel(ctx)
-	td.shardStreamsErrCh = make(chan error, 10)
 
 	if err := td.selectTablets(ctx); err != nil {
 		return err
@@ -399,11 +397,12 @@ func (td *tableDiffer) restartTargetVReplicationStreams(ctx context.Context) err
 }
 
 func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStreamer, query string, lastPK *querypb.QueryResult, gtidch chan string) {
-	log.Infof("streamOneShard Start for vdiff %s on %s using query: %s", td.wd.ct.uuid, participant.tablet.Alias.String(), query)
+	tabletAliasString := topoproto.TabletAliasString(participant.tablet.Alias)
+	log.Infof("streamOneShard Start for vdiff %s on %s using query: %s", td.wd.ct.uuid, tabletAliasString, query)
 	td.wgShardStreamers.Add(1)
 
 	defer func() {
-		log.Infof("streamOneShard for vdiff %s End on %s (err: %v)", td.wd.ct.uuid, participant.tablet.Alias.String(), participant.err)
+		log.Infof("streamOneShard for vdiff %s End on %s (err: %v)", td.wd.ct.uuid, tabletAliasString, participant.err)
 		select {
 		case <-ctx.Done():
 		default:
@@ -411,10 +410,6 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 			close(gtidch)
 		}
 		td.wgShardStreamers.Done()
-		if participant.err != nil {
-			td.shardStreamsErrCh <- vterrors.Wrapf(participant.err, "error encountered in vstream from the %s tablet in shard %s",
-				topoproto.TabletAliasString(participant.tablet.Alias), participant.shard)
-		}
 	}()
 
 	participant.err = func() error {
@@ -558,18 +553,6 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
 		lastProcessedRow = sourceRow
 
 		select {
-		case serr := <-td.shardStreamsErrCh:
-			// Read all errors in the channel and accumulate them across the streams.
-			shardStreamErrs := concurrency.AllErrorRecorder{}
-			shardStreamErrs.RecordError(serr)
-			for {
-				select {
-				case serr := <-td.shardStreamsErrCh:
-					shardStreamErrs.RecordError(serr)
-				default:
-					return nil, shardStreamErrs.Error()
-				}
-			}
 		case <-ctx.Done():
 			return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 		case <-td.wd.ct.done:
@@ -590,7 +573,7 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
 
 		rowsToCompare--
 		if rowsToCompare < 0 {
-			log.Infof("Stopping vdiff %s, specified row limit reached", td.wd.ct.uuid)
+			log.Infof("Stopping vdiff %s, specified row limit of %d reached", td.wd.ct.uuid, rowsToCompare)
 			return dr, nil
 		}
 		if advanceSource {
