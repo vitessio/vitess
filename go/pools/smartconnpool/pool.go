@@ -781,19 +781,47 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 	mono := monotonicFromTime(now)
 
 	closeInStack := func(s *connStack[C]) {
-		expiredConnections := make([]*Pooled[C], 0)
+		// Only expire up to ~half of the active connections at a time. This should
+		// prevent us from closing too many connections in one go which could lead to
+		// a lot of `.Get` calls being added to the waitlist if there's a sudden spike
+		// coming in _after_ connections were popped off the stack but _before_ being
+		// returned back to the pool. This is unlikely to happen, but better safe than sorry.
+		//
+		// We always expire at least one connection per stack per iteration to ensure
+		// that idle connections are eventually closed even in small pools.
+		//
+		// We will expire any additional connections in the next iteration of the idle closer.
+		expiredConnections := make([]*Pooled[C], 0, max(pool.Active()/2, 1))
 		validConnections := make([]*Pooled[C], 0)
 
 		// Pop out connections from the stack until we get a `nil` connection
 		for conn, ok := s.Pop(); ok; conn, ok = s.Pop() {
 			if conn.timeUsed.expired(mono, timeout) {
 				expiredConnections = append(expiredConnections, conn)
+
+				if len(expiredConnections) == cap(expiredConnections) {
+					// We have collected enough connections for this iteration to expire
+					break
+				}
 			} else {
 				validConnections = append(validConnections, conn)
 			}
 		}
 
 		// Return all the valid connections back to waiters or the stack
+		//
+		// The order here is not important - because we can't guarantee to
+		// restore the order we got the connections out of the stack anyway.
+		//
+		// If we return the connections in the order popped off the stack:
+		//   * waiters will get the newest connection first
+		//   * stack will have the oldest connections at the top of the stack.
+		//
+		// If we return the connections in reverse order:
+		//  * waiters will get the oldest connection first
+		//  * stack will have the newest connections at the top of the stack.
+		//
+		// Neither of these is better or worse than the other.
 		for _, conn := range validConnections {
 			pool.tryReturnConn(conn)
 		}

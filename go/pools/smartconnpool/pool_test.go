@@ -1454,3 +1454,38 @@ func TestIdleTimeoutDoesntLeaveLingeringConnection(t *testing.T) {
 
 	require.LessOrEqual(t, totalInStack, 10)
 }
+
+func BenchmarkPoolCleanupIdleConnectionsPerformanceNoIdleConnections(b *testing.B) {
+	var state TestState
+
+	capacity := 1000
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    int64(capacity),
+		IdleTimeout: 50 * time.Millisecond,
+		LogWait:     state.LogWait,
+	}).Open(newConnector(&state), nil)
+	defer p.Close()
+
+	// Fill the pool
+	connections := make([]*Pooled[*TestConn], 0, capacity)
+	for range capacity {
+		conn, err := p.Get(context.Background(), nil)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		connections = append(connections, conn)
+	}
+
+	// Return all connections to the pool
+	for _, conn := range connections {
+		conn.Recycle()
+	}
+
+	b.ResetTimer()
+
+	for b.Loop() {
+		p.closeIdleResources(time.Now())
+	}
+}
