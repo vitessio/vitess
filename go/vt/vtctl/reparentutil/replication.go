@@ -114,15 +114,20 @@ func FindPositionsOfAllCandidates(
 		isGTIDBasedShard           bool
 	)
 
-	for alias, afterStatus := range replicationStatusMapAfter {
-		isSemiSyncReplica := replicationStatusMapBefore[alias].SemiSyncReplicaStatus
+	for alias, beforeStatus := range replicationStatusMapBefore {
+		isSemiSyncReplica := beforeStatus.SemiSyncReplicaStatus
 		candidateInfoMap[alias] = &CandidateInfo{
 			IsSemiSyncReplica: isSemiSyncReplica,
 		}
-		if _, ok := afterStatus.RelayLogPosition.GTIDSet.(replication.Mysql56GTIDSet); ok {
+		if _, ok := beforeStatus.RelayLogPosition.GTIDSet.(replication.Mysql56GTIDSet); ok {
 			candidateInfoMap[alias].IsGTIDBased = true
 			isGTIDBasedShard = true
-		} else if isSemiSyncReplica {
+		}
+	}
+
+	for alias, afterStatus := range replicationStatusMapAfter {
+		candidateInfo, ok := candidateInfoMap[alias]
+		if ok && isGTIDBasedShard && candidateInfo.IsSemiSyncReplica {
 			return nil, nil, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "semi-sync replica tablets without gtid positions is unsupported")
 		}
 

@@ -72,14 +72,22 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 			name: "success",
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
-					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
+					Before: &replicationdatapb.Status{
+						SourceUuid:            "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						RelayLogPosition:      "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						SemiSyncReplicaStatus: false,
+					},
 					After: &replicationdatapb.Status{
 						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 					},
 				},
 				"r2": {
-					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
+					Before: &replicationdatapb.Status{
+						SourceUuid:            "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						RelayLogPosition:      "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						SemiSyncReplicaStatus: false,
+					},
 					After: &replicationdatapb.Status{
 						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
@@ -102,7 +110,11 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 			name: "success for single tablet",
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
-					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
+					Before: &replicationdatapb.Status{
+						SourceUuid:            "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						RelayLogPosition:      "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5,AAAAAAAA-71CA-11E1-9E33-C80AA9429562:1",
+						SemiSyncReplicaStatus: false,
+					},
 					After: &replicationdatapb.Status{
 						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5,AAAAAAAA-71CA-11E1-9E33-C80AA9429562:1",
@@ -120,14 +132,22 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 			name: "mixed replication modes",
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
-					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
+					Before: &replicationdatapb.Status{
+						SourceUuid:            "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						RelayLogPosition:      "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						SemiSyncReplicaStatus: false,
+					},
 					After: &replicationdatapb.Status{
 						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 					},
 				},
 				"r2": {
-					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
+					Before: &replicationdatapb.Status{
+						SourceUuid:            "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						RelayLogPosition:      "FilePos/mysql-bin.0001:10",
+						SemiSyncReplicaStatus: false,
+					},
 					After: &replicationdatapb.Status{
 						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "FilePos/mysql-bin.0001:10",
@@ -145,7 +165,11 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 			name: "tablet without relay log position",
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
-					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
+					Before: &replicationdatapb.Status{
+						SourceUuid:            "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						RelayLogPosition:      "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						SemiSyncReplicaStatus: false,
+					},
 					After: &replicationdatapb.Status{
 						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
@@ -166,14 +190,22 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 			name: "non-GTID-based",
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
-					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
+					Before: &replicationdatapb.Status{
+						SourceUuid:            "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						RelayLogPosition:      "FilePos/mysql-bin.0001:100",
+						SemiSyncReplicaStatus: false,
+					},
 					After: &replicationdatapb.Status{
 						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "FilePos/mysql-bin.0001:100",
 					},
 				},
 				"r2": {
-					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
+					Before: &replicationdatapb.Status{
+						SourceUuid:            "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						RelayLogPosition:      "FilePos/mysql-bin.0001:10",
+						SemiSyncReplicaStatus: false,
+					},
 					After: &replicationdatapb.Status{
 						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "FilePos/mysql-bin.0001:10",
@@ -191,7 +223,11 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 			name: "bad primary position fails the call",
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
-					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
+					Before: &replicationdatapb.Status{
+						SourceUuid:            "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						RelayLogPosition:      "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						SemiSyncReplicaStatus: false,
+					},
 					After: &replicationdatapb.Status{
 						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
@@ -208,13 +244,28 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 			shouldErr:                true,
 		},
 		{
-			name: "unsupported replica with file positons and semi-sync",
+			name: "unsupported replica with file positons in GTID-based shard and semi-sync",
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
-					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: true},
+					Before: &replicationdatapb.Status{
+						SourceUuid:            "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						RelayLogPosition:      "FilePos/mysql-bin.0001:10",
+						SemiSyncReplicaStatus: true,
+					},
 					After: &replicationdatapb.Status{
 						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "FilePos/mysql-bin.0001:10",
+					},
+				},
+				"r2": {
+					Before: &replicationdatapb.Status{
+						SourceUuid:            "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						RelayLogPosition:      "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						SemiSyncReplicaStatus: false,
+					},
+					After: &replicationdatapb.Status{
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 					},
 				},
 			},
