@@ -1370,7 +1370,10 @@ func TestIdleTimeoutConnectionLeak(t *testing.T) {
 	wg := sync.WaitGroup{}
 
 	for i := 0; i < 2; i++ {
-		wg.Go(func() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
 			getCtx, cancel := context.WithTimeout(t.Context(), 300*time.Millisecond)
 			defer cancel()
 
@@ -1378,7 +1381,7 @@ func TestIdleTimeoutConnectionLeak(t *testing.T) {
 			require.NoError(t, err)
 
 			p.put(conn)
-		})
+		}()
 	}
 
 	wg.Wait()
