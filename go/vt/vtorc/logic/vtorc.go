@@ -187,12 +187,10 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 	discoveryInstanceTimings.Add("Instance", instanceLatency)
 	discoveryInstanceTimings.Add("Other", otherLatency)
 
-	if forceDiscovery && err == nil {
-		log.Infof("Force discovered %s - %+v", tabletAlias, instance)
-	} else if forceDiscovery && err != nil {
-		log.Errorf("Force discovered %s - %+v, err - %v", tabletAlias, instance, err)
-	} else if err != nil {
-		log.Errorf("Failed to discover %s: %v", tabletAlias, err)
+	if err != nil {
+		log.Errorf("Failed to discover %s (force: %t), err: %v", tabletAlias, forceDiscovery, err)
+	} else {
+		log.Infof("Discovered %s (force: %t): %+v", tabletAlias, forceDiscovery, instance)
 	}
 
 	if instance == nil {
