@@ -221,9 +221,11 @@ func (stc *ScatterConn) ExecuteMultiShard(
 				}
 			}
 
+			qsSession := queryservice.Session{SessionUUID: session.GetSessionUUID()}
+
 			switch info.actionNeeded {
 			case nothing:
-				innerqr, err = qs.Execute(ctx, rs.Target, queries[i].Sql, queries[i].BindVariables, info.transactionID, info.reservedID, opts)
+				innerqr, err = qs.Execute(ctx, rs.Target, qsSession, queries[i].Sql, queries[i].BindVariables, info.transactionID, info.reservedID, opts)
 				if err != nil {
 					retryRequest(func() {
 						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
@@ -877,7 +879,7 @@ func actionInfo(ctx context.Context, target *querypb.Target, session *econtext.S
 	shouldReserve := session.InReservedConn() && (shardSession == nil || shardSession.ReservedId == 0)
 	shouldBegin := session.InTransaction() && (shardSession == nil || shardSession.TransactionId == 0) && !autocommit
 
-	var act = nothing
+	act := nothing
 	switch {
 	case shouldBegin && shouldReserve:
 		act = reserveBegin
