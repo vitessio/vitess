@@ -2901,6 +2901,5 @@ func TestMoveTablesCreateSourceEqualsTarget(t *testing.T) {
 		Workflow:       "wf1",
 	})
 
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "source and target keyspace must be different")
+	require.ErrorContains(t, err, "source and target keyspace must be different")
 }
