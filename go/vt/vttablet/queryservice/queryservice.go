@@ -19,9 +19,9 @@ limitations under the License.
 package queryservice
 
 import (
-	"context"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
+	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -80,7 +80,7 @@ type QueryService interface {
 	UnresolvedTransactions(ctx context.Context, target *querypb.Target, abandonAgeSeconds int64) ([]*querypb.TransactionMetadata, error)
 
 	// Execute for query execution
-	Execute(ctx context.Context, target *querypb.Target, session Session, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error)
+	Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error)
 	// StreamExecute for query execution with streaming
 	StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error
 
@@ -147,10 +147,4 @@ type ReservedTransactionState struct {
 	TransactionID       int64
 	TabletAlias         *topodatapb.TabletAlias
 	SessionStateChanges string
-}
-
-// Session represents the current VTGate session.
-type Session struct {
-	// SessionUUID is the UUID of the current session.
-	SessionUUID string
 }
