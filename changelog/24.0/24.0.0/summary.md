@@ -3,11 +3,26 @@
 
 ### Table of Contents
 
+- **[Major Changes](#major-changes)**
+    - **[New Support](#new-support)**
+        - [Window function pushdown for sharded keyspaces](#window-function-pushdown)
 - **[Minor Changes](#minor-changes)**
     - **[VTGate](#minor-changes-vtgate)**
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
     - **[VTTablet](#minor-changes-vttablet)**
         - [New Experimental flag `--init-tablet-type-lookup`](#vttablet-init-tablet-type-lookup)
+
+## <a id="major-changes"/>Major Changes</a>
+
+### <a id="new-support"/>New Support</a>
+
+#### <a id="window-function-pushdown"/>Window function pushdown for sharded keyspaces</a>
+
+This release introduces an optimization that allows window functions to be pushed down to individual shards when they are partitioned by a column that matches a unique vindex.
+
+Previously, all window function queries required single-shard routing, which limited their applicability on sharded tables. With this change, queries where the `PARTITION BY` clause aligns with a unique vindex can now be pushed down and executed on each shard.
+
+For examples and more details, see the [documentation](https://vitess.io/docs/24.0/reference/compatibility/mysql-compatibility/#window-functions).
 
 ## <a id="minor-changes"/>Minor Changes</a>
 

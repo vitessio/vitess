@@ -194,7 +194,14 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 		// to the PRIMARY binlog even when no ackers exist. This means we need to disable the vtgate buffer (above), because it
 		// will attempt the write on the promoted, unblocked primary - and this will hit a dupe key error.
 		_, err := conn.ExecuteFetch(writeSQL, 0, false)
-		require.ErrorContains(t, err, "context deadline exceeded (errno 1317) (sqlstate 70100) during query: "+writeSQL)
+
+		// The error here could be one of:
+		// * target: ks.0.primary: vttablet: rpc error: code = DeadlineExceeded desc = context deadline exceeded (errno 1317) (sqlstate 70100) during query: insert into test(id, msg) values (1, 'test 1')
+		// * target: ks.0.primary: vttablet: rpc error: code = DeadlineExceeded desc = stream terminated by RST_STREAM with error code: CANCEL (errno 1317) (sqlstate 70100) during query: insert into test(id, msg) values (1, 'test 1')
+		// * ...
+		//
+		// So we only check for the part of the error message that's consistent.
+		require.ErrorContains(t, err, "(errno 1317) (sqlstate 70100) during query: insert into test(id, msg) values (1, 'test 1')")
 
 		// Verify vtgate really processed the insert in case something unrelated caused the deadline exceeded.
 		vtgateVars := clusterInstance.VtgateProcess.GetVars()

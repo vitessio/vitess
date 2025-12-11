@@ -1319,3 +1319,88 @@ func TestCloseDuringWaitForConn(t *testing.T) {
 		require.EqualValues(t, 0, state.open.Load())
 	}
 }
+
+// TestIdleTimeoutConnectionLeak checks for leaked connections after idle timeout
+func TestIdleTimeoutConnectionLeak(t *testing.T) {
+	var state TestState
+
+	// Slow connection creation to ensure idle timeout happens during reopening
+	state.chaos.delayConnect = 300 * time.Millisecond
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    2,
+		IdleTimeout: 50 * time.Millisecond,
+		LogWait:     state.LogWait,
+	}).Open(newConnector(&state), nil)
+
+	getCtx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
+	defer cancel()
+
+	// Get and return two connections
+	conn1, err := p.Get(getCtx, nil)
+	require.NoError(t, err)
+
+	conn2, err := p.Get(getCtx, nil)
+	require.NoError(t, err)
+
+	p.put(conn1)
+	p.put(conn2)
+
+	// At this point: Active=2, InUse=0, Available=2
+	require.EqualValues(t, 2, p.Active())
+	require.EqualValues(t, 0, p.InUse())
+	require.EqualValues(t, 2, p.Available())
+
+	// Wait for idle timeout to kick in and start expiring connections
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		// Check the actual number of currently open connections
+		assert.Equal(c, int64(2), state.open.Load())
+		// Check the total number of closed connections
+		assert.Equal(c, int64(1), state.close.Load())
+	}, 100*time.Millisecond, 10*time.Millisecond)
+
+	// At this point, the idle timeout worker has expired the connections
+	// and is trying to reopen them (which takes 300ms due to delayConnect)
+
+	// Try to get connections while they're being reopened
+	// This should trigger the bug where connections get discarded
+	for i := 0; i < 2; i++ {
+		getCtx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+		defer cancel()
+
+		conn, err := p.Get(getCtx, nil)
+		require.NoError(t, err)
+
+		p.put(conn)
+	}
+
+	// Wait a moment for all reopening to complete
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		// Check the actual number of currently open connections
+		require.Equal(c, int64(2), state.open.Load())
+		// Check the total number of closed connections
+		require.Equal(c, int64(2), state.close.Load())
+	}, 400*time.Millisecond, 10*time.Millisecond)
+
+	// Check the pool state
+	assert.Equal(t, int64(2), p.Active())
+	assert.Equal(t, int64(0), p.InUse())
+	assert.Equal(t, int64(2), p.Available())
+	assert.Equal(t, int64(2), p.Metrics.IdleClosed())
+
+	// Try to close the pool - if there are leaked connections, this will timeout
+	closeCtx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
+	defer cancel()
+
+	err = p.CloseWithContext(closeCtx)
+	require.NoError(t, err)
+
+	// Pool should be completely closed now
+	assert.Equal(t, int64(0), p.Active())
+	assert.Equal(t, int64(0), p.InUse())
+	assert.Equal(t, int64(0), p.Available())
+	assert.Equal(t, int64(2), p.Metrics.IdleClosed())
+
+	assert.Equal(t, int64(0), state.open.Load())
+	assert.Equal(t, int64(4), state.close.Load())
+}

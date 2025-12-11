@@ -52,11 +52,12 @@ type vstreamManager struct {
 	toposerv srvtopo.Server
 	cell     string
 
-	vstreamsCreated         *stats.CountersWithMultiLabels
-	vstreamsLag             *stats.GaugesWithMultiLabels
-	vstreamsCount           *stats.CountersWithMultiLabels
-	vstreamsEventsStreamed  *stats.CountersWithMultiLabels
-	vstreamsEndedWithErrors *stats.CountersWithMultiLabels
+	vstreamsCreated             *stats.CountersWithMultiLabels
+	vstreamsLag                 *stats.GaugesWithMultiLabels
+	vstreamsCount               *stats.CountersWithMultiLabels
+	vstreamsEventsStreamed      *stats.CountersWithMultiLabels
+	vstreamsEndedWithErrors     *stats.CountersWithMultiLabels
+	vstreamsTransactionsChunked *stats.CountersWithMultiLabels
 }
 
 // maxSkewTimeoutSeconds is the maximum allowed skew between two streams when the MinimizeSkew flag is set
@@ -73,6 +74,11 @@ const stopOnReshardDelay = 500 * time.Millisecond
 // livenessTimeout is the point at which we return an error to the client if the stream has received
 // no events, including heartbeats, from any of the shards.
 var livenessTimeout = 10 * time.Minute
+
+// defaultTransactionChunkSizeBytes is the default threshold for chunking transactions.
+// 0 (the default value for protobuf int64) means disabled, clients must explicitly set a value to opt in for chunking.
+// Eventually we plan to enable chunking by default, for now set to 0, which is the same as the protobuf default.
+const defaultTransactionChunkSizeBytes = 0
 
 // vstream contains the metadata for one VStream request.
 type vstream struct {
@@ -143,7 +149,15 @@ type vstream struct {
 	// At what point, without any activity in the stream, should we consider it dead.
 	streamLivenessTimer *time.Timer
 
+	// When a transaction exceeds this size, VStream acquires a lock to ensure contiguous, chunked delivery.
+	// Smaller transactions are sent without locking for better parallelism.
+	transactionChunkSizeBytes int
+
 	flags *vtgatepb.VStreamFlags
+}
+
+func (vs *vstream) isChunkingEnabled() bool {
+	return vs.transactionChunkSizeBytes > 0
 }
 
 type journalEvent struct {
@@ -180,6 +194,10 @@ func newVStreamManager(resolver *srvtopo.Resolver, serv srvtopo.Server, cell str
 			"VStreamsEndedWithErrors",
 			"Number of vstreams that ended with errors",
 			labels),
+		vstreamsTransactionsChunked: exporter.NewCountersWithMultiLabels(
+			"VStreamsTransactionsChunked",
+			"Number of transactions that exceeded TransactionChunkSize threshold and required locking for contiguous, chunked delivery",
+			labels),
 	}
 }
 
@@ -189,6 +207,9 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 	if err != nil {
 		return vterrors.Wrap(err, "failed to resolve vstream parameters")
 	}
+	log.Infof("VStream flags: minimize_skew=%v, heartbeat_interval=%v, stop_on_reshard=%v, cells=%v, cell_preference=%v, tablet_order=%v, stream_keyspace_heartbeats=%v, include_reshard_journal_events=%v, tables_to_copy=%v, exclude_keyspace_from_table_name=%v, transaction_chunk_size=%v",
+		flags.GetMinimizeSkew(), flags.GetHeartbeatInterval(), flags.GetStopOnReshard(), flags.Cells, flags.CellPreference, flags.TabletOrder,
+		flags.GetStreamKeyspaceHeartbeats(), flags.GetIncludeReshardJournalEvents(), flags.TablesToCopy, flags.GetExcludeKeyspaceFromTableName(), flags.TransactionChunkSize)
 	ts, err := vsm.toposerv.GetTopoServer()
 	if err != nil {
 		return vterrors.Wrap(err, "failed to get topology server")
@@ -197,6 +218,13 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 		log.Errorf("unable to get topo server in VStream()")
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unable to get topoology server")
 	}
+	transactionChunkSizeBytes := defaultTransactionChunkSizeBytes
+	if flags.TransactionChunkSize > 0 && flags.GetMinimizeSkew() {
+		log.Warning("Minimize skew cannot be set with transaction chunk size (can cause deadlock), ignoring transaction chunk size.")
+	} else if flags.TransactionChunkSize > 0 {
+		transactionChunkSizeBytes = int(flags.TransactionChunkSize)
+	}
+
 	vs := &vstream{
 		vgtid:                       vgtid,
 		tabletType:                  tabletType,
@@ -215,6 +243,7 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 		heartbeatInterval:           flags.GetHeartbeatInterval(),
 		ts:                          ts,
 		copyCompletedShard:          make(map[string]struct{}),
+		transactionChunkSizeBytes:   transactionChunkSizeBytes,
 		tabletPickerOptions: discovery.TabletPickerOptions{
 			CellPreference: flags.GetCellPreference(),
 			TabletOrder:    flags.GetTabletOrder(),
@@ -687,6 +716,17 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			Options:      options,
 		}
 		log.Infof("Starting to vstream from %s, with req %+v", tabletAliasString, req)
+		var txLockHeld bool
+		var inTransaction bool
+		var accumulatedSize int
+
+		defer func() {
+			if txLockHeld {
+				vs.mu.Unlock()
+				txLockHeld = false
+			}
+		}()
+
 		err = tabletConn.VStream(ctx, req, func(events []*binlogdatapb.VEvent) error {
 			// We received a valid event. Reset error count.
 			errCount = 0
@@ -715,14 +755,22 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			sendevents := make([]*binlogdatapb.VEvent, 0, len(events))
 			for i, event := range events {
 				vs.streamLivenessTimer.Reset(livenessTimeout) // Any event in the stream demonstrates liveness
+				accumulatedSize += event.SizeVT()
 				switch event.Type {
+				case binlogdatapb.VEventType_BEGIN:
+					// Mark the start of a transaction.
+					// Also queue the events for sending to the client.
+					inTransaction = true
+					sendevents = append(sendevents, event)
 				case binlogdatapb.VEventType_FIELD:
 					ev := maybeUpdateTableName(event, sgtid.Keyspace, vs.flags.GetExcludeKeyspaceFromTableName(), extractFieldTableName)
 					sendevents = append(sendevents, ev)
 				case binlogdatapb.VEventType_ROW:
 					ev := maybeUpdateTableName(event, sgtid.Keyspace, vs.flags.GetExcludeKeyspaceFromTableName(), extractRowTableName)
 					sendevents = append(sendevents, ev)
-				case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER:
+				case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER, binlogdatapb.VEventType_ROLLBACK:
+					inTransaction = false
+					accumulatedSize = 0
 					sendevents = append(sendevents, event)
 					eventss = append(eventss, sendevents)
 
@@ -730,9 +778,20 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 						return vterrors.Wrap(err, aligningStreamsErr)
 					}
 
-					if err := vs.sendAll(ctx, sgtid, eventss); err != nil {
-						log.Infof("vstream for %s/%s, error in sendAll: %v", sgtid.Keyspace, sgtid.Shard, err)
-						return vterrors.Wrap(err, sendingEventsErr)
+					var sendErr error
+					if vs.isChunkingEnabled() && txLockHeld {
+						// If chunking is enabled and we are holding the lock (only possible to acquire lock when chunking is enabled), then send the events.
+						sendErr = vs.sendEventsLocked(ctx, sgtid, eventss)
+						vs.mu.Unlock()
+						txLockHeld = false
+					} else {
+						// If chunking is not enabled or this transaction was small enough to not need chunking,
+						// fall back to default behavior of sending entire transaction atomically.
+						sendErr = vs.sendAll(ctx, sgtid, eventss)
+					}
+					if sendErr != nil {
+						log.Infof("vstream for %s/%s, error in sendAll: %v", sgtid.Keyspace, sgtid.Shard, sendErr)
+						return vterrors.Wrap(sendErr, sendingEventsErr)
 					}
 					eventss = nil
 					sendevents = nil
@@ -827,6 +886,41 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			if len(sendevents) != 0 {
 				eventss = append(eventss, sendevents)
 			}
+
+			// If chunking is enabled, and we are holding the lock (only possible when enabled), and we are not in a transaction
+			// release the lock (this should not ever execute, acts as a safety check).
+			if vs.isChunkingEnabled() && txLockHeld && !inTransaction {
+				log.Warning("Detected held lock but not in a transaction, releasing the lock")
+				vs.mu.Unlock()
+				txLockHeld = false
+			}
+
+			// If chunking is enabled, and we are holding the lock (only possible when chunking is enabled), send the events.
+			if vs.isChunkingEnabled() && txLockHeld && len(eventss) > 0 {
+				if err := vs.sendEventsLocked(ctx, sgtid, eventss); err != nil {
+					log.Infof("vstream for %s/%s, error in sendAll at end of callback: %v", sgtid.Keyspace, sgtid.Shard, err)
+					return vterrors.Wrap(err, sendingEventsErr)
+				}
+				eventss = nil
+			}
+
+			// If chunking is enabled and we are in a transaction, and we do not yet hold the lock, and the accumulated size is greater than our chunk size
+			// then acquire the lock, so that we can send the events, and begin chunking the transaction.
+			if vs.isChunkingEnabled() && inTransaction && !txLockHeld && accumulatedSize > vs.transactionChunkSizeBytes {
+				log.Infof("vstream for %s/%s: transaction size %d bytes exceeds chunk size %d bytes, acquiring lock for contiguous, chunked delivery",
+					sgtid.Keyspace, sgtid.Shard, accumulatedSize, vs.transactionChunkSizeBytes)
+				vs.vsm.vstreamsTransactionsChunked.Add(labelValues, 1)
+				vs.mu.Lock()
+				txLockHeld = true
+				if len(eventss) > 0 {
+					if err := vs.sendEventsLocked(ctx, sgtid, eventss); err != nil {
+						log.Infof("vstream for %s/%s, error sending events after acquiring lock: %v", sgtid.Keyspace, sgtid.Shard, err)
+						return vterrors.Wrap(err, sendingEventsErr)
+					}
+					eventss = nil
+				}
+			}
+
 			return nil
 		})
 		// If stream was ended (by a journal event), return nil without checking for error.
@@ -942,6 +1036,11 @@ func (vs *vstream) shouldRetry(err error) (retry bool, ignoreTablet bool) {
 func (vs *vstream) sendAll(ctx context.Context, sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdatapb.VEvent) error {
 	vs.mu.Lock()
 	defer vs.mu.Unlock()
+	return vs.sendEventsLocked(ctx, sgtid, eventss)
+}
+
+// sendEventsLocked sends events assuming vs.mu is already held by the caller.
+func (vs *vstream) sendEventsLocked(ctx context.Context, sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdatapb.VEvent) error {
 	labelValues := []string{sgtid.Keyspace, sgtid.Shard, vs.tabletType.String()}
 
 	// Send all chunks while holding the lock.

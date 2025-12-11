@@ -478,6 +478,15 @@ func (a *analyzer) noteQuerySignature(node sqlparser.SQLNode) {
 		if node.Recursive {
 			a.sig.RecursiveCTE = true
 		}
+	case sqlparser.WindowFunc:
+		// Functions like SUM() implement both WindowFunc and AggrFunc.
+		// If an OVER clause is present, it's acting as a window function.
+		if node.GetOverClause() != nil {
+			a.sig.WindowFunc = true
+		} else if _, ok := node.(sqlparser.AggrFunc); ok {
+			// Otherwise, if it's also an aggregate function, it's a standard aggregation.
+			a.sig.Aggregation = true
+		}
 	case sqlparser.AggrFunc:
 		a.sig.Aggregation = true
 	case *sqlparser.Delete, *sqlparser.Update, *sqlparser.Insert:

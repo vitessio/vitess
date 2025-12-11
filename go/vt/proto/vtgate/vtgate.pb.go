@@ -1343,8 +1343,14 @@ type VStreamFlags struct {
 	TablesToCopy []string `protobuf:"bytes,9,rep,name=tables_to_copy,json=tablesToCopy,proto3" json:"tables_to_copy,omitempty"`
 	// Exclude the keyspace from the table name that is sent to the vstream client
 	ExcludeKeyspaceFromTableName bool `protobuf:"varint,10,opt,name=exclude_keyspace_from_table_name,json=excludeKeyspaceFromTableName,proto3" json:"exclude_keyspace_from_table_name,omitempty"`
-	unknownFields                protoimpl.UnknownFields
-	sizeCache                    protoimpl.SizeCache
+	// Transaction chunk threshold in bytes. When a transaction exceeds this size,
+	// VTGate will acquire a lock to ensure contiguous, non-interleaved delivery
+	// (BEGIN...ROW...COMMIT sent sequentially without mixing events from other shards).
+	// Events are still chunked to prevent OOM. Transactions smaller than this are sent
+	// without locking for better parallelism.
+	TransactionChunkSize int64 `protobuf:"varint,11,opt,name=transaction_chunk_size,json=transactionChunkSize,proto3" json:"transaction_chunk_size,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *VStreamFlags) Reset() {
@@ -1445,6 +1451,13 @@ func (x *VStreamFlags) GetExcludeKeyspaceFromTableName() bool {
 		return x.ExcludeKeyspaceFromTableName
 	}
 	return false
+}
+
+func (x *VStreamFlags) GetTransactionChunkSize() int64 {
+	if x != nil {
+		return x.TransactionChunkSize
+	}
+	return 0
 }
 
 // VStreamRequest is the payload for VStream.
@@ -2013,7 +2026,7 @@ const file_vtgate_proto_rawDesc = "" +
 	"\x19ResolveTransactionRequest\x12,\n" +
 	"\tcaller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\bcallerId\x12\x12\n" +
 	"\x04dtid\x18\x02 \x01(\tR\x04dtid\"\x1c\n" +
-	"\x1aResolveTransactionResponse\"\xdd\x03\n" +
+	"\x1aResolveTransactionResponse\"\x93\x04\n" +
 	"\fVStreamFlags\x12#\n" +
 	"\rminimize_skew\x18\x01 \x01(\bR\fminimizeSkew\x12-\n" +
 	"\x12heartbeat_interval\x18\x02 \x01(\rR\x11heartbeatInterval\x12&\n" +
@@ -2025,7 +2038,8 @@ const file_vtgate_proto_rawDesc = "" +
 	"\x1einclude_reshard_journal_events\x18\b \x01(\bR\x1bincludeReshardJournalEvents\x12$\n" +
 	"\x0etables_to_copy\x18\t \x03(\tR\ftablesToCopy\x12F\n" +
 	" exclude_keyspace_from_table_name\x18\n" +
-	" \x01(\bR\x1cexcludeKeyspaceFromTableName\"\xf6\x01\n" +
+	" \x01(\bR\x1cexcludeKeyspaceFromTableName\x124\n" +
+	"\x16transaction_chunk_size\x18\v \x01(\x03R\x14transactionChunkSize\"\xf6\x01\n" +
 	"\x0eVStreamRequest\x12,\n" +
 	"\tcaller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\bcallerId\x125\n" +
 	"\vtablet_type\x18\x02 \x01(\x0e2\x14.topodata.TabletTypeR\n" +
