@@ -1049,8 +1049,8 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	targetKeyspace := req.TargetKeyspace
 	// FIXME validate tableSpecs, allTables, excludeTables
 
-	if sourceKeyspace == targetKeyspace {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "source and target keyspace must be different")
+	if workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables && sourceKeyspace == targetKeyspace {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "source and target keyspace must be different for MoveTables workflows")
 	}
 
 	var (

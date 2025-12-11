@@ -2889,7 +2889,7 @@ func TestMaterializeAddTables(t *testing.T) {
 	}
 }
 
-func TestMoveTablesCreateSourceEqualsTarget(t *testing.T) {
+func TestMoveTablesPreventsSourceEqualsTarget(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
@@ -2901,5 +2901,20 @@ func TestMoveTablesCreateSourceEqualsTarget(t *testing.T) {
 		Workflow:       "wf1",
 	})
 
-	require.ErrorContains(t, err, "source and target keyspace must be different")
+	require.ErrorContains(t, err, "source and target keyspace must be different for MoveTables workflows")
+}
+
+func TestMigrateAllowsSourceEqualsTarget(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	ts := memorytopo.NewServer(ctx, "cell1")
+
+	_, err := NewServer(vtenv.NewTestEnv(), ts, nil).MigrateCreate(ctx, &vtctldatapb.MigrateCreateRequest{
+		SourceKeyspace: "ks1",
+		TargetKeyspace: "ks1",
+		Workflow:       "wf1",
+		MountName:      "ext1",
+	})
+	require.NotContains(t, err.Error(), "source and target keyspace must be different for MoveTables workflows")
 }
