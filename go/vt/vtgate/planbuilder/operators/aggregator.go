@@ -284,7 +284,7 @@ func (a *Aggregator) findColInternal(ctx *plancontext.PlanningContext, ae *sqlpa
 	}
 
 	if addToGroupBy {
-		panic(vterrors.VT13001(fmt.Sprintf("did not expect to add group by here: %s", sqlparser.String(expr))))
+		panic(vterrors.VT13001("did not expect to add group by here: " + sqlparser.String(expr)))
 	}
 
 	return -1
@@ -413,7 +413,7 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) Operator {
 func (aggr Aggr) setPushColumn(exprs []sqlparser.Expr) {
 	if aggr.Func == nil {
 		if len(exprs) > 1 {
-			panic(vterrors.VT13001(fmt.Sprintf("unexpected number of expression in an random aggregation: %s", sqlparser.SliceString(exprs))))
+			panic(vterrors.VT13001("unexpected number of expression in an random aggregation: " + sqlparser.SliceString(exprs)))
 		}
 		aggr.Original.Expr = exprs[0]
 		return
@@ -495,7 +495,7 @@ func (a *Aggregator) addIfAggregationColumn(ctx *plancontext.PlanningContext, co
 }
 
 func errFailedToPlan(original *sqlparser.AliasedExpr) *vterrors.VitessError {
-	return vterrors.VT12001(fmt.Sprintf("failed to plan aggregation on: %s", sqlparser.String(original)))
+	return vterrors.VT12001("failed to plan aggregation on: " + sqlparser.String(original))
 }
 
 func (a *Aggregator) addIfGroupingColumn(ctx *plancontext.PlanningContext, colIdx int) int {
@@ -620,7 +620,6 @@ func (a *Aggregator) checkForInvalidAggregations() {
 				panic(vterrors.VT03001(sqlparser.String(node)))
 			}
 			return true, nil
-
 		}, aggr.Original.Expr)
 	}
 }

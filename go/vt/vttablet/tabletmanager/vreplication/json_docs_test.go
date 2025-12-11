@@ -72,7 +72,6 @@ func repeatJSON(jsonDoc string, times int, typ largeDocCollectionType) string {
 			}
 		}
 		jsonDocs += "}"
-
 	}
 	return jsonDocs
 }

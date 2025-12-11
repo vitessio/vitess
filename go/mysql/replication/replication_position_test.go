@@ -396,7 +396,6 @@ func TestDecodePosition(t *testing.T) {
 	got, err := DecodePosition(input)
 	assert.NoError(t, err, "unexpected error: %v", err)
 	assert.True(t, got.Equal(want), "DecodePosition(%#v) = %#v, want %#v", input, got, want)
-
 }
 
 func TestDecodePositionDefaultFlavor(t *testing.T) {
@@ -424,7 +423,6 @@ func TestDecodePositionZero(t *testing.T) {
 	got, err := DecodePosition(input)
 	assert.NoError(t, err, "unexpected error: %v", err)
 	assert.True(t, got.Equal(want), "DecodePosition(%#v) = %#v, want %#v", input, got, want)
-
 }
 
 func TestDecodePositionNoFlavor(t *testing.T) {
@@ -437,7 +435,6 @@ func TestDecodePositionNoFlavor(t *testing.T) {
 	got, err := DecodePosition(input)
 	assert.NoError(t, err, "unexpected error: %v", err)
 	assert.True(t, got.Equal(want), "DecodePosition(%#v) = %#v, want %#v", input, got, want)
-
 }
 
 func TestJsonMarshalPosition(t *testing.T) {
@@ -475,7 +472,6 @@ func TestJsonUnmarshalPosition(t *testing.T) {
 	err := json.Unmarshal([]byte(input), &got)
 	assert.NoError(t, err, "unexpected error: %v", err)
 	assert.True(t, got.Equal(want), "json.Unmarshal(%#v) = %#v, want %#v", input, got, want)
-
 }
 
 func TestJsonMarshalPositionInStruct(t *testing.T) {
@@ -532,5 +528,4 @@ func TestJsonUnmarshalPositionZero(t *testing.T) {
 	err := json.Unmarshal([]byte(input), &got)
 	assert.NoError(t, err, "unexpected error: %v", err)
 	assert.True(t, got.Equal(want), "json.Unmarshal(%#v) = %#v, want %#v", input, got, want)
-
 }

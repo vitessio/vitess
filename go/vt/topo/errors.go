@@ -18,7 +18,6 @@ package topo
 
 import (
 	"errors"
-	"fmt"
 )
 
 // ErrorCode is the error code for topo errors.
@@ -50,29 +49,29 @@ func NewError(code ErrorCode, node string) error {
 	var message string
 	switch code {
 	case NodeExists:
-		message = fmt.Sprintf("node already exists: %s", node)
+		message = "node already exists: " + node
 	case NoNode:
-		message = fmt.Sprintf("node doesn't exist: %s", node)
+		message = "node doesn't exist: " + node
 	case NodeNotEmpty:
-		message = fmt.Sprintf("node not empty: %s", node)
+		message = "node not empty: " + node
 	case Timeout:
-		message = fmt.Sprintf("deadline exceeded: %s", node)
+		message = "deadline exceeded: " + node
 	case Interrupted:
-		message = fmt.Sprintf("interrupted: %s", node)
+		message = "interrupted: " + node
 	case BadVersion:
-		message = fmt.Sprintf("bad node version: %s", node)
+		message = "bad node version: " + node
 	case PartialResult:
-		message = fmt.Sprintf("partial result: %s", node)
+		message = "partial result: " + node
 	case NoUpdateNeeded:
-		message = fmt.Sprintf("no update needed: %s", node)
+		message = "no update needed: " + node
 	case NoImplementation:
-		message = fmt.Sprintf("no such topology implementation %s", node)
+		message = "no such topology implementation " + node
 	case NoReadOnlyImplementation:
-		message = fmt.Sprintf("no read-only topology implementation %s", node)
+		message = "no read-only topology implementation " + node
 	case ResourceExhausted:
-		message = fmt.Sprintf("server resource exhausted: %s", node)
+		message = "server resource exhausted: " + node
 	default:
-		message = fmt.Sprintf("unknown code: %s", node)
+		message = "unknown code: " + node
 	}
 	return Error{
 		code:    code,

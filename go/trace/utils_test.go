@@ -17,7 +17,7 @@ limitations under the License.
 package trace
 
 import (
-	"fmt"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -37,5 +37,5 @@ type fakeCloser struct {
 }
 
 func (fc *fakeCloser) Close() error {
-	return fmt.Errorf("test error")
+	return errors.New("test error")
 }

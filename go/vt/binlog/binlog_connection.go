@@ -19,6 +19,7 @@ package binlog
 import (
 	"context"
 	crand "crypto/rand"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -35,15 +36,13 @@ import (
 var (
 	// ErrBinlogUnavailable is returned by this library when we
 	// cannot find a suitable binlog to satisfy the request.
-	ErrBinlogUnavailable = fmt.Errorf("cannot find relevant binlogs on this server")
+	ErrBinlogUnavailable = errors.New("cannot find relevant binlogs on this server")
 )
 
 // BinlogConnection represents a connection to mysqld that pretends to be a replica
 // connecting for replication. Each such connection must identify itself to
 // mysqld with a server ID that is unique both among other BinlogConnections and
 // among actual replicas in the topology.
-//
-//revive:disable because I'm not trying to refactor the entire code base right now
 type BinlogConnection struct {
 	*mysql.Conn
 	cp       dbconfigs.Connector

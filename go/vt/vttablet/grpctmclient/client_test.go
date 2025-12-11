@@ -65,11 +65,12 @@ func TestDialDedicatedPool(t *testing.T) {
 		assert.NotEmpty(t, rpcClient.rpcDialPoolMap[dialPoolGroupThrottler])
 		assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupVTOrc])
 
-		c := rpcClient.rpcDialPoolMap[dialPoolGroupThrottler][addr]
-		assert.NotNil(t, c)
-		assert.Contains(t, []connectivity.State{connectivity.Connecting, connectivity.TransientFailure}, c.cc.GetState())
+		entry := rpcClient.rpcDialPoolMap[dialPoolGroupThrottler][addr]
+		assert.NotNil(t, entry)
+		assert.NotNil(t, entry.tmc)
+		assert.Contains(t, []connectivity.State{connectivity.Connecting, connectivity.TransientFailure}, entry.tmc.cc.GetState())
 
-		cachedTmc = c
+		cachedTmc = entry.tmc
 	})
 
 	t.Run("CheckThrottler", func(t *testing.T) {
@@ -145,22 +146,31 @@ func TestDialPool(t *testing.T) {
 		_, err := client.CheckThrottler(ctx, tablet, req)
 		assert.Error(t, err)
 	})
+
 	t.Run("post throttler maps", func(t *testing.T) {
 		rpcClient, ok := client.dialer.(*grpcClient)
 		require.True(t, ok)
 
-		rpcClient.mu.Lock()
-		defer rpcClient.mu.Unlock()
+		func() {
+			rpcClient.rpcDialPoolMapMu.Lock()
+			defer rpcClient.rpcDialPoolMapMu.Unlock()
 
-		assert.NotEmpty(t, rpcClient.rpcDialPoolMap)
-		assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupThrottler])
-		assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupVTOrc])
+			assert.NotEmpty(t, rpcClient.rpcDialPoolMap)
+			assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupThrottler])
+			assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupVTOrc])
+		}()
 
-		assert.NotEmpty(t, rpcClient.rpcClientMap)
-		assert.NotEmpty(t, rpcClient.rpcClientMap[addr])
+		func() {
+			rpcClient.rpcClientMapMu.Lock()
+			defer rpcClient.rpcClientMapMu.Unlock()
+
+			assert.NotEmpty(t, rpcClient.rpcClientMap)
+			assert.NotEmpty(t, rpcClient.rpcClientMap[addr])
+		}()
 
 		assert.Contains(t, []connectivity.State{connectivity.Connecting, connectivity.TransientFailure}, cachedTmc.cc.GetState())
 	})
+
 	t.Run("ExecuteFetchAsDba", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
@@ -171,20 +181,25 @@ func TestDialPool(t *testing.T) {
 	})
 
 	t.Run("post ExecuteFetchAsDba maps", func(t *testing.T) {
-
 		rpcClient, ok := client.dialer.(*grpcClient)
 		require.True(t, ok)
 
-		rpcClient.mu.Lock()
-		defer rpcClient.mu.Unlock()
+		func() {
+			rpcClient.rpcDialPoolMapMu.Lock()
+			defer rpcClient.rpcDialPoolMapMu.Unlock()
 
-		assert.NotEmpty(t, rpcClient.rpcDialPoolMap)
-		assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupThrottler])
-		assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupVTOrc])
+			assert.NotEmpty(t, rpcClient.rpcDialPoolMap)
+			assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupThrottler])
+			assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupVTOrc])
+		}()
 
-		// The default pools are unaffected. Invalidator does not run, connections are not closed.
-		assert.NotEmpty(t, rpcClient.rpcClientMap)
-		assert.NotEmpty(t, rpcClient.rpcClientMap[addr])
+		func() {
+			rpcClient.rpcClientMapMu.Lock()
+			defer rpcClient.rpcClientMapMu.Unlock()
+			// The default pools are unaffected. Invalidator does not run, connections are not closed.
+			assert.NotEmpty(t, rpcClient.rpcClientMap)
+			assert.NotEmpty(t, rpcClient.rpcClientMap[addr])
+		}()
 
 		assert.NotNil(t, cachedTmc)
 		assert.Contains(t, []connectivity.State{connectivity.Connecting, connectivity.TransientFailure}, cachedTmc.cc.GetState())

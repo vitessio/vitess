@@ -17,18 +17,27 @@ limitations under the License.
 package vttest
 
 import (
-	"fmt"
 	"math/rand/v2"
 	"net"
 	"os"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"vitess.io/vitess/go/vt/proto/vttest"
 
 	// we use gRPC everywhere, so import the vtgate client.
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
+)
+
+var (
+	// randomPortsMu provides synchronization for randomPorts().
+	randomPortsMu sync.Mutex
+
+	// usedRandomPorts stores ports that have been used by remotePort().
+	usedRandomPorts []int
 )
 
 // Environment is the interface that customizes the global settings for
@@ -236,21 +245,31 @@ func tmpdir(dataroot string) (dir string, err error) {
 // randomPort gets a random port that is available for a TCP connection.
 // After we generate a random port, we try to establish tcp connections on it and the next 5 values.
 // If any of them fail, then we try a different port.
-func randomPort() int {
+func randomPort() (port int) {
+	randomPortsMu.Lock()
+	defer randomPortsMu.Unlock()
 	for {
-		port := int(rand.Int32N(20000) + 10000)
+		portBase := int(rand.Int32N(20000) + 10000)
 		portInUse := false
+		portRange := make([]int, 0, 6)
 		for i := 0; i < 6; i++ {
-			ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port+i)))
+			port = portBase + i
+			if slices.Contains(usedRandomPorts, port) {
+				portInUse = true
+				break
+			}
+			ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
 			if err != nil {
 				portInUse = true
 				break
 			}
+			portRange = append(portRange, port)
 			ln.Close()
 		}
 		if portInUse {
 			continue
 		}
+		usedRandomPorts = append(usedRandomPorts, portRange...)
 		return port
 	}
 }
@@ -303,7 +322,7 @@ func NewLocalTestEnvWithDirectory(basePort int, directory string) (*LocalTestEnv
 		DefaultMyCnf: mycnf,
 		InitDBFile:   path.Join(os.Getenv("VTROOT"), "config/init_db.sql"),
 		Env: []string{
-			fmt.Sprintf("VTDATAROOT=%s", directory),
+			"VTDATAROOT=" + directory,
 			"VTTEST=endtoend",
 		},
 	}, nil

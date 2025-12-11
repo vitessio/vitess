@@ -120,10 +120,10 @@ func requireExpectedVSchema(t *testing.T, vschema *vschemapb.SrvVSchema, sourceK
 
 	foundA, foundB := false, false
 	for _, r := range vschema.RoutingRules.Rules {
-		if r.FromTable == "t1" && len(r.ToTables) == 1 && r.ToTables[0] == fmt.Sprintf("%s.t1", sourceKeyspace) {
+		if r.FromTable == "t1" && len(r.ToTables) == 1 && r.ToTables[0] == sourceKeyspace+".t1" {
 			foundA = true
 		}
-		if r.FromTable == fmt.Sprintf("%s.t1", targetKeyspace) && len(r.ToTables) == 1 && r.ToTables[0] == fmt.Sprintf("%s.t1", sourceKeyspace) {
+		if r.FromTable == targetKeyspace+".t1" && len(r.ToTables) == 1 && r.ToTables[0] == sourceKeyspace+".t1" {
 			foundB = true
 		}
 	}
@@ -217,9 +217,7 @@ func TestMoveTablesAllAndExclude(t *testing.T) {
 			require.NoError(t, err)
 			require.EqualValues(t, tcase.want, targetTables(ctx, env))
 		})
-
 	}
-
 }
 
 func TestMoveTablesStopFlags(t *testing.T) {
@@ -450,7 +448,7 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 				"v": {
 					Type: "lookup_unique",
 					Params: map[string]string{
-						"table": fmt.Sprintf("%s.lkp", ms.TargetKeyspace),
+						"table": ms.TargetKeyspace + ".lkp",
 						"from":  "c1",
 						"to":    "c2",
 					},
@@ -484,7 +482,7 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 				"v": {
 					Type: "lookup_unique",
 					Params: map[string]string{
-						"table": fmt.Sprintf("%s.lkp", ms.TargetKeyspace),
+						"table": ms.TargetKeyspace + ".lkp",
 						"from":  "c1",
 						"to":    "c2",
 					},
@@ -518,7 +516,7 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 				"v": {
 					Type: "lookup",
 					Params: map[string]string{
-						"table": fmt.Sprintf("%s.lkp", ms.TargetKeyspace),
+						"table": ms.TargetKeyspace + ".lkp",
 						"from":  "c1,c2",
 						"to":    "c3",
 					},
@@ -553,7 +551,7 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 				"v": {
 					Type: "lookup_unique",
 					Params: map[string]string{
-						"table": fmt.Sprintf("%s.lkp", ms.TargetKeyspace),
+						"table": ms.TargetKeyspace + ".lkp",
 						"from":  "c1",
 						"to":    "c2",
 					},
@@ -583,7 +581,7 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 				"v": {
 					Type: "lookup_unique",
 					Params: map[string]string{
-						"table": fmt.Sprintf("%s.lkp", ms.TargetKeyspace),
+						"table": ms.TargetKeyspace + ".lkp",
 						"from":  "c1",
 						"to":    "c2",
 					},
@@ -2306,7 +2304,6 @@ func TestMaterializerCopySchema(t *testing.T) {
 	env.tmc.verifyQueries(t)
 	require.Equal(t, env.tmc.getSchemaRequestCount(100), 1)
 	require.Equal(t, env.tmc.getSchemaRequestCount(200), 1)
-
 }
 
 func TestMaterializerExplicitColumns(t *testing.T) {
@@ -2514,7 +2511,6 @@ func TestMaterializerNoDDL(t *testing.T) {
 	require.EqualError(t, err, "target table t1 does not exist and there is no create ddl defined")
 	require.Equal(t, env.tmc.getSchemaRequestCount(100), 0)
 	require.Equal(t, env.tmc.getSchemaRequestCount(200), 1)
-
 }
 
 func TestMaterializerNoSourcePrimary(t *testing.T) {
@@ -3520,7 +3516,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 	tableMaterializeSettings := []*vtctldatapb.TableMaterializeSettings{
 		{
 			TargetTable:      table,
-			SourceExpression: fmt.Sprintf("select * from %s", table),
+			SourceExpression: "select * from " + table,
 		},
 	}
 	targetVSchema := &vschemapb.Keyspace{
@@ -3570,7 +3566,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 						Rules: []*binlogdatapb.Rule{
 							{
 								Match:  table,
-								Filter: fmt.Sprintf("select * from %s", table),
+								Filter: "select * from " + table,
 							},
 						},
 					},
@@ -3663,7 +3659,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 						Rules: []*binlogdatapb.Rule{
 							{
 								Match:  table,
-								Filter: fmt.Sprintf("select * from %s", table),
+								Filter: "select * from " + table,
 							},
 						},
 					},
@@ -3675,7 +3671,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 						Rules: []*binlogdatapb.Rule{
 							{
 								Match:  table,
-								Filter: fmt.Sprintf("select * from %s", table),
+								Filter: "select * from " + table,
 							},
 						},
 					},

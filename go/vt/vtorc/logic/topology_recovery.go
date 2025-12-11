@@ -474,7 +474,7 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 		restartExpected++
 		eg.Go(func() error {
 			logger.Infof("Restarting replication on direct replica %s", tabletAlias)
-			_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Restarting replication on direct replica %s", tabletAlias))
+			_ = AuditTopologyRecovery(topologyRecovery, "Restarting replication on direct replica "+tabletAlias)
 
 			if err := tmc.StopReplication(ctx, tablet); err != nil {
 				logger.Errorf("Failed to stop replication on %s: %v", tabletAlias, err)

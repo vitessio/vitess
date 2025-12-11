@@ -712,7 +712,6 @@ func TestSelectLike(t *testing.T) {
 		`StreamExecuteMulti dummy_select ks.0c80-0d: {} `,
 	})
 	expectResult(t, result, defaultSelectResult)
-
 }
 
 func TestSelectNext(t *testing.T) {
@@ -1431,7 +1430,6 @@ func TestParamsFail(t *testing.T) {
 }
 
 func TestExecFail(t *testing.T) {
-
 	t.Run("unsharded", func(t *testing.T) {
 		// Unsharded error
 		sel := NewRoute(

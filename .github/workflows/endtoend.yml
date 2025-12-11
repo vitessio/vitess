@@ -53,23 +53,22 @@ jobs:
 
     - name: Tune the OS
       if: steps.changes.outputs.end_to_end == 'true'
-      run: |
-        sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
+      uses: ./.github/actions/tune-os
 
-        # Don't waste a bunch of time processing man-db triggers
-        echo "set man-db/auto-update false" | sudo debconf-communicate
-        sudo dpkg-reconfigure man-db
+    - name: Setup MySQL
+      if: steps.changes.outputs.end_to_end == 'true'
+      uses: ./.github/actions/setup-mysql
+      with:
+        flavor: mysql-8.0
 
     - name: Get dependencies
       if: steps.changes.outputs.end_to_end == 'true'
       run: |
         sudo apt-get update
-        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd-client etcd-server curl git wget
+        sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
         
-        sudo service mysql stop
         sudo service etcd stop
-        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+
         go mod download
 
     - name: Run make minimaltools
@@ -90,4 +89,4 @@ jobs:
         # which musn't be more than 107 characters long.
         export VTDATAROOT="/tmp/"
 
-        eatmydata -- tools/e2e_test_runner.sh
+        tools/e2e_test_runner.sh

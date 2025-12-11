@@ -123,7 +123,6 @@ func TestNewFromFloat(t *testing.T) {
 		s := x.short
 		d := NewFromFloat(x.float)
 		assert.Equal(t, s, d.String())
-
 	}
 
 	shouldPanicOn := []float64{
@@ -155,7 +154,6 @@ func TestNewFromFloatRandom(t *testing.T) {
 		}
 		got := NewFromFloat(in)
 		assert.True(t, want.Equal(got))
-
 	}
 }
 
@@ -277,7 +275,6 @@ func TestNewFromStringErrs(t *testing.T) {
 		out, err := NewFromString(s)
 		assert.Error(t, err)
 		assert.Equal(t, o, out.String())
-
 	}
 }
 
@@ -307,7 +304,6 @@ func TestNewFromStringDeepEquals(t *testing.T) {
 			t.Errorf("error parsing strings to decimals")
 		}
 		assert.Equal(t, cmp.expected, reflect.DeepEqual(d1, d2))
-
 	}
 }
 
@@ -364,7 +360,6 @@ func TestNewFromInt(t *testing.T) {
 	for input, s := range tests {
 		d := NewFromInt(input)
 		assert.Equal(t, s, d.String())
-
 	}
 }
 
@@ -454,7 +449,6 @@ func TestDecimal_RoundAndStringFixed(t *testing.T) {
 		}
 		gotStr := d.StringFixed(test.places)
 		assert.Equal(t, test.expectedFixed, gotStr)
-
 	}
 }
 
@@ -484,7 +478,6 @@ func TestDecimal_Add(t *testing.T) {
 		}
 		c := a.Add(b)
 		assert.Equal(t, res, c.String())
-
 	}
 }
 
@@ -518,7 +511,6 @@ func TestDecimal_Sub(t *testing.T) {
 		}
 		c := a.sub(b)
 		assert.Equal(t, res, c.String())
-
 	}
 }
 
@@ -538,7 +530,6 @@ func TestDecimal_Neg(t *testing.T) {
 		}
 		b := a.Neg()
 		assert.Equal(t, res, b.String())
-
 	}
 }
 
@@ -546,7 +537,6 @@ func TestDecimal_NegFromEmpty(t *testing.T) {
 	a := Decimal{}
 	b := a.Neg()
 	assert.Equal(t, "0", b.String())
-
 }
 
 func TestDecimal_Mul(t *testing.T) {
@@ -574,13 +564,11 @@ func TestDecimal_Mul(t *testing.T) {
 		}
 		c := a.mul(b)
 		assert.Equal(t, res, c.String())
-
 	}
 
 	// positive scale
 	c := New(1234, 5).mul(New(45, -1))
 	assert.Equal(t, "555300000", c.String())
-
 }
 
 func TestDecimal_QuoRem(t *testing.T) {
@@ -710,7 +698,6 @@ func TestDecimal_Overflow(t *testing.T) {
 func TestDecimal_Scale(t *testing.T) {
 	a := New(1234, -3)
 	assert.EqualValues(t, -3, a.Exponent())
-
 }
 
 func TestDecimal_Abs1(t *testing.T) {
@@ -719,7 +706,6 @@ func TestDecimal_Abs1(t *testing.T) {
 
 	c := a.Abs()
 	assert.Zero(t, c.Cmp(b))
-
 }
 
 func TestDecimal_Abs2(t *testing.T) {
@@ -728,7 +714,6 @@ func TestDecimal_Abs2(t *testing.T) {
 
 	c := b.Abs()
 	assert.NotZero(t, c.Cmp(a))
-
 }
 
 func TestDecimal_ScalesNotEqual(t *testing.T) {
@@ -795,7 +780,6 @@ func TestDecimal_Cmp2(t *testing.T) {
 	a := New(123, 3)
 	b := New(1234, 2)
 	assert.Equal(t, -1, a.Cmp(b))
-
 }
 
 func TestDecimal_IsInteger(t *testing.T) {
@@ -821,7 +805,6 @@ func TestDecimal_IsInteger(t *testing.T) {
 			t.Fatal(err)
 		}
 		assert.Equal(t, testCase.IsInteger, d.isInteger())
-
 	}
 }
 
@@ -833,13 +816,11 @@ func TestDecimal_Sign(t *testing.T) {
 
 	mone := New(-1, 0)
 	assert.Equal(t, -1, mone.Sign())
-
 }
 
 func didPanic(f func()) bool {
 	ret := false
 	func() {
-
 		defer func() {
 			if message := recover(); message != nil {
 				ret = true
@@ -848,9 +829,7 @@ func didPanic(f func()) bool {
 
 		// call the target function
 		f()
-
 	}()
 
 	return ret
-
 }

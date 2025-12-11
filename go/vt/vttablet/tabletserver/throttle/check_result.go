@@ -99,15 +99,15 @@ func (c *CheckResult) IsOK() bool {
 func (c *CheckResult) Summary() string {
 	switch c.ResponseCode {
 	case tabletmanagerdatapb.CheckThrottlerResponseCode_OK:
-		return fmt.Sprintf("%s is granted access", c.AppName)
+		return c.AppName + " is granted access"
 	case tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED:
-		return fmt.Sprintf("%s is explicitly denied access", c.AppName)
+		return c.AppName + " is explicitly denied access"
 	case tabletmanagerdatapb.CheckThrottlerResponseCode_INTERNAL_ERROR:
 		return fmt.Sprintf("%s is denied access due to unexpected error: %v", c.AppName, c.Error)
 	case tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED:
 		return fmt.Sprintf("%s is denied access due to %s/%s metric value %v exceeding threshold %v", c.AppName, c.Scope, c.MetricName, c.Value, c.Threshold)
 	case tabletmanagerdatapb.CheckThrottlerResponseCode_UNKNOWN_METRIC:
-		return fmt.Sprintf("%s is denied access due to unknown or uncollected metric", c.AppName)
+		return c.AppName + " is denied access due to unknown or uncollected metric"
 	case tabletmanagerdatapb.CheckThrottlerResponseCode_UNDEFINED:
 		return ""
 	default:

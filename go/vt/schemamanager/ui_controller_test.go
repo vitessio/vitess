@@ -17,7 +17,7 @@ limitations under the License.
 package schemamanager
 
 import (
-	"fmt"
+	"errors"
 	"net/http/httptest"
 	"testing"
 
@@ -49,7 +49,7 @@ func TestUIController(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, response.Body.String(), "OnReadSuccess, sqls", "controller.OnReadSuccess should write to http response")
 
-	errReadFail := fmt.Errorf("read fail")
+	errReadFail := errors.New("read fail")
 	err = controller.OnReadFail(ctx, errReadFail)
 	require.ErrorIs(t, err, errReadFail)
 	require.Contains(t, response.Body.String(), "OnReadFail, error", "controller.OnReadFail should write to http response")
@@ -58,7 +58,7 @@ func TestUIController(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, response.Body.String(), "OnValidationSuccess, sqls", "controller.OnValidationSuccess should write to http response")
 
-	errValidationFail := fmt.Errorf("validation fail")
+	errValidationFail := errors.New("validation fail")
 	err = controller.OnValidationFail(ctx, errValidationFail)
 	require.ErrorIs(t, err, errValidationFail)
 	require.Contains(t, response.Body.String(), "OnValidationFail, error", "controller.OnValidationFail should write to http response")

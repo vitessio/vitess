@@ -36,7 +36,7 @@ import (
 //  2. Column and table names with special characters in them, namely a dash
 //  3. Identifiers using reserved words, as lead is a reserved word in MySQL 8.0+ (https://dev.mysql.com/doc/refman/8.0/en/keywords.html)
 //
-// The internal table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431 should be ignored by vreplication
+// The internal table _vt_prg_4f9194b43b2011eb8a0104ed332e05c2_20221210194431_ should be ignored by vreplication
 // The db_order_test table is used to ensure vreplication and vdiff work well with complex non-integer PKs, even across DB versions.
 // The db_order_test table needs to use a collation that exists in all versions for cross version tests as we use the collation for the PK
 // based merge sort in VDiff. The table is using a non-default collation for any version with utf8mb4 as 5.7 does NOT show the default
@@ -66,7 +66,7 @@ create table customer2(cid int, name varchar(128), typ enum('individual','soho',
 create table customer_seq2(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
 create table `+"`Lead`(`Lead-id`"+` binary(16), name varbinary(16), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key (`+"`Lead-id`"+`), key (date1));
 create table `+"`Lead-1`(`Lead`"+` binary(16), name varbinary(16), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key (`+"`Lead`"+`), key (date2));
-create table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431(id int, val varbinary(128), primary key(id), key(val));
+create table _vt_prg_4f9194b43b2011eb8a0104ed332e05c2_20221210194431_(id int, val varbinary(128), primary key(id), key(val));
 create table db_order_test (c_uuid varchar(64) not null default '', created_at datetime not null, dstuff varchar(128), dtstuff text, dbstuff blob, cstuff char(32), primary key (c_uuid,created_at), key (dstuff)) CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 create table vdiff_order (order_id varchar(50) collate utf8mb4_unicode_ci not null, primary key (order_id), key (order_id)) charset=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 create table datze (id int, dt1 datetime not null default current_timestamp, dt2 datetime not null, ts1 timestamp default current_timestamp, primary key (id), key (dt1));
@@ -83,10 +83,10 @@ create table ukTable (id1 int not null, id2 int not null, name varchar(20), uniq
 	internalSchema = `
  create table _1e275eef_3b20_11eb_a38f_04ed332e05c2_20201210204529_gho(id int, val varbinary(128), primary key(id));
  create table _0e8a27c8_1d73_11ec_a579_0aa0c75a6a1d_20210924200735_vrepl(id int, val varbinary(128), primary key(id));
- create table _vt_PURGE_1f9194b43b2011eb8a0104ed332e05c2_20201210194431(id int, val varbinary(128), primary key(id));
- create table _vt_EVAC_6ace8bcef73211ea87e9f875a4d24e90_29990915120410(id int, val varbinary(128), primary key(id));
- create table _vt_DROP_2bce8bcef73211ea87e9f875a4d24e90_20200915120410(id int, val varbinary(128), primary key(id));
- create table _vt_HOLD_4abe6bcef73211ea87e9f875a4d24e90_20220115120410(id int, val varbinary(128), primary key(id));
+ create table _vt_prg_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_(id int, val varbinary(128), primary key(id));
+ create table _vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_(id int, val varbinary(128), primary key(id));
+ create table _vt_drp_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_(id int, val varbinary(128), primary key(id));
+ create table _vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_(id int, val varbinary(128), primary key(id));
  `
 
 	initialProductVSchema = `
@@ -431,44 +431,44 @@ create table ukTable (id1 int not null, id2 int not null, name varchar(20), uniq
   }
 }
 `
-	materializeProductSpec = `
+	materializeProductSpec = fmt.Sprintf(`
 	{
 	"workflow": "cproduct",
-	"source_keyspace": "product",
-	"target_keyspace": "customer",
+	"source_keyspace": "%s",
+	"target_keyspace": "%s",
 	"table_settings": [{
 		"target_table": "cproduct",
 		"source_expression": "select * from product",
 		"create_ddl": "create table cproduct(pid bigint, description varchar(128), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key(pid)) CHARSET=utf8mb4"
 	}]
 }
-`
+`, defaultSourceKs, defaultTargetKs)
 
-	materializeCustomerNameSpec = `
+	materializeCustomerNameSpec = fmt.Sprintf(`
 {
   "workflow": "customer_name",
-  "source_keyspace": "customer",
-  "target_keyspace": "customer",
+  "source_keyspace": "%s",
+  "target_keyspace": "%s",
   "table_settings": [{
     "target_table": "customer_name",
     "source_expression": "select cid, name from customer",
     "create_ddl": "create table if not exists customer_name (cid bigint not null, name varchar(128), primary key(cid), key(name))"
   }]
 }
-`
+`, defaultTargetKs, defaultTargetKs)
 
-	materializeCustomerTypeSpec = `
+	materializeCustomerTypeSpec = fmt.Sprintf(`
 {
   "workflow": "enterprise_customer",
-  "source_keyspace": "customer",
-  "target_keyspace": "customer",
+  "source_keyspace": "%s",
+  "target_keyspace": "%s",
   "table_settings": [{
     "target_table": "enterprise_customer",
     "source_expression": "select cid, name, typ from customer where typ = 'enterprise'",
     "create_ddl": "create table if not exists enterprise_customer (cid bigint not null, name varchar(128), typ varchar(64), primary key(cid), key(typ))"
   }]
 }
-`
+`, defaultTargetKs, defaultTargetKs)
 
 	merchantOrdersVSchema = `
 {
@@ -512,10 +512,10 @@ create table ukTable (id1 int not null, id2 int not null, name varchar(20), uniq
 `
 
 	// the merchant-type keyspace allows us to test keyspace names with special characters in them (dash)
-	materializeMerchantOrdersSpec = `
+	materializeMerchantOrdersSpec = fmt.Sprintf(`
 {
   "workflow": "morders",
-  "source_keyspace": "customer",
+  "source_keyspace": "%s",
   "target_keyspace": "merchant-type",
   "table_settings": [{
     "target_table": "morders",
@@ -523,12 +523,12 @@ create table ukTable (id1 int not null, id2 int not null, name varchar(20), uniq
     "create_ddl": "create table morders(oid int, cid int, mname varchar(128), pid int, price int, qty int, total int, total2 int as (10 * total), primary key(oid)) CHARSET=utf8"
   }]
 }
-`
+`, defaultTargetKs)
 
-	materializeMerchantSalesSpec = `
+	materializeMerchantSalesSpec = fmt.Sprintf(`
 {
   "workflow": "msales",
-  "source_keyspace": "customer",
+  "source_keyspace": "%s",
   "target_keyspace": "merchant-type",
   "table_settings": [{
     "target_table": "msales",
@@ -536,7 +536,7 @@ create table ukTable (id1 int not null, id2 int not null, name varchar(20), uniq
     "create_ddl": "create table msales(merchant_name varchar(128), kount int, amount int, primary key(merchant_name)) CHARSET=utf8"
   }]
 }
-`
+`, defaultTargetKs)
 
 	materializeSalesVSchema = `
 {
@@ -552,30 +552,30 @@ create table ukTable (id1 int not null, id2 int not null, name varchar(20), uniq
   }
 }
 `
-	materializeSalesSpec = `
+	materializeSalesSpec = fmt.Sprintf(`
 {
   "workflow": "sales",
-  "source_keyspace": "customer",
-  "target_keyspace": "product",
+  "source_keyspace": "%s",
+  "target_keyspace": "%s",
   "table_settings": [{
     "target_Table": "sales",
     "source_expression": "select pid, count(*) as kount, sum(price) as amount from orders group by pid",
     "create_ddl": "create table sales(pid int, kount int, amount int, primary key(pid)) CHARSET=utf8"
   }]
 }
-`
-	materializeRollupSpec = `
+`, defaultTargetKs, defaultSourceKs)
+	materializeRollupSpec = fmt.Sprintf(`
 {
   "workflow": "rollup",
-  "source_keyspace": "product",
-  "target_keyspace": "product",
+  "source_keyspace": "%s",
+  "target_keyspace": "%s",
   "table_settings": [{
     "target_table": "rollup",
     "source_expression": "select 'total' as rollupname, count(*) as kount from product group by rollupname",
     "create_ddl": "create table rollup(rollupname varchar(100), kount int, primary key (rollupname)) CHARSET=utf8mb4"
   }]
 }
-`
+`, defaultSourceKs, defaultSourceKs)
 	initialExternalSchema = `
 create table review(rid int, pid int, review varbinary(128), primary key(rid));
 create table rating(gid int, pid int, rating int, primary key(gid));

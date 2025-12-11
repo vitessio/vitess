@@ -93,9 +93,9 @@ func startMySQLWithSSLRequired(t *testing.T, testUser string) (vttest.LocalClust
 		ExtraMyCnf: []string{
 			"[mysqld]",
 			"require_secure_transport=ON",
-			fmt.Sprintf("ssl-ca=%s", caFile),
-			fmt.Sprintf("ssl-cert=%s", serverCertFile),
-			fmt.Sprintf("ssl-key=%s", serverKeyFile),
+			"ssl-ca=" + caFile,
+			"ssl-cert=" + serverCertFile,
+			"ssl-key=" + serverKeyFile,
 		},
 	}
 

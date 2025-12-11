@@ -250,7 +250,7 @@ func setupExtraMyConfig() error {
 	}
 
 	// The config file is in the same directory as this test file
-	configPath := fmt.Sprintf("%s/extra_my.cnf", wd)
+	configPath := wd + "/extra_my.cnf"
 
 	// Verify the file exists
 	if _, err := os.Stat(configPath); err != nil {

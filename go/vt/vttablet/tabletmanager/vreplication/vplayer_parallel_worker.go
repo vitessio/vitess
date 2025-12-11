@@ -370,7 +370,7 @@ func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdata
 				return err
 			}
 			w.flushSequenceNumbers()
-			if err := w.setVRState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at DDL %s", event.Statement)); err != nil {
+			if err := w.setVRState(binlogdatapb.VReplicationWorkflowState_Stopped, "Stopped at DDL "+event.Statement); err != nil {
 				return err
 			}
 			if err := w.commitFunc(); err != nil {

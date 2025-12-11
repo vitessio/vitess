@@ -736,5 +736,4 @@ func (d Decimal) Clamp(integral, fractional int32) Decimal {
 		return d
 	}
 	return limit
-
 }

@@ -1,6 +1,6 @@
 module vitess.io/vitess
 
-go 1.25.1
+go 1.25.3
 
 require (
 	cloud.google.com/go/storage v1.57.0
@@ -65,15 +65,15 @@ require (
 	go.etcd.io/etcd/client/pkg/v3 v3.5.23
 	go.etcd.io/etcd/client/v3 v3.5.23
 	go.uber.org/mock v0.5.0
-	golang.org/x/crypto v0.42.0 // indirect
-	golang.org/x/mod v0.28.0 // indirect
-	golang.org/x/net v0.44.0
+	golang.org/x/crypto v0.45.0 // indirect
+	golang.org/x/mod v0.29.0 // indirect
+	golang.org/x/net v0.47.0
 	golang.org/x/oauth2 v0.31.0
-	golang.org/x/sys v0.36.0
-	golang.org/x/term v0.35.0
-	golang.org/x/text v0.29.0 // indirect
+	golang.org/x/sys v0.38.0
+	golang.org/x/term v0.37.0
+	golang.org/x/text v0.31.0 // indirect
 	golang.org/x/time v0.13.0
-	golang.org/x/tools v0.37.0
+	golang.org/x/tools v0.38.0
 	google.golang.org/api v0.251.0
 	google.golang.org/genproto v0.0.0-20250929231259-57b25ae835d4 // indirect
 	google.golang.org/grpc v1.75.1
@@ -108,7 +108,7 @@ require (
 	github.com/xlab/treeprint v1.2.0
 	go.uber.org/goleak v1.3.0
 	golang.org/x/exp v0.0.0-20250911091902-df9299821621
-	golang.org/x/sync v0.17.0
+	golang.org/x/sync v0.18.0
 	gonum.org/v1/gonum v0.16.0
 	modernc.org/sqlite v1.39.0
 )
@@ -134,7 +134,6 @@ require (
 	github.com/google/btree v1.1.3 // indirect
 	github.com/google/pprof v0.0.0-20250820193118-f64d9cf942d6 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/moby/sys/userns v0.1.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/olekukonko/cat v0.0.0-20250911104152-50322a0618f6 // indirect

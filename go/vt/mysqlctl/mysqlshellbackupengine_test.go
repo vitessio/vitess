@@ -29,6 +29,7 @@ import (
 
 	"vitess.io/vitess/go/ioutil"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -83,13 +84,11 @@ func TestMySQLShellBackupBackupPreCheck(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			mysqlShellBackupLocation = tt.location
 			mysqlShellFlags = tt.flags
 			assert.ErrorIs(t, engine.backupPreCheck(path.Join(mysqlShellBackupLocation, "test")), tt.err)
 		})
 	}
-
 }
 
 func TestMySQLShellBackupRestorePreCheck(t *testing.T) {
@@ -149,7 +148,6 @@ func TestMySQLShellBackupRestorePreCheck(t *testing.T) {
 			assert.Equal(t, tt.shouldDeleteUsers, shouldDeleteUsers)
 		})
 	}
-
 }
 
 func TestMySQLShellBackupRestorePreCheckDisableRedolog(t *testing.T) {
@@ -210,7 +208,6 @@ func TestMySQLShellBackupRestorePreCheckDisableRedolog(t *testing.T) {
 			require.ErrorIs(t, err, tt.err)
 		})
 	}
-
 }
 
 func TestShouldDrainForBackupMySQLShell(t *testing.T) {
@@ -324,7 +321,7 @@ func TestCleanupMySQL(t *testing.T) {
 			if tt.shouldDeleteUsers {
 				for _, drop := range tt.expectedDropUsers {
 					mysql.ExpectedExecuteSuperQueryList = append(mysql.ExpectedExecuteSuperQueryList,
-						fmt.Sprintf("DROP USER %s", drop),
+						"DROP USER "+drop,
 					)
 				}
 			}
@@ -341,7 +338,6 @@ func TestCleanupMySQL(t *testing.T) {
 				"unexpected number of queries executed")
 		})
 	}
-
 }
 
 // this is a helper to write files in a temporary directory
@@ -406,6 +402,10 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 
 		require.Equal(t, mysqlShellBackupEngineName, manifest.BackupMethod)
 
+		if hostname, err := netutil.FullyQualifiedHostname(); err == nil {
+			require.Equal(t, hostname, manifest.Hostname)
+		}
+
 		// did we notice the lock was release and did we release it ours as well?
 		require.Contains(t, logger.String(), "global read lock released after",
 			"failed to release the global lock after mysqlsh")
@@ -458,5 +458,4 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 		require.ErrorContains(t, err, "mysqlshell failed")
 		require.False(t, mysql.GlobalReadLock) // lock must be released.
 	})
-
 }

@@ -18,7 +18,6 @@ package grpc_api
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"testing"
 
@@ -46,13 +45,12 @@ func TestTransactionsWithGRPCAPI(t *testing.T) {
 	workload := []string{"OLTP", "OLAP"}
 	for i := 0; i < 4; i++ { // running all switch combinations.
 		index := i % len(workload)
-		_, session, err := exec(ctx, vtSession, fmt.Sprintf("set workload = %s", workload[index]), nil)
+		_, session, err := exec(ctx, vtSession, "set workload = "+workload[index], nil)
 		require.NoError(t, err)
 
 		require.Equal(t, workload[index], session.Options.Workload.String())
 		execTest(ctx, t, workload[index], vtSession)
 	}
-
 }
 
 func execTest(ctx context.Context, t *testing.T, workload string, vtSession *vtgateconn.VTGateSession) {

@@ -87,7 +87,7 @@ func TestMultiQuery(t *testing.T) {
 					t.Run("MySQL Protocol", func(t *testing.T) {
 						mcmp, closer := start(t)
 						defer closer()
-						utils.Exec(t, mcmp.VtConn, fmt.Sprintf(`set workload = %s`, workload))
+						utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
 						defer utils.Exec(t, mcmp.VtConn, `set workload = oltp`)
 
 						if !tt.errExpected {

@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -68,8 +69,8 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 		"--backup_storage_implementation", vtctld.BackupStorageImplementation,
 		vtutils.GetFlagVariantForTestsByVersion("--file-backup-storage-root", vtctldVer), vtctld.FileBackupStorageRoot,
 		"--log_dir", vtctld.LogDir,
-		"--port", fmt.Sprintf("%d", vtctld.Port),
-		"--grpc_port", fmt.Sprintf("%d", vtctld.GrpcPort),
+		"--port", strconv.Itoa(vtctld.Port),
+		"--grpc_port", strconv.Itoa(vtctld.GrpcPort),
 		"--bind-address", "127.0.0.1",
 		"--grpc_bind_address", "127.0.0.1",
 	)

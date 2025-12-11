@@ -134,9 +134,9 @@ func (s *shrinker) fillQueue() bool {
 				oneLess = num + 1
 			}
 
-			s.queue = append(s.queue, sqlparser.NewIntLiteral(fmt.Sprintf("%d", half)))
+			s.queue = append(s.queue, sqlparser.NewIntLiteral(strconv.FormatInt(half, 10)))
 			if oneLess != half {
-				s.queue = append(s.queue, sqlparser.NewIntLiteral(fmt.Sprintf("%d", oneLess)))
+				s.queue = append(s.queue, sqlparser.NewIntLiteral(strconv.FormatInt(oneLess, 10)))
 			}
 		case sqlparser.FloatVal, sqlparser.DecimalVal:
 			fval, err := strconv.ParseFloat(e.Val, 64)
@@ -152,7 +152,7 @@ func (s *shrinker) fillQueue() bool {
 
 			// add the value as an integer
 			intval := int(fval)
-			s.queue = append(s.queue, sqlparser.NewIntLiteral(fmt.Sprintf("%d", intval)))
+			s.queue = append(s.queue, sqlparser.NewIntLiteral(strconv.Itoa(intval)))
 
 			// we'll simplify by halving the current value and decreasing it by one
 			half := fval / 2

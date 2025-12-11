@@ -173,7 +173,6 @@ func waitForReadyToComplete(t *testing.T, uuid string, expected bool) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
-
 		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
@@ -295,11 +294,9 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitcode)
 	}
-
 }
 
 func TestSchedulerSchemaChanges(t *testing.T) {
-
 	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
 
 	t.Run("scheduler", testScheduler)
@@ -1704,10 +1701,10 @@ func testScheduler(t *testing.T) {
 		require.NoError(t, err)
 
 		sqls := []string{
-			fmt.Sprintf("drop table if exists t4_%s", u),
-			fmt.Sprintf("drop view  if exists t1_%s", u),
-			fmt.Sprintf("drop table if exists t2_%s", u),
-			fmt.Sprintf("drop view  if exists t3_%s", u),
+			"drop table if exists t4_" + u,
+			"drop view  if exists t1_" + u,
+			"drop table if exists t2_" + u,
+			"drop view  if exists t3_" + u,
 		}
 		sql := strings.Join(sqls, ";")
 		var vuuids []string
@@ -1734,10 +1731,10 @@ func testScheduler(t *testing.T) {
 		require.NoError(t, err)
 
 		sqls := []string{
-			fmt.Sprintf("drop table if exists t4_%s", u),
-			fmt.Sprintf("drop view  if exists t1_%s", u),
-			fmt.Sprintf("drop table if exists t2_%s", u),
-			fmt.Sprintf("drop view  if exists t3_%s", u),
+			"drop table if exists t4_" + u,
+			"drop view  if exists t1_" + u,
+			"drop table if exists t2_" + u,
+			"drop view  if exists t3_" + u,
 		}
 		sql := strings.Join(sqls, ";")
 		var vuuids []string
@@ -1764,10 +1761,10 @@ func testScheduler(t *testing.T) {
 		require.NoError(t, err)
 
 		sqls := []string{
-			fmt.Sprintf("drop table if exists t4_%s", u),
-			fmt.Sprintf("drop view  if exists t1_%s", u),
-			fmt.Sprintf("drop table t2_%s", u), // non existent
-			fmt.Sprintf("drop view  if exists t3_%s", u),
+			"drop table if exists t4_" + u,
+			"drop view  if exists t1_" + u,
+			"drop table t2_" + u, // non existent
+			"drop view  if exists t3_" + u,
 		}
 		sql := strings.Join(sqls, ";")
 		var vuuids []string
@@ -1835,9 +1832,9 @@ func testScheduler(t *testing.T) {
 	t.Run("in-order-completion: two new views, one depends on the other", func(t *testing.T) {
 		u, err := schema.CreateOnlineDDLUUID()
 		require.NoError(t, err)
-		v2name := fmt.Sprintf("v2_%s", u)
+		v2name := "v2_" + u
 		createv2 := fmt.Sprintf("create view %s as select id from t1_test", v2name)
-		v1name := fmt.Sprintf("v1_%s", u)
+		v1name := "v1_" + u
 		createv1 := fmt.Sprintf("create view %s as select id from %s", v1name, v2name)
 
 		sql := fmt.Sprintf("%s; %s;", createv2, createv1)
@@ -2809,7 +2806,6 @@ func testDeclarative(t *testing.T) {
 }
 
 func testForeignKeys(t *testing.T) {
-
 	var (
 		createStatements = []string{
 			`
@@ -3051,14 +3047,14 @@ func testForeignKeys(t *testing.T) {
 						if droppedTables[artifact] {
 							continue
 						}
-						statement := fmt.Sprintf("DROP TABLE IF EXISTS %s", artifact)
+						statement := "DROP TABLE IF EXISTS " + artifact
 						_, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, statement, cluster.ApplySchemaParams{DDLStrategy: "direct --unsafe-allow-foreign-keys"})
 						if err == nil {
 							droppedTables[artifact] = true
 						}
 					}
 				}
-				statement := fmt.Sprintf("DROP TABLE IF EXISTS %s", strings.Join(artifacts, ","))
+				statement := "DROP TABLE IF EXISTS " + strings.Join(artifacts, ",")
 				t.Run(statement, func(t *testing.T) {
 					testStatement(t, statement, "direct", "", false)
 				})

@@ -213,7 +213,6 @@ func (ts *Server) GetShardServingTypes(ctx context.Context, si *ShardInfo) (serv
 								}
 							}
 						}
-
 					}
 				}()
 			case IsErrType(err, NoNode):
@@ -283,7 +282,6 @@ func (ts *Server) AddSrvKeyspacePartitions(ctx context.Context, keyspace string,
 
 				// Partition does not exist at all, we need to create it
 				if !partitionFound {
-
 					partition := &topodatapb.SrvKeyspace_KeyspacePartition{
 						ServedType: tabletType,
 					}
@@ -552,7 +550,6 @@ func (ts *Server) MigrateServedType(ctx context.Context, keyspace string, shards
 			switch {
 			case err == nil:
 				for _, partition := range srvKeyspace.GetPartitions() {
-
 					// We are finishing the migration, cleaning up tablet controls from the srvKeyspace
 					if tabletType == topodatapb.TabletType_PRIMARY {
 						partition.ShardTabletControls = nil

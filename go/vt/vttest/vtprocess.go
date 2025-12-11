@@ -149,7 +149,7 @@ func (vtp *VtProcess) WaitTerminate() error {
 func (vtp *VtProcess) WaitStart() (err error) {
 	vtp.proc = exec.Command(
 		vtp.Binary,
-		"--port", fmt.Sprintf("%d", vtp.Port),
+		"--port", strconv.Itoa(vtp.Port),
 		"--bind-address", vtp.BindAddress,
 		"--log_dir", vtp.LogDirectory,
 		"--alsologtostderr",
@@ -157,7 +157,7 @@ func (vtp *VtProcess) WaitStart() (err error) {
 
 	if vtp.PortGrpc != 0 {
 		vtp.proc.Args = append(vtp.proc.Args, "--grpc-port")
-		vtp.proc.Args = append(vtp.proc.Args, fmt.Sprintf("%d", vtp.PortGrpc))
+		vtp.proc.Args = append(vtp.proc.Args, strconv.Itoa(vtp.PortGrpc))
 	}
 
 	if vtp.BindAddressGprc != "" {
@@ -279,6 +279,14 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		vt.ExtraArgs = append(vt.ExtraArgs, fmt.Sprintf("--tablet-refresh-interval=%v", args.VtgateTabletRefreshInterval))
 	}
 
+	// If gateway initial tablet timeout is not defined then we will give it value of 30s (vtcombo default).
+	// Setting it to a lower value will reduce the time VTGate waits for tablets at startup.
+	if args.VtgateGatewayInitialTabletTimeout <= 0 {
+		vt.ExtraArgs = append(vt.ExtraArgs, fmt.Sprintf("--gateway-initial-tablet-timeout=%v", 30*time.Second))
+	} else {
+		vt.ExtraArgs = append(vt.ExtraArgs, fmt.Sprintf("--gateway-initial-tablet-timeout=%v", args.VtgateGatewayInitialTabletTimeout))
+	}
+
 	vt.ExtraArgs = append(vt.ExtraArgs, QueryServerArgs...)
 	vt.ExtraArgs = append(vt.ExtraArgs, environment.VtcomboArguments()...)
 
@@ -315,7 +323,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		}...)
 	} else {
 		hostname, p := mysql.Address()
-		port := fmt.Sprintf("%d", p)
+		port := strconv.Itoa(p)
 
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{
 			"--db-host", hostname,
@@ -331,7 +339,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 
 	vt.ExtraArgs = append(vt.ExtraArgs, []string{
 		"--mysql-auth-server-impl", "none",
-		"--mysql-server-port", fmt.Sprintf("%d", vtcomboMysqlPort),
+		"--mysql-server-port", strconv.Itoa(vtcomboMysqlPort),
 		"--mysql-server-bind-address", vtcomboMysqlBindAddress,
 	}...)
 

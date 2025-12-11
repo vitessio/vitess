@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -353,7 +354,7 @@ func (dr *switcherDryRun) dropSourceShards(ctx context.Context) error {
 		}
 		tabletsList[si.ShardName()] = make([]string, 0)
 		for _, t := range tabletAliases {
-			tabletsList[si.ShardName()] = append(tabletsList[si.ShardName()], fmt.Sprintf("%d", t.Uid))
+			tabletsList[si.ShardName()] = append(tabletsList[si.ShardName()], strconv.FormatUint(uint64(t.Uid), 10))
 		}
 		sort.Strings(tabletsList[si.ShardName()]) // For deterministic output
 		logs = append(logs, fmt.Sprintf("cell:%s;keyspace:%s;shards:[%s]",
@@ -490,7 +491,7 @@ func (dr *switcherDryRun) dropTargetShards(ctx context.Context) error {
 		}
 		tabletsList[si.ShardName()] = make([]string, 0)
 		for _, t := range tabletAliases {
-			tabletsList[si.ShardName()] = append(tabletsList[si.ShardName()], fmt.Sprintf("%d", t.Uid))
+			tabletsList[si.ShardName()] = append(tabletsList[si.ShardName()], strconv.FormatUint(uint64(t.Uid), 10))
 		}
 		sort.Strings(tabletsList[si.ShardName()]) // For deterministic output
 		logs = append(logs, fmt.Sprintf("cell:%s;keyspace:%s;shards:[%s]",

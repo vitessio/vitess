@@ -126,7 +126,6 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitcode)
 	}
-
 }
 
 func TestShards(t *testing.T) {
@@ -134,7 +133,6 @@ func TestShards(t *testing.T) {
 }
 
 func TestDeploySchema(t *testing.T) {
-
 	if clusterInstance.ReusingVTDATAROOT {
 		// we assume data is already deployed
 		return
@@ -160,7 +158,6 @@ func TestDeploySchema(t *testing.T) {
 }
 
 func TestTablesExist(t *testing.T) {
-
 	checkTables(t, "", totalTableCount)
 }
 

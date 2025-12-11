@@ -75,7 +75,6 @@ func ElectNewPrimary(
 	// (TODO:@ajm188) it's a little gross we need to pass this, maybe embed in the context?
 	logger logutil.Logger,
 ) (*topodatapb.TabletAlias, error) {
-
 	var primaryCell string
 	if shardInfo.PrimaryAlias != nil {
 		primaryCell = shardInfo.PrimaryAlias.Cell

@@ -100,7 +100,6 @@ var (
 )
 
 func TestVaultAuth(t *testing.T) {
-
 	// Instantiate Vitess Cluster objects and start topo
 	initializeClusterEarly(t)
 	defer clusterInstance.Teardown()

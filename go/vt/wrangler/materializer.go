@@ -189,7 +189,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 			if allTables {
 				tables = ksTables
 			} else {
-				return fmt.Errorf("no tables to move")
+				return errors.New("no tables to move")
 			}
 		}
 		var excludeTablesList []string
@@ -209,7 +209,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		}
 		tables = tables2
 		if len(tables) == 0 {
-			return fmt.Errorf("no tables to move")
+			return errors.New("no tables to move")
 		}
 		log.Infof("Found tables to move: %s", strings.Join(tables, ","))
 
@@ -1226,7 +1226,6 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 					}
 					if sourceTableName.Name.String() != ts.TargetTable {
 						return fmt.Errorf("source and target table names must match for copying schema: %v vs %v", sqlparser.String(sourceTableName), ts.TargetTable)
-
 					}
 				}
 
@@ -1474,7 +1473,7 @@ func (mz *materializer) getWorkflowSubType() (binlogdatapb.VReplicationWorkflowS
 	workflowSubType := binlogdatapb.VReplicationWorkflowSubType_None
 	switch {
 	case mz.isPartial && mz.ms.AtomicCopy:
-		return workflowSubType, "", fmt.Errorf("both atomic copy and partial mode cannot be specified for the same workflow")
+		return workflowSubType, "", errors.New("both atomic copy and partial mode cannot be specified for the same workflow")
 	case mz.isPartial:
 		workflowSubType = binlogdatapb.VReplicationWorkflowSubType_Partial
 	case mz.ms.AtomicCopy:

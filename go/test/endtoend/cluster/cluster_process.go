@@ -99,6 +99,7 @@ type LocalProcessCluster struct {
 	// major version numbers
 	VtTabletMajorVersion int
 	VtctlMajorVersion    int
+	VtGateMajorVersion   int
 
 	// standalone executable
 	VtctldClientProcess VtctldClientProcess
@@ -298,10 +299,9 @@ func (cluster *LocalProcessCluster) StartUnshardedKeyspace(keyspace Keyspace, re
 }
 
 func (cluster *LocalProcessCluster) startPartialKeyspace(keyspace Keyspace, shardNames []string, movedShard string, replicaCount int, rdonly bool, customizers ...any) (err error) {
-
 	cluster.HasPartialKeyspaces = true
 	routedKeyspace := &Keyspace{
-		Name:             fmt.Sprintf("%s_routed", keyspace.Name),
+		Name:             keyspace.Name + "_routed",
 		SchemaSQL:        keyspace.SchemaSQL,
 		VSchema:          keyspace.VSchema,
 		DurabilityPolicy: keyspace.DurabilityPolicy,
@@ -454,6 +454,7 @@ func (cluster *LocalProcessCluster) AddShard(keyspaceName string, shardName stri
 			HTTPPort:  cluster.GetAndReservePort(),
 			GrpcPort:  cluster.GetAndReservePort(),
 			MySQLPort: cluster.GetAndReservePort(),
+			Cell:      cluster.Cell,
 			Alias:     fmt.Sprintf("%s-%010d", cluster.Cell, tabletUID),
 		}
 		if i == 0 { // Make the first one as primary
@@ -641,7 +642,7 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 		}
 		for _, tablet := range shard.Vttablets {
 			if !cluster.ReusingVTDATAROOT {
-				if _, err = tablet.VttabletProcess.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace.Name), keyspace.Name, false); err != nil {
+				if _, err = tablet.VttabletProcess.QueryTablet("create database vt_"+keyspace.Name, keyspace.Name, false); err != nil {
 					log.Errorf("error creating database for keyspace %v: %v", keyspace.Name, err)
 					return
 				}
@@ -836,6 +837,10 @@ func (cluster *LocalProcessCluster) populateVersionInfo() error {
 		return err
 	}
 	cluster.VtctlMajorVersion, err = GetMajorVersion("vtctl")
+	if err != nil {
+		return err
+	}
+	cluster.VtGateMajorVersion, err = GetMajorVersion("vtgate")
 	return err
 }
 
@@ -1175,7 +1180,6 @@ func (cluster *LocalProcessCluster) StartVtbackup(newInitDBFile string, initialB
 		initialBackup)
 	cluster.VtbackupProcess.ExtraArgs = extraArgs
 	return cluster.VtbackupProcess.Setup()
-
 }
 
 // GetAndReservePort gives port for required process

@@ -329,7 +329,7 @@ func (db *DB) NewConnection(c *mysql.Conn) {
 	defer db.mu.Unlock()
 
 	if db.isConnFail.Load() {
-		panic(fmt.Errorf("simulating a connection failure"))
+		panic(errors.New("simulating a connection failure"))
 	}
 
 	if db.connDelay != 0 {

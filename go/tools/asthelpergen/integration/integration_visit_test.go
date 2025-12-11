@@ -251,7 +251,6 @@ func TestCopyOnRewriteReplaceVisitable(t *testing.T) {
 	newLeaf := resRefCon.ASTType.(*testVisitable).inner.(*Leaf)
 	assert.Equal(t, 2, newLeaf.v)
 	assert.Equal(t, 1, leaf.v)
-
 }
 
 func (tv *testVisitor) assertVisitOrder(t *testing.T, expected []AST) {

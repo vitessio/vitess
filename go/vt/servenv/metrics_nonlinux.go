@@ -19,14 +19,12 @@ limitations under the License.
 
 package servenv
 
-import (
-	"fmt"
-)
+import "errors"
 
 func getCgroupCpu() (float64, error) {
-	return -1, fmt.Errorf("Cgroup not supported on nonlinux platform")
+	return -1, errors.New("cgroups not supported on nonlinux platforms")
 }
 
 func getCgroupMemory() (float64, error) {
-	return -1, fmt.Errorf("Cgroup not supported on nonlinux platform")
+	return -1, errors.New("cgroups not supported on nonlinux platforms")
 }

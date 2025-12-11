@@ -575,7 +575,7 @@ func (f *loggingVCursor) Session() SessionActions {
 }
 
 func (f *loggingVCursor) SetTarget(target string) error {
-	f.log = append(f.log, fmt.Sprintf("Target set to %s", target))
+	f.log = append(f.log, "Target set to "+target)
 	return nil
 }
 

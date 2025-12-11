@@ -284,9 +284,9 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # Please read docker/README.md to understand the different available images.
 
 # This rule builds the bootstrap images for all flavors.
-DOCKER_IMAGES_FOR_TEST = mysql80 mysql84 percona80
+DOCKER_IMAGES_FOR_TEST = mysql80 mysql84 percona80 percona84
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=48
+BOOTSTRAP_VERSION=49
 ensure_bootstrap_version:
 	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go
@@ -339,7 +339,7 @@ docker_lite:
 docker_mini:
 	${call build_docker_image,docker/mini/Dockerfile,vitess/mini}
 
-DOCKER_VTTESTSERVER_SUFFIX = mysql84
+DOCKER_VTTESTSERVER_SUFFIX = mysql84 percona84
 DOCKER_VTTESTSERVER_TARGETS = $(addprefix docker_vttestserver_,$(DOCKER_VTTESTSERVER_SUFFIX))
 $(DOCKER_VTTESTSERVER_TARGETS): docker_vttestserver_%:
 	${call build_docker_image,docker/vttestserver/Dockerfile.$*,vitess/vttestserver:$*}

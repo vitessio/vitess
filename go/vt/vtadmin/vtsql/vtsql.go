@@ -143,7 +143,7 @@ func (vtgate *VTGateProxy) dial(ctx context.Context, target string, opts ...grpc
 	span.Annotate("is_using_credentials", vtgate.creds != nil)
 
 	conf := vitessdriver.Configuration{
-		Protocol:        fmt.Sprintf("grpc_%s", vtgate.cluster.Id),
+		Protocol:        "grpc_" + vtgate.cluster.Id,
 		Address:         resolver.DialAddr(vtgate.resolver, "vtgate"),
 		Target:          target,
 		GRPCDialOptions: append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(vtgate.resolver)),
@@ -178,7 +178,8 @@ func (vtgate *VTGateProxy) ShowTablets(ctx context.Context) (*sql.Rows, error) {
 
 	vtadminproto.AnnotateClusterSpan(vtgate.cluster, span)
 
-	return vtgate.conn.QueryContext(vtgate.getQueryContext(ctx), "SHOW vitess_tablets")
+	// The caller must run .Close() if the *sql.Rows != nil. We will suppress the sqlclosecheck linter here.
+	return vtgate.conn.QueryContext(vtgate.getQueryContext(ctx), "SHOW vitess_tablets") //nolint:sqlclosecheck
 }
 
 // VExplain is part of the DB interface.
@@ -189,10 +190,11 @@ func (vtgate *VTGateProxy) VExplain(ctx context.Context, query string, vexplainS
 	vtadminproto.AnnotateClusterSpan(vtgate.cluster, span)
 
 	rows, err := vtgate.conn.QueryContext(vtgate.getQueryContext(ctx), query)
-
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
+
 	switch vexplainStmt.Type {
 	case sqlparser.QueriesVExplainType:
 		return convertVExplainQueriesResultToString(rows)

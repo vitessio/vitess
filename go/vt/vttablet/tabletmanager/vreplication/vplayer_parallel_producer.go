@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -29,10 +28,11 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/vterrors"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 const (
@@ -255,7 +255,6 @@ func (p *parallelProducer) aggregateWorkersPos(ctx context.Context, dbClient *vd
 	if !onlyFirstContiguous {
 		log.Errorf("========== QQQ aggregateWorkersPos aggregatedWorkersPos: %v", aggregatedWorkersPos)
 		log.Errorf("========== QQQ aggregateWorkersPos combinedPos: %v", combinedPos)
-
 	}
 	// Update _vt.vreplication. This write reflects everything we could read from the workers table,
 	// which means that data was committed by the workers, which means this is a de-factor "what's been
@@ -548,7 +547,6 @@ func (p *parallelProducer) applyEvents(ctx context.Context, relay *relayLog) err
 
 	for _, w := range p.workers {
 		wg.Add(1)
-		w := w
 		go func() {
 			defer wg.Done()
 			p.workerErrors <- w.applyQueuedEvents(workersCtx)
@@ -558,7 +556,7 @@ func (p *parallelProducer) applyEvents(ctx context.Context, relay *relayLog) err
 	estimateLag := func() {
 		behind := time.Now().UnixNano() - p.vp.lastTimestampNs - p.vp.timeOffsetNs
 		p.vp.vr.stats.ReplicationLagSeconds.Store(behind / 1e9)
-		p.vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(p.vp.vr.id)), time.Duration(behind/1e9)*time.Second)
+		//p.vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(p.vp.vr.id)), time.Duration(behind/1e9)*time.Second)
 	}
 
 	eventQueue := make(chan *binlogdatapb.VEvent, 2*maxCountWorkersEvents)
@@ -568,7 +566,7 @@ func (p *parallelProducer) applyEvents(ctx context.Context, relay *relayLog) err
 	// TODO(sougou): if we also stored the time of the last event, we
 	// can estimate this value more accurately.
 	defer p.vp.vr.stats.ReplicationLagSeconds.Store(math.MaxInt64)
-	defer p.vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(p.vp.vr.id)), math.MaxInt64)
+	//defer p.vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(p.vp.vr.id)), math.MaxInt64)
 	var lagSecs int64
 	for {
 		if p.posReached.Load() {
@@ -677,11 +675,11 @@ func (p *parallelProducer) applyEvents(ctx context.Context, relay *relayLog) err
 							table = event.GetRowEvent().TableName
 						}
 						if table != "" {
-							tableLogMsg = fmt.Sprintf(" for table %s", table)
+							tableLogMsg = " for table " + table
 						}
 						pos := getNextPosition(items, i, j+1)
 						if pos != "" {
-							gtidLogMsg = fmt.Sprintf(" while processing position %s", pos)
+							gtidLogMsg = " while processing position " + pos
 						}
 						log.Errorf("Error applying event%s%s: %s", tableLogMsg, gtidLogMsg, err.Error())
 						err = vterrors.Wrapf(err, "error applying event%s%s", tableLogMsg, gtidLogMsg)
@@ -693,7 +691,7 @@ func (p *parallelProducer) applyEvents(ctx context.Context, relay *relayLog) err
 
 		if lagSecs >= 0 {
 			p.vp.vr.stats.ReplicationLagSeconds.Store(lagSecs)
-			p.vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(p.vp.vr.id)), time.Duration(lagSecs)*time.Second)
+			//p.vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(p.vp.vr.id)), time.Duration(lagSecs)*time.Second)
 		} else { // We couldn't determine the lag, so we need to estimate it
 			estimateLag()
 		}

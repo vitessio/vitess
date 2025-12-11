@@ -18,6 +18,7 @@ package tabletmanager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -105,7 +106,7 @@ func (tm *TabletManager) RestoreData(
 	}
 	defer tm.unlock()
 	if tm.Cnf == nil {
-		return fmt.Errorf("cannot perform restore without my.cnf, please restart vttablet with a my.cnf file specified")
+		return errors.New("cannot perform restore without my.cnf, please restart vttablet with a my.cnf file specified")
 	}
 
 	var (
@@ -157,7 +158,6 @@ func (tm *TabletManager) RestoreData(
 }
 
 func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool, request *tabletmanagerdatapb.RestoreFromBackupRequest, mysqlShutdownTimeout time.Duration) error {
-
 	tablet := tm.Tablet()
 	originalType := tablet.Type
 	// Try to restore. Depending on the reason for failure, we may be ok.
