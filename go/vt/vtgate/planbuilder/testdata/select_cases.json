@@ -4440,11 +4440,11 @@
   },
   {
     "comment": "Subquery with `IN` condition using columns with matching lookup vindexes, impossible conditions and limit clause",
-    "query": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3) AND 1 = 0 AND music.foo = 'bar' LIMIT 0, 100) _inner)",
+    "query": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3) AND 1 = 0 AND music.col1 = 'bar' LIMIT 0, 100) _inner)",
     "plan": {
       "Type": "Complex",
       "QueryType": "SELECT",
-      "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3) AND 1 = 0 AND music.foo = 'bar' LIMIT 0, 100) _inner)",
+      "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3) AND 1 = 0 AND music.col1 = 'bar' LIMIT 0, 100) _inner)",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
