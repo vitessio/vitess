@@ -556,7 +556,7 @@ func (st *SemTable) CopySemanticInfo(from, to sqlparser.SQLNode) {
 			st.CopyDependencies(f, t)
 		} else {
 			// Otherwise, we only copy over the type information
-			st.ExprTypes[t] = st.ExprTypes[f]
+			st.CopyExprInfo(f, t)
 		}
 	case *sqlparser.Union:
 		t, ok := to.(*sqlparser.Union)
