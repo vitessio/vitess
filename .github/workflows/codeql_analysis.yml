@@ -67,7 +67,7 @@ jobs:
           sudo service etcd stop
           
           # install JUnit report formatter
-          go install github.com/vitessio/go-junit-report@HEAD
+          go install github.com/vitessio/go-junit-report@99fa7f0daf16db969f54a49139a14471e633e6e8 # HEAD
           
       - name: Building binaries
         timeout-minutes: 30
