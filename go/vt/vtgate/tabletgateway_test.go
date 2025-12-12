@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -43,14 +44,14 @@ import (
 func TestTabletGatewayExecute(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 	testTabletGatewayGeneric(t, ctx, func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error {
-		_, err := tg.Execute(ctx, target, "query", nil, 0, 0, nil)
+		_, err := tg.Execute(ctx, &vtgatepb.Session{}, target, "query", nil, 0, 0)
 		return err
 	},
 		func(t *testing.T, sc *sandboxconn.SandboxConn, want int64) {
 			assert.Equal(t, want, sc.ExecCount.Load())
 		})
 	testTabletGatewayTransact(t, ctx, func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error {
-		_, err := tg.Execute(ctx, target, "query", nil, 1, 0, nil)
+		_, err := tg.Execute(ctx, &vtgatepb.Session{}, target, "query", nil, 1, 0)
 		return err
 	})
 }
@@ -58,7 +59,7 @@ func TestTabletGatewayExecute(t *testing.T) {
 func TestTabletGatewayExecuteStream(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 	testTabletGatewayGeneric(t, ctx, func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error {
-		err := tg.StreamExecute(ctx, target, "query", nil, 0, 0, nil, func(qr *sqltypes.Result) error {
+		err := tg.StreamExecute(ctx, &vtgatepb.Session{}, target, "query", nil, 0, 0, func(qr *sqltypes.Result) error {
 			return nil
 		})
 		return err
@@ -71,7 +72,7 @@ func TestTabletGatewayExecuteStream(t *testing.T) {
 func TestTabletGatewayBegin(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 	testTabletGatewayGeneric(t, ctx, func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error {
-		_, err := tg.Begin(ctx, target, nil)
+		_, err := tg.Begin(ctx, &vtgatepb.Session{}, target)
 		return err
 	},
 		func(t *testing.T, sc *sandboxconn.SandboxConn, want int64) {
@@ -98,7 +99,7 @@ func TestTabletGatewayRollback(t *testing.T) {
 func TestTabletGatewayBeginExecute(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 	testTabletGatewayGeneric(t, ctx, func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error {
-		_, _, err := tg.BeginExecute(ctx, target, nil, "query", nil, 0, nil)
+		_, _, err := tg.BeginExecute(ctx, &vtgatepb.Session{}, target, nil, "query", nil, 0)
 		return err
 	},
 		func(t *testing.T, sc *sandboxconn.SandboxConn, want int64) {
@@ -190,7 +191,7 @@ func TestTabletGatewayReplicaTransactionError(t *testing.T) {
 	defer tg.Close(ctx)
 
 	_ = hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
-	_, err := tg.Execute(ctx, target, "query", nil, 1, 0, nil)
+	_, err := tg.Execute(ctx, &vtgatepb.Session{}, target, "query", nil, 1, 0)
 	verifyContainsError(t, err, "query service can only be used for non-transactional queries on replicas", vtrpcpb.Code_INTERNAL)
 }
 

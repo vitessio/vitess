@@ -42226,9 +42226,6 @@ export namespace query {
 
         /** ExecuteOptions transaction_timeout */
         transaction_timeout?: (number|Long|null);
-
-        /** ExecuteOptions SessionUUID */
-        SessionUUID?: (string|null);
     }
 
     /** Represents an ExecuteOptions. */
@@ -42287,9 +42284,6 @@ export namespace query {
 
         /** ExecuteOptions transaction_timeout. */
         public transaction_timeout?: (number|Long|null);
-
-        /** ExecuteOptions SessionUUID. */
-        public SessionUUID: string;
 
         /** ExecuteOptions timeout. */
         public timeout?: "authoritative_timeout";

@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package balancer contains a number of different tablet balancing algorithms and their implementations.
 package balancer
 
 import (

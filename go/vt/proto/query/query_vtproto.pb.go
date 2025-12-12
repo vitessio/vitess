@@ -178,7 +178,6 @@ func (m *ExecuteOptions) CloneVT() *ExecuteOptions {
 	r.Priority = m.Priority
 	r.FetchLastInsertId = m.FetchLastInsertId
 	r.InDmlExecution = m.InDmlExecution
-	r.SessionUUID = m.SessionUUID
 	if rhs := m.TransactionAccessMode; rhs != nil {
 		tmpContainer := make([]ExecuteOptions_TransactionAccessMode, len(rhs))
 		copy(tmpContainer, rhs)
@@ -1900,15 +1899,6 @@ func (m *ExecuteOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 			return 0, err
 		}
 		i -= size
-	}
-	if len(m.SessionUUID) > 0 {
-		i -= len(m.SessionUUID)
-		copy(dAtA[i:], m.SessionUUID)
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.SessionUUID)))
-		i--
-		dAtA[i] = 0x1
-		i--
-		dAtA[i] = 0xaa
 	}
 	if m.TransactionTimeout != nil {
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(*m.TransactionTimeout))
@@ -6236,10 +6226,6 @@ func (m *ExecuteOptions) SizeVT() (n int) {
 	if m.TransactionTimeout != nil {
 		n += 2 + protohelpers.SizeOfVarint(uint64(*m.TransactionTimeout))
 	}
-	l = len(m.SessionUUID)
-	if l > 0 {
-		n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
-	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -9048,38 +9034,6 @@ func (m *ExecuteOptions) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.TransactionTimeout = &v
-		case 21:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field SessionUUID", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.SessionUUID = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

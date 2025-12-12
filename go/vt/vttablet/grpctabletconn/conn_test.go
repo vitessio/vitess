@@ -32,6 +32,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	queryservicepb "vitess.io/vitess/go/vt/proto/queryservice"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttablet/grpcqueryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
@@ -191,22 +192,22 @@ func TestGoRoutineLeakPrevention(t *testing.T) {
 		cc: &grpc.ClientConn{},
 		c:  mqc,
 	}
-	_ = qc.StreamExecute(context.Background(), nil, "", nil, 0, 0, nil, func(result *sqltypes.Result) error {
+	_ = qc.StreamExecute(context.Background(), &vtgatepb.Session{}, nil, "", nil, 0, 0, func(result *sqltypes.Result) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())
 
-	_, _ = qc.BeginStreamExecute(context.Background(), nil, nil, "", nil, 0, nil, func(result *sqltypes.Result) error {
+	_, _ = qc.BeginStreamExecute(context.Background(), &vtgatepb.Session{}, nil, nil, "", nil, 0, func(result *sqltypes.Result) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())
 
-	_, _ = qc.ReserveBeginStreamExecute(context.Background(), nil, nil, nil, "", nil, nil, func(result *sqltypes.Result) error {
+	_, _ = qc.ReserveBeginStreamExecute(context.Background(), &vtgatepb.Session{}, nil, nil, nil, "", nil, func(result *sqltypes.Result) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())
 
-	_, _ = qc.ReserveStreamExecute(context.Background(), nil, nil, "", nil, 0, nil, func(result *sqltypes.Result) error {
+	_, _ = qc.ReserveStreamExecute(context.Background(), &vtgatepb.Session{}, nil, nil, "", nil, 0, func(result *sqltypes.Result) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())
