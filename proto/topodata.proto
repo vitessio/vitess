@@ -162,7 +162,7 @@ message Tablet {
   uint32 default_conn_collation = 16;
 
   // tablet_start_time is the Unix timestamp (seconds) when the vttablet process started.
-  int64 tablet_start_time = 17;
+  vttime.Time tablet_start_time = 17;
 
   // OBSOLETE: ip and tablet health information
   // string ip = 3;

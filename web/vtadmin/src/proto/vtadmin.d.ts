@@ -18422,7 +18422,7 @@ export namespace topodata {
         default_conn_collation?: (number|null);
 
         /** Tablet tablet_start_time */
-        tablet_start_time?: (number|Long|null);
+        tablet_start_time?: (vttime.ITime|null);
     }
 
     /** Represents a Tablet. */
@@ -18474,7 +18474,7 @@ export namespace topodata {
         public default_conn_collation: number;
 
         /** Tablet tablet_start_time. */
-        public tablet_start_time: (number|Long);
+        public tablet_start_time?: (vttime.ITime|null);
 
         /**
          * Creates a new Tablet instance using the specified properties.

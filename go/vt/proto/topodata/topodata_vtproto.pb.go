@@ -83,7 +83,7 @@ func (m *Tablet) CloneVT() *Tablet {
 	r.MysqlPort = m.MysqlPort
 	r.PrimaryTermStartTime = m.PrimaryTermStartTime.CloneVT()
 	r.DefaultConnCollation = m.DefaultConnCollation
-	r.TabletStartTime = m.TabletStartTime
+	r.TabletStartTime = m.TabletStartTime.CloneVT()
 	if rhs := m.PortMap; rhs != nil {
 		tmpContainer := make(map[string]int32, len(rhs))
 		for k, v := range rhs {
@@ -672,12 +672,17 @@ func (m *Tablet) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.TabletStartTime != 0 {
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.TabletStartTime))
+	if m.TabletStartTime != nil {
+		size, err := m.TabletStartTime.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x1
 		i--
-		dAtA[i] = 0x88
+		dAtA[i] = 0x8a
 	}
 	if m.DefaultConnCollation != 0 {
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.DefaultConnCollation))
@@ -2061,8 +2066,9 @@ func (m *Tablet) SizeVT() (n int) {
 	if m.DefaultConnCollation != 0 {
 		n += 2 + protohelpers.SizeOfVarint(uint64(m.DefaultConnCollation))
 	}
-	if m.TabletStartTime != 0 {
-		n += 2 + protohelpers.SizeOfVarint(uint64(m.TabletStartTime))
+	if m.TabletStartTime != nil {
+		l = m.TabletStartTime.SizeVT()
+		n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -3335,10 +3341,10 @@ func (m *Tablet) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 		case 17:
-			if wireType != 0 {
+			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field TabletStartTime", wireType)
 			}
-			m.TabletStartTime = 0
+			var msglen int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return protohelpers.ErrIntOverflow
@@ -3348,11 +3354,28 @@ func (m *Tablet) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.TabletStartTime |= int64(b&0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.TabletStartTime == nil {
+				m.TabletStartTime = &vttime.Time{}
+			}
+			if err := m.TabletStartTime.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
