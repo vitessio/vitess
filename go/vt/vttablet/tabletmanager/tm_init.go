@@ -289,6 +289,7 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 		DbNameOverride:       initDbNameOverride,
 		Tags:                 mergeTags(buildTags, initTags),
 		DefaultConnCollation: uint32(charset),
+		TabletStartTime:      protoutil.TimeToProto(time.Now()),
 		TabletShutdownTime:   nil,
 	}, nil
 }

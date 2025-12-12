@@ -18421,6 +18421,9 @@ export namespace topodata {
         /** Tablet default_conn_collation */
         default_conn_collation?: (number|null);
 
+        /** Tablet tablet_start_time */
+        tablet_start_time?: (vttime.ITime|null);
+
         /** Tablet tablet_shutdown_time */
         tablet_shutdown_time?: (vttime.ITime|null);
     }
@@ -18472,6 +18475,9 @@ export namespace topodata {
 
         /** Tablet default_conn_collation. */
         public default_conn_collation: number;
+
+        /** Tablet tablet_start_time. */
+        public tablet_start_time?: (vttime.ITime|null);
 
         /** Tablet tablet_shutdown_time. */
         public tablet_shutdown_time?: (vttime.ITime|null);
