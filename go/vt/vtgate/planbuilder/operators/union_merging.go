@@ -249,10 +249,9 @@ func compactUnion(u *Union) *ApplyResult {
 		}
 	}
 
-	var newSources []Operator
-	var newSelects [][]sqlparser.SelectExpr
-	merged := false
-
+	var merged bool
+	newSources := make([]Operator, 0, len(u.Sources))
+	newSelects := make([][]sqlparser.SelectExpr, 0, len(u.Sources))
 	for idx, source := range u.Sources {
 		other, ok := source.(*Union)
 

@@ -83,7 +83,7 @@ func (dr *switcherDryRun) switchTableReads(ctx context.Context, cells []string, 
 	if direction == workflow.DirectionBackward {
 		ks = dr.ts.SourceKeyspaceName()
 	}
-	var tabletTypes []string
+	tabletTypes := make([]string, 0, len(servedTypes))
 	for _, servedType := range servedTypes {
 		tabletTypes = append(tabletTypes, servedType.String())
 	}
@@ -110,14 +110,13 @@ func (dr *switcherDryRun) allowTargetWrites(ctx context.Context) error {
 
 func (dr *switcherDryRun) changeRouting(ctx context.Context) error {
 	dr.drLog.Log(fmt.Sprintf("Switch routing from keyspace %s to keyspace %s", dr.ts.SourceKeyspaceName(), dr.ts.TargetKeyspaceName()))
-	var deleteLogs, addLogs []string
 	if dr.ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 		tables := strings.Join(dr.ts.Tables(), ",")
 		dr.drLog.Log(fmt.Sprintf("Routing rules for tables [%s] will be updated", tables))
 		return nil
 	}
-	deleteLogs = nil
-	addLogs = nil
+	deleteLogs := make([]string, 0, len(dr.ts.Sources()))
+	addLogs := make([]string, 0, len(dr.ts.Targets()))
 	for _, source := range dr.ts.Sources() {
 		deleteLogs = append(deleteLogs, fmt.Sprintf("\tShard %s, Tablet %d", source.GetShard().ShardName(), source.GetShard().PrimaryAlias.Uid))
 	}

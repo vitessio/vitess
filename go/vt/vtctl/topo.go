@@ -200,8 +200,8 @@ func (d PlainTopologyDecoder) decode(ctx context.Context, topoPaths []string, co
 }
 
 func (d JSONTopologyDecoder) decode(ctx context.Context, topoPaths []string, conn topo.Conn, wr *wrangler.Wrangler, long bool) error {
-	hasError := false
-	var jsonData []any
+	var hasError bool
+	jsonData := make([]any, 0, len(topoPaths))
 	for _, topoPath := range topoPaths {
 		data, version, err := conn.Get(ctx, topoPath)
 		if err != nil {
