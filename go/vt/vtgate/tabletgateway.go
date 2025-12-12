@@ -212,23 +212,22 @@ func (gw *TabletGateway) setupBalancer() {
 		log.Exitf("--balancer-vtgate-cells is required when using --vtgate-balancer-mode=prefer-cell")
 	}
 
-	// Create the balancer based on mode
-	switch mode {
-	case balancer.ModeWarming:
-		config := balancer.WarmingConfig{
-			WarmingPeriod:         warmingPeriod,
-			WarmingTrafficPercent: warmingTrafficPercent,
-		}
-		gw.balancer = balancer.NewWarmingBalancer(gw.localCell, balancerVtgateCells, config)
-		log.Infof("Tablet balancer enabled with mode: %s (period: %v, traffic: %d%%)", mode, warmingPeriod, warmingTrafficPercent)
-	default:
-		var err error
-		gw.balancer, err = balancer.NewTabletBalancer(mode, gw.localCell, balancerVtgateCells)
-		if err != nil {
-			log.Exitf("Failed to create tablet balancer: %v", err)
-		}
-		log.Infof("Tablet balancer enabled with mode: %s", mode)
+	// Create the balancer
+	config := balancer.TabletBalancerConfig{
+		Mode:                  mode,
+		LocalCell:             gw.localCell,
+		VTGateCells:           balancerVtgateCells,
+		WarmingPeriod:         warmingPeriod,
+		WarmingTrafficPercent: warmingTrafficPercent,
 	}
+
+	var err error
+	gw.balancer, err = balancer.NewTabletBalancer(config)
+	if err != nil {
+		log.Exitf("Failed to create tablet balancer: %v", err)
+	}
+
+	log.Infof("Tablet balancer enabled with mode: %s", mode)
 }
 
 // QueryServiceByAlias satisfies the Gateway interface

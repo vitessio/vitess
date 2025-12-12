@@ -18,12 +18,12 @@ package balancer
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/rand/v2"
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -142,27 +142,57 @@ type TabletBalancer interface {
 	DebugHandler(w http.ResponseWriter, r *http.Request)
 }
 
-// NewTabletBalancer creates a new tablet balancer based on the specified mode.
+// TabletBalancerConfig holds configuration for all tablet balancer modes.
+type TabletBalancerConfig struct {
+	// Mode specifies which balancing algorithm to use.
+	Mode Mode
+
+	// LocalCell is the cell where this vtgate is running.
+	LocalCell string
+
+	// VTGateCells is the list of cells that contain vtgates.
+	// Required for prefer-cell mode, optional for random mode.
+	VTGateCells []string
+
+	// WarmingPeriod is how long a tablet is considered "new" after startup.
+	// Only used when Mode == ModeWarming.
+	WarmingPeriod time.Duration
+
+	// WarmingTrafficPercent is the percentage of traffic (0-100) to send to
+	// new tablets during the warming period. Only used when Mode == ModeWarming.
+	WarmingTrafficPercent int
+}
+
+// DefaultTabletBalancerConfig returns a config with sensible defaults.
+func DefaultTabletBalancerConfig() TabletBalancerConfig {
+	return TabletBalancerConfig{
+		Mode:                  ModeCell,
+		WarmingPeriod:         30 * time.Minute,
+		WarmingTrafficPercent: 10,
+	}
+}
+
+// NewTabletBalancer creates a new tablet balancer based on the specified configuration.
 // Supported modes:
 //   - "prefer-cell": Flow-based balancer that maintains cell affinity while balancing load
-//   - See the RFC here: https://github.com/vitessio/vitess/issues/12241
+//     See the RFC here: https://github.com/vitessio/vitess/issues/12241
 //   - "random": Random balancer that uniformly distributes load without cell affinity
+//   - "warming": Routes reduced traffic to new tablets during warmup period
 //
 // Note: "cell" mode is handled by the gateway and does not create a balancer instance.
-// operates as a round robin inside of the vtgate's cell
-// Returns an error for unsupported modes.
-func NewTabletBalancer(mode Mode, localCell string, vtGateCells []string) (TabletBalancer, error) {
-	switch mode {
+// Returns an error for unsupported modes or invalid configuration.
+func NewTabletBalancer(config TabletBalancerConfig) (TabletBalancer, error) {
+	switch config.Mode {
 	case ModePreferCell:
-		return newFlowBalancer(localCell, vtGateCells), nil
+		return newFlowBalancer(config.LocalCell, config.VTGateCells), nil
 	case ModeRandom:
-		return newRandomBalancer(localCell, vtGateCells), nil
+		return newRandomBalancer(config.LocalCell, config.VTGateCells), nil
 	case ModeWarming:
-		return nil, errors.New("warming mode requires additional configuration; use NewWarmingBalancer instead")
+		return newWarmingBalancer(config.LocalCell, config.VTGateCells, config.WarmingPeriod, config.WarmingTrafficPercent), nil
 	case ModeCell:
-		return nil, errors.New("cell mode should be handled by the gateway, not the balancer factory")
+		return nil, fmt.Errorf("cell mode should be handled by the gateway, not the balancer factory")
 	default:
-		return nil, fmt.Errorf("unsupported balancer mode: %s (supported modes: %s)", mode, strings.Join(GetAvailableModeNames(), ", "))
+		return nil, fmt.Errorf("unsupported balancer mode: %s (supported modes: %s)", config.Mode, strings.Join(GetAvailableModeNames(), ", "))
 	}
 }
 

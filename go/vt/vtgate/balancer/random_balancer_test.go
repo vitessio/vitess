@@ -89,7 +89,12 @@ func TestRandomBalancerPickSingle(t *testing.T) {
 
 func TestRandomBalancerFactory(t *testing.T) {
 	// Test that the factory creates a random balancer correctly
-	b, err := NewTabletBalancer(ModeRandom, "cell1", []string{"cell1", "cell2"})
+	config := TabletBalancerConfig{
+		Mode:        ModeRandom,
+		LocalCell:   "cell1",
+		VTGateCells: []string{"cell1", "cell2"},
+	}
+	b, err := NewTabletBalancer(config)
 	require.NoError(t, err)
 	require.NotNil(t, b)
 
@@ -100,13 +105,23 @@ func TestRandomBalancerFactory(t *testing.T) {
 
 func TestBalancerFactoryInvalidModes(t *testing.T) {
 	// Test that "cell" mode returns an error (should be handled by gateway)
-	b, err := NewTabletBalancer(ModeCell, "cell1", []string{})
+	config := TabletBalancerConfig{
+		Mode:        ModeCell,
+		LocalCell:   "cell1",
+		VTGateCells: []string{},
+	}
+	b, err := NewTabletBalancer(config)
 	assert.Error(t, err)
 	assert.Nil(t, b)
 	assert.ErrorContains(t, err, "cell mode should be handled by the gateway")
 
 	// Test that an invalid mode returns an error
-	b, err = NewTabletBalancer(ModeInvalid, "cell1", []string{})
+	config = TabletBalancerConfig{
+		Mode:        ModeInvalid,
+		LocalCell:   "cell1",
+		VTGateCells: []string{},
+	}
+	b, err = NewTabletBalancer(config)
 	assert.Error(t, err)
 	assert.Nil(t, b)
 	assert.ErrorContains(t, err, "unsupported balancer mode")

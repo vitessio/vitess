@@ -26,36 +26,15 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-// WarmingConfig holds configuration for the warming balancer.
-type WarmingConfig struct {
-	// WarmingPeriod is how long a tablet is considered "new" after startup.
-	// During this period, new tablets receive reduced traffic to allow their
-	// buffer pools to warm up.
-	WarmingPeriod time.Duration
-
-	// WarmingTrafficPercent is the percentage of traffic (0-100) to send to
-	// new tablets during the warming period. The remaining traffic goes to
-	// old tablets.
-	WarmingTrafficPercent int
-}
-
-// DefaultWarmingConfig returns a default warming configuration with sensible defaults.
-func DefaultWarmingConfig() WarmingConfig {
-	return WarmingConfig{
-		WarmingPeriod:         30 * time.Minute,
-		WarmingTrafficPercent: 10,
-	}
-}
-
-// NewWarmingBalancer creates a new warming balancer with the specified configuration.
+// newWarmingBalancer creates a new warming balancer.
 // The warming balancer routes a small percentage of traffic to newly started replicas
 // while directing the majority of traffic to established replicas with warm buffer pools.
-func NewWarmingBalancer(localCell string, vtGateCells []string, config WarmingConfig) TabletBalancer {
+func newWarmingBalancer(localCell string, vtGateCells []string, warmingPeriod time.Duration, warmingTrafficPercent int) *warmingBalancer {
 	return &warmingBalancer{
 		localCell:             localCell,
 		vtGateCells:           vtGateCells,
-		warmingPeriod:         config.WarmingPeriod,
-		warmingTrafficPercent: config.WarmingTrafficPercent,
+		warmingPeriod:         warmingPeriod,
+		warmingTrafficPercent: warmingTrafficPercent,
 	}
 }
 
