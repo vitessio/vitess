@@ -342,7 +342,7 @@ func (te *TxEngine) txFinish(transactionID int64, reason tx.ReleaseReason, f fun
 // by that time.
 func (te *TxEngine) shutdownLocked() {
 	log.Infof("TxEngine - called shutdownLocked")
-	immediate := !(te.state == AcceptingReadAndWrite)
+	immediate := te.state != AcceptingReadAndWrite
 
 	// Unlock, wait for all begin requests to complete, and relock.
 	te.state = Transitioning

@@ -290,7 +290,7 @@ type LocalCluster struct {
 // cluster access should be performed through the vtgate port.
 func (db *LocalCluster) MySQLConnParams() mysql.ConnParams {
 	connParams := db.mysql.Params(db.DbName())
-	ch, err := collations.MySQL8().ParseConnectionCharset(db.Config.Charset)
+	ch, err := collations.MySQL8().ParseConnectionCharset(db.Charset)
 	if err != nil {
 		panic(err)
 	}
@@ -324,7 +324,7 @@ func (db *LocalCluster) MySQLCleanConnParams() mysql.ConnParams {
 		mysqlctl = toxiproxy.mysqlctl
 	}
 	connParams := mysqlctl.Params(db.DbName())
-	ch, err := collations.MySQL8().ParseConnectionCharset(db.Config.Charset)
+	ch, err := collations.MySQL8().ParseConnectionCharset(db.Charset)
 	if err != nil {
 		panic(err)
 	}
@@ -390,7 +390,7 @@ func (db *LocalCluster) Setup() error {
 		return err
 	}
 
-	initializing := !(db.PersistentMode && dirExist(db.mysql.TabletDir()))
+	initializing := !db.PersistentMode || !dirExist(db.mysql.TabletDir())
 
 	if initializing {
 		log.Infof("Initializing MySQL Manager (%T)...", db.mysql)

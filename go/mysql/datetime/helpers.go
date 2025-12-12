@@ -199,7 +199,7 @@ func getnuml(s string, l int) (int, string, bool) {
 }
 
 func getnumn(s string) (int, string, bool) {
-	if len(s) == 0 || !('0' <= s[0] && s[0] <= '9') {
+	if len(s) == 0 || ('0' > s[0] || s[0] > '9') {
 		return 0, s, false
 	}
 

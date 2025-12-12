@@ -1062,11 +1062,11 @@ func (vbc *vcopierCopyWorker) execute(ctx context.Context, task *vcopierCopyTask
 		case vcopierCopyTaskBegin:
 			advanceFn = func(context.Context, *vcopierCopyTaskArgs) error {
 				// Rollback to make sure we're in a clean state.
-				if err := vbc.vdbClient.Rollback(); err != nil {
+				if err := vbc.Rollback(); err != nil {
 					return vterrors.Wrapf(err, "failed to rollback")
 				}
 				// Begin transaction.
-				if err := vbc.vdbClient.Begin(); err != nil {
+				if err := vbc.Begin(); err != nil {
 					return vterrors.Wrapf(err, "failed to start transaction")
 				}
 				return nil
@@ -1092,7 +1092,7 @@ func (vbc *vcopierCopyWorker) execute(ctx context.Context, task *vcopierCopyTask
 		case vcopierCopyTaskCommit:
 			advanceFn = func(context.Context, *vcopierCopyTaskArgs) error {
 				// Commit.
-				if err := vbc.vdbClient.Commit(); err != nil {
+				if err := vbc.Commit(); err != nil {
 					return vterrors.Wrapf(err, "error committing transaction")
 				}
 				return nil
@@ -1148,7 +1148,7 @@ func (vbc *vcopierCopyWorker) insertCopyState(ctx context.Context, lastpk *query
 	if err != nil {
 		return err
 	}
-	if _, err := vbc.vdbClient.Execute(copyStateInsert); err != nil {
+	if _, err := vbc.Execute(copyStateInsert); err != nil {
 		return err
 	}
 	return nil
@@ -1159,7 +1159,7 @@ func (vbc *vcopierCopyWorker) insertRows(ctx context.Context, rows []*querypb.Ro
 		&vbc.sqlbuffer,
 		rows,
 		func(sql string) (*sqltypes.Result, error) {
-			return vbc.vdbClient.ExecuteWithRetry(ctx, sql)
+			return vbc.ExecuteWithRetry(ctx, sql)
 		},
 	)
 }
