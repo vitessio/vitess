@@ -261,7 +261,6 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitcode)
 	}
-
 }
 
 // trackVreplicationLag is used as a helper function to track vreplication lag and print progress to standard output.
