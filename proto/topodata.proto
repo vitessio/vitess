@@ -161,7 +161,7 @@ message Tablet {
   // default_conn_collation is the default connection collation used by this tablet.
   uint32 default_conn_collation = 16;
 
-  // tablet_start_time is the Unix timestamp (seconds) when the vttablet process started.
+  // tablet_start_time is the vttime.Time when the vttablet process started.
   vttime.Time tablet_start_time = 17;
 
   // OBSOLETE: ip and tablet health information

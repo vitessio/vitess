@@ -398,7 +398,7 @@ type Tablet struct {
 	PrimaryTermStartTime *vttime.Time `protobuf:"bytes,14,opt,name=primary_term_start_time,json=primaryTermStartTime,proto3" json:"primary_term_start_time,omitempty"`
 	// default_conn_collation is the default connection collation used by this tablet.
 	DefaultConnCollation uint32 `protobuf:"varint,16,opt,name=default_conn_collation,json=defaultConnCollation,proto3" json:"default_conn_collation,omitempty"`
-	// tablet_start_time is the Unix timestamp (seconds) when the vttablet process started.
+	// tablet_start_time is the vttime.Time when the vttablet process started.
 	TabletStartTime *vttime.Time `protobuf:"bytes,17,opt,name=tablet_start_time,json=tabletStartTime,proto3" json:"tablet_start_time,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
