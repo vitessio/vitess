@@ -17,8 +17,10 @@ limitations under the License.
 package json
 
 import (
-	"slices"
+	"fmt"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseJSONPath(t *testing.T) {
@@ -47,28 +49,24 @@ func TestParseJSONPath(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		var p PathParser
-		jp, err := p.ParseBytes([]byte(tc.P))
-		if tc.Err == "" {
-			if err != nil {
-				t.Fatalf("failed to parse '%s': %v", tc.P, err)
+		t.Run(tc.P, func(t *testing.T) {
+			var p PathParser
+			jp, err := p.ParseBytes([]byte(tc.P))
+
+			if tc.Err != "" {
+				require.EqualError(t, err, tc.Err)
+				return
 			}
-		} else {
-			if err == nil {
-				t.Fatalf("bad parse for '%s': expected an error", tc.P)
-			} else if err.Error() != tc.Err {
-				t.Fatalf("bad parse for '%s': expected err='%s', got err='%s'", tc.P, tc.Err, err)
+
+			require.NoError(t, err)
+
+			want := tc.Want
+			if want == "" {
+				want = tc.P
 			}
-			continue
-		}
-		want := tc.Want
-		if want == "" {
-			want = tc.P
-		}
-		got := jp.String()
-		if got != want {
-			t.Fatalf("bad parse for '%s': want '%s', got '%s'", tc.P, want, got)
-		}
+
+			require.Equal(t, want, jp.String())
+		})
 	}
 }
 
@@ -92,12 +90,12 @@ func TestJSONExtract(t *testing.T) {
 		{`true`, `$[last]`, []string{"true"}},
 		{`true`, `$[0 to 0]`, []string{"true"}},
 		{`true`, `$[0 to 1]`, []string{"true"}},
-		{`true`, `$[1 to 2]`, []string{}},
+		{`true`, `$[1 to 2]`, nil},
 		{`true`, `$[last to last]`, []string{"true"}},
 		{`true`, `$[last-4 to last]`, []string{"true"}},
-		{`true`, `$[last-4 to last-1]`, []string{}},
-		{`true`, `$[1]`, []string{}},
-		{`true`, `$[last-1]`, []string{}},
+		{`true`, `$[last-4 to last-1]`, nil},
+		{`true`, `$[1]`, nil},
+		{`true`, `$[last-1]`, nil},
 		{`[ { "a": 1 }, { "a": 2 } ]`, `$**[0]`, []string{`{"a": 1}`, `1`, `{"a": 2}`, `2`}},
 		{`{ "a" : "foo", "b" : [ true, { "c" : 123, "c" : 456 } ] }`, `$.b[1].c`, []string{"456"}},
 		{`{ "a" : "foo", "b" : [ true, { "c" : "123" } ] }`, `$.b[1].c`, []string{"\"123\""}},
@@ -105,20 +103,18 @@ func TestJSONExtract(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		var matched []string
-		err := MatchPath([]byte(tc.J), []byte(tc.JP), func(value *Value) {
-			if value == nil {
-				return
-			}
-			matched = append(matched, string(value.MarshalTo(nil)))
+		t.Run(fmt.Sprintf("'%s' -> '%s'", tc.J, tc.JP), func(t *testing.T) {
+			var matched []string
+			err := MatchPath([]byte(tc.J), []byte(tc.JP), func(value *Value) {
+				if value == nil {
+					return
+				}
+				matched = append(matched, string(value.MarshalTo(nil)))
+			})
+
+			require.NoError(t, err)
+			require.Equal(t, tc.Expected, matched)
 		})
-		if err != nil {
-			t.Errorf("failed to match '%s'->'%s': %v", tc.J, tc.JP, err)
-			continue
-		}
-		if !slices.Equal(tc.Expected, matched) {
-			t.Errorf("'%s'->'%s' = %v (expected %v)", tc.J, tc.JP, matched, tc.Expected)
-		}
 	}
 }
 
@@ -145,35 +141,35 @@ func TestTransformations(t *testing.T) {
 	const Path1 = `$[1].b[0]`
 	const Path2 = `$[2][2]`
 
-	cases := []struct {
+	cases := map[string]struct {
 		T        Transformation
 		Document string
 		Paths    []string
 		Values   []string
 		Expected string
 	}{
-		{
+		"set operation": {
 			T:        Set,
 			Document: Document1,
 			Paths:    []string{Path1, Path2},
 			Values:   []string{"1", "2"},
 			Expected: `["a", {"b": [1, false]}, [10, 20, 2]]`,
 		},
-		{
+		"insert operation": {
 			T:        Insert,
 			Document: Document1,
 			Paths:    []string{Path1, Path2},
 			Values:   []string{"1", "2"},
 			Expected: `["a", {"b": [true, false]}, [10, 20, 2]]`,
 		},
-		{
+		"replace operation": {
 			T:        Replace,
 			Document: Document1,
 			Paths:    []string{Path1, Path2},
 			Values:   []string{"1", "2"},
 			Expected: `["a", {"b": [1, false]}, [10, 20]]`,
 		},
-		{
+		"remove operation": {
 			T:        Remove,
 			Document: Document1,
 			Paths:    []string{`$[2]`, `$[1].b[1]`, `$[1].b[1]`},
@@ -181,27 +177,24 @@ func TestTransformations(t *testing.T) {
 		},
 	}
 
-	for _, tc := range cases {
-		doc := json(t, tc.Document)
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			doc := json(t, tc.Document)
 
-		var paths []*Path
-		for _, p := range tc.Paths {
-			paths = append(paths, path(t, p))
-		}
+			var paths []*Path
+			for _, p := range tc.Paths {
+				paths = append(paths, path(t, p))
+			}
 
-		var values []*Value
-		for _, v := range tc.Values {
-			values = append(values, json(t, v))
-		}
+			var values []*Value
+			for _, v := range tc.Values {
+				values = append(values, json(t, v))
+			}
 
-		err := ApplyTransform(tc.T, doc, paths, values)
-		if err != nil {
-			t.Fatal(err)
-		}
+			err := ApplyTransform(tc.T, doc, paths, values)
+			require.NoError(t, err)
 
-		result := string(doc.MarshalTo(nil))
-		if result != tc.Expected {
-			t.Errorf("bad transformation (%v)\nwant: %s\ngot:  %s", tc.T, tc.Expected, result)
-		}
+			require.Equal(t, tc.Expected, string(doc.MarshalTo(nil)))
+		})
 	}
 }
