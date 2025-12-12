@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"runtime/debug"
 	"sync"
@@ -166,6 +167,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 		go stc.runLockQuery(ctx, session)
 	}
 
+	fmt.Println("HELLO")
 	if session.Options != nil {
 		session.Options.FetchLastInsertId = fetchLastInsertID
 	}
@@ -180,15 +182,20 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			var (
 				innerqr *sqltypes.Result
 				err     error
+				opts    *querypb.ExecuteOptions
 				alias   *topodatapb.TabletAlias
 				qs      queryservice.QueryService
 			)
 			transactionID := info.transactionID
 			reservedID := info.reservedID
 
-			if session.GetOptions() == nil && fetchLastInsertID {
-				session = econtext.NewSafeSession(session.Session)
-				session.SetOptions(&querypb.ExecuteOptions{FetchLastInsertId: fetchLastInsertID})
+			if session != nil && session.Session != nil {
+				opts = session.Session.Options
+			}
+
+			if opts == nil && fetchLastInsertID {
+				opts = &querypb.ExecuteOptions{FetchLastInsertId: fetchLastInsertID}
+				session = econtext.NewSafeSession(&vtgatepb.Session{Options: opts})
 			}
 
 			if autocommit {
@@ -407,15 +414,20 @@ func (stc *ScatterConn) StreamExecuteMulti(
 		func(rs *srvtopo.ResolvedShard, i int, info *shardActionInfo) (*shardActionInfo, error) {
 			var (
 				err   error
+				opts  *querypb.ExecuteOptions
 				alias *topodatapb.TabletAlias
 				qs    queryservice.QueryService
 			)
 			transactionID := info.transactionID
 			reservedID := info.reservedID
 
-			if session.GetOptions() == nil && fetchLastInsertID {
-				session = econtext.NewSafeSession(session.Session)
-				session.SetOptions(&querypb.ExecuteOptions{FetchLastInsertId: fetchLastInsertID})
+			if session != nil && session.Session != nil {
+				opts = session.Session.Options
+			}
+
+			if opts == nil && fetchLastInsertID {
+				opts = &querypb.ExecuteOptions{FetchLastInsertId: fetchLastInsertID}
+				session = econtext.NewSafeSession(&vtgatepb.Session{Options: opts})
 			}
 
 			if autocommit {
