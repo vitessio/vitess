@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/streamlog"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -771,7 +772,7 @@ func newNoTwopcExecutor(t *testing.T, ctx context.Context) (txe *DTExecutor, tsv
 func newTxForPrep(ctx context.Context, tsv *TabletServer) int64 {
 	txid := newTransaction(tsv, nil)
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
-	_, err := tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, txid, 0, nil)
+	_, err := tsv.Execute(ctx, &vtgatepb.Session{}, &target, "update test_table set name = 2 where pk = 1", nil, txid, 0)
 	if err != nil {
 		panic(err)
 	}

@@ -322,9 +322,10 @@ func (gw *TabletGateway) DebugBalancerHandler(w http.ResponseWriter, r *http.Req
 // withRetry also adds shard information to errors returned from the inner QueryService, so
 // withShardError should not be combined with withRetry.
 func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, _ queryservice.QueryService,
-	_ string, inTransaction bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
+	_ string, opts queryservice.WrapOpts, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error),
+) error {
 	// for transactions, we connect to a specific tablet instead of letting gateway choose one
-	if inTransaction && target.TabletType != topodatapb.TabletType_PRIMARY {
+	if opts.InTransaction && target.TabletType != topodatapb.TabletType_PRIMARY {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "tabletGateway's query service can only be used for non-transactional queries on replicas")
 	}
 	var tabletLastUsed *topodatapb.Tablet
@@ -350,7 +351,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		// Note: We only buffer once and only "!inTransaction" queries i.e.
 		// a) no transaction is necessary (e.g. critical reads) or
 		// b) no transaction was created yet.
-		if gw.buffer != nil && !bufferedOnce && !inTransaction && target.TabletType == topodatapb.TabletType_PRIMARY {
+		if gw.buffer != nil && !bufferedOnce && !opts.InTransaction && target.TabletType == topodatapb.TabletType_PRIMARY {
 			// The next call blocks if we should buffer during a failover.
 			retryDone, bufferErr := gw.buffer.WaitForFailoverEnd(ctx, target.Keyspace, target.Shard, gw.kev, err)
 
@@ -401,36 +402,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			break
 		}
 
-		var th *discovery.TabletHealth
-
-		// Determine if we should use the balancer for this target
-		useBalancer := gw.balancer != nil
-		if useBalancer && len(balancerKeyspaces) > 0 {
-			useBalancer = slices.Contains(balancerKeyspaces, target.Keyspace)
-		}
-
-		if useBalancer {
-			// Filter out the tablets that we've tried before (if any)
-			if len(invalidTablets) > 0 {
-				tablets = slices.DeleteFunc(tablets, func(t *discovery.TabletHealth) bool {
-					_, isInvalid := invalidTablets[topoproto.TabletAliasString(t.Tablet.Alias)]
-					return isInvalid
-				})
-			}
-
-			th = gw.balancer.Pick(target, tablets)
-		} else {
-			gw.shuffleTablets(gw.localCell, tablets)
-
-			// skip tablets we tried before
-			for _, t := range tablets {
-				if _, ok := invalidTablets[topoproto.TabletAliasString(t.Tablet.Alias)]; !ok {
-					th = t
-					break
-				}
-			}
-		}
-
+		th := gw.getBalancerTablet(target, tablets, invalidTablets, opts)
 		if th == nil {
 			// do not override error from last attempt.
 			if err == nil {
@@ -462,9 +434,57 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 	return NewShardError(err, target)
 }
 
+// getBalancerTablet selects a tablet for the given query target, using the configured balancer if enabled. Otherwise, it will
+// select a random tablet, with preference to the local cell.
+func (gw *TabletGateway) getBalancerTablet(target *querypb.Target, tablets []*discovery.TabletHealth, invalidTablets map[string]bool, opts queryservice.WrapOpts) *discovery.TabletHealth {
+	// Return early if no tablets are available
+	if len(tablets) == 0 {
+		return nil
+	}
+
+	// Filter out the tablets that we've tried before (if any)
+	if len(invalidTablets) > 0 {
+		tablets = slices.DeleteFunc(tablets, func(t *discovery.TabletHealth) bool {
+			_, isInvalid := invalidTablets[topoproto.TabletAliasString(t.Tablet.Alias)]
+			return isInvalid
+		})
+
+		// If all tablets are invalid, let's return early
+		if len(tablets) == 0 {
+			return nil
+		}
+	}
+
+	// Determine if we should use the balancer for this target
+	useBalancer := gw.balancer != nil
+	if useBalancer && len(balancerKeyspaces) > 0 {
+		useBalancer = slices.Contains(balancerKeyspaces, target.Keyspace)
+	}
+
+	// Get the tablet from the balancer if enabled
+	if useBalancer {
+		var sessionUUID string
+		if opts.Session != nil {
+			sessionUUID = opts.Session.GetSessionUUID()
+		}
+
+		tablet := gw.balancer.Pick(target, tablets, balancer.PickOpts{SessionUUID: sessionUUID})
+		if tablet != nil {
+			return tablet
+		}
+	}
+
+	// If the balancer isn't enabled, or it didn't return a tablet, shuffle the tablets
+	// and return the first one. (This will always contain at least one tablet due to the
+	// check above).
+	gw.shuffleTablets(gw.localCell, tablets)
+	return tablets[0]
+}
+
 // withShardError adds shard information to errors returned from the inner QueryService.
 func (gw *TabletGateway) withShardError(ctx context.Context, target *querypb.Target, conn queryservice.QueryService,
-	_ string, _ bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
+	_ string, _ queryservice.WrapOpts, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error),
+) error {
 	_, err := inner(ctx, target, conn)
 	return NewShardError(err, target)
 }
