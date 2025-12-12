@@ -18420,6 +18420,9 @@ export namespace topodata {
 
         /** Tablet default_conn_collation */
         default_conn_collation?: (number|null);
+
+        /** Tablet tablet_start_time */
+        tablet_start_time?: (number|Long|null);
     }
 
     /** Represents a Tablet. */
@@ -18469,6 +18472,9 @@ export namespace topodata {
 
         /** Tablet default_conn_collation. */
         public default_conn_collation: number;
+
+        /** Tablet tablet_start_time. */
+        public tablet_start_time: (number|Long);
 
         /**
          * Creates a new Tablet instance using the specified properties.
