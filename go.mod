@@ -61,9 +61,9 @@ require (
 	github.com/uber/jaeger-lib v2.4.1+incompatible // indirect
 	github.com/yudai/golcs v0.0.0-20170316035057-ecda9a501e82
 	github.com/z-division/go-zookeeper v1.0.0
-	go.etcd.io/etcd/api/v3 v3.5.23
-	go.etcd.io/etcd/client/pkg/v3 v3.5.23
-	go.etcd.io/etcd/client/v3 v3.5.23
+	go.etcd.io/etcd/api/v3 v3.5.25
+	go.etcd.io/etcd/client/pkg/v3 v3.5.25
+	go.etcd.io/etcd/client/v3 v3.5.25
 	go.uber.org/mock v0.5.0
 	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/mod v0.29.0 // indirect
