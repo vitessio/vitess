@@ -11,6 +11,9 @@
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
     - **[VTTablet](#minor-changes-vttablet)**
         - [New Experimental flag `--init-tablet-type-lookup`](#vttablet-init-tablet-type-lookup)
+    - **[VTOrc](#minor-changes-vtorc)**
+        - [Deprecated VTOrc Metric Removed](#vtorc-deprecated-metric-removed)
+        - [Improved VTOrc Discovery Logging](#vtorc-improved-discovery-logging)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -45,3 +48,19 @@ The new experimental flag `--init-tablet-type-lookup` for VTTablet allows tablet
 When enabled, the tablet uses its alias to look up the tablet type from the existing topology record on restart. This allows tablets to maintain their changed roles (e.g., RDONLY/DRAINED) across restarts without manual reconfiguration. If disabled or if no topology record exists, the standard `--init-tablet-type` value will be used instead.
 
 **Note**: Vitess Operator–managed deployments generally do not keep tablet records in the topo between restarts, so this feature will not take effect in those environments.
+
+### <a id="minor-changes-vtorc"/>VTOrc</a>
+
+#### <a id="vtorc-deprecated-metric-removed"/>Deprecated VTOrc Metric Removed</a>
+
+The `discoverInstanceTimings` metric has been removed from VTOrc in v24.0.0. This metric was deprecated in v23.
+
+**Migration**: Use `discoveryInstanceTimings` instead, which provides the same timing information for instance discovery actions (Backend, Instance, Other).
+
+**Impact**: Monitoring dashboards or alerting systems using `discoverInstanceTimings` must be updated to use `discoveryInstanceTimings`.
+
+#### <a id="vtorc-improved-discovery-logging"/>Improved VTOrc Discovery Logging</a>
+
+VTOrc's `DiscoverInstance` function now includes the tablet alias in all log messages and uses the correct log level when errors occur. Previously, error messages did not indicate which tablet failed discovery, and errors were logged at INFO level instead of ERROR level.
+
+This improvement makes it easier to identify and debug issues with specific tablets when discovery operations fail.
