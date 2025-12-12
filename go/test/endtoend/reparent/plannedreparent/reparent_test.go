@@ -117,14 +117,16 @@ func TestReparentReplicaOffline(t *testing.T) {
 
 	vtctldVersion, err := cluster.GetMajorVersion("vtctld")
 	require.NoError(t, err)
-	tabletVersion, err := cluster.GetMajorVersion("vttablet")
+	vttabletVersion, err := cluster.GetMajorVersion("vttablet")
 	require.NoError(t, err)
 
-	// TabletShutdownTime is v24+.
+	// TabletStartTime + TabletShutdownTime are v24+.
 	if vtctldVersion >= 24 {
 		tabletInfo, err := clusterInstance.VtctldClientProcess.GetTablet(killTablet.Alias)
 		require.NoError(t, err)
-		require.NotNil(t, tabletInfo.TabletStartTime)
+		if vttabletVersion >= 24 {
+			require.NotNil(t, tabletInfo.TabletStartTime)
+		}
 		require.Nil(t, tabletInfo.TabletShutdownTime)
 	}
 
@@ -138,7 +140,7 @@ func TestReparentReplicaOffline(t *testing.T) {
 		require.NoError(c, err)
 
 		// TabletShutdownTime is v24+. Test this is the vttablet and vtctld are v24+.
-		if vtctldVersion >= 24 && tabletVersion >= 24 {
+		if vtctldVersion >= 24 && vttabletVersion >= 24 {
 			require.Nil(c, tabletInfo.TabletStartTime)
 			require.NotNil(c, tabletInfo.TabletShutdownTime)
 			shutdownTime := protoutil.TimeFromProto(tabletInfo.TabletShutdownTime)
