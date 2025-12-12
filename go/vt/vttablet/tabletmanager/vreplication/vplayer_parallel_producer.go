@@ -37,7 +37,7 @@ import (
 
 const (
 	countWorkers          = 6
-	maxWorkerEvents       = 500
+	maxWorkerEvents       = 5000
 	maxCountWorkersEvents = countWorkers * maxWorkerEvents
 	maxIdleWorkerDuration = 250 * time.Millisecond
 

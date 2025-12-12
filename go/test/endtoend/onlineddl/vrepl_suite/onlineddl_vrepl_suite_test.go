@@ -313,8 +313,8 @@ func testSingle(t *testing.T, testName string, fkOnlineDDLPossible bool) {
 		if content, exists := readTestFile(t, testName, "order_by"); exists {
 			orderBy = "order by " + content
 		}
-		selectBefore := fmt.Sprintf("select %s from %s%s", beforeColumns, beforeTableName, orderBy)
-		selectAfter := fmt.Sprintf("select %s from %s%s", afterColumns, afterTableName, orderBy)
+		selectBefore := fmt.Sprintf("select %s from %s %s", beforeColumns, beforeTableName, orderBy)
+		selectAfter := fmt.Sprintf("select %s from %s %s", afterColumns, afterTableName, orderBy)
 
 		selectBeforeFile := onlineddl.CreateTempScript(t, selectBefore)
 		defer os.Remove(selectBeforeFile)
