@@ -81,6 +81,11 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 	gotTablet, err := BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	require.NoError(t, err)
 
+	// Verify TabletStartTime was set and is reasonable
+	assert.Greater(t, gotTablet.TabletStartTime, int64(0))
+	// Zero out TabletStartTime for comparison since it's dynamic
+	gotTablet.TabletStartTime = 0
+
 	// Hostname should be resolved.
 	assert.Equal(t, wantTablet, gotTablet)
 	tabletHostname = ""
@@ -98,6 +103,10 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 	}
 	gotTablet, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	require.NoError(t, err)
+	// Verify TabletStartTime was set
+	assert.Greater(t, gotTablet.TabletStartTime, int64(0))
+	// Zero out TabletStartTime for comparison since it's dynamic
+	gotTablet.TabletStartTime = 0
 	// KeyRange check is explicit because the next comparison doesn't
 	// show the diff well enough.
 	assert.Equal(t, wantTablet.KeyRange, gotTablet.KeyRange)
@@ -162,6 +171,10 @@ func TestBuildTabletFromInputWithBuildTags(t *testing.T) {
 
 	gotTablet, err := BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	require.NoError(t, err)
+	// Verify TabletStartTime was set
+	assert.Greater(t, gotTablet.TabletStartTime, int64(0))
+	// Zero out TabletStartTime for comparison since it's dynamic
+	gotTablet.TabletStartTime = 0
 	assert.Equal(t, wantTablet, gotTablet)
 }
 

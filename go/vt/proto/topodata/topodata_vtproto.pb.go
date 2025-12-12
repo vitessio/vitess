@@ -83,6 +83,7 @@ func (m *Tablet) CloneVT() *Tablet {
 	r.MysqlPort = m.MysqlPort
 	r.PrimaryTermStartTime = m.PrimaryTermStartTime.CloneVT()
 	r.DefaultConnCollation = m.DefaultConnCollation
+	r.TabletStartTime = m.TabletStartTime
 	if rhs := m.PortMap; rhs != nil {
 		tmpContainer := make(map[string]int32, len(rhs))
 		for k, v := range rhs {
@@ -670,6 +671,13 @@ func (m *Tablet) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.TabletStartTime != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.TabletStartTime))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0x88
 	}
 	if m.DefaultConnCollation != 0 {
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.DefaultConnCollation))
@@ -2053,6 +2061,9 @@ func (m *Tablet) SizeVT() (n int) {
 	if m.DefaultConnCollation != 0 {
 		n += 2 + protohelpers.SizeOfVarint(uint64(m.DefaultConnCollation))
 	}
+	if m.TabletStartTime != 0 {
+		n += 2 + protohelpers.SizeOfVarint(uint64(m.TabletStartTime))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -3319,6 +3330,25 @@ func (m *Tablet) UnmarshalVT(dAtA []byte) error {
 				b := dAtA[iNdEx]
 				iNdEx++
 				m.DefaultConnCollation |= uint32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 17:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TabletStartTime", wireType)
+			}
+			m.TabletStartTime = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.TabletStartTime |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
