@@ -115,10 +115,16 @@ func TestReparentReplicaOffline(t *testing.T) {
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	killTablet := tablets[3]
 
+	vtctldVersion, err := cluster.GetMajorVersion("vtctld")
+	require.NoError(t, err)
+	tabletVersion, err := cluster.GetMajorVersion("vttablet")
+	require.NoError(t, err)
+
 	// TabletShutdownTime is v24+.
-	if clusterInstance.VtctlMajorVersion >= 24 {
+	if vtctldVersion >= 24 {
 		tabletInfo, err := clusterInstance.VtctldClientProcess.GetTablet(killTablet.Alias)
 		require.NoError(t, err)
+		require.NotNil(t, tabletInfo.TabletStartTime)
 		require.Nil(t, tabletInfo.TabletShutdownTime)
 	}
 
@@ -132,7 +138,8 @@ func TestReparentReplicaOffline(t *testing.T) {
 		require.NoError(c, err)
 
 		// TabletShutdownTime is v24+. Test this is the vttablet and vtctld are v24+.
-		if clusterInstance.VtctlMajorVersion >= 24 && clusterInstance.VtTabletMajorVersion >= 24 {
+		if vtctldVersion >= 24 && tabletVersion >= 24 {
+			require.Nil(c, tabletInfo.TabletStartTime)
 			require.NotNil(c, tabletInfo.TabletShutdownTime)
 			shutdownTime := protoutil.TimeFromProto(tabletInfo.TabletShutdownTime)
 			require.WithinRange(c, shutdownTime, startKillTime, time.Now())
@@ -148,14 +155,12 @@ func TestReparentReplicaOffline(t *testing.T) {
 	out, err := utils.PrsWithTimeout(t, clusterInstance, tablets[1], false, "", "31s")
 	require.Error(t, err)
 
-	// WTFDEBUG
-	t.Logf("utils.PrsWithTimeout: %+v", out)
-	tabletVersion, err := cluster.GetMajorVersion("vttablet")
-	require.NoError(t, err)
-	t.Logf("tablet version: %+v", tabletVersion)
-
 	// Assert that PRS failed
-	assert.Contains(t, out, "rpc error: code = Unknown desc = tablet is shutdown")
+	if vtctldVersion >= 24 {
+		assert.Contains(t, out, "rpc error: code = Unknown desc = tablet is shutdown")
+	} else {
+		assert.Contains(t, out, "rpc error: code = DeadlineExceeded desc = latest balancer error")
+	}
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[0])
 }
 
