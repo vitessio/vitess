@@ -41,6 +41,7 @@ const (
 	jpMemberAny
 	jpArrayLocation
 	jpArrayLocationAny
+	jpArrayLocationRange
 	jpAny
 )
 
@@ -73,6 +74,15 @@ func (jp *Path) format(b *strings.Builder) {
 	case jpArrayLocation:
 		switch {
 		case jp.offset0 == -1:
+			b.WriteString("[last]")
+		case jp.offset0 >= 0:
+			_, _ = fmt.Fprintf(b, "[%d]", jp.offset0)
+		case jp.offset0 < 0:
+			_, _ = fmt.Fprintf(b, "[last%d]", jp.offset0+1)
+		}
+	case jpArrayLocationRange:
+		switch {
+		case jp.offset0 == -1:
 			b.WriteString("[last")
 		case jp.offset0 >= 0:
 			_, _ = fmt.Fprintf(b, "[%d", jp.offset0)
@@ -82,7 +92,7 @@ func (jp *Path) format(b *strings.Builder) {
 		switch {
 		case jp.offset1 == -1:
 			b.WriteString(" to last")
-		case jp.offset1 > 0:
+		case jp.offset1 >= 0:
 			_, _ = fmt.Fprintf(b, " to %d", jp.offset1)
 		case jp.offset1 < 0:
 			_, _ = fmt.Fprintf(b, " to last%d", jp.offset1+1)
@@ -107,12 +117,8 @@ func (jp *Path) String() string {
 func (jp *Path) ContainsWildcards() bool {
 	for jp != nil {
 		switch jp.kind {
-		case jpAny, jpArrayLocationAny, jpMemberAny:
+		case jpAny, jpArrayLocationAny, jpArrayLocationRange, jpMemberAny:
 			return true
-		case jpArrayLocation:
-			if jp.offset1 != 0 {
-				return true
-			}
 		}
 		jp = jp.next
 	}
@@ -187,6 +193,15 @@ func (m *matcher) value(p *Path, v *Value) {
 		}
 	case jpArrayLocation:
 		if ary, ok := v.Array(); ok {
+			from, _ := p.arrayOffsets(ary)
+			if from >= 0 && from < len(ary) {
+				m.value(p.next, ary[from])
+			}
+		} else if m.wrap && (p.offset0 == 0 || p.offset0 == -1) {
+			m.value(p.next, v)
+		}
+	case jpArrayLocationRange:
+		if ary, ok := v.Array(); ok {
 			from, to := p.arrayOffsets(ary)
 			if from >= 0 && from < len(ary) {
 				if to >= len(ary) {
@@ -196,7 +211,7 @@ func (m *matcher) value(p *Path, v *Value) {
 					m.value(p.next, ary[n])
 				}
 			}
-		} else if m.wrap && (p.offset0 == 0 || p.offset0 == -1) {
+		} else if m.wrap && (p.offset0 == 0 || p.offset1 == -1) {
 			m.value(p.next, v)
 		}
 	case jpArrayLocationAny:
@@ -234,6 +249,20 @@ func (jp *Path) transform(v *Value, t func(pp *Path, vv *Value)) {
 		}
 	case jpArrayLocation:
 		if ary, ok := v.Array(); ok {
+			from, _ := jp.arrayOffsets(ary)
+			if from >= 0 && from < len(ary) {
+				jp.next.transform(ary[from], t)
+			}
+		} else if jp.offset0 == 0 || jp.offset0 == -1 {
+			/*
+				If the path is evaluated against a value that is not an array,
+				the result of the evaluation is the same as if the value had been
+				wrapped in a single-element array:
+			*/
+			jp.next.transform(v, t)
+		}
+	case jpArrayLocationRange:
+		if ary, ok := v.Array(); ok {
 			from, to := jp.arrayOffsets(ary)
 			if from != to {
 				panic("range in transformation path expression")
@@ -241,7 +270,7 @@ func (jp *Path) transform(v *Value, t func(pp *Path, vv *Value)) {
 			if from >= 0 && from < len(ary) {
 				jp.next.transform(ary[from], t)
 			}
-		} else if jp.offset0 == 0 || jp.offset0 == -1 {
+		} else if jp.offset0 == 0 || jp.offset1 == -1 {
 			/*
 				If the path is evaluated against a value that is not an array,
 				the result of the evaluation is the same as if the value had been
@@ -532,6 +561,10 @@ func stepArrayLocationTo(p *PathParser, in []byte) ([]byte, error) {
 	if in == nil || skip == 0 {
 		return nil, errInvalid
 	}
+
+	// Upgrade to range
+	p.path.kind = jpArrayLocationRange
+
 	if in[0] >= '0' && in[0] <= '9' {
 		p.step = stepArrayLocationClose
 		offset, in2, err := p.lexNumeric(in)
