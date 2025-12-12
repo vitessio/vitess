@@ -538,7 +538,7 @@ func stepArrayLocationTo(p *PathParser, in []byte) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		if offset <= p.path.offset0 {
+		if offset < p.path.offset0 {
 			return nil, fmt.Errorf("range %d should be >= %d", offset, p.path.offset0)
 		}
 		p.path.offset1 = offset
