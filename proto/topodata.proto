@@ -166,6 +166,13 @@ message Tablet {
   // map<string, string> health_map = 11;
   // string db_server_version = 15;
   reserved 3, 11, 15;
+
+  // TabletShutdownTime is set to a vttime.Time equal to "now" (best-effort) to indicate a tablet
+  // cleanly completed a shutdown. It is unconditionally set to nil on tablet startup. This is
+  // used to avoid unnecessary dials to tablets that we know are down. It's possible for vttablet
+  // to be killed before it can set this time, so in some scenarios the value will report nil
+  // when in-reality the tablet has been stopped/killed/crashed.
+  vttime.Time tablet_shutdown_time = 18;
 }
 
 // A Shard contains data about a subset of the data whithin a keyspace.
