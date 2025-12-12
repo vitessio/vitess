@@ -510,6 +510,7 @@ func (tm *TabletManager) Close() {
 		tablet.Hostname = ""
 		tablet.MysqlHostname = ""
 		tablet.PortMap = nil
+		tablet.TabletStartTime = nil
 		tablet.TabletShutdownTime = protoutil.TimeToProto(time.Now())
 		return nil
 	}
