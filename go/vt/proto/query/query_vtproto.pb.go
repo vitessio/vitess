@@ -1428,7 +1428,6 @@ func (m *StreamHealthResponse) CloneVT() *StreamHealthResponse {
 	r.PrimaryTermStartTimestamp = m.PrimaryTermStartTimestamp
 	r.RealtimeStats = m.RealtimeStats.CloneVT()
 	r.TabletAlias = m.TabletAlias.CloneVT()
-	r.TabletStartTime = m.TabletStartTime
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -5724,11 +5723,6 @@ func (m *StreamHealthResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) 
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.TabletStartTime != 0 {
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.TabletStartTime))
-		i--
-		dAtA[i] = 0x38
-	}
 	if m.TabletAlias != nil {
 		size, err := m.TabletAlias.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
@@ -7657,9 +7651,6 @@ func (m *StreamHealthResponse) SizeVT() (n int) {
 	if m.TabletAlias != nil {
 		l = m.TabletAlias.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
-	}
-	if m.TabletStartTime != 0 {
-		n += 1 + protohelpers.SizeOfVarint(uint64(m.TabletStartTime))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -18672,25 +18663,6 @@ func (m *StreamHealthResponse) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		case 7:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field TabletStartTime", wireType)
-			}
-			m.TabletStartTime = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.TabletStartTime |= int64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

@@ -17,11 +17,14 @@ limitations under the License.
 package warming
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
 	"testing"
 	"time"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
@@ -63,63 +66,39 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		// Start keyspace with standard setup (1 primary + 2 replicas)
-		// All tablets will initially have "now" as their start time
+		// Start keyspace with 1 primary + 2 replicas
 		keyspace := &cluster.Keyspace{
 			Name:      keyspaceName,
 			SchemaSQL: sqlSchema,
 			VSchema:   vSchema,
 		}
-		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 2, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"0"}, 2, false); err != nil {
 			fmt.Printf("Failed to start keyspace: %v\n", err)
 			return 1
 		}
 
-		// Find the replica tablets
+		// Find the replica tablets and assign one as "old" and one as "new"
 		shard := &clusterInstance.Keyspaces[0].Shards[0]
-		var replicas []*cluster.Vttablet
+		replicaCount := 0
 		for _, tablet := range shard.Vttablets {
 			if tablet.Type == "replica" {
-				replicas = append(replicas, tablet)
+				replicaCount++
+				if replicaCount == 1 {
+					newReplica = tablet
+				} else {
+					oldReplica = tablet
+				}
 			}
 		}
-		if len(replicas) < 2 {
-			fmt.Printf("Expected 2 replicas, got %d\n", len(replicas))
+		if oldReplica == nil || newReplica == nil {
+			fmt.Printf("Failed to identify old and new replicas\n")
 			return 1
 		}
 
-		// Keep first replica as "new" (current time)
-		newReplica = replicas[0]
-
-		// Restart second replica with "old" start time (1 hour ago)
-		oldReplica = replicas[1]
-		if err := oldReplica.VttabletProcess.TearDown(); err != nil {
-			fmt.Printf("Failed to stop old replica: %v\n", err)
-			return 1
-		}
-
-		// Recreate the vttablet process with ExtraEnv for old start time
+		// Set the "old" replica's start time to 1 hour ago via topo
 		oldStartTime := time.Now().Add(-1 * time.Hour).Unix()
-		oldReplica.VttabletProcess = cluster.VttabletProcessInstance(
-			oldReplica.HTTPPort,
-			oldReplica.GrpcPort,
-			oldReplica.TabletUID,
-			cell,
-			shard.Name,
-			keyspaceName,
-			clusterInstance.VtctldProcess.Port,
-			oldReplica.Type,
-			clusterInstance.TopoProcess.Port,
-			clusterInstance.Hostname,
-			clusterInstance.TmpDirectory,
-			clusterInstance.VtTabletExtraArgs,
-			clusterInstance.DefaultCharset)
-		oldReplica.VttabletProcess.ExtraEnv = []string{
-			fmt.Sprintf("VTTEST_TABLET_START_TIME=%d", oldStartTime),
-		}
-		oldReplica.VttabletProcess.ServingStatus = "SERVING"
-		if err := oldReplica.VttabletProcess.Setup(); err != nil {
-			fmt.Printf("Failed to restart old replica: %v\n", err)
+		if err := updateTabletStartTime(oldReplica, oldStartTime); err != nil {
+			fmt.Printf("Failed to update old replica start time: %v\n", err)
 			return 1
 		}
 
@@ -139,4 +118,17 @@ func TestMain(m *testing.M) {
 		return m.Run()
 	}()
 	os.Exit(exitCode)
+}
+
+// updateTabletStartTime updates the TabletStartTime in topo for a tablet.
+func updateTabletStartTime(tablet *cluster.Vttablet, startTime int64) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	ts := clusterInstance.TopoProcess.Server
+	_, err := ts.UpdateTabletFields(ctx, tablet.GetAlias(), func(t *topodatapb.Tablet) error {
+		t.TabletStartTime = startTime
+		return nil
+	})
+	return err
 }

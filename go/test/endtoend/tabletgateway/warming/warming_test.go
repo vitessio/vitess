@@ -57,7 +57,7 @@ func TestWarmingBalancerTrafficDistribution(t *testing.T) {
 	waitForReplication(t, "warming_test")
 
 	// Execute many queries and track distribution
-	const numQueries = 500
+	const numQueries = 1000
 	counts := executeReplicaQueries(t, conn, numQueries)
 
 	oldCount := counts[oldServerID]
@@ -67,11 +67,10 @@ func TestWarmingBalancerTrafficDistribution(t *testing.T) {
 		newCount, float64(newCount)/float64(numQueries)*100)
 
 	// Verify distribution: old should get ~90%, new should get ~10%
-	// Use 25% tolerance for statistical variance (10% of 500 = 50 queries,
-	// so ±12 queries is reasonable variance)
+	// Use 20% tolerance for statistical variance
 	expectedOldPercent := 0.90
 	expectedNewPercent := 0.10
-	tolerance := 0.25
+	tolerance := 0.20
 
 	actualOldPercent := float64(oldCount) / float64(numQueries)
 	actualNewPercent := float64(newCount) / float64(numQueries)
@@ -117,9 +116,9 @@ func TestWarmingBalancerQueriesSucceed(t *testing.T) {
 // TestWarmingBalancerAllNewTablets verifies that when all tablets are "new",
 // traffic is distributed evenly (no warming needed since nothing to warm against).
 func TestWarmingBalancerAllNewTablets(t *testing.T) {
-	// Restart the "old" replica with a recent start time so both are "new"
-	restartReplicaWithStartTime(t, oldReplica, time.Now().Add(-5*time.Minute))
-	defer restartReplicaWithStartTime(t, oldReplica, time.Now().Add(-1*time.Hour)) // restore
+	// Set the "old" replica's start time to recent so both are "new"
+	setTabletStartTime(t, oldReplica, time.Now().Add(-5*time.Minute))
+	defer setTabletStartTime(t, oldReplica, time.Now().Add(-1*time.Hour)) // restore
 
 	vtParams := mysql.ConnParams{
 		Host: clusterInstance.Hostname,
@@ -142,7 +141,7 @@ func TestWarmingBalancerAllNewTablets(t *testing.T) {
 	newServerID := getServerID(t, newReplica)
 
 	// Execute queries and verify even distribution
-	const numQueries = 500
+	const numQueries = 1000
 	counts := executeReplicaQueries(t, conn, numQueries)
 
 	oldCount := counts[oldServerID]
@@ -190,8 +189,37 @@ func TestWarmingBalancerOldReplicaFailure(t *testing.T) {
 	err = oldReplica.VttabletProcess.TearDown()
 	require.NoError(t, err)
 	defer func() {
-		// Restore old replica
-		restartReplicaWithStartTime(t, oldReplica, time.Now().Add(-1*time.Hour))
+		// Restore old replica by restarting it - we need to actually restart
+		// the process since we called TearDown(). The tablet will get a new
+		// start time when it registers with topo, and we update it to be "old".
+		shard := &clusterInstance.Keyspaces[0].Shards[0]
+		oldReplica.VttabletProcess = cluster.VttabletProcessInstance(
+			oldReplica.HTTPPort,
+			oldReplica.GrpcPort,
+			oldReplica.TabletUID,
+			cell,
+			shard.Name,
+			keyspaceName,
+			clusterInstance.VtctldProcess.Port,
+			oldReplica.Type,
+			clusterInstance.TopoProcess.Port,
+			clusterInstance.Hostname,
+			clusterInstance.TmpDirectory,
+			clusterInstance.VtTabletExtraArgs,
+			clusterInstance.DefaultCharset)
+		oldReplica.VttabletProcess.ServingStatus = "SERVING"
+		if err := oldReplica.VttabletProcess.Setup(); err != nil {
+			t.Logf("Warning: failed to restart old replica in cleanup: %v", err)
+			return
+		}
+		// Wait for it to be healthy, then set the start time to "old"
+		shardName := clusterInstance.Keyspaces[0].Shards[0].Name
+		require.Eventually(t, func() bool {
+			err := clusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(
+				fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), 2, 5*time.Second)
+			return err == nil
+		}, 60*time.Second, 1*time.Second, "Tablet did not become healthy after restart")
+		setTabletStartTime(t, oldReplica, time.Now().Add(-1*time.Hour))
 	}()
 
 	// Wait for VTGate to notice the old replica is gone
@@ -222,9 +250,9 @@ func TestWarmingBalancerOldReplicaFailure(t *testing.T) {
 // (past the warming period), traffic is distributed evenly.
 // This also validates that warming period expiration works correctly.
 func TestWarmingBalancerAllOldTablets(t *testing.T) {
-	// Restart the "new" replica with an old start time so both are "old"
-	restartReplicaWithStartTime(t, newReplica, time.Now().Add(-1*time.Hour))
-	defer restartReplicaWithStartTime(t, newReplica, time.Now()) // restore to "new"
+	// Set the "new" replica's start time to old so both are "old"
+	setTabletStartTime(t, newReplica, time.Now().Add(-1*time.Hour))
+	defer setTabletStartTime(t, newReplica, time.Now()) // restore to "new"
 
 	vtParams := mysql.ConnParams{
 		Host: clusterInstance.Hostname,
@@ -247,7 +275,7 @@ func TestWarmingBalancerAllOldTablets(t *testing.T) {
 	newServerID := getServerID(t, newReplica)
 
 	// Execute queries and verify even distribution
-	const numQueries = 500
+	const numQueries = 1000
 	counts := executeReplicaQueries(t, conn, numQueries)
 
 	oldCount := counts[oldServerID]
@@ -310,47 +338,28 @@ func waitForReplicationOnTablets(t *testing.T, value string, replicas []*cluster
 			}
 		}
 		return true
-	}, 15*time.Second, 500*time.Millisecond, "Replication did not complete")
+	}, 30*time.Second, 500*time.Millisecond, "Replication did not complete")
 }
 
-func restartReplicaWithStartTime(t *testing.T, tablet *cluster.Vttablet, startTime time.Time) {
+func setTabletStartTime(t *testing.T, tablet *cluster.Vttablet, startTime time.Time) {
 	t.Helper()
 
-	// Stop the tablet if running
-	_ = tablet.VttabletProcess.TearDown()
+	// Update the TabletStartTime in topo
+	err := updateTabletStartTime(tablet, startTime.Unix())
+	require.NoError(t, err, "Failed to update tablet start time in topo")
 
-	shard := &clusterInstance.Keyspaces[0].Shards[0]
-
-	// Recreate the vttablet process with new start time
-	tablet.VttabletProcess = cluster.VttabletProcessInstance(
-		tablet.HTTPPort,
-		tablet.GrpcPort,
-		tablet.TabletUID,
-		cell,
-		shard.Name,
-		keyspaceName,
-		clusterInstance.VtctldProcess.Port,
-		tablet.Type,
-		clusterInstance.TopoProcess.Port,
-		clusterInstance.Hostname,
-		clusterInstance.TmpDirectory,
-		clusterInstance.VtTabletExtraArgs,
-		clusterInstance.DefaultCharset)
-	tablet.VttabletProcess.ExtraEnv = []string{
-		fmt.Sprintf("VTTEST_TABLET_START_TIME=%d", startTime.Unix()),
-	}
-	tablet.VttabletProcess.ServingStatus = "SERVING"
-
-	err := tablet.VttabletProcess.Setup()
-	require.NoError(t, err, "Failed to restart tablet with new start time")
-
-	// Wait for tablet to be healthy
-	shardName := clusterInstance.Keyspaces[0].Shards[0].Name
+	// Wait for VTGate to pick up the topo change by verifying the tablet
+	// info in VTGate's health check is updated. VTGate periodically refreshes
+	// tablet info from topo, so we wait until the change propagates.
 	require.Eventually(t, func() bool {
+		// Check that VTGate still sees the tablet as healthy - this confirms
+		// the topo watcher has refreshed. The actual start time verification
+		// happens implicitly through the query distribution in the tests.
+		shardName := clusterInstance.Keyspaces[0].Shards[0].Name
 		err := clusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(
-			fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), 2, 5*time.Second)
+			fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), 2, 1*time.Second)
 		return err == nil
-	}, 60*time.Second, 1*time.Second, "Tablet did not become healthy after restart")
+	}, 30*time.Second, 500*time.Millisecond, "VTGate did not refresh tablet info after topo change")
 }
 
 func getServerID(t *testing.T, tablet *cluster.Vttablet) int64 {

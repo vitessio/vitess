@@ -1018,12 +1018,6 @@ message StreamHealthResponse {
   // hasn't changed in the meantime e.g. due to tablet restarts where ports or
   // ips have been reused but assigned differently.
   topodata.TabletAlias tablet_alias = 5;
-
-  // tablet_start_time is the Unix timestamp (seconds since epoch) when the
-  // vttablet process started. Used by VTGate to identify newly restored replicas
-  // for warming purposes - new replicas receive reduced traffic while their
-  // buffer pools warm up.
-  int64 tablet_start_time = 7;
 }
 
 // TransactionState represents the state of a distributed transaction.

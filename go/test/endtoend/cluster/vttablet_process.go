@@ -88,10 +88,6 @@ type VttabletProcess struct {
 	// Extra Args to be set before starting the vttablet process
 	ExtraArgs []string
 
-	// Extra environment variables to be set before starting the vttablet process.
-	// Used by tests like warming balancer to set VTTEST_TABLET_START_TIME.
-	ExtraEnv []string
-
 	proc *exec.Cmd
 	exit chan error
 }
@@ -151,7 +147,6 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 	vttablet.proc.Env = append(vttablet.proc.Env, os.Environ()...)
 	vttablet.proc.Env = append(vttablet.proc.Env, DefaultVttestEnv)
-	vttablet.proc.Env = append(vttablet.proc.Env, vttablet.ExtraEnv...)
 
 	log.Infof("Running vttablet with command: %v", strings.Join(vttablet.proc.Args, " "))
 

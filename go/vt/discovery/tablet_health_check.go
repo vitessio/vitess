@@ -62,9 +62,6 @@ type tabletHealthCheck struct {
 	// a TabletExternallyReparented event. It is set to 0 if the
 	// tablet doesn't think it's a primary.
 	PrimaryTermStartTime int64
-	// TabletStartTime is the Unix timestamp of when the vttablet process
-	// started. Used for replica warming logic.
-	TabletStartTime int64
 	// Stats is the current health status, as received by the
 	// StreamHealth RPC (replication lag, ...).
 	Stats *query.RealtimeStats
@@ -97,7 +94,7 @@ func (thc *tabletHealthCheck) SimpleCopy() *TabletHealth {
 		Stats:                thc.Stats,
 		LastError:            thc.LastError,
 		PrimaryTermStartTime: thc.PrimaryTermStartTime,
-		TabletStartTime:      thc.TabletStartTime,
+		TabletStartTime:      thc.Tablet.TabletStartTime, // Read from topo
 		Serving:              thc.Serving,
 	}
 }
@@ -196,7 +193,7 @@ func (thc *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.St
 	thc.lastResponseTimestamp = time.Now()
 	thc.Target = shr.Target
 	thc.PrimaryTermStartTime = shr.PrimaryTermStartTimestamp
-	thc.TabletStartTime = shr.TabletStartTime
+	// TabletStartTime is read from thc.Tablet (topo) instead of health stream
 	thc.Stats = shr.RealtimeStats
 	thc.LastError = healthErr
 	reason := "healthCheck update"

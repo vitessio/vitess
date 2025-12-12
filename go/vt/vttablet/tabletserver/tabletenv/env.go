@@ -32,7 +32,6 @@ type Env interface {
 	Config() *TabletConfig
 	Exporter() *servenv.Exporter
 	Stats() *Stats
-	Metadata() *TabletMetadata
 	LogError()
 	Environment() *vtenv.Environment
 }
@@ -41,7 +40,6 @@ type testEnv struct {
 	config   *TabletConfig
 	exporter *servenv.Exporter
 	stats    *Stats
-	metadata *TabletMetadata
 	env      *vtenv.Environment
 }
 
@@ -53,7 +51,6 @@ func NewEnv(env *vtenv.Environment, config *TabletConfig, exporterName string) E
 		config:   config,
 		exporter: exporter,
 		stats:    NewStats(exporter),
-		metadata: NewTabletMetadata(),
 		env:      env,
 	}
 }
@@ -62,7 +59,6 @@ func (*testEnv) CheckMySQL()                        {}
 func (te *testEnv) Config() *TabletConfig           { return te.config }
 func (te *testEnv) Exporter() *servenv.Exporter     { return te.exporter }
 func (te *testEnv) Stats() *Stats                   { return te.stats }
-func (te *testEnv) Metadata() *TabletMetadata       { return te.metadata }
 func (te *testEnv) Environment() *vtenv.Environment { return te.env }
 
 func (te *testEnv) LogError() {
