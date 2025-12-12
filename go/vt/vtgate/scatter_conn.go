@@ -18,7 +18,6 @@ package vtgate
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"runtime/debug"
 	"sync"
@@ -167,7 +166,6 @@ func (stc *ScatterConn) ExecuteMultiShard(
 		go stc.runLockQuery(ctx, session)
 	}
 
-	fmt.Println("HELLO")
 	if session.Options != nil {
 		session.Options.FetchLastInsertId = fetchLastInsertID
 	}
