@@ -38,6 +38,8 @@ func TestParseJSONPath(t *testing.T) {
 		{P: `$.c[last-23 to last-444]`},
 		{P: `$.c[last-23 to last]`},
 		{P: `$.c[last]`},
+		{P: `$.c[last to last]`},
+		{P: `$.c[0 to 0]`},
 		{P: `$.c[last - 23 to last]`, Want: `$.c[last-23 to last]`},
 		{P: `$ . c [     last  -  23   to   last  -  444  ]`, Want: `$.c[last-23 to last-444]`},
 		{P: `$.      "a fish"     `, Want: `$."a fish"`},
