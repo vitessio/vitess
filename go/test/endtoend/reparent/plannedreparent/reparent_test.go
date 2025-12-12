@@ -148,6 +148,12 @@ func TestReparentReplicaOffline(t *testing.T) {
 	out, err := utils.PrsWithTimeout(t, clusterInstance, tablets[1], false, "", "31s")
 	require.Error(t, err)
 
+	// WTFDEBUG
+	t.Logf("utils.PrsWithTimeout: %+v", out)
+	tabletVersion, err := cluster.GetMajorVersion("vttablet")
+	require.NoError(t, err)
+	t.Logf("tablet version: %+v", tabletVersion)
+
 	// Assert that PRS failed
 	assert.Contains(t, out, "rpc error: code = Unknown desc = tablet is shutdown")
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[0])
