@@ -172,9 +172,12 @@ func TestReparentAvoid(t *testing.T) {
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	utils.DeleteTablet(t, clusterInstance, tablets[2])
 
+	vtctldVersion, err := cluster.GetMajorVersion("vtctld")
+	require.NoError(t, err)
+
 	// Perform a reparent operation with avoid_tablet pointing to non-primary. It
 	// should succeed without doing anything.
-	_, err := utils.PrsAvoid(t, clusterInstance, tablets[1])
+	_, err = utils.PrsAvoid(t, clusterInstance, tablets[1])
 	require.NoError(t, err)
 
 	utils.ValidateTopology(t, clusterInstance, false)
@@ -192,7 +195,12 @@ func TestReparentAvoid(t *testing.T) {
 	utils.StopTablet(t, tablets[0], true)
 	out, err := utils.PrsAvoid(t, clusterInstance, tablets[1])
 	require.Error(t, err)
-	assert.Contains(t, out, "rpc error: code = Unknown desc = tablet is shutdown")
+	if vtctldVersion >= 24 {
+		assert.Contains(t, out, "rpc error: code = Unknown desc = tablet is shutdown")
+	} else {
+		assert.Contains(t, out, "rpc error: code = DeadlineExceeded desc = latest balancer error")
+	}
+
 	utils.ValidateTopology(t, clusterInstance, false)
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
 
