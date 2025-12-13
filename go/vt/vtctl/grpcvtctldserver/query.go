@@ -150,6 +150,7 @@ func rowToSchemaMigration(row sqltypes.RowNamedValues) (sm *vtctldatapb.SchemaMi
 	sm.VitessLivenessIndicator = row.AsInt64("vitess_liveness_indicator", 0)
 	sm.UserThrottleRatio = float32(row.AsFloat64("user_throttle_ratio", 0))
 	sm.SpecialPlan = row.AsString("special_plan", "")
+	sm.InOrderCompletionPendingCount = row.AsUint64("in_order_completion_pending_count", 0)
 
 	sm.LastThrottledAt, err = valueToVTTime(row.AsString("last_throttled_timestamp", ""))
 	if err != nil {

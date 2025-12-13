@@ -26,6 +26,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/schema"
 )
 
 func TestShouldCutOverAccordingToBackoff(t *testing.T) {
@@ -227,5 +229,23 @@ func TestSafeMigrationCutOverThreshold(t *testing.T) {
 			}
 			assert.Equal(t, tcase.expect, threshold)
 		})
+	}
+}
+
+func TestGetInOrderCompletionPendingCount(t *testing.T) {
+	onlineDDL := &schema.OnlineDDL{UUID: t.Name()}
+	{
+		require.Zero(t, getInOrderCompletionPendingCount(onlineDDL, nil))
+	}
+	{
+		require.Zero(t, getInOrderCompletionPendingCount(onlineDDL, []string{}))
+	}
+	{
+		pendingMigrationsUUIDs := []string{t.Name()}
+		require.Zero(t, getInOrderCompletionPendingCount(onlineDDL, pendingMigrationsUUIDs))
+	}
+	{
+		pendingMigrationsUUIDs := []string{"a", "b", "c", t.Name(), "x"}
+		require.Equal(t, uint64(3), getInOrderCompletionPendingCount(onlineDDL, pendingMigrationsUUIDs))
 	}
 }
