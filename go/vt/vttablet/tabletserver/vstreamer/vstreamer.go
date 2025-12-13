@@ -412,7 +412,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			}
 			for _, vevent := range vevents {
 				if err := bufferAndTransmit(vevent); err != nil {
-					if err == io.EOF {
+					if errors.Is(vterrors.UnwrapAll(err), io.EOF) {
 						return nil
 					}
 					vs.vse.errorCounts.Add("BufferAndTransmit", 1)
@@ -440,7 +440,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		case <-hbTimer.C:
 			checkResult, ok := vs.vse.throttlerClient.ThrottleCheckOK(ctx, vs.throttlerApp)
 			if err := injectHeartbeat(!ok, checkResult.Summary()); err != nil {
-				if err == io.EOF {
+				if errors.Is(vterrors.UnwrapAll(err), io.EOF) {
 					return nil
 				}
 				vs.vse.errorCounts.Add("Send", 1)
@@ -466,6 +466,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 	if ev.IsFormatDescription() {
 		var err error
 		vs.format, err = ev.Format()
+		vs.eventGTID = nil
 		if err != nil {
 			return nil, fmt.Errorf("can't parse FORMAT_DESCRIPTION_EVENT: %v, event data: %#v", err, ev)
 		}
@@ -513,7 +514,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 				SequenceNumber: sequenceNumber,
 			})
 		}
-		vs.pos = replication.AppendGTID(vs.pos, gtid)
+		vs.pos = replication.AppendGTID(vs.pos, gtid) // Ideally using AppendGTIDInPlace, but there's a race condition here, see https://github.com/vitessio/vitess/pull/18611
 		vs.commitParent = commitParent
 		vs.sequenceNumber = sequenceNumber
 		vs.eventGTID = gtid
@@ -721,7 +722,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		for {
 			tpevent, err := tp.GetNextEvent()
 			if err != nil {
-				if err == io.EOF {
+				if errors.Is(vterrors.UnwrapAll(err), io.EOF) {
 					break
 				}
 				return nil, err

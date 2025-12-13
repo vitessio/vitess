@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS vreplication
     `id`                    int              NOT NULL AUTO_INCREMENT,
     `workflow`              varbinary(1000)           DEFAULT NULL,
     `source`                mediumblob       NOT NULL,
-    `pos`                   varbinary(10000) NOT NULL,
+    `pos`                   varbinary(45535) NOT NULL,
     `stop_pos`              varbinary(10000)          DEFAULT NULL,
     `max_tps`               bigint           NOT NULL,
     `max_replication_lag`   bigint           NOT NULL,

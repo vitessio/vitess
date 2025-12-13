@@ -24,6 +24,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"vitess.io/vitess/go/mysql/replication"
@@ -59,6 +60,7 @@ type vplayer struct {
 
 	replicatorPlan *ReplicatorPlan
 	tablePlans     map[string]*TablePlan
+	planMu         sync.RWMutex
 
 	// These are set when creating the VPlayer based on whether the VPlayer
 	// is in batch (stmt and trx) execution mode or not.
@@ -66,7 +68,8 @@ type vplayer struct {
 	commit func() error
 	// If the VPlayer is in batch mode, we accumulate each transaction's statements
 	// that are then sent as a single multi-statement protocol request to the database.
-	batchMode bool
+	batchMode    bool
+	parallelMode bool
 
 	pos replication.Position
 	// unsavedEvent is set any time we skip an event without
@@ -166,6 +169,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		}
 		vr.dbClient.maxBatchSize = maxAllowedPacket
 	}
+	parallelMode := len(copyState) == 0 && vr.workflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerParallel != 0
 
 	return &vplayer{
 		vr:               vr,
@@ -181,6 +185,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		query:            queryFunc,
 		commit:           commitFunc,
 		batchMode:        batchMode,
+		parallelMode:     parallelMode,
 	}
 }
 
@@ -281,9 +286,65 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	}()
 
 	applyErr := make(chan error, 1)
-	go func() {
-		applyErr <- vp.applyEvents(ctx, relay)
-	}()
+
+	if vp.parallelMode {
+		defer log.Errorf("========== QQQ DONE fetchAndApply")
+		log.Errorf("========== QQQ fetchAndApply startPos: %v", vp.startPos)
+
+		producer, err := newParallelProducer(ctx, vp.vr.dbClientGen, vp)
+		if err != nil {
+			return err
+		}
+		_, combinedPos, err := producer.aggregateWorkersPos(ctx, vp.vr.dbClient, false)
+		if err != nil {
+			return err
+		}
+		producer.startPos = combinedPos
+		log.Errorf("========== QQQ fetchAndApply producer.startPos = %v", producer.startPos)
+
+		go func() {
+			defer log.Errorf("========== QQQ DONE fetchAndApply/parallel goroutine")
+			// ctx, cancel := context.WithCancel(ctx)
+			// defer cancel()
+
+			err := func() error {
+				defer func() {
+					log.Errorf("========== QQQ DONE fetchAndApply/parallel inner. max_concurrency=%v, num commits=%v", producer.maxConcurrency.Load(), producer.numCommits.Load())
+
+					_, combinedPos, err := producer.aggregateWorkersPos(ctx, vp.vr.dbClient, false)
+					if err != nil {
+						log.Errorf("========== QQQ fetchAndApply producer.aggregateWorkersPos err=%v", err)
+					}
+					log.Errorf("========== QQQ fetchAndApply good. combinedPos=%v", combinedPos)
+				}()
+				log.Errorf("========== QQQ fetchAndApply applyEvents call")
+				if err := producer.applyEvents(ctx, relay); err != nil && err != io.EOF {
+					log.Errorf("========== QQQ fetchAndApply applyEvents err=%v", err)
+					return err
+				}
+				// log.Errorf("========== QQQ fetchAndApply producer.commitAll call")
+				// if err := producer.commitAll(ctx, nil); err != nil && err != io.EOF {
+				// 	log.Errorf("========== QQQ producer.commitAll err=%v", err)
+				// 	return err
+				// }
+				// TODO(shlomi): DeleteVReplicationWorkerPos
+				if producer.posReached.Load() {
+					log.Infof("Stopped at position: %v", vp.stopPos)
+					if vp.saveStop {
+						if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at position %v", vp.stopPos)); err != nil {
+							return err
+						}
+					}
+				}
+				return nil
+			}()
+			applyErr <- err
+		}()
+	} else {
+		go func() {
+			applyErr <- vp.applyEvents(ctx, relay)
+		}()
+	}
 
 	select {
 	case err := <-applyErr:
@@ -347,15 +408,7 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 		return fmt.Errorf("unexpected event on table %s", rowEvent.TableName)
 	}
 	applyFunc := func(sql string) (*sqltypes.Result, error) {
-		start := time.Now()
-		qr, err := vp.query(ctx, sql)
-		vp.vr.stats.QueryCount.Add(vp.phase, 1)
-		vp.vr.stats.QueryTimings.Record(vp.phase, start)
-		if vp.vr.workflowConfig.EnableHttpLog {
-			stats := NewVrLogStats("ROWCHANGE", start)
-			stats.Send(sql)
-		}
-		return qr, err
+		return vp.query(ctx, sql)
 	}
 
 	if vp.batchMode && len(rowEvent.RowChanges) > 1 {
@@ -644,10 +697,10 @@ func getNextPosition(items [][]*binlogdatapb.VEvent, i, j int) string {
 }
 
 func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, mustSave bool) error {
-	var stats *VrLogStats
-	if vp.vr.workflowConfig.EnableHttpLog {
-		stats = NewVrLogStats(event.Type.String(), time.Now())
-	}
+	// var stats *VrLogStats
+	// if vp.vr.workflowConfig.EnableHttpLog {
+	// 	stats = NewVrLogStats(event.Type.String(), time.Now())
+	// }
 	switch event.Type {
 	case binlogdatapb.VEventType_GTID:
 		pos, err := binlogplayer.DecodePosition(event.Gtid)
@@ -693,9 +746,9 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			return err
 		}
 		vp.tablePlans[event.FieldEvent.TableName] = tplan
-		if stats != nil {
-			stats.Send(fmt.Sprintf("%v", event.FieldEvent))
-		}
+		// if stats != nil {
+		// 	stats.Send(fmt.Sprintf("%v", event.FieldEvent))
+		// }
 
 	case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE,
 		binlogdatapb.VEventType_REPLACE, binlogdatapb.VEventType_SAVEPOINT:
@@ -713,9 +766,9 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if err := vp.applyStmtEvent(ctx, event); err != nil {
 				return err
 			}
-			if stats != nil {
-				stats.Send(sql)
-			}
+			// if stats != nil {
+			// 	stats.Send(sql)
+			// }
 		}
 	case binlogdatapb.VEventType_ROW:
 		// This player is configured for row based replication
@@ -728,9 +781,9 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		}
 		// Row event is logged AFTER RowChanges are applied so as to calculate the total elapsed
 		// time for the Row event.
-		if stats != nil {
-			stats.Send(fmt.Sprintf("%v", event.RowEvent))
-		}
+		// if stats != nil {
+		// 	stats.Send(fmt.Sprintf("%v", event.RowEvent))
+		// }
 	case binlogdatapb.VEventType_OTHER:
 		if vp.vr.dbClient.InTransaction {
 			// Unreachable
@@ -784,9 +837,9 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if _, err := vp.query(ctx, event.Statement); err != nil {
 				return err
 			}
-			if stats != nil {
-				stats.Send(event.Statement)
-			}
+			// if stats != nil {
+			// 	stats.Send(fmt.Sprintf("%v", event.Statement))
+			// }
 			posReached, err := vp.updatePos(ctx, event.Timestamp)
 			if err != nil {
 				return err
@@ -798,9 +851,9 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if _, err := vp.query(ctx, event.Statement); err != nil {
 				log.Infof("Ignoring error: %v for DDL: %s", err, event.Statement)
 			}
-			if stats != nil {
-				stats.Send(event.Statement)
-			}
+			// if stats != nil {
+			// 	stats.Send(fmt.Sprintf("%v", event.Statement))
+			// }
 			posReached, err := vp.updatePos(ctx, event.Timestamp)
 			if err != nil {
 				return err
@@ -854,9 +907,9 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			}
 			return io.EOF
 		}
-		if stats != nil {
-			stats.Send(fmt.Sprintf("%v", event.Journal))
-		}
+		// if stats != nil {
+		// 	stats.Send(fmt.Sprintf("%v", event.Journal))
+		// }
 		return io.EOF
 	case binlogdatapb.VEventType_HEARTBEAT:
 		if event.Throttled {

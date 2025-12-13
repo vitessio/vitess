@@ -95,9 +95,10 @@ const (
 
 // vreplicator provides the core logic to start vreplication streams
 type vreplicator struct {
-	vre      *Engine
-	id       int32
-	dbClient *vdbClient
+	vre         *Engine
+	id          int32
+	dbClient    *vdbClient
+	dbClientGen dbClientGenerator
 	// source
 	source          *binlogdatapb.BinlogSource
 	sourceVStreamer VStreamerClient
@@ -142,7 +143,7 @@ type vreplicator struct {
 //	More advanced constructs can be used. Please see the table plan builder
 //	documentation for more info.
 func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats,
-	dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, vre *Engine, workflowConfig *vttablet.VReplicationConfig) *vreplicator {
+	dbClient binlogplayer.DBClient, dbClientGen dbClientGenerator, mysqld mysqlctl.MysqlDaemon, vre *Engine, workflowConfig *vttablet.VReplicationConfig) *vreplicator {
 	if workflowConfig == nil {
 		workflowConfig = vttablet.DefaultVReplicationConfig
 	}
@@ -158,6 +159,7 @@ func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer
 		sourceVStreamer: sourceVStreamer,
 		stats:           stats,
 		dbClient:        newVDBClient(dbClient, stats, workflowConfig.RelayLogMaxItems),
+		dbClientGen:     dbClientGen,
 		mysqld:          mysqld,
 		workflowConfig:  workflowConfig,
 	}
