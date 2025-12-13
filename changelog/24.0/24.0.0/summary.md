@@ -7,6 +7,8 @@
     - **[New Support](#new-support)**
         - [Window function pushdown for sharded keyspaces](#window-function-pushdown)
 - **[Minor Changes](#minor-changes)**
+    - **[VReplication](#minor-changes-vreplication)**
+        - [`--shards` flag for MoveTables/Reshard start and stop](#vreplication-shards-flag-start-stop)
     - **[VTGate](#minor-changes-vtgate)**
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
         - [New "session" mode for `--vtgate-balancer-mode` flag](#vtgate-session-balancer-mode)
@@ -35,6 +37,22 @@ Previously, all window function queries required single-shard routing, which lim
 For examples and more details, see the [documentation](https://vitess.io/docs/24.0/reference/compatibility/mysql-compatibility/#window-functions).
 
 ## <a id="minor-changes"/>Minor Changes</a>
+
+### <a id="minor-changes-vreplication"/>VReplication</a>
+
+#### <a id="vreplication-shards-flag-start-stop"/>`--shards` flag for MoveTables/Reshard start and stop</a>
+
+The `start` and `stop` commands for MoveTables and Reshard workflows now support the `--shards` flag, allowing users to start or stop workflows on a specific subset of shards rather than all shards at once.
+
+**Example usage:**
+
+```bash
+# Start workflow on specific shards only
+vtctldclient MoveTables --target-keyspace customer --workflow commerce2customer start --shards="-80,80-"
+
+# Stop workflow on specific shards only
+vtctldclient Reshard --target-keyspace customer --workflow cust2cust stop --shards="80-"
+```
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
