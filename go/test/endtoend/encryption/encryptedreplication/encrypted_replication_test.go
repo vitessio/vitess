@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/encryption"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -62,9 +61,9 @@ func testReplicationBase(t *testing.T, isClientCertPassed bool) {
 
 	if isClientCertPassed {
 		replicaTablet.VttabletProcess.ExtraArgs = append(replicaTablet.VttabletProcess.ExtraArgs,
-			utils.GetFlagVariantForTests("--db-flags"), "2048",
-			utils.GetFlagVariantForTests("--db-ssl-ca"), path.Join(certDirectory, "ca-cert.pem"),
-			utils.GetFlagVariantForTests("--db-ssl-cert"), path.Join(certDirectory, "client-cert.pem"),
+			"--db-flags", "2048",
+			"--db-ssl-ca", path.Join(certDirectory, "ca-cert.pem"),
+			"--db-ssl-cert", path.Join(certDirectory, "client-cert.pem"),
 			"--db-ssl-key", path.Join(certDirectory, "client-key.pem"),
 		)
 	}

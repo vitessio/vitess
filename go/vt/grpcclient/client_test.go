@@ -92,7 +92,6 @@ func TestRegisterGRPCClientFlags(t *testing.T) {
 	require.Equal(t, "", compression)
 	require.Equal(t, "", credsFile)
 
-	// Use SetFlagVariantsForTests to randomly pick dashed or underscored keys.
 	flagMap := map[string]string{
 		"--grpc-keepalive-time":           "5s",
 		"--grpc-keepalive-timeout":        "5s",

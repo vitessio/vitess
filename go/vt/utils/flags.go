@@ -18,7 +18,6 @@ package utils
 
 import (
 	"fmt"
-	"math/rand/v2"
 	"os"
 	"strings"
 	"time"
@@ -111,36 +110,6 @@ func SetFlagVar(fs *pflag.FlagSet, value pflag.Value, name, usage string) {
 		fmt.Printf("[WARNING] Please use flag names with dashes instead of underscores, preparing for deprecation of underscores in flag names")
 	}
 	fs.Var(value, name, usage)
-}
-
-// SetFlagVariantsForTests randomly assigns either the underscored or dashed version of the flag name to the map.
-// This is designed to help catch cases where code does not properly handle both formats during testing.
-func SetFlagVariantsForTests(m map[string]string, key, value string) {
-	underscored, dashed := flagVariants(key)
-	if rand.Int()%2 == 0 {
-		m[underscored] = value
-	} else {
-		m[dashed] = value
-	}
-}
-
-// GetFlagVariantForTests randomly returns either the underscored or dashed version of the flag name.
-func GetFlagVariantForTests(flagName string) string {
-	underscored, dashed := flagVariants(flagName)
-	if rand.Int()%2 == 0 {
-		// fmt.Print("Using flag variant: ", underscored, "\n")
-		return underscored
-	}
-	// fmt.Print("Using flag variant: ", dashed, "\n")
-	return dashed
-}
-
-func GetFlagVariantForTestsByVersion(flagName string, majorVersion int) string {
-	underscored, dashed := flagVariants(flagName)
-	if majorVersion > 22 {
-		return dashed
-	}
-	return underscored
 }
 
 var (

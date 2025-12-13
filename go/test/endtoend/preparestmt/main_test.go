@@ -30,7 +30,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/vt/utils"
 )
 
 // tableData is a temporary structure to hold selected data.
@@ -162,10 +161,10 @@ func TestMain(m *testing.M) {
 		vtgateInstance.MySQLAuthServerImpl = "static"
 		// add extra arguments
 		vtgateInstance.ExtraArgs = []string{
-			utils.GetFlagVariantForTests("--mysql-server-query-timeout"), "1s",
+			"--mysql-server-query-timeout", "1s",
 			"--mysql-auth-server-static-file", clusterInstance.TmpDirectory + "/" + mysqlAuthServerStatic,
 			"--pprof-http",
-			utils.GetFlagVariantForTests("--schema-change-signal") + "=false",
+			"--schema-change-signal" + "=false",
 		}
 
 		// Start vtgate

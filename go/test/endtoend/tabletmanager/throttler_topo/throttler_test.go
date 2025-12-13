@@ -32,7 +32,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/throttler"
-	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
@@ -105,11 +104,11 @@ func TestMain(m *testing.M) {
 
 		// Set extra tablet args for lock timeout
 		clusterInstance.VtTabletExtraArgs = []string{
-			utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
-			utils.GetFlagVariantForTests("--watch-replication-stream"),
-			utils.GetFlagVariantForTests("--enable-replication-reporter"),
-			utils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
-			utils.GetFlagVariantForTests("--heartbeat-on-demand-duration"), onDemandHeartbeatDuration.String(),
+			"--lock-tables-timeout", "5s",
+			"--watch-replication-stream",
+			"--enable-replication-reporter",
+			"--heartbeat-interval", "250ms",
+			"--heartbeat-on-demand-duration", onDemandHeartbeatDuration.String(),
 		}
 
 		// Start keyspace
