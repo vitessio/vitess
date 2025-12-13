@@ -17,6 +17,7 @@ limitations under the License.
 package vstreamer
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -237,4 +238,27 @@ func TestFindTable(t *testing.T) {
 		assert.NoError(t, err, tcase.keyspace, tcase.tablename)
 		assert.Equal(t, table.Name.String(), tcase.tablename, tcase.keyspace, tcase.tablename)
 	}
+}
+
+func TestFindTableWithKeyspaceError(t *testing.T) {
+	testSrvVSchema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"ks_with_error": {
+				Tables: map[string]*vschemapb.Table{},
+			},
+		},
+	}
+	vschema := vindexes.BuildVSchema(testSrvVSchema, sqlparser.NewTestParser())
+	vschema.Keyspaces["ks_with_error"].Error = errors.New("vindex initialization failed")
+
+	lvs := &localVSchema{
+		keyspace: "ks_with_error",
+		vschema:  vschema,
+	}
+
+	_, err := lvs.findTable("customer")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "table customer not found in keyspace ks_with_error")
+	assert.Contains(t, err.Error(), "keyspace has error")
+	assert.Contains(t, err.Error(), "vindex initialization failed")
 }
