@@ -18,14 +18,17 @@ package vdiff
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -348,4 +351,10 @@ func TestPerformVDiffAction(t *testing.T) {
 		})
 		require.Equal(t, errCount, globalStats.ErrorCount.Get(), "expected error count %d, got %d", errCount, globalStats.ErrorCount.Get())
 	}
+}
+
+func TestIsReadOnlyError(t *testing.T) {
+	err := sqlerror.NewSQLError(sqlerror.EROptionPreventsStatement, sqlerror.SSUnknownSQLState, "The MySQL server is running with the --super-read-only option")
+	assert.True(t, isReadOnlyError(err))
+	assert.False(t, isReadOnlyError(errors.New("other error")))
 }
