@@ -2251,6 +2251,51 @@ func (asm *assembler) Fn_JSON_EXTRACT0(jp []*json.Path) {
 	}
 }
 
+func (asm *assembler) Fn_JSON_EXTRACT_dynamic(numPaths int) {
+	asm.adjustStack(-numPaths)
+
+	asm.emit(func(env *ExpressionEnv) int {
+		doc := env.vm.stack[env.vm.sp-numPaths-1].(*evalJSON)
+
+		matches := make([]*json.Value, 0, 4)
+		multi := numPaths > 1
+
+		for i := 0; i < numPaths; i++ {
+			pathArg := env.vm.stack[env.vm.sp-numPaths+i]
+			if pathArg == nil {
+				env.vm.stack[env.vm.sp-numPaths-1] = nil
+				env.vm.sp -= numPaths
+				return 1
+			}
+
+			path, err := intoJSONPath(pathArg)
+			if err != nil {
+				env.vm.err = err
+				return 0
+			}
+
+			if path.ContainsWildcards() {
+				multi = true
+			}
+
+			path.Match(doc, true, func(v *json.Value) {
+				matches = append(matches, v)
+			})
+		}
+
+		if len(matches) == 0 {
+			env.vm.stack[env.vm.sp-numPaths-1] = nil
+		} else if len(matches) == 1 && !multi {
+			env.vm.stack[env.vm.sp-numPaths-1] = matches[0]
+		} else {
+			env.vm.stack[env.vm.sp-numPaths-1] = json.NewArray(matches)
+		}
+
+		env.vm.sp -= numPaths
+		return 1
+	}, "FN JSON_EXTRACT, SP-%d..SP-1, SP-%d", numPaths, numPaths+1)
+}
+
 func (asm *assembler) Fn_JSON_KEYS(jp *json.Path) {
 	if jp == nil {
 		asm.emit(func(env *ExpressionEnv) int {

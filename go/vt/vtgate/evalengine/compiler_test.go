@@ -876,7 +876,9 @@ func TestBindVarLiteral(t *testing.T) {
 		expression string
 		bindType   func(expr sqlparser.Expr)
 		bindVar    *querypb.BindVariable
+		bindVars   map[string]*querypb.BindVariable
 		result     string
+		error      string
 	}{
 		{
 			expression: `_latin1 :vtg1 /* HEXNUM */`,
@@ -893,6 +895,53 @@ func TestBindVarLiteral(t *testing.T) {
 			},
 			bindVar: sqltypes.HexValBindVariable([]byte("0'FF'")),
 			result:  `VARCHAR("ÿ")`,
+		},
+
+		{
+			expression: `JSON_EXTRACT('[10, 20, [30, 40]]', :vtg1 /* VARCHAR */)`,
+			bindType: func(expr sqlparser.Expr) {
+				expr.(*sqlparser.JSONExtractExpr).PathList[0].(*sqlparser.Argument).Type = sqltypes.VarChar
+			},
+			bindVar: sqltypes.StringBindVariable("$[1]"),
+			result:  `JSON("20")`,
+		},
+		{
+			expression: `JSON_EXTRACT('[10, 20, [30, 40]]', :vtg1 /* VARCHAR */, :vtg2 /* VARCHAR */)`,
+			bindType: func(expr sqlparser.Expr) {
+				paths := expr.(*sqlparser.JSONExtractExpr).PathList
+				paths[0].(*sqlparser.Argument).Type = sqltypes.VarChar
+				paths[1].(*sqlparser.Argument).Type = sqltypes.VarChar
+			},
+			bindVars: map[string]*querypb.BindVariable{
+				"vtg1": sqltypes.StringBindVariable("$[0]"),
+				"vtg2": sqltypes.StringBindVariable("$[1]"),
+			},
+			result: `JSON("[10, 20]")`,
+		},
+		{
+			expression: `JSON_EXTRACT('[10, 20, [30, 40]]', '$[0]', :vtg1 /* VARCHAR */)`,
+			bindType: func(expr sqlparser.Expr) {
+				paths := expr.(*sqlparser.JSONExtractExpr).PathList
+				paths[1].(*sqlparser.Argument).Type = sqltypes.VarChar
+			},
+			bindVar: sqltypes.StringBindVariable("$[1]"),
+			result:  `JSON("[10, 20]")`,
+		},
+		{
+			expression: `JSON_EXTRACT('{"a": 1, "b": 2}', :vtg1 /* VARCHAR */)`,
+			bindType: func(expr sqlparser.Expr) {
+				expr.(*sqlparser.JSONExtractExpr).PathList[0].(*sqlparser.Argument).Type = sqltypes.VarChar
+			},
+			bindVar: sqltypes.StringBindVariable("$.*"),
+			result:  `JSON("[1, 2]")`,
+		},
+		{
+			expression: `JSON_EXTRACT('[10, 20]', :vtg1 /* VARCHAR */)`,
+			bindType: func(expr sqlparser.Expr) {
+				expr.(*sqlparser.JSONExtractExpr).PathList[0].(*sqlparser.Argument).Type = sqltypes.VarChar
+			},
+			bindVar: sqltypes.StringBindVariable("invalid"),
+			error:   "Invalid JSON path",
 		},
 	}
 
@@ -920,30 +969,49 @@ func TestBindVarLiteral(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			result := `VARCHAR("ÿ")`
-
 			env := evalengine.EmptyExpressionEnv(venv)
-			env.BindVars = map[string]*querypb.BindVariable{
-				"vtg1": tc.bindVar,
+			if tc.bindVars != nil {
+				env.BindVars = tc.bindVars
+			} else {
+				env.BindVars = map[string]*querypb.BindVariable{
+					"vtg1": tc.bindVar,
+				}
 			}
 
-			expected, err := env.EvaluateAST(converted)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if expected.String() != result {
-				t.Fatalf("bad evaluation from eval engine: got %s, want %s", expected.String(), result)
-			}
+			if tc.error != "" {
+				_, err := env.EvaluateAST(converted)
+				if err == nil {
+					t.Fatal("expected error but got none")
+				}
+				if !strings.Contains(err.Error(), tc.error) {
+					t.Fatalf("expected error containing %q, got %q", tc.error, err.Error())
+				}
 
-			// re-run the same evaluation multiple times to ensure results are always consistent
-			for i := 0; i < 8; i++ {
-				res, err := env.EvaluateVM(converted.(*evalengine.CompiledExpr))
+				_, err = env.EvaluateVM(converted.(*evalengine.CompiledExpr))
+				if err == nil {
+					t.Fatal("expected error from compiler but got none")
+				}
+				if !strings.Contains(err.Error(), tc.error) {
+					t.Fatalf("expected compiler error containing %q, got %q", tc.error, err.Error())
+				}
+			} else {
+				expected, err := env.EvaluateAST(converted)
 				if err != nil {
 					t.Fatal(err)
 				}
+				if expected.String() != tc.result {
+					t.Fatalf("bad evaluation from eval engine: got %s, want %s", expected.String(), tc.result)
+				}
 
-				if res.String() != result {
-					t.Errorf("bad evaluation from compiler: got %s, want %s (iteration %d)", res, result, i)
+				for i := 0; i < 8; i++ {
+					res, err := env.EvaluateVM(converted.(*evalengine.CompiledExpr))
+					if err != nil {
+						t.Fatal(err)
+					}
+
+					if res.String() != tc.result {
+						t.Errorf("bad evaluation from compiler: got %s, want %s (iteration %d)", res, tc.result, i)
+					}
 				}
 			}
 		})
