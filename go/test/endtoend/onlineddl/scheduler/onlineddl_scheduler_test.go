@@ -483,7 +483,7 @@ func testScheduler(t *testing.T) {
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			postponeLaunch := row.AsInt64("postpone_launch", 0)
-			assert.Equal(t, int64(1), postponeLaunch)
+			assert.EqualValues(t, 1, postponeLaunch)
 		}
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusQueued)
 
@@ -1824,7 +1824,7 @@ func testScheduler(t *testing.T) {
 					require.NotNil(t, rs)
 					for _, row := range rs.Named().Rows {
 						inOrderCompletionPendingCount := row.AsUint64("in_order_completion_pending_count", 0)
-						assert.EqualValues(c, uint64(i), inOrderCompletionPendingCount)
+						assert.EqualValues(c, i, inOrderCompletionPendingCount)
 					}
 				}
 			}, time.Minute, time.Second, "in_order_completion_pending_count not as expected")
