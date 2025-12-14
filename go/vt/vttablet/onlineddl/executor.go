@@ -1732,10 +1732,6 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	pendingMigrationsUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
-	if err != nil {
-		return err
-	}
 	var onlyScheduleOneMigration sync.Once
 
 	r, err := e.execQuery(ctx, sqlSelectQueuedMigrations)
@@ -1762,24 +1758,6 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 				// are inherently "ready to complete" because their operation is immediate.
 				if err := e.updateMigrationReadyToComplete(ctx, uuid, true); err != nil {
 					return err
-				}
-				if postponeCompletion {
-					onlineDDL, _, err := e.readMigration(ctx, uuid)
-					if err != nil {
-						return vterrors.Wrapf(err, "in scheduleNextMigration()")
-					}
-					if onlineDDL.StrategySetting().IsInOrderCompletion() {
-						// for `--in-order --postpone-completion` migrations:
-						// We're looking to populate the in_order_completion_pending_count column.
-						// For vitess migrations (based on vreplication), this column is populated via reviewRunningMigrations().
-						// However, for immediate operations, those are not "running" per se.
-						// So we populate the column here. This means we only populate the column once, when the migration is first
-						// scheduled. We do not further update the column as other migrations complete.
-						pendingMigrationsCount := getInOrderCompletionPendingCount(onlineDDL, pendingMigrationsUUIDs)
-						if err = e.updateInOrderCompletionPendingCount(ctx, uuid, pendingMigrationsCount); err != nil {
-							return err
-						}
-					}
 				}
 			}
 		}
@@ -2914,6 +2892,34 @@ func (e *Executor) getNonConflictingMigration(ctx context.Context) (*schema.Onli
 	return nil, nil
 }
 
+// reviewInOrderMigrations reviews all pending migrations that are also `--in-order` to see whether
+// they should be failed due to prior failed/cancelled migrations in same context.
+func (e *Executor) reviewInOrderMigrations(ctx context.Context) error {
+	pendingMigrationsUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
+	if err != nil {
+		return err
+	}
+	for _, uuid := range pendingMigrationsUUIDs {
+		onlineDDL, _, err := e.readMigration(ctx, uuid)
+		if err != nil {
+			return err
+		}
+		wasFailed, err := e.validateInOrderMigration(ctx, onlineDDL)
+		if err != nil {
+			return err
+		}
+		if wasFailed {
+			log.Infof("reviewInOrderMigrations: failder in-order migration uuid=%s due to previous failed/cancelled migrations in same context", uuid)
+		} else {
+			pendingMigrationsCount := getInOrderCompletionPendingCount(onlineDDL, pendingMigrationsUUIDs)
+			if err := e.updateInOrderCompletionPendingCount(ctx, uuid, pendingMigrationsCount); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // runNextMigration picks up to one 'ready' migration that is able to run, and executes it.
 // Possible scenarios:
 // - no migration is in 'ready' state -- nothing to be done
@@ -3648,6 +3654,9 @@ func (e *Executor) onMigrationCheckTick() {
 		log.Error(err)
 	}
 	if err := e.scheduleNextMigration(ctx); err != nil {
+		log.Error(err)
+	}
+	if err := e.reviewInOrderMigrations(ctx); err != nil {
 		log.Error(err)
 	}
 	if err := e.runNextMigration(ctx); err != nil {
