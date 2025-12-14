@@ -1732,14 +1732,19 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
+	pendingMigrationsUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
+	if err != nil {
+		return err
+	}
 	var onlyScheduleOneMigration sync.Once
 
 	r, err := e.execQuery(ctx, sqlSelectQueuedMigrations)
 	if err != nil {
-		return err
+		return vterrors.Wrapf(err, "in scheduleNextMigration()")
 	}
 	for _, row := range r.Named().Rows {
 		uuid := row["migration_uuid"].ToString()
+
 		postponeLaunch := row.AsBool("postpone_launch", false)
 		postponeCompletion := row.AsBool("postpone_completion", false)
 		readyToComplete := row.AsBool("ready_to_complete", false)
@@ -1757,6 +1762,24 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 				// are inherently "ready to complete" because their operation is immediate.
 				if err := e.updateMigrationReadyToComplete(ctx, uuid, true); err != nil {
 					return err
+				}
+				if postponeCompletion {
+					onlineDDL, _, err := e.readMigration(ctx, uuid)
+					if err != nil {
+						return vterrors.Wrapf(err, "in scheduleNextMigration()")
+					}
+					if onlineDDL.StrategySetting().IsInOrderCompletion() {
+						// for `--in-order --postpone-completion` migrations:
+						// We're looking to populate the in_order_completion_pending_count column.
+						// For vitess migrations (based on vreplication), this column is populated via reviewRunningMigrations().
+						// However, for immediate operations, those are not "running" per se.
+						// So we populate the column here. This means we only populate the column once, when the migration is first
+						// scheduled. We do not further update the column as other migrations complete.
+						pendingMigrationsCount := getInOrderCompletionPendingCount(onlineDDL, pendingMigrationsUUIDs)
+						if err = e.updateInOrderCompletionPendingCount(ctx, uuid, pendingMigrationsCount); err != nil {
+							return err
+						}
+					}
 				}
 			}
 		}
