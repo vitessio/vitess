@@ -2913,7 +2913,8 @@ func (e *Executor) reviewInOrderMigrations(ctx context.Context) error {
 		} else {
 			pendingMigrationsCount := getInOrderCompletionPendingCount(onlineDDL, pendingMigrationsUUIDs)
 			if err := e.updateInOrderCompletionPendingCount(ctx, uuid, pendingMigrationsCount); err != nil {
-				return err
+				return vterrors.Wrapf(err, "failed to update in order completion pending count for migration
+				 %s", uuid)
 			}
 		}
 	}
