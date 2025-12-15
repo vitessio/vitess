@@ -87,6 +87,7 @@ jobs:
         export VTDATAROOT="/tmp/"
 
         export NOVTADMINBUILD=1
+        export VT_GO_PARALLEL_VALUE=$(nproc)
 
         # Exclude endtoend tests from the coverage report.
         # TODO: figure out how best to include our endtoend tests in the coverage report.
