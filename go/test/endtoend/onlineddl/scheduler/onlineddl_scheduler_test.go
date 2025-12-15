@@ -1806,13 +1806,15 @@ func testScheduler(t *testing.T) {
 		sqls := []string{
 			`alter table t1_test force`,
 			`alter table t2_test force`,
+			`drop table if exists non_existent_1`,
+			`drop table if exists non_existent_2`,
 		}
 		sql := strings.Join(sqls, ";")
 		var vuuids []string
 		t.Run("apply schema", func(t *testing.T) {
 			uuidList := testOnlineDDLStatement(t, createParams(sql, ddlStrategy+" --in-order-completion --postpone-completion --allow-concurrent", "vtctl", "", "", true)) // skip wait
 			vuuids = strings.Split(uuidList, "\n")
-			assert.Len(t, vuuids, 2)
+			assert.Len(t, vuuids, len(sqls))
 			for _, uuid := range vuuids {
 				waitForReadyToComplete(t, uuid, true)
 			}
@@ -1822,10 +1824,13 @@ func testScheduler(t *testing.T) {
 				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, vuuids[0], schema.OnlineDDLStatusCancelled)
 			})
-			t.Run("expect 2nd migration to fail", func(t *testing.T) {
-				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, vuuids[1], normalWaitTime, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
-				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
-				onlineddl.CheckMigrationStatus(t, &vtParams, shards, vuuids[1], schema.OnlineDDLStatusFailed)
+			t.Run("expect following migrations to fail", func(t *testing.T) {
+				for i := 1; i < len(vuuids); i++ {
+					uuid := vuuids[i]
+					status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+					fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+					onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+				}
 			})
 		})
 	})

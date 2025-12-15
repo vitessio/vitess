@@ -2891,6 +2891,29 @@ func (e *Executor) getNonConflictingMigration(ctx context.Context) (*schema.Onli
 	return nil, nil
 }
 
+// reviewInOrderMigrations reviews all pending migrations that are also `--in-order` to see whether
+// they should be failed due to prior failed/cancelled migrations in same context.
+func (e *Executor) reviewInOrderMigrations(ctx context.Context) error {
+	pendingMigrationsUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
+	if err != nil {
+		return err
+	}
+	for _, uuid := range pendingMigrationsUUIDs {
+		onlineDDL, _, err := e.readMigration(ctx, uuid)
+		if err != nil {
+			return err
+		}
+		wasFailed, err := e.validateInOrderMigration(ctx, onlineDDL)
+		if err != nil {
+			return err
+		}
+		if wasFailed {
+			log.Infof("reviewInOrderMigrations: failing in-order migration uuid=%s due to previous failed/cancelled migrations in same context", uuid)
+		}
+	}
+	return nil
+}
+
 // runNextMigration picks up to one 'ready' migration that is able to run, and executes it.
 // Possible scenarios:
 // - no migration is in 'ready' state -- nothing to be done
@@ -3601,6 +3624,9 @@ func (e *Executor) onMigrationCheckTick() {
 		log.Error(err)
 	}
 	if err := e.scheduleNextMigration(ctx); err != nil {
+		log.Error(err)
+	}
+	if err := e.reviewInOrderMigrations(ctx); err != nil {
 		log.Error(err)
 	}
 	if err := e.runNextMigration(ctx); err != nil {
