@@ -110,7 +110,7 @@ func TestStateDenyList(t *testing.T) {
 		tableDefinitions               []*tabletmanagerdatapb.TableDefinition
 		tabletControls                 []*topodatapb.Shard_TabletControl
 		wantDeniedTables               map[topodatapb.TabletType][]string
-		wantAllowReadsFromDeniedTables bool
+		wantAllowReadsFromDeniedTables map[topodatapb.TabletType]bool
 		wantQueryRules                 string
 	}{
 		{
@@ -123,11 +123,12 @@ func TestStateDenyList(t *testing.T) {
 				Cells:        []string{"cell1"},
 				DeniedTables: []string{"t1"},
 			}},
-			wantDeniedTables: map[topodatapb.TabletType][]string{topodatapb.TabletType_REPLICA: {"t1"}},
-			wantQueryRules:   `[{"Description":"enforce denied tables","Name":"denied_table","TableNames":["t1"],"Action":"FAIL_RETRY"}]`,
+			wantDeniedTables:               map[topodatapb.TabletType][]string{topodatapb.TabletType_REPLICA: {"t1"}},
+			wantAllowReadsFromDeniedTables: map[topodatapb.TabletType]bool{topodatapb.TabletType_REPLICA: false},
+			wantQueryRules:                 `[{"Description":"enforce denied tables","Name":"denied_table","TableNames":["t1"],"Action":"FAIL_RETRY"}]`,
 		},
 		{
-			name: "primay denied table with allow reads",
+			name: "replica denied table with allow reads",
 			tableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
 				Name: "t1",
 			}},
@@ -138,7 +139,7 @@ func TestStateDenyList(t *testing.T) {
 				AllowReads:   true,
 			}},
 			wantDeniedTables:               map[topodatapb.TabletType][]string{topodatapb.TabletType_REPLICA: {"t1"}},
-			wantAllowReadsFromDeniedTables: true,
+			wantAllowReadsFromDeniedTables: map[topodatapb.TabletType]bool{topodatapb.TabletType_REPLICA: true},
 			wantQueryRules:                 `[{"Description":"enforce denied tables","Name":"denied_table","Plans":["Nextval","Insert","InsertMessage","Update","UpdateLimit","Delete","DeleteLimit","DDL","Set","OtherRead","OtherAdmin","MessageStream","Savepoint","Release","RollbackSavepoint","Show","Load","Flush","UnlockTables","CallProcedure","AlterMigration","RevertMigration","ShowMigrations","ShowMigrationLogs","ShowThrottledApps","ShowThrottlerStatus"],"TableNames":["t1"],"Action":"FAIL_RETRY"}]`,
 		},
 	}
