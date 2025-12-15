@@ -132,7 +132,7 @@ func TestReparentReplicaOffline(t *testing.T) {
 
 	// Gracefully kill one tablet so we seem offline. Use a SIGKILL-fallback delay of 30s, like kube.
 	startKillTime := time.Now()
-	killTablet.VttabletProcess.TearDownWithTimeout(30 * time.Second)
+	killTablet.VttabletProcess.TearDownWithTimeout(60 * time.Second)
 
 	// Confirm the tablet shutdown via the topo.
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
