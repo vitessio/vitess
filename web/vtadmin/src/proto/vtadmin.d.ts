@@ -52743,6 +52743,9 @@ export namespace vtctldata {
 
         /** SchemaMigration removed_foreign_key_names */
         removed_foreign_key_names?: (string|null);
+
+        /** SchemaMigration in_order_completion_pending_count */
+        in_order_completion_pending_count?: (number|Long|null);
     }
 
     /** Represents a SchemaMigration. */
@@ -52915,6 +52918,9 @@ export namespace vtctldata {
 
         /** SchemaMigration removed_foreign_key_names. */
         public removed_foreign_key_names: string;
+
+        /** SchemaMigration in_order_completion_pending_count. */
+        public in_order_completion_pending_count: (number|Long);
 
         /**
          * Creates a new SchemaMigration instance using the specified properties.
