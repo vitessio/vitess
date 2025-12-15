@@ -11,15 +11,6 @@ runs:
       shell: bash
       run: |
         export DEBIAN_FRONTEND="noninteractive"
-        
-        # Wait for any existing apt processes to finish
-        echo "Checking for existing apt processes..."
-        while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1 ; do
-          echo "Waiting for other apt processes to finish..."
-          sleep 2
-        done
-        echo "No apt locks detected, proceeding..."
-        
         sudo apt-get update
 
         # Uninstall any previously installed MySQL first

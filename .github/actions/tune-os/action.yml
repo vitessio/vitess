@@ -10,10 +10,6 @@ runs:
         sudo apt-get update && sudo apt-get install -y eatmydata
         echo "/usr/\${LIB}/libeatmydata.so" | sudo tee -a /etc/ld.so.preload
 
-        if systemctl list-unit-files snap.amazon-ssm-agent.amazon-ssm-agent.service &>/dev/null; then
-          sudo systemctl stop snap.amazon-ssm-agent.amazon-ssm-agent.service
-        fi
-
         # Increase the range of ephemeral ports.
         sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
 
