@@ -182,7 +182,7 @@ func validateTablet(tablet *topodatapb.Tablet) error {
 	}
 	grpcPort := int32(tablet.PortMap["grpc"])
 	if grpcPort <= 0 {
-		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet grpc port")
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet grpc port: %d", grpcPort)
 	}
 	return nil
 }
