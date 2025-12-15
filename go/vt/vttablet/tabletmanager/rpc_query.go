@@ -25,7 +25,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/executorcontext"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -294,6 +293,6 @@ func (tm *TabletManager) ExecuteQuery(ctx context.Context, req *tabletmanagerdat
 	if err != nil {
 		return nil, err
 	}
-	result, err := tm.QueryServiceControl.QueryService().Execute(ctx, executorcontext.NewSafeSession(nil), target, uq, nil, 0, 0)
+	result, err := tm.QueryServiceControl.QueryService().Execute(ctx, nil, target, uq, nil, 0, 0)
 	return sqltypes.ResultToProto3(result), err
 }
