@@ -175,10 +175,10 @@ func validateTablet(tablet *topodatapb.Tablet) error {
 	}
 
 	if tablet.Hostname == "" {
-		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet hostname")
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "empty tablet hostname")
 	}
 	if tablet.PortMap == nil {
-		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet port map")
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "no tablet port map")
 	}
 	grpcPort := int32(tablet.PortMap["grpc"])
 	if grpcPort <= 0 {
