@@ -62,9 +62,9 @@ require (
 	github.com/uber/jaeger-lib v2.4.1+incompatible // indirect
 	github.com/yudai/golcs v0.0.0-20170316035057-ecda9a501e82
 	github.com/z-division/go-zookeeper v1.0.0
-	go.etcd.io/etcd/api/v3 v3.5.19
-	go.etcd.io/etcd/client/pkg/v3 v3.5.19
-	go.etcd.io/etcd/client/v3 v3.5.19
+	go.etcd.io/etcd/api/v3 v3.5.25
+	go.etcd.io/etcd/client/pkg/v3 v3.5.25
+	go.etcd.io/etcd/client/v3 v3.5.25
 	go.uber.org/mock v0.5.0
 	golang.org/x/crypto v0.36.0 // indirect
 	golang.org/x/mod v0.24.0 // indirect
@@ -77,7 +77,7 @@ require (
 	golang.org/x/tools v0.31.0
 	google.golang.org/api v0.226.0
 	google.golang.org/genproto v0.0.0-20250313205543-e70fdf4c4cb4 // indirect
-	google.golang.org/grpc v1.71.0
+	google.golang.org/grpc v1.71.1
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.5.1
 	google.golang.org/grpc/examples v0.0.0-20250204041003-947e2a4be2ba
 	google.golang.org/protobuf v1.36.5
