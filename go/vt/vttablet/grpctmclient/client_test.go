@@ -243,7 +243,7 @@ func TestValidateTablet(t *testing.T) {
 		tablet := &topodatapb.Tablet{
 			Hostname: "",
 		}
-		require.ErrorContains(t, validateTablet(tablet), "invalid tablet hostname")
+		require.ErrorContains(t, validateTablet(tablet), "empty tablet hostname")
 	})
 
 	t.Run("invalid - nil PortMap", func(t *testing.T) {
@@ -251,7 +251,7 @@ func TestValidateTablet(t *testing.T) {
 			Hostname: t.Name(),
 			PortMap:  nil,
 		}
-		require.ErrorContains(t, validateTablet(tablet), "invalid tablet port map")
+		require.ErrorContains(t, validateTablet(tablet), "no tablet port map")
 	})
 
 	t.Run("invalid - bad port", func(t *testing.T) {
