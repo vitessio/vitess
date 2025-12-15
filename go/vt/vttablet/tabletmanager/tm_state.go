@@ -89,7 +89,7 @@ type tmState struct {
 
 	// allowReadsFromDeniedTables allows readonly operations to execute against
 	// denied tables.
-	allowReadsFromDeniedTables bool
+	allowReadsFromDeniedTables map[topodatapb.TabletType]bool
 }
 
 func newTMState(tm *TabletManager, tablet *topodatapb.Tablet) *tmState {
@@ -154,10 +154,11 @@ func (ts *tmState) RefreshFromTopoInfo(ctx context.Context, shardInfo *topo.Shar
 		ts.isResharding = len(shardInfo.SourceShards) > 0
 
 		ts.deniedTables = make(map[topodatapb.TabletType][]string)
+		ts.allowReadsFromDeniedTables = make(map[topodatapb.TabletType]bool)
 		for _, tc := range shardInfo.TabletControls {
 			if topo.InCellList(ts.tm.tabletAlias.Cell, tc.Cells) {
 				ts.deniedTables[tc.TabletType] = tc.DeniedTables
-				ts.allowReadsFromDeniedTables = tc.AllowReads
+				ts.allowReadsFromDeniedTables[tc.TabletType] = tc.AllowReads
 			}
 		}
 	}
@@ -413,7 +414,7 @@ func (ts *tmState) applyDenyList(ctx context.Context) (err error) {
 			}
 			// This pathway exists in order to allow traffic to pass to the
 			// target of a MoveTables workflow after using MirrorTraffic.
-			if ts.allowReadsFromDeniedTables {
+			if ts.allowReadsFromDeniedTables[ts.tablet.Type] {
 				// If a plan does not match any of the types below, it will be
 				// allowed to execute in spite of the table conditions above.
 				//
