@@ -1814,7 +1814,7 @@ func testScheduler(t *testing.T) {
 		t.Run("apply schema", func(t *testing.T) {
 			uuidList := testOnlineDDLStatement(t, createParams(sql, ddlStrategy+" --in-order-completion --postpone-completion --allow-concurrent", "vtctl", "", "", true)) // skip wait
 			vuuids = strings.Split(uuidList, "\n")
-			assert.Len(t, vuuids, 4)
+			assert.Len(t, vuuids, len(sqls))
 			for _, uuid := range vuuids {
 				waitForReadyToComplete(t, uuid, true)
 			}
