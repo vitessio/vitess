@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/ioutil"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/os2"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/log"
@@ -413,8 +414,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	// Save initial state so we can restore.
 	replicaStartRequired := false
 	sourceIsPrimary := false
-	superReadOnly := true // nolint
-	readOnly := true      // nolint
+	superReadOnly := true
 	var replicationPosition replication.Position
 	semiSyncSource, semiSyncReplica := params.Mysqld.SemiSyncEnabled(ctx)
 
@@ -432,7 +432,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	}
 
 	// get the read-only flag
-	readOnly, err = params.Mysqld.IsReadOnly(ctx)
+	readOnly, err := params.Mysqld.IsReadOnly(ctx)
 	if err != nil {
 		return BackupUnusable, vterrors.Wrap(err, "failed to get read_only status")
 	}
@@ -1008,6 +1008,12 @@ func (be *BuiltinBackupEngine) backupManifest(
 			}
 		}()
 
+		// Get the hostname
+		hostname, err := netutil.FullyQualifiedHostname()
+		if err != nil {
+			hostname = ""
+		}
+
 		// JSON-encode and write the MANIFEST
 		bm := &builtinBackupManifest{
 			// Common base fields
@@ -1021,6 +1027,7 @@ func (be *BuiltinBackupEngine) backupManifest(
 				Incremental:        !fromPosition.IsZero(),
 				ServerUUID:         serverUUID,
 				TabletAlias:        params.TabletAlias,
+				Hostname:           hostname,
 				Keyspace:           params.Keyspace,
 				Shard:              params.Shard,
 				BackupTime:         params.BackupTime.UTC().Format(time.RFC3339),

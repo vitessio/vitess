@@ -298,7 +298,7 @@ func (vc *VCursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 	callerId := callerid.EffectiveCallerIDFromContext(ctx)
 	immediateCallerId := callerid.ImmediateCallerIDFromContext(ctx)
 
-	timedCtx, _ := context.WithTimeout(context.Background(), vc.config.WarmingReadsTimeout) // nolint
+	timedCtx, _ := context.WithTimeout(context.Background(), vc.config.WarmingReadsTimeout) //nolint
 	clonedCtx := callerid.NewContext(timedCtx, callerId, immediateCallerId)
 
 	v := &VCursorImpl{
@@ -715,6 +715,9 @@ func (vc *VCursorImpl) ExecutePrimitive(ctx context.Context, primitive engine.Pr
 			continue
 		}
 		vc.logOpTraffic(primitive, res)
+		if res != nil && res.InsertIDUpdated() {
+			vc.SafeSession.LastInsertId = res.InsertID
+		}
 		return res, err
 	}
 	return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "upstream shards are not available")

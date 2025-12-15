@@ -1650,21 +1650,21 @@ func TestOnlineDDLTables(t *testing.T) {
 	execStatements(t, []string{
 		"create table vitess_test(id int, val varbinary(128), primary key(id))",
 		"create table _1e275eef_3b20_11eb_a38f_04ed332e05c2_20201210204529_gho(id int, val varbinary(128), primary key(id))",
-		"create table _vt_PURGE_1f9194b43b2011eb8a0104ed332e05c2_20201210194431(id int, val varbinary(128), primary key(id))",
+		"create table _vt_prg_1f9194b43b2011eb8a0104ed332e05c2_20201210194431_(id int, val varbinary(128), primary key(id))",
 		"create table _product_old(id int, val varbinary(128), primary key(id))",
 	})
 	position := primaryPosition(t)
 	execStatements(t, []string{
 		"insert into vitess_test values(1, 'abc')",
 		"insert into _1e275eef_3b20_11eb_a38f_04ed332e05c2_20201210204529_gho values(1, 'abc')",
-		"insert into _vt_PURGE_1f9194b43b2011eb8a0104ed332e05c2_20201210194431 values(1, 'abc')",
+		"insert into _vt_prg_1f9194b43b2011eb8a0104ed332e05c2_20201210194431_ values(1, 'abc')",
 		"insert into _product_old values(1, 'abc')",
 	})
 
 	defer execStatements(t, []string{
 		"drop table vitess_test",
 		"drop table _1e275eef_3b20_11eb_a38f_04ed332e05c2_20201210204529_gho",
-		"drop table _vt_PURGE_1f9194b43b2011eb8a0104ed332e05c2_20201210194431",
+		"drop table _vt_prg_1f9194b43b2011eb8a0104ed332e05c2_20201210194431_",
 		"drop table _product_old",
 	})
 	testcases := []testcase{{
@@ -2380,4 +2380,31 @@ func TestFilteredIsNullOperator(t *testing.T) {
 			ts.Run()
 		})
 	}
+}
+
+func TestUVStreamerNoCopyWithGTID(t *testing.T) {
+	execStatements(t, []string{
+		"create table t1(id int, val varchar(128), primary key(id))",
+		"insert into t1 values (1, 'val1')",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	ctx := context.Background()
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1",
+		}},
+	}
+	pos := primaryPosition(t)
+	options := &binlogdatapb.VStreamOptions{
+		TablesToCopy: []string{"t1"},
+	}
+	uvs := newUVStreamer(ctx, engine, env.Dbcfgs.DbaWithDB(), env.SchemaEngine, pos,
+		nil, filter, testLocalVSchema, throttlerapp.VStreamerName,
+		func([]*binlogdatapb.VEvent) error { return nil }, options)
+	err := uvs.init()
+	require.NoError(t, err)
+	require.Empty(t, uvs.plans, "Should not build table plans when startPos is set")
 }

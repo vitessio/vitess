@@ -134,7 +134,7 @@ jobs:
       - name: Install goimports
         if: (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.visitor == 'true')
         run: |
-          go install golang.org/x/tools/cmd/goimports@latest
+          go install golang.org/x/tools/cmd/goimports@034e59c473362f8f2be47694d98fd3f12a1ad497 # v0.39.0
 
       - name: Run goimports
         if: steps.changes.outputs.go_files == 'true'
@@ -186,21 +186,15 @@ jobs:
           git status
           test -z "$(git diff-index --name-only HEAD --)" || exit 1
 
-      - name: Install golangci-lint
-        if: steps.changes.outputs.go_files == 'true'
-        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.0.2
-
-      - name: Clean Env
-        if: steps.changes.outputs.go_files == 'true'
-        run: $(go env GOPATH)/bin/golangci-lint cache clean
-
-      - name: Print linter version
-        if: steps.changes.outputs.go_files == 'true'
-        run: $(go env GOPATH)/bin/golangci-lint --version
-
       - name: Run golangci-lint
         if: steps.changes.outputs.go_files == 'true'
-        run: $(go env GOPATH)/bin/golangci-lint run go/... --timeout 10m || exit 1
+        uses: golangci/golangci-lint-action@v9
+        with:
+          args: --timeout 10m
+          install-mode: "goinstall"
+          skip-cache: true
+          working-directory: go
+          version: v2.1.6
 
       - name: Run go mod tidy
         if: steps.changes.outputs.go_files == 'true'

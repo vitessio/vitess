@@ -320,137 +320,118 @@ func TestPopulateTable(t *testing.T) {
 	validateTableDoesNotExist(t, "no_such_table")
 }
 
-func generateRenameStatement(newFormat bool, fromTableName string, state schema.TableGCState, tm time.Time) (statement string, toTableName string, err error) {
-	if newFormat {
-		return schema.GenerateRenameStatement(fromTableName, state, tm)
-	}
-	return schema.GenerateRenameStatementOldFormat(fromTableName, state, tm)
+func generateRenameStatement(fromTableName string, state schema.TableGCState, tm time.Time) (statement string, toTableName string, err error) {
+	return schema.GenerateRenameStatement(fromTableName, state, tm)
 }
 
 func TestHold(t *testing.T) {
-	for _, newNameFormat := range []bool{false, true} {
-		t.Run(fmt.Sprintf("new format=%t", newNameFormat), func(t *testing.T) {
-			populateTable(t)
-			query, tableName, err := generateRenameStatement(newNameFormat, "t1", schema.HoldTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
-			assert.NoError(t, err)
+	populateTable(t)
+	query, tableName, err := generateRenameStatement("t1", schema.HoldTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
+	assert.NoError(t, err)
 
-			_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
-			assert.NoError(t, err)
+	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+	assert.NoError(t, err)
 
-			validateTableDoesNotExist(t, "t1")
-			validateTableExists(t, tableName)
+	validateTableDoesNotExist(t, "t1")
+	validateTableExists(t, tableName)
 
-			time.Sleep(tableTransitionExpiration / 2)
-			{
-				// Table was created with +10s timestamp, so it should still exist
-				validateTableExists(t, tableName)
+	time.Sleep(tableTransitionExpiration / 2)
+	{
+		// Table was created with +10s timestamp, so it should still exist
+		validateTableExists(t, tableName)
 
-				checkTableRows(t, tableName, 1024)
-			}
+		checkTableRows(t, tableName, 1024)
+	}
 
-			time.Sleep(tableTransitionExpiration)
-			// We're now both beyond table's timestamp as well as a tableGC interval
-			validateTableDoesNotExist(t, tableName)
-			if fastDropTable {
-				validateAnyState(t, -1, schema.DropTableGCState, schema.TableDroppedGCState)
-			} else {
-				validateAnyState(t, -1, schema.PurgeTableGCState, schema.EvacTableGCState, schema.DropTableGCState, schema.TableDroppedGCState)
-			}
-		})
+	time.Sleep(tableTransitionExpiration)
+	// We're now both beyond table's timestamp as well as a tableGC interval
+	validateTableDoesNotExist(t, tableName)
+	if fastDropTable {
+		validateAnyState(t, -1, schema.DropTableGCState, schema.TableDroppedGCState)
+	} else {
+		validateAnyState(t, -1, schema.PurgeTableGCState, schema.EvacTableGCState, schema.DropTableGCState, schema.TableDroppedGCState)
 	}
 }
 
 func TestEvac(t *testing.T) {
-	for _, newNameFormat := range []bool{false, true} {
-		t.Run(fmt.Sprintf("new format=%t", newNameFormat), func(t *testing.T) {
-			var tableName string
-			t.Run("setting up EVAC table", func(t *testing.T) {
-				populateTable(t)
-				var query string
-				var err error
-				query, tableName, err = generateRenameStatement(newNameFormat, "t1", schema.EvacTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
-				assert.NoError(t, err)
+	var tableName string
+	t.Run("setting up EVAC table", func(t *testing.T) {
+		populateTable(t)
+		var query string
+		var err error
+		query, tableName, err = generateRenameStatement("t1", schema.EvacTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
+		assert.NoError(t, err)
 
-				_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
-				assert.NoError(t, err)
+		_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+		assert.NoError(t, err)
 
-				validateTableDoesNotExist(t, "t1")
-			})
+		validateTableDoesNotExist(t, "t1")
+	})
 
-			t.Run("validating before expiration", func(t *testing.T) {
-				time.Sleep(tableTransitionExpiration / 2)
-				// Table was created with +10s timestamp, so it should still exist
-				if fastDropTable {
-					// EVAC state is skipped in mysql 8.0.23 and beyond
-					validateTableDoesNotExist(t, tableName)
-				} else {
-					validateTableExists(t, tableName)
-					checkTableRows(t, tableName, 1024)
-				}
-			})
+	t.Run("validating before expiration", func(t *testing.T) {
+		time.Sleep(tableTransitionExpiration / 2)
+		// Table was created with +10s timestamp, so it should still exist
+		if fastDropTable {
+			// EVAC state is skipped in mysql 8.0.23 and beyond
+			validateTableDoesNotExist(t, tableName)
+		} else {
+			validateTableExists(t, tableName)
+			checkTableRows(t, tableName, 1024)
+		}
+	})
 
-			t.Run("validating rows evacuated", func(t *testing.T) {
-				// We're now both beyond table's timestamp as well as a tableGC interval
-				validateTableDoesNotExist(t, tableName)
-				// Table should be renamed as _vt_DROP_... and then dropped!
-				validateAnyState(t, 0, schema.DropTableGCState, schema.TableDroppedGCState)
-			})
-		})
-	}
+	t.Run("validating rows evacuated", func(t *testing.T) {
+		// We're now both beyond table's timestamp as well as a tableGC interval
+		validateTableDoesNotExist(t, tableName)
+		// Table should be renamed as _vt_drp_... and then dropped!
+		validateAnyState(t, 0, schema.DropTableGCState, schema.TableDroppedGCState)
+	})
 }
 
 func TestDrop(t *testing.T) {
-	for _, newNameFormat := range []bool{false, true} {
-		t.Run(fmt.Sprintf("new format=%t", newNameFormat), func(t *testing.T) {
-			populateTable(t)
-			query, tableName, err := generateRenameStatement(newNameFormat, "t1", schema.DropTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
-			assert.NoError(t, err)
+	populateTable(t)
+	query, tableName, err := generateRenameStatement("t1", schema.DropTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
+	assert.NoError(t, err)
 
-			_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
-			assert.NoError(t, err)
+	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+	assert.NoError(t, err)
 
-			validateTableDoesNotExist(t, "t1")
+	validateTableDoesNotExist(t, "t1")
 
-			time.Sleep(tableTransitionExpiration)
-			time.Sleep(2 * gcCheckInterval)
-			// We're now both beyond table's timestamp as well as a tableGC interval
-			validateTableDoesNotExist(t, tableName)
-		})
-	}
+	time.Sleep(tableTransitionExpiration)
+	time.Sleep(2 * gcCheckInterval)
+	// We're now both beyond table's timestamp as well as a tableGC interval
+	validateTableDoesNotExist(t, tableName)
 }
 
 func TestPurge(t *testing.T) {
-	for _, newNameFormat := range []bool{false, true} {
-		t.Run(fmt.Sprintf("new format=%t", newNameFormat), func(t *testing.T) {
-			populateTable(t)
-			query, tableName, err := generateRenameStatement(newNameFormat, "t1", schema.PurgeTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
-			require.NoError(t, err)
+	populateTable(t)
+	query, tableName, err := generateRenameStatement("t1", schema.PurgeTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
+	require.NoError(t, err)
 
-			_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
-			require.NoError(t, err)
+	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+	require.NoError(t, err)
 
-			validateTableDoesNotExist(t, "t1")
-			if !fastDropTable {
-				validateTableExists(t, tableName)
-				checkTableRows(t, tableName, 1024)
-			}
-			if !fastDropTable {
-				time.Sleep(5 * gcPurgeCheckInterval) // wait for table to be purged
-			}
-			validateTableDoesNotExist(t, tableName) // whether purged or not, table should at some point transition to next state
-			if fastDropTable {
-				// if MySQL supports fast DROP TABLE, TableGC completely skips the PURGE state. Rows are not purged.
-				validateAnyState(t, 1024, schema.DropTableGCState, schema.TableDroppedGCState)
-			} else {
-				validateAnyState(t, 0, schema.EvacTableGCState, schema.DropTableGCState, schema.TableDroppedGCState)
-			}
-		})
+	validateTableDoesNotExist(t, "t1")
+	if !fastDropTable {
+		validateTableExists(t, tableName)
+		checkTableRows(t, tableName, 1024)
+	}
+	if !fastDropTable {
+		time.Sleep(5 * gcPurgeCheckInterval) // wait for table to be purged
+	}
+	validateTableDoesNotExist(t, tableName) // whether purged or not, table should at some point transition to next state
+	if fastDropTable {
+		// if MySQL supports fast DROP TABLE, TableGC completely skips the PURGE state. Rows are not purged.
+		validateAnyState(t, 1024, schema.DropTableGCState, schema.TableDroppedGCState)
+	} else {
+		validateAnyState(t, 0, schema.EvacTableGCState, schema.DropTableGCState, schema.TableDroppedGCState)
 	}
 }
 
 func TestPurgeView(t *testing.T) {
 	populateTable(t)
-	query, tableName, err := generateRenameStatement(true, "v1", schema.PurgeTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
+	query, tableName, err := generateRenameStatement("v1", schema.PurgeTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
 	require.NoError(t, err)
 
 	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)

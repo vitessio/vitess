@@ -460,9 +460,13 @@ func (pool *ConnPool[C]) pop(stack *connStack[C]) *Pooled[C] {
 	// to expire this connection (even if it's still visible to them), so it's
 	// safe to return it
 	for conn, ok := stack.Pop(); ok; conn, ok = stack.Pop() {
-		if conn.timeUsed.borrow() {
-			return conn
+		if !conn.timeUsed.borrow() {
+			// Ignore the connection that couldn't be borrowed;
+			// it's being closed by the idle worker and replaced by a new connection.
+			continue
 		}
+
+		return conn
 	}
 	return nil
 }
@@ -777,23 +781,74 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 	mono := monotonicFromTime(now)
 
 	closeInStack := func(s *connStack[C]) {
-		// Do a read-only best effort iteration of all the connection in this
-		// stack and atomically attempt to mark them as expired.
-		// Any connections that are marked as expired are _not_ removed from
-		// the stack; it's generally unsafe to remove nodes from the stack
-		// besides the head. When clients pop from the stack, they'll immediately
-		// notice the expired connection and ignore it.
-		// see: timestamp.expired
-		for conn := s.Peek(); conn != nil; conn = conn.next.Load() {
+		conn, ok := s.Pop()
+		if !ok {
+			// Early return to skip allocating slices when the stack is empty
+			return
+		}
+
+		activeConnections := pool.Active()
+
+		// Only expire up to ~half of the active connections at a time. This should
+		// prevent us from closing too many connections in one go which could lead to
+		// a lot of `.Get` calls being added to the waitlist if there's a sudden spike
+		// coming in _after_ connections were popped off the stack but _before_ being
+		// returned back to the pool. This is unlikely to happen, but better safe than sorry.
+		//
+		// We always expire at least one connection per stack per iteration to ensure
+		// that idle connections are eventually closed even in small pools.
+		//
+		// We will expire any additional connections in the next iteration of the idle closer.
+		expiredConnections := make([]*Pooled[C], 0, max(activeConnections/2, 1))
+		validConnections := make([]*Pooled[C], 0, activeConnections)
+
+		// Pop out connections from the stack until we get a `nil` connection
+		for ok {
 			if conn.timeUsed.expired(mono, timeout) {
-				pool.Metrics.idleClosed.Add(1)
-				conn.Close()
-				// Using context.Background() is fine since MySQL connection already enforces
-				// a connect timeout via the `db-connect-timeout-ms` config param.
-				if err := pool.connReopen(context.Background(), conn, mono); err != nil {
-					pool.closedConn()
+				expiredConnections = append(expiredConnections, conn)
+
+				if len(expiredConnections) == cap(expiredConnections) {
+					// We have collected enough connections for this iteration to expire
+					break
 				}
+			} else {
+				validConnections = append(validConnections, conn)
 			}
+
+			conn, ok = s.Pop()
+		}
+
+		// Return all the valid connections back to waiters or the stack
+		//
+		// The order here is not important - because we can't guarantee to
+		// restore the order we got the connections out of the stack anyway.
+		//
+		// If we return the connections in the order popped off the stack:
+		//   * waiters will get the newest connection first
+		//   * stack will have the oldest connections at the top of the stack.
+		//
+		// If we return the connections in reverse order:
+		//  * waiters will get the oldest connection first
+		//  * stack will have the newest connections at the top of the stack.
+		//
+		// Neither of these is better or worse than the other.
+		for _, conn := range validConnections {
+			pool.tryReturnConn(conn)
+		}
+
+		// Close all the expired connections and open new ones to replace them
+		for _, conn := range expiredConnections {
+			pool.Metrics.idleClosed.Add(1)
+
+			conn.Close()
+
+			err := pool.connReopen(context.Background(), conn, mono)
+			if err != nil {
+				pool.closedConn()
+				continue
+			}
+
+			pool.tryReturnConn(conn)
 		}
 	}
 

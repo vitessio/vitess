@@ -224,14 +224,20 @@ func TestSeq(t *testing.T) {
 	require.Nil(t, err)
 	defer conn.Close()
 
-	//Initialize seq table
-	utils.Exec(t, conn, "insert into sequence_test_seq(id, next_id, cache) values(0,1,10)")
+	// Initialize seq table if needed
+	qr := utils.Exec(t, conn, "select count(*) from sequence_test_seq")
+	require.Len(t, qr.Rows, 1)
+	cnt, err := qr.Rows[0][0].ToInt()
+	require.NoError(t, err)
+	if cnt == 0 {
+		utils.Exec(t, conn, "insert into sequence_test_seq(id, next_id, cache) values(0,1,10)")
+	}
 
 	//Insert 4 values in the main table
 	utils.Exec(t, conn, "insert into sequence_test(val) values('a'), ('b') ,('c'), ('d')")
 
 	// Test select calls to main table and verify expected id.
-	qr := utils.Exec(t, conn, "select id, val  from sequence_test where id=4")
+	qr = utils.Exec(t, conn, "select id, val  from sequence_test where id=4")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(4) VARCHAR("d")]]`; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
@@ -312,4 +318,138 @@ func TestInsertAllDefaults(t *testing.T) {
 	// inserting into a table that does not have default values for all columns fails
 	_, err = conn.ExecuteFetch("insert into lookup_vindex () values ()", 0, false)
 	require.Error(t, err)
+}
+
+// TestLastInsertIDWithSequence tests that LAST_INSERT_ID() returns the correct
+// sequence-generated value after an INSERT in both sharded and unsharded keyspaces.
+// This is a regression test for https://github.com/vitessio/vitess/issues/18946
+func TestLastInsertIDWithSequence(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("unsharded keyspace", func(t *testing.T) {
+		vtParams := mysql.ConnParams{
+			Host:   "localhost",
+			Port:   clusterInstance.VtgateMySQLPort,
+			DbName: unshardedKs,
+		}
+		conn, err := mysql.Connect(ctx, &vtParams)
+		require.NoError(t, err)
+		defer conn.Close()
+
+		// Initialize seq table if needed
+		qr := utils.Exec(t, conn, "select count(*) from sequence_test_seq")
+		require.Len(t, qr.Rows, 1)
+		cnt, err := qr.Rows[0][0].ToInt()
+		require.NoError(t, err)
+		if cnt == 0 {
+			utils.Exec(t, conn, "insert into sequence_test_seq(id, next_id, cache) values(0,1,10)")
+		}
+
+		// Clean up (don't reinitialize sequence - vtgate caches values in memory)
+		utils.Exec(t, conn, "delete from sequence_test")
+
+		// Insert a row - the sequence should generate an ID
+		utils.Exec(t, conn, "insert into sequence_test(val) values('test1')")
+
+		// LAST_INSERT_ID() should return a non-zero sequence-generated value
+		qr = utils.Exec(t, conn, "select LAST_INSERT_ID()")
+		require.Len(t, qr.Rows, 1, "should have one row")
+		firstID, err := qr.Rows[0][0].ToInt()
+		require.NoError(t, err)
+		assert.NotEqual(t, 0, firstID, "LAST_INSERT_ID() should not be 0 after INSERT with sequence")
+
+		// Insert another row
+		utils.Exec(t, conn, "insert into sequence_test(val) values('test2')")
+
+		// LAST_INSERT_ID() should return the new sequence value
+		qr = utils.Exec(t, conn, "select LAST_INSERT_ID()")
+		require.Len(t, qr.Rows, 1, "should have one row")
+		secondID, err := qr.Rows[0][0].ToInt()
+		require.NoError(t, err)
+		assert.Greater(t, secondID, firstID, "second LAST_INSERT_ID() value from sequence should be greater than the first")
+
+		// Verify the inserted rows have the expected LAST_INSERT_ID values.
+		qr = utils.Exec(t, conn, "select id from sequence_test where val = 'test1'")
+		require.Len(t, qr.Rows, 1, "should have one row")
+		firstInsertedID, err := qr.Rows[0][0].ToInt()
+		require.NoError(t, err)
+		assert.Equal(t, firstInsertedID, firstID, "first inserted row should have the first LAST_INSERT_ID value")
+		qr = utils.Exec(t, conn, "select id from sequence_test where val = 'test2'")
+		require.Len(t, qr.Rows, 1, "should have one row")
+		secondInsertedID, err := qr.Rows[0][0].ToInt()
+		require.NoError(t, err)
+		assert.Equal(t, secondInsertedID, secondID, "second inserted row should have the secnd LAST_INSERT_ID value")
+	})
+
+	t.Run("sharded keyspace", func(t *testing.T) {
+		vtParams := mysql.ConnParams{
+			Host:   "localhost",
+			Port:   clusterInstance.VtgateMySQLPort,
+			DbName: shardedKeyspaceName,
+		}
+		conn, err := mysql.Connect(ctx, &vtParams)
+		require.NoError(t, err)
+		defer conn.Close()
+
+		// Clean up
+		utils.Exec(t, conn, "delete from allDefaults")
+
+		// Get the current next_id from the sequence
+		qr := utils.Exec(t, conn, "select next_id from uks.id_seq")
+		require.Len(t, qr.Rows, 1, "should have one row in id_seq")
+
+		// Insert a row - the sequence should generate an ID
+		utils.Exec(t, conn, "insert into allDefaults(foo) values('bar')")
+
+		// LAST_INSERT_ID() should return the sequence-generated value
+		qr = utils.Exec(t, conn, "select LAST_INSERT_ID()")
+		require.Len(t, qr.Rows, 1, "should have one row")
+		lastInsertID, err := qr.Rows[0][0].ToInt()
+		require.NoError(t, err)
+		assert.NotEqual(t, 0, lastInsertID, "LAST_INSERT_ID() should not be 0 after INSERT with sequence in sharded keyspace")
+
+		// Verify the inserted row has the same ID
+		qr = utils.Exec(t, conn, fmt.Sprintf("select id from allDefaults where id = %d", +lastInsertID))
+		require.Len(t, qr.Rows, 1, "should be able to find the row by the LAST_INSERT_ID value")
+		lastInsertedID, err := qr.Rows[0][0].ToInt()
+		require.NoError(t, err)
+		assert.Equal(t, lastInsertID, lastInsertedID)
+	})
+
+	t.Run("within transaction", func(t *testing.T) {
+		vtParams := mysql.ConnParams{
+			Host:   "localhost",
+			Port:   clusterInstance.VtgateMySQLPort,
+			DbName: unshardedKs,
+		}
+		conn, err := mysql.Connect(ctx, &vtParams)
+		require.NoError(t, err)
+		defer conn.Close()
+
+		// Note: We don't reinitialize the sequence here because vtgate caches
+		// sequence values in memory. Instead, we just verify the behavior
+		// works correctly within a transaction regardless of the actual value.
+
+		// Start a transaction
+		utils.Exec(t, conn, "begin")
+
+		// Insert a row
+		utils.Exec(t, conn, "insert into sequence_test(val) values('txtest')")
+
+		// LAST_INSERT_ID() should work within the transaction and return non-zero
+		qr := utils.Exec(t, conn, "select LAST_INSERT_ID()")
+		require.Len(t, qr.Rows, 1, "should have one row")
+		lastInsertIDInTx, err := qr.Rows[0][0].ToInt()
+		require.NoError(t, err)
+		assert.NotEqual(t, 0, lastInsertIDInTx, "LAST_INSERT_ID() should not be 0 within transaction")
+
+		utils.Exec(t, conn, "commit")
+
+		// LAST_INSERT_ID() should still return the same value after commit
+		qr = utils.Exec(t, conn, "select LAST_INSERT_ID()")
+		require.Len(t, qr.Rows, 1, "should have one row")
+		lastInsertIDAfterCommit, err := qr.Rows[0][0].ToInt()
+		require.NoError(t, err)
+		assert.Equal(t, lastInsertIDInTx, lastInsertIDAfterCommit, "LAST_INSERT_ID() should persist after commit")
+	})
 }

@@ -5780,6 +5780,64 @@ func VisitTableStatement(in TableStatement, f Visit) error {
 		return nil
 	}
 }
+func VisitWindowFunc(in WindowFunc, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *ArgumentLessWindowExpr:
+		return VisitRefOfArgumentLessWindowExpr(in, f)
+	case *Avg:
+		return VisitRefOfAvg(in, f)
+	case *BitAnd:
+		return VisitRefOfBitAnd(in, f)
+	case *BitOr:
+		return VisitRefOfBitOr(in, f)
+	case *BitXor:
+		return VisitRefOfBitXor(in, f)
+	case *Count:
+		return VisitRefOfCount(in, f)
+	case *CountStar:
+		return VisitRefOfCountStar(in, f)
+	case *FirstOrLastValueExpr:
+		return VisitRefOfFirstOrLastValueExpr(in, f)
+	case *JSONArrayAgg:
+		return VisitRefOfJSONArrayAgg(in, f)
+	case *JSONObjectAgg:
+		return VisitRefOfJSONObjectAgg(in, f)
+	case *LagLeadExpr:
+		return VisitRefOfLagLeadExpr(in, f)
+	case *Max:
+		return VisitRefOfMax(in, f)
+	case *Min:
+		return VisitRefOfMin(in, f)
+	case *NTHValueExpr:
+		return VisitRefOfNTHValueExpr(in, f)
+	case *NtileExpr:
+		return VisitRefOfNtileExpr(in, f)
+	case *Std:
+		return VisitRefOfStd(in, f)
+	case *StdDev:
+		return VisitRefOfStdDev(in, f)
+	case *StdPop:
+		return VisitRefOfStdPop(in, f)
+	case *StdSamp:
+		return VisitRefOfStdSamp(in, f)
+	case *Sum:
+		return VisitRefOfSum(in, f)
+	case *VarPop:
+		return VisitRefOfVarPop(in, f)
+	case *VarSamp:
+		return VisitRefOfVarSamp(in, f)
+	case *Variance:
+		return VisitRefOfVariance(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
+	default:
+		// this should never happen
+		return nil
+	}
+}
 func VisitAlgorithmValue(in AlgorithmValue, f Visit) error {
 	_, err := f(in)
 	return err

@@ -99,6 +99,7 @@ type LocalProcessCluster struct {
 	// major version numbers
 	VtTabletMajorVersion int
 	VtctlMajorVersion    int
+	VtGateMajorVersion   int
 
 	// standalone executable
 	VtctldClientProcess VtctldClientProcess
@@ -453,6 +454,7 @@ func (cluster *LocalProcessCluster) AddShard(keyspaceName string, shardName stri
 			HTTPPort:  cluster.GetAndReservePort(),
 			GrpcPort:  cluster.GetAndReservePort(),
 			MySQLPort: cluster.GetAndReservePort(),
+			Cell:      cluster.Cell,
 			Alias:     fmt.Sprintf("%s-%010d", cluster.Cell, tabletUID),
 		}
 		if i == 0 { // Make the first one as primary
@@ -835,6 +837,10 @@ func (cluster *LocalProcessCluster) populateVersionInfo() error {
 		return err
 	}
 	cluster.VtctlMajorVersion, err = GetMajorVersion("vtctl")
+	if err != nil {
+		return err
+	}
+	cluster.VtGateMajorVersion, err = GetMajorVersion("vtgate")
 	return err
 }
 

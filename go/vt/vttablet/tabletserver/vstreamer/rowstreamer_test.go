@@ -546,7 +546,7 @@ func TestStreamRowsCancel(t *testing.T) {
 		cancel()
 		return nil
 	}, &options)
-	if got, want := err.Error(), "stream ended: context canceled"; got != want {
+	if got, want := err.Error(), "row stream ended: context canceled"; got != want {
 		t.Errorf("err: %v, want %s", err, want)
 	}
 }

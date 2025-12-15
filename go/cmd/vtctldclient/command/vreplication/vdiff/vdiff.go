@@ -439,7 +439,7 @@ HasMismatch:  {{.HasMismatch}}
 StartedAt:    {{.StartedAt}}
 {{if (eq .State "started")}}Progress:     {{printf "%.2f" .Progress.Percentage}}%{{if .Progress.ETA}}, ETA: {{.Progress.ETA}}{{end}}{{end}}
 {{if .CompletedAt}}CompletedAt:  {{.CompletedAt}}{{end}}
-{{range $table := .TableSummaryMap}} 
+{{range $table := .SortedTableSummaries}} 
 Table {{$table.TableName}}:
 	State:            {{$table.State}}
 	ProcessedRows:    {{$table.RowsCompared}}

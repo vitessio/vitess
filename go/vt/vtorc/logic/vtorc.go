@@ -54,8 +54,6 @@ var (
 
 	discoveryInstanceTimingsActions = []string{"Backend", "Instance", "Other"}
 	discoveryInstanceTimings        = stats.NewTimings("DiscoveryInstanceTimings", "Timings for instance discovery actions", "Action", discoveryInstanceTimingsActions...)
-	// TODO: deprecate in v24
-	discoverInstanceTimings = stats.NewTimings("DiscoverInstanceTimings", "Timings for instance discovery actions", "Action", discoveryInstanceTimingsActions...)
 )
 
 var recentDiscoveryOperationKeys *cache.Cache
@@ -185,23 +183,20 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 	instanceLatency := latency.Elapsed("instance")
 	otherLatency := totalLatency - (backendLatency + instanceLatency)
 
-	// TODO: deprecate in v24
-	discoverInstanceTimings.Add("Backend", backendLatency)
-	discoverInstanceTimings.Add("Instance", instanceLatency)
-	discoverInstanceTimings.Add("Other", otherLatency)
-
 	discoveryInstanceTimings.Add("Backend", backendLatency)
 	discoveryInstanceTimings.Add("Instance", instanceLatency)
 	discoveryInstanceTimings.Add("Other", otherLatency)
 
-	if forceDiscovery {
-		log.Infof("Force discovered - %+v, err - %v", instance, err)
+	if err != nil {
+		log.Errorf("Failed to discover %s (force: %t), err: %v", tabletAlias, forceDiscovery, err)
+	} else {
+		log.Infof("Discovered %s (force: %t): %+v", tabletAlias, forceDiscovery, instance)
 	}
 
 	if instance == nil {
 		failedDiscoveriesCounter.Add(1)
 		if util.ClearToLog("discoverInstance", tabletAlias) {
-			log.Warningf(" DiscoverInstance(%+v) instance is nil in %.3fs (Backend: %.3fs, Instance: %.3fs), error=%+v",
+			log.Warningf("DiscoverInstance(%+v) instance is nil in %.3fs (Backend: %.3fs, Instance: %.3fs), error=%+v",
 				tabletAlias,
 				totalLatency.Seconds(),
 				backendLatency.Seconds(),
@@ -243,7 +238,6 @@ func onHealthTick() {
 // ContinuousDiscovery starts an asynchronous infinite discovery process where instances are
 // periodically investigated and their status captured, and long since unseen instances are
 // purged and forgotten.
-// nolint SA1015: using time.Tick leaks the underlying ticker
 func ContinuousDiscovery() {
 	log.Infof("continuous discovery: setting up")
 	recentDiscoveryOperationKeys = cache.New(config.GetInstancePollTime(), time.Second)
@@ -283,6 +277,7 @@ func ContinuousDiscovery() {
 			}()
 		case <-caretakingTick:
 			// Various periodic internal maintenance tasks
+			//nolint:errcheck
 			go func() {
 				go inst.ForgetLongUnseenInstances()
 				go inst.ExpireAudit()
@@ -293,7 +288,7 @@ func ContinuousDiscovery() {
 			}()
 		case <-recoveryTick:
 			go func() {
-				go inst.ExpireInstanceAnalysisChangelog()
+				go inst.ExpireInstanceAnalysisChangelog() //nolint:errcheck
 
 				go func() {
 					// This function is non re-entrant (it can only be running once at any point in time)
@@ -306,9 +301,7 @@ func ContinuousDiscovery() {
 				}()
 			}()
 		case <-snapshotTopologiesTick:
-			go func() {
-				go inst.SnapshotTopologies()
-			}()
+			go inst.SnapshotTopologies() //nolint:errcheck
 		case <-tabletTopoTick:
 			ctx, cancel := context.WithTimeout(context.Background(), config.GetTopoInformationRefreshDuration())
 			if err := refreshAllInformation(ctx); err != nil {

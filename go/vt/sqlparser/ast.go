@@ -3265,6 +3265,27 @@ type (
 		AggrName() string
 	}
 
+	// WindowFunc represents a function that can have an OVER clause.
+	// This includes both:
+	// 1. Aggregate functions used as window functions (e.g., SUM, AVG, COUNT).
+	// 2. Non-aggregate window functions (e.g., RANK, LAG, NTILE).
+	//
+	// A window function performs an aggregate-like operation on a set of query rows.
+	// However, whereas an aggregate operation groups query rows into a single result row,
+	// a window function produces a result for each query row:
+	//   function_name([val, ...]) OVER window_name_or_specification
+	//
+	// References:
+	// - https://dev.mysql.com/doc/refman/8.0/en/window-functions-usage.html
+	// - https://dev.mysql.com/doc/refman/8.0/en/window-function-descriptions.html
+	WindowFunc interface {
+		Expr
+		GetOverClause() *OverClause
+		WindowFuncName() string
+		GetArgs() []Expr
+		GetArg() Expr
+	}
+
 	DistinctableAggr interface {
 		IsDistinct() bool
 		SetDistinct(bool)
@@ -3772,6 +3793,11 @@ func (variance *Variance) GetArg() Expr         { return variance.Arg }
 func (av *AnyValue) GetArg() Expr               { return av.Arg }
 func (jaa *JSONArrayAgg) GetArg() Expr          { return jaa.Expr }
 func (joa *JSONObjectAgg) GetArg() Expr         { return joa.Key }
+func (*ArgumentLessWindowExpr) GetArg() Expr    { return nil }
+func (node *FirstOrLastValueExpr) GetArg() Expr { return node.Expr }
+func (node *NtileExpr) GetArg() Expr            { return node.N }
+func (node *NTHValueExpr) GetArg() Expr         { return node.Expr }
+func (node *LagLeadExpr) GetArg() Expr          { return node.Expr }
 
 func (sum *Sum) GetArgs() []Expr                   { return []Expr{sum.Arg} }
 func (min *Min) GetArgs() []Expr                   { return []Expr{min.Arg} }
@@ -3886,6 +3912,111 @@ func (*Variance) AggrName() string        { return "variance" }
 func (*AnyValue) AggrName() string        { return "any_value" }
 func (*JSONArrayAgg) AggrName() string    { return "json_arrayagg" }
 func (*JSONObjectAgg) AggrName() string   { return "json_objectagg" }
+
+func (node *Count) GetOverClause() *OverClause                  { return node.OverClause }
+func (node *CountStar) GetOverClause() *OverClause              { return node.OverClause }
+func (node *Avg) GetOverClause() *OverClause                    { return node.OverClause }
+func (node *Max) GetOverClause() *OverClause                    { return node.OverClause }
+func (node *Min) GetOverClause() *OverClause                    { return node.OverClause }
+func (node *Sum) GetOverClause() *OverClause                    { return node.OverClause }
+func (node *BitAnd) GetOverClause() *OverClause                 { return node.OverClause }
+func (node *BitOr) GetOverClause() *OverClause                  { return node.OverClause }
+func (node *BitXor) GetOverClause() *OverClause                 { return node.OverClause }
+func (node *Std) GetOverClause() *OverClause                    { return node.OverClause }
+func (node *StdDev) GetOverClause() *OverClause                 { return node.OverClause }
+func (node *StdPop) GetOverClause() *OverClause                 { return node.OverClause }
+func (node *StdSamp) GetOverClause() *OverClause                { return node.OverClause }
+func (node *VarPop) GetOverClause() *OverClause                 { return node.OverClause }
+func (node *VarSamp) GetOverClause() *OverClause                { return node.OverClause }
+func (node *Variance) GetOverClause() *OverClause               { return node.OverClause }
+func (node *ArgumentLessWindowExpr) GetOverClause() *OverClause { return node.OverClause }
+func (node *FirstOrLastValueExpr) GetOverClause() *OverClause   { return node.OverClause }
+func (node *NtileExpr) GetOverClause() *OverClause              { return node.OverClause }
+func (node *NTHValueExpr) GetOverClause() *OverClause           { return node.OverClause }
+func (node *LagLeadExpr) GetOverClause() *OverClause            { return node.OverClause }
+func (node *JSONArrayAgg) GetOverClause() *OverClause           { return node.OverClause }
+func (node *JSONObjectAgg) GetOverClause() *OverClause          { return node.OverClause }
+
+func (node *Count) WindowFuncName() string         { return node.AggrName() }
+func (node *CountStar) WindowFuncName() string     { return node.AggrName() }
+func (node *Avg) WindowFuncName() string           { return node.AggrName() }
+func (node *Max) WindowFuncName() string           { return node.AggrName() }
+func (node *Min) WindowFuncName() string           { return node.AggrName() }
+func (node *Sum) WindowFuncName() string           { return node.AggrName() }
+func (node *BitAnd) WindowFuncName() string        { return node.AggrName() }
+func (node *BitOr) WindowFuncName() string         { return node.AggrName() }
+func (node *BitXor) WindowFuncName() string        { return node.AggrName() }
+func (node *Std) WindowFuncName() string           { return node.AggrName() }
+func (node *StdDev) WindowFuncName() string        { return node.AggrName() }
+func (node *StdPop) WindowFuncName() string        { return node.AggrName() }
+func (node *StdSamp) WindowFuncName() string       { return node.AggrName() }
+func (node *VarPop) WindowFuncName() string        { return node.AggrName() }
+func (node *VarSamp) WindowFuncName() string       { return node.AggrName() }
+func (node *Variance) WindowFuncName() string      { return node.AggrName() }
+func (node *JSONArrayAgg) WindowFuncName() string  { return node.AggrName() }
+func (node *JSONObjectAgg) WindowFuncName() string { return node.AggrName() }
+
+func (node *ArgumentLessWindowExpr) WindowFuncName() string {
+	switch node.Type {
+	case CumeDistExprType:
+		return "cume_dist"
+	case DenseRankExprType:
+		return "dense_rank"
+	case PercentRankExprType:
+		return "percent_rank"
+	case RankExprType:
+		return "rank"
+	case RowNumberExprType:
+		return "row_number"
+	}
+	return ""
+}
+
+func (node *FirstOrLastValueExpr) WindowFuncName() string {
+	switch node.Type {
+	case FirstValueExprType:
+		return "first_value"
+	case LastValueExprType:
+		return "last_value"
+	}
+	return ""
+}
+
+func (node *NtileExpr) WindowFuncName() string {
+	return "ntile"
+}
+
+func (node *NTHValueExpr) WindowFuncName() string {
+	return "nth_value"
+}
+
+func (node *LagLeadExpr) WindowFuncName() string {
+	switch node.Type {
+	case LagExprType:
+		return "lag"
+	case LeadExprType:
+		return "lead"
+	}
+	return ""
+}
+
+func (node *ArgumentLessWindowExpr) GetArgs() []Expr { return nil }
+func (node *FirstOrLastValueExpr) GetArgs() []Expr   { return []Expr{node.Expr} }
+func (node *NtileExpr) GetArgs() []Expr              { return []Expr{node.N} }
+func (node *NTHValueExpr) GetArgs() []Expr           { return []Expr{node.Expr, node.N} }
+func (node *LagLeadExpr) GetArgs() []Expr {
+	var args []Expr
+	if node.Expr != nil {
+		args = append(args, node.Expr)
+	}
+	if node.N != nil {
+		args = append(args, node.N)
+	}
+	if node.Default != nil {
+		args = append(args, node.Default)
+	}
+	return args
+}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.

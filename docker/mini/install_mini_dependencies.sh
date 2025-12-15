@@ -8,7 +8,7 @@
 set -euo pipefail
 
 # Install etcd
-ETCD_VER=v3.5.17
+ETCD_VER=v3.5.25
 DOWNLOAD_URL=https://storage.googleapis.com/etcd
 
 curl -k -L ${DOWNLOAD_URL}/${ETCD_VER}/etcd-${ETCD_VER}-linux-amd64.tar.gz -o /tmp/etcd-${ETCD_VER}-linux-amd64.tar.gz
