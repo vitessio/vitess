@@ -128,7 +128,7 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, session queryservice.S
 			BindVariables: bindVars,
 		},
 		TransactionId: transactionID,
-		Options:       session.GetOptions(),
+		Options:       getOptions(session),
 		ReservedId:    reservedID,
 	}
 	er, err := conn.c.Execute(ctx, req)
@@ -166,7 +166,7 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, session queryser
 				Sql:           query,
 				BindVariables: bindVars,
 			},
-			Options:       session.GetOptions(),
+			Options:       getOptions(session),
 			TransactionId: transactionID,
 			ReservedId:    reservedID,
 		}
@@ -209,7 +209,7 @@ func (conn *gRPCQueryClient) Begin(ctx context.Context, session queryservice.Ses
 		Target:            target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
-		Options:           session.GetOptions(),
+		Options:           getOptions(session),
 	}
 	br, err := conn.c.Begin(ctx, req)
 	if err != nil {
@@ -480,7 +480,7 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, session queryserv
 			BindVariables: bindVars,
 		},
 		ReservedId: reservedID,
-		Options:    session.GetOptions(),
+		Options:    getOptions(session),
 	}
 	reply, err := conn.c.BeginExecute(ctx, req)
 	if err != nil {
@@ -524,7 +524,7 @@ func (conn *gRPCQueryClient) BeginStreamExecute(ctx context.Context, session que
 				BindVariables: bindVars,
 			},
 			ReservedId: reservedID,
-			Options:    session.GetOptions(),
+			Options:    getOptions(session),
 		}
 		stream, err := conn.c.BeginStreamExecute(ctx, req)
 		if err != nil {
@@ -872,7 +872,7 @@ func (conn *gRPCQueryClient) ReserveBeginExecute(ctx context.Context, session qu
 		Target:            target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
-		Options:           session.GetOptions(),
+		Options:           getOptions(session),
 		PreQueries:        preQueries,
 		PostBeginQueries:  postBeginQueries,
 		Query: &querypb.BoundQuery{
@@ -917,7 +917,7 @@ func (conn *gRPCQueryClient) ReserveBeginStreamExecute(ctx context.Context, sess
 			Target:            target,
 			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
-			Options:           session.GetOptions(),
+			Options:           getOptions(session),
 			PreQueries:        preQueries,
 			PostBeginQueries:  postBeginQueries,
 			Query: &querypb.BoundQuery{
@@ -993,7 +993,7 @@ func (conn *gRPCQueryClient) ReserveExecute(ctx context.Context, session queryse
 			BindVariables: bindVariables,
 		},
 		TransactionId: transactionID,
-		Options:       session.GetOptions(),
+		Options:       getOptions(session),
 		PreQueries:    preQueries,
 	}
 	reply, err := conn.c.ReserveExecute(ctx, req)
@@ -1031,7 +1031,7 @@ func (conn *gRPCQueryClient) ReserveStreamExecute(ctx context.Context, session q
 			Target:            target,
 			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
-			Options:           session.GetOptions(),
+			Options:           getOptions(session),
 			PreQueries:        preQueries,
 			Query: &querypb.BoundQuery{
 				Sql:           sql,
@@ -1166,4 +1166,13 @@ func (conn *gRPCQueryClient) Close(ctx context.Context) error {
 // Tablet returns the rpc end point.
 func (conn *gRPCQueryClient) Tablet() *topodatapb.Tablet {
 	return conn.tablet
+}
+
+// getOptions safely extracts ExecuteOptions from a session, returning nil if session is nil.
+func getOptions(session queryservice.Session) *querypb.ExecuteOptions {
+	if session == nil {
+		return nil
+	}
+
+	return session.GetOptions()
 }

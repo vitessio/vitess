@@ -283,7 +283,7 @@ func (sbc *SandboxConn) Execute(ctx context.Context, session queryservice.Sessio
 		Sql:           query,
 		BindVariables: bv,
 	})
-	sbc.Options = append(sbc.Options, session.GetOptions())
+	sbc.Options = append(sbc.Options, getOptions(session))
 	if err := sbc.getError(); err != nil {
 		return nil, err
 	}
@@ -309,7 +309,7 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, session queryservice.
 		Sql:           query,
 		BindVariables: bv,
 	})
-	sbc.Options = append(sbc.Options, session.GetOptions())
+	sbc.Options = append(sbc.Options, getOptions(session))
 	err := sbc.getError()
 	if err != nil {
 		sbc.sExecMu.Unlock()
@@ -893,4 +893,13 @@ func (sbc *SandboxConn) panicIfNeeded() {
 	if sbc.panicThis != nil {
 		panic(sbc.panicThis)
 	}
+}
+
+// getOptions safely extracts ExecuteOptions from a session, returning nil if session is nil.
+func getOptions(session queryservice.Session) *querypb.ExecuteOptions {
+	if session == nil {
+		return nil
+	}
+
+	return session.GetOptions()
 }

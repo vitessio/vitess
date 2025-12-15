@@ -32,7 +32,6 @@ import (
 	"syscall"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtgate/executorcontext"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler"
 
 	"vitess.io/vitess/go/acl"
@@ -464,7 +463,7 @@ func (tsv *TabletServer) IsHealthy() error {
 	if topoproto.IsServingType(tsv.sm.Target().TabletType) {
 		_, err := tsv.Execute(
 			tabletenv.LocalContext(),
-			nilSession(),
+			nil,
 			nil,
 			"/* health */ select 1 from dual",
 			nil,
@@ -537,7 +536,7 @@ func (tsv *TabletServer) SchemaEngine() *schema.Engine {
 
 // Begin starts a new transaction. This is allowed only if the state is StateServing.
 func (tsv *TabletServer) Begin(ctx context.Context, session queryservice.Session, target *querypb.Target) (state queryservice.TransactionState, err error) {
-	return tsv.begin(ctx, target, nil, 0, nil, session.GetOptions())
+	return tsv.begin(ctx, target, nil, 0, nil, getOptions(session))
 }
 
 func (tsv *TabletServer) begin(
@@ -913,7 +912,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, session queryservice.Sessi
 		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] transactionID and reserveID must match if both are non-zero")
 	}
 
-	return tsv.execute(ctx, target, sql, bindVariables, transactionID, reservedID, nil, session.GetOptions())
+	return tsv.execute(ctx, target, sql, bindVariables, transactionID, reservedID, nil, getOptions(session))
 }
 
 func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
@@ -1015,7 +1014,7 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, session queryservice
 		return vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] transactionID and reserveID must match if both are non-zero")
 	}
 
-	return tsv.streamExecute(ctx, target, sql, bindVariables, transactionID, reservedID, nil, session.GetOptions(), callback)
+	return tsv.streamExecute(ctx, target, sql, bindVariables, transactionID, reservedID, nil, getOptions(session), callback)
 }
 
 func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
@@ -1079,9 +1078,11 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 
 // BeginExecute combines Begin and Execute.
 func (tsv *TabletServer) BeginExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64) (queryservice.TransactionState, *sqltypes.Result, error) {
+	options := getOptions(session)
+
 	// Disable hot row protection in case of reserve connection.
 	if tsv.enableHotRowProtection && reservedID == 0 {
-		txDone, err := tsv.beginWaitForSameRangeTransactions(ctx, target, session.GetOptions(), sql, bindVariables)
+		txDone, err := tsv.beginWaitForSameRangeTransactions(ctx, target, options, sql, bindVariables)
 		if err != nil {
 			return queryservice.TransactionState{}, nil, err
 		}
@@ -1090,7 +1091,7 @@ func (tsv *TabletServer) BeginExecute(ctx context.Context, session queryservice.
 		}
 	}
 
-	state, err := tsv.begin(ctx, target, postBeginQueries, reservedID, nil, session.GetOptions())
+	state, err := tsv.begin(ctx, target, postBeginQueries, reservedID, nil, options)
 	if err != nil {
 		return state, nil, err
 	}
@@ -1110,7 +1111,7 @@ func (tsv *TabletServer) BeginStreamExecute(
 	reservedID int64,
 	callback func(*sqltypes.Result) error,
 ) (queryservice.TransactionState, error) {
-	state, err := tsv.begin(ctx, target, postBeginQueries, reservedID, nil, session.GetOptions())
+	state, err := tsv.begin(ctx, target, postBeginQueries, reservedID, nil, getOptions(session))
 	if err != nil {
 		return state, err
 	}
@@ -1272,7 +1273,7 @@ func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, qu
 		return 0, err
 	}
 
-	state, err := tsv.Begin(ctx, nilSession(), target)
+	state, err := tsv.Begin(ctx, nil, target)
 	if err != nil {
 		return 0, err
 	}
@@ -1283,7 +1284,7 @@ func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, qu
 			tsv.Rollback(ctx, target, state.TransactionID)
 		}
 	}()
-	qr, err := tsv.Execute(ctx, nilSession(), target, query, bv, state.TransactionID, 0)
+	qr, err := tsv.Execute(ctx, nil, target, query, bv, state.TransactionID, 0)
 	if err != nil {
 		return 0, err
 	}
@@ -1337,7 +1338,8 @@ func (tsv *TabletServer) VStreamResults(ctx context.Context, target *querypb.Tar
 
 // ReserveBeginExecute implements the QueryService interface
 func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, settings []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable) (state queryservice.ReservedTransactionState, result *sqltypes.Result, err error) {
-	options := session.GetOptions()
+	options := getOptions(session)
+
 	state, result, err = tsv.beginExecuteWithSettings(ctx, target, settings, postBeginQueries, sql, bindVariables, options)
 	// If there is an error and the error message is about allowing query in reserved connection only,
 	// then we do not return an error from here and continue to use the reserved connection path.
@@ -1420,7 +1422,8 @@ func (tsv *TabletServer) ReserveBeginStreamExecute(
 	bindVariables map[string]*querypb.BindVariable,
 	callback func(*sqltypes.Result) error,
 ) (state queryservice.ReservedTransactionState, err error) {
-	options := session.GetOptions()
+	options := getOptions(session)
+
 	txState, err := tsv.begin(ctx, target, postBeginQueries, 0, settings, options)
 	if err != nil {
 		return txToReserveState(txState), err
@@ -1432,7 +1435,8 @@ func (tsv *TabletServer) ReserveBeginStreamExecute(
 
 // ReserveExecute implements the QueryService interface
 func (tsv *TabletServer) ReserveExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, settings []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64) (state queryservice.ReservedState, result *sqltypes.Result, err error) {
-	options := session.GetOptions()
+	options := getOptions(session)
+
 	result, err = tsv.executeWithSettings(ctx, target, settings, sql, bindVariables, transactionID, options)
 	// If there is an error and the error message is about allowing query in reserved connection only,
 	// then we do not return an error from here and continue to use the reserved connection path.
@@ -1486,7 +1490,7 @@ func (tsv *TabletServer) ReserveStreamExecute(
 	transactionID int64,
 	callback func(*sqltypes.Result) error,
 ) (state queryservice.ReservedState, err error) {
-	return state, tsv.streamExecute(ctx, target, sql, bindVariables, transactionID, 0, settings, session.GetOptions(), callback)
+	return state, tsv.streamExecute(ctx, target, sql, bindVariables, transactionID, 0, settings, getOptions(session), callback)
 }
 
 // Release implements the QueryService interface
@@ -2117,7 +2121,11 @@ func (tsv *TabletServer) getShard() string {
 	return tsv.sm.Target().Shard
 }
 
-// nilSession is a helper that returns an empty session.
-func nilSession() *executorcontext.SafeSession {
-	return executorcontext.NewSafeSession(nil)
+// getOptions safely extracts ExecuteOptions from a session, returning nil if session is nil.
+func getOptions(session queryservice.Session) *querypb.ExecuteOptions {
+	if session == nil {
+		return nil
+	}
+
+	return session.GetOptions()
 }

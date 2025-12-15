@@ -152,8 +152,8 @@ func (f *FakeQueryService) Begin(ctx context.Context, session queryservice.Sessi
 		panic(errors.New("test-triggered panic"))
 	}
 	f.checkTargetCallerID(ctx, "Begin", target)
-	if !proto.Equal(session.GetOptions(), TestSession.GetOptions()) {
-		f.t.Errorf("invalid Execute.ExecuteOptions: got %v expected %v", session.GetOptions(), TestSession.GetOptions())
+	if !proto.Equal(getOptions(session), TestSession.GetOptions()) {
+		f.t.Errorf("invalid Execute.ExecuteOptions: got %v expected %v", getOptions(session), TestSession.GetOptions())
 	}
 	return queryservice.TransactionState{TransactionID: beginTransactionID, TabletAlias: TestAlias}, nil
 }
@@ -428,8 +428,8 @@ func (f *FakeQueryService) Execute(ctx context.Context, session queryservice.Ses
 	if !sqltypes.BindVariablesEqual(bindVariables, ExecuteBindVars) {
 		f.t.Errorf("invalid Execute.BindVariables: got %v expected %v", bindVariables, ExecuteBindVars)
 	}
-	if !proto.Equal(session.GetOptions(), TestSession.GetOptions()) {
-		f.t.Errorf("invalid Execute.ExecuteOptions: got %v expected %v", session.GetOptions(), TestSession.GetOptions())
+	if !proto.Equal(getOptions(session), TestSession.GetOptions()) {
+		f.t.Errorf("invalid Execute.ExecuteOptions: got %v expected %v", getOptions(session), TestSession.GetOptions())
 	}
 	f.checkTargetCallerID(ctx, "Execute", target)
 	if transactionID != f.ExpectedTransactionID {
@@ -485,8 +485,8 @@ func (f *FakeQueryService) StreamExecute(ctx context.Context, session queryservi
 	if !sqltypes.BindVariablesEqual(bindVariables, StreamExecuteBindVars) {
 		f.t.Errorf("invalid StreamExecute.BindVariables: got %v expected %v", bindVariables, StreamExecuteBindVars)
 	}
-	if !proto.Equal(session.GetOptions(), TestSession.GetOptions()) {
-		f.t.Errorf("invalid StreamExecute.ExecuteOptions: got %v expected %v", session.GetOptions(), TestSession.GetOptions())
+	if !proto.Equal(getOptions(session), TestSession.GetOptions()) {
+		f.t.Errorf("invalid StreamExecute.ExecuteOptions: got %v expected %v", getOptions(session), TestSession.GetOptions())
 	}
 	f.checkTargetCallerID(ctx, "StreamExecute", target)
 	if err := callback(&StreamExecuteQueryResult1); err != nil {
@@ -786,4 +786,13 @@ func CreateFakeServer(t testing.TB) *FakeQueryService {
 	return &FakeQueryService{
 		t: t,
 	}
+}
+
+// getOptions safely extracts ExecuteOptions from a session, returning nil if session is nil.
+func getOptions(session queryservice.Session) *querypb.ExecuteOptions {
+	if session == nil {
+		return nil
+	}
+
+	return session.GetOptions()
 }
