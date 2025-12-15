@@ -2908,7 +2908,7 @@ func (e *Executor) reviewInOrderMigrations(ctx context.Context) error {
 			return err
 		}
 		if wasFailed {
-			log.Infof("reviewInOrderMigrations: failder in-order migration uuid=%s due to previous failed/cancelled migrations in same context", uuid)
+			log.Infof("reviewInOrderMigrations: failing in-order migration uuid=%s due to previous failed/cancelled migrations in same context", uuid)
 		}
 	}
 	return nil
