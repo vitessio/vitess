@@ -205,6 +205,9 @@ func FnJSONExtract(yield Query) {
 	yield(`JSON_EXTRACT('{"a": 1, "b": 2}', '$.a', '$.b')`, nil, false)
 	yield(`JSON_EXTRACT('{"a": 1}', '$.a', '$.z')`, nil, false)
 
+	yield(`JSON_EXTRACT(CONCAT('{', '"a"', ':', ' ', '1', '}'), '$.a'))`, nil, false)
+	yield(`JSON_EXTRACT('{"a": 1}', CONCAT('$', '.', 'a'))`, nil, false)
+
 	yield(`JSON_EXTRACT(NULL, '$.a')`, nil, false)
 	yield(`JSON_EXTRACT(NULL, NULL)`, nil, false)
 

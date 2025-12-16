@@ -154,6 +154,12 @@ func (call *builtinJSONExtract) compile(c *compiler) (ctype, error) {
 		}
 
 		if arg.constant() {
+			staticEnv := EmptyExpressionEnv(c.env)
+			arg, err = simplifyExpr(staticEnv, arg)
+			if err != nil {
+				return ctype{}, err
+			}
+
 			p, err := c.jsonExtractPath(arg)
 			staticPaths = append(staticPaths, staticPath{p, err})
 		} else {
