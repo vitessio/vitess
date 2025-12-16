@@ -463,12 +463,12 @@ func (gw *TabletGateway) getBalancerTablet(target *querypb.Target, tablets []*di
 
 	// Get the tablet from the balancer if enabled
 	if useBalancer {
-		var sessionUUID string
+		pickOpts := balancer.PickOpts{}
 		if opts.Session != nil {
-			sessionUUID = opts.Session.GetSessionUUID()
+			pickOpts.SessionUUID = opts.Session.GetSessionUUID()
 		}
 
-		tablet := gw.balancer.Pick(target, tablets, balancer.PickOpts{SessionUUID: sessionUUID})
+		tablet := gw.balancer.Pick(target, tablets, pickOpts)
 		if tablet != nil {
 			return tablet
 		}
