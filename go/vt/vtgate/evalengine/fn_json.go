@@ -30,6 +30,10 @@ type (
 		CallExpr
 	}
 
+	builtinJSONRemove struct {
+		CallExpr
+	}
+
 	builtinJSONUnquote struct {
 		CallExpr
 	}
@@ -60,6 +64,7 @@ type (
 )
 
 var _ IR = (*builtinJSONExtract)(nil)
+var _ IR = (*builtinJSONRemove)(nil)
 var _ IR = (*builtinJSONUnquote)(nil)
 var _ IR = (*builtinJSONObject)(nil)
 var _ IR = (*builtinJSONArray)(nil)
@@ -69,6 +74,7 @@ var _ IR = (*builtinJSONContainsPath)(nil)
 var _ IR = (*builtinJSONKeys)(nil)
 
 var errInvalidPathForTransform = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "In this situation, path expressions may not contain the * and ** tokens or an array range.")
+var errRootPathNotAllowed = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "The path expression '$' is not allowed in this context.")
 
 func (call *builtinJSONExtract) eval(env *ExpressionEnv) (eval, error) {
 	args, err := call.args(env)
@@ -168,6 +174,107 @@ func (call *builtinJSONExtract) compile(c *compiler) (ctype, error) {
 	}
 
 	c.asm.Fn_JSON_EXTRACT(len(call.Arguments[1:]), staticPaths)
+	c.asm.jumpDestination(skip)
+
+	if nullable {
+		// If any argument is nullable, the result is nullable too
+		jt.Flag |= flagNullable
+	}
+
+	return jt, nil
+}
+
+func (call *builtinJSONRemove) eval(env *ExpressionEnv) (eval, error) {
+	args, err := call.args(env)
+	if err != nil {
+		return nil, err
+	}
+
+	if args[0] == nil {
+		return nil, nil
+	}
+
+	doc, err := intoJSON(call.Method, args[0])
+	if err != nil {
+		return nil, err
+	}
+
+	paths := make([]*json.Path, 0, len(args[1:]))
+	for _, p := range args[1:] {
+		if p == nil {
+			return nil, nil
+		}
+
+		path, err := intoJSONPath(p)
+		if err != nil {
+			return nil, err
+		}
+
+		if path.ContainsWildcards() {
+			return nil, errInvalidPathForTransform
+		}
+
+		if path.IsRootPath() {
+			return nil, errRootPathNotAllowed
+		}
+
+		paths = append(paths, path)
+	}
+
+	if err := json.ApplyTransform(json.Remove, doc, paths, nil); err != nil {
+		return nil, err
+	}
+
+	return doc, nil
+}
+
+func (call *builtinJSONRemove) compile(c *compiler) (ctype, error) {
+	doct, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	nullable := doct.nullable()
+	skip := c.compileNullCheck1(doct)
+
+	// TODO: `*compiler.compileParseJSON` should handle `sqltypes.Null`` properly but
+	//		 we'll handle it here until all call sites are fixed.
+	var jt ctype
+	if doct.Type != sqltypes.Null {
+		jt, err = c.compileParseJSON("JSON_REMOVE", doct, 1)
+		if err != nil {
+			return ctype{}, err
+		}
+	} else {
+		jt = ctype{Type: sqltypes.Null, Flag: flagNull | flagNullable, Col: collationNull}
+	}
+
+	staticPaths := make([]staticPath, 0, len(call.Arguments[1:]))
+	for _, arg := range call.Arguments[1:] {
+		argType, err := arg.compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+
+		if !nullable {
+			nullable = argType.nullable()
+		}
+
+		if arg.constant() {
+			staticEnv := EmptyExpressionEnv(c.env)
+			arg, err = simplifyExpr(staticEnv, arg)
+			if err != nil {
+				return ctype{}, err
+			}
+
+			p, err := c.jsonExtractPath(arg)
+			staticPaths = append(staticPaths, staticPath{p, err})
+		} else {
+			staticPaths = append(staticPaths, staticPath{nil, nil})
+		}
+	}
+
+	c.asm.Fn_JSON_REMOVE(len(call.Arguments[1:]), staticPaths)
 	c.asm.jumpDestination(skip)
 
 	if nullable {

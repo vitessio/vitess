@@ -232,6 +232,14 @@ func FnJSONExtract(yield Query) {
 	yield(`JSON_EXTRACT('{"a": 1}', '$.a', 'invalid')`, nil, false)
 }
 
+func FnJSONRemove(yield Query) {
+	for _, obj := range inputJSONObjects {
+		for _, path1 := range inputJSONPaths {
+			yield(fmt.Sprintf("JSON_REMOVE('%s', '%s')", obj, path1), nil, false)
+		}
+	}
+}
+
 func FnJSONContainsPath(yield Query) {
 	for _, obj := range inputJSONObjects {
 		for _, path1 := range inputJSONPaths {

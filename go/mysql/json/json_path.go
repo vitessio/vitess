@@ -119,6 +119,11 @@ func (jp *Path) ContainsWildcards() bool {
 	return false
 }
 
+// IsRootPath returns true if the path is just the root path "$" with no further segments.
+func (jp *Path) IsRootPath() bool {
+	return jp != nil && jp.kind == jpDocumentRoot && jp.next == nil
+}
+
 // isArrayWrapping returns true if this path segment is [0] or [last],
 // which are the array access patterns that "wrap" non-array values.
 func (jp *Path) isArrayWrapping() bool {
