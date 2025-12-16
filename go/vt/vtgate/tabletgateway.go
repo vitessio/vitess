@@ -109,6 +109,9 @@ type TabletGateway struct {
 
 	// balancer used for routing to tablets
 	balancer balancer.TabletBalancer
+
+	// balancerMode is the current tablet balancer mode.
+	balancerMode balancer.Mode
 }
 
 func createHealthCheck(ctx context.Context, retryDelay, timeout time.Duration, ts *topo.Server, cell, cellsToWatch string) discovery.HealthCheck {
@@ -182,38 +185,37 @@ func (gw *TabletGateway) setupBalancer() {
 	}
 
 	// Determine the effective mode: new flag takes precedence, then deprecated flag, then default
-	var mode balancer.Mode
 	if balancerModeFlag != "" {
 		// Explicit new flag
-		mode = balancer.ParseMode(balancerModeFlag)
+		gw.balancerMode = balancer.ParseMode(balancerModeFlag)
 	} else if balancerEnabled {
 		// Deprecated flag for backwards compatibility
 		log.Warning("Flag --enable-balancer is deprecated. Please use --vtgate-balancer-mode=prefer-cell instead.")
-		mode = balancer.ModePreferCell
+		gw.balancerMode = balancer.ModePreferCell
 	} else {
 		// Default: no flags set
-		mode = balancer.ModeCell
+		gw.balancerMode = balancer.ModeCell
 	}
 
 	// Cell mode uses the default shuffleTablets behavior, no balancer needed
-	if mode == balancer.ModeCell {
+	if gw.balancerMode == balancer.ModeCell {
 		log.Info("Tablet balancer using 'cell' mode (shuffle tablets in local cell)")
 		return
 	}
 
 	// Validate mode-specific requirements
-	if mode == balancer.ModePreferCell && len(balancerVtgateCells) == 0 {
+	if gw.balancerMode == balancer.ModePreferCell && len(balancerVtgateCells) == 0 {
 		log.Exitf("--balancer-vtgate-cells is required when using --vtgate-balancer-mode=prefer-cell")
 	}
 
 	// Create the balancer for prefer-cell or random modes
 	var err error
-	gw.balancer, err = balancer.NewTabletBalancer(mode, gw.localCell, balancerVtgateCells)
+	gw.balancer, err = balancer.NewTabletBalancer(gw.balancerMode, gw.localCell, balancerVtgateCells)
 	if err != nil {
 		log.Exitf("Failed to create tablet balancer: %v", err)
 	}
 
-	log.Infof("Tablet balancer enabled with mode: %s", mode)
+	log.Infof("Tablet balancer enabled with mode: %s", gw.balancerMode)
 }
 
 // QueryServiceByAlias satisfies the Gateway interface
@@ -463,12 +465,14 @@ func (gw *TabletGateway) getBalancerTablet(target *querypb.Target, tablets []*di
 
 	// Get the tablet from the balancer if enabled
 	if useBalancer {
-		pickOpts := balancer.PickOpts{}
-		if opts.Session != nil {
-			pickOpts.SessionUUID = opts.Session.GetSessionUUID()
+		var pickOpts []balancer.PickOption
+
+		// Add the session UUID to the options if the session balancer is enabled and a session is present.
+		if gw.balancerMode == balancer.ModeSession && opts.Session != nil {
+			pickOpts = append(pickOpts, balancer.WithSessionUUID(opts.Session.GetSessionUUID()))
 		}
 
-		tablet := gw.balancer.Pick(target, tablets, pickOpts)
+		tablet := gw.balancer.Pick(target, tablets, pickOpts...)
 		if tablet != nil {
 			return tablet
 		}

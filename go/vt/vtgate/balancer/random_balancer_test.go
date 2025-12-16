@@ -47,7 +47,7 @@ func TestRandomBalancerUniformDistribution(t *testing.T) {
 	pickCounts := make(map[uint32]int)
 
 	for i := 0; i < numPicks; i++ {
-		th := b.Pick(target, tablets, PickOpts{})
+		th := b.Pick(target, tablets)
 		require.NotNil(t, th, "Pick should not return nil")
 		pickCounts[th.Tablet.Alias.Uid]++
 	}
@@ -66,7 +66,7 @@ func TestRandomBalancerPickEmpty(t *testing.T) {
 	target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA}
 	b := newRandomBalancer("cell1", []string{})
 
-	th := b.Pick(target, []*discovery.TabletHealth{}, PickOpts{})
+	th := b.Pick(target, []*discovery.TabletHealth{})
 	assert.Nil(t, th, "Pick should return nil for empty tablet list")
 }
 
@@ -80,7 +80,7 @@ func TestRandomBalancerPickSingle(t *testing.T) {
 
 	// Pick multiple times, should always return the same tablet
 	for i := 0; i < 100; i++ {
-		th := b.Pick(target, tablets, PickOpts{})
+		th := b.Pick(target, tablets)
 		require.NotNil(t, th, "Pick should not return nil")
 		assert.Equal(t, tablets[0].Tablet.Alias.Uid, th.Tablet.Alias.Uid,
 			"Pick should return the only available tablet")
@@ -133,7 +133,7 @@ func TestRandomBalancerCellFiltering(t *testing.T) {
 	pickCounts := make(map[string]int)
 
 	for i := 0; i < numPicks; i++ {
-		th := b.Pick(target, tablets, PickOpts{})
+		th := b.Pick(target, tablets)
 		require.NotNil(t, th)
 		pickCounts[th.Tablet.Alias.Cell]++
 	}

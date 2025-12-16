@@ -44,8 +44,9 @@ func newSessionBalancer(localCell string) TabletBalancer {
 //
 // For a given session, it will return the same tablet for its duration, with preference to tablets
 // in the local cell.
-func (b *SessionBalancer) Pick(target *querypb.Target, tablets []*discovery.TabletHealth, opts PickOpts) *discovery.TabletHealth {
-	if opts.SessionUUID == "" {
+func (b *SessionBalancer) Pick(target *querypb.Target, tablets []*discovery.TabletHealth, opts ...PickOption) *discovery.TabletHealth {
+	options := getOptions(opts)
+	if options.sessionUUID == "" {
 		return nil
 	}
 
@@ -55,7 +56,7 @@ func (b *SessionBalancer) Pick(target *querypb.Target, tablets []*discovery.Tabl
 
 	for _, tablet := range tablets {
 		alias := tabletAlias(tablet)
-		weight := tabletWeight(alias, opts.SessionUUID)
+		weight := tabletWeight(alias, options.sessionUUID)
 
 		if b.isLocal(tablet) && ((maxLocalTablet == nil) || (weight > maxLocalWeight)) {
 			maxLocalWeight = weight

@@ -298,7 +298,7 @@ func TestBalancedPick(t *testing.T) {
 			b := newFlowBalancer(localCell, vtGateCells).(*flowBalancer)
 
 			for i := 0; i < N/len(vtGateCells); i++ {
-				th := b.Pick(target, tablets, PickOpts{})
+				th := b.Pick(target, tablets)
 				if i == 0 {
 					t.Logf("Target Flows %v, Balancer: %s\n", expectedPerCell, b.print())
 				}
@@ -336,7 +336,7 @@ func TestTopologyChanged(t *testing.T) {
 	tablets = tablets[0:2]
 
 	for i := 0; i < N; i++ {
-		th := b.Pick(target, tablets, PickOpts{})
+		th := b.Pick(target, tablets)
 		allocation, totalAllocation := b.getAllocation(target, tablets)
 
 		assert.Equalf(t, ALLOCATION/2, totalAllocation, "totalAllocation mismatch %s", b.print())
@@ -346,7 +346,7 @@ func TestTopologyChanged(t *testing.T) {
 
 	// Run again with the full topology. Now traffic should go to cell b
 	for i := 0; i < N; i++ {
-		th := b.Pick(target, allTablets, PickOpts{})
+		th := b.Pick(target, allTablets)
 
 		allocation, totalAllocation := b.getAllocation(target, allTablets)
 
@@ -359,7 +359,7 @@ func TestTopologyChanged(t *testing.T) {
 	newTablet := createTestTablet("b")
 	allTablets[2] = newTablet
 	for i := 0; i < N; i++ {
-		th := b.Pick(target, allTablets, PickOpts{})
+		th := b.Pick(target, allTablets)
 
 		allocation, totalAllocation := b.getAllocation(target, allTablets)
 

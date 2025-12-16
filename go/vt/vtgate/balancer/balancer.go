@@ -137,16 +137,10 @@ func GetAvailableModeNames() []string {
 type TabletBalancer interface {
 	// Pick is the main entry point to the balancer. Returns the best tablet out of the list
 	// for a given query to maintain the desired balanced allocation over multiple executions.
-	Pick(target *querypb.Target, tablets []*discovery.TabletHealth, opts PickOpts) *discovery.TabletHealth
+	Pick(target *querypb.Target, tablets []*discovery.TabletHealth, opts ...PickOption) *discovery.TabletHealth
 
 	// DebugHandler provides a summary of tablet balancer state
 	DebugHandler(w http.ResponseWriter, r *http.Request)
-}
-
-// PickOpts are balancer options that are passed into Pick.
-type PickOpts struct {
-	// SessionUUID is the the current session UUID.
-	SessionUUID string
 }
 
 // NewTabletBalancer creates a new tablet balancer based on the specified mode.
@@ -245,7 +239,7 @@ func (b *flowBalancer) DebugHandler(w http.ResponseWriter, _ *http.Request) {
 // Given the total allocation for the set of tablets, choose the best target
 // by a weighted random sample so that over time the system will achieve the
 // desired balanced allocation.
-func (b *flowBalancer) Pick(target *querypb.Target, tablets []*discovery.TabletHealth, _ PickOpts) *discovery.TabletHealth {
+func (b *flowBalancer) Pick(target *querypb.Target, tablets []*discovery.TabletHealth, _ ...PickOption) *discovery.TabletHealth {
 	numTablets := len(tablets)
 	if numTablets == 0 {
 		return nil
