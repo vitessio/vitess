@@ -129,9 +129,16 @@ func (call *builtinJSONExtract) compile(c *compiler) (ctype, error) {
 	nullable := doct.nullable()
 	skip := c.compileNullCheck1(doct)
 
-	jt, err := c.compileParseJSON("JSON_EXTRACT", doct, 1)
-	if err != nil {
-		return ctype{}, err
+	// TODO: `*compiler.compileParseJSON` should handle `sqltypes.Null`` properly but
+	//		 we'll handle it here until all call sites are fixed.
+	var jt ctype
+	if doct.Type != sqltypes.Null {
+		jt, err = c.compileParseJSON("JSON_EXTRACT", doct, 1)
+		if err != nil {
+			return ctype{}, err
+		}
+	} else {
+		jt = ctype{Type: sqltypes.Null, Flag: flagNull | flagNullable, Col: collationNull}
 	}
 
 	staticPaths := make([]staticPath, 0, len(call.Arguments[1:]))
