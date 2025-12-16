@@ -30,10 +30,11 @@ import (
 
 var Cases = []TestCase{
 	{Run: JSONExtract, Schema: JSONExtract_Schema},
-	{Run: JSONPathOperations},
+	{Run: FnJSONKeys},
+	{Run: FnJSONExtract},
+	{Run: FnJSONContainsPath},
 	{Run: JSONArray},
 	{Run: JSONObject},
-	{Run: FnJSONExtract},
 	{Run: CharsetConversionOperators},
 	{Run: CaseExprWithPredicate},
 	{Run: CaseExprWithValue},
@@ -177,26 +178,27 @@ var Cases = []TestCase{
 	{Run: RegexpReplace},
 }
 
-func JSONPathOperations(yield Query) {
+func FnJSONKeys(yield Query) {
 	for _, obj := range inputJSONObjects {
 		yield(fmt.Sprintf("JSON_KEYS('%s')", obj), nil, false)
 
 		for _, path1 := range inputJSONPaths {
-			yield(fmt.Sprintf("JSON_EXTRACT('%s', '%s')", obj, path1), nil, false)
-			yield(fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'one', '%s')", obj, path1), nil, false)
-			yield(fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'all', '%s')", obj, path1), nil, false)
 			yield(fmt.Sprintf("JSON_KEYS('%s', '%s')", obj, path1), nil, false)
-
-			for _, path2 := range inputJSONPaths {
-				yield(fmt.Sprintf("JSON_EXTRACT('%s', '%s', '%s')", obj, path1, path2), nil, false)
-				yield(fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'one', '%s', '%s')", obj, path1, path2), nil, false)
-				yield(fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'all', '%s', '%s')", obj, path1, path2), nil, false)
-			}
 		}
 	}
 }
 
 func FnJSONExtract(yield Query) {
+	for _, obj := range inputJSONObjects {
+		for _, path1 := range inputJSONPaths {
+			yield(fmt.Sprintf("JSON_EXTRACT('%s', '%s')", obj, path1), nil, false)
+
+			for _, path2 := range inputJSONPaths {
+				yield(fmt.Sprintf("JSON_EXTRACT('%s', '%s', '%s')", obj, path1, path2), nil, false)
+			}
+		}
+	}
+
 	yield(`JSON_EXTRACT('{"a": 1}', '$.a')`, nil, false)
 	yield(`JSON_EXTRACT('{"a": 1}', '$.*')`, nil, false)
 	yield(`JSON_EXTRACT('[1, 2, 3]', '$[0 to 2]')`, nil, false)
@@ -225,6 +227,20 @@ func FnJSONExtract(yield Query) {
 	yield(`JSON_EXTRACT('{"a": 1}', NULL, 'invalid-path')`, nil, false)
 	yield(`JSON_EXTRACT('{"a": 1}', 'invalid-path', NULL)`, nil, false)
 	yield(`JSON_EXTRACT('{"a": 1}', '$.a', 'invalid')`, nil, false)
+}
+
+func FnJSONContainsPath(yield Query) {
+	for _, obj := range inputJSONObjects {
+		for _, path1 := range inputJSONPaths {
+			yield(fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'one', '%s')", obj, path1), nil, false)
+			yield(fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'all', '%s')", obj, path1), nil, false)
+
+			for _, path2 := range inputJSONPaths {
+				yield(fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'one', '%s', '%s')", obj, path1, path2), nil, false)
+				yield(fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'all', '%s', '%s')", obj, path1, path2), nil, false)
+			}
+		}
+	}
 }
 
 func JSONArray(yield Query) {
