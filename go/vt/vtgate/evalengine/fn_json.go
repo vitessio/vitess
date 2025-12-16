@@ -125,7 +125,7 @@ func (call *builtinJSONExtract) compile(c *compiler) (ctype, error) {
 		return ctype{}, err
 	}
 
-	// Check for nil argument
+	// Handle `NULL` arguments
 	nullable := doct.nullable()
 	skip := c.compileNullCheck1(doct)
 
