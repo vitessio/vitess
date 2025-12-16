@@ -33,6 +33,7 @@ var Cases = []TestCase{
 	{Run: JSONPathOperations},
 	{Run: JSONArray},
 	{Run: JSONObject},
+	{Run: FnJSONExtract},
 	{Run: CharsetConversionOperators},
 	{Run: CaseExprWithPredicate},
 	{Run: CaseExprWithValue},
@@ -193,6 +194,37 @@ func JSONPathOperations(yield Query) {
 			}
 		}
 	}
+}
+
+func FnJSONExtract(yield Query) {
+	yield(`JSON_EXTRACT('{"a": 1}', '$.a')`, nil, false)
+	yield(`JSON_EXTRACT('{"a": 1}', '$.*')`, nil, false)
+	yield(`JSON_EXTRACT('[1, 2, 3]', '$[0 to 2]')`, nil, false)
+	yield(`JSON_EXTRACT('{"a": 1, "b": 2}', '$.a', '$.b')`, nil, false)
+	yield(`JSON_EXTRACT('{"a": 1}', '$.a', '$.z')`, nil, false)
+
+	yield(`JSON_EXTRACT(NULL, '$.a')`, nil, false)
+	yield(`JSON_EXTRACT(NULL, NULL)`, nil, false)
+
+	yield(`JSON_EXTRACT('{"a": 1}', NULL)`, nil, false)
+	yield(`JSON_EXTRACT('{"a": 1}', '$.a', NULL)`, nil, false)
+	yield(`JSON_EXTRACT('{"a": 1}', NULL, '$.a')`, nil, false)
+
+	yield(`JSON_EXTRACT('{"a": 1}', '$.b')`, nil, false)
+	yield(`JSON_EXTRACT('{"a": 1}', '$.b', '$.c')`, nil, false)
+	yield(`JSON_EXTRACT('[1,2,3]', '$[10]')`, nil, false)
+
+	yield(`JSON_EXTRACT('{invalid}', '$.a')`, nil, false)
+	yield(`JSON_EXTRACT('not json', '$.a')`, nil, false)
+	yield(`JSON_EXTRACT('', '$.a')`, nil, false)
+	yield(`JSON_EXTRACT('{invalid}', NULL)`, nil, false)
+
+	yield(`JSON_EXTRACT('{"a": 1}', '$.b[ 1 ].')`, nil, false)
+
+	yield(`JSON_EXTRACT(NULL, 'invalid-path')`, nil, false)
+	yield(`JSON_EXTRACT('{"a": 1}', NULL, 'invalid-path')`, nil, false)
+	yield(`JSON_EXTRACT('{"a": 1}', 'invalid-path', NULL)`, nil, false)
+	yield(`JSON_EXTRACT('{"a": 1}', '$.a', 'invalid')`, nil, false)
 }
 
 func JSONArray(yield Query) {

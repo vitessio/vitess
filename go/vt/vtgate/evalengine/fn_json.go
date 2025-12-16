@@ -89,7 +89,7 @@ func (call *builtinJSONExtract) eval(env *ExpressionEnv) (eval, error) {
 }
 
 func builtin_JSON_EXTRACT(doc *json.Value, paths []eval) (eval, error) {
-	matches := make([]*json.Value, 0, 4)
+	matches := make([]*json.Value, 0, len(paths))
 	multi := len(paths) > 1
 
 	for _, p := range paths {
@@ -125,27 +125,45 @@ func (call *builtinJSONExtract) compile(c *compiler) (ctype, error) {
 		return ctype{}, err
 	}
 
-	if slice.All(call.Arguments[1:], func(expr IR) bool { return expr.constant() }) {
-		paths := make([]*json.Path, 0, len(call.Arguments[1:]))
+	// Check for nil argument
+	nullable := doct.nullable()
+	skip := c.compileNullCheck1(doct)
 
-		for _, arg := range call.Arguments[1:] {
-			jp, err := c.jsonExtractPath(arg)
-			if err != nil {
-				return ctype{}, err
-			}
-			paths = append(paths, jp)
-		}
+	jt, err := c.compileParseJSON("JSON_EXTRACT", doct, 1)
+	if err != nil {
+		return ctype{}, err
+	}
 
-		jt, err := c.compileParseJSON("JSON_EXTRACT", doct, 1)
+	staticPaths := make([]staticPath, 0, len(call.Arguments[1:]))
+
+	for _, arg := range call.Arguments[1:] {
+		argType, err := arg.compile(c)
 		if err != nil {
 			return ctype{}, err
 		}
 
-		c.asm.Fn_JSON_EXTRACT0(paths)
-		return jt, nil
+		if !nullable {
+			nullable = argType.nullable()
+		}
+
+		if arg.constant() {
+			p, err := c.jsonExtractPath(arg)
+			staticPaths = append(staticPaths, staticPath{p, err})
+		} else {
+			staticPaths = append(staticPaths, staticPath{nil, nil})
+		}
 	}
 
-	return ctype{}, c.unsupported(call)
+	c.asm.Fn_JSON_EXTRACT(len(call.Arguments[1:]), staticPaths)
+
+	if nullable {
+		c.asm.jumpDestination(skip)
+
+		// If any argument is nullable, the result is nullable too
+		jt.Flag |= flagNullable
+	}
+
+	return jt, nil
 }
 
 func (call *builtinJSONUnquote) eval(env *ExpressionEnv) (eval, error) {
