@@ -162,10 +162,9 @@ func (call *builtinJSONExtract) compile(c *compiler) (ctype, error) {
 	}
 
 	c.asm.Fn_JSON_EXTRACT(len(call.Arguments[1:]), staticPaths)
+	c.asm.jumpDestination(skip)
 
 	if nullable {
-		c.asm.jumpDestination(skip)
-
 		// If any argument is nullable, the result is nullable too
 		jt.Flag |= flagNullable
 	}
