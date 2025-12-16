@@ -17,6 +17,7 @@ limitations under the License.
 package vdiff
 
 import (
+	"encoding/hex"
 	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -86,9 +87,22 @@ func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, opts *
 		// Let's truncate if it's really worth it to avoid losing
 		// value for a few chars.
 		if truncateAt > 0 && row[index].Len() >= truncateAt+len(truncatedNotation)+20 {
-			rd.Row[col] = row[index].ToString()[:truncateAt] + truncatedNotation
+			if row[index].IsBinary() {
+				rb, _ := row[index].ToBytes()
+				rb = rb[:truncateAt]
+				// Print the column as a HEX string the same way the MySQL client does.
+				rd.Row[col] = "0x" + hex.EncodeToString(rb) + truncatedNotation
+			} else {
+				rd.Row[col] = row[index].ToString()[:truncateAt] + truncatedNotation
+			}
 		} else {
-			rd.Row[col] = row[index].ToString()
+			if row[index].IsBinary() {
+				rb, _ := row[index].ToBytes()
+				// Print the column as a HEX string the same way the MySQL client does.
+				rd.Row[col] = "0x" + hex.EncodeToString(rb)
+			} else {
+				rd.Row[col] = row[index].ToString()
+			}
 		}
 	}
 
