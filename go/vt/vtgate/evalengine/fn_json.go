@@ -74,7 +74,6 @@ var _ IR = (*builtinJSONContainsPath)(nil)
 var _ IR = (*builtinJSONKeys)(nil)
 
 var errInvalidPathForTransform = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "In this situation, path expressions may not contain the * and ** tokens or an array range.")
-var errRootPathNotAllowed = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "The path expression '$' is not allowed in this context.")
 
 func (call *builtinJSONExtract) eval(env *ExpressionEnv) (eval, error) {
 	args, err := call.args(env)
@@ -212,10 +211,6 @@ func (call *builtinJSONRemove) eval(env *ExpressionEnv) (eval, error) {
 
 		if path.ContainsWildcards() {
 			return nil, errInvalidPathForTransform
-		}
-
-		if path.IsRootPath() {
-			return nil, errRootPathNotAllowed
 		}
 
 		paths = append(paths, path)

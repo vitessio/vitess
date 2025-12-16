@@ -28,6 +28,7 @@ import (
 	"unicode/utf8"
 
 	"vitess.io/vitess/go/hack"
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/unicode2"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -311,6 +312,13 @@ func ApplyTransform(t Transformation, doc *Value, paths []*Path, values []*Value
 	if t != Remove && len(paths) != len(values) {
 		panic("missing Values for transformation")
 	}
+
+	if t == Remove {
+		if slice.Any(paths, func(p *Path) bool { return p.IsRootPath() }) {
+			return errRootPathNotAllowed
+		}
+	}
+
 	for i, p := range paths {
 		transform := func(pp *Path, vv *Value) {
 			switch pp.kind {
@@ -407,6 +415,7 @@ type PathParser struct {
 }
 
 var errInvalid = errors.New("Invalid JSON path expression")
+var errRootPathNotAllowed = errors.New("The path expression '$' is not allowed in this context.")
 
 func stepRoot(p *PathParser, in []byte) ([]byte, error) {
 	if in[0] == '$' {

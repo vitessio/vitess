@@ -2407,17 +2407,17 @@ func (asm *assembler) Fn_JSON_REMOVE(args int, staticPaths []staticPath) {
 				return 1
 			}
 
-			if path.IsRootPath() {
-				env.vm.err = errRootPathNotAllowed
-				return 1
-			}
-
 			paths = append(paths, path)
 		}
 
 		env.vm.sp -= args
 
-		_ = json.ApplyTransform(json.Remove, doc, paths, nil)
+		err := json.ApplyTransform(json.Remove, doc, paths, nil)
+		if err != nil {
+			env.vm.err = err
+			return 1
+		}
+
 		env.vm.stack[env.vm.sp-1] = doc
 		return 1
 	}, "FN JSON_REMOVE (SP-1) (SP-2)...(SP-N)")

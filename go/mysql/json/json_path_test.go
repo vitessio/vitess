@@ -206,7 +206,8 @@ func TestTransformations(t *testing.T) {
 			Document: `[{"a": 1}, {"a": 2}]`,
 			Paths:    []string{`$[1].b[0]`},
 			Expected: `[{"a": 1}, {"a": 2}]`,
-		}}
+		},
+	}
 
 	for _, tc := range cases {
 		doc := json(t, tc.Document)
