@@ -354,7 +354,7 @@ func TestQueryExecutorPlans(t *testing.T) {
 
 			// Test inside a transaction.
 			target := tsv.sm.Target()
-			state, err := tsv.Begin(ctx, &vtgatepb.Session{}, target)
+			state, err := tsv.Begin(ctx, nil, target)
 			if !tcase.outsideTxErr && tcase.errorWant != "" && !tcase.onlyInTxErr {
 				require.EqualError(t, err, tcase.errorWant)
 				return
@@ -451,7 +451,7 @@ func TestQueryExecutorQueryAnnotation(t *testing.T) {
 
 			// Test inside a transaction.
 			target := tsv.sm.Target()
-			state, err := tsv.Begin(ctx, &vtgatepb.Session{}, target)
+			state, err := tsv.Begin(ctx, nil, target)
 			require.NoError(t, err)
 			require.NotNil(t, state.TabletAlias, "alias should not be nil")
 			assert.Equal(t, tsv.alias, state.TabletAlias, "Wrong alias returned by Begin")
@@ -518,7 +518,7 @@ func TestQueryExecutorSelectImpossible(t *testing.T) {
 			assert.Equal(t, tcase.planWant, qre.logStats.PlanType, tcase.input)
 			assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
 			target := tsv.sm.Target()
-			state, err := tsv.Begin(ctx, &vtgatepb.Session{}, target)
+			state, err := tsv.Begin(ctx, nil, target)
 			require.NoError(t, err)
 			require.NotNil(t, state.TabletAlias, "alias should not be nil")
 			assert.Equal(t, tsv.alias, state.TabletAlias, "Wrong tablet alias from Begin")
@@ -649,7 +649,7 @@ func TestQueryExecutorLimitFailure(t *testing.T) {
 
 			// Test inside a transaction.
 			target := tsv.sm.Target()
-			state, err := tsv.Begin(ctx, &vtgatepb.Session{}, target)
+			state, err := tsv.Begin(ctx, nil, target)
 			require.NoError(t, err)
 			require.NotNil(t, state.TabletAlias, "alias should not be nil")
 			assert.Equal(t, tsv.alias, state.TabletAlias, "Wrong tablet alias from Begin")

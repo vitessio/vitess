@@ -41,7 +41,6 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -117,7 +116,7 @@ func testBeginError(t *testing.T, conn queryservice.QueryService, f *FakeQuerySe
 	t.Log("testBeginError")
 	f.HasBeginError = true
 	testErrorHelper(t, f, "Begin", func(ctx context.Context) error {
-		_, err := conn.Begin(ctx, &vtgatepb.Session{}, TestTarget)
+		_, err := conn.Begin(ctx, nil, TestTarget)
 		return err
 	})
 	f.HasBeginError = false
@@ -126,7 +125,7 @@ func testBeginError(t *testing.T, conn queryservice.QueryService, f *FakeQuerySe
 func testBeginPanics(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testBeginPanics")
 	testPanicHelper(t, f, "Begin", func(ctx context.Context) error {
-		_, err := conn.Begin(ctx, &vtgatepb.Session{}, TestTarget)
+		_, err := conn.Begin(ctx, nil, TestTarget)
 		return err
 	})
 }

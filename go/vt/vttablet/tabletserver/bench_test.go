@@ -26,7 +26,6 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
 // Benchmark run on 6/27/17, with optimized byte-level operations
@@ -73,8 +72,8 @@ func BenchmarkExecuteVarBinary(b *testing.B) {
 
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	db.SetAllowAll(true)
-	for i := 0; i < b.N; i++ {
-		if _, err := tsv.Execute(ctx, &vtgatepb.Session{}, &target, benchQuery, bv, 0, 0); err != nil {
+	for b.Loop() {
+		if _, err := tsv.Execute(ctx, nil, &target, benchQuery, bv, 0, 0); err != nil {
 			panic(err)
 		}
 	}
@@ -100,8 +99,8 @@ func BenchmarkExecuteExpression(b *testing.B) {
 
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	db.SetAllowAll(true)
-	for i := 0; i < b.N; i++ {
-		if _, err := tsv.Execute(ctx, &vtgatepb.Session{}, &target, benchQuery, bv, 0, 0); err != nil {
+	for b.Loop() {
+		if _, err := tsv.Execute(ctx, nil, &target, benchQuery, bv, 0, 0); err != nil {
 			panic(err)
 		}
 	}
