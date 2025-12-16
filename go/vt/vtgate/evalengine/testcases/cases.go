@@ -32,6 +32,7 @@ var Cases = []TestCase{
 	{Run: JSONExtract, Schema: JSONExtract_Schema},
 	{Run: FnJSONKeys},
 	{Run: FnJSONExtract},
+	{Run: FnJSONRemove},
 	{Run: FnJSONContainsPath},
 	{Run: JSONArray},
 	{Run: JSONObject},
