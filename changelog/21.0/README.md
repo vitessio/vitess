@@ -1,5 +1,4 @@
 ## v21.0
-
 * **[21.0.6](21.0.6)**
 	* [Changelog](21.0.6/changelog.md)
 	* [Release Notes](21.0.6/release_notes.md)
