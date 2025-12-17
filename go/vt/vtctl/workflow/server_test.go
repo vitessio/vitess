@@ -1260,7 +1260,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 		if si == nil || len(si.TabletControls) == 0 {
 			return false
 		}
-		for _, tc := range si.Shard.TabletControls {
+		for _, tc := range si.TabletControls {
 			return slices.Equal(tc.DeniedTables, []string{tableName})
 		}
 		return false

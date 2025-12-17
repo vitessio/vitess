@@ -504,7 +504,7 @@ func commandShardReplicationPositions(cmd *cobra.Command, args []string) error {
 		case nil:
 			line = cli.MarshalTabletAWK(rt.Tablet) + "<err> <err> <err>"
 		default:
-			line = cli.MarshalTabletAWK(rt.Tablet) + fmt.Sprintf(" %v %v", rt.Status.Position, rt.Status.ReplicationLagSeconds)
+			line = cli.MarshalTabletAWK(rt.Tablet) + fmt.Sprintf(" %v %v", rt.Position, rt.ReplicationLagSeconds)
 		}
 
 		fmt.Println(line)

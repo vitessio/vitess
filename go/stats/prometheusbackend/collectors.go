@@ -337,7 +337,7 @@ func (c *multiTimingsCollector) Describe(ch chan<- *prometheus.Desc) {
 
 // Collect implements Collector.
 func (c *multiTimingsCollector) Collect(ch chan<- prometheus.Metric) {
-	for cat, his := range c.mt.Timings.Histograms() {
+	for cat, his := range c.mt.Histograms() {
 		labelValues := strings.Split(cat, ".")
 		metric, err := prometheus.NewConstHistogram(
 			c.desc,
