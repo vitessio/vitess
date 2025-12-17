@@ -239,7 +239,7 @@ func IsPrimaryTablet(ctx context.Context, ts *topo.Server, ti *topo.TabletInfo) 
 	}
 
 	// Tablet record claims to be primary, and shard record matches
-	if topoproto.TabletAliasEqual(si.PrimaryAlias, ti.Tablet.Alias) {
+	if topoproto.TabletAliasEqual(si.PrimaryAlias, ti.Alias) {
 		return true, nil
 	}
 

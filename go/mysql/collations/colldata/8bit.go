@@ -114,7 +114,7 @@ func (c *Collation_8bit_bin) Wildcard(pat []byte, matchOne rune, matchMany rune,
 }
 
 func (c *Collation_8bit_bin) ToLower(dst, src []byte) []byte {
-	lowerTable := c.simpletables.tolower
+	lowerTable := c.tolower
 
 	for _, c := range src {
 		dst = append(dst, lowerTable[c])
@@ -123,7 +123,7 @@ func (c *Collation_8bit_bin) ToLower(dst, src []byte) []byte {
 }
 
 func (c *Collation_8bit_bin) ToUpper(dst, src []byte) []byte {
-	upperTable := c.simpletables.toupper
+	upperTable := c.toupper
 
 	for _, c := range src {
 		dst = append(dst, upperTable[c])
@@ -245,7 +245,7 @@ func weightStringPadingSimple(padChar byte, dst []byte, numCodepoints int, padTo
 }
 
 func (c *Collation_8bit_simple_ci) ToLower(dst, src []byte) []byte {
-	lowerTable := c.simpletables.tolower
+	lowerTable := c.tolower
 
 	for _, c := range src {
 		dst = append(dst, lowerTable[c])
@@ -254,7 +254,7 @@ func (c *Collation_8bit_simple_ci) ToLower(dst, src []byte) []byte {
 }
 
 func (c *Collation_8bit_simple_ci) ToUpper(dst, src []byte) []byte {
-	upperTable := c.simpletables.toupper
+	upperTable := c.toupper
 
 	for _, c := range src {
 		dst = append(dst, upperTable[c])

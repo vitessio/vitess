@@ -220,7 +220,7 @@ type MemoryLogger struct {
 // NewMemoryLogger returns a new MemoryLogger
 func NewMemoryLogger() *MemoryLogger {
 	ml := &MemoryLogger{}
-	ml.CallbackLogger.f = func(e *logutilpb.Event) {
+	ml.f = func(e *logutilpb.Event) {
 		ml.mu.Lock()
 		defer ml.mu.Unlock()
 		ml.Events = append(ml.Events, e)

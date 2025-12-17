@@ -188,7 +188,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			reservedID := info.reservedID
 
 			if session != nil && session.Session != nil {
-				opts = session.Session.Options
+				opts = session.Options
 			}
 
 			if opts == nil && fetchLastInsertID {
@@ -420,7 +420,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 			reservedID := info.reservedID
 
 			if session != nil && session.Session != nil {
-				opts = session.Session.Options
+				opts = session.Options
 			}
 
 			if opts == nil && fetchLastInsertID {
@@ -858,7 +858,7 @@ func requireNewQS(err error, target *querypb.Target) bool {
 
 // actionInfo looks at the current session, and returns information about what needs to be done for this tablet
 func actionInfo(ctx context.Context, target *querypb.Target, session *econtext.SafeSession, autocommit bool, txMode vtgatepb.TransactionMode) (*shardActionInfo, *vtgatepb.Session_ShardSession, error) {
-	if !(session.InTransaction() || session.InReservedConn()) {
+	if !session.InTransaction() && !session.InReservedConn() {
 		return &shardActionInfo{}, nil, nil
 	}
 	ignoreSession := ctx.Value(engine.IgnoreReserveTxn)

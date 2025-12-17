@@ -51,3 +51,8 @@ func (s *NoOpStrategy) Start() {
 func (s *NoOpStrategy) Stop() {
 	// No-op: NoOpStrategy has no resources to clean up
 }
+
+// GetStrategyName returns the name of the strategy.
+func (s *NoOpStrategy) GetStrategyName() string {
+	return string(ThrottlingStrategyUnknown)
+}

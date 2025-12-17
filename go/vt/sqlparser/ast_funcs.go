@@ -1142,7 +1142,7 @@ func containEscapableChars(s string, at AtCount) bool {
 		c := uint16(s[i])
 		letter := isLetter(c)
 		systemVarChar := isDbSystemVariable && isCarat(c)
-		if !(letter || systemVarChar) {
+		if !letter && !systemVarChar {
 			if i == 0 || !isDigit(c) {
 				return true
 			}

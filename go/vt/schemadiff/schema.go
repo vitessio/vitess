@@ -387,7 +387,7 @@ func (s *Schema) normalize(hints *DiffHints) error {
 		}
 
 		tableColumns := map[string]*sqlparser.ColumnDefinition{}
-		for _, col := range t.CreateTable.TableSpec.Columns {
+		for _, col := range t.TableSpec.Columns {
 			colName := col.Name.Lowered()
 			tableColumns[colName] = col
 		}
@@ -406,7 +406,7 @@ func (s *Schema) normalize(hints *DiffHints) error {
 			}
 
 			referencedColumns := map[string]*sqlparser.ColumnDefinition{}
-			for _, col := range referencedTable.CreateTable.TableSpec.Columns {
+			for _, col := range referencedTable.TableSpec.Columns {
 				colName := col.Name.Lowered()
 				referencedColumns[colName] = col
 			}
@@ -422,7 +422,7 @@ func (s *Schema) normalize(hints *DiffHints) error {
 				if !ok {
 					return errors.Join(errs, &InvalidReferencedColumnInForeignKeyConstraintError{Table: t.Name(), Constraint: cs.Name.String(), ReferencedTable: referencedTableName, ReferencedColumn: referencedColumnName})
 				}
-				if !colTypeEqualForForeignKey(s.env, t.TableSpec, referencedTable.CreateTable.TableSpec, coveredColumn.Type, referencedColumn.Type) {
+				if !colTypeEqualForForeignKey(s.env, t.TableSpec, referencedTable.TableSpec, coveredColumn.Type, referencedColumn.Type) {
 					return errors.Join(errs, &ForeignKeyColumnTypeMismatchError{Table: t.Name(), Constraint: cs.Name.String(), Column: coveredColumn.Name.String(), ReferencedTable: referencedTableName, ReferencedColumn: referencedColumnName})
 				}
 			}
@@ -1027,7 +1027,7 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 					// Dropping a foreign key; we need to understand which table this foreign key used to reference.
 					// The DropKey statement itself only _names_ the constraint, but does not have information
 					// about the parent, columns, etc. So we need to find the constraint in the CreateTable statement.
-					for _, cs := range diff.from.CreateTable.TableSpec.Constraints {
+					for _, cs := range diff.from.TableSpec.Constraints {
 						if strings.EqualFold(cs.Name.String(), node.Name.String()) {
 							if check, ok := cs.Details.(*sqlparser.ForeignKeyDefinition); ok {
 								parentTableName := check.ReferenceDefinition.ReferencedTable.Name.String()
@@ -1088,7 +1088,7 @@ func (s *Schema) ValidateViewReferences() error {
 	schemaInformation.addTable("dual")
 
 	for _, view := range s.Views() {
-		sel := sqlparser.Clone(view.CreateView.Select) // Analyze(), below, rewrites the select; we don't want to actually modify the schema
+		sel := sqlparser.Clone(view.Select) // Analyze(), below, rewrites the select; we don't want to actually modify the schema
 		_, err := semantics.AnalyzeStrict(sel, semanticKS.Name, schemaInformation)
 		formalizeErr := func(err error) error {
 			if err == nil {
