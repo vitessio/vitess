@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 // AggregateParams specify the parameters for each aggregation.
@@ -56,6 +57,11 @@ type AggregateParams struct {
 	OrigOpcode opcode.AggregateOpcode
 
 	CollationEnv *collations.Environment
+
+	// UseHashDistinct indicates this aggregation should use hash-based
+	// distinct tracking instead of sort-based. This is used when multiple
+	// distinct aggregations with different expressions exist in a query.
+	UseHashDistinct bool
 }
 
 // NewAggregateParam creates a new aggregate param
@@ -128,6 +134,14 @@ type aggregator interface {
 	reset()
 }
 
+// distinctTracker is an interface for tracking distinct values.
+// It can be implemented by sort-based (aggregatorDistinct) or
+// hash-based (aggregatorDistinctHash) trackers.
+type distinctTracker interface {
+	shouldReturn(row []sqltypes.Value) (bool, error)
+	reset()
+}
+
 type aggregatorDistinct struct {
 	column       int
 	last         sqltypes.Value
@@ -160,18 +174,69 @@ func (a *aggregatorDistinct) reset() {
 	a.last = sqltypes.NULL
 }
 
+// aggregatorDistinctHash is a hash-based distinct tracker that uses hash sets
+// to track seen values. Unlike aggregatorDistinct which requires sorted data,
+// this can handle arbitrary input order. It's used when multiple distinct
+// aggregations with different expressions exist in a single query.
+type aggregatorDistinctHash struct {
+	column       int
+	wsColumn     int // weight string column for collation support
+	seen         map[vthash.Hash]struct{}
+	hasher       vthash.Hasher
+	coll         collations.ID
+	collationEnv *collations.Environment
+	typ          querypb.Type
+	sqlmode      evalengine.SQLMode
+	values       *evalengine.EnumSetValues
+}
+
+func (a *aggregatorDistinctHash) shouldReturn(row []sqltypes.Value) (bool, error) {
+	val := row[a.column]
+	if val.IsNull() {
+		// NULL values are never counted as distinct duplicates
+		return false, nil
+	}
+
+	a.hasher.Reset()
+	err := evalengine.NullsafeHashcode128(&a.hasher, val, a.coll, a.typ, a.sqlmode, a.values)
+	if err != nil {
+		// Fallback to weight string if available
+		if a.wsColumn >= 0 {
+			val = row[a.wsColumn]
+			a.hasher.Reset()
+			err = evalengine.NullsafeHashcode128(&a.hasher, val, collations.Unknown, sqltypes.VarBinary, a.sqlmode, nil)
+		}
+		if err != nil {
+			return false, err
+		}
+	}
+
+	hash := a.hasher.Sum128()
+	if _, found := a.seen[hash]; found {
+		return true, nil // Already seen, skip
+	}
+	a.seen[hash] = struct{}{}
+	return false, nil
+}
+
+func (a *aggregatorDistinctHash) reset() {
+	a.seen = make(map[vthash.Hash]struct{})
+}
+
 type aggregatorCount struct {
 	from     int
 	n        int64
-	distinct aggregatorDistinct
+	distinct distinctTracker
 }
 
 func (a *aggregatorCount) add(row []sqltypes.Value) error {
 	if row[a.from].IsNull() {
 		return nil
 	}
-	if ret, err := a.distinct.shouldReturn(row); ret {
-		return err
+	if a.distinct != nil {
+		if ret, err := a.distinct.shouldReturn(row); ret {
+			return err
+		}
 	}
 	a.n++
 	return nil
@@ -183,7 +248,9 @@ func (a *aggregatorCount) finish(*evalengine.ExpressionEnv, collations.ID) (sqlt
 
 func (a *aggregatorCount) reset() {
 	a.n = 0
-	a.distinct.reset()
+	if a.distinct != nil {
+		a.distinct.reset()
+	}
 }
 
 type aggregatorCountStar struct {
@@ -235,15 +302,17 @@ func (a *aggregatorMinMax) reset() {
 type aggregatorSum struct {
 	from     int
 	sum      evalengine.Sum
-	distinct aggregatorDistinct
+	distinct distinctTracker
 }
 
 func (a *aggregatorSum) add(row []sqltypes.Value) error {
 	if row[a.from].IsNull() {
 		return nil
 	}
-	if ret, err := a.distinct.shouldReturn(row); ret {
-		return err
+	if a.distinct != nil {
+		if ret, err := a.distinct.shouldReturn(row); ret {
+			return err
+		}
 	}
 	return a.sum.Add(row[a.from])
 }
@@ -254,7 +323,9 @@ func (a *aggregatorSum) finish(*evalengine.ExpressionEnv, collations.ID) (sqltyp
 
 func (a *aggregatorSum) reset() {
 	a.sum.Reset()
-	a.distinct.reset()
+	if a.distinct != nil {
+		a.distinct.reset()
+	}
 }
 
 type aggregatorScalar struct {
@@ -411,6 +482,35 @@ func isComparable(typ sqltypes.Type) bool {
 	return false
 }
 
+// createDistinctTracker creates the appropriate distinct tracker based on the aggregation parameters.
+// If UseHashDistinct is true, it creates a hash-based tracker that can handle arbitrary input order.
+// Otherwise, it creates a sort-based tracker that requires sorted input.
+func createDistinctTracker(aggr *AggregateParams, distinctCol int, wsCol int, sourceType querypb.Type) distinctTracker {
+	if distinctCol < 0 {
+		return nil // No distinct tracking needed
+	}
+
+	if aggr.UseHashDistinct {
+		return &aggregatorDistinctHash{
+			column:       distinctCol,
+			wsColumn:     wsCol,
+			seen:         make(map[vthash.Hash]struct{}),
+			hasher:       vthash.New(),
+			coll:         aggr.Type.Collation(),
+			collationEnv: aggr.CollationEnv,
+			typ:          sourceType,
+			values:       aggr.Type.Values(),
+		}
+	}
+
+	return &aggregatorDistinct{
+		column:       distinctCol,
+		coll:         aggr.Type.Collation(),
+		collationEnv: aggr.CollationEnv,
+		values:       aggr.Type.Values(),
+	}
+}
+
 func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams, env *evalengine.ExpressionEnv, collation collations.ID) (*aggregationState, []*querypb.Field, error) {
 	fields = slice.Map(fields, func(from *querypb.Field) *querypb.Field { return from.CloneVT() })
 
@@ -423,12 +523,14 @@ func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams, env 
 		targetType := aggr.typ(sourceType, env, collation)
 
 		var ag aggregator
-		var distinct = -1
+		var distinctCol = -1
+		var wsCol = -1
 
 		if aggr.Opcode.IsDistinct() {
-			distinct = aggr.KeyCol
+			distinctCol = aggr.KeyCol
+			wsCol = aggr.WCol
 			if aggr.WAssigned() && !isComparable(sourceType) {
-				distinct = aggr.WCol
+				distinctCol = aggr.WCol
 			}
 		}
 
@@ -444,13 +546,8 @@ func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams, env 
 
 		case opcode.AggregateCount, opcode.AggregateCountDistinct:
 			ag = &aggregatorCount{
-				from: aggr.Col,
-				distinct: aggregatorDistinct{
-					column:       distinct,
-					coll:         aggr.Type.Collation(),
-					collationEnv: aggr.CollationEnv,
-					values:       aggr.Type.Values(),
-				},
+				from:     aggr.Col,
+				distinct: createDistinctTracker(aggr, distinctCol, wsCol, sourceType),
 			}
 
 		case opcode.AggregateSum, opcode.AggregateSumDistinct:
@@ -463,14 +560,9 @@ func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams, env 
 			}
 
 			ag = &aggregatorSum{
-				from: aggr.Col,
-				sum:  sum,
-				distinct: aggregatorDistinct{
-					column:       distinct,
-					coll:         aggr.Type.Collation(),
-					collationEnv: aggr.CollationEnv,
-					values:       aggr.Type.Values(),
-				},
+				from:     aggr.Col,
+				sum:      sum,
+				distinct: createDistinctTracker(aggr, distinctCol, wsCol, sourceType),
 			}
 
 		case opcode.AggregateMin:

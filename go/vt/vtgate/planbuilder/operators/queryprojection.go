@@ -79,6 +79,11 @@ type (
 
 		Distinct bool // Whether the aggregation function is DISTINCT
 
+		// UseHashDistinct indicates this aggregation should use hash-based distinct tracking
+		// instead of sort-based. Set when multiple distinct aggregations with different
+		// expressions exist in the query.
+		UseHashDistinct bool
+
 		// Offsets pointing to columns within the same aggregator
 		ColOffset int // Offset for the column being aggregated
 		WSOffset  int // Offset for the weight string of the column
