@@ -84,7 +84,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: uSchemaSQL,
 			VSchema:   uVSchema,
 		}
-		err = clusterInstance.StartUnshardedKeyspace(*uKeyspace, 0, false)
+		err = clusterInstance.StartUnshardedKeyspace(*uKeyspace, 0, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}
@@ -98,7 +98,7 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
 			"--queryserver-config-passthrough-dmls",
 			"--queryserver-config-max-result-size", "10")
-		err = clusterInstance.StartKeyspace(*sKeyspace, []string{"-80", "80-"}, 0, false)
+		err = clusterInstance.StartKeyspace(*sKeyspace, []string{"-80", "80-"}, 0, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}

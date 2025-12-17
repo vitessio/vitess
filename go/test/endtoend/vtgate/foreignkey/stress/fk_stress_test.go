@@ -377,7 +377,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// We will use a replica to confirm that vtgate's cascading works correctly.
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 2, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 2, false, clusterInstance.Cell); err != nil {
 			return 1, err
 		}
 
