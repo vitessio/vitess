@@ -99,17 +99,17 @@ func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, opts *
 			} else {
 				rd.Row[col] = row[index].ToString()[:truncateAt] + truncatedNotation
 			}
-		} else {
-			if row[index].IsBinary() {
-				rb, err := row[index].ToBytes()
-				if err != nil { // Should never happen
-					return vterrors.Wrapf(err, "failed to convert row value to bytes")
-				}
-				// Print the column as a HEX string the same way the MySQL client does.
-				rd.Row[col] = "0x" + hex.EncodeToString(rb)
-			} else {
-				rd.Row[col] = row[index].ToString()
+			return nil
+		}
+		if row[index].IsBinary() {
+			rb, err := row[index].ToBytes()
+			if err != nil { // Should never happen
+				return vterrors.Wrapf(err, "failed to convert row value to bytes")
 			}
+			// Print the column as a HEX string the same way the MySQL client does.
+			rd.Row[col] = "0x" + hex.EncodeToString(rb)
+		} else {
+			rd.Row[col] = row[index].ToString()
 		}
 		return nil
 	}
