@@ -161,8 +161,7 @@ jobs:
                 git add .
 
                 # Commit with conflict message
-                git commit --author="vitess-bot[bot] <108069721+vitess-bot[bot]@users.noreply.github.com>" \
-                  -m "Cherry-pick $MERGE_COMMIT_SHA with conflicts" || {
+                git commit -m "Cherry-pick $MERGE_COMMIT_SHA with conflicts" || {
                   echo "Error: Failed to commit conflicts"
                   git checkout main
                   git branch -D "$NEW_BRANCH" 2>/dev/null || true
@@ -177,7 +176,7 @@ jobs:
               fi
             else
               # Cherry-pick succeeded, amend to update author
-              git commit --amend --no-edit --author="vitess-bot[bot] <108069721+vitess-bot[bot]@users.noreply.github.com>" || {
+              git commit --amend --no-edit --reset-author || {
                 echo "Error: Failed to amend commit"
                 git checkout main
                 git branch -D "$NEW_BRANCH" 2>/dev/null || true
@@ -358,8 +357,7 @@ jobs:
                 git add .
 
                 # Commit with conflict message
-                git commit --author="vitess-bot[bot] <108069721+vitess-bot[bot]@users.noreply.github.com>" \
-                  -m "Cherry-pick $MERGE_COMMIT_SHA with conflicts" || {
+                git commit -m "Cherry-pick $MERGE_COMMIT_SHA with conflicts" || {
                   echo "Error: Failed to commit conflicts"
                   git checkout main
                   git branch -D "$NEW_BRANCH" 2>/dev/null || true
@@ -374,7 +372,7 @@ jobs:
               fi
             else
               # Cherry-pick succeeded, amend to update author
-              git commit --amend --no-edit --author="vitess-bot[bot] <108069721+vitess-bot[bot]@users.noreply.github.com>" || {
+              git commit --amend --no-edit --reset-author || {
                 echo "Error: Failed to amend commit"
                 git checkout main
                 git branch -D "$NEW_BRANCH" 2>/dev/null || true
