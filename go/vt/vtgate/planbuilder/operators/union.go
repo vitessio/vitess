@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
@@ -118,8 +119,26 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 func (u *Union) predicatePerSource(expr sqlparser.Expr, offsets map[string]int) (bool, []sqlparser.Expr) {
 	needsFilter := false
 	exprPerSource := make([]sqlparser.Expr, len(u.Sources))
+
+	// If the expression is a JoinPredicate, we need to extract the underlying expression
+	// before iterating over sources. This is because JoinPredicate.Clone() mutates shared
+	// tracker state during CopyOnRewrite, which would cause subsequent iterations to see
+	// the already-rewritten expression instead of the original.
+	baseExpr := expr
+	if jp, ok := expr.(*predicates.JoinPredicate); ok {
+		baseExpr = jp.Current()
+	}
+
 	for i := range u.Sources {
-		predicate := sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+		// Clone the base expression for each source to ensure independent rewrites
+		exprToRewrite := sqlparser.Clone(baseExpr)
+
+		// Check if this source can receive the raw underlying expression or needs the column alias.
+		// When a source is a Horizon wrapping another Union, we must use the column alias
+		// so that the inner Union can properly resolve the column reference.
+		useAlias := u.sourceNeedsAliasRewrite(i)
+
+		predicate := sqlparser.CopyOnRewrite(exprToRewrite, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 			col, ok := cursor.Node().(*sqlparser.ColName)
 			if !ok {
 				return
@@ -137,12 +156,37 @@ func (u *Union) predicatePerSource(expr sqlparser.Expr, offsets map[string]int) 
 			if !ok {
 				panic(vterrors.VT09015())
 			}
-			cursor.Replace(ae.Expr)
+
+			if useAlias {
+				// Use the column alias as a simple ColName so nested Unions can resolve it
+				cursor.Replace(sqlparser.NewColName(ae.ColumnName()))
+			} else {
+				// Use the raw underlying expression for direct pushdown
+				cursor.Replace(ae.Expr)
+			}
 		}, nil).(sqlparser.Expr)
 
 		exprPerSource[i] = predicate
 	}
 	return needsFilter, exprPerSource
+}
+
+// sourceNeedsAliasRewrite checks if a source is a Horizon that wraps another Union.
+// In such cases, we need to use the column alias instead of the raw expression
+// when rewriting predicates, so the inner Union can properly resolve column references.
+func (u *Union) sourceNeedsAliasRewrite(sourceIdx int) bool {
+	src := u.Sources[sourceIdx]
+	for {
+		switch op := src.(type) {
+		case *Horizon:
+			_, isUnion := op.Source.(*Union)
+			return isUnion
+		case *Route:
+			src = op.Source
+		default:
+			return false
+		}
+	}
 }
 
 func (u *Union) GetSelectFor(source int) *sqlparser.Select {
