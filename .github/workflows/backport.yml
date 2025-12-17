@@ -60,9 +60,6 @@ jobs:
             DRY_RUN="false"
           fi
 
-          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
-          echo "dry_run=$DRY_RUN" >> $GITHUB_OUTPUT
-
           if [ "$DRY_RUN" = "true" ]; then
             echo "🔍 DRY RUN MODE ENABLED - No changes will be made"
             echo "=================================================="
@@ -83,11 +80,6 @@ jobs:
             exit 1
           fi
 
-          # Export PR information
-          echo "pr_title=$PR_TITLE" >> $GITHUB_OUTPUT
-          echo "pr_author=$PR_AUTHOR" >> $GITHUB_OUTPUT
-          echo "merge_commit_sha=$MERGE_COMMIT_SHA" >> $GITHUB_OUTPUT
-
           echo "Processing PR #$PR_NUMBER: $PR_TITLE"
           echo "Author: $PR_AUTHOR"
           echo "Merge commit: $MERGE_COMMIT_SHA"
@@ -101,17 +93,6 @@ jobs:
 
           # Extract other labels (excluding backport/forwardport labels)
           OTHER_LABELS=$(echo "$LABELS" | grep -v "^Backport to: " | grep -v "^Forwardport to: " | jq -R -s -c 'split("\n") | map(select(length > 0))' || echo '[]')
-
-          # Export as outputs
-          echo "backport_branches<<EOF" >> $GITHUB_OUTPUT
-          echo "$BACKPORT_BRANCHES" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-          echo "forwardport_branches<<EOF" >> $GITHUB_OUTPUT
-          echo "$FORWARDPORT_BRANCHES" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-          echo "other_labels=$OTHER_LABELS" >> $GITHUB_OUTPUT
 
           if [ -n "$BACKPORT_BRANCHES" ]; then
             echo "Will backport PR #$PR_NUMBER to branches: $BACKPORT_BRANCHES"
