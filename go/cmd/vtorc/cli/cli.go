@@ -53,12 +53,6 @@ func run(cmd *cobra.Command, args []string) {
 	servenv.Init()
 	inst.RegisterStats()
 
-	if config.GetCell() == "" {
-		// TODO: remove warning in v25+.
-		log.Fatal("-cell is a required flag")
-		//log.Warning("WARNING: -cell will be a required flag in Vitess v25 and up")
-	}
-
 	log.Info("Starting vtorc")
 	if config.GetAuditToSyslog() {
 		inst.EnableAuditSyslog()
