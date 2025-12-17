@@ -29,16 +29,13 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
-func createSessionBalancer(t *testing.T) *SessionBalancer {
+func createSessionBalancer(t *testing.T) TabletBalancer {
 	t.Helper()
 
-	b := newSessionBalancer("local")
-	sb := b.(*SessionBalancer)
-
-	return sb
+	return newSessionBalancer("local")
 }
 
-func TestPickNoTablets(t *testing.T) {
+func TestSessionPickNoTablets(t *testing.T) {
 	b := createSessionBalancer(t)
 
 	target := &querypb.Target{
@@ -52,7 +49,7 @@ func TestPickNoTablets(t *testing.T) {
 	require.Nil(t, result)
 }
 
-func TestPickLocalOnly(t *testing.T) {
+func TestSessionPickLocalOnly(t *testing.T) {
 	b := createSessionBalancer(t)
 
 	target := &querypb.Target{
@@ -114,7 +111,7 @@ func TestPickLocalOnly(t *testing.T) {
 	require.NotEqual(t, picked2, picked3, fmt.Sprintf("expected different tablets, got %s for both", tabletAlias(picked3)))
 }
 
-func TestPickPreferLocal(t *testing.T) {
+func TestSessionPickPreferLocal(t *testing.T) {
 	b := createSessionBalancer(t)
 
 	target := &querypb.Target{
@@ -184,9 +181,15 @@ func TestPickPreferLocal(t *testing.T) {
 	picked1 := b.Pick(target, tablets, WithSessionUUID("a"))
 	require.NotNil(t, picked1)
 	require.Equal(t, "local", picked1.Target.Cell)
+
+	// Pick should pick the same tablet consistently
+	for range 20 {
+		picked := b.Pick(target, tablets, WithSessionUUID("a"))
+		require.Equal(t, picked1, picked, fmt.Sprintf("expected %s, got %s", tabletAlias(picked1), tabletAlias(picked)))
+	}
 }
 
-func TestPickNoLocal(t *testing.T) {
+func TestSessionPickNoLocal(t *testing.T) {
 	b := createSessionBalancer(t)
 
 	target := &querypb.Target{
@@ -237,9 +240,15 @@ func TestPickNoLocal(t *testing.T) {
 	picked1 := b.Pick(target, tablets, WithSessionUUID("a"))
 	require.NotNil(t, picked1)
 	require.Equal(t, "external", picked1.Target.Cell)
+
+	// Pick should pick the same tablet consistently
+	for range 20 {
+		picked := b.Pick(target, tablets, WithSessionUUID("a"))
+		require.Equal(t, picked1, picked, fmt.Sprintf("expected %s, got %s", tabletAlias(picked1), tabletAlias(picked)))
+	}
 }
 
-func TestPickNoOpts(t *testing.T) {
+func TestSessionPickNoOpts(t *testing.T) {
 	b := createSessionBalancer(t)
 
 	target := &querypb.Target{
@@ -274,7 +283,7 @@ func TestPickNoOpts(t *testing.T) {
 	require.Nil(t, result)
 }
 
-func TestPickInvalidTablets(t *testing.T) {
+func TestSessionPickInvalidTablets(t *testing.T) {
 	b := createSessionBalancer(t)
 
 	target := &querypb.Target{
