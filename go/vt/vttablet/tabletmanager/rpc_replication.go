@@ -525,7 +525,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	if err := tm.MysqlDaemon.SetReplicationPosition(ctx, pos); err != nil {
 		return err
 	}
-	if err := tm.MysqlDaemon.SetReplicationSource(ctx, ti.Tablet.MysqlHostname, ti.Tablet.MysqlPort, 0, false, true); err != nil {
+	if err := tm.MysqlDaemon.SetReplicationSource(ctx, ti.MysqlHostname, ti.MysqlPort, 0, false, true); err != nil {
 		return err
 	}
 
@@ -764,7 +764,7 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 		if err != nil {
 			return err
 		}
-		if ti.Tablet.Type == topodatapb.TabletType_PRIMARY {
+		if ti.Type == topodatapb.TabletType_PRIMARY {
 			return tm.tmState.updateTypeAndPublish(ctx, topodatapb.TabletType_PRIMARY, ti.PrimaryTermStartTime, DBActionSetReadWrite)
 		}
 	}
@@ -916,8 +916,8 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		return err
 	}
 
-	host := parent.Tablet.MysqlHostname
-	port := parent.Tablet.MysqlPort
+	host := parent.MysqlHostname
+	port := parent.MysqlPort
 	// If host is empty, then we shouldn't even attempt the reparent. That tablet has already shutdown.
 	if host == "" {
 		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "Shard primary has empty mysql hostname")

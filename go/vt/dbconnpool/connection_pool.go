@@ -65,7 +65,7 @@ func NewConnectionPool(name string, stats *servenv.Exporter, capacity int, idleT
 		// This is unnamed exported so it will use the stats functions directly when adding to the expvar.
 		stats = servenv.NewExporter("", "")
 	}
-	cp.ConnPool.RegisterStats(stats, name)
+	cp.RegisterStats(stats, name)
 	return cp
 }
 

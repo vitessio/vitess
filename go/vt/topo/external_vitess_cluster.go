@@ -98,7 +98,7 @@ func (ts *Server) UpdateExternalVitessCluster(ctx context.Context, vc *ExternalV
 		return ctx.Err()
 	}
 	// FIXME: check for cluster lock
-	data, err := vc.ExternalVitessCluster.MarshalVT()
+	data, err := vc.MarshalVT()
 	if err != nil {
 		return err
 	}

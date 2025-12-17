@@ -81,9 +81,6 @@ linters:
               desc: "vindexes should not depend on servenv - this component should be usable as a library without server infrastructure dependencies"
     errcheck:
       exclude-functions:
-        - flag.Set
-        - (*flag.FlagSet).Parse
-        - (flag.Value).Set
         - fmt.Fprint
         - fmt.Fprintf
         - io.WriteString(fmt.State)
@@ -106,11 +103,6 @@ linters:
         - (*vitess.io/vitess/go/bytes2.Buffer).WriteString
         - (vitess.io/vitess/go/sqltypes.BinWriter).Write
         - (*vitess.io/vitess/go/vt/vttest.LocalCluster).TearDown
-    govet:
-      disable:
-        - nilness
-        - unusedwrite
-        - loopclosure
     staticcheck:
       checks:
         - "all"
@@ -123,7 +115,6 @@ linters:
         - "-ST1022"
         - "-QF1001"
         - "-QF1005"
-        - "-QF1008"
   exclusions:
     generated: lax
     presets:
@@ -159,9 +150,6 @@ linters:
           - nosprintfhostport
           - sqlclosecheck
         path: ^go/test/
-      - linters:
-          - errcheck
-        path: ^go/vt/automation/
       - linters:
           - errcheck
         path: ^go/vt/mysqlctl/
@@ -206,9 +194,6 @@ linters:
         path: ^go/vt/vtgate/.*_test.go
       - linters:
           - errcheck
-        path: ^go/vt/vtgr/
-      - linters:
-          - errcheck
         path: ^go/vt/vttablet/(customrule|filelogger|grpctmserver|onlineddl|sandboxconn|tabletserver)/
       - linters:
           - errcheck
@@ -221,19 +206,11 @@ linters:
         path: ^go/vt/vttest
       - linters:
           - errcheck
-        path: ^go/vt/worker
-      - linters:
-          - errcheck
-        path: ^go/vt/workflow
-      - linters:
-          - errcheck
         path: ^go/vt/wrangler
       - linters:
           - errcheck
         path: ^go/vt/zkctl
     paths:
-      - third_party$
-      - builtin$
       - examples$
 formatters:
   enable:
@@ -246,7 +223,5 @@ formatters:
   exclusions:
     generated: lax
     paths:
-      - third_party$
-      - builtin$
       - examples$
       - ^go/vt/proto/

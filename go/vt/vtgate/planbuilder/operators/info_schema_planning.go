@@ -309,7 +309,7 @@ func shouldRewrite(e sqlparser.Expr) bool {
 	switch node := e.(type) {
 	case *sqlparser.FuncExpr:
 		// we should not rewrite database() calls against information_schema
-		return !(node.Name.EqualString("database") || node.Name.EqualString("schema"))
+		return !node.Name.EqualString("database") && !node.Name.EqualString("schema")
 	}
 	return true
 }

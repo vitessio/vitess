@@ -193,7 +193,7 @@ func FailAllWrites(s3bh *S3BackupHandle, ctx context.Context, filename string, f
 	r := &failReadPipeReader{PipeReader: reader}
 
 	s3bh.handleAddFile(ctx, filename, partSizeBytes, r, func(err error) {
-		r.PipeReader.CloseWithError(err)
+		r.CloseWithError(err)
 	})
 	return writer, nil
 }

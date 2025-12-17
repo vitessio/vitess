@@ -399,7 +399,7 @@ func (session *SafeSession) SetErrorUntilRollback(enable bool) {
 func (session *SafeSession) IsErrorUntilRollback() bool {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	return session.Session.GetErrorUntilRollback()
+	return session.GetErrorUntilRollback()
 }
 
 // GetLogger returns executor logger.
@@ -494,7 +494,7 @@ func (session *SafeSession) AppendOrUpdate(target *querypb.Target, info ShardAct
 		// Should be unreachable
 		return vterrors.VT13001("unexpected 'autocommitted' state in transaction")
 	}
-	if !(session.Session.InTransaction || session.Session.InReservedConn) {
+	if !session.Session.InTransaction && !session.Session.InReservedConn {
 		// Should be unreachable
 		return vterrors.VT13001("current session is neither in transaction nor in reserved connection")
 	}
@@ -598,14 +598,14 @@ func (session *SafeSession) MustRollback() bool {
 func (session *SafeSession) RecordWarning(warning *querypb.QueryWarning) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	session.Session.Warnings = append(session.Session.Warnings, warning)
+	session.Warnings = append(session.Warnings, warning)
 }
 
 // ClearWarnings removes all the warnings from the session
 func (session *SafeSession) ClearWarnings() {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	session.Session.Warnings = nil
+	session.Warnings = nil
 }
 
 // SetUserDefinedVariable sets the user defined variable in the session.
@@ -924,10 +924,10 @@ func removeShard(tabletAlias *topodatapb.TabletAlias, sessions []*vtgatepb.Sessi
 
 // GetOrCreateOptions will return the current options struct, or create one and return it if no-one exists
 func (session *SafeSession) GetOrCreateOptions() *querypb.ExecuteOptions {
-	if session.Session.Options == nil {
-		session.Session.Options = &querypb.ExecuteOptions{}
+	if session.Options == nil {
+		session.Options = &querypb.ExecuteOptions{}
 	}
-	return session.Session.Options
+	return session.Options
 }
 
 func (session *SafeSession) CachePlan() bool {
@@ -938,7 +938,7 @@ func (session *SafeSession) CachePlan() bool {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
-	return !(session.Options.SkipQueryPlanCache || session.Options.HasCreatedTempTables)
+	return !session.Options.SkipQueryPlanCache && !session.Options.HasCreatedTempTables
 }
 
 func (session *SafeSession) GetSelectLimit() int {
