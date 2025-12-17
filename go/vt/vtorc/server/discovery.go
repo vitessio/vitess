@@ -17,12 +17,27 @@ limitations under the License.
 package server
 
 import (
+	"context"
+
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/logic"
 )
 
 // StartVTOrcDiscovery starts VTOrc discovery serving
-func StartVTOrcDiscovery() {
+func StartVTOrcDiscovery() error {
+	ts := topo.Open()
+	if cell := config.GetCell(); cell != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+		defer cancel()
+		_, err := ts.GetCellInfo(ctx, cell, true /* strongRead */)
+		if err != nil {
+			return err
+		}
+	}
+
 	log.Info("Starting Discovery")
-	go logic.ContinuousDiscovery()
+	go logic.ContinuousDiscovery(ts)
+	return nil
 }

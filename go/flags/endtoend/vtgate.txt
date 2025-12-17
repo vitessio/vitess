@@ -38,7 +38,7 @@ Flags:
       --buffer-size int                                                  Maximum number of buffered requests in flight (across all ongoing failovers). (default 1000)
       --buffer-window duration                                           Duration for how long a request should be buffered at most. (default 10s)
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
-      --cell string                                                      cell to use
+      --cell string                                                      cell to use (required)
       --cells-to-watch string                                            comma-separated list of cells for watching tablets
       --config-file string                                               Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
       --config-file-not-found-handling ConfigFileNotFoundHandling        Behavior when a config file is not found. (Options: error, exit, ignore, warn) (default warn)

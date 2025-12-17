@@ -160,7 +160,7 @@ func TestMain(m *testing.M) {
 			VSchema:       VSchema,
 			SidecarDBName: sidecarDBName,
 		}
-		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 2, false)
+		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 2, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}
@@ -188,7 +188,7 @@ func TestMain(m *testing.M) {
 			}
 		}
 
-		if err := clusterInstance.StartVTOrc(KeyspaceName); err != nil {
+		if err := clusterInstance.StartVTOrc(Cell, KeyspaceName); err != nil {
 			return 1
 		}
 

@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/process"
@@ -238,7 +239,7 @@ func onHealthTick() {
 // ContinuousDiscovery starts an asynchronous infinite discovery process where instances are
 // periodically investigated and their status captured, and long since unseen instances are
 // purged and forgotten.
-func ContinuousDiscovery() {
+func ContinuousDiscovery(ts *topo.Server) {
 	log.Infof("continuous discovery: setting up")
 	recentDiscoveryOperationKeys = cache.New(config.GetInstancePollTime(), time.Second)
 
@@ -255,7 +256,7 @@ func ContinuousDiscovery() {
 	healthTick := time.Tick(config.HealthPollSeconds * time.Second)
 	caretakingTick := time.Tick(time.Minute)
 	recoveryTick := time.Tick(config.GetRecoveryPollDuration())
-	tabletTopoTick := OpenTabletDiscovery()
+	tabletTopoTick := OpenTabletDiscovery(ts)
 	var recoveryEntrance int64
 	var snapshotTopologiesTick <-chan time.Time
 	if config.GetSnapshotTopologyInterval() > 0 {

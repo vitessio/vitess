@@ -186,8 +186,7 @@ func shouldWatchTablet(tablet *topodatapb.Tablet) bool {
 
 // OpenTabletDiscovery opens the vitess topo if enables and returns a ticker
 // channel for polling.
-func OpenTabletDiscovery() <-chan time.Time {
-	ts = topo.Open()
+func OpenTabletDiscovery(ts *topo.Server) <-chan time.Time {
 	tmc = inst.InitializeTMC()
 	// Clear existing cache and perform a new refresh.
 	if _, err := db.ExecVTOrc("DELETE FROM vitess_tablet"); err != nil {

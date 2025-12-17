@@ -161,7 +161,7 @@ func setTempVtDataRoot() string {
 }
 
 // StartVTOrc starts a VTOrc instance
-func (vc *VitessCluster) StartVTOrc() error {
+func (vc *VitessCluster) StartVTOrc(cell string) error {
 	// Start vtorc if not already running
 	if vc.VTOrcProcess != nil {
 		return nil
@@ -169,6 +169,7 @@ func (vc *VitessCluster) StartVTOrc() error {
 	base := cluster.VtProcessInstance("vtorc", "vtorc", vc.ClusterConfig.topoPort, vc.ClusterConfig.hostname)
 	vtorcProcess := &cluster.VTOrcProcess{
 		VtProcess: base,
+		Cell:      cell,
 		LogDir:    vc.ClusterConfig.tmpDir,
 		Config:    cluster.VTOrcConfiguration{},
 		Port:      vc.ClusterConfig.vtorcPort,
@@ -548,7 +549,8 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 // AddShards creates shards given list of comma-separated keys with specified tablets in each shard
 func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspace, names string, numReplicas int, numRdonly int, tabletIDBase int, opts map[string]string) error {
 	// Add a VTOrc instance if one is not already running
-	if err := vc.StartVTOrc(); err != nil {
+	vtorcCell := cells[0]
+	if err := vc.StartVTOrc(vtorcCell.Name); err != nil {
 		return err
 	}
 	// Disable global recoveries until the shard has been added.

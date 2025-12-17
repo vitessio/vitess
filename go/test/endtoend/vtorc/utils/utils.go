@@ -232,15 +232,23 @@ func resetShardPrimary(ts *topo.Server) (err error) {
 }
 
 // StartVTOrcs is used to start the vtorcs with the given extra arguments
-func StartVTOrcs(t *testing.T, clusterInfo *VTOrcClusterInfo, orcExtraArgs []string, config cluster.VTOrcConfiguration, count int) {
+func StartVTOrcs(t *testing.T, clusterInfo *VTOrcClusterInfo, orcExtraArgs []string, config cluster.VTOrcConfiguration, countByCell map[string]int) {
 	t.Helper()
+
+	// use default vtorc cell counts if none are defined
+	if countByCell == nil {
+		countByCell = cluster.DefaultVtorcsByCell
+	}
+
 	// Start vtorc
-	for i := 0; i < count; i++ {
-		vtorcProcess := clusterInfo.ClusterInstance.NewVTOrcProcess(config)
-		vtorcProcess.ExtraArgs = orcExtraArgs
-		err := vtorcProcess.Setup()
-		require.NoError(t, err)
-		clusterInfo.ClusterInstance.VTOrcProcesses = append(clusterInfo.ClusterInstance.VTOrcProcesses, vtorcProcess)
+	for cell, count := range countByCell {
+		for i := 0; i < count; i++ {
+			vtorcProcess := clusterInfo.ClusterInstance.NewVTOrcProcess(config, cell)
+			vtorcProcess.ExtraArgs = orcExtraArgs
+			err := vtorcProcess.Setup()
+			require.NoError(t, err)
+			clusterInfo.ClusterInstance.VTOrcProcesses = append(clusterInfo.ClusterInstance.VTOrcProcesses, vtorcProcess)
+		}
 	}
 }
 
@@ -257,7 +265,12 @@ func StopVTOrcs(t *testing.T, clusterInfo *VTOrcClusterInfo) {
 }
 
 // SetupVttabletsAndVTOrcs is used to setup the vttablets and start the vtorcs
-func SetupVttabletsAndVTOrcs(t *testing.T, clusterInfo *VTOrcClusterInfo, numReplicasReqCell1, numRdonlyReqCell1 int, orcExtraArgs []string, config cluster.VTOrcConfiguration, vtorcCount int, durability string) {
+func SetupVttabletsAndVTOrcs(t *testing.T, clusterInfo *VTOrcClusterInfo, numReplicasReqCell1, numRdonlyReqCell1 int, orcExtraArgs []string, config cluster.VTOrcConfiguration, vtorcCountByCell map[string]int, durability string) {
+	// use default vtorc cell counts if none are defined
+	if vtorcCountByCell == nil {
+		vtorcCountByCell = cluster.DefaultVtorcsByCell
+	}
+
 	// stop vtorc if it is running
 	StopVTOrcs(t, clusterInfo)
 
@@ -313,7 +326,7 @@ func SetupVttabletsAndVTOrcs(t *testing.T, clusterInfo *VTOrcClusterInfo, numRep
 	require.NoError(t, err)
 
 	// start vtorc
-	StartVTOrcs(t, clusterInfo, orcExtraArgs, config, vtorcCount)
+	StartVTOrcs(t, clusterInfo, orcExtraArgs, config, vtorcCountByCell)
 }
 
 // cleanAndStartVttablet cleans the MySQL instance underneath for running a new test. It also starts the vttablet.

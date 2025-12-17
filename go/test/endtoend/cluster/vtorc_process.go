@@ -40,6 +40,7 @@ import (
 type VTOrcProcess struct {
 	VtProcess
 	Port        int
+	Cell        string
 	LogDir      string
 	LogFileName string
 	ExtraArgs   []string
@@ -85,6 +86,11 @@ func (orc *VTOrcProcess) RewriteConfiguration() error {
 
 // Setup starts orc process with required arguements
 func (orc *VTOrcProcess) Setup() (err error) {
+	// validate cell
+	if orc.Cell == "" {
+		log.Fatal("vtorc cell cannot be empty")
+	}
+
 	// create the configuration file
 	timeNow := time.Now().UnixNano()
 	err = os.MkdirAll(orc.LogDir, 0755)
@@ -118,6 +124,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	--config config/vtorc/default.json --alsologtostderr
 	*/
 	flags := map[string]string{
+		"--cell":                       orc.Cell,
 		"--topo-implementation":        orc.TopoImplementation,
 		"--topo-global-server-address": orc.TopoGlobalAddress,
 		"--topo-global-root":           orc.TopoGlobalRoot,
@@ -152,7 +159,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	orc.proc.Args = append(orc.proc.Args, "--alsologtostderr")
 
 	if orc.LogFileName == "" {
-		orc.LogFileName = fmt.Sprintf("orc-stderr-%d.txt", timeNow)
+		orc.LogFileName = fmt.Sprintf("vtorc-stderr-%d.txt", timeNow)
 	}
 	errFile, err := os.Create(path.Join(orc.LogDir, orc.LogFileName))
 	if err != nil {
@@ -164,7 +171,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	orc.proc.Env = append(orc.proc.Env, os.Environ()...)
 	orc.proc.Env = append(orc.proc.Env, DefaultVttestEnv)
 
-	log.Infof("Running vtorc with command: %v", strings.Join(orc.proc.Args, " "))
+	log.Infof("Running vtorc in cell %s with command: %v", orc.Cell, strings.Join(orc.proc.Args, " "))
 
 	err = orc.proc.Start()
 	if err != nil {
