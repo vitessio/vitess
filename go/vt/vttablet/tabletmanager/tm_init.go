@@ -290,6 +290,7 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 		Tags:                 mergeTags(buildTags, initTags),
 		DefaultConnCollation: uint32(charset),
 		TabletStartTime:      protoutil.TimeToProto(time.Now()),
+		TabletShutdownTime:   nil,
 	}, nil
 }
 
@@ -509,6 +510,8 @@ func (tm *TabletManager) Close() {
 		tablet.Hostname = ""
 		tablet.MysqlHostname = ""
 		tablet.PortMap = nil
+		tablet.TabletStartTime = nil
+		tablet.TabletShutdownTime = protoutil.TimeToProto(time.Now())
 		return nil
 	}
 
