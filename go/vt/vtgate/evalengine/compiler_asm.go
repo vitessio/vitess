@@ -2296,7 +2296,7 @@ func (asm *assembler) Fn_JSON_EXTRACT(args int, staticPaths []staticPath) {
 		}
 
 		return 1
-	}, "FN JSON_EXTRACT, SP-1, ..., SP-N")
+	}, "FN JSON_EXTRACT (SP-1) (SP-2)...(SP-N)")
 }
 
 func (asm *assembler) Fn_JSON_KEYS(jp *json.Path) {
@@ -2361,6 +2361,66 @@ func (asm *assembler) Fn_JSON_OBJECT(args int) {
 		env.vm.sp -= args - 1
 		return 1
 	}, "FN JSON_ARRAY (SP-%d)...(SP-1)", args)
+}
+
+func (asm *assembler) Fn_JSON_REMOVE(args int, staticPaths []staticPath) {
+	asm.adjustStack(-args)
+	asm.emit(func(env *ExpressionEnv) int {
+		paths := make([]*json.Path, 0, args)
+
+		doc := env.vm.stack[env.vm.sp-(args+1)].(*evalJSON)
+
+		for i := args; i > 0; i-- {
+			arg := env.vm.stack[env.vm.sp-i]
+
+			if arg == nil {
+				env.vm.sp -= args
+				env.vm.stack[env.vm.sp-1] = nil
+				return 1
+			}
+
+			staticPath := staticPaths[args-i]
+			if staticPath.err != nil {
+				env.vm.err = staticPath.err
+				return 1
+			}
+
+			var path *json.Path
+			if staticPath.p != nil {
+				path = staticPath.p
+			} else {
+				pathBytes, err := evalToVarchar(arg, collations.CollationUtf8mb4ID, true)
+				if err != nil {
+					env.vm.err = err
+					return 1
+				}
+
+				path, err = intoJSONPath(pathBytes)
+				if err != nil {
+					env.vm.err = err
+					return 1
+				}
+			}
+
+			if path.ContainsWildcards() {
+				env.vm.err = errInvalidPathForTransform
+				return 1
+			}
+
+			paths = append(paths, path)
+		}
+
+		env.vm.sp -= args
+
+		err := json.ApplyTransform(json.Remove, doc, paths, nil)
+		if err != nil {
+			env.vm.err = err
+			return 1
+		}
+
+		env.vm.stack[env.vm.sp-1] = doc
+		return 1
+	}, "FN JSON_REMOVE (SP-1) (SP-2)...(SP-N)")
 }
 
 func (asm *assembler) Fn_JSON_UNQUOTE() {
