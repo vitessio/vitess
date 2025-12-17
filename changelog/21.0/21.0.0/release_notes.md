@@ -1,4 +1,5 @@
 # Release of Vitess v21.0.0
+
 ## Summary
 
 ### Table of Contents
