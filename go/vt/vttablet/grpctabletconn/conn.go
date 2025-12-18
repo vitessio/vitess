@@ -112,7 +112,7 @@ func DialTablet(ctx context.Context, tablet *topodatapb.Tablet, failFast grpccli
 }
 
 // Execute sends the query to VTTablet.
-func (conn *gRPCQueryClient) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (conn *gRPCQueryClient) Execute(ctx context.Context, session queryservice.Session, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID, reservedID int64) (*sqltypes.Result, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -128,7 +128,7 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, target *querypb.Target
 			BindVariables: bindVars,
 		},
 		TransactionId: transactionID,
-		Options:       options,
+		Options:       getOptions(session),
 		ReservedId:    reservedID,
 	}
 	er, err := conn.c.Execute(ctx, req)
@@ -139,7 +139,7 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, target *querypb.Target
 }
 
 // StreamExecute executes the query and streams results back through callback.
-func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, reservedID int64, callback func(*sqltypes.Result) error) error {
 	// All streaming clients should follow the code pattern below.
 	// The first part of the function starts the stream while holding
 	// a lock on conn.mu. The second part receives the data and calls
@@ -166,7 +166,7 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, target *querypb.
 				Sql:           query,
 				BindVariables: bindVars,
 			},
-			Options:       options,
+			Options:       getOptions(session),
 			TransactionId: transactionID,
 			ReservedId:    reservedID,
 		}
@@ -198,7 +198,7 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, target *querypb.
 }
 
 // Begin starts a transaction.
-func (conn *gRPCQueryClient) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (state queryservice.TransactionState, err error) {
+func (conn *gRPCQueryClient) Begin(ctx context.Context, session queryservice.Session, target *querypb.Target) (state queryservice.TransactionState, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -209,7 +209,7 @@ func (conn *gRPCQueryClient) Begin(ctx context.Context, target *querypb.Target, 
 		Target:            target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
-		Options:           options,
+		Options:           getOptions(session),
 	}
 	br, err := conn.c.Begin(ctx, req)
 	if err != nil {
@@ -463,7 +463,7 @@ func (conn *gRPCQueryClient) UnresolvedTransactions(ctx context.Context, target 
 }
 
 // BeginExecute starts a transaction and runs an Execute.
-func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (state queryservice.TransactionState, result *sqltypes.Result, err error) {
+func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64) (state queryservice.TransactionState, result *sqltypes.Result, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -480,7 +480,7 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.T
 			BindVariables: bindVars,
 		},
 		ReservedId: reservedID,
-		Options:    options,
+		Options:    getOptions(session),
 	}
 	reply, err := conn.c.BeginExecute(ctx, req)
 	if err != nil {
@@ -496,7 +496,7 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.T
 }
 
 // BeginStreamExecute starts a transaction and runs an Execute.
-func (conn *gRPCQueryClient) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (state queryservice.TransactionState, err error) {
+func (conn *gRPCQueryClient) BeginStreamExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, callback func(*sqltypes.Result) error) (state queryservice.TransactionState, err error) {
 	// Please see comments in StreamExecute to see how this works.
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -524,7 +524,7 @@ func (conn *gRPCQueryClient) BeginStreamExecute(ctx context.Context, target *que
 				BindVariables: bindVars,
 			},
 			ReservedId: reservedID,
-			Options:    options,
+			Options:    getOptions(session),
 		}
 		stream, err := conn.c.BeginStreamExecute(ctx, req)
 		if err != nil {
@@ -861,7 +861,7 @@ func (conn *gRPCQueryClient) HandlePanic(err *error) {
 }
 
 // ReserveBeginExecute implements the queryservice interface
-func (conn *gRPCQueryClient) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (state queryservice.ReservedTransactionState, result *sqltypes.Result, err error) {
+func (conn *gRPCQueryClient) ReserveBeginExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable) (state queryservice.ReservedTransactionState, result *sqltypes.Result, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -872,7 +872,7 @@ func (conn *gRPCQueryClient) ReserveBeginExecute(ctx context.Context, target *qu
 		Target:            target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
-		Options:           options,
+		Options:           getOptions(session),
 		PreQueries:        preQueries,
 		PostBeginQueries:  postBeginQueries,
 		Query: &querypb.BoundQuery{
@@ -896,7 +896,7 @@ func (conn *gRPCQueryClient) ReserveBeginExecute(ctx context.Context, target *qu
 }
 
 // ReserveBeginStreamExecute implements the queryservice interface
-func (conn *gRPCQueryClient) ReserveBeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (state queryservice.ReservedTransactionState, err error) {
+func (conn *gRPCQueryClient) ReserveBeginStreamExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (state queryservice.ReservedTransactionState, err error) {
 	// Please see comments in StreamExecute to see how this works.
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -917,7 +917,7 @@ func (conn *gRPCQueryClient) ReserveBeginStreamExecute(ctx context.Context, targ
 			Target:            target,
 			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
-			Options:           options,
+			Options:           getOptions(session),
 			PreQueries:        preQueries,
 			PostBeginQueries:  postBeginQueries,
 			Query: &querypb.BoundQuery{
@@ -977,7 +977,7 @@ func (conn *gRPCQueryClient) ReserveBeginStreamExecute(ctx context.Context, targ
 }
 
 // ReserveExecute implements the queryservice interface
-func (conn *gRPCQueryClient) ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (state queryservice.ReservedState, result *sqltypes.Result, err error) {
+func (conn *gRPCQueryClient) ReserveExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64) (state queryservice.ReservedState, result *sqltypes.Result, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -993,7 +993,7 @@ func (conn *gRPCQueryClient) ReserveExecute(ctx context.Context, target *querypb
 			BindVariables: bindVariables,
 		},
 		TransactionId: transactionID,
-		Options:       options,
+		Options:       getOptions(session),
 		PreQueries:    preQueries,
 	}
 	reply, err := conn.c.ReserveExecute(ctx, req)
@@ -1010,7 +1010,7 @@ func (conn *gRPCQueryClient) ReserveExecute(ctx context.Context, target *querypb
 }
 
 // ReserveStreamExecute implements the queryservice interface
-func (conn *gRPCQueryClient) ReserveStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (state queryservice.ReservedState, err error) {
+func (conn *gRPCQueryClient) ReserveStreamExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, callback func(*sqltypes.Result) error) (state queryservice.ReservedState, err error) {
 	// Please see comments in StreamExecute to see how this works.
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -1031,7 +1031,7 @@ func (conn *gRPCQueryClient) ReserveStreamExecute(ctx context.Context, target *q
 			Target:            target,
 			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
-			Options:           options,
+			Options:           getOptions(session),
 			PreQueries:        preQueries,
 			Query: &querypb.BoundQuery{
 				Sql:           sql,
@@ -1166,4 +1166,13 @@ func (conn *gRPCQueryClient) Close(ctx context.Context) error {
 // Tablet returns the rpc end point.
 func (conn *gRPCQueryClient) Tablet() *topodatapb.Tablet {
 	return conn.tablet
+}
+
+// getOptions safely extracts ExecuteOptions from a session, returning nil if session is nil.
+func getOptions(session queryservice.Session) *querypb.ExecuteOptions {
+	if session == nil {
+		return nil
+	}
+
+	return session.GetOptions()
 }

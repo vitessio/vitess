@@ -9,6 +9,7 @@
 - **[Minor Changes](#minor-changes)**
     - **[VTGate](#minor-changes-vtgate)**
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
+        - [New "session" mode for `--vtgate-balancer-mode` flag](#vtgate-session-balancer-mode)
     - **[Query Serving](#minor-changes-query-serving)**
         - [JSON_EXTRACT now supports dynamic path arguments](#query-serving-json-extract-dynamic-args)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -41,6 +42,16 @@ The VTGate flag `--legacy-replication-lag-algorithm` now defaults to `false`, di
 Instead, a simpler algorithm purely based on low lag, high lag and minimum number of tablets is used, which has proven to be more stable in many production environments. A detailed explanation of the two approaches [is explained in this code comment](https://github.com/vitessio/vitess/blob/main/go/vt/discovery/replicationlag.go#L125-L149).
 
 In v25 this flag will become deprecated and in the following release it will be removed. In the meantime, the legacy behaviour can be used by setting `--legacy-replication-lag-algorithm=true`. This deprecation is tracked in https://github.com/vitessio/vitess/issues/18914.
+
+#### <a id="vtgate-session-balancer-mode"/>New "session" mode for `--vtgate-balancer-mode` flag</a>
+
+The VTGate flag `--vtgate-balancer-mode` now supports a new "session" mode in addition to the existing "cell", "prefer-cell", and "random" modes. Session mode routes each session consistently to the same tablet for the session's duration.
+
+To enable session mode, set the flag when starting VTGate:
+
+```
+--vtgate-balancer-mode=session
+```
 
 ### <a id="minor-changes-query-serving"/>Query Serving</a>
 
