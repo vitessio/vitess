@@ -19,7 +19,6 @@ package vreplication
 import (
 	"fmt"
 	"math"
-	"math/big"
 	"os/exec"
 	"path"
 	"runtime"
@@ -361,9 +360,9 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 	grepCmd := fmt.Sprintf("grep 'Streaming rows for query:' %s | grep -c -v MAX_EXECUTION_TIME", path.Join(vc.ClusterConfig.tmpDir, "vttablet*INFO*"))
 	out, err := exec.Command("bash", "-c", grepCmd).Output()
 	require.NoError(t, err)
-	bi := new(big.Int)
-	bi.SetBytes(out)
-	require.Greater(t, bi.Int64(), int64(0))
+	logcnt, err := strconv.Atoi(strings.TrimSpace(string(out)))
+	require.NoError(t, err)
+	require.Greater(t, logcnt, 0)
 }
 
 func testCLIErrors(t *testing.T, ksWorkflow, cells string) {
