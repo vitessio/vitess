@@ -21,31 +21,37 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/logic"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+// validateCell checks that the provided cell exists.
+func validateCell(cell string) error {
+	if cell == "" {
+		// TODO: remove warning in v25+.
+		//log.Warning("WARNING: --cell will become a required vtorc flag in Vitess v25 and up")
+		log.Fatal("--cell is a required field")
+	}
+
+	// TODO: pass a single *topo.Server into VTOrc.
+	// This will require some general refactoring.
+	ts := topo.Open()
+	defer ts.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+	defer cancel()
+	_, err := ts.GetCellInfo(ctx, cell, true /* strongRead */)
+	return err
+}
 
 // StartVTOrcDiscovery starts VTOrc discovery serving
 func StartVTOrcDiscovery() error {
 	cell := config.GetCell()
-	if cell == "" {
-		// TODO: remove warning in v25+.
-		log.Fatal("--cell is a required flag")
-		//log.Warning("WARNING: --cell will become a required vtorc flag in Vitess v25 and up")
-	}
-
-	ts := topo.Open()
-	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
-	defer cancel()
-	_, err := ts.GetCellInfo(ctx, cell, true /* strongRead */)
-	if err != nil {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to validate cell %s: %+v", cell, err)
+	if err := validateCell(cell); err != nil {
+		//return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to validate cell %s: %+v", cell, err)
+		log.Warningf("failed to validate cell %s: %+v", cell, err)
 	}
 
 	log.Info("Starting Discovery")
-	go logic.ContinuousDiscovery(ts)
+	go logic.ContinuousDiscovery()
 	return nil
 }
