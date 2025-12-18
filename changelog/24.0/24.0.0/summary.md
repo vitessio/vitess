@@ -11,6 +11,7 @@
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
     - **[VTTablet](#minor-changes-vttablet)**
         - [New Experimental flag `--init-tablet-type-lookup`](#vttablet-init-tablet-type-lookup)
+        - [Tablet Shutdown Tracking and Connection Validation](#vttablet-tablet-shutdown-validation)
     - **[VTOrc](#minor-changes-vtorc)**
         - [Deprecated VTOrc Metric Removed](#vtorc-deprecated-metric-removed)
         - [Improved VTOrc Discovery Logging](#vtorc-improved-discovery-logging)
@@ -48,6 +49,16 @@ The new experimental flag `--init-tablet-type-lookup` for VTTablet allows tablet
 When enabled, the tablet uses its alias to look up the tablet type from the existing topology record on restart. This allows tablets to maintain their changed roles (e.g., RDONLY/DRAINED) across restarts without manual reconfiguration. If disabled or if no topology record exists, the standard `--init-tablet-type` value will be used instead.
 
 **Note**: Vitess Operator–managed deployments generally do not keep tablet records in the topo between restarts, so this feature will not take effect in those environments.
+
+#### <a id="vttablet-tablet-shutdown-validation"/>Tablet Shutdown Tracking and Connection Validation</a>
+
+Vitess now tracks when tablets cleanly shut down and validates tablet records before attempting connections, reducing unnecessary connection attempts and log noise.
+
+**New Field**: A new `tablet_shutdown_time` field has been added to the Tablet protobuf. This field is set to the current timestamp when a tablet cleanly shuts down and is cleared (set to `nil`) when the tablet starts. This allows other Vitess components to detect when a tablet is intentionally offline.
+
+**Connection Validation**: When a tablet record has `tablet_shutdown_time` set, Vitess components will skip connection attempts and return an error indicating the tablet is shutdown. VTOrc will now skip polling tablets that have `tablet_shutdown_time` set. For tablets that shutdown uncleanly (crashed, killed, etc.), the field remains `nil` and the pre-v24 behavior is preserved (connection attempt with error logging).
+
+**Note**: This is a best-effort mechanism. Tablets that are killed or crash may not have the opportunity to set this field, in which case components will continue to attempt connections as they did in v23 and earlier.
 
 ### <a id="minor-changes-vtorc"/>VTOrc</a>
 

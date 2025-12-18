@@ -116,11 +116,11 @@ func (asl *AuthServerLdap) UserEntryWithPassword(conn *mysql.Conn, user string, 
 }
 
 func (asl *AuthServerLdap) validate(username, password string) (mysql.Getter, error) {
-	if err := asl.Client.Connect("tcp", &asl.ServerConfig); err != nil {
+	if err := asl.Connect("tcp", &asl.ServerConfig); err != nil {
 		return nil, err
 	}
-	defer asl.Client.Close()
-	if err := asl.Client.Bind(fmt.Sprintf(asl.UserDnPattern, username), password); err != nil {
+	defer asl.Close()
+	if err := asl.Bind(fmt.Sprintf(asl.UserDnPattern, username), password); err != nil {
 		return nil, err
 	}
 	groups, err := asl.getGroups(username)
@@ -132,7 +132,7 @@ func (asl *AuthServerLdap) validate(username, password string) (mysql.Getter, er
 
 // this needs to be passed an already connected client...should check for this
 func (asl *AuthServerLdap) getGroups(username string) ([]string, error) {
-	err := asl.Client.Bind(asl.User, asl.Password)
+	err := asl.Bind(asl.User, asl.Password)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +143,7 @@ func (asl *AuthServerLdap) getGroups(username string) ([]string, error) {
 		[]string{"cn"},
 		nil,
 	)
-	res, err := asl.Client.Search(req)
+	res, err := asl.Search(req)
 	if err != nil {
 		return nil, err
 	}
@@ -175,12 +175,12 @@ func (lud *LdapUserData) update() {
 	}
 	lud.updating = true
 	lud.Unlock()
-	err := lud.asl.Client.Connect("tcp", &lud.asl.ServerConfig)
+	err := lud.asl.Connect("tcp", &lud.asl.ServerConfig)
 	if err != nil {
 		log.Errorf("Error updating LDAP user data: %v", err)
 		return
 	}
-	defer lud.asl.Client.Close() //after the error check
+	defer lud.asl.Close() //after the error check
 	groups, err := lud.asl.getGroups(lud.username)
 	if err != nil {
 		log.Errorf("Error updating LDAP user data: %v", err)

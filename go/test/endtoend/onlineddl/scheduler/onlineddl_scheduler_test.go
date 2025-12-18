@@ -483,7 +483,7 @@ func testScheduler(t *testing.T) {
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			postponeLaunch := row.AsInt64("postpone_launch", 0)
-			assert.Equal(t, int64(1), postponeLaunch)
+			assert.EqualValues(t, 1, postponeLaunch)
 		}
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusQueued)
 
@@ -1818,6 +1818,16 @@ func testScheduler(t *testing.T) {
 			for _, uuid := range vuuids {
 				waitForReadyToComplete(t, uuid, true)
 			}
+			assert.EventuallyWithT(t, func(c *assert.CollectT) {
+				for i, uuid := range vuuids {
+					rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+					require.NotNil(t, rs)
+					for _, row := range rs.Named().Rows {
+						inOrderCompletionPendingCount := row.AsUint64("in_order_completion_pending_count", 0)
+						assert.EqualValues(c, i, inOrderCompletionPendingCount)
+					}
+				}
+			}, time.Minute, time.Second, "in_order_completion_pending_count not as expected")
 			t.Run("cancel 1st migration", func(t *testing.T) {
 				onlineddl.CheckCancelMigration(t, &vtParams, shards, vuuids[0], true)
 				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, vuuids[0], normalWaitTime, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
