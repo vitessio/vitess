@@ -985,24 +985,23 @@ func TestHasNonLiteralForeignKeyUpdate(t *testing.T) {
 
 func TestCopySemanticInfoNonColName(t *testing.T) {
 	t.Run("copies no semantic information when the source has no semantic information", func(t *testing.T) {
-		semTable := EmptySemTable()
+		parser := sqlparser.NewTestParser()
 
+		col, err := parser.ParseExpr("id")
+		require.NoError(t, err)
+
+		from, err := parser.ParseExpr("lower(id)")
+		require.NoError(t, err)
+
+		to, err := parser.ParseExpr("upper(id)")
+		require.NoError(t, err)
+
+		semTable := EmptySemTable()
 		tableSet := SingleTableSet(0)
 
-		col := &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("id")}
 		semTable.Recursive[col] = tableSet
 		semTable.Direct[col] = tableSet
 		semTable.ExprTypes[col] = evalengine.NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)
-
-		from := &sqlparser.FuncExpr{
-			Name:  sqlparser.NewIdentifierCI("lower"),
-			Exprs: []sqlparser.Expr{col},
-		}
-
-		to := &sqlparser.FuncExpr{
-			Name:  sqlparser.NewIdentifierCI("upper"),
-			Exprs: []sqlparser.Expr{col},
-		}
 
 		semTable.CopySemanticInfo(from, to)
 
@@ -1012,27 +1011,27 @@ func TestCopySemanticInfoNonColName(t *testing.T) {
 	})
 
 	t.Run("copies only the expression type when the source has semantic information", func(t *testing.T) {
-		semTable := EmptySemTable()
+		parser := sqlparser.NewTestParser()
 
+		col, err := parser.ParseExpr("id")
+		require.NoError(t, err)
+
+		from, err := parser.ParseExpr("lower(id)")
+		require.NoError(t, err)
+
+		to, err := parser.ParseExpr("upper(id)")
+		require.NoError(t, err)
+
+		semTable := EmptySemTable()
 		tableSet := SingleTableSet(0)
 
-		col := &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("id")}
 		semTable.Recursive[col] = tableSet
 		semTable.Direct[col] = tableSet
 		semTable.ExprTypes[col] = evalengine.NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)
 
-		from := &sqlparser.FuncExpr{
-			Name:  sqlparser.NewIdentifierCI("lower"),
-			Exprs: []sqlparser.Expr{col},
-		}
 		semTable.Recursive[from] = tableSet
 		semTable.Direct[from] = tableSet
 		semTable.ExprTypes[from] = evalengine.NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)
-
-		to := &sqlparser.FuncExpr{
-			Name:  sqlparser.NewIdentifierCI("upper"),
-			Exprs: []sqlparser.Expr{col},
-		}
 
 		semTable.CopySemanticInfo(from, to)
 
@@ -1045,29 +1044,27 @@ func TestCopySemanticInfoNonColName(t *testing.T) {
 
 func TestCopySemanticInfoIntoColName(t *testing.T) {
 	t.Run("copies all semantic information when the source has semantic information", func(t *testing.T) {
-		semTable := EmptySemTable()
+		parser := sqlparser.NewTestParser()
 
+		col, err := parser.ParseExpr("id")
+		require.NoError(t, err)
+
+		from, err := parser.ParseExpr("lower(id)")
+		require.NoError(t, err)
+
+		to, err := parser.ParseExpr("derived.id")
+		require.NoError(t, err)
+
+		semTable := EmptySemTable()
 		tableSet := SingleTableSet(0)
 
-		col := &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("id")}
 		semTable.Recursive[col] = tableSet
 		semTable.Direct[col] = tableSet
 		semTable.ExprTypes[col] = evalengine.NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)
 
-		from := &sqlparser.FuncExpr{
-			Name:  sqlparser.NewIdentifierCI("lower"),
-			Exprs: []sqlparser.Expr{col},
-		}
 		semTable.Recursive[from] = tableSet
 		semTable.Direct[from] = tableSet
 		semTable.ExprTypes[from] = evalengine.NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)
-
-		to := &sqlparser.ColName{
-			Name: sqlparser.NewIdentifierCI("id"),
-			Qualifier: sqlparser.TableName{
-				Name: sqlparser.NewIdentifierCS("derived"),
-			},
-		}
 
 		semTable.CopySemanticInfo(from, to)
 
@@ -1077,26 +1074,24 @@ func TestCopySemanticInfoIntoColName(t *testing.T) {
 	})
 
 	t.Run("does not copy semantic information when the source has no semantic information", func(t *testing.T) {
+		parser := sqlparser.NewTestParser()
+
+		col, err := parser.ParseExpr("id")
+		require.NoError(t, err)
+
+		from, err := parser.ParseExpr("lower(id)")
+		require.NoError(t, err)
+
+		to, err := parser.ParseExpr("derived.id")
+		require.NoError(t, err)
+
 		semTable := EmptySemTable()
 
 		tableSet := SingleTableSet(0)
 
-		col := &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("id")}
 		semTable.Recursive[col] = tableSet
 		semTable.Direct[col] = tableSet
 		semTable.ExprTypes[col] = evalengine.NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)
-
-		from := &sqlparser.FuncExpr{
-			Name:  sqlparser.NewIdentifierCI("lower"),
-			Exprs: []sqlparser.Expr{col},
-		}
-
-		to := &sqlparser.ColName{
-			Name: sqlparser.NewIdentifierCI("id"),
-			Qualifier: sqlparser.TableName{
-				Name: sqlparser.NewIdentifierCS("derived"),
-			},
-		}
 
 		semTable.CopySemanticInfo(from, to)
 
