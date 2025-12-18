@@ -10,6 +10,8 @@
     - **[VTGate](#minor-changes-vtgate)**
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
         - [New "session" mode for `--vtgate-balancer-mode` flag](#vtgate-session-balancer-mode)
+    - **[Query Serving](#minor-changes-query-serving)**
+        - [JSON_EXTRACT now supports dynamic path arguments](#query-serving-json-extract-dynamic-args)
     - **[VTTablet](#minor-changes-vttablet)**
         - [New Experimental flag `--init-tablet-type-lookup`](#vttablet-init-tablet-type-lookup)
         - [Tablet Shutdown Tracking and Connection Validation](#vttablet-tablet-shutdown-validation)
@@ -50,6 +52,16 @@ To enable session mode, set the flag when starting VTGate:
 ```
 --vtgate-balancer-mode=session
 ```
+
+### <a id="minor-changes-query-serving"/>Query Serving</a>
+
+#### <a id="query-serving-json-extract-dynamic-args"/>JSON_EXTRACT now supports dynamic path arguments</a>
+
+The `JSON_EXTRACT` function now supports dynamic path arguments like bind variables or results from other function calls. Previously, `JSON_EXTRACT` only worked with static string literals for path arguments.
+
+Null handling now matches MySQL behavior. The function returns NULL when either the document or path argument is NULL.
+
+Static path arguments are still optimized, even when mixed with dynamic arguments, so existing queries won't see any performance regression.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 

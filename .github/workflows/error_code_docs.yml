@@ -1,0 +1,167 @@
+# Updates error code documentation on the website repository when go/vt/vterrors/code.go is modified.
+# Creates a PR on vitessio/website with the updated query-serving error documentation.
+name: Update error code docs
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+    paths:
+      - 'go/vt/vterrors/code.go'
+
+jobs:
+  update_error_code_docs:
+    name: Update error code docs
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Generate GitHub App token
+        uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: vitess,website
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Set token in environment
+        run: echo "GH_TOKEN=${{ steps.app-token.outputs.token }}" >> "$GITHUB_ENV"
+
+      - name: Checkout vitess
+        uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/head
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Generate error codes
+        id: generate
+        run: |
+          # Run vterrorsgen to generate the error code documentation
+          ERROR_CODES=$(go run ./go/vt/vterrors/vterrorsgen)
+          
+          # Save to file for later use
+          echo "$ERROR_CODES" > /tmp/error_codes.txt
+          
+          echo "Error codes generated successfully"
+
+      - name: Determine docs version
+        id: docs_version
+        run: |
+          BASE_REF="${{ github.event.pull_request.base.ref }}"
+          
+          if [[ "$BASE_REF" == "main" ]]; then
+            # Get the "next" version from website config.toml
+            VERSION=$(gh api repos/${{ github.repository_owner }}/website/contents/config.toml \
+              --jq '.content' | base64 -d | grep 'next = ' | sed 's/.*"\([0-9.]*\)".*/\1/')
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "Docs version (from next): $VERSION"
+          elif [[ "$BASE_REF" =~ ^release-([0-9]+\.[0-9]+)$ ]]; then
+            VERSION="${BASH_REMATCH[1]}"
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "Docs version (from release branch): $VERSION"
+          else
+            echo "Unknown base ref: $BASE_REF, skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Clone website repository
+        if: steps.docs_version.outputs.skip != 'true'
+        run: |
+          git clone --depth 1 https://github.com/${{ github.repository_owner }}/website.git /tmp/website
+
+      - name: Update error documentation
+        if: steps.docs_version.outputs.skip != 'true'
+        id: update_docs
+        run: |
+          VERSION="${{ steps.docs_version.outputs.version }}"
+          DOC_PATH="/tmp/website/content/en/docs/${VERSION}/reference/errors/query-serving.md"
+          
+          if [[ ! -f "$DOC_PATH" ]]; then
+            echo "Documentation file not found: $DOC_PATH"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          
+          # Read the generated error codes
+          ERROR_CODES=$(cat /tmp/error_codes.txt)
+          
+          # Update the documentation between <!-- start --> and <!-- end --> markers
+          awk -v codes="$ERROR_CODES" '
+            /<!-- start -->/ { print; print codes; skip=1; next }
+            /<!-- end -->/ { skip=0 }
+            !skip { print }
+          ' "$DOC_PATH" > /tmp/query-serving-new.md
+          
+          mv /tmp/query-serving-new.md "$DOC_PATH"
+          
+          # Check if there are actual changes
+          cd /tmp/website
+          if git diff --quiet; then
+            echo "No changes detected in error code documentation"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Changes detected in error code documentation"
+            echo "doc_path=content/en/docs/${VERSION}/reference/errors/query-serving.md" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Get GitHub App user ID
+        if: steps.docs_version.outputs.skip != 'true' && steps.update_docs.outputs.skip != 'true'
+        id: get-user-id
+        run: |
+          echo "user-id=$(gh api "/users/${{ steps.app-token.outputs.app-slug }}[bot]" --jq .id)" >> "$GITHUB_OUTPUT"
+
+      - name: Configure Git
+        if: steps.docs_version.outputs.skip != 'true' && steps.update_docs.outputs.skip != 'true'
+        run: |
+          git config --global user.name '${{ steps.app-token.outputs.app-slug }}[bot]'
+          git config --global user.email '${{ steps.get-user-id.outputs.user-id }}+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com'
+
+      - name: Create or update PR on website
+        if: steps.docs_version.outputs.skip != 'true' && steps.update_docs.outputs.skip != 'true'
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          BRANCH_NAME="update-error-code-${PR_NUMBER}"
+          DOC_PATH="${{ steps.update_docs.outputs.doc_path }}"
+          REPO_OWNER="${{ github.repository_owner }}"
+          
+          cd /tmp/website
+          
+          # Check if branch already exists
+          if gh api "repos/${REPO_OWNER}/website/branches/${BRANCH_NAME}" --silent 2>/dev/null; then
+            echo "Branch ${BRANCH_NAME} already exists, updating..."
+            git fetch origin "${BRANCH_NAME}"
+            git checkout "${BRANCH_NAME}"
+            git reset --hard origin/prod
+          else
+            echo "Creating new branch ${BRANCH_NAME}..."
+            git checkout -b "${BRANCH_NAME}"
+          fi
+          
+          # Stage and commit changes
+          git add "$DOC_PATH"
+          git commit -m "Updated the query-serving error code"
+          
+          # Push changes
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${REPO_OWNER}/website.git" "${BRANCH_NAME}"
+          
+          # Check if PR already exists
+          EXISTING_PR=$(gh pr list --repo "${REPO_OWNER}/website" --head "${BRANCH_NAME}" --json number --jq '.[0].number' 2>/dev/null || echo "")
+          
+          if [[ -n "$EXISTING_PR" ]]; then
+            echo "PR #${EXISTING_PR} already exists, updated branch"
+            echo "https://github.com/${REPO_OWNER}/website/pull/${EXISTING_PR}"
+          else
+            # Create new PR
+            gh pr create \
+              --repo "${REPO_OWNER}/website" \
+              --title "Update error code documentation (#${PR_NUMBER})" \
+              --body "## Description
+          This Pull Request updates the error code documentation based on the changes made in https://github.com/${{ github.repository }}/pull/${PR_NUMBER}" \
+              --base prod \
+              --head "${BRANCH_NAME}"
+          fi
