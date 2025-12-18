@@ -203,10 +203,7 @@ func TestDownPrimary_KeyspaceEmergencyReparentDisabled(t *testing.T) {
 // bring down primary before VTOrc has started, let vtorc repair.
 func TestDownPrimaryBeforeVTOrc(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	vtorcsPerCell := map[string]int{
-		clusterInfo.ClusterInstance.Cell: 1,
-	}
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{}, vtorcsPerCell, policy.DurabilityNone)
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{}, cluster.DefaultVtorcsByCell, policy.DurabilityNone)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	curPrimary := shard0.Vttablets[0]
@@ -240,7 +237,7 @@ func TestDownPrimaryBeforeVTOrc(t *testing.T) {
 	// Start a VTOrc instance
 	utils.StartVTOrcs(t, clusterInfo, []string{vtutils.GetFlagVariantForTests("--remote-operation-timeout") + "=10s"}, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
-	}, vtorcsPerCell)
+	}, cluster.DefaultVtorcsByCell)
 
 	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
 

@@ -48,7 +48,7 @@ var (
 		viperutil.Options[string]{
 			FlagName: "cell",
 			Default:  "",
-			Dynamic:  false,
+			Dynamic:  true,
 		},
 	)
 

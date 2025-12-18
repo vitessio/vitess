@@ -410,9 +410,7 @@ func TestSemiSync(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, newCluster.ClusterInstance)
 	utils.StartVTOrcs(t, newCluster, nil, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
-	}, map[string]int{
-		newCluster.ClusterInstance.Cell: 1,
-	})
+	}, cluster.DefaultVtorcsByCell)
 	defer func() {
 		utils.StopVTOrcs(t, newCluster)
 		newCluster.ClusterInstance.Teardown()
@@ -641,9 +639,7 @@ func TestDurabilityPolicySetLater(t *testing.T) {
 	// Now start the vtorc instances
 	utils.StartVTOrcs(t, newCluster, nil, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
-	}, map[string]int{
-		newCluster.ClusterInstance.Cell: 1,
-	})
+	}, cluster.DefaultVtorcsByCell)
 	defer func() {
 		utils.StopVTOrcs(t, newCluster)
 		newCluster.ClusterInstance.Teardown()
