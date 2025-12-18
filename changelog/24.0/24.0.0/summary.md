@@ -9,6 +9,8 @@
 - **[Minor Changes](#minor-changes)**
     - **[VTGate](#minor-changes-vtgate)**
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
+    - **[Query Serving](#minor-changes-query-serving)**
+        - [JSON_EXTRACT now supports dynamic path arguments](#query-serving-json-extract-dynamic-args)
     - **[VTTablet](#minor-changes-vttablet)**
         - [New Experimental flag `--init-tablet-type-lookup`](#vttablet-init-tablet-type-lookup)
         - [Tablet Shutdown Tracking and Connection Validation](#vttablet-tablet-shutdown-validation)
@@ -39,6 +41,16 @@ The VTGate flag `--legacy-replication-lag-algorithm` now defaults to `false`, di
 Instead, a simpler algorithm purely based on low lag, high lag and minimum number of tablets is used, which has proven to be more stable in many production environments. A detailed explanation of the two approaches [is explained in this code comment](https://github.com/vitessio/vitess/blob/main/go/vt/discovery/replicationlag.go#L125-L149).
 
 In v25 this flag will become deprecated and in the following release it will be removed. In the meantime, the legacy behaviour can be used by setting `--legacy-replication-lag-algorithm=true`. This deprecation is tracked in https://github.com/vitessio/vitess/issues/18914.
+
+### <a id="minor-changes-query-serving"/>Query Serving</a>
+
+#### <a id="query-serving-json-extract-dynamic-args"/>JSON_EXTRACT now supports dynamic path arguments</a>
+
+The `JSON_EXTRACT` function now supports dynamic path arguments like bind variables or results from other function calls. Previously, `JSON_EXTRACT` only worked with static string literals for path arguments.
+
+Null handling now matches MySQL behavior. The function returns NULL when either the document or path argument is NULL.
+
+Static path arguments are still optimized, even when mixed with dynamic arguments, so existing queries won't see any performance regression.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
