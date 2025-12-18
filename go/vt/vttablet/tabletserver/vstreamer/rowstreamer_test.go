@@ -324,7 +324,7 @@ func TestStreamRowsKeyRange(t *testing.T) {
 	checkStream(t, "select * from t1 where in_keyrange('-80')", nil, wantQuery, wantStream, nil)
 }
 
-func TestStreamRowsWithoutTimeouts(t *testing.T) {
+func TestStreamRowsWithNoTimeouts(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
@@ -347,6 +347,8 @@ func TestStreamRowsWithoutTimeouts(t *testing.T) {
 		`fields:{name:"id1" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"} pkfields:{name:"id1" type:INT32 charset:63}`,
 		`rows:{lengths:1 lengths:3 values:"1aaa"} lastpk:{lengths:1 values:"6"}`,
 	}
+
+	// Pass the NoTimeouts option so that we do not get the MAX_EXECUTION_TIME query hint added to the query.
 	wantQuery := "select id1, val from t1 force index (`PRIMARY`) order by id1"
 	checkStream(t, "select * from t1 where in_keyrange('-80')", nil, wantQuery, wantStream, &binlogdatapb.VStreamOptions{NoTimeouts: true})
 }

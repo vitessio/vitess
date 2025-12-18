@@ -49,7 +49,7 @@ func TestGenRowDiff(t *testing.T) {
 						Name:              "t1",
 						Columns:           []string{"c1", "c2", "c3", "c4", "c5"},
 						PrimaryKeyColumns: []string{"c1", "c5"},
-						Fields:            sqltypes.MakeTestFields("c1|c2|c3|c4|c5", "int64|int64|varchar|binary|int64"),
+						Fields:            sqltypes.MakeTestFields("c1|c2|c3|c4|c5", "int64|int64|varchar|varbinary|int64"),
 					},
 				},
 			},
