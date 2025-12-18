@@ -269,7 +269,7 @@ func (dr *switcherDryRun) dropSourceShards(ctx context.Context) error {
 		}
 		sort.Strings(tabletsList[si.ShardName()])
 		logs = append(logs, fmt.Sprintf("\tCell %s Keyspace %s Shard\n%s",
-			si.Shard.PrimaryAlias.Cell, si.Keyspace(), si.ShardName()), strings.Join(tabletsList[si.ShardName()], "\n"))
+			si.PrimaryAlias.Cell, si.Keyspace(), si.ShardName()), strings.Join(tabletsList[si.ShardName()], "\n"))
 	}
 	if len(logs) > 0 {
 		dr.drLog.Log("Deleting following shards (and all related tablets):")
@@ -376,7 +376,7 @@ func (dr *switcherDryRun) dropTargetShards(ctx context.Context) error {
 		}
 		sort.Strings(tabletsList[si.ShardName()])
 		logs = append(logs, fmt.Sprintf("\tCell %s Keyspace %s Shard\n%s",
-			si.Shard.PrimaryAlias.Cell, si.Keyspace(), si.ShardName()), strings.Join(tabletsList[si.ShardName()], "\n"))
+			si.PrimaryAlias.Cell, si.Keyspace(), si.ShardName()), strings.Join(tabletsList[si.ShardName()], "\n"))
 	}
 	if len(logs) > 0 {
 		dr.drLog.Log("Deleting following shards (and all related tablets):")

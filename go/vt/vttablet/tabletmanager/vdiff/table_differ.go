@@ -425,7 +425,11 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 			TabletType: participant.tablet.Type,
 		}
 		var fields []*querypb.Field
-		req := &binlogdatapb.VStreamRowsRequest{Target: target, Query: query, Lastpk: lastPK}
+		req := &binlogdatapb.VStreamRowsRequest{
+			// We pass the NoTimeouts options as otherwise the row streamer will add a MAX_EXECUTION_TIME
+			// query hint with a value based on the --vreplication-copy-phase-duration flag.
+			Target: target, Query: query, Lastpk: lastPK, Options: &binlogdatapb.VStreamOptions{NoTimeouts: true},
+		}
 		return conn.VStreamRows(ctx, req, func(vsrRaw *binlogdatapb.VStreamRowsResponse) error {
 			// We clone (deep copy) the VStreamRowsResponse -- which contains a vstream packet with N rows and
 			// their corresponding GTID position/snapshot along with the LastPK in the row set -- so that we
@@ -945,13 +949,13 @@ func (td *tableDiffer) getSourcePKCols() error {
 	})
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to get the schema for table %s from source tablet %s",
-			td.table.Name, topoproto.TabletAliasString(sourceTablet.Tablet.Alias))
+			td.table.Name, topoproto.TabletAliasString(sourceTablet.Alias))
 	}
 	if len(sourceSchema.TableDefinitions) == 0 {
 		// The table no longer exists on the source. Any rows that exist on the target will be
 		// reported as extra rows.
 		log.Warningf("The %s table was not found on source tablet %s during VDiff for the %s workflow; any rows on the target will be reported as extra",
-			td.table.Name, topoproto.TabletAliasString(sourceTablet.Tablet.Alias), td.wd.ct.workflow)
+			td.table.Name, topoproto.TabletAliasString(sourceTablet.Alias), td.wd.ct.workflow)
 		return nil
 	}
 	sourceTable := sourceSchema.TableDefinitions[0]
@@ -964,14 +968,14 @@ func (td *tableDiffer) getSourcePKCols() error {
 			})
 			if err != nil {
 				return nil, vterrors.Wrapf(err, "failed to query the %s source tablet in order to get a primary key equivalent for the %s table",
-					topoproto.TabletAliasString(sourceTablet.Tablet.Alias), td.table.Name)
+					topoproto.TabletAliasString(sourceTablet.Alias), td.table.Name)
 			}
 			return sqltypes.Proto3ToResult(res), nil
 		}
 		pkeCols, _, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, executeFetch, sourceTablet.DbName(), td.table.Name)
 		if err != nil {
 			return vterrors.Wrapf(err, "failed to get a primary key equivalent for the %s table from source tablet %s",
-				td.table.Name, topoproto.TabletAliasString(sourceTablet.Tablet.Alias))
+				td.table.Name, topoproto.TabletAliasString(sourceTablet.Alias))
 		}
 		if len(pkeCols) > 0 {
 			log.Infof("Using primary key equivalent columns %+v for table %s in vdiff %s", pkeCols, td.table.Name, td.wd.ct.uuid)

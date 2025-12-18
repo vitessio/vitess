@@ -104,7 +104,7 @@ func (wr *Wrangler) ChangeTabletType(ctx context.Context, tabletAlias *topodatap
 
 	// We should clone the tablet and change its type to the expected type before checking the durability rules
 	// Since we want to check the durability rules for the desired state and not before we make that change
-	expectedTablet := ti.Tablet.CloneVT()
+	expectedTablet := ti.CloneVT()
 	expectedTablet.Type = tabletType
 	semiSync, err := wr.shouldSendSemiSyncAck(ctx, expectedTablet)
 	if err != nil {
