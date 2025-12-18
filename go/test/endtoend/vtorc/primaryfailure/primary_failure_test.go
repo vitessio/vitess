@@ -165,7 +165,7 @@ func TestDownPrimary_KeyspaceEmergencyReparentDisabled(t *testing.T) {
 		utils.PermanentlyRemoveVttablet(clusterInfo, curPrimary)
 	}()
 
-	// check ERS did not occur. For the RecoverDeadPrimary recovery, expect 1 skipped recovery, 0 successful recoveries and 0 ERS operations.
+	// check ERS did not occur. For the RecoverDeadPrimary recovery, expect >= 1 skipped recoveries, 0 successful recoveries and 0 ERS operations.
 	utils.WaitForSkippedRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name, logic.RecoverySkipERSDisabled, 1)
 	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name, 0)
 	utils.WaitForSuccessfulERSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 0)
