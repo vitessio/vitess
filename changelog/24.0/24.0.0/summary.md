@@ -14,6 +14,7 @@
         - [JSON_EXTRACT now supports dynamic path arguments](#query-serving-json-extract-dynamic-args)
     - **[VTTablet](#minor-changes-vttablet)**
         - [New Experimental flag `--init-tablet-type-lookup`](#vttablet-init-tablet-type-lookup)
+        - [New `in_order_completion_pending_count` field in OnlineDDL outputs](#vttablet-onlineddl-in-order-completion-count)
         - [Tablet Shutdown Tracking and Connection Validation](#vttablet-tablet-shutdown-validation)
     - **[VTOrc](#minor-changes-vtorc)**
         - [Deprecated VTOrc Metric Removed](#vtorc-deprecated-metric-removed)
@@ -72,6 +73,12 @@ The new experimental flag `--init-tablet-type-lookup` for VTTablet allows tablet
 When enabled, the tablet uses its alias to look up the tablet type from the existing topology record on restart. This allows tablets to maintain their changed roles (e.g., RDONLY/DRAINED) across restarts without manual reconfiguration. If disabled or if no topology record exists, the standard `--init-tablet-type` value will be used instead.
 
 **Note**: Vitess Operator–managed deployments generally do not keep tablet records in the topo between restarts, so this feature will not take effect in those environments.
+
+#### <a id="vttablet-onlineddl-in-order-completion-count"/>New `in_order_completion_pending_count` field in OnlineDDL outputs</a>
+
+OnlineDDL migration outputs now include a new `in_order_completion_pending_count` field. When using the `--in-order-completion` flag, this field shows how many migrations must complete before the current migration. The field is visible in `SHOW vitess_migrations` queries and `vtctldclient OnlineDDL <db> show` outputs.
+
+This provides better visibility into migration queue dependencies, making it easier to understand why a migration might be postponed. The count is automatically updated during the scheduler loop and cleared when migrations complete, fail, or are cancelled.
 
 #### <a id="vttablet-tablet-shutdown-validation"/>Tablet Shutdown Tracking and Connection Validation</a>
 
