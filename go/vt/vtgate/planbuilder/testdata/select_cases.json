@@ -6150,8 +6150,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select sum(id) over ( partition by `name`) from `user` where 1 != 1",
-        "Query": "select sum(id) over ( partition by `name`) from `user` where id = 5",
+        "FieldQuery": "select sum(id) over (partition by `name`) from `user` where 1 != 1",
+        "Query": "select sum(id) over (partition by `name`) from `user` where id = 5",
         "Values": [
           "5"
         ],
@@ -6178,6 +6178,230 @@
         },
         "FieldQuery": "select 1 from (select id as uid from `user` where 1 != 1) as t, `user` where 1 != 1",
         "Query": "select 1 from (select id as uid from `user`) as t, `user` where t.uid = `user`.id"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Window function with IN clause - ROW_NUMBER with PARTITION BY routing column",
+    "query": "SELECT id, intcol, ROW_NUMBER() OVER (PARTITION BY id ORDER BY intcol) as rn FROM user WHERE id IN (1,2,3,4)",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "SELECT",
+      "Original": "SELECT id, intcol, ROW_NUMBER() OVER (PARTITION BY id ORDER BY intcol) as rn FROM user WHERE id IN (1,2,3,4)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, intcol, row_number() over (partition by id order by intcol asc) as rn from `user` where 1 != 1",
+        "Query": "select id, intcol, row_number() over (partition by id order by intcol asc) as rn from `user` where id in ::__vals",
+        "Values": [
+          "(1, 2, 3, 4)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "UNION ALL with window functions - each branch has window function with different primary vindex values",
+    "query": "SELECT id, intcol, ROW_NUMBER() OVER (PARTITION BY id ORDER BY intcol) as rn FROM user WHERE id = 1 UNION ALL SELECT id, intcol, ROW_NUMBER() OVER (PARTITION BY id ORDER BY intcol) as rn FROM user WHERE id = 2",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "SELECT id, intcol, ROW_NUMBER() OVER (PARTITION BY id ORDER BY intcol) as rn FROM user WHERE id = 1 UNION ALL SELECT id, intcol, ROW_NUMBER() OVER (PARTITION BY id ORDER BY intcol) as rn FROM user WHERE id = 2",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, intcol, row_number() over (partition by id order by intcol asc) as rn from `user` where 1 != 1",
+            "Query": "select id, intcol, row_number() over (partition by id order by intcol asc) as rn from `user` where id = 1",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, intcol, row_number() over (partition by id order by intcol asc) as rn from `user` where 1 != 1",
+            "Query": "select id, intcol, row_number() over (partition by id order by intcol asc) as rn from `user` where id = 2",
+            "Values": [
+              "2"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Window function with RANK on single shard - PARTITION BY includes primary vindex",
+    "query": "SELECT id, textcol1, RANK() OVER (PARTITION BY id, textcol1 ORDER BY id) as rnk FROM user WHERE id = 5",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "SELECT id, textcol1, RANK() OVER (PARTITION BY id, textcol1 ORDER BY id) as rnk FROM user WHERE id = 5",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, textcol1, rank() over (partition by id, textcol1 order by id asc) as rnk from `user` where 1 != 1",
+        "Query": "select id, textcol1, rank() over (partition by id, textcol1 order by id asc) as rnk from `user` where id = 5",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Multiple window functions with same partition in single shard query",
+    "query": "SELECT id, intcol, ROW_NUMBER() OVER (PARTITION BY id ORDER BY intcol) as rn, RANK() OVER (PARTITION BY id ORDER BY intcol) as rnk FROM user WHERE id = 100",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "SELECT id, intcol, ROW_NUMBER() OVER (PARTITION BY id ORDER BY intcol) as rn, RANK() OVER (PARTITION BY id ORDER BY intcol) as rnk FROM user WHERE id = 100",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, intcol, row_number() over (partition by id order by intcol asc) as rn, rank() over (partition by id order by intcol asc) as rnk from `user` where 1 != 1",
+        "Query": "select id, intcol, row_number() over (partition by id order by intcol asc) as rn, rank() over (partition by id order by intcol asc) as rnk from `user` where id = 100",
+        "Values": [
+          "100"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Window function with composite vindex (multi-column) - PARTITION BY includes all primary vindex columns",
+    "query": "SELECT cola, colb, colc, RANK() OVER (PARTITION BY cola, colb ORDER BY colc) as rnk FROM multicol_tbl WHERE cola = 'A' AND colb = 'B'",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "SELECT cola, colb, colc, RANK() OVER (PARTITION BY cola, colb ORDER BY colc) as rnk FROM multicol_tbl WHERE cola = 'A' AND colb = 'B'",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select cola, colb, colc, rank() over (partition by cola, colb order by colc asc) as rnk from multicol_tbl where 1 != 1",
+        "Query": "select cola, colb, colc, rank() over (partition by cola, colb order by colc asc) as rnk from multicol_tbl where cola = 'A' and colb = 'B'",
+        "Values": [
+          "'A'",
+          "'B'"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "window function in subquery on unsharded table",
+    "query": "select * from (select rank() over (partition by col) as r from unsharded) as t",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select * from (select rank() over (partition by col) as r from unsharded) as t",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select * from (select rank() over (partition by col) as r from unsharded where 1 != 1) as t where 1 != 1",
+        "Query": "select * from (select rank() over (partition by col) as r from unsharded) as t"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "window function in subquery on sharded table with single shard predicate",
+    "query": "select * from (select rank() over (partition by col) as r from user where id = 1) as t",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select * from (select rank() over (partition by col) as r from user where id = 1) as t",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select r from (select rank() over (partition by col) as r from `user` where 1 != 1) as t where 1 != 1",
+        "Query": "select r from (select rank() over (partition by col) as r from `user` where id = 1) as t",
+        "Vindex": "user_index",
+        "Values": [
+          "1"
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "window function in subquery on sharded table with outer predicate",
+    "query": "select * from (select rank() over (partition by col) as r, id from user) as t where id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select * from (select rank() over (partition by col) as r, id from user) as t where id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select r, id from (select rank() over (partition by col) as r, id from `user` where 1 != 1) as t where 1 != 1",
+        "Query": "select r, id from (select rank() over (partition by col) as r, id from `user` where id = 1) as t",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
       },
       "TablesUsed": [
         "user.user"

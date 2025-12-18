@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -42,7 +43,6 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -50,6 +50,9 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 const (
@@ -79,6 +82,10 @@ var (
 	allowFirstBackup    bool
 	restartBeforeBackup bool
 	upgradeSafe         bool
+	initSQLQueries      []string
+	initSQLTabletTypes  []topodatapb.TabletType
+	initSQLTimeout      time.Duration
+	initSQLFailOnError  bool
 
 	// vttablet-like flags
 	initDbNameOverride string
@@ -208,6 +215,10 @@ func init() {
 	utils.SetFlagBoolVar(Main.Flags(), &allowFirstBackup, "allow-first-backup", allowFirstBackup, "Allow this job to take the first backup of an existing shard.")
 	utils.SetFlagBoolVar(Main.Flags(), &restartBeforeBackup, "restart-before-backup", restartBeforeBackup, "Perform a mysqld clean/full restart after applying binlogs, but before taking the backup. Only makes sense to work around xtrabackup bugs.")
 	Main.Flags().BoolVar(&upgradeSafe, "upgrade-safe", upgradeSafe, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
+	Main.Flags().StringSliceVar(&initSQLQueries, "init-backup-sql-queries", nil, "Queries to execute before initializing the backup")
+	Main.Flags().Var((*topoproto.TabletTypeListFlag)(&initSQLTabletTypes), "init-backup-tablet-types", "Tablet types used for the backup where the init SQL queries (--init-backup-sql-queries) will be executed before initializing the backup")
+	Main.Flags().DurationVar(&initSQLTimeout, "init-backup-sql-timeout", initSQLTimeout, "At what point should we time out the init SQL query (--init-backup-sql-queries) work and either fail the backup job (--init-backup-sql-fail-on-error) or continue on with the backup")
+	Main.Flags().BoolVar(&initSQLFailOnError, "init-backup-sql-fail-on-error", false, "Whether or not to fail the backup if the init SQL queries (--init-backup-sql-queries) fail, which includes if they fail to complete before the specified timeout (--init-backup-sql-timeout)")
 
 	// vttablet-like flags
 	utils.SetFlagStringVar(Main.Flags(), &initDbNameOverride, "init-db-name-override", initDbNameOverride, "(init parameter) override the name of the db used by vttablet")
@@ -394,9 +405,16 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 		Keyspace:             initKeyspace,
 		Shard:                initShard,
 		TabletAlias:          topoproto.TabletAliasString(tabletAlias),
+		TabletType:           topodatapb.TabletType_BACKUP,
 		Stats:                backupstats.BackupStats(),
 		UpgradeSafe:          upgradeSafe,
 		MysqlShutdownTimeout: mysqlShutdownTimeout,
+		InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+			Queries:     initSQLQueries,
+			TabletTypes: initSQLTabletTypes,
+			Timeout:     protoutil.DurationToProto(initSQLTimeout),
+			FailOnError: initSQLFailOnError,
+		},
 	}
 	// In initial_backup mode, just take a backup of this empty database.
 	if initialBackup {
@@ -487,6 +505,11 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 		} else {
 			disabledRedoLog = true
 		}
+	}
+
+	// Perform any requested pre backup initialization queries.
+	if err := mysqlctl.ExecuteBackupInitSQL(ctx, &backupParams); err != nil {
+		return vterrors.Wrap(err, "failed to execute backup init SQL queries")
 	}
 
 	// We have restored a backup. Now start replication.
@@ -692,7 +715,7 @@ func startReplication(ctx context.Context, mysqld mysqlctl.MysqlDaemon, topoServ
 	}
 
 	// Stop replication (in case we're restarting), set replication source, and start replication.
-	if err := mysqld.SetReplicationSource(ctx, ti.Tablet.MysqlHostname, ti.Tablet.MysqlPort, 0, true, true); err != nil {
+	if err := mysqld.SetReplicationSource(ctx, ti.MysqlHostname, ti.MysqlPort, 0, true, true); err != nil {
 		return vterrors.Wrap(err, "MysqlDaemon.SetReplicationSource failed")
 	}
 	return nil

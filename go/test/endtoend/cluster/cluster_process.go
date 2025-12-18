@@ -45,12 +45,14 @@ import (
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/executorcontext"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 
 	// Ensure dialers are registered (needed by ExecOnTablet and ExecOnVTGate).
@@ -99,6 +101,7 @@ type LocalProcessCluster struct {
 	// major version numbers
 	VtTabletMajorVersion int
 	VtctlMajorVersion    int
+	VtGateMajorVersion   int
 
 	// standalone executable
 	VtctldClientProcess VtctldClientProcess
@@ -806,7 +809,7 @@ func NewBareCluster(cell string, hostname string) *LocalProcessCluster {
 		// path/to/whatever exists
 		cluster.ReusingVTDATAROOT = true
 	} else {
-		err = createDirectory(cluster.CurrentVTDATAROOT, 0700)
+		err = createDirectory(cluster.CurrentVTDATAROOT, 0o700)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -836,6 +839,10 @@ func (cluster *LocalProcessCluster) populateVersionInfo() error {
 		return err
 	}
 	cluster.VtctlMajorVersion, err = GetMajorVersion("vtctl")
+	if err != nil {
+		return err
+	}
+	cluster.VtGateMajorVersion, err = GetMajorVersion("vtgate")
 	return err
 }
 
@@ -943,11 +950,12 @@ func (cluster *LocalProcessCluster) ExecOnTablet(ctx context.Context, vttablet *
 
 	txID, reservedID := 0, 0
 
-	return conn.Execute(ctx, &querypb.Target{
+	session := executorcontext.NewSafeSession(&vtgatepb.Session{Options: opts})
+	return conn.Execute(ctx, session, &querypb.Target{
 		Keyspace:   tablet.Keyspace,
 		Shard:      tablet.Shard,
 		TabletType: tablet.Type,
-	}, sql, bindvars, int64(txID), int64(reservedID), opts)
+	}, sql, bindvars, int64(txID), int64(reservedID))
 }
 
 // ExecOnVTGate executes a query on a local cluster VTGate with the provided
@@ -1160,7 +1168,8 @@ func (cluster *LocalProcessCluster) waitForMySQLProcessToExit(mysqlctlProcessLis
 
 // StartVtbackup starts a vtbackup
 func (cluster *LocalProcessCluster) StartVtbackup(newInitDBFile string, initialBackup bool,
-	keyspace string, shard string, cell string, extraArgs ...string) error {
+	keyspace string, shard string, cell string, extraArgs ...string,
+) error {
 	log.Info("Starting vtbackup")
 	cluster.VtbackupProcess = *VtbackupProcessInstance(
 		cluster.GetAndReserveTabletUID(),
@@ -1190,7 +1199,6 @@ func (cluster *LocalProcessCluster) GetAndReservePort() int {
 		cluster.nextPortForProcess = cluster.nextPortForProcess + 1
 		log.Infof("Attempting to reserve port: %v", cluster.nextPortForProcess)
 		ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(cluster.nextPortForProcess)))
-
 		if err != nil {
 			log.Errorf("Can't listen on port %v: %s, trying next port", cluster.nextPortForProcess, err)
 			continue
@@ -1213,7 +1221,7 @@ const portFileTimeout = 1 * time.Hour
 // If yes, then return that port, and save port + 200 in the same file
 // here, assumptions is 200 ports might be consumed for all tests in a package
 func getPort() int {
-	portFile, err := os.OpenFile(path.Join(os.TempDir(), "endtoend.port"), os.O_CREATE|os.O_RDWR, 0644)
+	portFile, err := os.OpenFile(path.Join(os.TempDir(), "endtoend.port"), os.O_CREATE|os.O_RDWR, 0o644)
 	if err != nil {
 		panic(err)
 	}

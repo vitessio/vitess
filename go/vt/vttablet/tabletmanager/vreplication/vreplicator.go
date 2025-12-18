@@ -366,7 +366,6 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 	req := &tabletmanagerdatapb.GetSchemaRequest{
 		Tables: []string{"/.*/"},
 		ExcludeTables: []string{
-			"/" + schema.OldGCTableNameExpression + "/",
 			"/" + schema.GCTableNameExpression + "/",
 		},
 	}

@@ -88,6 +88,7 @@ type (
 		Union           bool
 		RecursiveCTE    bool
 		LastInsertIDArg bool // LastInsertIDArg is true if the query has a LAST_INSERT_ID(x) with an argument
+		WindowFunc      bool
 	}
 
 	// MirrorInfo stores information used to produce mirror
@@ -560,7 +561,7 @@ func (st *SemTable) CopySemanticInfo(from, to sqlparser.SQLNode) {
 func (st *SemTable) Cloned(from, to sqlparser.SQLNode) {
 	f, fromOK := from.(sqlparser.Expr)
 	t, toOK := to.(sqlparser.Expr)
-	if !(fromOK && toOK) {
+	if !fromOK || !toOK {
 		return
 	}
 	st.CopyDependencies(f, t)

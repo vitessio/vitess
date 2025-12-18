@@ -35,12 +35,14 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
+
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -80,6 +82,7 @@ type BackupParams struct {
 	Shard    string
 	// TabletAlias is used along with backupTime to construct the backup name
 	TabletAlias string
+	TabletType  topodatapb.TabletType
 	// BackupTime is the time at which the backup is being started
 	BackupTime time.Time
 	// Position of last known backup. If non empty, then this value indicates the backup should be incremental
@@ -93,6 +96,8 @@ type BackupParams struct {
 	MysqlShutdownTimeout time.Duration
 	// BackupEngine allows us to override which backup engine should be used for a request
 	BackupEngine string
+	// Any SQL that you would like to run before initializing the backup.
+	InitSQL *tabletmanagerdatapb.BackupRequest_InitSQL
 }
 
 func (b *BackupParams) Copy() BackupParams {
@@ -106,11 +111,13 @@ func (b *BackupParams) Copy() BackupParams {
 		Keyspace:             b.Keyspace,
 		Shard:                b.Shard,
 		TabletAlias:          b.TabletAlias,
+		TabletType:           b.TabletType,
 		BackupTime:           b.BackupTime,
 		IncrementalFromPos:   b.IncrementalFromPos,
 		Stats:                b.Stats,
 		UpgradeSafe:          b.UpgradeSafe,
 		MysqlShutdownTimeout: b.MysqlShutdownTimeout,
+		InitSQL:              b.InitSQL,
 	}
 }
 

@@ -147,7 +147,7 @@ func (si *ShardInfo) Version() Version {
 
 // HasPrimary returns true if the Shard has an assigned primary.
 func (si *ShardInfo) HasPrimary() bool {
-	return !topoproto.TabletAliasIsZero(si.Shard.PrimaryAlias)
+	return !topoproto.TabletAliasIsZero(si.PrimaryAlias)
 }
 
 // GetPrimaryTermStartTime returns the shard's primary term start time as a Time value.
@@ -157,7 +157,7 @@ func (si *ShardInfo) GetPrimaryTermStartTime() time.Time {
 
 // SetPrimaryTermStartTime sets the shard's primary term start time as a Time value.
 func (si *ShardInfo) SetPrimaryTermStartTime(t time.Time) {
-	si.Shard.PrimaryTermStartTime = protoutil.TimeToProto(t)
+	si.PrimaryTermStartTime = protoutil.TimeToProto(t)
 }
 
 // GetShard is a high level function to read shard data.
@@ -207,7 +207,7 @@ func (ts *Server) updateShard(ctx context.Context, si *ShardInfo) error {
 		return err
 	}
 
-	data, err := si.Shard.MarshalVT()
+	data, err := si.MarshalVT()
 	if err != nil {
 		return err
 	}

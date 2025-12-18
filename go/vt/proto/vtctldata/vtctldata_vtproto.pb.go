@@ -214,6 +214,7 @@ func (m *SchemaMigration) CloneVT() *SchemaMigration {
 	r.ReviewedAt = m.ReviewedAt.CloneVT()
 	r.ReadyToCompleteAt = m.ReadyToCompleteAt.CloneVT()
 	r.RemovedForeignKeyNames = m.RemovedForeignKeyNames
+	r.InOrderCompletionPendingCount = m.InOrderCompletionPendingCount
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -819,6 +820,7 @@ func (m *BackupRequest) CloneVT() *BackupRequest {
 	r.IncrementalFromPos = m.IncrementalFromPos
 	r.UpgradeSafe = m.UpgradeSafe
 	r.MysqlShutdownTimeout = m.MysqlShutdownTimeout.CloneVT()
+	r.InitSql = m.InitSql.CloneVT()
 	if rhs := m.BackupEngine; rhs != nil {
 		tmpVal := *rhs
 		r.BackupEngine = &tmpVal
@@ -866,6 +868,7 @@ func (m *BackupShardRequest) CloneVT() *BackupShardRequest {
 	r.UpgradeSafe = m.UpgradeSafe
 	r.IncrementalFromPos = m.IncrementalFromPos
 	r.MysqlShutdownTimeout = m.MysqlShutdownTimeout.CloneVT()
+	r.InitSql = m.InitSql.CloneVT()
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -6450,6 +6453,13 @@ func (m *SchemaMigration) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.InOrderCompletionPendingCount != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.InOrderCompletionPendingCount))
+		i--
+		dAtA[i] = 0x3
+		i--
+		dAtA[i] = 0xb8
+	}
 	if len(m.RemovedForeignKeyNames) > 0 {
 		i -= len(m.RemovedForeignKeyNames)
 		copy(dAtA[i:], m.RemovedForeignKeyNames)
@@ -8595,6 +8605,16 @@ func (m *BackupRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.InitSql != nil {
+		size, err := m.InitSql.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x42
+	}
 	if m.MysqlShutdownTimeout != nil {
 		size, err := m.MysqlShutdownTimeout.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
@@ -8753,6 +8773,16 @@ func (m *BackupShardRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.InitSql != nil {
+		size, err := m.InitSql.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x42
 	}
 	if m.MysqlShutdownTimeout != nil {
 		size, err := m.MysqlShutdownTimeout.MarshalToSizedBufferVT(dAtA[:i])
@@ -22906,6 +22936,9 @@ func (m *SchemaMigration) SizeVT() (n int) {
 	if l > 0 {
 		n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
+	if m.InOrderCompletionPendingCount != 0 {
+		n += 2 + protohelpers.SizeOfVarint(uint64(m.InOrderCompletionPendingCount))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -23591,6 +23624,10 @@ func (m *BackupRequest) SizeVT() (n int) {
 		l = m.MysqlShutdownTimeout.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
+	if m.InitSql != nil {
+		l = m.InitSql.SizeVT()
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -23650,6 +23687,10 @@ func (m *BackupShardRequest) SizeVT() (n int) {
 	}
 	if m.MysqlShutdownTimeout != nil {
 		l = m.MysqlShutdownTimeout.SizeVT()
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.InitSql != nil {
+		l = m.InitSql.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -31339,6 +31380,25 @@ func (m *SchemaMigration) UnmarshalVT(dAtA []byte) error {
 			}
 			m.RemovedForeignKeyNames = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 55:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field InOrderCompletionPendingCount", wireType)
+			}
+			m.InOrderCompletionPendingCount = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.InOrderCompletionPendingCount |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -35982,6 +36042,42 @@ func (m *BackupRequest) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 8:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field InitSql", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.InitSql == nil {
+				m.InitSql = &tabletmanagerdata.BackupRequest_InitSQL{}
+			}
+			if err := m.InitSql.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -36408,6 +36504,42 @@ func (m *BackupShardRequest) UnmarshalVT(dAtA []byte) error {
 				m.MysqlShutdownTimeout = &vttime.Duration{}
 			}
 			if err := m.MysqlShutdownTimeout.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 8:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field InitSql", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.InitSql == nil {
+				m.InitSql = &tabletmanagerdata.BackupRequest_InitSQL{}
+			}
+			if err := m.InitSql.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

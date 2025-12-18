@@ -445,7 +445,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	_, err := executorExecSession(ctx, executor, session, "select id from main1", nil)
 	require.NoError(t, err)
 	wantSession := &vtgatepb.Session{TargetString: "@primary", InTransaction: true, FoundRows: 1, RowCount: -1}
-	testSession := session.Session.CloneVT()
+	testSession := session.CloneVT()
 	testSession.ShardSessions = nil
 	utils.MustMatch(t, wantSession, testSession, "session does not match for autocommit=0")
 
@@ -486,7 +486,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	_, err = executorExecSession(ctx, executor, session, "update main1 set id=1", nil)
 	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{InTransaction: true, Autocommit: true, TargetString: "@primary", FoundRows: 0, RowCount: 1}
-	testSession = session.Session.CloneVT()
+	testSession = session.CloneVT()
 	testSession.ShardSessions = nil
 	utils.MustMatch(t, wantSession, testSession, "session does not match for autocommit=1")
 	if got, want := sbclookup.CommitCount.Load(), startCount; got != want {
