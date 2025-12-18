@@ -171,7 +171,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	orc.proc.Env = append(orc.proc.Env, os.Environ()...)
 	orc.proc.Env = append(orc.proc.Env, DefaultVttestEnv)
 
-	log.Infof("Running vtorc in cell %s with command: %v", orc.Cell, strings.Join(orc.proc.Args, " "))
+	log.Infof("Running vtorc with command: %v", strings.Join(orc.proc.Args, " "))
 
 	err = orc.proc.Start()
 	if err != nil {

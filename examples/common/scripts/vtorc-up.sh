@@ -25,7 +25,6 @@ echo ${vtorc_pid} > "${log_dir}/vtorc.pid"
 echo "\
 vtorc is running!
   - UI: http://localhost:${port}
-  - Cell: ${cell}
   - Logs: ${log_dir}/vtorc.out
   - PID: ${vtorc_pid}
 "
