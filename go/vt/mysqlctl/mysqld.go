@@ -95,6 +95,7 @@ var (
 
 	mycnfTemplateFile string
 	socketFile        string
+	mysqlCloneEnabled bool
 
 	replicationConnectRetry = 10 * time.Second
 
@@ -144,6 +145,12 @@ func registerMySQLDFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &mycnfTemplateFile, "mysqlctl-mycnf-template", mycnfTemplateFile, "template file to use for generating the my.cnf file during server init")
 	utils.SetFlagStringVar(fs, &socketFile, "mysqlctl-socket", socketFile, "socket file to use for remote mysqlctl actions (empty for local actions)")
 	utils.SetFlagDurationVar(fs, &replicationConnectRetry, "replication-connect-retry", replicationConnectRetry, "how long to wait in between replica reconnect attempts. Only precise to the second.")
+	utils.SetFlagBoolVar(fs, &mysqlCloneEnabled, "mysql-clone-enabled", mysqlCloneEnabled, "Enable MySQL CLONE plugin and user for backup/replica provisioning (requires MySQL 8.0.17+)")
+}
+
+// MySQLCloneEnabled returns whether MySQL CLONE support is enabled.
+func MySQLCloneEnabled() bool {
+	return mysqlCloneEnabled
 }
 
 func registerReparentFlags(fs *pflag.FlagSet) {
@@ -796,6 +803,12 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 		if err := mysqld.executeMysqlScript(ctx, params, config.DefaultInitDB); err != nil {
 			return fmt.Errorf("failed to initialize mysqld: %v", err)
 		}
+		// Execute clone-specific init SQL if enabled
+		if mysqlCloneEnabled {
+			if err := mysqld.executeMysqlScript(ctx, params, config.InitClone); err != nil {
+				return fmt.Errorf("failed to initialize clone support: %v", err)
+			}
+		}
 		return nil
 	}
 
@@ -811,6 +824,12 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 	}
 	if err := mysqld.executeMysqlScript(ctx, params, string(script)); err != nil {
 		return fmt.Errorf("can't run init-db-sql-file (%v): %v", initDBSQLFile, err)
+	}
+	// Execute clone-specific init SQL if enabled
+	if mysqlCloneEnabled {
+		if err := mysqld.executeMysqlScript(ctx, params, config.InitClone); err != nil {
+			return fmt.Errorf("failed to initialize clone support: %v", err)
+		}
 	}
 	return nil
 }
@@ -969,6 +988,12 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 	}
 
 	myTemplateSource.WriteString(versionConfig)
+
+	// Conditionally include clone plugin config
+	if mysqlCloneEnabled && mysqld.capabilities.isMySQLLike() {
+		myTemplateSource.WriteString("\n## Clone plugin (--mysql-clone-enabled)\n")
+		myTemplateSource.WriteString(config.MycnfClone)
+	}
 
 	if extraCnf := os.Getenv("EXTRA_MY_CNF"); extraCnf != "" {
 		parts := strings.Split(extraCnf, ":")
