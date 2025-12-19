@@ -120,8 +120,15 @@ func TestReparentReplicaOffline(t *testing.T) {
 	out, err := utils.PrsWithTimeout(t, clusterInstance, tablets[1], false, "", "31s")
 	require.Error(t, err)
 
+	vtctldclientVersion, err := cluster.GetMajorVersion("vtctldclient")
+	require.NoError(t, err)
+
 	// Assert that PRS failed
-	assert.Contains(t, out, "rpc error: code = DeadlineExceeded desc")
+	if vtctldclientVersion >= 24 {
+		assert.Contains(t, out, "rpc error: code = Unknown desc = tablet is shutdown")
+	} else {
+		assert.Contains(t, out, "rpc error: code = DeadlineExceeded desc")
+	}
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[0])
 }
 
