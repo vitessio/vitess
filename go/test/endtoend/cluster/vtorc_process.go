@@ -19,6 +19,7 @@ package cluster
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -88,7 +89,7 @@ func (orc *VTOrcProcess) RewriteConfiguration() error {
 func (orc *VTOrcProcess) Setup() (err error) {
 	// validate cell
 	if orc.Cell == "" {
-		log.Fatal("vtorc cell cannot be empty")
+		return errors.New("vtorc cell cannot be empty")
 	}
 
 	// create the configuration file
