@@ -592,14 +592,15 @@ func TestFullStatus(t *testing.T) {
 	proxiedResp, err = c.FullStatus(t.Context(), primary, &tabletmanagerdatapb.FullStatusRequest{
 		ProxyTarget: primary,
 	})
-	assert.Error(t, err)
+	assert.ErrorContains(t, err, "cannot use proxying tablet as a proxy target")
+	assert.Nil(t, proxiedResp)
 
 	// test a proxied request failure to primary -> replica #2
 	proxiedResp, err = c.FullStatus(t.Context(), primary, &tabletmanagerdatapb.FullStatusRequest{
 		ProxiedBy:   primary.Alias,
 		ProxyTarget: replica,
 	})
-	assert.Error(t, err)
+	assert.ErrorContains(t, err, "cannot proxy a request that is already proxied")
 	assert.Nil(t, proxiedResp)
 
 	// test a proxied request failure to primary -> replica #3
@@ -607,7 +608,7 @@ func TestFullStatus(t *testing.T) {
 		ProxyTarget:    replica,
 		ProxyTimeoutMs: uint64(topo.RemoteOperationTimeout.Milliseconds()) + 100,
 	})
-	assert.Error(t, err)
+	assert.ErrorContains(t, err, "cannot set a proxy timeout ms greater than")
 	assert.Nil(t, proxiedResp)
 }
 
