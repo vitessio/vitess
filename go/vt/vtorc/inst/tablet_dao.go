@@ -48,10 +48,12 @@ func InitializeTMC() tmclient.TabletManagerClient {
 func fullStatus(tablet, proxyTarget *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
 	tmcCtx, tmcCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer tmcCancel()
-	return tmc.FullStatus(tmcCtx, tablet, &tabletmanagerdatapb.FullStatusRequest{
-		ProxyTarget:    proxyTarget,
-		ProxyTimeoutMs: uint64(tmcProxyTimeout.Milliseconds()),
-	})
+	request := &tabletmanagerdatapb.FullStatusRequest{}
+	if proxyTarget != nil {
+		request.ProxyTarget = proxyTarget
+		request.ProxyTimeoutMs = uint64(tmcProxyTimeout.Milliseconds())
+	}
+	return tmc.FullStatus(tmcCtx, tablet, request)
 }
 
 // ReadTablet reads the vitess tablet record.
