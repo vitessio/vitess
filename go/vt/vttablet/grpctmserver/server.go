@@ -370,12 +370,15 @@ func (s *server) ReplicationStatus(ctx context.Context, request *tabletmanagerda
 }
 
 func (s *server) proxyFullStatus(ctx context.Context, request *tabletmanagerdatapb.FullStatusRequest) (*replicationdatapb.FullStatus, error) {
+	// disallow infinite proxy loop
 	if topoproto.TabletAliasEqual(s.tm.GetTabletAlias(), request.ProxyTarget.Alias) {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "cannot use proxying tablet as a proxy target")
 	}
+	// disallow proxying more than once
 	if request.ProxiedBy != nil {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "cannot proxy a request that is already proxied")
 	}
+	// disallow timeouts larger than the local remote operation timeout
 	if request.ProxyTimeoutMs > uint64(topo.RemoteOperationTimeout.Milliseconds()) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot set a proxy timeout ms greater than %d", topo.RemoteOperationTimeout.Milliseconds())
 	}
