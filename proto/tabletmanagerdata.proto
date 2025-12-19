@@ -123,6 +123,9 @@ message PingRequest {
   // proxied request to complete. Must be less than topo.RemoteOperationTimeout
   // on the tablet proxying the request.
   uint64 proxy_timeout_ms = 3;
+
+  // is_proxied is set to true when a PingRequest is proxied by another tablet.
+  bool is_proxied = 4;
 }
 
 message PingResponse {
@@ -532,6 +535,9 @@ message FullStatusRequest {
   // proxied request to complete. Must be less than topo.RemoteOperationTimeout
   // on the tablet proxying the request.
   uint64 proxy_timeout_ms = 2;
+
+  // is_proxied is set to true when a FullStatusRequest is proxied by another tablet.
+  bool is_proxied = 3;
 }
 
 message FullStatusResponse {

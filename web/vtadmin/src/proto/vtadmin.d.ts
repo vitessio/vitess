@@ -21796,6 +21796,9 @@ export namespace tabletmanagerdata {
 
         /** PingRequest proxy_timeout_ms */
         proxy_timeout_ms?: (number|Long|null);
+
+        /** PingRequest is_proxied */
+        is_proxied?: (boolean|null);
     }
 
     /** Represents a PingRequest. */
@@ -21815,6 +21818,9 @@ export namespace tabletmanagerdata {
 
         /** PingRequest proxy_timeout_ms. */
         public proxy_timeout_ms: (number|Long);
+
+        /** PingRequest is_proxied. */
+        public is_proxied: boolean;
 
         /**
          * Creates a new PingRequest instance using the specified properties.
@@ -30965,6 +30971,9 @@ export namespace tabletmanagerdata {
 
         /** FullStatusRequest proxy_timeout_ms */
         proxy_timeout_ms?: (number|Long|null);
+
+        /** FullStatusRequest is_proxied */
+        is_proxied?: (boolean|null);
     }
 
     /** Represents a FullStatusRequest. */
@@ -30981,6 +30990,9 @@ export namespace tabletmanagerdata {
 
         /** FullStatusRequest proxy_timeout_ms. */
         public proxy_timeout_ms: (number|Long);
+
+        /** FullStatusRequest is_proxied. */
+        public is_proxied: boolean;
 
         /**
          * Creates a new FullStatusRequest instance using the specified properties.

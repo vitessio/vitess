@@ -39,6 +39,7 @@ import (
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	tabletmanagerservicepb "vitess.io/vitess/go/vt/proto/tabletmanagerservice"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var tmc = tmclient.NewTabletManagerClient()
@@ -54,14 +55,23 @@ func (s *server) Ping(ctx context.Context, request *tabletmanagerdatapb.PingRequ
 	defer s.tm.HandleRPCPanic(ctx, "Ping", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.PingResponse{}
-	if request.ProxyTarget != nil && !topoproto.TabletAliasEqual(s.tm.GetTabletAlias(), request.ProxyTarget.Alias) {
+	if request.ProxyTarget != nil {
+		if topoproto.TabletAliasEqual(s.tm.GetTabletAlias(), request.ProxyTarget.Alias) {
+			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "cannot use proxying tablet as a proxy target")
+		}
+		if request.IsProxied {
+			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "cannot proxy a request that is already proxied")
+		}
+
 		timeout := topo.RemoteOperationTimeout
 		if request.ProxyTimeoutMs > 0 {
 			timeout = time.Duration(request.ProxyTimeoutMs) * time.Millisecond
 		}
 		proxyCtx, proxyCancel := context.WithTimeout(ctx, timeout)
 		defer proxyCancel()
-		if err = tmc.Ping(proxyCtx, request.ProxyTarget, nil); err != nil {
+		if err = tmc.Ping(proxyCtx, request.ProxyTarget, &tabletmanagerdatapb.PingRequest{
+			IsProxied: true,
+		}); err != nil {
 			return nil, err
 		}
 		response.Payload = request.Payload
@@ -385,14 +395,23 @@ func (s *server) FullStatus(ctx context.Context, request *tabletmanagerdatapb.Fu
 	ctx = callinfo.GRPCCallInfo(ctx)
 	var status *replicationdatapb.FullStatus
 	response = &tabletmanagerdatapb.FullStatusResponse{}
-	if request.ProxyTarget != nil && !topoproto.TabletAliasEqual(s.tm.GetTabletAlias(), request.ProxyTarget.Alias) {
+	if request.ProxyTarget != nil {
+		if topoproto.TabletAliasEqual(s.tm.GetTabletAlias(), request.ProxyTarget.Alias) {
+			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "cannot use proxying tablet as a proxy target")
+		}
+		if request.IsProxied {
+			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "cannot proxy a request that is already proxied")
+		}
+
 		timeout := topo.RemoteOperationTimeout
 		if request.ProxyTimeoutMs > 0 {
 			timeout = time.Duration(request.ProxyTimeoutMs) * time.Millisecond
 		}
 		proxyCtx, proxyCancel := context.WithTimeout(ctx, timeout)
 		defer proxyCancel()
-		status, err = tmc.FullStatus(proxyCtx, request.ProxyTarget, nil)
+		status, err = tmc.FullStatus(proxyCtx, request.ProxyTarget, &tabletmanagerdatapb.FullStatusRequest{
+			IsProxied: true,
+		})
 	} else {
 		status, err = s.tm.FullStatus(ctx)
 	}

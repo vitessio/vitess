@@ -575,8 +575,10 @@ type PingRequest struct {
 	// proxied request to complete. Must be less than topo.RemoteOperationTimeout
 	// on the tablet proxying the request.
 	ProxyTimeoutMs uint64 `protobuf:"varint,3,opt,name=proxy_timeout_ms,json=proxyTimeoutMs,proto3" json:"proxy_timeout_ms,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// is_proxied is set to true when a PingRequest is proxied by another tablet.
+	IsProxied     bool `protobuf:"varint,4,opt,name=is_proxied,json=isProxied,proto3" json:"is_proxied,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PingRequest) Reset() {
@@ -628,6 +630,13 @@ func (x *PingRequest) GetProxyTimeoutMs() uint64 {
 		return x.ProxyTimeoutMs
 	}
 	return 0
+}
+
+func (x *PingRequest) GetIsProxied() bool {
+	if x != nil {
+		return x.IsProxied
+	}
+	return false
 }
 
 type PingResponse struct {
@@ -4799,8 +4808,10 @@ type FullStatusRequest struct {
 	// proxied request to complete. Must be less than topo.RemoteOperationTimeout
 	// on the tablet proxying the request.
 	ProxyTimeoutMs uint64 `protobuf:"varint,2,opt,name=proxy_timeout_ms,json=proxyTimeoutMs,proto3" json:"proxy_timeout_ms,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// is_proxied is set to true when a FullStatusRequest is proxied by another tablet.
+	IsProxied     bool `protobuf:"varint,3,opt,name=is_proxied,json=isProxied,proto3" json:"is_proxied,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *FullStatusRequest) Reset() {
@@ -4845,6 +4856,13 @@ func (x *FullStatusRequest) GetProxyTimeoutMs() uint64 {
 		return x.ProxyTimeoutMs
 	}
 	return 0
+}
+
+func (x *FullStatusRequest) GetIsProxied() bool {
+	if x != nil {
+		return x.IsProxied
+	}
+	return false
 }
 
 type FullStatusResponse struct {
@@ -8613,11 +8631,13 @@ const file_tabletmanagerdata_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xa3\x01\n" +
 	"\vPermissions\x12L\n" +
 	"\x10user_permissions\x18\x01 \x03(\v2!.tabletmanagerdata.UserPermissionR\x0fuserPermissions\x12F\n" +
-	"\x0edb_permissions\x18\x02 \x03(\v2\x1f.tabletmanagerdata.DbPermissionR\rdbPermissions\"\x86\x01\n" +
+	"\x0edb_permissions\x18\x02 \x03(\v2\x1f.tabletmanagerdata.DbPermissionR\rdbPermissions\"\xa5\x01\n" +
 	"\vPingRequest\x12\x18\n" +
 	"\apayload\x18\x01 \x01(\tR\apayload\x123\n" +
 	"\fproxy_target\x18\x02 \x01(\v2\x10.topodata.TabletR\vproxyTarget\x12(\n" +
-	"\x10proxy_timeout_ms\x18\x03 \x01(\x04R\x0eproxyTimeoutMs\"(\n" +
+	"\x10proxy_timeout_ms\x18\x03 \x01(\x04R\x0eproxyTimeoutMs\x12\x1d\n" +
+	"\n" +
+	"is_proxied\x18\x04 \x01(\bR\tisProxied\"(\n" +
 	"\fPingResponse\x12\x18\n" +
 	"\apayload\x18\x01 \x01(\tR\apayload\"*\n" +
 	"\fSleepRequest\x12\x1a\n" +
@@ -8825,10 +8845,12 @@ const file_tabletmanagerdata_proto_rawDesc = "" +
 	"\x19ReplicaWasPromotedRequest\"\x1c\n" +
 	"\x1aReplicaWasPromotedResponse\"#\n" +
 	"!ResetReplicationParametersRequest\"$\n" +
-	"\"ResetReplicationParametersResponse\"r\n" +
+	"\"ResetReplicationParametersResponse\"\x91\x01\n" +
 	"\x11FullStatusRequest\x123\n" +
 	"\fproxy_target\x18\x01 \x01(\v2\x10.topodata.TabletR\vproxyTarget\x12(\n" +
-	"\x10proxy_timeout_ms\x18\x02 \x01(\x04R\x0eproxyTimeoutMs\"I\n" +
+	"\x10proxy_timeout_ms\x18\x02 \x01(\x04R\x0eproxyTimeoutMs\x12\x1d\n" +
+	"\n" +
+	"is_proxied\x18\x03 \x01(\bR\tisProxied\"I\n" +
 	"\x12FullStatusResponse\x123\n" +
 	"\x06status\x18\x01 \x01(\v2\x1b.replicationdata.FullStatusR\x06status\"\x9c\x02\n" +
 	"\x1bSetReplicationSourceRequest\x12-\n" +
