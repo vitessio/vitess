@@ -7722,6 +7722,7 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: vitess-operator
+    namespace: default
 ---
 apiVersion: scheduling.k8s.io/v1
 description: Vitess components (vttablet, vtgate, vtctld, etcd)
