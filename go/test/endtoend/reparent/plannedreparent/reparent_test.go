@@ -120,10 +120,7 @@ func TestReparentReplicaOffline(t *testing.T) {
 	out, err := utils.PrsWithTimeout(t, clusterInstance, tablets[1], false, "", "31s")
 	require.Error(t, err)
 
-<<<<<<< HEAD
 	// Assert that PRS failed
-	assert.Contains(t, out, "rpc error: code = DeadlineExceeded desc")
-=======
 	vtctldVersion, err := cluster.GetMajorVersion("vtctld")
 	require.NoError(t, err)
 	errStr := "rpc error: code = DeadlineExceeded desc"
@@ -132,7 +129,6 @@ func TestReparentReplicaOffline(t *testing.T) {
 	}
 	assert.Contains(t, out, errStr)
 
->>>>>>> 18497c8654 ([latest-23.0](#8227): CherryPick(#19044): VDiff: Do not intentionally timeout query, and display diff sample binary columns as hex (#8228))
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[0])
 }
 
