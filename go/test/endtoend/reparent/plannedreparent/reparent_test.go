@@ -577,39 +577,45 @@ func TestFullStatus(t *testing.T) {
 	replica, err := clusterInstance.VtctldClientProcess.GetTablet(replicaTablet.Alias)
 	assert.NoError(t, err)
 
-	c := grpctmclient.NewClient()
+	vttabletVersion, err := cluster.GetMajorVersion("vttablet")
+	require.NoError(t, err)
 
-	// test a proxied request success from primary -> replica
-	proxiedResp, err := c.FullStatus(t.Context(), primary, &tabletmanagerdatapb.FullStatusRequest{
-		ProxyTarget: replica,
-	})
-	assert.NoError(t, err)
-	assert.NotNil(t, proxiedResp)
-	assert.Equal(t, topodatapb.TabletType_REPLICA, proxiedResp.TabletType)
-	assert.True(t, proxiedResp.ReadOnly)
+	// Support for proxying FullStatus RPCs was added in v24.
+	if vttabletVersion < 24 {
+		c := grpctmclient.NewClient()
 
-	// test a proxied request failure to primary -> replica #1
-	proxiedResp, err = c.FullStatus(t.Context(), primary, &tabletmanagerdatapb.FullStatusRequest{
-		ProxyTarget: primary,
-	})
-	assert.ErrorContains(t, err, "cannot use proxying tablet as a proxy target")
-	assert.Nil(t, proxiedResp)
+		// test a proxied request success from primary -> replica
+		proxiedResp, err := c.FullStatus(t.Context(), primary, &tabletmanagerdatapb.FullStatusRequest{
+			ProxyTarget: replica,
+		})
+		assert.NoError(t, err)
+		assert.NotNil(t, proxiedResp)
+		assert.Equal(t, topodatapb.TabletType_REPLICA, proxiedResp.TabletType)
+		assert.True(t, proxiedResp.ReadOnly)
 
-	// test a proxied request failure to primary -> replica #2
-	proxiedResp, err = c.FullStatus(t.Context(), primary, &tabletmanagerdatapb.FullStatusRequest{
-		ProxiedBy:   primary.Alias,
-		ProxyTarget: replica,
-	})
-	assert.ErrorContains(t, err, "cannot proxy a request that is already proxied")
-	assert.Nil(t, proxiedResp)
+		// test a proxied request failure to primary -> replica #1
+		proxiedResp, err = c.FullStatus(t.Context(), primary, &tabletmanagerdatapb.FullStatusRequest{
+			ProxyTarget: primary,
+		})
+		assert.ErrorContains(t, err, "cannot use proxying tablet as a proxy target")
+		assert.Nil(t, proxiedResp)
 
-	// test a proxied request failure to primary -> replica #3
-	proxiedResp, err = c.FullStatus(t.Context(), primary, &tabletmanagerdatapb.FullStatusRequest{
-		ProxyTarget:    replica,
-		ProxyTimeoutMs: uint64(topo.RemoteOperationTimeout.Milliseconds()) + 100,
-	})
-	assert.ErrorContains(t, err, "cannot set a proxy timeout ms greater than")
-	assert.Nil(t, proxiedResp)
+		// test a proxied request failure to primary -> replica #2
+		proxiedResp, err = c.FullStatus(t.Context(), primary, &tabletmanagerdatapb.FullStatusRequest{
+			ProxiedBy:   primary.Alias,
+			ProxyTarget: replica,
+		})
+		assert.ErrorContains(t, err, "cannot proxy a request that is already proxied")
+		assert.Nil(t, proxiedResp)
+
+		// test a proxied request failure to primary -> replica #3
+		proxiedResp, err = c.FullStatus(t.Context(), primary, &tabletmanagerdatapb.FullStatusRequest{
+			ProxyTarget:    replica,
+			ProxyTimeoutMs: uint64(topo.RemoteOperationTimeout.Milliseconds()) + 100,
+		})
+		assert.ErrorContains(t, err, "cannot set a proxy timeout ms greater than")
+		assert.Nil(t, proxiedResp)
+	}
 }
 
 func getFullStatus(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet) *replicationdatapb.FullStatus {
