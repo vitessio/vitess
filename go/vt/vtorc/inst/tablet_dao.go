@@ -24,7 +24,6 @@ import (
 
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
-
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -37,9 +36,7 @@ import (
 // ErrTabletAliasNil is a fixed error message.
 var ErrTabletAliasNil = errors.New("tablet alias is nil")
 var tmc tmclient.TabletManagerClient
-
-// TODO: make this a flag?
-var proxyTimeout = topo.RemoteOperationTimeout / 2
+var tmcProxyTimeout = topo.RemoteOperationTimeout / 2
 
 // InitializeTMC initializes the tablet manager client to use for all VTOrc RPC calls.
 func InitializeTMC() tmclient.TabletManagerClient {
@@ -53,7 +50,7 @@ func fullStatus(tablet, proxyTarget *topodatapb.Tablet) (*replicationdatapb.Full
 	defer tmcCancel()
 	return tmc.FullStatus(tmcCtx, tablet, &tabletmanagerdatapb.FullStatusRequest{
 		ProxyTarget:    proxyTarget,
-		ProxyTimeoutMs: uint64(proxyTimeout.Milliseconds()),
+		ProxyTimeoutMs: uint64(tmcProxyTimeout.Milliseconds()),
 	})
 }
 
