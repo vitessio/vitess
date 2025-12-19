@@ -18,6 +18,7 @@ package mysqlctl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -91,7 +92,7 @@ func (c *CloneExecutor) checkCloneCapability(ctx context.Context, mysqld MysqlDa
 	}
 
 	if len(result.Rows) == 0 || len(result.Rows[0]) == 0 {
-		return fmt.Errorf("empty version result")
+		return errors.New("empty version result")
 	}
 
 	versionStr := result.Rows[0][0].ToString()
@@ -120,7 +121,7 @@ func (c *CloneExecutor) checkCloneCapability(ctx context.Context, mysqld MysqlDa
 // Note: This operation will DESTROY all existing data on the recipient.
 func (c *CloneExecutor) ExecuteClone(ctx context.Context, mysqld MysqlDaemon) error {
 	if !MySQLCloneEnabled() {
-		return fmt.Errorf("MySQL CLONE not enabled; set --mysql-clone-enabled=true on both donor and recipient")
+		return errors.New("MySQL CLONE not enabled; set --mysql-clone-enabled=true on both donor and recipient")
 	}
 
 	log.Infof("Starting CLONE REMOTE from %s:%d", c.DonorHost, c.DonorPort)
@@ -205,7 +206,7 @@ func (c *CloneExecutor) checkClonePluginInstalled(ctx context.Context, mysqld My
 	}
 
 	if len(result.Rows) == 0 {
-		return fmt.Errorf("clone plugin is not installed (add 'plugin-load-add=mysql_clone.so' to my.cnf)")
+		return errors.New("clone plugin is not installed (add 'plugin-load-add=mysql_clone.so' to my.cnf)")
 	}
 
 	status := result.Rows[0][0].ToString()
