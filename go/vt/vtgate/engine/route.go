@@ -506,6 +506,11 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 		return
 	}
 
+	// Skip SELECT ... FOR UPDATE queries that cannot run on read-only replicas
+	if strings.Contains(strings.ToLower(route.Query), "for update") {
+		return
+	}
+
 	if vcursor.GetWarmingReadsPercent() == 0 || rand.IntN(100) > vcursor.GetWarmingReadsPercent() {
 		return
 	}
