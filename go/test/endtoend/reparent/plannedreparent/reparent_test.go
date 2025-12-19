@@ -35,6 +35,8 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
@@ -570,13 +572,43 @@ func TestFullStatus(t *testing.T) {
 	assert.Regexp(t, `[58]\.[074].*`, replicaStatus.Version)
 	assert.NotEmpty(t, replicaStatus.VersionComment)
 
-	// test a proxied request from primary -> replica
+	primary, err := clusterInstance.VtctldClientProcess.GetTablet(primaryTablet.Alias)
+	assert.NoError(t, err)
+	replica, err := clusterInstance.VtctldClientProcess.GetTablet(replicaTablet.Alias)
+	assert.NoError(t, err)
+
 	c := grpctmclient.NewClient()
-	proxiedResp, err := c.FullStatus(t.Context(), primaryTablet, &tabletmanagerdatapb.FullStatusRequest{
-		ProxyTarget: replicaTablet,
+
+	// test a proxied request success from primary -> replica
+	proxiedResp, err := c.FullStatus(t.Context(), primary, &tabletmanagerdatapb.FullStatusRequest{
+		ProxyTarget: replica,
 	})
 	assert.NoError(t, err)
-	t.Logf("proxiedResp: %+v", proxiedResp)
+	assert.NotNil(t, proxiedResp)
+	assert.Equal(t, topodatapb.TabletType_REPLICA, proxiedResp.TabletType)
+	assert.True(t, proxiedResp.ReadOnly)
+
+	// test a proxied request failure to primary -> replica #1
+	proxiedResp, err = c.FullStatus(t.Context(), primary, &tabletmanagerdatapb.FullStatusRequest{
+		ProxyTarget: primary,
+	})
+	assert.Error(t, err)
+
+	// test a proxied request failure to primary -> replica #2
+	proxiedResp, err = c.FullStatus(t.Context(), primary, &tabletmanagerdatapb.FullStatusRequest{
+		ProxiedBy:   primary.Alias,
+		ProxyTarget: replica,
+	})
+	assert.Error(t, err)
+	assert.Nil(t, proxiedResp)
+
+	// test a proxied request failure to primary -> replica #3
+	proxiedResp, err = c.FullStatus(t.Context(), primary, &tabletmanagerdatapb.FullStatusRequest{
+		ProxyTarget:    replica,
+		ProxyTimeoutMs: uint64(topo.RemoteOperationTimeout.Milliseconds()) + 100,
+	})
+	assert.Error(t, err)
+	assert.Nil(t, proxiedResp)
 }
 
 func getFullStatus(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet) *replicationdatapb.FullStatus {

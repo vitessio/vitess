@@ -961,12 +961,12 @@ func (fra *fakeRPCTM) FullStatus(ctx context.Context) (*replicationdatapb.FullSt
 }
 
 func tmRPCTestFullStatus(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	rs, err := client.FullStatus(ctx, tablet)
+	rs, err := client.FullStatus(ctx, tablet, nil)
 	compareError(t, "FullStatus", err, rs, testFullStatus)
 }
 
 func tmRPCTestFullStatusPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	_, err := client.FullStatus(ctx, tablet)
+	_, err := client.FullStatus(ctx, tablet, nil)
 	expectHandleRPCPanic(t, "FullStatus", false /*verbose*/, err)
 }
 

@@ -376,6 +376,9 @@ func (s *server) proxyFullStatus(ctx context.Context, request *tabletmanagerdata
 	if request.ProxiedBy != nil {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "cannot proxy a request that is already proxied")
 	}
+	if request.ProxyTimeoutMs > uint64(topo.RemoteOperationTimeout.Milliseconds()) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot set a proxy timeout ms greater than %d", topo.RemoteOperationTimeout.Milliseconds())
+	}
 
 	timeout := topo.RemoteOperationTimeout
 	if request.ProxyTimeoutMs > 0 {
