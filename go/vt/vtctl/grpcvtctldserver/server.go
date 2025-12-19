@@ -1642,7 +1642,7 @@ func (s *VtctldServer) GetFullStatus(ctx context.Context, req *vtctldatapb.GetFu
 		return nil, err
 	}
 
-	res, err := s.tmc.FullStatus(ctx, ti.Tablet)
+	res, err := s.tmc.FullStatus(ctx, ti.Tablet, nil /* tabletmanagerpb.FullStatusRequest */)
 	if err != nil {
 		return nil, err
 	}
@@ -3257,7 +3257,7 @@ func (s *VtctldServer) PingTablet(ctx context.Context, req *vtctldatapb.PingTabl
 		return nil, err
 	}
 
-	err = s.tmc.Ping(ctx, tablet.Tablet)
+	err = s.tmc.Ping(ctx, tablet.Tablet, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -5257,7 +5257,7 @@ func (s *VtctldServer) ValidateShard(ctx context.Context, req *vtctldatapb.Valid
 					ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 					defer cancel()
 
-					if err := s.tmc.Ping(ctx, ti.Tablet); err != nil {
+					if err := s.tmc.Ping(ctx, ti.Tablet, nil); err != nil {
 						results <- fmt.Sprintf("Ping(%v) failed: %v tablet hostname: %v", alias, err, ti.Hostname)
 					}
 				}(alias, ti)

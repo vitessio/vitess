@@ -111,7 +111,7 @@ func (client *FakeTabletManagerClient) VDiff(ctx context.Context, tablet *topoda
 //
 
 // Ping is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) Ping(ctx context.Context, tablet *topodatapb.Tablet) error {
+func (client *FakeTabletManagerClient) Ping(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.PingRequest) error {
 	return nil
 }
 
@@ -259,7 +259,7 @@ func (client *FakeTabletManagerClient) ReplicationStatus(ctx context.Context, ta
 }
 
 // FullStatus is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) FullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
+func (client *FakeTabletManagerClient) FullStatus(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.FullStatusRequest) (*replicationdatapb.FullStatus, error) {
 	return &replicationdatapb.FullStatus{}, nil
 }
 

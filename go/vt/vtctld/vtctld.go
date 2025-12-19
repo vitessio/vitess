@@ -103,7 +103,7 @@ func InitVtctld(env *vtenv.Environment, ts *topo.Server) error {
 			if err != nil {
 				return "", err
 			}
-			return "", wr.TabletManagerClient().Ping(ctx, ti.Tablet)
+			return "", wr.TabletManagerClient().Ping(ctx, ti.Tablet, nil)
 		})
 
 	actionRepo.RegisterTabletAction("RefreshState", acl.ADMIN,

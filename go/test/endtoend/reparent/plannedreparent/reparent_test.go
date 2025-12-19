@@ -34,7 +34,9 @@ import (
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
 	"vitess.io/vitess/go/vt/log"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
 func TestPrimaryToSpareStateChangeImpossible(t *testing.T) {
@@ -567,6 +569,14 @@ func TestFullStatus(t *testing.T) {
 	assert.True(t, replicaStatus.LogBinEnabled)
 	assert.Regexp(t, `[58]\.[074].*`, replicaStatus.Version)
 	assert.NotEmpty(t, replicaStatus.VersionComment)
+
+	// test a proxied request from primary -> replica
+	c := grpctmclient.NewClient()
+	proxiedResp, err := c.FullStatus(t.Context(), primaryTablet, &tabletmanagerdatapb.FullStatusRequest{
+		ProxyTarget: replicaTablet,
+	})
+	assert.NoError(t, err)
+	t.Logf("proxiedResp: %+v", proxiedResp)
 }
 
 func getFullStatus(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet) *replicationdatapb.FullStatus {

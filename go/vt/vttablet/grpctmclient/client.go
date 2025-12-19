@@ -354,19 +354,25 @@ func (client *grpcClient) Close() {
 //
 
 // Ping is part of the tmclient.TabletManagerClient interface.
-func (client *Client) Ping(ctx context.Context, tablet *topodatapb.Tablet) error {
+func (client *Client) Ping(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.PingRequest) error {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return err
 	}
 	defer closer.Close()
-	result, err := c.Ping(ctx, &tabletmanagerdatapb.PingRequest{
-		Payload: "payload",
-	})
+
+	if request == nil {
+		request = &tabletmanagerdatapb.PingRequest{}
+	}
+	if request.Payload == "" {
+		request.Payload = "payload"
+	}
+
+	result, err := c.Ping(ctx, request)
 	if err != nil {
 		return vterrors.FromGRPC(err)
 	}
-	if result.Payload != "payload" {
+	if result.Payload != request.Payload {
 		return fmt.Errorf("bad ping result: %v", result.Payload)
 	}
 	return nil
@@ -867,7 +873,7 @@ func (client *Client) ReplicationStatus(ctx context.Context, tablet *topodatapb.
 // It always tries to use a cached client via the dialer pool as this is
 // called very frequently from VTOrc, and the overhead of creating a new gRPC connection/channel
 // and dialing the other tablet every time is not practical.
-func (client *Client) FullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
+func (client *Client) FullStatus(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.FullStatusRequest) (*replicationdatapb.FullStatus, error) {
 	var c tabletmanagerservicepb.TabletManagerClient
 	var invalidator invalidatorFunc
 	var err error
@@ -887,7 +893,7 @@ func (client *Client) FullStatus(ctx context.Context, tablet *topodatapb.Tablet)
 		defer closer.Close()
 	}
 
-	response, err := c.FullStatus(ctx, &tabletmanagerdatapb.FullStatusRequest{})
+	response, err := c.FullStatus(ctx, request)
 	if err != nil {
 		if invalidator != nil {
 			invalidator()

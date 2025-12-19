@@ -59,10 +59,9 @@ func (s *server) Ping(ctx context.Context, request *tabletmanagerdatapb.PingRequ
 		if request.ProxyTimeoutMs > 0 {
 			timeout = time.Duration(request.ProxyTimeoutMs) * time.Millisecond
 		}
-
 		proxyCtx, proxyCancel := context.WithTimeout(ctx, timeout)
 		defer proxyCancel()
-		if err = tmc.Ping(proxyCtx, request.ProxyTarget); err != nil {
+		if err = tmc.Ping(proxyCtx, request.ProxyTarget, nil); err != nil {
 			return nil, err
 		}
 		response.Payload = request.Payload
@@ -393,7 +392,7 @@ func (s *server) FullStatus(ctx context.Context, request *tabletmanagerdatapb.Fu
 		}
 		proxyCtx, proxyCancel := context.WithTimeout(ctx, timeout)
 		defer proxyCancel()
-		status, err = tmc.FullStatus(proxyCtx, request.ProxyTarget)
+		status, err = tmc.FullStatus(proxyCtx, request.ProxyTarget, nil)
 	} else {
 		status, err = s.tm.FullStatus(ctx)
 	}
