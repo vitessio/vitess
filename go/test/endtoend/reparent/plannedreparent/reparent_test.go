@@ -121,7 +121,14 @@ func TestReparentReplicaOffline(t *testing.T) {
 	require.Error(t, err)
 
 	// Assert that PRS failed
-	assert.Contains(t, out, "rpc error: code = DeadlineExceeded desc")
+	vtctldVersion, err := cluster.GetMajorVersion("vtctld")
+	require.NoError(t, err)
+	errStr := "rpc error: code = DeadlineExceeded desc"
+	if vtctldVersion > 23 { // Newer, more specific error
+		errStr = "rpc error: code = Unknown desc = tablet is shutdown"
+	}
+	assert.Contains(t, out, errStr)
+
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[0])
 }
 
@@ -151,7 +158,13 @@ func TestReparentAvoid(t *testing.T) {
 	utils.StopTablet(t, tablets[0], true)
 	out, err := utils.PrsAvoid(t, clusterInstance, tablets[1])
 	require.Error(t, err)
-	assert.Contains(t, out, "rpc error: code = DeadlineExceeded desc = latest balancer error")
+	vtctldVersion, err := cluster.GetMajorVersion("vtctld")
+	require.NoError(t, err)
+	errStr := "rpc error: code = DeadlineExceeded desc = latest balancer error"
+	if vtctldVersion > 23 { // Newer, more specific error
+		errStr = "rpc error: code = Unknown desc = tablet is shutdown"
+	}
+	assert.Contains(t, out, errStr)
 	utils.ValidateTopology(t, clusterInstance, false)
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
 
