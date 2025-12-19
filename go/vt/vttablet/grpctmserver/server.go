@@ -54,29 +54,8 @@ type server struct {
 func (s *server) Ping(ctx context.Context, request *tabletmanagerdatapb.PingRequest) (response *tabletmanagerdatapb.PingResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "Ping", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.PingResponse{}
-	if request.ProxyTarget != nil {
-		if topoproto.TabletAliasEqual(s.tm.GetTabletAlias(), request.ProxyTarget.Alias) {
-			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "cannot use proxying tablet as a proxy target")
-		}
-		if request.IsProxied {
-			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "cannot proxy a request that is already proxied")
-		}
-
-		timeout := topo.RemoteOperationTimeout
-		if request.ProxyTimeoutMs > 0 {
-			timeout = time.Duration(request.ProxyTimeoutMs) * time.Millisecond
-		}
-		proxyCtx, proxyCancel := context.WithTimeout(ctx, timeout)
-		defer proxyCancel()
-		if err = tmc.Ping(proxyCtx, request.ProxyTarget, &tabletmanagerdatapb.PingRequest{
-			IsProxied: true,
-		}); err != nil {
-			return nil, err
-		}
-		response.Payload = request.Payload
-	} else {
-		response.Payload = s.tm.Ping(ctx, request.Payload)
+	response = &tabletmanagerdatapb.PingResponse{
+		Payload: s.tm.Ping(ctx, request.Payload),
 	}
 	return response, nil
 }
@@ -390,28 +369,33 @@ func (s *server) ReplicationStatus(ctx context.Context, request *tabletmanagerda
 	return response, err
 }
 
+func (s *server) proxyFullStatus(ctx context.Context, request *tabletmanagerdatapb.FullStatusRequest) (*replicationdatapb.FullStatus, error) {
+	if topoproto.TabletAliasEqual(s.tm.GetTabletAlias(), request.ProxyTarget.Alias) {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "cannot use proxying tablet as a proxy target")
+	}
+	if request.ProxiedBy != nil {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "cannot proxy a request that is already proxied")
+	}
+
+	timeout := topo.RemoteOperationTimeout
+	if request.ProxyTimeoutMs > 0 {
+		timeout = time.Duration(request.ProxyTimeoutMs) * time.Millisecond
+	}
+	proxyCtx, proxyCancel := context.WithTimeout(ctx, timeout)
+	defer proxyCancel()
+
+	return tmc.FullStatus(proxyCtx, request.ProxyTarget, &tabletmanagerdatapb.FullStatusRequest{
+		ProxiedBy: s.tm.GetTabletAlias(),
+	})
+}
+
 func (s *server) FullStatus(ctx context.Context, request *tabletmanagerdatapb.FullStatusRequest) (response *tabletmanagerdatapb.FullStatusResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "FullStatus", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	var status *replicationdatapb.FullStatus
 	response = &tabletmanagerdatapb.FullStatusResponse{}
 	if request.ProxyTarget != nil {
-		if topoproto.TabletAliasEqual(s.tm.GetTabletAlias(), request.ProxyTarget.Alias) {
-			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "cannot use proxying tablet as a proxy target")
-		}
-		if request.IsProxied {
-			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "cannot proxy a request that is already proxied")
-		}
-
-		timeout := topo.RemoteOperationTimeout
-		if request.ProxyTimeoutMs > 0 {
-			timeout = time.Duration(request.ProxyTimeoutMs) * time.Millisecond
-		}
-		proxyCtx, proxyCancel := context.WithTimeout(ctx, timeout)
-		defer proxyCancel()
-		status, err = tmc.FullStatus(proxyCtx, request.ProxyTarget, &tabletmanagerdatapb.FullStatusRequest{
-			IsProxied: true,
-		})
+		status, err = s.proxyFullStatus(ctx, request)
 	} else {
 		status, err = s.tm.FullStatus(ctx)
 	}

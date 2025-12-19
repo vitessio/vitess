@@ -96,7 +96,7 @@ func TestGRPCErrorCode_UNAVAILABLE(t *testing.T) {
 	defer cancel()
 	tmClient := tmc.NewClient()
 	vttablet := getTablet(tablet.GrpcPort)
-	_, err = tmClient.FullStatus(ctx, vttablet)
+	_, err = tmClient.FullStatus(ctx, vttablet, nil)
 	assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
 }
 

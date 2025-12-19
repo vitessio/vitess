@@ -67,7 +67,7 @@ type TabletManagerClient interface {
 	//
 
 	// Ping will try to ping the remote tablet
-	Ping(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.PingRequest) error
+	Ping(ctx context.Context, tablet *topodatapb.Tablet) error
 
 	// GetSchema asks the remote tablet for its database schema
 	GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error)

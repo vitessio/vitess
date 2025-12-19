@@ -769,7 +769,7 @@ func (itmc *internalTabletManagerClient) UnlockTables(ctx context.Context, table
 	return errors.New("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) Ping(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.PingRequest) error {
+func (itmc *internalTabletManagerClient) Ping(ctx context.Context, tablet *topodatapb.Tablet) error {
 	t, ok := tabletMap[tablet.Alias.Uid]
 	if !ok {
 		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)

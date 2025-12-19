@@ -3257,7 +3257,7 @@ func (s *VtctldServer) PingTablet(ctx context.Context, req *vtctldatapb.PingTabl
 		return nil, err
 	}
 
-	err = s.tmc.Ping(ctx, tablet.Tablet, nil)
+	err = s.tmc.Ping(ctx, tablet.Tablet)
 	if err != nil {
 		return nil, err
 	}
@@ -5257,7 +5257,7 @@ func (s *VtctldServer) ValidateShard(ctx context.Context, req *vtctldatapb.Valid
 					ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 					defer cancel()
 
-					if err := s.tmc.Ping(ctx, ti.Tablet, nil); err != nil {
+					if err := s.tmc.Ping(ctx, ti.Tablet); err != nil {
 						results <- fmt.Sprintf("Ping(%v) failed: %v tablet hostname: %v", alias, err, ti.Hostname)
 					}
 				}(alias, ti)

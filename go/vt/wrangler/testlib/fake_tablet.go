@@ -227,7 +227,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 	c := tmclient.NewTabletManagerClient()
 	for timeout >= 0 {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-		err := c.Ping(ctx, ft.TM.Tablet(), nil)
+		err := c.Ping(ctx, ft.TM.Tablet())
 		cancel()
 		if err == nil {
 			break

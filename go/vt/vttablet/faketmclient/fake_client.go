@@ -111,7 +111,7 @@ func (client *FakeTabletManagerClient) VDiff(ctx context.Context, tablet *topoda
 //
 
 // Ping is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) Ping(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.PingRequest) error {
+func (client *FakeTabletManagerClient) Ping(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return nil
 }
 

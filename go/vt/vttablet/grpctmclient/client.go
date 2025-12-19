@@ -354,25 +354,19 @@ func (client *grpcClient) Close() {
 //
 
 // Ping is part of the tmclient.TabletManagerClient interface.
-func (client *Client) Ping(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.PingRequest) error {
+func (client *Client) Ping(ctx context.Context, tablet *topodatapb.Tablet) error {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return err
 	}
 	defer closer.Close()
-
-	if request == nil {
-		request = &tabletmanagerdatapb.PingRequest{}
-	}
-	if request.Payload == "" {
-		request.Payload = "payload"
-	}
-
-	result, err := c.Ping(ctx, request)
+	result, err := c.Ping(ctx, &tabletmanagerdatapb.PingRequest{
+		Payload: "payload",
+	})
 	if err != nil {
 		return vterrors.FromGRPC(err)
 	}
-	if result.Payload != request.Payload {
+	if result.Payload != "payload" {
 		return fmt.Errorf("bad ping result: %v", result.Payload)
 	}
 	return nil
