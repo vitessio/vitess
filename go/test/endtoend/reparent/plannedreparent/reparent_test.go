@@ -581,7 +581,7 @@ func TestFullStatus(t *testing.T) {
 	require.NoError(t, err)
 
 	// Support for proxying FullStatus RPCs was added in v24.
-	if vttabletVersion < 24 {
+	if vttabletVersion >= 24 {
 		c := grpctmclient.NewClient()
 
 		// test a proxied request success from primary -> replica
