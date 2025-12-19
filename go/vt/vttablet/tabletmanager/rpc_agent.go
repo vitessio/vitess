@@ -43,6 +43,8 @@ type RPCTM interface {
 
 	GetPermissions(ctx context.Context) (*tabletmanagerdatapb.Permissions, error)
 
+	GetTabletAlias() *topodatapb.TabletAlias
+
 	// GetGlobalStatusVars returns the server's global status variables asked for.
 	// An empty/nil variable name parameter slice means you want all of them.
 	GetGlobalStatusVars(ctx context.Context, variables []string) (map[string]string, error)
@@ -179,6 +181,4 @@ type RPCTM interface {
 	// Throttler
 	CheckThrottler(ctx context.Context, request *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error)
 	GetThrottlerStatus(ctx context.Context, request *tabletmanagerdatapb.GetThrottlerStatusRequest) (*tabletmanagerdatapb.GetThrottlerStatusResponse, error)
-
-	GetTabletAlias() *topodatapb.TabletAlias
 }
