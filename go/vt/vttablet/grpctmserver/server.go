@@ -28,14 +28,20 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	tabletmanagerservicepb "vitess.io/vitess/go/vt/proto/tabletmanagerservice"
 )
+
+var tmc = tmclient.NewTabletManagerClient()
 
 // server is the gRPC implementation of the RPC server
 type server struct {
@@ -47,8 +53,21 @@ type server struct {
 func (s *server) Ping(ctx context.Context, request *tabletmanagerdatapb.PingRequest) (response *tabletmanagerdatapb.PingResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "Ping", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.PingResponse{
-		Payload: s.tm.Ping(ctx, request.Payload),
+	response = &tabletmanagerdatapb.PingResponse{}
+	if request.ProxyTarget != nil && !topoproto.TabletAliasEqual(s.tm.GetTabletAlias(), request.ProxyTarget.Alias) {
+		timeout := topo.RemoteOperationTimeout
+		if request.ProxyTimeoutMs > 0 {
+			timeout = time.Duration(request.ProxyTimeoutMs) * time.Millisecond
+		}
+
+		proxyCtx, proxyCancel := context.WithTimeout(ctx, timeout)
+		defer proxyCancel()
+		if err = tmc.Ping(proxyCtx, request.ProxyTarget); err != nil {
+			return nil, err
+		}
+		response.Payload = request.Payload
+	} else {
+		response.Payload = s.tm.Ping(ctx, request.Payload)
 	}
 	return response, nil
 }
@@ -365,8 +384,19 @@ func (s *server) ReplicationStatus(ctx context.Context, request *tabletmanagerda
 func (s *server) FullStatus(ctx context.Context, request *tabletmanagerdatapb.FullStatusRequest) (response *tabletmanagerdatapb.FullStatusResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "FullStatus", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
+	var status *replicationdatapb.FullStatus
 	response = &tabletmanagerdatapb.FullStatusResponse{}
-	status, err := s.tm.FullStatus(ctx)
+	if request.ProxyTarget != nil && !topoproto.TabletAliasEqual(s.tm.GetTabletAlias(), request.ProxyTarget.Alias) {
+		timeout := topo.RemoteOperationTimeout
+		if request.ProxyTimeoutMs > 0 {
+			timeout = time.Duration(request.ProxyTimeoutMs) * time.Millisecond
+		}
+		proxyCtx, proxyCancel := context.WithTimeout(ctx, timeout)
+		defer proxyCancel()
+		status, err = tmc.FullStatus(proxyCtx, request.ProxyTarget)
+	} else {
+		status, err = s.tm.FullStatus(ctx)
+	}
 	if err == nil {
 		response.Status = status
 	}

@@ -21790,6 +21790,12 @@ export namespace tabletmanagerdata {
 
         /** PingRequest payload */
         payload?: (string|null);
+
+        /** PingRequest proxy_target */
+        proxy_target?: (topodata.ITablet|null);
+
+        /** PingRequest proxy_timeout_ms */
+        proxy_timeout_ms?: (number|Long|null);
     }
 
     /** Represents a PingRequest. */
@@ -21803,6 +21809,12 @@ export namespace tabletmanagerdata {
 
         /** PingRequest payload. */
         public payload: string;
+
+        /** PingRequest proxy_target. */
+        public proxy_target?: (topodata.ITablet|null);
+
+        /** PingRequest proxy_timeout_ms. */
+        public proxy_timeout_ms: (number|Long);
 
         /**
          * Creates a new PingRequest instance using the specified properties.
@@ -30947,6 +30959,12 @@ export namespace tabletmanagerdata {
 
     /** Properties of a FullStatusRequest. */
     interface IFullStatusRequest {
+
+        /** FullStatusRequest proxy_target */
+        proxy_target?: (topodata.ITablet|null);
+
+        /** FullStatusRequest proxy_timeout_ms */
+        proxy_timeout_ms?: (number|Long|null);
     }
 
     /** Represents a FullStatusRequest. */
@@ -30957,6 +30975,12 @@ export namespace tabletmanagerdata {
          * @param [properties] Properties to set
          */
         constructor(properties?: tabletmanagerdata.IFullStatusRequest);
+
+        /** FullStatusRequest proxy_target. */
+        public proxy_target?: (topodata.ITablet|null);
+
+        /** FullStatusRequest proxy_timeout_ms. */
+        public proxy_timeout_ms: (number|Long);
 
         /**
          * Creates a new FullStatusRequest instance using the specified properties.

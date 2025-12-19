@@ -115,6 +115,14 @@ message Permissions {
 
 message PingRequest {
   string payload = 1;
+
+  // proxy_target specifies a tablet to proxy the PingResponse from.
+  topodata.Tablet proxy_target = 2;
+
+  // proxy_timeout_ms specifies the maximum number of milliseconds to wait for a
+  // proxied request to complete. Must be less than topo.RemoteOperationTimeout
+  // on the tablet proxying the request.
+  uint64 proxy_timeout_ms = 3;
 }
 
 message PingResponse {
@@ -517,6 +525,13 @@ message ResetReplicationParametersResponse {
 }
 
 message FullStatusRequest {
+  // proxy_target specifies a tablet to proxy the FullStatusResponse from.
+  topodata.Tablet proxy_target = 1;
+
+  // proxy_timeout_ms specifies the maximum number of milliseconds to wait for a
+  // proxied request to complete. Must be less than topo.RemoteOperationTimeout
+  // on the tablet proxying the request.
+  uint64 proxy_timeout_ms = 2;
 }
 
 message FullStatusResponse {
