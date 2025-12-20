@@ -68,30 +68,6 @@ type CloneExecutor struct {
 	UseSSL bool
 }
 
-// ValidateDonor checks that the donor MySQL instance meets all prerequisites for cloning.
-// It verifies:
-// - MySQL version >= 8.0.17
-// - Clone plugin is installed
-// - No non-InnoDB tables exist (clone only supports InnoDB)
-func (c *CloneExecutor) ValidateDonor(ctx context.Context, mysqld MysqlDaemon) error {
-	// Check MySQL version using capabilities system
-	if err := c.checkCloneCapability(ctx, mysqld); err != nil {
-		return err
-	}
-
-	// Check for non-InnoDB tables
-	if err := c.checkNoNonInnoDBTables(ctx, mysqld); err != nil {
-		return err
-	}
-
-	// Check clone plugin is installed
-	if err := c.checkClonePluginInstalled(ctx, mysqld); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // ValidateRecipient checks that the recipient MySQL instance meets all prerequisites for cloning.
 // It verifies:
 // - MySQL version >= 8.0.17
@@ -107,6 +83,84 @@ func (c *CloneExecutor) ValidateRecipient(ctx context.Context, mysqld MysqlDaemo
 		return err
 	}
 
+	return nil
+}
+
+// validateDonorRemote connects to the donor MySQL instance and validates it meets
+// all prerequisites for cloning. This is called from ExecuteClone to verify the
+// donor before attempting the clone operation.
+func (c *CloneExecutor) validateDonorRemote(ctx context.Context) error {
+	params := &mysql.ConnParams{
+		Host:  c.DonorHost,
+		Port:  c.DonorPort,
+		Uname: c.DonorUser,
+		Pass:  c.DonorPassword,
+	}
+
+	conn, err := mysql.Connect(ctx, params)
+	if err != nil {
+		return fmt.Errorf("failed to connect to donor %s:%d: %w", c.DonorHost, c.DonorPort, err)
+	}
+	defer conn.Close()
+
+	// Check MySQL version
+	qr, err := conn.ExecuteFetch("SELECT @@version", 1, false)
+	if err != nil {
+		return fmt.Errorf("failed to query donor MySQL version: %w", err)
+	}
+	if len(qr.Rows) == 0 || len(qr.Rows[0]) == 0 {
+		return errors.New("empty version result from donor")
+	}
+	versionStr := qr.Rows[0][0].ToString()
+	capableOf := mysql.ServerVersionCapableOf(versionStr)
+	if capableOf == nil {
+		return fmt.Errorf("unable to determine MySQL capabilities for donor version %q", versionStr)
+	}
+	ok, err := capableOf(capabilities.MySQLClonePluginFlavorCapability)
+	if err != nil {
+		return fmt.Errorf("failed to check donor clone capability: %w", err)
+	}
+	if !ok {
+		return fmt.Errorf("donor MySQL CLONE requires version 8.0.17 or higher, got %s", versionStr)
+	}
+
+	// Check clone plugin is installed
+	qr, err = conn.ExecuteFetch("SELECT PLUGIN_STATUS FROM information_schema.PLUGINS WHERE PLUGIN_NAME = 'clone'", 1, false)
+	if err != nil {
+		return fmt.Errorf("failed to check donor clone plugin status: %w", err)
+	}
+	if len(qr.Rows) == 0 {
+		return errors.New("clone plugin is not installed on donor (add 'plugin-load-add=mysql_clone.so' to my.cnf)")
+	}
+	status := qr.Rows[0][0].ToString()
+	if status != "ACTIVE" {
+		return fmt.Errorf("clone plugin is not active on donor (status: %s)", status)
+	}
+
+	// Check for non-InnoDB tables
+	qr, err = conn.ExecuteFetch(`
+		SELECT TABLE_SCHEMA, TABLE_NAME, ENGINE
+		FROM information_schema.TABLES
+		WHERE ENGINE != 'InnoDB'
+		AND ENGINE IS NOT NULL
+		AND TABLE_TYPE = 'BASE TABLE'
+		AND TABLE_SCHEMA NOT IN ('mysql', 'information_schema', 'performance_schema', 'sys')
+	`, 1000, false)
+	if err != nil {
+		return fmt.Errorf("failed to check donor for non-InnoDB tables: %w", err)
+	}
+	if len(qr.Rows) > 0 {
+		var tables []string
+		for _, row := range qr.Rows {
+			schema := row[0].ToString()
+			table := row[1].ToString()
+			engine := row[2].ToString()
+			tables = append(tables, fmt.Sprintf("%s.%s (%s)", schema, table, engine))
+		}
+		return fmt.Errorf("non-InnoDB tables found on donor (CLONE only supports InnoDB): %s", strings.Join(tables, ", "))
+	}
+
+	log.Infof("Donor %s:%d validated successfully (MySQL %s)", c.DonorHost, c.DonorPort, versionStr)
 	return nil
 }
 
@@ -142,12 +196,25 @@ func (c *CloneExecutor) checkCloneCapability(ctx context.Context, mysqld MysqlDa
 // This will:
 // 1. Set clone_valid_donor_list on the recipient
 // 2. Execute CLONE INSTANCE FROM on the recipient
-// 3. The recipient MySQL will restart automatically after clone completes
+// 3. Wait for MySQL to restart and verify clone completed successfully
+//
+// The restartTimeout specifies how long to wait for MySQL to restart and
+// report clone completion after the CLONE command finishes.
 //
 // Note: This operation will DESTROY all existing data on the recipient.
-func (c *CloneExecutor) ExecuteClone(ctx context.Context, mysqld MysqlDaemon) error {
+func (c *CloneExecutor) ExecuteClone(ctx context.Context, mysqld MysqlDaemon, restartTimeout time.Duration) error {
 	if !MySQLCloneEnabled() {
 		return errors.New("MySQL CLONE not enabled; set --mysql-clone-enabled=true on both donor and recipient")
+	}
+
+	// Validate recipient prerequisites
+	if err := c.ValidateRecipient(ctx, mysqld); err != nil {
+		return fmt.Errorf("recipient validation failed: %w", err)
+	}
+
+	// Validate donor prerequisites by connecting remotely
+	if err := c.validateDonorRemote(ctx); err != nil {
+		return fmt.Errorf("donor validation failed: %w", err)
 	}
 
 	log.Infof("Starting CLONE REMOTE from %s:%d", c.DonorHost, c.DonorPort)
@@ -165,10 +232,16 @@ func (c *CloneExecutor) ExecuteClone(ctx context.Context, mysqld MysqlDaemon) er
 
 	log.Infof("Executing CLONE INSTANCE FROM %s:%d (this may take a while)", c.DonorHost, c.DonorPort)
 
-	// Execute the clone command
-	// Note: After this command completes, MySQL will restart automatically
+	// Execute the clone command. When clone completes, MySQL restarts automatically
+	// which will cause the connection to drop. We ignore this error and verify
+	// success by checking clone_status after MySQL comes back up.
 	if err := mysqld.ExecuteSuperQuery(ctx, cloneCmd); err != nil {
-		return fmt.Errorf("CLONE INSTANCE failed: %w", err)
+		log.Infof("CLONE command returned (connection likely lost due to MySQL restart): %v", err)
+	}
+
+	// Wait for MySQL to restart and verify clone completed successfully
+	if err := c.waitForCloneComplete(ctx, mysqld, restartTimeout); err != nil {
+		return fmt.Errorf("clone verification failed: %w", err)
 	}
 
 	log.Infof("CLONE REMOTE completed successfully from %s:%d", c.DonorHost, c.DonorPort)
@@ -189,37 +262,6 @@ func (c *CloneExecutor) buildCloneCommand() string {
 	}
 
 	return sb.String()
-}
-
-// checkNoNonInnoDBTables verifies that no user tables use non-InnoDB storage engines.
-// MySQL CLONE only copies InnoDB data; other engines would result in empty tables.
-func (c *CloneExecutor) checkNoNonInnoDBTables(ctx context.Context, mysqld MysqlDaemon) error {
-	query := `
-		SELECT TABLE_SCHEMA, TABLE_NAME, ENGINE
-		FROM information_schema.TABLES
-		WHERE ENGINE != 'InnoDB'
-		AND ENGINE IS NOT NULL
-		AND TABLE_TYPE = 'BASE TABLE'
-		AND TABLE_SCHEMA NOT IN ('mysql', 'information_schema', 'performance_schema', 'sys')
-	`
-
-	result, err := mysqld.FetchSuperQuery(ctx, query)
-	if err != nil {
-		return fmt.Errorf("failed to check for non-InnoDB tables: %w", err)
-	}
-
-	if len(result.Rows) > 0 {
-		var tables []string
-		for _, row := range result.Rows {
-			schema := row[0].ToString()
-			table := row[1].ToString()
-			engine := row[2].ToString()
-			tables = append(tables, fmt.Sprintf("%s.%s (%s)", schema, table, engine))
-		}
-		return fmt.Errorf("non-InnoDB tables found (CLONE only supports InnoDB): %s", strings.Join(tables, ", "))
-	}
-
-	return nil
 }
 
 // checkClonePluginInstalled verifies that the clone plugin is loaded.
@@ -302,17 +344,10 @@ func CloneFromDonor(ctx context.Context, topoServer *topo.Server, mysqld MysqlDa
 	}
 
 	// Execute the clone operation.
-	// Note: MySQL will restart automatically after clone completes.
-	if err := executor.ExecuteClone(ctx, mysqld); err != nil {
+	// Note: ExecuteClone will wait for myqld to restart and for CLONE to report
+	// success via performance_schema before returning.
+	if err := executor.ExecuteClone(ctx, mysqld, 5*time.Minute); err != nil {
 		return replication.Position{}, fmt.Errorf("clone execution failed: %v", err)
-	}
-
-	// After clone, MySQL restarts automatically. We need to wait for it to come back up.
-	log.Info("Clone completed, waiting for MySQL to restart...")
-
-	// The connection to MySQL will be lost after clone. Wait for it to come back.
-	if err := waitForMySQLRestart(ctx, mysqld); err != nil {
-		return replication.Position{}, fmt.Errorf("failed waiting for MySQL restart after clone: %v", err)
 	}
 
 	// Get the GTID position from the cloned data.
@@ -325,27 +360,71 @@ func CloneFromDonor(ctx context.Context, topoServer *topo.Server, mysqld MysqlDa
 	return pos, nil
 }
 
-// waitForMySQLRestart waits for MySQL to restart after a clone operation.
-func waitForMySQLRestart(ctx context.Context, mysqld MysqlDaemon) error {
-	// MySQL automatically restarts after clone. We need to wait for it.
-	// Use a reasonable timeout for restart.
-	restartTimeout := 5 * time.Minute
-	restartCtx, cancel := context.WithTimeout(ctx, restartTimeout)
-	defer cancel()
+// waitForCloneComplete waits for a clone operation to complete by polling
+// performance_schema.clone_status. This handles the MySQL restart that occurs
+// after clone - connections will fail during restart and this function will
+// retry until MySQL is back and clone_status shows completion.
+func (c *CloneExecutor) waitForCloneComplete(ctx context.Context, mysqld MysqlDaemon, timeout time.Duration) error {
+	const pollInterval = time.Second
 
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
+	deadline := time.Now().Add(timeout)
+	query := "SELECT STATE, ERROR_NO, ERROR_MESSAGE FROM performance_schema.clone_status ORDER BY ID DESC LIMIT 1"
+
+	log.Infof("Waiting for clone to complete (timeout: %v)", timeout)
 
 	for {
+		// Check context cancellation
 		select {
-		case <-restartCtx.Done():
-			return errors.New("timeout waiting for MySQL to restart after clone")
-		case <-ticker.C:
-			// Try to connect to MySQL.
-			if _, err := mysqld.FetchSuperQuery(restartCtx, "SELECT 1"); err == nil {
-				log.Info("MySQL is back online after clone")
-				return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		// Check timeout
+		if time.Now().After(deadline) {
+			return fmt.Errorf("timeout waiting for clone to complete after %v", timeout)
+		}
+
+		// Try to query clone status - connection may fail if MySQL is restarting
+		result, err := mysqld.FetchSuperQuery(ctx, query)
+		if err != nil {
+			// Connection failures are expected during MySQL restart
+			log.Infof("Clone status query failed (MySQL may be restarting): %v", err)
+			time.Sleep(pollInterval)
+			continue
+		}
+
+		if len(result.Rows) == 0 {
+			// No clone status yet - MySQL may have just started
+			log.Infof("No clone status found, waiting...")
+			time.Sleep(pollInterval)
+			continue
+		}
+
+		state := result.Rows[0][0].ToString()
+		errorNo := result.Rows[0][1].ToString()
+		errorMsg := result.Rows[0][2].ToString()
+
+		log.Infof("Clone status: STATE=%s, ERROR_NO=%s", state, errorNo)
+
+		switch state {
+		case "Completed":
+			if errorNo != "0" {
+				return fmt.Errorf("clone completed with error %s: %s", errorNo, errorMsg)
 			}
+			log.Infof("Clone completed successfully")
+			return nil
+		case "Failed":
+			return fmt.Errorf("clone failed with error %s: %s", errorNo, errorMsg)
+		case "In Progress", "Not Started":
+			// Still running, keep waiting
+			time.Sleep(pollInterval)
+			continue
+		default:
+			// Unknown state, keep waiting but log it
+			log.Warningf("Unknown clone state: %s", state)
+			time.Sleep(pollInterval)
+			continue
 		}
 	}
 }

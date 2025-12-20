@@ -19,6 +19,7 @@ package mysqlctl
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -69,6 +70,151 @@ func TestBuildCloneCommand(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+func Test_waitForCloneComplete(t *testing.T) {
+	tests := []struct {
+		name         string
+		queryResults []*sqltypes.Result
+		queryErrors  []error
+		expectError  bool
+		errorContain string
+	}{
+		{
+			name: "clone completed successfully",
+			queryResults: []*sqltypes.Result{
+				sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("STATE|ERROR_NO|ERROR_MESSAGE", "varchar|varchar|varchar"),
+					"Completed|0|",
+				),
+			},
+			expectError: false,
+		},
+		{
+			name: "clone completed with error",
+			queryResults: []*sqltypes.Result{
+				sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("STATE|ERROR_NO|ERROR_MESSAGE", "varchar|varchar|varchar"),
+					"Completed|3862|Clone Donor Error: 3862 : Clone requires redo log archiving to be started by BACKUP.",
+				),
+			},
+			expectError:  true,
+			errorContain: "clone completed with error",
+		},
+		{
+			name: "clone failed",
+			queryResults: []*sqltypes.Result{
+				sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("STATE|ERROR_NO|ERROR_MESSAGE", "varchar|varchar|varchar"),
+					"Failed|3862|Clone Donor Error",
+				),
+			},
+			expectError:  true,
+			errorContain: "clone failed",
+		},
+		{
+			name: "clone in progress then completed",
+			queryResults: []*sqltypes.Result{
+				sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("STATE|ERROR_NO|ERROR_MESSAGE", "varchar|varchar|varchar"),
+					"In Progress|0|",
+				),
+				sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("STATE|ERROR_NO|ERROR_MESSAGE", "varchar|varchar|varchar"),
+					"Completed|0|",
+				),
+			},
+			expectError: false,
+		},
+		{
+			name: "connection error then completed",
+			queryResults: []*sqltypes.Result{
+				nil,
+				sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("STATE|ERROR_NO|ERROR_MESSAGE", "varchar|varchar|varchar"),
+					"Completed|0|",
+				),
+			},
+			queryErrors: []error{
+				assert.AnError,
+				nil,
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fmd := NewFakeMysqlDaemon(nil)
+			defer fmd.Close()
+
+			// Set up the sequence of results
+			callCount := 0
+			fmd.FetchSuperQueryCallback = func(query string) (*sqltypes.Result, error) {
+				if callCount < len(tt.queryResults) {
+					idx := callCount
+					callCount++
+					var err error
+					if tt.queryErrors != nil && idx < len(tt.queryErrors) {
+						err = tt.queryErrors[idx]
+					}
+					return tt.queryResults[idx], err
+				}
+				return nil, assert.AnError
+			}
+
+			executor := &CloneExecutor{}
+
+			err := executor.waitForCloneComplete(context.Background(), fmd, 5*time.Second)
+			if tt.expectError {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errorContain)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func Test_waitForCloneComplete_Timeout(t *testing.T) {
+	fmd := NewFakeMysqlDaemon(nil)
+	defer fmd.Close()
+
+	// Always return "In Progress"
+	fmd.FetchSuperQueryCallback = func(query string) (*sqltypes.Result, error) {
+		return sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("STATE|ERROR_NO|ERROR_MESSAGE", "varchar|varchar|varchar"),
+			"In Progress|0|",
+		), nil
+	}
+
+	executor := &CloneExecutor{}
+
+	err := executor.waitForCloneComplete(context.Background(), fmd, 100*time.Millisecond)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "timeout")
+}
+
+func Test_waitForCloneComplete_ContextCanceled(t *testing.T) {
+	fmd := NewFakeMysqlDaemon(nil)
+	defer fmd.Close()
+
+	// Always return "In Progress"
+	fmd.FetchSuperQueryCallback = func(query string) (*sqltypes.Result, error) {
+		return sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("STATE|ERROR_NO|ERROR_MESSAGE", "varchar|varchar|varchar"),
+			"In Progress|0|",
+		), nil
+	}
+
+	executor := &CloneExecutor{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	err := executor.waitForCloneComplete(ctx, fmd, 5*time.Second)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled)
 }
 
 func TestValidateRecipient(t *testing.T) {
