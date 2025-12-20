@@ -249,7 +249,8 @@ func CloneFromDonor(ctx context.Context, topoServer *topo.Server, mysqld MysqlDa
 	var donorAlias *topodatapb.TabletAlias
 	var err error
 
-	if cloneFromPrimary {
+	switch {
+	case cloneFromPrimary:
 		// Look up the primary tablet from topology.
 		log.Infof("Looking up primary tablet for shard %s/%s", keyspace, shard)
 		si, err := topoServer.GetShard(ctx, keyspace, shard)
@@ -261,13 +262,15 @@ func CloneFromDonor(ctx context.Context, topoServer *topo.Server, mysqld MysqlDa
 		}
 		donorAlias = si.PrimaryAlias
 		log.Infof("Found primary tablet: %s", topoproto.TabletAliasString(donorAlias))
-	} else {
+	case cloneFromTablet != "":
 		// Parse the explicit donor tablet alias.
 		log.Infof("Starting clone-based backup from tablet %s", cloneFromTablet)
 		donorAlias, err = topoproto.ParseTabletAlias(cloneFromTablet)
 		if err != nil {
 			return replication.Position{}, fmt.Errorf("invalid tablet alias %q: %v", cloneFromTablet, err)
 		}
+	default:
+		return replication.Position{}, fmt.Errorf("no donor specified")
 	}
 
 	// Get donor tablet info from topology.

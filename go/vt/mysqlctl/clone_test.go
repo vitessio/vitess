@@ -23,7 +23,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 func TestBuildCloneCommand(t *testing.T) {
@@ -144,6 +151,136 @@ func TestValidateRecipient(t *testing.T) {
 				assert.Contains(t, err.Error(), tt.errorContain)
 			} else {
 				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+type cloneFromDonorTestEnv struct {
+	ctx      context.Context
+	logger   *logutil.MemoryLogger
+	ts       *topo.Server
+	mysqld   *FakeMysqlDaemon
+	keyspace string
+	shard    string
+}
+
+func createCloneFromDonorTestEnv(t *testing.T) *cloneFromDonorTestEnv {
+	ctx := context.Background()
+	logger := logutil.NewMemoryLogger()
+
+	// Create in-memory topo server with a test cell
+	ts := memorytopo.NewServer(ctx, "cell1")
+
+	keyspace := "test"
+	shard := "-"
+
+	// Create keyspace in topology
+	require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}))
+
+	// Create fake MySQL daemon
+	sqldb := fakesqldb.New(t)
+	sqldb.SetNeverFail(true)
+	mysqld := NewFakeMysqlDaemon(sqldb)
+
+	t.Cleanup(func() {
+		mysqld.Close()
+		sqldb.Close()
+		utils.EnsureNoLeaks(t)
+	})
+
+	return &cloneFromDonorTestEnv{
+		ctx:      ctx,
+		logger:   logger,
+		ts:       ts,
+		mysqld:   mysqld,
+		keyspace: keyspace,
+		shard:    shard,
+	}
+}
+
+func TestCloneFromDonor(t *testing.T) {
+	testCases := []struct {
+		name             string
+		cloneFromPrimary bool
+		cloneFromTablet  string
+		setup            func(*testing.T, *cloneFromDonorTestEnv)
+		wantErr          bool
+		wantErrContains  string
+	}{
+		{
+			name:             "clone from primary, GetShard fails",
+			cloneFromPrimary: true,
+			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
+				// Don't create the shard, so GetShard will fail
+			},
+			wantErr:         true,
+			wantErrContains: "failed to get shard",
+		},
+		{
+			name:             "clone from primary, shard has no primary",
+			cloneFromPrimary: true,
+			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
+				// Create shard without a primary
+				require.NoError(t, env.ts.CreateShard(env.ctx, env.keyspace, env.shard))
+			},
+			wantErr:         true,
+			wantErrContains: "has no primary",
+		},
+		{
+			name:            "clone from tablet, invalid tablet alias",
+			cloneFromTablet: "invalid-alias-format",
+			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
+				// No setup needed, invalid alias will fail parsing
+			},
+			wantErr:         true,
+			wantErrContains: "invalid tablet alias",
+		},
+		{
+			name:             "neither cloneFromPrimary nor cloneFromTablet specified",
+			cloneFromPrimary: false,
+			cloneFromTablet:  "",
+			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
+				// No setup needed, will fail when no donor is specified
+			},
+			wantErr:         true,
+			wantErrContains: "no donor specified",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := createCloneFromDonorTestEnv(t)
+
+			// Save and restore global flags
+			oldCloneFromPrimary := cloneFromPrimary
+			oldCloneFromTablet := cloneFromTablet
+			defer func() {
+				cloneFromPrimary = oldCloneFromPrimary
+				cloneFromTablet = oldCloneFromTablet
+			}()
+
+			// Set test flag values
+			cloneFromPrimary = tc.cloneFromPrimary
+			cloneFromTablet = tc.cloneFromTablet
+
+			// Run setup if provided
+			if tc.setup != nil {
+				tc.setup(t, env)
+			}
+
+			// Execute CloneFromDonor
+			pos, err := CloneFromDonor(env.ctx, env.ts, env.mysqld, env.keyspace, env.shard)
+
+			// Verify results
+			if tc.wantErr {
+				require.Error(t, err)
+				if tc.wantErrContains != "" {
+					assert.ErrorContains(t, err, tc.wantErrContains)
+				}
+			} else {
+				require.NoError(t, err)
+				assert.NotEmpty(t, pos)
 			}
 		})
 	}
