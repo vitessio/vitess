@@ -18,19 +18,27 @@ package mysqlctl
 
 import (
 	"context"
+	"fmt"
+	"net"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtenv"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -302,6 +310,69 @@ func TestValidateRecipient(t *testing.T) {
 	}
 }
 
+type mockDonorHandler struct {
+	mysql.UnimplementedHandler
+	t *testing.T
+}
+
+func (h *mockDonorHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
+	// Respond to donor validation queries
+	switch {
+	case strings.Contains(query, "SELECT @@version"):
+		result := sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("@@version", "varchar"),
+			"8.0.32",
+		)
+		return callback(result)
+	case strings.Contains(query, "SELECT PLUGIN_STATUS"):
+		result := sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("PLUGIN_STATUS", "varchar"),
+			"ACTIVE",
+		)
+		return callback(result)
+	case strings.Contains(query, "SELECT TABLE_SCHEMA"):
+		// Return empty result (no non-InnoDB tables)
+		result := sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("TABLE_SCHEMA|TABLE_NAME|ENGINE", "varchar|varchar|varchar"),
+		)
+		return callback(result)
+	default:
+		return fmt.Errorf("unexpected query: %s", query)
+	}
+}
+
+func (h *mockDonorHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) error {
+	return fmt.Errorf("ComQueryMulti not implemented")
+}
+
+func (h *mockDonorHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Field, uint16, error) {
+	return nil, 0, fmt.Errorf("ComPrepare not implemented")
+}
+
+func (h *mockDonorHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
+	return fmt.Errorf("ComStmtExecute not implemented")
+}
+
+func (h *mockDonorHandler) ComRegisterReplica(c *mysql.Conn, replicaHost string, replicaPort uint16, replicaUser string, replicaPassword string) error {
+	return fmt.Errorf("ComRegisterReplica not implemented")
+}
+
+func (h *mockDonorHandler) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos uint32) error {
+	return fmt.Errorf("ComBinlogDump not implemented")
+}
+
+func (h *mockDonorHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error {
+	return fmt.Errorf("ComBinlogDumpGTID not implemented")
+}
+
+func (h *mockDonorHandler) WarningCount(c *mysql.Conn) uint16 {
+	return 0
+}
+
+func (h *mockDonorHandler) Env() *vtenv.Environment {
+	return vtenv.NewTestEnv()
+}
+
 type cloneFromDonorTestEnv struct {
 	ctx      context.Context
 	logger   *logutil.MemoryLogger
@@ -355,7 +426,7 @@ func TestCloneFromDonor(t *testing.T) {
 		wantErrContains  string
 	}{
 		{
-			name:             "clone from primary, GetShard fails",
+			name:             "clone from primary, get shard fails",
 			cloneFromPrimary: true,
 			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
 				// Don't create the shard, so GetShard will fail
@@ -392,23 +463,224 @@ func TestCloneFromDonor(t *testing.T) {
 			wantErr:         true,
 			wantErrContains: "no donor specified",
 		},
+		{
+			name:            "GetTablet fails",
+			cloneFromTablet: "cell1-100",
+			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
+				// Don't create the tablet, so GetTablet will fail
+			},
+			wantErr:         true,
+			wantErrContains: "failed to get tablet",
+		},
+		{
+			name:            "clone user not configured",
+			cloneFromTablet: "cell1-100",
+			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
+				// Create a valid tablet
+				tablet := &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "cell1", Uid: 100},
+					MysqlHostname: "donor-host",
+					MysqlPort:     3306,
+					Keyspace:      env.keyspace,
+					Shard:         env.shard,
+				}
+				require.NoError(t, env.ts.CreateTablet(env.ctx, tablet))
+
+				// Don't set GlobalDBConfigs.CloneUser, so it will be empty
+			},
+			wantErr:         true,
+			wantErrContains: "clone user not configured",
+		},
+		{
+			name:            "recipient validation fails",
+			cloneFromTablet: "cell1-100",
+			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
+				// Create a valid tablet
+				tablet := &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "cell1", Uid: 100},
+					MysqlHostname: "donor-host",
+					MysqlPort:     3306,
+					Keyspace:      env.keyspace,
+					Shard:         env.shard,
+				}
+				require.NoError(t, env.ts.CreateTablet(env.ctx, tablet))
+
+				// Set up clone credentials
+				dbconfigs.GlobalDBConfigs.CloneUser = dbconfigs.UserConfig{
+					User:     "clone_user",
+					Password: "password",
+				}
+
+				// Configure mysqld to return an old MySQL version
+				env.mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
+					"SELECT @@version": sqltypes.MakeTestResult(
+						sqltypes.MakeTestFields("@@version", "varchar"),
+						"8.0.16",
+					),
+				}
+			},
+			wantErr:         true,
+			wantErrContains: "recipient validation failed",
+		},
+		{
+			name:            "get position after clone fails",
+			cloneFromTablet: "cell1-100",
+			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
+				// Create mock donor server with auth for clone_user
+				jsonConfig := `{"clone_user": [{"Password": "password"}]}`
+				authServer := mysql.NewAuthServerStatic("", jsonConfig, 0)
+				handler := &mockDonorHandler{t: t}
+
+				listener, err := mysql.NewListener("tcp", "127.0.0.1:", authServer, handler, 0, 0, false, false, 0, 0, false)
+				require.NoError(t, err)
+
+				// Start accepting connections
+				go listener.Accept()
+
+				// Clean up when test ends
+				t.Cleanup(func() {
+					listener.Close()
+				})
+
+				// Get the assigned host/port
+				host := listener.Addr().(*net.TCPAddr).IP.String()
+				port := listener.Addr().(*net.TCPAddr).Port
+
+				// Create donor tablet with the mock server's address
+				tablet := &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "cell1", Uid: 100},
+					MysqlHostname: host,
+					MysqlPort:     int32(port),
+					Keyspace:      env.keyspace,
+					Shard:         env.shard,
+				}
+				require.NoError(t, env.ts.CreateTablet(env.ctx, tablet))
+
+				// Set up clone credentials
+				dbconfigs.GlobalDBConfigs.CloneUser = dbconfigs.UserConfig{
+					User:     "clone_user",
+					Password: "password",
+				}
+
+				// Configure recipient mysqld for successful validation and clone
+				env.mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
+					"SELECT @@version": sqltypes.MakeTestResult(
+						sqltypes.MakeTestFields("@@version", "varchar"),
+						"8.0.32",
+					),
+					"SELECT PLUGIN_STATUS FROM information_schema.PLUGINS WHERE PLUGIN_NAME = 'clone'": sqltypes.MakeTestResult(
+						sqltypes.MakeTestFields("PLUGIN_STATUS", "varchar"),
+						"ACTIVE",
+					),
+					"SELECT STATE, ERROR_NO, ERROR_MESSAGE FROM performance_schema.clone_status": sqltypes.MakeTestResult(
+						sqltypes.MakeTestFields("STATE|ERROR_NO|ERROR_MESSAGE", "varchar|varchar|varchar"),
+						"Completed|0|",
+					),
+				}
+
+				// List all expected queries that ExecuteClone will run
+				env.mysqld.ExpectedExecuteSuperQueryList = []string{
+					fmt.Sprintf("SET GLOBAL clone_valid_donor_list = '%s:%d'", host, port),
+					fmt.Sprintf("CLONE INSTANCE FROM 'clone_user'@'%s':%d IDENTIFIED BY 'password' REQUIRE NO SSL", host, port),
+				}
+
+				// Make PrimaryPosition return an error
+				env.mysqld.PrimaryPositionError = assert.AnError
+			},
+			wantErr:         true,
+			wantErrContains: "failed to get position after clone",
+		},
+		{
+			name:            "success",
+			cloneFromTablet: "cell1-100",
+			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
+				// Create mock donor server with auth for clone_user
+				jsonConfig := `{"clone_user": [{"Password": "password"}]}`
+				authServer := mysql.NewAuthServerStatic("", jsonConfig, 0)
+				handler := &mockDonorHandler{t: t}
+
+				listener, err := mysql.NewListener("tcp", "127.0.0.1:", authServer, handler, 0, 0, false, false, 0, 0, false)
+				require.NoError(t, err)
+
+				// Start accepting connections
+				go listener.Accept()
+
+				// Clean up when test ends
+				t.Cleanup(func() {
+					listener.Close()
+				})
+
+				// Get the assigned host/port
+				host := listener.Addr().(*net.TCPAddr).IP.String()
+				port := listener.Addr().(*net.TCPAddr).Port
+
+				// Create donor tablet with the mock server's address
+				tablet := &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "cell1", Uid: 100},
+					MysqlHostname: host,
+					MysqlPort:     int32(port),
+					Keyspace:      env.keyspace,
+					Shard:         env.shard,
+				}
+				require.NoError(t, env.ts.CreateTablet(env.ctx, tablet))
+
+				// Set up clone credentials
+				dbconfigs.GlobalDBConfigs.CloneUser = dbconfigs.UserConfig{
+					User:     "clone_user",
+					Password: "password",
+				}
+
+				// Configure recipient mysqld for successful validation and clone
+				env.mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
+					"SELECT @@version": sqltypes.MakeTestResult(
+						sqltypes.MakeTestFields("@@version", "varchar"),
+						"8.0.32",
+					),
+					"SELECT PLUGIN_STATUS FROM information_schema.PLUGINS WHERE PLUGIN_NAME = 'clone'": sqltypes.MakeTestResult(
+						sqltypes.MakeTestFields("PLUGIN_STATUS", "varchar"),
+						"ACTIVE",
+					),
+					"SELECT STATE, ERROR_NO, ERROR_MESSAGE FROM performance_schema.clone_status": sqltypes.MakeTestResult(
+						sqltypes.MakeTestFields("STATE|ERROR_NO|ERROR_MESSAGE", "varchar|varchar|varchar"),
+						"Completed|0|",
+					),
+				}
+
+				// Set a valid GTID position
+				env.mysqld.CurrentPrimaryPosition = replication.Position{
+					GTIDSet: replication.Mysql56GTIDSet{},
+				}
+
+				// List all expected queries that ExecuteClone will run
+				env.mysqld.ExpectedExecuteSuperQueryList = []string{
+					fmt.Sprintf("SET GLOBAL clone_valid_donor_list = '%s:%d'", host, port),
+					fmt.Sprintf("CLONE INSTANCE FROM 'clone_user'@'%s':%d IDENTIFIED BY 'password' REQUIRE NO SSL", host, port),
+				}
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			env := createCloneFromDonorTestEnv(t)
 
-			// Save and restore global flags
+			// Save and restore global flags and config
 			oldCloneFromPrimary := cloneFromPrimary
 			oldCloneFromTablet := cloneFromTablet
+			oldCloneUser := dbconfigs.GlobalDBConfigs.CloneUser
+			oldMysqlCloneEnabled := mysqlCloneEnabled
 			defer func() {
 				cloneFromPrimary = oldCloneFromPrimary
 				cloneFromTablet = oldCloneFromTablet
+				dbconfigs.GlobalDBConfigs.CloneUser = oldCloneUser
+				mysqlCloneEnabled = oldMysqlCloneEnabled
 			}()
 
 			// Set test flag values
 			cloneFromPrimary = tc.cloneFromPrimary
 			cloneFromTablet = tc.cloneFromTablet
+			mysqlCloneEnabled = true
 
 			// Run setup if provided
 			if tc.setup != nil {
