@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/olekukonko/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -446,27 +447,27 @@ func (h *mockDonorHandler) ComQuery(c *mysql.Conn, query string, callback func(*
 }
 
 func (h *mockDonorHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) error {
-	return fmt.Errorf("ComQueryMulti not implemented")
+	return errors.New("ComQueryMulti not implemented")
 }
 
 func (h *mockDonorHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Field, uint16, error) {
-	return nil, 0, fmt.Errorf("ComPrepare not implemented")
+	return nil, 0, errors.New("ComPrepare not implemented")
 }
 
 func (h *mockDonorHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
-	return fmt.Errorf("ComStmtExecute not implemented")
+	return errors.New("ComStmtExecute not implemented")
 }
 
 func (h *mockDonorHandler) ComRegisterReplica(c *mysql.Conn, replicaHost string, replicaPort uint16, replicaUser string, replicaPassword string) error {
-	return fmt.Errorf("ComRegisterReplica not implemented")
+	return errors.New("ComRegisterReplica not implemented")
 }
 
 func (h *mockDonorHandler) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos uint32) error {
-	return fmt.Errorf("ComBinlogDump not implemented")
+	return errors.New("ComBinlogDump not implemented")
 }
 
 func (h *mockDonorHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error {
-	return fmt.Errorf("ComBinlogDumpGTID not implemented")
+	return errors.New("ComBinlogDumpGTID not implemented")
 }
 
 func (h *mockDonorHandler) WarningCount(c *mysql.Conn) uint16 {

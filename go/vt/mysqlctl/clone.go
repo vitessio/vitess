@@ -313,7 +313,7 @@ func CloneFromDonor(ctx context.Context, topoServer *topo.Server, mysqld MysqlDa
 			return replication.Position{}, fmt.Errorf("invalid tablet alias %q: %v", cloneFromTablet, err)
 		}
 	default:
-		return replication.Position{}, fmt.Errorf("no donor specified")
+		return replication.Position{}, errors.New("no donor specified")
 	}
 
 	// Get donor tablet info from topology.
