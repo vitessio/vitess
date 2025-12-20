@@ -398,8 +398,18 @@ func createCloneFromDonorTestEnv(t *testing.T, donorHost string, donorPort int) 
 	// Create keyspace in topology
 	require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}))
 
-	// Create donor tablet in topology with the mock server's address
+	// Create donor tablet alias
 	donorAlias := &topodatapb.TabletAlias{Cell: "cell1", Uid: 100}
+
+	// Create shard in topology with donor as primary
+	require.NoError(t, ts.CreateShard(ctx, keyspace, shard))
+	_, err := ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = donorAlias
+		return nil
+	})
+	require.NoError(t, err)
+
+	// Create donor tablet in topology with the mock server's address
 	tablet := &topodatapb.Tablet{
 		Alias:         donorAlias,
 		MysqlHostname: donorHost,
@@ -499,7 +509,8 @@ func TestCloneFromDonor(t *testing.T) {
 			name:             "clone from primary, get shard fails",
 			cloneFromPrimary: true,
 			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
-				// Don't create the shard, so GetShard will fail
+				// Delete the shard that was created in env setup
+				require.NoError(t, env.ts.DeleteShard(env.ctx, env.keyspace, env.shard))
 			},
 			wantErr:         true,
 			wantErrContains: "failed to get shard",
@@ -508,8 +519,12 @@ func TestCloneFromDonor(t *testing.T) {
 			name:             "clone from primary, shard has no primary",
 			cloneFromPrimary: true,
 			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
-				// Create shard without a primary
-				require.NoError(t, env.ts.CreateShard(env.ctx, env.keyspace, env.shard))
+				// Clear the primary alias from the shard
+				_, err := env.ts.UpdateShardFields(env.ctx, env.keyspace, env.shard, func(si *topo.ShardInfo) error {
+					si.PrimaryAlias = nil
+					return nil
+				})
+				require.NoError(t, err)
 			},
 			wantErr:         true,
 			wantErrContains: "has no primary",
