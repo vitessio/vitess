@@ -310,69 +310,6 @@ func TestValidateRecipient(t *testing.T) {
 	}
 }
 
-type mockDonorHandler struct {
-	mysql.UnimplementedHandler
-	t *testing.T
-}
-
-func (h *mockDonorHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
-	// Respond to donor validation queries
-	switch {
-	case strings.Contains(query, "SELECT @@version"):
-		result := sqltypes.MakeTestResult(
-			sqltypes.MakeTestFields("@@version", "varchar"),
-			"8.0.32",
-		)
-		return callback(result)
-	case strings.Contains(query, "SELECT PLUGIN_STATUS"):
-		result := sqltypes.MakeTestResult(
-			sqltypes.MakeTestFields("PLUGIN_STATUS", "varchar"),
-			"ACTIVE",
-		)
-		return callback(result)
-	case strings.Contains(query, "SELECT TABLE_SCHEMA"):
-		// Return empty result (no non-InnoDB tables)
-		result := sqltypes.MakeTestResult(
-			sqltypes.MakeTestFields("TABLE_SCHEMA|TABLE_NAME|ENGINE", "varchar|varchar|varchar"),
-		)
-		return callback(result)
-	default:
-		return fmt.Errorf("unexpected query: %s", query)
-	}
-}
-
-func (h *mockDonorHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) error {
-	return fmt.Errorf("ComQueryMulti not implemented")
-}
-
-func (h *mockDonorHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Field, uint16, error) {
-	return nil, 0, fmt.Errorf("ComPrepare not implemented")
-}
-
-func (h *mockDonorHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
-	return fmt.Errorf("ComStmtExecute not implemented")
-}
-
-func (h *mockDonorHandler) ComRegisterReplica(c *mysql.Conn, replicaHost string, replicaPort uint16, replicaUser string, replicaPassword string) error {
-	return fmt.Errorf("ComRegisterReplica not implemented")
-}
-
-func (h *mockDonorHandler) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos uint32) error {
-	return fmt.Errorf("ComBinlogDump not implemented")
-}
-
-func (h *mockDonorHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error {
-	return fmt.Errorf("ComBinlogDumpGTID not implemented")
-}
-
-func (h *mockDonorHandler) WarningCount(c *mysql.Conn) uint16 {
-	return 0
-}
-
-func (h *mockDonorHandler) Env() *vtenv.Environment {
-	return vtenv.NewTestEnv()
-}
-
 type cloneFromDonorTestEnv struct {
 	ctx        context.Context
 	logger     *logutil.MemoryLogger
@@ -473,6 +410,71 @@ func createCloneFromDonorTestEnv(t *testing.T, donorHost string, donorPort int) 
 		donorPort:  donorPort,
 		donorAlias: donorAlias,
 	}
+}
+
+// mockDonorHandler is used to create a minimal mysqld server that the recipient
+// can connect to to verify it's safe to CLONE from.
+type mockDonorHandler struct {
+	mysql.UnimplementedHandler
+	t *testing.T
+}
+
+func (h *mockDonorHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
+	// Respond to donor validation queries
+	switch {
+	case strings.Contains(query, "SELECT @@version"):
+		result := sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("@@version", "varchar"),
+			"8.0.32",
+		)
+		return callback(result)
+	case strings.Contains(query, "SELECT PLUGIN_STATUS"):
+		result := sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("PLUGIN_STATUS", "varchar"),
+			"ACTIVE",
+		)
+		return callback(result)
+	case strings.Contains(query, "SELECT TABLE_SCHEMA"):
+		// Return empty result (no non-InnoDB tables)
+		result := sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("TABLE_SCHEMA|TABLE_NAME|ENGINE", "varchar|varchar|varchar"),
+		)
+		return callback(result)
+	default:
+		return fmt.Errorf("unexpected query: %s", query)
+	}
+}
+
+func (h *mockDonorHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) error {
+	return fmt.Errorf("ComQueryMulti not implemented")
+}
+
+func (h *mockDonorHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Field, uint16, error) {
+	return nil, 0, fmt.Errorf("ComPrepare not implemented")
+}
+
+func (h *mockDonorHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
+	return fmt.Errorf("ComStmtExecute not implemented")
+}
+
+func (h *mockDonorHandler) ComRegisterReplica(c *mysql.Conn, replicaHost string, replicaPort uint16, replicaUser string, replicaPassword string) error {
+	return fmt.Errorf("ComRegisterReplica not implemented")
+}
+
+func (h *mockDonorHandler) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos uint32) error {
+	return fmt.Errorf("ComBinlogDump not implemented")
+}
+
+func (h *mockDonorHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error {
+	return fmt.Errorf("ComBinlogDumpGTID not implemented")
+}
+
+func (h *mockDonorHandler) WarningCount(c *mysql.Conn) uint16 {
+	return 0
+}
+
+func (h *mockDonorHandler) Env() *vtenv.Environment {
+	return vtenv.NewTestEnv()
 }
 
 func TestCloneFromDonor(t *testing.T) {
