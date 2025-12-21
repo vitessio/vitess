@@ -74,6 +74,9 @@ type State struct {
 	IsPartialMigration    bool
 	ShardsAlreadySwitched []string
 	ShardsNotYetSwitched  []string
+
+	ReadsMirrored  bool
+	WritesMirrored bool
 }
 
 func (s *State) String() string {

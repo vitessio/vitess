@@ -402,7 +402,7 @@ func (si *ShardInfo) GetTabletControl(tabletType topodatapb.TabletType) *topodat
 //     because it's not used in the same context (vertical vs horizontal sharding)
 //
 // This function should be called while holding the keyspace lock.
-func (si *ShardInfo) UpdateDeniedTables(ctx context.Context, tabletType topodatapb.TabletType, cells []string, remove bool, tables []string) error {
+func (si *ShardInfo) UpdateDeniedTables(ctx context.Context, tabletType topodatapb.TabletType, cells []string, remove bool, tables []string, allowReads bool) error {
 	if err := CheckKeyspaceLocked(ctx, si.keyspace); err != nil {
 		return err
 	}
@@ -424,12 +424,13 @@ func (si *ShardInfo) UpdateDeniedTables(ctx context.Context, tabletType topodata
 			TabletType:   tabletType,
 			Cells:        cells,
 			DeniedTables: tables,
+			AllowReads:   allowReads,
 		})
 		return nil
 	}
 
 	if tabletType == topodatapb.TabletType_PRIMARY {
-		if err := si.updatePrimaryTabletControl(tc, remove, tables); err != nil {
+		if err := si.updatePrimaryTabletControl(tc, remove, tables, allowReads); err != nil {
 			return err
 		}
 		return nil
@@ -448,7 +449,9 @@ func (si *ShardInfo) UpdateDeniedTables(ctx context.Context, tabletType topodata
 	return nil
 }
 
-func (si *ShardInfo) updatePrimaryTabletControl(tc *topodatapb.Shard_TabletControl, remove bool, tables []string) error {
+func (si *ShardInfo) updatePrimaryTabletControl(tc *topodatapb.Shard_TabletControl, remove bool, tables []string, allowReads bool) error {
+	tc.AllowReads = allowReads
+
 	var newTables []string
 	for _, table := range tables {
 		exists := false
