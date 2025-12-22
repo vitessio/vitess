@@ -177,11 +177,7 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 		return nil, nil
 	}
 
-	envPath, err := os.Getenv("PATH")
-	if err != nil {
-		return nil, err
-	}
-
+	envPath := os.Getenv("PATH")
 	testCmd := t.Command
 	if len(testCmd) == 0 {
 		if strings.Contains(fmt.Sprintf("%v", t.File), ".go") {
