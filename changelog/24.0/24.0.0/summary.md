@@ -107,7 +107,7 @@ VTOrc's `DiscoverInstance` function now includes the tablet alias in all log mes
 
 This improvement makes it easier to identify and debug issues with specific tablets when discovery operations fail.
 
-#### <a id="vtorc-cell-flag"/>New `--cell` Flag for VTOrc (Optional in v24, Required in v25+)</a>
+#### <a id="vtorc-cell-flag"/>New `--cell` Flag</a>
 
 VTOrc now supports a `--cell` flag that specifies which Vitess cell the VTOrc process is running in. The flag is optional in v24 but will be required in v25+, similar to VTGate's `--cell` flag.
 
