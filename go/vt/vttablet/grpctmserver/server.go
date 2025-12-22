@@ -20,7 +20,6 @@ import (
 	"context"
 	"time"
 
-	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/callerid"
@@ -32,8 +31,8 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/grpctmclient"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -43,13 +42,13 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
+var tmc = tmclient.NewTabletManagerClient()
+
 // server is the gRPC implementation of the RPC server
 type server struct {
 	tabletmanagerservicepb.UnimplementedTabletManagerServer
 	// implementation of the tm to call
-	tm        tabletmanager.RPCTM
-	tmc       *grpctmclient.Client
-	proxySema *semaphore.Weighted
+	tm tabletmanager.RPCTM
 }
 
 func (s *server) Ping(ctx context.Context, request *tabletmanagerdatapb.PingRequest) (response *tabletmanagerdatapb.PingResponse, err error) {
@@ -384,12 +383,6 @@ func (s *server) proxyFullStatus(ctx context.Context, request *tabletmanagerdata
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot set a proxy timeout ms greater than %d", topo.RemoteOperationTimeout.Milliseconds())
 	}
 
-	// limit number of inflight proxy requests
-	if err := s.proxySema.Acquire(ctx, 1); err != nil {
-		return nil, err
-	}
-	defer s.proxySema.Release(1)
-
 	timeout := topo.RemoteOperationTimeout
 	if request.ProxyTimeoutMs > 0 {
 		timeout = time.Duration(request.ProxyTimeoutMs) * time.Millisecond
@@ -397,7 +390,7 @@ func (s *server) proxyFullStatus(ctx context.Context, request *tabletmanagerdata
 	proxyCtx, proxyCancel := context.WithTimeout(ctx, timeout)
 	defer proxyCancel()
 
-	return s.tmc.FullStatus(proxyCtx, request.ProxyTarget, &tabletmanagerdatapb.FullStatusRequest{
+	return tmc.FullStatus(proxyCtx, request.ProxyTarget, &tabletmanagerdatapb.FullStatusRequest{
 		ProxiedBy: s.tm.GetTabletAlias(),
 	})
 }
@@ -773,20 +766,12 @@ func (s *server) GetThrottlerStatus(ctx context.Context, request *tabletmanagerd
 func init() {
 	tabletmanager.RegisterTabletManagers = append(tabletmanager.RegisterTabletManagers, func(tm *tabletmanager.TabletManager) {
 		if servenv.GRPCCheckServiceMap("tabletmanager") {
-			tabletmanagerservicepb.RegisterTabletManagerServer(servenv.GRPCServer, &server{
-				tm:        tm,
-				tmc:       grpctmclient.NewClient(),
-				proxySema: semaphore.NewWeighted(4),
-			})
+			tabletmanagerservicepb.RegisterTabletManagerServer(servenv.GRPCServer, &server{tm: tm})
 		}
 	})
 }
 
 // RegisterForTest will register the RPC, to be used by test instances only
 func RegisterForTest(s *grpc.Server, tm tabletmanager.RPCTM) {
-	tabletmanagerservicepb.RegisterTabletManagerServer(s, &server{
-		tm:        tm,
-		tmc:       grpctmclient.NewClient(),
-		proxySema: semaphore.NewWeighted(2),
-	})
+	tabletmanagerservicepb.RegisterTabletManagerServer(s, &server{tm: tm})
 }
