@@ -506,13 +506,20 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 		return
 	}
 
-	// Skip SELECT ... FOR UPDATE queries that cannot run on read-only replicas
-	if strings.Contains(strings.ToLower(route.Query), "for update") {
+	if vcursor.GetWarmingReadsPercent() == 0 || rand.IntN(100) > vcursor.GetWarmingReadsPercent() {
 		return
 	}
 
-	if vcursor.GetWarmingReadsPercent() == 0 || rand.IntN(100) > vcursor.GetWarmingReadsPercent() {
-		return
+	// Remove FOR UPDATE locks for warming reads if present
+	warmingQueries := queries
+	if modifiedQuery, ok := removeForUpdateLocks(route.Query); ok {
+		warmingQueries = make([]*querypb.BoundQuery, len(queries))
+		for i, query := range queries {
+			warmingQueries[i] = &querypb.BoundQuery{
+				Sql:           modifiedQuery,
+				BindVariables: query.BindVariables,
+			}
+		}
 	}
 
 	replicaVCursor := vcursor.CloneForReplicaWarming(ctx)
@@ -530,7 +537,7 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 				return
 			}
 
-			_, errs := replicaVCursor.ExecuteMultiShard(ctx, route, rss, queries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
+			_, errs := replicaVCursor.ExecuteMultiShard(ctx, route, rss, warmingQueries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
 			if len(errs) > 0 {
 				log.Warn(fmt.Sprintf("Failed to execute warming replica read: %v", errs))
 			} else {
@@ -540,4 +547,32 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 	default:
 		log.Warn("Failed to execute warming replica read as pool is full")
 	}
+}
+
+func removeForUpdateLocks(query string) (string, bool) {
+	parser, err := sqlparser.New(sqlparser.Options{})
+	if err != nil {
+		return query, false
+	}
+	stmt, err := parser.Parse(query)
+	if err != nil {
+		return query, false
+	}
+	sel, ok := stmt.(*sqlparser.Select)
+	if !ok {
+		return query, false
+	}
+
+	// Check if this is a FOR UPDATE query
+	if sel.Lock != sqlparser.ForUpdateLock &&
+		sel.Lock != sqlparser.ForUpdateLockNoWait &&
+		sel.Lock != sqlparser.ForUpdateLockSkipLocked {
+		return query, false
+	}
+
+	// Remove the lock clause
+	sel.Lock = sqlparser.NoLock
+
+	// Convert back to SQL string
+	return sqlparser.String(sel), true
 }
