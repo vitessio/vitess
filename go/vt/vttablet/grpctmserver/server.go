@@ -32,8 +32,8 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/grpctmclient"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -48,7 +48,7 @@ type server struct {
 	tabletmanagerservicepb.UnimplementedTabletManagerServer
 	// implementation of the tm to call
 	tm        tabletmanager.RPCTM
-	tmc       *grpctmclient.Client
+	tmc       tmclient.TabletManagerClient
 	proxySema *semaphore.Weighted
 }
 
@@ -771,11 +771,15 @@ func (s *server) GetThrottlerStatus(ctx context.Context, request *tabletmanagerd
 // registration glue
 
 func init() {
+	tmc := tmclient.NewTabletManagerClient()
+	tmclient.RegisterTabletManagerClientFactory("grpc", func() tmclient.TabletManagerClient {
+		return tmc
+	})
 	tabletmanager.RegisterTabletManagers = append(tabletmanager.RegisterTabletManagers, func(tm *tabletmanager.TabletManager) {
 		if servenv.GRPCCheckServiceMap("tabletmanager") {
 			tabletmanagerservicepb.RegisterTabletManagerServer(servenv.GRPCServer, &server{
 				tm:        tm,
-				tmc:       grpctmclient.NewClient(),
+				tmc:       tmc,
 				proxySema: semaphore.NewWeighted(4),
 			})
 		}
@@ -786,7 +790,7 @@ func init() {
 func RegisterForTest(s *grpc.Server, tm tabletmanager.RPCTM) {
 	tabletmanagerservicepb.RegisterTabletManagerServer(s, &server{
 		tm:        tm,
-		tmc:       grpctmclient.NewClient(),
+		tmc:       tmclient.NewTabletManagerClient(),
 		proxySema: semaphore.NewWeighted(2),
 	})
 }
