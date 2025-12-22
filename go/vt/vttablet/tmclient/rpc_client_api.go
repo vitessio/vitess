@@ -18,8 +18,11 @@ package tmclient
 
 import (
 	"context"
+	"runtime"
+	"runtime/debug"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/hook"
@@ -324,6 +327,14 @@ func RegisterTabletManagerClientFactory(name string, factory TabletManagerClient
 func NewTabletManagerClient() TabletManagerClient {
 	f, ok := tabletManagerClientFactories[tabletManagerProtocol]
 	if !ok {
+		_, file, fileNo, ok := runtime.Caller(0)
+		if ok {
+			log.Infof("NewTabletManagerClient() called by %s:%d", file, fileNo)
+		}
+
+		debug.PrintStack()
+		spew.Dump(tabletManagerClientFactories)
+
 		log.Exitf("No TabletManagerProtocol registered with name %s", tabletManagerProtocol)
 	}
 
