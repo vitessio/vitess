@@ -327,9 +327,10 @@ func RegisterTabletManagerClientFactory(name string, factory TabletManagerClient
 func NewTabletManagerClient() TabletManagerClient {
 	f, ok := tabletManagerClientFactories[tabletManagerProtocol]
 	if !ok {
-		_, file, fileNo, ok := runtime.Caller(0)
+		pc, file, fileNo, ok := runtime.Caller(1)
 		if ok {
-			log.Infof("NewTabletManagerClient() called by %s:%d", file, fileNo)
+			details := runtime.FuncForPC(pc)
+			log.Infof("NewTabletManagerClient() called by %s:%d (%+v)", file, fileNo, details.Name())
 		}
 
 		debug.PrintStack()
