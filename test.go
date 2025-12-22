@@ -176,6 +176,12 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 		t.pass++
 		return nil, nil
 	}
+
+	envPath, err := os.Getenv("PATH")
+	if err != nil {
+		return nil, err
+	}
+
 	testCmd := t.Command
 	if len(testCmd) == 0 {
 		if strings.Contains(fmt.Sprintf("%v", t.File), ".go") {
@@ -218,7 +224,9 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 	// Put everything in a unique dir, so we can copy and/or safely delete it.
 	// Also try to make them use different port ranges
 	// to mitigate failures due to zombie processes.
+	binDir := filepath.Join(dir, "bin")
 	cmd.Env = updateEnv(os.Environ(), map[string]string{
+		"PATH":        binDir + ":" + envPath,
 		"VTROOT":      "/vt/src/vitess.io/vitess",
 		"VTDATAROOT":  dataDir,
 		"VTPORTSTART": strconv.FormatInt(int64(getPortStart(100)), 10),
