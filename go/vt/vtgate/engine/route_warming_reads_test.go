@@ -61,24 +61,34 @@ func (vc *warmingReadsVCursor) CloneForReplicaWarming(ctx context.Context) VCurs
 func TestWarmingReadsSkipsForUpdate(t *testing.T) {
 	vindex, _ := vindexes.CreateVindex("hash", "", nil)
 	testCases := []struct {
-		name       string
-		query      string
-		shouldSkip bool
+		name                 string
+		query                string
+		expectedWarmingQuery string
 	}{
 		{
-			name:       "SELECT FOR UPDATE",
-			query:      "SELECT * FROM users WHERE id = 1 FOR UPDATE",
-			shouldSkip: true,
+			name:                 "SELECT FOR UPDATE",
+			query:                "SELECT * FROM users WHERE id = 1 FOR UPDATE",
+			expectedWarmingQuery: "select * from users where id = 1",
 		},
 		{
-			name:       "SELECT FOR UPDATE mixed case",
-			query:      "SELECT * FROM users WHERE id = 1 FoR UpDaTe",
-			shouldSkip: true,
+			name:                 "SELECT FOR UPDATE mixed case",
+			query:                "SELECT * FROM users WHERE id = 1 FoR UpDaTe",
+			expectedWarmingQuery: "select * from users where id = 1",
 		},
 		{
-			name:       "Regular SELECT",
-			query:      "SELECT * FROM users WHERE id = 1",
-			shouldSkip: false,
+			name:                 "SELECT FOR UPDATE with extra spaces",
+			query:                "SELECT * FROM users WHERE id = 1 FOR     UPDATE",
+			expectedWarmingQuery: "select * from users where id = 1",
+		},
+		{
+			name:                 "SELECT FOR UPDATE with comment",
+			query:                "SELECT * FROM users WHERE id = 1 FOR /* comment */ UPDATE",
+			expectedWarmingQuery: "select * from users where id = 1",
+		},
+		{
+			name:                 "Regular SELECT",
+			query:                "SELECT * FROM users WHERE id = 1",
+			expectedWarmingQuery: "SELECT * FROM users WHERE id = 1",
 		},
 	}
 
@@ -99,6 +109,7 @@ func TestWarmingReadsSkipsForUpdate(t *testing.T) {
 			}
 
 			var warmingReadExecuted atomic.Bool
+			var capturedQuery string
 			vc := &warmingReadsVCursor{
 				loggingVCursor: &loggingVCursor{
 					shards:  []string{"-20", "20-"},
@@ -108,20 +119,20 @@ func TestWarmingReadsSkipsForUpdate(t *testing.T) {
 				warmingReadsChannel: make(chan bool, 1),
 			}
 			vc.warmingReadsExecuteFunc = func(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) {
+				if len(queries) > 0 {
+					capturedQuery = queries[0].Sql
+				}
 				warmingReadExecuted.Store(true)
 			}
 
 			_, err := route.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 			require.NoError(t, err)
 
-			if tc.shouldSkip {
-				time.Sleep(50 * time.Millisecond)
-				require.False(t, warmingReadExecuted.Load(), "warming read should not be executed for FOR UPDATE queries")
-			} else {
-				require.Eventually(t, func() bool {
-					return warmingReadExecuted.Load()
-				}, time.Second, 10*time.Millisecond, "warming read should be executed for regular SELECT queries")
-			}
+			require.Eventually(t, func() bool {
+				return warmingReadExecuted.Load()
+			}, time.Second, 10*time.Millisecond, "warming read should be executed")
+
+			require.Equal(t, tc.expectedWarmingQuery, capturedQuery, "warming read query should match expected")
 		})
 	}
 }
