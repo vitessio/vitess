@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -103,6 +104,9 @@ func TestWarmingReadsSkipsForUpdate(t *testing.T) {
 				tc.query,
 				"dummy_select_field",
 			)
+			// Parse and set QueryStatement to match how Routes are created in production
+			parser, _ := sqlparser.NewTestParser().Parse(tc.query)
+			route.QueryStatement = parser
 			route.Vindex = vindex.(vindexes.SingleColumn)
 			route.Values = []evalengine.Expr{
 				evalengine.NewLiteralInt(1),
