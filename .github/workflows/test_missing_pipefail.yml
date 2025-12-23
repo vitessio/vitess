@@ -1,0 +1,20 @@
+name: test_missing_pipefail
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions: read-all
+
+jobs:
+  demonstrate-missing-pipefail:
+    name: Demonstrate Missing Pipefail Bug
+    runs-on: ubuntu-latest
+    steps:
+      - name: Command fails but workflow succeeds (BUG)
+        run: |
+          # WITHOUT set -exo pipefail, the exit 1 failure is hidden
+          # because the last command in the pipe (cat) succeeds.
+          # This demonstrates why we need pipefail in our workflows.
+          (exit 1) | cat
+          echo "This step INCORRECTLY succeeded even though a command failed!"
