@@ -141,16 +141,19 @@ func (c *CloneExecutor) validateDonorRemote(ctx context.Context) error {
 
 // checkCloneCapability verifies that the MySQL version supports the CLONE plugin.
 func (c *CloneExecutor) checkCloneCapability(ctx context.Context, mysqld MysqlDaemon) error {
-	result, err := mysqld.FetchSuperQuery(ctx, "SELECT @@version")
+	versionStr, err := mysqld.GetVersionString(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to query MySQL version: %w", err)
 	}
 
-	if len(result.Rows) == 0 || len(result.Rows[0]) == 0 {
-		return errors.New("empty version result")
+	// GetVersionString may return either SQL query result (e.g., "8.0.44") or CLI output
+	// (e.g., "/usr/sbin/mysqld Ver 8.0.44..."). Try parsing as CLI output first to
+	// extract a clean version string.
+	_, version, parseErr := ParseVersionString(versionStr)
+	if parseErr == nil {
+		versionStr = fmt.Sprintf("%d.%d.%d", version.Major, version.Minor, version.Patch)
 	}
 
-	versionStr := result.Rows[0][0].ToString()
 	capableOf := mysql.ServerVersionCapableOf(versionStr)
 	if capableOf == nil {
 		return fmt.Errorf("unable to determine MySQL capabilities for version %q", versionStr)

@@ -213,17 +213,14 @@ func Test_waitForCloneComplete_ContextCanceled(t *testing.T) {
 func TestValidateRecipient(t *testing.T) {
 	tests := []struct {
 		name         string
-		versionQuery *sqltypes.Result
+		version      string
 		pluginQuery  *sqltypes.Result
 		expectError  bool
 		errorContain string
 	}{
 		{
-			name: "valid MySQL 8.0.32 with clone plugin",
-			versionQuery: sqltypes.MakeTestResult(
-				sqltypes.MakeTestFields("@@version", "varchar"),
-				"8.0.32",
-			),
+			name:    "valid MySQL 8.0.32 with clone plugin",
+			version: "8.0.32",
 			pluginQuery: sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields("PLUGIN_STATUS", "varchar"),
 				"ACTIVE",
@@ -231,30 +228,21 @@ func TestValidateRecipient(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "MySQL version too old",
-			versionQuery: sqltypes.MakeTestResult(
-				sqltypes.MakeTestFields("@@version", "varchar"),
-				"8.0.16",
-			),
+			name:         "MySQL version too old",
+			version:      "8.0.16",
 			expectError:  true,
 			errorContain: "requires version 8.0.17",
 		},
 		{
-			name: "clone plugin not installed",
-			versionQuery: sqltypes.MakeTestResult(
-				sqltypes.MakeTestFields("@@version", "varchar"),
-				"8.0.32",
-			),
+			name:         "clone plugin not installed",
+			version:      "8.0.32",
 			pluginQuery:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("PLUGIN_STATUS", "varchar")),
 			expectError:  true,
 			errorContain: "clone plugin is not installed",
 		},
 		{
-			name: "clone plugin not active",
-			versionQuery: sqltypes.MakeTestResult(
-				sqltypes.MakeTestFields("@@version", "varchar"),
-				"8.0.32",
-			),
+			name:    "clone plugin not active",
+			version: "8.0.32",
 			pluginQuery: sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields("PLUGIN_STATUS", "varchar"),
 				"DISABLED",
@@ -269,11 +257,11 @@ func TestValidateRecipient(t *testing.T) {
 			fmd := NewFakeMysqlDaemon(nil)
 			defer fmd.Close()
 
-			fmd.FetchSuperQueryMap = map[string]*sqltypes.Result{
-				"SELECT @@version": tt.versionQuery,
-			}
+			fmd.Version = tt.version
 			if tt.pluginQuery != nil {
-				fmd.FetchSuperQueryMap["SELECT PLUGIN_STATUS FROM information_schema.PLUGINS WHERE PLUGIN_NAME = 'clone'"] = tt.pluginQuery
+				fmd.FetchSuperQueryMap = map[string]*sqltypes.Result{
+					"SELECT PLUGIN_STATUS FROM information_schema.PLUGINS WHERE PLUGIN_NAME = 'clone'": tt.pluginQuery,
+				}
 			}
 
 			executor := &CloneExecutor{
