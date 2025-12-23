@@ -247,7 +247,10 @@ func (rs *rowStreamer) buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, err
 func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error) {
 	buf := sqlparser.NewTrackedBuffer(nil)
 	// We could have used select *, but being explicit is more predictable.
-	buf.Myprintf("select %s", GetVReplicationMaxExecutionTimeQueryHint(rs.config.CopyPhaseDuration))
+	buf.Myprintf("select ")
+	if rs.options == nil || !rs.options.NoTimeouts { // We don't e.g. want to add the timeout for a VDiff query
+		buf.Myprintf("%s", GetVReplicationMaxExecutionTimeQueryHint(rs.config.CopyPhaseDuration))
+	}
 	prefix := ""
 	for _, col := range rs.plan.Table.Fields {
 		if rs.plan.isConvertColumnUsingUTF8(col.Name) {

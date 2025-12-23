@@ -9,12 +9,17 @@
 - **[Minor Changes](#minor-changes)**
     - **[VTGate](#minor-changes-vtgate)**
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
+        - [New "session" mode for `--vtgate-balancer-mode` flag](#vtgate-session-balancer-mode)
+    - **[Query Serving](#minor-changes-query-serving)**
+        - [JSON_EXTRACT now supports dynamic path arguments](#query-serving-json-extract-dynamic-args)
     - **[VTTablet](#minor-changes-vttablet)**
         - [New Experimental flag `--init-tablet-type-lookup`](#vttablet-init-tablet-type-lookup)
+        - [New `in_order_completion_pending_count` field in OnlineDDL outputs](#vttablet-onlineddl-in-order-completion-count)
         - [Tablet Shutdown Tracking and Connection Validation](#vttablet-tablet-shutdown-validation)
     - **[VTOrc](#minor-changes-vtorc)**
         - [Deprecated VTOrc Metric Removed](#vtorc-deprecated-metric-removed)
         - [Improved VTOrc Discovery Logging](#vtorc-improved-discovery-logging)
+        - [New `--cell` Flag](#vtorc-cell-flag)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -40,6 +45,26 @@ Instead, a simpler algorithm purely based on low lag, high lag and minimum numbe
 
 In v25 this flag will become deprecated and in the following release it will be removed. In the meantime, the legacy behaviour can be used by setting `--legacy-replication-lag-algorithm=true`. This deprecation is tracked in https://github.com/vitessio/vitess/issues/18914.
 
+#### <a id="vtgate-session-balancer-mode"/>New "session" mode for `--vtgate-balancer-mode` flag</a>
+
+The VTGate flag `--vtgate-balancer-mode` now supports a new "session" mode in addition to the existing "cell", "prefer-cell", and "random" modes. Session mode routes each session consistently to the same tablet for the session's duration.
+
+To enable session mode, set the flag when starting VTGate:
+
+```
+--vtgate-balancer-mode=session
+```
+
+### <a id="minor-changes-query-serving"/>Query Serving</a>
+
+#### <a id="query-serving-json-extract-dynamic-args"/>JSON_EXTRACT now supports dynamic path arguments</a>
+
+The `JSON_EXTRACT` function now supports dynamic path arguments like bind variables or results from other function calls. Previously, `JSON_EXTRACT` only worked with static string literals for path arguments.
+
+Null handling now matches MySQL behavior. The function returns NULL when either the document or path argument is NULL.
+
+Static path arguments are still optimized, even when mixed with dynamic arguments, so existing queries won't see any performance regression.
+
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
 #### <a id="vttablet-init-tablet-type-lookup"/>New Experimental flag `--init-tablet-type-lookup`</a>
@@ -49,6 +74,12 @@ The new experimental flag `--init-tablet-type-lookup` for VTTablet allows tablet
 When enabled, the tablet uses its alias to look up the tablet type from the existing topology record on restart. This allows tablets to maintain their changed roles (e.g., RDONLY/DRAINED) across restarts without manual reconfiguration. If disabled or if no topology record exists, the standard `--init-tablet-type` value will be used instead.
 
 **Note**: Vitess Operator–managed deployments generally do not keep tablet records in the topo between restarts, so this feature will not take effect in those environments.
+
+#### <a id="vttablet-onlineddl-in-order-completion-count"/>New `in_order_completion_pending_count` field in OnlineDDL outputs</a>
+
+OnlineDDL migration outputs now include a new `in_order_completion_pending_count` field. When using the `--in-order-completion` flag, this field shows how many migrations must complete before the current migration. The field is visible in `SHOW vitess_migrations` queries and `vtctldclient OnlineDDL <db> show` outputs.
+
+This provides better visibility into migration queue dependencies, making it easier to understand why a migration might be postponed. The count is automatically updated during the scheduler loop and cleared when migrations complete, fail, or are cancelled.
 
 #### <a id="vttablet-tablet-shutdown-validation"/>Tablet Shutdown Tracking and Connection Validation</a>
 
@@ -75,3 +106,13 @@ The `discoverInstanceTimings` metric has been removed from VTOrc in v24.0.0. Thi
 VTOrc's `DiscoverInstance` function now includes the tablet alias in all log messages and uses the correct log level when errors occur. Previously, error messages did not indicate which tablet failed discovery, and errors were logged at INFO level instead of ERROR level.
 
 This improvement makes it easier to identify and debug issues with specific tablets when discovery operations fail.
+
+#### <a id="vtorc-cell-flag"/>New `--cell` Flag</a>
+
+VTOrc now supports a `--cell` flag that specifies which Vitess cell the VTOrc process is running in. The flag is optional in v24 but will be required in v25+, similar to VTGate's `--cell` flag.
+
+When provided, VTOrc validates that the cell exists in the topology service on startup. Without the flag, VTOrc logs a warning about the v25+ flag requirement.
+
+This enables future cross-cell problem validation, where VTOrc will be able to ask another cell to validate detected problems before taking recovery actions. The flag is currently validated but not yet used in VTOrc recovery logic.
+
+**Note**: If you're running VTOrc in a multi-cell deployment, start using the `--cell` flag now to prepare for the v25 requirement.

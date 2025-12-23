@@ -62,7 +62,7 @@ func TestMain(m *testing.M) {
 			VSchema:   shardedVSchema,
 		}
 
-		err = clusterInstance.StartKeyspace(*sKs, shardedKsShards, 0, false)
+		err = clusterInstance.StartKeyspace(*sKs, shardedKsShards, 0, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}

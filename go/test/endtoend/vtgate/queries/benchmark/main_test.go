@@ -84,7 +84,7 @@ func TestMain(m *testing.M) {
 			VSchema:   sVSchema1,
 		}
 
-		err = clusterInstance.StartKeyspace(*sKeyspace1, shards4, 0, false)
+		err = clusterInstance.StartKeyspace(*sKeyspace1, shards4, 0, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}
@@ -96,7 +96,7 @@ func TestMain(m *testing.M) {
 			VSchema:   sVSchema2,
 		}
 
-		err = clusterInstance.StartKeyspace(*sKeyspace2, shards4, 0, false)
+		err = clusterInstance.StartKeyspace(*sKeyspace2, shards4, 0, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}
@@ -108,7 +108,7 @@ func TestMain(m *testing.M) {
 			VSchema:   sVSchema3,
 		}
 
-		err = clusterInstance.StartKeyspace(*sKeyspace3, shards4, 0, false)
+		err = clusterInstance.StartKeyspace(*sKeyspace3, shards4, 0, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}

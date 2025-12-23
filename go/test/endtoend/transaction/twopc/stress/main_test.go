@@ -78,13 +78,14 @@ func TestMain(m *testing.M) {
 		)
 
 		// Start keyspace
+		cell := clusterInstance.Cell
 		keyspace := &cluster.Keyspace{
 			Name:             keyspaceName,
 			SchemaSQL:        SchemaSQL,
 			VSchema:          VSchema,
 			DurabilityPolicy: policy.DurabilitySemiSync,
 		}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false, cell); err != nil {
 			return 1
 		}
 
@@ -95,7 +96,7 @@ func TestMain(m *testing.M) {
 			VSchema:          "{}",
 			DurabilityPolicy: policy.DurabilitySemiSync,
 		}
-		if err := clusterInstance.StartUnshardedKeyspace(*unshardedKeyspace, 2, false); err != nil {
+		if err := clusterInstance.StartUnshardedKeyspace(*unshardedKeyspace, 2, false, cell); err != nil {
 			return 1
 		}
 

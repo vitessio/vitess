@@ -285,7 +285,7 @@ func initializeClusterLate(t *testing.T) {
 	err = clusterInstance.VtctldClientProcess.InitShardPrimary(keyspaceName, shard.Name, cell, primary.TabletUID)
 	require.NoError(t, err)
 
-	err = clusterInstance.StartVTOrc(keyspaceName)
+	err = clusterInstance.StartVTOrc(cell, keyspaceName)
 	require.NoError(t, err)
 
 	// Start vtgate

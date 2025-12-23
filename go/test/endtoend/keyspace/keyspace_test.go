@@ -102,12 +102,13 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start sharded keyspace
+		cell := clusterForKSTest.Cell
 		keyspaceSharded := &cluster.Keyspace{
 			Name:      keyspaceShardedName,
 			SchemaSQL: sqlSchema,
 			VSchema:   vSchema,
 		}
-		if err := clusterForKSTest.StartKeyspace(*keyspaceSharded, []string{"-80", "80-"}, 1, false); err != nil {
+		if err := clusterForKSTest.StartKeyspace(*keyspaceSharded, []string{"-80", "80-"}, 1, false, cell); err != nil {
 			return 1
 		}
 		if err := clusterForKSTest.VtctldClientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceShardedName); err != nil {
@@ -119,7 +120,7 @@ func TestMain(m *testing.M) {
 			Name:      keyspaceUnshardedName,
 			SchemaSQL: sqlSchema,
 		}
-		if err := clusterForKSTest.StartKeyspace(*keyspaceUnsharded, []string{keyspaceUnshardedName}, 1, false); err != nil {
+		if err := clusterForKSTest.StartKeyspace(*keyspaceUnsharded, []string{keyspaceUnshardedName}, 1, false, cell); err != nil {
 			return 1
 		}
 		if err := clusterForKSTest.VtctldClientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceUnshardedName); err != nil {

@@ -167,7 +167,7 @@ func TestMainImpl(m *testing.M) {
 		if err := localCluster.VtctldClientProcess.InitializeShard(keyspaceName, shard.Name, cell, primary.TabletUID); err != nil {
 			return 1, err
 		}
-		if err := localCluster.StartVTOrc(keyspaceName); err != nil {
+		if err := localCluster.StartVTOrc(cell, keyspaceName); err != nil {
 			return 1, err
 		}
 		return m.Run(), nil

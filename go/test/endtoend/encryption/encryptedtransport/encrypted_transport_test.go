@@ -146,7 +146,7 @@ func TestSecureTransport(t *testing.T) {
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand(vtctlInitArgs...)
 	require.NoError(t, err)
 
-	err = clusterInstance.StartVTOrc("test_keyspace")
+	err = clusterInstance.StartVTOrc(cell, "test_keyspace")
 	require.NoError(t, err)
 
 	// Apply schema.

@@ -127,7 +127,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`rows:{lengths:1 values:"1"} rows:{lengths:1 values:"1"} lastpk:{lengths:1 values:"2"}`,
 	}
 	wantQuery := "select /*+ MAX_EXECUTION_TIME(3600000) */ id, val from t1 force index (`PRIMARY`) order by id"
-	checkStream(t, "select 1 from t1", nil, wantQuery, wantStream)
+	checkStream(t, "select 1 from t1", nil, wantQuery, wantStream, nil)
 
 	// t1: simulates rollup, with non-pk column
 	wantStream = []string{
@@ -135,7 +135,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`rows:{lengths:1 lengths:3 values:"1aaa"} rows:{lengths:1 lengths:3 values:"1bbb"} lastpk:{lengths:1 values:"2"}`,
 	}
 	wantQuery = "select /*+ MAX_EXECUTION_TIME(3600000) */ id, val from t1 force index (`PRIMARY`) order by id"
-	checkStream(t, "select 1, val from t1", nil, wantQuery, wantStream)
+	checkStream(t, "select 1, val from t1", nil, wantQuery, wantStream, nil)
 
 	// t1: simulates rollup, with pk and non-pk column
 	wantStream = []string{
@@ -143,7 +143,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`rows:{lengths:1 lengths:1 lengths:3 values:"11aaa"} rows:{lengths:1 lengths:1 lengths:3 values:"12bbb"} lastpk:{lengths:1 values:"2"}`,
 	}
 	wantQuery = "select /*+ MAX_EXECUTION_TIME(3600000) */ id, val from t1 force index (`PRIMARY`) order by id"
-	checkStream(t, "select 1, id, val from t1", nil, wantQuery, wantStream)
+	checkStream(t, "select 1, id, val from t1", nil, wantQuery, wantStream, nil)
 
 	// t1: no pk in select list
 	wantStream = []string{
@@ -151,7 +151,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`rows:{lengths:3 values:"aaa"} rows:{lengths:3 values:"bbb"} lastpk:{lengths:1 values:"2"}`,
 	}
 	wantQuery = "select /*+ MAX_EXECUTION_TIME(3600000) */ id, val from t1 force index (`PRIMARY`) order by id"
-	checkStream(t, "select val from t1", nil, wantQuery, wantStream)
+	checkStream(t, "select val from t1", nil, wantQuery, wantStream, nil)
 
 	// t1: all rows
 	wantStream = []string{
@@ -159,7 +159,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`rows:{lengths:1 lengths:3 values:"1aaa"} rows:{lengths:1 lengths:3 values:"2bbb"} lastpk:{lengths:1 values:"2"}`,
 	}
 	wantQuery = "select /*+ MAX_EXECUTION_TIME(3600000) */ id, val from t1 force index (`PRIMARY`) order by id"
-	checkStream(t, "select * from t1", nil, wantQuery, wantStream)
+	checkStream(t, "select * from t1", nil, wantQuery, wantStream, nil)
 
 	// t1: lastpk=1
 	wantStream = []string{
@@ -167,7 +167,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`rows:{lengths:1 lengths:3 values:"2bbb"} lastpk:{lengths:1 values:"2"}`,
 	}
 	wantQuery = "select /*+ MAX_EXECUTION_TIME(3600000) */ id, val from t1 force index (`PRIMARY`) where (id > 1) order by id"
-	checkStream(t, "select * from t1", []sqltypes.Value{sqltypes.NewInt64(1)}, wantQuery, wantStream)
+	checkStream(t, "select * from t1", []sqltypes.Value{sqltypes.NewInt64(1)}, wantQuery, wantStream, nil)
 
 	// t1: different column ordering
 	wantStream = []string{
@@ -175,7 +175,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`rows:{lengths:3 lengths:1 values:"aaa1"} rows:{lengths:3 lengths:1 values:"bbb2"} lastpk:{lengths:1 values:"2"}`,
 	}
 	wantQuery = "select /*+ MAX_EXECUTION_TIME(3600000) */ id, val from t1 force index (`PRIMARY`) order by id"
-	checkStream(t, "select val, id from t1", nil, wantQuery, wantStream)
+	checkStream(t, "select val, id from t1", nil, wantQuery, wantStream, nil)
 
 	// t2: all rows
 	wantStream = []string{
@@ -183,7 +183,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`rows:{lengths:1 lengths:1 lengths:3 values:"12aaa"} rows:{lengths:1 lengths:1 lengths:3 values:"13bbb"} lastpk:{lengths:1 lengths:1 values:"13"}`,
 	}
 	wantQuery = "select /*+ MAX_EXECUTION_TIME(3600000) */ id1, id2, val from t2 force index (`PRIMARY`) order by id1, id2"
-	checkStream(t, "select * from t2", nil, wantQuery, wantStream)
+	checkStream(t, "select * from t2", nil, wantQuery, wantStream, nil)
 
 	// t2: lastpk=1,2
 	wantStream = []string{
@@ -191,7 +191,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`rows:{lengths:1 lengths:1 lengths:3 values:"13bbb"} lastpk:{lengths:1 lengths:1 values:"13"}`,
 	}
 	wantQuery = "select /*+ MAX_EXECUTION_TIME(3600000) */ id1, id2, val from t2 force index (`PRIMARY`) where (id1 = 1 and id2 > 2) or (id1 > 1) order by id1, id2"
-	checkStream(t, "select * from t2", []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, wantQuery, wantStream)
+	checkStream(t, "select * from t2", []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, wantQuery, wantStream, nil)
 
 	// t3: all rows
 	wantStream = []string{
@@ -199,7 +199,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`rows:{lengths:1 lengths:3 values:"1aaa"} rows:{lengths:1 lengths:3 values:"2bbb"} lastpk:{lengths:1 lengths:3 values:"2bbb"}`,
 	}
 	wantQuery = "select /*+ MAX_EXECUTION_TIME(3600000) */ id, val from t3 order by id, val"
-	checkStream(t, "select * from t3", nil, wantQuery, wantStream)
+	checkStream(t, "select * from t3", nil, wantQuery, wantStream, nil)
 
 	// t3: lastpk: 1,'aaa'
 	wantStream = []string{
@@ -207,7 +207,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`rows:{lengths:1 lengths:3 values:"2bbb"} lastpk:{lengths:1 lengths:3 values:"2bbb"}`,
 	}
 	wantQuery = "select /*+ MAX_EXECUTION_TIME(3600000) */ id, val from t3 where (id = 1 and val > _binary'aaa') or (id > 1) order by id, val"
-	checkStream(t, "select * from t3", []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarBinary("aaa")}, wantQuery, wantStream)
+	checkStream(t, "select * from t3", []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarBinary("aaa")}, wantQuery, wantStream, nil)
 
 	// t4: all rows
 	wantStream = []string{
@@ -215,7 +215,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`rows:{lengths:1 lengths:1 lengths:1 lengths:3 values:"123aaa"} rows:{lengths:1 lengths:1 lengths:1 lengths:3 values:"234bbb"} lastpk:{lengths:1 lengths:1 lengths:1 values:"234"}`,
 	}
 	wantQuery = "select /*+ MAX_EXECUTION_TIME(3600000) */ id1, id2, id3, val from t4 force index (`PRIMARY`) order by id1, id2, id3"
-	checkStream(t, "select * from t4", nil, wantQuery, wantStream)
+	checkStream(t, "select * from t4", nil, wantQuery, wantStream, nil)
 
 	// t4: lastpk: 1,2,3
 	wantStream = []string{
@@ -223,7 +223,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`rows:{lengths:1 lengths:1 lengths:1 lengths:3 values:"234bbb"} lastpk:{lengths:1 lengths:1 lengths:1 values:"234"}`,
 	}
 	wantQuery = "select /*+ MAX_EXECUTION_TIME(3600000) */ id1, id2, id3, val from t4 force index (`PRIMARY`) where (id1 = 1 and id2 = 2 and id3 > 3) or (id1 = 1 and id2 > 2) or (id1 > 1) order by id1, id2, id3"
-	checkStream(t, "select * from t4", []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2), sqltypes.NewInt64(3)}, wantQuery, wantStream)
+	checkStream(t, "select * from t4", []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2), sqltypes.NewInt64(3)}, wantQuery, wantStream, nil)
 
 	// t5: No PK, but a PKE
 	wantStream = []string{
@@ -231,7 +231,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`rows:{lengths:1 lengths:1 lengths:1 lengths:3 values:"234bbb"} lastpk:{lengths:1 lengths:1 lengths:1 values:"234"}`,
 	}
 	wantQuery = "select /*+ MAX_EXECUTION_TIME(3600000) */ id1, id2, id3, val from t5 force index (`id1_id2_id3`) where (id1 = 1 and id2 = 2 and id3 > 3) or (id1 = 1 and id2 > 2) or (id1 > 1) order by id1, id2, id3"
-	checkStream(t, "select * from t5", []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2), sqltypes.NewInt64(3)}, wantQuery, wantStream)
+	checkStream(t, "select * from t5", []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2), sqltypes.NewInt64(3)}, wantQuery, wantStream, nil)
 
 	// t5: test for unsupported integer literal
 	wantError := "only the integer literal 1 is supported"
@@ -321,7 +321,36 @@ func TestStreamRowsKeyRange(t *testing.T) {
 		`rows:{lengths:1 lengths:3 values:"1aaa"} lastpk:{lengths:1 values:"6"}`,
 	}
 	wantQuery := "select /*+ MAX_EXECUTION_TIME(3600000) */ id1, val from t1 force index (`PRIMARY`) order by id1"
-	checkStream(t, "select * from t1 where in_keyrange('-80')", nil, wantQuery, wantStream)
+	checkStream(t, "select * from t1 where in_keyrange('-80')", nil, wantQuery, wantStream, nil)
+}
+
+func TestStreamRowsWithNoTimeouts(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	err := env.SetVSchema(shardedVSchema)
+	require.NoError(t, err)
+	defer env.SetVSchema("{}")
+
+	execStatements(t, []string{
+		"create table t1(id1 int, val varbinary(128), primary key(id1))",
+		"insert into t1 values (1, 'aaa'), (6, 'bbb')",
+	})
+
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+
+	// Only the first row should be returned, but lastpk should be 6.
+	wantStream := []string{
+		`fields:{name:"id1" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"} pkfields:{name:"id1" type:INT32 charset:63}`,
+		`rows:{lengths:1 lengths:3 values:"1aaa"} lastpk:{lengths:1 values:"6"}`,
+	}
+
+	// Pass the NoTimeouts option so that we do not get the MAX_EXECUTION_TIME query hint added to the query.
+	wantQuery := "select id1, val from t1 force index (`PRIMARY`) order by id1"
+	checkStream(t, "select * from t1 where in_keyrange('-80')", nil, wantQuery, wantStream, &binlogdatapb.VStreamOptions{NoTimeouts: true})
 }
 
 func TestStreamRowsFilterInt(t *testing.T) {
@@ -350,7 +379,7 @@ func TestStreamRowsFilterInt(t *testing.T) {
 		`rows:{lengths:1 lengths:3 values:"1aaa"} rows:{lengths:1 lengths:3 values:"4ddd"} lastpk:{lengths:1 values:"4"}`,
 	}
 	wantQuery := "select /*+ MAX_EXECUTION_TIME(3600000) */ id1, id2, val from t1 where (id2 = 100) order by id1"
-	checkStream(t, "select id1, val from t1 where (id2 = 100)", nil, wantQuery, wantStream)
+	checkStream(t, "select id1, val from t1 where (id2 = 100)", nil, wantQuery, wantStream, nil)
 	require.Equal(t, int64(0), engine.rowStreamerNumPackets.Get())
 	require.Equal(t, int64(2), engine.rowStreamerNumRows.Get())
 	require.Less(t, int64(0), engine.vstreamerPacketSize.Get())
@@ -383,7 +412,7 @@ func TestStreamRowsFilterBetween(t *testing.T) {
 		`rows:{lengths:1 lengths:3 values:"2bbb"} rows:{lengths:1 lengths:3 values:"3ccc"} rows:{lengths:1 lengths:3 values:"4ddd"} lastpk:{lengths:1 values:"4"}`,
 	}
 	wantQuery := "select /*+ MAX_EXECUTION_TIME(3600000) */ id1, id2, val from t1 where (id1 between 2 and 4) order by id1"
-	checkStream(t, "select id1, val from t1 where (id1 between 2 and 4)", nil, wantQuery, wantStream)
+	checkStream(t, "select id1, val from t1 where (id1 between 2 and 4)", nil, wantQuery, wantStream, nil)
 	require.Equal(t, int64(0), engine.rowStreamerNumPackets.Get())
 	require.Equal(t, int64(3), engine.rowStreamerNumRows.Get())
 	require.NotZero(t, engine.vstreamerPacketSize.Get())
@@ -397,7 +426,7 @@ func TestStreamRowsFilterBetween(t *testing.T) {
 		`rows:{lengths:1 lengths:3 values:"1aaa"} rows:{lengths:1 lengths:3 values:"5eee"} lastpk:{lengths:1 values:"5"}`,
 	}
 	wantQuery = "select /*+ MAX_EXECUTION_TIME(3600000) */ id1, id2, val from t1 where (id1 not between 2 and 4) order by id1"
-	checkStream(t, "select id1, val from t1 where (id1 not between 2 and 4)", nil, wantQuery, wantStream)
+	checkStream(t, "select id1, val from t1 where (id1 not between 2 and 4)", nil, wantQuery, wantStream, nil)
 	require.Equal(t, int64(0), engine.rowStreamerNumPackets.Get())
 	require.Equal(t, int64(2), engine.rowStreamerNumRows.Get())
 	require.NotZero(t, engine.vstreamerPacketSize.Get())
@@ -429,7 +458,7 @@ func TestStreamRowsFilterIn(t *testing.T) {
 		`rows:{lengths:1 lengths:3 values:"1aaa"} rows:{lengths:1 lengths:3 values:"2bbb"} rows:{lengths:1 lengths:3 values:"3ccc"} lastpk:{lengths:1 values:"3"}`,
 	}
 	wantQuery := "select /*+ MAX_EXECUTION_TIME(3600000) */ id1, id2, val from t1 where (id1 in (1, 2, 3)) order by id1"
-	checkStream(t, "select id1, val from t1 where id1 in (1, 2, 3)", nil, wantQuery, wantStream)
+	checkStream(t, "select id1, val from t1 where id1 in (1, 2, 3)", nil, wantQuery, wantStream, nil)
 	require.Equal(t, int64(0), engine.rowStreamerNumPackets.Get())
 	require.Equal(t, int64(3), engine.rowStreamerNumRows.Get())
 	require.NotZero(t, engine.vstreamerPacketSize.Get())
@@ -459,7 +488,7 @@ func TestStreamRowsFilterVarBinary(t *testing.T) {
 		`rows:{lengths:1 lengths:6 values:"2newton"} rows:{lengths:1 lengths:6 values:"3newton"} rows:{lengths:1 lengths:6 values:"5newton"} lastpk:{lengths:1 values:"5"}`,
 	}
 	wantQuery := "select /*+ MAX_EXECUTION_TIME(3600000) */ id1, val from t1 where (val = 'newton') order by id1"
-	checkStream(t, "select id1, val from t1 where (val = 'newton')", nil, wantQuery, wantStream)
+	checkStream(t, "select id1, val from t1 where (val = 'newton')", nil, wantQuery, wantStream, nil)
 }
 
 func TestStreamRowsFilterVarChar(t *testing.T) {
@@ -484,7 +513,7 @@ func TestStreamRowsFilterVarChar(t *testing.T) {
 		`rows:{lengths:1 lengths:7 values:"2Ñewton"} rows:{lengths:1 lengths:6 values:"3nEwton"} rows:{lengths:1 lengths:8 values:"5neẅton"} lastpk:{lengths:1 values:"5"}`,
 	}
 	wantQuery := "select /*+ MAX_EXECUTION_TIME(3600000) */ id1, val from t1 where (val = 'newton') order by id1"
-	checkStream(t, "select id1, val from t1 where (val = 'newton')", nil, wantQuery, wantStream)
+	checkStream(t, "select id1, val from t1 where (val = 'newton')", nil, wantQuery, wantStream, nil)
 }
 
 func TestStreamRowsMultiPacket(t *testing.T) {
@@ -511,7 +540,7 @@ func TestStreamRowsMultiPacket(t *testing.T) {
 		`rows:{lengths:1 lengths:1 values:"52"} lastpk:{lengths:1 values:"5"}`,
 	}
 	wantQuery := "select /*+ MAX_EXECUTION_TIME(3600000) */ id, val from t1 force index (`PRIMARY`) order by id"
-	checkStream(t, "select * from t1", nil, wantQuery, wantStream)
+	checkStream(t, "select * from t1", nil, wantQuery, wantStream, nil)
 }
 
 func TestStreamRowsCancel(t *testing.T) {
@@ -623,7 +652,7 @@ func TestStreamRowsHeartbeat(t *testing.T) {
 	}
 }
 
-func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantQuery string, wantStream []string) {
+func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantQuery string, wantStream []string, options *binlogdatapb.VStreamOptions) {
 	t.Helper()
 
 	i := 0
@@ -633,7 +662,9 @@ func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantQuery 
 	go func() {
 		first := true
 		defer close(ch)
-		var options binlogdatapb.VStreamOptions
+		if options == nil {
+			options = &binlogdatapb.VStreamOptions{}
+		}
 		options.ConfigOverrides = make(map[string]string)
 
 		// Support both formats for backwards compatibility
@@ -668,7 +699,7 @@ func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantQuery 
 			}
 			i++
 			return nil
-		}, &options)
+		}, options)
 		if err != nil {
 			ch <- err
 		}

@@ -69,7 +69,7 @@ for i in 100 101 102; do
 done
 
 # start vtorc
-../common/scripts/vtorc-up.sh
+CELL=zone1 ../common/scripts/vtorc-up.sh
 
 # Wait for all the tablets to be up and registered in the topology server
 # and for a primary tablet to be elected in the shard and become healthy/serving.
