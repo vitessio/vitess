@@ -131,7 +131,7 @@ func (r ValueSliceContainer) String() string {
 }
 
 func (r InterfaceSlice) String() string {
-	var elements []string
+	elements := make([]string, 0, len(r))
 	for _, el := range r {
 		elements = append(elements, el.String())
 	}
@@ -144,7 +144,7 @@ func (r Bytes) String() string {
 }
 
 func (r LeafSlice) String() string {
-	var elements []string
+	elements := make([]string, 0, len(r))
 	for _, el := range r {
 		elements = append(elements, el.String())
 	}

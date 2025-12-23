@@ -123,12 +123,11 @@ func createDeleteWithInputOp(ctx *plancontext.PlanningContext, del *sqlparser.De
 		Lock:    sqlparser.ForUpdateLock,
 	}
 
-	var delOps []dmlOp
+	delOps := make([]dmlOp, 0, len(ctx.SemTable.DMLTargets.Constituents()))
 	for _, target := range ctx.SemTable.DMLTargets.Constituents() {
 		op := createDeleteOpWithTarget(ctx, target, del.Ignore)
 		delOps = append(delOps, op)
 	}
-
 	delOps = sortDmlOps(delOps)
 
 	// now map the operator and column list.
@@ -264,7 +263,7 @@ func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delet
 }
 
 func generateOwnedVindexQuery(del *sqlparser.Delete, table TargetTable, ksidCols []sqlparser.IdentifierCI) *sqlparser.Select {
-	var selExprs []sqlparser.SelectExpr
+	selExprs := make([]sqlparser.SelectExpr, 0)
 	for _, col := range ksidCols {
 		colName := makeColName(col, table, sqlparser.MultiTable(del.TableExprs))
 		selExprs = append(selExprs, aeWrap(colName))
@@ -293,13 +292,12 @@ func makeColName(col sqlparser.IdentifierCI, table TargetTable, isMultiTbl bool)
 
 func addOrdering(ctx *plancontext.PlanningContext, op Operator, orderBy sqlparser.OrderBy) Operator {
 	es := &expressionSet{}
-	var order []OrderBy
+	order := make([]OrderBy, 0, len(orderBy))
 	for _, ord := range orderBy {
 		if sqlparser.IsNull(ord.Expr) || !es.add(ctx, ord.Expr) {
 			// ORDER BY null, or expression repeated can safely be ignored
 			continue
 		}
-
 		order = append(order, OrderBy{
 			Inner:          sqlparser.Clone(ord),
 			SimplifiedExpr: ord.Expr,
@@ -341,8 +339,8 @@ func updateQueryGraphWithSource(ctx *plancontext.PlanningContext, input Operator
 }
 
 func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp Operator, delStmt *sqlparser.Delete, childFks []vindexes.ChildFKInfo, deletedTbl *vindexes.BaseTable) Operator {
-	var fkChildren []*FkChild
 	var selectExprs []sqlparser.SelectExpr
+	fkChildren := make([]*FkChild, 0, len(childFks))
 	tblName := delStmt.Targets[0]
 	for _, fk := range childFks {
 		// Any RESTRICT type foreign keys that arrive here,

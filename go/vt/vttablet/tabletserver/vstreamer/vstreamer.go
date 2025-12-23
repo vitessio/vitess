@@ -889,8 +889,8 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 }
 
 func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, error) {
-	var fields []*querypb.Field
 	var txtFieldIdx int
+	fields := make([]*querypb.Field, 0, len(tm.Types))
 	for i, typ := range tm.Types {
 		t, err := sqltypes.MySQLToType(typ, 0)
 		if err != nil {

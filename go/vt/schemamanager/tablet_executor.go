@@ -545,7 +545,7 @@ func applyAllowZeroInDate(sql string, parser *sqlparser.Parser) (string, error) 
 	if err != nil {
 		return sql, err
 	}
-	var modifiedSqls []string
+	modifiedSqls := make([]string, 0, len(sqls))
 	for _, singleSQL := range sqls {
 		// --allow-zero-in-date Applies to DDLs
 		stmt, err := parser.Parse(singleSQL)
