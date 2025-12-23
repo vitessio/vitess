@@ -269,65 +269,59 @@ func (c *CloneExecutor) checkClonePluginInstalled(ctx context.Context, mysqld My
 // retry until MySQL is back and clone_status shows completion.
 func (c *CloneExecutor) waitForCloneComplete(ctx context.Context, mysqld MysqlDaemon, timeout time.Duration) error {
 	const pollInterval = time.Second
-
-	deadline := time.Now().Add(timeout)
 	query := "SELECT STATE, ERROR_NO, ERROR_MESSAGE FROM performance_schema.clone_status ORDER BY ID DESC LIMIT 1"
 
 	log.Infof("Waiting for clone to complete (timeout: %v)", timeout)
 
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+
 	for {
-		// Check context cancellation
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		default:
-		}
-
-		// Check timeout
-		if time.Now().After(deadline) {
+		case <-timer.C:
 			return fmt.Errorf("timeout waiting for clone to complete after %v", timeout)
-		}
-
-		// Try to query clone status - connection may fail if MySQL is restarting
-		result, err := mysqld.FetchSuperQuery(ctx, query)
-		if err != nil {
-			// Connection failures are expected during MySQL restart
-			log.Infof("Clone status query failed (MySQL may be restarting): %v", err)
-			time.Sleep(pollInterval)
-			continue
-		}
-
-		if len(result.Rows) == 0 {
-			// No clone status yet - MySQL may have just started
-			log.Infof("No clone status found, waiting...")
-			time.Sleep(pollInterval)
-			continue
-		}
-
-		state := result.Rows[0][0].ToString()
-		errorNo := result.Rows[0][1].ToString()
-		errorMsg := result.Rows[0][2].ToString()
-
-		log.Infof("Clone status: STATE=%s, ERROR_NO=%s", state, errorNo)
-
-		switch state {
-		case "Completed":
-			if errorNo != "0" {
-				return fmt.Errorf("clone completed with error %s: %s", errorNo, errorMsg)
+		case <-ticker.C:
+			// Try to query clone status - connection may fail if MySQL is restarting
+			result, err := mysqld.FetchSuperQuery(ctx, query)
+			if err != nil {
+				// Connection failures are expected during MySQL restart
+				log.Infof("Clone status query failed (MySQL may be restarting): %v", err)
+				continue
 			}
-			log.Infof("Clone completed successfully")
-			return nil
-		case "Failed":
-			return fmt.Errorf("clone failed with error %s: %s", errorNo, errorMsg)
-		case "In Progress", "Not Started":
-			// Still running, keep waiting
-			time.Sleep(pollInterval)
-			continue
-		default:
-			// Unknown state, keep waiting but log it
-			log.Warningf("Unknown clone state: %s", state)
-			time.Sleep(pollInterval)
-			continue
+
+			if len(result.Rows) == 0 {
+				// No clone status yet - MySQL may have just started
+				log.Infof("No clone status found, waiting...")
+				continue
+			}
+
+			state := result.Rows[0][0].ToString()
+			errorNo := result.Rows[0][1].ToString()
+			errorMsg := result.Rows[0][2].ToString()
+
+			log.Infof("Clone status: STATE=%s, ERROR_NO=%s", state, errorNo)
+
+			switch state {
+			case "Completed":
+				if errorNo != "0" {
+					return fmt.Errorf("clone completed with error %s: %s", errorNo, errorMsg)
+				}
+				log.Infof("Clone completed successfully")
+				return nil
+			case "Failed":
+				return fmt.Errorf("clone failed with error %s: %s", errorNo, errorMsg)
+			case "In Progress", "Not Started":
+				// Still running, keep waiting
+				continue
+			default:
+				// Unknown state, keep waiting but log it
+				log.Warningf("Unknown clone state: %s", state)
+				continue
+			}
 		}
 	}
 }
