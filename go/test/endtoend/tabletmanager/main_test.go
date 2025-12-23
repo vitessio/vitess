@@ -111,10 +111,9 @@ func TestMain(m *testing.M) {
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
-			Name:             keyspaceName,
-			DurabilityPolicy: "semi_sync",
-			SchemaSQL:        sqlSchema,
-			VSchema:          vSchema,
+			Name:      keyspaceName,
+			SchemaSQL: sqlSchema,
+			VSchema:   vSchema,
 		}
 
 		if err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, true, clusterInstance.Cell); err != nil {

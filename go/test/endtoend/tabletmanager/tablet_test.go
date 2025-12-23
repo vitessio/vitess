@@ -172,10 +172,22 @@ func TestStopReplicationAndGetStatus(t *testing.T) {
 	require.NoError(t, err)
 	log.Info(fmt.Sprintf("Started vttablet %v", tablet))
 
-	ctx, cancel := context.WithTimeout(t.Context(), time.Second*60)
-	defer cancel()
+	// Setup semi-sync on keyspace and wait for tablet to enable semi-sync.
+	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+	require.NoError(t, err)
+	defer clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=none")
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
+		defer cancel()
+		resp, err := tmcFullStatus(ctx, tablet.GrpcPort)
+		require.NoError(c, err)
+		require.True(c, resp.SemiSyncReplicaEnabled)
+		require.True(c, resp.SemiSyncReplicaStatus)
+	}, time.Second*45, time.Second)
 
 	// Test replicationdatapb.Capability_SEMISYNC returns semi-sync status.
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
+	defer cancel()
 	resp, err := tmcStopReplicationAndGetStatus(ctx, tablet.GrpcPort, replicationdatapb.StopReplicationMode_IOTHREADONLY, replicationdatapb.Capability_SEMISYNC)
 	require.NoError(t, err)
 	require.NotNil(t, resp.Before)
