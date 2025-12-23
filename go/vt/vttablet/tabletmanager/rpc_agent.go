@@ -158,7 +158,7 @@ type RPCTM interface {
 
 	SetReplicationSource(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool, heartbeatInterval float64) error
 
-	StopReplicationAndGetStatus(ctx context.Context, stopReplicationMode replicationdatapb.StopReplicationMode) (StopReplicationAndGetStatusResponse, error)
+	StopReplicationAndGetStatus(ctx context.Context, stopReplicationMode replicationdatapb.StopReplicationMode, replicationCapability replicationdatapb.Capability) (StopReplicationAndGetStatusResponse, error)
 
 	ReplicaWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error
 

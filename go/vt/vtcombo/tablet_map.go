@@ -1029,7 +1029,7 @@ func (itmc *internalTabletManagerClient) SetReplicationSource(context.Context, *
 	return errors.New("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) StopReplicationAndGetStatus(context.Context, *topodatapb.Tablet, replicationdatapb.StopReplicationMode) (*replicationdatapb.StopReplicationStatus, error) {
+func (itmc *internalTabletManagerClient) StopReplicationAndGetStatus(context.Context, *topodatapb.Tablet, replicationdatapb.StopReplicationMode, replicationdatapb.Capability) (*replicationdatapb.StopReplicationStatus, error) {
 	return nil, errors.New("not implemented in vtcombo")
 }
 

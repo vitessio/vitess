@@ -86,6 +86,52 @@ func (StopReplicationMode) EnumDescriptor() ([]byte, []int) {
 	return file_replicationdata_proto_rawDescGZIP(), []int{0}
 }
 
+type Capability int32
+
+const (
+	Capability_NONE     Capability = 0
+	Capability_SEMISYNC Capability = 1
+)
+
+// Enum value maps for Capability.
+var (
+	Capability_name = map[int32]string{
+		0: "NONE",
+		1: "SEMISYNC",
+	}
+	Capability_value = map[string]int32{
+		"NONE":     0,
+		"SEMISYNC": 1,
+	}
+)
+
+func (x Capability) Enum() *Capability {
+	p := new(Capability)
+	*p = x
+	return p
+}
+
+func (x Capability) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (Capability) Descriptor() protoreflect.EnumDescriptor {
+	return file_replicationdata_proto_enumTypes[1].Descriptor()
+}
+
+func (Capability) Type() protoreflect.EnumType {
+	return &file_replicationdata_proto_enumTypes[1]
+}
+
+func (x Capability) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use Capability.Descriptor instead.
+func (Capability) EnumDescriptor() ([]byte, []int) {
+	return file_replicationdata_proto_rawDescGZIP(), []int{1}
+}
+
 // Status is the replication status for MySQL/MariaDB/File-based. Returned by a
 // flavor-specific command and parsed into a Position and fields.
 type Status struct {
@@ -114,6 +160,10 @@ type Status struct {
 	SslAllowed                             bool   `protobuf:"varint,23,opt,name=ssl_allowed,json=sslAllowed,proto3" json:"ssl_allowed,omitempty"`
 	ReplicationLagUnknown                  bool   `protobuf:"varint,24,opt,name=replication_lag_unknown,json=replicationLagUnknown,proto3" json:"replication_lag_unknown,omitempty"`
 	BackupRunning                          bool   `protobuf:"varint,25,opt,name=backup_running,json=backupRunning,proto3" json:"backup_running,omitempty"`
+	SemiSyncPrimaryEnabled                 bool   `protobuf:"varint,26,opt,name=semi_sync_primary_enabled,json=semiSyncPrimaryEnabled,proto3" json:"semi_sync_primary_enabled,omitempty"`
+	SemiSyncReplicaEnabled                 bool   `protobuf:"varint,27,opt,name=semi_sync_replica_enabled,json=semiSyncReplicaEnabled,proto3" json:"semi_sync_replica_enabled,omitempty"`
+	SemiSyncPrimaryStatus                  bool   `protobuf:"varint,28,opt,name=semi_sync_primary_status,json=semiSyncPrimaryStatus,proto3" json:"semi_sync_primary_status,omitempty"`
+	SemiSyncReplicaStatus                  bool   `protobuf:"varint,29,opt,name=semi_sync_replica_status,json=semiSyncReplicaStatus,proto3" json:"semi_sync_replica_status,omitempty"`
 	unknownFields                          protoimpl.UnknownFields
 	sizeCache                              protoimpl.SizeCache
 }
@@ -305,6 +355,34 @@ func (x *Status) GetReplicationLagUnknown() bool {
 func (x *Status) GetBackupRunning() bool {
 	if x != nil {
 		return x.BackupRunning
+	}
+	return false
+}
+
+func (x *Status) GetSemiSyncPrimaryEnabled() bool {
+	if x != nil {
+		return x.SemiSyncPrimaryEnabled
+	}
+	return false
+}
+
+func (x *Status) GetSemiSyncReplicaEnabled() bool {
+	if x != nil {
+		return x.SemiSyncReplicaEnabled
+	}
+	return false
+}
+
+func (x *Status) GetSemiSyncPrimaryStatus() bool {
+	if x != nil {
+		return x.SemiSyncPrimaryStatus
+	}
+	return false
+}
+
+func (x *Status) GetSemiSyncReplicaStatus() bool {
+	if x != nil {
+		return x.SemiSyncReplicaStatus
 	}
 	return false
 }
@@ -720,7 +798,7 @@ var File_replicationdata_proto protoreflect.FileDescriptor
 
 const file_replicationdata_proto_rawDesc = "" +
 	"\n" +
-	"\x15replicationdata.proto\x12\x0freplicationdata\x1a\x0etopodata.proto\"\xbd\a\n" +
+	"\x15replicationdata.proto\x12\x0freplicationdata\x1a\x0etopodata.proto\"\xa5\t\n" +
 	"\x06Status\x12\x1a\n" +
 	"\bposition\x18\x01 \x01(\tR\bposition\x126\n" +
 	"\x17replication_lag_seconds\x18\x04 \x01(\rR\x15replicationLagSeconds\x12\x1f\n" +
@@ -751,7 +829,11 @@ const file_replicationdata_proto_rawDesc = "" +
 	"\vssl_allowed\x18\x17 \x01(\bR\n" +
 	"sslAllowed\x126\n" +
 	"\x17replication_lag_unknown\x18\x18 \x01(\bR\x15replicationLagUnknown\x12%\n" +
-	"\x0ebackup_running\x18\x19 \x01(\bR\rbackupRunningJ\x04\b\x02\x10\x03J\x04\b\x03\x10\x04\"n\n" +
+	"\x0ebackup_running\x18\x19 \x01(\bR\rbackupRunning\x129\n" +
+	"\x19semi_sync_primary_enabled\x18\x1a \x01(\bR\x16semiSyncPrimaryEnabled\x129\n" +
+	"\x19semi_sync_replica_enabled\x18\x1b \x01(\bR\x16semiSyncReplicaEnabled\x127\n" +
+	"\x18semi_sync_primary_status\x18\x1c \x01(\bR\x15semiSyncPrimaryStatus\x127\n" +
+	"\x18semi_sync_replica_status\x18\x1d \x01(\bR\x15semiSyncReplicaStatusJ\x04\b\x02\x10\x03J\x04\b\x03\x10\x04\"n\n" +
 	"\rConfiguration\x12-\n" +
 	"\x12heartbeat_interval\x18\x01 \x01(\x01R\x11heartbeatInterval\x12.\n" +
 	"\x13replica_net_timeout\x18\x02 \x01(\x05R\x11replicaNetTimeout\"w\n" +
@@ -796,7 +878,11 @@ const file_replicationdata_proto_rawDesc = "" +
 	"tabletType*;\n" +
 	"\x13StopReplicationMode\x12\x12\n" +
 	"\x0eIOANDSQLTHREAD\x10\x00\x12\x10\n" +
-	"\fIOTHREADONLY\x10\x01B.Z,vitess.io/vitess/go/vt/proto/replicationdatab\x06proto3"
+	"\fIOTHREADONLY\x10\x01*$\n" +
+	"\n" +
+	"Capability\x12\b\n" +
+	"\x04NONE\x10\x00\x12\f\n" +
+	"\bSEMISYNC\x10\x01B.Z,vitess.io/vitess/go/vt/proto/replicationdatab\x06proto3"
 
 var (
 	file_replicationdata_proto_rawDescOnce sync.Once
@@ -810,24 +896,25 @@ func file_replicationdata_proto_rawDescGZIP() []byte {
 	return file_replicationdata_proto_rawDescData
 }
 
-var file_replicationdata_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_replicationdata_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
 var file_replicationdata_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_replicationdata_proto_goTypes = []any{
 	(StopReplicationMode)(0),      // 0: replicationdata.StopReplicationMode
-	(*Status)(nil),                // 1: replicationdata.Status
-	(*Configuration)(nil),         // 2: replicationdata.Configuration
-	(*StopReplicationStatus)(nil), // 3: replicationdata.StopReplicationStatus
-	(*PrimaryStatus)(nil),         // 4: replicationdata.PrimaryStatus
-	(*FullStatus)(nil),            // 5: replicationdata.FullStatus
-	(topodata.TabletType)(0),      // 6: topodata.TabletType
+	(Capability)(0),               // 1: replicationdata.Capability
+	(*Status)(nil),                // 2: replicationdata.Status
+	(*Configuration)(nil),         // 3: replicationdata.Configuration
+	(*StopReplicationStatus)(nil), // 4: replicationdata.StopReplicationStatus
+	(*PrimaryStatus)(nil),         // 5: replicationdata.PrimaryStatus
+	(*FullStatus)(nil),            // 6: replicationdata.FullStatus
+	(topodata.TabletType)(0),      // 7: topodata.TabletType
 }
 var file_replicationdata_proto_depIdxs = []int32{
-	1, // 0: replicationdata.StopReplicationStatus.before:type_name -> replicationdata.Status
-	1, // 1: replicationdata.StopReplicationStatus.after:type_name -> replicationdata.Status
-	1, // 2: replicationdata.FullStatus.replication_status:type_name -> replicationdata.Status
-	4, // 3: replicationdata.FullStatus.primary_status:type_name -> replicationdata.PrimaryStatus
-	2, // 4: replicationdata.FullStatus.replication_configuration:type_name -> replicationdata.Configuration
-	6, // 5: replicationdata.FullStatus.tablet_type:type_name -> topodata.TabletType
+	2, // 0: replicationdata.StopReplicationStatus.before:type_name -> replicationdata.Status
+	2, // 1: replicationdata.StopReplicationStatus.after:type_name -> replicationdata.Status
+	2, // 2: replicationdata.FullStatus.replication_status:type_name -> replicationdata.Status
+	5, // 3: replicationdata.FullStatus.primary_status:type_name -> replicationdata.PrimaryStatus
+	3, // 4: replicationdata.FullStatus.replication_configuration:type_name -> replicationdata.Configuration
+	7, // 5: replicationdata.FullStatus.tablet_type:type_name -> topodata.TabletType
 	6, // [6:6] is the sub-list for method output_type
 	6, // [6:6] is the sub-list for method input_type
 	6, // [6:6] is the sub-list for extension type_name
@@ -845,7 +932,7 @@ func file_replicationdata_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_replicationdata_proto_rawDesc), len(file_replicationdata_proto_rawDesc)),
-			NumEnums:      1,
+			NumEnums:      2,
 			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,

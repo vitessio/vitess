@@ -53,6 +53,10 @@ message Status {
   bool ssl_allowed = 23;
   bool replication_lag_unknown = 24;
   bool backup_running = 25;
+  bool semi_sync_primary_enabled = 26;
+  bool semi_sync_replica_enabled = 27;
+  bool semi_sync_primary_status = 28;
+  bool semi_sync_replica_status = 29;
 }
 
 // Configuration holds replication configuration information gathered from performance_schema and global variables.
@@ -110,4 +114,9 @@ message FullStatus {
   bool disk_stalled = 23;
   bool semi_sync_blocked = 24;
   topodata.TabletType tablet_type = 25;
+}
+
+enum Capability {
+  NONE = 0;
+  SEMISYNC = 1;
 }

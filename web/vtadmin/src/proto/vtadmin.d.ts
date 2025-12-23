@@ -31544,6 +31544,9 @@ export namespace tabletmanagerdata {
 
         /** StopReplicationAndGetStatusRequest stop_replication_mode */
         stop_replication_mode?: (replicationdata.StopReplicationMode|null);
+
+        /** StopReplicationAndGetStatusRequest capability */
+        capability?: (replicationdata.Capability|null);
     }
 
     /** Represents a StopReplicationAndGetStatusRequest. */
@@ -31557,6 +31560,9 @@ export namespace tabletmanagerdata {
 
         /** StopReplicationAndGetStatusRequest stop_replication_mode. */
         public stop_replication_mode: replicationdata.StopReplicationMode;
+
+        /** StopReplicationAndGetStatusRequest capability. */
+        public capability: replicationdata.Capability;
 
         /**
          * Creates a new StopReplicationAndGetStatusRequest instance using the specified properties.
@@ -49464,6 +49470,18 @@ export namespace replicationdata {
 
         /** Status backup_running */
         backup_running?: (boolean|null);
+
+        /** Status semi_sync_primary_enabled */
+        semi_sync_primary_enabled?: (boolean|null);
+
+        /** Status semi_sync_replica_enabled */
+        semi_sync_replica_enabled?: (boolean|null);
+
+        /** Status semi_sync_primary_status */
+        semi_sync_primary_status?: (boolean|null);
+
+        /** Status semi_sync_replica_status */
+        semi_sync_replica_status?: (boolean|null);
     }
 
     /** Represents a Status. */
@@ -49543,6 +49561,18 @@ export namespace replicationdata {
 
         /** Status backup_running. */
         public backup_running: boolean;
+
+        /** Status semi_sync_primary_enabled. */
+        public semi_sync_primary_enabled: boolean;
+
+        /** Status semi_sync_replica_enabled. */
+        public semi_sync_replica_enabled: boolean;
+
+        /** Status semi_sync_primary_status. */
+        public semi_sync_primary_status: boolean;
+
+        /** Status semi_sync_replica_status. */
+        public semi_sync_replica_status: boolean;
 
         /**
          * Creates a new Status instance using the specified properties.
@@ -50182,6 +50212,12 @@ export namespace replicationdata {
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Capability enum. */
+    enum Capability {
+        NONE = 0,
+        SEMISYNC = 1
     }
 }
 

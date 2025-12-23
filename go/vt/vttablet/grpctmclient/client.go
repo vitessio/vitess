@@ -1363,7 +1363,8 @@ func (client *Client) ReplicaWasRestarted(ctx context.Context, tablet *topodatap
 }
 
 // StopReplicationAndGetStatus is part of the tmclient.TabletManagerClient interface.
-func (client *Client) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, stopReplicationMode replicationdatapb.StopReplicationMode) (status *replicationdatapb.StopReplicationStatus, err error) {
+func (client *Client) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, stopReplicationMode replicationdatapb.StopReplicationMode,
+	replicationCapability replicationdatapb.Capability) (status *replicationdatapb.StopReplicationStatus, err error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
@@ -1371,6 +1372,7 @@ func (client *Client) StopReplicationAndGetStatus(ctx context.Context, tablet *t
 	defer closer.Close()
 	response, err := c.StopReplicationAndGetStatus(ctx, &tabletmanagerdatapb.StopReplicationAndGetStatusRequest{
 		StopReplicationMode: stopReplicationMode,
+		Capability:          replicationCapability,
 	})
 	if err != nil {
 		return nil, vterrors.FromGRPC(err)

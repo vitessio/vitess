@@ -1017,7 +1017,8 @@ func (tm *TabletManager) ReplicaWasRestarted(ctx context.Context, parent *topoda
 
 // StopReplicationAndGetStatus stops MySQL replication, and returns the
 // current status.
-func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopReplicationMode replicationdatapb.StopReplicationMode) (StopReplicationAndGetStatusResponse, error) {
+func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopReplicationMode replicationdatapb.StopReplicationMode,
+	replicationCapability replicationdatapb.Capability) (StopReplicationAndGetStatusResponse, error) {
 	log.Infof("StopReplicationAndGetStatus: mode: %v", stopReplicationMode)
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return StopReplicationAndGetStatusResponse{}, err
@@ -1036,6 +1037,12 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 	}
 	before := replication.ReplicationStatusToProto(rs)
 	before.BackupRunning = tm.IsBackupRunning()
+
+	// Get semi-sync state
+	if replicationCapability == replicationdatapb.Capability_SEMISYNC {
+		before.SemiSyncPrimaryEnabled, before.SemiSyncReplicaEnabled = tm.MysqlDaemon.SemiSyncEnabled(ctx)
+		before.SemiSyncPrimaryStatus, before.SemiSyncReplicaStatus = tm.MysqlDaemon.SemiSyncStatus(ctx)
+	}
 
 	if stopReplicationMode == replicationdatapb.StopReplicationMode_IOTHREADONLY {
 		if !rs.IOHealthy() {

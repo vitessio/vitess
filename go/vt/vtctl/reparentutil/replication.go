@@ -247,9 +247,15 @@ func stopReplicationAndBuildStatusMaps(
 			errChan <- concurrencyErr
 		}()
 
+		var capability replicationdatapb.Capability
+		if policy.HasSemiSync(durability) {
+			capability = replicationdatapb.Capability_SEMISYNC
+		}
+
 		logger.Infof("getting replication position from %v", alias)
 
-		stopReplicationStatus, err := tmc.StopReplicationAndGetStatus(groupCtx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
+		stopReplicationMode := replicationdatapb.StopReplicationMode_IOTHREADONLY
+		stopReplicationStatus, err := tmc.StopReplicationAndGetStatus(groupCtx, tabletInfo.Tablet, stopReplicationMode, capability)
 		if err != nil {
 			sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
 			if isSQLErr && sqlErr != nil && sqlErr.Number() == sqlerror.ERNotReplica {

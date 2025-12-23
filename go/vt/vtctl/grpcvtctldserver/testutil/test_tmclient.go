@@ -1463,7 +1463,8 @@ func (fake *TabletManagerClient) StopReplication(ctx context.Context, tablet *to
 
 // StopReplicationAndGetStatus is part of the tmclient.TabletManagerClient
 // interface.
-func (fake *TabletManagerClient) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, mode replicationdatapb.StopReplicationMode) (*replicationdatapb.StopReplicationStatus, error) {
+func (fake *TabletManagerClient) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, mode replicationdatapb.StopReplicationMode,
+	capability replicationdatapb.Capability) (*replicationdatapb.StopReplicationStatus, error) {
 	if fake.StopReplicationAndGetStatusResults == nil {
 		return nil, assert.AnError
 	}
