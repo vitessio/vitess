@@ -449,7 +449,7 @@ func testExecuteError(t *testing.T, conn queryservice.QueryService, f *FakeQuery
 	t.Log("testExecuteError")
 	f.HasError = true
 	testErrorHelper(t, f, "Execute", func(ctx context.Context) error {
-		_, err := conn.Execute(ctx, nil, TestTarget, ExecuteQuery, ExecuteBindVars, ExecuteTransactionID, ReserveConnectionID, nil)
+		_, err := conn.Execute(ctx, nil, TestTarget, ExecuteQuery, ExecuteBindVars, ExecuteTransactionID, ReserveConnectionID, TestExecuteOptions)
 		return err
 	})
 	f.HasError = false
@@ -458,7 +458,7 @@ func testExecuteError(t *testing.T, conn queryservice.QueryService, f *FakeQuery
 func testExecutePanics(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testExecutePanics")
 	testPanicHelper(t, f, "Execute", func(ctx context.Context) error {
-		_, err := conn.Execute(ctx, nil, TestTarget, ExecuteQuery, ExecuteBindVars, ExecuteTransactionID, ReserveConnectionID, nil)
+		_, err := conn.Execute(ctx, nil, TestTarget, ExecuteQuery, ExecuteBindVars, ExecuteTransactionID, ReserveConnectionID, TestExecuteOptions)
 		return err
 	})
 }
@@ -485,7 +485,7 @@ func testBeginExecuteErrorInBegin(t *testing.T, conn queryservice.QueryService, 
 	t.Log("testBeginExecuteErrorInBegin")
 	f.HasBeginError = true
 	testErrorHelper(t, f, "BeginExecute.Begin", func(ctx context.Context) error {
-		state, _, err := conn.BeginExecute(ctx, nil, TestTarget, nil, ExecuteQuery, ExecuteBindVars, ReserveConnectionID, nil)
+		state, _, err := conn.BeginExecute(ctx, nil, TestTarget, nil, ExecuteQuery, ExecuteBindVars, ReserveConnectionID, TestExecuteOptions)
 		if state.TransactionID != 0 {
 			t.Errorf("Unexpected transactionID from BeginExecute: got %v wanted 0", state.TransactionID)
 		}
@@ -499,7 +499,7 @@ func testBeginExecuteErrorInExecute(t *testing.T, conn queryservice.QueryService
 	f.HasError = true
 	testErrorHelper(t, f, "BeginExecute.Execute", func(ctx context.Context) error {
 		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-		state, _, err := conn.BeginExecute(ctx, nil, TestTarget, nil, ExecuteQuery, ExecuteBindVars, ReserveConnectionID, nil)
+		state, _, err := conn.BeginExecute(ctx, nil, TestTarget, nil, ExecuteQuery, ExecuteBindVars, ReserveConnectionID, TestExecuteOptions)
 		if state.TransactionID != beginTransactionID {
 			t.Errorf("Unexpected transactionID from BeginExecute: got %v wanted %v", state.TransactionID, beginTransactionID)
 		}
@@ -511,7 +511,7 @@ func testBeginExecuteErrorInExecute(t *testing.T, conn queryservice.QueryService
 func testBeginExecutePanics(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testBeginExecutePanics")
 	testPanicHelper(t, f, "BeginExecute", func(ctx context.Context) error {
-		_, _, err := conn.BeginExecute(ctx, nil, TestTarget, nil, ExecuteQuery, ExecuteBindVars, ReserveConnectionID, nil)
+		_, _, err := conn.BeginExecute(ctx, nil, TestTarget, nil, ExecuteQuery, ExecuteBindVars, ReserveConnectionID, TestExecuteOptions)
 		return err
 	})
 }
@@ -557,7 +557,7 @@ func testStreamExecuteError(t *testing.T, conn queryservice.QueryService, f *Fak
 	testErrorHelper(t, f, "StreamExecute", func(ctx context.Context) error {
 		f.ErrorWait = make(chan struct{})
 		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-		return conn.StreamExecute(ctx, nil, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, 0, 0, nil, func(qr *sqltypes.Result) error {
+		return conn.StreamExecute(ctx, nil, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, 0, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
 			// For some errors, the call can be retried.
 			select {
 			case <-f.ErrorWait:
@@ -586,7 +586,7 @@ func testStreamExecutePanics(t *testing.T, conn queryservice.QueryService, f *Fa
 	f.StreamExecutePanicsEarly = true
 	testPanicHelper(t, f, "StreamExecute.Early", func(ctx context.Context) error {
 		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-		return conn.StreamExecute(ctx, nil, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, 0, 0, nil, func(qr *sqltypes.Result) error {
+		return conn.StreamExecute(ctx, nil, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, 0, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
 			return nil
 		})
 	})
@@ -596,7 +596,7 @@ func testStreamExecutePanics(t *testing.T, conn queryservice.QueryService, f *Fa
 	testPanicHelper(t, f, "StreamExecute.Late", func(ctx context.Context) error {
 		f.PanicWait = make(chan struct{})
 		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-		return conn.StreamExecute(ctx, nil, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, 0, 0, nil, func(qr *sqltypes.Result) error {
+		return conn.StreamExecute(ctx, nil, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, 0, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
 			// For some errors, the call can be retried.
 			select {
 			case <-f.PanicWait:
@@ -692,7 +692,7 @@ func testBeginStreamExecuteErrorInBegin(t *testing.T, conn queryservice.QuerySer
 	testErrorHelper(t, f, "StreamExecute", func(ctx context.Context) error {
 		f.ErrorWait = make(chan struct{})
 		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-		_, err := conn.BeginStreamExecute(ctx, nil, TestTarget, nil, StreamExecuteQuery, StreamExecuteBindVars, 0, nil, func(qr *sqltypes.Result) error {
+		_, err := conn.BeginStreamExecute(ctx, nil, TestTarget, nil, StreamExecuteQuery, StreamExecuteBindVars, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
 			// For some errors, the call can be retried.
 			select {
 			case <-f.ErrorWait:
@@ -720,7 +720,7 @@ func testBeginStreamExecuteErrorInExecute(t *testing.T, conn queryservice.QueryS
 	testErrorHelper(t, f, "StreamExecute", func(ctx context.Context) error {
 		f.ErrorWait = make(chan struct{})
 		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-		state, err := conn.BeginStreamExecute(ctx, nil, TestTarget, nil, StreamExecuteQuery, StreamExecuteBindVars, 0, nil, func(qr *sqltypes.Result) error {
+		state, err := conn.BeginStreamExecute(ctx, nil, TestTarget, nil, StreamExecuteQuery, StreamExecuteBindVars, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
 			// For some errors, the call can be retried.
 			select {
 			case <-f.ErrorWait:
@@ -749,7 +749,7 @@ func testReserveStreamExecuteErrorInReserve(t *testing.T, conn queryservice.Quer
 	testErrorHelper(t, f, "ReserveStreamExecute", func(ctx context.Context) error {
 		f.ErrorWait = make(chan struct{})
 		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-		_, err := conn.ReserveStreamExecute(ctx, nil, TestTarget, nil, StreamExecuteQuery, StreamExecuteBindVars, 0, nil, func(qr *sqltypes.Result) error {
+		_, err := conn.ReserveStreamExecute(ctx, nil, TestTarget, nil, StreamExecuteQuery, StreamExecuteBindVars, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
 			// For some errors, the call can be retried.
 			select {
 			case <-f.ErrorWait:
@@ -777,7 +777,7 @@ func testReserveStreamExecuteErrorInExecute(t *testing.T, conn queryservice.Quer
 	testErrorHelper(t, f, "ReserveStreamExecute", func(ctx context.Context) error {
 		f.ErrorWait = make(chan struct{})
 		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-		state, err := conn.ReserveStreamExecute(ctx, nil, TestTarget, nil, StreamExecuteQuery, StreamExecuteBindVars, 0, nil, func(qr *sqltypes.Result) error {
+		state, err := conn.ReserveStreamExecute(ctx, nil, TestTarget, nil, StreamExecuteQuery, StreamExecuteBindVars, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
 			// For some errors, the call can be retried.
 			select {
 			case <-f.ErrorWait:
@@ -808,7 +808,7 @@ func testBeginStreamExecutePanics(t *testing.T, conn queryservice.QueryService, 
 	f.StreamExecutePanicsEarly = true
 	testPanicHelper(t, f, "StreamExecute.Early", func(ctx context.Context) error {
 		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-		return conn.StreamExecute(ctx, nil, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, 0, 0, nil, func(qr *sqltypes.Result) error {
+		return conn.StreamExecute(ctx, nil, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, 0, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
 			return nil
 		})
 	})
@@ -818,7 +818,7 @@ func testBeginStreamExecutePanics(t *testing.T, conn queryservice.QueryService, 
 	testPanicHelper(t, f, "StreamExecute.Late", func(ctx context.Context) error {
 		f.PanicWait = make(chan struct{})
 		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-		_, err := conn.BeginStreamExecute(ctx, nil, TestTarget, nil, StreamExecuteQuery, StreamExecuteBindVars, 0, nil, func(qr *sqltypes.Result) error {
+		_, err := conn.BeginStreamExecute(ctx, nil, TestTarget, nil, StreamExecuteQuery, StreamExecuteBindVars, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
 			// For some errors, the call can be retried.
 			select {
 			case <-f.PanicWait:
