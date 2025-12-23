@@ -247,7 +247,7 @@ func (fake *stopReplicationAndBuildStatusMapsTestTMClient) DemotePrimary(ctx con
 }
 
 func (fake *stopReplicationAndBuildStatusMapsTestTMClient) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, mode replicationdatapb.StopReplicationMode,
-	capability replicationdatapb.Capability) (*replicationdatapb.StopReplicationStatus, error) {
+	replicationCapability replicationdatapb.Capability) (*replicationdatapb.StopReplicationStatus, error) {
 	if tablet.Alias == nil {
 		return nil, assert.AnError
 	}
