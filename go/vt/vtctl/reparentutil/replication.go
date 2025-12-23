@@ -154,11 +154,11 @@ func FindPositionsOfAllCandidates(
 			return nil, nil, vterrors.Wrapf(err, "could not decode a primary status executed position for tablet %v: %v", alias, err)
 		}
 
+		candidateInfoMap[alias] = &CandidateInfo{}
 		if _, ok := executedPosition.GTIDSet.(replication.Mysql56GTIDSet); ok {
-			candidateInfoMap[alias] = &CandidateInfo{
-				IsGTIDBased: true,
-			}
+			candidateInfoMap[alias].IsGTIDBased = true
 		}
+
 		positionMap[alias] = &RelayLogPositions{Combined: executedPosition}
 	}
 
