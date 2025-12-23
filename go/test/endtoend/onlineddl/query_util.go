@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 
 	"github.com/olekukonko/tablewriter"
+	"github.com/olekukonko/tablewriter/tw"
 )
 
 // PrintQueryResult will pretty-print a QueryResult to the logger.
@@ -34,28 +35,34 @@ func PrintQueryResult(writer io.Writer, qr *sqltypes.Result) {
 		return
 	}
 
-	table := tablewriter.NewWriter(writer)
-	table.SetAutoFormatHeaders(false)
+	table := tablewriter.NewTable(writer,
+		tablewriter.WithSymbols(tw.NewSymbols(tw.StyleASCII)),
+		tablewriter.WithHeaderAutoFormat(tw.State(-1)),
+		tablewriter.WithRowMaxWidth(30),
+	)
 
 	// Make header.
-	header := make([]string, 0, len(qr.Fields))
+	header := make([]any, 0, len(qr.Fields))
 	for _, field := range qr.Fields {
 		header = append(header, field.Name)
 	}
-	table.SetHeader(header)
+	table.Header(header...)
 
 	// Add rows.
 	for _, row := range qr.Rows {
-		vals := make([]string, 0, len(row))
+		vals := make([]any, 0, len(row))
 		for _, val := range row {
 			v := val.ToString()
 			v = strings.ReplaceAll(v, "\r", " ")
 			v = strings.ReplaceAll(v, "\n", " ")
 			vals = append(vals, v)
 		}
-		table.Append(vals)
+		if err := table.Append(vals...); err != nil {
+			// If append fails, continue with remaining rows
+			continue
+		}
 	}
 
 	// Print table.
-	table.Render()
+	_ = table.Render() // Ignore render error as this is output formatting
 }

@@ -60,6 +60,7 @@ jobs:
             - '.github/workflows/upgrade_downgrade_test_onlineddl_flow.yml'
 
     - name: Set output with latest release branch
+      if: steps.changes.outputs.end_to_end == 'true'
       id: output-previous-release-ref
       run: |
         previous_release_ref=$(./tools/get_previous_release.sh ${{github.base_ref}} ${{github.ref}})
@@ -67,62 +68,37 @@ jobs:
         echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
 
     - name: Set output with next release branch
+      if: steps.changes.outputs.end_to_end == 'true'
       id: output-next-release-ref
       run: |
         next_release_ref=$(./tools/get_next_release.sh ${{github.base_ref}} ${{github.ref}})
         echo $next_release_ref
         echo "next_release_ref=${next_release_ref}" >> $GITHUB_OUTPUT
 
-    - name: Set up Go
+    - name: Tune the OS
       if: steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
-      with:
-        go-version: 1.24.7
+      uses: ./.github/actions/tune-os
 
     - name: Set up python
       if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
 
-    - name: Tune the OS
+    - name: Setup MySQL
       if: steps.changes.outputs.end_to_end == 'true'
-      run: |
-        sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
-
-        # Don't waste a bunch of time processing man-db triggers
-        echo "set man-db/auto-update false" | sudo debconf-communicate
-        sudo dpkg-reconfigure man-db
+      uses: ./.github/actions/setup-mysql
+      with:
+        flavor: mysql-8.4
 
     - name: Get base dependencies
       timeout-minutes: 10
       if: steps.changes.outputs.end_to_end == 'true'
       run: |
         sudo DEBIAN_FRONTEND="noninteractive" apt-get update
-        # Uninstall any previously installed MySQL first
-        # sudo systemctl stop apparmor
-        sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
-        sudo apt-get -y autoremove
-        sudo apt-get -y autoclean
-        # sudo deluser mysql
-        sudo rm -rf /var/lib/mysql
-        sudo rm -rf /etc/mysql
-        # Install mysql80
-        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.34-1_all.deb
-        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.4-lts | sudo debconf-set-selections
-        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
-        sudo apt-get update
-        sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
-        # Install everything else we need, and configure
-        sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget eatmydata
-        
-        sudo service mysql stop
-        sudo service etcd stop
-        sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
-        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
 
-        # install JUnit report formatter
-        go install github.com/vitessio/go-junit-report@HEAD
+        # Install everything else we need, and configure
+        sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
+        
+        sudo service etcd stop
 
     # Checkout to the last release of Vitess
     - name: Check out last version's code (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
@@ -131,6 +107,13 @@ jobs:
       with:
         ref: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
         persist-credentials: 'false'
+
+    - name: Set up Go
+      if: steps.changes.outputs.end_to_end == 'true'
+      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      with:
+        go-version-file: go.mod
+        cache: false
 
     - name: Get dependencies for the last release
       if: steps.changes.outputs.end_to_end == 'true'
@@ -156,6 +139,13 @@ jobs:
         ref: ${{ steps.output-next-release-ref.outputs.next_release_ref }}
         persist-credentials: 'false'
 
+    - name: Set up Go
+      if: steps.changes.outputs.end_to_end == 'true'
+      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      with:
+        go-version-file: go.mod
+        cache: false
+
     - name: Get dependencies for the next release
       if: steps.changes.outputs.end_to_end == 'true'
       run: |
@@ -178,6 +168,13 @@ jobs:
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         persist-credentials: 'false'
+
+    - name: Set up Go
+      if: steps.changes.outputs.end_to_end == 'true'
+      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      with:
+        go-version-file: go.mod
+        cache: false
 
     - name: Get dependencies for this commit
       if: steps.changes.outputs.end_to_end == 'true'
@@ -220,7 +217,7 @@ jobs:
         source build.env
         export PRIMARY_TABLET_BINARY_SUFFIX=""
         export REPLICA_TABLET_BINARY_SUFFIX="-last"
-        eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_onlineddl_flow
+        go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_onlineddl_flow
 
     # Running a test with primary tablet at version n-1  and replica vttablet at version n (current SHA)
     - name: Run Online DDL tests (primary=N-1, replica=N)
@@ -232,7 +229,7 @@ jobs:
         source build.env
         export PRIMARY_TABLET_BINARY_SUFFIX="-last"
         export REPLICA_TABLET_BINARY_SUFFIX=""
-        eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_onlineddl_flow
+        go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_onlineddl_flow
 
     # Running a test with primary tablet at version n+1 and replica vttablet at version n (current SHA)
     - name: Run Online DDL tests (primary=N+1, replica=N)
@@ -244,7 +241,7 @@ jobs:
         source build.env
         export PRIMARY_TABLET_BINARY_SUFFIX="-next"
         export REPLICA_TABLET_BINARY_SUFFIX=""
-        eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_onlineddl_flow
+        go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_onlineddl_flow
 
     # Running a test with primary tablet at version n (current SHA) and replica vttablet at version n+1
     - name: Run Online DDL tests (primary=N, replica=N+1)
@@ -256,4 +253,4 @@ jobs:
         source build.env
         export PRIMARY_TABLET_BINARY_SUFFIX=""
         export REPLICA_TABLET_BINARY_SUFFIX="-next"
-        eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_onlineddl_flow
+        go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_onlineddl_flow

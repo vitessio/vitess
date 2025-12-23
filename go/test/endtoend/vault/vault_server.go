@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -85,7 +86,7 @@ func (vs *Server) start() error {
 	hcl, _ := os.ReadFile(hclFile)
 	// Replace variable parts in Vault config file
 	hcl = bytes.Replace(hcl, []byte("$server"), []byte(vs.address), 1)
-	hcl = bytes.Replace(hcl, []byte("$port"), []byte(fmt.Sprintf("%d", vs.port1)), 1)
+	hcl = bytes.Replace(hcl, []byte("$port"), []byte(strconv.Itoa(vs.port1)), 1)
 	hcl = bytes.Replace(hcl, []byte("$cert"), []byte(path.Join(os.Getenv("PWD"), vaultCertFileName)), 1)
 	hcl = bytes.Replace(hcl, []byte("$key"), []byte(path.Join(os.Getenv("PWD"), vaultKeyFileName)), 1)
 	newHclFile := path.Join(vs.logDir, vaultConfigFileName)
@@ -98,7 +99,7 @@ func (vs *Server) start() error {
 	vs.proc = exec.Command(
 		vs.execPath,
 		"server",
-		fmt.Sprintf("-config=%s", newHclFile),
+		"-config="+newHclFile,
 	)
 
 	logFile, err := os.Create(path.Join(vs.logDir, "log.txt"))

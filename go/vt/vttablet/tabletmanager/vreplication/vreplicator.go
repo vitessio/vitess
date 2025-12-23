@@ -19,6 +19,7 @@ package vreplication
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -229,10 +230,10 @@ func (vr *vreplicator) validateBinlogRowImage() error {
 		// used in unit tests only
 		default:
 			return vterrors.New(vtrpcpb.Code_INTERNAL,
-				fmt.Sprintf("noblob binlog_row_image is not supported for %s", binlogdatapb.VReplicationWorkflowType_name[vr.WorkflowType]))
+				"noblob binlog_row_image is not supported for "+binlogdatapb.VReplicationWorkflowType_name[vr.WorkflowType])
 		}
 	default:
-		return vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("%s binlog_row_image is not supported by Vitess VReplication", binlogRowImage))
+		return vterrors.New(vtrpcpb.Code_INTERNAL, binlogRowImage+" binlog_row_image is not supported by Vitess VReplication")
 	}
 	return nil
 }
@@ -365,7 +366,6 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 	req := &tabletmanagerdatapb.GetSchemaRequest{
 		Tables: []string{"/.*/"},
 		ExcludeTables: []string{
-			"/" + schema.OldGCTableNameExpression + "/",
 			"/" + schema.GCTableNameExpression + "/",
 		},
 	}
@@ -382,7 +382,7 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 			return nil, err
 		}
 		if len(qr.Rows) == 0 {
-			return nil, fmt.Errorf("no data returned from information_schema.columns")
+			return nil, errors.New("no data returned from information_schema.columns")
 		}
 
 		var pks []string
@@ -544,7 +544,7 @@ func (vr *vreplicator) getSettingFKCheck() error {
 		return err
 	}
 	if len(qr.Rows) != 1 || len(qr.Fields) != 1 {
-		return fmt.Errorf("unable to select @@foreign_key_checks")
+		return errors.New("unable to select @@foreign_key_checks")
 	}
 	vr.originalFKCheckSetting, err = qr.Rows[0][0].ToCastInt64()
 	if err != nil {
@@ -570,7 +570,7 @@ func (vr *vreplicator) getSettingFKRestrict() error {
 		return err
 	}
 	if len(qr.Rows) != 1 || len(qr.Fields) != 1 {
-		return fmt.Errorf("unable to select @@session.restrict_fk_on_non_standard_key")
+		return errors.New("unable to select @@session.restrict_fk_on_non_standard_key")
 	}
 	vr.originalFKRestrict, err = qr.Rows[0][0].ToCastInt64()
 	if err != nil {

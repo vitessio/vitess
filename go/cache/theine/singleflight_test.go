@@ -172,7 +172,6 @@ func TestGoexitDo(t *testing.T) {
 func BenchmarkDo(b *testing.B) {
 	keys := randKeys(b, 10240, 10)
 	benchDo(b, NewGroup[string, int](), keys)
-
 }
 
 func benchDo(b *testing.B, g *Group[string, int], keys []string) {

@@ -50,7 +50,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-
 	exitCode := func() int {
 		clusterInstance = cluster.NewCluster(cell, "localhost")
 		defer clusterInstance.Teardown()

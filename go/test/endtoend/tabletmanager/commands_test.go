@@ -134,7 +134,6 @@ func TestTabletCommands(t *testing.T) {
 
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ValidateShard", "--ping-tablets", keyspaceShard)
 	require.Nil(t, err, "error should be Nil")
-
 }
 
 func assertExcludeFields(t *testing.T, qr string) {
@@ -218,7 +217,6 @@ func runHookAndAssert(t *testing.T, params []string, expectedStatus int64, expec
 		assert.Equal(t, expectedStatus, resp.HookResult.ExitStatus)
 		assert.Contains(t, resp.HookResult.Stderr, expectedStderr)
 	}
-
 }
 
 func TestShardReplicationFix(t *testing.T) {
@@ -229,7 +227,7 @@ func TestShardReplicationFix(t *testing.T) {
 	assert.Len(t, result[cell].Nodes, 3)
 
 	// Manually add a bogus entry to the replication graph, and check it is removed by ShardReplicationFix
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ShardReplicationAdd", keyspaceShard, fmt.Sprintf("%s-9000", cell))
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ShardReplicationAdd", keyspaceShard, cell+"-9000")
 	require.Nil(t, err, "error should be Nil")
 
 	result, err = clusterInstance.VtctldClientProcess.GetShardReplication(keyspaceName, shardName, cell)
@@ -246,7 +244,6 @@ func TestShardReplicationFix(t *testing.T) {
 }
 
 func TestGetSchema(t *testing.T) {
-
 	res, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetSchema",
 		"--include-views", "--tables", "t1,v1",
 		fmt.Sprintf("%s-%d", clusterInstance.Cell, primaryTablet.TabletUID))

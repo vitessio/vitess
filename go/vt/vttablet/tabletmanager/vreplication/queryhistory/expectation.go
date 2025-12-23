@@ -1,7 +1,5 @@
 package queryhistory
 
-import "fmt"
-
 // Expectation represents an expectation about the contents of a query.
 type Expectation interface {
 	ExpectQuery(string)
@@ -35,5 +33,5 @@ func (e *expectation) String() string {
 		return "<nil>"
 	}
 
-	return fmt.Sprintf("query=%s", e.query)
+	return "query=" + e.query
 }

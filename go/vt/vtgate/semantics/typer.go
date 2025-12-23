@@ -49,18 +49,32 @@ func (t *typer) up(cursor *sqlparser.Cursor) error {
 		if node.Type >= 0 {
 			t.m[node] = evalengine.NewTypeEx(node.Type, collations.CollationForType(node.Type, t.collationEnv.DefaultConnectionCharset()), true, node.Size, node.Scale, nil)
 		}
-	case sqlparser.AggrFunc:
-		code, ok := opcode.SupportedAggregates[node.AggrName()]
-		if !ok {
-			return nil
-		}
+	case sqlparser.WindowFunc:
+		name := node.WindowFuncName()
 		var inputType evalengine.Type
 		if arg := node.GetArg(); arg != nil {
 			if tt, ok := t.m[arg]; ok {
 				inputType = tt
 			}
 		}
-		t.m[node] = code.ResolveType(inputType, t.collationEnv)
+
+		if code, ok := opcode.SupportedWindowFunctions[name]; ok {
+			t.m[node] = code.ResolveType(inputType, t.collationEnv)
+		} else if code, ok := opcode.SupportedAggregates[name]; ok {
+			// Functions like SUM() implement both WindowFunc and AggrFunc.
+			// If an OVER clause is present, it's acting as a window function.
+			t.m[node] = code.ResolveType(inputType, t.collationEnv)
+		}
+	case sqlparser.AggrFunc:
+		if code, ok := opcode.SupportedAggregates[node.AggrName()]; ok {
+			var inputType evalengine.Type
+			if arg := node.GetArg(); arg != nil {
+				if tt, ok := t.m[arg]; ok {
+					inputType = tt
+				}
+			}
+			t.m[node] = code.ResolveType(inputType, t.collationEnv)
+		}
 	}
 	return nil
 }

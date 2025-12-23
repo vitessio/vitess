@@ -137,7 +137,7 @@ func TestScatterErrsAsWarns(t *testing.T) {
 		t.Run(mode.m, func(t *testing.T) {
 			// connection setup
 			utils.Exec(t, mode.conn, "use @replica")
-			utils.Exec(t, mode.conn, fmt.Sprintf("set workload = %s", mode.m))
+			utils.Exec(t, mode.conn, "set workload = "+mode.m)
 
 			expectedWarnings := []string{
 				"operation not allowed in state NOT_SERVING",

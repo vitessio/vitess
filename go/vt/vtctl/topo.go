@@ -19,6 +19,7 @@ package vtctl
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 
@@ -57,7 +58,7 @@ func commandTopoCat(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.
 	decodeProto := subFlags.Bool("decode_proto", false, "decode proto files and display them as text")
 	subFlags.Parse(args)
 	if subFlags.NArg() == 0 {
-		return fmt.Errorf("TopoCat: no path specified")
+		return errors.New("TopoCat: no path specified")
 	}
 	resolved, err := wr.TopoServer().ResolveWildcards(ctx, *cell, subFlags.Args())
 	if err != nil {
@@ -91,7 +92,7 @@ func commandTopoCp(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 	toTopo := subFlags.Bool("to_topo", false, "copies from local server to topo instead (reverse direction).")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("TopoCp: need source and destination")
+		return errors.New("TopoCp: need source and destination")
 	}
 	from := subFlags.Arg(0)
 	to := subFlags.Arg(1)
@@ -167,7 +168,7 @@ func (d ProtoTopologyDecoder) decode(ctx context.Context, topoPaths []string, co
 	}
 
 	if hasError {
-		return fmt.Errorf("TopoCat: some paths had errors")
+		return errors.New("TopoCat: some paths had errors")
 	}
 	return nil
 }
@@ -193,7 +194,7 @@ func (d PlainTopologyDecoder) decode(ctx context.Context, topoPaths []string, co
 	}
 
 	if hasError {
-		return fmt.Errorf("TopoCat: some paths had errors")
+		return errors.New("TopoCat: some paths had errors")
 	}
 	return nil
 }
@@ -239,7 +240,7 @@ func (d JSONTopologyDecoder) decode(ctx context.Context, topoPaths []string, con
 	}
 
 	if hasError {
-		return fmt.Errorf("TopoCat: some paths had errors")
+		return errors.New("TopoCat: some paths had errors")
 	}
 	return nil
 }

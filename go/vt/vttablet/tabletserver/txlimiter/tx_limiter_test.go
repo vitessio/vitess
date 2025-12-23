@@ -55,7 +55,6 @@ func TestTxLimiter_DisabledAllowsAll(t *testing.T) {
 			t.Errorf("Transaction number %d, Get(): got %v, want %v", i, got, want)
 		}
 	}
-
 }
 
 func TestTxLimiter_LimitsOnlyOffendingUser(t *testing.T) {

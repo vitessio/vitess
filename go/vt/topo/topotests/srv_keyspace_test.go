@@ -75,7 +75,6 @@ func TestWatchSrvKeyspaceNoNode(t *testing.T) {
 }
 
 func TestWatchSrvKeyspace(t *testing.T) {
-
 	cell := "cell1"
 	keyspace := "ks1"
 	ctx, cancel := context.WithCancel(context.Background())
@@ -465,7 +464,6 @@ func TestUpdateSrvKeyspacePartitions(t *testing.T) {
 	if string(got) != string(want) {
 		t.Errorf("GetSrvKeyspace() failure. Got %v, want: %v", string(got), string(want))
 	}
-
 }
 
 func TestUpdateUpdateDisableQueryService(t *testing.T) {

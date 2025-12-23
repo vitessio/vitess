@@ -17,7 +17,6 @@ limitations under the License.
 package vtsql
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -50,10 +49,10 @@ func TestConfigParse(t *testing.T) {
 		f, err := os.CreateTemp("", "vtsql-config-test-testcluster-*") // testcluster is going to appear in the template
 		require.NoError(t, err)
 
-		_, err = f.Write([]byte(`{
+		_, err = f.WriteString(`{
 	"Username": "vtadmin",
 	"Password": "hunter2"
-}`))
+}`)
 		require.NoError(t, err)
 
 		path := f.Name()
@@ -76,7 +75,7 @@ func TestConfigParse(t *testing.T) {
 			"--discovery-tags=a:1,b:2",
 			"--effective-user=vt_appdebug",
 			"--discovery-tags=c:3",
-			fmt.Sprintf("--credentials-path-tmpl=%s", credsTmplStr),
+			"--credentials-path-tmpl=" + credsTmplStr,
 		}
 
 		expectedCreds := &StaticAuthCredentials{
@@ -104,10 +103,10 @@ func TestConfigParse(t *testing.T) {
 		f, err := os.CreateTemp("", "vtsql-config-test-testcluster-*") // testcluster is going to appear in the template
 		require.NoError(t, err)
 
-		_, err = f.Write([]byte(`{
+		_, err = f.WriteString(`{
 	"Username": "vtadmin",
 	"Password": "hunter2"
-}`))
+}`)
 		require.NoError(t, err)
 
 		path := f.Name()
@@ -131,7 +130,7 @@ func TestConfigParse(t *testing.T) {
 			"--effective-user=vt_appdebug",
 			"--discovery-tags=c:3",
 			"--credentials-password=my_password",
-			fmt.Sprintf("--credentials-path-tmpl=%s", credsTmplStr),
+			"--credentials-path-tmpl=" + credsTmplStr,
 		}
 
 		expectedCreds := &StaticAuthCredentials{
@@ -195,10 +194,10 @@ func TestConfigParse(t *testing.T) {
 		f, err := os.CreateTemp("", "vtsql-config-test-testcluster-*") // testcluster is going to appear in the template
 		require.NoError(t, err)
 
-		_, err = f.Write([]byte(`{
+		_, err = f.WriteString(`{
 	"Username": "vtadmin",
 	"Password": "hunter2"
-}`))
+}`)
 		require.NoError(t, err)
 
 		path := f.Name()
@@ -215,7 +214,7 @@ func TestConfigParse(t *testing.T) {
 			"--discovery-tags=a:1,b:2",
 			"--effective-user=vt_appdebug",
 			"--discovery-tags=c:3",
-			fmt.Sprintf("--credentials-path-tmpl=%s", credsTmplStr),
+			"--credentials-path-tmpl=" + credsTmplStr,
 		}
 
 		expectedCreds := &StaticAuthCredentials{

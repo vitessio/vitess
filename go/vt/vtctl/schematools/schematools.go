@@ -52,7 +52,6 @@ func ParseSchemaMigrationStrategy(name string) (vtctldatapb.SchemaMigration_Stra
 	if name == "" {
 		// backward compatiblity and to handle unspecified values
 		return vtctldatapb.SchemaMigration_DIRECT, nil
-
 	}
 
 	upperName := strings.ToUpper(name)
@@ -62,7 +61,6 @@ func ParseSchemaMigrationStrategy(name string) (vtctldatapb.SchemaMigration_Stra
 	}
 
 	return vtctldatapb.SchemaMigration_Strategy(strategy), nil
-
 }
 
 // ParseSchemaMigrationStatus parses the given status into the underlying enum type.

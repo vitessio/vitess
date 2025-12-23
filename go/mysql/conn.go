@@ -1359,7 +1359,6 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 			// packet for this query.
 			needsEndPacket = true
 			if len(qr.QueryResult.Fields) == 0 {
-
 				// A successful callback with no fields means that this was a
 				// DML or other write-only operation.
 				//

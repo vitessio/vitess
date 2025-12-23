@@ -85,7 +85,7 @@ func TestPerformVDiffAction(t *testing.T) {
 			},
 			expectQueries: []queryAndResult{
 				{
-					query: fmt.Sprintf("select id as id from _vt.vdiff where vdiff_uuid = %s", encodeString(uuid)),
+					query: "select id as id from _vt.vdiff where vdiff_uuid = " + encodeString(uuid),
 				},
 				{
 					query: fmt.Sprintf(`insert into _vt.vdiff(keyspace, workflow, state, options, shard, db_name, vdiff_uuid) values('', '', 'pending', '{"picker_options":{"source_cell":"cell1,zone100_test","target_cell":"cell1,zone100_test"}}', '0', 'vt_vttest', %s)`, encodeString(uuid)),
@@ -109,7 +109,7 @@ func TestPerformVDiffAction(t *testing.T) {
 			},
 			expectQueries: []queryAndResult{
 				{
-					query: fmt.Sprintf("select id as id from _vt.vdiff where vdiff_uuid = %s", encodeString(uuid)),
+					query: "select id as id from _vt.vdiff where vdiff_uuid = " + encodeString(uuid),
 				},
 				{
 					query: fmt.Sprintf(`insert into _vt.vdiff(keyspace, workflow, state, options, shard, db_name, vdiff_uuid) values('', '', 'stopped', '{"picker_options":{"source_cell":"cell1","target_cell":"cell1"},"core_options":{"auto_start":false}}', '0', 'vt_vttest', %s)`, encodeString(uuid)),
@@ -140,7 +140,7 @@ func TestPerformVDiffAction(t *testing.T) {
 			},
 			expectQueries: []queryAndResult{
 				{
-					query: fmt.Sprintf("select id as id from _vt.vdiff where vdiff_uuid = %s", encodeString(uuid)),
+					query: "select id as id from _vt.vdiff where vdiff_uuid = " + encodeString(uuid),
 				},
 				{
 					query: fmt.Sprintf(`insert into _vt.vdiff(keyspace, workflow, state, options, shard, db_name, vdiff_uuid) values('', '', 'pending', '{"picker_options":{"source_cell":"all","target_cell":"all"}}', '0', 'vt_vttest', %s)`, encodeString(uuid)),
@@ -163,7 +163,7 @@ func TestPerformVDiffAction(t *testing.T) {
 			},
 			expectQueries: []queryAndResult{
 				{
-					query: fmt.Sprintf("select id as id from _vt.vdiff where vdiff_uuid = %s", encodeString(uuid)),
+					query: "select id as id from _vt.vdiff where vdiff_uuid = " + encodeString(uuid),
 					result: sqltypes.MakeTestResult(
 						sqltypes.MakeTestFields(
 							"id",
@@ -204,7 +204,7 @@ func TestPerformVDiffAction(t *testing.T) {
 			},
 			expectQueries: []queryAndResult{
 				{
-					query: fmt.Sprintf("select id as id from _vt.vdiff where vdiff_uuid = %s", encodeString(uuid)),
+					query: "select id as id from _vt.vdiff where vdiff_uuid = " + encodeString(uuid),
 					result: sqltypes.MakeTestResult(
 						sqltypes.MakeTestFields(
 							"id",
@@ -234,7 +234,7 @@ func TestPerformVDiffAction(t *testing.T) {
 			},
 			expectQueries: []queryAndResult{
 				{
-					query: fmt.Sprintf("select id as id from _vt.vdiff where vdiff_uuid = %s", encodeString(uuid)),
+					query: "select id as id from _vt.vdiff where vdiff_uuid = " + encodeString(uuid),
 					result: sqltypes.MakeTestResult(
 						sqltypes.MakeTestFields(
 							"id",
@@ -244,8 +244,7 @@ func TestPerformVDiffAction(t *testing.T) {
 					),
 				},
 				{
-					query: fmt.Sprintf(`delete from vd, vdt using _vt.vdiff as vd left join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
-							where vd.vdiff_uuid = %s`, encodeString(uuid)),
+					query: "delete from vd, vdt using _vt.vdiff as vd left join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)\n\t\t\t\t\t\t\twhere vd.vdiff_uuid = " + encodeString(uuid),
 				},
 			},
 		},

@@ -147,7 +147,7 @@ func setup(ctx context.Context) (func(), int) {
 	streamerEngine.InitDBConfig(env.KeyspaceName, env.ShardName)
 	streamerEngine.Open()
 
-	if err := env.Mysqld.ExecuteSuperQuery(ctx, fmt.Sprintf("create database %s", vrepldb)); err != nil {
+	if err := env.Mysqld.ExecuteSuperQuery(ctx, "create database "+vrepldb); err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
 		return nil, 1
 	}
@@ -750,7 +750,7 @@ func customExpectData(t *testing.T, table string, values [][]string, exec func(c
 	if len(strings.Split(table, ".")) == 1 {
 		query = fmt.Sprintf("select * from %s.%s", vrepldb, table)
 	} else {
-		query = fmt.Sprintf("select * from %s", table)
+		query = "select * from " + table
 	}
 
 	// without the sleep and retry there is a flakiness where rows inserted by vreplication are not immediately visible
@@ -778,7 +778,6 @@ func customExpectData(t *testing.T, table string, values [][]string, exec func(c
 
 func compareQueryResults(t *testing.T, query string, values [][]string,
 	exec func(ctx context.Context, query string) (*sqltypes.Result, error)) error {
-
 	t.Helper()
 	qr, err := exec(context.Background(), query)
 	if err != nil {

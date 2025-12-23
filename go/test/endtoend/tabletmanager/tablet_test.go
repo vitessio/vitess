@@ -36,7 +36,6 @@ import (
 
 // TestEnsureDB tests that vttablet creates the db as needed
 func TestEnsureDB(t *testing.T) {
-
 	// Create new tablet
 	tablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 	mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
@@ -103,7 +102,6 @@ func TestGRPCErrorCode_UNAVAILABLE(t *testing.T) {
 
 // TestResetReplicationParameters tests that the RPC ResetReplicationParameters works as intended.
 func TestResetReplicationParameters(t *testing.T) {
-
 	// Create new tablet
 	tablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 	mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)

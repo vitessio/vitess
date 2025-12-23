@@ -18,7 +18,6 @@ package vtctldclient
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -85,7 +84,7 @@ func TestParse(t *testing.T) {
 			tmplParts := append(baseParts[:2], "{{ .Cluster.Name }}", baseParts[3])
 
 			args := []string{
-				fmt.Sprintf("--credentials-path-tmpl=%s", filepath.Join(credsdir, strings.Join(tmplParts, "."))),
+				"--credentials-path-tmpl=" + filepath.Join(credsdir, strings.Join(tmplParts, ".")),
 			}
 
 			cfg, err := Parse(&vtadminpb.Cluster{Name: "testcluster"}, nil, args)

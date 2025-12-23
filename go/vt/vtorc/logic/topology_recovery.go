@@ -424,7 +424,7 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 	// Find the primary tablet for semi-sync policy determination
 	var primaryTablet *topodatapb.Tablet
 	for _, tabletInfo := range tablets {
-		if topoproto.TabletAliasEqual(tabletInfo.Tablet.Alias, analysisEntry.AnalyzedInstanceAlias) {
+		if topoproto.TabletAliasEqual(tabletInfo.Alias, analysisEntry.AnalyzedInstanceAlias) {
 			primaryTablet = tabletInfo.Tablet
 			break
 		}
@@ -473,7 +473,7 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 		restartExpected++
 		eg.Go(func() error {
 			logger.Infof("Restarting replication on direct replica %s", tabletAliasString)
-			_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Restarting replication on direct replica %s", tabletAliasString))
+			_ = AuditTopologyRecovery(topologyRecovery, "Restarting replication on direct replica "+tabletAliasString)
 
 			if err := tmc.StopReplication(ctx, tablet); err != nil {
 				logger.Errorf("Failed to stop replication on %s: %v", tabletAliasString, err)

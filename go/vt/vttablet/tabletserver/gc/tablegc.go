@@ -246,7 +246,6 @@ func (collector *TableGC) RequestChecks() {
 
 // operate is the main entry point for the table garbage collector operation and logic.
 func (collector *TableGC) operate(ctx context.Context) {
-
 	dropTablesChan := make(chan *gcTable)
 	purgeRequestsChan := make(chan bool)
 	transitionRequestsChan := make(chan *transitionRequest)

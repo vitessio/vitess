@@ -19,8 +19,9 @@ package srvtopo
 import (
 	"bytes"
 	"context"
-	"fmt"
+	"errors"
 	"reflect"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -297,7 +298,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 
 	// Now test with a new error in which the topo service is locked during
 	// the test which prevents all queries from proceeding.
-	forceErr = fmt.Errorf("test topo error with factory locked")
+	forceErr = errors.New("test topo error with factory locked")
 	factory.SetError(forceErr)
 	factory.Lock()
 	go func() {
@@ -555,7 +556,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 		t.Errorf("GetSrvKeyspaceNames got %v want %v", names, wantNames)
 	}
 
-	forceErr := fmt.Errorf("force test error")
+	forceErr := errors.New("force test error")
 	factory.SetError(forceErr)
 
 	// Lock the topo for half the duration of the cache TTL to ensure our
@@ -653,13 +654,13 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 
 	// Force another error and lock the topo. Then wait for the TTL to
 	// expire and verify that the context timeout unblocks the request.
-	forceErr = fmt.Errorf("force long test error")
+	forceErr = errors.New("force long test error")
 	factory.SetError(forceErr)
 	factory.Lock()
 
 	time.Sleep(srvTopoCacheTTL)
 
-	timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), srvTopoCacheRefresh*2) //nolint
+	timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), srvTopoCacheRefresh*2)
 	defer timeoutCancel()
 	_, err = rs.GetSrvKeyspaceNames(timeoutCtx, "test_cell", false)
 	if err != context.DeadlineExceeded {
@@ -705,7 +706,7 @@ func TestGetSrvKeyspaceNamesCachedErrorRecovery(t *testing.T) {
 	require.ElementsMatch(t, names, expectedNames, "Initial GetSrvKeyspaceNames returned wrong names")
 
 	// Phase 2: Force an error to get it cached
-	testErr := fmt.Errorf("test error - service unavailable")
+	testErr := errors.New("test error - service unavailable")
 	factory.SetError(testErr)
 
 	// Wait for the cache TTL to expire so the cached value is no longer valid
@@ -867,7 +868,7 @@ func TestSrvKeyspaceWatcher(t *testing.T) {
 					ShardReferences: []*topodatapb.ShardReference{
 						{
 							// This may not be a valid shard spec, but is fine for unit test purposes
-							Name:     fmt.Sprintf("%d", i),
+							Name:     strconv.Itoa(i),
 							KeyRange: keyRange[0],
 						},
 					},

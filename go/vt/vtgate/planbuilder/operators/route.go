@@ -379,7 +379,7 @@ func findVSchemaTableAndCreateRoute(
 	//
 	// Exclude dual tables, which do not get a mirror rule, and are not known to
 	// the VSchema.
-	if ctx.IsMirrored() && !(vschemaTable.Type == vindexes.TypeReference && vschemaTable.Name.String() == "dual") {
+	if ctx.IsMirrored() && (vschemaTable.Type != vindexes.TypeReference || vschemaTable.Name.String() != "dual") {
 		vschemaTable, _, tabletType, target, err = ctx.VSchema.FindTable(tableName)
 	}
 
@@ -616,7 +616,6 @@ func addColumnToInput(
 	var src Operator
 	var updateSrc func(Operator)
 	switch op := operator.(type) {
-
 	// Pass through operators - we can just add the columns to their source
 	case *SubQuery:
 		src, updateSrc = op.Outer, func(newSrc Operator) { op.Outer = newSrc }

@@ -92,7 +92,6 @@ func TestGetTabletsAndMapByShardCell(t *testing.T) {
 			tabletList, err := ts.GetTabletsByShardCell(ctx, tt.keyspace, tt.shard, tt.cells)
 			require.NoError(t, err)
 			checkTabletListEqual(t, maps.Values(tt.want), tabletList)
-
 		})
 	}
 }

@@ -346,7 +346,6 @@ func (s *Store[K, V]) setInternal(key K, value V, cost int64, epoch uint32) (*Sh
 	entry.epoch.Store(epoch)
 	s.setEntry(shard, cost, epoch, entry)
 	return shard, entry, true
-
 }
 
 func (s *Store[K, V]) Set(key K, value V, cost int64, epoch uint32) bool {

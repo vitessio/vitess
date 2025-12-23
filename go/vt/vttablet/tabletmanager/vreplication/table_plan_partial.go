@@ -17,7 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
-	"fmt"
+	"encoding/hex"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -115,7 +115,6 @@ func (tpb *tablePlanBuilder) generatePartialSelectPart(buf *sqlparser.TrackedBuf
 		buf.Myprintf("%s", separator)
 		separator = ", "
 		buf.Myprintf("%v", cexpr.expr)
-
 	}
 	buf.WriteString(" from dual where ")
 	tpb.generatePKConstraint(buf, bvf)
@@ -177,14 +176,14 @@ func (tpb *tablePlanBuilder) createPartialUpdateQuery(dataColumns *binlogdatapb.
 	return buf.ParsedQuery()
 }
 func (tp *TablePlan) getPartialInsertQuery(dataColumns *binlogdatapb.RowChange_Bitmap) (*sqlparser.ParsedQuery, error) {
-	key := fmt.Sprintf("%x", dataColumns.Cols)
+	key := hex.EncodeToString(dataColumns.Cols)
 	ins, ok := tp.PartialInserts[key]
 	if ok {
 		return ins, nil
 	}
 	ins = tp.TablePlanBuilder.createPartialInsertQuery(dataColumns)
 	if ins == nil {
-		return ins, vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("unable to create partial insert query for %s", tp.TargetName))
+		return ins, vterrors.New(vtrpcpb.Code_INTERNAL, "unable to create partial insert query for "+tp.TargetName)
 	}
 	tp.PartialInserts[key] = ins
 	tp.Stats.PartialQueryCacheSize.Add([]string{"insert"}, 1)
@@ -192,14 +191,14 @@ func (tp *TablePlan) getPartialInsertQuery(dataColumns *binlogdatapb.RowChange_B
 }
 
 func (tp *TablePlan) getPartialUpdateQuery(dataColumns *binlogdatapb.RowChange_Bitmap) (*sqlparser.ParsedQuery, error) {
-	key := fmt.Sprintf("%x", dataColumns.Cols)
+	key := hex.EncodeToString(dataColumns.Cols)
 	upd, ok := tp.PartialUpdates[key]
 	if ok {
 		return upd, nil
 	}
 	upd = tp.TablePlanBuilder.createPartialUpdateQuery(dataColumns)
 	if upd == nil {
-		return upd, vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("unable to create partial update query for %s", tp.TargetName))
+		return upd, vterrors.New(vtrpcpb.Code_INTERNAL, "unable to create partial update query for "+tp.TargetName)
 	}
 	tp.PartialUpdates[key] = upd
 	tp.Stats.PartialQueryCacheSize.Add([]string{"update"}, 1)

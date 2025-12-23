@@ -18,6 +18,7 @@ package mysqlctl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -87,7 +88,7 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, request *tab
 	backtickDBName := sqlescape.EscapeID(dbName)
 
 	// get the database creation command
-	qr, fetchErr := mysqld.FetchSuperQuery(ctx, fmt.Sprintf("SHOW CREATE DATABASE IF NOT EXISTS %s", backtickDBName))
+	qr, fetchErr := mysqld.FetchSuperQuery(ctx, "SHOW CREATE DATABASE IF NOT EXISTS "+backtickDBName)
 	if fetchErr != nil {
 		return nil, fetchErr
 	}
@@ -113,7 +114,6 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, request *tab
 	tableNames := make([]string, 0, len(tds))
 	for _, td := range tds {
 		tableNames = append(tableNames, td.Name)
-		td := td
 
 		eg.Go(func() error {
 			fields, columns, schema, err := mysqld.collectSchema(ctx, dbName, td.Name, td.Type, request.TableSchemaOnly)
@@ -519,7 +519,7 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 			if change.Force {
 				log.Warningf("BeforeSchema differs, applying anyway")
 			} else {
-				return nil, fmt.Errorf("BeforeSchema differs")
+				return nil, errors.New("BeforeSchema differs")
 			}
 		}
 	}
@@ -565,7 +565,7 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 			if change.Force {
 				log.Warningf("AfterSchema differs, not reporting error")
 			} else {
-				return nil, fmt.Errorf("AfterSchema differs")
+				return nil, errors.New("AfterSchema differs")
 			}
 		}
 	}

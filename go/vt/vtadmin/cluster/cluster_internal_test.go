@@ -19,6 +19,7 @@ package cluster
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"sort"
 	"testing"
@@ -732,7 +733,7 @@ func TestRefreshState(t *testing.T) {
 			cluster: &Cluster{
 				Vtctld: &fakevtctldclient.VtctldClient{
 					RefreshStateResults: map[string]error{
-						"zone1-0000000100": fmt.Errorf("some error"),
+						"zone1-0000000100": errors.New("some error"),
 					},
 				},
 				topoReadPool: pools.NewRPCPool(1, time.Millisecond*100, nil),

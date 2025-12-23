@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"strings"
@@ -211,7 +212,7 @@ func (lg *SimpleLoadGenerator) execQueryWithRetry(query string) (*sqltypes.Resul
 			}
 			if lg.runCtx != nil && lg.runCtx.Err() != nil {
 				log.Infof("Load generator run context done, query never completed: %q", query)
-				errCh <- fmt.Errorf("load generator stopped")
+				errCh <- errors.New("load generator stopped")
 				return
 			}
 			if retry {
@@ -335,7 +336,7 @@ func (lg *SimpleLoadGenerator) Stop() error {
 		return nil
 	case <-time.After(timeout):
 		log.Infof("Timed out waiting for load generator to stop")
-		return fmt.Errorf("timed out waiting for load generator to stop")
+		return errors.New("timed out waiting for load generator to stop")
 	}
 }
 

@@ -9,6 +9,7 @@ Usage of vtctlclient:
       --config-type string                                          Config file type (omit to infer config type from file extension).
       --datadog-agent-host string                                   host to send spans to. if empty, no tracing will be done
       --datadog-agent-port string                                   port to send spans to. if empty, no tracing will be done
+      --datadog-trace-debug-mode                                    enable debug mode for datadog tracing
       --grpc-auth-static-client-creds string                        When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
       --grpc-compression string                                     Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
       --grpc-dial-concurrency-limit int                             Maximum concurrency of grpc dial operations. This should be less than the golang max thread limit of 10000. (default 1024)

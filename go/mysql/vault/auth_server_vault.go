@@ -18,6 +18,7 @@ package vault
 
 import (
 	"crypto/subtle"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -76,11 +77,11 @@ func newAuthServerVault(addr string, timeout time.Duration, caCertPath string, p
 	// Validate more parameters
 	token, err := readFromFile(tokenFilePath)
 	if err != nil {
-		return nil, fmt.Errorf("No Vault token in provided filename for --mysql_auth_vault_tokenfile")
+		return nil, errors.New("No Vault token in provided filename for --mysql_auth_vault_tokenfile")
 	}
 	secretID, err := readFromFile(secretIDPath)
 	if err != nil {
-		return nil, fmt.Errorf("No Vault secret_id in provided filename for --mysql_auth_vault_role_secretidfile")
+		return nil, errors.New("No Vault secret_id in provided filename for --mysql_auth_vault_role_secretidfile")
 	}
 
 	config := vaultapi.NewConfig()
@@ -210,7 +211,7 @@ func (a *AuthServerVault) reloadVault() error {
 	}
 
 	if secret.JSONSecret == nil {
-		return fmt.Errorf("Empty vtgate credentials retrieved from Vault server")
+		return errors.New("Empty vtgate credentials retrieved from Vault server")
 	}
 
 	entries := make(map[string][]*mysql.AuthServerStaticEntry)
@@ -218,7 +219,7 @@ func (a *AuthServerVault) reloadVault() error {
 		return fmt.Errorf("Error parsing vtgate Vault auth server config: %v", err)
 	}
 	if len(entries) == 0 {
-		return fmt.Errorf("vtgate credentials from Vault empty! Not updating previously cached values")
+		return errors.New("vtgate credentials from Vault empty! Not updating previously cached values")
 	}
 
 	log.Infof("reloadVault(): success. Client status: %s", a.vaultClient.GetStatus())
@@ -241,7 +242,6 @@ func (a *AuthServerVault) installSignalHandlers() {
 			if err != nil {
 				log.Errorf("%s", err)
 			}
-
 		}
 	}()
 }

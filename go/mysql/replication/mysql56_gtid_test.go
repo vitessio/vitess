@@ -34,7 +34,6 @@ func TestParseMysql56GTID(t *testing.T) {
 	got, err := parseMysql56GTID(input)
 	require.NoError(t, err, "unexpected error: %v", err)
 	assert.Equal(t, want, got, "parseMysql56GTID(%#v) = %#v, want %#v", input, got, want)
-
 }
 
 func TestParseMysql56GTIDInvalid(t *testing.T) {
@@ -49,7 +48,6 @@ func TestParseMysql56GTIDInvalid(t *testing.T) {
 	for _, input := range table {
 		_, err := parseMysql56GTID(input)
 		assert.Error(t, err, "parseMysql56GTID(%#v): expected error, got none", input)
-
 	}
 }
 
@@ -67,7 +65,6 @@ func TestParseSID(t *testing.T) {
 	got, err := ParseSID(input)
 	require.NoError(t, err, "unexpected error: %v", err)
 	assert.Equal(t, want, got, "ParseSID(%#v) = %#v, want %#v", input, got, want)
-
 }
 
 func TestParseSIDInvalid(t *testing.T) {
@@ -81,7 +78,6 @@ func TestParseSIDInvalid(t *testing.T) {
 	for _, input := range table {
 		_, err := ParseSID(input)
 		assert.Error(t, err, "ParseSID(%#v): expected error, got none", input)
-
 	}
 }
 

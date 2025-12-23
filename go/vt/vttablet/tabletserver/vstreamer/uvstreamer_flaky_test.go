@@ -217,7 +217,6 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 		log.Infof("Position after second insert into t1: %s", primaryPosition(t))
 		conn.ExecuteFetch("unlock tables", 1, false)
 		log.Info("Inserted row for fast forward to find, unlocked tables")
-
 	}
 
 	callbacks[fmt.Sprintf("OTHER.*%s t3", copyPhaseStart)] = func() {
@@ -232,7 +231,6 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 		log.Infof("Position after third insert into t1: %s", primaryPosition(t))
 		conn.ExecuteFetch("unlock tables", 1, false)
 		log.Info("Inserted rows for fast forward to find, unlocked tables")
-
 	}
 
 	callbacks["COPY_COMPLETED"] = func() {
@@ -374,7 +372,7 @@ func initTables(t *testing.T, tables []string) {
 		tableName := table
 		idx = i + 1
 		insertMultipleRows(t, table, idx, numInitialRows)
-		positions[fmt.Sprintf("%sBulkInsert", table)] = primaryPosition(t)
+		positions[table+"BulkInsert"] = primaryPosition(t)
 
 		callbacks[fmt.Sprintf("LASTPK.*%s.*%d", table, numInitialRows)] = func() {
 			ctx := context.Background()
@@ -411,7 +409,6 @@ func initTables(t *testing.T, tables []string) {
 		}
 		env.Mysqld.ExecuteSuperQueryList(ctx, queries)
 		log.Infof("Position after insert into t1 and t2 after t2 complete: %s", primaryPosition(t))
-
 	}
 	positions["afterInitialInsert"] = primaryPosition(t)
 }
@@ -429,7 +426,7 @@ func initialize(t *testing.T) {
 func getRule(table string) *binlogdatapb.Rule {
 	return &binlogdatapb.Rule{
 		Match:  table,
-		Filter: fmt.Sprintf("select * from %s", table),
+		Filter: "select * from " + table,
 	}
 }
 

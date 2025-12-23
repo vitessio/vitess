@@ -94,6 +94,6 @@ func (tm *TabletManager) ApplySchema(ctx context.Context, change *tmutils.Schema
 	}
 
 	// and if it worked, reload the schema
-	tm.ReloadSchema(ctx, "") // nolint:errcheck
+	tm.ReloadSchema(ctx, "") //nolint:errcheck
 	return scr, nil
 }

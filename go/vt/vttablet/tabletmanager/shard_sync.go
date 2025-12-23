@@ -242,7 +242,7 @@ func (tm *TabletManager) endPrimaryTerm(ctx context.Context, primaryAlias *topod
 	log.Infof("Active reparents are enabled; converting MySQL to replica.")
 	demotePrimaryCtx, cancelDemotePrimary := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancelDemotePrimary()
-	if _, err := tm.demotePrimary(demotePrimaryCtx, false /* revertPartialFailure */); err != nil {
+	if _, err := tm.demotePrimary(demotePrimaryCtx, false /* revertPartialFailure */, true /* force */); err != nil {
 		return vterrors.Wrap(err, "failed to demote primary")
 	}
 	setPrimaryCtx, cancelSetPrimary := context.WithTimeout(ctx, topo.RemoteOperationTimeout)

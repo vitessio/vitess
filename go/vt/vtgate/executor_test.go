@@ -445,7 +445,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	_, err := executorExecSession(ctx, executor, session, "select id from main1", nil)
 	require.NoError(t, err)
 	wantSession := &vtgatepb.Session{TargetString: "@primary", InTransaction: true, FoundRows: 1, RowCount: -1}
-	testSession := session.Session.CloneVT()
+	testSession := session.CloneVT()
 	testSession.ShardSessions = nil
 	utils.MustMatch(t, wantSession, testSession, "session does not match for autocommit=0")
 
@@ -486,7 +486,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	_, err = executorExecSession(ctx, executor, session, "update main1 set id=1", nil)
 	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{InTransaction: true, Autocommit: true, TargetString: "@primary", FoundRows: 0, RowCount: 1}
-	testSession = session.Session.CloneVT()
+	testSession = session.CloneVT()
 	testSession.ShardSessions = nil
 	utils.MustMatch(t, wantSession, testSession, "session does not match for autocommit=1")
 	if got, want := sbclookup.CommitCount.Load(), startCount; got != want {
@@ -569,7 +569,6 @@ func TestExecutorShowColumns(t *testing.T) {
 			sbclookup.BatchQueries = nil
 		})
 	}
-
 }
 
 func sortString(w string) string {
@@ -638,7 +637,7 @@ func TestExecutorShow(t *testing.T) {
 	assert.Equal(t, want, lastQuery, "Got: %v, want %v", lastQuery, want)
 
 	wantqr := showResults
-	utils.MustMatch(t, wantqr, qr, fmt.Sprintf("unexpected results running query: %s", query))
+	utils.MustMatch(t, wantqr, qr, "unexpected results running query: "+query)
 
 	wantErrNoTable := "table unknown_table not found"
 	_, err = executorExecSession(ctx, executor, session, "show create table unknown_table", nil)
@@ -1093,7 +1092,7 @@ func TestExecutorShow(t *testing.T) {
 			buildVarCharRow("TestXBadVSchema/e0-"),
 		},
 	}
-	utils.MustMatch(t, wantqr, qr, fmt.Sprintf("%s, with a bad keyspace", query))
+	utils.MustMatch(t, wantqr, qr, query+", with a bad keyspace")
 
 	query = "show vschema tables"
 	session = econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
@@ -1807,7 +1806,6 @@ func TestGetPlanNormalized(t *testing.T) {
 }
 
 func TestGetPlanPriority(t *testing.T) {
-
 	testCases := []struct {
 		name             string
 		sql              string
@@ -1839,7 +1837,6 @@ func TestGetPlanPriority(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestPassthroughDDL(t *testing.T) {
@@ -2779,7 +2776,6 @@ func TestExecutorStartTxnStmt(t *testing.T) {
 
 			_, err = executorExecSession(ctx, executor, session, "rollback", nil)
 			require.NoError(t, err)
-
 		})
 	}
 }

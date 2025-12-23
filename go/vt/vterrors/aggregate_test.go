@@ -18,7 +18,6 @@ package vterrors
 
 import (
 	"errors"
-	"fmt"
 	"testing"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -56,7 +55,7 @@ func TestAggregateVtGateErrorCodes(t *testing.T) {
 		{
 			// unknown errors map to the unknown code
 			input: []error{
-				fmt.Errorf("unknown error"),
+				errors.New("unknown error"),
 			},
 			expected: vtrpcpb.Code_UNKNOWN,
 		},

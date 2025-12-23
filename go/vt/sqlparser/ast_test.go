@@ -342,7 +342,6 @@ func TestSetAutocommitOFF(t *testing.T) {
 	default:
 		t.Errorf("SET statement expression is not Literal: %T", e.Expr)
 	}
-
 }
 
 func TestWhere(t *testing.T) {

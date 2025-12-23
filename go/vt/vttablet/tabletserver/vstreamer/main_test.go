@@ -18,6 +18,7 @@ package vstreamer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -286,7 +287,13 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 	}
 }
 
+func startFullyThrottledStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter, position string, tablePKs []*binlogdatapb.TableLastPK) (*sync.WaitGroup, <-chan []*binlogdatapb.VEvent) {
+	return startStreamWithAllOrNothingThrottlingOption(ctx, t, filter, position, tablePKs, true)
+}
 func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter, position string, tablePKs []*binlogdatapb.TableLastPK) (*sync.WaitGroup, <-chan []*binlogdatapb.VEvent) {
+	return startStreamWithAllOrNothingThrottlingOption(ctx, t, filter, position, tablePKs, false)
+}
+func startStreamWithAllOrNothingThrottlingOption(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter, position string, tablePKs []*binlogdatapb.TableLastPK, alwaysThrottle bool) (*sync.WaitGroup, <-chan []*binlogdatapb.VEvent) {
 	switch position {
 	case "":
 		position = primaryPosition(t)
@@ -301,14 +308,14 @@ func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter,
 	go func() {
 		defer close(ch)
 		defer wg.Done()
-		if vstream(ctx, t, position, tablePKs, filter, ch) != nil {
+		if vstream(ctx, t, position, tablePKs, filter, ch, alwaysThrottle) != nil {
 			t.Log("vstream returned error")
 		}
 	}()
 	return &wg, ch
 }
 
-func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, ch chan []*binlogdatapb.VEvent) error {
+func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, ch chan []*binlogdatapb.VEvent, fullyThrottle bool) error {
 	if filter == nil {
 		filter = &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{
@@ -329,7 +336,12 @@ func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogda
 	utils.SetFlagVariantsForTests(options.ConfigOverrides, "vstream-dynamic-packet-size", dynamicPacketSize)
 	utils.SetFlagVariantsForTests(options.ConfigOverrides, "vstream-packet-size", packetSize)
 
-	return engine.Stream(ctx, pos, tablePKs, filter, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error {
+	appName := throttlerapp.VStreamerName
+	if fullyThrottle {
+		appName = throttlerapp.TestingAlwaysThrottledName
+	}
+
+	return engine.Stream(ctx, pos, tablePKs, filter, appName, func(evs []*binlogdatapb.VEvent) error {
 		timer := time.NewTimer(2 * time.Second)
 		defer timer.Stop()
 
@@ -337,7 +349,7 @@ func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogda
 		select {
 		case ch <- evs:
 		case <-ctx.Done():
-			return fmt.Errorf("engine.Stream Done() stream ended early")
+			return errors.New("engine.Stream Done() stream ended early")
 		case <-timer.C:
 			t.Log("VStream timed out waiting for events")
 			return io.EOF

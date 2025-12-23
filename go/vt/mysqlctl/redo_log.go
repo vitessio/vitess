@@ -18,7 +18,7 @@ package mysqlctl
 
 import (
 	"context"
-	"fmt"
+	"errors"
 )
 
 func (mysqld *Mysqld) DisableRedoLog(ctx context.Context) error {
@@ -38,7 +38,7 @@ func (mysqld *Mysqld) ProcessCanDisableRedoLog(ctx context.Context) (bool, error
 		return false, err
 	}
 	if len(qr.Rows) == 0 {
-		return false, fmt.Errorf("mysqld >= 8.0.21 required to disable the redo log")
+		return false, errors.New("mysqld >= 8.0.21 required to disable the redo log")
 	}
 	return true, nil
 }

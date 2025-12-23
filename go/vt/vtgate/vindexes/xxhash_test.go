@@ -138,7 +138,7 @@ func TestXXHashMap(t *testing.T) {
 func TestXXHashVerify(t *testing.T) {
 	hexValStr := "9efa"
 	hexValStrSQL := fmt.Sprintf("x'%s'", hexValStr)
-	hexNumStrSQL := fmt.Sprintf("0x%s", hexValStr)
+	hexNumStrSQL := "0x" + hexValStr
 	hexBytes, _ := hex.DecodeString(hexValStr)
 	ids := []sqltypes.Value{sqltypes.NewUint64(1), sqltypes.NewUint64(2), sqltypes.NewHexVal([]byte(hexValStrSQL)), sqltypes.NewHexNum([]byte(hexNumStrSQL))}
 	ksids := [][]byte{{0xd4, 0x64, 0x5, 0x36, 0x76, 0x12, 0xb4, 0xb7}, {0xd4, 0x64, 0x5, 0x36, 0x76, 0x12, 0xb4, 0xb7}, vXXHash(hexBytes), vXXHash(hexBytes)}
@@ -169,11 +169,10 @@ func BenchmarkXXHash(b *testing.B) {
 			input[i] = byte(i)
 		}
 
-		name := fmt.Sprintf("xxHash,direct,bytes,n=%s", benchSize.name)
+		name := "xxHash,direct,bytes,n=" + benchSize.name
 		b.Run(name, func(b *testing.B) {
 			benchmarkXXHashBytes(b, input)
 		})
-
 	}
 }
 

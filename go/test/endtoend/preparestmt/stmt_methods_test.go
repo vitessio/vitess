@@ -113,7 +113,6 @@ func TestInsertUpdateDelete(t *testing.T) {
 			-(1 << 63), (1 << 63) - 1, 1, -1,
 		}
 		exec(t, dbo, insertStmt, insertValue...)
-
 	}
 	// validate inserted data count
 	testcount(t, dbo, 100)
@@ -213,7 +212,6 @@ func deleteRecord(t *testing.T, dbo *sql.DB) {
 
 	data := selectWhere(t, dbo, "id = ?", testingID)
 	assert.Equal(t, 0, len(data))
-
 }
 
 // updateRecord test update operation corresponds to the testingID.
@@ -233,7 +231,6 @@ func updateRecord(t *testing.T, dbo *sql.DB) {
 	// validate value of msg column in data
 	assert.Equal(t, updateData, data[0].Data)
 	assert.Equal(t, updateTextCol, data[0].TextCol)
-
 }
 
 // reconnectAndTest creates new connection with database and validate.
@@ -243,7 +240,6 @@ func reconnectAndTest(t *testing.T) {
 	defer dbo.Close()
 	data := selectWhere(t, dbo, "id = ?", testingID)
 	assert.Equal(t, 0, len(data))
-
 }
 
 // TestColumnParameter query database using column
@@ -326,7 +322,7 @@ func (c *columns) ToString() string {
 
 func getIntToString(x sql.NullInt64) string {
 	if x.Valid {
-		return fmt.Sprintf("%d", x.Int64)
+		return strconv.FormatInt(x.Int64, 10)
 	}
 	return "NULL"
 }
@@ -570,7 +566,16 @@ func validateBaselineErrSpecializedPlan(t *testing.T, p map[string]any) {
 	pm, ok := plan.(map[string]any)
 	require.True(t, ok, "plan is not of type map[string]any")
 	require.EqualValues(t, "PlanSwitcher", pm["OperatorType"])
-	require.EqualValues(t, "VT12001: unsupported: OVER CLAUSE with sharded keyspace", pm["BaselineErr"])
+	baselineErr := pm["BaselineErr"].(string)
+
+	// v24+ uses new error message format
+	// v23 and earlier uses old format
+	expectedErr := "VT12001: unsupported: window functions are only supported for single-shard queries"
+	if clusterInstance.VtGateMajorVersion < 24 {
+		expectedErr = "VT12001: unsupported: OVER CLAUSE with sharded keyspace"
+	}
+
+	require.EqualValues(t, expectedErr, baselineErr)
 
 	pd, err := engine.PrimitiveDescriptionFromMap(plan.(map[string]any))
 	require.NoError(t, err)
@@ -607,7 +612,7 @@ func getPlanWhenReady(t *testing.T, sql string, timeout time.Duration, plansFunc
 	for {
 		select {
 		case <-waitTimeout:
-			require.Fail(t, fmt.Sprintf("timeout waiting for plan for query: %s", sql))
+			require.Fail(t, "timeout waiting for plan for query: "+sql)
 			return nil
 		default:
 			p, err := plansFunc()

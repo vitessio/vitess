@@ -101,7 +101,6 @@ var (
 )
 
 func registerFlags(fs *pflag.FlagSet) {
-
 	utils.SetFlagStringVar(fs, &region, "s3-backup-aws-region", "us-east-1", "AWS region to use.")
 	utils.SetFlagIntVar(fs, &retryCount, "s3-backup-aws-retries", -1, "AWS request retries.")
 	utils.SetFlagStringVar(fs, &endpoint, "s3-backup-aws-endpoint", "", "endpoint of the S3 backend (region must be provided).")
@@ -175,7 +174,7 @@ func (bh *S3BackupHandle) Name() string {
 // AddFile is part of the backupstorage.BackupHandle interface.
 func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize int64) (io.WriteCloser, error) {
 	if bh.readOnly {
-		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
+		return nil, errors.New("AddFile cannot be called on read-only backup")
 	}
 
 	partSizeBytes, err := calculateUploadPartSize(filesize)
@@ -259,7 +258,7 @@ func calculateUploadPartSize(filesize int64) (partSizeBytes int64, err error) {
 // EndBackup is part of the backupstorage.BackupHandle interface.
 func (bh *S3BackupHandle) EndBackup(ctx context.Context) error {
 	if bh.readOnly {
-		return fmt.Errorf("EndBackup cannot be called on read-only backup")
+		return errors.New("EndBackup cannot be called on read-only backup")
 	}
 	bh.waitGroup.Wait()
 	return bh.Error()
@@ -268,7 +267,7 @@ func (bh *S3BackupHandle) EndBackup(ctx context.Context) error {
 // AbortBackup is part of the backupstorage.BackupHandle interface.
 func (bh *S3BackupHandle) AbortBackup(ctx context.Context) error {
 	if bh.readOnly {
-		return fmt.Errorf("AbortBackup cannot be called on read-only backup")
+		return errors.New("AbortBackup cannot be called on read-only backup")
 	}
 	return bh.bs.RemoveBackup(ctx, bh.dir, bh.name)
 }
@@ -276,7 +275,7 @@ func (bh *S3BackupHandle) AbortBackup(ctx context.Context) error {
 // ReadFile is part of the backupstorage.BackupHandle interface.
 func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.ReadCloser, error) {
 	if !bh.readOnly {
-		return nil, fmt.Errorf("ReadFile cannot be called on read-write backup")
+		return nil, errors.New("ReadFile cannot be called on read-write backup")
 	}
 	object := objName(bh.dir, bh.name, filename)
 	sendStats := bh.bs.params.Stats.Scope(stats.Operation("AWS:Request:Send"))
@@ -552,7 +551,7 @@ func (bs *S3BackupStorage) client() (*s3.Client, error) {
 		bs._client = s3.NewFromConfig(cfg, options...)
 
 		if len(bucket) == 0 {
-			return nil, fmt.Errorf("--s3-backup-storage-bucket required")
+			return nil, errors.New("--s3-backup-storage-bucket required")
 		}
 
 		if _, err := bs._client.HeadBucket(context.Background(), &s3.HeadBucketInput{Bucket: &bucket}); err != nil {

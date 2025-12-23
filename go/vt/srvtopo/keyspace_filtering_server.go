@@ -18,7 +18,7 @@ package srvtopo
 
 import (
 	"context"
-	"fmt"
+	"errors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -28,7 +28,7 @@ import (
 var (
 	// ErrNilUnderlyingServer is returned when attempting to create a new keyspace
 	// filtering server if a nil underlying server implementation is provided.
-	ErrNilUnderlyingServer = fmt.Errorf("unable to construct filtering server without an underlying server")
+	ErrNilUnderlyingServer = errors.New("unable to construct filtering server without an underlying server")
 )
 
 // NewKeyspaceFilteringServer constructs a new server based on the provided

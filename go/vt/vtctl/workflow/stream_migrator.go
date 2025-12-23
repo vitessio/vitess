@@ -293,7 +293,7 @@ func (sm *StreamMigrator) legacyReadTabletStreams(ctx context.Context, ti *topo.
 	query := fmt.Sprintf("select id, workflow, source, pos, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name=%s and workflow != %s",
 		encodeString(ti.DbName()), encodeString(sm.ts.ReverseWorkflowName()))
 	if constraint != "" {
-		query += fmt.Sprintf(" and %s", constraint)
+		query += " and " + constraint
 	}
 
 	p3qr, err := sm.ts.TabletManagerClient().VReplicationExec(ctx, ti.Tablet, query)
@@ -472,7 +472,7 @@ func (sm *StreamMigrator) legacyReadSourceStreams(ctx context.Context, cancelMig
 			return nil
 		}
 
-		query := fmt.Sprintf("select distinct vrepl_id from _vt.copy_state where vrepl_id in %s", VReplicationStreams(tabletStreams).Values())
+		query := "select distinct vrepl_id from _vt.copy_state where vrepl_id in " + VReplicationStreams(tabletStreams).Values()
 		p3qr, err := sm.ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet, query)
 		switch {
 		case err != nil:
@@ -579,7 +579,7 @@ func (sm *StreamMigrator) readSourceStreams(ctx context.Context, cancelMigrate b
 			return nil
 		}
 
-		query := fmt.Sprintf("select distinct vrepl_id from _vt.copy_state where vrepl_id in %s", VReplicationStreams(tabletStreams).Values())
+		query := "select distinct vrepl_id from _vt.copy_state where vrepl_id in " + VReplicationStreams(tabletStreams).Values()
 		p3qr, err := sm.ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet, query)
 		switch {
 		case err != nil:
@@ -661,13 +661,13 @@ func (sm *StreamMigrator) legacyStopSourceStreams(ctx context.Context) error {
 			return nil
 		}
 
-		query := fmt.Sprintf("update _vt.vreplication set state='Stopped', message='for cutover' where id in %s", VReplicationStreams(tabletStreams).Values())
+		query := "update _vt.vreplication set state='Stopped', message='for cutover' where id in " + VReplicationStreams(tabletStreams).Values()
 		_, err := sm.ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet, query)
 		if err != nil {
 			return err
 		}
 
-		tabletStreams, err = sm.legacyReadTabletStreams(ctx, source.GetPrimary(), fmt.Sprintf("id in %s", VReplicationStreams(tabletStreams).Values()))
+		tabletStreams, err = sm.legacyReadTabletStreams(ctx, source.GetPrimary(), "id in "+VReplicationStreams(tabletStreams).Values())
 		if err != nil {
 			return err
 		}
@@ -712,7 +712,7 @@ func (sm *StreamMigrator) stopSourceStreams(ctx context.Context) error {
 					return fmt.Errorf("no binlog source is defined for materialization workflow %s", vrs.Workflow)
 				}
 				eg.Go(func() error {
-					sourceTablet := source.primary.Tablet.CloneVT()
+					sourceTablet := source.primary.CloneVT()
 					if sourceTablet.Shard != vrs.BinlogSource.Shard {
 						si, err := sm.ts.TopoServer().GetTabletMapForShard(egCtx, vrs.BinlogSource.GetKeyspace(), vrs.BinlogSource.GetShard())
 						if err != nil {
@@ -734,7 +734,7 @@ func (sm *StreamMigrator) stopSourceStreams(ctx context.Context) error {
 						return err
 					}
 					sm.ts.Logger().Infof("Waiting for intra-keyspace materialization workflow %s on %v/%v to reach position %v for stream source from %s/%s, starting from position %s on tablet %s",
-						vrs.Workflow, source.primary.Keyspace, source.primary.Shard, pos, vrs.BinlogSource.Keyspace, vrs.BinlogSource.Shard, vrs.Position, topoproto.TabletAliasString(source.primary.Tablet.Alias))
+						vrs.Workflow, source.primary.Keyspace, source.primary.Shard, pos, vrs.BinlogSource.Keyspace, vrs.BinlogSource.Shard, vrs.Position, topoproto.TabletAliasString(source.primary.Alias))
 					if err := sm.ts.TabletManagerClient().VReplicationWaitForPos(egCtx, source.primary.Tablet, vrs.ID, pos); err != nil {
 						return err
 					}
@@ -751,7 +751,7 @@ func (sm *StreamMigrator) stopSourceStreams(ctx context.Context) error {
 				tabletStreams[0].Workflow, xtra, err)
 		}
 
-		query := fmt.Sprintf("update _vt.vreplication set state='Stopped', message='for cutover' where id in %s", VReplicationStreams(tabletStreams).Values())
+		query := "update _vt.vreplication set state='Stopped', message='for cutover' where id in " + VReplicationStreams(tabletStreams).Values()
 		_, err := sm.ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet, query)
 		if err != nil {
 			return err
@@ -870,7 +870,7 @@ func (sm *StreamMigrator) legacyVerifyStreamPositions(ctx context.Context, stopP
 			return nil
 		}
 
-		tabletStreams, err := sm.legacyReadTabletStreams(ctx, source.GetPrimary(), fmt.Sprintf("id in %s", VReplicationStreams(tabletStreams).Values()))
+		tabletStreams, err := sm.legacyReadTabletStreams(ctx, source.GetPrimary(), "id in "+VReplicationStreams(tabletStreams).Values())
 		if err != nil {
 			return err
 		}
@@ -1039,7 +1039,7 @@ func (sm *StreamMigrator) createTargetStreams(ctx context.Context, tmpl []*VRepl
 						return err
 					}
 					sm.ts.Logger().Infof("Setting position for intra-keyspace materialization workflow %s on %v/%v to %v on tablet %s",
-						stream.Workflow, st.primary.Keyspace, st.primary.Shard, pos, topoproto.TabletAliasString(st.primary.Tablet.Alias))
+						stream.Workflow, st.primary.Keyspace, st.primary.Shard, pos, topoproto.TabletAliasString(st.primary.Alias))
 					stream.Position, err = binlogplayer.DecodePosition(pos)
 					if err != nil {
 						return err

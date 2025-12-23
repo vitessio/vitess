@@ -39,7 +39,11 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       // svgr options: https://react-svgr.com/docs/options/
-      svgr({ svgrOptions: { icon: true } }),
+      svgr({
+        svgrOptions: {
+          icon: true
+        }
+      }),
       eslint()
     ],
     test: {

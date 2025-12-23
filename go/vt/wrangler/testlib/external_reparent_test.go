@@ -493,7 +493,6 @@ func TestTabletExternallyReparentedRerun(t *testing.T) {
 	if tablet.Type != topodatapb.TabletType_PRIMARY {
 		t.Fatalf("new primary should be PRIMARY but is: %v", tablet.Type)
 	}
-
 }
 
 func TestRPCTabletExternallyReparentedDemotesPrimaryToConfiguredTabletType(t *testing.T) {
@@ -530,7 +529,7 @@ func TestRPCTabletExternallyReparentedDemotesPrimaryToConfiguredTabletType(t *te
 		t.Fatalf("GetTablet failed: %v", err)
 	}
 
-	if err := wr.TabletExternallyReparented(context.Background(), ti.Tablet.Alias); err != nil {
+	if err := wr.TabletExternallyReparented(context.Background(), ti.Alias); err != nil {
 		t.Fatalf("TabletExternallyReparented failed: %v", err)
 	}
 

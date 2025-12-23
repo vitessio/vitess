@@ -201,7 +201,7 @@ func TestAutoCommit(t *testing.T) {
 func TestForUpdate(t *testing.T) {
 	for _, mode := range []string{"for update", "lock in share mode"} {
 		client := framework.NewClient()
-		query := fmt.Sprintf("select * from vitess_test where intval=2 %s", mode)
+		query := "select * from vitess_test where intval=2 " + mode
 		_, err := client.Execute(query, nil)
 		require.NoError(t, err)
 
@@ -922,5 +922,4 @@ func TestSkipUserMetrics(t *testing.T) {
 	for _, expected := range expectedDiffs {
 		compareIntDiff(t, vend, expected.tag, vstart, expected.diff)
 	}
-
 }

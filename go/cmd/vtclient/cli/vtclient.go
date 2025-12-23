@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/olekukonko/tablewriter"
+	"github.com/olekukonko/tablewriter/tw"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
@@ -396,11 +397,24 @@ func (r *results) print(w io.Writer) {
 		return
 	}
 
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader(r.Fields)
-	table.SetAutoFormatHeaders(false)
-	table.AppendBulk(r.Rows)
-	table.Render()
+	table := tablewriter.NewTable(os.Stdout,
+		tablewriter.WithSymbols(tw.NewSymbols(tw.StyleASCII)),
+		tablewriter.WithHeaderAutoFormat(tw.State(-1)),
+		tablewriter.WithRowMaxWidth(30),
+	)
+	headerAny := make([]any, len(r.Fields))
+	for i, field := range r.Fields {
+		headerAny[i] = field
+	}
+	table.Header(headerAny...)
+	if err := table.Bulk(r.Rows); err != nil {
+		fmt.Fprintf(w, "Error displaying table: %v\n", err)
+		return
+	}
+	if err := table.Render(); err != nil {
+		fmt.Fprintf(w, "Error rendering table: %v\n", err)
+		return
+	}
 	fmt.Fprintf(w, "%v row(s) affected (%v, cum: %v)\n", r.rowsAffected, r.duration, r.cumulativeDuration)
 	if r.lastInsertID != 0 {
 		fmt.Fprintf(w, "Last insert ID: %v\n", r.lastInsertID)

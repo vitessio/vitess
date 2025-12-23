@@ -119,7 +119,6 @@ func (tfe *TestFieldEvent) String() string {
 			}
 		}
 		fe.Fields = append(fe.Fields, field)
-
 	}
 	if !ignoreKeyspaceShardInFieldAndRowEvents {
 		fe.Keyspace = testenv.DBName
@@ -330,7 +329,7 @@ func (ts *TestSpec) Init() {
 
 // Close() should be called (via defer) at the end of the test to clean up the tables created in the test.
 func (ts *TestSpec) Close() {
-	dropStatement := fmt.Sprintf("drop table if exists %s", strings.Join(ts.schema.TableNames(), ", "))
+	dropStatement := "drop table if exists " + strings.Join(ts.schema.TableNames(), ", ")
 	execStatement(ts.t, dropStatement)
 }
 
@@ -399,7 +398,7 @@ func (ts *TestSpec) Run() {
 				continue
 			case tq.events != nil && // when we define the actual events either as a serialized string or as a TestRowEvent
 				(len(tq.events) > 0 &&
-					!(len(tq.events) == 1 && tq.events[0].event == "" && tq.events[0].spec == nil)):
+					(len(tq.events) != 1 || tq.events[0].event != "" || tq.events[0].spec != nil)):
 				for _, e := range tq.events {
 					if e.restart {
 						tc.output = append(tc.output, output)

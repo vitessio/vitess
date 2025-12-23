@@ -17,12 +17,15 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
 	"reflect"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -86,7 +89,7 @@ const (
 )
 
 var (
-	errShortCircuit = fmt.Errorf("short circuiting test")
+	errShortCircuit = errors.New("short circuiting test")
 	defaultSchema   = &tabletmanagerdatapb.SchemaDefinition{
 		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 			{
@@ -287,7 +290,7 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 			// This is our expected query, which will also short circuit
 			// the test with an error as at this point we've tested what
 			// we wanted to test.
-			targetTablet.vrdbClient.AddInvariant(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{})
+			targetTablet.vrdbClient.AddInvariant("use "+sidecar.GetIdentifier(), &sqltypes.Result{})
 			targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 			for _, table := range tt.schema.TableDefinitions {
 				tenv.db.AddQuery(fmt.Sprintf(getNonEmptyTableQuery, table.Name), &sqltypes.Result{})
@@ -382,7 +385,7 @@ func TestMoveTablesUnsharded(t *testing.T) {
 			"id",
 			"int64",
 		),
-		fmt.Sprintf("%d", vreplID),
+		strconv.Itoa(vreplID),
 	)
 
 	tenv.mysqld.Schema = defaultSchema
@@ -468,7 +471,7 @@ func TestMoveTablesUnsharded(t *testing.T) {
 	// We use the tablet's UID in the mocked results for the max value used on each target shard.
 	nextSeqVal := int(float64(targetShards["0"].tablet.Alias.Uid)) + 1
 	tenv.tmc.setVReplicationExecResults(globalTablet.tablet,
-		sqlparser.BuildParsedQuery(initSequenceTable, sqlescape.EscapeID(fmt.Sprintf("vt_%s", globalKs)), sqlescape.EscapeID("t1_seq"), nextSeqVal, nextSeqVal, nextSeqVal).Query,
+		sqlparser.BuildParsedQuery(initSequenceTable, sqlescape.EscapeID("vt_"+globalKs), sqlescape.EscapeID("t1_seq"), nextSeqVal, nextSeqVal, nextSeqVal).Query,
 		&sqltypes.Result{RowsAffected: 0},
 	)
 
@@ -651,7 +654,7 @@ func TestMoveTablesSharded(t *testing.T) {
 			"id",
 			"int64",
 		),
-		fmt.Sprintf("%d", vreplID),
+		strconv.Itoa(vreplID),
 	)
 
 	tenv.mysqld.Schema = defaultSchema
@@ -737,7 +740,7 @@ func TestMoveTablesSharded(t *testing.T) {
 	// We use the tablet's UID in the mocked results for the max value used on each target shard.
 	nextSeqVal := int(math.Max(float64(targetShards["-80"].tablet.Alias.Uid), float64(targetShards["80-"].tablet.Alias.Uid))) + 1
 	tenv.tmc.setVReplicationExecResults(globalTablet.tablet,
-		sqlparser.BuildParsedQuery(initSequenceTable, sqlescape.EscapeID(fmt.Sprintf("vt_%s", globalKs)), sqlescape.EscapeID("t1_seq"), nextSeqVal, nextSeqVal, nextSeqVal).Query,
+		sqlparser.BuildParsedQuery(initSequenceTable, sqlescape.EscapeID("vt_"+globalKs), sqlescape.EscapeID("t1_seq"), nextSeqVal, nextSeqVal, nextSeqVal).Query,
 		&sqltypes.Result{RowsAffected: 0},
 	)
 
@@ -921,7 +924,7 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			"id",
 			"int64",
 		),
-		fmt.Sprintf("%d", vreplID),
+		strconv.Itoa(vreplID),
 	)
 
 	getCopyStateQuery := fmt.Sprintf(sqlGetVReplicationCopyStatus, sidecar.GetIdentifier(), int64(vreplID))
@@ -1083,25 +1086,24 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			require.NotEqual(t, "", tt.query, "No expected query provided")
 
 			// These are the same for each RPC call.
-			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest("use "+sidecar.GetIdentifier(), &sqltypes.Result{}, nil)
 			if tt.initiallyNonEmptyMessage {
 				tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(selectQuery, selectResNonEmptyMessage, nil)
 			} else {
 				tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(selectQuery, selectRes, nil)
 			}
 			if tt.request.State == nil || *tt.request.State == binlogdatapb.VReplicationWorkflowState_Running {
-				tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+				tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest("use "+sidecar.GetIdentifier(), &sqltypes.Result{}, nil)
 				if tt.isCopying {
 					tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(getCopyStateQuery, copying, nil)
 				} else {
 					tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(getCopyStateQuery, notCopying, nil)
-
 				}
 			}
 			// This is our expected query, which will also short circuit
 			// the test with an error as at this point we've tested what
 			// we wanted to test.
-			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest("use "+sidecar.GetIdentifier(), &sqltypes.Result{}, nil)
 			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(idQuery, idRes, nil)
 			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(tt.query, &sqltypes.Result{RowsAffected: 1}, errShortCircuit)
 			_, err = tenv.tmc.tablets[tabletUID].tm.UpdateVReplicationWorkflow(ctx, tt.request)
@@ -1180,7 +1182,7 @@ func TestUpdateVReplicationWorkflows(t *testing.T) {
 			require.NotEqual(t, "", tt.query, "No expected query provided")
 
 			// These are the same for each RPC call.
-			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest("use "+sidecar.GetIdentifier(), &sqltypes.Result{}, nil)
 			addlPredicates := ""
 			if len(tt.request.GetIncludeWorkflows()) > 0 {
 				addlPredicates = fmt.Sprintf(" and workflow in ('%s')", strings.Join(tt.request.GetIncludeWorkflows(), "', '"))
@@ -1403,7 +1405,7 @@ func TestSourceShardSelection(t *testing.T) {
 
 			for uid, streams := range tt.streams {
 				targetTablet := targetTablets[uid]
-				targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+				targetTablet.vrdbClient.ExpectRequest("use "+sidecar.GetIdentifier(), &sqltypes.Result{}, nil)
 				targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 				for _, table := range tt.schema.TableDefinitions {
 					tenv.db.AddQuery(fmt.Sprintf(getNonEmptyTableQuery, table.Name), &sqltypes.Result{})
@@ -1416,7 +1418,7 @@ func TestSourceShardSelection(t *testing.T) {
 						// everything we wanted to in the test.
 						err = errShortCircuit
 					}
-					targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+					targetTablet.vrdbClient.ExpectRequest("use "+sidecar.GetIdentifier(), &sqltypes.Result{}, nil)
 					targetTablet.vrdbClient.ExpectRequest(
 						fmt.Sprintf(`%s values ('%s', 'keyspace:"%s" shard:"%s" filter:{rules:{match:"t1" filter:"select * from t1 where in_keyrange(id, \'%s.hash\', \'%s\')"}}', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 0, '{}')`,
 							insertVReplicationPrefix, wf, sourceKs, sourceShard, targetKs, targetTablet.tablet.Shard, tenv.cells[0], tenv.dbName),
@@ -1671,7 +1673,7 @@ func TestHasVReplicationWorkflows(t *testing.T) {
 
 			req := &tabletmanagerdatapb.HasVReplicationWorkflowsRequest{}
 
-			tt.tablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+			tt.tablet.vrdbClient.ExpectRequest("use "+sidecar.GetIdentifier(), &sqltypes.Result{}, nil)
 			tt.tablet.vrdbClient.ExpectRequest(fmt.Sprintf(hasWorkflows, tenv.dbName), tt.queryRes, nil)
 
 			got, err := tenv.tmc.HasVReplicationWorkflows(ctx, tt.tablet.tablet, req)
@@ -1787,7 +1789,7 @@ func TestReadVReplicationWorkflows(t *testing.T) {
 			require.NotNil(t, tt.req, "No request provided")
 
 			if !tt.wantErr { // Errors we're testing for occur before executing any queries.
-				tablet.vrdbClient.AddInvariant(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{})
+				tablet.vrdbClient.AddInvariant("use "+sidecar.GetIdentifier(), &sqltypes.Result{})
 				tablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, tt.wantPreds), &sqltypes.Result{}, nil)
 				for _, table := range defaultSchema.TableDefinitions {
 					tenv.db.AddQuery(fmt.Sprintf(getNonEmptyTableQuery, table.Name), &sqltypes.Result{})
@@ -1808,7 +1810,7 @@ func TestReadVReplicationWorkflows(t *testing.T) {
 func addInvariants(dbClient *binlogplayer.MockDBClient, vreplID, sourceTabletUID int, position, workflow, cell string) {
 	// This reduces a lot of noise, but is also needed as it's executed when any of the
 	// other queries here are executed via engine.exec().
-	dbClient.AddInvariant(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{})
+	dbClient.AddInvariant("use "+sidecar.GetIdentifier(), &sqltypes.Result{})
 
 	// The binlogplayer queries result from the controller starting up and the sequence
 	// within everything else is non-deterministic.
@@ -1868,11 +1870,11 @@ func addMaterializeSettingsTablesToSchema(ms *vtctldatapb.MaterializeSettings, t
 		}
 		schema.TableDefinitions = append(schema.TableDefinitions, &tabletmanagerdatapb.TableDefinition{
 			Name:   tableName,
-			Schema: fmt.Sprintf("%s_schema", tableName),
+			Schema: tableName + "_schema",
 		})
 		schema.TableDefinitions = append(schema.TableDefinitions, &tabletmanagerdatapb.TableDefinition{
 			Name:   ts.TargetTable,
-			Schema: fmt.Sprintf("%s_schema", ts.TargetTable),
+			Schema: ts.TargetTable + "_schema",
 		})
 	}
 	tenv.tmc.SetSchema(schema)
@@ -1982,7 +1984,7 @@ func TestExternalizeLookupVindex(t *testing.T) {
 		},
 	}
 
-	trxTS := fmt.Sprintf("%d", time.Now().Unix())
+	trxTS := strconv.FormatInt(time.Now().Unix(), 10)
 	fields := sqltypes.MakeTestFields(
 		"id|state|message|source|workflow_type|workflow_sub_type|max_tps|max_replication_lag|time_updated|time_heartbeat|time_throttled|transaction_timestamp|rows_copied|options",
 		"int64|varbinary|varbinary|blob|int64|int64|int64|int64|int64|int64|int64|int64|int64|varchar",
@@ -2001,12 +2003,16 @@ func TestExternalizeLookupVindex(t *testing.T) {
 	unownedRunning := sqltypes.MakeTestResult(fields, "2|Running|msg|"+unownedSourceKeepRunningAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5|{}")
 	unownedStopped := sqltypes.MakeTestResult(fields, "2|Stopped|Stopped after copy|"+unownedSourceStopAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5|{}")
 
-	options := `{
-      "lookup_vindexes": [
-        "owned_lookup",
-        "owned_lookup2"
-      ]
-    }`
+	raw := `{
+		"lookup_vindexes": [
+		  "owned_lookup",
+		  "owned_lookup2"
+		]
+	  }`
+	var buf bytes.Buffer
+	json.Compact(&buf, []byte(raw))
+	options := buf.String()
+
 	ownedMultipleRunning := sqltypes.MakeTestResult(fields, "1|Running|msg|"+ownedSourceKeepRunningAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5|"+options)
 	testcases := []struct {
 		request         *vtctldatapb.LookupVindexExternalizeRequest
@@ -2189,7 +2195,7 @@ func TestExternalizeLookupVindex(t *testing.T) {
 					"id",
 					"int64",
 				),
-				fmt.Sprintf("%d", vreplID),
+				strconv.Itoa(vreplID),
 			)
 
 			streamsResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
@@ -2360,7 +2366,7 @@ func TestInternalizeLookupVindex(t *testing.T) {
 		},
 	}
 
-	trxTS := fmt.Sprintf("%d", time.Now().Unix())
+	trxTS := strconv.FormatInt(time.Now().Unix(), 10)
 	fields := sqltypes.MakeTestFields(
 		"id|state|message|source|workflow_type|workflow_sub_type|max_tps|max_replication_lag|time_updated|time_heartbeat|time_throttled|transaction_timestamp|rows_copied|options",
 		"int64|varbinary|varbinary|blob|int64|int64|int64|int64|int64|int64|int64|int64|int64|varchar",
@@ -2380,12 +2386,15 @@ func TestInternalizeLookupVindex(t *testing.T) {
 	unownedRunning := sqltypes.MakeTestResult(fields, "2|Running|msg|"+unownedSourceKeepRunningAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5|{}")
 	unownedStopped := sqltypes.MakeTestResult(fields, "2|Stopped|Stopped after copy|"+unownedSourceStopAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5|{}")
 
-	options := `{
+	raw := `{
 		"lookup_vindexes": [
 		  "owned_lookup",
 		  "owned_lookup2"
 		]
 	  }`
+	buf := bytes.Buffer{}
+	json.Compact(&buf, []byte(raw))
+	options := buf.String()
 	ownedMultipleStopped := sqltypes.MakeTestResult(fields, "1|Stopped|"+workflow.Frozen+"|"+ownedSourceStopAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5|"+options)
 
 	testcases := []struct {
@@ -2680,7 +2689,7 @@ func TestCompleteLookupVindex(t *testing.T) {
 		},
 	}
 
-	trxTS := fmt.Sprintf("%d", time.Now().Unix())
+	trxTS := strconv.FormatInt(time.Now().Unix(), 10)
 	fields := sqltypes.MakeTestFields(
 		"id|state|message|source|workflow_type|workflow_sub_type|max_tps|max_replication_lag|time_updated|time_heartbeat|time_throttled|transaction_timestamp|rows_copied|options",
 		"int64|varbinary|varbinary|blob|int64|int64|int64|int64|int64|int64|int64|int64|int64|varchar",
@@ -2700,12 +2709,15 @@ func TestCompleteLookupVindex(t *testing.T) {
 	unownedRunning := sqltypes.MakeTestResult(fields, "2|Running|msg|"+unownedSourceKeepRunningAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5|{}")
 	unownedStopped := sqltypes.MakeTestResult(fields, "2|Stopped|Stopped after copy|"+unownedSourceStopAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5|{}")
 
-	options := `{
+	raw := `{
 		"lookup_vindexes": [
 		  "owned_lookup",
 		  "owned_lookup2"
 		]
 	  }`
+	buf := bytes.Buffer{}
+	json.Compact(&buf, []byte(raw))
+	options := buf.String()
 	ownedMultipleStopped := sqltypes.MakeTestResult(fields, "1|Stopped|"+workflow.Frozen+"|"+ownedSourceStopAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5|"+options)
 
 	testcases := []struct {
@@ -2951,7 +2963,7 @@ func TestMaterializerOneToOne(t *testing.T) {
 
 	addMaterializeSettingsTablesToSchema(ms, tenv, vtenv)
 
-	targetTablet.vrdbClient.AddInvariant(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{})
+	targetTablet.vrdbClient.AddInvariant("use "+sidecar.GetIdentifier(), &sqltypes.Result{})
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 	for _, table := range ms.TableSettings {
 		tenv.db.AddQuery(fmt.Sprintf(getNonEmptyTableQuery, table.TargetTable), &sqltypes.Result{})
@@ -3448,7 +3460,7 @@ func TestMaterializerDeploySchema(t *testing.T) {
 		}
 	}
 	tenv.tmc.tabletSchemas[targetTabletUID] = schema
-	targetTablet.vrdbClient.AddInvariant(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{})
+	targetTablet.vrdbClient.AddInvariant("use "+sidecar.GetIdentifier(), &sqltypes.Result{})
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 	for _, table := range ms.TableSettings {
 		tenv.db.AddQuery(fmt.Sprintf(getNonEmptyTableQuery, table.TargetTable), &sqltypes.Result{})
@@ -3521,7 +3533,7 @@ func TestMaterializerCopySchema(t *testing.T) {
 		}
 	}
 	tenv.tmc.tabletSchemas[targetTabletUID] = schema
-	targetTablet.vrdbClient.AddInvariant(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{})
+	targetTablet.vrdbClient.AddInvariant("use "+sidecar.GetIdentifier(), &sqltypes.Result{})
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 	for _, table := range ms.TableSettings {
 		tenv.db.AddQuery(fmt.Sprintf(getNonEmptyTableQuery, table.TargetTable), &sqltypes.Result{})
@@ -3810,7 +3822,7 @@ func TestMaterializerStopAfterCopy(t *testing.T) {
 
 	addMaterializeSettingsTablesToSchema(ms, tenv, vtenv)
 
-	targetTablet.vrdbClient.AddInvariant(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{})
+	targetTablet.vrdbClient.AddInvariant("use "+sidecar.GetIdentifier(), &sqltypes.Result{})
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 	for _, table := range ms.TableSettings {
 		tenv.db.AddQuery(fmt.Sprintf(getNonEmptyTableQuery, table.TargetTable), &sqltypes.Result{})
@@ -3874,7 +3886,7 @@ func TestMaterializerNoTargetVSchema(t *testing.T) {
 
 	addMaterializeSettingsTablesToSchema(ms, tenv, vtenv)
 
-	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest("use "+sidecar.GetIdentifier(), &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 	for _, table := range ms.TableSettings {
 		tenv.db.AddQuery(fmt.Sprintf(getNonEmptyTableQuery, table.TargetTable), &sqltypes.Result{})
@@ -3882,7 +3894,7 @@ func TestMaterializerNoTargetVSchema(t *testing.T) {
 
 	err = ws.Materialize(ctx, ms)
 	targetTablet.vrdbClient.Wait()
-	require.EqualError(t, err, fmt.Sprintf("table t1 not found in vschema for keyspace %s", targetKs))
+	require.EqualError(t, err, "table t1 not found in vschema for keyspace "+targetKs)
 }
 
 func TestMaterializerNoDDL(t *testing.T) {
@@ -3922,7 +3934,7 @@ func TestMaterializerNoDDL(t *testing.T) {
 
 	// Clear out the schema on the target tablet.
 	tenv.tmc.tabletSchemas[targetTabletUID] = &tabletmanagerdatapb.SchemaDefinition{}
-	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest("use "+sidecar.GetIdentifier(), &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 	for _, table := range ms.TableSettings {
 		tenv.db.AddQuery(fmt.Sprintf(getNonEmptyTableQuery, table.TargetTable), &sqltypes.Result{})
@@ -3932,7 +3944,6 @@ func TestMaterializerNoDDL(t *testing.T) {
 	require.EqualError(t, err, "target table t1 does not exist and there is no create ddl defined")
 	require.Equal(t, tenv.tmc.getSchemaRequestCount(100), 0)
 	require.Equal(t, tenv.tmc.getSchemaRequestCount(200), 1)
-
 }
 
 func TestMaterializerNoSourcePrimary(t *testing.T) {
@@ -4022,7 +4033,7 @@ func TestMaterializerTableMismatchNonCopy(t *testing.T) {
 
 	// Clear out the schema on the target tablet.
 	tenv.tmc.tabletSchemas[targetTabletUID] = &tabletmanagerdatapb.SchemaDefinition{}
-	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest("use "+sidecar.GetIdentifier(), &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 	for _, table := range ms.TableSettings {
 		tenv.db.AddQuery(fmt.Sprintf(getNonEmptyTableQuery, table.TargetTable), &sqltypes.Result{})
@@ -4071,7 +4082,7 @@ func TestMaterializerTableMismatchCopy(t *testing.T) {
 
 	// Clear out the schema on the target tablet.
 	tenv.tmc.tabletSchemas[targetTabletUID] = &tabletmanagerdatapb.SchemaDefinition{}
-	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest("use "+sidecar.GetIdentifier(), &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 	for _, table := range ms.TableSettings {
 		tenv.db.AddQuery(fmt.Sprintf(getNonEmptyTableQuery, table.TargetTable), &sqltypes.Result{})
@@ -4116,7 +4127,7 @@ func TestMaterializerNoSourceTable(t *testing.T) {
 	// Clear out the schema on the source and target tablet.
 	tenv.tmc.tabletSchemas[sourceTabletUID] = &tabletmanagerdatapb.SchemaDefinition{}
 	tenv.tmc.tabletSchemas[targetTabletUID] = &tabletmanagerdatapb.SchemaDefinition{}
-	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest("use "+sidecar.GetIdentifier(), &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 	for _, table := range ms.TableSettings {
 		tenv.db.AddQuery(fmt.Sprintf(getNonEmptyTableQuery, table.TargetTable), &sqltypes.Result{})
@@ -4167,7 +4178,7 @@ func TestMaterializerSyntaxError(t *testing.T) {
 	tenv.tmc.tabletSchemas[sourceTabletUID] = &tabletmanagerdatapb.SchemaDefinition{}
 	tenv.tmc.tabletSchemas[targetTabletUID] = &tabletmanagerdatapb.SchemaDefinition{}
 	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, ms.TableSettings[0].CreateDdl, &sqltypes.Result{})
-	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest("use "+sidecar.GetIdentifier(), &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 	for _, table := range ms.TableSettings {
 		tenv.db.AddQuery(fmt.Sprintf(getNonEmptyTableQuery, table.TargetTable), &sqltypes.Result{})
@@ -4218,7 +4229,7 @@ func TestMaterializerNotASelect(t *testing.T) {
 	tenv.tmc.tabletSchemas[sourceTabletUID] = &tabletmanagerdatapb.SchemaDefinition{}
 	tenv.tmc.tabletSchemas[targetTabletUID] = &tabletmanagerdatapb.SchemaDefinition{}
 	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, ms.TableSettings[0].CreateDdl, &sqltypes.Result{})
-	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest("use "+sidecar.GetIdentifier(), &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 	for _, table := range ms.TableSettings {
 		tenv.db.AddQuery(fmt.Sprintf(getNonEmptyTableQuery, table.TargetTable), &sqltypes.Result{})

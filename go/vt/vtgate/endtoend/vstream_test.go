@@ -214,11 +214,13 @@ func TestVStreamCopyBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 	numExpectedEvents := 2 /* num shards */ *(7 /* begin/field/vgtid:pos/2 rowevents avg/vgitd: lastpk/commit) */ +3 /* begin/vgtid/commit for completed table */ +1 /* copy operation completed */) + 1 /* fully copy operation completed */
-	expectedCompletedEvents := []string{
-		`type:COPY_COMPLETED keyspace:"ks" shard:"-80"`,
-		`type:COPY_COMPLETED keyspace:"ks" shard:"80-"`,
-		`type:COPY_COMPLETED`,
+
+	expectedCompletedEvents := []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_COPY_COMPLETED, Keyspace: "ks", Shard: "-80"},
+		{Type: binlogdatapb.VEventType_COPY_COMPLETED, Keyspace: "ks", Shard: "80-"},
+		{Type: binlogdatapb.VEventType_COPY_COMPLETED},
 	}
+
 	require.NotNil(t, reader)
 	var evs []*binlogdatapb.VEvent
 	var completedEvs []*binlogdatapb.VEvent
@@ -239,7 +241,7 @@ func TestVStreamCopyBasic(t *testing.T) {
 			if len(evs) == numExpectedEvents {
 				sortCopyCompletedEvents(completedEvs)
 				for i, ev := range completedEvs {
-					require.Regexp(t, expectedCompletedEvents[i], ev.String())
+					require.True(t, proto.Equal(ev, expectedCompletedEvents[i]), "event: %s, expected: %s", ev.String(), expectedCompletedEvents[i].String())
 				}
 				t.Logf("TestVStreamCopyBasic was successful")
 				return
@@ -304,7 +306,7 @@ func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
 		name                    string
 		shardGtid               *binlogdatapb.ShardGtid
 		expectedEventNum        int
-		expectedCompletedEvents []string
+		expectedCompletedEvents []*binlogdatapb.VEvent
 	}{
 		{
 			name: "copy from all keyspaces",
@@ -312,12 +314,12 @@ func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
 				Keyspace: "/.*",
 			},
 			expectedEventNum: expectedKs1EventNum + expectedKs2EventNum + expectedFullyCopyCompletedNum,
-			expectedCompletedEvents: []string{
-				`type:COPY_COMPLETED keyspace:"ks" shard:"-80"`,
-				`type:COPY_COMPLETED keyspace:"ks" shard:"80-"`,
-				`type:COPY_COMPLETED keyspace:"ks2" shard:"-80"`,
-				`type:COPY_COMPLETED keyspace:"ks2" shard:"80-"`,
-				`type:COPY_COMPLETED`,
+			expectedCompletedEvents: []*binlogdatapb.VEvent{
+				{Type: binlogdatapb.VEventType_COPY_COMPLETED, Keyspace: "ks", Shard: "-80"},
+				{Type: binlogdatapb.VEventType_COPY_COMPLETED, Keyspace: "ks", Shard: "80-"},
+				{Type: binlogdatapb.VEventType_COPY_COMPLETED, Keyspace: "ks2", Shard: "-80"},
+				{Type: binlogdatapb.VEventType_COPY_COMPLETED, Keyspace: "ks2", Shard: "80-"},
+				{Type: binlogdatapb.VEventType_COPY_COMPLETED},
 			},
 		},
 		{
@@ -326,10 +328,10 @@ func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
 				Keyspace: "ks",
 			},
 			expectedEventNum: expectedKs1EventNum + expectedFullyCopyCompletedNum,
-			expectedCompletedEvents: []string{
-				`type:COPY_COMPLETED keyspace:"ks" shard:"-80"`,
-				`type:COPY_COMPLETED keyspace:"ks" shard:"80-"`,
-				`type:COPY_COMPLETED`,
+			expectedCompletedEvents: []*binlogdatapb.VEvent{
+				{Type: binlogdatapb.VEventType_COPY_COMPLETED, Keyspace: "ks", Shard: "-80"},
+				{Type: binlogdatapb.VEventType_COPY_COMPLETED, Keyspace: "ks", Shard: "80-"},
+				{Type: binlogdatapb.VEventType_COPY_COMPLETED},
 			},
 		},
 	}
@@ -361,7 +363,7 @@ func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
 					if len(evs) == c.expectedEventNum {
 						sortCopyCompletedEvents(completedEvs)
 						for i, ev := range completedEvs {
-							require.Equal(t, c.expectedCompletedEvents[i], ev.String())
+							require.True(t, proto.Equal(ev, c.expectedCompletedEvents[i]), "event: %s, expected: %s", ev.String(), c.expectedCompletedEvents[i].String())
 						}
 						t.Logf("TestVStreamCopyUnspecifiedShardGtid was successful")
 						return
@@ -449,20 +451,85 @@ func TestVStreamCopyResume(t *testing.T) {
 	expectedRowCopyEvents := 5                       // id1 and id2 IN(5,6,7,8,9)
 	expectedCatchupEvents := len(catchupQueries) - 1 // insert into t1 should never reach
 	rowCopyEvents, replCatchupEvents := 0, 0
-	expectedEvents := []string{
-		`type:ROW timestamp:[0-9]+ row_event:{table_name:"ks.t1_copy_resume" row_changes:{before:{lengths:1 lengths:1 values:"11"} after:{lengths:1 lengths:2 values:"110"}} keyspace:"ks" shard:"-80"} current_time:[0-9]+ keyspace:"ks" shard:"-80"`,
-		`type:ROW timestamp:[0-9]+ row_event:{table_name:"ks.t1_copy_resume" row_changes:{before:{lengths:1 lengths:2 values:"110"}} keyspace:"ks" shard:"-80"} current_time:[0-9]+ keyspace:"ks" shard:"-80"`,
-		`type:ROW row_event:{table_name:"ks.t1_copy_resume" row_changes:{after:{lengths:1 lengths:1 values:"55"}} keyspace:"ks" shard:"-80"} keyspace:"ks" shard:"-80"`,
-		`type:ROW row_event:{table_name:"ks.t1_copy_resume" row_changes:{after:{lengths:1 lengths:1 values:"66"}} keyspace:"ks" shard:"80-"} keyspace:"ks" shard:"80-"`,
-		`type:ROW row_event:{table_name:"ks.t1_copy_resume" row_changes:{after:{lengths:1 lengths:1 values:"77"}} keyspace:"ks" shard:"80-"} keyspace:"ks" shard:"80-"`,
-		`type:ROW row_event:{table_name:"ks.t1_copy_resume" row_changes:{after:{lengths:1 lengths:1 values:"88"}} keyspace:"ks" shard:"80-"} keyspace:"ks" shard:"80-"`,
-		`type:ROW timestamp:[0-9]+ row_event:{table_name:"ks.t1_copy_resume" row_changes:{after:{lengths:1 lengths:1 values:"99"}} keyspace:"ks" shard:"-80"} current_time:[0-9]+ keyspace:"ks" shard:"-80"`,
-		`type:ROW row_event:{table_name:"ks.t1_copy_resume" row_changes:{after:{lengths:1 lengths:2 values:"990"}} keyspace:"ks" shard:"-80"} keyspace:"ks" shard:"-80"`,
-		`type:ROW timestamp:[0-9]+ row_event:{table_name:"ks.t1_copy_resume" row_changes:{before:{lengths:1 lengths:1 values:"99"} after:{lengths:1 lengths:2 values:"990"}} keyspace:"ks" shard:"-80"} current_time:[0-9]+ keyspace:"ks" shard:"-80"`,
+
+	expectedEvents := []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_ROW, Timestamp: 1, RowEvent: &binlogdatapb.RowEvent{TableName: "ks.t1_copy_resume", RowChanges: []*binlogdatapb.RowChange{
+			{Before: &querypb.Row{Lengths: []int64{1, 1}, Values: []byte("11")}, After: &querypb.Row{Lengths: []int64{1, 2}, Values: []byte("110")}},
+		}, Keyspace: "ks", Shard: "-80"}, Keyspace: "ks", Shard: "-80", CurrentTime: 1},
+		{Type: binlogdatapb.VEventType_ROW, Timestamp: 1, RowEvent: &binlogdatapb.RowEvent{TableName: "ks.t1_copy_resume", RowChanges: []*binlogdatapb.RowChange{
+			{Before: &querypb.Row{Lengths: []int64{1, 2}, Values: []byte("110")}},
+		}, Keyspace: "ks", Shard: "-80"}, Keyspace: "ks", Shard: "-80", CurrentTime: 1},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: "ks.t1_copy_resume", RowChanges: []*binlogdatapb.RowChange{
+			{After: &querypb.Row{Lengths: []int64{1, 1}, Values: []byte("55")}},
+		}, Keyspace: "ks", Shard: "-80"}, Keyspace: "ks", Shard: "-80"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: "ks.t1_copy_resume", RowChanges: []*binlogdatapb.RowChange{
+			{After: &querypb.Row{Lengths: []int64{1, 1}, Values: []byte("66")}},
+		}, Keyspace: "ks", Shard: "80-"}, Keyspace: "ks", Shard: "80-"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: "ks.t1_copy_resume", RowChanges: []*binlogdatapb.RowChange{
+			{After: &querypb.Row{Lengths: []int64{1, 1}, Values: []byte("77")}},
+		}, Keyspace: "ks", Shard: "80-"}, Keyspace: "ks", Shard: "80-"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: "ks.t1_copy_resume", RowChanges: []*binlogdatapb.RowChange{
+			{After: &querypb.Row{Lengths: []int64{1, 1}, Values: []byte("88")}},
+		}, Keyspace: "ks", Shard: "80-"}, Keyspace: "ks", Shard: "80-"},
+		{Type: binlogdatapb.VEventType_ROW, Timestamp: 1, RowEvent: &binlogdatapb.RowEvent{TableName: "ks.t1_copy_resume", RowChanges: []*binlogdatapb.RowChange{
+			{After: &querypb.Row{Lengths: []int64{1, 1}, Values: []byte("99")}},
+		}, Keyspace: "ks", Shard: "-80"}, Keyspace: "ks", Shard: "-80", CurrentTime: 1},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: "ks.t1_copy_resume", RowChanges: []*binlogdatapb.RowChange{
+			{After: &querypb.Row{Lengths: []int64{1, 2}, Values: []byte("990")}},
+		}, Keyspace: "ks", Shard: "-80"}, Keyspace: "ks", Shard: "-80"},
+		{Type: binlogdatapb.VEventType_ROW, Timestamp: 1, RowEvent: &binlogdatapb.RowEvent{TableName: "ks.t1_copy_resume", RowChanges: []*binlogdatapb.RowChange{
+			{Before: &querypb.Row{Lengths: []int64{1, 1}, Values: []byte("99")}, After: &querypb.Row{Lengths: []int64{1, 2}, Values: []byte("990")}},
+		}, Keyspace: "ks", Shard: "-80"}, Keyspace: "ks", Shard: "-80", CurrentTime: 1},
 	}
-	redash80 := regexp.MustCompile(`(?i)type:VGTID vgtid:{shard_gtids:{keyspace:"ks" shard:"-80" gtid:".+" table_p_ks:{table_name:"t1_copy_resume" lastpk:{fields:{name:"id1" type:INT64 charset:63 flags:[0-9]+} rows:{lengths:1 values:"[0-9]"}}}} shard_gtids:{keyspace:"ks" shard:"80-" gtid:".+"}} keyspace:"ks" shard:"(-80|80-)"`)
-	re80dash := regexp.MustCompile(`(?i)type:VGTID vgtid:{shard_gtids:{keyspace:"ks" shard:"-80" gtid:".+"} shard_gtids:{keyspace:"ks" shard:"80-" gtid:".+" table_p_ks:{table_name:"t1_copy_resume" lastpk:{fields:{name:"id1" type:INT64 charset:63 flags:[0-9]+} rows:{lengths:1 values:"[0-9]"}}}}} keyspace:"ks" shard:"(-80|80-)"`)
-	both := regexp.MustCompile(`(?i)type:VGTID vgtid:{shard_gtids:{keyspace:"ks" shard:"-80" gtid:".+" table_p_ks:{table_name:"t1_copy_resume" lastpk:{fields:{name:"id1" type:INT64 charset:63 flags:[0-9]+} rows:{lengths:1 values:"[0-9]"}}}} shard_gtids:{keyspace:"ks" shard:"80-" gtid:".+" table_p_ks:{table_name:"t1_copy_resume" lastpk:{fields:{name:"id1" type:INT64 charset:63 flags:[0-9]+} rows:{lengths:1 values:"[0-9]"}}}}} keyspace:"ks" shard:"(-80|80-)"`)
+
+	vgtidLastPK := sqltypes.Result{
+		Fields: []*querypb.Field{{Name: "id1", Type: querypb.Type_INT64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_BINARY_FLAG)}},
+		Rows:   [][]sqltypes.Value{{sqltypes.NewInt64(4)}},
+	}
+
+	vgtidTablePKs := []*binlogdatapb.TableLastPK{
+		{
+			TableName: "t1_copy_resume",
+			Lastpk:    sqltypes.ResultToProto3(&vgtidLastPK),
+		},
+	}
+
+	vgtidEventDash80 := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_VGTID,
+		Vgtid: &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{
+				{Keyspace: "ks", Shard: "-80", TablePKs: vgtidTablePKs},
+				{Keyspace: "ks", Shard: "80-"},
+			},
+		}, Keyspace: "ks",
+	}
+
+	vgtidEvent80Dash := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_VGTID,
+		Vgtid: &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{
+				{Keyspace: "ks", Shard: "-80"},
+				{Keyspace: "ks", Shard: "80-", TablePKs: vgtidTablePKs},
+			},
+		}, Keyspace: "ks",
+	}
+
+	vgtidEventBoth := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_VGTID,
+		Vgtid: &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{
+				{Keyspace: "ks", Shard: "-80", TablePKs: vgtidTablePKs},
+				{Keyspace: "ks", Shard: "80-", TablePKs: vgtidTablePKs},
+			},
+		}, Keyspace: "ks",
+	}
+
+	expectedVGTIDEvents := []*binlogdatapb.VEvent{
+		vgtidEventDash80,
+		vgtidEvent80Dash,
+		vgtidEventBoth,
+	}
+
 	var evs []*binlogdatapb.VEvent
 
 	for {
@@ -490,14 +557,48 @@ func TestVStreamCopyResume(t *testing.T) {
 					// at least one shard has copied rows and thus has a full TableLastPK proto
 					// message.
 					eventStr := ev.String()
-					require.True(t, redash80.MatchString(eventStr) || re80dash.MatchString(eventStr) || both.MatchString(eventStr),
+					match := false
+
+					// Set expected event gtid, flags, and row value to actual event values as the values are not deterministic
+					for _, expectedEvent := range expectedVGTIDEvents {
+						cloneExpectedEvent := proto.Clone(expectedEvent).(*binlogdatapb.VEvent)
+						cloneExpectedEvent.Vgtid.ShardGtids[0].Gtid = ev.Vgtid.ShardGtids[0].Gtid
+						cloneExpectedEvent.Vgtid.ShardGtids[1].Gtid = ev.Vgtid.ShardGtids[1].Gtid
+						cloneExpectedEvent.Shard = ev.Shard
+						if ev.Vgtid.ShardGtids[0].TablePKs != nil && cloneExpectedEvent.Vgtid.ShardGtids[0].TablePKs != nil {
+							cloneExpectedEvent.Vgtid.ShardGtids[0].TablePKs[0].Lastpk.Rows[0].Values = ev.Vgtid.ShardGtids[0].TablePKs[0].Lastpk.Rows[0].Values
+							cloneExpectedEvent.Vgtid.ShardGtids[0].TablePKs[0].Lastpk.Fields[0].Flags = ev.Vgtid.ShardGtids[0].TablePKs[0].Lastpk.Fields[0].Flags
+						}
+						if ev.Vgtid.ShardGtids[1].TablePKs != nil && cloneExpectedEvent.Vgtid.ShardGtids[1].TablePKs != nil {
+							cloneExpectedEvent.Vgtid.ShardGtids[1].TablePKs[0].Lastpk.Rows[0].Values = ev.Vgtid.ShardGtids[1].TablePKs[0].Lastpk.Rows[0].Values
+							cloneExpectedEvent.Vgtid.ShardGtids[1].TablePKs[0].Lastpk.Fields[0].Flags = ev.Vgtid.ShardGtids[1].TablePKs[0].Lastpk.Fields[0].Flags
+						}
+						if proto.Equal(cloneExpectedEvent, ev) {
+							match = true
+							break
+						}
+					}
+
+					require.True(t, match,
 						"VGTID event does not have a complete TableLastPK proto message for either shard; event: %s", eventStr)
 				}
 			}
 			if expectedCatchupEvents == replCatchupEvents && expectedRowCopyEvents == rowCopyEvents {
 				sort.Sort(VEventSorter(evs))
 				for i, ev := range evs {
-					require.Regexp(t, expectedEvents[i], ev.String())
+					cloneExpectedEvent := proto.Clone(expectedEvents[i]).(*binlogdatapb.VEvent)
+					// The timestamp and current time are not deterministic, so we need to set them to the expected values
+					if expectedEvents[i].Timestamp != 0 {
+						cloneExpectedEvent.Timestamp = ev.Timestamp
+					}
+					if expectedEvents[i].CurrentTime != 0 {
+						cloneExpectedEvent.CurrentTime = ev.CurrentTime
+					}
+					// Clear non-deterministic fields from actual event for comparison
+					ev.CommitParent = 0
+					ev.SequenceNumber = 0
+					ev.EventGtid = ""
+					require.True(t, proto.Equal(cloneExpectedEvent, ev), "event: %s, \nexpected: %s", ev.String(), cloneExpectedEvent.String())
 				}
 				t.Logf("TestVStreamCopyResume was successful")
 				return
@@ -606,15 +707,23 @@ func TestVStreamSharded(t *testing.T) {
 	var evs []*binlogdatapb.VEvent
 
 	type expectedEvent struct {
-		ev       string
+		ev       *binlogdatapb.VEvent
 		received bool
 	}
+	// expectedEvents := []*expectedEvent{
+	// 	{`type:FIELD field_event:{table_name:"ks.t1_sharded" fields:{name:"id1" type:INT64 table:"t1_sharded" org_table:"t1_sharded" database:"vt_ks_-80" org_name:"id1" column_length:20 charset:63 flags:53251 column_type:"bigint(20)"} fields:{name:"id2" type:INT64 table:"t1_sharded" org_table:"t1_sharded" database:"vt_ks_-80" org_name:"id2" column_length:20 charset:63 flags:32768 column_type:"bigint(20)"} keyspace:"ks" shard:"-80" enum_set_string_values:true}`, false},
+	// 	{`type:ROW row_event:{table_name:"ks.t1_sharded" row_changes:{after:{lengths:1 lengths:1 values:"11"}} keyspace:"ks" shard:"-80"}`, false},
+	// 	{`type:FIELD field_event:{table_name:"ks.t1_sharded" fields:{name:"id1" type:INT64 table:"t1_sharded" org_table:"t1_sharded" database:"vt_ks_80-" org_name:"id1" column_length:20 charset:63 flags:53251 column_type:"bigint(20)"} fields:{name:"id2" type:INT64 table:"t1_sharded" org_table:"t1_sharded" database:"vt_ks_80-" org_name:"id2" column_length:20 charset:63 flags:32768 column_type:"bigint(20)"} keyspace:"ks" shard:"80-" enum_set_string_values:true}`, false},
+	// 	{`type:ROW row_event:{table_name:"ks.t1_sharded" row_changes:{after:{lengths:1 lengths:1 values:"44"}} keyspace:"ks" shard:"80-"}`, false},
+	// }
+
 	expectedEvents := []*expectedEvent{
-		{`type:FIELD field_event:{table_name:"ks.t1_sharded" fields:{name:"id1" type:INT64 table:"t1_sharded" org_table:"t1_sharded" database:"vt_ks_-80" org_name:"id1" column_length:20 charset:63 flags:53251 column_type:"bigint(20)"} fields:{name:"id2" type:INT64 table:"t1_sharded" org_table:"t1_sharded" database:"vt_ks_-80" org_name:"id2" column_length:20 charset:63 flags:32768 column_type:"bigint(20)"} keyspace:"ks" shard:"-80" enum_set_string_values:true}`, false},
-		{`type:ROW row_event:{table_name:"ks.t1_sharded" row_changes:{after:{lengths:1 lengths:1 values:"11"}} keyspace:"ks" shard:"-80"}`, false},
-		{`type:FIELD field_event:{table_name:"ks.t1_sharded" fields:{name:"id1" type:INT64 table:"t1_sharded" org_table:"t1_sharded" database:"vt_ks_80-" org_name:"id1" column_length:20 charset:63 flags:53251 column_type:"bigint(20)"} fields:{name:"id2" type:INT64 table:"t1_sharded" org_table:"t1_sharded" database:"vt_ks_80-" org_name:"id2" column_length:20 charset:63 flags:32768 column_type:"bigint(20)"} keyspace:"ks" shard:"80-" enum_set_string_values:true}`, false},
-		{`type:ROW row_event:{table_name:"ks.t1_sharded" row_changes:{after:{lengths:1 lengths:1 values:"44"}} keyspace:"ks" shard:"80-"}`, false},
+		{&binlogdatapb.VEvent{Type: binlogdatapb.VEventType_FIELD, FieldEvent: &binlogdatapb.FieldEvent{TableName: "ks.t1_sharded", Fields: []*querypb.Field{{Name: "id1", Type: querypb.Type_INT64, Table: "t1_sharded", OrgTable: "t1_sharded", Database: "vt_ks_-80", OrgName: "id1", ColumnLength: 20, Charset: 63, Flags: 53251, ColumnType: "bigint(20)"}, {Name: "id2", Type: querypb.Type_INT64, Table: "t1_sharded", OrgTable: "t1_sharded", Database: "vt_ks_-80", OrgName: "id2", ColumnLength: 20, Charset: 63, Flags: 32768, ColumnType: "bigint(20)"}}, Keyspace: "ks", Shard: "-80", EnumSetStringValues: true}}, false},
+		{&binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: "ks.t1_sharded", RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Lengths: []int64{1, 1}, Values: []byte("11")}}}, Keyspace: "ks", Shard: "-80"}}, false},
+		{&binlogdatapb.VEvent{Type: binlogdatapb.VEventType_FIELD, FieldEvent: &binlogdatapb.FieldEvent{TableName: "ks.t1_sharded", Fields: []*querypb.Field{{Name: "id1", Type: querypb.Type_INT64, Table: "t1_sharded", OrgTable: "t1_sharded", Database: "vt_ks_80-", OrgName: "id1", ColumnLength: 20, Charset: 63, Flags: 53251, ColumnType: "bigint(20)"}, {Name: "id2", Type: querypb.Type_INT64, Table: "t1_sharded", OrgTable: "t1_sharded", Database: "vt_ks_80-", OrgName: "id2", ColumnLength: 20, Charset: 63, Flags: 32768, ColumnType: "bigint(20)"}}, Keyspace: "ks", Shard: "80-", EnumSetStringValues: true}}, false},
+		{&binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: "ks.t1_sharded", RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Lengths: []int64{1, 1}, Values: []byte("44")}}}, Keyspace: "ks", Shard: "80-"}}, false},
 	}
+
 	for {
 		events, err := reader.Recv()
 		switch err {
@@ -637,7 +746,7 @@ func TestVStreamSharded(t *testing.T) {
 				for _, ev := range evs {
 					s := fmt.Sprintf("%v", ev)
 					for _, expectedEv := range expectedEvents {
-						if removeAnyDeprecatedDisplayWidths(expectedEv.ev) == removeAnyDeprecatedDisplayWidths(s) {
+						if removeAnyDeprecatedDisplayWidths(expectedEv.ev.String()) == removeAnyDeprecatedDisplayWidths(s) {
 							expectedEv.received = true
 							break
 						}
@@ -687,7 +796,7 @@ func TestVStreamCopyTransactions(t *testing.T) {
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match:  table,
-			Filter: fmt.Sprintf("select * from %s", table),
+			Filter: "select * from " + table,
 		}},
 	}
 
@@ -695,7 +804,7 @@ func TestVStreamCopyTransactions(t *testing.T) {
 	defer closeConnections()
 
 	// Clear any existing data.
-	q := fmt.Sprintf("delete from %s", table)
+	q := "delete from " + table
 	_, err := conn.ExecuteFetch(q, -1, false)
 	require.NoError(t, err, "error clearing data: %v", err)
 

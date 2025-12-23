@@ -30,7 +30,7 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-func main() { // nolint:funlen
+func main() {
 	source := pflag.String("source", "../../proto/vtctlservice", "source package")
 	typeName := pflag.String("type", "VtctldClient", "interface type to implement")
 	implType := pflag.String("impl", "gRPCVtctldClient", "type implementing the interface")

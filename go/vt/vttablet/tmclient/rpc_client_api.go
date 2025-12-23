@@ -191,6 +191,9 @@ type TabletManagerClient interface {
 	// StartReplication starts the mysql replication
 	StartReplication(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error
 
+	// RestartReplication stops and then starts the mysql replication
+	RestartReplication(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error
+
 	// StartReplicationUntilAfter starts replication until after the position specified
 	StartReplicationUntilAfter(ctx context.Context, tablet *topodatapb.Tablet, position string, duration time.Duration) error
 
@@ -251,7 +254,7 @@ type TabletManagerClient interface {
 
 	// DemotePrimary tells the soon-to-be-former primary it's going to change,
 	// and it should go read-only and return its current position.
-	DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error)
+	DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet, force bool) (*replicationdatapb.PrimaryStatus, error)
 
 	// UndoDemotePrimary reverts all changes made by DemotePrimary
 	// To be used if we are unable to promote the chosen new primary

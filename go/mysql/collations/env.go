@@ -227,8 +227,8 @@ func (env *Environment) CollationAlias(collation string) (string, bool) {
 	}
 	for _, alias := range allCols.alias {
 		for source, dest := range charsetAliases() {
-			if strings.HasPrefix(collation, fmt.Sprintf("%s_", source)) &&
-				strings.HasPrefix(alias.name, fmt.Sprintf("%s_", dest)) {
+			if strings.HasPrefix(collation, source+"_") &&
+				strings.HasPrefix(alias.name, dest+"_") {
 				return alias.name, true
 			}
 		}

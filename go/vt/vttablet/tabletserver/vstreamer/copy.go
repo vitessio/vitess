@@ -214,7 +214,7 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 	filter := uvs.plans[tableName].rule.Filter
 
 	log.Infof("Starting copyTable for %s, Filter: %s, LastPK: %v", tableName, filter, lastPK)
-	uvs.sendTestEvent(fmt.Sprintf("Copy Start %s", tableName))
+	uvs.sendTestEvent("Copy Start " + tableName)
 
 	err := uvs.vse.StreamRows(ctx, filter, lastPK, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		select {

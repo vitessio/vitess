@@ -18,6 +18,7 @@ package common
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -49,7 +50,7 @@ func GetSwitchTrafficCommand(opts *SubCommandsOpts) *cobra.Command {
 				}
 			}
 			if SwitchTrafficOptions.Timeout.Seconds() < 1 {
-				return fmt.Errorf("timeout value must be at least 1 second")
+				return errors.New("timeout value must be at least 1 second")
 			}
 			return nil
 		},

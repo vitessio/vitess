@@ -55,8 +55,8 @@ type MysqlctlProcess struct {
 func (mysqlctl *MysqlctlProcess) InitDb() (err error) {
 	args := []string{"--log_dir", mysqlctl.LogDirectory,
 		//todo: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
-		"--mysql_port", fmt.Sprintf("%d", mysqlctl.MySQLPort),
+		"--tablet_uid", strconv.Itoa(mysqlctl.TabletUID),
+		"--mysql_port", strconv.Itoa(mysqlctl.MySQLPort),
 		"init",
 	}
 	if mysqlctl.MajorVersion < 18 {
@@ -102,8 +102,8 @@ func (mysqlctl *MysqlctlProcess) startProcess(init bool) (*exec.Cmd, error) {
 		mysqlctl.Binary,
 		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--log_dir", mysqlctl.LogDirectory,
-		"--tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
-		"--mysql_port", fmt.Sprintf("%d", mysqlctl.MySQLPort),
+		"--tablet_uid", strconv.Itoa(mysqlctl.TabletUID),
+		"--mysql_port", strconv.Itoa(mysqlctl.MySQLPort),
 	)
 	if *isCoverage {
 		tmpProcess.Args = append(tmpProcess.Args, []string{"--test.coverprofile=" + getCoveragePath("mysql-start.out")}...)
@@ -232,7 +232,7 @@ func (mysqlctl *MysqlctlProcess) StopProcess() (*exec.Cmd, error) {
 		mysqlctl.Binary,
 		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--log_dir", mysqlctl.LogDirectory,
-		"--tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
+		"--tablet_uid", strconv.Itoa(mysqlctl.TabletUID),
 	)
 	if *isCoverage {
 		tmpProcess.Args = append(tmpProcess.Args, []string{"--test.coverprofile=" + getCoveragePath("mysql-stop.out")}...)

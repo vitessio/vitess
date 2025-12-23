@@ -18,6 +18,7 @@ package vstreamer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -323,7 +324,6 @@ func (plan *Plan) shouldFilter(values []sqltypes.Value, charsets []collations.ID
 // filtering cannot be performed in-place. The result argument must be a slice of
 // length equal to ColExprs
 func (plan *Plan) mapValues(values []sqltypes.Value) ([]sqltypes.Value, error) {
-
 	result := make([]sqltypes.Value, len(plan.ColExprs))
 
 	for i, colExpr := range plan.ColExprs {
@@ -521,10 +521,6 @@ func buildTablePlan(env *vtenv.Environment, ti *Table, vschema *localVSchema, qu
 	if err := plan.analyzeExprs(vschema, sel.GetColumns()); err != nil {
 		log.Errorf("%s", err.Error())
 		return nil, err
-	}
-
-	if sel.Where == nil {
-		return plan, nil
 	}
 
 	return plan, nil
@@ -900,14 +896,14 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 	case *sqlparser.Literal:
 		// allow only intval 1
 		if inner.Type != sqlparser.IntVal {
-			return ColExpr{}, fmt.Errorf("only integer literals are supported")
+			return ColExpr{}, errors.New("only integer literals are supported")
 		}
 		num, err := strconv.ParseInt(string(inner.Val), 0, 64)
 		if err != nil {
 			return ColExpr{}, err
 		}
 		if num != 1 {
-			return ColExpr{}, fmt.Errorf("only the integer literal 1 is supported")
+			return ColExpr{}, errors.New("only the integer literal 1 is supported")
 		}
 		return ColExpr{
 			Field: &querypb.Field{
@@ -1050,5 +1046,11 @@ func findColumn(ti *Table, name sqlparser.IdentifierCI) (int, error) {
 			return i, nil
 		}
 	}
-	return 0, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "column %s not found in table %s", sqlparser.String(name), ti.Name)
+	// Let's see if the Table only has TableMap event names and if so return a different error.
+	for _, col := range ti.Fields {
+		if !strings.HasPrefix(col.Name, "@") {
+			return 0, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "column %s not found in table %s", sqlparser.String(name), ti.Name)
+		}
+	}
+	return 0, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot use column names in vstream filter as the current table schema for table %s is not compatible with the current event for this table in the stream", ti.Name)
 }

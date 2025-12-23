@@ -18,6 +18,7 @@ package txserializer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -290,7 +291,7 @@ func testHTTPHandler(txs *TxSerializer, count int, redacted bool) error {
 
 	if redacted {
 		if !strings.Contains(rr.Body.String(), "/debug/hotrows has been redacted for your protection") {
-			return fmt.Errorf("expected /debug/hotrows to be redacted")
+			return errors.New("expected /debug/hotrows to be redacted")
 		}
 		return nil
 	}

@@ -100,7 +100,6 @@ func TestMain(m *testing.M) {
 		return m.Run()
 	}()
 	os.Exit(exitCode)
-
 }
 
 func TestTabletChange(t *testing.T) {

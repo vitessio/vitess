@@ -80,7 +80,6 @@ func (upd *Update) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 		return err
 	}
 	return callback(res)
-
 }
 
 // updateVindexEntries performs an update when a vindex is being modified

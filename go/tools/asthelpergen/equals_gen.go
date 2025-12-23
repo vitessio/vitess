@@ -17,7 +17,6 @@ limitations under the License.
 package asthelpergen
 
 import (
-	"fmt"
 	"go/types"
 	"strings"
 
@@ -58,7 +57,7 @@ func newEqualsGen(pkgname string, options *EqualsOptions) *equalsGen {
 }
 
 func (e *equalsGen) addFunc(name string, code *jen.Statement) {
-	e.file.Add(jen.Comment(fmt.Sprintf("%s does deep equals between the two objects.", name)))
+	e.file.Add(jen.Comment(name + " does deep equals between the two objects."))
 	e.file.Add(code)
 }
 

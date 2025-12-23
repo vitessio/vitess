@@ -18,7 +18,7 @@ package mysql
 
 import (
 	"encoding/binary"
-	"fmt"
+	"errors"
 
 	"vitess.io/vitess/go/mysql/replication"
 )
@@ -54,7 +54,7 @@ func (*filePosBinlogEvent) IsGTID() bool {
 }
 
 func (*filePosBinlogEvent) PreviousGTIDs(BinlogFormat) (replication.Position, error) {
-	return replication.Position{}, fmt.Errorf("filePos should not provide PREVIOUS_GTIDS_EVENT events")
+	return replication.Position{}, errors.New("filePos should not provide PREVIOUS_GTIDS_EVENT events")
 }
 
 // StripChecksum implements BinlogEvent.StripChecksum().

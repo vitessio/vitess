@@ -18,7 +18,6 @@ package zk2topo
 
 import (
 	"context"
-	"fmt"
 	"path"
 	"time"
 
@@ -74,7 +73,7 @@ func (zs *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.L
 		// https://github.com/vitessio/vitess/blob/main/go/vt/topo/zk2topo/utils.go#L55
 		// TODO: Fix/send ephemeral flag value recursively while creating ephemeral file
 		if e.Name == locksPath && e.Type == topo.TypeDirectory {
-			return nil, topo.NewError(topo.NodeExists, fmt.Sprintf("lock already exists at path %s", dirPath))
+			return nil, topo.NewError(topo.NodeExists, "lock already exists at path "+dirPath)
 		}
 	}
 

@@ -18,7 +18,6 @@ package engine
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -44,7 +43,7 @@ var databaseCreatorPlugins = map[string]DBDDLPlugin{}
 // A duplicate plugin will generate a panic.
 func DBDDLRegister(name string, plugin DBDDLPlugin) {
 	if _, ok := databaseCreatorPlugins[name]; ok {
-		panic(fmt.Sprintf("%s is already registered", name))
+		panic(name + " is already registered")
 	}
 	databaseCreatorPlugins[name] = plugin
 }

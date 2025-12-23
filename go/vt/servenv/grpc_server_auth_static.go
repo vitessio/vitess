@@ -19,6 +19,7 @@ package servenv
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 
@@ -99,7 +100,7 @@ func newStaticAuthContext(ctx context.Context, username string) context.Context 
 func staticAuthPluginInitializer() (Authenticator, error) {
 	entries := make([]StaticAuthConfigEntry, 0)
 	if credsFile == "" {
-		err := fmt.Errorf("failed to load static auth plugin. Plugin configured but grpc-auth-static-password-file not provided")
+		err := errors.New("failed to load static auth plugin. Plugin configured but grpc-auth-static-password-file not provided")
 		return nil, err
 	}
 

@@ -753,7 +753,7 @@
           "Sharded": true
         },
         "FieldQuery": "select 1 from `user` as u, user_extra as ue, ref_with_source as sr, ref as rr where 1 != 1",
-        "Query": "select 1 from `user` as u, user_extra as ue, ref_with_source as sr, ref as rr where rr.bar = sr.bar and u.id = ue.user_id and sr.foo = ue.foo"
+        "Query": "select 1 from `user` as u, user_extra as ue, ref_with_source as sr, ref as rr where u.id = ue.user_id and rr.bar = sr.bar and sr.foo = ue.foo"
       },
       "TablesUsed": [
         "user.ref",

@@ -17,7 +17,6 @@ limitations under the License.
 package evalengine
 
 import (
-	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -359,7 +358,7 @@ func (ast *astCompiler) translateIntroducerExpr(introduced *sqlparser.Introducer
 	} else {
 		defaultCollation := ast.cfg.Environment.CollationEnv().DefaultCollationForCharset(introduced.CharacterSet[1:])
 		if defaultCollation == collations.Unknown {
-			panic(fmt.Sprintf("unknown character set: %s", introduced.CharacterSet))
+			panic("unknown character set: " + introduced.CharacterSet)
 		}
 		collation = defaultCollation
 	}

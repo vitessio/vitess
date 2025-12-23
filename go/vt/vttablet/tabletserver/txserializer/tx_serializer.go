@@ -132,7 +132,6 @@ func New(env tabletenv.Env) *TxSerializer {
 		queues:                       make(map[string]*queue),
 		redactUIQuery:                streamlog.NewQueryLogConfigForTest().RedactDebugUIQueries,
 	}
-
 }
 
 // DoneFunc is returned by Wait() and must be called by the caller.

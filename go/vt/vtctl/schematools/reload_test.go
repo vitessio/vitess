@@ -18,6 +18,7 @@ package schematools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -67,7 +68,7 @@ func (tmc *reloadSchemaTMC) ReloadSchema(ctx context.Context, tablet *topodatapb
 	}()
 
 	if tmc.results == nil {
-		return fmt.Errorf("no results set on reloadSchemaTMC")
+		return errors.New("no results set on reloadSchemaTMC")
 	}
 
 	key := topoproto.TabletAliasString(tablet.Alias)

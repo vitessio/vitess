@@ -845,7 +845,7 @@ func TestVSchemaUpdateWithFKReferenceToInternalTables(t *testing.T) {
 			Columns: cols1,
 			ForeignKeys: []*sqlparser.ForeignKeyDefinition{
 				createFkDefinition([]string{"id"}, "t1", []string{"id"}, sqlparser.Cascade, sqlparser.SetNull),
-				createFkDefinition([]string{"id"}, "_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410", []string{"id"}, sqlparser.Cascade, sqlparser.SetNull),
+				createFkDefinition([]string{"id"}, "_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_", []string{"id"}, sqlparser.Cascade, sqlparser.SetNull),
 			},
 		},
 	}}
@@ -940,7 +940,6 @@ func TestForeignKeyRoutingRules(t *testing.T) {
 	assert.Equal(t, "targetKs.t2", targetTables["t1"].ChildForeignKeys[0].Table.String())
 	assert.Len(t, targetTables["t2"].ParentForeignKeys, 1, "target child table should have parent FK")
 	assert.Equal(t, "targetKs.t1", targetTables["t2"].ParentForeignKeys[0].Table.String())
-
 }
 
 func createTableInfoWithFK(fkTarget string) *vindexes.TableInfo {

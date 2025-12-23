@@ -61,7 +61,7 @@ type ConsulDiscovery struct {
 // NewConsul returns a ConsulDiscovery for the given cluster. Args are a slice
 // of command-line flags (e.g. "-key=value") that are parsed by a consul-
 // specific flag set.
-func NewConsul(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []string) (Discovery, error) { // nolint:funlen
+func NewConsul(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []string) (Discovery, error) {
 	c, err := consul.NewClient(consul.DefaultConfig())
 	if err != nil {
 		return nil, err
@@ -468,7 +468,7 @@ type ConsulClient interface {
 // ConsulHealth defines an interface for the subset of the (*consul.Health) struct
 // used by discovery, so we can swap in an implementation for testing.
 type ConsulHealth interface {
-	ServiceMultipleTags(service string, tags []string, passingOnly bool, q *consul.QueryOptions) ([]*consul.ServiceEntry, *consul.QueryMeta, error) // nolint:lll
+	ServiceMultipleTags(service string, tags []string, passingOnly bool, q *consul.QueryOptions) ([]*consul.ServiceEntry, *consul.QueryMeta, error)
 }
 
 // consulClient is our shim wrapper around the upstream consul client.

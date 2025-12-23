@@ -629,7 +629,7 @@ func TestPlayerStatementModeWithFilterAndErrorHandling(t *testing.T) {
 	// It does not work when filter is enabled
 	output := qh.Expect(
 		"rollback",
-		fmt.Sprintf("/update _vt.vreplication set message='%s", expectedMsg),
+		"/update _vt.vreplication set message='"+expectedMsg,
 	)
 
 	execStatements(t, input)
@@ -3089,7 +3089,6 @@ func TestPlayerJSONTwoColumns(t *testing.T) {
 			expectJSON(t, "vitess_json2", tcase.data, id, env.Mysqld.FetchSuperQuery)
 		})
 	}
-
 }
 
 func TestVReplicationLogs(t *testing.T) {
@@ -3113,7 +3112,6 @@ func TestVReplicationLogs(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, want, fmt.Sprintf("%v", qr.Rows))
 		})
-
 	}
 }
 

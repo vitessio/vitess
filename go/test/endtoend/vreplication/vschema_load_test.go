@@ -36,14 +36,13 @@ import (
 // TestVSchemaChangesUnderLoad tests vstreamer under a load of high binlog events and simultaneous multiple vschema changes
 // see https://github.com/vitessio/vitess/issues/11169
 func TestVSchemaChangesUnderLoad(t *testing.T) {
-
 	extendedTimeout := defaultTimeout * 4
 
 	vc = NewVitessCluster(t, nil)
 	defer vc.TearDown()
 
 	defaultCell := vc.Cells[vc.CellNames[0]]
-	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, 1, 0, 100, sourceKsOpts)
+	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, 1, 0, 100, defaultSourceKsOpts)
 
 	vtgateConn := vc.GetVTGateConn(t)
 	defer vtgateConn.Close()

@@ -222,11 +222,9 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitcode)
 	}
-
 }
 
 func TestVreplMiniStressSchemaChanges(t *testing.T) {
-
 	ctx := context.Background()
 
 	shards = clusterInstance.Keyspaces[0].Shards

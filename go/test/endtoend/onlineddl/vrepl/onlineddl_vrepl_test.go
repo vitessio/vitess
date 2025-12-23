@@ -220,11 +220,9 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitcode)
 	}
-
 }
 
 func TestVreplSchemaChanges(t *testing.T) {
-
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 2, len(shards))
 	for _, shard := range shards {
@@ -527,7 +525,6 @@ func TestVreplSchemaChanges(t *testing.T) {
 		currentPrimaryTablet := shards[0].Vttablets[currentPrimaryTabletIndex]
 		reparentTablet := shards[0].Vttablets[1-currentPrimaryTabletIndex]
 		t.Run(fmt.Sprintf("PlannedReparentShard via throttling %d/2", (currentPrimaryTabletIndex+1)), func(t *testing.T) {
-
 			insertRows(t, 2)
 			_, err = throttler.ThrottleAppAndWaitUntilTabletsConfirm(t, clusterInstance, throttlerapp.OnlineDDLName)
 			assert.NoError(t, err)
@@ -625,7 +622,6 @@ func TestVreplSchemaChanges(t *testing.T) {
 		reparentTablet := shards[0].Vttablets[1-currentPrimaryTabletIndex]
 
 		t.Run(fmt.Sprintf("PlannedReparentShard via postponed %d/2", (currentPrimaryTabletIndex+1)), func(t *testing.T) {
-
 			insertRows(t, 2)
 
 			uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess --postpone-completion", providedUUID, providedMigrationContext, "vtgate", "test_val", "", true)

@@ -712,6 +712,18 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 			},
 		}, nil
 
+	case *sqlparser.JSONRemoveExpr:
+		args, err := ast.translateFuncArgs(append([]sqlparser.Expr{call.JSONDoc}, call.PathList...))
+		if err != nil {
+			return nil, err
+		}
+		return &builtinJSONRemove{
+			CallExpr: CallExpr{
+				Arguments: args,
+				Method:    "JSON_REMOVE",
+			},
+		}, nil
+
 	case *sqlparser.JSONUnquoteExpr:
 		arg, err := ast.translateExpr(call.JSONValue)
 		if err != nil {

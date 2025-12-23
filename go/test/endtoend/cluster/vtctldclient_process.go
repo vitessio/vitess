@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os/exec"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -159,7 +160,7 @@ func (vtctldclient *VtctldClientProcess) ApplySchemaWithOutput(keyspace string, 
 		args = append(args, "--uuid", params.UUIDs)
 	}
 	if params.BatchSize > 0 {
-		args = append(args, "--batch-size", fmt.Sprintf("%d", params.BatchSize))
+		args = append(args, "--batch-size", strconv.Itoa(params.BatchSize))
 	}
 	if params.CallerID != "" {
 		args = append(args, "--caller-id", params.CallerID)

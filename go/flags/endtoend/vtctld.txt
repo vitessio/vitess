@@ -52,6 +52,7 @@ Flags:
       --consul-auth-static-file string                                   JSON File to read the topos/tokens from.
       --datadog-agent-host string                                        host to send spans to. if empty, no tracing will be done
       --datadog-agent-port string                                        port to send spans to. if empty, no tracing will be done
+      --datadog-trace-debug-mode                                         enable debug mode for datadog tracing
       --disable-active-reparents                                         if set, do not allow active reparents. Use this to protect a cluster using external reparents.
       --emit-stats                                                       If set, emit stats to push-based monitoring and stats backends
       --file-backup-storage-root string                                  Root directory for the file backup storage.

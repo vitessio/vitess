@@ -245,7 +245,7 @@ func (logger *StreamLogger[T]) LogToFile(path string, logf LogFormatter) (chan T
 		for {
 			select {
 			case record := <-logChan:
-				logf(f, formatParams, record) // nolint:errcheck
+				logf(f, formatParams, record) //nolint:errcheck
 			case <-rotateChan:
 				f.Close()
 				f, _ = os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)

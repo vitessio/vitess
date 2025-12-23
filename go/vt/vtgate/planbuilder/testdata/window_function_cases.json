@@ -1,0 +1,1181 @@
+[
+  {
+    "comment": "Aggregate Window Function: SUM over all rows (Global Sum) - https://dev.mysql.com/doc/refman/8.0/en/window-functions-usage.html",
+    "query": "select sum(intcol) over () from user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Aggregate Window Function: SUM partitioned by column - https://dev.mysql.com/doc/refman/8.0/en/window-functions-usage.html",
+    "query": "select sum(intcol) over (partition by textcol1) from user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Aggregate Window Function: SUM ordered by column (Running Total) - https://dev.mysql.com/doc/refman/8.0/en/window-functions-usage.html",
+    "query": "select sum(intcol) over (order by Id) from user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Aggregate Window Function: SUM partitioned and ordered - https://dev.mysql.com/doc/refman/8.0/en/window-functions-usage.html",
+    "query": "select sum(intcol) over (partition by textcol1 order by Id) from user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Aggregate Window Function: AVG with window frame - https://dev.mysql.com/doc/refman/8.0/en/window-functions-frames.html",
+    "query": "select avg(intcol) over (partition by textcol1 order by Id rows between 1 preceding and 1 following) from user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Non-Aggregate Window Function: ROW_NUMBER - https://dev.mysql.com/doc/refman/8.0/en/window-function-descriptions.html#function_row-number",
+    "query": "select row_number() over (order by Id) from user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Non-Aggregate Window Function: RANK - https://dev.mysql.com/doc/refman/8.0/en/window-function-descriptions.html#function_rank",
+    "query": "select rank() over (order by intcol) from user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Non-Aggregate Window Function: DENSE_RANK - https://dev.mysql.com/doc/refman/8.0/en/window-function-descriptions.html#function_dense-rank",
+    "query": "select dense_rank() over (order by intcol) from user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Non-Aggregate Window Function: PERCENT_RANK - https://dev.mysql.com/doc/refman/8.0/en/window-function-descriptions.html#function_percent-rank",
+    "query": "select percent_rank() over (order by intcol) from user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Non-Aggregate Window Function: CUME_DIST - https://dev.mysql.com/doc/refman/8.0/en/window-function-descriptions.html#function_cume-dist",
+    "query": "select cume_dist() over (order by intcol) from user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Non-Aggregate Window Function: NTILE - https://dev.mysql.com/doc/refman/8.0/en/window-function-descriptions.html#function_ntile",
+    "query": "select ntile(4) over (order by Id) from user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Non-Aggregate Window Function: LAG - https://dev.mysql.com/doc/refman/8.0/en/window-function-descriptions.html#function_lag",
+    "query": "select lag(intcol, 1, 0) over (order by Id) from user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Non-Aggregate Window Function: LEAD - https://dev.mysql.com/doc/refman/8.0/en/window-function-descriptions.html#function_lead",
+    "query": "select lead(intcol, 1, 0) over (order by Id) from user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Non-Aggregate Window Function: FIRST_VALUE - https://dev.mysql.com/doc/refman/8.0/en/window-function-descriptions.html#function_first-value",
+    "query": "select first_value(textcol1) over (order by Id) from user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Non-Aggregate Window Function: LAST_VALUE - https://dev.mysql.com/doc/refman/8.0/en/window-function-descriptions.html#function_last-value",
+    "query": "select last_value(textcol1) over (order by Id) from user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Non-Aggregate Window Function: NTH_VALUE - https://dev.mysql.com/doc/refman/8.0/en/window-function-descriptions.html#function_nth-value",
+    "query": "select nth_value(textcol1, 2) over (order by Id) from user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Named Window - https://dev.mysql.com/doc/refman/8.0/en/window-functions-named-windows.html",
+    "query": "select sum(intcol) over w from user window w as (partition by textcol1 order by Id)",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Window Function on Unsharded Table - https://dev.mysql.com/doc/refman/8.0/en/window-functions-usage.html",
+    "query": "select sum(predef1) over (partition by predef1) from unsharded",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select sum(predef1) over (partition by predef1) from unsharded",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select sum(predef1) over (partition by predef1) from unsharded where 1 != 1",
+        "Query": "select sum(predef1) over (partition by predef1) from unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "Window Function in Subquery (Unsharded) - https://dev.mysql.com/doc/refman/8.0/en/window-functions-usage.html",
+    "query": "select * from (select sum(predef1) over (partition by predef1) as s from unsharded) as t",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select * from (select sum(predef1) over (partition by predef1) as s from unsharded) as t",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select * from (select sum(predef1) over (partition by predef1) as s from unsharded where 1 != 1) as t where 1 != 1",
+        "Query": "select * from (select sum(predef1) over (partition by predef1) as s from unsharded) as t"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "Window Function in Subquery (Sharded, Single Shard) - https://dev.mysql.com/doc/refman/8.0/en/window-functions-usage.html",
+    "query": "select * from (select sum(intcol) over (partition by textcol1) as s from user where Id = 1) as t",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select * from (select sum(intcol) over (partition by textcol1) as s from user where Id = 1) as t",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select s from (select sum(intcol) over (partition by textcol1) as s from `user` where 1 != 1) as t where 1 != 1",
+        "Query": "select s from (select sum(intcol) over (partition by textcol1) as s from `user` where Id = 1) as t",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Window Function with Frame: ROWS UNBOUNDED PRECEDING - https://dev.mysql.com/doc/refman/8.0/en/window-functions-frames.html",
+    "query": "select sum(intcol) over (order by Id rows unbounded preceding) from user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Window Function with Frame: RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW - https://dev.mysql.com/doc/refman/8.0/en/window-functions-frames.html",
+    "query": "select sum(intcol) over (order by Id range between unbounded preceding and current row) from user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Multiple Window Functions - https://dev.mysql.com/doc/refman/8.0/en/window-functions-usage.html",
+    "query": "select sum(intcol) over (partition by textcol1), avg(intcol) over (partition by textcol1) from user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Window Function with Alias - https://dev.mysql.com/doc/refman/8.0/en/window-functions-usage.html",
+    "query": "select sum(intcol) over (partition by textcol1) as s from user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Window Function on Reference Table - Should be supported",
+    "query": "select sum(col) over (partition by col) from ref",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select sum(col) over (partition by col) from ref",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select sum(col) over (partition by col) from ref where 1 != 1",
+        "Query": "select sum(col) over (partition by col) from ref"
+      },
+      "TablesUsed": [
+        "user.ref"
+      ]
+    }
+  },
+  {
+    "comment": "Window Function on Sharded Table with Single Shard Targeting - Should be supported",
+    "query": "select sum(intcol) over (partition by textcol1) from user where Id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select sum(intcol) over (partition by textcol1) from user where Id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select sum(intcol) over (partition by textcol1) from `user` where 1 != 1",
+        "Query": "select sum(intcol) over (partition by textcol1) from `user` where Id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Single Shard - Rank",
+    "query": "select rank() over (order by col) from user where Id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select rank() over (order by col) from user where Id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select rank() over (order by col asc) from `user` where 1 != 1",
+        "Query": "select rank() over (order by col asc) from `user` where Id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Single Shard - RowNumber",
+    "query": "select row_number() over () from user where Id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select row_number() over () from user where Id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select row_number() over () from `user` where 1 != 1",
+        "Query": "select row_number() over () from `user` where Id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Single Shard - DenseRank",
+    "query": "select dense_rank() over (order by col) from user where Id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select dense_rank() over (order by col) from user where Id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select dense_rank() over (order by col asc) from `user` where 1 != 1",
+        "Query": "select dense_rank() over (order by col asc) from `user` where Id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Single Shard - Avg Partition By Order By Rows",
+    "query": "select avg(col) over (partition by textcol1 order by col rows between 1 preceding and 1 following) from user where Id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select avg(col) over (partition by textcol1 order by col rows between 1 preceding and 1 following) from user where Id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select avg(col) over (partition by textcol1 order by col asc rows between 1 preceding and 1 following) from `user` where 1 != 1",
+        "Query": "select avg(col) over (partition by textcol1 order by col asc rows between 1 preceding and 1 following) from `user` where Id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Single Shard - Lead",
+    "query": "select lead(col, 1) over (order by col) from user where Id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select lead(col, 1) over (order by col) from user where Id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select lead(col, 1) over (order by col asc) from `user` where 1 != 1",
+        "Query": "select lead(col, 1) over (order by col asc) from `user` where Id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Single Shard - Lag",
+    "query": "select lag(col, 1) over (order by col) from user where Id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select lag(col, 1) over (order by col) from user where Id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select lag(col, 1) over (order by col asc) from `user` where 1 != 1",
+        "Query": "select lag(col, 1) over (order by col asc) from `user` where Id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Single Shard - FirstValue",
+    "query": "select first_value(col) over (order by col) from user where Id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select first_value(col) over (order by col) from user where Id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select first_value(col) over (order by col asc) from `user` where 1 != 1",
+        "Query": "select first_value(col) over (order by col asc) from `user` where Id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Single Shard - LastValue",
+    "query": "select last_value(col) over (order by col) from user where Id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select last_value(col) over (order by col) from user where Id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select last_value(col) over (order by col asc) from `user` where 1 != 1",
+        "Query": "select last_value(col) over (order by col asc) from `user` where Id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Single Shard - NthValue",
+    "query": "select nth_value(col, 2) over (order by col) from user where Id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select nth_value(col, 2) over (order by col) from user where Id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select nth_value(col, 2) over (order by col asc) from `user` where 1 != 1",
+        "Query": "select nth_value(col, 2) over (order by col asc) from `user` where Id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Single Shard - Ntile",
+    "query": "select ntile(4) over (order by col) from user where Id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select ntile(4) over (order by col) from user where Id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select ntile(4) over (order by col asc) from `user` where 1 != 1",
+        "Query": "select ntile(4) over (order by col asc) from `user` where Id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Single Shard - Multiple Windows",
+    "query": "select rank() over (order by col), row_number() over (partition by textcol1) from user where Id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select rank() over (order by col), row_number() over (partition by textcol1) from user where Id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select rank() over (order by col asc), row_number() over (partition by textcol1) from `user` where 1 != 1",
+        "Query": "select rank() over (order by col asc), row_number() over (partition by textcol1) from `user` where Id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Single Shard - Range Frame",
+    "query": "select count(*) over (order by col range between unbounded preceding and current row) from user where Id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select count(*) over (order by col range between unbounded preceding and current row) from user where Id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select count(*) over (order by col asc range between unbounded preceding and current row) from `user` where 1 != 1",
+        "Query": "select count(*) over (order by col asc range between unbounded preceding and current row) from `user` where Id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Single Shard - Named Window",
+    "query": "select rank() over w from user where Id = 1 window w as (order by col)",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select rank() over w from user where Id = 1 window w as (order by col)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select rank() over w from `user` where 1 != 1",
+        "Query": "select rank() over w from `user` where Id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Single Shard - Window in ORDER BY",
+    "query": "select col from user where Id = 1 order by rank() over (order by col)",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select col from user where Id = 1 order by rank() over (order by col)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "Query": "select col from `user` where Id = 1 order by rank() over (order by col asc) asc",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Single Shard - Window with GROUP BY",
+    "query": "select col, count(*) from user where Id = 1 group by col order by rank() over (order by count(*))",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select col, count(*) from user where Id = 1 group by col order by rank() over (order by count(*))",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col, count(*) from `user` where 1 != 1 group by col",
+        "Query": "select col, count(*) from `user` where Id = 1 group by col order by rank() over (order by count(*) asc) asc",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Single Shard - Window with DISTINCT",
+    "query": "select distinct col, rank() over (order by col) from user where Id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select distinct col, rank() over (order by col) from user where Id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col, rank() over (order by col asc) from `user` where 1 != 1",
+        "Query": "select distinct col, rank() over (order by col asc) from `user` where Id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Single Shard - Window with LIMIT",
+    "query": "select rank() over (order by col) from user where Id = 1 limit 5",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select rank() over (order by col) from user where Id = 1 limit 5",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select rank() over (order by col asc) from `user` where 1 != 1",
+        "Query": "select rank() over (order by col asc) from `user` where Id = 1 limit 5",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Authoritative Table - Partition By Primary Vindex",
+    "query": "select rank() over (partition by user_id) from authoritative",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select rank() over (partition by user_id) from authoritative",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select rank() over (partition by user_id) from authoritative where 1 != 1",
+        "Query": "select rank() over (partition by user_id) from authoritative"
+      },
+      "TablesUsed": [
+        "user.authoritative"
+      ]
+    }
+  },
+  {
+    "comment": "Authoritative Table - Partition By Primary Vindex and Valid Column",
+    "query": "select rank() over (partition by user_id, col1) from authoritative",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select rank() over (partition by user_id, col1) from authoritative",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select rank() over (partition by user_id, col1) from authoritative where 1 != 1",
+        "Query": "select rank() over (partition by user_id, col1) from authoritative"
+      },
+      "TablesUsed": [
+        "user.authoritative"
+      ]
+    }
+  },
+  {
+    "comment": "Multi-Shard - IN clause with Partition By Primary Vindex",
+    "query": "SELECT id, intcol, ROW_NUMBER() OVER (PARTITION BY id ORDER BY intcol) as rn FROM user WHERE id IN (1,2,3,4)",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "SELECT",
+      "Original": "SELECT id, intcol, ROW_NUMBER() OVER (PARTITION BY id ORDER BY intcol) as rn FROM user WHERE id IN (1,2,3,4)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, intcol, row_number() over (partition by id order by intcol asc) as rn from `user` where 1 != 1",
+        "Query": "select id, intcol, row_number() over (partition by id order by intcol asc) as rn from `user` where id in ::__vals",
+        "Values": [
+          "(1, 2, 3, 4)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Multi-Shard - IN clause with Partition By Primary Vindex and Additional Column",
+    "query": "SELECT id, textcol1, intcol, RANK() OVER (PARTITION BY id, textcol1 ORDER BY intcol) as rnk FROM user WHERE id IN (1,2)",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "SELECT",
+      "Original": "SELECT id, textcol1, intcol, RANK() OVER (PARTITION BY id, textcol1 ORDER BY intcol) as rnk FROM user WHERE id IN (1,2)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, textcol1, intcol, rank() over (partition by id, textcol1 order by intcol asc) as rnk from `user` where 1 != 1",
+        "Query": "select id, textcol1, intcol, rank() over (partition by id, textcol1 order by intcol asc) as rnk from `user` where id in ::__vals",
+        "Values": [
+          "(1, 2)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Scatter - Partition by Primary Vindex (Authoritative Table allows push-down)",
+    "query": "SELECT user_id, DENSE_RANK() OVER (PARTITION BY user_id ORDER BY col1) as dr FROM authoritative",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "SELECT user_id, DENSE_RANK() OVER (PARTITION BY user_id ORDER BY col1) as dr FROM authoritative",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_id, dense_rank() over (partition by user_id order by col1 asc) as dr from authoritative where 1 != 1",
+        "Query": "select user_id, dense_rank() over (partition by user_id order by col1 asc) as dr from authoritative"
+      },
+      "TablesUsed": [
+        "user.authoritative"
+      ]
+    }
+  },
+  {
+    "comment": "Scatter - Partition by Non-Vindex Column (should be rejected)",
+    "query": "SELECT Id, textcol1, ROW_NUMBER() OVER (PARTITION BY textcol1 ORDER BY intcol) as rn FROM user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Scatter - No PARTITION BY (Global window, should be rejected)",
+    "query": "SELECT Id, ROW_NUMBER() OVER (ORDER BY intcol) as rn FROM user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Scatter - Partition by Expression (should be rejected)",
+    "query": "SELECT Id, intcol, SUM(intcol) OVER (PARTITION BY intcol % 2 ORDER BY Id) as s FROM user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "IN clause - Partition by Non-Vindex Column (should be rejected)",
+    "query": "SELECT Id, textcol1, LAG(intcol) OVER (PARTITION BY textcol1 ORDER BY intcol) as lag_val FROM user WHERE Id IN (1,2,3)",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Scatter - Between Route would also need partition by primary vindex",
+    "query": "SELECT id, intcol, RANK() OVER (PARTITION BY id ORDER BY intcol) as rnk FROM user WHERE id BETWEEN 1 AND 10",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "SELECT id, intcol, RANK() OVER (PARTITION BY id ORDER BY intcol) as rnk FROM user WHERE id BETWEEN 1 AND 10",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, intcol, rank() over (partition by id order by intcol asc) as rnk from `user` where 1 != 1",
+        "Query": "select id, intcol, rank() over (partition by id order by intcol asc) as rnk from `user` where id between 1 and 10"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Single Shard - HAVING with Window Function - HAVING must be applied before window function execution",
+    "query": "SELECT id, SUM(intcol) as sum_val, ROW_NUMBER() OVER (ORDER BY sum_val) as rn FROM user WHERE id = 1 GROUP BY id HAVING SUM(intcol) > 0",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "SELECT id, SUM(intcol) as sum_val, ROW_NUMBER() OVER (ORDER BY sum_val) as rn FROM user WHERE id = 1 GROUP BY id HAVING SUM(intcol) > 0",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, sum(intcol) as sum_val, row_number() over (order by sum_val asc) as rn from `user` where 1 != 1 group by id",
+        "Query": "select id, sum(intcol) as sum_val, row_number() over (order by sum_val asc) as rn from `user` where id = 1 group by id having sum(intcol) > 0",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Single Shard - Qualified Column Name with Alias (table.column syntax)",
+    "query": "select u.id, rank() over (order by u.col) from user u where u.id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select u.id, rank() over (order by u.col) from user u where u.id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.id, rank() over (order by u.col asc) from `user` as u where 1 != 1",
+        "Query": "select u.id, rank() over (order by u.col asc) from `user` as u where u.id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Scatter with Qualified Column Partition By Primary Vindex",
+    "query": "select a.user_id, row_number() over (partition by a.user_id order by a.col1) from authoritative a",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select a.user_id, row_number() over (partition by a.user_id order by a.col1) from authoritative a",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a.user_id, row_number() over (partition by a.user_id order by a.col1 asc) from authoritative as a where 1 != 1",
+        "Query": "select a.user_id, row_number() over (partition by a.user_id order by a.col1 asc) from authoritative as a"
+      },
+      "TablesUsed": [
+        "user.authoritative"
+      ]
+    }
+  },
+  {
+    "comment": "Multi-Shard - Partition by Multiple Columns including Primary Vindex",
+    "query": "select id, textcol1, rank() over (partition by id, textcol1 order by col) from user where id in (1,2)",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "SELECT",
+      "Original": "select id, textcol1, rank() over (partition by id, textcol1 order by col) from user where id in (1,2)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, textcol1, rank() over (partition by id, textcol1 order by col asc) from `user` where 1 != 1",
+        "Query": "select id, textcol1, rank() over (partition by id, textcol1 order by col asc) from `user` where id in ::__vals",
+        "Values": [
+          "(1, 2)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Single Shard EqualUnique - Window with ORDER BY only (no PARTITION BY)",
+    "query": "select id, col, rank() over (order by intcol) from user where id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select id, col, rank() over (order by intcol) from user where id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, col, rank() over (order by intcol asc) from `user` where 1 != 1",
+        "Query": "select id, col, rank() over (order by intcol asc) from `user` where id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Single Shard - Multiple Window Functions with Different PARTITION BY",
+    "query": "select id, rank() over (partition by col), row_number() over (partition by textcol1) from user where id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select id, rank() over (partition by col), row_number() over (partition by textcol1) from user where id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, rank() over (partition by col), row_number() over (partition by textcol1) from `user` where 1 != 1",
+        "Query": "select id, rank() over (partition by col), row_number() over (partition by textcol1) from `user` where id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Unsharded - Multiple Window Functions",
+    "query": "select predef1, rank() over (partition by predef1), row_number() over (order by predef3) from unsharded",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select predef1, rank() over (partition by predef1), row_number() over (order by predef3) from unsharded",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select predef1, rank() over (partition by predef1), row_number() over (order by predef3 asc) from unsharded where 1 != 1",
+        "Query": "select predef1, rank() over (partition by predef1), row_number() over (order by predef3 asc) from unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "Window Function on Sharded Join - Cross-Shard Join (should be rejected)",
+    "query": "select a.id, row_number() over (partition by a.id order by b.intcol) from user a, user b where a.id = ? and b.id = ?",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Window Function on Sharded Join - Partition by Non-Vindex Column (should be rejected)",
+    "query": "select a.id, row_number() over (partition by a.textcol1 order by b.intcol) from user a, user b where a.id = ? and b.id = ?",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Window Function on Sharded Join - No PARTITION BY (Global Window, should be rejected)",
+    "query": "select a.id, row_number() over (order by a.intcol) from user a, user b where a.id = ? and b.id = ?",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Window Function on Self-Join - Same Table with Different Aliases (should be rejected)",
+    "query": "select e.id, s.id, row_number() over (partition by e.age order by s.textcol1 desc) as age_rank from user e, user s where e.id = ? and s.id = ?",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Window Function on Three-Way Sharded Join (should be rejected)",
+    "query": "select a.id, row_number() over (partition by a.id order by b.intcol) from user a, user b, user c where a.id = ? and b.id = ? and c.id = ?",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Window Function on Sharded Join - Multiple Window Functions (should be rejected)",
+    "query": "select a.id, row_number() over (order by a.intcol) as rn, rank() over (partition by a.textcol1 order by b.intcol) as rnk from user a, user b where a.id = ? and b.id = ?",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "UNION: Both branches single-shard EqualUnique (WORKS - window partitioned by primary vindex)",
+    "query": "select Id, intcol, row_number() over (partition by Id order by intcol) as rn from user where Id = 1 union all select Id, intcol, row_number() over (partition by Id order by intcol) as rn from user where Id = 2",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select Id, intcol, row_number() over (partition by Id order by intcol) as rn from user where Id = 1 union all select Id, intcol, row_number() over (partition by Id order by intcol) as rn from user where Id = 2",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select Id, intcol, row_number() over (partition by Id order by intcol asc) as rn from `user` where 1 != 1",
+            "Query": "select Id, intcol, row_number() over (partition by Id order by intcol asc) as rn from `user` where Id = 1",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select Id, intcol, row_number() over (partition by Id order by intcol asc) as rn from `user` where 1 != 1",
+            "Query": "select Id, intcol, row_number() over (partition by Id order by intcol asc) as rn from `user` where Id = 2",
+            "Values": [
+              "2"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "UNION: Both branches unsharded (WORKS - window on unsharded)",
+    "query": "select predef1, row_number() over (partition by predef1 order by predef1) as rn from unsharded union all select predef1, row_number() over (partition by predef1 order by predef1) as rn from unsharded",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select predef1, row_number() over (partition by predef1 order by predef1) as rn from unsharded union all select predef1, row_number() over (partition by predef1 order by predef1) as rn from unsharded",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select predef1, row_number() over (partition by predef1 order by predef1 asc) as rn from unsharded where 1 != 1 union all select predef1, row_number() over (partition by predef1 order by predef1 asc) as rn from unsharded where 1 != 1",
+        "Query": "select predef1, row_number() over (partition by predef1 order by predef1 asc) as rn from unsharded union all select predef1, row_number() over (partition by predef1 order by predef1 asc) as rn from unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "UNION: One sharded single-shard (EqualUnique), one unsharded (WORKS - both single-shard routes)",
+    "query": "select Id, col, row_number() over (partition by Id order by col) as rn from user where Id = 1 union all select 0 as Id, col, row_number() over (order by col) as rn from unsharded_a",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select Id, col, row_number() over (partition by Id order by col) as rn from user where Id = 1 union all select 0 as Id, col, row_number() over (order by col) as rn from unsharded_a",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select Id, col, row_number() over (partition by Id order by col asc) as rn from `user` where 1 != 1",
+            "Query": "select Id, col, row_number() over (partition by Id order by col asc) as rn from `user` where Id = 1",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 0 as Id, col, row_number() over (order by col asc) as rn from unsharded_a where 1 != 1",
+            "Query": "select 0 as Id, col, row_number() over (order by col asc) as rn from unsharded_a"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded_a",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "UNION: Partitioned by non-vindex column on scatter (FAILS - partitions span multiple shards)",
+    "query": "select Id, textcol1, row_number() over (partition by textcol1 order by Id) as rn from user union all select Id, textcol1, row_number() over (partition by textcol1 order by Id) as rn from user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "UNION: Global window without PARTITION BY on scatter (FAILS - spans all shards)",
+    "query": "select Id, intcol, row_number() over (order by intcol) as rn from user union all select Id, intcol, row_number() over (order by intcol) as rn from user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "IN route: Partitioned by non-vindex column (FAILS - partitions span multiple shards)",
+    "query": "select Id, textcol1, row_number() over (partition by textcol1 order by Id) as rn from user where Id in (1, 2)",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "Join: Optimizes to Route - inner join of single-shard branches, window partitioned by primary vindex",
+    "query": "select e.Id, e.Name, s.intcol, row_number() over (partition by e.Id order by s.Name desc) as name_rank from user e, user s where e.Id = 1 and s.Id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select e.Id, e.Name, s.intcol, row_number() over (partition by e.Id order by s.Name desc) as name_rank from user e, user s where e.Id = 1 and s.Id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select e.Id, e.`Name`, s.intcol, row_number() over (partition by e.Id order by s.`Name` desc) as name_rank from `user` as e, `user` as s where 1 != 1",
+        "Query": "select e.Id, e.`Name`, s.intcol, row_number() over (partition by e.Id order by s.`Name` desc) as name_rank from `user` as e, `user` as s where e.Id = 1 and s.Id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  }
+]

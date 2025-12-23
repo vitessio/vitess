@@ -56,7 +56,6 @@ func TestRoutingRulesErrors(t *testing.T) {
 	factory.SetError(errors.New("topo failure for testing"))
 
 	t.Run("GetRoutingRules error", func(t *testing.T) {
-
 		rules, err := GetRoutingRules(ctx, ts)
 		assert.Error(t, err, "expected error from GetRoutingRules, got rules=%v", rules)
 	})

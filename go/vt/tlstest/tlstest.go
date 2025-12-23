@@ -420,18 +420,18 @@ func CreateClientServerCertPairs(root string) ClientServerKeyPairs {
 
 	serialCounter = serialCounter + 3
 
-	serverCAName := fmt.Sprintf("servers-ca-%s", serverCASerial)
+	serverCAName := "servers-ca-" + serverCASerial
 	serverCACommonName := fmt.Sprintf("Servers %s CA", serverCASerial)
-	serverCertName := fmt.Sprintf("server-instance-%s", serverSerial)
+	serverCertName := "server-instance-" + serverSerial
 	serverCertCommonName := fmt.Sprintf("server%s.example.com", serverSerial)
-	revokedServerCertName := fmt.Sprintf("server-instance-%s", revokedServerSerial)
+	revokedServerCertName := "server-instance-" + revokedServerSerial
 	revokedServerCertCommonName := fmt.Sprintf("server%s.example.com", revokedServerSerial)
 
-	clientCAName := fmt.Sprintf("clients-ca-%s", clientCASerial)
+	clientCAName := "clients-ca-" + clientCASerial
 	clientCACommonName := fmt.Sprintf("Clients %s CA", clientCASerial)
-	clientCertName := fmt.Sprintf("client-instance-%s", clientCertSerial)
+	clientCertName := "client-instance-" + clientCertSerial
 	clientCertCommonName := fmt.Sprintf("client%s.example.com", clientCertSerial)
-	revokedClientCertName := fmt.Sprintf("client-instance-%s", revokedClientSerial)
+	revokedClientCertName := "client-instance-" + revokedClientSerial
 	revokedClientCertCommonName := fmt.Sprintf("client%s.example.com", revokedClientSerial)
 
 	CreateIntermediateCA(root, CA, serverCASerial, serverCAName, serverCACommonName)
@@ -444,8 +444,8 @@ func CreateClientServerCertPairs(root string) ClientServerKeyPairs {
 	CreateSignedCert(root, clientCAName, revokedClientSerial, revokedClientCertName, revokedClientCertCommonName)
 	RevokeCertAndRegenerateCRL(root, clientCAName, revokedClientCertName)
 
-	serverCRLPath := path.Join(root, fmt.Sprintf("%s-crl.pem", serverCAName))
-	clientCRLPath := path.Join(root, fmt.Sprintf("%s-crl.pem", clientCAName))
+	serverCRLPath := path.Join(root, serverCAName+"-crl.pem")
+	clientCRLPath := path.Join(root, clientCAName+"-crl.pem")
 	combinedCRLPath := path.Join(root, fmt.Sprintf("%s-%s-combined-crl.pem", serverCAName, clientCAName))
 
 	serverCRLBytes, err := os.ReadFile(serverCRLPath)
@@ -464,18 +464,18 @@ func CreateClientServerCertPairs(root string) ClientServerKeyPairs {
 	}
 
 	return ClientServerKeyPairs{
-		ServerCert:        path.Join(root, fmt.Sprintf("%s-cert.pem", serverCertName)),
-		ServerKey:         path.Join(root, fmt.Sprintf("%s-key.pem", serverCertName)),
-		ServerCA:          path.Join(root, fmt.Sprintf("%s-cert.pem", serverCAName)),
+		ServerCert:        path.Join(root, serverCertName+"-cert.pem"),
+		ServerKey:         path.Join(root, serverCertName+"-key.pem"),
+		ServerCA:          path.Join(root, serverCAName+"-cert.pem"),
 		ServerCRL:         serverCRLPath,
-		RevokedServerCert: path.Join(root, fmt.Sprintf("%s-cert.pem", revokedServerCertName)),
-		RevokedServerKey:  path.Join(root, fmt.Sprintf("%s-key.pem", revokedServerCertName)),
-		ClientCert:        path.Join(root, fmt.Sprintf("%s-cert.pem", clientCertName)),
-		ClientKey:         path.Join(root, fmt.Sprintf("%s-key.pem", clientCertName)),
-		ClientCA:          path.Join(root, fmt.Sprintf("%s-cert.pem", clientCAName)),
+		RevokedServerCert: path.Join(root, revokedServerCertName+"-cert.pem"),
+		RevokedServerKey:  path.Join(root, revokedServerCertName+"-key.pem"),
+		ClientCert:        path.Join(root, clientCertName+"-cert.pem"),
+		ClientKey:         path.Join(root, clientCertName+"-key.pem"),
+		ClientCA:          path.Join(root, clientCAName+"-cert.pem"),
 		ClientCRL:         clientCRLPath,
-		RevokedClientCert: path.Join(root, fmt.Sprintf("%s-cert.pem", revokedClientCertName)),
-		RevokedClientKey:  path.Join(root, fmt.Sprintf("%s-key.pem", revokedClientCertName)),
+		RevokedClientCert: path.Join(root, revokedClientCertName+"-cert.pem"),
+		RevokedClientKey:  path.Join(root, revokedClientCertName+"-key.pem"),
 		CombinedCRL:       combinedCRLPath,
 		ServerName:        serverCertCommonName,
 		RevokedServerName: revokedServerCertCommonName,

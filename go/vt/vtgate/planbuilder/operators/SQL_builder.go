@@ -41,7 +41,6 @@ type (
 
 func (qb *queryBuilder) asSelectStatement() sqlparser.TableStatement {
 	return qb.stmt.(sqlparser.TableStatement)
-
 }
 func (qb *queryBuilder) asOrderAndLimit() sqlparser.OrderAndLimit {
 	return qb.stmt.(sqlparser.OrderAndLimit)
@@ -362,7 +361,6 @@ func (qb *queryBuilder) sortTables() {
 		sort.Sort(ts)
 		return true, nil
 	}, qb.stmt)
-
 }
 
 type tableSorter struct {

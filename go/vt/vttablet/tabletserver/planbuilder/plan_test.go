@@ -320,7 +320,7 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 	name = locateFile(name)
 	fd, err := os.OpenFile(name, os.O_RDONLY, 0)
 	if err != nil {
-		panic(fmt.Sprintf("Could not open file %s", name))
+		panic("Could not open file " + name)
 	}
 	testCaseIterator = make(chan testCase)
 	go func() {

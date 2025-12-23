@@ -377,7 +377,7 @@ func (r *replacer) post(cursor *sqlparser.CopyOnWriteCursor) {
 		node := cursor.Node()
 		_, ok := node.(sqlparser.Expr)
 		if !ok {
-			panic(fmt.Sprintf("can't replace this node with an expression: %s", sqlparser.String(node)))
+			panic("can't replace this node with an expression: " + sqlparser.String(node))
 		}
 		cursor.Replace(r.replaceExpr)
 		r.replaceExpr = nil

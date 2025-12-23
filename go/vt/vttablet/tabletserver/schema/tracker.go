@@ -18,7 +18,7 @@ package schema
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"sync"
 	"time"
 
@@ -136,7 +136,6 @@ func (tr *Tracker) process(ctx context.Context) {
 				}
 				if event.Type == binlogdatapb.VEventType_DDL &&
 					MustReloadSchemaOnDDL(event.Statement, tr.engine.cp.DBName(), tr.env.Environment().Parser()) {
-
 					if err := tr.schemaUpdated(gtid, event.Statement, event.Timestamp); err != nil {
 						tr.env.Stats().ErrorCounters.Add(vtrpcpb.Code_INTERNAL.String(), 1)
 						log.Errorf("Error updating schema: %s for ddl %s, gtid %s",
@@ -212,7 +211,7 @@ func (tr *Tracker) possiblyInsertInitialSchema(ctx context.Context) error {
 func (tr *Tracker) schemaUpdated(gtid string, ddl string, timestamp int64) error {
 	log.Infof("Processing schemaUpdated event for gtid %s, ddl %s", gtid, ddl)
 	if gtid == "" || ddl == "" {
-		return fmt.Errorf("got invalid gtid or ddl in schemaUpdated")
+		return errors.New("got invalid gtid or ddl in schemaUpdated")
 	}
 	ctx := context.Background()
 	// Engine will have reloaded the schema because vstream will reload it on a DDL

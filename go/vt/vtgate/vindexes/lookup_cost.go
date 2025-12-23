@@ -54,7 +54,6 @@ func newLookupCost(name string, m map[string]string) (Vindex, error) {
 		LookupNonUnique: lookup.(*LookupNonUnique),
 		cost:            cost,
 	}, nil
-
 }
 
 func getInt(m map[string]string, key string, defaultVal int) int {

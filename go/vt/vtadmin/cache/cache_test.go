@@ -18,7 +18,7 @@ package cache_test
 
 import (
 	"context"
-	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -194,7 +194,7 @@ func TestBackfillTTL(t *testing.T) {
 
 type intkey int
 
-func (k intkey) Key() string { return fmt.Sprintf("%d", int(k)) }
+func (k intkey) Key() string { return strconv.Itoa(int(k)) }
 
 func TestEnqueueBackfillTimeout(t *testing.T) {
 	t.Parallel()

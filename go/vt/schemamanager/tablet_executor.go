@@ -18,6 +18,7 @@ package schemamanager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -95,7 +96,7 @@ func (exec *TabletExecutor) SetUUIDList(uuids []string) error {
 		uuidsMap[uuid] = true
 	}
 	if len(uuidsMap) != len(uuids) {
-		return fmt.Errorf("UUID values must be unique")
+		return errors.New("UUID values must be unique")
 	}
 	exec.uuids = uuids
 	return nil
@@ -138,7 +139,7 @@ func (exec *TabletExecutor) Open(ctx context.Context, keyspace string) error {
 // Validate validates a list of sql statements.
 func (exec *TabletExecutor) Validate(ctx context.Context, sqls []string) error {
 	if exec.isClosed {
-		return fmt.Errorf("executor is closed")
+		return errors.New("executor is closed")
 	}
 	if err := exec.parseDDLs(sqls); err != nil {
 		return err
@@ -388,7 +389,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	}
 	execResult.Sqls = sqls
 	if exec.isClosed {
-		return errorExecResult(fmt.Errorf("executor is closed"))
+		return errorExecResult(errors.New("executor is closed"))
 	}
 	startTime := time.Now()
 	defer func() { execResult.TotalTimeSpent = time.Since(startTime) }()
@@ -466,17 +467,17 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	if exec.batchSize > 1 {
 		// Before we proceed to batch, we need to validate there's no conflicts.
 		if !exec.isDirectStrategy() {
-			return errorExecResult(fmt.Errorf("--batch-size requires 'direct' ddl_strategy"))
+			return errorExecResult(errors.New("--batch-size requires 'direct' ddl_strategy"))
 		}
 		if exec.hasProvidedUUIDs() {
-			return errorExecResult(fmt.Errorf("--batch-size conflicts with --uuid-list. Batching does not support UUIDs."))
+			return errorExecResult(errors.New("--batch-size conflicts with --uuid-list. Batching does not support UUIDs."))
 		}
 		allSQLsAreCreate, err := allSQLsAreCreateQueries(sqls, exec.parser)
 		if err != nil {
 			return errorExecResult(err)
 		}
 		if !allSQLsAreCreate {
-			return errorExecResult(fmt.Errorf("--batch-size only allowed when all queries are CREATE TABLE|VIEW"))
+			return errorExecResult(errors.New("--batch-size only allowed when all queries are CREATE TABLE|VIEW"))
 		}
 
 		sqls = batchSQLs(sqls, int(exec.batchSize))
@@ -569,7 +570,6 @@ func (exec *TabletExecutor) executeOneTablet(
 	viaQueryService bool,
 	errChan chan ShardWithError,
 	successChan chan ShardResult) {
-
 	var results []*querypb.QueryResult
 	var err error
 	if viaQueryService {
@@ -596,7 +596,6 @@ func (exec *TabletExecutor) executeOneTablet(
 			request.DisableForeignKeyChecks = true
 		}
 		results, err = exec.tmc.ExecuteMultiFetchAsDba(ctx, tablet, false, request)
-
 	}
 	if err != nil {
 		errChan <- ShardWithError{Shard: tablet.Shard, Err: err.Error()}

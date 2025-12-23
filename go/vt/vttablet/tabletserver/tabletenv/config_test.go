@@ -499,7 +499,7 @@ func TestVerifyUnmanagedTabletConfig(t *testing.T) {
 	// creates a temporary credentials file.
 	tmpFile, err := os.CreateTemp("", "db_credentials.json")
 	require.NoError(t, err)
-	_, err = tmpFile.Write([]byte(`{"testUser": ["testPassword"], "testUserWithEmptyPassword": [""]}`))
+	_, err = tmpFile.WriteString(`{"testUser": ["testPassword"], "testUserWithEmptyPassword": [""]}`)
 	require.NoError(t, err)
 	require.NoError(t, tmpFile.Close())
 	defer os.Remove(tmpFile.Name())

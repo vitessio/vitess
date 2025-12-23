@@ -38,7 +38,7 @@ type fakeConsulHealth struct {
 	entries map[string][]*consul.ServiceEntry
 }
 
-func (health *fakeConsulHealth) ServiceMultipleTags(service string, tags []string, passingOnly bool, q *consul.QueryOptions) ([]*consul.ServiceEntry, *consul.QueryMeta, error) { // nolint:lll
+func (health *fakeConsulHealth) ServiceMultipleTags(service string, tags []string, passingOnly bool, q *consul.QueryOptions) ([]*consul.ServiceEntry, *consul.QueryMeta, error) {
 	if health.entries == nil {
 		return nil, nil, assert.AnError
 	}
@@ -405,7 +405,7 @@ func TestConsulDiscoverVTGateAddr(t *testing.T) {
 				vtgateService:  "vtgate",
 				vtgateCellTag:  "cell",
 				vtgatePoolTag:  "pool",
-				vtgateAddrTmpl: template.Must(template.New("").Parse("{{ .Cluster.Name }}-{{ .Pool }}-{{ .Cell }}-{{ .Hostname }}.example.com:15000")), // nolint:lll
+				vtgateAddrTmpl: template.Must(template.New("").Parse("{{ .Cluster.Name }}-{{ .Pool }}-{{ .Cell }}-{{ .Hostname }}.example.com:15000")),
 			},
 			tags: []string{},
 			entries: map[string][]*consul.ServiceEntry{

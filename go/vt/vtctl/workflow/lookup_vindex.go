@@ -19,6 +19,7 @@ package workflow
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -125,7 +126,7 @@ func (lv *lookupVindex) prepareCreate(ctx context.Context, workflow, keyspace st
 			// vindexes, so this case should be possible only when we are
 			// backfilling a single vindex. So, this approach can be used.
 			if len(specs.Tables) < 1 || len(specs.Tables) > 2 {
-				return nil, nil, nil, nil, fmt.Errorf("one or two tables must be specified")
+				return nil, nil, nil, nil, errors.New("one or two tables must be specified")
 			}
 			vInfo.sourceTable, vInfo.sourceTableName, err = getSourceTable(specs.Tables, vInfo.targetTableName, vInfo.fromCols)
 			if err != nil {
@@ -349,7 +350,7 @@ func (lv *lookupVindex) validateAndGetVindexInfo(vindexName string, vindex *vsch
 
 	// Validate input table.
 	if len(tables) < 1 {
-		return nil, fmt.Errorf("at least one table must be specified")
+		return nil, errors.New("at least one table must be specified")
 	}
 
 	return &vindexInfo{
@@ -623,10 +624,10 @@ func getTargetVindex(sourceTableDefinition *tabletmanagerdatapb.TableDefinition,
 func (lv *lookupVindex) validateExternalizedVindex(vindex *vschemapb.Vindex) error {
 	writeOnly, ok := vindex.Params["write_only"]
 	if ok && writeOnly == "true" {
-		return fmt.Errorf("vindex is in write-only mode")
+		return errors.New("vindex is in write-only mode")
 	}
 	if vindex.Owner == "" {
-		return fmt.Errorf("vindex has no owner")
+		return errors.New("vindex has no owner")
 	}
 	return nil
 }

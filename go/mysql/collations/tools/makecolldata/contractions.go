@@ -61,7 +61,7 @@ func printContraction1(g *codegen.Generator, wa *weightarray, incont []uca.Contr
 			trie[r] = append(trie[r], cont)
 		}
 		if depth == len(cont.Path) {
-			leaf = &cont // nolint:exportloopref
+			leaf = &cont
 		}
 	}
 

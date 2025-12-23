@@ -30,7 +30,10 @@ import (
 
 var Cases = []TestCase{
 	{Run: JSONExtract, Schema: JSONExtract_Schema},
-	{Run: JSONPathOperations},
+	{Run: FnJSONKeys},
+	{Run: FnJSONExtract},
+	{Run: FnJSONRemove},
+	{Run: FnJSONContainsPath},
 	{Run: JSONArray},
 	{Run: JSONObject},
 	{Run: CharsetConversionOperators},
@@ -176,18 +179,75 @@ var Cases = []TestCase{
 	{Run: RegexpReplace},
 }
 
-func JSONPathOperations(yield Query) {
+func FnJSONKeys(yield Query) {
 	for _, obj := range inputJSONObjects {
 		yield(fmt.Sprintf("JSON_KEYS('%s')", obj), nil, false)
 
 		for _, path1 := range inputJSONPaths {
-			yield(fmt.Sprintf("JSON_EXTRACT('%s', '%s')", obj, path1), nil, false)
-			yield(fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'one', '%s')", obj, path1), nil, false)
-			yield(fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'all', '%s')", obj, path1), nil, false)
 			yield(fmt.Sprintf("JSON_KEYS('%s', '%s')", obj, path1), nil, false)
+		}
+	}
+}
+
+func FnJSONExtract(yield Query) {
+	for _, obj := range inputJSONObjects {
+		for _, path1 := range inputJSONPaths {
+			yield(fmt.Sprintf("JSON_EXTRACT('%s', '%s')", obj, path1), nil, false)
 
 			for _, path2 := range inputJSONPaths {
 				yield(fmt.Sprintf("JSON_EXTRACT('%s', '%s', '%s')", obj, path1, path2), nil, false)
+			}
+		}
+	}
+
+	yield(`JSON_EXTRACT('{"a": 1}', '$.a')`, nil, false)
+	yield(`JSON_EXTRACT('{"a": 1}', '$.*')`, nil, false)
+	yield(`JSON_EXTRACT('[1, 2, 3]', '$[0 to 2]')`, nil, false)
+	yield(`JSON_EXTRACT('{"a": 1, "b": 2}', '$.a', '$.b')`, nil, false)
+	yield(`JSON_EXTRACT('{"a": 1}', '$.a', '$.z')`, nil, false)
+
+	yield(`JSON_EXTRACT(CONCAT('{', '"a"', ':', ' ', '1', '}'), '$.a')`, nil, false)
+	yield(`JSON_EXTRACT('{"a": 1}', CONCAT('$', '.', 'a'))`, nil, false)
+
+	yield(`JSON_EXTRACT(NULL, '$.a')`, nil, false)
+	yield(`JSON_EXTRACT(NULL, NULL)`, nil, false)
+
+	yield(`JSON_EXTRACT('{"a": 1}', NULL)`, nil, false)
+	yield(`JSON_EXTRACT('{"a": 1}', '$.a', NULL)`, nil, false)
+	yield(`JSON_EXTRACT('{"a": 1}', NULL, '$.a')`, nil, false)
+
+	yield(`JSON_EXTRACT('{"a": 1}', '$.b')`, nil, false)
+	yield(`JSON_EXTRACT('{"a": 1}', '$.b', '$.c')`, nil, false)
+	yield(`JSON_EXTRACT('[1,2,3]', '$[10]')`, nil, false)
+
+	yield(`JSON_EXTRACT('{invalid}', '$.a')`, nil, false)
+	yield(`JSON_EXTRACT('not json', '$.a')`, nil, false)
+	yield(`JSON_EXTRACT('', '$.a')`, nil, false)
+	yield(`JSON_EXTRACT('{invalid}', NULL)`, nil, false)
+
+	yield(`JSON_EXTRACT('{"a": 1}', '$.b[ 1 ].')`, nil, false)
+
+	yield(`JSON_EXTRACT(NULL, 'invalid-path')`, nil, false)
+	yield(`JSON_EXTRACT('{"a": 1}', NULL, 'invalid-path')`, nil, false)
+	yield(`JSON_EXTRACT('{"a": 1}', 'invalid-path', NULL)`, nil, false)
+	yield(`JSON_EXTRACT('{"a": 1}', '$.a', 'invalid')`, nil, false)
+}
+
+func FnJSONRemove(yield Query) {
+	for _, obj := range inputJSONObjects {
+		for _, path1 := range inputJSONPaths {
+			yield(fmt.Sprintf("JSON_REMOVE('%s', '%s')", obj, path1), nil, false)
+		}
+	}
+}
+
+func FnJSONContainsPath(yield Query) {
+	for _, obj := range inputJSONObjects {
+		for _, path1 := range inputJSONPaths {
+			yield(fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'one', '%s')", obj, path1), nil, false)
+			yield(fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'all', '%s')", obj, path1), nil, false)
+
+			for _, path2 := range inputJSONPaths {
 				yield(fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'one', '%s', '%s')", obj, path1, path2), nil, false)
 				yield(fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'all', '%s', '%s')", obj, path1, path2), nil, false)
 			}
@@ -825,7 +885,7 @@ func LargeIntegers(yield Query) {
 
 	for pos := 1; pos < len(largepi); pos++ {
 		yield(largepi[:pos], nil, false)
-		yield(fmt.Sprintf("-%s", largepi[:pos]), nil, false)
+		yield("-"+largepi[:pos], nil, false)
 	}
 }
 
@@ -927,8 +987,8 @@ func FloatFormatting(yield Query) {
 	}
 
 	for _, f := range floats {
-		yield(fmt.Sprintf("%s + 0.0e0", f), nil, false)
-		yield(fmt.Sprintf("-%s", f), nil, false)
+		yield(f+" + 0.0e0", nil, false)
+		yield("-"+f, nil, false)
 	}
 
 	for i := 0; i < 64; i++ {
@@ -1072,13 +1132,13 @@ func NegateArithmetic(yield Query) {
 	}
 
 	for _, rhs := range cases {
-		yield(fmt.Sprintf("- %s", rhs), nil, false)
-		yield(fmt.Sprintf("-%s", rhs), nil, false)
+		yield("- "+rhs, nil, false)
+		yield("-"+rhs, nil, false)
 	}
 
 	for _, rhs := range inputConversions {
-		yield(fmt.Sprintf("- %s", rhs), nil, false)
-		yield(fmt.Sprintf("-%s", rhs), nil, false)
+		yield("- "+rhs, nil, false)
+		yield("-"+rhs, nil, false)
 	}
 }
 

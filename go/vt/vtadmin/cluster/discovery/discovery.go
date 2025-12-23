@@ -89,7 +89,6 @@ type Discovery interface {
 // pflag.
 type Factory func(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []string) (Discovery, error)
 
-// nolint:gochecknoglobals
 var registry = map[string]Factory{}
 var registryMu sync.Mutex
 
@@ -123,7 +122,7 @@ func New(impl string, cluster *vtadminpb.Cluster, args []string) (Discovery, err
 	return factory(cluster, pflag.NewFlagSet("discovery:"+impl, pflag.ContinueOnError), args)
 }
 
-func init() { // nolint:gochecknoinits
+func init() {
 	Register("consul", NewConsul)
 	Register("staticfile", NewStaticFile)
 	Register("dynamic", NewDynamic)

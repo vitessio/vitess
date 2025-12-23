@@ -214,7 +214,6 @@ func GetVExplainKeys(ctx *plancontext.PlanningContext, stmt sqlparser.Statement)
 						columnUse{col, sqlparser.LessEqualOp})
 				}
 			}
-
 		}
 	}
 

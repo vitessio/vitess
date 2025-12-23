@@ -89,7 +89,6 @@ func TestWeightsForSpace(t *testing.T) {
 			continue
 		}
 		assert.Equal(t, expected, actual, "expected Weight(' ') == 0x%X, got 0x%X", expected, actual)
-
 	}
 }
 
@@ -111,7 +110,6 @@ func TestKanaSensitivity(t *testing.T) {
 			collation := testcollation(t, tc.collation)
 			equal := collation.Collate([]byte(Kana1), []byte(Kana2), false) == 0
 			assert.Equal(t, tc.equal, equal, "expected %q == %q to be %v", Kana1, Kana2, tc.equal)
-
 		})
 	}
 }
@@ -141,7 +139,6 @@ func TestContractions(t *testing.T) {
 			for _, in := range tc.inputs {
 				weightString := coll.WeightString(nil, []byte(in), 0)
 				assert.True(t, bytes.Equal(weightString, tc.expected), "weight_string(%q) = %#v (expected %#v)", in, weightString, tc.expected)
-
 			}
 		})
 	}
@@ -162,7 +159,6 @@ func TestReplacementCharacter(t *testing.T) {
 			coll := testcollation(t, tc.collation)
 			weightString := coll.WeightString(nil, []byte(string(utf8.RuneError)), 0)
 			assert.True(t, bytes.Equal(weightString, tc.expected), "weight_string(\\uFFFD) = %#v (expected %#v)", weightString, tc.expected)
-
 		})
 	}
 }
@@ -186,7 +182,6 @@ func TestIsPrefix(t *testing.T) {
 
 			cmp := coll.Collate([]byte(left), []byte(right), true)
 			assert.Equal(t, 0, cmp, "IsPrefix(%q, %q) = %d (expected 0)", left, right, cmp)
-
 		}
 	}
 }
@@ -801,7 +796,6 @@ func TestCompareWithWeightString(t *testing.T) {
 		left := collation.WeightString(nil, []byte(tc.left), 0)
 		right := collation.WeightString(nil, []byte(tc.right), 0)
 		assert.Equal(t, tc.equal, bytes.Equal(left, right), "expected %q / %v == %q / %v to be %v", tc.left, left, tc.right, right, tc.equal)
-
 	}
 }
 
@@ -858,7 +852,6 @@ func TestTinyWeightStrings(t *testing.T) {
 			}
 		}
 	}
-
 }
 
 func TestFastIterators(t *testing.T) {
@@ -891,7 +884,6 @@ func TestFastIterators(t *testing.T) {
 			coll := testcollation(t, tc.collation)
 			result := coll.WeightString(nil, allASCIICharacters, 0)
 			assert.True(t, bytes.Equal(tc.expected, result), "weight_string(%q) = %#v (expected %#v)", allASCIICharacters, result, tc.expected)
-
 		})
 	}
 }
@@ -971,7 +963,6 @@ func TestEqualities(t *testing.T) {
 
 		cmp := collation.Collate([]byte(tc.left), []byte(tc.right), false)
 		assert.Equal(t, tc.equal, (cmp == 0), "expected %q == %q to be %v", tc.left, tc.right, tc.equal)
-
 	}
 }
 

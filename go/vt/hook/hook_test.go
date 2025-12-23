@@ -275,7 +275,7 @@ func TestExecuteAsWritePipe(t *testing.T) {
 	}()
 
 	writerMutex.Lock()
-	_, err = writer.Write([]byte("Hello, World!\n"))
+	_, err = writer.WriteString("Hello, World!\n")
 	writerMutex.Unlock()
 	require.NoError(t, err)
 

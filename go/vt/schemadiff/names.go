@@ -17,8 +17,8 @@ limitations under the License.
 package schemadiff
 
 import (
-	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/textutil"
@@ -39,10 +39,10 @@ var constraintVitessNameRegexp = regexp.MustCompile(`^(.*?)(_([0-9a-z]{25}))?$`)
 // before schemadiff/vitess generated a replacement name.
 // e.g. input: "check1_7no794p1x6zw6je1gfqmt7bca", output: "check1"
 func ExtractConstraintOriginalName(tableName string, constraintName string) string {
-	if strings.HasPrefix(constraintName, fmt.Sprintf("%s_chk_", tableName)) {
+	if strings.HasPrefix(constraintName, tableName+"_chk_") {
 		return constraintName[len(tableName)+1:]
 	}
-	if strings.HasPrefix(constraintName, fmt.Sprintf("%s_ibfk_", tableName)) {
+	if strings.HasPrefix(constraintName, tableName+"_ibfk_") {
 		return constraintName[len(tableName)+1:]
 	}
 	if submatch := constraintVitessNameRegexp.FindStringSubmatch(constraintName); len(submatch) > 0 {
@@ -68,9 +68,9 @@ func ExtractConstraintOriginalName(tableName string, constraintName string) stri
 // Example: sometable_chk_1
 // Next, when MySQL is asked to RENAME TABLE and sees a constraint with this format, it attempts to rename
 // the constraint with the new table's name. This is problematic for Vitess, because we often rename tables to
-// very long names, such as _vt_HOLD_394f9e6dfc3d11eca0390a43f95f28a3_20220706091048.
+// very long names, such as _vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_.
 // As we rename the constraint to e.g. `sometable_chk_1_cps1okb4uafunfqusi2lp22u3`, this makes MySQL want to
-// call the new constraint something like _vt_HOLD_394f9e6dfc3d11eca0390a43f95f28a3_20220706091048_chk_1_cps1okb4uafunfqusi2lp22u3,
+// call the new constraint something like _vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_chk_1_cps1okb4uafunfqusi2lp22u3,
 // which exceeds the 64 character limit for table names. Long story short, we also trim down <tablename> if the constraint seems
 // to be auto-generated.
 func newConstraintName(tableName string, baseUUID string, constraintDefinition *sqlparser.ConstraintDefinition, hashExists map[string]bool, seed string, oldName string) string {
@@ -80,7 +80,7 @@ func newConstraintName(tableName string, baseUUID string, constraintDefinition *
 	oldName = ExtractConstraintOriginalName(tableName, oldName)
 	hash := textutil.UUIDv5Base36(baseUUID, tableName, seed)
 	for i := 1; hashExists[hash]; i++ {
-		hash = textutil.UUIDv5Base36(baseUUID, tableName, seed, fmt.Sprintf("%d", i))
+		hash = textutil.UUIDv5Base36(baseUUID, tableName, seed, strconv.Itoa(i))
 	}
 	hashExists[hash] = true
 	suffix := "_" + hash

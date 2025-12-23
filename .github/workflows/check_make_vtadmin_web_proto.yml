@@ -27,6 +27,9 @@ jobs:
       with:
         persist-credentials: 'false'
 
+    - name: Tune the OS
+      uses: ./.github/actions/tune-os
+
     - name: Check for changes in relevant files
       uses: dorny/paths-filter@ebc4d7e9ebcb0b1eb21480bb8f43113e996ac77a # v3.0.1
       id: changes

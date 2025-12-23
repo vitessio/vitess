@@ -217,7 +217,6 @@ func TestInitAndUpdate(t *testing.T) {
 		100*time.Millisecond,
 		30*time.Second,
 		"test_sc and test_sc_1 should not be in vschema tables")
-
 }
 
 func TestDMLOnNewTable(t *testing.T) {

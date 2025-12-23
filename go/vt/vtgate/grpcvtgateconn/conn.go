@@ -39,11 +39,12 @@ import (
 )
 
 var (
-	cert string
-	key  string
-	ca   string
-	crl  string
-	name string
+	cert     string
+	key      string
+	ca       string
+	crl      string
+	name     string
+	failFast bool
 )
 
 func init() {
@@ -56,16 +57,17 @@ func init() {
 		"vtctl",
 		"vttestserver",
 	} {
-		servenv.OnParseFor(cmd, registerFlags)
+		servenv.OnParseFor(cmd, RegisterFlags)
 	}
 }
 
-func registerFlags(fs *pflag.FlagSet) {
+func RegisterFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &cert, "vtgate-grpc-cert", "", "the cert to use to connect")
 	utils.SetFlagStringVar(fs, &key, "vtgate-grpc-key", "", "the key to use to connect")
 	utils.SetFlagStringVar(fs, &ca, "vtgate-grpc-ca", "", "the server ca to use to validate servers when connecting")
 	utils.SetFlagStringVar(fs, &crl, "vtgate-grpc-crl", "", "the server crl to use to validate server certificates when connecting")
 	utils.SetFlagStringVar(fs, &name, "vtgate-grpc-server-name", "", "the server name to use to validate server certificate")
+	utils.SetFlagBoolVar(fs, &failFast, "vtgate-grpc-fail-fast", false, "whether to enable grpc fail fast when connecting")
 }
 
 type vtgateConn struct {
@@ -87,7 +89,7 @@ func Dial(opts ...grpc.DialOption) vtgateconn.DialerFunc {
 
 		opts = append(opts, opt)
 
-		cc, err := grpcclient.DialContext(ctx, address, grpcclient.FailFast(false), opts...)
+		cc, err := grpcclient.DialContext(ctx, address, grpcclient.FailFast(failFast), opts...)
 		if err != nil {
 			return nil, err
 		}
@@ -318,7 +320,6 @@ func (a *vstreamAdapter) Recv() ([]*binlogdatapb.VEvent, error) {
 
 func (conn *vtgateConn) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid,
 	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags) (vtgateconn.VStreamReader, error) {
-
 	req := &vtgatepb.VStreamRequest{
 		CallerId:   callerid.EffectiveCallerIDFromContext(ctx),
 		TabletType: tabletType,

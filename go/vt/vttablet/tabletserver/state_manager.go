@@ -706,7 +706,6 @@ func (sm *stateManager) handleTransitionGracePeriod(tabletType topodatapb.Tablet
 	if tabletType == topodatapb.TabletType_PRIMARY &&
 		sm.target.TabletType != topodatapb.TabletType_PRIMARY &&
 		sm.transitionGracePeriod != 0 {
-
 		sm.alsoAllow = []topodatapb.TabletType{sm.target.TabletType}
 		// This is not a perfect solution because multiple back and forth
 		// transitions will launch multiple of these goroutines. But the

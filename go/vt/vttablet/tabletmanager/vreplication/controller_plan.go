@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -165,7 +166,7 @@ func buildControllerPlan(query string, parser *sqlparser.Parser) (*controllerPla
 func buildInsertPlan(ins *sqlparser.Insert) (*controllerPlan, error) {
 	// This should never happen.
 	if ins == nil {
-		return nil, fmt.Errorf("BUG: invalid nil INSERT statement found when building VReplication plan")
+		return nil, errors.New("BUG: invalid nil INSERT statement found when building VReplication plan")
 	}
 	tableName, err := ins.Table.TableName()
 	if err != nil {

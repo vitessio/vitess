@@ -18,6 +18,7 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -55,7 +56,7 @@ var (
 // Restart restarts vttablet and mysql.
 func (tablet *Vttablet) Restart() error {
 	if tablet.MysqlctlProcess.TabletUID|tablet.MysqlctldProcess.TabletUID == 0 {
-		return fmt.Errorf("no mysql process is running")
+		return errors.New("no mysql process is running")
 	}
 
 	if tablet.MysqlctlProcess.TabletUID > 0 {
@@ -306,7 +307,6 @@ func NewConnParams(port int, password, socketPath, keyspace string) mysql.ConnPa
 	}
 
 	return cp
-
 }
 
 // WriteDbCredentialToTmp writes JSON formatted db credentials to the

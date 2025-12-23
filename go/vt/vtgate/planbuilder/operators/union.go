@@ -197,7 +197,7 @@ func (u *Union) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool,
 		})
 
 		if argIdx == -1 {
-			panic(vterrors.VT13001(fmt.Sprintf("could not find the argument to the weight_string function: %s", sqlparser.String(wsArg))))
+			panic(vterrors.VT13001("could not find the argument to the weight_string function: " + sqlparser.String(wsArg)))
 		}
 
 		offset, err := u.addWeightStringToOffset(ctx, argIdx)

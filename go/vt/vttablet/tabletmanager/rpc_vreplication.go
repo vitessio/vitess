@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -184,7 +185,7 @@ func (tm *TabletManager) DeleteTableData(ctx context.Context, req *tabletmanager
 	if batchSize < 1 {
 		batchSize = movetables.DefaultDeleteBatchSize
 	}
-	limit := &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral(fmt.Sprintf("%d", batchSize))}
+	limit := &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral(strconv.FormatInt(batchSize, 10))}
 	// We will log some progress info every 100 delete batches.
 	progressRows := uint64(batchSize * 100)
 
@@ -694,7 +695,7 @@ func getOptionSetString(config map[string]string) string {
 		}
 		clause += ")"
 	}
-	options = fmt.Sprintf(", options = %s", clause)
+	options = ", options = " + clause
 	return options
 }
 
@@ -747,6 +748,13 @@ func (tm *TabletManager) GetMaxValueForSequences(ctx context.Context, req *table
 }
 
 func (tm *TabletManager) getMaxSequenceValue(ctx context.Context, sm *tabletmanagerdatapb.GetMaxValueForSequencesRequest_SequenceMetadata) (int64, error) {
+	for _, val := range []string{sm.UsingTableDbNameEscaped, sm.UsingTableNameEscaped, sm.UsingColEscaped} {
+		lv := len(val)
+		if lv < 3 || val[0] != '`' || val[lv-1] != '`' {
+			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+				"the database (%s), table (%s), and column (%s) names must be non-empty escaped values", sm.UsingTableDbNameEscaped, sm.UsingTableNameEscaped, sm.UsingColEscaped)
+		}
+	}
 	query := sqlparser.BuildParsedQuery(sqlGetMaxSequenceVal,
 		sm.UsingColEscaped,
 		sm.UsingTableDbNameEscaped,
@@ -797,6 +805,11 @@ func (tm *TabletManager) updateSequenceValue(ctx context.Context, seq *tabletman
 	if tm.Tablet().DbNameOverride != "" {
 		seq.BackingTableDbName = tm.Tablet().DbNameOverride
 	}
+	backingTableDbNameEscaped, err := sqlescape.EnsureEscaped(seq.BackingTableDbName)
+	if err != nil {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid database name %s specified for sequence backing table: %v",
+			seq.BackingTableDbName, err)
+	}
 	backingTableNameEscaped, err := sqlescape.EnsureEscaped(seq.BackingTableName)
 	if err != nil {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid table name %s specified for sequence backing table: %v",
@@ -804,8 +817,8 @@ func (tm *TabletManager) updateSequenceValue(ctx context.Context, seq *tabletman
 	}
 	log.Infof("Updating sequence %s.%s to %d", seq.BackingTableDbName, seq.BackingTableName, nextVal)
 	initQuery := sqlparser.BuildParsedQuery(sqlInitSequenceTable,
-		seq.BackingTableDbName,
-		seq.BackingTableName,
+		backingTableDbNameEscaped,
+		backingTableNameEscaped,
 		nextVal,
 		nextVal,
 		nextVal,
@@ -828,7 +841,7 @@ func (tm *TabletManager) updateSequenceValue(ctx context.Context, seq *tabletman
 			return vterrors.Errorf(
 				vtrpcpb.Code_INTERNAL,
 				"failed to initialize the backing sequence table %s.%s: %v",
-				seq.BackingTableDbName, seq.BackingTableName, err,
+				backingTableDbNameEscaped, backingTableNameEscaped, err,
 			)
 		}
 
@@ -842,12 +855,16 @@ func (tm *TabletManager) updateSequenceValue(ctx context.Context, seq *tabletman
 
 	return vterrors.Errorf(
 		vtrpcpb.Code_INTERNAL, "failed to initialize the backing sequence table %s.%s after retries. Last error: %v",
-		seq.BackingTableDbName, backingTableNameEscaped, err)
+		backingTableDbNameEscaped, backingTableNameEscaped, err)
 }
 
-func (tm *TabletManager) createSequenceTable(ctx context.Context, escapedTableName string) error {
+func (tm *TabletManager) createSequenceTable(ctx context.Context, tableName string) error {
+	escapedTableName, err := sqlescape.EnsureEscaped(tableName)
+	if err != nil {
+		return err
+	}
 	stmt := sqlparser.BuildParsedQuery(sqlCreateSequenceTable, escapedTableName)
-	_, err := tm.ApplySchema(ctx, &tmutils.SchemaChange{
+	_, err = tm.ApplySchema(ctx, &tmutils.SchemaChange{
 		SQL:                     stmt.Query,
 		Force:                   false,
 		AllowReplication:        true,
@@ -1021,7 +1038,7 @@ func (tm *TabletManager) buildReadVReplicationWorkflowsQuery(req *tabletmanagerd
 			if i > 0 {
 				additionalPredicates.WriteByte(',')
 			}
-			additionalPredicates.WriteString(fmt.Sprintf("%d", id))
+			additionalPredicates.WriteString(strconv.Itoa(int(id)))
 		}
 		additionalPredicates.WriteByte(')')
 	}

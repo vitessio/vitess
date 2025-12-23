@@ -315,7 +315,6 @@ func TestSetForeignKeyCheck(t *testing.T) {
 		{"commit", nil},
 	}}
 	ts.Run()
-
 }
 
 func TestStmtComment(t *testing.T) {
@@ -530,7 +529,7 @@ func TestVStreamMissingFieldsInLastPK(t *testing.T) {
 	}
 	ctx := context.Background()
 	ch := make(chan []*binlogdatapb.VEvent)
-	err := vstream(ctx, t, "", tablePKs, filter, ch)
+	err := vstream(ctx, t, "", tablePKs, filter, ch, false)
 	require.ErrorContains(t, err, "lastpk for table t1 has no fields defined")
 }
 
@@ -758,7 +757,7 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 					want := expectedEvents[i]
 					switch want {
 					case "begin", "commit", "gtid":
-						want = fmt.Sprintf("type:%s", strings.ToUpper(want))
+						want = "type:" + strings.ToUpper(want)
 					default:
 						want = env.RemoveAnyDeprecatedDisplayWidths(want)
 					}
@@ -1483,7 +1482,7 @@ func TestDDLDropColumn(t *testing.T) {
 		}
 	}()
 	defer close(ch)
-	err := vstream(ctx, t, pos, nil, nil, ch)
+	err := vstream(ctx, t, pos, nil, nil, ch, false)
 	want := "cannot determine table columns"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, must contain %s", err, want)
@@ -1651,21 +1650,21 @@ func TestOnlineDDLTables(t *testing.T) {
 	execStatements(t, []string{
 		"create table vitess_test(id int, val varbinary(128), primary key(id))",
 		"create table _1e275eef_3b20_11eb_a38f_04ed332e05c2_20201210204529_gho(id int, val varbinary(128), primary key(id))",
-		"create table _vt_PURGE_1f9194b43b2011eb8a0104ed332e05c2_20201210194431(id int, val varbinary(128), primary key(id))",
+		"create table _vt_prg_1f9194b43b2011eb8a0104ed332e05c2_20201210194431_(id int, val varbinary(128), primary key(id))",
 		"create table _product_old(id int, val varbinary(128), primary key(id))",
 	})
 	position := primaryPosition(t)
 	execStatements(t, []string{
 		"insert into vitess_test values(1, 'abc')",
 		"insert into _1e275eef_3b20_11eb_a38f_04ed332e05c2_20201210204529_gho values(1, 'abc')",
-		"insert into _vt_PURGE_1f9194b43b2011eb8a0104ed332e05c2_20201210194431 values(1, 'abc')",
+		"insert into _vt_prg_1f9194b43b2011eb8a0104ed332e05c2_20201210194431_ values(1, 'abc')",
 		"insert into _product_old values(1, 'abc')",
 	})
 
 	defer execStatements(t, []string{
 		"drop table vitess_test",
 		"drop table _1e275eef_3b20_11eb_a38f_04ed332e05c2_20201210204529_gho",
-		"drop table _vt_PURGE_1f9194b43b2011eb8a0104ed332e05c2_20201210194431",
+		"drop table _vt_prg_1f9194b43b2011eb8a0104ed332e05c2_20201210194431_",
 		"drop table _product_old",
 	})
 	testcases := []testcase{{
@@ -1962,6 +1961,39 @@ func TestHeartbeat(t *testing.T) {
 	cancel()
 }
 
+func TestFullyThrottledTimeout(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	origTimeout := fullyThrottledTimeout
+	origHeartbeatTime := HeartbeatTime
+	startingMetric := engine.errorCounts.Counts()[fullyThrottledMetricLabel]
+	defer func() {
+		fullyThrottledTimeout = origTimeout
+		HeartbeatTime = origHeartbeatTime
+	}()
+
+	fullyThrottledTimeout = 100 * time.Millisecond
+	HeartbeatTime = fullyThrottledTimeout * 15
+	waitTimer := time.NewTimer(HeartbeatTime)
+	defer waitTimer.Stop()
+	done := make(chan struct{})
+	go func() {
+		wg, evs := startFullyThrottledStream(ctx, t, nil, "", nil) // Fully throttled
+		wg.Wait()
+		require.Zero(t, len(evs))
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		endingMetric := engine.errorCounts.Counts()[fullyThrottledMetricLabel]
+		require.Equal(t, startingMetric+1, endingMetric)
+		return
+	case <-waitTimer.C:
+		require.FailNow(t, "fully throttled stall handler did not fire as expected")
+	}
+}
+
 func TestNoFutureGTID(t *testing.T) {
 	// Execute something to make sure we have ranges in GTIDs.
 	execStatements(t, []string{
@@ -1978,7 +2010,7 @@ func TestNoFutureGTID(t *testing.T) {
 	index := strings.LastIndexByte(pos, '-')
 	num, err := strconv.Atoi(pos[index+1:])
 	require.NoError(t, err)
-	future := pos[:index+1] + fmt.Sprintf("%d", num+1)
+	future := pos[:index+1] + strconv.Itoa(num+1)
 	t.Logf("future position: %v", future)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1990,7 +2022,7 @@ func TestNoFutureGTID(t *testing.T) {
 		}
 	}()
 	defer close(ch)
-	err = vstream(ctx, t, future, nil, nil, ch)
+	err = vstream(ctx, t, future, nil, nil, ch, false)
 	want := "GTIDSet Mismatch"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, must contain %s", err, want)
@@ -2348,4 +2380,31 @@ func TestFilteredIsNullOperator(t *testing.T) {
 			ts.Run()
 		})
 	}
+}
+
+func TestUVStreamerNoCopyWithGTID(t *testing.T) {
+	execStatements(t, []string{
+		"create table t1(id int, val varchar(128), primary key(id))",
+		"insert into t1 values (1, 'val1')",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	ctx := context.Background()
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1",
+		}},
+	}
+	pos := primaryPosition(t)
+	options := &binlogdatapb.VStreamOptions{
+		TablesToCopy: []string{"t1"},
+	}
+	uvs := newUVStreamer(ctx, engine, env.Dbcfgs.DbaWithDB(), env.SchemaEngine, pos,
+		nil, filter, testLocalVSchema, throttlerapp.VStreamerName,
+		func([]*binlogdatapb.VEvent) error { return nil }, options)
+	err := uvs.init()
+	require.NoError(t, err)
+	require.Empty(t, uvs.plans, "Should not build table plans when startPos is set")
 }

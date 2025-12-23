@@ -34,6 +34,7 @@ import (
 
 	"vitess.io/vitess/go/ioutil"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -245,6 +246,12 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 	}
 	defer closeFile(mwc, backupManifestFileName, params.Logger, &finalErr)
 
+	// Get the hostname
+	hostname, err := netutil.FullyQualifiedHostname()
+	if err != nil {
+		hostname = ""
+	}
+
 	// JSON-encode and write the MANIFEST
 	bm := &xtraBackupManifest{
 		// Common base fields
@@ -255,6 +262,7 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 			PurgedPosition: replicationPosition,
 			ServerUUID:     serverUUID,
 			TabletAlias:    params.TabletAlias,
+			Hostname:       hostname,
 			Keyspace:       params.Keyspace,
 			Shard:          params.Shard,
 			BackupTime:     FormatRFC3339(params.BackupTime.UTC()),
@@ -458,7 +466,7 @@ func (be *XtrabackupEngine) backupFiles(
 	sterrOutput := stderrBuilder.String()
 
 	if err := backupCmd.Wait(); err != nil {
-		return replicationPosition, vterrors.Wrap(err, fmt.Sprintf("xtrabackup failed with error. Output=%s", sterrOutput))
+		return replicationPosition, vterrors.Wrap(err, "xtrabackup failed with error. Output="+sterrOutput)
 	}
 
 	replicationPosition, rerr := findReplicationPositionFromXtrabackupInfo(params.Cnf.TmpDir, flavor, params.Logger)
@@ -471,7 +479,6 @@ func (be *XtrabackupEngine) backupFiles(
 
 // ExecuteRestore restores from a backup. Any error is returned.
 func (be *XtrabackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (*BackupManifest, error) {
-
 	var bm xtraBackupManifest
 
 	if err := getBackupManifestInto(ctx, bh, &bm); err != nil {

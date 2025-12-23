@@ -73,6 +73,9 @@ func NewUserPermission(fields []*querypb.Field, values []sqltypes.Value) *tablet
 		case "password_last_changed":
 			// we skip this one, as the value may be
 			// different on primary and replicas.
+		case "authentication_string":
+		// skip authentication_string as it
+		// may contain a password hash.
 		default:
 			up.Privileges[field.Name] = values[i].ToString()
 		}
@@ -162,7 +165,6 @@ func PermissionsString(permissions *tabletmanagerdatapb.Permissions) string {
 }
 
 func diffPermissions(name, leftName string, left permissionList, rightName string, right permissionList, er concurrency.ErrorRecorder) {
-
 	leftIndex := 0
 	rightIndex := 0
 	for leftIndex < left.Len() && rightIndex < right.Len() {

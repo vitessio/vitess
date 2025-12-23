@@ -75,7 +75,6 @@ func ElectNewPrimary(
 	// (TODO:@ajm188) it's a little gross we need to pass this, maybe embed in the context?
 	logger logutil.Logger,
 ) (*topodatapb.TabletAlias, error) {
-
 	var primaryCell string
 	if shardInfo.PrimaryAlias != nil {
 		primaryCell = shardInfo.PrimaryAlias.Cell
@@ -108,7 +107,7 @@ func ElectNewPrimary(
 		case opts.AvoidPrimaryAlias != nil && topoproto.TabletAliasEqual(tablet.Alias, opts.AvoidPrimaryAlias):
 			reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v matches the primary alias to avoid", topoproto.TabletAliasString(tablet.Alias)))
 			continue
-		case tablet.Tablet.Type != topodatapb.TabletType_REPLICA:
+		case tablet.Type != topodatapb.TabletType_REPLICA:
 			reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v is not a replica", topoproto.TabletAliasString(tablet.Alias)))
 			continue
 		}

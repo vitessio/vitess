@@ -91,6 +91,8 @@ func recursiveTransform(ctx *plancontext.PlanningContext, op operators.Operator)
 		return transformDMLWithInput(ctx, op)
 	case *operators.RecurseCTE:
 		return transformRecurseCTE(ctx, op)
+	case *operators.Window:
+		return transformWindow(ctx, op)
 	case *operators.PercentBasedMirror:
 		return transformPercentBasedMirror(ctx, op)
 	}

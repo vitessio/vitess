@@ -625,7 +625,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 			}
 			s = strings.TrimLeft(s, "0")
 			if isNegative {
-				s = fmt.Sprintf("-%s", s)
+				s = "-" + s
 			}
 			return []byte(s)
 		}

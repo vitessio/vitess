@@ -186,7 +186,7 @@ func (s *Server) MustListenAndServe() {
 }
 
 // listenFunc is extracted to mock out in tests.
-var listenFunc = net.Listen // nolint:gochecknoglobals
+var listenFunc = net.Listen
 
 // ListenAndServe sets up a listener, multiplexes it into gRPC and non-gRPC
 // requests, and binds the gRPC server and mux.Router to them, respectively. It
@@ -195,7 +195,7 @@ var listenFunc = net.Listen // nolint:gochecknoglobals
 //
 // On shutdown, it may begin a lame duck period (see Options) before beginning
 // a graceful shutdown of the gRPC server and closing listeners.
-func (s *Server) ListenAndServe() error { // nolint:funlen
+func (s *Server) ListenAndServe() error {
 	lis, err := listenFunc("tcp", s.opts.Addr)
 	if err != nil {
 		return err
@@ -219,7 +219,7 @@ func (s *Server) ListenAndServe() error { // nolint:funlen
 	// listen for signals
 	go func() {
 		sig := <-signals
-		err := fmt.Errorf("received signal: %v", sig) // nolint:goerr113
+		err := fmt.Errorf("received signal: %v", sig)
 		log.Warning(err)
 		shutdown <- err
 	}()

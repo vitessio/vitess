@@ -79,7 +79,6 @@ func TestUnionDistinct(t *testing.T) {
 				mcmp.Exec(`select curdate() from t1 union select id1 from t1`)
 			}
 		})
-
 	}
 }
 

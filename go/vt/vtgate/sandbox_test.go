@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"strconv"
@@ -250,7 +251,7 @@ func (sct *sandboxTopo) GetSrvKeyspaceNames(ctx context.Context, cell string, st
 func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	sand := getSandbox(keyspace)
 	if sand == nil {
-		return nil, fmt.Errorf("topo error GetSrvKeyspace")
+		return nil, errors.New("topo error GetSrvKeyspace")
 	}
 	sand.sandmu.Lock()
 	defer sand.sandmu.Unlock()
@@ -260,7 +261,7 @@ func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace strin
 	sand.SrvKeyspaceCounter++
 	if sand.SrvKeyspaceMustFail > 0 {
 		sand.SrvKeyspaceMustFail--
-		return nil, fmt.Errorf("topo error GetSrvKeyspace")
+		return nil, errors.New("topo error GetSrvKeyspace")
 	}
 	switch keyspace {
 	case KsTestUnsharded:
@@ -339,7 +340,6 @@ func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string, callba
 				if !callback(update.Value, update.Err) {
 					panic("sandboxTopo callback returned false")
 				}
-
 			}
 		}
 	}()

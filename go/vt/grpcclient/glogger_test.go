@@ -64,7 +64,6 @@ func TestGlogger(t *testing.T) {
 		gl.Warningf("formatted %s", "warning")
 	})
 	require.Contains(t, output, "formatted warning")
-
 }
 
 func TestGloggerError(t *testing.T) {

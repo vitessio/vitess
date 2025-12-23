@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -76,10 +77,10 @@ func TestRecurseDualQuery(t *testing.T) {
 	require.NoError(t, err)
 
 	rightPrim.ExpectLog(t, []string{
-		`Execute col1: type:INT64 value:"1" false`,
-		`Execute col1: type:INT64 value:"2" false`,
-		`Execute col1: type:INT64 value:"3" false`,
-		`Execute col1: type:INT64 value:"4" false`,
+		fmt.Sprintf(`Execute col1: %v false`, sqltypes.Int64BindVariable(1)),
+		fmt.Sprintf(`Execute col1: %v false`, sqltypes.Int64BindVariable(2)),
+		fmt.Sprintf(`Execute col1: %v false`, sqltypes.Int64BindVariable(3)),
+		fmt.Sprintf(`Execute col1: %v false`, sqltypes.Int64BindVariable(4)),
 	})
 
 	wantRes := sqltypes.MakeTestResult(
@@ -103,10 +104,10 @@ func TestRecurseDualQuery(t *testing.T) {
 	require.NoError(t, err)
 
 	rightPrim.ExpectLog(t, []string{
-		`StreamExecute col1: type:INT64 value:"1" false`,
-		`StreamExecute col1: type:INT64 value:"2" false`,
-		`StreamExecute col1: type:INT64 value:"3" false`,
-		`StreamExecute col1: type:INT64 value:"4" false`,
+		fmt.Sprintf(`StreamExecute col1: %v false`, sqltypes.Int64BindVariable(1)),
+		fmt.Sprintf(`StreamExecute col1: %v false`, sqltypes.Int64BindVariable(2)),
+		fmt.Sprintf(`StreamExecute col1: %v false`, sqltypes.Int64BindVariable(3)),
+		fmt.Sprintf(`StreamExecute col1: %v false`, sqltypes.Int64BindVariable(4)),
 	})
 	expectResult(t, r, wantRes)
 
@@ -119,11 +120,10 @@ func TestRecurseDualQuery(t *testing.T) {
 	require.NoError(t, err)
 
 	rightPrim.ExpectLog(t, []string{
-		`Execute col1: type:INT64 value:"1" false`,
-		`Execute col1: type:INT64 value:"2" false`,
-		`Execute col1: type:INT64 value:"3" false`,
-		`Execute col1: type:INT64 value:"4" false`,
+		fmt.Sprintf(`Execute col1: %v false`, sqltypes.Int64BindVariable(1)),
+		fmt.Sprintf(`Execute col1: %v false`, sqltypes.Int64BindVariable(2)),
+		fmt.Sprintf(`Execute col1: %v false`, sqltypes.Int64BindVariable(3)),
+		fmt.Sprintf(`Execute col1: %v false`, sqltypes.Int64BindVariable(4)),
 	})
 	expectResult(t, r, wantRes)
-
 }

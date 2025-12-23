@@ -18,7 +18,6 @@ package vtgate
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"testing"
 
@@ -1414,7 +1413,6 @@ func TestInsertShardedKeyrange(t *testing.T) {
 }
 
 func TestInsertShardedAutocommitLookup(t *testing.T) {
-
 	vschema := `
 {
 	"sharded": true,
@@ -1845,6 +1843,8 @@ func TestInsertGeneratorSharded(t *testing.T) {
 		InsertIDChanged: true,
 	}
 	utils.MustMatch(t, wantResult, result)
+	// Verify that LastInsertId is set in the session (regression test for #18946)
+	assert.EqualValues(t, 1, session.LastInsertId)
 }
 
 func TestInsertAutoincSharded(t *testing.T) {
@@ -1901,6 +1901,8 @@ func TestInsertGeneratorUnsharded(t *testing.T) {
 		RowsAffected:    1,
 	}
 	utils.MustMatch(t, wantResult, result)
+	// Verify that LastInsertId is set in the session (regression test for #18946)
+	assert.EqualValues(t, 1, session.LastInsertId)
 }
 
 func TestInsertAutoincUnsharded(t *testing.T) {
@@ -2364,7 +2366,6 @@ func TestInsertBadAutoInc(t *testing.T) {
 }
 
 func TestKeyDestRangeQuery(t *testing.T) {
-
 	type testCase struct {
 		inputQuery, targetString string
 		expectedSbc1Query        string
@@ -2967,7 +2968,7 @@ func TestInsertSelectFromDual(t *testing.T) {
 			sbc1.Queries = nil
 			sbc2.Queries = nil
 			sbclookup.Queries = nil
-			wQuery := fmt.Sprintf("set @@workload = %s", workload)
+			wQuery := "set @@workload = " + workload
 			// set result for dual query.
 			sbc1.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("1|2|myname", "int64|int64|varchar"), "1|2|myname")})
 
@@ -3032,7 +3033,7 @@ func TestInsertSelectFromTable(t *testing.T) {
 		sbc1.Queries = nil
 		sbc2.Queries = nil
 		sbclookup.Queries = nil
-		wQuery := fmt.Sprintf("set @@workload = %s", workload)
+		wQuery := "set @@workload = " + workload
 		_, err := executorExecSession(context.Background(), executor, session, wQuery, nil)
 		require.NoError(t, err)
 

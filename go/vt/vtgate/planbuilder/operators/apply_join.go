@@ -214,7 +214,7 @@ func (aj *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, orig *sq
 	case deps.IsSolvedBy(both):
 		col = breakExpressionInLHSandRHS(ctx, e, TableID(aj.LHS))
 	default:
-		panic(vterrors.VT13001(fmt.Sprintf("expression depends on tables outside this join: %s", sqlparser.String(e))))
+		panic(vterrors.VT13001("expression depends on tables outside this join: " + sqlparser.String(e)))
 	}
 
 	col.GroupBy = addToGroupBy

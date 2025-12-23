@@ -26,6 +26,7 @@ import (
 	"path"
 	"reflect"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -36,11 +37,15 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 const mysqlShutdownTimeout = 1 * time.Minute
@@ -526,7 +531,6 @@ func TestRestoreManifestMySQLVersionValidation(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 type forTest []FileEntry
@@ -734,5 +738,280 @@ func TestScanLinesToLogger(t *testing.T) {
 
 	for i, event := range logger.Events {
 		require.Equal(t, fmt.Sprintf("test: foobar %d", i), event.Value)
+	}
+}
+
+func TestExecuteBackupInitSQL(t *testing.T) {
+	testCases := []struct {
+		name          string
+		params        *BackupParams
+		setupMysqld   func(*FakeMysqlDaemon)
+		wantErr       bool
+		wantErrString string
+		wantLogMsg    string
+		wantNoLogMsg  bool
+	}{
+		{
+			name:         "nil params",
+			params:       nil,
+			wantErr:      false,
+			wantNoLogMsg: true,
+		},
+		{
+			name: "nil InitSQL",
+			params: &BackupParams{
+				InitSQL: nil,
+			},
+			wantErr:      false,
+			wantNoLogMsg: true,
+		},
+		{
+			name: "no queries",
+			params: &BackupParams{
+				InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+					Queries: []string{},
+				},
+			},
+			wantErr:      false,
+			wantNoLogMsg: true,
+		},
+		{
+			name: "skip queries - tablet type not in allow list",
+			params: &BackupParams{
+				TabletType: topodatapb.TabletType_PRIMARY,
+				InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+					Queries:     []string{"OPTIMIZE TABLE foo"},
+					TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY},
+					Timeout:     protoutil.DurationToProto(30 * time.Second),
+				},
+				Logger: logutil.NewMemoryLogger(),
+			},
+			wantErr:    false,
+			wantLogMsg: "Skipping backup init SQL queries",
+		},
+		{
+			name: "missing timeout",
+			params: &BackupParams{
+				TabletType: topodatapb.TabletType_REPLICA,
+				InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+					Queries:     []string{"OPTIMIZE LOCAL TABLE foo"},
+					TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_REPLICA},
+					Timeout:     nil,
+				},
+				Logger: logutil.NewMemoryLogger(),
+			},
+			wantErr:       true,
+			wantErrString: "no timeout provided",
+			wantNoLogMsg:  true,
+		},
+		{
+			name: "successful execution with single query",
+			params: &BackupParams{
+				TabletType: topodatapb.TabletType_PRIMARY,
+				InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+					Queries:     []string{"OPTIMIZE LOCAL TABLE foo"},
+					TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA},
+					Timeout:     protoutil.DurationToProto(30 * time.Second),
+					FailOnError: true,
+				},
+				Logger: logutil.NewMemoryLogger(),
+			},
+			setupMysqld: func(fmd *FakeMysqlDaemon) {
+				fmd.ExpectedExecuteSuperQueryList = []string{
+					"OPTIMIZE LOCAL TABLE foo",
+				}
+			},
+			wantErr:    false,
+			wantLogMsg: "Successfully completed init SQL queries: \"OPTIMIZE LOCAL TABLE foo\"",
+		},
+		{
+			name: "successful execution with multiple queries in order",
+			params: &BackupParams{
+				TabletType: topodatapb.TabletType_PRIMARY,
+				InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+					Queries: []string{
+						"SET sql_log_bin=0",
+						"SET super_read_only=OFF",
+						"SET SESSION innodb_fast_shutdown=0",
+						"OPTIMIZE TABLE test.table1",
+						"OPTIMIZE TABLE test.table2",
+						"SET sql_log_bin=1",
+						"SET super_read_only=ON",
+					},
+					TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+					Timeout:     protoutil.DurationToProto(30 * time.Second),
+					FailOnError: true,
+				},
+				Logger: logutil.NewMemoryLogger(),
+			},
+			setupMysqld: func(fmd *FakeMysqlDaemon) {
+				fmd.ExpectedExecuteSuperQueryList = []string{
+					"SET sql_log_bin=0",
+					"SET super_read_only=OFF",
+					"SET SESSION innodb_fast_shutdown=0",
+					"OPTIMIZE TABLE test.table1",
+					"OPTIMIZE TABLE test.table2",
+					"SET sql_log_bin=1",
+					"SET super_read_only=ON",
+				}
+			},
+			wantErr:    false,
+			wantLogMsg: "Successfully completed init SQL queries",
+		},
+		{
+			name: "no tablet types provided",
+			params: &BackupParams{
+				TabletType: topodatapb.TabletType_PRIMARY,
+				InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+					Queries:     []string{"OPTIMIZE TABLE foo"},
+					TabletTypes: []topodatapb.TabletType{},
+					Timeout:     protoutil.DurationToProto(30 * time.Second),
+				},
+				Logger: logutil.NewMemoryLogger(),
+			},
+			wantErr:       true,
+			wantErrString: "backup init SQL queries provided but no tablet types",
+			wantNoLogMsg:  true,
+		},
+		{
+			name: "query failure with FailOnError true",
+			params: &BackupParams{
+				TabletType: topodatapb.TabletType_PRIMARY,
+				InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+					Queries:     []string{"INVALID SQL QUERY"},
+					TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+					Timeout:     protoutil.DurationToProto(30 * time.Second),
+					FailOnError: true,
+				},
+				Logger: logutil.NewMemoryLogger(),
+			},
+			setupMysqld: func(fmd *FakeMysqlDaemon) {
+				fmd.ExpectedExecuteSuperQueryList = []string{"DIFFERENT QUERY"}
+			},
+			wantErr:       true,
+			wantErrString: "failed to execute init SQL queries",
+		},
+		{
+			name: "query failure with FailOnError false",
+			params: &BackupParams{
+				TabletType: topodatapb.TabletType_PRIMARY,
+				InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+					Queries:     []string{"INVALID SQL QUERY"},
+					TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+					Timeout:     protoutil.DurationToProto(30 * time.Second),
+					FailOnError: false,
+				},
+				Logger: logutil.NewMemoryLogger(),
+			},
+			setupMysqld: func(fmd *FakeMysqlDaemon) {
+				fmd.ExpectedExecuteSuperQueryList = []string{"DIFFERENT QUERY"}
+			},
+			wantErr:    false,
+			wantLogMsg: "Continuing with backup after failed init SQL work",
+		},
+		{
+			name: "zero timeout value",
+			params: &BackupParams{
+				TabletType: topodatapb.TabletType_PRIMARY,
+				InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+					Queries:     []string{"OPTIMIZE TABLE foo"},
+					TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+					Timeout:     protoutil.DurationToProto(0),
+				},
+				Logger: logutil.NewMemoryLogger(),
+			},
+			wantErr:       true,
+			wantErrString: "no timeout provided",
+			wantNoLogMsg:  true,
+		},
+	}
+
+	// Test case for context cancellation during query execution.
+	t.Run("parent context canceled with query failure", func(t *testing.T) {
+		sqldb := fakesqldb.New(t)
+		defer sqldb.Close()
+		mysqld := NewFakeMysqlDaemon(sqldb)
+		defer mysqld.Close()
+
+		// Set up to fail the query.
+		mysqld.ExpectedExecuteSuperQueryList = []string{"DIFFERENT QUERY"}
+		logger := logutil.NewMemoryLogger()
+
+		params := &BackupParams{
+			TabletType: topodatapb.TabletType_PRIMARY,
+			InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+				Queries:     []string{"ACTUAL QUERY"},
+				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+				Timeout:     protoutil.DurationToProto(30 * time.Second),
+				FailOnError: false,
+			},
+			Mysqld: mysqld,
+			Logger: logger,
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel() // Cancel immediately to simulate parent context cancellation
+
+		err := ExecuteBackupInitSQL(ctx, params)
+		require.NoError(t, err) // Should not error because FailOnError is false
+
+		// Check that the appropriate log message was generated.
+		found := false
+		for _, event := range logger.Events {
+			if strings.Contains(event.Value, "Canceling init SQL work due to hitting the configured timeout") {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "Expected log message about canceling init SQL work")
+	})
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var mysqld *FakeMysqlDaemon
+			if tc.params != nil && tc.params.InitSQL != nil && len(tc.params.InitSQL.Queries) > 0 && tc.setupMysqld != nil {
+				sqldb := fakesqldb.New(t)
+				defer sqldb.Close()
+				mysqld = NewFakeMysqlDaemon(sqldb)
+				defer mysqld.Close()
+				tc.setupMysqld(mysqld)
+				tc.params.Mysqld = mysqld
+			}
+
+			ctx := context.Background()
+			err := ExecuteBackupInitSQL(ctx, tc.params)
+
+			if tc.wantErr {
+				require.Error(t, err)
+				if tc.wantErrString != "" {
+					assert.ErrorContains(t, err, tc.wantErrString)
+				}
+			} else {
+				require.NoError(t, err)
+			}
+
+			if mysqld != nil && !tc.wantErr {
+				assert.NoError(t, mysqld.CheckSuperQueryList())
+			}
+
+			// Verify logging too.
+			if tc.params != nil && tc.params.Logger != nil {
+				memLogger, ok := tc.params.Logger.(*logutil.MemoryLogger)
+				require.True(t, ok, "Expected MemoryLogger")
+
+				if tc.wantNoLogMsg {
+					assert.Empty(t, memLogger.Events, "Expected no log messages")
+				} else if tc.wantLogMsg != "" {
+					found := false
+					for _, event := range memLogger.Events {
+						if strings.Contains(event.Value, tc.wantLogMsg) {
+							found = true
+							break
+						}
+					}
+					assert.True(t, found, "Expected log message containing %q, got events: %+v", tc.wantLogMsg, memLogger.Events)
+				}
+			}
+		})
 	}
 }

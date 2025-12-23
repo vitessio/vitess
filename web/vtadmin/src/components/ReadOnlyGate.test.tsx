@@ -23,11 +23,11 @@ const ORIGINAL_PROCESS_ENV = { ...import.meta.env };
 
 describe('ReadOnlyGate', () => {
     afterEach(() => {
-        import.meta.env = ORIGINAL_PROCESS_ENV;
+        Object.assign(import.meta.env, ORIGINAL_PROCESS_ENV);
     });
 
     it('hides children when in read-only mode', () => {
-        (process as any).env.VITE_READONLY_MODE = 'true';
+        import.meta.env.VITE_READONLY_MODE = 'true';
 
         render(
             <ReadOnlyGate>
@@ -40,6 +40,8 @@ describe('ReadOnlyGate', () => {
     });
 
     it('shows children when not in read-only mode', () => {
+        import.meta.env.VITE_READONLY_MODE = 'false';
+
         render(
             <ReadOnlyGate>
                 <div data-testid="child">🌶🌶🌶</div>

@@ -17,6 +17,7 @@ limitations under the License.
 package replication
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -189,7 +190,7 @@ func FindErrantGTIDs(position Position, sourceUUID SID, otherPositions []Positio
 
 	gtidSet, ok := position.GTIDSet.(Mysql56GTIDSet)
 	if !ok {
-		return nil, fmt.Errorf("errant GTIDs can only be computed on the MySQL flavor")
+		return nil, errors.New("errant GTIDs can only be computed on the MySQL flavor")
 	}
 
 	otherSets := make([]Mysql56GTIDSet, 0, len(otherPositions))

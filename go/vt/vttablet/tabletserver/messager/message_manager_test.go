@@ -19,10 +19,10 @@ package messager
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"reflect"
 	"runtime"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -104,7 +104,7 @@ func newMMRow(id int64) *querypb.Row {
 		sqltypes.NewInt64(0),
 		sqltypes.NULL,
 		sqltypes.NewInt64(id),
-		sqltypes.NewVarBinary(fmt.Sprintf("%v", id)),
+		sqltypes.NewVarBinary(strconv.FormatInt(id, 10)),
 	})
 }
 

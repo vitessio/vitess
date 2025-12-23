@@ -86,7 +86,6 @@ func getVExplainQueriesFields() []*querypb.Field {
 		{Name: "keyspace", Type: sqltypes.VarChar},
 		{Name: "shard", Type: sqltypes.VarChar},
 		{Name: "query", Type: sqltypes.VarChar}}
-
 }
 
 func getVExplainAllFields() []*querypb.Field {

@@ -48,7 +48,6 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
-
 		topology := new(vttestpb.VTTestTopology)
 		topology.Keyspaces = []*vttestpb.Keyspace{
 			{
@@ -167,7 +166,6 @@ func assertTabletsPresent(t *testing.T) {
 		default:
 			t.Logf("invalid shard %s", parts[2])
 		}
-
 	}
 
 	assert.Equal(t, 2, numPrimary)

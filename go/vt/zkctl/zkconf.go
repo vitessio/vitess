@@ -24,6 +24,7 @@ limitations under the License.
 package zkctl
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -37,7 +38,7 @@ import (
 )
 
 type zkServerAddr struct {
-	ServerId     uint32 // nolint:revive
+	ServerId     uint32
 	Hostname     string
 	LeaderPort   int
 	ElectionPort int
@@ -45,7 +46,7 @@ type zkServerAddr struct {
 }
 
 type ZkConfig struct {
-	ServerId   uint32 // nolint:revive
+	ServerId   uint32
 	ClientPort int
 	Servers    []zkServerAddr
 	Extra      []string
@@ -93,7 +94,7 @@ func (cnf *ZkConfig) MyidFile() string {
 }
 
 func (cnf *ZkConfig) WriteMyid() error {
-	return os.WriteFile(cnf.MyidFile(), []byte(fmt.Sprintf("%v", cnf.ServerId)), 0o664)
+	return os.WriteFile(cnf.MyidFile(), []byte(strconv.FormatUint(uint64(cnf.ServerId), 10)), 0o664)
 }
 
 /*
@@ -117,7 +118,7 @@ func MakeZooCfg(cnfFiles []string, cnf *ZkConfig, header string) (string, error)
 
 	myTemplateSource.WriteString("\n") // in case `data` did not end with a newline
 	for _, extra := range cnf.Extra {
-		myTemplateSource.WriteString(fmt.Sprintf("%s\n", extra))
+		myTemplateSource.WriteString(extra + "\n")
 	}
 
 	myTemplate, err := template.New("foo").Parse(myTemplateSource.String())
@@ -178,7 +179,7 @@ func MakeZkConfigFromString(cmdLine string, myID uint32) *ZkConfig {
 			// 	panic(fmt.Errorf("expected fully qualified hostname: %v", zkServer.Hostname))
 			// }
 		default:
-			panic(fmt.Errorf("bad command line format for zk config"))
+			panic(errors.New("bad command line format for zk config"))
 		}
 		zkConfig.Servers = append(zkConfig.Servers, zkServer)
 	}

@@ -14,7 +14,7 @@ concurrency:
 jobs:
   build:
     name: VTop Example
-    runs-on: self-hosted
+    runs-on: oracle-vm-8cpu-32gb-x86-64
 
     steps:
       - name: Skip CI
@@ -58,18 +58,19 @@ jobs:
 
       - name: Tune the OS
         if: steps.changes.outputs.end_to_end == 'true'
-        run: |
-          echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
+        uses: ./.github/actions/tune-os
 
-          # Don't waste a bunch of time processing man-db triggers
-          echo "set man-db/auto-update false" | sudo debconf-communicate
-          sudo dpkg-reconfigure man-db
+      - name: Setup MySQL
+        if: steps.changes.outputs.end_to_end == 'true'
+        uses: ./.github/actions/setup-mysql
+        with:
+          flavor: mysql-8.4
 
       - name: Get dependencies
         if: steps.changes.outputs.end_to_end == 'true'
         run: |
           # Install everything we need, and configure
-          sudo apt-get install -y eatmydata make
+          sudo apt-get install -y make
           go mod download
 
       # needed for vtctldclient
@@ -88,4 +89,4 @@ jobs:
         timeout-minutes: 60
         run: |
           source build.env
-          eatmydata -- go run test.go -docker=false -skip-build -print-log -follow -retry=1 -timeout=60m vtop_example
+          go run test.go -docker=false -skip-build -print-log -follow -retry=1 -timeout=60m vtop_example

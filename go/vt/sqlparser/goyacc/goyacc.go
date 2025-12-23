@@ -351,7 +351,6 @@ var zznewstate = 0
 const EOF = -1
 
 func main() {
-
 	setup() // initialize and read productions
 
 	tbitset = (ntokens + 32) / 32
@@ -1627,7 +1626,6 @@ func openup() {
 	if ftable == nil {
 		errorf("can't create file %v", oflag)
 	}
-
 }
 
 // return a pointer to the name of symbol i
@@ -2881,13 +2879,11 @@ nextn:
 		// check the position equals another only if the states are identical
 		for j := 0; j < nstate; j++ {
 			if indgo[j] == n {
-
 				// we have some disagreement
 				if flag != 0 {
 					continue nextn
 				}
 				if nq == len(optst[j]) {
-
 					// states are equal
 					indgo[i] = n
 					if adb > 1 {

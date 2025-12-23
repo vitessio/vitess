@@ -18,6 +18,7 @@ package vstreamer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync/atomic"
@@ -152,7 +153,7 @@ func (conn *snapshotConn) limitOpenBinlogSize() (bool, error) {
 		return rotatedLog, err
 	}
 	if res == nil || len(res.Rows) == 0 {
-		return rotatedLog, fmt.Errorf("SHOW BINARY LOGS returned no rows")
+		return rotatedLog, errors.New("SHOW BINARY LOGS returned no rows")
 	}
 	// the current log will be the last one in the results
 	curLogIdx := len(res.Rows) - 1
@@ -231,11 +232,11 @@ func (conn *snapshotConn) startSnapshotAllTables(ctx context.Context) (gtid stri
 				continue
 			}
 			tableName = sqlparser.String(sqlparser.NewIdentifierCS(tableName))
-			lockClause := fmt.Sprintf("%s read", tableName)
+			lockClause := tableName + " read"
 			lockClauses = append(lockClauses, lockClause)
 		}
 		if len(lockClauses) > 0 {
-			query := fmt.Sprintf("lock tables %s", strings.Join(lockClauses, ","))
+			query := "lock tables " + strings.Join(lockClauses, ",")
 			if _, err := lockConn.ExecuteFetch(query, 1, false); err != nil {
 				log.Error(vterrors.Wrapf(err, "explicitly locking all %v tables", len(lockClauses)))
 				return "", err

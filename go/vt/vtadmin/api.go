@@ -2657,11 +2657,14 @@ func (api *API) VExplain(ctx context.Context, req *vtadminpb.VExplainRequest) (*
 		return nil, err
 	}
 
-	if _, ok := stmt.(*sqlparser.VExplainStmt); !ok {
+	vexplainStmt, ok := stmt.(*sqlparser.VExplainStmt)
+	if !ok {
 		return nil, vterrors.VT09017("Invalid VExplain statement")
 	}
 
-	response, err := c.DB.VExplain(ctx, req.GetSql(), stmt.(*sqlparser.VExplainStmt))
+	// Canonicalize the SQL using the AST, to prevent use of raw user input.
+	canonicalQuery := sqlparser.String(vexplainStmt)
+	response, err := c.DB.VExplain(ctx, canonicalQuery, vexplainStmt)
 
 	if err != nil {
 		return nil, err

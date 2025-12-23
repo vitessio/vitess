@@ -43,6 +43,7 @@ Flags:
       --external-topo-implementation string                              the topology implementation to use for vtcombo process
       --extra-my-cnf string                                              extra files to add to the config, separated by ':'
       --foreign-key-mode string                                          This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow (default "allow")
+      --gateway-initial-tablet-timeout duration                          At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type (default 30s)
       --grpc-auth-mode string                                            Which auth plugin implementation to use (eg: static)
       --grpc-auth-mtls-allowed-substrings string                         List of substrings of at least one of the client certificate names (separated by colon).
       --grpc-auth-static-client-creds string                             When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
@@ -163,6 +164,7 @@ Flags:
       --vtgate-grpc-ca string                                            the server ca to use to validate servers when connecting
       --vtgate-grpc-cert string                                          the cert to use to connect
       --vtgate-grpc-crl string                                           the server crl to use to validate server certificates when connecting
+      --vtgate-grpc-fail-fast                                            whether to enable grpc fail fast when connecting
       --vtgate-grpc-key string                                           the key to use to connect
       --vtgate-grpc-server-name string                                   the server name to use to validate server certificate
       --xbstream-restore-flags string                                    Flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt

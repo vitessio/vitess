@@ -18,6 +18,7 @@ package topotests
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -86,7 +87,7 @@ func TestCellInfo(t *testing.T) {
 	}
 
 	// Test failing update.
-	updateErr := fmt.Errorf("inside error")
+	updateErr := errors.New("inside error")
 	if err := ts.UpdateCellInfoFields(ctx, cell, func(ci *topodatapb.CellInfo) error {
 		return updateErr
 	}); err != updateErr {

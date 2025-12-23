@@ -117,7 +117,6 @@ func TestQueries(t *testing.T) {
 		// MySQL 5.7 is adding the NO_DEFAULT_VALUE_FLAG to Flags.
 		expectedResult.Fields[0].Flags |= uint32(querypb.MySqlFlag_NO_DEFAULT_VALUE_FLAG)
 		assert.True(t, result.Equal(expectedResult), "unexpected result for select, got:\n%v\nexpected:\n%v\n", result, expectedResult)
-
 	}
 
 	// Insert a few rows.
@@ -125,7 +124,6 @@ func TestQueries(t *testing.T) {
 		result, err := conn.ExecuteFetch(fmt.Sprintf("insert into a(id, name) values(%v, 'nice name %v')", 1000+i, i), 1000, true)
 		require.NoError(t, err, "ExecuteFetch(%v) failed: %v", i, err)
 		assert.Equal(t, uint64(1), result.RowsAffected, "insert into returned RowsAffected %v, was expecting 1", result.RowsAffected)
-
 	}
 
 	// And use a streaming query to read them back.
@@ -137,7 +135,6 @@ func TestQueries(t *testing.T) {
 	result, err = conn.ExecuteFetch("drop table a", 0, false)
 	require.NoError(t, err, "drop table failed: %v", err)
 	assert.Equal(t, uint64(0), result.RowsAffected, "insert into returned RowsAffected %v, was expecting 0", result.RowsAffected)
-
 }
 
 func TestLargeQueries(t *testing.T) {
@@ -168,7 +165,6 @@ func TestLargeQueries(t *testing.T) {
 					"Expected single row single column string.")
 			}
 			require.Equal(t, expectedString, result.Rows[0][0].ToString(), "Result row was incorrect. Suppressing large string")
-
 		}
 	}
 }
@@ -214,7 +210,6 @@ func readRowsUsingStream(t *testing.T, conn *mysql.Conn, expectedCount int) {
 		// MySQL 5.7 is adding the NO_DEFAULT_VALUE_FLAG to Flags.
 		expectedFields[0].Flags |= uint32(querypb.MySqlFlag_NO_DEFAULT_VALUE_FLAG)
 		require.True(t, sqltypes.FieldsEqual(fields, expectedFields), "fields are not right, got:\n%v\nexpected:\n%v", fields, expectedFields)
-
 	}
 
 	// Read the rows.
@@ -263,7 +258,6 @@ func doTestWarnings(t *testing.T, disableClientDeprecateEOF bool) {
 
 	_, err = conn.ExecuteFetch("drop table a", 0, false)
 	require.NoError(t, err, "create table failed: %v", err)
-
 }
 
 func TestWarningsDeprecateEOF(t *testing.T) {
@@ -283,8 +277,7 @@ func TestSysInfo(t *testing.T) {
 	_, err = conn.ExecuteFetch("drop table if exists `a`", 1000, true)
 	require.NoError(t, err)
 
-	_, err = conn.ExecuteFetch(fmt.Sprintf("CREATE TABLE `a` (`one` int NOT NULL,`two` int NOT NULL,PRIMARY KEY (`one`,`two`)) ENGINE=InnoDB DEFAULT CHARSET=%s",
-		charsetName), 1000, true)
+	_, err = conn.ExecuteFetch("CREATE TABLE `a` (`one` int NOT NULL,`two` int NOT NULL,PRIMARY KEY (`one`,`two`)) ENGINE=InnoDB DEFAULT CHARSET="+charsetName, 1000, true)
 	require.NoError(t, err)
 	defer conn.ExecuteFetch("drop table `a`", 1000, true)
 

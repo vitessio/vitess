@@ -84,6 +84,7 @@ Flags:
       --consul-auth-static-file string                                   JSON File to read the topos/tokens from.
       --datadog-agent-host string                                        host to send spans to. if empty, no tracing will be done
       --datadog-agent-port string                                        port to send spans to. if empty, no tracing will be done
+      --datadog-trace-debug-mode                                         enable debug mode for datadog tracing
       --db-allprivs-password string                                      db allprivs password
       --db-allprivs-use-ssl                                              Set this flag to false to make the allprivs connection to not use ssl (default true)
       --db-allprivs-user string                                          db allprivs user userKey (default "vt_allprivs")
@@ -200,7 +201,8 @@ Flags:
       --init-db-name-override string                                     (init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>
       --init-keyspace string                                             (init parameter) keyspace to use for this tablet
       --init-shard string                                                (init parameter) shard to use for this tablet
-      --init-tablet-type string                                          (init parameter) tablet type to use for this tablet. Valid values are: PRIMARY, REPLICA, SPARE, and RDONLY. The default is REPLICA.
+      --init-tablet-type string                                          (init parameter) tablet type to use for this tablet. Valid values are: REPLICA, RDONLY, and SPARE. The default is REPLICA.
+      --init-tablet-type-lookup                                          (Experimental, init parameter) if enabled, uses tablet alias to look up the tablet type from the existing topology record on restart and use that instead of init-tablet-type. This allows tablets to maintain their changed roles (e.g., RDONLY/DRAINED) across restarts. If disabled or if no topology record exists, init-tablet-type will be used.
       --init-tags StringMap                                              (init parameter) comma separated list of key:value pairs used to tag the tablet
       --init-timeout duration                                            (init parameter) timeout to use for the init phase. (default 1m0s)
       --jaeger-agent-host string                                         host and port to send spans to. if empty, no tracing will be done

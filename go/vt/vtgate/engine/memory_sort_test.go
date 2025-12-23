@@ -108,7 +108,6 @@ func TestMemorySortStreamExecuteWeightString(t *testing.T) {
 	var results []*sqltypes.Result
 
 	t.Run("order by weight string", func(t *testing.T) {
-
 		err := ms.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
 			results = append(results, qr)
 			return nil

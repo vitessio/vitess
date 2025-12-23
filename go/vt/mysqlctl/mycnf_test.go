@@ -96,8 +96,6 @@ func TestMycnf(t *testing.T) {
 // 3. go test
 // 4. \rm $VTROOT/vthook/make_mycnf
 // 5. Add No Prefix back
-
-// nolint
 func NoTestMycnfHook(t *testing.T) {
 	uid := uint32(11111)
 	cnf := NewMycnf(uid, 6802)

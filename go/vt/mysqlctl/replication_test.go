@@ -18,7 +18,7 @@ package mysqlctl
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"math"
 	"net"
 	"strings"
@@ -40,7 +40,6 @@ func testRedacted(t *testing.T, source, expected string) {
 }
 
 func TestRedactSourcePassword(t *testing.T) {
-
 	// regular test case
 	testRedacted(t, `CHANGE REPLICATION SOURCE TO
   SOURCE_PASSWORD = 'AAA',
@@ -71,7 +70,6 @@ func TestRedactSourcePassword(t *testing.T) {
 }
 
 func TestRedactMasterPassword(t *testing.T) {
-
 	// regular test case
 	testRedacted(t, `CHANGE MASTER TO
   MASTER_PASSWORD = 'AAA',
@@ -137,7 +135,7 @@ func TestWaitForReplicationStart(t *testing.T) {
 	err := WaitForReplicationStart(context.Background(), fakemysqld, 2)
 	assert.NoError(t, err)
 
-	fakemysqld.ReplicationStatusError = fmt.Errorf("test error")
+	fakemysqld.ReplicationStatusError = errors.New("test error")
 	err = WaitForReplicationStart(context.Background(), fakemysqld, 2)
 	assert.ErrorContains(t, err, "test error")
 

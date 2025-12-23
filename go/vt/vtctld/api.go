@@ -342,7 +342,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository) {
 					return nil, fmt.Errorf("could not fetch cell info: %v", err)
 				}
 				if len(cells) == 0 {
-					return nil, fmt.Errorf("no local cells have been created yet")
+					return nil, errors.New("no local cells have been created yet")
 				}
 				cell = cells[0]
 			} else {
@@ -378,7 +378,6 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository) {
 			srvKeyspaces[keyspaceName] = srvKeyspace
 		}
 		return srvKeyspaces, nil
-
 	})
 
 	// Tablets
@@ -531,7 +530,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository) {
 			return err
 		}
 
-		requestContext := fmt.Sprintf("vtctld/api:%s", apiCallUUID)
+		requestContext := "vtctld/api:" + apiCallUUID
 		executor := schemamanager.NewTabletExecutor(requestContext, wr.TopoServer(), wr.TabletManagerClient(), wr.Logger(), time.Duration(req.ReplicaTimeoutSeconds)*time.Second, 0, actions.env.Parser())
 		if err := executor.SetDDLStrategy(req.DDLStrategy); err != nil {
 			return fmt.Errorf("error setting DDL strategy: %v", err)

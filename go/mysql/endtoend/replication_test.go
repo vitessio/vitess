@@ -339,7 +339,6 @@ func TestRowReplicationWithRealDatabase(t *testing.T) {
 	if _, err := dConn.ExecuteFetch("drop table replication", 0, false); err != nil {
 		t.Fatal(err)
 	}
-
 }
 
 // TestRowReplicationTypes creates a table with all
@@ -1031,14 +1030,12 @@ func TestRowReplicationTypes(t *testing.T) {
 
 	for i, tcase := range testcases {
 		assert.True(t, reflect.DeepEqual(result.Rows[0][i+1], result.Rows[1][i+1]), "Field %v is not the same, got %v and %v", tcase.name, result.Rows[0][i+1], result.Rows[1][i+1])
-
 	}
 
 	// Drop the table, we're done.
 	if _, err := dConn.ExecuteFetch("drop table replicationtypes", 0, false); err != nil {
 		t.Fatal(err)
 	}
-
 }
 
 // valuesForTests is a helper method to return the sqltypes.Value

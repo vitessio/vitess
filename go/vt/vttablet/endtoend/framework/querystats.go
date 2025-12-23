@@ -18,7 +18,6 @@ package framework
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 )
 
@@ -33,7 +32,7 @@ type QueryStat struct {
 func QueryStats() map[string]QueryStat {
 	out := make(map[string]QueryStat)
 	var list []QueryStat
-	response, err := http.Get(fmt.Sprintf("%s/debug/query_stats", ServerAddress))
+	response, err := http.Get(ServerAddress + "/debug/query_stats")
 	if err != nil {
 		return out
 	}

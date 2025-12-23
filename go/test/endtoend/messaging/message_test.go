@@ -19,6 +19,7 @@ package messaging
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -82,9 +83,9 @@ func TestMessage(t *testing.T) {
 	require.NoError(t, err)
 	defer streamConn.Close()
 
-	utils.Exec(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
+	utils.Exec(t, conn, "use "+lookupKeyspace)
 	utils.Exec(t, conn, createMessage)
-	clusterInstance.VtctldClientProcess.ExecuteCommand(fmt.Sprintf("ReloadSchemaKeyspace %s", lookupKeyspace))
+	clusterInstance.VtctldClientProcess.ExecuteCommand("ReloadSchemaKeyspace " + lookupKeyspace)
 
 	defer utils.Exec(t, conn, "drop table vitess_message")
 
@@ -220,7 +221,7 @@ func TestThreeColMessage(t *testing.T) {
 	require.NoError(t, err)
 	defer streamConn.Close()
 
-	utils.Exec(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
+	utils.Exec(t, conn, "use "+lookupKeyspace)
 	utils.Exec(t, conn, createThreeColMessage)
 	defer utils.Exec(t, conn, "drop table vitess_message3")
 
@@ -313,7 +314,7 @@ func TestSpecificStreamingColsMessage(t *testing.T) {
 	require.NoError(t, err)
 	defer streamConn.Close()
 
-	utils.Exec(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
+	utils.Exec(t, conn, "use "+lookupKeyspace)
 	utils.Exec(t, conn, createSpecificStreamingColsMessage)
 	defer utils.Exec(t, conn, "drop table vitess_message4")
 
@@ -434,7 +435,6 @@ func TestReparenting(t *testing.T) {
 
 // TestConnection validate the connection count and message streaming.
 func TestConnection(t *testing.T) {
-
 	name := "sharded_message"
 
 	// 1 sec sleep added to avoid invalid connection count
@@ -582,7 +582,7 @@ func VtgateGrpcConn(ctx context.Context, cluster *cluster.LocalProcessCluster) (
 func (stream *VTGateStream) MessageStream(ks, shard string, keyRange *topodatapb.KeyRange, name string) (*sqltypes.Result, error) {
 	// start message stream which send received message to the respChan
 	session := stream.Session("@primary", nil)
-	resultStream, err := session.StreamExecute(stream.ctx, fmt.Sprintf("stream * from %s", name), nil)
+	resultStream, err := session.StreamExecute(stream.ctx, "stream * from "+name, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -621,7 +621,7 @@ func (stream *VTGateStream) Next() (*sqltypes.Result, error) {
 	case s := <-stream.respChan:
 		return s, nil
 	case <-timer.C:
-		return nil, fmt.Errorf("time limit exceeded")
+		return nil, errors.New("time limit exceeded")
 	}
 }
 

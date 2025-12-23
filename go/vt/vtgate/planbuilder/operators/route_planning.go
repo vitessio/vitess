@@ -44,7 +44,7 @@ func pushDerived(ctx *plancontext.PlanningContext, op *Horizon) (Operator, *Appl
 		return op, NoRewrite
 	}
 
-	if !(innerRoute.Routing.OpCode() == engine.EqualUnique) && !op.IsMergeable(ctx) {
+	if (innerRoute.Routing.OpCode() != engine.EqualUnique) && !op.IsMergeable(ctx) {
 		// no need to check anything if we are sure that we will only hit a single shard
 		return op, NoRewrite
 	}
@@ -250,6 +250,10 @@ func findBestJoin(
 				continue
 			}
 			plan := getJoinFor(ctx, planCache, lhs, rhs, joinPredicates)
+			if _, ok := plan.(*Route); ok {
+				// we were able to merge the two inputs - we're done for now
+				return plan, i, j
+			}
 			if bestPlan == nil || CostOf(plan) < CostOf(bestPlan) {
 				bestPlan = plan
 				// remember which plans we based on, so we can remove them later
@@ -418,7 +422,6 @@ func findColumnVindex(ctx *plancontext.PlanningContext, a Operator, exp sqlparse
 }
 
 // unwrapDerivedTables we want to find the bottom layer of derived tables
-// nolint
 func unwrapDerivedTables(ctx *plancontext.PlanningContext, exp sqlparser.Expr) sqlparser.Expr {
 	for {
 		// if we are dealing with derived tables in derived tables

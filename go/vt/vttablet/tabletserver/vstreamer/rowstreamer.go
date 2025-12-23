@@ -88,7 +88,6 @@ type rowStreamer struct {
 func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string,
 	lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine,
 	mode RowStreamerMode, conn *snapshotConn, options *binlogdatapb.VStreamOptions) *rowStreamer {
-
 	config, err := GetVReplicationConfig(options)
 	if err != nil {
 		return nil
@@ -173,7 +172,7 @@ func (rs *rowStreamer) buildPlan() error {
 	// filtering will work.
 	rs.plan, err = buildTablePlan(rs.se.Environment(), ti, rs.vschema, rs.query)
 	if err != nil {
-		log.Errorf("%s", err.Error())
+		log.Errorf("Failed to build table plan for %s in row streamer: %v", ti.Name, err)
 		return err
 	}
 
@@ -248,7 +247,10 @@ func (rs *rowStreamer) buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, err
 func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error) {
 	buf := sqlparser.NewTrackedBuffer(nil)
 	// We could have used select *, but being explicit is more predictable.
-	buf.Myprintf("select %s", GetVReplicationMaxExecutionTimeQueryHint(rs.config.CopyPhaseDuration))
+	buf.Myprintf("select ")
+	if rs.options == nil || !rs.options.NoTimeouts { // We don't e.g. want to add the timeout for a VDiff query
+		buf.Myprintf("%s", GetVReplicationMaxExecutionTimeQueryHint(rs.config.CopyPhaseDuration))
+	}
 	prefix := ""
 	for _, col := range rs.plan.Table.Fields {
 		if rs.plan.isConvertColumnUsingUTF8(col.Name) {
@@ -348,7 +350,7 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 		rotatedLog bool
 		err        error
 	)
-	log.Infof("Streaming query: %v\n", rs.sendQuery)
+	log.Infof("Streaming rows for query: %s\n", rs.sendQuery)
 	if rs.mode == RowStreamerModeSingleTable {
 		gtid, rotatedLog, err = rs.conn.streamWithSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
 		if err != nil {
@@ -385,7 +387,7 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 		Gtid:     gtid,
 	})
 	if err != nil {
-		return fmt.Errorf("stream send error: %v", err)
+		return fmt.Errorf("row stream send error: %v", err)
 	}
 
 	// streamQuery sends heartbeats as long as it operates
@@ -414,8 +416,8 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 	logger := logutil.NewThrottledLogger(rs.vse.GetTabletInfo(), throttledLoggerInterval)
 	for {
 		if rs.ctx.Err() != nil {
-			log.Infof("Stream ended because of ctx.Done")
-			return fmt.Errorf("stream ended: %v", rs.ctx.Err())
+			log.Infof("Row stream ended because of ctx.Done")
+			return fmt.Errorf("row stream ended: %v", rs.ctx.Err())
 		}
 
 		// check throttler.
@@ -423,7 +425,7 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 			throttleResponseRateLimiter.Do(func() error {
 				return safeSend(&binlogdatapb.VStreamRowsResponse{Throttled: true, ThrottledReason: checkResult.Summary()})
 			})
-			logger.Infof("throttled.")
+			logger.Infof("Throttled streaming rows for %s", rs.sendQuery)
 			continue
 		}
 

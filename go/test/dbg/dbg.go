@@ -190,5 +190,4 @@ func dump(vals []any, writer io.Writer) {
 	}
 
 	_, _ = buf.WriteTo(writer)
-
 }

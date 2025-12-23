@@ -130,7 +130,7 @@ func debugEnvHandler(vtg *VTGate, w http.ResponseWriter, r *http.Request) {
 	addIntVar := func(varname string, f func() int) {
 		vars = append(vars, envValue{
 			VarName: varname,
-			Value:   fmt.Sprintf("%v", f()),
+			Value:   strconv.Itoa(f()),
 		})
 	}
 	addDurationVar := func(varname string, f func() time.Duration) {

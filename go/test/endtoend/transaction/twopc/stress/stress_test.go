@@ -143,7 +143,6 @@ func TestSettings(t *testing.T) {
 			tt.verifyFunc(t, &vtParams)
 		})
 	}
-
 }
 
 // TestDisruptions tests that atomic transactions persevere through various disruptions.

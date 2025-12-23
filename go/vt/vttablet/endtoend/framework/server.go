@@ -18,7 +18,6 @@ package framework
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"net/http"
 	"time"
@@ -84,7 +83,7 @@ func StartCustomServer(ctx context.Context, connParams, connAppDebugParams mysql
 	if err != nil {
 		return vterrors.Wrap(err, "could not start listener")
 	}
-	ServerAddress = fmt.Sprintf("http://%s", ln.Addr().String())
+	ServerAddress = "http://" + ln.Addr().String()
 	go func() {
 		err := servenv.HTTPServe(ln)
 		if err != nil {
@@ -93,7 +92,7 @@ func StartCustomServer(ctx context.Context, connParams, connAppDebugParams mysql
 	}()
 	for {
 		time.Sleep(10 * time.Millisecond)
-		response, err := http.Get(fmt.Sprintf("%s/debug/vars", ServerAddress))
+		response, err := http.Get(ServerAddress + "/debug/vars")
 		if err == nil {
 			response.Body.Close()
 			break

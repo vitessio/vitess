@@ -26,7 +26,7 @@ import (
 
 func logSyslog(msg string) {
 	if syslogger, err := syslog.New(syslog.LOG_INFO, "vtctl "); err == nil {
-		syslogger.Info(msg) // nolint:errcheck
+		syslogger.Info(msg) //nolint:errcheck
 	} else {
 		log.Warningf("cannot connect to syslog: %v", err)
 	}

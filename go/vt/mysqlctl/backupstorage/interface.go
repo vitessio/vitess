@@ -20,15 +20,14 @@ package backupstorage
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"io"
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/mysqlctl/errors"
-	"vitess.io/vitess/go/vt/utils"
-
+	mysqlctlerrors "vitess.io/vitess/go/vt/mysqlctl/errors"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -93,7 +92,7 @@ type BackupHandle interface {
 
 	// BackupErrorRecorder is embedded here to coordinate reporting and
 	// handling of errors among all the components involved in taking/restoring a backup.
-	errors.BackupErrorRecorder
+	mysqlctlerrors.BackupErrorRecorder
 }
 
 // BackupStorage is the interface to the storage system
@@ -139,7 +138,7 @@ var BackupStorageMap = make(map[string]BackupStorage)
 func GetBackupStorage() (BackupStorage, error) {
 	bs, ok := BackupStorageMap[BackupStorageImplementation]
 	if !ok {
-		return nil, fmt.Errorf("no registered implementation of BackupStorage")
+		return nil, errors.New("no registered implementation of BackupStorage")
 	}
 	return bs, nil
 }

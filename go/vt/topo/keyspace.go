@@ -168,7 +168,7 @@ func (ts *Server) UpdateKeyspace(ctx context.Context, ki *KeyspaceInfo) error {
 		return err
 	}
 
-	data, err := ki.Keyspace.MarshalVT()
+	data, err := ki.MarshalVT()
 	if err != nil {
 		return err
 	}
@@ -301,8 +301,6 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 	eg.SetLimit(int(opt.Concurrency))
 
 	for _, shard := range shards {
-		shard := shard
-
 		eg.Go(func() error {
 			si, err := ts.GetShard(ctx, keyspace, shard)
 			switch {

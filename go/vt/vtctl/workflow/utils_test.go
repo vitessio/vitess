@@ -53,7 +53,6 @@ func TestCreateDefaultShardRoutingRules(t *testing.T) {
 			rules[fmt.Sprintf("%s.%s", targetKeyspace.KeyspaceName, targetShard)] = sourceKeyspace.KeyspaceName
 		}
 		return rules
-
 	}
 	testCases := []testCase{
 		{

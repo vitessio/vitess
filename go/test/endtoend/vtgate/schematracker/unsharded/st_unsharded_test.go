@@ -113,7 +113,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestNewUnshardedTable(t *testing.T) {
-
 	// create a sql connection
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -182,7 +181,6 @@ func TestNewUnshardedTable(t *testing.T) {
 // creating two tables having the same name differing only in casing, but other operating systems don't.
 // More information at https://dev.mysql.com/doc/refman/8.0/en/identifier-case-sensitivity.html#:~:text=Table%20names%20are%20stored%20in,lowercase%20on%20storage%20and%20lookup.
 func TestCaseSensitiveSchemaTracking(t *testing.T) {
-
 	// create a sql connection
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)

@@ -15695,6 +15695,66 @@ func (a *application) rewriteTableStatement(parent SQLNode, node TableStatement,
 	}
 }
 
+// Function Generation Source: InterfaceMethod
+func (a *application) rewriteWindowFunc(parent SQLNode, node WindowFunc, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	switch node := node.(type) {
+	case *ArgumentLessWindowExpr:
+		return a.rewriteRefOfArgumentLessWindowExpr(parent, node, replacer)
+	case *Avg:
+		return a.rewriteRefOfAvg(parent, node, replacer)
+	case *BitAnd:
+		return a.rewriteRefOfBitAnd(parent, node, replacer)
+	case *BitOr:
+		return a.rewriteRefOfBitOr(parent, node, replacer)
+	case *BitXor:
+		return a.rewriteRefOfBitXor(parent, node, replacer)
+	case *Count:
+		return a.rewriteRefOfCount(parent, node, replacer)
+	case *CountStar:
+		return a.rewriteRefOfCountStar(parent, node, replacer)
+	case *FirstOrLastValueExpr:
+		return a.rewriteRefOfFirstOrLastValueExpr(parent, node, replacer)
+	case *JSONArrayAgg:
+		return a.rewriteRefOfJSONArrayAgg(parent, node, replacer)
+	case *JSONObjectAgg:
+		return a.rewriteRefOfJSONObjectAgg(parent, node, replacer)
+	case *LagLeadExpr:
+		return a.rewriteRefOfLagLeadExpr(parent, node, replacer)
+	case *Max:
+		return a.rewriteRefOfMax(parent, node, replacer)
+	case *Min:
+		return a.rewriteRefOfMin(parent, node, replacer)
+	case *NTHValueExpr:
+		return a.rewriteRefOfNTHValueExpr(parent, node, replacer)
+	case *NtileExpr:
+		return a.rewriteRefOfNtileExpr(parent, node, replacer)
+	case *Std:
+		return a.rewriteRefOfStd(parent, node, replacer)
+	case *StdDev:
+		return a.rewriteRefOfStdDev(parent, node, replacer)
+	case *StdPop:
+		return a.rewriteRefOfStdPop(parent, node, replacer)
+	case *StdSamp:
+		return a.rewriteRefOfStdSamp(parent, node, replacer)
+	case *Sum:
+		return a.rewriteRefOfSum(parent, node, replacer)
+	case *VarPop:
+		return a.rewriteRefOfVarPop(parent, node, replacer)
+	case *VarSamp:
+		return a.rewriteRefOfVarSamp(parent, node, replacer)
+	case *Variance:
+		return a.rewriteRefOfVariance(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
+	default:
+		// this should never happen
+		return true
+	}
+}
+
 // Function Generation Source: BasicMethod
 func (a *application) rewriteAlgorithmValue(parent SQLNode, node AlgorithmValue, replacer replacerFunc) bool {
 	if a.pre != nil {

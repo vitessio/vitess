@@ -51,5 +51,4 @@ func TestValidateClearText(t *testing.T) {
 
 	_, err = asl.validate("invaliduser", "invalidpass")
 	require.Error(t, err, "AuthServerLdap validated invalid credentials.")
-
 }
