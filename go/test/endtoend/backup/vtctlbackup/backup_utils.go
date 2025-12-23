@@ -280,7 +280,7 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 		return 1, err
 	}
 
-	if err := localCluster.StartVTOrc(keyspaceName); err != nil {
+	if err := localCluster.StartVTOrc(cell, keyspaceName); err != nil {
 		return 1, err
 	}
 

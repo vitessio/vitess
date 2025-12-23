@@ -70,7 +70,7 @@ func TestMain(m *testing.M) {
 			VSchema:   vschemaJSON,
 		}
 
-		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false)
+		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}

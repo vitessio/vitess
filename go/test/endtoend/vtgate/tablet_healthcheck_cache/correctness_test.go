@@ -106,7 +106,7 @@ func TestMain(m *testing.M) {
 			VSchema:   vSchema,
 		}
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, []string{utils.GetFlagVariantForTests("--health-check-interval"), "1s"}...)
-		err = clusterInstance.StartKeyspace(*keyspace, shards, 1, false)
+		err = clusterInstance.StartKeyspace(*keyspace, shards, 1, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}

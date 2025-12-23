@@ -70,7 +70,7 @@ func TestMain(m *testing.M) {
 			"--queryserver-config-transaction-timeout=20s",
 			vtutils.GetFlagVariantForTests("--shutdown-grace-period")+"=3s",
 			"--queryserver-config-schema-change-signal=false")
-		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false)
+		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}

@@ -232,7 +232,7 @@ func (bt *BufferingTest) createCluster() (*cluster.LocalProcessCluster, int) {
 		vtutils.GetFlagVariantForTests("--health-check-interval"), "1s",
 		"--queryserver-config-transaction-timeout", "20s",
 	}
-	if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {
+	if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false, clusterInstance.Cell); err != nil {
 		return nil, 1
 	}
 
