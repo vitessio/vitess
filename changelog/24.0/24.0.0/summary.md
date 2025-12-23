@@ -19,6 +19,7 @@
     - **[VTOrc](#minor-changes-vtorc)**
         - [Deprecated VTOrc Metric Removed](#vtorc-deprecated-metric-removed)
         - [Improved VTOrc Discovery Logging](#vtorc-improved-discovery-logging)
+        - [New `--cell` Flag](#vtorc-cell-flag)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -105,3 +106,13 @@ The `discoverInstanceTimings` metric has been removed from VTOrc in v24.0.0. Thi
 VTOrc's `DiscoverInstance` function now includes the tablet alias in all log messages and uses the correct log level when errors occur. Previously, error messages did not indicate which tablet failed discovery, and errors were logged at INFO level instead of ERROR level.
 
 This improvement makes it easier to identify and debug issues with specific tablets when discovery operations fail.
+
+#### <a id="vtorc-cell-flag"/>New `--cell` Flag</a>
+
+VTOrc now supports a `--cell` flag that specifies which Vitess cell the VTOrc process is running in. The flag is optional in v24 but will be required in v25+, similar to VTGate's `--cell` flag.
+
+When provided, VTOrc validates that the cell exists in the topology service on startup. Without the flag, VTOrc logs a warning about the v25+ flag requirement.
+
+This enables future cross-cell problem validation, where VTOrc will be able to ask another cell to validate detected problems before taking recovery actions. The flag is currently validated but not yet used in VTOrc recovery logic.
+
+**Note**: If you're running VTOrc in a multi-cell deployment, start using the `--cell` flag now to prepare for the v25 requirement.
