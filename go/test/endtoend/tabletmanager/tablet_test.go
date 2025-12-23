@@ -155,14 +155,32 @@ func TestGetGlobalStatusVars(t *testing.T) {
 	checkValueGreaterZero(t, statusValues, "Uptime")
 }
 
+// TestStopReplicationAndGetStatus tests the StopReplicationAndGetStatus RPC.
 func TestStopReplicationAndGetStatus(t *testing.T) {
-	ctx := t.Context()
-
 	// Create new tablet
 	tablet := clusterInstance.NewVttabletInstance("replica", 0, "")
+	defer killTablets(tablet)
+	mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
+	require.NoError(t, err)
+
+	tablet.MysqlctlProcess = *mysqlctlProcess
+	err = tablet.MysqlctlProcess.Start()
+	require.NoError(t, err)
+
+	// Start vttablet process as replica.
+	err = clusterInstance.StartVttablet(tablet, false, "SERVING", false, cell, keyspaceName, hostname, "0")
+	require.NoError(t, err)
+	log.Info(fmt.Sprintf("Started vttablet %v", tablet))
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*60)
+	defer cancel()
+
+	// Test replicationdatapb.Capability_SEMISYNC returns semi-sync status.
 	resp, err := tmcStopReplicationAndGetStatus(ctx, tablet.GrpcPort, replicationdatapb.StopReplicationMode_IOTHREADONLY, replicationdatapb.Capability_SEMISYNC)
 	require.NoError(t, err)
-	t.Logf("TestStopReplicationAndGetStatus() resp: %+v", resp)
+	require.NotNil(t, resp.Before)
+	require.True(t, resp.Before.SemiSyncReplicaEnabled)
+	require.True(t, resp.Before.SemiSyncReplicaStatus)
 }
 
 func checkValueGreaterZero(t *testing.T, statusValues map[string]string, val string) {
