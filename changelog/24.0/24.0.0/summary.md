@@ -19,6 +19,7 @@
     - **[VTOrc](#minor-changes-vtorc)**
         - [Deprecated VTOrc Metric Removed](#vtorc-deprecated-metric-removed)
         - [Improved VTOrc Discovery Logging](#vtorc-improved-discovery-logging)
+        - [Deprecation of Snapshot Topology feature](#vtorc-snapshot-topology-deprecation)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -94,14 +95,24 @@ Vitess now tracks when tablets cleanly shut down and validates tablet records be
 
 #### <a id="vtorc-deprecated-metric-removed"/>Deprecated VTOrc Metric Removed</a>
 
-The `discoverInstanceTimings` metric has been removed from VTOrc in v24.0.0. This metric was deprecated in v23.
+The `DiscoverInstanceTimings` metric has been removed from VTOrc in v24. This metric was deprecated in v23.
 
-**Migration**: Use `discoveryInstanceTimings` instead, which provides the same timing information for instance discovery actions (Backend, Instance, Other).
+**Migration**: Use `DiscoveryInstanceTimings` instead, which provides the same timing information for instance discovery actions (Backend, Instance, Other).
 
-**Impact**: Monitoring dashboards or alerting systems using `discoverInstanceTimings` must be updated to use `discoveryInstanceTimings`.
+**Impact**: Monitoring dashboards or alerting systems using `DiscoverInstanceTimings` must be updated to use `DiscoveryInstanceTimings`.
 
 #### <a id="vtorc-improved-discovery-logging"/>Improved VTOrc Discovery Logging</a>
 
 VTOrc's `DiscoverInstance` function now includes the tablet alias in all log messages and uses the correct log level when errors occur. Previously, error messages did not indicate which tablet failed discovery, and errors were logged at INFO level instead of ERROR level.
 
 This improvement makes it easier to identify and debug issues with specific tablets when discovery operations fail.
+
+#### <a id="vtorc-snapshot-topology-deprecation"/>Deprecation of Snapshot Topology feature</a>
+
+VTOrc's Snapshot Topology feature, which is enabled by setting `--snapshot-topology-interval` to a non-zero-value is deprecated as of v24 and the logic is planned for removal in v25.
+
+The lack of facilities to read the snapshots created by this feature coupled with the in-memory nature of VTOrc's backend means this logic has limited usefulness. This deprecation is explained and tracked in detail in https://github.com/vitessio/vitess/issues/18691.
+
+**Migration**: remove the VTOrc flag `--snapshot-topology-interval` before v25.
+
+**Impact**: VTOrc can no longer create snapshots of the topology in it's backend database.
