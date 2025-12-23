@@ -29,8 +29,8 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
-	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -94,9 +94,7 @@ func TestGRPCErrorCode_UNAVAILABLE(t *testing.T) {
 	// because this will try and fail to connect to mysql
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
-	tmClient := tmc.NewClient()
-	vttablet := getTablet(tablet.GrpcPort)
-	_, err = tmClient.FullStatus(ctx, vttablet)
+	_, err = tmcFullStatus(ctx, tablet.GrpcPort)
 	assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
 }
 
@@ -155,6 +153,16 @@ func TestGetGlobalStatusVars(t *testing.T) {
 	checkValueGreaterZero(t, statusValues, "Innodb_buffer_pool_pages_data")
 	checkValueGreaterZero(t, statusValues, "Innodb_buffer_pool_pages_free")
 	checkValueGreaterZero(t, statusValues, "Uptime")
+}
+
+func TestStopReplicationAndGetStatus(t *testing.T) {
+	ctx := t.Context()
+
+	// Create new tablet
+	tablet := clusterInstance.NewVttabletInstance("replica", 0, "")
+	resp, err := tmcStopReplicationAndGetStatus(ctx, tablet.GrpcPort, replicationdatapb.StopReplicationMode_IOTHREADONLY, replicationdatapb.Capability_SEMISYNC)
+	require.NoError(t, err)
+	t.Logf("TestStopReplicationAndGetStatus() resp: %+v", resp)
 }
 
 func checkValueGreaterZero(t *testing.T, statusValues map[string]string, val string) {

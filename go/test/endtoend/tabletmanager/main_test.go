@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/utils"
 	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
@@ -110,9 +111,10 @@ func TestMain(m *testing.M) {
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: sqlSchema,
-			VSchema:   vSchema,
+			Name:             keyspaceName,
+			DurabilityPolicy: "semi_sync",
+			SchemaSQL:        sqlSchema,
+			VSchema:          vSchema,
 		}
 
 		if err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, true, clusterInstance.Cell); err != nil {
@@ -194,6 +196,16 @@ func tmcGetGlobalStatusVars(ctx context.Context, tabletGrpcPort int, variables [
 func tmcStartReplicationUntilAfter(ctx context.Context, tabletGrpcPort int, positon string, waittime time.Duration) error {
 	vtablet := getTablet(tabletGrpcPort)
 	return tmClient.StartReplicationUntilAfter(ctx, vtablet, positon, waittime)
+}
+
+func tmcFullStatus(ctx context.Context, tabletGrpcPort int) (*replicationdatapb.FullStatus, error) {
+	vtablet := getTablet(tabletGrpcPort)
+	return tmClient.FullStatus(ctx, vtablet)
+}
+
+func tmcStopReplicationAndGetStatus(ctx context.Context, tabletGrpcPort int, mode replicationdatapb.StopReplicationMode, replicationCapability replicationdatapb.Capability) (*replicationdatapb.StopReplicationStatus, error) {
+	vtablet := getTablet(tabletGrpcPort)
+	return tmClient.StopReplicationAndGetStatus(ctx, vtablet, mode, replicationCapability)
 }
 
 func getTablet(tabletGrpcPort int) *tabletpb.Tablet {
