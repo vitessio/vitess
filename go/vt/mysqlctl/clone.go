@@ -325,7 +325,7 @@ func CloneFromDonor(ctx context.Context, topoServer *topo.Server, mysqld MysqlDa
 	// Get clone credentials.
 	cloneConfig := dbconfigs.GlobalDBConfigs.CloneUser
 	if cloneConfig.User == "" {
-		return replication.Position{}, fmt.Errorf("clone user not configured; set --db-clone-user flag")
+		return replication.Position{}, errors.New("clone user not configured; set --db-clone-user flag")
 	}
 
 	// Create the clone executor.
