@@ -1364,15 +1364,21 @@ func TestIdleTimeoutConnectionLeak(t *testing.T) {
 
 	// Try to get connections while they're being reopened
 	// This should trigger the bug where connections get discarded
+	wg := sync.WaitGroup{}
+
 	for i := 0; i < 2; i++ {
-		getCtx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
-		defer cancel()
+		wg.Go(func() {
+			getCtx, cancel := context.WithTimeout(t.Context(), 300*time.Millisecond)
+			defer cancel()
 
-		conn, err := p.Get(getCtx, nil)
-		require.NoError(t, err)
+			conn, err := p.Get(getCtx, nil)
+			require.NoError(t, err)
 
-		p.put(conn)
+			p.put(conn)
+		})
 	}
+
+	wg.Wait()
 
 	// Wait a moment for all reopening to complete
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -1403,4 +1409,83 @@ func TestIdleTimeoutConnectionLeak(t *testing.T) {
 
 	assert.Equal(t, int64(0), state.open.Load())
 	assert.Equal(t, int64(4), state.close.Load())
+}
+
+func TestIdleTimeoutDoesntLeaveLingeringConnection(t *testing.T) {
+	var state TestState
+
+	ctx := context.Background()
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    10,
+		IdleTimeout: 50 * time.Millisecond,
+		LogWait:     state.LogWait,
+	}).Open(newConnector(&state), nil)
+
+	defer p.Close()
+
+	var conns []*Pooled[*TestConn]
+	for i := 0; i < 10; i++ {
+		conn, err := p.Get(ctx, nil)
+		require.NoError(t, err)
+		conns = append(conns, conn)
+	}
+
+	for _, conn := range conns {
+		p.put(conn)
+	}
+
+	require.EqualValues(t, 10, p.Active())
+	require.EqualValues(t, 10, p.Available())
+
+	// Wait a bit for the idle timeout worker to refresh connections
+	assert.Eventually(t, func() bool {
+		return p.Metrics.IdleClosed() > 10
+	}, 500*time.Millisecond, 10*time.Millisecond, "Expected at least 10 connections to be closed by idle timeout")
+
+	// Verify that new connections were created to replace the closed ones
+	require.EqualValues(t, 10, p.Active())
+	require.EqualValues(t, 10, p.Available())
+
+	// Count how many connections in the stack are closed
+	totalInStack := 0
+	for conn := p.clean.Peek(); conn != nil; conn = conn.next.Load() {
+		totalInStack++
+	}
+
+	require.LessOrEqual(t, totalInStack, 10)
+}
+
+func BenchmarkPoolCleanupIdleConnectionsPerformanceNoIdleConnections(b *testing.B) {
+	var state TestState
+
+	capacity := 1000
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    int64(capacity),
+		IdleTimeout: 30 * time.Second,
+		LogWait:     state.LogWait,
+	}).Open(newConnector(&state), nil)
+	defer p.Close()
+
+	// Fill the pool
+	connections := make([]*Pooled[*TestConn], 0, capacity)
+	for range capacity {
+		conn, err := p.Get(context.Background(), nil)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		connections = append(connections, conn)
+	}
+
+	// Return all connections to the pool
+	for _, conn := range connections {
+		conn.Recycle()
+	}
+
+	b.ResetTimer()
+
+	for b.Loop() {
+		p.closeIdleResources(time.Now())
+	}
 }

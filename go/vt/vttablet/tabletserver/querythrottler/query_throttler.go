@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/vt/log"
@@ -37,9 +39,17 @@ import (
 )
 
 const (
+	queryThrottlerAppName = "QueryThrottler"
 	// defaultPriority is the default priority value when none is specified
 	defaultPriority = 100 // sqlparser.MaxPriorityValue
 )
+
+type Stats struct {
+	requestsTotal     *stats.CountersWithMultiLabels
+	requestsThrottled *stats.CountersWithMultiLabels
+	totalLatency      *servenv.MultiTimingsWrapper
+	evaluateLatency   *servenv.MultiTimingsWrapper
+}
 
 type QueryThrottler struct {
 	ctx            context.Context
@@ -52,6 +62,8 @@ type QueryThrottler struct {
 	cfgLoader ConfigLoader
 	// strategy is the current throttling strategy handler.
 	strategy registry.ThrottlingStrategyHandler
+	env      tabletenv.Env
+	stats    Stats
 }
 
 // NewQueryThrottler creates a new  query throttler.
@@ -65,6 +77,13 @@ func NewQueryThrottler(ctx context.Context, throttler *throttle.Throttler, cfgLo
 		cfg:            Config{},
 		cfgLoader:      cfgLoader,
 		strategy:       &registry.NoOpStrategy{}, // default strategy until config is loaded
+		env:            env,
+		stats: Stats{
+			requestsTotal:     env.Exporter().NewCountersWithMultiLabels(queryThrottlerAppName+"Requests", "query throttler requests", []string{"Strategy", "Workload", "Priority"}),
+			requestsThrottled: env.Exporter().NewCountersWithMultiLabels(queryThrottlerAppName+"Throttled", "query throttler requests throttled", []string{"Strategy", "Workload", "Priority", "MetricName", "MetricValue", "DryRun"}),
+			totalLatency:      env.Exporter().NewMultiTimings(queryThrottlerAppName+"TotalLatencyNs", "Total time each request takes in query throttling including evaluation, metric checks, and other overhead (nanoseconds)", []string{"Strategy", "Workload", "Priority"}),
+			evaluateLatency:   env.Exporter().NewMultiTimings(queryThrottlerAppName+"EvaluateLatencyNs", "Time each request takes to make the throttling decision (nanoseconds)", []string{"Strategy", "Workload", "Priority"}),
+		},
 	}
 
 	// Start the initial strategy
@@ -97,27 +116,49 @@ func (qt *QueryThrottler) Shutdown() {
 func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, transactionID int64, options *querypb.ExecuteOptions) error {
 	// Lock-free read: for maximum performance in the hot path as cfg and strategy are updated rarely (default once per minute).
 	// They are word-sized and safe for atomic reads; stale data for one query is acceptable and avoids mutex contention in the hot path.
-	if !qt.cfg.Enabled {
+	tCfg := qt.cfg
+	tStrategy := qt.strategy
+
+	if !tCfg.Enabled {
 		return nil
 	}
+
+	// Capture start time for latency measurements only when throttling is enabled
+	startTime := time.Now()
 
 	// Extract query attributes once to avoid re computation in strategies
 	attrs := registry.QueryAttributes{
 		WorkloadName: extractWorkloadName(options),
 		Priority:     extractPriority(options),
 	}
+	strategyName := tStrategy.GetStrategyName()
+	workload := attrs.WorkloadName
+	priorityStr := strconv.Itoa(attrs.Priority)
+
+	// Defer total latency recording to ensure it's always emitted regardless of return path.
+	defer func() {
+		qt.stats.totalLatency.Record([]string{strategyName, workload, priorityStr}, startTime)
+	}()
 
 	// Evaluate the throttling decision
 	decision := qt.strategy.Evaluate(ctx, tabletType, parsedQuery, transactionID, attrs)
+
+	// Record evaluate-window latency immediately after Evaluate returns
+	qt.stats.evaluateLatency.Record([]string{strategyName, workload, priorityStr}, startTime)
+
+	qt.stats.requestsTotal.Add([]string{strategyName, workload, priorityStr}, 1)
 
 	// If no throttling is needed, allow the query
 	if !decision.Throttle {
 		return nil
 	}
 
+	// Emit metric of query being throttled.
+	qt.stats.requestsThrottled.Add([]string{strategyName, workload, priorityStr, decision.MetricName, strconv.FormatFloat(decision.MetricValue, 'f', -1, 64), strconv.FormatBool(tCfg.DryRun)}, 1)
+
 	// If dry-run mode is enabled, log the decision but don't throttle
-	if qt.cfg.DryRun {
-		log.Warningf("[DRY-RUN] %s", decision.Message)
+	if tCfg.DryRun {
+		log.Warningf("[DRY-RUN] %s, metric name: %s, metric value: %f", decision.Message, decision.MetricName, decision.MetricValue)
 		return nil
 	}
 

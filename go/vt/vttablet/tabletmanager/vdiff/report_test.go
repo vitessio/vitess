@@ -49,7 +49,7 @@ func TestGenRowDiff(t *testing.T) {
 						Name:              "t1",
 						Columns:           []string{"c1", "c2", "c3", "c4", "c5"},
 						PrimaryKeyColumns: []string{"c1", "c5"},
-						Fields:            sqltypes.MakeTestFields("c1|c2|c3|c4|c5", "int64|int64|varchar|varchar|int64"),
+						Fields:            sqltypes.MakeTestFields("c1|c2|c3|c4|c5", "int64|int64|varchar|varbinary|int64"),
 					},
 				},
 			},
@@ -61,13 +61,20 @@ func TestGenRowDiff(t *testing.T) {
 				sqltypes.NewInt64(1),
 				sqltypes.NewInt64(2),
 				sqltypes.NewVarChar("hi3"),
-				sqltypes.NewVarChar("hi4"),
+				sqltypes.NewVarBinary("hi4"),
 				sqltypes.NewInt64(5),
 			},
 			reportOptions: &tabletmanagerdatapb.VDiffReportOptions{},
 			want: &RowDiff{
 				Row: map[string]string{ // The two PK cols should be first
-					"c1": "1", "c5": "5", "c2": "2", "c3": "hi3", "c4": "hi4",
+					// mysql> select hex("hi4");
+					// +------------+
+					// | hex("hi4") |
+					// +------------+
+					// | 686934     |
+					// +------------+
+					// 1 row in set (0.00 sec)
+					"c1": "1", "c5": "5", "c2": "2", "c3": "hi3", "c4": "0x686934",
 				},
 			},
 		},

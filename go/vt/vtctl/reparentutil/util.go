@@ -107,7 +107,7 @@ func ElectNewPrimary(
 		case opts.AvoidPrimaryAlias != nil && topoproto.TabletAliasEqual(tablet.Alias, opts.AvoidPrimaryAlias):
 			reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v matches the primary alias to avoid", topoproto.TabletAliasString(tablet.Alias)))
 			continue
-		case tablet.Tablet.Type != topodatapb.TabletType_REPLICA:
+		case tablet.Type != topodatapb.TabletType_REPLICA:
 			reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v is not a replica", topoproto.TabletAliasString(tablet.Alias)))
 			continue
 		}

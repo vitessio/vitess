@@ -398,8 +398,16 @@ type Tablet struct {
 	PrimaryTermStartTime *vttime.Time `protobuf:"bytes,14,opt,name=primary_term_start_time,json=primaryTermStartTime,proto3" json:"primary_term_start_time,omitempty"`
 	// default_conn_collation is the default connection collation used by this tablet.
 	DefaultConnCollation uint32 `protobuf:"varint,16,opt,name=default_conn_collation,json=defaultConnCollation,proto3" json:"default_conn_collation,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	// tablet_start_time is the vttime.Time when the vttablet process started.
+	TabletStartTime *vttime.Time `protobuf:"bytes,17,opt,name=tablet_start_time,json=tabletStartTime,proto3" json:"tablet_start_time,omitempty"`
+	// TabletShutdownTime is set to a vttime.Time equal to "now" (best-effort) to indicate a tablet
+	// cleanly completed a shutdown. It is unconditionally set to nil on tablet startup. This is
+	// used to avoid unnecessary dials to tablets that we know are down. It's possible for vttablet
+	// to be killed before it can set this time, so in some scenarios the value will report nil
+	// when in-reality the tablet has been stopped/killed/crashed.
+	TabletShutdownTime *vttime.Time `protobuf:"bytes,18,opt,name=tablet_shutdown_time,json=tabletShutdownTime,proto3" json:"tablet_shutdown_time,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *Tablet) Reset() {
@@ -521,6 +529,20 @@ func (x *Tablet) GetDefaultConnCollation() uint32 {
 		return x.DefaultConnCollation
 	}
 	return 0
+}
+
+func (x *Tablet) GetTabletStartTime() *vttime.Time {
+	if x != nil {
+		return x.TabletStartTime
+	}
+	return nil
+}
+
+func (x *Tablet) GetTabletShutdownTime() *vttime.Time {
+	if x != nil {
+		return x.TabletShutdownTime
+	}
+	return nil
 }
 
 // A Shard contains data about a subset of the data whithin a keyspace.
@@ -1791,7 +1813,7 @@ const file_topodata_proto_rawDesc = "" +
 	"\x03end\x18\x02 \x01(\fR\x03end\"3\n" +
 	"\vTabletAlias\x12\x12\n" +
 	"\x04cell\x18\x01 \x01(\tR\x04cell\x12\x10\n" +
-	"\x03uid\x18\x02 \x01(\rR\x03uid\"\xba\x05\n" +
+	"\x03uid\x18\x02 \x01(\rR\x03uid\"\xb4\x06\n" +
 	"\x06Tablet\x12+\n" +
 	"\x05alias\x18\x01 \x01(\v2\x15.topodata.TabletAliasR\x05alias\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x128\n" +
@@ -1807,7 +1829,9 @@ const file_topodata_proto_rawDesc = "" +
 	"\n" +
 	"mysql_port\x18\r \x01(\x05R\tmysqlPort\x12C\n" +
 	"\x17primary_term_start_time\x18\x0e \x01(\v2\f.vttime.TimeR\x14primaryTermStartTime\x124\n" +
-	"\x16default_conn_collation\x18\x10 \x01(\rR\x14defaultConnCollation\x1a:\n" +
+	"\x16default_conn_collation\x18\x10 \x01(\rR\x14defaultConnCollation\x128\n" +
+	"\x11tablet_start_time\x18\x11 \x01(\v2\f.vttime.TimeR\x0ftabletStartTime\x12>\n" +
+	"\x14tablet_shutdown_time\x18\x12 \x01(\v2\f.vttime.TimeR\x12tabletShutdownTime\x1a:\n" +
 	"\fPortMapEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a7\n" +
@@ -1992,42 +2016,44 @@ var file_topodata_proto_depIdxs = []int32{
 	1,  // 3: topodata.Tablet.type:type_name -> topodata.TabletType
 	21, // 4: topodata.Tablet.tags:type_name -> topodata.Tablet.TagsEntry
 	30, // 5: topodata.Tablet.primary_term_start_time:type_name -> vttime.Time
-	4,  // 6: topodata.Shard.primary_alias:type_name -> topodata.TabletAlias
-	30, // 7: topodata.Shard.primary_term_start_time:type_name -> vttime.Time
-	3,  // 8: topodata.Shard.key_range:type_name -> topodata.KeyRange
-	22, // 9: topodata.Shard.source_shards:type_name -> topodata.Shard.SourceShard
-	23, // 10: topodata.Shard.tablet_controls:type_name -> topodata.Shard.TabletControl
-	31, // 11: topodata.Shard.vtorc_state:type_name -> vtorcdata.Shard
-	0,  // 12: topodata.Keyspace.keyspace_type:type_name -> topodata.KeyspaceType
-	30, // 13: topodata.Keyspace.snapshot_time:type_name -> vttime.Time
-	13, // 14: topodata.Keyspace.throttler_config:type_name -> topodata.ThrottlerConfig
-	32, // 15: topodata.Keyspace.vtorc_state:type_name -> vtorcdata.Keyspace
-	24, // 16: topodata.ShardReplication.nodes:type_name -> topodata.ShardReplication.Node
-	2,  // 17: topodata.ShardReplicationError.type:type_name -> topodata.ShardReplicationError.Type
-	4,  // 18: topodata.ShardReplicationError.tablet_alias:type_name -> topodata.TabletAlias
-	3,  // 19: topodata.ShardReference.key_range:type_name -> topodata.KeyRange
-	3,  // 20: topodata.ShardTabletControl.key_range:type_name -> topodata.KeyRange
-	30, // 21: topodata.ThrottledAppRule.expires_at:type_name -> vttime.Time
-	25, // 22: topodata.ThrottlerConfig.throttled_apps:type_name -> topodata.ThrottlerConfig.ThrottledAppsEntry
-	27, // 23: topodata.ThrottlerConfig.app_checked_metrics:type_name -> topodata.ThrottlerConfig.AppCheckedMetricsEntry
-	28, // 24: topodata.ThrottlerConfig.metric_thresholds:type_name -> topodata.ThrottlerConfig.MetricThresholdsEntry
-	29, // 25: topodata.SrvKeyspace.partitions:type_name -> topodata.SrvKeyspace.KeyspacePartition
-	13, // 26: topodata.SrvKeyspace.throttler_config:type_name -> topodata.ThrottlerConfig
-	17, // 27: topodata.ExternalVitessCluster.topo_config:type_name -> topodata.TopoConfig
-	18, // 28: topodata.ExternalClusters.vitess_cluster:type_name -> topodata.ExternalVitessCluster
-	3,  // 29: topodata.Shard.SourceShard.key_range:type_name -> topodata.KeyRange
-	1,  // 30: topodata.Shard.TabletControl.tablet_type:type_name -> topodata.TabletType
-	4,  // 31: topodata.ShardReplication.Node.tablet_alias:type_name -> topodata.TabletAlias
-	12, // 32: topodata.ThrottlerConfig.ThrottledAppsEntry.value:type_name -> topodata.ThrottledAppRule
-	26, // 33: topodata.ThrottlerConfig.AppCheckedMetricsEntry.value:type_name -> topodata.ThrottlerConfig.MetricNames
-	1,  // 34: topodata.SrvKeyspace.KeyspacePartition.served_type:type_name -> topodata.TabletType
-	10, // 35: topodata.SrvKeyspace.KeyspacePartition.shard_references:type_name -> topodata.ShardReference
-	11, // 36: topodata.SrvKeyspace.KeyspacePartition.shard_tablet_controls:type_name -> topodata.ShardTabletControl
-	37, // [37:37] is the sub-list for method output_type
-	37, // [37:37] is the sub-list for method input_type
-	37, // [37:37] is the sub-list for extension type_name
-	37, // [37:37] is the sub-list for extension extendee
-	0,  // [0:37] is the sub-list for field type_name
+	30, // 6: topodata.Tablet.tablet_start_time:type_name -> vttime.Time
+	30, // 7: topodata.Tablet.tablet_shutdown_time:type_name -> vttime.Time
+	4,  // 8: topodata.Shard.primary_alias:type_name -> topodata.TabletAlias
+	30, // 9: topodata.Shard.primary_term_start_time:type_name -> vttime.Time
+	3,  // 10: topodata.Shard.key_range:type_name -> topodata.KeyRange
+	22, // 11: topodata.Shard.source_shards:type_name -> topodata.Shard.SourceShard
+	23, // 12: topodata.Shard.tablet_controls:type_name -> topodata.Shard.TabletControl
+	31, // 13: topodata.Shard.vtorc_state:type_name -> vtorcdata.Shard
+	0,  // 14: topodata.Keyspace.keyspace_type:type_name -> topodata.KeyspaceType
+	30, // 15: topodata.Keyspace.snapshot_time:type_name -> vttime.Time
+	13, // 16: topodata.Keyspace.throttler_config:type_name -> topodata.ThrottlerConfig
+	32, // 17: topodata.Keyspace.vtorc_state:type_name -> vtorcdata.Keyspace
+	24, // 18: topodata.ShardReplication.nodes:type_name -> topodata.ShardReplication.Node
+	2,  // 19: topodata.ShardReplicationError.type:type_name -> topodata.ShardReplicationError.Type
+	4,  // 20: topodata.ShardReplicationError.tablet_alias:type_name -> topodata.TabletAlias
+	3,  // 21: topodata.ShardReference.key_range:type_name -> topodata.KeyRange
+	3,  // 22: topodata.ShardTabletControl.key_range:type_name -> topodata.KeyRange
+	30, // 23: topodata.ThrottledAppRule.expires_at:type_name -> vttime.Time
+	25, // 24: topodata.ThrottlerConfig.throttled_apps:type_name -> topodata.ThrottlerConfig.ThrottledAppsEntry
+	27, // 25: topodata.ThrottlerConfig.app_checked_metrics:type_name -> topodata.ThrottlerConfig.AppCheckedMetricsEntry
+	28, // 26: topodata.ThrottlerConfig.metric_thresholds:type_name -> topodata.ThrottlerConfig.MetricThresholdsEntry
+	29, // 27: topodata.SrvKeyspace.partitions:type_name -> topodata.SrvKeyspace.KeyspacePartition
+	13, // 28: topodata.SrvKeyspace.throttler_config:type_name -> topodata.ThrottlerConfig
+	17, // 29: topodata.ExternalVitessCluster.topo_config:type_name -> topodata.TopoConfig
+	18, // 30: topodata.ExternalClusters.vitess_cluster:type_name -> topodata.ExternalVitessCluster
+	3,  // 31: topodata.Shard.SourceShard.key_range:type_name -> topodata.KeyRange
+	1,  // 32: topodata.Shard.TabletControl.tablet_type:type_name -> topodata.TabletType
+	4,  // 33: topodata.ShardReplication.Node.tablet_alias:type_name -> topodata.TabletAlias
+	12, // 34: topodata.ThrottlerConfig.ThrottledAppsEntry.value:type_name -> topodata.ThrottledAppRule
+	26, // 35: topodata.ThrottlerConfig.AppCheckedMetricsEntry.value:type_name -> topodata.ThrottlerConfig.MetricNames
+	1,  // 36: topodata.SrvKeyspace.KeyspacePartition.served_type:type_name -> topodata.TabletType
+	10, // 37: topodata.SrvKeyspace.KeyspacePartition.shard_references:type_name -> topodata.ShardReference
+	11, // 38: topodata.SrvKeyspace.KeyspacePartition.shard_tablet_controls:type_name -> topodata.ShardTabletControl
+	39, // [39:39] is the sub-list for method output_type
+	39, // [39:39] is the sub-list for method input_type
+	39, // [39:39] is the sub-list for extension type_name
+	39, // [39:39] is the sub-list for extension extendee
+	0,  // [0:39] is the sub-list for field type_name
 }
 
 func init() { file_topodata_proto_init() }

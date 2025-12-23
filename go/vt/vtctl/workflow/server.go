@@ -1048,6 +1048,11 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	sourceKeyspace := req.SourceKeyspace
 	targetKeyspace := req.TargetKeyspace
 	// FIXME validate tableSpecs, allTables, excludeTables
+
+	if workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables && sourceKeyspace == targetKeyspace {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "source and target keyspace must be different for MoveTables workflows")
+	}
+
 	var (
 		tables       = req.IncludeTables
 		externalTopo *topo.Server

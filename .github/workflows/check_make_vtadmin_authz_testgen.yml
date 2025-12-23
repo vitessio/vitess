@@ -60,7 +60,7 @@ jobs:
         sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
         sudo service etcd stop
         go mod download
-        go install golang.org/x/tools/cmd/goimports@latest
+        go install golang.org/x/tools/cmd/goimports@034e59c473362f8f2be47694d98fd3f12a1ad497 # v0.39.0
 
     - name: Run make minimaltools
       if: steps.changes.outputs.vtadmin_changes == 'true'

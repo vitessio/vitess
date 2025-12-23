@@ -170,7 +170,7 @@ func deleteShardCell(ctx context.Context, ts *topo.Server, keyspace string, shar
 	// aliases of every tablet in the cell, so we'll need to filter
 	// out anything not in our shard.
 	for alias, ti := range tabletMap {
-		if !(ti.Keyspace == keyspace && ti.Shard == shard) {
+		if ti.Keyspace != keyspace || ti.Shard != shard {
 			delete(tabletMap, alias)
 		}
 	}

@@ -358,7 +358,7 @@ func (dr *switcherDryRun) dropSourceShards(ctx context.Context) error {
 		}
 		sort.Strings(tabletsList[si.ShardName()]) // For deterministic output
 		logs = append(logs, fmt.Sprintf("cell:%s;keyspace:%s;shards:[%s]",
-			si.Shard.PrimaryAlias.Cell, si.Keyspace(), si.ShardName()), strings.Join(tabletsList[si.ShardName()], ","))
+			si.PrimaryAlias.Cell, si.Keyspace(), si.ShardName()), strings.Join(tabletsList[si.ShardName()], ","))
 	}
 	if len(logs) > 0 {
 		dr.drLog.Logf("Delete shards (and all related tablets): [%s]", strings.Join(logs, ","))
@@ -495,7 +495,7 @@ func (dr *switcherDryRun) dropTargetShards(ctx context.Context) error {
 		}
 		sort.Strings(tabletsList[si.ShardName()]) // For deterministic output
 		logs = append(logs, fmt.Sprintf("cell:%s;keyspace:%s;shards:[%s]",
-			si.Shard.PrimaryAlias.Cell, si.Keyspace(), si.ShardName()), strings.Join(tabletsList[si.ShardName()], ","))
+			si.PrimaryAlias.Cell, si.Keyspace(), si.ShardName()), strings.Join(tabletsList[si.ShardName()], ","))
 	}
 	if len(logs) > 0 {
 		dr.drLog.Logf("Delete shards (and all related tablets): [%s]", strings.Join(logs, ","))

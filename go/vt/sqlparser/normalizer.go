@@ -874,7 +874,7 @@ func (nz *normalizer) rewriteDistinctableAggr(node DistinctableAggr) {
 }
 
 func (nz *normalizer) shouldParameterize() bool {
-	return !(nz.inDerived > 0 && len(nz.onLeave) > 0) && nz.parameterize
+	return (nz.inDerived <= 0 || len(nz.onLeave) <= 0) && nz.parameterize
 }
 
 // SystemSchema checks if the given schema is a system schema.

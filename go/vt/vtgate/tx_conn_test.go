@@ -1549,7 +1549,7 @@ func TestTxConnAccessModeReset(t *testing.T) {
 				tcase.f(ctx, safeSession))
 
 			// check that the access mode is reset
-			require.Nil(t, safeSession.Session.Options.TransactionAccessMode)
+			require.Nil(t, safeSession.Options.TransactionAccessMode)
 		})
 	}
 }

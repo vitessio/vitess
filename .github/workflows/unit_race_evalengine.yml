@@ -85,14 +85,14 @@ jobs:
         sudo apt-get -qq install -y make unzip g++ curl git wget ant openjdk-11-jdk
         
         mkdir -p dist bin
-        curl -s -L https://github.com/coreos/etcd/releases/download/v3.5.17/etcd-v3.5.17-linux-amd64.tar.gz | tar -zxC dist
-        mv dist/etcd-v3.5.17-linux-amd64/{etcd,etcdctl} bin/
+        curl --max-time 10 --retry 3 --retry-max-time 45 -s -L https://github.com/coreos/etcd/releases/download/v3.5.25/etcd-v3.5.25-linux-amd64.tar.gz | tar -zxC dist
+        mv dist/etcd-v3.5.25-linux-amd64/{etcd,etcdctl} bin/
 
         go mod download
-        go install golang.org/x/tools/cmd/goimports@latest
+        go install golang.org/x/tools/cmd/goimports@034e59c473362f8f2be47694d98fd3f12a1ad497 # v0.39.0
         
         # install JUnit report formatter
-        go install github.com/vitessio/go-junit-report@HEAD
+        go install github.com/vitessio/go-junit-report@99fa7f0daf16db969f54a49139a14471e633e6e8 # HEAD
 
     - name: Run make tools
       if: steps.changes.outputs.unit_tests == 'true'

@@ -29,6 +29,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
 	"vitess.io/vitess/go/vt/log"
@@ -112,16 +113,56 @@ func TestReparentReplicaOffline(t *testing.T) {
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	killTablet := tablets[3]
 
-	// Kill one tablet so we seem offline
-	utils.StopTablet(t, tablets[3], true)
+	vtctldVersion, err := cluster.GetMajorVersion("vtctld")
+	require.NoError(t, err)
+	vttabletVersion, err := cluster.GetMajorVersion("vttablet")
+	require.NoError(t, err)
+
+	// TabletStartTime + TabletShutdownTime are v24+.
+	if vtctldVersion >= 24 {
+		tabletInfo, err := clusterInstance.VtctldClientProcess.GetTablet(killTablet.Alias)
+		require.NoError(t, err)
+		if vttabletVersion >= 24 {
+			require.NotNil(t, tabletInfo.TabletStartTime)
+		}
+		require.Nil(t, tabletInfo.TabletShutdownTime)
+	}
+
+	// Gracefully kill one tablet so we seem offline. Use a SIGKILL-fallback delay of 30s, like kube.
+	startKillTime := time.Now()
+	killTablet.VttabletProcess.TearDownWithTimeout(60 * time.Second)
+
+	// Confirm the tablet shutdown via the topo.
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		tabletInfo, err := clusterInstance.VtctldClientProcess.GetTablet(killTablet.Alias)
+		require.NoError(c, err)
+
+		// TabletShutdownTime is v24+. Test this is the vttablet and vtctld are v24+.
+		if vtctldVersion >= 24 && vttabletVersion >= 24 {
+			require.Nil(c, tabletInfo.TabletStartTime)
+			require.NotNil(c, tabletInfo.TabletShutdownTime)
+			shutdownTime := protoutil.TimeFromProto(tabletInfo.TabletShutdownTime)
+			require.WithinRange(c, shutdownTime, startKillTime, time.Now())
+		} else {
+			// TODO: remove this test after v25.
+			require.Empty(c, tabletInfo.Hostname)
+			require.Empty(c, tabletInfo.MysqlHostname)
+			require.Empty(c, tabletInfo.PortMap)
+		}
+	}, time.Second, time.Second*31)
 
 	// Perform a graceful reparent operation.
 	out, err := utils.PrsWithTimeout(t, clusterInstance, tablets[1], false, "", "31s")
 	require.Error(t, err)
 
 	// Assert that PRS failed
-	assert.Contains(t, out, "rpc error: code = DeadlineExceeded desc")
+	if vtctldVersion >= 24 {
+		assert.Contains(t, out, "rpc error: code = Unknown desc = tablet is shutdown")
+	} else {
+		assert.Contains(t, out, "rpc error: code = DeadlineExceeded desc = latest balancer error")
+	}
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[0])
 }
 
@@ -131,9 +172,12 @@ func TestReparentAvoid(t *testing.T) {
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	utils.DeleteTablet(t, clusterInstance, tablets[2])
 
+	vtctldVersion, err := cluster.GetMajorVersion("vtctld")
+	require.NoError(t, err)
+
 	// Perform a reparent operation with avoid_tablet pointing to non-primary. It
 	// should succeed without doing anything.
-	_, err := utils.PrsAvoid(t, clusterInstance, tablets[1])
+	_, err = utils.PrsAvoid(t, clusterInstance, tablets[1])
 	require.NoError(t, err)
 
 	utils.ValidateTopology(t, clusterInstance, false)
@@ -151,7 +195,12 @@ func TestReparentAvoid(t *testing.T) {
 	utils.StopTablet(t, tablets[0], true)
 	out, err := utils.PrsAvoid(t, clusterInstance, tablets[1])
 	require.Error(t, err)
-	assert.Contains(t, out, "rpc error: code = DeadlineExceeded desc = latest balancer error")
+	if vtctldVersion >= 24 {
+		assert.Contains(t, out, "rpc error: code = Unknown desc = tablet is shutdown")
+	} else {
+		assert.Contains(t, out, "rpc error: code = DeadlineExceeded desc = latest balancer error")
+	}
+
 	utils.ValidateTopology(t, clusterInstance, false)
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
 

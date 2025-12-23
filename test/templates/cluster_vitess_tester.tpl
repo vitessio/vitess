@@ -98,7 +98,7 @@ jobs:
         go mod download
 
         # install JUnit report formatter
-        go install github.com/vitessio/go-junit-report@{{.GoJunitReportSHA}}
+        go install github.com/vitessio/go-junit-report@{{.GoJunitReport.SHA}} # {{.GoJunitReport.Comment}}
         
         # install vitess tester
         go install github.com/vitessio/vt/go/vt@e43009309f599378504905d4b804460f47822ac5

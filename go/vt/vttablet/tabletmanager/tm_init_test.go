@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
+	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -76,10 +77,16 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 		Tags:                 map[string]string{},
 		DbNameOverride:       "aa",
 		DefaultConnCollation: uint32(collations.MySQL8().DefaultConnectionCharset()),
+		TabletStartTime:      &vttime.Time{},
 	}
 
 	gotTablet, err := BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	require.NoError(t, err)
+
+	// Verify TabletStartTime was set and is reasonable
+	assert.Greater(t, protoutil.TimeFromProto(gotTablet.TabletStartTime), time.Now().Add(-1*time.Hour))
+	// Zero out TabletStartTime for comparison since it's dynamic
+	gotTablet.TabletStartTime = &vttime.Time{}
 
 	// Hostname should be resolved.
 	assert.Equal(t, wantTablet, gotTablet)
@@ -98,6 +105,10 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 	}
 	gotTablet, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	require.NoError(t, err)
+	// Verify TabletStartTime was set
+	assert.Greater(t, protoutil.TimeFromProto(gotTablet.TabletStartTime), time.Now().Add(-1*time.Hour))
+	// Zero out TabletStartTime for comparison since it's dynamic
+	gotTablet.TabletStartTime = &vttime.Time{}
 	// KeyRange check is explicit because the next comparison doesn't
 	// show the diff well enough.
 	assert.Equal(t, wantTablet.KeyRange, gotTablet.KeyRange)
@@ -158,10 +169,15 @@ func TestBuildTabletFromInputWithBuildTags(t *testing.T) {
 		Tags:                 servenv.AppVersion.ToStringMap(),
 		DbNameOverride:       "aa",
 		DefaultConnCollation: uint32(collations.MySQL8().DefaultConnectionCharset()),
+		TabletStartTime:      &vttime.Time{},
 	}
 
 	gotTablet, err := BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	require.NoError(t, err)
+	// Verify TabletStartTime was set
+	assert.Greater(t, protoutil.TimeFromProto(gotTablet.TabletStartTime), time.Now().Add(-1*time.Hour))
+	// Zero out TabletStartTime for comparison since it's dynamic
+	gotTablet.TabletStartTime = &vttime.Time{}
 	assert.Equal(t, wantTablet, gotTablet)
 }
 

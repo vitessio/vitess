@@ -1,0 +1,48 @@
+# Adds a comment with a link to arewefastyet when the "Benchmark me" label is added.
+name: arewefastyet comment
+on:
+  pull_request_target:
+    types: [labeled]
+
+jobs:
+  add_arewefastyet_comment:
+    name: Add arewefastyet comment
+    runs-on: ubuntu-latest
+    if: github.event.label.name == 'Benchmark me'
+
+    steps:
+      - name: Generate GitHub App token
+        uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-pull-requests: write
+
+      - name: Set token in environment
+        run: echo "GH_TOKEN=${{ steps.app-token.outputs.token }}" >> "$GITHUB_ENV"
+
+      - name: Check if comment already exists
+        id: check_comment
+        run: |
+          # Get all comments on the PR
+          COMMENTS=$(gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments --jq '.[].body')
+
+          # Check if arewefastyet comment already exists
+          if echo "$COMMENTS" | grep -q "This Pull Request is now handled by arewefastyet"; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "arewefastyet comment already exists"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Add arewefastyet comment
+        if: steps.check_comment.outputs.skip != 'true'
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} \
+            --repo ${{ github.repository }} \
+            --body "Hello! :wave:
+
+          This Pull Request is now handled by arewefastyet. The current HEAD and future commits will be benchmarked.
+
+          You can find the performance comparison on the [arewefastyet website](https://benchmark.vitess.io/pr/${{ github.event.pull_request.number }})."

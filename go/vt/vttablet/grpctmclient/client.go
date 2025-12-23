@@ -45,6 +45,7 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	tabletmanagerservicepb "vitess.io/vitess/go/vt/proto/tabletmanagerservice"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type DialPoolGroup int
@@ -160,9 +161,39 @@ func NewClient() *Client {
 	}
 }
 
+// validateTablet confirms the tablet record contains the necessary fields
+// for talking gRPC.
+func validateTablet(tablet *topodatapb.Tablet) error {
+	// v24+ adds a TabletShutdownTime field that is set to "now" on clean shutdown.
+	if tablet.TabletShutdownTime != nil {
+		return vterrors.New(vtrpcpb.Code_UNAVAILABLE, "tablet is shutdown")
+	}
+
+	// <= v23 compatibility to similuate missing TabletShutdownTime field. Remove in v25.
+	if tablet.Hostname == "" && tablet.MysqlHostname == "" && tablet.PortMap == nil && tablet.Type != topodatapb.TabletType_UNKNOWN {
+		return vterrors.New(vtrpcpb.Code_UNAVAILABLE, "tablet is shutdown")
+	}
+
+	if tablet.Hostname == "" {
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "empty tablet hostname")
+	}
+	if tablet.PortMap == nil {
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "no tablet port map")
+	}
+	grpcPort := int32(tablet.PortMap["grpc"])
+	if grpcPort <= 0 {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet grpc port: %d", grpcPort)
+	}
+	return nil
+}
+
 // dial returns a client to use
 func (client *grpcClient) dial(ctx context.Context, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, io.Closer, error) {
-	addr := netutil.JoinHostPort(tablet.Hostname, int32(tablet.PortMap["grpc"]))
+	if err := validateTablet(tablet); err != nil {
+		return nil, nil, err
+	}
+
+	addr := netutil.JoinHostPort(tablet.Hostname, tablet.PortMap["grpc"])
 	opt, err := grpcclient.SecureDialOption(cert, key, ca, crl, name)
 	if err != nil {
 		return nil, nil, err
@@ -187,6 +218,10 @@ func (client *grpcClient) createTmc(ctx context.Context, addr string, opt grpc.D
 }
 
 func (client *grpcClient) dialPool(ctx context.Context, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, error) {
+	if err := validateTablet(tablet); err != nil {
+		return nil, err
+	}
+
 	addr := netutil.JoinHostPort(tablet.Hostname, int32(tablet.PortMap["grpc"]))
 	opt, err := grpcclient.SecureDialOption(cert, key, ca, crl, name)
 	if err != nil {
@@ -227,6 +262,10 @@ func (client *grpcClient) dialPool(ctx context.Context, tablet *topodatapb.Table
 }
 
 func (client *grpcClient) dialDedicatedPool(ctx context.Context, dialPoolGroup DialPoolGroup, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, invalidatorFunc, error) {
+	if err := validateTablet(tablet); err != nil {
+		return nil, nil, err
+	}
+
 	addr := netutil.JoinHostPort(tablet.Hostname, int32(tablet.PortMap["grpc"]))
 	opt, err := grpcclient.SecureDialOption(cert, key, ca, crl, name)
 	if err != nil {

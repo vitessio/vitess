@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package balancer contains a number of different tablet balancing algorithms and their implementations.
 package balancer
 
 import (
@@ -96,6 +97,7 @@ const (
 	ModeCell
 	ModePreferCell
 	ModeRandom
+	ModeSession
 )
 
 func ParseMode(ms string) Mode {
@@ -106,6 +108,8 @@ func ParseMode(ms string) Mode {
 		return ModePreferCell
 	case "random":
 		return ModeRandom
+	case "session":
+		return ModeSession
 	default:
 		return ModeInvalid
 	}
@@ -119,19 +123,21 @@ func (m Mode) String() string {
 		return "prefer-cell"
 	case ModeRandom:
 		return "random"
+	case ModeSession:
+		return "session"
 	default:
 		return "invalid"
 	}
 }
 
 func GetAvailableModeNames() []string {
-	return []string{ModeCell.String(), ModePreferCell.String(), ModeRandom.String()}
+	return []string{ModeCell.String(), ModePreferCell.String(), ModeRandom.String(), ModeSession.String()}
 }
 
 type TabletBalancer interface {
 	// Pick is the main entry point to the balancer. Returns the best tablet out of the list
 	// for a given query to maintain the desired balanced allocation over multiple executions.
-	Pick(target *querypb.Target, tablets []*discovery.TabletHealth) *discovery.TabletHealth
+	Pick(target *querypb.Target, tablets []*discovery.TabletHealth, opts ...PickOption) *discovery.TabletHealth
 
 	// DebugHandler provides a summary of tablet balancer state
 	DebugHandler(w http.ResponseWriter, r *http.Request)
@@ -142,6 +148,7 @@ type TabletBalancer interface {
 //   - "prefer-cell": Flow-based balancer that maintains cell affinity while balancing load
 //   - See the RFC here: https://github.com/vitessio/vitess/issues/12241
 //   - "random": Random balancer that uniformly distributes load without cell affinity
+//   - "session": Session balancer that pins a session to the same tablet for the duration of the session. If the tablet goes away, the session is automatically and transparently migrated to another tablet of the same type.
 //
 // Note: "cell" mode is handled by the gateway and does not create a balancer instance.
 // operates as a round robin inside of the vtgate's cell
@@ -152,6 +159,8 @@ func NewTabletBalancer(mode Mode, localCell string, vtGateCells []string) (Table
 		return newFlowBalancer(localCell, vtGateCells), nil
 	case ModeRandom:
 		return newRandomBalancer(localCell, vtGateCells), nil
+	case ModeSession:
+		return newSessionBalancer(localCell), nil
 	case ModeCell:
 		return nil, errors.New("cell mode should be handled by the gateway, not the balancer factory")
 	default:
@@ -230,7 +239,7 @@ func (b *flowBalancer) DebugHandler(w http.ResponseWriter, _ *http.Request) {
 // Given the total allocation for the set of tablets, choose the best target
 // by a weighted random sample so that over time the system will achieve the
 // desired balanced allocation.
-func (b *flowBalancer) Pick(target *querypb.Target, tablets []*discovery.TabletHealth) *discovery.TabletHealth {
+func (b *flowBalancer) Pick(target *querypb.Target, tablets []*discovery.TabletHealth, _ ...PickOption) *discovery.TabletHealth {
 	numTablets := len(tablets)
 	if numTablets == 0 {
 		return nil
@@ -342,9 +351,6 @@ func (b *flowBalancer) allocateFlows(allTablets []*discovery.TabletHealth) *targ
 			}
 		}
 
-		// fmt.Printf("outflows %v over %v under %v\n", a.Outflows, overAllocated, underAllocated)
-
-		//
 		// For each overallocated cell, proportionally shift flow from targets that are overallocated
 		// to targets that are underallocated.
 		//
@@ -365,9 +371,6 @@ func (b *flowBalancer) allocateFlows(allTablets []*discovery.TabletHealth) *targ
 					// Note that the operator order matters -- multiplications need to occur before divisions
 					// to avoid truncating the integer values.
 					shiftFlow := overAllocatedFlow * currentFlow * underAllocatedFlow / a.Inflows[overAllocatedCell] / unbalancedFlow
-
-					//fmt.Printf("shift %d %s %s -> %s (over %d current %d in %d under %d unbalanced %d) \n", shiftFlow, vtgateCell, overAllocatedCell, underAllocatedCell,
-					//	overAllocatedFlow, currentFlow, a.Inflows[overAllocatedCell], underAllocatedFlow, unbalancedFlow)
 
 					a.Outflows[vtgateCell][overAllocatedCell] -= shiftFlow
 					a.Inflows[overAllocatedCell] -= shiftFlow
