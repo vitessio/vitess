@@ -17,7 +17,6 @@ limitations under the License.
 package stress
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"

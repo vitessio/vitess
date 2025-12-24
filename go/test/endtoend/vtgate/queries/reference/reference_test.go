@@ -17,7 +17,6 @@ limitations under the License.
 package reference
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"

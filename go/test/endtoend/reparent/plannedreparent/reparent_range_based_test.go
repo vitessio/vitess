@@ -17,14 +17,12 @@ limitations under the License.
 package plannedreparent
 
 import (
-	"context"
 	"testing"
-
-	"vitess.io/vitess/go/test/endtoend/reparent/utils"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/reparent/utils"
 )
 
 func TestReparentGracefulRangeBased(t *testing.T) {

@@ -17,7 +17,6 @@ limitations under the License.
 package fuzz
 
 import (
-	"context"
 	_ "embed"
 	"flag"
 	"fmt"

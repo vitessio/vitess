@@ -18,7 +18,6 @@ This tests select/insert using the unshared keyspace added in main_test
 package healthcheck
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"

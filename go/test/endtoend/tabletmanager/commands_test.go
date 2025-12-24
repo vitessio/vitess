@@ -17,7 +17,6 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"

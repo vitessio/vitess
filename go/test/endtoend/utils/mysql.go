@@ -89,12 +89,13 @@ func NewMySQLWithMysqld(port int, hostname, dbName string, schemaSQL ...string) 
 		return mysql.ConnParams{}, nil, nil, nil, err
 	}
 
+	ctx := context.Background()
 	mysqlPort := port
 	mysqld, mycnf, err := CreateMysqldAndMycnf(uid, "", mysqlPort)
 	if err != nil {
 		return mysql.ConnParams{}, nil, nil, nil, err
 	}
-	err = initMysqld(mysqld, mycnf, initMySQLFile)
+	err = initMysqld(ctx, mysqld, mycnf, initMySQLFile)
 	if err != nil {
 		return mysql.ConnParams{}, nil, nil, nil, err
 	}
@@ -106,13 +107,12 @@ func NewMySQLWithMysqld(port int, hostname, dbName string, schemaSQL ...string) 
 		DbName:     dbName,
 	}
 	for _, sql := range schemaSQL {
-		err = prepareMySQLWithSchema(params, sql)
+		err = prepareMySQLWithSchema(ctx, params, sql)
 		if err != nil {
 			return mysql.ConnParams{}, nil, nil, nil, err
 		}
 	}
 	return params, mysqld, mycnf, func() {
-		ctx := t.Context()
 		_ = mysqld.Teardown(ctx, mycnf, true, mysqlShutdownTimeout)
 	}, nil
 }
@@ -144,14 +144,13 @@ func createInitSQLFile(mysqlDir, ksName string) (string, error) {
 	return initSQLFile, nil
 }
 
-func initMysqld(mysqld *mysqlctl.Mysqld, mycnf *mysqlctl.Mycnf, initSQLFile string) error {
+func initMysqld(ctx context.Context, mysqld *mysqlctl.Mysqld, mycnf *mysqlctl.Mycnf, initSQLFile string) error {
 	f, err := os.CreateTemp(path.Dir(mycnf.Path), "my.cnf")
 	if err != nil {
 		return err
 	}
 	f.Close()
 
-	ctx := t.Context()
 	err = mysqld.Init(ctx, mycnf, initSQLFile)
 	if err != nil {
 		return err
@@ -159,8 +158,7 @@ func initMysqld(mysqld *mysqlctl.Mysqld, mycnf *mysqlctl.Mycnf, initSQLFile stri
 	return nil
 }
 
-func prepareMySQLWithSchema(params mysql.ConnParams, sql string) error {
-	ctx := t.Context()
+func prepareMySQLWithSchema(ctx context.Context, params mysql.ConnParams, sql string) error {
 	conn, err := mysql.Connect(ctx, &params)
 	if err != nil {
 		return err

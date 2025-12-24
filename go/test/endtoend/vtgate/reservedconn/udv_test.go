@@ -17,20 +17,16 @@ limitations under the License.
 package reservedconn
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
-	utils2 "vitess.io/vitess/go/test/endtoend/utils"
-
-	"github.com/stretchr/testify/assert"
-
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	utils2 "vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/utils"
 )
 
 func TestSetUDV(t *testing.T) {

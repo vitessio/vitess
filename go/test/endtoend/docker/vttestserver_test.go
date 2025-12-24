@@ -17,17 +17,15 @@ limitations under the License.
 package docker
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-
-	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 func TestMain(m *testing.M) {

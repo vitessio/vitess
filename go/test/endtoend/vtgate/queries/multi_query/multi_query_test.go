@@ -17,7 +17,6 @@ limitations under the License.
 package multi_query
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"testing"

@@ -17,7 +17,6 @@ limitations under the License.
 package schematracker
 
 import (
-	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -26,14 +25,12 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
-	"github.com/stretchr/testify/require"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 	vtutils "vitess.io/vitess/go/vt/utils"
 )
 

@@ -17,7 +17,6 @@ limitations under the License.
 package viewsdisabled
 
 import (
-	"context"
 	_ "embed"
 	"encoding/json"
 	"flag"

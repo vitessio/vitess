@@ -85,7 +85,7 @@ func TestMain(m *testing.M) {
 }
 
 func start(b *testing.B) (*mysql.Conn, func()) {
-	ctx := t.Context()
+	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(b, err)
 	cleanup(b)

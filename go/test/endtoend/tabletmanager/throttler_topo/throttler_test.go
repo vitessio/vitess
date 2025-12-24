@@ -16,7 +16,6 @@ limitations under the License.
 package throttler
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"

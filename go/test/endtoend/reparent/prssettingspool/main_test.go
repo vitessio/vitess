@@ -17,7 +17,6 @@ limitations under the License.
 package misc
 
 import (
-	"context"
 	_ "embed"
 	"flag"
 	"os"

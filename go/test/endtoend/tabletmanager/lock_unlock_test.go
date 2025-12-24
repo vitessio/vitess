@@ -17,19 +17,16 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stretchr/testify/assert"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 // TestLockAndUnlock tests the lock ability by locking a replica and asserting it does not see changes

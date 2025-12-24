@@ -17,7 +17,6 @@ limitations under the License.
 package unsharded
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -27,10 +26,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/constants/sidecar"
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 	vtutils "vitess.io/vitess/go/vt/utils"
 )
 

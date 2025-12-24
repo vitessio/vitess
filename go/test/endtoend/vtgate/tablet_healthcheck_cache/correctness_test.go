@@ -17,7 +17,6 @@ limitations under the License.
 package tablethealthcheckcache
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"

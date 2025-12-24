@@ -19,7 +19,6 @@ package vault
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"fmt"
 	"net"
 	"os"

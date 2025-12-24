@@ -17,7 +17,6 @@ limitations under the License.
 package multiks
 
 import (
-	"context"
 	_ "embed"
 	"flag"
 	"fmt"

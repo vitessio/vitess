@@ -209,7 +209,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 }
 
 func startBenchmark(b *testing.B) {
-	ctx := t.Context()
+	ctx := context.Background()
 	vtConn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(b, err)
 	mysqlConn, err := mysql.Connect(ctx, &mysqlParams)

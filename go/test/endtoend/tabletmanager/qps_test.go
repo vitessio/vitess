@@ -16,7 +16,6 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"context"
 	"testing"
 	"time"
 

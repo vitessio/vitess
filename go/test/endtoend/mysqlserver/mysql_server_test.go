@@ -18,7 +18,6 @@ R442
 package mysqlserver
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"io"

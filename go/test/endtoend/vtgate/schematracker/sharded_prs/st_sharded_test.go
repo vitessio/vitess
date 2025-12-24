@@ -17,20 +17,18 @@ limitations under the License.
 package shardedprs
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/constants/sidecar"
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 	vtutils "vitess.io/vitess/go/vt/utils"
 )
 

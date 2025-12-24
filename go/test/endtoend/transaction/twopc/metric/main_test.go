@@ -17,7 +17,6 @@ limitations under the License.
 package transaction
 
 import (
-	"context"
 	_ "embed"
 	"flag"
 	"fmt"
