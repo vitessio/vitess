@@ -90,9 +90,7 @@ jobs:
         sudo apt-get -qq install -y mysql-shell
 
         # Install everything else we need, and configure
-        sudo apt-get -qq install -y make unzip g++ etcd-client etcd-server curl git wget xz-utils libncurses6
-
-        sudo service etcd stop
+        sudo apt-get -qq install -y make unzip g++ curl git wget xz-utils libncurses6
 
         go mod download
 

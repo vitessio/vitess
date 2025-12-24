@@ -97,10 +97,6 @@ jobs:
         export DEBIAN_FRONTEND="noninteractive"
         sudo apt-get install -y make unzip g++ curl git wget ant openjdk-11-jdk
 
-        mkdir -p dist bin
-        curl --max-time 10 --retry 3 --retry-max-time 45 -s -L https://github.com/coreos/etcd/releases/download/v3.5.25/etcd-v3.5.25-linux-amd64.tar.gz | tar -zxC dist
-        mv dist/etcd-v3.5.25-linux-amd64/{etcd,etcdctl} bin/
-
         go mod download
         go install golang.org/x/tools/cmd/goimports@{{.Goimports.SHA}} # {{.Goimports.Comment}}
 

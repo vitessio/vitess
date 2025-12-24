@@ -111,9 +111,7 @@ jobs:
       run: |
         sudo apt-get update
 
-        sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
-
-        sudo service etcd stop
+        sudo apt-get install -y make unzip g++ curl git wget
 
         # install JUnit report formatter
         go install github.com/vitessio/go-junit-report@{{.GoJunitReport.SHA}} # {{.GoJunitReport.Comment}}
@@ -137,7 +135,7 @@ jobs:
 
     {{if .MakeTools}}
 
-    - name: Installing zookeeper and consul
+    - name: Installing etcd, consul and zookeeper
       if: steps.changes.outputs.end_to_end == 'true'
       run: |
           make tools

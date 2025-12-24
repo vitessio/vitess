@@ -91,9 +91,7 @@ jobs:
         sudo apt-get -qq update
 
         # Install everything else we need, and configure
-        sudo apt-get -qq install -y make unzip g++ etcd-client etcd-server curl git wget xz-utils libncurses6
-
-        sudo service etcd stop
+        sudo apt-get -qq install -y make unzip g++ curl git wget xz-utils libncurses6
 
         go mod download
 
@@ -102,6 +100,15 @@ jobs:
         
         # install vitess tester
         go install github.com/vitessio/vt/go/vt@e43009309f599378504905d4b804460f47822ac5
+
+     {{if .MakeTools}}
+
+     - name: Installing etcd, consul and zookeeper
+       if: steps.changes.outputs.end_to_end == 'true'
+       run: |
+           make tools
+
+     {{end}}
 
     - name: Setup launchable dependencies
       if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main'
