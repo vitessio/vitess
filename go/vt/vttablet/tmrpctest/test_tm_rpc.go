@@ -1372,7 +1372,7 @@ func tmRPCTestSetReplicationSourcePanic(ctx context.Context, t *testing.T, clien
 	expectHandleRPCPanic(t, "SetReplicationSource", true /*verbose*/, err)
 }
 
-func (fra *fakeRPCTM) StopReplicationAndGetStatus(ctx context.Context, stopReplicationMode replicationdatapb.StopReplicationMode, replicationCapability replicationdatapb.Capability) (tabletmanager.StopReplicationAndGetStatusResponse, error) {
+func (fra *fakeRPCTM) StopReplicationAndGetStatus(ctx context.Context, stopReplicationMode replicationdatapb.StopReplicationMode) (tabletmanager.StopReplicationAndGetStatusResponse, error) {
 	if fra.panics {
 		panic(errors.New("test-triggered panic"))
 	}
@@ -1409,15 +1409,15 @@ func tmRPCTestReplicaWasRestartedPanic(ctx context.Context, t *testing.T, client
 	expectHandleRPCPanic(t, "ReplicaWasRestarted", true /*verbose*/, err)
 }
 
-func tmRPCTestStopReplicationAndGetStatus(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet, replicationCapability replicationdatapb.Capability) {
-	rp, err := client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD, replicationCapability)
+func tmRPCTestStopReplicationAndGetStatus(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	rp, err := client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD)
 	compareError(t, "StopReplicationAndGetStatus", err, rp, &replicationdatapb.StopReplicationStatus{Before: testReplicationStatus, After: testReplicationStatus})
-	rp, err = client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY, replicationCapability)
+	rp, err = client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
 	compareError(t, "StopReplicationAndGetStatus", err, rp, &replicationdatapb.StopReplicationStatus{Before: testReplicationStatus, After: testReplicationStatus})
 }
 
-func tmRPCTestStopReplicationAndGetStatusPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet, replicationCapability replicationdatapb.Capability) {
-	_, err := client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD, replicationCapability)
+func tmRPCTestStopReplicationAndGetStatusPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD)
 	expectHandleRPCPanic(t, "StopReplicationAndGetStatus", true /*verbose*/, err)
 }
 
@@ -1616,7 +1616,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestDemotePrimary(ctx, t, client, tablet)
 	tmRPCTestUndoDemotePrimary(ctx, t, client, tablet)
 	tmRPCTestSetReplicationSource(ctx, t, client, tablet)
-	tmRPCTestStopReplicationAndGetStatus(ctx, t, client, tablet, replicationdatapb.Capability_NONE)
+	tmRPCTestStopReplicationAndGetStatus(ctx, t, client, tablet)
 	tmRPCTestPromoteReplica(ctx, t, client, tablet)
 
 	tmRPCTestInitReplica(ctx, t, client, tablet)
@@ -1679,7 +1679,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestDemotePrimaryPanic(ctx, t, client, tablet)
 	tmRPCTestUndoDemotePrimaryPanic(ctx, t, client, tablet)
 	tmRPCTestSetReplicationSourcePanic(ctx, t, client, tablet)
-	tmRPCTestStopReplicationAndGetStatusPanic(ctx, t, client, tablet, replicationdatapb.Capability_NONE)
+	tmRPCTestStopReplicationAndGetStatusPanic(ctx, t, client, tablet)
 	tmRPCTestPromoteReplicaPanic(ctx, t, client, tablet)
 
 	tmRPCTestInitReplicaPanic(ctx, t, client, tablet)

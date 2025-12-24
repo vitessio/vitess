@@ -545,7 +545,6 @@ message ReplicaWasRestartedResponse {
 
 message StopReplicationAndGetStatusRequest {
   replicationdata.StopReplicationMode stop_replication_mode = 1;
-  replicationdata.Capability capability = 2;
 }
 
 message StopReplicationAndGetStatusResponse {

@@ -115,8 +115,3 @@ message FullStatus {
   bool semi_sync_blocked = 24;
   topodata.TabletType tablet_type = 25;
 }
-
-enum Capability {
-  NONE = 0;
-  SEMISYNC = 1;
-}
