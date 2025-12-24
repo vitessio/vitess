@@ -482,7 +482,7 @@ func generateUnitTestWorkflows(gitMetas *GitMetas) {
 	// Generate unit tests with race detection
 	for _, evalengine := range []string{"1", "0"} {
 		raceTest := &unitTest{
-			Name:       fmt.Sprintf("Unit Test (Race%s)", evalengineToNameSuffix(evalengine)),
+			Name:       fmt.Sprintf("Unit Test (%sRace)", evalengineToRaceNamePrefix(evalengine)),
 			RunsOn:     cores16RunnerName,
 			Platform:   string(mysql80),
 			GoPrivate:  goPrivate,
@@ -509,6 +509,13 @@ func evalengineToString(evalengine string) string {
 func evalengineToNameSuffix(evalengine string) string {
 	if evalengine == "1" {
 		return " evalengine"
+	}
+	return ""
+}
+
+func evalengineToRaceNamePrefix(evalengine string) string {
+	if evalengine == "1" {
+		return "Evalengine_"
 	}
 	return ""
 }

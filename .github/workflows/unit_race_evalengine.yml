@@ -1,6 +1,6 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Unit Test (Race evalengine)
+name: Unit Test (Evalengine_Race)
 on:
   push:
     branches:
@@ -10,7 +10,7 @@ on:
   pull_request:
     branches: '**'
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Unit Test (Race evalengine)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Unit Test (Evalengine_Race)')
   cancel-in-progress: true
 
 permissions: read-all
@@ -22,7 +22,7 @@ env:
 
 jobs:
   test:
-    name: Unit Test (Race evalengine)
+    name: Unit Test (Evalengine_Race)
     runs-on: oracle-vm-16cpu-64gb-x86-64
 
     steps:
