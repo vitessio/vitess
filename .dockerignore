@@ -2,5 +2,6 @@
 /dist/
 /bin/
 /vtdataroot/
+/vthook/
 /web/vtadmin/node_modules
 /web/vtadmin/build
