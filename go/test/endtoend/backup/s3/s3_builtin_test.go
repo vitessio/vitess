@@ -170,7 +170,7 @@ func runBackupTest(t *testing.T, cfg backupTestConfig) {
 		ForcePath: true,
 	})
 
-	ctx := t.Context()
+	ctx := context.Background()
 	backupRoot, keyspace, shard, ts := blackbox.SetupCluster(ctx, t, 2, 2)
 
 	be := &mysqlctl.BuiltinBackupEngine{}
@@ -299,7 +299,7 @@ func runRestoreTest(t *testing.T, cfg restoreTestConfig) {
 		ForcePath: true,
 	})
 
-	ctx := t.Context()
+	ctx := context.Background()
 	backupRoot, keyspace, shard, ts := blackbox.SetupCluster(ctx, t, 2, 2)
 
 	fakeStats := backupstats.NewFakeStats()
