@@ -14,6 +14,7 @@ limitations under the License.
 package fuzzing
 
 import (
+	"context"
 	"sync"
 	"testing"
 
@@ -37,7 +38,7 @@ func initTesting() {
 func FuzzTabletManagerExecuteFetchAsDba(data []byte) int {
 	fuzzInitter.Do(initTesting)
 	t := &testing.T{}
-	ctx := t.Context()
+	ctx := context.Background()
 	cp := mysql.ConnParams{}
 	db := fakesqldb.New(t)
 	defer db.Close()
