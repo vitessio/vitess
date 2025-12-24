@@ -18,8 +18,11 @@ package tmclient
 
 import (
 	"context"
+	"runtime"
+	"runtime/debug"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/hook"
@@ -179,7 +182,7 @@ type TabletManagerClient interface {
 	ReplicationStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error)
 
 	// FullStatus returns the tablet's mysql replication status.
-	FullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error)
+	FullStatus(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.FullStatusRequest) (*replicationdatapb.FullStatus, error)
 
 	// StopReplication stops the mysql replication
 	StopReplication(ctx context.Context, tablet *topodatapb.Tablet) error
@@ -324,6 +327,15 @@ func RegisterTabletManagerClientFactory(name string, factory TabletManagerClient
 func NewTabletManagerClient() TabletManagerClient {
 	f, ok := tabletManagerClientFactories[tabletManagerProtocol]
 	if !ok {
+		pc, file, fileNo, ok := runtime.Caller(1)
+		if ok {
+			details := runtime.FuncForPC(pc)
+			log.Infof("NewTabletManagerClient() called by %s:%d (%+v)", file, fileNo, details.Name())
+		}
+
+		debug.PrintStack()
+		spew.Dump(tabletManagerClientFactories)
+
 		log.Exitf("No TabletManagerProtocol registered with name %s", tabletManagerProtocol)
 	}
 

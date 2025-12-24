@@ -54,7 +54,8 @@ type fakeRPCTM struct {
 	// slow if true will let Ping() sleep and effectively not respond to an RPC.
 	slow bool
 	// mu guards accesses of "slow".
-	mu sync.Mutex
+	mu          sync.Mutex
+	tabletAlias *topodatapb.TabletAlias
 }
 
 func (fra *fakeRPCTM) CreateVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {
@@ -133,6 +134,10 @@ func (fra *fakeRPCTM) UnlockTables(ctx context.Context) error {
 func (fra *fakeRPCTM) MysqlHostMetrics(ctx context.Context, req *tabletmanagerdatapb.MysqlHostMetricsRequest) (*tabletmanagerdatapb.MysqlHostMetricsResponse, error) {
 	// TODO implement me
 	panic("implement me")
+}
+
+func (fra *fakeRPCTM) GetTabletAlias() *topodatapb.TabletAlias {
+	return fra.tabletAlias
 }
 
 func (fra *fakeRPCTM) setSlow(slow bool) {
@@ -956,12 +961,12 @@ func (fra *fakeRPCTM) FullStatus(ctx context.Context) (*replicationdatapb.FullSt
 }
 
 func tmRPCTestFullStatus(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	rs, err := client.FullStatus(ctx, tablet)
+	rs, err := client.FullStatus(ctx, tablet, nil)
 	compareError(t, "FullStatus", err, rs, testFullStatus)
 }
 
 func tmRPCTestFullStatusPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	_, err := client.FullStatus(ctx, tablet)
+	_, err := client.FullStatus(ctx, tablet, nil)
 	expectHandleRPCPanic(t, "FullStatus", false /*verbose*/, err)
 }
 

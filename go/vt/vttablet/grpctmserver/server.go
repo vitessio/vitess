@@ -28,14 +28,21 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	tabletmanagerservicepb "vitess.io/vitess/go/vt/proto/tabletmanagerservice"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+var tmc = tmclient.NewTabletManagerClient()
 
 // server is the gRPC implementation of the RPC server
 type server struct {
@@ -362,11 +369,42 @@ func (s *server) ReplicationStatus(ctx context.Context, request *tabletmanagerda
 	return response, err
 }
 
+func (s *server) proxyFullStatus(ctx context.Context, request *tabletmanagerdatapb.FullStatusRequest) (*replicationdatapb.FullStatus, error) {
+	// disallow infinite proxy loop
+	if topoproto.TabletAliasEqual(s.tm.GetTabletAlias(), request.ProxyTarget.Alias) {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "cannot use proxying tablet as a proxy target")
+	}
+	// disallow proxying more than once
+	if request.ProxiedBy != nil {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "cannot proxy a request that is already proxied")
+	}
+	// disallow timeouts larger than the local remote operation timeout
+	if request.ProxyTimeoutMs > uint64(topo.RemoteOperationTimeout.Milliseconds()) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot set a proxy timeout ms greater than %d", topo.RemoteOperationTimeout.Milliseconds())
+	}
+
+	timeout := topo.RemoteOperationTimeout
+	if request.ProxyTimeoutMs > 0 {
+		timeout = time.Duration(request.ProxyTimeoutMs) * time.Millisecond
+	}
+	proxyCtx, proxyCancel := context.WithTimeout(ctx, timeout)
+	defer proxyCancel()
+
+	return tmc.FullStatus(proxyCtx, request.ProxyTarget, &tabletmanagerdatapb.FullStatusRequest{
+		ProxiedBy: s.tm.GetTabletAlias(),
+	})
+}
+
 func (s *server) FullStatus(ctx context.Context, request *tabletmanagerdatapb.FullStatusRequest) (response *tabletmanagerdatapb.FullStatusResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "FullStatus", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
+	var status *replicationdatapb.FullStatus
 	response = &tabletmanagerdatapb.FullStatusResponse{}
-	status, err := s.tm.FullStatus(ctx)
+	if request.ProxyTarget != nil {
+		status, err = s.proxyFullStatus(ctx, request)
+	} else {
+		status, err = s.tm.FullStatus(ctx)
+	}
 	if err == nil {
 		response.Status = status
 	}

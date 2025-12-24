@@ -745,7 +745,7 @@ func (fake *TabletManagerClient) ConcludeTransaction(ctx context.Context, tablet
 }
 
 // FullStatus is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) FullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
+func (fake *TabletManagerClient) FullStatus(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.FullStatusRequest) (*replicationdatapb.FullStatus, error) {
 	if fake.FullStatusResult != nil {
 		return fake.FullStatusResult, nil
 	}

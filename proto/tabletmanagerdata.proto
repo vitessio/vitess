@@ -517,6 +517,16 @@ message ResetReplicationParametersResponse {
 }
 
 message FullStatusRequest {
+  // proxy_target specifies a tablet to proxy the FullStatusResponse from.
+  topodata.Tablet proxy_target = 1;
+
+  // proxy_timeout_ms specifies the maximum number of milliseconds to wait for a
+  // proxied request to complete. Must be less than topo.RemoteOperationTimeout
+  // on the tablet proxying the request.
+  uint64 proxy_timeout_ms = 2;
+
+  // proxied_by is set to the tablet alias that proxied a FullStatusRequest.
+  topodata.TabletAlias proxied_by = 3;
 }
 
 message FullStatusResponse {
