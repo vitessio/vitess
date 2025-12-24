@@ -175,7 +175,10 @@ func TestStopReplicationAndGetStatus(t *testing.T) {
 	// Setup semi-sync on keyspace and wait for tablet to enable semi-sync.
 	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
 	require.NoError(t, err)
-	defer clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=none")
+	defer func() {
+		tmcStartReplication(t.Context(), tablet.GrpcPort)
+		clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=none")
+	}()
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
 		defer cancel()
