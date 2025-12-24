@@ -222,10 +222,10 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 		// Disable gRPC server GOAWAY/"too_many_pings" errors. Context:
 		// https://github.com/grpc/grpc/blob/master/doc/keepalive.md
 		"GRPC_ARG_HTTP2_MAX_PINGS_WITHOUT_DATA": "0",
-		"VTROOT":      "/vt/src/vitess.io/vitess",
-		"VTDATAROOT":  dataDir,
-		"VTPORTSTART": strconv.FormatInt(int64(getPortStart(100)), 10),
-		"TOPO":        os.Getenv("TOPO"),
+		"VTROOT":                                "/vt/src/vitess.io/vitess",
+		"VTDATAROOT":                            dataDir,
+		"VTPORTSTART":                           strconv.FormatInt(int64(getPortStart(100)), 10),
+		"TOPO":                                  os.Getenv("TOPO"),
 	})
 
 	// Capture test output.
