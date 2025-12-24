@@ -158,7 +158,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestCFCPrefixQueryNoHash(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := clusterInstance.GetVTParams(sKs)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
@@ -195,7 +195,7 @@ func TestCFCPrefixQueryNoHash(t *testing.T) {
 }
 
 func TestCFCPrefixQueryWithHash(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := clusterInstance.GetVTParams(sKsMD5)
 
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -237,7 +237,7 @@ func TestCFCPrefixQueryWithHash(t *testing.T) {
 }
 
 func TestCFCInsert(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	vtParams := clusterInstance.GetVTParams(sKs)
 	conn, err := mysql.Connect(ctx, &vtParams)

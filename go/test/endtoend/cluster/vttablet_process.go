@@ -554,7 +554,7 @@ func (vttablet *VttabletProcess) defaultConn(dbname string) (*mysql.Conn, error)
 }
 
 func (vttablet *VttabletProcess) conn(dbParams *mysql.ConnParams) (*mysql.Conn, error) {
-	ctx := context.Background()
+	ctx := t.Context()
 	return mysql.Connect(ctx, dbParams)
 }
 

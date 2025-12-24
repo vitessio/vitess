@@ -29,7 +29,7 @@ import (
 )
 
 func TestColumnNames(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)

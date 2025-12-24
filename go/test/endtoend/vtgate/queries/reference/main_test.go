@@ -103,7 +103,7 @@ func TestMain(m *testing.M) {
 		done := make(chan bool, 1)
 		expectRows := 2
 		go func() {
-			ctx := context.Background()
+			ctx := t.Context()
 			vtgateAddr := fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateProcess.GrpcPort)
 			vtgateConn, err := vtgateconn.Dial(ctx, vtgateAddr)
 			if err != nil {
@@ -171,7 +171,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		vtgateAddr := fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateProcess.GrpcPort)
 		vtgateConn, err := vtgateconn.Dial(ctx, vtgateAddr)
 		if err != nil {

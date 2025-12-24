@@ -71,7 +71,7 @@ func TestAddKeyspace(t *testing.T) {
 	_ = clusterInstance.VtgateProcess.Setup()
 	clusterInstance.WaitForTabletsToHealthyInVtgate()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := mysql.ConnParams{
 		Host: clusterInstance.Hostname,
 		Port: clusterInstance.VtgateMySQLPort,

@@ -82,7 +82,7 @@ func TestMain(m *testing.M) {
 }
 
 func start(t *testing.T) (*mysql.Conn, func()) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 

@@ -137,7 +137,7 @@ func TestResetReplicationParameters(t *testing.T) {
 
 // TestGetGlobalStatusVars tests the GetGlobalStatusVars RPC
 func TestGetGlobalStatusVars(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	statusValues, err := tmcGetGlobalStatusVars(ctx, replicaTablet.GrpcPort, []string{"Innodb_buffer_pool_pages_data", "unknown_value"})
 	require.NoError(t, err)
 	require.Len(t, statusValues, 1)

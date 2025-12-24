@@ -60,7 +60,7 @@ func FuzzLoadTable(data []byte) int {
 }
 
 func newTestLoadTable(tableName, comment string, db *fakesqldb.DB) (*schema.Table, error) {
-	ctx := context.Background()
+	ctx := t.Context()
 	appParams := dbconfigs.New(db.ConnParams())
 	dbaParams := dbconfigs.New(db.ConnParams())
 	cfg := tabletenv.ConnPoolConfig{

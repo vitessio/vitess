@@ -106,7 +106,7 @@ func TestAcquireSameConnID(t *testing.T) {
 			require.Equal(t, "Fail in goroutine after TestAcquireSameConnID has completed", err)
 		}
 	}()
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

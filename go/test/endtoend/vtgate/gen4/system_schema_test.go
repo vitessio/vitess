@@ -31,7 +31,7 @@ import (
 )
 
 func TestDbNameOverride(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -53,7 +53,7 @@ func TestDbNameOverride(t *testing.T) {
 }
 
 func TestInformationSchemaQuery(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -87,7 +87,7 @@ func assertSingleRowIsReturned(t *testing.T, conn *mysql.Conn, predicate string,
 }
 
 func TestInformationSchemaWithSubquery(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -97,7 +97,7 @@ func TestInformationSchemaWithSubquery(t *testing.T) {
 }
 
 func TestInformationSchemaQueryGetsRoutedToTheRightTableAndKeyspace(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -108,7 +108,7 @@ func TestInformationSchemaQueryGetsRoutedToTheRightTableAndKeyspace(t *testing.T
 }
 
 func TestFKConstraintUsingInformationSchema(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -125,7 +125,7 @@ func TestFKConstraintUsingInformationSchema(t *testing.T) {
 }
 
 func TestConnectWithSystemSchema(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	for _, dbname := range []string{"information_schema", "mysql", "performance_schema", "sys"} {
 		connParams := vtParams
 		connParams.DbName = dbname
@@ -137,7 +137,7 @@ func TestConnectWithSystemSchema(t *testing.T) {
 }
 
 func TestUseSystemSchema(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -148,7 +148,7 @@ func TestUseSystemSchema(t *testing.T) {
 }
 
 func TestSystemSchemaQueryWithoutQualifier(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -182,7 +182,7 @@ func TestSystemSchemaQueryWithoutQualifier(t *testing.T) {
 }
 
 func TestMultipleSchemaPredicates(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -207,7 +207,7 @@ func TestMultipleSchemaPredicates(t *testing.T) {
 }
 
 func TestQuerySystemTables(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

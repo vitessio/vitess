@@ -36,7 +36,7 @@ import (
 
 func TestVtgateProcess(t *testing.T) {
 	verifyVtgateVariables(t, clusterInstance.VtgateProcess.VerifyURL)
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

@@ -30,7 +30,7 @@ import (
 )
 
 func start(t *testing.T) (*mysql.Conn, func()) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtConn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 

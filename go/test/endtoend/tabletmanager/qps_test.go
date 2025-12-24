@@ -28,7 +28,7 @@ import (
 )
 
 func TestQPS(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	vtParams := mysql.ConnParams{
 		Host: "localhost",

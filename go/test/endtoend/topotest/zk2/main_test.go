@@ -102,7 +102,7 @@ func TestNamedLocking(t *testing.T) {
 	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctldClientProcess.TopoGlobalAddress, clusterInstance.VtctldClientProcess.TopoGlobalRoot)
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	lockName := "TestNamedLocking"
 	action := "Testing"
 
@@ -144,7 +144,7 @@ func TestNamedLocking(t *testing.T) {
 }
 
 func TestTopoDownServingQuery(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
 		Port: clusterInstance.VtgateMySQLPort,

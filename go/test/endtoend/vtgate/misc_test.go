@@ -355,7 +355,7 @@ func TestFlushLock(t *testing.T) {
 
 	var cnt atomic.Int32
 	go func() {
-		ctx := context.Background()
+		ctx := t.Context()
 		conn2, err := mysql.Connect(ctx, &vtParams)
 		require.NoError(t, err)
 		defer conn2.Close()
@@ -823,7 +823,7 @@ func TestRowCountExceed(t *testing.T) {
 }
 
 func TestDDLTargeted(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

@@ -112,7 +112,7 @@ func NewMySQLWithMysqld(port int, hostname, dbName string, schemaSQL ...string) 
 		}
 	}
 	return params, mysqld, mycnf, func() {
-		ctx := context.Background()
+		ctx := t.Context()
 		_ = mysqld.Teardown(ctx, mycnf, true, mysqlShutdownTimeout)
 	}, nil
 }
@@ -151,7 +151,7 @@ func initMysqld(mysqld *mysqlctl.Mysqld, mycnf *mysqlctl.Mycnf, initSQLFile stri
 	}
 	f.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	err = mysqld.Init(ctx, mycnf, initSQLFile)
 	if err != nil {
 		return err
@@ -160,7 +160,7 @@ func initMysqld(mysqld *mysqlctl.Mysqld, mycnf *mysqlctl.Mycnf, initSQLFile stri
 }
 
 func prepareMySQLWithSchema(params mysql.ConnParams, sql string) error {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &params)
 	if err != nil {
 		return err

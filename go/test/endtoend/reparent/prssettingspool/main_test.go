@@ -83,7 +83,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestSettingsPoolWithTXAndPRS(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -115,7 +115,7 @@ func TestSettingsPoolWithTXAndPRS(t *testing.T) {
 }
 
 func TestSettingsPoolWithoutTXAndPRS(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

@@ -82,7 +82,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestDBDDLPlugin(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
 		Port: clusterInstance.VtgateMySQLPort,

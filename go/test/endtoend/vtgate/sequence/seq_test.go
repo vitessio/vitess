@@ -216,7 +216,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestSeq(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
 		Port: clusterInstance.VtgateMySQLPort,
@@ -279,7 +279,7 @@ func TestSeq(t *testing.T) {
 }
 
 func TestDotTableSeq(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := mysql.ConnParams{
 		Host:   "localhost",
 		Port:   clusterInstance.VtgateMySQLPort,
@@ -301,7 +301,7 @@ func TestDotTableSeq(t *testing.T) {
 }
 
 func TestInsertAllDefaults(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := mysql.ConnParams{
 		Host:   "localhost",
 		Port:   clusterInstance.VtgateMySQLPort,
@@ -325,7 +325,7 @@ func TestInsertAllDefaults(t *testing.T) {
 // sequence-generated value after an INSERT in both sharded and unsharded keyspaces.
 // This is a regression test for https://github.com/vitessio/vitess/issues/18946
 func TestLastInsertIDWithSequence(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	t.Run("unsharded keyspace", func(t *testing.T) {
 		vtParams := mysql.ConnParams{

@@ -30,7 +30,7 @@ import (
 )
 
 func TestFallbackSecurityPolicy(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	mTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
 	// Start Mysql Processes
@@ -84,7 +84,7 @@ func assertAllowedURLTest(t *testing.T, url string) {
 }
 
 func TestDenyAllSecurityPolicy(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	mTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
 	// Start Mysql Processes
@@ -115,7 +115,7 @@ func TestDenyAllSecurityPolicy(t *testing.T) {
 }
 
 func TestReadOnlySecurityPolicy(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	mTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
 	// Start Mysql Processes

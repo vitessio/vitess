@@ -95,7 +95,7 @@ func TestMain(m *testing.M) {
 
 // TestTransactionModes tests transactions using twopc mode
 func TestTransactionModes(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -139,7 +139,7 @@ func TestTransactionModes(t *testing.T) {
 
 // TestTransactionIsolation tests transaction isolation level.
 func TestTransactionIsolation(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -175,7 +175,7 @@ func TestTransactionAccessModes(t *testing.T) {
 	closer := start(t)
 	defer closer()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -208,7 +208,7 @@ func TestTransactionAccessModes(t *testing.T) {
 // TestTransactionIsolationInTx tests transaction isolation level inside transaction
 // and setting isolation level to different values.
 func TestTransactionIsolationInTx(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)

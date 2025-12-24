@@ -28,7 +28,7 @@ import (
 )
 
 func TestReparentGracefulRangeBased(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	utils.ShardName = "0000000000000000-ffffffffffffffff"
 	defer func() { utils.ShardName = "0" }()

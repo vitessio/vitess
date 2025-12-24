@@ -120,7 +120,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestNewTable(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -161,7 +161,7 @@ func TestNewTable(t *testing.T) {
 }
 
 func TestAmbiguousColumnJoin(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -172,7 +172,7 @@ func TestAmbiguousColumnJoin(t *testing.T) {
 }
 
 func TestInitAndUpdate(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -220,7 +220,7 @@ func TestInitAndUpdate(t *testing.T) {
 }
 
 func TestDMLOnNewTable(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -272,7 +272,7 @@ func TestDMLOnNewTable(t *testing.T) {
 
 // TestNewView validates that view tracking works as expected.
 func TestNewView(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -294,7 +294,7 @@ func TestNewView(t *testing.T) {
 
 // TestViewAndTable validates that new column added in table is present in the view definition
 func TestViewAndTable(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

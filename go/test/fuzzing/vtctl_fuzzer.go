@@ -155,7 +155,7 @@ func Fuzz(data []byte) int {
 	// At this point we have a data array that can
 	// be divided properly. We can now proceed to
 	// passing it to Vitess
-	ctx := context.Background()
+	ctx := t.Context()
 	topo, err := createTopo(ctx)
 	if err != nil {
 		return -1

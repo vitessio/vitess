@@ -87,7 +87,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestTransactionRollBackWhenShutDown(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -121,7 +121,7 @@ func TestTransactionRollBackWhenShutDown(t *testing.T) {
 }
 
 func TestErrorInAutocommitSession(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

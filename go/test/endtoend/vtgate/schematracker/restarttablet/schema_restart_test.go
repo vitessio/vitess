@@ -115,7 +115,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestVSchemaTrackerInit(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

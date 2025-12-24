@@ -38,7 +38,7 @@ func initTesting() {
 func FuzzTabletManagerExecuteFetchAsDba(data []byte) int {
 	fuzzInitter.Do(initTesting)
 	t := &testing.T{}
-	ctx := context.Background()
+	ctx := t.Context()
 	cp := mysql.ConnParams{}
 	db := fakesqldb.New(t)
 	defer db.Close()

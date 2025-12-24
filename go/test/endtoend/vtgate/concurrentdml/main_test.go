@@ -108,7 +108,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestInsertIgnoreOnLookupUniqueVindex(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
 		Port: clusterInstance.VtgateMySQLPort,
@@ -136,7 +136,7 @@ func TestInsertIgnoreOnLookupUniqueVindex(t *testing.T) {
 
 func TestOpenTxBlocksInSerial(t *testing.T) {
 	t.Skip("Update and Insert in same transaction does not work with the unique consistent lookup having same value.")
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
 		Port: clusterInstance.VtgateMySQLPort,
@@ -167,7 +167,7 @@ func TestOpenTxBlocksInSerial(t *testing.T) {
 
 func TestOpenTxBlocksInConcurrent(t *testing.T) {
 	t.Skip("Update and Insert in same transaction does not work with the unique consistent lookup having same value.")
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
 		Port: clusterInstance.VtgateMySQLPort,
@@ -204,7 +204,7 @@ func TestOpenTxBlocksInConcurrent(t *testing.T) {
 }
 
 func TestUpdateLookupUniqueVindex(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
 		Port: clusterInstance.VtgateMySQLPort,
