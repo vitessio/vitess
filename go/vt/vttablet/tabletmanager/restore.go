@@ -421,6 +421,10 @@ func (tm *TabletManager) restoreBackupInnerLocked(
 
 	// Choose replication action.
 	switch {
+	case err == mysqlctl.ErrNoBackup:
+		// Starting with empty database.
+		// We just need to initialize replication
+		replicationAction = replicationActionInitialize
 	case params.IsIncrementalRecovery():
 		// The whole point of point-in-time recovery is that we want to restore
 		// up to a given position, and to NOT proceed from that position. We
@@ -431,10 +435,6 @@ func (tm *TabletManager) restoreBackupInnerLocked(
 		// Reconnect to primary only for "NORMAL" keyspaces.
 		replicationAction = replicationActionStart
 		replicationPos = backupManifest.Position
-	case err == mysqlctl.ErrNoBackup:
-		// Starting with empty database.
-		// We just need to initialize replication
-		replicationAction = replicationActionInitialize
 	case params.DryRun:
 		// Do nothing here.
 		params.Logger.Infof("Dry run. No changes made")
