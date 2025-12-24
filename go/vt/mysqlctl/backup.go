@@ -315,21 +315,28 @@ func removeExistingFiles(cnf *Mycnf) error {
 
 // ShouldRestore checks whether a database with tables already exists
 // and returns whether a restore action should be performed
-func ShouldRestore(ctx context.Context, params RestoreParams) (bool, error) {
-	if params.DeleteBeforeRestore || RestoreWasInterrupted(params.Cnf) {
+func ShouldRestore(
+	ctx context.Context,
+	logger logutil.Logger,
+	cnf *Mycnf,
+	mysqld MysqlDaemon,
+	dbName string,
+	deleteBeforeRestore bool,
+) (bool, error) {
+	if deleteBeforeRestore || RestoreWasInterrupted(cnf) {
 		return true, nil
 	}
-	params.Logger.Infof("Restore: No %v file found, checking no existing data is present", RestoreState)
+	logger.Infof("Restore: No %v file found, checking no existing data is present", RestoreState)
 	// Wait for mysqld to be ready, in case it was launched in parallel with us.
 	// If this doesn't succeed, we should not attempt a restore
-	if err := params.Mysqld.Wait(ctx, params.Cnf); err != nil {
+	if err := mysqld.Wait(ctx, cnf); err != nil {
 		return false, err
 	}
-	if err := params.Mysqld.WaitForDBAGrants(ctx, DbaGrantWaitTime); err != nil {
-		params.Logger.Errorf("error waiting for the grants: %v", err)
+	if err := mysqld.WaitForDBAGrants(ctx, DbaGrantWaitTime); err != nil {
+		logger.Errorf("error waiting for the grants: %v", err)
 		return false, err
 	}
-	return checkNoDB(ctx, params.Mysqld, params.DbName)
+	return checkNoDB(ctx, mysqld, dbName)
 }
 
 // ensureRestoredGTIDPurgedMatchesManifest sees the following: when you restore a full backup, you want the MySQL server to have

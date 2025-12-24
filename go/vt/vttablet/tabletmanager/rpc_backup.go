@@ -204,10 +204,12 @@ func (tm *TabletManager) RestoreFromBackup(ctx context.Context, logger logutil.L
 	}
 
 	// Create the logger: tee to console and source.
-	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
+	restoreLogger := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
 
 	// Now we can run restore.
-	err = tm.restoreDataLocked(ctx, l, 0 /* waitForBackupInterval */, true /* deleteBeforeRestore */, request, mysqlShutdownTimeout)
+	err = tm.restoreBackupOuterLocked(ctx, restoreLogger, request.GetAllowedBackupEngines(),
+		protoutil.TimeFromProto(request.BackupTime), true /* deleteBeforeRestore */, request.DryRun, mysqlShutdownTimeout,
+		request.RestoreToPos, protoutil.TimeFromProto(request.RestoreToTimestamp), 0 /* waitForBackupInterval */)
 
 	// Re-run health check to be sure to capture any replication delay.
 	tm.QueryServiceControl.BroadcastHealth()
