@@ -960,7 +960,7 @@ func (cluster *LocalProcessCluster) ExecOnTablet(ctx context.Context, vttablet *
 		Keyspace:   tablet.Keyspace,
 		Shard:      tablet.Shard,
 		TabletType: tablet.Type,
-	}, sql, bindvars, int64(txID), int64(reservedID))
+	}, sql, bindvars, int64(txID), int64(reservedID), opts)
 }
 
 // ExecOnVTGate executes a query on a local cluster VTGate with the provided
