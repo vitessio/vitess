@@ -185,10 +185,9 @@ func TestStopReplicationAndGetStatus(t *testing.T) {
 		require.True(c, resp.SemiSyncReplicaStatus)
 	}, time.Second*45, time.Second)
 
-	// Test replicationdatapb.Capability_SEMISYNC returns semi-sync status.
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
 	defer cancel()
-	resp, err := tmcStopReplicationAndGetStatus(ctx, tablet.GrpcPort, replicationdatapb.StopReplicationMode_IOTHREADONLY, replicationdatapb.Capability_SEMISYNC)
+	resp, err := tmcStopReplicationAndGetStatus(ctx, tablet.GrpcPort, replicationdatapb.StopReplicationMode_IOTHREADONLY)
 	require.NoError(t, err)
 	require.NotNil(t, resp.Before)
 	require.True(t, resp.Before.SemiSyncReplicaEnabled)
