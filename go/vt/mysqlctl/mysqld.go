@@ -153,6 +153,11 @@ func MySQLCloneEnabled() bool {
 	return mysqlCloneEnabled
 }
 
+// SetMySQLCloneEnabled sets the MySQL CLONE enabled flag. This is intended for testing.
+func SetMySQLCloneEnabled(enabled bool) {
+	mysqlCloneEnabled = enabled
+}
+
 func registerReparentFlags(fs *pflag.FlagSet) {
 	utils.SetFlagBoolVar(fs, &DisableActiveReparents, "disable-active-reparents", DisableActiveReparents, "if set, do not allow active reparents. Use this to protect a cluster using external reparents.")
 }
