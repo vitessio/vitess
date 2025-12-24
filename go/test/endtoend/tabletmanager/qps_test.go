@@ -16,7 +16,6 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -28,7 +27,7 @@ import (
 )
 
 func TestQPS(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	vtParams := mysql.ConnParams{
 		Host: "localhost",

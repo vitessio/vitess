@@ -17,7 +17,6 @@ limitations under the License.
 package vreplsuite
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -443,7 +442,7 @@ func mysqlParams() *mysql.ConnParams {
 func mysqlExec(t *testing.T, sql string, expectError string) *sqltypes.Result {
 	t.Helper()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, mysqlParams())
 	require.Nil(t, err)
 	defer conn.Close()

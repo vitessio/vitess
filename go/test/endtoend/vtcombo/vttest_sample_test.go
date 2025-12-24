@@ -132,7 +132,7 @@ func TestStandalone(t *testing.T) {
 
 	assertVSchemaExists(t, grpcAddress)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := vtgateconn.Dial(ctx, grpcAddress)
 	require.NoError(t, err)
 	defer conn.Close()

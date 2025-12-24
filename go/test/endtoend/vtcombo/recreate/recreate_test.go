@@ -94,7 +94,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestDropAndRecreateWithSameShards(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := vtgateconn.Dial(ctx, grpcAddress)
 	require.Nil(t, err)
 	defer conn.Close()

@@ -19,7 +19,6 @@ package vault
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"fmt"
 	"net"
 	"os"
@@ -294,7 +293,7 @@ func initializeClusterLate(t *testing.T) {
 }
 
 func insertRow(t *testing.T, id int, productName string) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := mysql.ConnParams{
 		Host:  clusterInstance.Hostname,
 		Port:  clusterInstance.VtgateMySQLPort,

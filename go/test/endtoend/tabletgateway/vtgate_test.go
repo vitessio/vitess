@@ -18,7 +18,6 @@ This tests select/insert using the unshared keyspace added in main_test
 package healthcheck
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -43,7 +42,7 @@ func TestVtgateHealthCheck(t *testing.T) {
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
 	verifyVtgateVariables(t, clusterInstance.VtgateProcess.VerifyURL)
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -56,7 +55,7 @@ func TestVtgateReplicationStatusCheck(t *testing.T) {
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
 	verifyVtgateVariables(t, clusterInstance.VtgateProcess.VerifyURL)
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams) // VTGate
 	require.NoError(t, err)
 	defer conn.Close()
@@ -105,7 +104,7 @@ func TestVtgateReplicationStatusCheckWithTabletTypeChange(t *testing.T) {
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
 	verifyVtgateVariables(t, clusterInstance.VtgateProcess.VerifyURL)
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -179,7 +178,7 @@ func TestReplicaTransactions(t *testing.T) {
 	// TODO(deepthi): this test seems to depend on previous test. Fix tearDown so that tests are independent
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
-	ctx := context.Background()
+	ctx := t.Context()
 	writeConn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer writeConn.Close()
@@ -284,7 +283,7 @@ func TestReplicaTransactions(t *testing.T) {
 
 // TestStreamingRPCStuck tests that StreamExecute calls don't get stuck on the vttablets if a client stop reading from a stream.
 func TestStreamingRPCStuck(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtConn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer vtConn.Close()

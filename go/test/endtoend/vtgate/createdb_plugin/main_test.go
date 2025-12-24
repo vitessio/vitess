@@ -17,21 +17,18 @@ limitations under the License.
 package unsharded
 
 import (
-	"context"
 	"flag"
 	"os"
 	"sync"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
@@ -82,7 +79,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestDBDDLPlugin(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
 		Port: clusterInstance.VtgateMySQLPort,

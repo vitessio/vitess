@@ -124,7 +124,7 @@ func TestChangeTypeWithoutSemiSync(t *testing.T) {
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	primary, replica := tablets[0], tablets[1]
 

@@ -17,7 +17,6 @@ limitations under the License.
 package mysqlvsvitess
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -115,7 +114,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestCreateMySQL(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	mysqlConn, err := mysql.Connect(ctx, &mysqlParams)
 	require.NoError(t, err)
 	defer mysqlConn.Close()

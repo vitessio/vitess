@@ -95,7 +95,7 @@ func (tablet *Vttablet) ValidateTabletRestart(t *testing.T) {
 
 // GetPrimaryPosition gets the executed replication position of given vttablet
 func GetPrimaryPosition(t *testing.T, vttablet Vttablet, hostname string) (string, string) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtablet := getTablet(vttablet.GrpcPort, hostname)
 	pos, err := tmClient.PrimaryPosition(ctx, vtablet)
 	require.Nil(t, err)
@@ -105,7 +105,7 @@ func GetPrimaryPosition(t *testing.T, vttablet Vttablet, hostname string) (strin
 
 // FullStatus gets the full status from the given tablet.
 func FullStatus(t *testing.T, vttablet *Vttablet, hostname string) *replicationdatapb.FullStatus {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtablet := getTablet(vttablet.GrpcPort, hostname)
 	status, err := tmClient.FullStatus(ctx, vtablet)
 	require.NoError(t, err)

@@ -445,7 +445,7 @@ func ValidateTopology(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 
 // ConfirmReplication confirms that the replication is working properly
 func ConfirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*cluster.Vttablet) int {
-	ctx := context.Background()
+	ctx := t.Context()
 	insertVal++
 	n := insertVal // unique value ...
 	// insert data into the new primary, check the connected replica work
