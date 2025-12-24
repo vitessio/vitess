@@ -228,7 +228,7 @@ unit_test_cover: build dependency_check demo
 	go tool $(VT_GO_PARALLEL) cover -html=coverage.out
 
 unit_test_race: build dependency_check
-	tools/unit_test_race.sh
+	RACE=1 tools/unit_test_runner.sh
 
 e2e_test_race: build
 	tools/e2e_test_race.sh
