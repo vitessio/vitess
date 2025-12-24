@@ -114,6 +114,10 @@ type Status struct {
 	SslAllowed                             bool   `protobuf:"varint,23,opt,name=ssl_allowed,json=sslAllowed,proto3" json:"ssl_allowed,omitempty"`
 	ReplicationLagUnknown                  bool   `protobuf:"varint,24,opt,name=replication_lag_unknown,json=replicationLagUnknown,proto3" json:"replication_lag_unknown,omitempty"`
 	BackupRunning                          bool   `protobuf:"varint,25,opt,name=backup_running,json=backupRunning,proto3" json:"backup_running,omitempty"`
+	SemiSyncPrimaryEnabled                 bool   `protobuf:"varint,26,opt,name=semi_sync_primary_enabled,json=semiSyncPrimaryEnabled,proto3" json:"semi_sync_primary_enabled,omitempty"`
+	SemiSyncReplicaEnabled                 bool   `protobuf:"varint,27,opt,name=semi_sync_replica_enabled,json=semiSyncReplicaEnabled,proto3" json:"semi_sync_replica_enabled,omitempty"`
+	SemiSyncPrimaryStatus                  bool   `protobuf:"varint,28,opt,name=semi_sync_primary_status,json=semiSyncPrimaryStatus,proto3" json:"semi_sync_primary_status,omitempty"`
+	SemiSyncReplicaStatus                  bool   `protobuf:"varint,29,opt,name=semi_sync_replica_status,json=semiSyncReplicaStatus,proto3" json:"semi_sync_replica_status,omitempty"`
 	unknownFields                          protoimpl.UnknownFields
 	sizeCache                              protoimpl.SizeCache
 }
@@ -305,6 +309,34 @@ func (x *Status) GetReplicationLagUnknown() bool {
 func (x *Status) GetBackupRunning() bool {
 	if x != nil {
 		return x.BackupRunning
+	}
+	return false
+}
+
+func (x *Status) GetSemiSyncPrimaryEnabled() bool {
+	if x != nil {
+		return x.SemiSyncPrimaryEnabled
+	}
+	return false
+}
+
+func (x *Status) GetSemiSyncReplicaEnabled() bool {
+	if x != nil {
+		return x.SemiSyncReplicaEnabled
+	}
+	return false
+}
+
+func (x *Status) GetSemiSyncPrimaryStatus() bool {
+	if x != nil {
+		return x.SemiSyncPrimaryStatus
+	}
+	return false
+}
+
+func (x *Status) GetSemiSyncReplicaStatus() bool {
+	if x != nil {
+		return x.SemiSyncReplicaStatus
 	}
 	return false
 }
@@ -720,7 +752,7 @@ var File_replicationdata_proto protoreflect.FileDescriptor
 
 const file_replicationdata_proto_rawDesc = "" +
 	"\n" +
-	"\x15replicationdata.proto\x12\x0freplicationdata\x1a\x0etopodata.proto\"\xbd\a\n" +
+	"\x15replicationdata.proto\x12\x0freplicationdata\x1a\x0etopodata.proto\"\xa5\t\n" +
 	"\x06Status\x12\x1a\n" +
 	"\bposition\x18\x01 \x01(\tR\bposition\x126\n" +
 	"\x17replication_lag_seconds\x18\x04 \x01(\rR\x15replicationLagSeconds\x12\x1f\n" +
@@ -751,7 +783,11 @@ const file_replicationdata_proto_rawDesc = "" +
 	"\vssl_allowed\x18\x17 \x01(\bR\n" +
 	"sslAllowed\x126\n" +
 	"\x17replication_lag_unknown\x18\x18 \x01(\bR\x15replicationLagUnknown\x12%\n" +
-	"\x0ebackup_running\x18\x19 \x01(\bR\rbackupRunningJ\x04\b\x02\x10\x03J\x04\b\x03\x10\x04\"n\n" +
+	"\x0ebackup_running\x18\x19 \x01(\bR\rbackupRunning\x129\n" +
+	"\x19semi_sync_primary_enabled\x18\x1a \x01(\bR\x16semiSyncPrimaryEnabled\x129\n" +
+	"\x19semi_sync_replica_enabled\x18\x1b \x01(\bR\x16semiSyncReplicaEnabled\x127\n" +
+	"\x18semi_sync_primary_status\x18\x1c \x01(\bR\x15semiSyncPrimaryStatus\x127\n" +
+	"\x18semi_sync_replica_status\x18\x1d \x01(\bR\x15semiSyncReplicaStatusJ\x04\b\x02\x10\x03J\x04\b\x03\x10\x04\"n\n" +
 	"\rConfiguration\x12-\n" +
 	"\x12heartbeat_interval\x18\x01 \x01(\x01R\x11heartbeatInterval\x12.\n" +
 	"\x13replica_net_timeout\x18\x02 \x01(\x05R\x11replicaNetTimeout\"w\n" +
