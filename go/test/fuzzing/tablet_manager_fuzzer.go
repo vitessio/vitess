@@ -14,7 +14,6 @@ limitations under the License.
 package fuzzing
 
 import (
-	"context"
 	"sync"
 	"testing"
 
