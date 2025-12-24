@@ -190,7 +190,6 @@ func warmUpHeartbeat(t *testing.T) tabletmanagerdatapb.CheckThrottlerResponseCod
 	require.NoError(t, err)
 
 	time.Sleep(time.Second)
-	t.Logf("resp.ResponseCode: %v", resp.Check.ResponseCode)
 	return resp.Check.ResponseCode
 }
 
