@@ -195,6 +195,8 @@ func TestStopReplicationAndGetStatus(t *testing.T) {
 	require.NotNil(t, resp.Before)
 	require.True(t, resp.Before.SemiSyncReplicaEnabled)
 	require.True(t, resp.Before.SemiSyncReplicaStatus)
+	require.False(t, resp.Before.SemiSyncPrimaryEnabled)
+	require.False(t, resp.Before.SemiSyncPrimaryStatus)
 }
 
 func checkValueGreaterZero(t *testing.T, statusValues map[string]string, val string) {
