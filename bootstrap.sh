@@ -244,6 +244,9 @@ install_all() {
   # toxiproxy
   install_dep "toxiproxy" "$TOXIPROXY_VER" "$VTROOT/dist/toxiproxy" install_toxiproxy
 
+  # gotestsum
+  go install gotest.tools/gotestsum@$GOTESTSUM_VER
+
   echo
   echo "bootstrap finished - run 'make build' to compile"
 }

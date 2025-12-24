@@ -463,7 +463,7 @@ func generateUnitTestWorkflows(gitMetas *GitMetas) {
 		for _, evalengine := range []string{"1", "0"} {
 			test := &unitTest{
 				Name:       fmt.Sprintf("Unit Test (%s%s)", evalengineToString(evalengine), platform),
-				RunsOn:     defaultRunnerName,
+				RunsOn:     cores16RunnerName,
 				Platform:   string(platform),
 				GoPrivate:  goPrivate,
 				Evalengine: evalengine,

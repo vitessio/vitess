@@ -126,12 +126,12 @@ func TestConcurrentKeyspaceRoutingRulesUpdates(t *testing.T) {
 		t.Skip()
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
 	t.Run("memtopo", func(t *testing.T) {
-		testConcurrentKeyspaceRoutingRulesUpdates(t, ctx, ts)
+		testConcurrentKeyspaceRoutingRulesUpdates(t, ts)
 	})
 
 	etcdServerAddress := startEtcd(t)
@@ -141,19 +141,19 @@ func TestConcurrentKeyspaceRoutingRulesUpdates(t *testing.T) {
 	ts, err := topo.OpenServer(topoName, etcdServerAddress, "/vitess")
 	require.NoError(t, err)
 	t.Run("etcd", func(t *testing.T) {
-		testConcurrentKeyspaceRoutingRulesUpdates(t, ctx, ts)
+		testConcurrentKeyspaceRoutingRulesUpdates(t, ts)
 		ts.Close()
 	})
 }
 
-func testConcurrentKeyspaceRoutingRulesUpdates(t *testing.T, ctx context.Context, ts *topo.Server) {
+func testConcurrentKeyspaceRoutingRulesUpdates(t *testing.T, ts *topo.Server) {
 	concurrency := 100
 	duration := 10 * time.Second
 
 	var wg sync.WaitGroup
 	wg.Add(concurrency)
 
-	shortCtx, cancel := context.WithTimeout(ctx, duration)
+	ctx, cancel := context.WithTimeout(t.Context(), duration)
 	defer cancel()
 	log.Infof("Starting %d concurrent updates", concurrency)
 	for i := 0; i < concurrency; i++ {
@@ -161,24 +161,22 @@ func testConcurrentKeyspaceRoutingRulesUpdates(t *testing.T, ctx context.Context
 			defer wg.Done()
 			for {
 				select {
-				case <-shortCtx.Done():
+				case <-ctx.Done():
 					return
 				default:
-					update(t, ts, id)
+					update(ctx, t, ts, id)
 				}
 			}
 		}(i)
 	}
 	wg.Wait()
 	log.Infof("All updates completed")
-	rules, err := ts.GetKeyspaceRoutingRules(ctx)
+	rules, err := ts.GetKeyspaceRoutingRules(t.Context())
 	require.NoError(t, err)
 	require.LessOrEqual(t, concurrency, len(rules.Rules))
 }
 
-func update(t *testing.T, ts *topo.Server, id int) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+func update(ctx context.Context, t *testing.T, ts *topo.Server, id int) {
 	s := fmt.Sprintf("%d_%d", id, rand.IntN(math.MaxInt))
 	routes := make(map[string]string)
 	for _, tabletType := range tabletTypeSuffixes {
@@ -186,8 +184,14 @@ func update(t *testing.T, ts *topo.Server, id int) {
 		routes[from] = s + tabletType
 	}
 	err := updateKeyspaceRoutingRules(ctx, ts, "test", routes)
+	if ctx.Err() != nil {
+		return
+	}
 	require.NoError(t, err)
 	got, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
+	if ctx.Err() != nil {
+		return
+	}
 	require.NoError(t, err)
 	for _, tabletType := range tabletTypeSuffixes {
 		from := fmt.Sprintf("from%s%s", s, tabletType)

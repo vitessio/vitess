@@ -14,17 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Custom Go unit test runner which runs all unit tests in parallel except for
-# known flaky unit tests.
-# Flaky unit tests are run sequentially in the second phase and retried up to
-# three times.
-
-# Why are there flaky unit tests?
-#
-# Some of the Go unit tests are inherently flaky e.g. because they use the
-# real timer implementation and might fail when things take longer as usual.
-# In particular, this happens when the system is under load and threads do not
-# get scheduled as fast as usual. Then, the expected timings do not match.
+# Custom Go unit test runner which runs all unit tests in parallel with
+# up to 3 retries for flaky tests.
 
 # Set VT_GO_PARALLEL variable in the same way as the Makefile does.
 # We repeat this here because this script is called directly by test.go
@@ -50,9 +41,8 @@ case "$kernel" in
     ;;
 esac
 
-# All Go packages with test files.
-# Output per line: <full Go package name> <all _test.go files in the package>*
-packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}{{if len .XTestGoFiles}}{{.ImportPath}} {{join .XTestGoFiles " "}}{{end}}' ./go/... | sort)
+# All Go packages with test files, excluding endtoend tests.
+packages_with_tests=$(go list ./go/... | grep -v "endtoend")
 
 if [[ "$VTEVALENGINETEST" == "1" ]]; then
   packages_with_tests=$(echo "$packages_with_tests" | grep "evalengine")
@@ -62,32 +52,14 @@ if [[ "$VTEVALENGINETEST" == "0" ]]; then
   packages_with_tests=$(echo "$packages_with_tests" | grep -v "evalengine")
 fi
 
-# Flaky tests have the suffix "_flaky_test.go".
-# Exclude endtoend tests
-all_except_flaky_tests=$(echo "$packages_with_tests" | grep -vE ".+ .+_flaky_test\.go" | cut -d" " -f1 | grep -v "endtoend")
-flaky_tests=$(echo "$packages_with_tests" | grep -E ".+ .+_flaky_test\.go" | cut -d" " -f1)
+GOTESTSUM_ARGS="--rerun-fails=3"
 
-go test $VT_GO_PARALLEL -v -count=1 $all_except_flaky_tests
-if [ $? -ne 0 ]; then
-  echo "ERROR: Go unit tests failed. See above for errors."
-  echo
-  echo "This should NOT happen. Did you introduce a flaky unit test?"
-  echo "If so, please rename it to the suffix _flaky_test.go."
-  exit 1
+if [[ -n "$JUNIT_OUTPUT" ]]; then
+  GOTESTSUM_ARGS="$GOTESTSUM_ARGS --junitfile $JUNIT_OUTPUT"
 fi
 
-echo '# Flaky tests (3 attempts permitted)'
+if [[ -n "$JSON_OUTPUT" ]]; then
+  GOTESTSUM_ARGS="$GOTESTSUM_ARGS --jsonfile $JSON_OUTPUT"
+fi
 
-# Run flaky tests sequentially. Retry when necessary.
-for pkg in $flaky_tests; do
-  max_attempts=3
-  attempt=1
-  # Set a timeout because some tests may deadlock when they flake.
-  until go test -timeout 5m $VT_GO_PARALLEL $pkg -v -count=1; do
-    echo "FAILED (try $attempt/$max_attempts) in $pkg (return code $?). See above for errors."
-    if [ $((++attempt)) -gt $max_attempts ]; then
-      echo "ERROR: Flaky Go unit tests in package $pkg failed too often (after $max_attempts retries). Please reduce the flakiness."
-      exit 1
-    fi
-  done
-done
+gotestsum $GOTESTSUM_ARGS --packages="$packages_with_tests" -- $VT_GO_PARALLEL
