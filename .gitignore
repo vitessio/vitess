@@ -37,10 +37,6 @@ __debug_bin
 # generated protobuf files
 /go/vt/.proto.tmp
 
-# Godeps files
-/Godeps/_workspace/pkg
-/Godeps/_workspace/bin
-
 # Eclipse Java CheckStyle plugin configuration.
 /java/*/.checkstyle
 # java target files
@@ -52,14 +48,7 @@ __debug_bin
 /java/pom.xml.versionsBackup
 /java/*/pom.xml.versionsBackup
 
-# php downloaded dependencies
-/php/composer.phar
-/php/vendor
-
 report*.xml
-
-# vitess.io preview site
-/preview-vitess.io/
 
 # vitess.io generated site files
 /docs/
@@ -68,19 +57,13 @@ report*.xml
 _test/
 /test/stats.json
 
-# Go vendored libs
-/vendor/*/
-
-# release folder
-/releases/
-
 # Local examples
 /examples/local/vtdataroot
 
 /dist/
-/vthook/
 /bin/
 /vtdataroot/
+/vthook/
 venv
 
 .scannerwork
