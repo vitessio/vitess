@@ -70,13 +70,14 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-enable-views")
 
 		// Start sharded keyspace
+		cell := clusterInstance.Cell
 		sks := cluster.Keyspace{
 			Name:      shardedKs,
 			SchemaSQL: shardedSchema,
 			VSchema:   shardedVSchema,
 		}
 
-		err = clusterInstance.StartKeyspace(sks, []string{"-80", "80-"}, 0, false)
+		err = clusterInstance.StartKeyspace(sks, []string{"-80", "80-"}, 0, false, cell)
 		if err != nil {
 			return 1
 		}
@@ -88,7 +89,7 @@ func TestMain(m *testing.M) {
 			VSchema:   unshardedVSchema,
 		}
 
-		err = clusterInstance.StartUnshardedKeyspace(uks, 0, false)
+		err = clusterInstance.StartUnshardedKeyspace(uks, 0, false, cell)
 		if err != nil {
 			return 1
 		}

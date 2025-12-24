@@ -127,7 +127,8 @@ func TestMain(m *testing.M) {
 			VSchema:   sVSchema,
 		}
 		// cfc_testing
-		if err := clusterInstance.StartKeyspace(*sKeyspace, []string{"-41", "41-4180", "4180-42", "42-"}, 0, false); err != nil {
+		cell := clusterInstance.Cell
+		if err := clusterInstance.StartKeyspace(*sKeyspace, []string{"-41", "41-4180", "4180-42", "42-"}, 0, false, cell); err != nil {
 			return 1
 		}
 		// cfc_testing_md5
@@ -136,7 +137,7 @@ func TestMain(m *testing.M) {
 				Name:      sKsMD5,
 				SchemaSQL: sSchemaMD5,
 				VSchema:   sVSchemaMD5,
-			}, []string{"-c2", "c2-c20a80", "c20a80-d0", "d0-"}, 0, false); err != nil {
+			}, []string{"-c2", "c2-c20a80", "c20a80-d0", "d0-"}, 0, false, cell); err != nil {
 			return 1
 		}
 

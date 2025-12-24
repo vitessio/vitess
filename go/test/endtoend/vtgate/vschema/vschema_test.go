@@ -101,7 +101,7 @@ func TestMain(m *testing.M) {
 			Name:      keyspaceName,
 			SchemaSQL: sqlSchema,
 		}
-		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false); err != nil {
+		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false, clusterInstance.Cell); err != nil {
 			return 1, err
 		}
 

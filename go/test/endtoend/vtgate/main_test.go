@@ -74,7 +74,7 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
 			"--queryserver-config-max-result-size", "100",
 			"--queryserver-config-terse-errors")
-		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false)
+		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}

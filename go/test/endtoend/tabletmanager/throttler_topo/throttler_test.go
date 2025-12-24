@@ -119,7 +119,7 @@ func TestMain(m *testing.M) {
 			VSchema:   vSchema,
 		}
 
-		if err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {
+		if err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false, clusterInstance.Cell); err != nil {
 			return 1
 		}
 

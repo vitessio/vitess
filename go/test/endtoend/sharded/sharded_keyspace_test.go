@@ -110,7 +110,7 @@ func TestShardedKeyspace(t *testing.T) {
 	err = clusterInstance.VtctldClientProcess.InitializeShard(keyspaceName, shard2.Name, cell, shard2Primary.TabletUID)
 	require.Nil(t, err)
 
-	err = clusterInstance.StartVTOrc(keyspaceName)
+	err = clusterInstance.StartVTOrc(cell, keyspaceName)
 	require.NoError(t, err)
 
 	// apply the schema on the first shard through vtctl, so all tablets
