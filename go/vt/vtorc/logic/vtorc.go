@@ -191,9 +191,9 @@ func DiscoverInstance(tabletAlias *topodatapb.TabletAlias, forceDiscovery bool) 
 	discoveryInstanceTimings.Add("Other", otherLatency)
 
 	if err != nil {
-		log.Errorf("Failed to discover %s (force: %t), err: %v", tabletAlias, forceDiscovery, err)
+		log.Errorf("Failed to discover %s (force: %t), err: %v", tabletAliasString, forceDiscovery, err)
 	} else {
-		log.Infof("Discovered %s (force: %t): %+v", tabletAlias, forceDiscovery, instance)
+		log.Infof("Discovered %s (force: %t): %+v", tabletAliasString, forceDiscovery, instance)
 	}
 
 	if instance == nil {
