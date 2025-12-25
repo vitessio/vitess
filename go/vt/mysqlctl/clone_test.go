@@ -357,6 +357,7 @@ func createCloneFromDonorTestEnv(t *testing.T, donorHost string, donorPort int) 
 	}
 
 	// Configure recipient mysqld for successful validation and clone by default
+	mysqld.Version = "8.0.32"
 	mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
 		"SELECT @@version": sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("@@version", "varchar"),
@@ -564,10 +565,7 @@ func TestCloneFromDonor(t *testing.T) {
 			cloneFromTablet: "cell1-100",
 			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
 				// Configure mysqld to return an old MySQL version
-				env.mysqld.FetchSuperQueryMap["SELECT @@version"] = sqltypes.MakeTestResult(
-					sqltypes.MakeTestFields("@@version", "varchar"),
-					"8.0.16",
-				)
+				env.mysqld.Version = "8.0.16"
 			},
 			wantErr:         true,
 			wantErrContains: "recipient validation failed",
