@@ -43,8 +43,15 @@ type (
 
 		// We support a single distinct aggregation per aggregator. It is stored here.
 		// When planning the ordering that the OrderedAggregate will require,
-		// this needs to be the last ORDER BY expression
+		// this needs to be the last ORDER BY expression.
+		// Deprecated: Use UseHashDistinct for multiple distinct support.
 		DistinctExpr sqlparser.Expr
+
+		// UseHashDistinct indicates that distinct aggregations should use hash-based
+		// tracking instead of sort-based. This is set when multiple distinct aggregations
+		// with different expressions exist in the query. When true, DistinctExpr is ignored
+		// and no sorting by distinct expressions is required.
+		UseHashDistinct bool
 
 		// Pushed will be set to true once this aggregation has been pushed deeper in the tree
 		Pushed        bool

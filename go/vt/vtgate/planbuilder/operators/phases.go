@@ -241,7 +241,9 @@ func addOrderingFor(aggrOp *Aggregator) {
 	orderBys := slice.Map(aggrOp.Grouping, func(from GroupBy) OrderBy {
 		return from.AsOrderBy()
 	})
-	if aggrOp.DistinctExpr != nil {
+	// Only add ordering for DistinctExpr if we're using sort-based distinct tracking.
+	// Hash-based distinct (UseHashDistinct=true) doesn't require ordering by the distinct expression.
+	if aggrOp.DistinctExpr != nil && !aggrOp.UseHashDistinct {
 		orderBys = append(orderBys, OrderBy{
 			Inner: &sqlparser.Order{
 				Expr: aggrOp.DistinctExpr,
@@ -256,7 +258,9 @@ func needsOrdering(ctx *plancontext.PlanningContext, in *Aggregator) bool {
 	requiredOrder := slice.Map(in.Grouping, func(from GroupBy) sqlparser.Expr {
 		return from.Inner
 	})
-	if in.DistinctExpr != nil {
+	// Only require ordering for DistinctExpr if we're using sort-based distinct tracking.
+	// Hash-based distinct (UseHashDistinct=true) doesn't require ordering by the distinct expression.
+	if in.DistinctExpr != nil && !in.UseHashDistinct {
 		requiredOrder = append(requiredOrder, in.DistinctExpr)
 	}
 	if len(requiredOrder) == 0 {
