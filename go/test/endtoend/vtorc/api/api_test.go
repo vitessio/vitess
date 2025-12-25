@@ -85,7 +85,7 @@ func TestAPIEndpoints(t *testing.T) {
 	})
 
 	// Before we disable recoveries, let us wait until VTOrc has fixed all the issues (if any).
-	_, _ = utils.MakeAPICallRetry(t, vtorc, "/api/replication-analysis", func(_ int, response string) bool {
+	_, _ = utils.MakeAPICallRetry(t, vtorc, "/api/detection-analysis", func(i int, response string) bool {
 		return response != "null"
 	})
 
@@ -164,15 +164,15 @@ func TestAPIEndpoints(t *testing.T) {
 		assert.Equal(t, "Global recoveries disabled\n", resp)
 	})
 
-	t.Run("Replication Analysis API", func(t *testing.T) {
+	t.Run("Detection Analysis API", func(t *testing.T) {
 		// use vtctldclient to stop replication
 		_, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("StopReplication", replica.Alias)
 		require.NoError(t, err)
 
 		// We know VTOrc won't fix this since we disabled global recoveries!
 		// Wait until VTOrc picks up on this issue and verify
-		// that we see a not null result on the api/replication-analysis page
-		status, resp := utils.MakeAPICallRetry(t, vtorc, "/api/replication-analysis", func(_ int, response string) bool {
+		// that we see a not null result on the api/detection-analysis page
+		status, resp := utils.MakeAPICallRetry(t, vtorc, "/api/detection-analysis", func(_ int, response string) bool {
 			return response == "null"
 		})
 		assert.Equal(t, 200, status, resp)
@@ -180,25 +180,25 @@ func TestAPIEndpoints(t *testing.T) {
 		assert.Contains(t, resp, `"Analysis": "ReplicationStopped"`)
 
 		// Verify that filtering also works in the API as intended
-		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks&shard=0")
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/detection-analysis?keyspace=ks&shard=0")
 		require.NoError(t, err)
 		assert.Equal(t, 200, status, resp)
 		assert.Contains(t, resp, fmt.Sprintf(`"AnalyzedInstanceAlias": "%s"`, replica.Alias))
 
 		// Verify that filtering by keyspace also works in the API as intended
-		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks")
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/detection-analysis?keyspace=ks")
 		require.NoError(t, err)
 		assert.Equal(t, 200, status, resp)
 		assert.Contains(t, resp, fmt.Sprintf(`"AnalyzedInstanceAlias": "%s"`, replica.Alias))
 
 		// Check that filtering using keyspace and shard works
-		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks&shard=80-")
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/detection-analysis?keyspace=ks&shard=80-")
 		require.NoError(t, err)
 		assert.Equal(t, 200, status, resp)
 		assert.Equal(t, "null", resp)
 
 		// Check that filtering using just the shard fails
-		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?shard=0")
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/detection-analysis?shard=0")
 		require.NoError(t, err)
 		assert.Equal(t, 400, status, resp)
 		assert.Equal(t, "Filtering by shard without keyspace isn't supported\n", resp)

@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/viperutil/debug"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/logic"
 	"vitess.io/vitess/go/vt/vtorc/process"
@@ -42,7 +43,6 @@ const (
 	disableGlobalRecoveriesAPI = "/api/disable-global-recoveries"
 	enableGlobalRecoveriesAPI  = "/api/enable-global-recoveries"
 	detectionAnalysisAPI       = "/api/detection-analysis"
-	replicationAnalysisAPI     = "/api/replication-analysis" // TODO: remove in v24+
 	databaseStateAPI           = "/api/database-state"
 	configAPI                  = "/api/config"
 	healthAPI                  = "/debug/health"
@@ -59,7 +59,6 @@ var (
 		disableGlobalRecoveriesAPI,
 		enableGlobalRecoveriesAPI,
 		detectionAnalysisAPI,
-		replicationAnalysisAPI,
 		databaseStateAPI,
 		configAPI,
 		healthAPI,
@@ -85,7 +84,7 @@ func (v *vtorcAPI) ServeHTTP(response http.ResponseWriter, request *http.Request
 		problemsAPIHandler(response, request)
 	case errantGTIDsAPI:
 		errantGTIDsAPIHandler(response, request)
-	case detectionAnalysisAPI, replicationAnalysisAPI:
+	case detectionAnalysisAPI:
 		detectionAnalysisAPIHandler(response, request)
 	case databaseStateAPI:
 		databaseStateAPIHandler(response)
@@ -105,7 +104,7 @@ func getACLPermissionLevelForAPI(apiEndpoint string) string {
 		return acl.MONITORING
 	case disableGlobalRecoveriesAPI, enableGlobalRecoveriesAPI:
 		return acl.ADMIN
-	case detectionAnalysisAPI, replicationAnalysisAPI, configAPI:
+	case detectionAnalysisAPI, configAPI:
 		return acl.MONITORING
 	case healthAPI, databaseStateAPI:
 		return acl.MONITORING
@@ -210,6 +209,29 @@ func enableGlobalRecoveriesAPIHandler(response http.ResponseWriter) {
 	writePlainTextResponse(response, "Global recoveries enabled", http.StatusOK)
 }
 
+// LegacyDetectionAnalysisJSON is a wrapper to *inst.DetectionAnalysis that
+// provides the AnalyzedInstanceAlias field in the old string-based format.
+type LegacyDetectionAnalysisJSON struct {
+	*inst.DetectionAnalysis
+}
+
+// NewLegacyDetectionAnalysisJSON wraps a *inst.DetectionAnalysis with *LegacyDetectionAnalysisJSON.
+func NewLegacyDetectionAnalysisJSON(da *inst.DetectionAnalysis) *LegacyDetectionAnalysisJSON {
+	return &LegacyDetectionAnalysisJSON{da}
+}
+
+// MarshalJSON converts a legacyDetectionAnalysisJSON to the legacy format JSON.
+func (ldaj *LegacyDetectionAnalysisJSON) MarshalJSON() ([]byte, error) {
+	type Alias LegacyDetectionAnalysisJSON
+	return json.Marshal(&struct {
+		AnalyzedInstanceAlias string `json:"AnalyzedInstanceAlias"`
+		*Alias
+	}{
+		AnalyzedInstanceAlias: topoproto.TabletAliasString(ldaj.AnalyzedInstanceAlias),
+		Alias:                 (*Alias)(ldaj),
+	})
+}
+
 // detectionAnalysisAPIHandler is the handler for the detectionAnalysisAPI endpoint
 func detectionAnalysisAPIHandler(response http.ResponseWriter, request *http.Request) {
 	// This api also supports filtering by shard and keyspace provided.
@@ -224,10 +246,11 @@ func detectionAnalysisAPIHandler(response http.ResponseWriter, request *http.Req
 		http.Error(response, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	// TODO: We can also add filtering for a specific instance too based on the tablet alias.
-	// Currently inst.DetectionAnalysis doesn't store the tablet alias, but once it does we can filter on that too
-	returnAsJSON(response, http.StatusOK, analysis)
+	processed := make([]*LegacyDetectionAnalysisJSON, 0)
+	for _, a := range analysis {
+		processed = append(processed, NewLegacyDetectionAnalysisJSON(a))
+	}
+	returnAsJSON(response, http.StatusOK, processed)
 }
 
 // healthAPIHandler is the handler for the healthAPI endpoint
