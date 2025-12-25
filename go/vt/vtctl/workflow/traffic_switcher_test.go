@@ -450,3 +450,36 @@ func TestCancelMigration_SHARDS(t *testing.T) {
 	assert.Empty(t, env.tmc.vrQueries[100])
 	assert.Empty(t, env.tmc.vrQueries[200])
 }
+
+
+func TestDropTargetShards_NoOp(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	workflowName := "wf1"
+	tableName := "t1"
+	sourceKeyspace := &testKeyspace{KeyspaceName: "sourceks", ShardNames: []string{"0"}}
+	targetKeyspace := &testKeyspace{KeyspaceName: "targetks", ShardNames: []string{"0"}}
+
+	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
+		tableName: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   tableName,
+					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+				},
+			},
+		},
+	}
+
+	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer env.close()
+	env.tmc.schema = schema
+
+	ts, _, err := env.ws.getWorkflowState(ctx, targetKeyspace.KeyspaceName, workflowName)
+	require.NoError(t, err)
+
+	// Verify dropTargetShards can be called safely
+	err = ts.dropTargetShards(ctx)
+	require.NoError(t, err)
+}
