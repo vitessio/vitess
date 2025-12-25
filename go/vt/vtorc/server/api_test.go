@@ -29,9 +29,6 @@ func TestGetACLPermissionLevelForAPI(t *testing.T) {
 			apiEndpoint: detectionAnalysisAPI,
 			want:        acl.MONITORING,
 		}, {
-			apiEndpoint: replicationAnalysisAPI,
-			want:        acl.MONITORING,
-		}, {
 			apiEndpoint: healthAPI,
 			want:        acl.MONITORING,
 		}, {
