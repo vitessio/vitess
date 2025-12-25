@@ -323,6 +323,7 @@ Flags:
       --restore-from-backup-ts string                                    (init restore parameter) if set, restore the latest backup taken at or before this timestamp. Example: '2021-04-29.133050'
       --restore-to-pos string                                            (init incremental restore parameter) if set, run a point in time recovery that ends with the given position. This will attempt to use one full backup followed by zero or more incremental backups
       --restore-to-timestamp string                                      (init incremental restore parameter) if set, run a point in time recovery that restores up to the given timestamp, if possible. Given timestamp in RFC3339 format. Example: '2006-01-02T15:04:05Z07:00'
+      --restore-with-clone                                               (init restore parameter) will restore from a clone, requires either --clone-from-primary or --clone-from-tablet, mutually exclusive with --restore-from-backup
       --retain-online-ddl-tables duration                                How long should vttablet keep an old migrated table before purging it (default 24h0m0s)
       --sanitize-log-messages                                            Remove potentially sensitive information in tablet INFO, WARNING, and ERROR log messages such as query parameters.
       --schema-change-reload-timeout duration                            query server schema change reload timeout, this is how long to wait for the signaled schema reload operation to complete before giving up (default 30s)
