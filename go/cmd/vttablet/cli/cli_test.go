@@ -69,5 +69,5 @@ func TestRunFailsToStartTabletManager(t *testing.T) {
 	defer cancel()
 
 	err := Main.ExecuteContext(ctx)
-	require.ErrorContains(t, err, "you cannot enable --restore-from-backup without a my.cnf file")
+	require.ErrorContains(t, err, "you cannot enable --restore-from-backup or --restore-with-clone without a my.cnf file")
 }
