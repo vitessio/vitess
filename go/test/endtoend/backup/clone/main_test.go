@@ -225,20 +225,11 @@ func mysqlVersionSupportsClone(versionStr string) bool {
 	versionPart := parts[0]
 
 	// Parse the version
-	flavor, version, err := mysqlctl.ParseVersionString(versionPart)
+	_, version, err := mysqlctl.ParseVersionString(versionPart)
 	if err != nil {
 		return false
 	}
 
-	// Clone is only supported on MySQL 8.0.17+
-	if flavor != mysqlctl.FlavorMySQL && flavor != mysqlctl.FlavorPercona {
-		return false
-	}
-	if version.Major < 8 || (version.Major == 8 && version.Minor == 0 && version.Patch < 17) {
-		return false
-	}
-
-	// Verify clone capability
 	cleanVersion := fmt.Sprintf("%d.%d.%d", version.Major, version.Minor, version.Patch)
 	capableOf := mysql.ServerVersionCapableOf(cleanVersion)
 	if capableOf == nil {
