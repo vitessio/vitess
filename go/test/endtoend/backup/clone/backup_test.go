@@ -30,6 +30,9 @@ import (
 )
 
 func TestCloneBackup(t *testing.T) {
+	t.Cleanup(func() { removeBackups(t) })
+	t.Cleanup(tearDown)
+
 	// Initialize tablets first so we can connect to MySQL.
 	for _, tablet := range []*cluster.Vttablet{primary, replica1} {
 		err := localCluster.InitTablet(tablet, keyspaceName, shardName)
@@ -98,10 +101,6 @@ func TestCloneBackup(t *testing.T) {
 	// The 3rd row proves replication is working after restore.
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 3)
 	log.Infof("Clone backup verification successful: replica2 has all data")
-
-	// Cleanup.
-	removeBackups(t)
-	tearDown()
 }
 
 func vtbackupWithClone(t *testing.T) error {
