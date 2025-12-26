@@ -6,7 +6,7 @@ When run periodically for each shard, vtbackup can ensure these configurable pol
  * Old backups for the shard are removed.
 
 Whatever system launches vtbackup is responsible for the following:
- - Running vtbackup with similar flags that would be used for a vttablet and 
+ - Running vtbackup with similar flags that would be used for a vttablet and
    mysqlctld in the target shard to be backed up.
 
  - Provisioning as much disk space for vtbackup as would be given to vttablet.
