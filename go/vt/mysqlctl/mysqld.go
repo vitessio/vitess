@@ -830,12 +830,6 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 	if err := mysqld.executeMysqlScript(ctx, params, string(script)); err != nil {
 		return fmt.Errorf("can't run init-db-sql-file (%v): %v", initDBSQLFile, err)
 	}
-	// Execute clone-specific init SQL if enabled
-	if mysqlCloneEnabled {
-		if err := mysqld.executeMysqlScript(ctx, params, config.InitClone); err != nil {
-			return fmt.Errorf("failed to initialize clone support: %v", err)
-		}
-	}
 	return nil
 }
 
