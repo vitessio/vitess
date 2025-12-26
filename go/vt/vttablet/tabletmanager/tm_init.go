@@ -891,7 +891,7 @@ func (tm *TabletManager) handleRestore(ctx context.Context, config *tabletenv.Ta
 		return false, errors.New("--restore-to-timestamp and --restore-to-pos are mutually exclusive")
 	}
 
-	if !restoreFromBackup || restoreWithClone {
+	if !restoreFromBackup && !restoreWithClone {
 		return false, nil
 	}
 
