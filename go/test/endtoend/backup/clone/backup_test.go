@@ -43,9 +43,8 @@ func TestCloneBackup(t *testing.T) {
 	require.NoError(t, err)
 
 	// Now check if MySQL version supports clone (need vttablet running to query).
-	mysqlVersion := getMySQLVersion(t, primary)
-	if !mysqlVersionSupportsClone(mysqlVersion) {
-		t.Skipf("Skipping clone test: MySQL version %s does not support CLONE (requires 8.0.17+)", mysqlVersion)
+	if !mysqlVersionSupportsClone(t, primary) {
+		t.Skip("Skipping clone test: MySQL version does not support CLONE (requires 8.0.17+)")
 	}
 
 	// Check if clone plugin is available.
@@ -117,6 +116,7 @@ func vtbackupWithClone(t *testing.T) error {
 		// Clone from primary instead of restoring from backup.
 		"--restore-with-clone",
 		"--clone-from-primary",
+		"--mysql-clone-enabled",
 		// Clone credentials - use vt_clone user which is created with @'%' host
 		// and BACKUP_ADMIN privilege in init_db.sql (no password).
 		"--db-clone-user", "vt_clone",

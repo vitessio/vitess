@@ -227,7 +227,7 @@ func init() {
 	utils.SetFlagStringVar(Main.Flags(), &initShard, "init-shard", initShard, "(init parameter) shard to use for this tablet")
 	Main.Flags().IntVar(&concurrency, "concurrency", concurrency, "(init restore parameter) how many concurrent files to restore at once")
 	utils.SetFlagStringVar(Main.Flags(), &incrementalFromPos, "incremental-from-pos", incrementalFromPos, "Position, or name of backup from which to create an incremental backup. Default: empty. If given, then this backup becomes an incremental backup from given position or given backup. If value is 'auto', this backup will be taken from the last successful backup position.")
-	utils.SetFlagBoolVar(Main.Flags(), &restoreWithClone, "restore-with-clone", restoreWithClone, "(init parameter) will perform the restore phase with MySQL CLONE, requires either --clone-from-primary or --clone-from-tablet")
+	Main.Flags().BoolVar(&restoreWithClone, "restore-with-clone", restoreWithClone, "(init parameter) will perform the restore phase with MySQL CLONE, requires either --clone-from-primary or --clone-from-tablet")
 
 	// mysqlctld-like flags
 	utils.SetFlagIntVar(Main.Flags(), &mysqlPort, "mysql-port", mysqlPort, "MySQL port")
