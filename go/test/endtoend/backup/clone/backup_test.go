@@ -112,11 +112,11 @@ func vtbackupWithClone(t *testing.T) error {
 	extraArgs := []string{
 		"--allow_first_backup",
 		"--db-credentials-file", dbCredentialFile,
+		"--mysql-clone-enabled",
 		vtutils.GetFlagVariantForTests("--mysql-socket"), mysqlSocket.Name(),
 		// Clone from primary instead of restoring from backup.
 		"--restore-with-clone",
 		"--clone-from-primary",
-		"--mysql-clone-enabled",
 		// Clone credentials - use vt_clone user which is created with @'%' host
 		// and BACKUP_ADMIN privilege in init_db.sql (no password).
 		"--db-clone-user", "vt_clone",
