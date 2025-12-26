@@ -27,30 +27,29 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/mysql"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/mysqlctl"
 	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 var (
-	primary          *cluster.Vttablet
-	replica1         *cluster.Vttablet
-	replica2         *cluster.Vttablet
-	localCluster     *cluster.LocalProcessCluster
-	newInitDBFile    string
-	cell             = cluster.DefaultCell
-	hostname         = "localhost"
-	keyspaceName     = "ks"
-	shardName        = "0"
-	dbPassword       = "VtDbaPass"
-	shardKsName      = fmt.Sprintf("%s/%s", keyspaceName, shardName)
-	dbCredentialFile string
-	commonTabletArg  = []string{
+	primary           *cluster.Vttablet
+	replica1          *cluster.Vttablet
+	replica2          *cluster.Vttablet
+	localCluster      *cluster.LocalProcessCluster
+	newInitDBFile     string
+	cell              = cluster.DefaultCell
+	hostname          = "localhost"
+	keyspaceName      = "ks"
+	shardName         = "0"
+	dbPassword        = "VtDbaPass"
+	shardKsName       = fmt.Sprintf("%s/%s", keyspaceName, shardName)
+	dbCredentialFile  string
+	vttabletExtraArgs = []string{
 		vtutils.GetFlagVariantForTests("--vreplication-retry-delay"), "1s",
 		vtutils.GetFlagVariantForTests("--degraded-threshold"), "5s",
 		vtutils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
@@ -124,8 +123,10 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
-		extraArgs := []string{"--db-credentials-file", dbCredentialFile}
-		commonTabletArg = append(commonTabletArg, "--db-credentials-file", dbCredentialFile)
+		mysqlctlExtraArgs := []string{"--db-credentials-file", dbCredentialFile}
+		vttabletExtraArgs = append(vttabletExtraArgs,
+			"--db-credentials-file", dbCredentialFile,
+			"--mysql-clone-enabled")
 
 		primary = localCluster.NewVttabletInstance("replica", 0, "")
 		replica1 = localCluster.NewVttabletInstance("replica", 0, "")
@@ -137,7 +138,7 @@ func TestMain(m *testing.M) {
 		for _, tablet := range shard.Vttablets {
 			tablet.VttabletProcess = localCluster.VtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName)
 			tablet.VttabletProcess.DbPassword = dbPassword
-			tablet.VttabletProcess.ExtraArgs = commonTabletArg
+			tablet.VttabletProcess.ExtraArgs = vttabletExtraArgs
 			tablet.VttabletProcess.SupportsBackup = true
 
 			mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
@@ -146,7 +147,7 @@ func TestMain(m *testing.M) {
 			}
 			tablet.MysqlctlProcess = *mysqlctlProcess
 			tablet.MysqlctlProcess.InitDBFile = newInitDBFile
-			tablet.MysqlctlProcess.ExtraArgs = extraArgs
+			tablet.MysqlctlProcess.ExtraArgs = mysqlctlExtraArgs
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			if err != nil {
 				return 1, err
@@ -204,48 +205,13 @@ func setupExtraMyCnf() error {
 	return nil
 }
 
-// getMySQLVersion retrieves the MySQL version from a running tablet
-func getMySQLVersion(t *testing.T, tablet *cluster.Vttablet) string {
-	qr, err := tablet.VttabletProcess.QueryTablet("SELECT VERSION()", keyspaceName, true)
-	if err != nil {
-		t.Logf("Failed to get MySQL version: %v", err)
-		return ""
-	}
-	if len(qr.Rows) == 0 {
-		return ""
-	}
-	return qr.Rows[0][0].ToString()
-}
-
 // mysqlVersionSupportsClone checks if the MySQL version supports CLONE plugin
-func mysqlVersionSupportsClone(versionStr string) bool {
-	// Parse version string to extract numeric version
-	// Format might be: "8.0.35-27" or "8.0.35"
-	parts := strings.Split(versionStr, "-")
-	versionPart := parts[0]
-
-	// Parse the version
-	flavor, version, err := mysqlctl.ParseVersionString(versionPart)
-	if err != nil {
-		return false
-	}
-
-	// Clone is only supported on MySQL 8.0.17+
-	if flavor != mysqlctl.FlavorMySQL && flavor != mysqlctl.FlavorPercona {
-		return false
-	}
-	if version.Major < 8 || (version.Major == 8 && version.Minor == 0 && version.Patch < 17) {
-		return false
-	}
-
-	// Verify clone capability
-	cleanVersion := fmt.Sprintf("%d.%d.%d", version.Major, version.Minor, version.Patch)
-	capableOf := mysql.ServerVersionCapableOf(cleanVersion)
-	if capableOf == nil {
-		return false
-	}
-	hasClone, err := capableOf(capabilities.MySQLClonePluginFlavorCapability)
-	return err == nil && hasClone
+func mysqlVersionSupportsClone(t *testing.T, tablet *cluster.Vttablet) bool {
+	conn, err := tablet.VttabletProcess.TabletConn(keyspaceName, false)
+	require.NoError(t, err, "failed to get tablet connection")
+	ok, err := conn.SupportsCapability(capabilities.MySQLClonePluginFlavorCapability)
+	require.NoError(t, err, "failed to check clone capability")
+	return ok
 }
 
 // clonePluginAvailable checks if the clone plugin is installed and active

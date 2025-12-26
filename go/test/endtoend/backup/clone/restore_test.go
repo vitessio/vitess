@@ -47,9 +47,8 @@ func TestCloneRestore(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	// Now check if MySQL version supports clone (need vttablet running to query).
-	mysqlVersion := getMySQLVersion(t, primary)
-	if !mysqlVersionSupportsClone(mysqlVersion) {
-		t.Skipf("Skipping clone test: MySQL version %s does not support CLONE (requires 8.0.17+)", mysqlVersion)
+	if !mysqlVersionSupportsClone(t, primary) {
+		t.Skip("Skipping clone test: MySQL version does not support CLONE (requires 8.0.17+)")
 	}
 
 	// Check if clone plugin is available.
@@ -75,13 +74,20 @@ func TestCloneRestore(t *testing.T) {
 	// Bring up replica2 using clone from primary.
 	err = localCluster.InitTablet(replica2, keyspaceName, shardName)
 	require.NoError(t, err)
-	restoreWithClone(t, replica2, "replica", "SERVING", true)
+	restoreWithClone(t, replica2, "replica", "SERVING")
 
-	// Wait for MySQL to restart after clone.
-	time.Sleep(10 * time.Second)
+	// Wait for data to exist.
+	require.Eventually(t, func() bool {
+		qr, _ := replica2.VttabletProcess.QueryTablet("select * from vt_insert_test", keyspaceName, true)
+		if qr != nil {
+			if len(qr.Rows) == 3 {
+				return true
+			}
+		}
+		return false
+	}, 5*time.Minute, 10*time.Second)
 
-	// Verify clone worked: data exists, clone_status confirms, replication is set up.
-	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 3)
+	// Verify clone worked: clone_status confirms, replication is set up.
 	verifyClonedData(t, replica2)
 	verifyCloneWasUsed(t, replica2)
 	verifyReplicationTopology(t, replica2)
@@ -103,10 +109,12 @@ func TestCloneRestore(t *testing.T) {
 }
 
 // restoreWithClone starts a tablet that will use MySQL CLONE to get its data.
-func restoreWithClone(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForState string, cloneFromPrimary bool) {
+func restoreWithClone(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForState string) {
 	tablet.VttabletProcess.ExtraArgs = []string{
 		"--db-credentials-file", dbCredentialFile,
+		"--mysql-clone-enabled",
 		// Enable restore with clone - this triggers the clone logic.
+		"--restore-from-backup=false",
 		"--restore-with-clone",
 		// Clone configuration - tells vttablet to clone instead of restoring from backup.
 		"--clone-from-primary",
