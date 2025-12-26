@@ -85,6 +85,9 @@ type FakeMysqlDaemon struct {
 	// and ReplicationStatus.
 	CurrentPrimaryPosition replication.Position
 
+	// PrimaryPositionError is used by PrimaryPosition.
+	PrimaryPositionError error
+
 	// CurrentRelayLogPosition is returned by ReplicationStatus.
 	CurrentRelayLogPosition replication.Position
 
@@ -415,6 +418,9 @@ func (fmd *FakeMysqlDaemon) GetPreviousGTIDs(ctx context.Context, binlog string)
 
 // PrimaryPosition is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) PrimaryPosition(ctx context.Context) (replication.Position, error) {
+	if fmd.PrimaryPositionError != nil {
+		return replication.Position{}, fmd.PrimaryPositionError
+	}
 	return fmd.GetPrimaryPositionLocked(), nil
 }
 
