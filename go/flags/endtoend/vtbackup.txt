@@ -6,7 +6,7 @@ When run periodically for each shard, vtbackup can ensure these configurable pol
  * Old backups for the shard are removed.
 
 Whatever system launches vtbackup is responsible for the following:
- - Running vtbackup with similar flags that would be used for a vttablet and 
+ - Running vtbackup with similar flags that would be used for a vttablet and
    mysqlctld in the target shard to be backed up.
 
  - Provisioning as much disk space for vtbackup as would be given to vttablet.
@@ -68,6 +68,8 @@ Flags:
       --builtinbackup-mysqld-timeout duration                       how long to wait for mysqld to shutdown at the start of the backup. (default 10m0s)
       --builtinbackup-progress duration                             how often to send progress updates when backing up large files. (default 5s)
       --ceph-backup-storage-config string                           Path to JSON config file for ceph backup storage. (default "ceph_backup_config.json")
+      --clone-from-primary                                          Clone data from the primary tablet in the shard using MySQL CLONE REMOTE instead of restoring from backup. Requires MySQL 8.0.17+. Mutually exclusive with --clone-from-tablet.
+      --clone-from-tablet string                                    Clone data from this tablet using MySQL CLONE REMOTE instead of restoring from backup (tablet alias, e.g., zone1-123). Requires MySQL 8.0.17+. Mutually exclusive with --clone-from-primary.
       --compression-engine-name string                              compressor engine used for compression. (default "pargzip")
       --compression-level int                                       what level to pass to the compressor. (default 1)
       --concurrency int                                             (init restore parameter) how many concurrent files to restore at once (default 4)
@@ -189,6 +191,7 @@ Flags:
       --mycnf-slow-log-path string                                  mysql slow query log path
       --mycnf-socket-file string                                    mysql socket file
       --mycnf-tmp-dir string                                        mysql tmp directory
+      --mysql-clone-enabled                                         Enable MySQL CLONE plugin and user for backup/replica provisioning (requires MySQL 8.0.17+)
       --mysql-port int                                              MySQL port (default 3306)
       --mysql-server-version string                                 MySQL server version to advertise. (default "8.4.6-Vitess")
       --mysql-shell-backup-location string                          location where the backup will be stored
@@ -207,6 +210,7 @@ Flags:
       --purge-logs-interval duration                                how often try to remove old logs (default 1h0m0s)
       --remote-operation-timeout duration                           time to wait for a remote operation (default 15s)
       --restart-before-backup                                       Perform a mysqld clean/full restart after applying binlogs, but before taking the backup. Only makes sense to work around xtrabackup bugs.
+      --restore-with-clone                                          (init parameter) will perform the restore phase with MySQL CLONE, requires either --clone-from-primary or --clone-from-tablet
       --s3-backup-aws-endpoint string                               endpoint of the S3 backend (region must be provided).
       --s3-backup-aws-min-partsize int                              Minimum part size to use, defaults to 5MiB but can be increased due to the dataset size. (default 5242880)
       --s3-backup-aws-region string                                 AWS region to use. (default "us-east-1")
