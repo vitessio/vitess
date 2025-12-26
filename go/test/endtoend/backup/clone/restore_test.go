@@ -18,6 +18,7 @@ package clone
 
 import (
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -31,6 +32,9 @@ import (
 // --restore-with-clone flag. This simulates the workflow where a new replica
 // is provisioned by cloning data from the primary instead of restoring from backup.
 func TestCloneRestore(t *testing.T) {
+	t.Cleanup(func() { removeBackups(t) })
+	t.Cleanup(tearDownRestoreTest)
+
 	// Initialize primary and replica1 first (need replica for semi-sync durability).
 	for _, tablet := range []*cluster.Vttablet{primary, replica1} {
 		err := localCluster.InitTablet(tablet, keyspaceName, shardName)
@@ -71,6 +75,17 @@ func TestCloneRestore(t *testing.T) {
 	// Verify data exists on primary.
 	cluster.VerifyRowsInTablet(t, primary, keyspaceName, 3)
 
+	// Clean up replica2's MySQL data from previous test so clone can work.
+	// Stop MySQL, remove data directory, and restart with fresh data.
+	err = replica2.MysqlctlProcess.Stop()
+	require.NoError(t, err)
+	err = os.RemoveAll(replica2.VttabletProcess.Directory)
+	require.NoError(t, err)
+	proc, err := replica2.MysqlctlProcess.StartProcess()
+	require.NoError(t, err)
+	err = proc.Wait()
+	require.NoError(t, err)
+
 	// Bring up replica2 using clone from primary.
 	err = localCluster.InitTablet(replica2, keyspaceName, shardName)
 	require.NoError(t, err)
@@ -103,9 +118,6 @@ func TestCloneRestore(t *testing.T) {
 
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 8)
 	verifyPostCloneReplication(t, replica2)
-
-	// Cleanup.
-	tearDownRestoreTest()
 }
 
 // restoreWithClone starts a tablet that will use MySQL CLONE to get its data.
