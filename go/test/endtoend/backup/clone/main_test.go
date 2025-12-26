@@ -264,3 +264,33 @@ func parseVersionFromRow(row []sqltypes.Value) (int, int, int, error) {
 
 	return major, minor, patch, nil
 }
+
+// removeBackups removes all backups for the test shard.
+func removeBackups(t *testing.T) {
+	backups, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("GetBackups", shardKsName)
+	require.NoError(t, err)
+	for _, backup := range splitLines(backups) {
+		if backup != "" {
+			_, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("RemoveBackup", shardKsName, backup)
+			require.NoError(t, err)
+		}
+	}
+}
+
+// splitLines splits a string by newlines, filtering out empty lines.
+func splitLines(s string) []string {
+	var result []string
+	start := 0
+	for i, c := range s {
+		if c == '\n' {
+			if i > start {
+				result = append(result, s[start:i])
+			}
+			start = i + 1
+		}
+	}
+	if start < len(s) {
+		result = append(result, s[start:])
+	}
+	return result
+}
