@@ -49,6 +49,7 @@ const (
 	Filtered     = "filtered"
 	Repl         = "repl"
 	ExternalRepl = "erepl"
+	Clone        = "clone"
 )
 
 var (
@@ -56,7 +57,7 @@ var (
 	GlobalDBConfigs DBConfigs
 
 	// All can be used to register all flags: RegisterFlags(All...)
-	All = []string{App, AppDebug, AllPrivs, Dba, Filtered, Repl, ExternalRepl}
+	All = []string{App, AppDebug, AllPrivs, Dba, Filtered, Repl, ExternalRepl, Clone}
 )
 
 // DBConfigs stores all the data needed to build various connection
@@ -97,6 +98,7 @@ type DBConfigs struct {
 	Repl         UserConfig `json:"repl,omitempty"`
 	Appdebug     UserConfig `json:"appdebug,omitempty"`
 	Allprivs     UserConfig `json:"allprivs,omitempty"`
+	CloneUser    UserConfig `json:"clone,omitempty"`
 	externalRepl UserConfig
 
 	appParams          mysql.ConnParams
@@ -105,6 +107,7 @@ type DBConfigs struct {
 	replParams         mysql.ConnParams
 	appdebugParams     mysql.ConnParams
 	allprivsParams     mysql.ConnParams
+	cloneParams        mysql.ConnParams
 	externalReplParams mysql.ConnParams
 }
 
@@ -261,6 +264,11 @@ func (dbcfgs *DBConfigs) ExternalReplWithDB() Connector {
 	return params
 }
 
+// CloneConnector returns connection parameters for clone with no dbname set.
+func (dbcfgs *DBConfigs) CloneConnector() Connector {
+	return dbcfgs.makeParams(&dbcfgs.cloneParams, false)
+}
+
 // AppWithDB returns connection parameters for app with dbname set.
 func (dbcfgs *DBConfigs) makeParams(cp *mysql.ConnParams, withDB bool) Connector {
 	result := *cp
@@ -306,6 +314,7 @@ func (dbcfgs *DBConfigs) Redacted() *DBConfigs {
 	dbcfgs.Repl.Password = "****"
 	dbcfgs.Appdebug.Password = "****"
 	dbcfgs.Allprivs.Password = "****"
+	dbcfgs.CloneUser.Password = "****"
 	return dbcfgs
 }
 
@@ -401,6 +410,9 @@ func (dbcfgs *DBConfigs) getParams(userKey string) (*UserConfig, *mysql.ConnPara
 	case ExternalRepl:
 		uc = &dbcfgs.externalRepl
 		cp = &dbcfgs.externalReplParams
+	case Clone:
+		uc = &dbcfgs.CloneUser
+		cp = &dbcfgs.cloneParams
 	default:
 		log.Exitf("Invalid db user key requested: %s", userKey)
 	}
@@ -423,6 +435,7 @@ func NewTestDBConfigs(genParams, appDebugParams mysql.ConnParams, dbname string)
 		dbaParams:          genParams,
 		filteredParams:     genParams,
 		replParams:         genParams,
+		cloneParams:        genParams,
 		externalReplParams: genParams,
 		DBName:             dbname,
 		Charset:            "",

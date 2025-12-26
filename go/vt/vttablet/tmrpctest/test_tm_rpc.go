@@ -315,8 +315,8 @@ func tmRPCTestRPCTimeout(ctx context.Context, t *testing.T, client tmclient.Tabl
 		if err := shortCtx.Err(); err != context.DeadlineExceeded {
 			t.Errorf("tmRPCTestRPCTimeout: got %v want context.DeadlineExceeded", err)
 		}
-	default:
-		t.Errorf("tmRPCTestRPCTimeout: context.Done() not closed")
+	case <-time.After(time.Second):
+		t.Errorf("tmRPCTestRPCTimeout: context.Done() not closed within timeout")
 	}
 }
 

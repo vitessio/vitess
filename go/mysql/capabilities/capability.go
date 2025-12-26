@@ -52,6 +52,7 @@ const (
 	ReplicaTerminologyCapability                                          // Supported in 8.0.26 and above, using SHOW REPLICA STATUS and all variations.
 	BinaryLogStatus                                                       // Supported in 8.2.0 and above, uses SHOW BINARY LOG STATUS
 	RestrictFKOnNonStandardKey                                            // Supported in 8.4.0 and above, restricts usage of non-standard indexes for foreign keys.
+	MySQLClonePluginFlavorCapability                                      // Supported in 8.0.17 and above, MySQL CLONE plugin for physical snapshot.
 )
 
 type CapableOf func(capability FlavorCapability) (bool, error)
@@ -107,7 +108,8 @@ func MySQLVersionHasCapability(serverVersion string, capability FlavorCapability
 		return atLeast(8, 0, 16)
 	case CheckConstraintsCapability:
 		return atLeast(8, 0, 16)
-	case TransactionalGtidExecutedFlavorCapability:
+	case TransactionalGtidExecutedFlavorCapability,
+		MySQLClonePluginFlavorCapability:
 		return atLeast(8, 0, 17)
 	case DisableRedoLogFlavorCapability:
 		return atLeast(8, 0, 21)

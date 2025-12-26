@@ -70,6 +70,7 @@ Flags:
       --log_dir string                                              If non-empty, write log files in this directory
       --logtostderr                                                 log to standard error instead of files
       --max-stack-size int                                          configure the maximum stack size in bytes (default 67108864)
+      --mysql-clone-enabled                                         Enable MySQL CLONE plugin and user for backup/replica provisioning (requires MySQL 8.0.17+)
       --mysql-port int                                              MySQL port. (default 3306)
       --mysql-server-version string                                 MySQL server version to advertise. (default "8.4.6-Vitess")
       --mysql-socket string                                         Path to the mysqld socket file.
