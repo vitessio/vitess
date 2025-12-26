@@ -141,40 +141,6 @@ func verifyBackupCount(t *testing.T, shardKsName string, expected int) []string 
 	return result
 }
 
-func removeBackups(t *testing.T) {
-	backups, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("GetBackups", shardKsName)
-	require.NoError(t, err)
-	for _, backup := range splitLines(backups) {
-		if backup != "" {
-			_, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("RemoveBackup", shardKsName, backup)
-			require.NoError(t, err)
-		}
-	}
-}
-
-func splitLines(s string) []string {
-	var result []string
-	for _, line := range []byte(s) {
-		if line == '\n' {
-			continue
-		}
-	}
-	// Simple split by newline.
-	start := 0
-	for i, c := range s {
-		if c == '\n' {
-			if i > start {
-				result = append(result, s[start:i])
-			}
-			start = i + 1
-		}
-	}
-	if start < len(s) {
-		result = append(result, s[start:])
-	}
-	return result
-}
-
 func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForState string) {
 	// Start tablet with restore enabled. MySQL is already running from TestMain.
 	log.Infof("restoring tablet %s", time.Now())
