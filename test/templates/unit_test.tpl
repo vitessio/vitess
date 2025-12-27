@@ -134,8 +134,8 @@ jobs:
         export VTDATAROOT="/tmp/"
 
         export NOVTADMINBUILD=1
-        {{if not .Race}}export VT_GO_PARALLEL_VALUE=$(nproc)
-        {{end}}export VTEVALENGINETEST="{{.Evalengine}}"
+        export VT_GO_PARALLEL_VALUE=$(nproc)
+        export VTEVALENGINETEST="{{.Evalengine}}"
         # We sometimes need to alter the behavior based on the platform we're
         # testing, e.g. MySQL 5.7 vs 8.0.
         export CI_DB_PLATFORM="{{.Platform}}"
