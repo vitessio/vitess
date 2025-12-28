@@ -220,7 +220,7 @@ func NewLegacyDetectionAnalysisJSON(da *inst.DetectionAnalysis) *LegacyDetection
 	return &LegacyDetectionAnalysisJSON{da}
 }
 
-// MarshalJSON converts a legacyDetectionAnalysisJSON to the legacy format JSON.
+// MarshalJSON converts a *LegacyDetectionAnalysisJSON to the legacy format JSON.
 func (ldaj *LegacyDetectionAnalysisJSON) MarshalJSON() ([]byte, error) {
 	type Alias LegacyDetectionAnalysisJSON
 	return json.Marshal(&struct {
@@ -230,6 +230,23 @@ func (ldaj *LegacyDetectionAnalysisJSON) MarshalJSON() ([]byte, error) {
 		AnalyzedInstanceAlias: topoproto.TabletAliasString(ldaj.AnalyzedInstanceAlias),
 		Alias:                 (*Alias)(ldaj),
 	})
+}
+
+// UnmarshalJSON converts JSON to a *LegacyDetectionAnalysisJSON.
+func (ldaj *LegacyDetectionAnalysisJSON) UnmarshalJSON(data []byte) (err error) {
+	type Alias LegacyDetectionAnalysisJSON
+	s := &struct {
+		AnalyzedInstanceAlias string `json:"AnalyzedInstanceAlias"`
+		*Alias
+	}{
+		AnalyzedInstanceAlias: topoproto.TabletAliasString(ldaj.AnalyzedInstanceAlias),
+		Alias:                 (*Alias)(ldaj),
+	}
+	if err := json.Unmarshal(data, &s); err != nil {
+		return nil
+	}
+	ldaj.AnalyzedInstanceAlias, err = topoproto.ParseTabletAlias(s.AnalyzedInstanceAlias)
+	return err
 }
 
 // detectionAnalysisAPIHandler is the handler for the detectionAnalysisAPI endpoint
