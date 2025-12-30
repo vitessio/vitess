@@ -55,9 +55,15 @@ var (
 	defaultReplicas        int
 	sourceKsOpts           = make(map[string]string)
 	targetKsOpts           = make(map[string]string)
+	defaultTargetKsOpts    = make(map[string]string)
 	httpClient             = throttlebase.SetupHTTPClient(time.Second)
 	sourceThrottlerAppName = throttlerapp.VStreamerName
 	targetThrottlerAppName = throttlerapp.VReplicationName
+)
+
+const (
+	defaultSourceKs = "product"
+	defaultTargetKs = "customer"
 )
 
 const (
