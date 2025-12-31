@@ -4,6 +4,8 @@
 name: PR opened tasks
 on:
   pull_request_target:
+    branches:
+      - main
     types: [opened]
 
 jobs:
