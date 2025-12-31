@@ -334,7 +334,7 @@ func (hs *healthStreamer) reload(full map[string]*schema.Table, created, altered
 	// Schema Reload to happen only on primary when it is serving.
 	// We can be in a state when the primary is not serving after we have run DemotePrimary. In that case,
 	// we don't want to run any queries in MySQL, so we shouldn't reload anything in the healthStreamer.
-	if !hs.isServingPrimary {
+	if !hs.isServingPrimary || hs.conns == nil {
 		return nil
 	}
 

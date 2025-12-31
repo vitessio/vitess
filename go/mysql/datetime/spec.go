@@ -359,10 +359,7 @@ func (t2 fmtFullTime24) parse(t *timeparts, bytes string) (string, bool) {
 type fmtWeek0 struct{}
 
 func (fmtWeek0) format(dst []byte, t DateTime, prec uint8) []byte {
-	year, week := t.Date.SundayWeek()
-	if year < t.Date.Year() {
-		week = 0
-	}
+	week := t.Date.Week(0)
 	return appendInt(dst, week, 2)
 }
 
@@ -374,10 +371,7 @@ func (u fmtWeek0) parse(t *timeparts, bytes string) (string, bool) {
 type fmtWeek1 struct{}
 
 func (fmtWeek1) format(dst []byte, t DateTime, prec uint8) []byte {
-	year, week := t.Date.ISOWeek()
-	if year < t.Date.Year() {
-		week = 0
-	}
+	week := t.Date.Week(1)
 	return appendInt(dst, week, 2)
 }
 
@@ -389,7 +383,7 @@ func (u fmtWeek1) parse(t *timeparts, bytes string) (string, bool) {
 type fmtWeek2 struct{}
 
 func (fmtWeek2) format(dst []byte, t DateTime, prec uint8) []byte {
-	_, week := t.Date.SundayWeek()
+	week := t.Date.Week(2)
 	return appendInt(dst, week, 2)
 }
 
@@ -401,7 +395,7 @@ func (v fmtWeek2) parse(t *timeparts, bytes string) (string, bool) {
 type fmtWeek3 struct{}
 
 func (fmtWeek3) format(dst []byte, t DateTime, prec uint8) []byte {
-	_, week := t.Date.ISOWeek()
+	week := t.Date.Week(3)
 	return appendInt(dst, week, 2)
 }
 

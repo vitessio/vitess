@@ -157,8 +157,10 @@ func (bvar *BindVariable) compile(c *compiler) (ctype, error) {
 		c.asm.PushNull()
 	case tt == sqltypes.TypeJSON:
 		c.asm.PushBVar_json(bvar.Key)
-	case tt == sqltypes.Datetime || tt == sqltypes.Timestamp:
+	case tt == sqltypes.Datetime:
 		c.asm.PushBVar_datetime(bvar.Key)
+	case tt == sqltypes.Timestamp:
+		c.asm.PushBVar_timestamp(bvar.Key)
 	case tt == sqltypes.Date:
 		c.asm.PushBVar_date(bvar.Key)
 	case tt == sqltypes.Time:
