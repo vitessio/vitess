@@ -209,6 +209,7 @@ type unitTestsGroup struct {
 type clusterTest struct {
 	*GitMetas
 	Name, Shard, Platform              string
+	JobID                              string
 	FileName                           string
 	BuildTag                           string
 	RunsOn                             string
@@ -371,9 +372,15 @@ func generateClusterWorkflows(list []string, gitMetas *GitMetas) {
 
 	for _, cluster := range clusters {
 		for _, mysqlVersion := range clusterMySQLVersions() {
+			// Job IDs must start with a letter or underscore
+			jobID := cluster
+			if len(cluster) > 0 && cluster[0] >= '0' && cluster[0] <= '9' {
+				jobID = "e2e_" + cluster
+			}
 			test := &clusterTest{
 				Name:      fmt.Sprintf("Cluster (%s)", cluster),
 				Shard:     cluster,
+				JobID:     jobID,
 				BuildTag:  buildTag[cluster],
 				RunsOn:    defaultRunnerName,
 				GoPrivate: goPrivate,

@@ -164,7 +164,7 @@ jobs:
         paths: "report.xml"
         show: "fail"
 
-  12:
+  e2e_12:
     timeout-minutes: 60
     name: Run endtoend tests on Cluster (12)
     runs-on: ubuntu-24.04
@@ -288,7 +288,7 @@ jobs:
         paths: "report.xml"
         show: "fail"
 
-  13:
+  e2e_13:
     timeout-minutes: 60
     name: Run endtoend tests on Cluster (13)
     runs-on: ubuntu-24.04
@@ -554,7 +554,7 @@ jobs:
         paths: "report.xml"
         show: "fail"
 
-  15:
+  e2e_15:
     timeout-minutes: 60
     name: Run endtoend tests on Cluster (15)
     runs-on: ubuntu-24.04
@@ -944,7 +944,7 @@ jobs:
         paths: "report.xml"
         show: "fail"
 
-  18:
+  e2e_18:
     timeout-minutes: 60
     name: Run endtoend tests on Cluster (18)
     runs-on: ubuntu-24.04
@@ -1587,7 +1587,7 @@ jobs:
         paths: "report.xml"
         show: "fail"
 
-  21:
+  e2e_21:
     timeout-minutes: 60
     name: Run endtoend tests on Cluster (21)
     runs-on: ubuntu-24.04

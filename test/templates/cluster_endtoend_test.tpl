@@ -21,7 +21,7 @@ env:
 
 jobs:
 {{range .Clusters}}
-  {{.Shard}}:
+  {{.JobID}}:
     timeout-minutes: 60
     name: Run endtoend tests on {{.Name}}
     runs-on: {{.RunsOn}}
