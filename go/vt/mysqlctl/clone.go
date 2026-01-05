@@ -25,7 +25,10 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vttls"
 )
 
 // CloneExecutor handles MySQL CLONE REMOTE operations for backup and replica provisioning.
@@ -65,14 +68,7 @@ func (c *CloneExecutor) ValidateRecipient(ctx context.Context, mysqld MysqlDaemo
 // all prerequisites for cloning. This is called from ExecuteClone to verify the
 // donor before attempting the clone operation.
 func (c *CloneExecutor) validateDonorRemote(ctx context.Context) error {
-	params := &mysql.ConnParams{
-		Host:  c.DonorHost,
-		Port:  c.DonorPort,
-		Uname: c.DonorUser,
-		Pass:  c.DonorPassword,
-	}
-
-	conn, err := mysql.Connect(ctx, params)
+	conn, err := mysql.Connect(ctx, c.donorConnParams())
 	if err != nil {
 		return fmt.Errorf("failed to connect to donor %s:%d: %w", c.DonorHost, c.DonorPort, err)
 	}
@@ -112,29 +108,6 @@ func (c *CloneExecutor) validateDonorRemote(ctx context.Context) error {
 		return fmt.Errorf("clone plugin is not active on donor (status: %s)", status)
 	}
 
-	// Check for non-InnoDB tables
-	qr, err = conn.ExecuteFetch(`
-		SELECT TABLE_SCHEMA, TABLE_NAME, ENGINE
-		FROM information_schema.TABLES
-		WHERE ENGINE != 'InnoDB'
-		AND ENGINE IS NOT NULL
-		AND TABLE_TYPE = 'BASE TABLE'
-		AND TABLE_SCHEMA NOT IN ('mysql', 'information_schema', 'performance_schema', 'sys')
-	`, 1000, false)
-	if err != nil {
-		return fmt.Errorf("failed to check donor for non-InnoDB tables: %w", err)
-	}
-	if len(qr.Rows) > 0 {
-		var tables []string
-		for _, row := range qr.Rows {
-			schema := row[0].ToString()
-			table := row[1].ToString()
-			engine := row[2].ToString()
-			tables = append(tables, fmt.Sprintf("%s.%s (%s)", schema, table, engine))
-		}
-		return fmt.Errorf("non-InnoDB tables found on donor (CLONE only supports InnoDB): %s", strings.Join(tables, ", "))
-	}
-
 	log.Infof("Donor %s:%d validated successfully (MySQL %s)", c.DonorHost, c.DonorPort, versionStr)
 	return nil
 }
@@ -168,6 +141,21 @@ func (c *CloneExecutor) checkCloneCapability(ctx context.Context, mysqld MysqlDa
 	}
 
 	return nil
+}
+
+func (c *CloneExecutor) donorConnParams() *mysql.ConnParams {
+	params := &mysql.ConnParams{
+		Host:  c.DonorHost,
+		Port:  c.DonorPort,
+		Uname: c.DonorUser,
+		Pass:  c.DonorPassword,
+	}
+	if c.UseSSL {
+		params.SslMode = vttls.Required
+	} else {
+		params.SslMode = vttls.Disabled
+	}
+	return params
 }
 
 // ExecuteClone performs CLONE REMOTE from the donor to the recipient.
@@ -214,6 +202,9 @@ func (c *CloneExecutor) ExecuteClone(ctx context.Context, mysqld MysqlDaemon, re
 	// which will cause the connection to drop. We ignore this error and verify
 	// success by checking clone_status after MySQL comes back up.
 	if err := mysqld.ExecuteSuperQuery(ctx, cloneCmd); err != nil {
+		if !isCloneConnError(err) {
+			return fmt.Errorf("clone command failed: %w", err)
+		}
 		log.Infof("CLONE command returned (connection likely lost due to MySQL restart): %v", err)
 	}
 
@@ -229,9 +220,11 @@ func (c *CloneExecutor) ExecuteClone(ctx context.Context, mysqld MysqlDaemon, re
 // buildCloneCommand constructs the CLONE INSTANCE SQL command.
 func (c *CloneExecutor) buildCloneCommand() string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("CLONE INSTANCE FROM '%s'@'%s':%d",
-		c.DonorUser, c.DonorHost, c.DonorPort))
-	sb.WriteString(fmt.Sprintf(" IDENTIFIED BY '%s'", c.DonorPassword))
+	sb.WriteString(fmt.Sprintf("CLONE INSTANCE FROM %s@%s:%d",
+		sqltypes.EncodeStringSQL(c.DonorUser),
+		sqltypes.EncodeStringSQL(c.DonorHost),
+		c.DonorPort))
+	sb.WriteString(" IDENTIFIED BY " + sqltypes.EncodeStringSQL(c.DonorPassword))
 
 	if c.UseSSL {
 		sb.WriteString(" REQUIRE SSL")
@@ -240,6 +233,19 @@ func (c *CloneExecutor) buildCloneCommand() string {
 	}
 
 	return sb.String()
+}
+
+func isCloneConnError(err error) bool {
+	var sqlErr *sqlerror.SQLError
+	if !errors.As(err, &sqlErr) {
+		return false
+	}
+	switch sqlErr.Number() {
+	case sqlerror.CRServerGone, sqlerror.CRServerLost:
+		return true
+	default:
+		return false
+	}
 }
 
 // checkClonePluginInstalled verifies that the clone plugin is loaded.

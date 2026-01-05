@@ -18,13 +18,16 @@ package mysqlctl
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vttls"
 )
 
 func TestBuildCloneCommand(t *testing.T) {
@@ -55,12 +58,105 @@ func TestBuildCloneCommand(t *testing.T) {
 			},
 			expected: "CLONE INSTANCE FROM 'clone_user'@'10.0.0.50':3307 IDENTIFIED BY 'password' REQUIRE NO SSL",
 		},
+		{
+			name: "with escaping",
+			executor: &CloneExecutor{
+				DonorHost:     "host'one",
+				DonorPort:     3310,
+				DonorUser:     "user\\name",
+				DonorPassword: "pass'word",
+				UseSSL:        true,
+			},
+			expected: fmt.Sprintf("CLONE INSTANCE FROM %s@%s:%d IDENTIFIED BY %s REQUIRE SSL",
+				sqltypes.EncodeStringSQL("user\\name"),
+				sqltypes.EncodeStringSQL("host'one"),
+				3310,
+				sqltypes.EncodeStringSQL("pass'word")),
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := tt.executor.buildCloneCommand()
 			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestDonorConnParamsSSLMode(t *testing.T) {
+	tests := []struct {
+		name     string
+		useSSL   bool
+		expected vttls.SslMode
+	}{
+		{
+			name:     "ssl required",
+			useSSL:   true,
+			expected: vttls.Required,
+		},
+		{
+			name:     "ssl disabled",
+			useSSL:   false,
+			expected: vttls.Disabled,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			executor := &CloneExecutor{
+				DonorHost:     "127.0.0.1",
+				DonorPort:     3306,
+				DonorUser:     "vt_clone",
+				DonorPassword: "secret",
+				UseSSL:        tt.useSSL,
+			}
+
+			params := executor.donorConnParams()
+			assert.Equal(t, tt.expected, params.SslMode)
+		})
+	}
+}
+
+func TestIsCloneConnError(t *testing.T) {
+	serverGone := sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "gone")
+	serverLost := sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "lost")
+	accessDenied := sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, sqlerror.SSUnknownSQLState, "access denied")
+
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{
+			name:     "server gone",
+			err:      serverGone,
+			expected: true,
+		},
+		{
+			name:     "server lost",
+			err:      serverLost,
+			expected: true,
+		},
+		{
+			name:     "wrapped server lost",
+			err:      fmt.Errorf("wrapped: %w", serverLost),
+			expected: true,
+		},
+		{
+			name:     "access denied",
+			err:      accessDenied,
+			expected: false,
+		},
+		{
+			name:     "non sql error",
+			err:      assert.AnError,
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, isCloneConnError(tt.err))
 		})
 	}
 }

@@ -268,6 +268,8 @@ const (
 	sourcePasswordEnd   = "',\n"
 	masterPasswordStart = "  MASTER_PASSWORD = '"
 	masterPasswordEnd   = "',\n"
+	identifiedByStart   = " IDENTIFIED BY '"
+	identifiedByEnd     = "'"
 	passwordStart       = " PASSWORD = '"
 	passwordEnd         = "'"
 )
@@ -291,6 +293,15 @@ func redactPassword(input string) string {
 			return input
 		}
 		input = input[:i+len(masterPasswordStart)] + strings.Repeat("*", 4) + input[i+len(masterPasswordStart)+j:]
+	}
+
+	i = strings.Index(input, identifiedByStart)
+	if i != -1 {
+		j := strings.Index(input[i+len(identifiedByStart):], identifiedByEnd)
+		if j == -1 {
+			return input
+		}
+		input = input[:i+len(identifiedByStart)] + strings.Repeat("*", 4) + input[i+len(identifiedByStart)+j:]
 	}
 	// We also check if we have any password keyword in the query
 	i = strings.Index(input, passwordStart)
