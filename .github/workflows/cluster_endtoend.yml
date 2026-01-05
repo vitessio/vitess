@@ -257,8 +257,7 @@ jobs:
             - 'config/**'
             - 'bootstrap.sh'
             - '.github/workflows/cluster_endtoend.yml'
-            ${{ contains(matrix.shard, 'onlineddl') && '- go/test/endtoend/onlineddl/vrepl_suite/testdata' || '' }}
-            ${{ contains(matrix.shard, 'schemadiff') && '- go/test/endtoend/onlineddl/vrepl_suite/testdata' || '' }}
+            ${{ (contains(matrix.shard, 'onlineddl') || contains(matrix.shard, 'schemadiff')) && '- go/test/endtoend/onlineddl/vrepl_suite/testdata' || '' }}
 
     - name: Set up Go
       if: steps.changes.outputs.end_to_end == 'true'
