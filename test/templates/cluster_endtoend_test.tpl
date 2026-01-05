@@ -20,11 +20,45 @@ env:
 {{if .GoPrivate}}  GOPRIVATE: "{{.GoPrivate}}"{{end}}
 
 jobs:
-{{range .Clusters}}
-  {{.JobID}}:
+  cluster_endtoend:
     timeout-minutes: 60
-    name: Run endtoend tests on {{.Name}}
-    runs-on: {{.RunsOn}}
+    name: Run endtoend tests on Cluster (${{`{{ matrix.shard }}`}})
+    runs-on: ${{`{{ matrix.runs_on }}`}}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+{{- range .Clusters}}
+          - shard: "{{.Shard}}"
+            runs_on: {{.RunsOn}}
+            {{- if .MemoryCheck}}
+            memory_check: true
+            {{- end}}
+            {{- if .MakeTools}}
+            make_tools: true
+            {{- end}}
+            {{- if .InstallXtraBackup}}
+            install_xtrabackup: true
+            {{- end}}
+            {{- if .NeedsMinio}}
+            needs_minio: true
+            {{- end}}
+            {{- if .LimitResourceUsage}}
+            limit_resource_usage: true
+            {{- end}}
+            {{- if .EnableBinlogTransactionCompression}}
+            enable_binlog_transaction_compression: true
+            {{- end}}
+            {{- if .EnablePartialJSON}}
+            enable_partial_json: true
+            {{- end}}
+            {{- if .PartialKeyspace}}
+            partial_keyspace: true
+            {{- end}}
+            {{- if .BuildTag}}
+            build_tag: "{{.BuildTag}}"
+            {{- end}}
+{{- end}}
 
     steps:
     - name: Skip CI
@@ -34,8 +68,8 @@ jobs:
           exit 1
         fi
 
-    {{if .MemoryCheck}}
     - name: Check Memory
+      if: ${{`{{ matrix.memory_check }}`}}
       run: |
         totalMem=$(free -g | awk 'NR==2 {print $2}')
         echo "total memory $totalMem GB"
@@ -44,7 +78,6 @@ jobs:
           exit 1
         fi
 
-    {{end}}
     - name: Check out code
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
@@ -71,9 +104,8 @@ jobs:
             - 'config/**'
             - 'bootstrap.sh'
             - '.github/workflows/cluster_endtoend.yml'
-            {{- if or (contains .Name "onlineddl") (contains .Name "schemadiff") }}
-            - 'go/test/endtoend/onlineddl/vrepl_suite/testdata'
-            {{- end}}
+            ${{`{{ contains(matrix.shard, 'onlineddl') && '- go/test/endtoend/onlineddl/vrepl_suite/testdata' || '' }}`}}
+            ${{`{{ contains(matrix.shard, 'schemadiff') && '- go/test/endtoend/onlineddl/vrepl_suite/testdata' || '' }}`}}
 
     - name: Set up Go
       if: steps.changes.outputs.end_to_end == 'true'
@@ -81,7 +113,7 @@ jobs:
       with:
         go-version-file: go.mod
 
-{{if $.GoPrivate}}
+{{if .GoPrivate}}
     - name: Setup GitHub access token
       if: steps.changes.outputs.end_to_end == 'true'
       run: git config --global url.https://${{`{{ secrets.GH_ACCESS_TOKEN }}`}}@github.com/.insteadOf https://github.com/
@@ -95,40 +127,37 @@ jobs:
       if: steps.changes.outputs.end_to_end == 'true'
       uses: ./.github/actions/tune-os
 
-    {{if not .InstallXtraBackup}}
     - name: Setup MySQL
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true' && !matrix.install_xtrabackup
       uses: ./.github/actions/setup-mysql
       with:
         flavor: mysql-8.4
-    {{end}}
 
     - name: Get dependencies
       if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
-        {{if .InstallXtraBackup}}
-        # Setup Percona Server for MySQL 8.0
-        sudo apt-get -qq update
-        sudo apt-get -qq install -y lsb-release gnupg2
-        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo percona-release setup ps80
-        sudo apt-get -qq update
+        if [[ "${{`{{ matrix.install_xtrabackup }}`}}" == "true" ]]; then
+          # Setup Percona Server for MySQL 8.0
+          sudo apt-get -qq update
+          sudo apt-get -qq install -y lsb-release gnupg2
+          wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
+          sudo DEBIAN_FRONTEND="noninteractive" dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+          sudo percona-release setup ps80
+          sudo apt-get -qq update
 
-        sudo apt-get -qq install -y percona-server-server percona-server-client
+          sudo apt-get -qq install -y percona-server-server percona-server-client
 
-        sudo service mysql stop
+          sudo service mysql stop
 
-        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+          sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+          sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
 
-        sudo apt-get -qq install -y percona-xtrabackup-80 lz4
+          sudo apt-get -qq install -y percona-xtrabackup-80 lz4
+        else
+          sudo apt-get -qq install -y mysql-shell
+        fi
 
-        {{else}}
-        sudo apt-get -qq install -y mysql-shell
-
-        {{end}}
         # Install everything else we need, and configure
         sudo apt-get -qq install -y make unzip g++ etcd-client etcd-server curl git wget xz-utils libncurses6
 
@@ -139,22 +168,18 @@ jobs:
         # install JUnit report formatter
         go install github.com/vitessio/go-junit-report@{{$.GoJunitReport.SHA}} # {{$.GoJunitReport.Comment}}
 
-    {{if .NeedsMinio}}
     - name: Install Minio
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true' && matrix.needs_minio
       run: |
         wget https://dl.min.io/server/minio/release/linux-amd64/minio
         chmod +x minio
         mv minio /usr/local/bin
-    {{end}}
 
-    {{if .MakeTools}}
     - name: Installing zookeeper and consul
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.end_to_end == 'true' && matrix.make_tools
       run: |
           make tools
 
-    {{end}}
     - name: Setup launchable dependencies
       if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main'
       run: |
@@ -178,10 +203,10 @@ jobs:
 
         set -exo pipefail
 
-        {{if .LimitResourceUsage}}
-        # Increase our open file descriptor limit as we could hit this
-        ulimit -n 65536
-        cat <<-EOF>>./config/mycnf/mysql84.cnf
+        if [[ "${{`{{ matrix.limit_resource_usage }}`}}" == "true" ]]; then
+          # Increase our open file descriptor limit as we could hit this
+          ulimit -n 65536
+          cat <<-EOF>>./config/mycnf/mysql84.cnf
         innodb_buffer_pool_dump_at_shutdown=OFF
         innodb_buffer_pool_in_core_file=OFF
         innodb_buffer_pool_load_at_startup=OFF
@@ -196,24 +221,35 @@ jobs:
         performance_schema=OFF
         slow-query-log=OFF
         EOF
-        {{end}}
+        fi
 
-        {{if .EnableBinlogTransactionCompression}}
-        cat <<-EOF>>./config/mycnf/mysql84.cnf
+        if [[ "${{`{{ matrix.enable_binlog_transaction_compression }}`}}" == "true" ]]; then
+          cat <<-EOF>>./config/mycnf/mysql84.cnf
         binlog-transaction-compression=ON
         EOF
-        {{end}}
+        fi
 
-        {{if .EnablePartialJSON}}
-        cat <<-EOF>>./config/mycnf/mysql84.cnf
+        if [[ "${{`{{ matrix.enable_partial_json }}`}}" == "true" ]]; then
+          cat <<-EOF>>./config/mycnf/mysql84.cnf
         binlog-row-value-options=PARTIAL_JSON
         EOF
-        {{end}}
+        fi
 
         # Some of these tests require specific locales to be installed.
         # See https://github.com/cncf/automation/commit/49f2ad7a791a62ff7d038002bbb2b1f074eed5d5
         # run the tests however you normally do, then produce a JUnit XML file
-        go run test.go -docker={{if .Docker}}true -flavor={{.Platform}}{{else}}false{{end}} -follow -shard {{.Shard}}{{if .PartialKeyspace}} -partial-keyspace=true {{end}}{{if .BuildTag}} -build-tag={{.BuildTag}} {{end}} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+
+        PARTIAL_KEYSPACE_FLAG=""
+        if [[ "${{`{{ matrix.partial_keyspace }}`}}" == "true" ]]; then
+          PARTIAL_KEYSPACE_FLAG="-partial-keyspace=true"
+        fi
+
+        BUILD_TAG_FLAG=""
+        if [[ -n "${{`{{ matrix.build_tag }}`}}" ]]; then
+          BUILD_TAG_FLAG="-build-tag=${{`{{ matrix.build_tag }}`}}"
+        fi
+
+        go run test.go -docker=false -follow -shard ${{`{{ matrix.shard }}`}} ${PARTIAL_KEYSPACE_FLAG} ${BUILD_TAG_FLAG} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Record test results in launchable if PR is not a draft
       if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main' && !cancelled()
@@ -233,4 +269,3 @@ jobs:
       with:
         paths: "report.xml"
         show: "fail"
-{{end}}
