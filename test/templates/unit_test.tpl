@@ -1,4 +1,4 @@
-name: {{.Name}}
+name: Unit Tests
 on:
   push:
     branches:
@@ -8,7 +8,7 @@ on:
   pull_request:
     branches: '**'
 concurrency:
-  group: format('{0}-{1}', ${{"{{"}} github.ref {{"}}"}}, '{{.Name}}')
+  group: format('{0}-{1}', ${{"{{"}} github.ref {{"}}"}}, 'unit_test')
   cancel-in-progress: true
 
 permissions: read-all
@@ -20,7 +20,8 @@ env:
 {{if .GoPrivate}}  GOPRIVATE: "{{.GoPrivate}}"{{end}}
 
 jobs:
-  test:
+{{range .Tests}}
+  {{.JobName}}:
     name: {{.Name}}
     runs-on: {{.RunsOn}}
 
@@ -55,7 +56,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
-            - '.github/workflows/{{.FileName}}'
+            - '.github/workflows/unit_test.yml'
 
     - name: Set up Go
       if: steps.changes.outputs.unit_tests == 'true'
@@ -63,7 +64,7 @@ jobs:
       with:
         go-version-file: go.mod
 
-{{if .GoPrivate}}
+{{if $.GoPrivate}}
     - name: Setup GitHub access token
       if: steps.changes.outputs.unit_tests == 'true'
       run: git config --global url.https://${{`{{ secrets.GH_ACCESS_TOKEN }}`}}@github.com/.insteadOf https://github.com/
@@ -81,15 +82,15 @@ jobs:
       if: steps.changes.outputs.unit_tests == 'true'
       uses: ./.github/actions/setup-mysql
       with:
-        {{ if (eq .Platform "mysql57") -}}
+        {{- if (eq .Platform "mysql57") }}
         flavor: mysql-5.7
-        {{ end }}
-        {{- if (eq .Platform "mysql80") -}}
+        {{- end }}
+        {{- if (eq .Platform "mysql80") }}
         flavor: mysql-8.0
-        {{ end }}
-        {{- if (eq .Platform "mysql84") -}}
+        {{- end }}
+        {{- if (eq .Platform "mysql84") }}
         flavor: mysql-8.4
-        {{ end }}
+        {{- end }}
 
     - name: Get dependencies
       if: steps.changes.outputs.unit_tests == 'true'
@@ -102,10 +103,10 @@ jobs:
         mv dist/etcd-v3.5.25-linux-amd64/{etcd,etcdctl} bin/
 
         go mod download
-        go install golang.org/x/tools/cmd/goimports@{{.Goimports.SHA}} # {{.Goimports.Comment}}
+        go install golang.org/x/tools/cmd/goimports@{{$.Goimports.SHA}} # {{$.Goimports.Comment}}
 
         # install JUnit report formatter
-        go install github.com/vitessio/go-junit-report@{{.GoJunitReport.SHA}} # {{.GoJunitReport.Comment}}
+        go install github.com/vitessio/go-junit-report@{{$.GoJunitReport.SHA}} # {{$.GoJunitReport.Comment}}
 
     - name: Run make tools
       if: steps.changes.outputs.unit_tests == 'true'
@@ -160,3 +161,4 @@ jobs:
       with:
         paths: "report.xml"
         show: "fail"
+{{end}}

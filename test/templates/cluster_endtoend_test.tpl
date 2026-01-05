@@ -1,4 +1,4 @@
-name: {{.Name}}
+name: Cluster End-to-End Tests
 on:
   push:
     branches:
@@ -8,7 +8,7 @@ on:
   pull_request:
     branches: '**'
 concurrency:
-  group: format('{0}-{1}', ${{"{{"}} github.ref {{"}}"}}, '{{.Name}}')
+  group: format('{0}-{1}', ${{"{{"}} github.ref {{"}}"}}, 'cluster_endtoend')
   cancel-in-progress: true
 
 permissions: read-all
@@ -20,7 +20,8 @@ env:
 {{if .GoPrivate}}  GOPRIVATE: "{{.GoPrivate}}"{{end}}
 
 jobs:
-  build:
+{{range .Clusters}}
+  {{.Shard}}:
     timeout-minutes: 60
     name: Run endtoend tests on {{.Name}}
     runs-on: {{.RunsOn}}
@@ -34,7 +35,6 @@ jobs:
         fi
 
     {{if .MemoryCheck}}
-
     - name: Check Memory
       run: |
         totalMem=$(free -g | awk 'NR==2 {print $2}')
@@ -45,7 +45,6 @@ jobs:
         fi
 
     {{end}}
-
     - name: Check out code
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
@@ -71,7 +70,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
-            - '.github/workflows/{{.FileName}}'
+            - '.github/workflows/cluster_endtoend.yml'
             {{- if or (contains .Name "onlineddl") (contains .Name "schemadiff") }}
             - 'go/test/endtoend/onlineddl/vrepl_suite/testdata'
             {{- end}}
@@ -82,7 +81,7 @@ jobs:
       with:
         go-version-file: go.mod
 
-{{if .GoPrivate}}
+{{if $.GoPrivate}}
     - name: Setup GitHub access token
       if: steps.changes.outputs.end_to_end == 'true'
       run: git config --global url.https://${{`{{ secrets.GH_ACCESS_TOKEN }}`}}@github.com/.insteadOf https://github.com/
@@ -102,14 +101,13 @@ jobs:
       uses: ./.github/actions/setup-mysql
       with:
         flavor: mysql-8.4
-    {{ end }}
+    {{end}}
 
     - name: Get dependencies
       if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
         {{if .InstallXtraBackup}}
-
         # Setup Percona Server for MySQL 8.0
         sudo apt-get -qq update
         sudo apt-get -qq install -y lsb-release gnupg2
@@ -128,11 +126,9 @@ jobs:
         sudo apt-get -qq install -y percona-xtrabackup-80 lz4
 
         {{else}}
-
         sudo apt-get -qq install -y mysql-shell
 
         {{end}}
-
         # Install everything else we need, and configure
         sudo apt-get -qq install -y make unzip g++ etcd-client etcd-server curl git wget xz-utils libncurses6
 
@@ -141,10 +137,11 @@ jobs:
         go mod download
 
         # install JUnit report formatter
-        go install github.com/vitessio/go-junit-report@{{.GoJunitReport.SHA}} # {{.GoJunitReport.Comment}}
+        go install github.com/vitessio/go-junit-report@{{$.GoJunitReport.SHA}} # {{$.GoJunitReport.Comment}}
 
-    {{if .NeedsMinio }}
+    {{if .NeedsMinio}}
     - name: Install Minio
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         wget https://dl.min.io/server/minio/release/linux-amd64/minio
         chmod +x minio
@@ -152,14 +149,12 @@ jobs:
     {{end}}
 
     {{if .MakeTools}}
-
     - name: Installing zookeeper and consul
       if: steps.changes.outputs.end_to_end == 'true'
       run: |
           make tools
 
     {{end}}
-
     - name: Setup launchable dependencies
       if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main'
       run: |
@@ -238,3 +233,4 @@ jobs:
       with:
         paths: "report.xml"
         show: "fail"
+{{end}}
