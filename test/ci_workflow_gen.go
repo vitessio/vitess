@@ -74,12 +74,9 @@ const (
 
 	unitTestTemplate = "templates/unit_test.tpl"
 
-	// An empty string will cause the default non platform specific template
-	// to be used.
-	clusterTestTemplate = "templates/cluster_endtoend_test%s.tpl"
-
 	clusterVitessTesterTemplate = "templates/cluster_vitess_tester.tpl"
 
+	clusterTestTemplate       = "templates/cluster_endtoend_test.tpl"
 	clusterTestDockerTemplate = "templates/cluster_endtoend_test_docker.tpl"
 )
 
@@ -199,13 +196,20 @@ type GitMetas struct {
 
 type unitTest struct {
 	*GitMetas
-	Name, RunsOn, Platform, FileName, GoPrivate, Evalengine string
-	Race                                                    bool
+	Name, JobName, RunsOn, Platform, FileName, GoPrivate, Evalengine string
+	Race                                                             bool
+}
+
+type unitTestsGroup struct {
+	*GitMetas
+	Tests     []*unitTest
+	GoPrivate string
 }
 
 type clusterTest struct {
 	*GitMetas
 	Name, Shard, Platform              string
+	JobID                              string
 	FileName                           string
 	BuildTag                           string
 	RunsOn                             string
@@ -227,6 +231,12 @@ type vitessTesterTest struct {
 	RunsOn    string
 	GoPrivate string
 	Path      string
+}
+
+type clusterTestGroup struct {
+	*GitMetas
+	Clusters  []*clusterTest
+	GoPrivate string
 }
 
 // getGitRefSHA fetches the HEAD SHA of a git repo + branch using the "git" command.
@@ -343,8 +353,7 @@ func main() {
 
 	generateUnitTestWorkflows(gitMetas)
 	generateVitessTesterWorkflows(vitessTesterMap, clusterVitessTesterTemplate, gitMetas)
-	generateClusterWorkflows(clusterList, clusterTestTemplate, gitMetas)
-	generateClusterWorkflows(clusterDockerList, clusterTestDockerTemplate, gitMetas)
+	generateClusterWorkflows(clusterList, gitMetas)
 }
 
 func canonnizeList(list []string) []string {
@@ -357,33 +366,21 @@ func canonnizeList(list []string) []string {
 	return output
 }
 
-func generateVitessTesterWorkflows(mp map[string]string, tpl string, gitMetas *GitMetas) {
-	for test, testPath := range mp {
-		tt := &vitessTesterTest{
-			Name:      fmt.Sprintf("Vitess Tester (%v)", test),
-			RunsOn:    defaultRunnerName,
-			GoPrivate: goPrivate,
-			Path:      testPath,
-			GitMetas:  gitMetas,
-		}
-
-		templateFileName := tpl
-		tt.FileName = fmt.Sprintf("vitess_tester_%s.yml", test)
-		workflowPath := fmt.Sprintf("%s/%s", workflowConfigDir, tt.FileName)
-		err := writeFileFromTemplate(templateFileName, workflowPath, tt)
-		if err != nil {
-			log.Print(err)
-		}
-	}
-}
-
-func generateClusterWorkflows(list []string, tpl string, gitMetas *GitMetas) {
+func generateClusterWorkflows(list []string, gitMetas *GitMetas) {
 	clusters := canonnizeList(list)
+	var clusterTests []*clusterTest
+
 	for _, cluster := range clusters {
 		for _, mysqlVersion := range clusterMySQLVersions() {
+			// Job IDs must start with a letter or underscore
+			jobID := cluster
+			if len(cluster) > 0 && cluster[0] >= '0' && cluster[0] <= '9' {
+				jobID = "e2e_" + cluster
+			}
 			test := &clusterTest{
 				Name:      fmt.Sprintf("Cluster (%s)", cluster),
 				Shard:     cluster,
+				JobID:     jobID,
 				BuildTag:  buildTag[cluster],
 				RunsOn:    defaultRunnerName,
 				GoPrivate: goPrivate,
@@ -434,48 +431,63 @@ func generateClusterWorkflows(list []string, tpl string, gitMetas *GitMetas) {
 				test.EnableBinlogTransactionCompression = true
 				test.EnablePartialJSON = true
 			}
-			mysqlVersionIndicator := ""
-			if mysqlVersion != defaultMySQLVersion && len(clusterMySQLVersions()) > 1 {
-				mysqlVersionIndicator = "_" + string(mysqlVersion)
-				test.Name = test.Name + " " + string(mysqlVersion)
-			}
 			if strings.Contains(test.Shard, "partial_keyspace") {
 				test.PartialKeyspace = true
 			}
 
-			workflowPath := fmt.Sprintf("%s/cluster_endtoend_%s%s.yml", workflowConfigDir, cluster, mysqlVersionIndicator)
-			templateFileName := tpl
-			if test.Platform != "" {
-				templateFileName = fmt.Sprintf(tpl, "_"+test.Platform)
-			} else if strings.Contains(templateFileName, "%s") {
-				templateFileName = fmt.Sprintf(tpl, "")
-			}
-			test.FileName = fmt.Sprintf("cluster_endtoend_%s%s.yml", cluster, mysqlVersionIndicator)
-			err := writeFileFromTemplate(templateFileName, workflowPath, test)
-			if err != nil {
-				log.Print(err)
-			}
+			clusterTests = append(clusterTests, test)
+		}
+	}
+
+	group := &clusterTestGroup{
+		GitMetas:  gitMetas,
+		Clusters:  clusterTests,
+		GoPrivate: goPrivate,
+	}
+
+	workflowPath := fmt.Sprintf("%s/cluster_endtoend.yml", workflowConfigDir)
+	err := writeFileFromTemplate(clusterTestTemplate, workflowPath, group)
+	if err != nil {
+		log.Print(err)
+	}
+}
+
+func generateVitessTesterWorkflows(mp map[string]string, tpl string, gitMetas *GitMetas) {
+	for test, testPath := range mp {
+		tt := &vitessTesterTest{
+			Name:      fmt.Sprintf("Vitess Tester (%v)", test),
+			RunsOn:    defaultRunnerName,
+			GoPrivate: goPrivate,
+			Path:      testPath,
+			GitMetas:  gitMetas,
+		}
+
+		templateFileName := tpl
+		tt.FileName = fmt.Sprintf("vitess_tester_%s.yml", test)
+		workflowPath := fmt.Sprintf("%s/%s", workflowConfigDir, tt.FileName)
+		err := writeFileFromTemplate(templateFileName, workflowPath, tt)
+		if err != nil {
+			log.Print(err)
 		}
 	}
 }
 
 func generateUnitTestWorkflows(gitMetas *GitMetas) {
+	var tests []*unitTest
+
+	// Generate unit tests for each platform and evalengine combination
 	for _, platform := range unitTestDatabases {
 		for _, evalengine := range []string{"1", "0"} {
 			test := &unitTest{
 				Name:       fmt.Sprintf("Unit Test (%s%s)", evalengineToString(evalengine), platform),
+				JobName:    fmt.Sprintf("unit_test_%s%s", evalengineToString(evalengine), platform),
 				RunsOn:     defaultRunnerName,
 				Platform:   string(platform),
 				GoPrivate:  goPrivate,
 				Evalengine: evalengine,
 				GitMetas:   gitMetas,
 			}
-			test.FileName = fmt.Sprintf("unit_test_%s%s.yml", evalengineToString(evalengine), platform)
-			path := fmt.Sprintf("%s/%s", workflowConfigDir, test.FileName)
-			err := writeFileFromTemplate(unitTestTemplate, path, test)
-			if err != nil {
-				log.Print(err)
-			}
+			tests = append(tests, test)
 		}
 	}
 
@@ -483,6 +495,7 @@ func generateUnitTestWorkflows(gitMetas *GitMetas) {
 	for _, evalengine := range []string{"1", "0"} {
 		raceTest := &unitTest{
 			Name:       fmt.Sprintf("Unit Test (%sRace)", evalengineToRaceNamePrefix(evalengine)),
+			JobName:    fmt.Sprintf("unit_race%s", evalengineToFileSuffix(evalengine)),
 			RunsOn:     cores16RunnerName,
 			Platform:   string(mysql80),
 			GoPrivate:  goPrivate,
@@ -490,12 +503,19 @@ func generateUnitTestWorkflows(gitMetas *GitMetas) {
 			Race:       true,
 			GitMetas:   gitMetas,
 		}
-		raceTest.FileName = fmt.Sprintf("unit_race%s.yml", evalengineToFileSuffix(evalengine))
-		path := fmt.Sprintf("%s/%s", workflowConfigDir, raceTest.FileName)
-		err := writeFileFromTemplate(unitTestTemplate, path, raceTest)
-		if err != nil {
-			log.Print(err)
-		}
+		tests = append(tests, raceTest)
+	}
+
+	group := &unitTestsGroup{
+		GitMetas:  gitMetas,
+		Tests:     tests,
+		GoPrivate: goPrivate,
+	}
+
+	workflowPath := fmt.Sprintf("%s/unit_test.yml", workflowConfigDir)
+	err := writeFileFromTemplate(unitTestTemplate, workflowPath, group)
+	if err != nil {
+		log.Print(err)
 	}
 }
 

@@ -1,6 +1,6 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Unit Test (evalengine_mysql57)
+name: Unit Tests
 on:
   push:
     branches:
@@ -10,7 +10,7 @@ on:
   pull_request:
     branches: '**'
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Unit Test (evalengine_mysql57)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'unit_test')
   cancel-in-progress: true
 
 permissions: read-all
@@ -21,9 +21,47 @@ env:
   GITHUB_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
 
 jobs:
-  test:
-    name: Unit Test (evalengine_mysql57)
-    runs-on: ubuntu-24.04
+  unit_test:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runs_on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "Unit Test (evalengine_mysql57)"
+            platform: "mysql57"
+            runs_on: ubuntu-24.04
+            evalengine: "1"
+          - name: "Unit Test (mysql57)"
+            platform: "mysql57"
+            runs_on: ubuntu-24.04
+            evalengine: "0"
+          - name: "Unit Test (evalengine_mysql80)"
+            platform: "mysql80"
+            runs_on: ubuntu-24.04
+            evalengine: "1"
+          - name: "Unit Test (mysql80)"
+            platform: "mysql80"
+            runs_on: ubuntu-24.04
+            evalengine: "0"
+          - name: "Unit Test (evalengine_mysql84)"
+            platform: "mysql84"
+            runs_on: ubuntu-24.04
+            evalengine: "1"
+          - name: "Unit Test (mysql84)"
+            platform: "mysql84"
+            runs_on: ubuntu-24.04
+            evalengine: "0"
+          - name: "Unit Test (Evalengine_Race)"
+            platform: "mysql80"
+            runs_on: oracle-vm-16cpu-64gb-x86-64
+            evalengine: "1"
+            race: true
+          - name: "Unit Test (Race)"
+            platform: "mysql80"
+            runs_on: oracle-vm-16cpu-64gb-x86-64
+            evalengine: "0"
+            race: true
 
     steps:
     - name: Skip CI
@@ -56,7 +94,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
-            - '.github/workflows/unit_test_evalengine_mysql57.yml'
+            - '.github/workflows/unit_test.yml'
 
     - name: Set up Go
       if: steps.changes.outputs.unit_tests == 'true'
@@ -76,8 +114,8 @@ jobs:
       if: steps.changes.outputs.unit_tests == 'true'
       uses: ./.github/actions/setup-mysql
       with:
-        flavor: mysql-5.7
-        
+        flavor: ${{ matrix.platform == 'mysql57' && 'mysql-5.7' || matrix.platform == 'mysql80' && 'mysql-8.0' || 'mysql-8.4' }}
+
     - name: Get dependencies
       if: steps.changes.outputs.unit_tests == 'true'
       run: |
@@ -113,7 +151,7 @@ jobs:
 
     - name: Run test
       if: steps.changes.outputs.unit_tests == 'true'
-      timeout-minutes: 30
+      timeout-minutes: ${{ matrix.race && 45 || 30 }}
       run: |
         set -exo pipefail
         # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
@@ -122,12 +160,16 @@ jobs:
 
         export NOVTADMINBUILD=1
         export VT_GO_PARALLEL_VALUE=$(nproc)
-        export VTEVALENGINETEST="1"
+        export VTEVALENGINETEST="${{ matrix.evalengine }}"
         # We sometimes need to alter the behavior based on the platform we're
         # testing, e.g. MySQL 5.7 vs 8.0.
-        export CI_DB_PLATFORM="mysql57"
+        export CI_DB_PLATFORM="${{ matrix.platform }}"
 
-        make unit_test | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        if [[ "${{ matrix.race }}" == "true" ]]; then
+          make unit_test_race | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        else
+          make unit_test | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        fi
 
     - name: Record test results in launchable if PR is not a draft
       if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.unit_tests == 'true' && github.base_ref == 'main' && !cancelled()

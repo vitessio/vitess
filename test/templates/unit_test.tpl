@@ -1,4 +1,4 @@
-name: {{.Name}}
+name: Unit Tests
 on:
   push:
     branches:
@@ -8,7 +8,7 @@ on:
   pull_request:
     branches: '**'
 concurrency:
-  group: format('{0}-{1}', ${{"{{"}} github.ref {{"}}"}}, '{{.Name}}')
+  group: format('{0}-{1}', ${{"{{"}} github.ref {{"}}"}}, 'unit_test')
   cancel-in-progress: true
 
 permissions: read-all
@@ -20,9 +20,22 @@ env:
 {{if .GoPrivate}}  GOPRIVATE: "{{.GoPrivate}}"{{end}}
 
 jobs:
-  test:
-    name: {{.Name}}
-    runs-on: {{.RunsOn}}
+  unit_test:
+    name: ${{`{{ matrix.name }}`}}
+    runs-on: ${{`{{ matrix.runs_on }}`}}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+{{- range .Tests}}
+          - name: "{{.Name}}"
+            platform: "{{.Platform}}"
+            runs_on: {{.RunsOn}}
+            evalengine: "{{.Evalengine}}"
+            {{- if .Race}}
+            race: true
+            {{- end}}
+{{- end}}
 
     steps:
     - name: Skip CI
@@ -55,7 +68,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
-            - '.github/workflows/{{.FileName}}'
+            - '.github/workflows/unit_test.yml'
 
     - name: Set up Go
       if: steps.changes.outputs.unit_tests == 'true'
@@ -81,15 +94,7 @@ jobs:
       if: steps.changes.outputs.unit_tests == 'true'
       uses: ./.github/actions/setup-mysql
       with:
-        {{ if (eq .Platform "mysql57") -}}
-        flavor: mysql-5.7
-        {{ end }}
-        {{- if (eq .Platform "mysql80") -}}
-        flavor: mysql-8.0
-        {{ end }}
-        {{- if (eq .Platform "mysql84") -}}
-        flavor: mysql-8.4
-        {{ end }}
+        flavor: ${{`{{ matrix.platform == 'mysql57' && 'mysql-5.7' || matrix.platform == 'mysql80' && 'mysql-8.0' || 'mysql-8.4' }}`}}
 
     - name: Get dependencies
       if: steps.changes.outputs.unit_tests == 'true'
@@ -102,10 +107,10 @@ jobs:
         mv dist/etcd-v3.5.25-linux-amd64/{etcd,etcdctl} bin/
 
         go mod download
-        go install golang.org/x/tools/cmd/goimports@{{.Goimports.SHA}} # {{.Goimports.Comment}}
+        go install golang.org/x/tools/cmd/goimports@{{$.Goimports.SHA}} # {{$.Goimports.Comment}}
 
         # install JUnit report formatter
-        go install github.com/vitessio/go-junit-report@{{.GoJunitReport.SHA}} # {{.GoJunitReport.Comment}}
+        go install github.com/vitessio/go-junit-report@{{$.GoJunitReport.SHA}} # {{$.GoJunitReport.Comment}}
 
     - name: Run make tools
       if: steps.changes.outputs.unit_tests == 'true'
@@ -126,7 +131,7 @@ jobs:
 
     - name: Run test
       if: steps.changes.outputs.unit_tests == 'true'
-      timeout-minutes: {{if .Race}}45{{else}}30{{end}}
+      timeout-minutes: ${{`{{ matrix.race && 45 || 30 }}`}}
       run: |
         set -exo pipefail
         # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
@@ -135,12 +140,16 @@ jobs:
 
         export NOVTADMINBUILD=1
         export VT_GO_PARALLEL_VALUE=$(nproc)
-        export VTEVALENGINETEST="{{.Evalengine}}"
+        export VTEVALENGINETEST="${{`{{ matrix.evalengine }}`}}"
         # We sometimes need to alter the behavior based on the platform we're
         # testing, e.g. MySQL 5.7 vs 8.0.
-        export CI_DB_PLATFORM="{{.Platform}}"
+        export CI_DB_PLATFORM="${{`{{ matrix.platform }}`}}"
 
-        make {{if .Race}}unit_test_race{{else}}unit_test{{end}} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        if [[ "${{`{{ matrix.race }}`}}" == "true" ]]; then
+          make unit_test_race | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        else
+          make unit_test | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        fi
 
     - name: Record test results in launchable if PR is not a draft
       if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.unit_tests == 'true' && github.base_ref == 'main' && !cancelled()
