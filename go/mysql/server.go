@@ -268,7 +268,7 @@ func NewListener(
 	flushDelay time.Duration,
 	multiQuery bool,
 ) (*Listener, error) {
-	listener, err := net.Listen(protocol, address)
+	listener, err := netutil.Listen(protocol, address)
 	if err != nil {
 		return nil, err
 	}
