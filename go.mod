@@ -141,6 +141,7 @@ require (
 	github.com/olekukonko/ll v0.1.1 // indirect
 	github.com/opencontainers/runtime-spec v1.2.1 // indirect
 	github.com/puzpuzpuz/xsync/v3 v3.5.1 // indirect
+	github.com/rs/zerolog v1.34.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	go.opentelemetry.io/collector/component v1.42.0 // indirect
 	go.opentelemetry.io/collector/featuregate v1.42.0 // indirect
@@ -150,6 +151,7 @@ require (
 	go.opentelemetry.io/otel/log v0.14.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	k8s.io/apimachinery v0.33.4 // indirect
 )
 

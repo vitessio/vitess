@@ -7,6 +7,8 @@
     - **[New Support](#new-support)**
         - [Window function pushdown for sharded keyspaces](#window-function-pushdown)
 - **[Minor Changes](#minor-changes)**
+    - **[Logging](#minor-changes-logging)**
+        - [Structured Logging](#structured-logging)
     - **[VTGate](#minor-changes-vtgate)**
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
         - [New "session" mode for `--vtgate-balancer-mode` flag](#vtgate-session-balancer-mode)
@@ -34,6 +36,39 @@ Previously, all window function queries required single-shard routing, which lim
 For examples and more details, see the [documentation](https://vitess.io/docs/24.0/reference/compatibility/mysql-compatibility/#window-functions).
 
 ## <a id="minor-changes"/>Minor Changes</a>
+
+### <a id="minor-changes-logging"/>Logging</a>
+
+#### <a id="structured-logging"/>Structured Logging</a>
+
+Opt-in structured JSON logging has been added. By default, Vitess will continue to use unstructured logging through `glog`. To opt-in to structured logging, use these new flags:
+
+- `--structured-logging`: Enables structured logging.
+- `--structured-logging-level`: Minimum log level: trace, debug, info, warn, error, fatal, panic, disabled (default: info)
+- `--structured-logging-pretty`: Enable pretty, human-readable output (default: false)
+- `--structured-logging-file`: Log to a file instead of stdout
+
+The existing `--log-rotate-max-size` flag controls the max size of the log file before rotation. Otherwise, the new structured logging flags are mutually exclusive with the old `glog` flags.
+
+Example JSON output:
+
+```console
+$ vttablet --structured-logging
+
+{"level":"info","caller":"/Users/mhamza/dev/vitess/go/vt/servenv/servenv_unix.go:57","time":"2026-01-06T09:22:36-05:00","message":"Version: 24.0.0-SNAPSHOT (Git revision  branch '') built on  by @ using go1.25.5 darwin/arm64"}
+{"level":"fatal","caller":"/Users/mhamza/dev/vitess/go/vt/topo/server.go:257","time":"2026-01-06T09:22:36-05:00","message":"topo-global-server-address must be configured"}
+```
+
+Example pretty output:
+
+```console
+$ vttablet --structured-logging --structured-logging-pretty
+
+2026-01-06T09:23:13-05:00 INF go/vt/servenv/servenv_unix.go:57 > Version: 24.0.0-SNAPSHOT (Git revision  branch '') built on  by @ using go1.25.5 darwin/arm64
+2026-01-06T09:23:13-05:00 FTL go/vt/topo/server.go:257 > topo-global-server-address must be configured
+```
+
+In v25, structured logging will become the default and `glog` and its flags will be deprecated. In v26, `glog` will be removed.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
