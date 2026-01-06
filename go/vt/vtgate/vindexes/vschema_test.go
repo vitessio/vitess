@@ -978,7 +978,8 @@ func TestVSchemaMirrorRules(t *testing.T) {
 				Error: errors.New("mirror chaining is not allowed"),
 			},
 		},
-		RoutingRules: map[string]*RoutingRule{},
+		RoutingRules:     map[string]*RoutingRule{},
+		ViewRoutingRules: map[string]*ViewRoutingRule{},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"ks1": {
 				Keyspace:       ks1,
@@ -1372,8 +1373,9 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 		t1.ColumnVindexes[0],
 	}
 	want := &VSchema{
-		MirrorRules:  map[string]*MirrorRule{},
-		RoutingRules: map[string]*RoutingRule{},
+		MirrorRules:      map[string]*MirrorRule{},
+		RoutingRules:     map[string]*RoutingRule{},
+		ViewRoutingRules: map[string]*ViewRoutingRule{},
 		globalTables: map[string]Table{
 			"t1": t1,
 		},
@@ -1449,8 +1451,9 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 		t1.ColumnVindexes[1],
 		t1.ColumnVindexes[0]}
 	want := &VSchema{
-		MirrorRules:  map[string]*MirrorRule{},
-		RoutingRules: map[string]*RoutingRule{},
+		MirrorRules:      map[string]*MirrorRule{},
+		RoutingRules:     map[string]*RoutingRule{},
+		ViewRoutingRules: map[string]*ViewRoutingRule{},
 		globalTables: map[string]Table{
 			"t1": t1,
 		},
@@ -1557,8 +1560,9 @@ func TestBuildVSchemaDupSeq(t *testing.T) {
 		Keyspace: ksb,
 		Type:     "sequence"}
 	want := &VSchema{
-		MirrorRules:  map[string]*MirrorRule{},
-		RoutingRules: map[string]*RoutingRule{},
+		MirrorRules:      map[string]*MirrorRule{},
+		RoutingRules:     map[string]*RoutingRule{},
+		ViewRoutingRules: map[string]*ViewRoutingRule{},
 		globalTables: map[string]Table{
 			"t1": nil,
 		},
@@ -1619,8 +1623,9 @@ func TestBuildVSchemaDupTable(t *testing.T) {
 		Keyspace: ksb,
 	}
 	want := &VSchema{
-		MirrorRules:  map[string]*MirrorRule{},
-		RoutingRules: map[string]*RoutingRule{},
+		MirrorRules:      map[string]*MirrorRule{},
+		RoutingRules:     map[string]*RoutingRule{},
+		ViewRoutingRules: map[string]*ViewRoutingRule{},
 		globalTables: map[string]Table{
 			"t1": nil,
 		},
@@ -1749,8 +1754,9 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 		t2.ColumnVindexes[0],
 	}
 	want := &VSchema{
-		MirrorRules:  map[string]*MirrorRule{},
-		RoutingRules: map[string]*RoutingRule{},
+		MirrorRules:      map[string]*MirrorRule{},
+		RoutingRules:     map[string]*RoutingRule{},
+		ViewRoutingRules: map[string]*ViewRoutingRule{},
 		globalTables: map[string]Table{
 			"t1": nil,
 		},
@@ -2336,8 +2342,9 @@ func TestSequence(t *testing.T) {
 		t2.ColumnVindexes[0],
 	}
 	want := &VSchema{
-		MirrorRules:  map[string]*MirrorRule{},
-		RoutingRules: map[string]*RoutingRule{},
+		MirrorRules:      map[string]*MirrorRule{},
+		RoutingRules:     map[string]*RoutingRule{},
+		ViewRoutingRules: map[string]*ViewRoutingRule{},
 		globalTables: map[string]Table{
 			"seq": seq,
 			"t1":  t1,

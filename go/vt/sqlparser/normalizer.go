@@ -73,7 +73,7 @@ type (
 	}
 	// VSchemaViews provides access to view definitions within the VSchema.
 	VSchemaViews interface {
-		FindView(name TableName) TableStatement
+		FindView(name TableName) (TableStatement, *TableName)
 	}
 )
 
@@ -619,11 +619,23 @@ func (nz *normalizer) rewriteAliasedTable(cursor *Cursor, node *AliasedTableExpr
 	}
 
 	// Replace views with their underlying definitions.
+	nz.rewriteView(aliasTableName, node, tblName)
+}
+
+func (nz *normalizer) rewriteView(aliasTableName TableName, node *AliasedTableExpr, tblName string) {
 	if nz.views == nil {
 		return
 	}
-	view := nz.views.FindView(aliasTableName)
+
+	view, targetViewName := nz.views.FindView(aliasTableName)
 	if view == nil {
+		// If a view routing rule matched this view, but the target view was not found, we'll rewrite the view name
+		// into the target view so that any error messages reference the target view, e.g. "table 'target_view'
+		// does not exist in keyspace 'target_ks'", rather than silently continuing with the source view.
+		if targetViewName != nil {
+			node.Expr = *targetViewName
+		}
+
 		return
 	}
 
