@@ -345,7 +345,7 @@ Flags:
       --statsd-sample-rate float                                         Sample rate for statsd metrics (default 1)
       --stderrthreshold severityFlag                                     logs at or above this threshold go to stderr (default 1)
       --stream-health-buffer-size uint                                   max streaming health entries to buffer per streaming health client (default 20)
-      --structured-logging                                               Enable structured logging instead of glog
+      --structured-logging                                               Enable structured logging
       --structured-logging-file string                                   Path to log file for structured logging with rotation (empty means stdout)
       --structured-logging-level string                                  Log level for structured logging: trace, debug, info, warn, error, fatal, panic, disabled (default "info")
       --structured-logging-pretty                                        Enable pretty console output for structured logging

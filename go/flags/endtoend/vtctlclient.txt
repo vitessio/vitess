@@ -37,7 +37,7 @@ Usage of vtctlclient:
       --security-policy string                                      the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --server string                                               server to use for connection
       --stderrthreshold severityFlag                                logs at or above this threshold go to stderr (default 1)
-      --structured-logging                                          Enable structured logging instead of glog
+      --structured-logging                                          Enable structured logging
       --structured-logging-file string                              Path to log file for structured logging with rotation (empty means stdout)
       --structured-logging-level string                             Log level for structured logging: trace, debug, info, warn, error, fatal, panic, disabled (default "info")
       --structured-logging-pretty                                   Enable pretty console output for structured logging

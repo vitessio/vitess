@@ -204,7 +204,7 @@ Flags:
       --statsd-sample-rate float                                         Sample rate for statsd metrics (default 1)
       --stderrthreshold severityFlag                                     logs at or above this threshold go to stderr (default 1)
       --stream-buffer-size int                                           the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size. (default 32768)
-      --structured-logging                                               Enable structured logging instead of glog
+      --structured-logging                                               Enable structured logging
       --structured-logging-file string                                   Path to log file for structured logging with rotation (empty means stdout)
       --structured-logging-level string                                  Log level for structured logging: trace, debug, info, warn, error, fatal, panic, disabled (default "info")
       --structured-logging-pretty                                        Enable pretty console output for structured logging
