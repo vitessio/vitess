@@ -26,8 +26,8 @@ import (
 )
 
 // glogWriter implements zerolog.LevelWriter and routes log output to glog. This allows zerolog to
-// build structured JSON log entries while still outputting through glog's infrastructure when
-// structured logging is disabled.
+// build structured JSON log entries while still outputting through glog when structured logging
+// is disabled.
 type glogWriter struct{}
 
 // Write implements io.Writer. It delegates to WriteLevel with NoLevel.
