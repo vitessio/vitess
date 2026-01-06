@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
-	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -68,9 +67,9 @@ func TestEnsureDB(t *testing.T) {
 	killTablets(tablet)
 }
 
-// TestGRPCErrorCode_UNAVAILABLE tests that vttablet returns correct gRPC codes,
-// in this case codes.Unavailable/vtrpcpb.Code_UNAVAILABLE when mysqld is down.
-func TestGRPCErrorCode_UNAVAILABLE(t *testing.T) {
+// TestGRPCErrorCode_MySQLDown tests that vttablet returns the correct vtrpcpb error code
+// (vtrpcpb.Code_UNAVAILABLE) when mysqld is down but vttablet is still up.
+func TestGRPCErrorCode_MySQLDown(t *testing.T) {
 	// Create new tablet
 	tablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 	defer killTablets(tablet)
@@ -86,18 +85,25 @@ func TestGRPCErrorCode_UNAVAILABLE(t *testing.T) {
 	err = clusterInstance.StartVttablet(tablet, false, "SERVING", false, cell, "dbtest", hostname, "0")
 	require.NoError(t, err)
 
+	vttablet := getTablet(tablet.GrpcPort)
+
+	// test FullStatus before stopping mysql
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
+	defer cancel()
+	res, err := tmClient.FullStatus(ctx, vttablet)
+	require.NotNil(t, res)
+	require.Equal(t, vtrpcpb.Code_OK, vterrors.Code(err))
+
 	// kill the mysql process
 	err = tablet.MysqlctlProcess.Stop()
 	require.NoError(t, err)
 
 	// confirm we get vtrpcpb.Code_UNAVAILABLE when calling FullStatus,
 	// because this will try and fail to connect to mysql
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-	tmClient := tmc.NewClient()
-	vttablet := getTablet(tablet.GrpcPort)
-	_, err = tmClient.FullStatus(ctx, vttablet)
-	assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
+	ctx2, cancel2 := context.WithTimeout(t.Context(), time.Second*10)
+	defer cancel2()
+	_, err = tmClient.FullStatus(ctx2, vttablet)
+	require.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
 }
 
 // TestResetReplicationParameters tests that the RPC ResetReplicationParameters works as intended.
