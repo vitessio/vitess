@@ -232,19 +232,24 @@ func TestBinaryJSON(t *testing.T) {
 			expected: json.NewNumber("123456789.1234", json.NumberTypeDecimal),
 		},
 		{
-			name:     `bit literal [2 202 254]`,
+			name:     `small decimal "1.99"`,
+			data:     []byte{15, 246, 4, 3, 2, 0x81, 0x63},
+			expected: json.NewNumber("1.99", json.NumberTypeDecimal),
+		},
+		{
+			name:     `bit literal 0xCAFE`,
 			data:     []byte{15, 16, 2, 202, 254},
-			expected: json.NewBit(string([]byte{2, 202, 254})),
+			expected: json.NewBit(string([]byte{202, 254})),
 		},
 		{
-			name:     `opaque string [2 202 254]`,
+			name:     `opaque string 0xCAFE`,
 			data:     []byte{15, 15, 2, 202, 254},
-			expected: json.NewBlob(string([]byte{2, 202, 254})),
+			expected: json.NewBlob(string([]byte{202, 254})),
 		},
 		{
-			name:     `opaque blob [2 202 254]`,
+			name:     `opaque blob 0xCAFE`,
 			data:     []byte{15, 252, 2, 202, 254},
-			expected: json.NewBlob(string([]byte{2, 202, 254})),
+			expected: json.NewBlob(string([]byte{202, 254})),
 		},
 	}
 	for _, tc := range testcases {
@@ -252,6 +257,32 @@ func TestBinaryJSON(t *testing.T) {
 			val, err := ParseBinaryJSON(tc.data)
 			require.NoError(t, err)
 			require.Equal(t, tc.expected, val)
+		})
+	}
+}
+
+func TestBinaryJSONOpaqueErrors(t *testing.T) {
+	testcases := []struct {
+		name string
+		data []byte
+	}{
+		{
+			name: "opaque length exceeds payload",
+			data: []byte{15, 252, 2, 202},
+		},
+		{
+			name: "opaque date too short",
+			data: []byte{15, 10, 4, 0, 0, 0, 0},
+		},
+		{
+			name: "opaque decimal too short",
+			data: []byte{15, 246, 1, 0x01},
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := ParseBinaryJSON(tc.data)
+			require.Error(t, err)
 		})
 	}
 }
@@ -443,19 +474,20 @@ func TestMarshalJSONToSQL(t *testing.T) {
 			expected: `CAST(123456789.1234 as JSON)`,
 		},
 		{
-			name:     `bit literal [2 202 254]`,
+			// 0xCAFE = 51966 = binary 1100101011111110 (16 bits)
+			name:     `bit literal 0xCAFE`,
 			data:     []byte{15, 16, 2, 202, 254},
-			expected: `CAST(b'101100101011111110' as JSON)`,
+			expected: `CAST(b'1100101011111110' as JSON)`,
 		},
 		{
-			name:     `opaque string [2 202 254]`,
+			name:     `opaque string 0xCAFE`,
 			data:     []byte{15, 15, 2, 202, 254},
-			expected: `CAST(x'02CAFE' as JSON)`,
+			expected: `CAST(x'CAFE' as JSON)`,
 		},
 		{
-			name:     `opaque blob [2 202 254]`,
+			name:     `opaque blob 0xCAFE`,
 			data:     []byte{15, 252, 2, 202, 254},
-			expected: `CAST(x'02CAFE' as JSON)`,
+			expected: `CAST(x'CAFE' as JSON)`,
 		},
 	}
 	for _, tc := range testcases {
