@@ -29,18 +29,12 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-// Package-level flag variables for structured logging configuration.
 var (
 	structuredLogging       bool
 	structuredLoggingLevel  string
 	structuredLoggingPretty bool
 	structuredLoggingFile   string
 )
-
-// StructuredLogging returns true if structured JSON logging is enabled.
-func StructuredLogging() bool {
-	return structuredLogging
-}
 
 // slogger is the default structured logger. It defaults to glog unless structured logging is
 // enabled with --structured-logging.
