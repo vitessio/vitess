@@ -138,17 +138,6 @@ func validateFlags(fs *pflag.FlagSet) error {
 	return nil
 }
 
-// NewStructuredLogger returns a zerolog logger configured for the given mode. When structured is
-// false, logs are routed through glog. When structured is true, logs are written directly to
-// stdout.
-func NewStructuredLogger(structured bool) zerolog.Logger {
-	if structured {
-		return zerolog.New(os.Stdout).With().Timestamp().Logger()
-	}
-
-	return zerolog.New(&glogWriter{}).With().Timestamp().Logger()
-}
-
 // callerSkip returns the skip value to use, defaulting to 1 if not provided.
 func callerSkip(skip []int) int {
 	if len(skip) > 0 {
