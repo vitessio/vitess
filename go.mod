@@ -102,6 +102,7 @@ require (
 	github.com/kr/pretty v0.3.1
 	github.com/kr/text v0.2.0
 	github.com/nsf/jsondiff v0.0.0-20210926074059-1e845ec5d249
+	github.com/rs/zerolog v1.34.0
 	github.com/shirou/gopsutil/v4 v4.25.8
 	github.com/spf13/afero v1.15.0
 	github.com/spf13/jwalterweatherman v1.1.0
@@ -110,6 +111,7 @@ require (
 	golang.org/x/exp v0.0.0-20250911091902-df9299821621
 	golang.org/x/sync v0.18.0
 	gonum.org/v1/gonum v0.16.0
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	modernc.org/sqlite v1.39.0
 )
 
@@ -141,7 +143,6 @@ require (
 	github.com/olekukonko/ll v0.1.1 // indirect
 	github.com/opencontainers/runtime-spec v1.2.1 // indirect
 	github.com/puzpuzpuz/xsync/v3 v3.5.1 // indirect
-	github.com/rs/zerolog v1.34.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	go.opentelemetry.io/collector/component v1.42.0 // indirect
 	go.opentelemetry.io/collector/featuregate v1.42.0 // indirect
@@ -151,7 +152,6 @@ require (
 	go.opentelemetry.io/otel/log v0.14.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	k8s.io/apimachinery v0.33.4 // indirect
 )
 
