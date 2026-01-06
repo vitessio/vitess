@@ -146,8 +146,7 @@ var (
 	FatalfDepth = func(depth int, format string, args ...any) { glogFatalf(depth+1, format, args...) }
 )
 
-// RegisterFlags installs log flags on the given FlagSet, including both glog compatibility flags and
-// structured logging flags.
+// RegisterFlags installs log flags on the given FlagSet.
 //
 // `go/cmd/*` entrypoints should either use servenv.ParseFlags(WithArgs)? which calls this function,
 // or call this function directly before parsing command-line arguments.
