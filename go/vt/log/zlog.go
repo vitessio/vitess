@@ -78,8 +78,8 @@ func Init(fs *pflag.FlagSet) error {
 }
 
 // structuredLoggingOutput returns the appropriate io.Writer for structured logging based on the
-// configured flags. If a file path is specified, it returns a lumberjack logger with rotation,
-// configured with the --log-rotate-max-size flag. Otherwise, it returns stdout.
+// configured flags. If a file path is specified, it returns a logger with rotation, configured 
+// with the --log-rotate-max-size flag. Otherwise, it returns stdout.
 func structuredLoggingOutput() io.Writer {
 	var out io.Writer = os.Stdout
 	if structuredLoggingFile != "" {
