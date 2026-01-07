@@ -286,15 +286,6 @@
 				"site_test"
 			]
 		},
-		"endtoend_utils": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/utils"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "12",
-			"RetryMax": 1,
-			"Tags": []
-		},
 		"onlineddl_vrepl": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/vrepl", "-timeout", "30m"],
@@ -1514,15 +1505,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_migrate",
-			"RetryMax": 1,
-			"Tags": []
-		},
-		"migration": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/migration"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vreplication_basic",
 			"RetryMax": 1,
 			"Tags": []
 		},
