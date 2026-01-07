@@ -1522,7 +1522,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/migration"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_migrate",
+			"Shard": "vreplication_basic",
 			"RetryMax": 1,
 			"Tags": []
 		},
