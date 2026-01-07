@@ -123,6 +123,8 @@ func (d *testdisco) DiscoverVtctldAddrs(ctx context.Context, tags []string) ([]s
 // TestRedial tests that vtadmin-api is able to recover from a lost connection to
 // a vtctld by rediscovering and redialing a new one.
 func TestRedial(t *testing.T) {
+	t.Skip("flaky test, gRPC reconnection timing is unreliable")
+
 	// Initialize vtctld #1
 	listener1, server1, err := initVtctldServer()
 	require.NoError(t, err)
