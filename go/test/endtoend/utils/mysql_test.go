@@ -112,8 +112,14 @@ func TestCreateMySQL(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &mysqlParams)
 	require.NoError(t, err)
-	AssertMatches(t, conn, "show databases;", `[[VARCHAR("information_schema")] [VARCHAR("ks")] [VARCHAR("mysql")] [VARCHAR("performance_schema")] [VARCHAR("sys")]]`)
-	AssertMatches(t, conn, "show tables;", `[[VARCHAR("t1")]]`)
+	// On case-sensitive filesystems (Linux), MySQL returns VARBINARY for database/table names.
+	// On case-insensitive filesystems (macOS, Windows), it returns VARCHAR.
+	AssertMatchesAny(t, conn, "show databases;",
+		`[[VARCHAR("information_schema")] [VARCHAR("ks")] [VARCHAR("mysql")] [VARCHAR("performance_schema")] [VARCHAR("sys")]]`,
+		`[[VARBINARY("information_schema")] [VARBINARY("ks")] [VARBINARY("mysql")] [VARBINARY("performance_schema")] [VARBINARY("sys")]]`)
+	AssertMatchesAny(t, conn, "show tables;",
+		`[[VARCHAR("t1")]]`,
+		`[[VARBINARY("t1")]]`)
 	Exec(t, conn, "insert into t1(id1, id2, id3) values (1, 1, 1), (2, 2, 2), (3, 3, 3)")
 	AssertMatches(t, conn, "select * from t1;", `[[INT64(1) INT64(1) INT64(1)] [INT64(2) INT64(2) INT64(2)] [INT64(3) INT64(3) INT64(3)]]`)
 }
