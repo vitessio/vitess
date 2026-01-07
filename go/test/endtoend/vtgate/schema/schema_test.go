@@ -80,14 +80,15 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start keyspace
+		cell := clusterInstance.Cell
 		keyspace := &cluster.Keyspace{
 			Name: keyspaceName,
 		}
 
-		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 2, true); err != nil {
+		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 2, true, cell); err != nil {
 			return 1, err
 		}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 1, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 1, false, cell); err != nil {
 			return 1, err
 		}
 		return m.Run(), nil
@@ -343,6 +344,6 @@ func addNewShard(t *testing.T, shard int) {
 	keyspace := &cluster.Keyspace{
 		Name: keyspaceName,
 	}
-	err := clusterInstance.StartKeyspace(*keyspace, []string{strconv.Itoa(shard)}, 1, false)
+	err := clusterInstance.StartKeyspace(*keyspace, []string{strconv.Itoa(shard)}, 1, false, clusterInstance.Cell)
 	require.Nil(t, err)
 }

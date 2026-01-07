@@ -110,7 +110,7 @@ func SetupShardedReparentCluster(t *testing.T, durability string, extraVttabletF
 		VSchema:          `{"sharded": true, "vindexes": {"hash_index": {"type": "hash"}}, "tables": {"vt_insert_test": {"column_vindexes": [{"column": "id", "name": "hash_index"}]}}}`,
 		DurabilityPolicy: durability,
 	}
-	err = clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false)
+	err = clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false, clusterInstance.Cell)
 	require.NoError(t, err)
 
 	// Start Vtgate

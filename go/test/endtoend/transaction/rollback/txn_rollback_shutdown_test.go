@@ -69,7 +69,7 @@ func TestMain(m *testing.M) {
 			Name:      keyspaceName,
 			SchemaSQL: sqlSchema,
 		}
-		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false)
+		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false, clusterInstance.Cell)
 		if err != nil {
 			panic(err)
 		}

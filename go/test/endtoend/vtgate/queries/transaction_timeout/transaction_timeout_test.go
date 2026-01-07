@@ -51,7 +51,7 @@ func createCluster(t *testing.T, vttabletArgs ...string) func() {
 		Name:      uks,
 		SchemaSQL: uschemaSQL,
 	}
-	err = clusterInstance.StartUnshardedKeyspace(*ukeyspace, 0, false)
+	err = clusterInstance.StartUnshardedKeyspace(*ukeyspace, 0, false, clusterInstance.Cell)
 	require.NoError(t, err)
 
 	err = clusterInstance.StartVtgate()

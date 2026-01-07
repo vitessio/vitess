@@ -197,7 +197,7 @@ func TestMain(m *testing.M) {
 			VSchema: vSchema,
 		}
 
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false, clusterInstance.Cell); err != nil {
 			return 1, err
 		}
 		vtgateInstance := clusterInstance.NewVtgateInstance()

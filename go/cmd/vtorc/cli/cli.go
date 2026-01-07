@@ -53,7 +53,7 @@ func run(cmd *cobra.Command, args []string) {
 	servenv.Init()
 	inst.RegisterStats()
 
-	log.Info("starting vtorc")
+	log.Info("Starting vtorc")
 	if config.GetAuditToSyslog() {
 		inst.EnableAuditSyslog()
 	}
@@ -61,7 +61,9 @@ func run(cmd *cobra.Command, args []string) {
 
 	// Log final config values to debug if something goes wrong.
 	log.Infof("Running with Configuration - %v", debug.AllSettings())
-	server.StartVTOrcDiscovery()
+	if err := server.StartVTOrcDiscovery(); err != nil {
+		log.Fatalf("Failed to start vtorc: %+v", err)
+	}
 
 	server.RegisterVTOrcAPIEndpoints()
 	servenv.OnRun(func() {

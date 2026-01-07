@@ -55,7 +55,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tableaclpb "vitess.io/vitess/go/vt/proto/tableacl"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -354,7 +353,7 @@ func TestQueryExecutorPlans(t *testing.T) {
 
 			// Test inside a transaction.
 			target := tsv.sm.Target()
-			state, err := tsv.Begin(ctx, nil, target)
+			state, err := tsv.Begin(ctx, nil, target, nil)
 			if !tcase.outsideTxErr && tcase.errorWant != "" && !tcase.onlyInTxErr {
 				require.EqualError(t, err, tcase.errorWant)
 				return
@@ -451,7 +450,7 @@ func TestQueryExecutorQueryAnnotation(t *testing.T) {
 
 			// Test inside a transaction.
 			target := tsv.sm.Target()
-			state, err := tsv.Begin(ctx, nil, target)
+			state, err := tsv.Begin(ctx, nil, target, nil)
 			require.NoError(t, err)
 			require.NotNil(t, state.TabletAlias, "alias should not be nil")
 			assert.Equal(t, tsv.alias, state.TabletAlias, "Wrong alias returned by Begin")
@@ -518,7 +517,7 @@ func TestQueryExecutorSelectImpossible(t *testing.T) {
 			assert.Equal(t, tcase.planWant, qre.logStats.PlanType, tcase.input)
 			assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
 			target := tsv.sm.Target()
-			state, err := tsv.Begin(ctx, nil, target)
+			state, err := tsv.Begin(ctx, nil, target, nil)
 			require.NoError(t, err)
 			require.NotNil(t, state.TabletAlias, "alias should not be nil")
 			assert.Equal(t, tsv.alias, state.TabletAlias, "Wrong tablet alias from Begin")
@@ -649,7 +648,7 @@ func TestQueryExecutorLimitFailure(t *testing.T) {
 
 			// Test inside a transaction.
 			target := tsv.sm.Target()
-			state, err := tsv.Begin(ctx, nil, target)
+			state, err := tsv.Begin(ctx, nil, target, nil)
 			require.NoError(t, err)
 			require.NotNil(t, state.TabletAlias, "alias should not be nil")
 			assert.Equal(t, tsv.alias, state.TabletAlias, "Wrong tablet alias from Begin")
@@ -1640,7 +1639,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 
 func newTransaction(tsv *TabletServer, options *querypb.ExecuteOptions) int64 {
 	target := tsv.sm.Target()
-	state, err := tsv.Begin(context.Background(), &vtgatepb.Session{Options: options}, target)
+	state, err := tsv.Begin(context.Background(), nil, target, options)
 	if err != nil {
 		panic(vterrors.Wrap(err, "failed to start a transaction"))
 	}

@@ -90,7 +90,7 @@ func TestMain(m *testing.M) {
 
 		clusterInstance.VtGateExtraArgs = []string{vtutils.GetFlagVariantForTests("--schema-change-signal")}
 		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal"}
-		err = clusterInstance.StartKeyspace(*sKs, shardedKsShards, 0, false)
+		err = clusterInstance.StartKeyspace(*sKs, shardedKsShards, 0, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}
@@ -100,7 +100,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: unshardedSchemaSQL,
 			VSchema:   unshardedVSchema,
 		}
-		err = clusterInstance.StartUnshardedKeyspace(*uKs, 0, false)
+		err = clusterInstance.StartUnshardedKeyspace(*uKs, 0, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}
@@ -111,7 +111,7 @@ func TestMain(m *testing.M) {
 			Name:      unsharded2Ks,
 			SchemaSQL: unsharded2SchemaSQL,
 		}
-		err = clusterInstance.StartUnshardedKeyspace(*uKs2, 0, false)
+		err = clusterInstance.StartUnshardedKeyspace(*uKs2, 0, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}

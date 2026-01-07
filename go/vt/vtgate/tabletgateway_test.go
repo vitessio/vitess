@@ -43,14 +43,14 @@ import (
 func TestTabletGatewayExecute(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 	testTabletGatewayGeneric(t, ctx, func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error {
-		_, err := tg.Execute(ctx, nil, target, "query", nil, 0, 0)
+		_, err := tg.Execute(ctx, nil, target, "query", nil, 0, 0, nil)
 		return err
 	},
 		func(t *testing.T, sc *sandboxconn.SandboxConn, want int64) {
 			assert.Equal(t, want, sc.ExecCount.Load())
 		})
 	testTabletGatewayTransact(t, ctx, func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error {
-		_, err := tg.Execute(ctx, nil, target, "query", nil, 1, 0)
+		_, err := tg.Execute(ctx, nil, target, "query", nil, 1, 0, nil)
 		return err
 	})
 }
@@ -58,7 +58,7 @@ func TestTabletGatewayExecute(t *testing.T) {
 func TestTabletGatewayExecuteStream(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 	testTabletGatewayGeneric(t, ctx, func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error {
-		err := tg.StreamExecute(ctx, nil, target, "query", nil, 0, 0, func(qr *sqltypes.Result) error {
+		err := tg.StreamExecute(ctx, nil, target, "query", nil, 0, 0, nil, func(qr *sqltypes.Result) error {
 			return nil
 		})
 		return err
@@ -71,7 +71,7 @@ func TestTabletGatewayExecuteStream(t *testing.T) {
 func TestTabletGatewayBegin(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 	testTabletGatewayGeneric(t, ctx, func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error {
-		_, err := tg.Begin(ctx, nil, target)
+		_, err := tg.Begin(ctx, nil, target, nil)
 		return err
 	},
 		func(t *testing.T, sc *sandboxconn.SandboxConn, want int64) {
@@ -98,7 +98,7 @@ func TestTabletGatewayRollback(t *testing.T) {
 func TestTabletGatewayBeginExecute(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 	testTabletGatewayGeneric(t, ctx, func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error {
-		_, _, err := tg.BeginExecute(ctx, nil, target, nil, "query", nil, 0)
+		_, _, err := tg.BeginExecute(ctx, nil, target, nil, "query", nil, 0, nil)
 		return err
 	},
 		func(t *testing.T, sc *sandboxconn.SandboxConn, want int64) {
@@ -190,7 +190,7 @@ func TestTabletGatewayReplicaTransactionError(t *testing.T) {
 	defer tg.Close(ctx)
 
 	_ = hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
-	_, err := tg.Execute(ctx, nil, target, "query", nil, 1, 0)
+	_, err := tg.Execute(ctx, nil, target, "query", nil, 1, 0, nil)
 	verifyContainsError(t, err, "query service can only be used for non-transactional queries on replicas", vtrpcpb.Code_INTERNAL)
 }
 

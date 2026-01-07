@@ -28,7 +28,6 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -100,9 +99,11 @@ func (client *QueryClient) Begin(clientFoundRows bool) error {
 	if client.transactionID != 0 {
 		return errors.New("already in transaction")
 	}
-
-	session := &vtgatepb.Session{Options: &querypb.ExecuteOptions{ClientFoundRows: clientFoundRows}}
-	state, err := client.server.Begin(client.ctx, session, client.target)
+	var options *querypb.ExecuteOptions
+	if clientFoundRows {
+		options = &querypb.ExecuteOptions{ClientFoundRows: clientFoundRows}
+	}
+	state, err := client.server.Begin(client.ctx, nil, client.target, options)
 	if err != nil {
 		return err
 	}
@@ -201,16 +202,15 @@ func (client *QueryClient) BeginExecute(query string, bindvars map[string]*query
 	if client.transactionID != 0 {
 		return nil, errors.New("already in transaction")
 	}
-
-	session := &vtgatepb.Session{Options: &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL}}
 	state, qr, err := client.server.BeginExecute(
 		client.ctx,
-		session,
+		nil,
 		client.target,
 		preQueries,
 		query,
 		bindvars,
 		client.reservedID,
+		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
 	)
 	client.transactionID = state.TransactionID
 	client.sessionStateChanges = state.SessionStateChanges
@@ -222,15 +222,15 @@ func (client *QueryClient) BeginExecute(query string, bindvars map[string]*query
 
 // ExecuteWithOptions executes a query using 'options'.
 func (client *QueryClient) ExecuteWithOptions(query string, bindvars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
-	session := &vtgatepb.Session{Options: options}
 	return client.server.Execute(
 		client.ctx,
-		session,
+		nil,
 		client.target,
 		query,
 		bindvars,
 		client.transactionID,
 		client.reservedID,
+		options,
 	)
 }
 
@@ -242,14 +242,14 @@ func (client *QueryClient) StreamExecute(query string, bindvars map[string]*quer
 // StreamExecuteWithOptions executes a query & returns the results using 'options'.
 func (client *QueryClient) StreamExecuteWithOptions(query string, bindvars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	result := &sqltypes.Result{}
-	session := &vtgatepb.Session{Options: options}
 	err := client.server.StreamExecute(client.ctx,
-		session,
+		nil,
 		client.target,
 		query,
 		bindvars,
 		client.transactionID,
 		client.reservedID,
+		options,
 		func(res *sqltypes.Result) error {
 			if result.Fields == nil {
 				result.Fields = res.Fields
@@ -266,15 +266,15 @@ func (client *QueryClient) StreamExecuteWithOptions(query string, bindvars map[s
 // StreamBeginExecuteWithOptions starts a tx and executes a query using 'options', returning the results .
 func (client *QueryClient) StreamBeginExecuteWithOptions(query string, preQueries []string, bindvars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	result := &sqltypes.Result{}
-	session := &vtgatepb.Session{Options: options}
 	state, err := client.server.BeginStreamExecute(
 		client.ctx,
-		session,
+		nil,
 		client.target,
 		preQueries,
 		query,
 		bindvars,
 		client.reservedID,
+		options,
 		func(res *sqltypes.Result) error {
 			if result.Fields == nil {
 				result.Fields = res.Fields
@@ -293,8 +293,7 @@ func (client *QueryClient) StreamBeginExecuteWithOptions(query string, preQuerie
 
 // Stream streams the results of a query.
 func (client *QueryClient) Stream(query string, bindvars map[string]*querypb.BindVariable, sendFunc func(*sqltypes.Result) error) error {
-	session := &vtgatepb.Session{Options: &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL}}
-	return client.server.StreamExecute(client.ctx, session, client.target, query, bindvars, 0, 0, sendFunc)
+	return client.server.StreamExecute(client.ctx, nil, client.target, query, bindvars, 0, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL}, sendFunc)
 }
 
 // MessageStream streams messages from the message table.
@@ -321,8 +320,7 @@ func (client *QueryClient) ReserveExecute(query string, preQueries []string, bin
 	if client.reservedID != 0 {
 		return nil, errors.New("already reserved a connection")
 	}
-	session := &vtgatepb.Session{Options: &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL}}
-	state, qr, err := client.server.ReserveExecute(client.ctx, session, client.target, preQueries, query, bindvars, client.transactionID)
+	state, qr, err := client.server.ReserveExecute(client.ctx, nil, client.target, preQueries, query, bindvars, client.transactionID, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
 	client.reservedID = state.ReservedID
 	if err != nil {
 		return nil, err
@@ -336,8 +334,7 @@ func (client *QueryClient) ReserveStreamExecute(query string, preQueries []strin
 		return nil, errors.New("already reserved a connection")
 	}
 	result := &sqltypes.Result{}
-	session := &vtgatepb.Session{Options: &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL}}
-	state, err := client.server.ReserveStreamExecute(client.ctx, session, client.target, preQueries, query, bindvars, client.transactionID,
+	state, err := client.server.ReserveStreamExecute(client.ctx, nil, client.target, preQueries, query, bindvars, client.transactionID, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
 		func(res *sqltypes.Result) error {
 			if result.Fields == nil {
 				result.Fields = res.Fields
@@ -360,8 +357,7 @@ func (client *QueryClient) ReserveBeginExecute(query string, preQueries []string
 	if client.transactionID != 0 {
 		return nil, errors.New("already in transaction")
 	}
-	session := &vtgatepb.Session{Options: &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL}}
-	state, qr, err := client.server.ReserveBeginExecute(client.ctx, session, client.target, preQueries, postBeginQueries, query, bindvars)
+	state, qr, err := client.server.ReserveBeginExecute(client.ctx, nil, client.target, preQueries, postBeginQueries, query, bindvars, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
 	client.transactionID = state.TransactionID
 	client.reservedID = state.ReservedID
 	client.sessionStateChanges = state.SessionStateChanges
@@ -380,8 +376,7 @@ func (client *QueryClient) ReserveBeginStreamExecute(query string, preQueries []
 		return nil, errors.New("already in transaction")
 	}
 	result := &sqltypes.Result{}
-	session := &vtgatepb.Session{Options: &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL}}
-	state, err := client.server.ReserveBeginStreamExecute(client.ctx, session, client.target, preQueries, postBeginQueries, query, bindvars,
+	state, err := client.server.ReserveBeginStreamExecute(client.ctx, nil, client.target, preQueries, postBeginQueries, query, bindvars, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
 		func(res *sqltypes.Result) error {
 			if result.Fields == nil {
 				result.Fields = res.Fields

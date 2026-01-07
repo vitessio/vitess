@@ -71,7 +71,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start with 2 replicas (3 total tablets including primary)
-		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 2, false); err != nil {
+		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 2, false, clusterInstance.Cell); err != nil {
 			return 1
 		}
 
