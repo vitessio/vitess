@@ -74,6 +74,7 @@ func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int) (
 	var cfg dbconfigs.DBConfigs
 	// ensure the DBA username is 'root' instead of the system's default username so that mysqladmin can shutdown
 	cfg.Dba.User = "root"
+	cfg.Repl.User = "vt_repl"
 	cfg.InitWithSocket(mycnf.SocketFile, collations.MySQL8())
 	return mysqlctl.NewMysqld(&cfg), mycnf, nil
 }
@@ -119,7 +120,7 @@ func NewMySQLWithMysqld(port int, hostname, dbName string, schemaSQL ...string) 
 
 func createMySQLDir(portNo uint32) (string, error) {
 	mysqlDir := mysqlctl.TabletDir(portNo)
-	err := os.Mkdir(mysqlDir, 0700)
+	err := os.Mkdir(mysqlDir, 0o700)
 	if err != nil {
 		return "", err
 	}
@@ -141,6 +142,12 @@ func createInitSQLFile(mysqlDir, ksName string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
+	_, err = f.WriteString("CREATE USER IF NOT EXISTS 'vt_repl'@'%'; GRANT REPLICATION SLAVE ON *.* TO 'vt_repl'@'%';")
+	if err != nil {
+		return "", err
+	}
+
 	return initSQLFile, nil
 }
 
