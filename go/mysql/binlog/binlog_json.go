@@ -450,16 +450,18 @@ func binparserLiteral(_ jsonDataType, data []byte, pos int) (node *json.Value, e
 // we currently know about (and support) date/time/datetime/decimal.
 func binparserOpaque(_ jsonDataType, data []byte, pos int) (node *json.Value, err error) {
 	if pos >= len(data) {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "opaque value missing type at position %d", pos)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "opaque JSON field value missing type at position %d", pos)
 	}
-	dataType := data[pos]
-	if pos+1 >= len(data) {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "opaque value missing length at position %d", pos)
+	typePos := pos
+	dataType := data[typePos]
+	pos = typePos + 1
+	if pos >= len(data) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "opaque JSON field value missing length at position %d", typePos)
 	}
-	length, start := readVariableLength(data, pos+1)
+	length, start := readVariableLength(data, pos)
 	end := start + length
 	if start > len(data) || end > len(data) {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "opaque value length %d exceeds available bytes", length)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "opaque JSON field value length %d exceeds available bytes", length)
 	}
 	switch dataType {
 	case TypeDate:

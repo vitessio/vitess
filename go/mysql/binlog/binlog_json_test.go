@@ -263,26 +263,30 @@ func TestBinaryJSON(t *testing.T) {
 
 func TestBinaryJSONOpaqueErrors(t *testing.T) {
 	testcases := []struct {
-		name string
-		data []byte
+		name        string
+		data        []byte
+		expectedErr string
 	}{
 		{
-			name: "opaque length exceeds payload",
-			data: []byte{15, 252, 2, 202},
+			name:        "opaque length exceeds payload",
+			data:        []byte{15, 252, 2, 202},
+			expectedErr: "opaque JSON field value length 2 exceeds available bytes",
 		},
 		{
-			name: "opaque date too short",
-			data: []byte{15, 10, 4, 0, 0, 0, 0},
+			name:        "opaque date too short",
+			data:        []byte{15, 10, 4, 0, 0, 0, 0},
+			expectedErr: "opaque date length 4 is too short",
 		},
 		{
-			name: "opaque decimal too short",
-			data: []byte{15, 246, 1, 0x01},
+			name:        "opaque decimal too short",
+			data:        []byte{15, 246, 1, 0x01},
+			expectedErr: "opaque decimal length 1 is too short",
 		},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := ParseBinaryJSON(tc.data)
-			require.Error(t, err)
+			require.ErrorContains(t, err, tc.expectedErr)
 		})
 	}
 }
