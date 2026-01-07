@@ -1762,7 +1762,7 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 			}
 		}
 
-		if !(isImmediateOperation && postponeCompletion) {
+		if !isImmediateOperation || !postponeCompletion {
 			// Any non-postponed migration can be scheduled
 			// postponed ALTER can be scheduled (because vreplication will postpone the cut-over)
 			// We only schedule a single migration in the execution of this function

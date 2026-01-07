@@ -84,7 +84,7 @@ func TestMain(m *testing.M) {
 			SidecarDBName: sidecarDBName,
 		}
 		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal"}
-		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false)
+		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}

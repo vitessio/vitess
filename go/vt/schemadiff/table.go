@@ -468,11 +468,11 @@ func NewCreateTableEntity(env *Environment, c *sqlparser.CreateTable) (*CreateTa
 
 // ColumnDefinitionEntities returns the list of column entities for the table.
 func (c *CreateTableEntity) ColumnDefinitionEntities() []*ColumnDefinitionEntity {
-	cc := getTableCharsetCollate(c.Env, &c.CreateTable.TableSpec.Options)
+	cc := getTableCharsetCollate(c.Env, &c.TableSpec.Options)
 	pkColumnsMaps := c.primaryKeyColumnsMap()
-	entities := make([]*ColumnDefinitionEntity, len(c.CreateTable.TableSpec.Columns))
-	for i := range c.CreateTable.TableSpec.Columns {
-		col := c.CreateTable.TableSpec.Columns[i]
+	entities := make([]*ColumnDefinitionEntity, len(c.TableSpec.Columns))
+	for i := range c.TableSpec.Columns {
+		col := c.TableSpec.Columns[i]
 		_, inPK := pkColumnsMaps[col.Name.Lowered()]
 		entities[i] = NewColumnDefinitionEntity(c.Env, col, inPK, cc)
 	}
@@ -497,7 +497,7 @@ func (c *CreateTableEntity) ColumnDefinitionEntitiesMap() map[string]*ColumnDefi
 // IndexDefinitionEntities returns the list of index entities for the table.
 func (c *CreateTableEntity) IndexDefinitionEntities() []*IndexDefinitionEntity {
 	colMap := c.ColumnDefinitionEntitiesMap()
-	keys := c.CreateTable.TableSpec.Indexes
+	keys := c.TableSpec.Indexes
 	entities := make([]*IndexDefinitionEntity, len(keys))
 	for i, key := range keys {
 		colEntities := []*ColumnDefinitionEntity{}
@@ -546,7 +546,7 @@ func (c *CreateTableEntity) normalize() *CreateTableEntity {
 }
 
 func (c *CreateTableEntity) normalizeTableOptions() {
-	for _, opt := range c.CreateTable.TableSpec.Options {
+	for _, opt := range c.TableSpec.Options {
 		opt.Name = strings.ToLower(opt.Name)
 		switch opt.Name {
 		case "charset":
@@ -573,7 +573,7 @@ func (c *CreateTableEntity) normalizeTableOptions() {
 // GetCharset returns the explicit character set name specified
 // in the CREATE TABLE statement (if any).
 func (c *CreateTableEntity) GetCharset() string {
-	for _, opt := range c.CreateTable.TableSpec.Options {
+	for _, opt := range c.TableSpec.Options {
 		if strings.ToLower(opt.Name) == "charset" {
 			opt.String = strings.ToLower(opt.String)
 			if charsetName, ok := c.Env.CollationEnv().CharsetAlias(opt.String); ok {
@@ -588,7 +588,7 @@ func (c *CreateTableEntity) GetCharset() string {
 // GetCollation returns the explicit collation name specified
 // in the CREATE TABLE statement (if any).
 func (c *CreateTableEntity) GetCollation() string {
-	for _, opt := range c.CreateTable.TableSpec.Options {
+	for _, opt := range c.TableSpec.Options {
 		if strings.ToLower(opt.Name) == "collate" {
 			opt.String = strings.ToLower(opt.String)
 			if collationName, ok := c.Env.CollationEnv().CollationAlias(opt.String); ok {
@@ -621,9 +621,9 @@ func getTableCharsetCollate(env *Environment, tableOptions *sqlparser.TableOptio
 }
 
 func (c *CreateTableEntity) normalizeColumnOptions() {
-	cc := getTableCharsetCollate(c.Env, &c.CreateTable.TableSpec.Options)
+	cc := getTableCharsetCollate(c.Env, &c.TableSpec.Options)
 
-	for _, col := range c.CreateTable.TableSpec.Columns {
+	for _, col := range c.TableSpec.Columns {
 		if col.Type.Options == nil {
 			col.Type.Options = &sqlparser.ColumnTypeOptions{}
 		}
@@ -809,7 +809,7 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 }
 
 func (c *CreateTableEntity) normalizeIndexOptions() {
-	for _, idx := range c.CreateTable.TableSpec.Indexes {
+	for _, idx := range c.TableSpec.Indexes {
 		for _, opt := range idx.Options {
 			opt.Name = strings.ToLower(opt.Name)
 			opt.String = strings.ToLower(opt.String)
@@ -822,11 +822,11 @@ func isBool(colType *sqlparser.ColumnType) bool {
 }
 
 func (c *CreateTableEntity) normalizePartitionOptions() {
-	if c.CreateTable.TableSpec.PartitionOption == nil {
+	if c.TableSpec.PartitionOption == nil {
 		return
 	}
 
-	for _, def := range c.CreateTable.TableSpec.PartitionOption.Definitions {
+	for _, def := range c.TableSpec.PartitionOption.Definitions {
 		if def.Options == nil || def.Options.Engine == nil {
 			continue
 		}
@@ -855,9 +855,9 @@ func (c *CreateTableEntity) normalizePrimaryKeyColumns() {
 	// should turn into:
 	// `create table t (id int, primary key (id))`
 	// Also, PRIMARY KEY must come first before all other keys
-	for _, col := range c.CreateTable.TableSpec.Columns {
+	for _, col := range c.TableSpec.Columns {
 		if col.Type.Options.KeyOpt == sqlparser.ColKeyPrimary {
-			c.CreateTable.TableSpec.Indexes = append([]*sqlparser.IndexDefinition{newPrimaryKeyIndexDefinitionSingleColumn(col.Name)}, c.CreateTable.TableSpec.Indexes...)
+			c.TableSpec.Indexes = append([]*sqlparser.IndexDefinition{newPrimaryKeyIndexDefinitionSingleColumn(col.Name)}, c.TableSpec.Indexes...)
 			col.Type.Options.KeyOpt = sqlparser.ColKeyNone
 		}
 	}
@@ -869,12 +869,12 @@ func (c *CreateTableEntity) normalizeKeys() {
 	// let's ensure all keys have names
 	keyNameExists := map[string]bool{}
 	// first, we iterate and take note for all keys that do already have names
-	for _, key := range c.CreateTable.TableSpec.Indexes {
+	for _, key := range c.TableSpec.Indexes {
 		if name := key.Info.Name.Lowered(); name != "" {
 			keyNameExists[name] = true
 		}
 	}
-	for _, key := range c.CreateTable.TableSpec.Indexes {
+	for _, key := range c.TableSpec.Indexes {
 		// now, let's look at keys that do not have names, and assign them new names
 		if name := key.Info.Name.String(); name == "" {
 			// we know there must be at least one column covered by this key
@@ -925,23 +925,23 @@ func (c *CreateTableEntity) normalizeUnnamedConstraints() {
 	// let's ensure all constraints have names
 	constraintNameExists := map[string]bool{}
 	// first, we iterate and take note for all keys that do already have names
-	for _, constraint := range c.CreateTable.TableSpec.Constraints {
+	for _, constraint := range c.TableSpec.Constraints {
 		if name := constraint.Name.Lowered(); name != "" {
 			constraintNameExists[name] = true
 		}
 	}
 
 	// now, let's look at keys that do not have names, and assign them new names
-	for _, constraint := range c.CreateTable.TableSpec.Constraints {
+	for _, constraint := range c.TableSpec.Constraints {
 		if name := constraint.Name.String(); name == "" {
 			nameFormat := "%s_chk_%d"
 			if _, fk := constraint.Details.(*sqlparser.ForeignKeyDefinition); fk {
 				nameFormat = "%s_ibfk_%d"
 			}
-			suggestedCheckName := fmt.Sprintf(nameFormat, c.CreateTable.Table.Name.String(), 1)
+			suggestedCheckName := fmt.Sprintf(nameFormat, c.Table.Name.String(), 1)
 			// now let's see if that name is taken; if it is, enumerate new news until we find a free name
 			for enumerate := 2; constraintNameExists[strings.ToLower(suggestedCheckName)]; enumerate++ {
-				suggestedCheckName = fmt.Sprintf(nameFormat, c.CreateTable.Table.Name.String(), enumerate)
+				suggestedCheckName = fmt.Sprintf(nameFormat, c.Table.Name.String(), enumerate)
 			}
 			// OK we found a free slot!
 			constraint.Name = sqlparser.NewIdentifierCI(suggestedCheckName)
@@ -951,7 +951,7 @@ func (c *CreateTableEntity) normalizeUnnamedConstraints() {
 }
 
 func (c *CreateTableEntity) normalizeForeignKeyIndexes() {
-	for _, constraint := range c.CreateTable.TableSpec.Constraints {
+	for _, constraint := range c.TableSpec.Constraints {
 		fk, ok := constraint.Details.(*sqlparser.ForeignKeyDefinition)
 		if !ok {
 			continue
@@ -979,7 +979,7 @@ func (c *CreateTableEntity) normalizeForeignKeyIndexes() {
 
 // Name implements Entity interface
 func (c *CreateTableEntity) Name() string {
-	return c.CreateTable.GetTable().Name.String()
+	return c.GetTable().Name.String()
 }
 
 // Diff implements Entity interface function
@@ -991,7 +991,7 @@ func (c *CreateTableEntity) Diff(other Entity, hints *DiffHints) (EntityDiff, er
 	if hints.StrictIndexOrdering {
 		return nil, ErrStrictIndexOrderingUnsupported
 	}
-	if c.CreateTable.TableSpec == nil {
+	if c.TableSpec == nil {
 		return nil, ErrUnexpectedTableSpec
 	}
 
@@ -1008,10 +1008,10 @@ func (c *CreateTableEntity) Diff(other Entity, hints *DiffHints) (EntityDiff, er
 // It returns an AlterTable statement if changes are found, or nil if not.
 // the other table may be of different name; its name is ignored.
 func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints) (*AlterTableEntityDiff, error) {
-	if !c.CreateTable.IsFullyParsed() {
+	if !c.IsFullyParsed() {
 		return nil, &NotFullyParsedError{Entity: c.Name(), Statement: sqlparser.CanonicalString(c.CreateTable)}
 	}
-	if !other.CreateTable.IsFullyParsed() {
+	if !other.IsFullyParsed() {
 		return nil, &NotFullyParsedError{Entity: other.Name(), Statement: sqlparser.CanonicalString(other.CreateTable)}
 	}
 
@@ -1020,14 +1020,14 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 	}
 
 	alterTable := &sqlparser.AlterTable{
-		Table: c.CreateTable.Table,
+		Table: c.Table,
 	}
 	if hints.TableQualifierHint == TableQualifierDeclared {
 		alterTable.Table.Qualifier = other.Table.Qualifier
 	}
 
-	t1cc := getTableCharsetCollate(c.Env, &c.CreateTable.TableSpec.Options)
-	t2cc := getTableCharsetCollate(c.Env, &other.CreateTable.TableSpec.Options)
+	t1cc := getTableCharsetCollate(c.Env, &c.TableSpec.Options)
+	t2cc := getTableCharsetCollate(c.Env, &other.TableSpec.Options)
 
 	var parentAlterTableEntityDiff *AlterTableEntityDiff
 	var partitionSpecs []*sqlparser.PartitionSpec
@@ -1037,8 +1037,8 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		// diff columns
 		// ordered columns for both tables:
 
-		t1Columns := c.CreateTable.TableSpec.Columns
-		t2Columns := other.CreateTable.TableSpec.Columns
+		t1Columns := c.TableSpec.Columns
+		t2Columns := other.TableSpec.Columns
 		if err := c.diffColumns(alterTable, annotations, t1Columns, t2Columns, hints, t1cc, t2cc); err != nil {
 			return nil, err
 		}
@@ -1046,22 +1046,22 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 	{
 		// diff keys
 		// ordered keys for both tables:
-		t1Keys := c.CreateTable.TableSpec.Indexes
-		t2Keys := other.CreateTable.TableSpec.Indexes
+		t1Keys := c.TableSpec.Indexes
+		t2Keys := other.TableSpec.Indexes
 		superfluousFulltextKeys = c.diffKeys(alterTable, annotations, t1Keys, t2Keys, hints)
 	}
 	{
 		// diff constraints
 		// ordered constraints for both tables:
-		t1Constraints := c.CreateTable.TableSpec.Constraints
-		t2Constraints := other.CreateTable.TableSpec.Constraints
+		t1Constraints := c.TableSpec.Constraints
+		t2Constraints := other.TableSpec.Constraints
 		c.diffConstraints(alterTable, annotations, c.Name(), t1Constraints, other.Name(), t2Constraints, hints)
 	}
 	{
 		// diff partitions
 		// ordered keys for both tables:
-		t1Partitions := c.CreateTable.TableSpec.PartitionOption
-		t2Partitions := other.CreateTable.TableSpec.PartitionOption
+		t1Partitions := c.TableSpec.PartitionOption
+		t2Partitions := other.TableSpec.PartitionOption
 		var err error
 		partitionSpecs, err = c.diffPartitions(alterTable, annotations, t1Partitions, t2Partitions, hints)
 		if err != nil {
@@ -1071,8 +1071,8 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 	{
 		// diff table options
 		// ordered keys for both tables:
-		t1Options := c.CreateTable.TableSpec.Options
-		t2Options := other.CreateTable.TableSpec.Options
+		t1Options := c.TableSpec.Options
+		t2Options := other.TableSpec.Options
 		if err := c.diffOptions(alterTable, annotations, t1Options, t2Options, hints); err != nil {
 			return nil, err
 		}
@@ -1102,7 +1102,7 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 	}
 	for _, superfluousFulltextKey := range superfluousFulltextKeys {
 		alterTable := &sqlparser.AlterTable{
-			Table:        c.CreateTable.Table,
+			Table:        c.Table,
 			AlterOptions: []sqlparser.AlterOption{superfluousFulltextKey},
 		}
 		diff := newAlterTableEntityDiff(alterTable)
@@ -1112,7 +1112,7 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 	}
 	for _, partitionSpec := range partitionSpecs {
 		alterTable := &sqlparser.AlterTable{
-			Table:         c.CreateTable.Table,
+			Table:         c.Table,
 			PartitionSpec: partitionSpec,
 		}
 		diff := newAlterTableEntityDiff(alterTable)
@@ -2067,7 +2067,7 @@ func heuristicallyDetectColumnRenames(
 // primaryKeyColumns returns the columns covered by an existing PRIMARY KEY, or nil if there isn't
 // a PRIMARY KEY
 func (c *CreateTableEntity) primaryKeyColumns() []*sqlparser.IndexColumn {
-	for _, existingIndex := range c.CreateTable.TableSpec.Indexes {
+	for _, existingIndex := range c.TableSpec.Indexes {
 		if existingIndex.Info.Type == sqlparser.IndexTypePrimary {
 			return existingIndex.Columns
 		}
@@ -2191,7 +2191,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 	}
 	if diff.alterTable.PartitionOption != nil {
 		// Specify new spec:
-		c.CreateTable.TableSpec.PartitionOption = diff.alterTable.PartitionOption
+		c.TableSpec.PartitionOption = diff.alterTable.PartitionOption
 	}
 	// reorderColumn attempts to reorder column that is right now in position 'colIndex',
 	// based on its FIRST or AFTER specs (if any)
@@ -2239,7 +2239,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 	}
 
 	columnExists := map[string]bool{}
-	for _, col := range c.CreateTable.TableSpec.Columns {
+	for _, col := range c.TableSpec.Columns {
 		columnExists[col.Name.Lowered()] = true
 	}
 
@@ -2400,7 +2400,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 				cols := c.primaryKeyColumns()
 				if cols == nil {
 					// add primary key
-					c.CreateTable.TableSpec.Indexes = append([]*sqlparser.IndexDefinition{newPrimaryKeyIndexDefinitionSingleColumn(opt.NewColDefinition.Name)}, c.CreateTable.TableSpec.Indexes...)
+					c.TableSpec.Indexes = append([]*sqlparser.IndexDefinition{newPrimaryKeyIndexDefinitionSingleColumn(opt.NewColDefinition.Name)}, c.TableSpec.Indexes...)
 				} else {
 					if len(cols) == 1 && strings.EqualFold(cols[0].Column.String(), opt.NewColDefinition.Name.String()) {
 						// existing PK is exactly this column. Nothing to do
@@ -2508,7 +2508,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			// to error out before applying the ADD KEY.
 			switch opt.Type {
 			case sqlparser.PrimaryKeyType, sqlparser.NormalKeyType:
-				for _, cs := range c.CreateTable.TableSpec.Constraints {
+				for _, cs := range c.TableSpec.Constraints {
 					fk, ok := cs.Details.(*sqlparser.ForeignKeyDefinition)
 					if !ok {
 						continue
@@ -2572,7 +2572,7 @@ func (c *CreateTableEntity) postApplyNormalize() error {
 	// reduce or remove keys based on existing column list
 	// (a column may have been removed)postApplyNormalize
 	columnExists := map[string]bool{}
-	for _, col := range c.CreateTable.TableSpec.Columns {
+	for _, col := range c.TableSpec.Columns {
 		columnExists[col.Name.Lowered()] = true
 	}
 	var nonEmptyIndexes []*sqlparser.IndexDefinition
@@ -2585,7 +2585,7 @@ func (c *CreateTableEntity) postApplyNormalize() error {
 		}
 		return false
 	}
-	for _, key := range c.CreateTable.TableSpec.Indexes {
+	for _, key := range c.TableSpec.Indexes {
 		var existingKeyColumns []*sqlparser.IndexColumn
 		for _, keyCol := range key.Columns {
 			if !keyHasNonExistentColumns(keyCol) {
@@ -2597,10 +2597,10 @@ func (c *CreateTableEntity) postApplyNormalize() error {
 			nonEmptyIndexes = append(nonEmptyIndexes, key)
 		}
 	}
-	c.CreateTable.TableSpec.Indexes = nonEmptyIndexes
+	c.TableSpec.Indexes = nonEmptyIndexes
 
 	var keptConstraints []*sqlparser.ConstraintDefinition
-	for _, constraint := range c.CreateTable.TableSpec.Constraints {
+	for _, constraint := range c.TableSpec.Constraints {
 		check, ok := constraint.Details.(*sqlparser.CheckConstraintDefinition)
 		if !ok {
 			keptConstraints = append(keptConstraints, constraint)
@@ -2627,7 +2627,7 @@ func (c *CreateTableEntity) postApplyNormalize() error {
 			keptConstraints = append(keptConstraints, constraint)
 		}
 	}
-	c.CreateTable.TableSpec.Constraints = keptConstraints
+	c.TableSpec.Constraints = keptConstraints
 
 	c.normalizePrimaryKeyColumns()
 	c.normalizeForeignKeyIndexes()
@@ -2687,7 +2687,7 @@ func indexCoversColumnsInOrder(index *sqlparser.IndexDefinition, columns sqlpars
 // indexesCoveringForeignKeyColumns returns a list of indexes that cover a given list of coumns, in-oder and in prefix.
 // Used for validating indexes covering foreign keys.
 func (c *CreateTableEntity) indexesCoveringForeignKeyColumns(columns sqlparser.Columns) (indexes []*sqlparser.IndexDefinition) {
-	for _, index := range c.CreateTable.TableSpec.Indexes {
+	for _, index := range c.TableSpec.Indexes {
 		if indexCoversColumnsInOrder(index, columns) {
 			indexes = append(indexes, index)
 		}
@@ -2703,7 +2703,7 @@ func (c *CreateTableEntity) columnsCoveredByInOrderIndex(columns sqlparser.Colum
 
 func (c *CreateTableEntity) validateDuplicateKeyNameError() error {
 	keyNames := map[string]bool{}
-	for _, key := range c.CreateTable.TableSpec.Indexes {
+	for _, key := range c.TableSpec.Indexes {
 		name := key.Info.Name
 		if _, ok := keyNames[name.Lowered()]; ok {
 			return &DuplicateKeyNameError{Table: c.Name(), Key: name.String()}
@@ -2717,7 +2717,7 @@ func (c *CreateTableEntity) validateDuplicateKeyNameError() error {
 // - all columns referenced by keys exist
 func (c *CreateTableEntity) validate() error {
 	columnExists := map[string]bool{}
-	for _, col := range c.CreateTable.TableSpec.Columns {
+	for _, col := range c.TableSpec.Columns {
 		colName := col.Name.Lowered()
 		if columnExists[colName] {
 			return &ApplyDuplicateColumnError{Table: c.Name(), Column: col.Name.String()}
@@ -2731,7 +2731,7 @@ func (c *CreateTableEntity) validate() error {
 	}
 	// validate all columns used by foreign key constraints do in fact exist,
 	// and that there exists an index over those columns
-	for _, cs := range c.CreateTable.TableSpec.Constraints {
+	for _, cs := range c.TableSpec.Constraints {
 		fk, ok := cs.Details.(*sqlparser.ForeignKeyDefinition)
 		if !ok {
 			continue
@@ -2746,7 +2746,7 @@ func (c *CreateTableEntity) validate() error {
 		}
 	}
 	// validate all columns referenced by indexes do in fact exist
-	for _, key := range c.CreateTable.TableSpec.Indexes {
+	for _, key := range c.TableSpec.Indexes {
 		for colName := range getKeyColumnNames(key) {
 			if !columnExists[colName] {
 				return &InvalidColumnInKeyError{Table: c.Name(), Column: colName, Key: key.Info.Name.String()}
@@ -2754,7 +2754,7 @@ func (c *CreateTableEntity) validate() error {
 		}
 	}
 	// validate all columns referenced by generated columns do in fact exist
-	for _, col := range c.CreateTable.TableSpec.Columns {
+	for _, col := range c.TableSpec.Columns {
 		if col.Type.Options != nil && col.Type.Options.As != nil {
 			var referencedColumns []string
 			err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
@@ -2775,7 +2775,7 @@ func (c *CreateTableEntity) validate() error {
 		}
 	}
 	// validate all columns referenced by functional indexes do in fact exist
-	for _, idx := range c.CreateTable.TableSpec.Indexes {
+	for _, idx := range c.TableSpec.Indexes {
 		for _, idxCol := range idx.Columns {
 			var referencedColumns []string
 			err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
@@ -2796,7 +2796,7 @@ func (c *CreateTableEntity) validate() error {
 		}
 	}
 	// validate all columns referenced by constraint checks do in fact exist
-	for _, cs := range c.CreateTable.TableSpec.Constraints {
+	for _, cs := range c.TableSpec.Constraints {
 		check, ok := cs.Details.(*sqlparser.CheckConstraintDefinition)
 		if !ok {
 			continue
@@ -2823,7 +2823,7 @@ func (c *CreateTableEntity) validate() error {
 		return err
 	}
 
-	if partition := c.CreateTable.TableSpec.PartitionOption; partition != nil {
+	if partition := c.TableSpec.PartitionOption; partition != nil {
 		// validate no two partitions have same name
 		partitionExists := map[string]bool{}
 		for _, p := range partition.Definitions {
@@ -2853,7 +2853,7 @@ func (c *CreateTableEntity) validate() error {
 			}
 
 			// Validate all unique keys include this column:
-			for _, key := range c.CreateTable.TableSpec.Indexes {
+			for _, key := range c.TableSpec.Indexes {
 				if !key.Info.IsUnique() {
 					continue
 				}
@@ -2885,7 +2885,7 @@ func (c *CreateTableEntity) identicalOtherThanName(other *CreateTableEntity) boo
 
 // AutoIncrementValue returns the value of the AUTO_INCREMENT option, or zero if not exists.
 func (c *CreateTableEntity) AutoIncrementValue() (autoIncrement uint64, err error) {
-	for _, option := range c.CreateTable.TableSpec.Options {
+	for _, option := range c.TableSpec.Options {
 		if strings.ToUpper(option.Name) == "AUTO_INCREMENT" {
 			autoIncrement, err := strconv.ParseUint(option.Value.Val, 10, 64)
 			if err != nil {

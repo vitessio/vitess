@@ -18423,6 +18423,9 @@ export namespace topodata {
 
         /** Tablet tablet_start_time */
         tablet_start_time?: (vttime.ITime|null);
+
+        /** Tablet tablet_shutdown_time */
+        tablet_shutdown_time?: (vttime.ITime|null);
     }
 
     /** Represents a Tablet. */
@@ -18475,6 +18478,9 @@ export namespace topodata {
 
         /** Tablet tablet_start_time. */
         public tablet_start_time?: (vttime.ITime|null);
+
+        /** Tablet tablet_shutdown_time. */
+        public tablet_shutdown_time?: (vttime.ITime|null);
 
         /**
          * Creates a new Tablet instance using the specified properties.
@@ -40193,6 +40199,9 @@ export namespace binlogdata {
 
         /** VStreamOptions tables_to_copy */
         tables_to_copy?: (string[]|null);
+
+        /** VStreamOptions no_timeouts */
+        no_timeouts?: (boolean|null);
     }
 
     /** Represents a VStreamOptions. */
@@ -40212,6 +40221,9 @@ export namespace binlogdata {
 
         /** VStreamOptions tables_to_copy. */
         public tables_to_copy: string[];
+
+        /** VStreamOptions no_timeouts. */
+        public no_timeouts: boolean;
 
         /**
          * Creates a new VStreamOptions instance using the specified properties.
@@ -49452,6 +49464,18 @@ export namespace replicationdata {
 
         /** Status backup_running */
         backup_running?: (boolean|null);
+
+        /** Status semi_sync_primary_enabled */
+        semi_sync_primary_enabled?: (boolean|null);
+
+        /** Status semi_sync_replica_enabled */
+        semi_sync_replica_enabled?: (boolean|null);
+
+        /** Status semi_sync_primary_status */
+        semi_sync_primary_status?: (boolean|null);
+
+        /** Status semi_sync_replica_status */
+        semi_sync_replica_status?: (boolean|null);
     }
 
     /** Represents a Status. */
@@ -49531,6 +49555,18 @@ export namespace replicationdata {
 
         /** Status backup_running. */
         public backup_running: boolean;
+
+        /** Status semi_sync_primary_enabled. */
+        public semi_sync_primary_enabled: boolean;
+
+        /** Status semi_sync_replica_enabled. */
+        public semi_sync_replica_enabled: boolean;
+
+        /** Status semi_sync_primary_status. */
+        public semi_sync_primary_status: boolean;
+
+        /** Status semi_sync_replica_status. */
+        public semi_sync_replica_status: boolean;
 
         /**
          * Creates a new Status instance using the specified properties.

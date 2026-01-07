@@ -75,6 +75,9 @@ func (lvs *localVSchema) findTable(tablename string) (*vindexes.BaseTable, error
 		if schema.IsInternalOperationTableName(tablename) {
 			log.Infof("found internal table %s, ignoring in local vschema search", tablename)
 		} else {
+			if ks.Error != nil {
+				return nil, fmt.Errorf("table %s not found in keyspace %s (keyspace has error: %v)", tablename, lvs.keyspace, ks.Error)
+			}
 			return nil, fmt.Errorf("table %s not found", tablename)
 		}
 	}

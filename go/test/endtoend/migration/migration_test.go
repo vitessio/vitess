@@ -251,7 +251,7 @@ func startCluster(t *testing.T) string {
 func createKeyspace(t *testing.T, ks cluster.Keyspace, shards []string, customizers ...any) {
 	t.Helper()
 
-	err := clusterInstance.StartKeyspace(ks, shards, 1, false, customizers...)
+	err := clusterInstance.StartKeyspace(ks, shards, 1, false, clusterInstance.Cell, customizers...)
 	require.NoError(t, err)
 	keyspaces[ks.Name] = &clusterInstance.Keyspaces[len(clusterInstance.Keyspaces)-1]
 }

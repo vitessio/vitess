@@ -56,10 +56,11 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start keyspace
+		cell := clusterInstance.Cell
 		keyspace := &cluster.Keyspace{
 			Name: keyspaceName,
 		}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false, cell); err != nil {
 			return 1
 		}
 
@@ -138,7 +139,7 @@ func start(t *testing.T, ksName string) {
 		Name: ksName,
 	}
 	require.NoError(t,
-		clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false),
+		clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false, clusterInstance.Cell),
 		"new database creation failed")
 }
 

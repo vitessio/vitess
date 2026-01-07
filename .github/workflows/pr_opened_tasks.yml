@@ -1,0 +1,94 @@
+# Runs when a PR is opened. Performs the following tasks:
+# - Adds a review checklist comment
+# - Adds initial labels (NeedsWebsiteDocsUpdate, NeedsDescriptionUpdate, NeedsIssue, NeedsBackportReason)
+name: PR opened tasks
+on:
+  pull_request_target:
+    types: [opened]
+
+jobs:
+  # Skip PRs with "Backport" or "Forwardport" labels since those are automated.
+  check_labels:
+    name: Check for Backport or Forwardport labels
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.check_labels.outputs.skip }}
+
+    steps:
+      - name: Generate GitHub App token
+        uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-pull-requests: read
+
+      - name: Check for Backport or Forwardport labels
+        id: check_labels
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          # Get labels for this pull request
+          LABELS=$(gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels --jq '.[].name')
+
+          # Check if PR has Backport or Forwardport label (case-insensitive)
+          if echo "$LABELS" | grep -qi "^backport$\|^forwardport$"; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "PR has Backport or Forwardport label, skipping opened PR tasks"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  add_review_checklist:
+    name: Add Review Checklist
+    runs-on: ubuntu-latest
+    needs: check_labels
+    if: needs.check_labels.outputs.skip != 'true'
+
+    steps:
+      - name: Generate GitHub App token
+        uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-pull-requests: write
+
+      - name: Set token in environment
+        run: echo "GH_TOKEN=${{ steps.app-token.outputs.token }}" >> "$GITHUB_ENV"
+
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.base_ref }}
+          persist-credentials: 'false'
+
+      - name: Add Review Checklist Comment
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} \
+            --repo ${{ github.repository }} \
+            --body-file .github/review_checklist.md
+
+  add_initial_labels:
+    name: Add Initial Labels
+    runs-on: ubuntu-latest
+    needs: check_labels
+    if: needs.check_labels.outputs.skip != 'true'
+
+    steps:
+      - name: Generate GitHub App token
+        uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-pull-requests: write
+
+      - name: Set token in environment
+        run: echo "GH_TOKEN=${{ steps.app-token.outputs.token }}" >> "$GITHUB_ENV"
+
+      - name: Add Initial Labels
+        run: |
+          gh pr edit ${{ github.event.pull_request.number }} \
+            --repo ${{ github.repository }} \
+            --add-label "NeedsWebsiteDocsUpdate,NeedsDescriptionUpdate,NeedsIssue,NeedsBackportReason"
