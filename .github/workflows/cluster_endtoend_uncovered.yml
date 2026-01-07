@@ -1,0 +1,125 @@
+# Runs all end-to-end tests that are not covered by test/config.json
+name: Cluster (uncovered e2e tests)
+on:
+  push:
+    branches:
+      - "main"
+      - "release-[0-9]+.[0-9]"
+    tags: "**"
+  pull_request:
+    branches: "**"
+concurrency:
+  group: ${{ github.ref }}-Cluster (uncovered e2e tests)
+  cancel-in-progress: true
+
+permissions: read-all
+
+jobs:
+  build:
+    timeout-minutes: 60
+    name: Run uncovered e2e tests
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Skip CI
+        run: |
+          if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
+            echo "skipping CI due to the 'Skip CI' label"
+            exit 1
+          fi
+
+      - name: Check out code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: "false"
+
+      - name: Check for changes in relevant files
+        uses: dorny/paths-filter@ebc4d7e9ebcb0b1eb21480bb8f43113e996ac77a # v3.0.1
+        id: changes
+        with:
+          token: ""
+          filters: |
+            end_to_end:
+              - 'go/**/*.go'
+              - 'go/vt/sidecardb/**/*.sql'
+              - 'test.go'
+              - 'Makefile'
+              - 'build.env'
+              - 'go.sum'
+              - 'go.mod'
+              - 'proto/*.proto'
+              - 'tools/**'
+              - 'config/**'
+              - 'bootstrap.sh'
+              - '.github/workflows/cluster_endtoend_uncovered.yml'
+
+      - name: Set up Go
+        if: steps.changes.outputs.end_to_end == 'true'
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: go.mod
+
+      - name: Tune the OS
+        if: steps.changes.outputs.end_to_end == 'true'
+        uses: ./.github/actions/tune-os
+
+      - name: Setup MySQL
+        if: steps.changes.outputs.end_to_end == 'true'
+        uses: ./.github/actions/setup-mysql
+        with:
+          flavor: mysql-8.4
+
+      - name: Get dependencies
+        if: steps.changes.outputs.end_to_end == 'true'
+        timeout-minutes: 10
+        run: |
+          sudo apt-get -qq install -y mysql-shell make unzip g++ etcd-client etcd-server curl git wget xz-utils libncurses6
+          sudo service etcd stop
+          go mod download
+          go install github.com/vitessio/go-junit-report@HEAD
+
+      - name: Build vitess
+        if: steps.changes.outputs.end_to_end == 'true'
+        timeout-minutes: 10
+        run: make build
+
+      - name: Run uncovered e2e tests
+        if: steps.changes.outputs.end_to_end == 'true'
+        timeout-minutes: 45
+        run: |
+          # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
+          # which musn't be more than 107 characters long.
+          export VTDATAROOT="/tmp/"
+          source build.env
+
+          set -exo pipefail
+
+          # Find all e2e test packages
+          all_packages=$(go list -f '{{if .TestGoFiles}}{{.ImportPath}}{{end}}' ./go/test/endtoend/...)
+
+          # Get packages covered by config.json
+          covered_packages=$(jq -r '.Tests[].Args[0] // empty' test/config.json | grep '^vitess.io/vitess/go/test/endtoend' | sort -u)
+
+          # Find uncovered packages (in all but not in covered)
+          packages=$(comm -23 <(echo "$all_packages" | sort) <(echo "$covered_packages"))
+
+          if [ -z "$packages" ]; then
+            echo "All e2e test packages are covered by test/config.json"
+            exit 0
+          fi
+
+          echo "Running uncovered e2e test packages:"
+          echo "$packages"
+
+          go test -v -count=1 -alsologtostderr $packages | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+
+      - name: Print test output
+        if: steps.changes.outputs.end_to_end == 'true' && !cancelled()
+        run: cat output.txt
+
+      - name: Test Summary
+        if: steps.changes.outputs.end_to_end == 'true' && !cancelled()
+        uses: test-summary/action@31493c76ec9e7aa675f1585d3ed6f1da69269a86 # v2.4
+        with:
+          paths: "report.xml"
+          show: "fail"
