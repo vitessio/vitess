@@ -449,11 +449,25 @@ func binparserLiteral(_ jsonDataType, data []byte, pos int) (node *json.Value, e
 // other types are stored as catch-all opaque types: documentation on these is scarce.
 // we currently know about (and support) date/time/datetime/decimal.
 func binparserOpaque(_ jsonDataType, data []byte, pos int) (node *json.Value, err error) {
-	dataType := data[pos]
-	start := 3       // account for length of stored value
-	end := start + 8 // all currently supported opaque data types are 8 bytes in size
+	if pos >= len(data) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "opaque JSON field value missing type at position %d", pos)
+	}
+	typePos := pos
+	dataType := data[typePos]
+	pos = typePos + 1
+	if pos >= len(data) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "opaque JSON field value missing length at position %d", typePos)
+	}
+	length, start := readVariableLength(data, pos)
+	end := start + length
+	if start > len(data) || end > len(data) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "opaque JSON field value length %d exceeds available bytes", length)
+	}
 	switch dataType {
 	case TypeDate:
+		if length < 8 {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "opaque date length %d is too short", length)
+		}
 		raw := binary.LittleEndian.Uint64(data[start:end])
 		value := raw >> 24
 		yearMonth := (value >> 22) & 0x01ffff // 17 bits starting at 22nd
@@ -463,6 +477,9 @@ func binparserOpaque(_ jsonDataType, data []byte, pos int) (node *json.Value, er
 		dateString := fmt.Sprintf("%04d-%02d-%02d", year, month, day)
 		node = json.NewDate(dateString)
 	case TypeTime2, TypeTime:
+		if length < 8 {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "opaque time length %d is too short", length)
+		}
 		raw := binary.LittleEndian.Uint64(data[start:end])
 		value := raw >> 24
 		hour := (value >> 12) & 0x03ff // 10 bits starting at 12th
@@ -472,6 +489,9 @@ func binparserOpaque(_ jsonDataType, data []byte, pos int) (node *json.Value, er
 		timeString := fmt.Sprintf("%02d:%02d:%02d.%06d", hour, minute, second, microSeconds)
 		node = json.NewTime(timeString)
 	case TypeDateTime2, TypeDateTime, TypeTimestamp2, TypeTimestamp:
+		if length < 8 {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "opaque datetime length %d is too short", length)
+		}
 		raw := binary.LittleEndian.Uint64(data[start:end])
 		value := raw >> 24
 		yearMonth := (value >> 22) & 0x01ffff // 17 bits starting at 22nd
@@ -485,6 +505,9 @@ func binparserOpaque(_ jsonDataType, data []byte, pos int) (node *json.Value, er
 		timeString := fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d.%06d", year, month, day, hour, minute, second, microSeconds)
 		node = json.NewDateTime(timeString)
 	case TypeDecimal, TypeNewDecimal:
+		if length < 2 {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "opaque decimal length %d is too short", length)
+		}
 		decimalData := data[start:end]
 		precision := decimalData[0]
 		scale := decimalData[1]
@@ -495,11 +518,11 @@ func binparserOpaque(_ jsonDataType, data []byte, pos int) (node *json.Value, er
 		}
 		node = json.NewNumber(val.ToString(), json.NumberTypeDecimal)
 	case TypeVarchar, TypeVarString, TypeString, TypeBlob, TypeTinyBlob, TypeMediumBlob, TypeLongBlob:
-		node = json.NewBlob(string(data[pos+1:]))
+		node = json.NewBlob(string(data[start:end]))
 	case TypeBit:
-		node = json.NewBit(string(data[pos+1:]))
+		node = json.NewBit(string(data[start:end]))
 	default:
-		node = json.NewOpaqueValue(string(data[pos+1:]))
+		node = json.NewOpaqueValue(string(data[start:end]))
 	}
 	return node, nil
 }
