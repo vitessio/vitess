@@ -14,6 +14,7 @@
         - [JSON_EXTRACT now supports dynamic path arguments](#query-serving-json-extract-dynamic-args)
     - **[VTTablet](#minor-changes-vttablet)**
         - [New Experimental flag `--init-tablet-type-lookup`](#vttablet-init-tablet-type-lookup)
+        - [QueryThrottler Observability Metrics](#vttablet-querythrottler-metrics)
         - [New `in_order_completion_pending_count` field in OnlineDDL outputs](#vttablet-onlineddl-in-order-completion-count)
         - [Tablet Shutdown Tracking and Connection Validation](#vttablet-tablet-shutdown-validation)
     - **[VTOrc](#minor-changes-vtorc)**
@@ -74,6 +75,21 @@ The new experimental flag `--init-tablet-type-lookup` for VTTablet allows tablet
 When enabled, the tablet uses its alias to look up the tablet type from the existing topology record on restart. This allows tablets to maintain their changed roles (e.g., RDONLY/DRAINED) across restarts without manual reconfiguration. If disabled or if no topology record exists, the standard `--init-tablet-type` value will be used instead.
 
 **Note**: Vitess Operator–managed deployments generally do not keep tablet records in the topo between restarts, so this feature will not take effect in those environments.
+
+#### <a id="vttablet-querythrottler-metrics"/>QueryThrottler Observability Metrics</a>
+
+VTTablet now exposes new metrics to track QueryThrottler behavior.
+
+Four new metrics have been added:
+
+- **QueryThrottlerRequests**: Total number of requests evaluated by the query throttler
+- **QueryThrottlerThrottled**: Number of requests that were throttled
+- **QueryThrottlerTotalLatencyNs**: Total time each request takes in query throttling, including evaluation, metric checks, and other overhead (nanoseconds)
+- **QueryThrottlerEvaluateLatencyNs**: Time taken to make the throttling decision (nanoseconds)
+
+All metrics include labels for `Strategy`, `Workload`, and `Priority`. The `QueryThrottlerThrottled` metric has additional labels for `MetricName`, `MetricValue`, and `DryRun` to identify which metric triggered the throttling and whether it occurred in dry-run mode.
+
+These metrics help monitor throttling patterns, identify which workloads are throttled, measure performance overhead, and validate behavior in dry-run mode before configuration changes.
 
 #### <a id="vttablet-onlineddl-in-order-completion-count"/>New `in_order_completion_pending_count` field in OnlineDDL outputs</a>
 
