@@ -88,6 +88,7 @@ func TestMain(m *testing.M) {
 			[]string{"-"},
 			1, /*creates 1 replica tablet in addition to primary*/
 			false,
+			clusterInstance.Cell,
 		); err != nil {
 			return 1
 		}

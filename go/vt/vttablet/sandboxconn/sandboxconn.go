@@ -264,7 +264,7 @@ func (sbc *SandboxConn) SetSchemaResult(r []SchemaResult) {
 }
 
 // Execute is part of the QueryService interface.
-func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (sbc *SandboxConn) Execute(ctx context.Context, session queryservice.Session, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	sbc.panicIfNeeded()
 	sbc.execMu.Lock()
 	defer sbc.execMu.Unlock()
@@ -297,7 +297,7 @@ func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, que
 }
 
 // StreamExecute is part of the QueryService interface.
-func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+func (sbc *SandboxConn) StreamExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	sbc.panicIfNeeded()
 	sbc.sExecMu.Lock()
 	sbc.ExecCount.Add(1)
@@ -338,12 +338,12 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Targe
 }
 
 // Begin is part of the QueryService interface.
-func (sbc *SandboxConn) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (queryservice.TransactionState, error) {
+func (sbc *SandboxConn) Begin(ctx context.Context, session queryservice.Session, target *querypb.Target, options *querypb.ExecuteOptions) (queryservice.TransactionState, error) {
 	sbc.panicIfNeeded()
-	return sbc.begin(ctx, target, nil, 0, options)
+	return sbc.begin(ctx, session, target, nil, 0, options)
 }
 
-func (sbc *SandboxConn) begin(ctx context.Context, target *querypb.Target, preQueries []string, reservedID int64, options *querypb.ExecuteOptions) (queryservice.TransactionState, error) {
+func (sbc *SandboxConn) begin(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, reservedID int64, options *querypb.ExecuteOptions) (queryservice.TransactionState, error) {
 	sbc.BeginCount.Add(1)
 	err := sbc.getError()
 	if err != nil {
@@ -355,7 +355,7 @@ func (sbc *SandboxConn) begin(ctx context.Context, target *querypb.Target, preQu
 		transactionID = sbc.TransactionID.Add(1)
 	}
 	for _, preQuery := range preQueries {
-		_, err := sbc.Execute(ctx, target, preQuery, nil, transactionID, reservedID, options)
+		_, err := sbc.Execute(ctx, session, target, preQuery, nil, transactionID, reservedID, options)
 		if err != nil {
 			return queryservice.TransactionState{}, err
 		}
@@ -494,30 +494,30 @@ func (sbc *SandboxConn) UnresolvedTransactions(context.Context, *querypb.Target,
 }
 
 // BeginExecute is part of the QueryService interface.
-func (sbc *SandboxConn) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (queryservice.TransactionState, *sqltypes.Result, error) {
+func (sbc *SandboxConn) BeginExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (queryservice.TransactionState, *sqltypes.Result, error) {
 	sbc.panicIfNeeded()
-	state, err := sbc.begin(ctx, target, preQueries, reservedID, options)
+	state, err := sbc.begin(ctx, session, target, preQueries, reservedID, options)
 	if state.TransactionID != 0 {
 		sbc.setTxReservedID(state.TransactionID, reservedID)
 	}
 	if err != nil {
 		return queryservice.TransactionState{}, nil, err
 	}
-	result, err := sbc.Execute(ctx, target, query, bindVars, state.TransactionID, reservedID, options)
+	result, err := sbc.Execute(ctx, session, target, query, bindVars, state.TransactionID, reservedID, options)
 	return state, result, err
 }
 
 // BeginStreamExecute is part of the QueryService interface.
-func (sbc *SandboxConn) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (queryservice.TransactionState, error) {
+func (sbc *SandboxConn) BeginStreamExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (queryservice.TransactionState, error) {
 	sbc.panicIfNeeded()
-	state, err := sbc.begin(ctx, target, preQueries, reservedID, options)
+	state, err := sbc.begin(ctx, session, target, preQueries, reservedID, options)
 	if state.TransactionID != 0 {
 		sbc.setTxReservedID(state.TransactionID, reservedID)
 	}
 	if err != nil {
 		return queryservice.TransactionState{}, err
 	}
-	err = sbc.StreamExecute(ctx, target, sql, bindVariables, state.TransactionID, reservedID, options, callback)
+	err = sbc.StreamExecute(ctx, session, target, sql, bindVariables, state.TransactionID, reservedID, options, callback)
 	return state, err
 }
 
@@ -669,10 +669,10 @@ func (sbc *SandboxConn) HandlePanic(err *error) {
 }
 
 // ReserveBeginExecute implements the QueryService interface
-func (sbc *SandboxConn) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (queryservice.ReservedTransactionState, *sqltypes.Result, error) {
+func (sbc *SandboxConn) ReserveBeginExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (queryservice.ReservedTransactionState, *sqltypes.Result, error) {
 	sbc.panicIfNeeded()
-	reservedID := sbc.reserve(ctx, target, preQueries, bindVariables, 0, options)
-	state, result, err := sbc.BeginExecute(ctx, target, postBeginQueries, sql, bindVariables, reservedID, options)
+	reservedID := sbc.reserve(ctx, session, target, preQueries, bindVariables, 0, options)
+	state, result, err := sbc.BeginExecute(ctx, session, target, postBeginQueries, sql, bindVariables, reservedID, options)
 	if state.TransactionID != 0 {
 		sbc.setTxReservedID(state.TransactionID, reservedID)
 	}
@@ -684,10 +684,10 @@ func (sbc *SandboxConn) ReserveBeginExecute(ctx context.Context, target *querypb
 }
 
 // ReserveBeginStreamExecute is part of the QueryService interface.
-func (sbc *SandboxConn) ReserveBeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (queryservice.ReservedTransactionState, error) {
+func (sbc *SandboxConn) ReserveBeginStreamExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (queryservice.ReservedTransactionState, error) {
 	sbc.panicIfNeeded()
-	reservedID := sbc.reserve(ctx, target, preQueries, bindVariables, 0, options)
-	state, err := sbc.BeginStreamExecute(ctx, target, postBeginQueries, sql, bindVariables, reservedID, options, callback)
+	reservedID := sbc.reserve(ctx, session, target, preQueries, bindVariables, 0, options)
+	state, err := sbc.BeginStreamExecute(ctx, session, target, postBeginQueries, sql, bindVariables, reservedID, options, callback)
 	if state.TransactionID != 0 {
 		sbc.setTxReservedID(state.TransactionID, reservedID)
 	}
@@ -699,10 +699,10 @@ func (sbc *SandboxConn) ReserveBeginStreamExecute(ctx context.Context, target *q
 }
 
 // ReserveExecute implements the QueryService interface
-func (sbc *SandboxConn) ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (queryservice.ReservedState, *sqltypes.Result, error) {
+func (sbc *SandboxConn) ReserveExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (queryservice.ReservedState, *sqltypes.Result, error) {
 	sbc.panicIfNeeded()
-	reservedID := sbc.reserve(ctx, target, preQueries, bindVariables, transactionID, options)
-	result, err := sbc.Execute(ctx, target, sql, bindVariables, transactionID, reservedID, options)
+	reservedID := sbc.reserve(ctx, session, target, preQueries, bindVariables, transactionID, options)
+	result, err := sbc.Execute(ctx, session, target, sql, bindVariables, transactionID, reservedID, options)
 	if transactionID != 0 {
 		sbc.setTxReservedID(transactionID, reservedID)
 	}
@@ -713,10 +713,10 @@ func (sbc *SandboxConn) ReserveExecute(ctx context.Context, target *querypb.Targ
 }
 
 // ReserveStreamExecute is part of the QueryService interface.
-func (sbc *SandboxConn) ReserveStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (queryservice.ReservedState, error) {
+func (sbc *SandboxConn) ReserveStreamExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (queryservice.ReservedState, error) {
 	sbc.panicIfNeeded()
-	reservedID := sbc.reserve(ctx, target, preQueries, bindVariables, transactionID, options)
-	err := sbc.StreamExecute(ctx, target, sql, bindVariables, transactionID, reservedID, options, callback)
+	reservedID := sbc.reserve(ctx, session, target, preQueries, bindVariables, transactionID, options)
+	err := sbc.StreamExecute(ctx, session, target, sql, bindVariables, transactionID, reservedID, options, callback)
 	if transactionID != 0 {
 		sbc.setTxReservedID(transactionID, reservedID)
 	}
@@ -726,10 +726,10 @@ func (sbc *SandboxConn) ReserveStreamExecute(ctx context.Context, target *queryp
 	}, err
 }
 
-func (sbc *SandboxConn) reserve(ctx context.Context, target *querypb.Target, preQueries []string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) int64 {
+func (sbc *SandboxConn) reserve(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) int64 {
 	sbc.ReserveCount.Add(1)
 	for _, query := range preQueries {
-		sbc.Execute(ctx, target, query, bindVariables, transactionID, 0, options)
+		sbc.Execute(ctx, session, target, query, bindVariables, transactionID, 0, options)
 	}
 	if transactionID != 0 {
 		return transactionID

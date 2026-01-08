@@ -472,7 +472,7 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 					if shr != nil &&
 						(shr.Serving || tp.options.IncludeNonServingTablets) &&
 						(shr.RealtimeStats != nil && shr.RealtimeStats.HealthError == "" &&
-							(tabletInfo.Tablet.Type == topodatapb.TabletType_PRIMARY /* lag is not relevant */ ||
+							(tabletInfo.Type == topodatapb.TabletType_PRIMARY /* lag is not relevant */ ||
 								(tp.options.ExcludeTabletsWithMaxReplicationLag == 0 /* not set */ ||
 									shr.RealtimeStats.ReplicationLagSeconds <= uint32(tp.options.ExcludeTabletsWithMaxReplicationLag.Seconds())))) {
 						return io.EOF // End the stream

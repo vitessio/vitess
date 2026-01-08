@@ -161,6 +161,16 @@ message Tablet {
   // default_conn_collation is the default connection collation used by this tablet.
   uint32 default_conn_collation = 16;
 
+  // tablet_start_time is the vttime.Time when the vttablet process started.
+  vttime.Time tablet_start_time = 17;
+
+  // TabletShutdownTime is set to a vttime.Time equal to "now" (best-effort) to indicate a tablet
+  // cleanly completed a shutdown. It is unconditionally set to nil on tablet startup. This is
+  // used to avoid unnecessary dials to tablets that we know are down. It's possible for vttablet
+  // to be killed before it can set this time, so in some scenarios the value will report nil
+  // when in-reality the tablet has been stopped/killed/crashed.
+  vttime.Time tablet_shutdown_time = 18;
+
   // OBSOLETE: ip and tablet health information
   // string ip = 3;
   // map<string, string> health_map = 11;

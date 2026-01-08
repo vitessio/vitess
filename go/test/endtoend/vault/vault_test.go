@@ -19,7 +19,6 @@ package vault
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"fmt"
 	"net"
 	"os"
@@ -285,7 +284,7 @@ func initializeClusterLate(t *testing.T) {
 	err = clusterInstance.VtctldClientProcess.InitShardPrimary(keyspaceName, shard.Name, cell, primary.TabletUID)
 	require.NoError(t, err)
 
-	err = clusterInstance.StartVTOrc(keyspaceName)
+	err = clusterInstance.StartVTOrc(cell, keyspaceName)
 	require.NoError(t, err)
 
 	// Start vtgate
@@ -294,7 +293,7 @@ func initializeClusterLate(t *testing.T) {
 }
 
 func insertRow(t *testing.T, id int, productName string) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := mysql.ConnParams{
 		Host:  clusterInstance.Hostname,
 		Port:  clusterInstance.VtgateMySQLPort,

@@ -141,7 +141,7 @@ jobs:
         go mod download
 
         # install JUnit report formatter
-        go install github.com/vitessio/go-junit-report@{{.GoJunitReportSHA}}
+        go install github.com/vitessio/go-junit-report@{{.GoJunitReport.SHA}} # {{.GoJunitReport.Comment}}
 
     {{if .NeedsMinio }}
     - name: Install Minio

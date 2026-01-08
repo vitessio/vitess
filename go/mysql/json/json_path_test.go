@@ -171,6 +171,42 @@ func TestTransformations(t *testing.T) {
 			Paths:    []string{`$[2]`, `$[1].b[1]`, `$[1].b[1]`},
 			Expected: `["a", {"b": [true]}]`,
 		},
+		{
+			T:        Remove,
+			Document: `{"a": {"b": 1}, "c": {"b": 2}}`,
+			Paths:    []string{`$[0][0]`},
+			Expected: `{"a": {"b": 1}, "c": {"b": 2}}`,
+		},
+		{
+			T:        Remove,
+			Document: `{"a": {"b": 1}, "c": {"b": 2}}`,
+			Paths:    []string{`$[0][0].a[0][0].b`},
+			Expected: `{"a": {}, "c": {"b": 2}}`,
+		},
+		{
+			T:        Remove,
+			Document: `{"a": {"b": 1}, "c": {"b": 2}}`,
+			Paths:    []string{`$[0].a[0]`},
+			Expected: `{"c": {"b": 2}}`,
+		},
+		{
+			T:        Remove,
+			Document: `{"a": {"b": 1, "c": 2}, "c": {"b": 2}}`,
+			Paths:    []string{`$.a[0]`},
+			Expected: `{"c": {"b": 2}}`,
+		},
+		{
+			T:        Remove,
+			Document: `[1, 2, 3]`,
+			Paths:    []string{`$[0][0][0]`},
+			Expected: `[2, 3]`,
+		},
+		{
+			T:        Remove,
+			Document: `[{"a": 1}, {"a": 2}]`,
+			Paths:    []string{`$[1].b[0]`},
+			Expected: `[{"a": 1}, {"a": 2}]`,
+		},
 	}
 
 	for _, tc := range cases {

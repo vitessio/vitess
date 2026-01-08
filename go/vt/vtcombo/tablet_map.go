@@ -460,6 +460,7 @@ var _ queryservice.QueryService = (*internalTabletConn)(nil)
 // We need to copy the bind variables as tablet server will change them.
 func (itc *internalTabletConn) Execute(
 	ctx context.Context,
+	session queryservice.Session,
 	target *querypb.Target,
 	query string,
 	bindVars map[string]*querypb.BindVariable,
@@ -467,7 +468,7 @@ func (itc *internalTabletConn) Execute(
 	options *querypb.ExecuteOptions,
 ) (*sqltypes.Result, error) {
 	bindVars = sqltypes.CopyBindVariables(bindVars)
-	reply, err := itc.tablet.qsc.QueryService().Execute(ctx, target, query, bindVars, transactionID, reservedID, options)
+	reply, err := itc.tablet.qsc.QueryService().Execute(ctx, session, target, query, bindVars, transactionID, reservedID, options)
 	if err != nil {
 		return nil, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 	}
@@ -478,6 +479,7 @@ func (itc *internalTabletConn) Execute(
 // We need to copy the bind variables as tablet server will change them.
 func (itc *internalTabletConn) StreamExecute(
 	ctx context.Context,
+	session queryservice.Session,
 	target *querypb.Target,
 	query string,
 	bindVars map[string]*querypb.BindVariable,
@@ -487,17 +489,18 @@ func (itc *internalTabletConn) StreamExecute(
 	callback func(*sqltypes.Result) error,
 ) error {
 	bindVars = sqltypes.CopyBindVariables(bindVars)
-	err := itc.tablet.qsc.QueryService().StreamExecute(ctx, target, query, bindVars, transactionID, reservedID, options, callback)
+	err := itc.tablet.qsc.QueryService().StreamExecute(ctx, session, target, query, bindVars, transactionID, reservedID, options, callback)
 	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
 // Begin is part of queryservice.QueryService
 func (itc *internalTabletConn) Begin(
 	ctx context.Context,
+	session queryservice.Session,
 	target *querypb.Target,
 	options *querypb.ExecuteOptions,
 ) (queryservice.TransactionState, error) {
-	state, err := itc.tablet.qsc.QueryService().Begin(ctx, target, options)
+	state, err := itc.tablet.qsc.QueryService().Begin(ctx, session, target, options)
 	return state, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
@@ -575,6 +578,7 @@ func (itc *internalTabletConn) UnresolvedTransactions(ctx context.Context, targe
 // BeginExecute is part of queryservice.QueryService
 func (itc *internalTabletConn) BeginExecute(
 	ctx context.Context,
+	session queryservice.Session,
 	target *querypb.Target,
 	preQueries []string,
 	query string,
@@ -583,13 +587,14 @@ func (itc *internalTabletConn) BeginExecute(
 	options *querypb.ExecuteOptions,
 ) (queryservice.TransactionState, *sqltypes.Result, error) {
 	bindVars = sqltypes.CopyBindVariables(bindVars)
-	state, result, err := itc.tablet.qsc.QueryService().BeginExecute(ctx, target, preQueries, query, bindVars, reserveID, options)
+	state, result, err := itc.tablet.qsc.QueryService().BeginExecute(ctx, session, target, preQueries, query, bindVars, reserveID, options)
 	return state, result, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
 // BeginStreamExecute is part of queryservice.QueryService
 func (itc *internalTabletConn) BeginStreamExecute(
 	ctx context.Context,
+	session queryservice.Session,
 	target *querypb.Target,
 	preQueries []string,
 	query string,
@@ -599,7 +604,7 @@ func (itc *internalTabletConn) BeginStreamExecute(
 	callback func(*sqltypes.Result) error,
 ) (queryservice.TransactionState, error) {
 	bindVars = sqltypes.CopyBindVariables(bindVars)
-	state, err := itc.tablet.qsc.QueryService().BeginStreamExecute(ctx, target, preQueries, query, bindVars, reservedID, options, callback)
+	state, err := itc.tablet.qsc.QueryService().BeginStreamExecute(ctx, session, target, preQueries, query, bindVars, reservedID, options, callback)
 	return state, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
@@ -622,6 +627,7 @@ func (itc *internalTabletConn) HandlePanic(err *error) {
 // ReserveBeginExecute is part of the QueryService interface.
 func (itc *internalTabletConn) ReserveBeginExecute(
 	ctx context.Context,
+	session queryservice.Session,
 	target *querypb.Target,
 	preQueries []string,
 	postBeginQueries []string,
@@ -630,13 +636,14 @@ func (itc *internalTabletConn) ReserveBeginExecute(
 	options *querypb.ExecuteOptions,
 ) (queryservice.ReservedTransactionState, *sqltypes.Result, error) {
 	bindVariables = sqltypes.CopyBindVariables(bindVariables)
-	state, result, err := itc.tablet.qsc.QueryService().ReserveBeginExecute(ctx, target, preQueries, postBeginQueries, sql, bindVariables, options)
+	state, result, err := itc.tablet.qsc.QueryService().ReserveBeginExecute(ctx, session, target, preQueries, postBeginQueries, sql, bindVariables, options)
 	return state, result, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
 // ReserveBeginStreamExecute is part of the QueryService interface.
 func (itc *internalTabletConn) ReserveBeginStreamExecute(
 	ctx context.Context,
+	session queryservice.Session,
 	target *querypb.Target,
 	preQueries []string,
 	postBeginQueries []string,
@@ -646,13 +653,14 @@ func (itc *internalTabletConn) ReserveBeginStreamExecute(
 	callback func(*sqltypes.Result) error,
 ) (queryservice.ReservedTransactionState, error) {
 	bindVariables = sqltypes.CopyBindVariables(bindVariables)
-	state, err := itc.tablet.qsc.QueryService().ReserveBeginStreamExecute(ctx, target, preQueries, postBeginQueries, sql, bindVariables, options, callback)
+	state, err := itc.tablet.qsc.QueryService().ReserveBeginStreamExecute(ctx, session, target, preQueries, postBeginQueries, sql, bindVariables, options, callback)
 	return state, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
 // ReserveExecute is part of the QueryService interface.
 func (itc *internalTabletConn) ReserveExecute(
 	ctx context.Context,
+	session queryservice.Session,
 	target *querypb.Target,
 	preQueries []string,
 	sql string,
@@ -661,13 +669,14 @@ func (itc *internalTabletConn) ReserveExecute(
 	options *querypb.ExecuteOptions,
 ) (queryservice.ReservedState, *sqltypes.Result, error) {
 	bindVariables = sqltypes.CopyBindVariables(bindVariables)
-	state, result, err := itc.tablet.qsc.QueryService().ReserveExecute(ctx, target, preQueries, sql, bindVariables, transactionID, options)
+	state, result, err := itc.tablet.qsc.QueryService().ReserveExecute(ctx, session, target, preQueries, sql, bindVariables, transactionID, options)
 	return state, result, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
 // ReserveStreamExecute is part of the QueryService interface.
 func (itc *internalTabletConn) ReserveStreamExecute(
 	ctx context.Context,
+	session queryservice.Session,
 	target *querypb.Target,
 	preQueries []string,
 	sql string,
@@ -677,7 +686,7 @@ func (itc *internalTabletConn) ReserveStreamExecute(
 	callback func(*sqltypes.Result) error,
 ) (queryservice.ReservedState, error) {
 	bindVariables = sqltypes.CopyBindVariables(bindVariables)
-	state, err := itc.tablet.qsc.QueryService().ReserveStreamExecute(ctx, target, preQueries, sql, bindVariables, transactionID, options, callback)
+	state, err := itc.tablet.qsc.QueryService().ReserveStreamExecute(ctx, session, target, preQueries, sql, bindVariables, transactionID, options, callback)
 	return state, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
@@ -1103,6 +1112,7 @@ func (itmc *internalTabletManagerClient) ResetReplicationParameters(context.Cont
 func (itmc *internalTabletManagerClient) ReplicaWasRestarted(context.Context, *topodatapb.Tablet, *topodatapb.TabletAlias) error {
 	return errors.New("not implemented in vtcombo")
 }
+
 func (itmc *internalTabletManagerClient) ResetSequences(ctx context.Context, tablet *topodatapb.Tablet, tables []string) error {
 	return errors.New("not implemented in vtcombo")
 }

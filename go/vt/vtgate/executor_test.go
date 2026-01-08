@@ -445,7 +445,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	_, err := executorExecSession(ctx, executor, session, "select id from main1", nil)
 	require.NoError(t, err)
 	wantSession := &vtgatepb.Session{TargetString: "@primary", InTransaction: true, FoundRows: 1, RowCount: -1}
-	testSession := session.Session.CloneVT()
+	testSession := session.CloneVT()
 	testSession.ShardSessions = nil
 	utils.MustMatch(t, wantSession, testSession, "session does not match for autocommit=0")
 
@@ -486,7 +486,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	_, err = executorExecSession(ctx, executor, session, "update main1 set id=1", nil)
 	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{InTransaction: true, Autocommit: true, TargetString: "@primary", FoundRows: 0, RowCount: 1}
-	testSession = session.Session.CloneVT()
+	testSession = session.CloneVT()
 	testSession.ShardSessions = nil
 	utils.MustMatch(t, wantSession, testSession, "session does not match for autocommit=1")
 	if got, want := sbclookup.CommitCount.Load(), startCount; got != want {
@@ -3354,6 +3354,47 @@ func TestExecutorShowShards(t *testing.T) {
 			filter:         nil,
 			destTabletType: topodatapb.TabletType_PRIMARY,
 			wantErr:        "testing error getting keyspace ks1",
+		},
+		{
+			// Test that deleted keyspaces (returning NoNode error) are skipped
+			// rather than causing the entire query to fail.
+			name: "Deleted keyspace (NoNode) should be skipped",
+			srvTopoServer: &fakesrvtopo.FakeSrvTopo{
+				SrvKeyspaceNamesOutput: map[string][]string{
+					localCell: {"ks1", "ks2"},
+				},
+				SrvKeyspaceError: map[string]map[string]error{
+					localCell: {
+						"ks1": topo.NewError(topo.NoNode, "ks1"),
+					},
+				},
+				SrvKeyspaceOutput: map[string]map[string]*topodatapb.SrvKeyspace{
+					localCell: {
+						"ks2": {
+							Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+								{
+									ServedType: topodatapb.TabletType_PRIMARY,
+									ShardReferences: []*topodatapb.ShardReference{
+										{Name: "-40"},
+										{Name: "40-80"},
+										{Name: "80-"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			filter:         nil,
+			destTabletType: topodatapb.TabletType_PRIMARY,
+			want: &sqltypes.Result{
+				Fields: buildVarCharFields("Shards"),
+				Rows: []sqltypes.Row{
+					buildVarCharRow("ks2/-40"),
+					buildVarCharRow("ks2/40-80"),
+					buildVarCharRow("ks2/80-"),
+				},
+			},
 		},
 	}
 	for _, tt := range tests {

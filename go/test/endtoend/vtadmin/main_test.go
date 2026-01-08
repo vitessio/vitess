@@ -68,7 +68,7 @@ func TestMain(m *testing.M) {
 			Name:      uks,
 			SchemaSQL: uschemaSQL,
 		}
-		err = clusterInstance.StartUnshardedKeyspace(*ukeyspace, 0, false)
+		err = clusterInstance.StartUnshardedKeyspace(*ukeyspace, 0, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}

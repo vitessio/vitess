@@ -97,7 +97,7 @@ func TestMain(m *testing.M) {
 			SidecarDBName:    sidecarDBName,
 			DurabilityPolicy: policy.DurabilitySemiSync,
 		}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false, clusterInstance.Cell); err != nil {
 			return 1
 		}
 
@@ -135,7 +135,7 @@ func TestMain(m *testing.M) {
 }
 
 func start(t *testing.T) (*mysql.Conn, func()) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	cleanup(t)

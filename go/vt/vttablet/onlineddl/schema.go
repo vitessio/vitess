@@ -139,6 +139,11 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
+	sqlUpdateInOrderCompletionPendingCount = `UPDATE _vt.schema_migrations
+			SET in_order_completion_pending_count=%a
+		WHERE
+			migration_uuid=%a
+	`
 	sqlUpdateArtifacts = `UPDATE _vt.schema_migrations
 			SET artifacts=concat(%a, ',', artifacts), cleanup_timestamp=NULL
 		WHERE
@@ -288,7 +293,8 @@ const (
 			completed_timestamp=NULL,
 			last_cutover_attempt_timestamp=NULL,
 			shadow_analyzed_timestamp=NULL,
-			cleanup_timestamp=NULL
+			cleanup_timestamp=NULL,
+			in_order_completion_pending_count=0
 		WHERE
 			migration_status IN ('failed', 'cancelled')
 			AND (%s)
@@ -310,7 +316,8 @@ const (
 			completed_timestamp=NULL,
 			last_cutover_attempt_timestamp=NULL,
 			shadow_analyzed_timestamp=NULL,
-			cleanup_timestamp=NULL
+			cleanup_timestamp=NULL,
+			in_order_completion_pending_count=0
 		WHERE
 			migration_status IN ('failed', 'cancelled')
 			AND migration_uuid=%a
