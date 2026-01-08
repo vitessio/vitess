@@ -14,6 +14,7 @@ This is an alphabetical list of known adopters of Vitess. Some have already gone
 * [Peak Games](https://peak.com/)
 * [Pinterest](https://pinterest.com)
 * [Pixel Federation](https://pixelfederation.com)
+* [PlanetScale](https://planetscale.com/)
 * [Quiz of Kings](https://quizofkings.com)
 * [Shopify](https://www.shopify.com)
 * [Slack](https://slack.com)
