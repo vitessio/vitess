@@ -711,8 +711,11 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 	}
 	for _, ks := range participants {
 		id := je.participants[ks]
-		_, err := dbClient.ExecuteFetch(binlogplayer.DeleteVReplication(id), maxRows)
-		if err != nil {
+		if _, err := dbClient.ExecuteFetch(binlogplayer.DeleteVReplication(id), maxRows); err != nil {
+			log.Errorf("transitionJournal: %v", err)
+			return
+		}
+		if _, err := dbClient.ExecuteFetch(binlogplayer.DeleteVReplicationWorkerPos(id), maxRows); err != nil {
 			log.Errorf("transitionJournal: %v", err)
 			return
 		}

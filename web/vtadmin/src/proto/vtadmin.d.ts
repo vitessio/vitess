@@ -39833,6 +39833,15 @@ export namespace binlogdata {
 
         /** VEvent event_gtid */
         event_gtid?: (string|null);
+
+        /** VEvent must_save */
+        must_save?: (boolean|null);
+
+        /** VEvent pin_worker */
+        pin_worker?: (boolean|null);
+
+        /** VEvent skippable */
+        skippable?: (boolean|null);
     }
 
     /** Represents a VEvent. */
@@ -39897,6 +39906,15 @@ export namespace binlogdata {
 
         /** VEvent event_gtid. */
         public event_gtid: string;
+
+        /** VEvent must_save. */
+        public must_save: boolean;
+
+        /** VEvent pin_worker. */
+        public pin_worker: boolean;
+
+        /** VEvent skippable. */
+        public skippable: boolean;
 
         /**
          * Creates a new VEvent instance using the specified properties.

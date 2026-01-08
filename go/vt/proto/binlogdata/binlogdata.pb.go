@@ -1903,7 +1903,13 @@ type VEvent struct {
 	// For GTID events, the sequence number (logical clock) value of this transaction.
 	SequenceNumber int64 `protobuf:"varint,27,opt,name=sequence_number,json=sequenceNumber,proto3" json:"sequence_number,omitempty"`
 	// EventGTID is decorated by VPlayer. It is the specific GTID (not the GTID set) for this event.
-	EventGtid     string `protobuf:"bytes,28,opt,name=event_gtid,json=eventGtid,proto3" json:"event_gtid,omitempty"`
+	EventGtid string `protobuf:"bytes,28,opt,name=event_gtid,json=eventGtid,proto3" json:"event_gtid,omitempty"`
+	// MustSave is a decoration by VPlayer
+	MustSave bool `protobuf:"varint,29,opt,name=must_save,json=mustSave,proto3" json:"must_save,omitempty"`
+	// PinWorker is a decoration by parallel VPlayer
+	PinWorker bool `protobuf:"varint,30,opt,name=pin_worker,json=pinWorker,proto3" json:"pin_worker,omitempty"`
+	// Skippable is a decoration by parallel VPlayer
+	Skippable     bool `protobuf:"varint,31,opt,name=skippable,proto3" json:"skippable,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2062,6 +2068,27 @@ func (x *VEvent) GetEventGtid() string {
 		return x.EventGtid
 	}
 	return ""
+}
+
+func (x *VEvent) GetMustSave() bool {
+	if x != nil {
+		return x.MustSave
+	}
+	return false
+}
+
+func (x *VEvent) GetPinWorker() bool {
+	if x != nil {
+		return x.PinWorker
+	}
+	return false
+}
+
+func (x *VEvent) GetSkippable() bool {
+	if x != nil {
+		return x.Skippable
+	}
+	return false
 }
 
 type MinimalTable struct {
@@ -3223,7 +3250,7 @@ const file_binlogdata_proto_rawDesc = "" +
 	"\vshard_gtids\x18\x05 \x03(\v2\x15.binlogdata.ShardGtidR\n" +
 	"shardGtids\x12=\n" +
 	"\fparticipants\x18\x06 \x03(\v2\x19.binlogdata.KeyspaceShardR\fparticipants\x12)\n" +
-	"\x10source_workflows\x18\a \x03(\tR\x0fsourceWorkflows\"\xa3\x05\n" +
+	"\x10source_workflows\x18\a \x03(\tR\x0fsourceWorkflows\"\xfd\x05\n" +
 	"\x06VEvent\x12*\n" +
 	"\x04type\x18\x01 \x01(\x0e2\x16.binlogdata.VEventTypeR\x04type\x12\x1c\n" +
 	"\ttimestamp\x18\x02 \x01(\x03R\ttimestamp\x12\x12\n" +
@@ -3244,7 +3271,11 @@ const file_binlogdata_proto_rawDesc = "" +
 	"\rcommit_parent\x18\x1a \x01(\x03R\fcommitParent\x12'\n" +
 	"\x0fsequence_number\x18\x1b \x01(\x03R\x0esequenceNumber\x12\x1d\n" +
 	"\n" +
-	"event_gtid\x18\x1c \x01(\tR\teventGtid\"\x8d\x01\n" +
+	"event_gtid\x18\x1c \x01(\tR\teventGtid\x12\x1b\n" +
+	"\tmust_save\x18\x1d \x01(\bR\bmustSave\x12\x1d\n" +
+	"\n" +
+	"pin_worker\x18\x1e \x01(\bR\tpinWorker\x12\x1c\n" +
+	"\tskippable\x18\x1f \x01(\bR\tskippable\"\x8d\x01\n" +
 	"\fMinimalTable\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12$\n" +
 	"\x06fields\x18\x02 \x03(\v2\f.query.FieldR\x06fields\x12\x1e\n" +

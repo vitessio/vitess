@@ -37,3 +37,9 @@ super-read-only
 # Replication parameters to ensure reparents are fast.
 replica_net_timeout = 8
 
+
+binlog_transaction_dependency_tracking=WRITESET
+slave_preserve_commit_order=ON
+slave_parallel_type=LOGICAL_CLOCK
+transaction_write_set_extraction=XXHASH64
+

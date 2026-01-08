@@ -304,6 +304,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"onlineddl_vrepl_bench": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/vrepl_bench", "-timeout", "30m"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "onlineddl_vrepl_bench",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"onlineddl_vrepl_suite": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/vrepl_suite", "-timeout", "30m"],

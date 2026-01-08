@@ -103,6 +103,7 @@ var (
 		"mysql_server_vault",
 		"vstream",
 		"onlineddl_vrepl",
+		"onlineddl_vrepl_bench",
 		"onlineddl_vrepl_stress",
 		"onlineddl_vrepl_stress_suite",
 		"onlineddl_vrepl_suite",
@@ -175,6 +176,7 @@ var (
 	}
 	clusterRequiring16CoresMachines = []string{
 		"onlineddl_vrepl",
+		"onlineddl_vrepl_bench",
 		"onlineddl_vrepl_stress",
 		"onlineddl_vrepl_stress_suite",
 		"onlineddl_vrepl_suite",

@@ -11,6 +11,8 @@ create table onlineddl_test (
   key i_idx(i)
 ) auto_increment=1;
 
+insert into onlineddl_test values (null, 7, null, now(), now(), '2010-10-20 07:20:30', 0);
+
 drop event if exists onlineddl_test;
 delimiter ;;
 create event onlineddl_test
