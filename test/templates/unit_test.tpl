@@ -155,7 +155,4 @@ jobs:
     - name: Slowest Tests
       if: steps.changes.outputs.unit_tests == 'true' && !cancelled()
       run: |
-        echo '## Slowest Tests' >> "$GITHUB_STEP_SUMMARY"
-        echo '```' >> "$GITHUB_STEP_SUMMARY"
-        go tool gotestsum tool slowest --jsonfile report.json >> "$GITHUB_STEP_SUMMARY"
-        echo '```' >> "$GITHUB_STEP_SUMMARY"
+        go tool gotestsum tool slowest --num 20 --jsonfile report.json | tee -a "$GITHUB_STEP_SUMMARY"
