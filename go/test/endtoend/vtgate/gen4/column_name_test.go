@@ -17,19 +17,17 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"testing"
-
-	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 func TestColumnNames(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)

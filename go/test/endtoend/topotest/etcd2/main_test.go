@@ -98,7 +98,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestTopoDownServingQuery(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
 		Port: clusterInstance.VtgateMySQLPort,
@@ -206,7 +206,7 @@ func TestLockingWithTTL(t *testing.T) {
 	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctldClientProcess.TopoGlobalAddress, clusterInstance.VtctldClientProcess.TopoGlobalRoot)
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Acquire a keyspace lock with a short custom TTL.
 	ttl := 1 * time.Second
@@ -227,7 +227,7 @@ func TestNamedLocking(t *testing.T) {
 	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctldClientProcess.TopoGlobalAddress, clusterInstance.VtctldClientProcess.TopoGlobalRoot)
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	lockName := "TestNamedLocking"
 	action := "Testing"
 
