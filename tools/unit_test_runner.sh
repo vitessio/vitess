@@ -64,5 +64,8 @@ GOTESTSUM_ARGS="--rerun-fails=3 --rerun-fails-max-failures=10 --format-hide-empt
 if [[ -n "${JUNIT_OUTPUT:-}" ]]; then
 	GOTESTSUM_ARGS="$GOTESTSUM_ARGS --junitfile $JUNIT_OUTPUT"
 fi
+if [[ -n "${JSON_OUTPUT:-}" ]]; then
+	GOTESTSUM_ARGS="$GOTESTSUM_ARGS --jsonfile $JSON_OUTPUT"
+fi
 
 go tool gotestsum $GOTESTSUM_ARGS --packages="$packages_with_tests" -- $VT_GO_PARALLEL $RACE_FLAG -count=1

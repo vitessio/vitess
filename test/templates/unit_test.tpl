@@ -137,7 +137,7 @@ jobs:
         # testing, e.g. MySQL 5.7 vs 8.0.
         export CI_DB_PLATFORM="{{.Platform}}"
 
-        JUNIT_OUTPUT=report.xml make {{if .Race}}unit_test_race{{else}}unit_test{{end}}
+        JUNIT_OUTPUT=report.xml JSON_OUTPUT=report.json make {{if .Race}}unit_test_race{{else}}unit_test{{end}}
 
     - name: Record test results in launchable if PR is not a draft
       if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.unit_tests == 'true' && github.base_ref == 'main' && !cancelled()
@@ -151,3 +151,11 @@ jobs:
       with:
         paths: "report.xml"
         show: "fail"
+
+    - name: Slowest Tests
+      if: steps.changes.outputs.unit_tests == 'true' && !cancelled()
+      run: |
+        echo '## Slowest Tests' >> "$GITHUB_STEP_SUMMARY"
+        echo '```' >> "$GITHUB_STEP_SUMMARY"
+        go tool gotestsum tool slowest --jsonfile report.json >> "$GITHUB_STEP_SUMMARY"
+        echo '```' >> "$GITHUB_STEP_SUMMARY"
