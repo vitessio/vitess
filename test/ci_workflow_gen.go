@@ -272,18 +272,6 @@ func getGitMetas(ctx context.Context) (*GitMetas, error) {
 
 	eg, egCtx := errgroup.WithContext(ctx)
 
-	// vitessio/go-junit-report
-	eg.Go(func() error {
-		sha, err := getGitRefSHA(egCtx, "https://github.com/vitessio/go-junit-report", "HEAD")
-		if err != nil {
-			return err
-		}
-		metasMu.Lock()
-		defer metasMu.Unlock()
-		metas.GoJunitReport = &GitMeta{SHA: sha, Comment: "HEAD"}
-		return nil
-	})
-
 	// goimports tool
 	eg.Go(func() error {
 		sha, err := getGitRefSHA(egCtx, "https://go.googlesource.com/tools", goimportsTag)
@@ -293,6 +281,18 @@ func getGitMetas(ctx context.Context) (*GitMetas, error) {
 		metasMu.Lock()
 		defer metasMu.Unlock()
 		metas.Goimports = &GitMeta{SHA: sha, Comment: goimportsTag}
+		return nil
+	})
+
+	// vitessio/go-junit-report
+	eg.Go(func() error {
+		sha, err := getGitRefSHA(egCtx, "https://github.com/vitessio/go-junit-report", "HEAD")
+		if err != nil {
+			return err
+		}
+		metasMu.Lock()
+		defer metasMu.Unlock()
+		metas.GoJunitReport = &GitMeta{SHA: sha, Comment: "HEAD"}
 		return nil
 	})
 
