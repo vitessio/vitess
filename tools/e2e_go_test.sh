@@ -10,4 +10,4 @@ if [[ -n "${JSON_OUTPUT:-}" ]]; then
 	GOTESTSUM_ARGS="$GOTESTSUM_ARGS --jsonfile $JSON_OUTPUT"
 fi
 
-go tool gotestsum $GOTESTSUM_ARGS -- "$@" -count=1
+go tool gotestsum $GOTESTSUM_ARGS -- "$@" -alsologtostderr -count=1
