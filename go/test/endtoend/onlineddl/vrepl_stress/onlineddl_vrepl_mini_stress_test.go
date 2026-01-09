@@ -198,7 +198,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// No need for replicas in this stress test
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 0, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 0, false, clusterInstance.Cell); err != nil {
 			return 1, err
 		}
 
@@ -222,12 +222,10 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitcode)
 	}
-
 }
 
 func TestVreplMiniStressSchemaChanges(t *testing.T) {
-
-	ctx := context.Background()
+	ctx := t.Context()
 
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
@@ -288,7 +286,7 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 		// the vreplication/ALTER TABLE did not corrupt our data and we are happy.
 		testName := fmt.Sprintf("ALTER TABLE with workload %d/%d", (i + 1), countIterations)
 		t.Run(testName, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			t.Run("create schema", func(t *testing.T) {
 				testWithInitialSchema(t)
 			})
@@ -564,7 +562,7 @@ func initTable(t *testing.T) {
 		}
 	})
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -600,7 +598,7 @@ func testSelectTableMetrics(t *testing.T) {
 
 	log.Infof("%s", writeMetrics.String())
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()

@@ -18,7 +18,7 @@ package reparentutil
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"slices"
 	"testing"
 	"time"
@@ -1867,7 +1867,6 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
@@ -2017,7 +2016,7 @@ func TestEmergencyReparenter_promotionOfNewPrimary(t *testing.T) {
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Error: fmt.Errorf("primary position error"),
+						Error: errors.New("primary position error"),
 					},
 				},
 			},
@@ -2402,7 +2401,7 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 	tests := []struct {
 		name       string
 		tmc        *testutil.TabletManagerClient
-		candidates map[string]replication.Position
+		candidates map[string]*RelayLogPositions
 		tabletMap  map[string]*topo.TabletInfo
 		statusMap  map[string]*replicationdatapb.StopReplicationStatus
 		shouldErr  bool
@@ -2419,7 +2418,7 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 					},
 				},
 			},
-			candidates: map[string]replication.Position{
+			candidates: map[string]*RelayLogPositions{
 				"zone1-0000000100": {},
 				"zone1-0000000101": {},
 			},
@@ -2467,7 +2466,7 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 					},
 				},
 			},
-			candidates: map[string]replication.Position{
+			candidates: map[string]*RelayLogPositions{
 				"zone1-0000000100": {},
 				"zone1-0000000101": {},
 			},
@@ -2518,7 +2517,7 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 					},
 				},
 			},
-			candidates: map[string]replication.Position{
+			candidates: map[string]*RelayLogPositions{
 				"zone1-0000000100": {},
 				"zone1-0000000101": {},
 				"zone1-0000000102": {},
@@ -2583,7 +2582,7 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 					},
 				},
 			},
-			candidates: map[string]replication.Position{
+			candidates: map[string]*RelayLogPositions{
 				"zone1-0000000100": {},
 				"zone1-0000000101": {},
 			},
@@ -2793,26 +2792,57 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 		Sequence: 11,
 	}
 
-	positionMostAdvanced := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
-	positionMostAdvanced.GTIDSet = positionMostAdvanced.GTIDSet.AddGTID(mysqlGTID1)
-	positionMostAdvanced.GTIDSet = positionMostAdvanced.GTIDSet.AddGTID(mysqlGTID2)
-	positionMostAdvanced.GTIDSet = positionMostAdvanced.GTIDSet.AddGTID(mysqlGTID3)
+	// most advanced gtid set
+	positionMostAdvanced := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	positionMostAdvanced.Combined.GTIDSet = positionMostAdvanced.Combined.GTIDSet.AddGTID(mysqlGTID1)
+	positionMostAdvanced.Combined.GTIDSet = positionMostAdvanced.Combined.GTIDSet.AddGTID(mysqlGTID2)
+	positionMostAdvanced.Combined.GTIDSet = positionMostAdvanced.Combined.GTIDSet.AddGTID(mysqlGTID3)
+	positionMostAdvanced.Executed.GTIDSet = positionMostAdvanced.Executed.GTIDSet.AddGTID(mysqlGTID1)
+	positionMostAdvanced.Executed.GTIDSet = positionMostAdvanced.Executed.GTIDSet.AddGTID(mysqlGTID2)
 
-	positionIntermediate1 := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
-	positionIntermediate1.GTIDSet = positionIntermediate1.GTIDSet.AddGTID(mysqlGTID1)
+	// same combined gtid set as positionMostAdvanced, but 1 position behind in gtid executed
+	positionAlmostMostAdvanced := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	positionAlmostMostAdvanced.Combined.GTIDSet = positionAlmostMostAdvanced.Combined.GTIDSet.AddGTID(mysqlGTID1)
+	positionAlmostMostAdvanced.Combined.GTIDSet = positionAlmostMostAdvanced.Combined.GTIDSet.AddGTID(mysqlGTID2)
+	positionAlmostMostAdvanced.Combined.GTIDSet = positionAlmostMostAdvanced.Combined.GTIDSet.AddGTID(mysqlGTID3)
+	positionAlmostMostAdvanced.Executed.GTIDSet = positionAlmostMostAdvanced.Executed.GTIDSet.AddGTID(mysqlGTID1)
 
-	positionIntermediate2 := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
-	positionIntermediate2.GTIDSet = positionIntermediate2.GTIDSet.AddGTID(mysqlGTID1)
-	positionIntermediate2.GTIDSet = positionIntermediate2.GTIDSet.AddGTID(mysqlGTID2)
+	positionIntermediate1 := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	positionIntermediate1.Combined.GTIDSet = positionIntermediate1.Combined.GTIDSet.AddGTID(mysqlGTID1)
+	positionIntermediate1.Executed.GTIDSet = positionIntermediate1.Executed.GTIDSet.AddGTID(mysqlGTID1)
 
-	positionOnly2 := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
-	positionOnly2.GTIDSet = positionOnly2.GTIDSet.AddGTID(mysqlGTID2)
+	positionIntermediate2 := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	positionIntermediate2.Combined.GTIDSet = positionIntermediate2.Combined.GTIDSet.AddGTID(mysqlGTID1)
+	positionIntermediate2.Combined.GTIDSet = positionIntermediate2.Combined.GTIDSet.AddGTID(mysqlGTID2)
+	positionIntermediate2.Executed.GTIDSet = positionIntermediate2.Executed.GTIDSet.AddGTID(mysqlGTID1)
 
-	positionEmpty := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
+	positionOnly2 := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	positionOnly2.Combined.GTIDSet = positionOnly2.Combined.GTIDSet.AddGTID(mysqlGTID2)
+	positionOnly2.Executed.GTIDSet = positionOnly2.Executed.GTIDSet.AddGTID(mysqlGTID2)
+
+	positionEmpty := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
 
 	tests := []struct {
 		name                 string
-		validCandidates      map[string]replication.Position
+		validCandidates      map[string]*RelayLogPositions
 		tabletMap            map[string]*topo.TabletInfo
 		emergencyReparentOps EmergencyReparentOptions
 		result               *topodatapb.Tablet
@@ -2820,10 +2850,11 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 	}{
 		{
 			name: "choose most advanced",
-			validCandidates: map[string]replication.Position{
+			validCandidates: map[string]*RelayLogPositions{
 				"zone1-0000000100": positionMostAdvanced,
 				"zone1-0000000101": positionIntermediate1,
 				"zone1-0000000102": positionIntermediate2,
+				"zone1-0000000103": positionAlmostMostAdvanced,
 			},
 			tabletMap: map[string]*topo.TabletInfo{
 				"zone1-0000000100": {
@@ -2850,6 +2881,14 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 						},
 					},
 				},
+				"zone1-0000000103": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+					},
+				},
 				"zone1-0000000404": {
 					Tablet: &topodatapb.Tablet{
 						Alias: &topodatapb.TabletAlias{
@@ -2868,10 +2907,11 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 			},
 		}, {
 			name: "choose most advanced with the best promotion rule",
-			validCandidates: map[string]replication.Position{
+			validCandidates: map[string]*RelayLogPositions{
 				"zone1-0000000100": positionMostAdvanced,
 				"zone1-0000000101": positionIntermediate1,
 				"zone1-0000000102": positionMostAdvanced,
+				"zone1-0000000103": positionAlmostMostAdvanced,
 			},
 			tabletMap: map[string]*topo.TabletInfo{
 				"zone1-0000000100": {
@@ -2898,6 +2938,14 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 							Uid:  102,
 						},
 						Type: topodatapb.TabletType_RDONLY,
+					},
+				},
+				"zone1-0000000103": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
 					},
 				},
 				"zone1-0000000404": {
@@ -2922,10 +2970,11 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 				Cell: "zone1",
 				Uid:  102,
 			}},
-			validCandidates: map[string]replication.Position{
+			validCandidates: map[string]*RelayLogPositions{
 				"zone1-0000000100": positionMostAdvanced,
 				"zone1-0000000101": positionIntermediate1,
 				"zone1-0000000102": positionMostAdvanced,
+				"zone1-0000000103": positionAlmostMostAdvanced,
 			},
 			tabletMap: map[string]*topo.TabletInfo{
 				"zone1-0000000100": {
@@ -2954,6 +3003,14 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 						Type: topodatapb.TabletType_RDONLY,
 					},
 				},
+				"zone1-0000000103": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+					},
+				},
 				"zone1-0000000404": {
 					Tablet: &topodatapb.Tablet{
 						Alias: &topodatapb.TabletAlias{
@@ -2976,7 +3033,7 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 				Cell: "zone1",
 				Uid:  102,
 			}},
-			validCandidates: map[string]replication.Position{
+			validCandidates: map[string]*RelayLogPositions{
 				"zone1-0000000100": positionOnly2,
 				"zone1-0000000101": positionIntermediate1,
 				"zone1-0000000102": positionEmpty,
@@ -3143,7 +3200,7 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Error: fmt.Errorf("primary position error"),
+						Error: errors.New("primary position error"),
 					},
 				},
 			},
@@ -3799,7 +3856,7 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 					"zone1-0000000100": nil,
 				},
 				SetReplicationSourceResults: map[string]error{
-					"zone1-0000000101": fmt.Errorf("An error"),
+					"zone1-0000000101": errors.New("An error"),
 				},
 			},
 			newSourceTabletAlias: "zone1-0000000100",
@@ -4615,7 +4672,7 @@ func getRelayLogPosition(gtidSets ...string) string {
 			res += ","
 		}
 		first = false
-		res += fmt.Sprintf("%s:%s", uuids[idx], set)
+		res += uuids[idx] + ":" + set
 	}
 	return res
 }

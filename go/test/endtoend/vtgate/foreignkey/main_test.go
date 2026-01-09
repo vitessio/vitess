@@ -119,13 +119,14 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start keyspace
+		cell := clusterInstance.Cell
 		sKs := &cluster.Keyspace{
 			Name:      shardedKs,
 			SchemaSQL: schemaSQL,
 			VSchema:   shardedVSchema,
 		}
 
-		err = clusterInstance.StartKeyspace(*sKs, []string{"-80", "80-"}, 1, false)
+		err = clusterInstance.StartKeyspace(*sKs, []string{"-80", "80-"}, 1, false, cell)
 		if err != nil {
 			return 1
 		}
@@ -137,7 +138,7 @@ func TestMain(m *testing.M) {
 			VSchema:   shardScopedVSchema,
 		}
 
-		err = clusterInstance.StartKeyspace(*ssKs, []string{"-80", "80-"}, 1, false)
+		err = clusterInstance.StartKeyspace(*ssKs, []string{"-80", "80-"}, 1, false, cell)
 		if err != nil {
 			return 1
 		}
@@ -147,7 +148,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: schemaSQL,
 			VSchema:   unshardedVSchema,
 		}
-		err = clusterInstance.StartUnshardedKeyspace(*uKs, 1, false)
+		err = clusterInstance.StartUnshardedKeyspace(*uKs, 1, false, cell)
 		if err != nil {
 			return 1
 		}
@@ -157,7 +158,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: schemaSQL,
 			VSchema:   unshardedUnmanagedVSchema,
 		}
-		err = clusterInstance.StartUnshardedKeyspace(*unmanagedKs, 1, false)
+		err = clusterInstance.StartUnshardedKeyspace(*unmanagedKs, 1, false, cell)
 		if err != nil {
 			return 1
 		}
@@ -250,7 +251,7 @@ func setupExtraMyConfig() error {
 	}
 
 	// The config file is in the same directory as this test file
-	configPath := fmt.Sprintf("%s/extra_my.cnf", wd)
+	configPath := wd + "/extra_my.cnf"
 
 	// Verify the file exists
 	if _, err := os.Stat(configPath); err != nil {

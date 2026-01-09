@@ -36,14 +36,13 @@ import (
 // TestVSchemaChangesUnderLoad tests vstreamer under a load of high binlog events and simultaneous multiple vschema changes
 // see https://github.com/vitessio/vitess/issues/11169
 func TestVSchemaChangesUnderLoad(t *testing.T) {
-
 	extendedTimeout := defaultTimeout * 4
 
 	vc = NewVitessCluster(t, nil)
 	defer vc.TearDown()
 
 	defaultCell := vc.Cells[vc.CellNames[0]]
-	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, 1, 0, 100, sourceKsOpts)
+	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, 1, 0, 100, defaultSourceKsOpts)
 
 	vtgateConn := vc.GetVTGateConn(t)
 	defer vtgateConn.Close()
@@ -51,7 +50,7 @@ func TestVSchemaChangesUnderLoad(t *testing.T) {
 	// ch is used to signal that there is significant data inserted into the tables and when a lot of vschema changes have been applied
 	ch := make(chan bool, 1)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	initialDataInserted := false
 	startCid := 100
 	warmupRowCount := startCid + 2000

@@ -18,6 +18,7 @@ package testutil
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -355,6 +356,10 @@ type TabletManagerClient struct {
 	// keyed by tablet alias
 	StartReplicationResults map[string]error
 	// keyed by tablet alias
+	RestartReplicationDelays map[string]time.Duration
+	// keyed by tablet alias
+	RestartReplicationResults map[string]error
+	// keyed by tablet alias
 	StopReplicationDelays map[string]time.Duration
 	// keyed by tablet alias
 	StopReplicationResults map[string]error
@@ -422,7 +427,7 @@ func (stream *backupStreamAdapter) Send(msg *logutilpb.Event) error {
 // Backup is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.BackupRequest) (logutil.EventStream, error) {
 	if tablet.Type == topodatapb.TabletType_PRIMARY && !req.AllowPrimary {
-		return nil, fmt.Errorf("cannot backup primary with allowPrimary=false")
+		return nil, errors.New("cannot backup primary with allowPrimary=false")
 	}
 
 	key := topoproto.TabletAliasString(tablet.Alias)
@@ -549,7 +554,7 @@ func (fake *TabletManagerClient) ChangeType(ctx context.Context, tablet *topodat
 }
 
 // DemotePrimary is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+func (fake *TabletManagerClient) DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet, force bool) (*replicationdatapb.PrimaryStatus, error) {
 	if fake.DemotePrimaryResults == nil {
 		return nil, assert.AnError
 	}
@@ -749,7 +754,7 @@ func (fake *TabletManagerClient) FullStatus(ctx context.Context, tablet *topodat
 		return nil, assert.AnError
 	}
 
-	return nil, fmt.Errorf("no output set for FullStatus")
+	return nil, errors.New("no output set for FullStatus")
 }
 
 // GetPermissions is part of the tmclient.TabletManagerClient interface.
@@ -785,7 +790,7 @@ func (fake *TabletManagerClient) GetPermissions(ctx context.Context, tablet *top
 // GetReplicas is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) GetReplicas(ctx context.Context, tablet *topodatapb.Tablet) ([]string, error) {
 	if fake.GetReplicasResults == nil {
-		return nil, fmt.Errorf("no results set on fake")
+		return nil, errors.New("no results set on fake")
 	}
 
 	key := topoproto.TabletAliasString(tablet.Alias)
@@ -1263,7 +1268,7 @@ func (fake *TabletManagerClient) SetReplicationSource(ctx context.Context, table
 	if fake.SetReplicationSourceSemiSync != nil {
 		if semiSyncRequirement, ok := fake.SetReplicationSourceSemiSync[key]; ok {
 			if semiSyncRequirement != semiSync {
-				return fmt.Errorf("semi-sync settings incorrect")
+				return errors.New("semi-sync settings incorrect")
 			}
 		}
 	}
@@ -1390,6 +1395,36 @@ func (fake *TabletManagerClient) StartReplication(ctx context.Context, tablet *t
 	}
 
 	if err, ok := fake.StartReplicationResults[key]; ok {
+		return err
+	}
+
+	return fmt.Errorf("%w: no result for key %s", assert.AnError, key)
+}
+
+// RestartReplication is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) RestartReplication(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
+	if fake.RestartReplicationResults == nil {
+		return assert.AnError
+	}
+
+	if tablet.Alias == nil {
+		return assert.AnError
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+
+	if fake.RestartReplicationDelays != nil {
+		if delay, ok := fake.RestartReplicationDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
+	if err, ok := fake.RestartReplicationResults[key]; ok {
 		return err
 	}
 

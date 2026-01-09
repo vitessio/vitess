@@ -17,7 +17,6 @@ limitations under the License.
 package vreplsuite
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -26,6 +25,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/config"
@@ -36,9 +38,6 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	"vitess.io/vitess/go/test/endtoend/throttler"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -106,7 +105,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// No need for replicas in this stress test
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 0, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 0, false, clusterInstance.Cell); err != nil {
 			return 1, err
 		}
 
@@ -130,11 +129,9 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitcode)
 	}
-
 }
 
 func TestVreplSuiteSchemaChanges(t *testing.T) {
-
 	shards := clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 
@@ -225,7 +222,7 @@ func testSingle(t *testing.T, testName string, fkOnlineDDLPossible bool) {
 	_ = mysqlExec(t, "set @@global.event_scheduler=1", "")
 
 	_ = mysqlExec(t, fmt.Sprintf("drop table if exists %s_child, %s, %s_parent, %s, %s;", tableName, tableName, tableName, beforeTableName, afterTableName), "")
-	_ = mysqlExec(t, fmt.Sprintf("drop event if exists %s", eventName), "")
+	_ = mysqlExec(t, "drop event if exists "+eventName, "")
 
 	{
 		// create
@@ -313,7 +310,7 @@ func testSingle(t *testing.T, testName string, fkOnlineDDLPossible bool) {
 		}
 		orderBy := ""
 		if content, exists := readTestFile(t, testName, "order_by"); exists {
-			orderBy = fmt.Sprintf("order by %s", content)
+			orderBy = "order by " + content
 		}
 		selectBefore := fmt.Sprintf("select %s from %s %s", beforeColumns, beforeTableName, orderBy)
 		selectAfter := fmt.Sprintf("select %s from %s %s", afterColumns, afterTableName, orderBy)
@@ -379,7 +376,7 @@ func mysqlParams() *mysql.ConnParams {
 	evaluatedMysqlParams = &mysql.ConnParams{
 		Uname:      "vt_dba",
 		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", getTablet().TabletUID), "/mysql.sock"),
-		DbName:     fmt.Sprintf("vt_%s", keyspaceName),
+		DbName:     "vt_" + keyspaceName,
 	}
 	return evaluatedMysqlParams
 }
@@ -388,7 +385,7 @@ func mysqlParams() *mysql.ConnParams {
 func mysqlExec(t *testing.T, sql string, expectError string) *sqltypes.Result {
 	t.Helper()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, mysqlParams())
 	require.Nil(t, err)
 	defer conn.Close()
@@ -405,7 +402,7 @@ func mysqlExec(t *testing.T, sql string, expectError string) *sqltypes.Result {
 
 // getCreateTableStatement returns the CREATE TABLE statement for a given table
 func getCreateTableStatement(t *testing.T, tableName string) (statement string) {
-	queryResult, err := getTablet().VttabletProcess.QueryTablet(fmt.Sprintf("show create table %s", tableName), keyspaceName, true)
+	queryResult, err := getTablet().VttabletProcess.QueryTablet("show create table "+tableName, keyspaceName, true)
 	require.Nil(t, err)
 
 	assert.Equal(t, len(queryResult.Rows), 1)

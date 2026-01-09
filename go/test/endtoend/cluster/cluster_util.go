@@ -18,6 +18,7 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -55,7 +56,7 @@ var (
 // Restart restarts vttablet and mysql.
 func (tablet *Vttablet) Restart() error {
 	if tablet.MysqlctlProcess.TabletUID|tablet.MysqlctldProcess.TabletUID == 0 {
-		return fmt.Errorf("no mysql process is running")
+		return errors.New("no mysql process is running")
 	}
 
 	if tablet.MysqlctlProcess.TabletUID > 0 {
@@ -94,7 +95,7 @@ func (tablet *Vttablet) ValidateTabletRestart(t *testing.T) {
 
 // GetPrimaryPosition gets the executed replication position of given vttablet
 func GetPrimaryPosition(t *testing.T, vttablet Vttablet, hostname string) (string, string) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtablet := getTablet(vttablet.GrpcPort, hostname)
 	pos, err := tmClient.PrimaryPosition(ctx, vtablet)
 	require.Nil(t, err)
@@ -104,7 +105,7 @@ func GetPrimaryPosition(t *testing.T, vttablet Vttablet, hostname string) (strin
 
 // FullStatus gets the full status from the given tablet.
 func FullStatus(t *testing.T, vttablet *Vttablet, hostname string) *replicationdatapb.FullStatus {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtablet := getTablet(vttablet.GrpcPort, hostname)
 	status, err := tmClient.FullStatus(ctx, vtablet)
 	require.NoError(t, err)
@@ -306,7 +307,6 @@ func NewConnParams(port int, password, socketPath, keyspace string) mysql.ConnPa
 	}
 
 	return cp
-
 }
 
 // WriteDbCredentialToTmp writes JSON formatted db credentials to the

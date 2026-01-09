@@ -132,7 +132,7 @@ func TestStandalone(t *testing.T) {
 
 	assertVSchemaExists(t, grpcAddress)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := vtgateconn.Dial(ctx, grpcAddress)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -279,7 +279,6 @@ func assertTabletsPresent(t *testing.T) {
 		default:
 			t.Logf("invalid shard %s", parts[2])
 		}
-
 	}
 
 	assert.Equal(t, 2, numPrimary)

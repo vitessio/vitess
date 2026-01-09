@@ -19,6 +19,7 @@ package utils
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -31,16 +32,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/utils"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
-	"vitess.io/vitess/go/vt/vttablet/tabletconn"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/utils"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 )
 
 var (
@@ -110,7 +110,7 @@ func SetupShardedReparentCluster(t *testing.T, durability string, extraVttabletF
 		VSchema:          `{"sharded": true, "vindexes": {"hash_index": {"type": "hash"}}, "tables": {"vt_insert_test": {"column_vindexes": [{"column": "id", "name": "hash_index"}]}}}`,
 		DurabilityPolicy: durability,
 	}
-	err = clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false)
+	err = clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false, clusterInstance.Cell)
 	require.NoError(t, err)
 
 	// Start Vtgate
@@ -223,7 +223,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	}
 	if clusterInstance.VtctlMajorVersion >= 14 {
 		clusterInstance.VtctldClientProcess = *cluster.VtctldClientProcessInstance(clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TopoPort, "localhost", clusterInstance.TmpDirectory)
-		out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", KeyspaceName, fmt.Sprintf("--durability-policy=%s", durability))
+		out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", KeyspaceName, "--durability-policy="+durability)
 		require.NoError(t, err, out)
 	}
 
@@ -445,7 +445,7 @@ func ValidateTopology(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 
 // ConfirmReplication confirms that the replication is working properly
 func ConfirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*cluster.Vttablet) int {
-	ctx := context.Background()
+	ctx := t.Context()
 	insertVal++
 	n := insertVal // unique value ...
 	// insert data into the new primary, check the connected replica work
@@ -739,7 +739,7 @@ func WaitForReplicationPosition(t *testing.T, tabletA *cluster.Vttablet, tabletB
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
-	return fmt.Errorf("failed to catch up on replication position")
+	return errors.New("failed to catch up on replication position")
 }
 
 // positionAtLeast executes the command position at_least
@@ -842,6 +842,7 @@ func CheckReplicationStatus(ctx context.Context, t *testing.T, tablet *cluster.V
 	}
 }
 
+// WaitForTabletToBeServing waits for a tablet to reach a serving state.
 func WaitForTabletToBeServing(ctx context.Context, t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet, timeout time.Duration) {
 	vTablet, err := clusterInstance.VtctldClientProcess.GetTablet(tablet.Alias)
 	require.NoError(t, err)
@@ -861,4 +862,23 @@ func WaitForTabletToBeServing(ctx context.Context, t *testing.T, clusterInstance
 	if err != nil && !strings.Contains(err.Error(), "context canceled") {
 		t.Fatal(err.Error())
 	}
+}
+
+// WaitForQueryWithStateInProcesslist waits for a query to be present in the processlist with a specific state.
+func WaitForQueryWithStateInProcesslist(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, sql, state string, timeout time.Duration) {
+	require.Eventually(t, func() bool {
+		qr := RunSQL(ctx, t, "select Command, State, Info from information_schema.processlist", tablet)
+		for _, row := range qr.Rows {
+			if len(row) != 3 {
+				continue
+			}
+			if strings.EqualFold(row[0].ToString(), "Query") {
+				continue
+			}
+			if strings.EqualFold(row[1].ToString(), state) && strings.EqualFold(row[2].ToString(), sql) {
+				return true
+			}
+		}
+		return false
+	}, timeout, time.Second, "query with state not in processlist")
 }

@@ -402,7 +402,7 @@ func mysqlParams() *mysql.ConnParams {
 	evaluatedMysqlParams = &mysql.ConnParams{
 		Uname:      "vt_dba",
 		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", primaryTablet.TabletUID), "/mysql.sock"),
-		DbName:     fmt.Sprintf("vt_%s", keyspaceName),
+		DbName:     "vt_" + keyspaceName,
 	}
 	return evaluatedMysqlParams
 }
@@ -450,7 +450,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// No need for replicas in this stress test
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 0, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 0, false, clusterInstance.Cell); err != nil {
 			return 1, err
 		}
 
@@ -474,11 +474,9 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitcode)
 	}
-
 }
 
 func TestVreplStressSchemaChanges(t *testing.T) {
-
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 	require.Equal(t, 1, len(shards[0].Vttablets))
@@ -755,7 +753,7 @@ func initTable(t *testing.T) {
 	log.Infof("initTable begin")
 	defer log.Infof("initTable complete")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()

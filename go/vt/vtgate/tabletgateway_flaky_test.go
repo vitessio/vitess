@@ -95,7 +95,7 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 	sbc.SetResults([]*sqltypes.Result{sqlResult1})
 
 	// run a query that we indeed get the result added to the sandbox connection back
-	res, err := tg.Execute(ctx, target, "query", nil, 0, 0, nil)
+	res, err := tg.Execute(ctx, nil, target, "query", nil, 0, 0, nil)
 	require.NoError(t, err)
 	require.Equal(t, res, sqlResult1)
 
@@ -115,7 +115,7 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 	// execute the query in a go routine since it should be buffered, and check that it eventually succeed
 	queryChan := make(chan struct{})
 	go func() {
-		res, err = tg.Execute(ctx, target, "query", nil, 0, 0, nil)
+		res, err = tg.Execute(ctx, nil, target, "query", nil, 0, 0, nil)
 		queryChan <- struct{}{}
 	}()
 
@@ -136,6 +136,8 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 	}
 }
 
+// TestGatewayBufferingWhileReparenting is used to test that the buffering mechanism buffers the queries when a PRS happens
+// the healthchecks that happen during a PRS are simulated in this test
 // TestGatewayBufferingWhileReparenting is used to test that the buffering mechanism buffers the queries when a PRS happens
 // the healthchecks that happen during a PRS are simulated in this test
 func TestGatewayBufferingWhileReparenting(t *testing.T) {
@@ -188,7 +190,7 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 
 		// run a query that we indeed get the result added to the sandbox connection back
 		// this also checks that the query reaches the primary tablet and not the replica
-		res, err := tg.Execute(ctx, target, "query", nil, 0, 0, nil)
+		res, err := tg.Execute(ctx, nil, target, "query", nil, 0, 0, nil)
 		require.NoError(t, err)
 		require.Equal(t, res, sqlResult1)
 
@@ -226,7 +228,7 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 		// execute the query in a go routine since it should be buffered, and check that it eventually succeed
 		queryChan := make(chan struct{})
 		go func() {
-			res, err = tg.Execute(ctx, target, "query", nil, 0, 0, nil)
+			res, err = tg.Execute(ctx, nil, target, "query", nil, 0, 0, nil)
 			queryChan <- struct{}{}
 		}()
 
@@ -335,7 +337,7 @@ func TestInconsistentStateDetectedBuffering(t *testing.T) {
 	var err error
 	queryChan := make(chan struct{})
 	go func() {
-		res, err = tg.Execute(ctx, target, "query", nil, 0, 0, nil)
+		res, err = tg.Execute(ctx, nil, target, "query", nil, 0, 0, nil)
 		queryChan <- struct{}{}
 	}()
 
@@ -344,8 +346,8 @@ func TestInconsistentStateDetectedBuffering(t *testing.T) {
 		require.Nil(t, res)
 		require.Error(t, err)
 		// depending on whether the health check ticks before or after the buffering code, we might get different errors
-		if !(err.Error() == "target: ks1.-80.primary: inconsistent state detected, primary is serving but initially found no available tablet" ||
-			err.Error() == "target: ks1.-80.primary: no healthy tablet available for 'keyspace:\"ks1\" shard:\"-80\" tablet_type:PRIMARY'") {
+		if err.Error() != "target: ks1.-80.primary: inconsistent state detected, primary is serving but initially found no available tablet" &&
+			err.Error() != "target: ks1.-80.primary: no healthy tablet available for 'keyspace:\"ks1\" shard:\"-80\" tablet_type:PRIMARY'" {
 			t.Fatalf("wrong error returned: %v", err)
 		}
 	case <-time.After(15 * time.Second):

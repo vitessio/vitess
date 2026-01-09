@@ -75,7 +75,7 @@ func TestSettings(t *testing.T) {
 				"insert into twopc_settings(id, col) values(9, now())"),
 			verifyFunc: func(t *testing.T, vtParams *mysql.ConnParams) {
 				// We can check that the time_zone setting was taken into account by checking the diff with the time by using a different time_zone.
-				ctx := context.Background()
+				ctx := t.Context()
 				conn, err := mysql.Connect(ctx, vtParams)
 				require.NoError(t, err)
 				defer conn.Close()
@@ -92,7 +92,7 @@ func TestSettings(t *testing.T) {
 				"insert into twopc_settings(id, col) values(9, now())"),
 			verifyFunc: func(t *testing.T, vtParams *mysql.ConnParams) {
 				// We can check that the time_zone setting was taken into account by checking the diff with the time by using a different time_zone.
-				ctx := context.Background()
+				ctx := t.Context()
 				conn, err := mysql.Connect(ctx, vtParams)
 				require.NoError(t, err)
 				defer conn.Close()
@@ -110,7 +110,7 @@ func TestSettings(t *testing.T) {
 				"insert into twopc_settings(id, col) values(25, now())"),
 			verifyFunc: func(t *testing.T, vtParams *mysql.ConnParams) {
 				// We can check that the time_zone setting was taken into account by checking the diff with the time by using a different time_zone.
-				ctx := context.Background()
+				ctx := t.Context()
 				conn, err := mysql.Connect(ctx, vtParams)
 				require.NoError(t, err)
 				defer conn.Close()
@@ -143,7 +143,6 @@ func TestSettings(t *testing.T) {
 			tt.verifyFunc(t, &vtParams)
 		})
 	}
-
 }
 
 // TestDisruptions tests that atomic transactions persevere through various disruptions.

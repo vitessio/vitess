@@ -59,7 +59,6 @@ func TestFindAllTargetsAndKeyspaces(t *testing.T) {
 	defer func() {
 		srvTopoCacheRefresh = 1 * time.Second
 		srvTopoCacheTTL = 1 * time.Second
-
 	}()
 	counts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
 	rs := NewResilientServer(ctx, ts, counts)

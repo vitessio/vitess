@@ -2397,7 +2397,6 @@ func TestCreateTableDiff(t *testing.T) {
 				assert.Equal(t, ts.diff, diff)
 
 				if len(ts.diffs) > 0 {
-
 					allSubsequentDiffs := AllSubsequent(alter)
 					allSubsequentDiffsStatements := []string{}
 					for _, d := range allSubsequentDiffs {
@@ -3522,7 +3521,7 @@ func TestIndexesCoveringForeignKeyColumns(t *testing.T) {
 	c, err := NewCreateTableEntity(env, createTable)
 	require.NoError(t, err)
 	tableColumns := map[string]sqlparser.IdentifierCI{}
-	for _, col := range c.CreateTable.TableSpec.Columns {
+	for _, col := range c.TableSpec.Columns {
 		tableColumns[col.Name.Lowered()] = col.Name
 	}
 	for _, ts := range tt {

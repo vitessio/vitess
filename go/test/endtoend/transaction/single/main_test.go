@@ -64,7 +64,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: SchemaSQL,
 			VSchema:   VSchema,
 		}
-		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false)
+		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}
@@ -269,7 +269,6 @@ func TestOnlyMultiShardWriteFail(t *testing.T) {
 		utils.Exec(t, conn, `select * from t1 where txn_id in ("d", "e", "f")`)
 		utils.Exec(t, conn, `commit`)
 	})
-
 }
 
 func setup(t *testing.T) (*mysql.Conn, func()) {

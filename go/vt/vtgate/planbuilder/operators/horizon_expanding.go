@@ -17,6 +17,7 @@ limitations under the License.
 package operators
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -93,14 +94,25 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 		extracted = append(extracted, "Projection")
 	}
 
+	if sel.Having != nil {
+		// HAVING is applied after aggregation but before window functions.
+		// This ensures window functions like ROW_NUMBER() only operate on filtered rows.
+		op = addWherePredicates(ctx, sel.Having.Expr, op)
+		extracted = append(extracted, "Filter")
+	}
+
+	if qp.HasWindow {
+		// Window functions are evaluated after HAVING but before DISTINCT, ORDER BY, and LIMIT.
+		// SQL execution order: Projection → Aggregation → HAVING → Window → Distinct → Order → Limit
+		// We wrap the current operator (which is either a Projection or Aggregation)
+		// with the Window operator to handle these calculations.
+		op = newWindow(op, qp)
+		extracted = append(extracted, "Window")
+	}
+
 	if qp.NeedsDistinct() {
 		op = newDistinct(op, qp, true)
 		extracted = append(extracted, "Distinct")
-	}
-
-	if sel.Having != nil {
-		op = addWherePredicates(ctx, sel.Having.Expr, op)
-		extracted = append(extracted, "Filter")
 	}
 
 	if len(qp.OrderExprs) > 0 {
@@ -315,7 +327,7 @@ func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProj
 	aes, err := slice.MapWithError(qp.SelectExprs, func(from SelectExpr) (*sqlparser.AliasedExpr, error) {
 		ae, ok := from.Col.(*sqlparser.AliasedExpr)
 		if !ok {
-			return nil, fmt.Errorf("star found")
+			return nil, errors.New("star found")
 		}
 		return ae, nil
 	})

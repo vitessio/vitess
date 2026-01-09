@@ -82,7 +82,7 @@ func testReplicationBase(t *testing.T, isClientCertPassed bool) {
 		require.Error(t, err)
 	}
 
-	err = clusterInstance.StartVTOrc(keyspace)
+	err = clusterInstance.StartVTOrc(clusterInstance.Cell, keyspace)
 	require.NoError(t, err)
 }
 

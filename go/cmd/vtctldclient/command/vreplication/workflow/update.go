@@ -17,6 +17,7 @@ limitations under the License.
 package workflow
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -79,7 +80,7 @@ var (
 				changes = true
 			}
 			if !changes {
-				return fmt.Errorf("no configuration options specified to update")
+				return errors.New("no configuration options specified to update")
 			}
 			return nil
 		},

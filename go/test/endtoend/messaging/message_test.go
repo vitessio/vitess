@@ -19,6 +19,7 @@ package messaging
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -68,7 +69,7 @@ create table vitess_message(
 `
 
 func TestMessage(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
@@ -82,9 +83,9 @@ func TestMessage(t *testing.T) {
 	require.NoError(t, err)
 	defer streamConn.Close()
 
-	utils.Exec(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
+	utils.Exec(t, conn, "use "+lookupKeyspace)
 	utils.Exec(t, conn, createMessage)
-	clusterInstance.VtctldClientProcess.ExecuteCommand(fmt.Sprintf("ReloadSchemaKeyspace %s", lookupKeyspace))
+	clusterInstance.VtctldClientProcess.ExecuteCommand("ReloadSchemaKeyspace " + lookupKeyspace)
 
 	defer utils.Exec(t, conn, "drop table vitess_message")
 
@@ -206,7 +207,7 @@ create table vitess_message3(
 `
 
 func TestThreeColMessage(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
@@ -220,7 +221,7 @@ func TestThreeColMessage(t *testing.T) {
 	require.NoError(t, err)
 	defer streamConn.Close()
 
-	utils.Exec(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
+	utils.Exec(t, conn, "use "+lookupKeyspace)
 	utils.Exec(t, conn, createThreeColMessage)
 	defer utils.Exec(t, conn, "drop table vitess_message3")
 
@@ -299,7 +300,7 @@ var createSpecificStreamingColsMessage = `create table vitess_message4(
 ) comment 'vitess_message,vt_message_cols=id|msg1,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'`
 
 func TestSpecificStreamingColsMessage(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
@@ -313,7 +314,7 @@ func TestSpecificStreamingColsMessage(t *testing.T) {
 	require.NoError(t, err)
 	defer streamConn.Close()
 
-	utils.Exec(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
+	utils.Exec(t, conn, "use "+lookupKeyspace)
 	utils.Exec(t, conn, createSpecificStreamingColsMessage)
 	defer utils.Exec(t, conn, "drop table vitess_message4")
 
@@ -377,7 +378,7 @@ func TestUnsharded(t *testing.T) {
 func TestReparenting(t *testing.T) {
 	name := "sharded_message"
 
-	ctx := context.Background()
+	ctx := t.Context()
 	// start grpc connection with vtgate and validate client
 	// connection counts in tablets
 	stream, err := VtgateGrpcConn(ctx, clusterInstance)
@@ -434,7 +435,6 @@ func TestReparenting(t *testing.T) {
 
 // TestConnection validate the connection count and message streaming.
 func TestConnection(t *testing.T) {
-
 	name := "sharded_message"
 
 	// 1 sec sleep added to avoid invalid connection count
@@ -445,7 +445,7 @@ func TestConnection(t *testing.T) {
 	assertClientCount(t, 0, shard0Primary)
 	assertClientCount(t, 0, shard1Primary)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	// first connection with vtgate
 	stream, err := VtgateGrpcConn(ctx, clusterInstance)
 	require.Nil(t, err)
@@ -492,7 +492,7 @@ func TestConnection(t *testing.T) {
 }
 
 func testMessaging(t *testing.T, name, ks string) {
-	ctx := context.Background()
+	ctx := t.Context()
 	stream, err := VtgateGrpcConn(ctx, clusterInstance)
 	require.Nil(t, err)
 	defer stream.Close()
@@ -582,7 +582,7 @@ func VtgateGrpcConn(ctx context.Context, cluster *cluster.LocalProcessCluster) (
 func (stream *VTGateStream) MessageStream(ks, shard string, keyRange *topodatapb.KeyRange, name string) (*sqltypes.Result, error) {
 	// start message stream which send received message to the respChan
 	session := stream.Session("@primary", nil)
-	resultStream, err := session.StreamExecute(stream.ctx, fmt.Sprintf("stream * from %s", name), nil)
+	resultStream, err := session.StreamExecute(stream.ctx, "stream * from "+name, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -621,7 +621,7 @@ func (stream *VTGateStream) Next() (*sqltypes.Result, error) {
 	case s := <-stream.respChan:
 		return s, nil
 	case <-timer.C:
-		return nil, fmt.Errorf("time limit exceeded")
+		return nil, errors.New("time limit exceeded")
 	}
 }
 

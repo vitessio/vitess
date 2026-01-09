@@ -95,229 +95,230 @@ func TestQueryExecutorPlans(t *testing.T) {
 		outsideTxErr bool
 		// TxThrottler allows the test case to override the transaction throttler
 		txThrottler txthrottler.TxThrottler
-	}{{
-		input: "select * from t",
-		dbResponses: []dbResponse{{
-			query:  "select * from t limit 10001",
-			result: selectResult,
-		}},
-		resultWant: selectResult,
-		planWant:   "Select",
-		logWant:    "select * from t limit 10001",
-		inTxWant:   "select * from t limit 10001",
-	}, {
-		input: "select * from t limit 1",
-		dbResponses: []dbResponse{{
-			query:  "select * from t limit 1",
-			result: selectResult,
-		}},
-		resultWant: selectResult,
-		planWant:   "Select",
-		logWant:    "select * from t limit 1",
-		inTxWant:   "select * from t limit 1",
-	}, {
-		input: "show engines",
-		dbResponses: []dbResponse{{
-			query:  "show engines",
-			result: dmlResult,
-		}},
-		resultWant: dmlResult,
-		planWant:   "Show",
-		logWant:    "show engines",
-	}, {
-		input: "repair t",
-		dbResponses: []dbResponse{{
-			query:  "repair t",
-			result: dmlResult,
-		}},
-		resultWant: dmlResult,
-		planWant:   "OtherAdmin",
-		logWant:    "repair t",
-	}, {
-		input: "insert into test_table(a) values(1)",
-		dbResponses: []dbResponse{{
-			query:  "insert into test_table(a) values (1)",
-			result: dmlResult,
-		}},
-		resultWant: dmlResult,
-		planWant:   "Insert",
-		logWant:    "insert into test_table(a) values (1)",
-	}, {
-		input: "replace into test_table(a) values(1)",
-		dbResponses: []dbResponse{{
-			query:  "replace into test_table(a) values (1)",
-			result: dmlResult,
-		}},
-		resultWant: dmlResult,
-		planWant:   "Insert",
-		logWant:    "replace into test_table(a) values (1)",
-	}, {
-		input: "update test_table set a=1",
-		dbResponses: []dbResponse{{
-			query:  "update test_table set a = 1 limit 10001",
-			result: dmlResult,
-		}},
-		resultWant: dmlResult,
-		planWant:   "UpdateLimit",
-		// The UpdateLimit query will not use autocommit because
-		// it needs to roll back on failure.
-		logWant:  "begin; update test_table set a = 1 limit 10001; commit",
-		inTxWant: "update test_table set a = 1 limit 10001",
-	}, {
-		input:       "select a, b from test_table",
-		passThrough: true,
-		inDMLExec:   true,
-		dbResponses: []dbResponse{{
-			query:  "select a, b from test_table",
-			result: selectResult,
-		}},
-		resultWant:   selectResult,
-		planWant:     "SelectNoLimit",
-		logWant:      "select a, b from test_table",
-		outsideTxErr: true,
-		errorWant:    "[BUG] SelectNoLimit unexpected plan type",
-	}, {
-		input:       "update test_table set a=1",
-		passThrough: true,
-		dbResponses: []dbResponse{{
-			query:  "update test_table set a = 1",
-			result: dmlResult,
-		}},
-		resultWant: dmlResult,
-		planWant:   "Update",
-		logWant:    "update test_table set a = 1",
-	}, {
-		input: "delete from test_table",
-		dbResponses: []dbResponse{{
-			query:  "delete from test_table limit 10001",
-			result: dmlResult,
-		}},
-		resultWant: dmlResult,
-		planWant:   "DeleteLimit",
-		// The DeleteLimit query will not use autocommit because
-		// it needs to roll back on failure.
-		logWant:  "begin; delete from test_table limit 10001; commit",
-		inTxWant: "delete from test_table limit 10001",
-	}, {
-		input:       "delete from test_table",
-		passThrough: true,
-		dbResponses: []dbResponse{{
-			query:  "delete from test_table",
-			result: dmlResult,
-		}},
-		resultWant: dmlResult,
-		planWant:   "Delete",
-		logWant:    "delete from test_table",
-	}, {
-		input: "alter table test_table add zipcode int",
-		dbResponses: []dbResponse{{
-			query:  "alter table test_table add column zipcode int",
-			result: dmlResult,
-		}},
-		resultWant:  dmlResult,
-		planWant:    "DDL",
-		logWant:     "alter table test_table add column zipcode int",
-		onlyInTxErr: true,
-		errorWant:   "DDL statement executed inside a transaction",
-	}, {
-		input: "savepoint a",
-		dbResponses: []dbResponse{{
-			query:  "savepoint a",
-			result: emptyResult,
-		}},
-		resultWant: emptyResult,
-		planWant:   "Savepoint",
-		logWant:    "savepoint a",
-		inTxWant:   "savepoint a",
-	}, {
-		input: "create index a on user(id)",
-		dbResponses: []dbResponse{{
-			query:  "alter table `user` add key a (id)",
-			result: emptyResult,
-		}},
-		resultWant:  emptyResult,
-		planWant:    "DDL",
-		logWant:     "alter table `user` add key a (id)",
-		inTxWant:    "alter table `user` add key a (id)",
-		onlyInTxErr: true,
-		errorWant:   "DDL statement executed inside a transaction",
-	}, {
-		input: "create index a on user(id1 + id2)",
-		dbResponses: []dbResponse{{
-			query:  "create index a on user(id1 + id2)",
-			result: emptyResult,
-		}},
-		resultWant:  emptyResult,
-		planWant:    "DDL",
-		logWant:     "create index a on user(id1 + id2)",
-		inTxWant:    "create index a on user(id1 + id2)",
-		onlyInTxErr: true,
-		errorWant:   "DDL statement executed inside a transaction",
-	}, {
-		input: "ROLLBACK work to SAVEPOINT a",
-		dbResponses: []dbResponse{{
-			query:  "ROLLBACK work to SAVEPOINT a",
-			result: emptyResult,
-		}},
-		resultWant: emptyResult,
-		planWant:   "RollbackSavepoint",
-		logWant:    "ROLLBACK work to SAVEPOINT a",
-		inTxWant:   "ROLLBACK work to SAVEPOINT a",
-	}, {
-		input: "RELEASE savepoint a",
-		dbResponses: []dbResponse{{
-			query:  "RELEASE savepoint a",
-			result: emptyResult,
-		}},
-		resultWant: emptyResult,
-		planWant:   "Release",
-		logWant:    "RELEASE savepoint a",
-		inTxWant:   "RELEASE savepoint a",
-	}, {
-		input: "show create database db_name",
-		dbResponses: []dbResponse{{
-			query:  "show create database ks",
-			result: emptyResult,
-		}},
-		resultWant: emptyResult,
-		planWant:   "Show",
-		logWant:    "show create database ks",
-	}, {
-		input: "show create database mysql",
-		dbResponses: []dbResponse{{
-			query:  "show create database mysql",
-			result: emptyResult,
-		}},
-		resultWant: emptyResult,
-		planWant:   "Show",
-		logWant:    "show create database mysql",
-	}, {
-		input: "show create table mysql.user",
-		dbResponses: []dbResponse{{
-			query:  "show create table mysql.`user`",
-			result: emptyResult,
-		}},
-		resultWant: emptyResult,
-		planWant:   "Show",
-		logWant:    "show create table mysql.`user`",
-	}, {
-		input: "update test_table set a=1",
-		dbResponses: []dbResponse{{
-			query:  "update test_table set a = 1 limit 10001",
-			result: dmlResult,
-		}},
-		errorWant:   "Transaction throttled",
-		txThrottler: &mockTxThrottler{true},
-	}, {
-		input:       "update test_table set a=1",
-		passThrough: true,
-		dbResponses: []dbResponse{{
-			query:  "update test_table set a = 1 limit 10001",
-			result: dmlResult,
-		}},
-		errorWant:   "Transaction throttled",
-		txThrottler: &mockTxThrottler{true},
-	},
+	}{
+		{
+			input: "select * from t",
+			dbResponses: []dbResponse{{
+				query:  "select * from t limit 10001",
+				result: selectResult,
+			}},
+			resultWant: selectResult,
+			planWant:   "Select",
+			logWant:    "select * from t limit 10001",
+			inTxWant:   "select * from t limit 10001",
+		}, {
+			input: "select * from t limit 1",
+			dbResponses: []dbResponse{{
+				query:  "select * from t limit 1",
+				result: selectResult,
+			}},
+			resultWant: selectResult,
+			planWant:   "Select",
+			logWant:    "select * from t limit 1",
+			inTxWant:   "select * from t limit 1",
+		}, {
+			input: "show engines",
+			dbResponses: []dbResponse{{
+				query:  "show engines",
+				result: dmlResult,
+			}},
+			resultWant: dmlResult,
+			planWant:   "Show",
+			logWant:    "show engines",
+		}, {
+			input: "repair t",
+			dbResponses: []dbResponse{{
+				query:  "repair t",
+				result: dmlResult,
+			}},
+			resultWant: dmlResult,
+			planWant:   "OtherAdmin",
+			logWant:    "repair t",
+		}, {
+			input: "insert into test_table(a) values(1)",
+			dbResponses: []dbResponse{{
+				query:  "insert into test_table(a) values (1)",
+				result: dmlResult,
+			}},
+			resultWant: dmlResult,
+			planWant:   "Insert",
+			logWant:    "insert into test_table(a) values (1)",
+		}, {
+			input: "replace into test_table(a) values(1)",
+			dbResponses: []dbResponse{{
+				query:  "replace into test_table(a) values (1)",
+				result: dmlResult,
+			}},
+			resultWant: dmlResult,
+			planWant:   "Insert",
+			logWant:    "replace into test_table(a) values (1)",
+		}, {
+			input: "update test_table set a=1",
+			dbResponses: []dbResponse{{
+				query:  "update test_table set a = 1 limit 10001",
+				result: dmlResult,
+			}},
+			resultWant: dmlResult,
+			planWant:   "UpdateLimit",
+			// The UpdateLimit query will not use autocommit because
+			// it needs to roll back on failure.
+			logWant:  "begin; update test_table set a = 1 limit 10001; commit",
+			inTxWant: "update test_table set a = 1 limit 10001",
+		}, {
+			input:       "select a, b from test_table",
+			passThrough: true,
+			inDMLExec:   true,
+			dbResponses: []dbResponse{{
+				query:  "select a, b from test_table",
+				result: selectResult,
+			}},
+			resultWant:   selectResult,
+			planWant:     "SelectNoLimit",
+			logWant:      "select a, b from test_table",
+			outsideTxErr: true,
+			errorWant:    "[BUG] SelectNoLimit unexpected plan type",
+		}, {
+			input:       "update test_table set a=1",
+			passThrough: true,
+			dbResponses: []dbResponse{{
+				query:  "update test_table set a = 1",
+				result: dmlResult,
+			}},
+			resultWant: dmlResult,
+			planWant:   "Update",
+			logWant:    "update test_table set a = 1",
+		}, {
+			input: "delete from test_table",
+			dbResponses: []dbResponse{{
+				query:  "delete from test_table limit 10001",
+				result: dmlResult,
+			}},
+			resultWant: dmlResult,
+			planWant:   "DeleteLimit",
+			// The DeleteLimit query will not use autocommit because
+			// it needs to roll back on failure.
+			logWant:  "begin; delete from test_table limit 10001; commit",
+			inTxWant: "delete from test_table limit 10001",
+		}, {
+			input:       "delete from test_table",
+			passThrough: true,
+			dbResponses: []dbResponse{{
+				query:  "delete from test_table",
+				result: dmlResult,
+			}},
+			resultWant: dmlResult,
+			planWant:   "Delete",
+			logWant:    "delete from test_table",
+		}, {
+			input: "alter table test_table add zipcode int",
+			dbResponses: []dbResponse{{
+				query:  "alter table test_table add column zipcode int",
+				result: dmlResult,
+			}},
+			resultWant:  dmlResult,
+			planWant:    "DDL",
+			logWant:     "alter table test_table add column zipcode int",
+			onlyInTxErr: true,
+			errorWant:   "DDL statement executed inside a transaction",
+		}, {
+			input: "savepoint a",
+			dbResponses: []dbResponse{{
+				query:  "savepoint a",
+				result: emptyResult,
+			}},
+			resultWant: emptyResult,
+			planWant:   "Savepoint",
+			logWant:    "savepoint a",
+			inTxWant:   "savepoint a",
+		}, {
+			input: "create index a on user(id)",
+			dbResponses: []dbResponse{{
+				query:  "alter table `user` add key a (id)",
+				result: emptyResult,
+			}},
+			resultWant:  emptyResult,
+			planWant:    "DDL",
+			logWant:     "alter table `user` add key a (id)",
+			inTxWant:    "alter table `user` add key a (id)",
+			onlyInTxErr: true,
+			errorWant:   "DDL statement executed inside a transaction",
+		}, {
+			input: "create index a on user(id1 + id2)",
+			dbResponses: []dbResponse{{
+				query:  "create index a on user(id1 + id2)",
+				result: emptyResult,
+			}},
+			resultWant:  emptyResult,
+			planWant:    "DDL",
+			logWant:     "create index a on user(id1 + id2)",
+			inTxWant:    "create index a on user(id1 + id2)",
+			onlyInTxErr: true,
+			errorWant:   "DDL statement executed inside a transaction",
+		}, {
+			input: "ROLLBACK work to SAVEPOINT a",
+			dbResponses: []dbResponse{{
+				query:  "ROLLBACK work to SAVEPOINT a",
+				result: emptyResult,
+			}},
+			resultWant: emptyResult,
+			planWant:   "RollbackSavepoint",
+			logWant:    "ROLLBACK work to SAVEPOINT a",
+			inTxWant:   "ROLLBACK work to SAVEPOINT a",
+		}, {
+			input: "RELEASE savepoint a",
+			dbResponses: []dbResponse{{
+				query:  "RELEASE savepoint a",
+				result: emptyResult,
+			}},
+			resultWant: emptyResult,
+			planWant:   "Release",
+			logWant:    "RELEASE savepoint a",
+			inTxWant:   "RELEASE savepoint a",
+		}, {
+			input: "show create database db_name",
+			dbResponses: []dbResponse{{
+				query:  "show create database ks",
+				result: emptyResult,
+			}},
+			resultWant: emptyResult,
+			planWant:   "Show",
+			logWant:    "show create database ks",
+		}, {
+			input: "show create database mysql",
+			dbResponses: []dbResponse{{
+				query:  "show create database mysql",
+				result: emptyResult,
+			}},
+			resultWant: emptyResult,
+			planWant:   "Show",
+			logWant:    "show create database mysql",
+		}, {
+			input: "show create table mysql.user",
+			dbResponses: []dbResponse{{
+				query:  "show create table mysql.`user`",
+				result: emptyResult,
+			}},
+			resultWant: emptyResult,
+			planWant:   "Show",
+			logWant:    "show create table mysql.`user`",
+		}, {
+			input: "update test_table set a=1",
+			dbResponses: []dbResponse{{
+				query:  "update test_table set a = 1 limit 10001",
+				result: dmlResult,
+			}},
+			errorWant:   "Transaction throttled",
+			txThrottler: &mockTxThrottler{true},
+		}, {
+			input:       "update test_table set a=1",
+			passThrough: true,
+			dbResponses: []dbResponse{{
+				query:  "update test_table set a = 1 limit 10001",
+				result: dmlResult,
+			}},
+			errorWant:   "Transaction throttled",
+			txThrottler: &mockTxThrottler{true},
+		},
 	}
 	for _, tcase := range testcases {
 		t.Run(tcase.input, func(t *testing.T) {
@@ -352,7 +353,7 @@ func TestQueryExecutorPlans(t *testing.T) {
 
 			// Test inside a transaction.
 			target := tsv.sm.Target()
-			state, err := tsv.Begin(ctx, target, nil)
+			state, err := tsv.Begin(ctx, nil, target, nil)
 			if !tcase.outsideTxErr && tcase.errorWant != "" && !tcase.onlyInTxErr {
 				require.EqualError(t, err, tcase.errorWant)
 				return
@@ -449,7 +450,7 @@ func TestQueryExecutorQueryAnnotation(t *testing.T) {
 
 			// Test inside a transaction.
 			target := tsv.sm.Target()
-			state, err := tsv.Begin(ctx, target, nil)
+			state, err := tsv.Begin(ctx, nil, target, nil)
 			require.NoError(t, err)
 			require.NotNil(t, state.TabletAlias, "alias should not be nil")
 			assert.Equal(t, tsv.alias, state.TabletAlias, "Wrong alias returned by Begin")
@@ -516,7 +517,7 @@ func TestQueryExecutorSelectImpossible(t *testing.T) {
 			assert.Equal(t, tcase.planWant, qre.logStats.PlanType, tcase.input)
 			assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
 			target := tsv.sm.Target()
-			state, err := tsv.Begin(ctx, target, nil)
+			state, err := tsv.Begin(ctx, nil, target, nil)
 			require.NoError(t, err)
 			require.NotNil(t, state.TabletAlias, "alias should not be nil")
 			assert.Equal(t, tsv.alias, state.TabletAlias, "Wrong tablet alias from Begin")
@@ -647,7 +648,7 @@ func TestQueryExecutorLimitFailure(t *testing.T) {
 
 			// Test inside a transaction.
 			target := tsv.sm.Target()
-			state, err := tsv.Begin(ctx, target, nil)
+			state, err := tsv.Begin(ctx, nil, target, nil)
 			require.NoError(t, err)
 			require.NotNil(t, state.TabletAlias, "alias should not be nil")
 			assert.Equal(t, tsv.alias, state.TabletAlias, "Wrong tablet alias from Begin")
@@ -1466,6 +1467,79 @@ func TestQueryExecutorShouldConsolidate(t *testing.T) {
 	}
 }
 
+func TestQueryExecutorConsolidatorWaiterCapFallback(t *testing.T) {
+	// Test that when the consolidator waiter cap is reached, queries fall back
+	// to independent execution instead of returning empty results.
+
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	ctx := context.Background()
+	tsv := newTestTabletServer(ctx, enableConsolidator, db)
+	defer tsv.StopService()
+
+	// Set a waiter cap of 1
+	tsv.config.ConsolidatorQueryWaiterCap = 1
+
+	fakeConsolidator := sync2.NewFakeConsolidator()
+	tsv.qe.consolidator = fakeConsolidator
+
+	input := "select * from t limit 10001"
+	result := &sqltypes.Result{
+		Fields: getTestTableFields(),
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt32(1),   // pk
+			sqltypes.NewInt32(100), // name
+			sqltypes.NewInt32(200), // addr
+		}},
+	}
+
+	// Set up consolidator to simulate an identical query already running (Created=false)
+	fakePendingResult := &sync2.FakePendingResult{}
+	fakePendingResult.SetResult(result)
+	// Start with waiter count above the cap (2 > 1), so the condition fails
+	fakePendingResult.WaiterCount = 2
+
+	fakeConsolidator.CreateReturn = &sync2.FakeConsolidatorCreateReturn{
+		Created:       false, // Simulate identical query already running
+		PendingResult: fakePendingResult,
+	}
+
+	// Set up database query/response for fallback execution
+	db.AddQuery(input, result)
+
+	qre := newTestQueryExecutor(context.Background(), tsv, input, 0)
+	qre.options = &querypb.ExecuteOptions{Consolidator: querypb.ExecuteOptions_CONSOLIDATOR_ENABLED}
+
+	// Execute query
+	actualResult, err := qre.Execute()
+	require.NoError(t, err)
+	require.NotNil(t, actualResult)
+
+	// Verify we got the correct result (not empty)
+	require.Equal(t, result.Fields, actualResult.Fields)
+	require.Equal(t, result.Rows, actualResult.Rows)
+
+	// Verify consolidator was attempted
+	require.Len(t, fakeConsolidator.CreateCalls, 1)
+
+	// Verify we did NOT wait (because waiter cap was exceeded)
+	require.Equal(t, 0, fakePendingResult.WaitCalls)
+
+	// Verify we did NOT broadcast (because we're not the original)
+	require.Equal(t, 0, fakePendingResult.BroadcastCalls)
+
+	// Verify AddWaiterCounter was called: once with 0 (to check count), once with -1 (cleanup)
+	require.Len(t, fakePendingResult.AddWaiterCounterCalls, 2)
+	require.Equal(t, int64(0), fakePendingResult.AddWaiterCounterCalls[0])  // Check current count
+	require.Equal(t, int64(-1), fakePendingResult.AddWaiterCounterCalls[1]) // Decrement
+
+	// Verify fallback executed the query independently
+	require.Equal(t, 1, db.GetQueryCalledNum(input))
+
+	db.VerifyAllExecutedOrFail()
+}
+
 func TestGetConnectionLogStats(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
@@ -1565,7 +1639,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 
 func newTransaction(tsv *TabletServer, options *querypb.ExecuteOptions) int64 {
 	target := tsv.sm.Target()
-	state, err := tsv.Begin(context.Background(), target, options)
+	state, err := tsv.Begin(context.Background(), nil, target, options)
 	if err != nil {
 		panic(vterrors.Wrap(err, "failed to start a transaction"))
 	}

@@ -199,7 +199,6 @@ func TestFilterByPlan(t *testing.T) {
 		if got != want {
 			t.Errorf("qrs1:\n%s, want\n%s", got, want)
 		}
-
 	}
 	{
 		// test multiple tables:

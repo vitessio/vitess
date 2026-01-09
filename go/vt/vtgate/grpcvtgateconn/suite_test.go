@@ -23,6 +23,7 @@ package grpcvtgateconn
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -50,6 +51,8 @@ type fakeVTGateService struct {
 	t        *testing.T
 	panics   bool
 	hasError bool
+
+	ActiveTxns int
 
 	errorWait chan struct{}
 }
@@ -104,7 +107,7 @@ func (f *fakeVTGateService) Execute(
 		return session, nil, errTestVtGateError
 	}
 	if f.panics {
-		panic(fmt.Errorf("test forced panic"))
+		panic(errors.New("test forced panic"))
 	}
 	f.checkCallerID(ctx, "Execute")
 	sql = strings.TrimSpace(sql)
@@ -121,10 +124,19 @@ func (f *fakeVTGateService) Execute(
 		f.t.Errorf("Execute:\n%+v, want\n%+v", query, execCase.execQuery)
 		return session, nil, nil
 	}
+
 	if execCase.outSession != nil {
+		if !session.InTransaction && execCase.outSession.InTransaction {
+			f.ActiveTxns++
+		}
+		if session.InTransaction && !execCase.outSession.InTransaction {
+			f.ActiveTxns--
+		}
+
 		proto.Reset(session)
 		proto.Merge(session, execCase.outSession)
 	}
+
 	return session, execCase.result, nil
 }
 
@@ -134,7 +146,7 @@ func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, session *vtgatepb.
 		return session, nil, errTestVtGateError
 	}
 	if f.panics {
-		panic(fmt.Errorf("test forced panic"))
+		panic(errors.New("test forced panic"))
 	}
 	f.checkCallerID(ctx, "ExecuteBatch")
 	execCase, ok := execMap[sqlList[0]]
@@ -163,7 +175,7 @@ func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, session *vtgatepb.
 // StreamExecute is part of the VTGateService interface
 func (f *fakeVTGateService) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
 	if f.panics {
-		panic(fmt.Errorf("test forced panic"))
+		panic(errors.New("test forced panic"))
 	}
 	sql = strings.TrimSpace(sql)
 	execCase, ok := execMap[sql]
@@ -252,7 +264,7 @@ func (f *fakeVTGateService) Prepare(ctx context.Context, session *vtgatepb.Sessi
 		return session, nil, 0, errTestVtGateError
 	}
 	if f.panics {
-		panic(fmt.Errorf("test forced panic"))
+		panic(errors.New("test forced panic"))
 	}
 	f.checkCallerID(ctx, "Prepare")
 	execCase, ok := execMap[sql]
@@ -276,7 +288,10 @@ func (f *fakeVTGateService) Prepare(ctx context.Context, session *vtgatepb.Sessi
 
 // CloseSession is part of the VTGateService interface
 func (f *fakeVTGateService) CloseSession(ctx context.Context, session *vtgatepb.Session) error {
-	panic("unimplemented")
+	if session.InTransaction {
+		f.ActiveTxns--
+	}
+	return nil
 }
 
 func (f *fakeVTGateService) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, send func([]*binlogdatapb.VEvent) error) error {
@@ -321,7 +336,7 @@ func RunTests(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGat
 
 	fs := fakeServer.(*fakeVTGateService)
 
-	testExecute(t, session)
+	testExecute(t, session, "request1")
 	testExecuteMulti(t, session)
 	testStreamExecute(t, session)
 	testStreamExecuteMulti(t, session)
@@ -391,9 +406,9 @@ func verifyErrorString(t *testing.T, err error, method string) {
 	}
 }
 
-func testExecute(t *testing.T, session *vtgateconn.VTGateSession) {
+func testExecute(t *testing.T, session *vtgateconn.VTGateSession, request string) {
 	ctx := newContext()
-	execCase := execMap["request1"]
+	execCase := execMap[request]
 	qr, err := session.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables, false)
 	require.NoError(t, err)
 	if !qr.Equal(execCase.result) {
@@ -708,6 +723,66 @@ var execMap = map[string]struct {
 			},
 		},
 	},
+	"begin": {
+		execQuery: &queryExecute{
+			SQL: "begin",
+			Session: &vtgatepb.Session{
+				TargetString:  "connection_ks",
+				InTransaction: false,
+			},
+		},
+		result: &sqltypes.Result{},
+		outSession: &vtgatepb.Session{
+			TargetString:  "connection_ks",
+			Autocommit:    false,
+			InTransaction: true,
+		},
+	},
+	"commit": {
+		execQuery: &queryExecute{
+			SQL: "commit",
+			Session: &vtgatepb.Session{
+				TargetString:  "connection_ks",
+				InTransaction: true,
+			},
+		},
+		result: &sqltypes.Result{},
+		outSession: &vtgatepb.Session{
+			TargetString:  "connection_ks",
+			Autocommit:    false,
+			InTransaction: false,
+		},
+	},
+	"txnRequest": {
+		execQuery: &queryExecute{
+			SQL: "txnRequest",
+			Session: &vtgatepb.Session{
+				TargetString:  "connection_ks",
+				InTransaction: true,
+			},
+		},
+		result: &sqltypes.Result{},
+		outSession: &vtgatepb.Session{
+			TargetString:  "connection_ks",
+			Autocommit:    false,
+			InTransaction: true,
+		},
+	},
+	"nontxnRequest": {
+		execQuery: &queryExecute{
+			SQL: "nontxnRequest",
+			Session: &vtgatepb.Session{
+				TargetString:  "connection_ks",
+				InTransaction: false,
+			},
+		},
+		result: &sqltypes.Result{},
+		outSession: &vtgatepb.Session{
+			TargetString:  "connection_ks",
+			Autocommit:    false,
+			InTransaction: false,
+		},
+	},
 }
 
 var result1 = sqltypes.Result{
@@ -740,4 +815,42 @@ var result1 = sqltypes.Result{
 var streamResultFields = sqltypes.Result{
 	Fields: result1.Fields,
 	Rows:   [][]sqltypes.Value{},
+}
+
+func RunSessionTests(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGateService) {
+	vtgateconn.RegisterDialer("test", func(ctx context.Context, address string) (vtgateconn.Impl, error) {
+		return impl, nil
+	})
+	conn, err := vtgateconn.DialProtocol(context.Background(), "test", "")
+	if err != nil {
+		t.Fatalf("Got err: %v from vtgateconn.DialProtocol", err)
+	}
+	session := conn.Session("connection_ks", nil)
+	session.SessionPb().Autocommit = false
+
+	fs := fakeServer.(*fakeVTGateService)
+
+	require.Equal(t, fs.ActiveTxns, 0)
+
+	testExecute(t, session, "begin")
+	require.Equal(t, fs.ActiveTxns, 1)
+	testExecute(t, session, "txnRequest")
+	require.Equal(t, fs.ActiveTxns, 1)
+	testExecute(t, session, "commit")
+	require.Equal(t, fs.ActiveTxns, 0)
+
+	session = conn.Session("connection_ks", nil)
+	session.SessionPb().Autocommit = false
+
+	testExecute(t, session, "begin")
+	require.Equal(t, fs.ActiveTxns, 1)
+
+	session.CloseSession(newContext())
+	require.Equal(t, fs.ActiveTxns, 0)
+
+	session = conn.Session("connection_ks", nil)
+	session.SessionPb().Autocommit = false
+
+	testExecute(t, session, "nontxnRequest")
+	require.Equal(t, fs.ActiveTxns, 0)
 }

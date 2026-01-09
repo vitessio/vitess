@@ -23,6 +23,7 @@ import (
 	"os"
 	"path"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -79,14 +80,15 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start keyspace
+		cell := clusterInstance.Cell
 		keyspace := &cluster.Keyspace{
 			Name: keyspaceName,
 		}
 
-		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 2, true); err != nil {
+		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 2, true, cell); err != nil {
 			return 1, err
 		}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 1, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 1, false, cell); err != nil {
 			return 1, err
 		}
 		return m.Run(), nil
@@ -97,7 +99,6 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitcode)
 	}
-
 }
 
 func TestSchemaChange(t *testing.T) {
@@ -110,19 +111,18 @@ func TestSchemaChange(t *testing.T) {
 	testUnsafeAllowForeignKeys(t)
 	testCreateInvalidView(t)
 	testCopySchemaShards(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.TabletPath, 2)
-	testCopySchemaShards(t, fmt.Sprintf("%s/0", keyspaceName), 3)
+	testCopySchemaShards(t, keyspaceName+"/0", 3)
 	testCopySchemaShardWithDifferentDB(t, 4)
 	testWithAutoSchemaFromChangeDir(t)
 }
 
 func testWithInitialSchema(t *testing.T) {
 	// Create 4 tables
-	var sqlQuery = "" // nolint
+	var sqlQuery string
 	for i := 0; i < totalTableCount; i++ {
 		sqlQuery = fmt.Sprintf(createTable, fmt.Sprintf("vt_select_test_%02d", i))
 		err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, sqlQuery)
 		require.Nil(t, err)
-
 	}
 
 	// Check if 4 tables are created
@@ -310,7 +310,7 @@ func testCopySchemaShardWithDifferentDB(t *testing.T, shard int) {
 	addNewShard(t, shard)
 	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0], 0)
 	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[1], 0)
-	source := fmt.Sprintf("%s/0", keyspaceName)
+	source := keyspaceName + "/0"
 
 	tabletAlias := clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0].VttabletProcess.TabletPath
 	schema, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetSchema", tabletAlias)
@@ -344,6 +344,6 @@ func addNewShard(t *testing.T, shard int) {
 	keyspace := &cluster.Keyspace{
 		Name: keyspaceName,
 	}
-	err := clusterInstance.StartKeyspace(*keyspace, []string{fmt.Sprintf("%d", shard)}, 1, false)
+	err := clusterInstance.StartKeyspace(*keyspace, []string{strconv.Itoa(shard)}, 1, false, clusterInstance.Cell)
 	require.Nil(t, err)
 }

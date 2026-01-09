@@ -65,9 +65,9 @@ func TestSidecarDB(t *testing.T) {
 	shard := "0"
 
 	cell1 := vc.Cells[defaultCellName]
-	tablet100 := fmt.Sprintf("%s-100", defaultCellName)
-	tablet101 := fmt.Sprintf("%s-101", defaultCellName)
-	vc.AddKeyspace(t, []*Cell{cell1}, keyspace, "0", initialProductVSchema, initialProductSchema, 1, 0, 100, sourceKsOpts)
+	tablet100 := defaultCellName + "-100"
+	tablet101 := defaultCellName + "-101"
+	vc.AddKeyspace(t, []*Cell{cell1}, keyspace, "0", initialProductVSchema, initialProductSchema, 1, 0, 100, defaultSourceKsOpts)
 	shard0 := vc.Cells[defaultCellName].Keyspaces[keyspace].Shards[shard]
 	tablet100Port := shard0.Tablets[tablet100].Vttablet.Port
 	tablet101Port := shard0.Tablets[tablet101].Vttablet.Port
@@ -102,7 +102,6 @@ func TestSidecarDB(t *testing.T) {
 		numChanges := modifySidecarDBSchema(t, vc, currentPrimary, ddls1)
 		expectedChanges100 += numChanges
 		prs(t, keyspace, shard)
-		// nolint
 		currentPrimary = tablet100
 
 		validateSidecarDBTables(t, tablet100, sidecarDBTables)

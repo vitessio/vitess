@@ -228,7 +228,7 @@ unit_test_cover: build dependency_check demo
 	go tool $(VT_GO_PARALLEL) cover -html=coverage.out
 
 unit_test_race: build dependency_check
-	tools/unit_test_race.sh
+	RACE=1 tools/unit_test_runner.sh
 
 e2e_test_race: build
 	tools/e2e_test_race.sh
@@ -284,9 +284,9 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # Please read docker/README.md to understand the different available images.
 
 # This rule builds the bootstrap images for all flavors.
-DOCKER_IMAGES_FOR_TEST = mysql80 mysql84 percona80
+DOCKER_IMAGES_FOR_TEST = mysql80 mysql84 percona80 percona84
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=48
+BOOTSTRAP_VERSION=49
 ensure_bootstrap_version:
 	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go
@@ -322,7 +322,7 @@ define build_docker_image
 	fi
 endef
 
-DOCKER_LITE_SUFFIX = mysql84 percona80
+DOCKER_LITE_SUFFIX = mysql80 percona80
 DOCKER_LITE_TARGETS = $(addprefix docker_lite_,$(DOCKER_LITE_SUFFIX))
 $(DOCKER_LITE_TARGETS): docker_lite_%:
 	${call build_docker_image,docker/lite/Dockerfile.$*,vitess/lite:$*}
@@ -339,7 +339,7 @@ docker_lite:
 docker_mini:
 	${call build_docker_image,docker/mini/Dockerfile,vitess/mini}
 
-DOCKER_VTTESTSERVER_SUFFIX = mysql84
+DOCKER_VTTESTSERVER_SUFFIX = mysql84 percona84
 DOCKER_VTTESTSERVER_TARGETS = $(addprefix docker_vttestserver_,$(DOCKER_VTTESTSERVER_SUFFIX))
 $(DOCKER_VTTESTSERVER_TARGETS): docker_vttestserver_%:
 	${call build_docker_image,docker/vttestserver/Dockerfile.$*,vitess/vttestserver:$*}

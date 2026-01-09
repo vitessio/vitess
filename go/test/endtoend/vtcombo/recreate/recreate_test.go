@@ -48,7 +48,6 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
-
 		topology := new(vttestpb.VTTestTopology)
 		topology.Keyspaces = []*vttestpb.Keyspace{
 			{
@@ -95,7 +94,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestDropAndRecreateWithSameShards(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := vtgateconn.Dial(ctx, grpcAddress)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -167,7 +166,6 @@ func assertTabletsPresent(t *testing.T) {
 		default:
 			t.Logf("invalid shard %s", parts[2])
 		}
-
 	}
 
 	assert.Equal(t, 2, numPrimary)

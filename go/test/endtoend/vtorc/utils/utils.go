@@ -18,6 +18,7 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -40,6 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vtorc/logic"
 
 	// Register topo implementations.
 	_ "vitess.io/vitess/go/vt/topo/consultopo"
@@ -230,15 +232,23 @@ func resetShardPrimary(ts *topo.Server) (err error) {
 }
 
 // StartVTOrcs is used to start the vtorcs with the given extra arguments
-func StartVTOrcs(t *testing.T, clusterInfo *VTOrcClusterInfo, orcExtraArgs []string, config cluster.VTOrcConfiguration, count int) {
+func StartVTOrcs(t *testing.T, clusterInfo *VTOrcClusterInfo, orcExtraArgs []string, config cluster.VTOrcConfiguration, countByCell map[string]int) {
 	t.Helper()
+
+	// use default vtorc cell counts if none are defined
+	if countByCell == nil {
+		countByCell = cluster.DefaultVtorcsByCell
+	}
+
 	// Start vtorc
-	for i := 0; i < count; i++ {
-		vtorcProcess := clusterInfo.ClusterInstance.NewVTOrcProcess(config)
-		vtorcProcess.ExtraArgs = orcExtraArgs
-		err := vtorcProcess.Setup()
-		require.NoError(t, err)
-		clusterInfo.ClusterInstance.VTOrcProcesses = append(clusterInfo.ClusterInstance.VTOrcProcesses, vtorcProcess)
+	for cell, count := range countByCell {
+		for i := 0; i < count; i++ {
+			vtorcProcess := clusterInfo.ClusterInstance.NewVTOrcProcess(config, cell)
+			vtorcProcess.ExtraArgs = orcExtraArgs
+			err := vtorcProcess.Setup()
+			require.NoError(t, err)
+			clusterInfo.ClusterInstance.VTOrcProcesses = append(clusterInfo.ClusterInstance.VTOrcProcesses, vtorcProcess)
+		}
 	}
 }
 
@@ -255,7 +265,12 @@ func StopVTOrcs(t *testing.T, clusterInfo *VTOrcClusterInfo) {
 }
 
 // SetupVttabletsAndVTOrcs is used to setup the vttablets and start the vtorcs
-func SetupVttabletsAndVTOrcs(t *testing.T, clusterInfo *VTOrcClusterInfo, numReplicasReqCell1, numRdonlyReqCell1 int, orcExtraArgs []string, config cluster.VTOrcConfiguration, vtorcCount int, durability string) {
+func SetupVttabletsAndVTOrcs(t *testing.T, clusterInfo *VTOrcClusterInfo, numReplicasReqCell1, numRdonlyReqCell1 int, orcExtraArgs []string, config cluster.VTOrcConfiguration, vtorcCountByCell map[string]int, durability string) {
+	// use default vtorc cell counts if none are defined
+	if vtorcCountByCell == nil {
+		vtorcCountByCell = cluster.DefaultVtorcsByCell
+	}
+
 	// stop vtorc if it is running
 	StopVTOrcs(t, clusterInfo)
 
@@ -300,7 +315,7 @@ func SetupVttabletsAndVTOrcs(t *testing.T, clusterInfo *VTOrcClusterInfo, numRep
 	if durability == "" {
 		durability = policy.DurabilityNone
 	}
-	out, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, fmt.Sprintf("--durability-policy=%s", durability))
+	out, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy="+durability)
 	require.NoError(t, err, out)
 	// VTOrc now uses shard record too, so we need to clear that as well for correct testing.
 	_, err = clusterInfo.Ts.UpdateShardFields(context.Background(), keyspaceName, shardName, func(info *topo.ShardInfo) error {
@@ -311,7 +326,7 @@ func SetupVttabletsAndVTOrcs(t *testing.T, clusterInfo *VTOrcClusterInfo, numRep
 	require.NoError(t, err)
 
 	// start vtorc
-	StartVTOrcs(t, clusterInfo, orcExtraArgs, config, vtorcCount)
+	StartVTOrcs(t, clusterInfo, orcExtraArgs, config, vtorcCountByCell)
 }
 
 // cleanAndStartVttablet cleans the MySQL instance underneath for running a new test. It also starts the vttablet.
@@ -491,7 +506,7 @@ func checkInsertedValues(t *testing.T, tablet *cluster.Vttablet, index int) erro
 	if err == nil && len(qr.Rows) == 1 {
 		return nil
 	}
-	return fmt.Errorf("data is not yet replicated")
+	return errors.New("data is not yet replicated")
 }
 
 // WaitForReplicationToStop waits for replication to stop on the given tablet
@@ -500,7 +515,7 @@ func WaitForReplicationToStop(t *testing.T, vttablet *cluster.Vttablet) error {
 	for {
 		select {
 		case <-timeout:
-			return fmt.Errorf("timedout: waiting for primary to stop replication")
+			return errors.New("timedout: waiting for primary to stop replication")
 		default:
 			res, err := RunSQL(t, "SHOW REPLICA STATUS", vttablet, "")
 			if err != nil {
@@ -521,7 +536,7 @@ func validateTopology(t *testing.T, clusterInfo *VTOrcClusterInfo, pingTablets b
 		for {
 			select {
 			case <-timeout:
-				ch <- fmt.Errorf("time out waiting for validation to pass")
+				ch <- errors.New("time out waiting for validation to pass")
 				return
 			default:
 				var err error
@@ -613,7 +628,6 @@ func execute(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, er
 
 // StartVttablet is used to start a vttablet from the given cell and type
 func StartVttablet(t *testing.T, clusterInfo *VTOrcClusterInfo, cell string, isRdonly bool) *cluster.Vttablet {
-
 	var tablet *cluster.Vttablet
 	for _, cellInfo := range clusterInfo.CellInfos {
 		if cellInfo.CellName == cell {
@@ -999,16 +1013,16 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 	}, timeout, time.Second, "timed out waiting for successful recovery count")
 }
 
-// WaitForSkippedRecoveryCount waits until the given recovery name's count of skipped runs matches the count expected
-func WaitForSkippedRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, recoveryName, keyspace, shard string, countExpected int) {
+// WaitForSkippedRecoveryCount waits until the given recovery name's count of skipped runs matches the count expected or greater
+func WaitForSkippedRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, recoveryName, keyspace, shard string, recoverySkipCode logic.RecoverySkipCode, countExpected int) {
 	t.Helper()
 	timeout := 15 * time.Second
-	mapKey := fmt.Sprintf("%s.%s.%s", recoveryName, keyspace, shard)
+	mapKey := fmt.Sprintf("%s.%s.%s.%s", recoveryName, keyspace, shard, recoverySkipCode)
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		vars := vtorcInstance.GetVars()
 		skippedRecoveriesMap := vars["SkippedRecoveries"].(map[string]interface{})
 		skippedCount := GetIntFromValue(skippedRecoveriesMap[mapKey])
-		assert.EqualValues(c, countExpected, skippedCount)
+		assert.GreaterOrEqual(c, skippedCount, countExpected)
 	}, timeout, time.Second, "timeout waiting for skipped recoveries")
 }
 

@@ -1,4 +1,6 @@
-name: unit_race
+# DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
+
+name: Unit Test (Race)
 on:
   push:
     branches:
@@ -8,7 +10,7 @@ on:
   pull_request:
     branches: '**'
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'unit_race')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Unit Test (Race)')
   cancel-in-progress: true
 
 permissions: read-all
@@ -19,10 +21,10 @@ env:
   GITHUB_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
 
 jobs:
-
-  build:
+  test:
     name: Unit Test (Race)
     runs-on: oracle-vm-16cpu-64gb-x86-64
+
     steps:
     - name: Skip CI
       run: |
@@ -68,38 +70,29 @@ jobs:
 
     - name: Tune the OS
       if: steps.changes.outputs.unit_tests == 'true'
-      run: |
-        sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
+      uses: ./.github/actions/tune-os
 
-        # Don't waste a bunch of time processing man-db triggers
-        echo "set man-db/auto-update false" | sudo debconf-communicate
-        sudo dpkg-reconfigure man-db
-
+    - name: Setup MySQL
+      if: steps.changes.outputs.unit_tests == 'true'
+      uses: ./.github/actions/setup-mysql
+      with:
+        flavor: mysql-8.0
+        
     - name: Get dependencies
       if: steps.changes.outputs.unit_tests == 'true'
       run: |
         export DEBIAN_FRONTEND="noninteractive"
-        sudo apt-get -qq update
-
-        # mysql80
-        sudo apt-get -qq install -y mysql-server mysql-client
-
-        sudo apt-get -qq install -y make unzip g++ curl git wget ant openjdk-11-jdk eatmydata
-        
-        sudo service mysql stop
-        sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
-        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
+        sudo apt-get install -y make unzip g++ curl git wget ant openjdk-11-jdk
 
         mkdir -p dist bin
-        curl -s -L https://github.com/coreos/etcd/releases/download/v3.5.17/etcd-v3.5.17-linux-amd64.tar.gz | tar -zxC dist
-        mv dist/etcd-v3.5.17-linux-amd64/{etcd,etcdctl} bin/
+        curl --max-time 10 --retry 3 --retry-max-time 45 -s -L https://github.com/coreos/etcd/releases/download/v3.5.25/etcd-v3.5.25-linux-amd64.tar.gz | tar -zxC dist
+        mv dist/etcd-v3.5.25-linux-amd64/{etcd,etcdctl} bin/
 
         go mod download
-        go install golang.org/x/tools/cmd/goimports@latest
-        
+        go install golang.org/x/tools/cmd/goimports@034e59c473362f8f2be47694d98fd3f12a1ad497 # v0.39.0
+
         # install JUnit report formatter
-        go install github.com/vitessio/go-junit-report@HEAD
+        go install github.com/vitessio/go-junit-report@99fa7f0daf16db969f54a49139a14471e633e6e8 # HEAD
 
     - name: Run make tools
       if: steps.changes.outputs.unit_tests == 'true'
@@ -118,17 +111,23 @@ jobs:
         # Tell Launchable about the build you are producing and testing
         launchable record build --name "$GITHUB_RUN_ID" --no-commit-collection --source .
 
-    - name: unit_race
+    - name: Run test
       if: steps.changes.outputs.unit_tests == 'true'
       timeout-minutes: 45
       run: |
+        set -exo pipefail
         # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
         # which musn't be more than 107 characters long.
         export VTDATAROOT="/tmp/"
-        export NOVTADMINBUILD=1
-        export VTEVALENGINETEST="0"
 
-        eatmydata -- make unit_test_race | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        export NOVTADMINBUILD=1
+        export VT_GO_PARALLEL_VALUE=$(nproc)
+        export VTEVALENGINETEST="0"
+        # We sometimes need to alter the behavior based on the platform we're
+        # testing, e.g. MySQL 5.7 vs 8.0.
+        export CI_DB_PLATFORM="mysql80"
+
+        make unit_test_race | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Record test results in launchable if PR is not a draft
       if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.unit_tests == 'true' && github.base_ref == 'main' && !cancelled()
@@ -141,7 +140,7 @@ jobs:
       run: |
         # print test output
         cat output.txt
-        
+
     - name: Test Summary
       if: steps.changes.outputs.unit_tests == 'true' && !cancelled()
       uses: test-summary/action@31493c76ec9e7aa675f1585d3ed6f1da69269a86 # v2.4

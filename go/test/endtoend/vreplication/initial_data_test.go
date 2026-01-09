@@ -20,8 +20,10 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
+	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -31,18 +33,24 @@ func insertInitialData(t *testing.T) {
 		defer closeConn()
 		log.Infof("Inserting initial data")
 		lines, _ := os.ReadFile("unsharded_init_data.sql")
-		execMultipleQueries(t, vtgateConn, "product:0", string(lines))
-		execVtgateQuery(t, vtgateConn, "product:0", "insert into customer_seq(id, next_id, cache) values(0, 100, 100);")
-		execVtgateQuery(t, vtgateConn, "product:0", "insert into order_seq(id, next_id, cache) values(0, 100, 100);")
-		execVtgateQuery(t, vtgateConn, "product:0", "insert into customer_seq2(id, next_id, cache) values(0, 100, 100);")
+		execMultipleQueries(t, vtgateConn, defaultSourceKs+":0", string(lines))
+		execVtgateQuery(t, vtgateConn, defaultSourceKs+":0", "insert into customer_seq(id, next_id, cache) values(0, 100, 100);")
+		execVtgateQuery(t, vtgateConn, defaultSourceKs+":0", "insert into order_seq(id, next_id, cache) values(0, 100, 100);")
+		execVtgateQuery(t, vtgateConn, defaultSourceKs+":0", "insert into customer_seq2(id, next_id, cache) values(0, 100, 100);")
 		log.Infof("Done inserting initial data")
 
-		waitForRowCount(t, vtgateConn, "product:0", "product", 2)
-		waitForRowCount(t, vtgateConn, "product:0", "customer", 3)
-		waitForQueryResult(t, vtgateConn, "product:0", "select * from merchant",
+		waitForRowCount(t, vtgateConn, defaultSourceKs+":0", "product", 2)
+		waitForRowCount(t, vtgateConn, defaultSourceKs+":0", "customer", 3)
+		waitForQueryResult(t, vtgateConn, defaultSourceKs+":0", "select * from merchant",
 			`[[VARCHAR("Monoprice") VARCHAR("eléctronics")] [VARCHAR("newegg") VARCHAR("elec†ronics")]]`)
 
 		insertJSONValues(t)
+
+		insertLargeTransactionForChunkTesting(t, vtgateConn, defaultSourceKs+":0", 50000)
+		log.Infof("Inserted large transaction for chunking tests")
+
+		execVtgateQuery(t, vtgateConn, defaultSourceKs, "delete from customer where cid >= 50000 and cid < 50100")
+		log.Infof("Cleaned up chunk testing rows from source keyspace")
 	})
 }
 
@@ -52,12 +60,12 @@ func insertJSONValues(t *testing.T) {
 	// insert null value combinations
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
-	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j3) values(1, \"{}\")")
-	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j1, j3) values(2, \"{}\", \"{}\")")
-	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j2, j3) values(3, \"{}\", \"{}\")")
-	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j1, j2, j3) values(4, NULL, 'null', '\"null\"')")
-	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j3) values(5, JSON_QUOTE('null'))")
-	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j3) values(6, '{}')")
+	execVtgateQuery(t, vtgateConn, defaultSourceKs+":0", "insert into json_tbl(id, j3) values(1, \"{}\")")
+	execVtgateQuery(t, vtgateConn, defaultSourceKs+":0", "insert into json_tbl(id, j1, j3) values(2, \"{}\", \"{}\")")
+	execVtgateQuery(t, vtgateConn, defaultSourceKs+":0", "insert into json_tbl(id, j2, j3) values(3, \"{}\", \"{}\")")
+	execVtgateQuery(t, vtgateConn, defaultSourceKs+":0", "insert into json_tbl(id, j1, j2, j3) values(4, NULL, 'null', '\"null\"')")
+	execVtgateQuery(t, vtgateConn, defaultSourceKs+":0", "insert into json_tbl(id, j3) values(5, JSON_QUOTE('null'))")
+	execVtgateQuery(t, vtgateConn, defaultSourceKs+":0", "insert into json_tbl(id, j3) values(6, '{}')")
 
 	id := 8 // 6 inserted above and one after copy phase is done
 
@@ -68,7 +76,7 @@ func insertJSONValues(t *testing.T) {
 		j1 := rand.IntN(numJsonValues)
 		j2 := rand.IntN(numJsonValues)
 		query := fmt.Sprintf(q, id, jsonValues[j1], jsonValues[j2])
-		execVtgateQuery(t, vtgateConn, "product:0", query)
+		execVtgateQuery(t, vtgateConn, defaultSourceKs+":0", query)
 	}
 }
 
@@ -82,7 +90,7 @@ func insertMoreCustomers(t *testing.T, numCustomers int) {
 	// that we reserved.
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
-	maxID := waitForSequenceValue(t, vtgateConn, "product", "customer_seq", numCustomers)
+	maxID := waitForSequenceValue(t, vtgateConn, defaultSourceKs, "customer_seq", numCustomers)
 	// So we need to calculate the first value we reserved
 	// from the max.
 	cid := maxID - int64(numCustomers)
@@ -97,28 +105,28 @@ func insertMoreCustomers(t *testing.T, numCustomers int) {
 		}
 		cid++
 	}
-	execVtgateQuery(t, vtgateConn, "customer", sql)
+	execVtgateQuery(t, vtgateConn, defaultTargetKs, sql)
 }
 
 func insertMoreProducts(t *testing.T) {
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
 	sql := "insert into product(pid, description) values(3, 'cpu'),(4, 'camera'),(5, 'mouse');"
-	execVtgateQuery(t, vtgateConn, "product", sql)
+	execVtgateQuery(t, vtgateConn, defaultSourceKs, sql)
 }
 
 func insertMoreProductsForSourceThrottler(t *testing.T) {
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
 	sql := "insert into product(pid, description) values(103, 'new-cpu'),(104, 'new-camera'),(105, 'new-mouse');"
-	execVtgateQuery(t, vtgateConn, "product", sql)
+	execVtgateQuery(t, vtgateConn, defaultSourceKs, sql)
 }
 
 func insertMoreProductsForTargetThrottler(t *testing.T) {
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
 	sql := "insert into product(pid, description) values(203, 'new-cpu'),(204, 'new-camera'),(205, 'new-mouse');"
-	execVtgateQuery(t, vtgateConn, "product", sql)
+	execVtgateQuery(t, vtgateConn, defaultSourceKs, sql)
 }
 
 var blobTableQueries = []string{
@@ -137,6 +145,18 @@ func insertIntoBlobTable(t *testing.T) {
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
 	for _, query := range blobTableQueries {
-		execVtgateQuery(t, vtgateConn, "product:0", query)
+		execVtgateQuery(t, vtgateConn, defaultSourceKs+":0", query)
 	}
+}
+
+// insertLargeTransactionForChunkTesting inserts a transaction large enough to exceed the 1KB chunking threshold.
+func insertLargeTransactionForChunkTesting(t *testing.T, vtgateConn *mysql.Conn, keyspace string, startID int) {
+	execVtgateQuery(t, vtgateConn, keyspace, "BEGIN")
+	for i := 0; i < 15; i++ {
+		largeData := strings.Repeat("x", 94) + fmt.Sprintf("_%05d", i)
+		query := fmt.Sprintf("INSERT INTO customer (cid, name) VALUES (%d, '%s')",
+			startID+i, largeData)
+		execVtgateQuery(t, vtgateConn, keyspace, query)
+	}
+	execVtgateQuery(t, vtgateConn, keyspace, "COMMIT")
 }

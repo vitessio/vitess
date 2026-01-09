@@ -17,7 +17,7 @@ limitations under the License.
 package zk2topo
 
 import (
-	"fmt"
+	"strconv"
 
 	"vitess.io/vitess/go/vt/topo"
 )
@@ -29,7 +29,7 @@ type ZKVersion int32
 
 // String is part of the topo.Version interface.
 func (v ZKVersion) String() string {
-	return fmt.Sprintf("%v", int32(v))
+	return strconv.Itoa(int(int32(v)))
 }
 
 var _ topo.Version = (ZKVersion)(0) // compile-time interface check

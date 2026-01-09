@@ -108,7 +108,6 @@ func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard 
 // and updates it's tablet record in the topo. Updating the shard record is handled
 // by the new primary tablet
 func (wr *Wrangler) TabletExternallyReparented(ctx context.Context, newPrimaryAlias *topodatapb.TabletAlias) error {
-
 	tabletInfo, err := wr.ts.GetTablet(ctx, newPrimaryAlias)
 	if err != nil {
 		log.Warningf("TabletExternallyReparented: failed to read tablet record for %v: %v", newPrimaryAlias, err)

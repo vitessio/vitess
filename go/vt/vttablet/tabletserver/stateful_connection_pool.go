@@ -200,7 +200,8 @@ func (sf *StatefulConnectionPool) NewConn(ctx context.Context, options *querypb.
 		enforceTimeout: options.GetWorkload() != querypb.ExecuteOptions_DBA,
 	}
 	// This will set both the timeout and initialize the expiryTime.
-	sfConn.SetTimeout(sf.env.Config().TxTimeoutForWorkload(options.GetWorkload()))
+	timeout := getTransactionTimeout(options, sf.env.Config(), options.GetWorkload())
+	sfConn.SetTimeout(timeout)
 
 	err = sf.active.Register(sfConn.ConnID, sfConn)
 	if err != nil {

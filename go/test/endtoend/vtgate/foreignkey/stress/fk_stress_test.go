@@ -377,7 +377,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// We will use a replica to confirm that vtgate's cascading works correctly.
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 2, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 2, false, clusterInstance.Cell); err != nil {
 			return 1, err
 		}
 
@@ -401,7 +401,6 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitcode)
 	}
-
 }
 
 func queryTablet(t *testing.T, tablet *cluster.Vttablet, query string, expectError string) *sqltypes.Result {
@@ -473,7 +472,6 @@ func waitForReplicationCatchup(t *testing.T) {
 	primaryPos := getTabletPosition(t, primary)
 	var wg sync.WaitGroup
 	for _, replica := range []*cluster.Vttablet{replicaNoFK, replicaFK} {
-		replica := replica
 		wg.Add(1)
 		go func() {
 			waitForReplicaCatchup(t, ctx, replica, primaryPos)
@@ -562,7 +560,7 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 		testName = fmt.Sprintf("%s/%s", testName, tcase.notes)
 	}
 	t.Run(testName, func(t *testing.T) {
-		ctx := context.Background()
+		ctx := t.Context()
 
 		t.Run("create schema", func(t *testing.T) {
 			createInitialSchema(t, tcase)
@@ -653,7 +651,6 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 }
 
 func TestStressFK(t *testing.T) {
-
 	t.Run("validate replication health", func(t *testing.T) {
 		validateReplicationIsHealthy(t, replicaNoFK)
 		validateReplicationIsHealthy(t, replicaFK)
@@ -799,7 +796,7 @@ func validateTableDefinitions(t *testing.T, afterOnlineDDL bool) {
 
 // createInitialSchema creates the tables from scratch, and drops the foreign key constraints on the replica.
 func createInitialSchema(t *testing.T, tcase *testCase) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -957,7 +954,7 @@ func waitForTable(t *testing.T, tableName string, conn *mysql.Conn) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
-	query := fmt.Sprintf("select count(*) from %s", tableName)
+	query := "select count(*) from " + tableName
 	for {
 		if _, err := conn.ExecuteFetch(query, 1, false); err == nil {
 			return // good
@@ -1007,7 +1004,7 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 
 // getCreateTableStatement returns the CREATE TABLE statement for a given table
 func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName string) (statement string) {
-	queryResult := queryTablet(t, tablet, fmt.Sprintf("show create table %s", tableName), "")
+	queryResult := queryTablet(t, tablet, "show create table "+tableName, "")
 
 	require.Equal(t, len(queryResult.Rows), 1)
 	row := queryResult.Rows[0]
@@ -1197,7 +1194,7 @@ func populateTables(t *testing.T, tcase *testCase) {
 	log.Infof("initTable begin")
 	defer log.Infof("initTable complete")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()

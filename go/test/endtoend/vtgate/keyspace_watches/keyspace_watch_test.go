@@ -91,7 +91,7 @@ func createCluster(extraVTGateArgs []string) (*cluster.LocalProcessCluster, int)
 		Name:      keyspaceUnshardedName,
 		SchemaSQL: sqlSchema,
 	}
-	if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {
+	if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false, clusterInstance.Cell); err != nil {
 		return nil, 1
 	}
 
@@ -117,7 +117,6 @@ func createCluster(extraVTGateArgs []string) (*cluster.LocalProcessCluster, int)
 }
 
 func TestRoutingWithKeyspacesToWatch(t *testing.T) {
-
 	clusterInstance, exitCode := createCluster(nil)
 	defer clusterInstance.Teardown()
 
@@ -140,7 +139,6 @@ func TestRoutingWithKeyspacesToWatch(t *testing.T) {
 }
 
 func TestVSchemaDDLWithKeyspacesToWatch(t *testing.T) {
-
 	extraVTGateArgs := []string{
 		"--vschema-ddl-authorized-users", "%",
 	}

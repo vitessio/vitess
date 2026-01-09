@@ -446,7 +446,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	_, err := executorExecSession(ctx, executor, session, "select id from main1", nil)
 	require.NoError(t, err)
 	wantSession := &vtgatepb.Session{TargetString: "@primary", InTransaction: true, FoundRows: 1, RowCount: -1}
-	testSession := session.Session.CloneVT()
+	testSession := session.CloneVT()
 	testSession.ShardSessions = nil
 	utils.MustMatch(t, wantSession, testSession, "session does not match for autocommit=0")
 
@@ -487,7 +487,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	_, err = executorExecSession(ctx, executor, session, "update main1 set id=1", nil)
 	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{InTransaction: true, Autocommit: true, TargetString: "@primary", FoundRows: 0, RowCount: 1}
-	testSession = session.Session.CloneVT()
+	testSession = session.CloneVT()
 	testSession.ShardSessions = nil
 	utils.MustMatch(t, wantSession, testSession, "session does not match for autocommit=1")
 	if got, want := sbclookup.CommitCount.Load(), startCount; got != want {
@@ -570,7 +570,6 @@ func TestExecutorShowColumns(t *testing.T) {
 			sbclookup.BatchQueries = nil
 		})
 	}
-
 }
 
 func sortString(w string) string {
@@ -639,7 +638,7 @@ func TestExecutorShow(t *testing.T) {
 	assert.Equal(t, want, lastQuery, "Got: %v, want %v", lastQuery, want)
 
 	wantqr := showResults
-	utils.MustMatch(t, wantqr, qr, fmt.Sprintf("unexpected results running query: %s", query))
+	utils.MustMatch(t, wantqr, qr, "unexpected results running query: "+query)
 
 	wantErrNoTable := "table unknown_table not found"
 	_, err = executorExecSession(ctx, executor, session, "show create table unknown_table", nil)
@@ -1094,7 +1093,7 @@ func TestExecutorShow(t *testing.T) {
 			buildVarCharRow("TestXBadVSchema/e0-"),
 		},
 	}
-	utils.MustMatch(t, wantqr, qr, fmt.Sprintf("%s, with a bad keyspace", query))
+	utils.MustMatch(t, wantqr, qr, query+", with a bad keyspace")
 
 	query = "show vschema tables"
 	session = econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
@@ -1810,7 +1809,6 @@ func TestGetPlanNormalized(t *testing.T) {
 }
 
 func TestGetPlanPriority(t *testing.T) {
-
 	testCases := []struct {
 		name             string
 		sql              string
@@ -1842,7 +1840,6 @@ func TestGetPlanPriority(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestPassthroughDDL(t *testing.T) {
@@ -2782,7 +2779,6 @@ func TestExecutorStartTxnStmt(t *testing.T) {
 
 			_, err = executorExecSession(ctx, executor, session, "rollback", nil)
 			require.NoError(t, err)
-
 		})
 	}
 }
@@ -3361,6 +3357,47 @@ func TestExecutorShowShards(t *testing.T) {
 			filter:         nil,
 			destTabletType: topodatapb.TabletType_PRIMARY,
 			wantErr:        "testing error getting keyspace ks1",
+		},
+		{
+			// Test that deleted keyspaces (returning NoNode error) are skipped
+			// rather than causing the entire query to fail.
+			name: "Deleted keyspace (NoNode) should be skipped",
+			srvTopoServer: &fakesrvtopo.FakeSrvTopo{
+				SrvKeyspaceNamesOutput: map[string][]string{
+					localCell: {"ks1", "ks2"},
+				},
+				SrvKeyspaceError: map[string]map[string]error{
+					localCell: {
+						"ks1": topo.NewError(topo.NoNode, "ks1"),
+					},
+				},
+				SrvKeyspaceOutput: map[string]map[string]*topodatapb.SrvKeyspace{
+					localCell: {
+						"ks2": {
+							Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+								{
+									ServedType: topodatapb.TabletType_PRIMARY,
+									ShardReferences: []*topodatapb.ShardReference{
+										{Name: "-40"},
+										{Name: "40-80"},
+										{Name: "80-"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			filter:         nil,
+			destTabletType: topodatapb.TabletType_PRIMARY,
+			want: &sqltypes.Result{
+				Fields: buildVarCharFields("Shards"),
+				Rows: []sqltypes.Row{
+					buildVarCharRow("ks2/-40"),
+					buildVarCharRow("ks2/40-80"),
+					buildVarCharRow("ks2/80-"),
+				},
+			},
 		},
 	}
 	for _, tt := range tests {

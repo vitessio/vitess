@@ -107,7 +107,7 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtTabletExtraArgs = []string{
 			"--queryserver-config-transaction-timeout", "3s",
 		}
-		if err := clusterInstance.StartKeyspace(*Keyspace, []string{"-80", "80-"}, 1, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*Keyspace, []string{"-80", "80-"}, 1, false, clusterInstance.Cell); err != nil {
 			log.Fatal(err.Error())
 			return 1
 		}
@@ -125,7 +125,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestStreamMessaging(t *testing.T) {
-
 	cnf := vitessdriver.Configuration{
 		Protocol: "grpc",
 		Address:  clusterInstance.Hostname + ":" + strconv.Itoa(clusterInstance.VtgateGrpcPort),

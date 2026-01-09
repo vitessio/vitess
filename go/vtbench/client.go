@@ -18,6 +18,7 @@ package vtbench
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -54,7 +55,6 @@ func (c *mysqlClientConn) connect(ctx context.Context, cp ConnParams) error {
 		Pass:       cp.Password,
 		UnixSocket: cp.UnixSocket,
 	})
-
 	if err != nil {
 		return err
 	}
@@ -84,7 +84,7 @@ var vtgateConns = map[string]*vtgateconn.VTGateConn{}
 func (c *grpcVtgateConn) connect(ctx context.Context, cp ConnParams) error {
 	withBlockOnce.Do(func() {
 		grpcclient.RegisterGRPCDialOptions(func(opts []grpc.DialOption) ([]grpc.DialOption, error) {
-			return append(opts, grpc.WithBlock()), nil // nolint:staticcheck
+			return append(opts, grpc.WithBlock()), nil //nolint:staticcheck
 		})
 	})
 
@@ -119,7 +119,7 @@ var vttabletConns = map[string]queryservice.QueryService{}
 func (c *grpcVttabletConn) connect(ctx context.Context, cp ConnParams) error {
 	withBlockOnce.Do(func() {
 		grpcclient.RegisterGRPCDialOptions(func(opts []grpc.DialOption) ([]grpc.DialOption, error) {
-			return append(opts, grpc.WithBlock()), nil // nolint:staticcheck
+			return append(opts, grpc.WithBlock()), nil //nolint:staticcheck
 		})
 	})
 
@@ -148,7 +148,7 @@ func (c *grpcVttabletConn) connect(ctx context.Context, cp ConnParams) error {
 
 	shard, ok := dest.(key.DestinationShard)
 	if !ok {
-		return fmt.Errorf("invalid destination shard")
+		return errors.New("invalid destination shard")
 	}
 
 	c.target = querypb.Target{
@@ -161,5 +161,5 @@ func (c *grpcVttabletConn) connect(ctx context.Context, cp ConnParams) error {
 }
 
 func (c *grpcVttabletConn) execute(ctx context.Context, query string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return c.qs.Execute(ctx, &c.target, query, bindVars, 0, 0, nil)
+	return c.qs.Execute(ctx, nil, &c.target, query, bindVars, 0, 0, nil)
 }

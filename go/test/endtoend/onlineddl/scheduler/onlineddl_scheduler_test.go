@@ -173,7 +173,6 @@ func waitForReadyToComplete(t *testing.T, uuid string, expected bool) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
-
 		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
@@ -270,7 +269,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// No need for replicas in this stress test
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 0, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 0, false, clusterInstance.Cell); err != nil {
 			return 1, err
 		}
 
@@ -295,11 +294,9 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitcode)
 	}
-
 }
 
 func TestSchedulerSchemaChanges(t *testing.T) {
-
 	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
 
 	t.Run("scheduler", testScheduler)
@@ -486,7 +483,7 @@ func testScheduler(t *testing.T) {
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			postponeLaunch := row.AsInt64("postpone_launch", 0)
-			assert.Equal(t, int64(1), postponeLaunch)
+			assert.EqualValues(t, 1, postponeLaunch)
 		}
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusQueued)
 
@@ -1704,10 +1701,10 @@ func testScheduler(t *testing.T) {
 		require.NoError(t, err)
 
 		sqls := []string{
-			fmt.Sprintf("drop table if exists t4_%s", u),
-			fmt.Sprintf("drop view  if exists t1_%s", u),
-			fmt.Sprintf("drop table if exists t2_%s", u),
-			fmt.Sprintf("drop view  if exists t3_%s", u),
+			"drop table if exists t4_" + u,
+			"drop view  if exists t1_" + u,
+			"drop table if exists t2_" + u,
+			"drop view  if exists t3_" + u,
 		}
 		sql := strings.Join(sqls, ";")
 		var vuuids []string
@@ -1734,10 +1731,10 @@ func testScheduler(t *testing.T) {
 		require.NoError(t, err)
 
 		sqls := []string{
-			fmt.Sprintf("drop table if exists t4_%s", u),
-			fmt.Sprintf("drop view  if exists t1_%s", u),
-			fmt.Sprintf("drop table if exists t2_%s", u),
-			fmt.Sprintf("drop view  if exists t3_%s", u),
+			"drop table if exists t4_" + u,
+			"drop view  if exists t1_" + u,
+			"drop table if exists t2_" + u,
+			"drop view  if exists t3_" + u,
 		}
 		sql := strings.Join(sqls, ";")
 		var vuuids []string
@@ -1764,10 +1761,10 @@ func testScheduler(t *testing.T) {
 		require.NoError(t, err)
 
 		sqls := []string{
-			fmt.Sprintf("drop table if exists t4_%s", u),
-			fmt.Sprintf("drop view  if exists t1_%s", u),
-			fmt.Sprintf("drop table t2_%s", u), // non existent
-			fmt.Sprintf("drop view  if exists t3_%s", u),
+			"drop table if exists t4_" + u,
+			"drop view  if exists t1_" + u,
+			"drop table t2_" + u, // non existent
+			"drop view  if exists t3_" + u,
 		}
 		sql := strings.Join(sqls, ";")
 		var vuuids []string
@@ -1809,35 +1806,50 @@ func testScheduler(t *testing.T) {
 		sqls := []string{
 			`alter table t1_test force`,
 			`alter table t2_test force`,
+			`drop table if exists non_existent_1`,
+			`drop table if exists non_existent_2`,
 		}
 		sql := strings.Join(sqls, ";")
 		var vuuids []string
 		t.Run("apply schema", func(t *testing.T) {
 			uuidList := testOnlineDDLStatement(t, createParams(sql, ddlStrategy+" --in-order-completion --postpone-completion --allow-concurrent", "vtctl", "", "", true)) // skip wait
 			vuuids = strings.Split(uuidList, "\n")
-			assert.Len(t, vuuids, 2)
+			assert.Len(t, vuuids, len(sqls))
 			for _, uuid := range vuuids {
 				waitForReadyToComplete(t, uuid, true)
 			}
+			assert.EventuallyWithT(t, func(c *assert.CollectT) {
+				for i, uuid := range vuuids {
+					rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+					require.NotNil(t, rs)
+					for _, row := range rs.Named().Rows {
+						inOrderCompletionPendingCount := row.AsUint64("in_order_completion_pending_count", 0)
+						assert.EqualValues(c, i, inOrderCompletionPendingCount)
+					}
+				}
+			}, time.Minute, time.Second, "in_order_completion_pending_count not as expected")
 			t.Run("cancel 1st migration", func(t *testing.T) {
 				onlineddl.CheckCancelMigration(t, &vtParams, shards, vuuids[0], true)
 				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, vuuids[0], normalWaitTime, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
 				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, vuuids[0], schema.OnlineDDLStatusCancelled)
 			})
-			t.Run("expect 2nd migration to fail", func(t *testing.T) {
-				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, vuuids[1], normalWaitTime, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
-				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
-				onlineddl.CheckMigrationStatus(t, &vtParams, shards, vuuids[1], schema.OnlineDDLStatusFailed)
+			t.Run("expect following migrations to fail", func(t *testing.T) {
+				for i := 1; i < len(vuuids); i++ {
+					uuid := vuuids[i]
+					status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+					fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+					onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+				}
 			})
 		})
 	})
 	t.Run("in-order-completion: two new views, one depends on the other", func(t *testing.T) {
 		u, err := schema.CreateOnlineDDLUUID()
 		require.NoError(t, err)
-		v2name := fmt.Sprintf("v2_%s", u)
+		v2name := "v2_" + u
 		createv2 := fmt.Sprintf("create view %s as select id from t1_test", v2name)
-		v1name := fmt.Sprintf("v1_%s", u)
+		v1name := "v1_" + u
 		createv1 := fmt.Sprintf("create view %s as select id from %s", v1name, v2name)
 
 		sql := fmt.Sprintf("%s; %s;", createv2, createv1)
@@ -2332,7 +2344,7 @@ func testDeclarative(t *testing.T) {
 		log.Infof("initTable begin")
 		defer log.Infof("initTable complete")
 
-		ctx := context.Background()
+		ctx := t.Context()
 		conn, err := mysql.Connect(ctx, &vtParams)
 		require.Nil(t, err)
 		defer conn.Close()
@@ -2358,7 +2370,7 @@ func testDeclarative(t *testing.T) {
 
 		log.Infof("%s", writeMetrics.String())
 
-		ctx := context.Background()
+		ctx := t.Context()
 		conn, err := mysql.Connect(ctx, &vtParams)
 		require.Nil(t, err)
 		defer conn.Close()
@@ -2809,7 +2821,6 @@ func testDeclarative(t *testing.T) {
 }
 
 func testForeignKeys(t *testing.T) {
-
 	var (
 		createStatements = []string{
 			`
@@ -3051,14 +3062,14 @@ func testForeignKeys(t *testing.T) {
 						if droppedTables[artifact] {
 							continue
 						}
-						statement := fmt.Sprintf("DROP TABLE IF EXISTS %s", artifact)
+						statement := "DROP TABLE IF EXISTS " + artifact
 						_, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, statement, cluster.ApplySchemaParams{DDLStrategy: "direct --unsafe-allow-foreign-keys"})
 						if err == nil {
 							droppedTables[artifact] = true
 						}
 					}
 				}
-				statement := fmt.Sprintf("DROP TABLE IF EXISTS %s", strings.Join(artifacts, ","))
+				statement := "DROP TABLE IF EXISTS " + strings.Join(artifacts, ",")
 				t.Run(statement, func(t *testing.T) {
 					testStatement(t, statement, "direct", "", false)
 				})

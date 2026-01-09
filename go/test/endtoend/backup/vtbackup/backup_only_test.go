@@ -245,7 +245,7 @@ func startVtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disabl
 		// Use opentsdb for stats.
 		utils.GetFlagVariantForTests("--stats-backend"), "opentsdb",
 		// Write stats to file for reading afterwards.
-		utils.GetFlagVariantForTests("--opentsdb-uri"), fmt.Sprintf("file://%s", statsPath),
+		utils.GetFlagVariantForTests("--opentsdb-uri"), "file://" + statsPath,
 	}
 	if restartBeforeBackup {
 		extraArgs = append(extraArgs, "--restart_before_backup")
@@ -375,7 +375,7 @@ func resetTabletDirectory(t *testing.T, tablet cluster.Vttablet, initMysql bool)
 func tearDown(t *testing.T, initMysql bool) {
 	// reset replication
 	for _, db := range []string{"_vt", "vt_insert_test"} {
-		_, err := primary.VttabletProcess.QueryTablet(fmt.Sprintf("drop database if exists %s", db), keyspaceName, true)
+		_, err := primary.VttabletProcess.QueryTablet("drop database if exists "+db, keyspaceName, true)
 		require.NoError(t, err)
 	}
 	caughtUp := waitForReplicationToCatchup([]cluster.Vttablet{*replica1, *replica2})

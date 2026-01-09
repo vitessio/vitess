@@ -534,7 +534,6 @@ func addColumns(ctx *plancontext.PlanningContext, columns sqlparser.Columns, exp
 		if !exists {
 			offsets = append(offsets, len(selectExprs))
 			selectExprs = append(selectExprs, ae)
-
 		}
 	}
 	return offsets, selectExprs

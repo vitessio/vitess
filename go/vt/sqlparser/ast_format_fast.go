@@ -242,7 +242,6 @@ func (node *Insert) FormatFast(buf *TrackedBuffer) {
 		node.OnDup.FormatFast(buf)
 
 	}
-
 }
 
 // FormatFast formats the node.
@@ -1157,7 +1156,6 @@ func (ct *ColumnType) FormatFast(buf *TrackedBuffer) {
 		buf.WriteByte(',')
 		buf.WriteString(fmt.Sprintf("%d", *ct.Scale))
 		buf.WriteByte(')')
-
 	} else if ct.Length != nil {
 		buf.WriteByte('(')
 		buf.WriteString(fmt.Sprintf("%d", *ct.Length))
@@ -1578,7 +1576,6 @@ func (node *Begin) FormatFast(buf *TrackedBuffer) {
 		buf.WriteString(", ")
 		buf.WriteString(accessMode.ToString())
 	}
-
 }
 
 // FormatFast formats the node.
@@ -1819,7 +1816,11 @@ func (node TableName) FormatFast(buf *TrackedBuffer) {
 		node.Qualifier.FormatFast(buf)
 		buf.WriteByte('.')
 	}
-	node.Name.FormatFast(buf)
+	if node.Qualifier.IsEmpty() && node.Name.String() == "dual" {
+		buf.WriteString("dual")
+	} else {
+		node.Name.FormatFast(buf)
+	}
 }
 
 // FormatFast formats the node.
@@ -2459,7 +2460,6 @@ func (node *JSONPrettyExpr) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("json_pretty(")
 	buf.printExpr(node, node.JSONVal, true)
 	buf.WriteByte(')')
-
 }
 
 // FormatFast formats the node
@@ -2467,7 +2467,6 @@ func (node *JSONStorageFreeExpr) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("json_storage_free(")
 	buf.printExpr(node, node.JSONVal, true)
 	buf.WriteByte(')')
-
 }
 
 // FormatFast formats the node
@@ -2475,7 +2474,6 @@ func (node *JSONStorageSizeExpr) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("json_storage_size(")
 	buf.printExpr(node, node.JSONVal, true)
 	buf.WriteByte(')')
-
 }
 
 // FormatFast formats the node
@@ -2494,25 +2492,46 @@ func (node *OverClause) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node
 func (node *WindowSpecification) FormatFast(buf *TrackedBuffer) {
+	hasContent := false
 	if node.Name.NotEmpty() {
-		buf.WriteByte(' ')
 		node.Name.FormatFast(buf)
+		hasContent = true
 	}
 	if node.PartitionClause != nil {
-		buf.WriteString(" partition by ")
-		buf.formatExprs(node.PartitionClause)
+		if hasContent {
+			buf.WriteString(" partition by ")
+			buf.formatExprs(node.PartitionClause)
+		} else {
+			buf.WriteString("partition by ")
+			buf.formatExprs(node.PartitionClause)
+		}
+		hasContent = true
 	}
 	if node.OrderClause != nil {
-		node.OrderClause.FormatFast(buf)
+		if hasContent {
+			node.OrderClause.FormatFast(buf)
+		} else {
+			prefix := "order by "
+			for _, n := range node.OrderClause {
+				buf.WriteString(prefix)
+				n.FormatFast(buf)
+				prefix = ", "
+			}
+		}
+		hasContent = true
 	}
 	if node.FrameClause != nil {
-		node.FrameClause.FormatFast(buf)
+		if hasContent {
+			buf.WriteByte(' ')
+			node.FrameClause.FormatFast(buf)
+		} else {
+			node.FrameClause.FormatFast(buf)
+		}
 	}
 }
 
 // FormatFast formats the node
 func (node *FrameClause) FormatFast(buf *TrackedBuffer) {
-	buf.WriteByte(' ')
 	buf.WriteString(node.Unit.ToString())
 	if node.End != nil {
 		buf.WriteString(" between")
@@ -3377,7 +3396,6 @@ func (node *AddIndexDefinition) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (node *AddColumns) FormatFast(buf *TrackedBuffer) {
-
 	if len(node.Columns) == 1 {
 		buf.WriteString("add column ")
 		node.Columns[0].FormatFast(buf)
@@ -3497,7 +3515,6 @@ func (node *KeyState) FormatFast(buf *TrackedBuffer) {
 	} else {
 		buf.WriteString("disable keys")
 	}
-
 }
 
 // FormatFast formats the node
@@ -3759,7 +3776,6 @@ func (node *JSONObjectExpr) FormatFast(buf *TrackedBuffer) {
 		for i, p := range node.Params {
 			if i != 0 {
 				buf.WriteString(", ")
-
 			}
 			p.FormatFast(buf)
 		}

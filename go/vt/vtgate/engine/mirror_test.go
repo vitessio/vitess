@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -124,7 +125,7 @@ func TestMirror(t *testing.T) {
 			"ExecuteMultiShard ks1.0: select f.bar from foo f where f.id = 1 {} false false",
 		})
 		mirrorVC.ExpectLog(t, []string{
-			`ResolveDestinations ks2 [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(d46405367612b4b7)`,
+			fmt.Sprintf(`ResolveDestinations ks2 [%v] Destinations:DestinationKeyspaceID(d46405367612b4b7)`, sqltypes.Int64BindVariable(1)),
 			"ExecuteMultiShard ks2.-20: select f.bar from foo f where f.id = 1 {} false false",
 		})
 		require.NotNil(t, targetExecTime.Load())
@@ -145,7 +146,7 @@ func TestMirror(t *testing.T) {
 		}()
 
 		vc.results = nil
-		vc.resultErr = fmt.Errorf("return me")
+		vc.resultErr = errors.New("return me")
 
 		ctx := context.Background()
 		res, err := mirror.TryExecute(ctx, vc, map[string]*querypb.BindVariable{}, true)
@@ -158,7 +159,7 @@ func TestMirror(t *testing.T) {
 			"ExecuteMultiShard ks1.0: select f.bar from foo f where f.id = 1 {} false false",
 		})
 		mirrorVC.ExpectLog(t, []string{
-			`ResolveDestinations ks2 [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(d46405367612b4b7)`,
+			fmt.Sprintf(`ResolveDestinations ks2 [%v] Destinations:DestinationKeyspaceID(d46405367612b4b7)`, sqltypes.Int64BindVariable(1)),
 			"ExecuteMultiShard ks2.-20: select f.bar from foo f where f.id = 1 {} false false",
 		})
 		require.NotNil(t, targetExecTime.Load())
@@ -179,7 +180,7 @@ func TestMirror(t *testing.T) {
 		}()
 
 		mirrorVC.results = nil
-		mirrorVC.resultErr = fmt.Errorf("ignore me")
+		mirrorVC.resultErr = errors.New("ignore me")
 
 		want := vc.results[0]
 		res, err := mirror.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
@@ -191,7 +192,7 @@ func TestMirror(t *testing.T) {
 			"ExecuteMultiShard ks1.0: select f.bar from foo f where f.id = 1 {} false false",
 		})
 		mirrorVC.ExpectLog(t, []string{
-			`ResolveDestinations ks2 [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(d46405367612b4b7)`,
+			fmt.Sprintf(`ResolveDestinations ks2 [%v] Destinations:DestinationKeyspaceID(d46405367612b4b7)`, sqltypes.Int64BindVariable(1)),
 			"ExecuteMultiShard ks2.-20: select f.bar from foo f where f.id = 1 {} false false",
 		})
 
@@ -244,7 +245,7 @@ func TestMirror(t *testing.T) {
 			"ExecuteMultiShard ks1.0: select f.bar from foo f where f.id = 1 {} false false",
 		})
 		mirrorVC.ExpectLog(t, []string{
-			`ResolveDestinations ks2 [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(d46405367612b4b7)`,
+			fmt.Sprintf(`ResolveDestinations ks2 [%v] Destinations:DestinationKeyspaceID(d46405367612b4b7)`, sqltypes.Int64BindVariable(1)),
 			"ExecuteMultiShard ks2.-20: select f.bar from foo f where f.id = 1 {} false false",
 		})
 
@@ -299,7 +300,7 @@ func TestMirror(t *testing.T) {
 			"ExecuteMultiShard ks1.0: select f.bar from foo f where f.id = 1 {} false false",
 		})
 		mirrorVC.ExpectLog(t, []string{
-			`ResolveDestinations ks2 [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(d46405367612b4b7)`,
+			fmt.Sprintf(`ResolveDestinations ks2 [%v] Destinations:DestinationKeyspaceID(d46405367612b4b7)`, sqltypes.Int64BindVariable(1)),
 			"ExecuteMultiShard ks2.-20: select f.bar from foo f where f.id = 1 {} false false",
 		})
 
@@ -336,7 +337,7 @@ func TestMirror(t *testing.T) {
 			"StreamExecuteMulti select f.bar from foo f where f.id = 1 ks1.0: {} ",
 		})
 		mirrorVC.ExpectLog(t, []string{
-			`ResolveDestinations ks2 [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(d46405367612b4b7)`,
+			fmt.Sprintf(`ResolveDestinations ks2 [%v] Destinations:DestinationKeyspaceID(d46405367612b4b7)`, sqltypes.Int64BindVariable(1)),
 			"StreamExecuteMulti select f.bar from foo f where f.id = 1 ks2.-20: {} ",
 		})
 
@@ -358,7 +359,7 @@ func TestMirror(t *testing.T) {
 		}()
 
 		vc.results = nil
-		vc.resultErr = fmt.Errorf("return me")
+		vc.resultErr = errors.New("return me")
 
 		err := mirror.TryStreamExecute(
 			context.Background(),
@@ -378,7 +379,7 @@ func TestMirror(t *testing.T) {
 			"StreamExecuteMulti select f.bar from foo f where f.id = 1 ks1.0: {} ",
 		})
 		mirrorVC.ExpectLog(t, []string{
-			`ResolveDestinations ks2 [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(d46405367612b4b7)`,
+			fmt.Sprintf(`ResolveDestinations ks2 [%v] Destinations:DestinationKeyspaceID(d46405367612b4b7)`, sqltypes.Int64BindVariable(1)),
 			"StreamExecuteMulti select f.bar from foo f where f.id = 1 ks2.-20: {} ",
 		})
 
@@ -400,7 +401,7 @@ func TestMirror(t *testing.T) {
 		}()
 
 		mirrorVC.results = nil
-		mirrorVC.resultErr = fmt.Errorf("ignore me")
+		mirrorVC.resultErr = errors.New("ignore me")
 
 		want := vc.results[0]
 		err := mirror.TryStreamExecute(
@@ -420,7 +421,7 @@ func TestMirror(t *testing.T) {
 			"StreamExecuteMulti select f.bar from foo f where f.id = 1 ks1.0: {} ",
 		})
 		mirrorVC.ExpectLog(t, []string{
-			`ResolveDestinations ks2 [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(d46405367612b4b7)`,
+			fmt.Sprintf(`ResolveDestinations ks2 [%v] Destinations:DestinationKeyspaceID(d46405367612b4b7)`, sqltypes.Int64BindVariable(1)),
 			"StreamExecuteMulti select f.bar from foo f where f.id = 1 ks2.-20: {} ",
 		})
 
@@ -480,7 +481,7 @@ func TestMirror(t *testing.T) {
 			"StreamExecuteMulti select f.bar from foo f where f.id = 1 ks1.0: {} ",
 		})
 		mirrorVC.ExpectLog(t, []string{
-			`ResolveDestinations ks2 [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(d46405367612b4b7)`,
+			fmt.Sprintf(`ResolveDestinations ks2 [%v] Destinations:DestinationKeyspaceID(d46405367612b4b7)`, sqltypes.Int64BindVariable(1)),
 			"StreamExecuteMulti select f.bar from foo f where f.id = 1 ks2.-20: {} ",
 		})
 
@@ -539,7 +540,7 @@ func TestMirror(t *testing.T) {
 			"StreamExecuteMulti select f.bar from foo f where f.id = 1 ks1.0: {} ",
 		})
 		mirrorVC.ExpectLog(t, []string{
-			`ResolveDestinations ks2 [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(d46405367612b4b7)`,
+			fmt.Sprintf(`ResolveDestinations ks2 [%v] Destinations:DestinationKeyspaceID(d46405367612b4b7)`, sqltypes.Int64BindVariable(1)),
 			"StreamExecuteMulti select f.bar from foo f where f.id = 1 ks2.-20: {} ",
 		})
 

@@ -176,7 +176,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// No need for replicas in this stress test
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 0, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 0, false, clusterInstance.Cell); err != nil {
 			return 1, err
 		}
 
@@ -200,7 +200,6 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitcode)
 	}
-
 }
 
 func TestRevertSchemaChanges(t *testing.T) {
@@ -215,7 +214,6 @@ func TestRevertSchemaChanges(t *testing.T) {
 }
 
 func testRevertible(t *testing.T) {
-
 	fkOnlineDDLPossible := false
 	t.Run("check 'rename_table_preserve_foreign_key' variable", func(t *testing.T) {
 		// Online DDL is not possible on vanilla MySQL 8.0 for reasons described in https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/.
@@ -502,7 +500,6 @@ func testRevertible(t *testing.T) {
 }
 
 func testRevert(t *testing.T) {
-
 	var (
 		partitionedTableName = `part_test`
 		createStatement      = `
@@ -1423,7 +1420,7 @@ func initTable(t *testing.T) {
 	log.Infof("initTable begin")
 	defer log.Infof("initTable complete")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -1449,7 +1446,7 @@ func testSelectTableMetrics(t *testing.T) {
 
 	log.Infof("%s", writeMetrics.String())
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

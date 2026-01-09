@@ -14,13 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package balancer contains a number of different tablet balancing algorithms and their implementations.
 package balancer
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"net/http"
+	"strings"
 	"sync"
 
 	"vitess.io/vitess/go/vt/discovery"
@@ -87,24 +90,93 @@ converge on the desired balanced query load.
 
 */
 
+type Mode int
+
+const (
+	ModeInvalid Mode = iota
+	ModeCell
+	ModePreferCell
+	ModeRandom
+	ModeSession
+)
+
+func ParseMode(ms string) Mode {
+	switch strings.ToLower(ms) {
+	case "cell":
+		return ModeCell
+	case "prefer-cell":
+		return ModePreferCell
+	case "random":
+		return ModeRandom
+	case "session":
+		return ModeSession
+	default:
+		return ModeInvalid
+	}
+}
+
+func (m Mode) String() string {
+	switch m {
+	case ModeCell:
+		return "cell"
+	case ModePreferCell:
+		return "prefer-cell"
+	case ModeRandom:
+		return "random"
+	case ModeSession:
+		return "session"
+	default:
+		return "invalid"
+	}
+}
+
+func GetAvailableModeNames() []string {
+	return []string{ModeCell.String(), ModePreferCell.String(), ModeRandom.String(), ModeSession.String()}
+}
+
 type TabletBalancer interface {
 	// Pick is the main entry point to the balancer. Returns the best tablet out of the list
 	// for a given query to maintain the desired balanced allocation over multiple executions.
-	Pick(target *querypb.Target, tablets []*discovery.TabletHealth) *discovery.TabletHealth
+	Pick(target *querypb.Target, tablets []*discovery.TabletHealth, opts ...PickOption) *discovery.TabletHealth
 
 	// DebugHandler provides a summary of tablet balancer state
 	DebugHandler(w http.ResponseWriter, r *http.Request)
 }
 
-func NewTabletBalancer(localCell string, vtGateCells []string) TabletBalancer {
-	return &tabletBalancer{
+// NewTabletBalancer creates a new tablet balancer based on the specified mode.
+// Supported modes:
+//   - "prefer-cell": Flow-based balancer that maintains cell affinity while balancing load
+//   - See the RFC here: https://github.com/vitessio/vitess/issues/12241
+//   - "random": Random balancer that uniformly distributes load without cell affinity
+//   - "session": Session balancer that pins a session to the same tablet for the duration of the session. If the tablet goes away, the session is automatically and transparently migrated to another tablet of the same type.
+//
+// Note: "cell" mode is handled by the gateway and does not create a balancer instance.
+// operates as a round robin inside of the vtgate's cell
+// Returns an error for unsupported modes.
+func NewTabletBalancer(mode Mode, localCell string, vtGateCells []string) (TabletBalancer, error) {
+	switch mode {
+	case ModePreferCell:
+		return newFlowBalancer(localCell, vtGateCells), nil
+	case ModeRandom:
+		return newRandomBalancer(localCell, vtGateCells), nil
+	case ModeSession:
+		return newSessionBalancer(localCell), nil
+	case ModeCell:
+		return nil, errors.New("cell mode should be handled by the gateway, not the balancer factory")
+	default:
+		return nil, fmt.Errorf("unsupported balancer mode: %s (supported modes: %s)", mode, strings.Join(GetAvailableModeNames(), ", "))
+	}
+}
+
+func newFlowBalancer(localCell string, vtGateCells []string) TabletBalancer {
+	return &flowBalancer{
 		localCell:   localCell,
 		vtGateCells: vtGateCells,
 		allocations: map[discovery.KeyspaceShardTabletType]*targetAllocation{},
 	}
 }
 
-type tabletBalancer struct {
+type flowBalancer struct {
 	//
 	// Configuration
 	//
@@ -145,13 +217,13 @@ type targetAllocation struct {
 	TotalAllocation int
 }
 
-func (b *tabletBalancer) print() string {
+func (b *flowBalancer) print() string {
 	allocations, _ := json.Marshal(&b.allocations)
 	return fmt.Sprintf("LocalCell: %s, VtGateCells: %s, allocations: %s",
 		b.localCell, b.vtGateCells, string(allocations))
 }
 
-func (b *tabletBalancer) DebugHandler(w http.ResponseWriter, _ *http.Request) {
+func (b *flowBalancer) DebugHandler(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 	fmt.Fprintf(w, "Local Cell: %v\r\n", b.localCell)
 	fmt.Fprintf(w, "Vtgate Cells: %v\r\n", b.vtGateCells)
@@ -167,8 +239,7 @@ func (b *tabletBalancer) DebugHandler(w http.ResponseWriter, _ *http.Request) {
 // Given the total allocation for the set of tablets, choose the best target
 // by a weighted random sample so that over time the system will achieve the
 // desired balanced allocation.
-func (b *tabletBalancer) Pick(target *querypb.Target, tablets []*discovery.TabletHealth) *discovery.TabletHealth {
-
+func (b *flowBalancer) Pick(target *querypb.Target, tablets []*discovery.TabletHealth, _ ...PickOption) *discovery.TabletHealth {
 	numTablets := len(tablets)
 	if numTablets == 0 {
 		return nil
@@ -191,7 +262,7 @@ func (b *tabletBalancer) Pick(target *querypb.Target, tablets []*discovery.Table
 // To stick with integer arithmetic, use 1,000,000 as the full load
 const ALLOCATION = 1000000
 
-func (b *tabletBalancer) allocateFlows(allTablets []*discovery.TabletHealth) *targetAllocation {
+func (b *flowBalancer) allocateFlows(allTablets []*discovery.TabletHealth) *targetAllocation {
 	// Initialization: Set up some data structures and derived values
 	a := targetAllocation{
 		Target:      map[string]int{},
@@ -272,7 +343,6 @@ func (b *tabletBalancer) allocateFlows(allTablets []*discovery.TabletHealth) *ta
 	// assigning local cell traffic and distributing load from cells without tablets.
 	//
 	if /* fudge for integer arithmetic */ unbalancedFlow > 10 {
-
 		// cells which are overallocated
 		overAllocated := make(map[string]int)
 		for cell, allocation := range a.Target {
@@ -281,9 +351,6 @@ func (b *tabletBalancer) allocateFlows(allTablets []*discovery.TabletHealth) *ta
 			}
 		}
 
-		// fmt.Printf("outflows %v over %v under %v\n", a.Outflows, overAllocated, underAllocated)
-
-		//
 		// For each overallocated cell, proportionally shift flow from targets that are overallocated
 		// to targets that are underallocated.
 		//
@@ -292,7 +359,6 @@ func (b *tabletBalancer) allocateFlows(allTablets []*discovery.TabletHealth) *ta
 		for _, vtgateCell := range b.vtGateCells {
 			for underAllocatedCell, underAllocatedFlow := range underAllocated {
 				for overAllocatedCell, overAllocatedFlow := range overAllocated {
-
 					currentFlow := a.Outflows[vtgateCell][overAllocatedCell]
 					if currentFlow == 0 {
 						continue
@@ -305,9 +371,6 @@ func (b *tabletBalancer) allocateFlows(allTablets []*discovery.TabletHealth) *ta
 					// Note that the operator order matters -- multiplications need to occur before divisions
 					// to avoid truncating the integer values.
 					shiftFlow := overAllocatedFlow * currentFlow * underAllocatedFlow / a.Inflows[overAllocatedCell] / unbalancedFlow
-
-					//fmt.Printf("shift %d %s %s -> %s (over %d current %d in %d under %d unbalanced %d) \n", shiftFlow, vtgateCell, overAllocatedCell, underAllocatedCell,
-					//	overAllocatedFlow, currentFlow, a.Inflows[overAllocatedCell], underAllocatedFlow, unbalancedFlow)
 
 					a.Outflows[vtgateCell][overAllocatedCell] -= shiftFlow
 					a.Inflows[overAllocatedCell] -= shiftFlow
@@ -339,7 +402,7 @@ func (b *tabletBalancer) allocateFlows(allTablets []*discovery.TabletHealth) *ta
 }
 
 // getAllocation builds the allocation map if needed and returns a copy of the map
-func (b *tabletBalancer) getAllocation(target *querypb.Target, tablets []*discovery.TabletHealth) (map[uint32]int, int) {
+func (b *flowBalancer) getAllocation(target *querypb.Target, tablets []*discovery.TabletHealth) (map[uint32]int, int) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 

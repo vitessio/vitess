@@ -19,12 +19,14 @@ package cluster
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -39,6 +41,7 @@ import (
 type VTOrcProcess struct {
 	VtProcess
 	Port        int
+	Cell        string
 	LogDir      string
 	LogFileName string
 	ExtraArgs   []string
@@ -84,6 +87,11 @@ func (orc *VTOrcProcess) RewriteConfiguration() error {
 
 // Setup starts orc process with required arguements
 func (orc *VTOrcProcess) Setup() (err error) {
+	// validate cell
+	if orc.Cell == "" {
+		return errors.New("vtorc cell cannot be empty")
+	}
+
 	// create the configuration file
 	timeNow := time.Now().UnixNano()
 	err = os.MkdirAll(orc.LogDir, 0755)
@@ -117,11 +125,12 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	--config config/vtorc/default.json --alsologtostderr
 	*/
 	flags := map[string]string{
+		"--cell":                       orc.Cell,
 		"--topo-implementation":        orc.TopoImplementation,
 		"--topo-global-server-address": orc.TopoGlobalAddress,
 		"--topo-global-root":           orc.TopoGlobalRoot,
 		"--config-file":                orc.ConfigPath,
-		"--port":                       fmt.Sprintf("%d", orc.Port),
+		"--port":                       strconv.Itoa(orc.Port),
 		"--bind-address":               "127.0.0.1",
 	}
 
@@ -151,7 +160,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	orc.proc.Args = append(orc.proc.Args, "--alsologtostderr")
 
 	if orc.LogFileName == "" {
-		orc.LogFileName = fmt.Sprintf("orc-stderr-%d.txt", timeNow)
+		orc.LogFileName = fmt.Sprintf("vtorc-stderr-%d.txt", timeNow)
 	}
 	errFile, err := os.Create(path.Join(orc.LogDir, orc.LogFileName))
 	if err != nil {

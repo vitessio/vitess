@@ -108,6 +108,8 @@ type RPCTM interface {
 
 	StartReplication(ctx context.Context, semiSync bool) error
 
+	RestartReplication(ctx context.Context, semiSync bool) error
+
 	StartReplicationUntilAfter(ctx context.Context, position string, waitTime time.Duration) error
 
 	GetReplicas(ctx context.Context) ([]string, error)
@@ -146,7 +148,7 @@ type RPCTM interface {
 
 	InitReplica(ctx context.Context, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64, semiSync bool) error
 
-	DemotePrimary(ctx context.Context) (*replicationdatapb.PrimaryStatus, error)
+	DemotePrimary(ctx context.Context, force bool) (*replicationdatapb.PrimaryStatus, error)
 
 	UndoDemotePrimary(ctx context.Context, semiSync bool) error
 

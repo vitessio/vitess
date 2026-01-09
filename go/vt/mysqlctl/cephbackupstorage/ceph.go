@@ -88,7 +88,7 @@ func (bh *CephBackupHandle) Name() string {
 // AddFile implements BackupHandle.
 func (bh *CephBackupHandle) AddFile(ctx context.Context, filename string, filesize int64) (io.WriteCloser, error) {
 	if bh.readOnly {
-		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
+		return nil, errors.New("AddFile cannot be called on read-only backup")
 	}
 	reader, writer := io.Pipe()
 	bh.waitGroup.Add(1)
@@ -117,7 +117,7 @@ func (bh *CephBackupHandle) AddFile(ctx context.Context, filename string, filesi
 // EndBackup implements BackupHandle.
 func (bh *CephBackupHandle) EndBackup(ctx context.Context) error {
 	if bh.readOnly {
-		return fmt.Errorf("EndBackup cannot be called on read-only backup")
+		return errors.New("EndBackup cannot be called on read-only backup")
 	}
 	bh.waitGroup.Wait()
 	// Return the saved PutObject() errors, if any.
@@ -127,7 +127,7 @@ func (bh *CephBackupHandle) EndBackup(ctx context.Context) error {
 // AbortBackup implements BackupHandle.
 func (bh *CephBackupHandle) AbortBackup(ctx context.Context) error {
 	if bh.readOnly {
-		return fmt.Errorf("AbortBackup cannot be called on read-only backup")
+		return errors.New("AbortBackup cannot be called on read-only backup")
 	}
 	return bh.bs.RemoveBackup(ctx, bh.dir, bh.name)
 }
@@ -135,7 +135,7 @@ func (bh *CephBackupHandle) AbortBackup(ctx context.Context) error {
 // ReadFile implements BackupHandle.
 func (bh *CephBackupHandle) ReadFile(ctx context.Context, filename string) (io.ReadCloser, error) {
 	if !bh.readOnly {
-		return nil, fmt.Errorf("ReadFile cannot be called on read-write backup")
+		return nil, errors.New("ReadFile cannot be called on read-write backup")
 	}
 	// ceph bucket name
 	bucket := alterBucketName(bh.dir)

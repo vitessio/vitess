@@ -237,7 +237,6 @@ func (vse *Engine) validateBinlogRowImage(ctx context.Context, db dbconfigs.Conn
 func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK,
 	filter *binlogdatapb.Filter, throttlerApp throttlerapp.Name,
 	send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions) error {
-
 	if err := vse.validateBinlogRowImage(ctx, vse.se.GetDBConnector()); err != nil {
 		return err
 	}
@@ -327,7 +326,6 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 // StreamTables streams all tables.
 func (vse *Engine) StreamTables(ctx context.Context,
 	send func(*binlogdatapb.VStreamTablesResponse) error, options *binlogdatapb.VStreamOptions) error {
-
 	// Ensure vschema is initialized and the watcher is started.
 	// Starting of the watcher is delayed till the first call to StreamTables
 	// so that this overhead is incurred only if someone uses this feature.
@@ -370,7 +368,6 @@ func (vse *Engine) StreamTables(ctx context.Context,
 // StreamResults streams results of the query with the gtid.
 func (vse *Engine) StreamResults(ctx context.Context, query string,
 	send func(*binlogdatapb.VStreamResultsResponse) error) error {
-
 	// Create stream and add it to the map.
 	resultStreamer, idx, err := func() (*resultStreamer, int, error) {
 		if atomic.LoadInt32(&vse.isOpen) == 0 {
@@ -525,7 +522,7 @@ func (vse *Engine) waitForMySQL(ctx context.Context, db dbconfigs.Connector, tab
 					// Global row streamer waits on the source tablet
 					vse.rowStreamerWaits.Record("waitForMySQL", ct)
 					// Waits by the table we're copying from the source tablet
-					vse.vstreamerPhaseTimings.Record(fmt.Sprintf("%s:waitForMySQL", tableName), ct)
+					vse.vstreamerPhaseTimings.Record(tableName+":waitForMySQL", ct)
 				}()
 				recording = true
 			}

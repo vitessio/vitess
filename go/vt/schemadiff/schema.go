@@ -134,21 +134,31 @@ func getForeignKeyParentTableNames(createTable *sqlparser.CreateTable) (names []
 }
 
 // getViewDependentTableNames analyzes a CREATE VIEW definition and extracts all tables/views read by this view
-func getViewDependentTableNames(createView *sqlparser.CreateView) (names []string) {
+func getViewDependentTableNames(createView *sqlparser.CreateView) (names []string, cteNames []string) {
+	cteMap := make(map[string]bool)
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
+		case *sqlparser.CommonTableExpr:
+			if !cteMap[node.ID.String()] {
+				cteNames = append(cteNames, node.ID.String())
+				cteMap[node.ID.String()] = true
+			}
 		case *sqlparser.TableName:
-			names = append(names, node.Name.String())
+			if _, isCte := cteMap[node.Name.String()]; !isCte {
+				names = append(names, node.Name.String())
+			}
 		case *sqlparser.AliasedTableExpr:
 			if tableName, ok := node.Expr.(sqlparser.TableName); ok {
-				names = append(names, tableName.Name.String())
+				if _, isCte := cteMap[tableName.Name.String()]; !isCte {
+					names = append(names, tableName.Name.String())
+				}
 			}
 			// or, this could be a more complex expression, like a derived table `(select * from v1) as derived`,
 			// in which case further Walk-ing will eventually find the "real" table name
 		}
 		return true, nil
 	}, createView)
-	return names
+	return names, cteNames
 }
 
 // normalize is called as part of Schema creation process. The user may only get a hold of normalized schema.
@@ -310,7 +320,7 @@ func (s *Schema) normalize(hints *DiffHints) error {
 				continue
 			}
 			// Not handled. Is this view dependent on already handled objects?
-			dependentNames := getViewDependentTableNames(v.CreateView)
+			dependentNames, _ := getViewDependentTableNames(v.CreateView)
 			if allNamesFoundInLowerLevel(dependentNames, iterationLevel) {
 				s.sorted = append(s.sorted, v)
 				dependencyLevels[v.Name()] = iterationLevel
@@ -341,7 +351,7 @@ func (s *Schema) normalize(hints *DiffHints) error {
 			if _, ok := dependencyLevels[v.Name()]; !ok {
 				// We _know_ that in this iteration, at least one view is found unassigned a dependency level.
 				// We gather all the errors.
-				dependentNames := getViewDependentTableNames(v.CreateView)
+				dependentNames, _ := getViewDependentTableNames(v.CreateView)
 				missingReferencedEntities := []string{}
 				for _, name := range dependentNames {
 					if _, ok := dependencyLevels[name]; !ok {
@@ -377,7 +387,7 @@ func (s *Schema) normalize(hints *DiffHints) error {
 		}
 
 		tableColumns := map[string]*sqlparser.ColumnDefinition{}
-		for _, col := range t.CreateTable.TableSpec.Columns {
+		for _, col := range t.TableSpec.Columns {
 			colName := col.Name.Lowered()
 			tableColumns[colName] = col
 		}
@@ -396,7 +406,7 @@ func (s *Schema) normalize(hints *DiffHints) error {
 			}
 
 			referencedColumns := map[string]*sqlparser.ColumnDefinition{}
-			for _, col := range referencedTable.CreateTable.TableSpec.Columns {
+			for _, col := range referencedTable.TableSpec.Columns {
 				colName := col.Name.Lowered()
 				referencedColumns[colName] = col
 			}
@@ -412,7 +422,7 @@ func (s *Schema) normalize(hints *DiffHints) error {
 				if !ok {
 					return errors.Join(errs, &InvalidReferencedColumnInForeignKeyConstraintError{Table: t.Name(), Constraint: cs.Name.String(), ReferencedTable: referencedTableName, ReferencedColumn: referencedColumnName})
 				}
-				if !colTypeEqualForForeignKey(s.env, t.TableSpec, referencedTable.CreateTable.TableSpec, coveredColumn.Type, referencedColumn.Type) {
+				if !colTypeEqualForForeignKey(s.env, t.TableSpec, referencedTable.TableSpec, coveredColumn.Type, referencedColumn.Type) {
 					return errors.Join(errs, &ForeignKeyColumnTypeMismatchError{Table: t.Name(), Constraint: cs.Name.String(), Column: coveredColumn.Name.String(), ReferencedTable: referencedTableName, ReferencedColumn: referencedColumnName})
 				}
 			}
@@ -974,12 +984,16 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 	for _, diff := range schemaDiff.UnorderedDiffs() {
 		switch diff := diff.(type) {
 		case *CreateViewEntityDiff:
-			checkDependencies(diff, getViewDependentTableNames(diff.createView))
+			dependentNames, _ := getViewDependentTableNames(diff.createView)
+			checkDependencies(diff, dependentNames)
 		case *AlterViewEntityDiff:
-			checkDependencies(diff, getViewDependentTableNames(diff.from.CreateView))
-			checkDependencies(diff, getViewDependentTableNames(diff.to.CreateView))
+			fromDependentNames, _ := getViewDependentTableNames(diff.from.CreateView)
+			checkDependencies(diff, fromDependentNames)
+			toDependentNames, _ := getViewDependentTableNames(diff.to.CreateView)
+			checkDependencies(diff, toDependentNames)
 		case *DropViewEntityDiff:
-			checkDependencies(diff, getViewDependentTableNames(diff.from.CreateView))
+			dependentNames, _ := getViewDependentTableNames(diff.from.CreateView)
+			checkDependencies(diff, dependentNames)
 		case *CreateTableEntityDiff:
 			checkDependencies(diff, getForeignKeyParentTableNames(diff.CreateTable()))
 			_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
@@ -1013,7 +1027,7 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 					// Dropping a foreign key; we need to understand which table this foreign key used to reference.
 					// The DropKey statement itself only _names_ the constraint, but does not have information
 					// about the parent, columns, etc. So we need to find the constraint in the CreateTable statement.
-					for _, cs := range diff.from.CreateTable.TableSpec.Constraints {
+					for _, cs := range diff.from.TableSpec.Constraints {
 						if strings.EqualFold(cs.Name.String(), node.Name.String()) {
 							if check, ok := cs.Details.(*sqlparser.ForeignKeyDefinition); ok {
 								parentTableName := check.ReferenceDefinition.ReferencedTable.Name.String()
@@ -1074,7 +1088,7 @@ func (s *Schema) ValidateViewReferences() error {
 	schemaInformation.addTable("dual")
 
 	for _, view := range s.Views() {
-		sel := sqlparser.Clone(view.CreateView.Select) // Analyze(), below, rewrites the select; we don't want to actually modify the schema
+		sel := sqlparser.Clone(view.Select) // Analyze(), below, rewrites the select; we don't want to actually modify the schema
 		_, err := semantics.AnalyzeStrict(sel, semanticKS.Name, schemaInformation)
 		formalizeErr := func(err error) error {
 			if err == nil {
@@ -1142,13 +1156,15 @@ func (s *Schema) getViewColumnNames(v *CreateViewEntity, schemaInformation *decl
 	for _, node := range v.Select.GetColumns() {
 		switch node := node.(type) {
 		case *sqlparser.StarExpr:
+			dependentNames, cteNames := getViewDependentTableNames(v.CreateView)
 			if tableName := node.TableName.Name.String(); tableName != "" {
-				for _, col := range schemaInformation.Tables[tableName].Columns {
-					name := sqlparser.Clone(col.Name)
-					columnNames = append(columnNames, &name)
+				if tbl, ok := schemaInformation.Tables[tableName]; ok {
+					for _, col := range tbl.Columns {
+						name := sqlparser.Clone(col.Name)
+						columnNames = append(columnNames, &name)
+					}
 				}
 			} else {
-				dependentNames := getViewDependentTableNames(v.CreateView)
 				// add all columns from all referenced tables and views
 				for _, entityName := range dependentNames {
 					if schemaInformation.Tables[entityName] != nil { // is nil for dual/DUAL
@@ -1159,7 +1175,10 @@ func (s *Schema) getViewColumnNames(v *CreateViewEntity, schemaInformation *decl
 					}
 				}
 			}
-			if len(columnNames) == 0 {
+			if len(columnNames) == 0 && len(cteNames) == 0 {
+				// *-expressions that do not resolve to any columns are invalid in views.
+				// For CTEs, schemadiff does not analyze the list of columns returned by the CTE (even if the CTE defines it).
+				// TODO(shlomi): analyze CTE columns as well.
 				return nil, &InvalidStarExprInViewError{View: v.Name()}
 			}
 		case *sqlparser.AliasedExpr:

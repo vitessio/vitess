@@ -63,7 +63,6 @@ func analyzeExecuteFetchAsDbaMultiQuery(sql string, parser *sqlparser.Parser) (q
 				allowZeroInDate = true
 			}
 		}
-
 	}
 	return queries, parseable, countCreate, allowZeroInDate, nil
 }
@@ -294,6 +293,6 @@ func (tm *TabletManager) ExecuteQuery(ctx context.Context, req *tabletmanagerdat
 	if err != nil {
 		return nil, err
 	}
-	result, err := tm.QueryServiceControl.QueryService().Execute(ctx, target, uq, nil, 0, 0, nil)
+	result, err := tm.QueryServiceControl.QueryService().Execute(ctx, nil, target, uq, nil, 0, 0, nil)
 	return sqltypes.ResultToProto3(result), err
 }

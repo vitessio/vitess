@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -96,7 +97,7 @@ func TestMain(m *testing.M) {
 			SidecarDBName:    sidecarDBName,
 			DurabilityPolicy: policy.DurabilitySemiSync,
 		}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false, clusterInstance.Cell); err != nil {
 			return 1
 		}
 
@@ -134,7 +135,7 @@ func TestMain(m *testing.M) {
 }
 
 func start(t *testing.T) (*mysql.Conn, func()) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	cleanup(t)
@@ -235,7 +236,7 @@ func getStatement(stmt string) string {
 
 	sid, exists := sm.stmt[sKey]
 	if !exists {
-		sid = fmt.Sprintf("%d", len(sm.stmt)+1)
+		sid = strconv.Itoa(len(sm.stmt) + 1)
 		sm.stmt[sKey] = sid
 	}
 	return prefix + sid

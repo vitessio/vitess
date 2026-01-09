@@ -18,6 +18,7 @@ package topo
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path"
 	"sort"
@@ -130,7 +131,7 @@ func (ti *TabletInfo) Addr() string {
 
 // MysqlAddr returns hostname:mysql port.
 func (ti *TabletInfo) MysqlAddr() string {
-	return netutil.JoinHostPort(ti.Tablet.MysqlHostname, ti.Tablet.MysqlPort)
+	return netutil.JoinHostPort(ti.MysqlHostname, ti.MysqlPort)
 }
 
 // DbName is usually implied by keyspace. Having the shard information in the
@@ -331,7 +332,7 @@ func (ts *Server) GetTabletsIndividuallyByCell(ctx context.Context, cell string,
 // UpdateTablet updates the tablet data only - not associated replication paths.
 // It also uses a span, and sends the event.
 func (ts *Server) UpdateTablet(ctx context.Context, ti *TabletInfo) error {
-	conn, err := ts.ConnForCell(ctx, ti.Tablet.Alias.Cell)
+	conn, err := ts.ConnForCell(ctx, ti.Alias.Cell)
 	if err != nil {
 		return err
 	}
@@ -340,11 +341,11 @@ func (ts *Server) UpdateTablet(ctx context.Context, ti *TabletInfo) error {
 	span.Annotate("tablet", topoproto.TabletAliasString(ti.Alias))
 	defer span.Finish()
 
-	data, err := ti.Tablet.MarshalVT()
+	data, err := ti.MarshalVT()
 	if err != nil {
 		return err
 	}
-	tabletPath := path.Join(TabletsPath, topoproto.TabletAliasString(ti.Tablet.Alias), TabletFile)
+	tabletPath := path.Join(TabletsPath, topoproto.TabletAliasString(ti.Alias), TabletFile)
 	newVersion, err := conn.Update(ctx, tabletPath, data, ti.version)
 	if err != nil {
 		return err
@@ -461,8 +462,8 @@ func (ts *Server) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Tabl
 		event.Dispatch(&events.TabletChange{
 			Tablet: &topodatapb.Tablet{
 				Alias:    tabletAlias,
-				Keyspace: ti.Tablet.Keyspace,
-				Shard:    ti.Tablet.Shard,
+				Keyspace: ti.Keyspace,
+				Shard:    ti.Shard,
 			},
 			Status: "deleted",
 		})
@@ -606,7 +607,7 @@ func (ts *Server) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, all
 	} else {
 		si, err = ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 		if IsErrType(err, NoNode) {
-			return fmt.Errorf("missing parent shard, use -parent option to create it, or CreateKeyspace / CreateShard")
+			return errors.New("missing parent shard, use -parent option to create it, or CreateKeyspace / CreateShard")
 		}
 	}
 

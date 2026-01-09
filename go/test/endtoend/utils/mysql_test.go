@@ -50,7 +50,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-
 	exitCode := func() int {
 		clusterInstance = cluster.NewCluster(cell, "localhost")
 		defer clusterInstance.Teardown()
@@ -110,7 +109,7 @@ func TestCheckFields(t *testing.T) {
 }
 
 func TestCreateMySQL(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &mysqlParams)
 	require.NoError(t, err)
 	AssertMatches(t, conn, "show databases;", `[[VARCHAR("information_schema")] [VARCHAR("ks")] [VARCHAR("mysql")] [VARCHAR("performance_schema")] [VARCHAR("sys")]]`)
@@ -382,7 +381,7 @@ func TestGetGTIDMode(t *testing.T) {
 	require.NotNil(t, mysqld)
 
 	// Default value
-	ctx := context.Background()
+	ctx := t.Context()
 	res, err := mysqld.GetGTIDMode(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, "ON", res)
@@ -426,7 +425,7 @@ func TestGetPreviousGTIDs(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, res)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	r, err := mysqld.GetPreviousGTIDs(ctx, res[0])
 	assert.NoError(t, err)
 	assert.Empty(t, r)

@@ -94,13 +94,13 @@ func newTestMaterializerEnv(t *testing.T, ms *vtctldatapb.MaterializeSettings, s
 		env.tmc.schema[ms.SourceKeyspace+"."+tableName] = &tabletmanagerdatapb.SchemaDefinition{
 			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
 				Name:   tableName,
-				Schema: fmt.Sprintf("%s_schema", tableName),
+				Schema: tableName + "_schema",
 			}},
 		}
 		env.tmc.schema[ms.TargetKeyspace+"."+ts.TargetTable] = &tabletmanagerdatapb.SchemaDefinition{
 			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
 				Name:   ts.TargetTable,
-				Schema: fmt.Sprintf("%s_schema", ts.TargetTable),
+				Schema: ts.TargetTable + "_schema",
 			}},
 		}
 	}
