@@ -28,7 +28,7 @@ packages_with_tests=$(go list ./go/.../endtoend/... | grep -v "go/test/endtoend"
 
 # Build gotestsum args. Failed tests are retried up to 3 times, but if more than 10 tests fail
 # initially we skip retries to avoid wasting time on a real widespread failure.
-GOTESTSUM_ARGS="--format github-actions --rerun-fails=3 --rerun-fails-max-failures=10 --format-hide-empty-pkg --hide-summary=skipped"
+GOTESTSUM_ARGS="--format github-actions --rerun-fails=3 --rerun-fails-max-failures=10 --rerun-fails-run-root-test --format-hide-empty-pkg --hide-summary=skipped"
 if [[ -n "${JUNIT_OUTPUT:-}" ]]; then
 	GOTESTSUM_ARGS="$GOTESTSUM_ARGS --junitfile $JUNIT_OUTPUT"
 fi
