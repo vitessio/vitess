@@ -85,7 +85,7 @@ func CloneFromDonor(ctx context.Context, topoServer *topo.Server, mysqld MysqlDa
 		log.Infof("Found primary tablet: %s", topoproto.TabletAliasString(donorAlias))
 	case cloneFromTablet != "":
 		// Parse the explicit donor tablet alias.
-		log.Infof("Starting clone-based backup from tablet %s", cloneFromTablet)
+		log.Infof("Starting clone from tablet %s", cloneFromTablet)
 		donorAlias, err = topoproto.ParseTabletAlias(cloneFromTablet)
 		if err != nil {
 			return replication.Position{}, fmt.Errorf("invalid tablet alias %q: %v", cloneFromTablet, err)
