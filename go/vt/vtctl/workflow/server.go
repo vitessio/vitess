@@ -1248,7 +1248,8 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 			if cerr := s.dropArtifacts(ctx, false, &switcher{s: s, ts: ts}); cerr != nil {
 				err = vterrors.Wrapf(err, "failed to cleanup workflow artifacts: %v", cerr)
 			}
-			if origVSchema == nil { // There's no previous version to restore
+			if vschema.Sharded || origVSchema == nil {
+				// We don't modify the vschema for sharded keyspaces, so there's nothing to restore.
 				return
 			}
 			if cerr := s.ts.SaveVSchema(ctx, origVSchema); cerr != nil {

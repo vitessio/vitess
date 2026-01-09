@@ -1033,6 +1033,91 @@ func TestMoveTablesNoRoutingRules(t *testing.T) {
 	require.Zerof(t, len(rr.Rules), "routing rules should be empty, found %+v", rr.Rules)
 }
 
+func TestMoveTablesCreateShardedVSchemaRollback(t *testing.T) {
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       "workflow",
+		SourceKeyspace: "sourceks",
+		TargetKeyspace: "targetks",
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+		}},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"-"}, []string{"-"})
+	defer env.close()
+
+	targetVSchema := &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"hash": {
+				Type: "hash",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Name:   "hash",
+					Column: "id",
+				}},
+			},
+		},
+	}
+	err := env.ws.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name:     ms.TargetKeyspace,
+		Keyspace: targetVSchema,
+	})
+	require.NoError(t, err)
+
+	env.tmc.expectFetchAsAllPrivsQuery(startingTargetTabletUID, getNonEmptyTable, &sqltypes.Result{})
+
+	sourceDeleteQuery := fmt.Sprintf(sqlDeleteWorkflow, encodeString("vt_sourceks"), encodeString(ReverseWorkflowName(ms.Workflow)))
+	targetDeleteQuery := fmt.Sprintf(sqlDeleteWorkflow, encodeString("vt_targetks"), encodeString(ms.Workflow))
+	env.tmc.expectVRQuery(startingSourceTabletUID, sourceDeleteQuery, &sqltypes.Result{})
+	env.tmc.expectVRQuery(startingTargetTabletUID, targetDeleteQuery, &sqltypes.Result{})
+
+	readCalls := 0
+	env.tmc.readVReplicationWorkflow = func(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
+		readCalls++
+		if readCalls == 1 {
+			return &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+				Workflow:     request.Workflow,
+				WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
+				Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
+					{
+						Id: 1,
+						Bls: &binlogdatapb.BinlogSource{
+							Keyspace: ms.SourceKeyspace,
+							Shard:    "-",
+							Filter: &binlogdatapb.Filter{
+								Rules: []*binlogdatapb.Rule{{
+									Match:  "t1",
+									Filter: "select * from t1",
+								}},
+							},
+						},
+					},
+				},
+			}, nil
+		}
+		return nil, errors.New("read vreplication failed")
+	}
+
+	_, err = env.ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
+		Workflow:       ms.Workflow,
+		SourceKeyspace: ms.SourceKeyspace,
+		TargetKeyspace: ms.TargetKeyspace,
+		IncludeTables:  []string{"t1"},
+	})
+	require.ErrorContains(t, err, "read vreplication failed")
+
+	got, err := env.ws.ts.GetVSchema(ctx, ms.TargetKeyspace)
+	require.NoError(t, err)
+	require.True(t, proto.Equal(got.Keyspace, targetVSchema), "got: %v, want: %v", got.Keyspace, targetVSchema)
+}
+
 func TestCreateLookupVindexFull(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "lookup",
