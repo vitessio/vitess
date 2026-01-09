@@ -198,7 +198,7 @@ func TestWorkflowLockJitter(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			seenDelays := make(map[time.Duration]bool)
-			var minSeen, maxSeen time.Duration = tc.retryDelay, 0
+			var minSeen, maxSeen time.Duration
 
 			for range tc.iterations {
 				retryDelay := tc.retryDelay
