@@ -48,8 +48,9 @@ const (
 )
 
 var (
-	cloneFromPrimary = false
-	cloneFromTablet  = ""
+	cloneFromPrimary        = false
+	cloneFromTablet         = ""
+	cloneRestartWaitTimeout = 5 * time.Minute
 )
 
 func init() {
@@ -62,6 +63,7 @@ func init() {
 func registerCloneFlags(fs *pflag.FlagSet) {
 	utils.SetFlagBoolVar(fs, &cloneFromPrimary, "clone-from-primary", cloneFromPrimary, "Clone data from the primary tablet in the shard using MySQL CLONE REMOTE instead of restoring from backup. Requires MySQL 8.0.17+. Mutually exclusive with --clone-from-tablet.")
 	utils.SetFlagStringVar(fs, &cloneFromTablet, "clone-from-tablet", cloneFromTablet, "Clone data from this tablet using MySQL CLONE REMOTE instead of restoring from backup (tablet alias, e.g., zone1-123). Requires MySQL 8.0.17+. Mutually exclusive with --clone-from-primary.")
+	utils.SetFlagDurationVar(fs, &cloneRestartWaitTimeout, "clone-restart-wait-timeout", cloneRestartWaitTimeout, "Timeout for waiting for MySQL to restart after CLONE REMOTE.")
 }
 
 // CloneFromDonor clones data from the specified donor tablet using MySQL CLONE REMOTE.
@@ -71,6 +73,8 @@ func CloneFromDonor(ctx context.Context, topoServer *topo.Server, mysqld MysqlDa
 	var err error
 
 	switch {
+	case cloneFromPrimary && cloneFromTablet != "":
+		return replication.Position{}, errors.New("--clone-from-primary and --clone-from-tablet are mutually exclusive")
 	case cloneFromPrimary:
 		// Look up the primary tablet from topology.
 		log.Infof("Looking up primary tablet for shard %s/%s", keyspace, shard)
@@ -117,15 +121,10 @@ func CloneFromDonor(ctx context.Context, topoServer *topo.Server, mysqld MysqlDa
 
 	log.Infof("Clone executor configured for donor %s:%d", executor.DonorHost, executor.DonorPort)
 
-	// Validate that the recipient (local) MySQL meets prerequisites.
-	if err := executor.validateRecipient(ctx, mysqld); err != nil {
-		return replication.Position{}, fmt.Errorf("recipient validation failed: %v", err)
-	}
-
 	// Execute the clone operation.
 	// Note: ExecuteClone will wait for myqld to restart and for CLONE to report
 	// success via performance_schema before returning.
-	if err := executor.ExecuteClone(ctx, mysqld, 5*time.Minute); err != nil {
+	if err := executor.ExecuteClone(ctx, mysqld, cloneRestartWaitTimeout); err != nil {
 		return replication.Position{}, fmt.Errorf("clone execution failed: %v", err)
 	}
 
