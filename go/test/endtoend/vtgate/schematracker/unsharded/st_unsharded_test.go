@@ -17,7 +17,6 @@ limitations under the License.
 package unsharded
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -27,10 +26,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/constants/sidecar"
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
@@ -84,7 +82,7 @@ func TestMain(m *testing.M) {
 			SidecarDBName: sidecarDBName,
 		}
 		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal"}
-		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false)
+		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}
@@ -114,7 +112,7 @@ func TestMain(m *testing.M) {
 
 func TestNewUnshardedTable(t *testing.T) {
 	// create a sql connection
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -182,7 +180,7 @@ func TestNewUnshardedTable(t *testing.T) {
 // More information at https://dev.mysql.com/doc/refman/8.0/en/identifier-case-sensitivity.html#:~:text=Table%20names%20are%20stored%20in,lowercase%20on%20storage%20and%20lookup.
 func TestCaseSensitiveSchemaTracking(t *testing.T) {
 	// create a sql connection
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

@@ -254,7 +254,7 @@ func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessClus
 	// - one replica will be busted and dead in the water and we'll call TabletExternallyReparented.
 	// Args:
 	// downPrimary: kills the old primary first
-	ctx := context.Background()
+	ctx := t.Context()
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
 	// now manually reparent 1 out of 2 tablets
@@ -331,7 +331,7 @@ func TestReparentWithDownReplica(t *testing.T) {
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
 
@@ -377,7 +377,7 @@ func TestChangeTypeSemiSync(t *testing.T) {
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Create new names for tablets, so this test is less confusing.
 	primary, replica, rdonly1, rdonly2 := tablets[0], tablets[1], tablets[2], tablets[3]

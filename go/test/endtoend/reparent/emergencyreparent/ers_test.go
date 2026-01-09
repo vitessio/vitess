@@ -65,7 +65,7 @@ func TestReparentIgnoreReplicas(t *testing.T) {
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	var err error
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	insertVal := utils.ConfirmReplication(t, tablets[0], tablets[1:])
 
@@ -105,7 +105,7 @@ func TestReparentDownPrimary(t *testing.T) {
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Make the current primary agent and database unavailable.
 	utils.StopTablet(t, tablets[0], true)
@@ -273,7 +273,7 @@ func TestReparentNoChoiceDownPrimary(t *testing.T) {
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	var err error
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	insertVal := utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
 
@@ -413,7 +413,7 @@ func TestPullFromRdonly(t *testing.T) {
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	var err error
 
-	ctx := context.Background()
+	ctx := t.Context()
 	// make tablets[1] a rdonly tablet.
 	// rename tablet so that the test is not confusing
 	rdonly := tablets[1]

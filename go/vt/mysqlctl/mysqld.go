@@ -989,9 +989,15 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 	myTemplateSource.WriteString(versionConfig)
 
 	// Conditionally include clone plugin config
-	if mysqlCloneEnabled && mysqld.capabilities.isMySQLLike() {
-		myTemplateSource.WriteString("\n## Clone plugin (--mysql-clone-enabled)\n")
-		myTemplateSource.WriteString(config.MycnfClone)
+	if mysqlCloneEnabled && f == FlavorMySQL {
+		v := mysqld.capabilities.version
+		if v.Major < 8 || (v.Major == 8 && v.Minor == 0 && v.Patch < 17) {
+			log.Warningf("--mysql-clone-enabled is set but MySQL version %d.%d.%d does not support CLONE (requires 8.0.17+); flag will be ignored",
+				v.Major, v.Minor, v.Patch)
+		} else {
+			myTemplateSource.WriteString("\n## Clone plugin (--mysql-clone-enabled)\n")
+			myTemplateSource.WriteString(config.MycnfClone)
+		}
 	}
 
 	if extraCnf := os.Getenv("EXTRA_MY_CNF"); extraCnf != "" {

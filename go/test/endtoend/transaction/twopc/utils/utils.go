@@ -130,7 +130,7 @@ func WaitForResults(t *testing.T, vtParams *mysql.ConnParams, query string, resu
 		case <-timeout:
 			t.Fatalf("didn't reach expected results for %s. Last results - %v", query, prevRes)
 		default:
-			ctx := context.Background()
+			ctx := t.Context()
 			conn, err := mysql.Connect(ctx, vtParams)
 			if err == nil {
 				res, _ := utils.ExecAllowError(t, conn, query)

@@ -25,13 +25,11 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/executorcontext"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	queryservicepb "vitess.io/vitess/go/vt/proto/queryservice"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
 // query is the gRPC query service implementation.
@@ -50,10 +48,7 @@ func (q *query) Execute(ctx context.Context, request *querypb.ExecuteRequest) (r
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-
-	session := executorcontext.NewSafeSession(&vtgatepb.Session{Options: request.Options})
-
-	result, err := q.server.Execute(ctx, session, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.ReservedId)
+	result, err := q.server.Execute(ctx, nil, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.ReservedId, request.Options)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
@@ -69,10 +64,7 @@ func (q *query) StreamExecute(request *querypb.StreamExecuteRequest, stream quer
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-
-	session := executorcontext.NewSafeSession(&vtgatepb.Session{Options: request.Options})
-
-	err = q.server.StreamExecute(ctx, session, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.ReservedId, func(reply *sqltypes.Result) error {
+	err = q.server.StreamExecute(ctx, nil, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.ReservedId, request.Options, func(reply *sqltypes.Result) error {
 		return stream.Send(&querypb.StreamExecuteResponse{
 			Result: sqltypes.ResultToProto3(reply),
 		})
@@ -87,10 +79,7 @@ func (q *query) Begin(ctx context.Context, request *querypb.BeginRequest) (respo
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-
-	session := executorcontext.NewSafeSession(&vtgatepb.Session{Options: request.Options})
-
-	state, err := q.server.Begin(ctx, session, request.Target)
+	state, err := q.server.Begin(ctx, nil, request.Target, request.Options)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
@@ -263,10 +252,7 @@ func (q *query) BeginExecute(ctx context.Context, request *querypb.BeginExecuteR
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-
-	session := executorcontext.NewSafeSession(&vtgatepb.Session{Options: request.Options})
-
-	state, result, err := q.server.BeginExecute(ctx, session, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.ReservedId)
+	state, result, err := q.server.BeginExecute(ctx, nil, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.ReservedId, request.Options)
 	if err != nil {
 		// if we have a valid transactionID, return the error in-band
 		if state.TransactionID != 0 {
@@ -293,10 +279,7 @@ func (q *query) BeginStreamExecute(request *querypb.BeginStreamExecuteRequest, s
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-
-	session := executorcontext.NewSafeSession(&vtgatepb.Session{Options: request.Options})
-
-	state, err := q.server.BeginStreamExecute(ctx, session, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.ReservedId, func(reply *sqltypes.Result) error {
+	state, err := q.server.BeginStreamExecute(ctx, nil, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.ReservedId, request.Options, func(reply *sqltypes.Result) error {
 		return stream.Send(&querypb.BeginStreamExecuteResponse{
 			Result: sqltypes.ResultToProto3(reply),
 		})
@@ -409,10 +392,7 @@ func (q *query) ReserveExecute(ctx context.Context, request *querypb.ReserveExec
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-
-	session := executorcontext.NewSafeSession(&vtgatepb.Session{Options: request.Options})
-
-	state, result, err := q.server.ReserveExecute(ctx, session, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.TransactionId)
+	state, result, err := q.server.ReserveExecute(ctx, nil, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options)
 	if err != nil {
 		// if we have a valid reservedID, return the error in-band
 		if state.ReservedID != 0 {
@@ -439,9 +419,7 @@ func (q *query) ReserveStreamExecute(request *querypb.ReserveStreamExecuteReques
 		request.ImmediateCallerId,
 	)
 
-	session := executorcontext.NewSafeSession(&vtgatepb.Session{Options: request.Options})
-
-	state, err := q.server.ReserveStreamExecute(ctx, session, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.TransactionId, func(reply *sqltypes.Result) error {
+	state, err := q.server.ReserveStreamExecute(ctx, nil, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options, func(reply *sqltypes.Result) error {
 		return stream.Send(&querypb.ReserveStreamExecuteResponse{
 			Result: sqltypes.ResultToProto3(reply),
 		})
@@ -466,9 +444,7 @@ func (q *query) ReserveBeginExecute(ctx context.Context, request *querypb.Reserv
 		request.ImmediateCallerId,
 	)
 
-	session := executorcontext.NewSafeSession(&vtgatepb.Session{Options: request.Options})
-
-	state, result, err := q.server.ReserveBeginExecute(ctx, session, request.Target, request.PreQueries, request.PostBeginQueries, request.Query.Sql, request.Query.BindVariables)
+	state, result, err := q.server.ReserveBeginExecute(ctx, nil, request.Target, request.PreQueries, request.PostBeginQueries, request.Query.Sql, request.Query.BindVariables, request.Options)
 	if err != nil {
 		// if we have a valid reservedID or transactionID, return the error in-band
 		if state.TransactionID != 0 || state.ReservedID != 0 {
@@ -499,9 +475,7 @@ func (q *query) ReserveBeginStreamExecute(request *querypb.ReserveBeginStreamExe
 		request.ImmediateCallerId,
 	)
 
-	session := executorcontext.NewSafeSession(&vtgatepb.Session{Options: request.Options})
-
-	state, err := q.server.ReserveBeginStreamExecute(ctx, session, request.Target, request.PreQueries, request.PostBeginQueries, request.Query.Sql, request.Query.BindVariables, func(reply *sqltypes.Result) error {
+	state, err := q.server.ReserveBeginStreamExecute(ctx, nil, request.Target, request.PreQueries, request.PostBeginQueries, request.Query.Sql, request.Query.BindVariables, request.Options, func(reply *sqltypes.Result) error {
 		return stream.Send(&querypb.ReserveBeginStreamExecuteResponse{
 			Result: sqltypes.ResultToProto3(reply),
 		})
