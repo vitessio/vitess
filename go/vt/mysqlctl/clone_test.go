@@ -1,5 +1,5 @@
 /*
-Copyright 2025 The Vitess Authors.
+Copyright 2026 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -257,7 +257,7 @@ func Test_waitForCloneComplete(t *testing.T) {
 			err := executor.waitForCloneComplete(context.Background(), fmd, 5*time.Second)
 			if tt.expectError {
 				require.Error(t, err)
-				assert.Contains(t, err.Error(), tt.errorContain)
+				assert.ErrorContains(t, err, tt.errorContain)
 			} else {
 				require.NoError(t, err)
 			}
@@ -281,7 +281,7 @@ func Test_waitForCloneComplete_Timeout(t *testing.T) {
 
 	err := executor.waitForCloneComplete(context.Background(), fmd, 100*time.Millisecond)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "timeout")
+	assert.ErrorContains(t, err, "timeout")
 }
 
 func Test_waitForCloneComplete_ContextCanceled(t *testing.T) {
@@ -356,7 +356,7 @@ func TestValidateRecipient(t *testing.T) {
 			fmd.Version = tt.version
 			if tt.pluginQuery != nil {
 				fmd.FetchSuperQueryMap = map[string]*sqltypes.Result{
-					"SELECT PLUGIN_STATUS FROM information_schema.PLUGINS WHERE PLUGIN_NAME = 'clone'": tt.pluginQuery,
+					clonePluginStatusQuery: tt.pluginQuery,
 				}
 			}
 
@@ -368,10 +368,10 @@ func TestValidateRecipient(t *testing.T) {
 				UseSSL:        false,
 			}
 
-			err := executor.ValidateRecipient(context.Background(), fmd)
+			err := executor.validateRecipient(context.Background(), fmd)
 			if tt.expectError {
 				require.Error(t, err)
-				assert.Contains(t, err.Error(), tt.errorContain)
+				assert.ErrorContains(t, err, tt.errorContain)
 			} else {
 				require.NoError(t, err)
 			}

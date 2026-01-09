@@ -1,5 +1,5 @@
 /*
-Copyright 2025 The Vitess Authors.
+Copyright 2026 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -28,7 +28,14 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttls"
+)
+
+const (
+	clonePluginStatusQuery = "SELECT PLUGIN_STATUS FROM information_schema.PLUGINS WHERE PLUGIN_NAME = 'clone'"
+	cloneStatusQuery       = "SELECT STATE, ERROR_NO, ERROR_MESSAGE FROM performance_schema.clone_status ORDER BY ID DESC LIMIT 1"
 )
 
 // CloneExecutor handles MySQL CLONE REMOTE operations for backup and replica provisioning.
@@ -46,11 +53,11 @@ type CloneExecutor struct {
 	UseSSL bool
 }
 
-// ValidateRecipient checks that the recipient MySQL instance meets all prerequisites for cloning.
+// validateRecipient checks that the recipient MySQL instance meets all prerequisites for cloning.
 // It verifies:
 // - MySQL version >= 8.0.17
 // - Clone plugin is installed
-func (c *CloneExecutor) ValidateRecipient(ctx context.Context, mysqld MysqlDaemon) error {
+func (c *CloneExecutor) validateRecipient(ctx context.Context, mysqld MysqlDaemon) error {
 	// Check MySQL version using capabilities system
 	if err := c.checkCloneCapability(ctx, mysqld); err != nil {
 		return err
@@ -70,42 +77,42 @@ func (c *CloneExecutor) ValidateRecipient(ctx context.Context, mysqld MysqlDaemo
 func (c *CloneExecutor) validateDonorRemote(ctx context.Context) error {
 	conn, err := mysql.Connect(ctx, c.donorConnParams())
 	if err != nil {
-		return fmt.Errorf("failed to connect to donor %s:%d: %w", c.DonorHost, c.DonorPort, err)
+		return vterrors.Wrapf(err, "failed to connect to donor %s:%d", c.DonorHost, c.DonorPort)
 	}
 	defer conn.Close()
 
 	// Check MySQL version
 	qr, err := conn.ExecuteFetch("SELECT @@version", 1, false)
 	if err != nil {
-		return fmt.Errorf("failed to query donor MySQL version: %w", err)
+		return vterrors.Wrapf(err, "failed to query donor MySQL version")
 	}
 	if len(qr.Rows) == 0 || len(qr.Rows[0]) == 0 {
-		return errors.New("empty version result from donor")
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "empty version result from donor")
 	}
 	versionStr := qr.Rows[0][0].ToString()
 	capableOf := mysql.ServerVersionCapableOf(versionStr)
 	if capableOf == nil {
-		return fmt.Errorf("unable to determine MySQL capabilities for donor version %q", versionStr)
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unable to determine MySQL capabilities for donor version %q", versionStr)
 	}
 	ok, err := capableOf(capabilities.MySQLClonePluginFlavorCapability)
 	if err != nil {
-		return fmt.Errorf("failed to check donor clone capability: %w", err)
+		return vterrors.Wrapf(err, "failed to check donor clone capability")
 	}
 	if !ok {
-		return fmt.Errorf("donor MySQL CLONE requires version 8.0.17 or higher, got %s", versionStr)
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "donor MySQL CLONE requires version 8.0.17 or higher, got %s", versionStr)
 	}
 
 	// Check clone plugin is installed
-	qr, err = conn.ExecuteFetch("SELECT PLUGIN_STATUS FROM information_schema.PLUGINS WHERE PLUGIN_NAME = 'clone'", 1, false)
+	qr, err = conn.ExecuteFetch(clonePluginStatusQuery, 1, false)
 	if err != nil {
-		return fmt.Errorf("failed to check donor clone plugin status: %w", err)
+		return vterrors.Wrapf(err, "failed to check donor clone plugin status")
 	}
-	if len(qr.Rows) == 0 {
-		return errors.New("clone plugin is not installed on donor (add 'plugin-load-add=mysql_clone.so' to my.cnf)")
+	if len(qr.Rows) == 0 || len(qr.Rows[0]) == 0 {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "clone plugin is not installed on donor (add 'plugin-load-add=mysql_clone.so' to my.cnf)")
 	}
 	status := qr.Rows[0][0].ToString()
-	if status != "ACTIVE" {
-		return fmt.Errorf("clone plugin is not active on donor (status: %s)", status)
+	if !strings.EqualFold(status, "ACTIVE") {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "clone plugin is not active on donor (status: %s)", status)
 	}
 
 	log.Infof("Donor %s:%d validated successfully (MySQL %s)", c.DonorHost, c.DonorPort, versionStr)
@@ -116,7 +123,7 @@ func (c *CloneExecutor) validateDonorRemote(ctx context.Context) error {
 func (c *CloneExecutor) checkCloneCapability(ctx context.Context, mysqld MysqlDaemon) error {
 	versionStr, err := mysqld.GetVersionString(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to query MySQL version: %w", err)
+		return vterrors.Wrapf(err, "failed to query MySQL version")
 	}
 
 	// GetVersionString may return either SQL query result (e.g., "8.0.44") or CLI output
@@ -129,15 +136,15 @@ func (c *CloneExecutor) checkCloneCapability(ctx context.Context, mysqld MysqlDa
 
 	capableOf := mysql.ServerVersionCapableOf(versionStr)
 	if capableOf == nil {
-		return fmt.Errorf("unable to determine MySQL capabilities for version %q", versionStr)
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unable to determine MySQL capabilities for version %q", versionStr)
 	}
 
 	ok, err := capableOf(capabilities.MySQLClonePluginFlavorCapability)
 	if err != nil {
-		return fmt.Errorf("failed to check clone capability: %w", err)
+		return vterrors.Wrapf(err, "failed to check clone capability")
 	}
 	if !ok {
-		return fmt.Errorf("MySQL CLONE requires version 8.0.17 or higher, got %s", versionStr)
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "MySQL CLONE requires version 8.0.17 or higher, got %s", versionStr)
 	}
 
 	return nil
@@ -164,23 +171,23 @@ func (c *CloneExecutor) donorConnParams() *mysql.ConnParams {
 // 2. Execute CLONE INSTANCE FROM on the recipient
 // 3. Wait for MySQL to restart and verify clone completed successfully
 //
-// The restartTimeout specifies how long to wait for MySQL to restart and
+// The waitTimeout specifies how long to wait for MySQL to restart and
 // report clone completion after the CLONE command finishes.
 //
 // Note: This operation will DESTROY all existing data on the recipient.
-func (c *CloneExecutor) ExecuteClone(ctx context.Context, mysqld MysqlDaemon, restartTimeout time.Duration) error {
+func (c *CloneExecutor) ExecuteClone(ctx context.Context, mysqld MysqlDaemon, waitTimeout time.Duration) error {
 	if !MySQLCloneEnabled() {
-		return errors.New("MySQL CLONE not enabled; set --mysql-clone-enabled=true on both donor and recipient")
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "MySQL CLONE not enabled; set --mysql-clone-enabled=true on both donor and recipient")
 	}
 
 	// Validate recipient prerequisites
-	if err := c.ValidateRecipient(ctx, mysqld); err != nil {
-		return fmt.Errorf("recipient validation failed: %w", err)
+	if err := c.validateRecipient(ctx, mysqld); err != nil {
+		return vterrors.Wrapf(err, "recipient validation failed")
 	}
 
 	// Validate donor prerequisites by connecting remotely
 	if err := c.validateDonorRemote(ctx); err != nil {
-		return fmt.Errorf("donor validation failed: %w", err)
+		return vterrors.Wrapf(err, "donor validation failed")
 	}
 
 	log.Infof("Starting CLONE REMOTE from %s:%d", c.DonorHost, c.DonorPort)
@@ -190,7 +197,7 @@ func (c *CloneExecutor) ExecuteClone(ctx context.Context, mysqld MysqlDaemon, re
 	setDonorListQuery := fmt.Sprintf("SET GLOBAL clone_valid_donor_list = '%s'", donorAddr)
 
 	if err := mysqld.ExecuteSuperQuery(ctx, setDonorListQuery); err != nil {
-		return fmt.Errorf("failed to set clone_valid_donor_list: %w", err)
+		return vterrors.Wrapf(err, "failed to set clone_valid_donor_list")
 	}
 
 	// Build the CLONE INSTANCE command
@@ -203,14 +210,14 @@ func (c *CloneExecutor) ExecuteClone(ctx context.Context, mysqld MysqlDaemon, re
 	// success by checking clone_status after MySQL comes back up.
 	if err := mysqld.ExecuteSuperQuery(ctx, cloneCmd); err != nil {
 		if !isCloneConnError(err) {
-			return fmt.Errorf("clone command failed: %w", err)
+			return vterrors.Wrapf(err, "clone command failed")
 		}
 		log.Infof("CLONE command returned (connection likely lost due to MySQL restart): %v", err)
 	}
 
 	// Wait for MySQL to restart and verify clone completed successfully
-	if err := c.waitForCloneComplete(ctx, mysqld, restartTimeout); err != nil {
-		return fmt.Errorf("clone verification failed: %w", err)
+	if err := c.waitForCloneComplete(ctx, mysqld, waitTimeout); err != nil {
+		return vterrors.Wrapf(err, "clone success verification failed")
 	}
 
 	log.Infof("CLONE REMOTE completed successfully from %s:%d", c.DonorHost, c.DonorPort)
@@ -250,20 +257,18 @@ func isCloneConnError(err error) bool {
 
 // checkClonePluginInstalled verifies that the clone plugin is loaded.
 func (c *CloneExecutor) checkClonePluginInstalled(ctx context.Context, mysqld MysqlDaemon) error {
-	query := "SELECT PLUGIN_STATUS FROM information_schema.PLUGINS WHERE PLUGIN_NAME = 'clone'"
-
-	result, err := mysqld.FetchSuperQuery(ctx, query)
+	result, err := mysqld.FetchSuperQuery(ctx, clonePluginStatusQuery)
 	if err != nil {
-		return fmt.Errorf("failed to check clone plugin status: %w", err)
+		return vterrors.Wrapf(err, "failed to check clone plugin status")
 	}
 
-	if len(result.Rows) == 0 {
-		return errors.New("clone plugin is not installed (add 'plugin-load-add=mysql_clone.so' to my.cnf)")
+	if len(result.Rows) == 0 || len(result.Rows[0]) == 0 {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "clone plugin is not installed (add 'plugin-load-add=mysql_clone.so' to my.cnf)")
 	}
 
 	status := result.Rows[0][0].ToString()
-	if status != "ACTIVE" {
-		return fmt.Errorf("clone plugin is not active (status: %s)", status)
+	if !strings.EqualFold(status, "ACTIVE") {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "clone plugin is not active (status: %s)", status)
 	}
 
 	return nil
@@ -275,7 +280,6 @@ func (c *CloneExecutor) checkClonePluginInstalled(ctx context.Context, mysqld My
 // retry until MySQL is back and clone_status shows completion.
 func (c *CloneExecutor) waitForCloneComplete(ctx context.Context, mysqld MysqlDaemon, timeout time.Duration) error {
 	const pollInterval = time.Second
-	query := "SELECT STATE, ERROR_NO, ERROR_MESSAGE FROM performance_schema.clone_status ORDER BY ID DESC LIMIT 1"
 
 	log.Infof("Waiting for clone to complete (timeout: %v)", timeout)
 
@@ -289,10 +293,10 @@ func (c *CloneExecutor) waitForCloneComplete(ctx context.Context, mysqld MysqlDa
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-timer.C:
-			return fmt.Errorf("timeout waiting for clone to complete after %v", timeout)
+			return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "timeout waiting for clone to complete after %v", timeout)
 		case <-ticker.C:
 			// Try to query clone status - connection may fail if MySQL is restarting
-			result, err := mysqld.FetchSuperQuery(ctx, query)
+			result, err := mysqld.FetchSuperQuery(ctx, cloneStatusQuery)
 			if err != nil {
 				// Connection failures are expected during MySQL restart
 				log.Infof("Clone status query failed (MySQL may be restarting): %v", err)
@@ -305,22 +309,28 @@ func (c *CloneExecutor) waitForCloneComplete(ctx context.Context, mysqld MysqlDa
 				continue
 			}
 
+			if len(result.Rows[0]) < 3 {
+				// Unexpected row format
+				log.Warningf("Unexpected clone_status row format: got %d columns, expected 3", len(result.Rows[0]))
+				continue
+			}
+
 			state := result.Rows[0][0].ToString()
 			errorNo := result.Rows[0][1].ToString()
 			errorMsg := result.Rows[0][2].ToString()
 
 			log.Infof("Clone status: STATE=%s, ERROR_NO=%s", state, errorNo)
 
-			switch state {
-			case "Completed":
+			switch {
+			case strings.EqualFold(state, "Completed"):
 				if errorNo != "0" {
-					return fmt.Errorf("clone completed with error %s: %s", errorNo, errorMsg)
+					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "clone completed with error %s: %s", errorNo, errorMsg)
 				}
-				log.Infof("Clone completed successfully")
+				log.Infof("Clone completed successfully from %s:%d", c.DonorHost, c.DonorPort)
 				return nil
-			case "Failed":
-				return fmt.Errorf("clone failed with error %s: %s", errorNo, errorMsg)
-			case "In Progress", "Not Started":
+			case strings.EqualFold(state, "Failed"):
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "clone failed with error %s: %s", errorNo, errorMsg)
+			case strings.EqualFold(state, "In Progress"), strings.EqualFold(state, "Not Started"):
 				// Still running, keep waiting
 				continue
 			default:
