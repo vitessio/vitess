@@ -18,6 +18,7 @@ package grpctmserver
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"google.golang.org/grpc"
@@ -28,20 +29,29 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	tabletmanagerservicepb "vitess.io/vitess/go/vt/proto/tabletmanagerservice"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+var ErrNoProxyTabletManagerClient = errors.New("no proxy tabletmanager client")
 
 // server is the gRPC implementation of the RPC server
 type server struct {
 	tabletmanagerservicepb.UnimplementedTabletManagerServer
 	// implementation of the tm to call
 	tm tabletmanager.RPCTM
+	// proxyTabletManagerClient for proxy requests
+	proxyTabletManagerClient tmclient.TabletManagerClient
 }
 
 func (s *server) Ping(ctx context.Context, request *tabletmanagerdatapb.PingRequest) (response *tabletmanagerdatapb.PingResponse, err error) {
@@ -362,11 +372,46 @@ func (s *server) ReplicationStatus(ctx context.Context, request *tabletmanagerda
 	return response, err
 }
 
+func (s *server) proxyFullStatus(ctx context.Context, request *tabletmanagerdatapb.FullStatusRequest) (*replicationdatapb.FullStatus, error) {
+	if s.proxyTabletManagerClient == nil {
+		return nil, ErrNoProxyTabletManagerClient
+	}
+
+	// disallow infinite proxy loop
+	if topoproto.TabletAliasEqual(s.tm.GetTabletAlias(), request.ProxyTarget.Alias) {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "cannot use proxying tablet as a proxy target")
+	}
+	// disallow proxying more than once
+	if request.ProxiedBy != nil {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "cannot proxy a request that is already proxied")
+	}
+	// disallow timeouts larger than the local remote operation timeout
+	if request.ProxyTimeoutMs > uint64(topo.RemoteOperationTimeout.Milliseconds()) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot set a proxy timeout ms greater than %d", topo.RemoteOperationTimeout.Milliseconds())
+	}
+
+	timeout := topo.RemoteOperationTimeout
+	if request.ProxyTimeoutMs > 0 {
+		timeout = time.Duration(request.ProxyTimeoutMs) * time.Millisecond
+	}
+	proxyCtx, proxyCancel := context.WithTimeout(ctx, timeout)
+	defer proxyCancel()
+
+	return s.proxyTabletManagerClient.FullStatus(proxyCtx, request.ProxyTarget, &tabletmanagerdatapb.FullStatusRequest{
+		ProxiedBy: s.tm.GetTabletAlias(),
+	})
+}
+
 func (s *server) FullStatus(ctx context.Context, request *tabletmanagerdatapb.FullStatusRequest) (response *tabletmanagerdatapb.FullStatusResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "FullStatus", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
+	var status *replicationdatapb.FullStatus
 	response = &tabletmanagerdatapb.FullStatusResponse{}
-	status, err := s.tm.FullStatus(ctx)
+	if request.ProxyTarget != nil {
+		status, err = s.proxyFullStatus(ctx, request)
+	} else {
+		status, err = s.tm.FullStatus(ctx)
+	}
 	if err == nil {
 		response.Status = status
 	}
@@ -728,12 +773,18 @@ func (s *server) GetThrottlerStatus(ctx context.Context, request *tabletmanagerd
 func init() {
 	tabletmanager.RegisterTabletManagers = append(tabletmanager.RegisterTabletManagers, func(tm *tabletmanager.TabletManager) {
 		if servenv.GRPCCheckServiceMap("tabletmanager") {
-			tabletmanagerservicepb.RegisterTabletManagerServer(servenv.GRPCServer, &server{tm: tm})
+			tabletmanagerservicepb.RegisterTabletManagerServer(servenv.GRPCServer, &server{
+				tm:                       tm,
+				proxyTabletManagerClient: tmclient.NewTabletManagerClient(),
+			})
 		}
 	})
 }
 
 // RegisterForTest will register the RPC, to be used by test instances only
-func RegisterForTest(s *grpc.Server, tm tabletmanager.RPCTM) {
-	tabletmanagerservicepb.RegisterTabletManagerServer(s, &server{tm: tm})
+func RegisterForTest(s *grpc.Server, tm tabletmanager.RPCTM, proxyTabletManagerClient tmclient.TabletManagerClient) {
+	tabletmanagerservicepb.RegisterTabletManagerServer(s, &server{
+		tm:                       tm,
+		proxyTabletManagerClient: proxyTabletManagerClient,
+	})
 }

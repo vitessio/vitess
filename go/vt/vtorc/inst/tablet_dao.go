@@ -24,8 +24,8 @@ import (
 
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
-
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -36,6 +36,7 @@ import (
 // ErrTabletAliasNil is a fixed error message.
 var ErrTabletAliasNil = errors.New("tablet alias is nil")
 var tmc tmclient.TabletManagerClient
+var tmcProxyTimeout = topo.RemoteOperationTimeout / 2
 
 // InitializeTMC initializes the tablet manager client to use for all VTOrc RPC calls.
 func InitializeTMC() tmclient.TabletManagerClient {
@@ -44,10 +45,15 @@ func InitializeTMC() tmclient.TabletManagerClient {
 }
 
 // fullStatus gets the full status of the MySQL running in vttablet.
-func fullStatus(tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
+func fullStatus(tablet, proxyTarget *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
 	tmcCtx, tmcCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer tmcCancel()
-	return tmc.FullStatus(tmcCtx, tablet)
+	request := &tabletmanagerdatapb.FullStatusRequest{}
+	if proxyTarget != nil {
+		request.ProxyTarget = proxyTarget
+		request.ProxyTimeoutMs = uint64(tmcProxyTimeout.Milliseconds())
+	}
+	return tmc.FullStatus(tmcCtx, tablet, request)
 }
 
 // ReadTablet reads the vitess tablet record.

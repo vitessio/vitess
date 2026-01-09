@@ -196,7 +196,7 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 		goto Cleanup
 	}
 
-	fs, err = fullStatus(tablet)
+	fs, err = fullStatus(tablet, nil /* proxyTarget */)
 	if err != nil {
 		goto Cleanup
 	}

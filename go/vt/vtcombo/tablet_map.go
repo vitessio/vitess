@@ -1069,7 +1069,7 @@ func (itmc *internalTabletManagerClient) ReplicationStatus(context.Context, *top
 	return nil, errors.New("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) FullStatus(context.Context, *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
+func (itmc *internalTabletManagerClient) FullStatus(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.FullStatusRequest) (*replicationdatapb.FullStatus, error) {
 	return nil, errors.New("not implemented in vtcombo")
 }
 
