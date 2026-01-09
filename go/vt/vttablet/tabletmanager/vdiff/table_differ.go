@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"slices"
 	"strings"
 	"sync"
@@ -136,7 +137,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 		if lockErr == nil {
 			break
 		}
-		log.Warningf("Locking workfkow %s for VDiff %s initialization (stream ID: %d) failed, will wait %v before retrying: %v",
+		log.Warningf("Locking workflow %s for VDiff %s initialization (stream ID: %d) failed, will wait %v before retrying: %v",
 			lockName, td.wd.ct.uuid, td.wd.ct.id, retryDelay, lockErr)
 		select {
 		case <-ctx.Done():
@@ -147,6 +148,11 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 			if retryDelay < maxRetryDelay {
 				retryDelay = min(time.Duration(float64(retryDelay)*backoffFactor), maxRetryDelay)
 			}
+			// Add jitter to prevent thundering herds: ±25% of original retryDelay.
+			// This means that we may wait up to maxRetryDelay * 1.25, but it prevents all of
+			// the waiters from eventually waiting for the fixed maxRetryDelay period.
+			jitter := time.Duration(rand.IntN(int(retryDelay) / 2))
+			retryDelay = retryDelay - (retryDelay / 4) + jitter
 			continue
 		}
 	}

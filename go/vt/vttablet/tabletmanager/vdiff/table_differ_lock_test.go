@@ -19,6 +19,7 @@ package vdiff
 import (
 	"context"
 	"fmt"
+	"math/rand/v2"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -155,4 +156,73 @@ func TestWorkflowLockExponentialBackoff(t *testing.T) {
 	// Verify the lock was eventually acquired and there were retries.
 	require.True(t, gotLock.Load(), "the lock should have been acquired after retries")
 	require.Greater(t, retryCount.Load(), int32(1), "we should have retried at least twice")
+}
+
+// TestWorkflowLockJitter tests that jitter is correctly applied to retry delays
+// to prevent thundering herd issues.
+func TestWorkflowLockJitter(t *testing.T) {
+	testCases := []struct {
+		name         string
+		retryDelay   time.Duration
+		expectedMin  time.Duration
+		expectedMax  time.Duration
+		iterations   int
+		uniqueDelays int // minimum number of unique delays we expect
+	}{
+		{
+			name:         "10ms delay",
+			retryDelay:   10 * time.Millisecond,
+			expectedMin:  7 * time.Millisecond,  // 10 - (10/4) = 7.5ms
+			expectedMax:  13 * time.Millisecond, // 10 - (10/4) + (10/2) = 12.5ms (+ tolerance)
+			iterations:   100,
+			uniqueDelays: 3, // Should see multiple different delays
+		},
+		{
+			name:         "100ms delay",
+			retryDelay:   100 * time.Millisecond,
+			expectedMin:  75 * time.Millisecond,  // 100 - 25 = 75ms
+			expectedMax:  125 * time.Millisecond, // 100 - 25 + 50 = 125ms
+			iterations:   100,
+			uniqueDelays: 10, // Should see many different delays
+		},
+		{
+			name:         "1s delay",
+			retryDelay:   1 * time.Second,
+			expectedMin:  750 * time.Millisecond,  // 1000 - 250 = 750ms
+			expectedMax:  1250 * time.Millisecond, // 1000 - 250 + 500 = 1250ms
+			iterations:   100,
+			uniqueDelays: 20, // Should see many different delays
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			seenDelays := make(map[time.Duration]bool)
+			var minSeen, maxSeen time.Duration = tc.retryDelay, 0
+
+			for range tc.iterations {
+				retryDelay := tc.retryDelay
+				jitter := time.Duration(rand.IntN(int(retryDelay) / 2))
+				jitteredDelay := retryDelay - (retryDelay / 4) + jitter
+
+				// Track min/max.
+				if jitteredDelay < minSeen {
+					minSeen = jitteredDelay
+				}
+				if jitteredDelay > maxSeen {
+					maxSeen = jitteredDelay
+				}
+
+				seenDelays[jitteredDelay] = true
+
+				// Verify the jittered delay is within expected bounds.
+				require.GreaterOrEqual(t, jitteredDelay, tc.expectedMin, "jittered delay should be >= %v", tc.expectedMin)
+				require.LessOrEqual(t, jitteredDelay, tc.expectedMax, "jittered delay should be <= %v", tc.expectedMax)
+			}
+
+			// Verify we're seeing variety in the delays (not always the same value).
+			require.GreaterOrEqual(t, len(seenDelays), tc.uniqueDelays,
+				"should see at least %d unique delays, got %d", tc.uniqueDelays, len(seenDelays))
+		})
+	}
 }
