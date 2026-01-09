@@ -989,8 +989,7 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 	myTemplateSource.WriteString(versionConfig)
 
 	// Conditionally include clone plugin config
-	if mysqlCloneEnabled && mysqld.capabilities.isMySQLLike() {
-		// Clone plugin requires MySQL 8.0.17+
+	if mysqlCloneEnabled && f == FlavorMySQL {
 		v := mysqld.capabilities.version
 		if v.Major < 8 || (v.Major == 8 && v.Minor == 0 && v.Patch < 17) {
 			log.Warningf("--mysql-clone-enabled is set but MySQL version %d.%d.%d does not support CLONE (requires 8.0.17+); flag will be ignored",
