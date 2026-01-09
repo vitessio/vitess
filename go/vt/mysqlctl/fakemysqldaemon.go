@@ -184,6 +184,10 @@ type FakeMysqlDaemon struct {
 	// FetchSuperQueryResults is used by FetchSuperQuery.
 	FetchSuperQueryMap map[string]*sqltypes.Result
 
+	// FetchSuperQueryCallback is an optional callback for dynamic query handling.
+	// If set, it takes precedence over FetchSuperQueryMap.
+	FetchSuperQueryCallback func(query string) (*sqltypes.Result, error)
+
 	// SemiSyncPrimaryEnabled represents the state of rpl_semi_sync_source_enabled.
 	SemiSyncPrimaryEnabled bool
 	// SemiSyncReplicaEnabled represents the state of rpl_semi_sync_replica_enabled.
@@ -617,6 +621,11 @@ func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(ctx context.Context, queryList
 
 // FetchSuperQuery returns the results from the map, if any.
 func (fmd *FakeMysqlDaemon) FetchSuperQuery(ctx context.Context, query string) (*sqltypes.Result, error) {
+	// If a callback is set, use it for dynamic handling
+	if fmd.FetchSuperQueryCallback != nil {
+		return fmd.FetchSuperQueryCallback(query)
+	}
+
 	if fmd.FetchSuperQueryMap == nil {
 		return nil, fmt.Errorf("unexpected query: %v", query)
 	}

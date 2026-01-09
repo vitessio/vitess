@@ -99,6 +99,11 @@ func TestRedactMasterPassword(t *testing.T) {
   MASTER_PASSWORD = 'AAA`)
 }
 
+func TestRedactIdentifiedByPassword(t *testing.T) {
+	testRedacted(t, "CLONE INSTANCE FROM 'user'@'host':3306 IDENTIFIED BY 'secret' REQUIRE SSL",
+		"CLONE INSTANCE FROM 'user'@'host':3306 IDENTIFIED BY '****' REQUIRE SSL")
+}
+
 func TestRedactPassword(t *testing.T) {
 	// regular case
 	testRedacted(t, `START xxx USER = 'vt_repl', PASSWORD = 'AAA'`,

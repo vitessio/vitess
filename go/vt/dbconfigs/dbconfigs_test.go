@@ -326,6 +326,8 @@ app:
   user: vt_app
 appdebug:
   password: '****'
+clone:
+  password: '****'
 dba:
   password: '****'
   user: vt_dba
