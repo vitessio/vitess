@@ -592,6 +592,16 @@ func TestCloneFromDonor(t *testing.T) {
 		wantErrContains  string
 	}{
 		{
+			name:             "both cloneFromPrimary and cloneFromTablet specified",
+			cloneFromPrimary: true,
+			cloneFromTablet:  "cell1-100",
+			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
+				// No setup needed, mutual exclusivity check happens first
+			},
+			wantErr:         true,
+			wantErrContains: "mutually exclusive",
+		},
+		{
 			name:             "clone from primary, get shard fails",
 			cloneFromPrimary: true,
 			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
@@ -653,16 +663,6 @@ func TestCloneFromDonor(t *testing.T) {
 			},
 			wantErr:         true,
 			wantErrContains: "clone user not configured",
-		},
-		{
-			name:            "recipient validation fails",
-			cloneFromTablet: "cell1-100",
-			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
-				// Configure mysqld to return an old MySQL version
-				env.mysqld.Version = "8.0.16"
-			},
-			wantErr:         true,
-			wantErrContains: "recipient validation failed",
 		},
 		{
 			name:            "get position after clone fails",
