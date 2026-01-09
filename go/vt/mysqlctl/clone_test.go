@@ -675,7 +675,12 @@ func TestCloneFromDonor(t *testing.T) {
 			wantErrContains: "failed to get position after clone",
 		},
 		{
-			name:            "success",
+			name:             "success with clone-from-primary",
+			cloneFromPrimary: true,
+			wantErr:          false,
+		},
+		{
+			name:            "success with clone-from-tablet",
 			cloneFromTablet: "cell1-100",
 			wantErr:         false,
 		},
