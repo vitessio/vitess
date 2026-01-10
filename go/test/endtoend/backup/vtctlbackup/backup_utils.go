@@ -132,7 +132,7 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 		return 1, err
 	}
 	newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
-	err = os.WriteFile(newInitDBFile, []byte(sql), 0666)
+	err = os.WriteFile(newInitDBFile, []byte(sql), 0o666)
 	if err != nil {
 		return 1, err
 	}
@@ -382,6 +382,10 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDe
 			method: primaryBackup,
 		},
 		{
+			name:   "TestPrimaryRestoreSidecarReplication",
+			method: primaryRestoreSidecarReplication,
+		},
+		{
 			name:   "TestPrimaryReplicaSameBackup",
 			method: primaryReplicaSameBackup,
 		}, //
@@ -561,6 +565,58 @@ func primaryBackup(t *testing.T) {
 
 	_, err = primary.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
 	require.NoError(t, err)
+}
+
+// primaryRestoreSidecarReplication ensures replication remains healthy after restoring a primary from a backup that
+// has a mismatch in _vt.tables relative to existing replicas.
+func primaryRestoreSidecarReplication(t *testing.T) {
+	localCluster.DisableVTOrcRecoveries(t)
+	defer localCluster.EnableVTOrcRecoveries(t)
+
+	// Step 1: create the table and get initial replication.
+	verifyInitialReplication(t)
+
+	// Step 2: take a backup before the primary has recorded _vt.tables.
+	err := localCluster.VtctldClientProcess.ExecuteCommand("Backup", "--allow-primary", primary.Alias)
+	require.NoError(t, err)
+	firstBackupTimestamp := time.Now().UTC().Format(mysqlctl.BackupTimestampFormat)
+
+	// // Step 3: make the primary advance so the replica diverges.
+	// _, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
+	// require.NoError(t, err)
+
+	// Step 3: bring up a second replica
+	restoreWaitForBackup(t, "replica", nil, true)
+	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, timeout)
+	require.NoError(t, err)
+
+	// Step 4: Promote the second replica, which initiates a schema reload. A table is now created in _vt.tables.
+	err = localCluster.VtctldClientProcess.ExecuteCommand("PlannedReparentShard", "--new-primary", replica2.Alias, shardKsName)
+	require.NoError(t, err)
+
+	// Replica 2 isn't needed anymore
+	err = localCluster.VtctldClientProcess.ExecuteCommand("DeleteTablets", "--allow-primary", replica2.Alias)
+	require.NoError(t, err)
+	err = replica2.VttabletProcess.TearDown()
+	require.NoError(t, err)
+
+	// Step 5: Restore the primary from the backup we took
+	err = localCluster.VtctldClientProcess.ExecuteCommand("RestoreFromBackup", "--backup-timestamp", firstBackupTimestamp, primary.Alias)
+	require.NoError(t, err)
+
+	// Step 6: make the old primary the primary again. This will initiate a schema reload, but since the backup is missing the table
+	// in _vt.tables, it will create it and replicate it to the replica, which already has the table in its _vt.tables from replica 2.
+	err = localCluster.VtctldClientProcess.InitShardPrimary(keyspaceName, shardName, cell, primary.TabletUID)
+	require.NoError(t, err)
+
+	// Validate replication still works
+	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test_after_init')", keyspaceName, true)
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool {
+		res, err := replica1.VttabletProcess.QueryTablet("select msg from vt_insert_test where msg = 'test_after_init'", keyspaceName, true)
+		return err == nil && len(res.Rows) == 1
+	}, 1*time.Second, 10*time.Millisecond, "expected replication to be working")
 }
 
 // Test a primary and replica from the same backup.
