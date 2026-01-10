@@ -572,16 +572,16 @@ func TestFullStatus(t *testing.T) {
 	assert.Regexp(t, `[58]\.[074].*`, replicaStatus.Version)
 	assert.NotEmpty(t, replicaStatus.VersionComment)
 
-	primary, err := clusterInstance.VtctldClientProcess.GetTablet(primaryTablet.Alias)
-	assert.NoError(t, err)
-	replica, err := clusterInstance.VtctldClientProcess.GetTablet(replicaTablet.Alias)
-	assert.NoError(t, err)
-
 	vttabletVersion, err := cluster.GetMajorVersion("vttablet")
 	require.NoError(t, err)
 
 	// Support for proxying FullStatus RPCs was added in v24
 	if vttabletVersion >= 24 {
+		primary, err := clusterInstance.VtctldClientProcess.GetTablet(primaryTablet.Alias)
+		assert.NoError(t, err)
+		replica, err := clusterInstance.VtctldClientProcess.GetTablet(replicaTablet.Alias)
+		assert.NoError(t, err)
+
 		c := grpctmclient.NewClient()
 
 		// test a proxied request success from primary -> replica

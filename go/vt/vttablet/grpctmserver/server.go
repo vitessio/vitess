@@ -18,7 +18,6 @@ package grpctmserver
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"google.golang.org/grpc"
@@ -43,15 +42,13 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-var ErrNoProxyTabletManagerClient = errors.New("no proxy tabletmanager client")
-
 // server is the gRPC implementation of the RPC server
 type server struct {
 	tabletmanagerservicepb.UnimplementedTabletManagerServer
 	// implementation of the tm to call
 	tm tabletmanager.RPCTM
-	// proxyTabletManagerClient for proxy requests
-	proxyTabletManagerClient tmclient.TabletManagerClient
+	// tmc is a tabletmanger client for proxy requests
+	tmc tmclient.TabletManagerClient
 }
 
 func (s *server) Ping(ctx context.Context, request *tabletmanagerdatapb.PingRequest) (response *tabletmanagerdatapb.PingResponse, err error) {
@@ -373,8 +370,8 @@ func (s *server) ReplicationStatus(ctx context.Context, request *tabletmanagerda
 }
 
 func (s *server) proxyFullStatus(ctx context.Context, request *tabletmanagerdatapb.FullStatusRequest) (*replicationdatapb.FullStatus, error) {
-	if s.proxyTabletManagerClient == nil {
-		return nil, ErrNoProxyTabletManagerClient
+	if s.tmc == nil {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "no proxy tabletmanger client")
 	}
 
 	// disallow infinite proxy loop
@@ -397,7 +394,7 @@ func (s *server) proxyFullStatus(ctx context.Context, request *tabletmanagerdata
 	proxyCtx, proxyCancel := context.WithTimeout(ctx, timeout)
 	defer proxyCancel()
 
-	return s.proxyTabletManagerClient.FullStatus(proxyCtx, request.ProxyTarget, &tabletmanagerdatapb.FullStatusRequest{
+	return s.tmc.FullStatus(proxyCtx, request.ProxyTarget, &tabletmanagerdatapb.FullStatusRequest{
 		ProxiedBy: s.tm.GetTabletAlias(),
 	})
 }
@@ -774,17 +771,17 @@ func init() {
 	tabletmanager.RegisterTabletManagers = append(tabletmanager.RegisterTabletManagers, func(tm *tabletmanager.TabletManager) {
 		if servenv.GRPCCheckServiceMap("tabletmanager") {
 			tabletmanagerservicepb.RegisterTabletManagerServer(servenv.GRPCServer, &server{
-				tm:                       tm,
-				proxyTabletManagerClient: tmclient.NewTabletManagerClient(),
+				tm:  tm,
+				tmc: tmclient.NewTabletManagerClient(),
 			})
 		}
 	})
 }
 
 // RegisterForTest will register the RPC, to be used by test instances only
-func RegisterForTest(s *grpc.Server, tm tabletmanager.RPCTM, proxyTabletManagerClient tmclient.TabletManagerClient) {
+func RegisterForTest(s *grpc.Server, tm tabletmanager.RPCTM, tmc tmclient.TabletManagerClient) {
 	tabletmanagerservicepb.RegisterTabletManagerServer(s, &server{
-		tm:                       tm,
-		proxyTabletManagerClient: proxyTabletManagerClient,
+		tm:  tm,
+		tmc: tmc,
 	})
 }
