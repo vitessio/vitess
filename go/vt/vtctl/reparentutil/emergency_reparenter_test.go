@@ -735,7 +735,12 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							Before: &replicationdatapb.Status{
+								IoState:          int32(replication.ReplicationStateRunning),
+								SqlState:         int32(replication.ReplicationStateRunning),
+								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+							},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -744,7 +749,12 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							Before: &replicationdatapb.Status{
+								IoState:          int32(replication.ReplicationStateRunning),
+								SqlState:         int32(replication.ReplicationStateRunning),
+								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+							},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -753,8 +763,11 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000102": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
-							After:  &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{
+								IoState:  int32(replication.ReplicationStateRunning),
+								SqlState: int32(replication.ReplicationStateRunning),
+							},
+							After: &replicationdatapb.Status{},
 						},
 					},
 				},
@@ -4734,18 +4747,21 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			},
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000102": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("1-100"),
 						SourceUuid:       u1,
 					},
 				},
 				"zone1-0000000103": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("1-99"),
 						SourceUuid:       u1,
 					},
 				},
 				"zone1-0000000104": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("1-100"),
 						SourceUuid:       u1,
@@ -4798,18 +4814,21 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			},
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000102": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("1-100", "1-30"),
 						SourceUuid:       u1,
 					},
 				},
 				"zone1-0000000103": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("1-99", "1-30"),
 						SourceUuid:       u1,
 					},
 				},
 				"zone1-0000000104": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("1-100", "1-30"),
 						SourceUuid:       u1,
@@ -4862,18 +4881,21 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			},
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000102": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("1-100", "1-30"),
 						SourceUuid:       u1,
 					},
 				},
 				"zone1-0000000103": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("1-99", "1-30"),
 						SourceUuid:       u1,
 					},
 				},
 				"zone1-0000000104": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("1-101", "1-30"),
 						SourceUuid:       u1,
@@ -4926,18 +4948,21 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			},
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000102": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-100"),
 						SourceUuid:       u1,
 					},
 				},
 				"zone1-0000000103": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("", "1-30", "1-50"),
 						SourceUuid:       u1,
 					},
 				},
 				"zone1-0000000104": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("", "1-30"),
 						SourceUuid:       u1,
@@ -4990,18 +5015,21 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			},
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000102": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("", "1-30", "1-50"),
 						SourceUuid:       u1,
 					},
 				},
 				"zone1-0000000103": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("", "1-30", "1-50"),
 						SourceUuid:       u1,
 					},
 				},
 				"zone1-0000000104": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("", "1-30"),
 						SourceUuid:       u1,
@@ -5054,12 +5082,14 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			},
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000103": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-50"),
 						SourceUuid:       u1,
 					},
 				},
 				"zone1-0000000104": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("1-90", "1-30", "1-50"),
 						SourceUuid:       u1,
@@ -5117,18 +5147,21 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			},
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000102": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("", "1-20", "1-50"),
 						SourceUuid:       u1,
 					},
 				},
 				"zone1-0000000103": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-50"),
 						SourceUuid:       u1,
 					},
 				},
 				"zone1-0000000104": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("", "1-31", "1-50"),
 						SourceUuid:       u2,
@@ -5181,12 +5214,14 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			},
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000103": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-50"),
 						SourceUuid:       u1,
 					},
 				},
 				"zone1-0000000104": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("", "1-31", "1-50"),
 						SourceUuid:       u2,
@@ -5244,18 +5279,21 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			},
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000102": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("1-99", "1-31", "1-50"),
 						SourceUuid:       u1,
 					},
 				},
 				"zone1-0000000103": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-50"),
 						SourceUuid:       u1,
 					},
 				},
 				"zone1-0000000104": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-50"),
 						SourceUuid:       u1,
@@ -5308,18 +5346,21 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			},
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000102": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("1-101", "1-31", "1-50"),
 						SourceUuid:       u1,
 					},
 				},
 				"zone1-0000000103": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-50"),
 						SourceUuid:       u1,
 					},
 				},
 				"zone1-0000000104": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-50"),
 						SourceUuid:       u1,
@@ -5361,12 +5402,14 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			},
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000102": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("1-100", "1-31", "1-50"),
 						SourceUuid:       u1,
 					},
 				},
 				"zone1-0000000103": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-50"),
 						SourceUuid:       u1,
@@ -5419,18 +5462,21 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			},
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000102": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("1-100", "1-31", "1-50"),
 						SourceUuid:       u1,
 					},
 				},
 				"zone1-0000000103": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-51"),
 						SourceUuid:       u1,
 					},
 				},
 				"zone1-0000000104": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("1-90", "1-30", "1-50"),
 						SourceUuid:       u1,
@@ -5483,12 +5529,14 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			},
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000103": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-51"),
 						SourceUuid:       u1,
 					},
 				},
 				"zone1-0000000104": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("", "1-31", "1-50"),
 						SourceUuid:       u2,
@@ -5542,12 +5590,14 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			},
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000103": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-51"),
 						SourceUuid:       u1,
 					},
 				},
 				"zone1-0000000104": {
+					Before: &replicationdatapb.Status{SemiSyncReplicaStatus: false},
 					After: &replicationdatapb.Status{
 						RelayLogPosition: getRelayLogPosition("", "1-31", "1-50"),
 						SourceUuid:       u2,
@@ -5567,9 +5617,9 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			erp := &EmergencyReparenter{
 				tmc: tt.tmc,
 			}
-			validCandidates, isGtid, err := FindPositionsOfAllCandidates(tt.statusMap, tt.primaryStatusMap)
+			validCandidates, isGTIDBasedMap, err := FindPositionsOfAllCandidates(tt.statusMap, tt.primaryStatusMap)
 			require.NoError(t, err)
-			require.True(t, isGtid)
+			require.Len(t, isGTIDBasedMap, len(validCandidates))
 			candidates, err := erp.findErrantGTIDs(context.Background(), validCandidates, tt.statusMap, tt.tabletMap, 10*time.Second)
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
