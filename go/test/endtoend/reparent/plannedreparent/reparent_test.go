@@ -580,7 +580,7 @@ func TestFullStatus(t *testing.T) {
 	vttabletVersion, err := cluster.GetMajorVersion("vttablet")
 	require.NoError(t, err)
 
-	// Support for proxying FullStatus RPCs was added in v24.
+	// Support for proxying FullStatus RPCs was added in v24
 	if vttabletVersion >= 24 {
 		c := grpctmclient.NewClient()
 
@@ -592,6 +592,8 @@ func TestFullStatus(t *testing.T) {
 		assert.NotNil(t, proxiedResp)
 		assert.Equal(t, topodatapb.TabletType_REPLICA, proxiedResp.TabletType)
 		assert.True(t, proxiedResp.ReadOnly)
+		assert.NotEqual(t, primaryStatus.ServerId, proxiedResp.ServerId)
+		assert.NotEqual(t, primaryStatus.ServerUuid, proxiedResp.ServerUuid)
 
 		// test a proxied request failure to primary -> replica #1
 		proxiedResp, err = c.FullStatus(t.Context(), primary, &tabletmanagerdatapb.FullStatusRequest{
