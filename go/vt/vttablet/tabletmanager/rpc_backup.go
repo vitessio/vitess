@@ -102,6 +102,12 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 		return vterrors.Wrap(err, "failed to execute backup init SQL queries")
 	}
 
+	// Reload the schema so that backup takes most up-to-date snapshot of the sidecar database (for example,
+	// to capture a new table that has been created since the last schema reload).
+	if err := tm.QueryServiceControl.ReloadSchema(ctx); err != nil {
+		return vterrors.Wrap(err, "failed to reload schema before backup")
+	}
+
 	// Prevent concurrent backups, and record stats
 	backupMode := backupModeOnline
 	if engine.ShouldDrainForBackup(req) {
