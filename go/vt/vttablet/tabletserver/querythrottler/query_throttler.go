@@ -356,18 +356,22 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 		newStrategy = selectThrottlingStrategy(newCfg, qt.throttleClient, qt.tabletConfig)
 	}
 
-	// Acquire write lock only for the actual swap operation
-	qt.mu.Lock()
-	if needsStrategyChange {
-		qt.strategyHandlerInstance = newStrategy
-		// Start a new strategy after assignment, still under lock for consistency.
-		if newStrategy != nil {
-			newStrategy.Start()
+	// Acquire write lock only for the actual swap operation.
+	// Using closure + defer ensures unlock happens even on panic.
+	func() {
+		qt.mu.Lock()
+		defer qt.mu.Unlock()
+
+		if needsStrategyChange {
+			qt.strategyHandlerInstance = newStrategy
+			// Start a new strategy after assignment, still under lock for consistency.
+			if newStrategy != nil {
+				newStrategy.Start()
+			}
 		}
-	}
-	// Always update the configuration
-	qt.cfg = newCfg
-	qt.mu.Unlock()
+		// Always update the configuration
+		qt.cfg = newCfg
+	}()
 
 	// Stop the old strategy (if needed) outside the lock to avoid blocking.
 	if needsStrategyChange && oldStrategyInstance != nil {
