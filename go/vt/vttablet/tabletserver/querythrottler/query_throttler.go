@@ -32,6 +32,7 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -69,8 +70,8 @@ type QueryThrottler struct {
 	mu           sync.RWMutex
 	watchStarted atomic.Bool
 
-	// cfg holds the current configuration for the throttler.
-	cfg Config
+	// cfg holds the current configuration for the throttler (proto type used directly).
+	cfg *querythrottlerpb.Config
 	// strategyHandlerInstance is the current throttling strategy handler instance
 	strategyHandlerInstance registry.ThrottlingStrategyHandler
 	env                     tabletenv.Env
@@ -87,7 +88,7 @@ func NewQueryThrottler(ctx context.Context, throttler *throttle.Throttler, env t
 		tabletConfig:            env.Config(),
 		cell:                    alias.GetCell(),
 		srvTopoServer:           srvTopoServer,
-		cfg:                     Config{},
+		cfg:                     &querythrottlerpb.Config{},
 		strategyHandlerInstance: &registry.NoOpStrategy{}, // default strategy until config is loaded
 		env:                     env,
 		stats: Stats{
@@ -159,7 +160,7 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 	tCfg := qt.cfg
 	tStrategy := qt.strategyHandlerInstance
 
-	if !tCfg.Enabled {
+	if !tCfg.GetEnabled() {
 		return nil
 	}
 
@@ -194,10 +195,10 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 	}
 
 	// Emit metric of query being throttled.
-	qt.stats.requestsThrottled.Add([]string{strategyName, workload, priorityStr, decision.MetricName, strconv.FormatFloat(decision.MetricValue, 'f', -1, 64), strconv.FormatBool(tCfg.DryRun)}, 1)
+	qt.stats.requestsThrottled.Add([]string{strategyName, workload, priorityStr, decision.MetricName, strconv.FormatFloat(decision.MetricValue, 'f', -1, 64), strconv.FormatBool(tCfg.GetDryRun())}, 1)
 
 	// If dry-run mode is enabled, log the decision but don't throttle
-	if tCfg.DryRun {
+	if tCfg.GetDryRun() {
 		log.Warningf("[DRY-RUN] %s, metric name: %s, metric value: %f", decision.Message, decision.MetricName, decision.MetricValue)
 		return nil
 	}
@@ -338,8 +339,7 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 	}
 
 	// Get the query throttler configuration from the SrvKeyspace that the QueryThrottler uses to manage its throttling behavior.
-	iqtConfig := srvks.GetQueryThrottlerConfig()
-	newCfg := ConfigFromProto(iqtConfig)
+	newCfg := srvks.GetQueryThrottlerConfig()
 
 	// If the config is not changed, return early.
 	if !isConfigUpdateRequired(qt.cfg, newCfg) {
@@ -347,7 +347,7 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 	}
 
 	// No Locking is required because only this function updates the configs of Query Throttler.
-	needsStrategyChange := qt.cfg.GetStrategyName() != newCfg.GetStrategyName()
+	needsStrategyChange := qt.cfg.GetStrategy() != newCfg.GetStrategy()
 	oldStrategyInstance := qt.strategyHandlerInstance
 
 	var newStrategy registry.ThrottlingStrategyHandler
@@ -374,12 +374,12 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 		oldStrategyInstance.Stop()
 	}
 
-	log.Infof("HandleConfigUpdate: config updated, strategy=%s, enabled=%v", newCfg.GetStrategyName(), newCfg.Enabled)
+	log.Infof("HandleConfigUpdate: config updated, strategy=%s, enabled=%v", newCfg.GetStrategy(), newCfg.GetEnabled())
 	return true
 }
 
 // selectThrottlingStrategy returns the appropriate strategy implementation based on the config.
-func selectThrottlingStrategy(cfg Config, client *throttle.Client, tabletConfig *tabletenv.TabletConfig) registry.ThrottlingStrategyHandler {
+func selectThrottlingStrategy(cfg *querythrottlerpb.Config, client *throttle.Client, tabletConfig *tabletenv.TabletConfig) registry.ThrottlingStrategyHandler {
 	deps := registry.Deps{
 		ThrottleClient: client,
 		TabletConfig:   tabletConfig,
@@ -390,16 +390,16 @@ func selectThrottlingStrategy(cfg Config, client *throttle.Client, tabletConfig 
 // isConfigUpdateRequired checks if the new config is different from the old config.
 // This only checks for enabled, strategy name, and dry run because the strategy itself will update the strategy-specific config
 // during runtime by having a separate watcher similar to the one used in QueryThrottler.
-func isConfigUpdateRequired(oldCfg, newCfg Config) bool {
-	if oldCfg.Enabled != newCfg.Enabled {
+func isConfigUpdateRequired(oldCfg, newCfg *querythrottlerpb.Config) bool {
+	if oldCfg.GetEnabled() != newCfg.GetEnabled() {
 		return true
 	}
 
-	if oldCfg.StrategyName != newCfg.StrategyName {
+	if oldCfg.GetStrategy() != newCfg.GetStrategy() {
 		return true
 	}
 
-	if oldCfg.DryRun != newCfg.DryRun {
+	if oldCfg.GetDryRun() != newCfg.GetDryRun() {
 		return true
 	}
 

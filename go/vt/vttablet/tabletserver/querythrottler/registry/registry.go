@@ -21,16 +21,17 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/vt/log"
+	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
 )
 
 var (
 	mu        sync.RWMutex
-	factories = map[ThrottlingStrategy]StrategyFactory{}
+	factories = map[querythrottlerpb.ThrottlingStrategy]StrategyFactory{}
 )
 
 // Register registers a new strategy factory with the given name.
 // Panics if a strategy with the same name is already registered (fail-fast behavior).
-func Register(name ThrottlingStrategy, factory StrategyFactory) {
+func Register(name querythrottlerpb.ThrottlingStrategy, factory StrategyFactory) {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -44,7 +45,7 @@ func Register(name ThrottlingStrategy, factory StrategyFactory) {
 
 // Get retrieves a strategy factory by name.
 // Returns the factory and true if found, nil and false otherwise.
-func Get(name ThrottlingStrategy) (StrategyFactory, bool) {
+func Get(name querythrottlerpb.ThrottlingStrategy) (StrategyFactory, bool) {
 	mu.RLock()
 	defer mu.RUnlock()
 
@@ -56,19 +57,19 @@ func Get(name ThrottlingStrategy) (StrategyFactory, bool) {
 // Falls back to NoOpStrategy for unknown strategies or factory errors.
 func CreateStrategy(cfg StrategyConfig, deps Deps) ThrottlingStrategyHandler {
 	// If the requested strategy name is unknown or the factory panics/returns error, CreateStrategy() directly constructs &NoOpStrategy{} as its unconditional fallback.
-	// Configuration files or runtime switches never list "NoOp" as a valid strategy choice; they list “TabletThrottler”, “Cinnamon”, etc.
+	// Configuration files or runtime switches never list "NoOp" as a valid strategy choice; they list "TabletThrottler", "Cinnamon", etc.
 	// The design intent is:
-	// Every “real” strategy must self-register to opt-in.
+	// Every "real" strategy must self-register to opt-in.
 	// NoOpStrategy must always be available—even before any registration happens—so the registry itself can safely fall back on it.
-	factory, ok := Get(cfg.GetStrategyName())
+	factory, ok := Get(cfg.GetStrategy())
 	if !ok {
-		log.Warningf("Unknown strategy %s, using NoOp", cfg.GetStrategyName())
+		log.Warningf("Unknown strategy %s, using NoOp", cfg.GetStrategy())
 		return &NoOpStrategy{}
 	}
 
 	strategy, err := factory.New(deps, cfg)
 	if err != nil {
-		log.Errorf("Strategy %s failed to init: %v, using NoOp", cfg.GetStrategyName(), err)
+		log.Errorf("Strategy %s failed to init: %v, using NoOp", cfg.GetStrategy(), err)
 		return &NoOpStrategy{}
 	}
 
@@ -77,11 +78,11 @@ func CreateStrategy(cfg StrategyConfig, deps Deps) ThrottlingStrategyHandler {
 
 // ListRegistered returns a list of all registered strategy names.
 // Useful for debugging and testing.
-func ListRegistered() []ThrottlingStrategy {
+func ListRegistered() []querythrottlerpb.ThrottlingStrategy {
 	mu.RLock()
 	defer mu.RUnlock()
 
-	strategies := make([]ThrottlingStrategy, 0, len(factories))
+	strategies := make([]querythrottlerpb.ThrottlingStrategy, 0, len(factories))
 	for name := range factories {
 		strategies = append(strategies, name)
 	}

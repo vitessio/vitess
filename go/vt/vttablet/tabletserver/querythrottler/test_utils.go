@@ -20,26 +20,18 @@ import (
 	"context"
 	"fmt"
 
-	"vitess.io/vitess/go/vt/proto/querythrottler"
+	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler/registry"
 )
 
 // createTestSrvKeyspace creates a SrvKeyspace with query throttler config for testing
-func createTestSrvKeyspace(enabled bool, strategy registry.ThrottlingStrategy, dryRun bool) *topodatapb.SrvKeyspace {
-	var protoStrategy querythrottler.ThrottlingStrategy
-	switch strategy {
-	case registry.ThrottlingStrategyTabletThrottler:
-		protoStrategy = querythrottler.ThrottlingStrategy_TABLET_THROTTLER
-	default:
-		protoStrategy = querythrottler.ThrottlingStrategy_UNKNOWN
-	}
-
+func createTestSrvKeyspace(enabled bool, strategy querythrottlerpb.ThrottlingStrategy, dryRun bool) *topodatapb.SrvKeyspace {
 	return &topodatapb.SrvKeyspace{
-		QueryThrottlerConfig: &querythrottler.Config{
+		QueryThrottlerConfig: &querythrottlerpb.Config{
 			Enabled:  enabled,
-			Strategy: protoStrategy,
+			Strategy: strategy,
 			DryRun:   dryRun,
 		},
 	}

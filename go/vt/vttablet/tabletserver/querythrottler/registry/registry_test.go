@@ -20,13 +20,15 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
 )
 
 // reset clears all registered factories. This is used for testing.
 func reset() {
 	mu.Lock()
 	defer mu.Unlock()
-	factories = make(map[ThrottlingStrategy]StrategyFactory)
+	factories = make(map[querythrottlerpb.ThrottlingStrategy]StrategyFactory)
 }
 
 // testStrategyFactory is a simple factory for testing.
@@ -44,9 +46,9 @@ func TestRegister(t *testing.T) {
 
 	// Test successful registration
 	testFactory := testStrategyFactory{}
-	Register("test-strategy", testFactory)
+	Register(querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, testFactory)
 
-	factory, exists := Get("test-strategy")
+	factory, exists := Get(querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER)
 	require.True(t, exists)
 	require.Equal(t, testFactory, factory)
 }
@@ -55,43 +57,31 @@ func TestRegisterDuplicate(t *testing.T) {
 	reset()
 
 	testFactory := testStrategyFactory{}
-	Register("test-strategy", testFactory)
+	Register(querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, testFactory)
 
 	// Should panic on duplicate registration
 	require.Panics(t, func() {
-		Register("test-strategy", testFactory)
+		Register(querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, testFactory)
 	})
 }
 
 func TestGetUnknown(t *testing.T) {
 	reset()
 
-	factory, exists := Get("unknown-strategy")
+	factory, exists := Get(querythrottlerpb.ThrottlingStrategy_UNKNOWN)
 	require.False(t, exists)
 	require.Nil(t, factory)
-}
-
-// testConfig implements the Config interface for testing
-type testConfig struct {
-	strategy ThrottlingStrategy
-}
-
-func (c testConfig) GetStrategyName() ThrottlingStrategy {
-	return c.strategy
-}
-
-func (c testConfig) GetTabletStrategyConfig() interface{} {
-	return nil
 }
 
 func TestCreateStrategy(t *testing.T) {
 	reset()
 
 	// Register a test factory
-	Register("test-strategy", testStrategyFactory{})
+	Register(querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, testStrategyFactory{})
 
-	cfg := testConfig{
-		strategy: "test-strategy",
+	cfg := &querythrottlerpb.Config{
+		Enabled:  true,
+		Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
 	}
 	deps := Deps{}
 
@@ -102,8 +92,9 @@ func TestCreateStrategy(t *testing.T) {
 func TestCreateStrategyUnknown(t *testing.T) {
 	reset()
 
-	cfg := testConfig{
-		strategy: "unknown-strategy",
+	cfg := &querythrottlerpb.Config{
+		Enabled:  true,
+		Strategy: querythrottlerpb.ThrottlingStrategy_UNKNOWN,
 	}
 	deps := Deps{}
 
@@ -119,12 +110,10 @@ func TestListRegistered(t *testing.T) {
 	strategies := ListRegistered()
 	require.Empty(t, strategies)
 
-	// Register some strategies
-	Register("strategy1", testStrategyFactory{})
-	Register("strategy2", testStrategyFactory{})
+	// Register strategies using proto enum values
+	Register(querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, testStrategyFactory{})
 
 	strategies = ListRegistered()
-	require.Len(t, strategies, 2)
-	require.Contains(t, strategies, ThrottlingStrategy("strategy1"))
-	require.Contains(t, strategies, ThrottlingStrategy("strategy2"))
+	require.Len(t, strategies, 1)
+	require.Contains(t, strategies, querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER)
 }
