@@ -319,7 +319,7 @@ message Keyspace {
   vtorcdata.Keyspace vtorc_state = 11;
 
   // QueryThrottler provides a flexible throttling configuration that supports multiple throttling strategies beyond the standard tablet throttling.
-  querythrottler.Config query_throttler_config = 20000;
+  querythrottler.Config query_throttler_config = 12;
 }
 
 // ShardReplication describes the MySQL replication relationships
@@ -454,7 +454,7 @@ message SrvKeyspace {
   ThrottlerConfig throttler_config = 6;
 
   // QueryThrottler provides a flexible throttling configuration that supports multiple throttling strategies beyond the standard tablet throttling.
-  querythrottler.Config query_throttler_config = 20000;
+  querythrottler.Config query_throttler_config = 7;
 
 }
 

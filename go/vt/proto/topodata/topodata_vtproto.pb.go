@@ -1103,11 +1103,7 @@ func (m *Keyspace) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= size
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
-		dAtA[i] = 0x9
-		i--
-		dAtA[i] = 0xe2
-		i--
-		dAtA[i] = 0x82
+		dAtA[i] = 0x62
 	}
 	if m.VtorcState != nil {
 		size, err := m.VtorcState.MarshalToSizedBufferVT(dAtA[:i])
@@ -1750,11 +1746,7 @@ func (m *SrvKeyspace) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= size
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
-		dAtA[i] = 0x9
-		i--
-		dAtA[i] = 0xe2
-		i--
-		dAtA[i] = 0x82
+		dAtA[i] = 0x3a
 	}
 	if m.ThrottlerConfig != nil {
 		size, err := m.ThrottlerConfig.MarshalToSizedBufferVT(dAtA[:i])
@@ -2257,7 +2249,7 @@ func (m *Keyspace) SizeVT() (n int) {
 	}
 	if m.QueryThrottlerConfig != nil {
 		l = m.QueryThrottlerConfig.SizeVT()
-		n += 3 + l + protohelpers.SizeOfVarint(uint64(l))
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -2489,7 +2481,7 @@ func (m *SrvKeyspace) SizeVT() (n int) {
 	}
 	if m.QueryThrottlerConfig != nil {
 		l = m.QueryThrottlerConfig.SizeVT()
-		n += 3 + l + protohelpers.SizeOfVarint(uint64(l))
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -4381,7 +4373,7 @@ func (m *Keyspace) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		case 20000:
+		case 12:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field QueryThrottlerConfig", wireType)
 			}
@@ -5943,7 +5935,7 @@ func (m *SrvKeyspace) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		case 20000:
+		case 7:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field QueryThrottlerConfig", wireType)
 			}
