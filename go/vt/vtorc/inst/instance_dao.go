@@ -191,6 +191,11 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 		goto Cleanup
 	}
 
+	// Don't poll the tablet if we know it is down.
+	if tablet.TabletShutdownTime != nil {
+		goto Cleanup
+	}
+
 	fs, err = fullStatus(tablet)
 	if err != nil {
 		goto Cleanup

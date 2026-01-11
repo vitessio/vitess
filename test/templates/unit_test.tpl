@@ -98,14 +98,14 @@ jobs:
         sudo apt-get install -y make unzip g++ curl git wget ant openjdk-11-jdk
 
         mkdir -p dist bin
-        curl -s -L https://github.com/coreos/etcd/releases/download/v3.5.17/etcd-v3.5.17-linux-amd64.tar.gz | tar -zxC dist
-        mv dist/etcd-v3.5.17-linux-amd64/{etcd,etcdctl} bin/
+        curl --max-time 10 --retry 3 --retry-max-time 45 -s -L https://github.com/coreos/etcd/releases/download/v3.5.25/etcd-v3.5.25-linux-amd64.tar.gz | tar -zxC dist
+        mv dist/etcd-v3.5.25-linux-amd64/{etcd,etcdctl} bin/
 
         go mod download
-        go install golang.org/x/tools/cmd/goimports@latest
+        go install golang.org/x/tools/cmd/goimports@{{.Goimports.SHA}} # {{.Goimports.Comment}}
 
         # install JUnit report formatter
-        go install github.com/vitessio/go-junit-report@{{.GoJunitReportSHA}}
+        go install github.com/vitessio/go-junit-report@{{.GoJunitReport.SHA}} # {{.GoJunitReport.Comment}}
 
     - name: Run make tools
       if: steps.changes.outputs.unit_tests == 'true'
@@ -126,7 +126,7 @@ jobs:
 
     - name: Run test
       if: steps.changes.outputs.unit_tests == 'true'
-      timeout-minutes: 30
+      timeout-minutes: {{if .Race}}45{{else}}30{{end}}
       run: |
         set -exo pipefail
         # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
@@ -140,7 +140,7 @@ jobs:
         # testing, e.g. MySQL 5.7 vs 8.0.
         export CI_DB_PLATFORM="{{.Platform}}"
 
-        make unit_test | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        make {{if .Race}}unit_test_race{{else}}unit_test{{end}} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Record test results in launchable if PR is not a draft
       if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.unit_tests == 'true' && github.base_ref == 'main' && !cancelled()

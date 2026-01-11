@@ -140,7 +140,7 @@ func (c *CountersWithSingleLabel) Add(name string, value int64) {
 	if c.labelCombined {
 		name = StatsAllStr
 	}
-	c.counters.add(name, value)
+	c.add(name, value)
 }
 
 // Reset resets the value for the name.
@@ -148,12 +148,12 @@ func (c *CountersWithSingleLabel) Reset(name string) {
 	if c.labelCombined {
 		name = StatsAllStr
 	}
-	c.counters.set(name, 0)
+	c.set(name, 0)
 }
 
 // ResetAll clears the counters
 func (c *CountersWithSingleLabel) ResetAll() {
-	c.counters.reset()
+	c.reset()
 }
 
 // CountersWithMultiLabels is a multidimensional counters implementation.
@@ -196,7 +196,7 @@ func (mc *CountersWithMultiLabels) Add(names []string, value int64) {
 	if len(names) != len(mc.labels) {
 		panic("CountersWithMultiLabels: wrong number of values in Add")
 	}
-	mc.counters.add(safeJoinLabels(names, mc.combinedLabels), value)
+	mc.add(safeJoinLabels(names, mc.combinedLabels), value)
 }
 
 // Reset resets the value of a named counter back to 0.
@@ -206,12 +206,12 @@ func (mc *CountersWithMultiLabels) Reset(names []string) {
 		panic("CountersWithMultiLabels: wrong number of values in Reset")
 	}
 
-	mc.counters.set(safeJoinLabels(names, mc.combinedLabels), 0)
+	mc.set(safeJoinLabels(names, mc.combinedLabels), 0)
 }
 
 // ResetAll clears the counters
 func (mc *CountersWithMultiLabels) ResetAll() {
-	mc.counters.reset()
+	mc.reset()
 }
 
 // Counts returns a copy of the Counters' map.
@@ -320,7 +320,7 @@ func NewGaugesWithSingleLabel(name, help, label string, tags ...string) *GaugesW
 
 // Set sets the value of a named gauge.
 func (g *GaugesWithSingleLabel) Set(name string, value int64) {
-	g.counters.set(name, value)
+	g.set(name, value)
 }
 
 // SyncGaugesWithSingleLabel is a GaugesWithSingleLabel that proactively pushes
@@ -378,10 +378,10 @@ func (mg *GaugesWithMultiLabels) GetLabelName(names ...string) string {
 // Set sets the value of a named counter.
 // len(names) must be equal to len(Labels).
 func (mg *GaugesWithMultiLabels) Set(names []string, value int64) {
-	if len(names) != len(mg.CountersWithMultiLabels.labels) {
+	if len(names) != len(mg.labels) {
 		panic("GaugesWithMultiLabels: wrong number of values in Set")
 	}
-	mg.counters.set(safeJoinLabels(names, nil), value)
+	mg.set(safeJoinLabels(names, nil), value)
 }
 
 // ResetKey resets a specific key.
@@ -392,7 +392,7 @@ func (mg *GaugesWithMultiLabels) Set(names []string, value int64) {
 // This is useful when you range over all internal counts and you want to reset
 // specific keys.
 func (mg *GaugesWithMultiLabels) ResetKey(key string) {
-	mg.counters.set(key, 0)
+	mg.set(key, 0)
 }
 
 // GaugesFuncWithMultiLabels is a wrapper around CountersFuncWithMultiLabels

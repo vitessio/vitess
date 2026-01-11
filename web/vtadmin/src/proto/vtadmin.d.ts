@@ -18420,6 +18420,12 @@ export namespace topodata {
 
         /** Tablet default_conn_collation */
         default_conn_collation?: (number|null);
+
+        /** Tablet tablet_start_time */
+        tablet_start_time?: (vttime.ITime|null);
+
+        /** Tablet tablet_shutdown_time */
+        tablet_shutdown_time?: (vttime.ITime|null);
     }
 
     /** Represents a Tablet. */
@@ -18469,6 +18475,12 @@ export namespace topodata {
 
         /** Tablet default_conn_collation. */
         public default_conn_collation: number;
+
+        /** Tablet tablet_start_time. */
+        public tablet_start_time?: (vttime.ITime|null);
+
+        /** Tablet tablet_shutdown_time. */
+        public tablet_shutdown_time?: (vttime.ITime|null);
 
         /**
          * Creates a new Tablet instance using the specified properties.
@@ -32563,6 +32575,9 @@ export namespace tabletmanagerdata {
 
         /** BackupRequest mysql_shutdown_timeout */
         mysql_shutdown_timeout?: (vttime.IDuration|null);
+
+        /** BackupRequest init_sql */
+        init_sql?: (tabletmanagerdata.BackupRequest.IInitSQL|null);
     }
 
     /** Represents a BackupRequest. */
@@ -32591,6 +32606,9 @@ export namespace tabletmanagerdata {
 
         /** BackupRequest mysql_shutdown_timeout. */
         public mysql_shutdown_timeout?: (vttime.IDuration|null);
+
+        /** BackupRequest init_sql. */
+        public init_sql?: (tabletmanagerdata.BackupRequest.IInitSQL|null);
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -32668,6 +32686,124 @@ export namespace tabletmanagerdata {
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace BackupRequest {
+
+        /** Properties of an InitSQL. */
+        interface IInitSQL {
+
+            /** InitSQL queries */
+            queries?: (string[]|null);
+
+            /** InitSQL tablet_types */
+            tablet_types?: (topodata.TabletType[]|null);
+
+            /** InitSQL timeout */
+            timeout?: (vttime.IDuration|null);
+
+            /** InitSQL fail_on_error */
+            fail_on_error?: (boolean|null);
+        }
+
+        /** Represents an InitSQL. */
+        class InitSQL implements IInitSQL {
+
+            /**
+             * Constructs a new InitSQL.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: tabletmanagerdata.BackupRequest.IInitSQL);
+
+            /** InitSQL queries. */
+            public queries: string[];
+
+            /** InitSQL tablet_types. */
+            public tablet_types: topodata.TabletType[];
+
+            /** InitSQL timeout. */
+            public timeout?: (vttime.IDuration|null);
+
+            /** InitSQL fail_on_error. */
+            public fail_on_error: boolean;
+
+            /**
+             * Creates a new InitSQL instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns InitSQL instance
+             */
+            public static create(properties?: tabletmanagerdata.BackupRequest.IInitSQL): tabletmanagerdata.BackupRequest.InitSQL;
+
+            /**
+             * Encodes the specified InitSQL message. Does not implicitly {@link tabletmanagerdata.BackupRequest.InitSQL.verify|verify} messages.
+             * @param message InitSQL message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: tabletmanagerdata.BackupRequest.IInitSQL, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified InitSQL message, length delimited. Does not implicitly {@link tabletmanagerdata.BackupRequest.InitSQL.verify|verify} messages.
+             * @param message InitSQL message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: tabletmanagerdata.BackupRequest.IInitSQL, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes an InitSQL message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns InitSQL
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.BackupRequest.InitSQL;
+
+            /**
+             * Decodes an InitSQL message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns InitSQL
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.BackupRequest.InitSQL;
+
+            /**
+             * Verifies an InitSQL message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates an InitSQL message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns InitSQL
+             */
+            public static fromObject(object: { [k: string]: any }): tabletmanagerdata.BackupRequest.InitSQL;
+
+            /**
+             * Creates a plain object from an InitSQL message. Also converts values to other types if specified.
+             * @param message InitSQL
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: tabletmanagerdata.BackupRequest.InitSQL, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this InitSQL to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for InitSQL
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
     }
 
     /** Properties of a BackupResponse. */
@@ -40691,6 +40827,9 @@ export namespace binlogdata {
 
         /** VStreamOptions tables_to_copy */
         tables_to_copy?: (string[]|null);
+
+        /** VStreamOptions no_timeouts */
+        no_timeouts?: (boolean|null);
     }
 
     /** Represents a VStreamOptions. */
@@ -40710,6 +40849,9 @@ export namespace binlogdata {
 
         /** VStreamOptions tables_to_copy. */
         public tables_to_copy: string[];
+
+        /** VStreamOptions no_timeouts. */
+        public no_timeouts: boolean;
 
         /**
          * Creates a new VStreamOptions instance using the specified properties.
@@ -49950,6 +50092,18 @@ export namespace replicationdata {
 
         /** Status backup_running */
         backup_running?: (boolean|null);
+
+        /** Status semi_sync_primary_enabled */
+        semi_sync_primary_enabled?: (boolean|null);
+
+        /** Status semi_sync_replica_enabled */
+        semi_sync_replica_enabled?: (boolean|null);
+
+        /** Status semi_sync_primary_status */
+        semi_sync_primary_status?: (boolean|null);
+
+        /** Status semi_sync_replica_status */
+        semi_sync_replica_status?: (boolean|null);
     }
 
     /** Represents a Status. */
@@ -50029,6 +50183,18 @@ export namespace replicationdata {
 
         /** Status backup_running. */
         public backup_running: boolean;
+
+        /** Status semi_sync_primary_enabled. */
+        public semi_sync_primary_enabled: boolean;
+
+        /** Status semi_sync_replica_enabled. */
+        public semi_sync_replica_enabled: boolean;
+
+        /** Status semi_sync_primary_status. */
+        public semi_sync_primary_status: boolean;
+
+        /** Status semi_sync_replica_status. */
+        public semi_sync_replica_status: boolean;
 
         /**
          * Creates a new Status instance using the specified properties.
@@ -53241,6 +53407,9 @@ export namespace vtctldata {
 
         /** SchemaMigration removed_foreign_key_names */
         removed_foreign_key_names?: (string|null);
+
+        /** SchemaMigration in_order_completion_pending_count */
+        in_order_completion_pending_count?: (number|Long|null);
     }
 
     /** Represents a SchemaMigration. */
@@ -53413,6 +53582,9 @@ export namespace vtctldata {
 
         /** SchemaMigration removed_foreign_key_names. */
         public removed_foreign_key_names: string;
+
+        /** SchemaMigration in_order_completion_pending_count. */
+        public in_order_completion_pending_count: (number|Long);
 
         /**
          * Creates a new SchemaMigration instance using the specified properties.
@@ -56284,6 +56456,9 @@ export namespace vtctldata {
 
         /** BackupRequest mysql_shutdown_timeout */
         mysql_shutdown_timeout?: (vttime.IDuration|null);
+
+        /** BackupRequest init_sql */
+        init_sql?: (tabletmanagerdata.BackupRequest.IInitSQL|null);
     }
 
     /** Represents a BackupRequest. */
@@ -56315,6 +56490,9 @@ export namespace vtctldata {
 
         /** BackupRequest mysql_shutdown_timeout. */
         public mysql_shutdown_timeout?: (vttime.IDuration|null);
+
+        /** BackupRequest init_sql. */
+        public init_sql?: (tabletmanagerdata.BackupRequest.IInitSQL|null);
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -56532,6 +56710,9 @@ export namespace vtctldata {
 
         /** BackupShardRequest mysql_shutdown_timeout */
         mysql_shutdown_timeout?: (vttime.IDuration|null);
+
+        /** BackupShardRequest init_sql */
+        init_sql?: (tabletmanagerdata.BackupRequest.IInitSQL|null);
     }
 
     /** Represents a BackupShardRequest. */
@@ -56563,6 +56744,9 @@ export namespace vtctldata {
 
         /** BackupShardRequest mysql_shutdown_timeout. */
         public mysql_shutdown_timeout?: (vttime.IDuration|null);
+
+        /** BackupShardRequest init_sql. */
+        public init_sql?: (tabletmanagerdata.BackupRequest.IInitSQL|null);
 
         /**
          * Creates a new BackupShardRequest instance using the specified properties.

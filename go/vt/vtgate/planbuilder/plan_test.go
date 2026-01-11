@@ -98,6 +98,7 @@ func (s *planTestSuite) TestPlan() {
 	s.testFile("filter_cases.json", vw, false)
 	s.testFile("postprocess_cases.json", vw, false)
 	s.testFile("select_cases.json", vw, false)
+	s.testFile("window_function_cases.json", vw, false)
 	s.testFile("symtab_cases.json", vw, false)
 	s.testFile("unsupported_cases.json", vw, false)
 	s.testFile("unknown_schema_cases.json", vw, false)

@@ -43,6 +43,12 @@ func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.TableStatemen
 
 	switch node := query.(type) {
 	case *sqlparser.Select:
+		// Window functions cannot be merged into the outer scope because they operate on a result set
+		// and require specific partitioning and ordering semantics that would be lost in a merge
+		if ctx.ContainsWindowFunc(node) {
+			return false
+		}
+
 		if node.GroupBy != nil && len(node.GroupBy.Exprs) > 0 {
 			// iff we are grouping, we need to check that we can perform the grouping inside a single shard, and we check that
 			// by checking that one of the grouping expressions used is a unique single column vindex.

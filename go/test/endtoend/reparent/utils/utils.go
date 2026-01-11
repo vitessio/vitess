@@ -110,7 +110,7 @@ func SetupShardedReparentCluster(t *testing.T, durability string, extraVttabletF
 		VSchema:          `{"sharded": true, "vindexes": {"hash_index": {"type": "hash"}}, "tables": {"vt_insert_test": {"column_vindexes": [{"column": "id", "name": "hash_index"}]}}}`,
 		DurabilityPolicy: durability,
 	}
-	err = clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false)
+	err = clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false, clusterInstance.Cell)
 	require.NoError(t, err)
 
 	// Start Vtgate
@@ -445,7 +445,7 @@ func ValidateTopology(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 
 // ConfirmReplication confirms that the replication is working properly
 func ConfirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*cluster.Vttablet) int {
-	ctx := context.Background()
+	ctx := t.Context()
 	insertVal++
 	n := insertVal // unique value ...
 	// insert data into the new primary, check the connected replica work

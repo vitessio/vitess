@@ -3311,7 +3311,7 @@ func TestPrepareWithUnsupportedQuery(t *testing.T) {
 		{Name: "a", Type: querypb.Type_NULL_TYPE},
 		{Name: "b", Type: querypb.Type_NULL_TYPE},
 		{Name: "c", Type: querypb.Type_NULL_TYPE},
-		{Name: "row_number() over ( partition by x)", Type: querypb.Type_NULL_TYPE},
+		{Name: "row_number() over (partition by x)", Type: querypb.Type_NULL_TYPE},
 	}
 	require.Equal(t, wantFields, fields)
 
@@ -3413,7 +3413,7 @@ func TestSelectLock(t *testing.T) {
 
 	_, err := exec(executor, session, "select get_lock('lock name', 10) from dual")
 	require.NoError(t, err)
-	wantSession.LastLockHeartbeat = session.Session.LastLockHeartbeat // copying as this is current timestamp value.
+	wantSession.LastLockHeartbeat = session.LastLockHeartbeat // copying as this is current timestamp value.
 	utils.MustMatch(t, wantSession, session.Session, "")
 	utils.MustMatch(t, wantQueries, sbc1.Queries, "")
 
@@ -3426,7 +3426,7 @@ func TestSelectLock(t *testing.T) {
 
 	_, err = exec(executor, session, "select release_lock('lock name') from dual")
 	require.NoError(t, err)
-	wantSession.LastLockHeartbeat = session.Session.LastLockHeartbeat // copying as this is current timestamp value.
+	wantSession.LastLockHeartbeat = session.LastLockHeartbeat // copying as this is current timestamp value.
 	utils.MustMatch(t, wantQueries, sbc1.Queries, "")
 	utils.MustMatch(t, wantSession, session.Session, "")
 }

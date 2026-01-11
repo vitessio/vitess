@@ -75,6 +75,33 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 		return errors.New("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow_primary")
 	}
 
+	// Create the logger: tee to console and source.
+	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
+
+	backupParams := mysqlctl.BackupParams{
+		Cnf:                  tm.Cnf,
+		Mysqld:               tm.MysqlDaemon,
+		Logger:               l,
+		Concurrency:          int(req.Concurrency),
+		IncrementalFromPos:   req.IncrementalFromPos,
+		HookExtraEnv:         tm.hookExtraEnv(),
+		TopoServer:           tm.TopoServer,
+		Keyspace:             tablet.Keyspace,
+		Shard:                tablet.Shard,
+		TabletAlias:          topoproto.TabletAliasString(tablet.Alias),
+		TabletType:           tablet.Type,
+		Stats:                backupstats.BackupStats(),
+		UpgradeSafe:          req.UpgradeSafe,
+		MysqlShutdownTimeout: shutdownTimeout(l, req.MysqlShutdownTimeout),
+		BackupEngine:         backupEngine,
+		InitSQL:              req.InitSql.CloneVT(),
+	}
+
+	// Perform any requested pre backup initialization queries.
+	if err := mysqlctl.ExecuteBackupInitSQL(ctx, &backupParams); err != nil {
+		return vterrors.Wrap(err, "failed to execute backup init SQL queries")
+	}
+
 	// Prevent concurrent backups, and record stats
 	backupMode := backupModeOnline
 	if engine.ShouldDrainForBackup(req) {
@@ -84,9 +111,6 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 		return err
 	}
 	defer tm.endBackup(backupMode)
-
-	// Create the logger: tee to console and source.
-	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
 
 	var originalType topodatapb.TabletType
 	if engine.ShouldDrainForBackup(req) {
@@ -157,24 +181,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 	}
 
 	// Now we can run the backup.
-	backupParams := mysqlctl.BackupParams{
-		Cnf:                  tm.Cnf,
-		Mysqld:               tm.MysqlDaemon,
-		Logger:               l,
-		Concurrency:          int(req.Concurrency),
-		IncrementalFromPos:   req.IncrementalFromPos,
-		HookExtraEnv:         tm.hookExtraEnv(),
-		TopoServer:           tm.TopoServer,
-		Keyspace:             tablet.Keyspace,
-		Shard:                tablet.Shard,
-		TabletAlias:          topoproto.TabletAliasString(tablet.Alias),
-		BackupTime:           time.Now(),
-		Stats:                backupstats.BackupStats(),
-		UpgradeSafe:          req.UpgradeSafe,
-		MysqlShutdownTimeout: shutdownTimeout(l, req.MysqlShutdownTimeout),
-		BackupEngine:         backupEngine,
-	}
-
+	backupParams.BackupTime = time.Now()
 	returnErr := mysqlctl.Backup(ctx, backupParams)
 
 	return returnErr

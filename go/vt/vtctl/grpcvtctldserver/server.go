@@ -525,6 +525,7 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 		IncrementalFromPos:   req.IncrementalFromPos,
 		UpgradeSafe:          req.UpgradeSafe,
 		MysqlShutdownTimeout: req.MysqlShutdownTimeout,
+		InitSql:              req.InitSql,
 	}
 	err = s.backupTablet(ctx, backupTablet, r, stream)
 	return err
@@ -541,6 +542,7 @@ func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tabl
 		BackupEngine:         req.BackupEngine,
 		UpgradeSafe:          req.UpgradeSafe,
 		MysqlShutdownTimeout: req.MysqlShutdownTimeout,
+		InitSql:              req.InitSql,
 	}
 	logStream, err := s.tmc.Backup(ctx, tablet, r)
 	if err != nil {
@@ -662,7 +664,7 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 	}
 
 	if req.DryRun {
-		afterTablet := tablet.Tablet.CloneVT()
+		afterTablet := tablet.CloneVT()
 		afterTablet.Type = req.DbType
 
 		return &vtctldatapb.ChangeTabletTypeResponse{
@@ -710,7 +712,7 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 
 	// We should clone the tablet and change its type to the expected type before checking the durability rules
 	// Since we want to check the durability rules for the desired state and not before we make that change
-	expectedTablet := tablet.Tablet.CloneVT()
+	expectedTablet := tablet.CloneVT()
 	expectedTablet.Type = req.DbType
 	err = s.tmc.ChangeType(ctx, tablet.Tablet, req.DbType, policy.IsReplicaSemiSync(durability, shardPrimary.Tablet, expectedTablet))
 	if err != nil {
@@ -1807,7 +1809,7 @@ func (s *VtctldServer) GetSchema(ctx context.Context, req *vtctldatapb.GetSchema
 }
 
 func (s *VtctldServer) GetSchemaMigrations(ctx context.Context, req *vtctldatapb.GetSchemaMigrationsRequest) (resp *vtctldatapb.GetSchemaMigrationsResponse, err error) {
-	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetShard")
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetSchemaMigrations")
 	defer span.Finish()
 
 	defer panicHandler(&err)
@@ -2278,7 +2280,7 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 	// is no longer the serving primary.
 	adjustTypeForStalePrimary := func(ti *topo.TabletInfo, mtst time.Time) {
 		if ti.Type == topodatapb.TabletType_PRIMARY && ti.GetPrimaryTermStartTime().Before(mtst) {
-			ti.Tablet.Type = topodatapb.TabletType_UNKNOWN
+			ti.Type = topodatapb.TabletType_UNKNOWN
 		}
 	}
 
@@ -2844,7 +2846,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	if !ok {
 		return fmt.Errorf("primary-elect tablet %v is not in the shard", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 	}
-	ev.NewPrimary = primaryElectTabletInfo.Tablet.CloneVT()
+	ev.NewPrimary = primaryElectTabletInfo.CloneVT()
 
 	// Check the primary is the only primary is the shard, or -force was used.
 	_, primaryTabletMap := topotools.SortedTabletMap(tabletMap)
@@ -4548,7 +4550,7 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 	log.Infof("TabletExternallyReparented: executing tablet type change %v -> PRIMARY on %v", tablet.Type, topoproto.TabletAliasString(req.Tablet))
 	ev := &events.Reparent{
 		ShardInfo:  *shard,
-		NewPrimary: tablet.Tablet.CloneVT(),
+		NewPrimary: tablet.CloneVT(),
 		OldPrimary: &topodatapb.Tablet{
 			Alias: shard.PrimaryAlias,
 			Type:  topodatapb.TabletType_PRIMARY,
@@ -5213,7 +5215,7 @@ func (s *VtctldServer) ValidateShard(ctx context.Context, req *vtctldatapb.Valid
 			for _, tablet := range tabletMap {
 				ip, err := topoproto.MySQLIP(tablet.Tablet)
 				if err != nil {
-					results <- fmt.Sprintf("could not resolve IP for tablet %s: %v", tablet.Tablet.MysqlHostname, err)
+					results <- fmt.Sprintf("could not resolve IP for tablet %s: %v", tablet.MysqlHostname, err)
 					continue
 				}
 
@@ -5237,7 +5239,7 @@ func (s *VtctldServer) ValidateShard(ctx context.Context, req *vtctldatapb.Valid
 
 				ip, err := topoproto.MySQLIP(tablet.Tablet)
 				if err != nil {
-					results <- fmt.Sprintf("could not resolve IP for tablet %s: %v", tablet.Tablet.MysqlHostname, err)
+					results <- fmt.Sprintf("could not resolve IP for tablet %s: %v", tablet.MysqlHostname, err)
 					continue
 				}
 

@@ -36,7 +36,7 @@ import (
 //  2. Column and table names with special characters in them, namely a dash
 //  3. Identifiers using reserved words, as lead is a reserved word in MySQL 8.0+ (https://dev.mysql.com/doc/refman/8.0/en/keywords.html)
 //
-// The internal table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431 should be ignored by vreplication
+// The internal table _vt_prg_4f9194b43b2011eb8a0104ed332e05c2_20221210194431_ should be ignored by vreplication
 // The db_order_test table is used to ensure vreplication and vdiff work well with complex non-integer PKs, even across DB versions.
 // The db_order_test table needs to use a collation that exists in all versions for cross version tests as we use the collation for the PK
 // based merge sort in VDiff. The table is using a non-default collation for any version with utf8mb4 as 5.7 does NOT show the default
@@ -66,7 +66,7 @@ create table customer2(cid int, name varchar(128), typ enum('individual','soho',
 create table customer_seq2(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
 create table `+"`Lead`(`Lead-id`"+` binary(16), name varbinary(16), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key (`+"`Lead-id`"+`), key (date1));
 create table `+"`Lead-1`(`Lead`"+` binary(16), name varbinary(16), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key (`+"`Lead`"+`), key (date2));
-create table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431(id int, val varbinary(128), primary key(id), key(val));
+create table _vt_prg_4f9194b43b2011eb8a0104ed332e05c2_20221210194431_(id int, val varbinary(128), primary key(id), key(val));
 create table db_order_test (c_uuid varchar(64) not null default '', created_at datetime not null, dstuff varchar(128), dtstuff text, dbstuff blob, cstuff char(32), primary key (c_uuid,created_at), key (dstuff)) CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 create table vdiff_order (order_id varchar(50) collate utf8mb4_unicode_ci not null, primary key (order_id), key (order_id)) charset=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 create table datze (id int, dt1 datetime not null default current_timestamp, dt2 datetime not null, ts1 timestamp default current_timestamp, primary key (id), key (dt1));
@@ -83,10 +83,10 @@ create table ukTable (id1 int not null, id2 int not null, name varchar(20), uniq
 	internalSchema = `
  create table _1e275eef_3b20_11eb_a38f_04ed332e05c2_20201210204529_gho(id int, val varbinary(128), primary key(id));
  create table _0e8a27c8_1d73_11ec_a579_0aa0c75a6a1d_20210924200735_vrepl(id int, val varbinary(128), primary key(id));
- create table _vt_PURGE_1f9194b43b2011eb8a0104ed332e05c2_20201210194431(id int, val varbinary(128), primary key(id));
- create table _vt_EVAC_6ace8bcef73211ea87e9f875a4d24e90_29990915120410(id int, val varbinary(128), primary key(id));
- create table _vt_DROP_2bce8bcef73211ea87e9f875a4d24e90_20200915120410(id int, val varbinary(128), primary key(id));
- create table _vt_HOLD_4abe6bcef73211ea87e9f875a4d24e90_20220115120410(id int, val varbinary(128), primary key(id));
+ create table _vt_prg_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_(id int, val varbinary(128), primary key(id));
+ create table _vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_(id int, val varbinary(128), primary key(id));
+ create table _vt_drp_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_(id int, val varbinary(128), primary key(id));
+ create table _vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_(id int, val varbinary(128), primary key(id));
  `
 
 	initialProductVSchema = `

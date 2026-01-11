@@ -101,7 +101,7 @@ func (rs *ResolvedShard) WithKeyspace(newKeyspace string) *ResolvedShard {
 func (r *Resolver) GetKeyspaceShards(ctx context.Context, keyspace string, tabletType topodatapb.TabletType) (string, *topodatapb.SrvKeyspace, []*topodatapb.ShardReference, error) {
 	srvKeyspace, err := r.topoServ.GetSrvKeyspace(ctx, r.localCell, keyspace)
 	if err != nil {
-		return "", nil, nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "keyspace %v fetch error: %v", keyspace, err)
+		return "", nil, nil, vterrors.Wrapf(err, "keyspace %v fetch error", keyspace)
 	}
 
 	partition := topoproto.SrvKeyspaceGetPartition(srvKeyspace, tabletType)

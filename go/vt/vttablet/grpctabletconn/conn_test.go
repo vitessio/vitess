@@ -191,22 +191,22 @@ func TestGoRoutineLeakPrevention(t *testing.T) {
 		cc: &grpc.ClientConn{},
 		c:  mqc,
 	}
-	_ = qc.StreamExecute(context.Background(), nil, "", nil, 0, 0, nil, func(result *sqltypes.Result) error {
+	_ = qc.StreamExecute(context.Background(), nil, nil, "", nil, 0, 0, nil, func(result *sqltypes.Result) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())
 
-	_, _ = qc.BeginStreamExecute(context.Background(), nil, nil, "", nil, 0, nil, func(result *sqltypes.Result) error {
+	_, _ = qc.BeginStreamExecute(context.Background(), nil, nil, nil, "", nil, 0, nil, func(result *sqltypes.Result) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())
 
-	_, _ = qc.ReserveBeginStreamExecute(context.Background(), nil, nil, nil, "", nil, nil, func(result *sqltypes.Result) error {
+	_, _ = qc.ReserveBeginStreamExecute(context.Background(), nil, nil, nil, nil, "", nil, nil, func(result *sqltypes.Result) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())
 
-	_, _ = qc.ReserveStreamExecute(context.Background(), nil, nil, "", nil, 0, nil, func(result *sqltypes.Result) error {
+	_, _ = qc.ReserveStreamExecute(context.Background(), nil, nil, nil, "", nil, 0, nil, func(result *sqltypes.Result) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())

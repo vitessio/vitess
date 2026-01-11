@@ -119,7 +119,7 @@ func TestMain(m *testing.M) {
 			VSchema:   vSchema,
 		}
 
-		if err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {
+		if err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false, clusterInstance.Cell); err != nil {
 			return 1
 		}
 
@@ -190,7 +190,6 @@ func warmUpHeartbeat(t *testing.T) tabletmanagerdatapb.CheckThrottlerResponseCod
 	require.NoError(t, err)
 
 	time.Sleep(time.Second)
-	t.Logf("resp.ResponseCode: %v", resp.Check.ResponseCode)
 	return resp.Check.ResponseCode
 }
 

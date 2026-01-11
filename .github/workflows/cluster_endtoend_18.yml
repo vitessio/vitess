@@ -96,7 +96,7 @@ jobs:
         go mod download
 
         # install JUnit report formatter
-        go install github.com/vitessio/go-junit-report@99fa7f0daf16db969f54a49139a14471e633e6e8
+        go install github.com/vitessio/go-junit-report@99fa7f0daf16db969f54a49139a14471e633e6e8 # HEAD
 
     - name: Installing zookeeper and consul
       if: steps.changes.outputs.end_to_end == 'true'

@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -123,16 +124,18 @@ func TestQueryThrottler_Shutdown(t *testing.T) {
 	require.NotNil(t, strategy)
 }
 
-// TestIncomingQueryThrottler_DryRunMode tests that dry-run mode logs decisions but doesn't throttle queries.
-func TestIncomingQueryThrottler_DryRunMode(t *testing.T) {
+// TestQueryThrottler_DryRunMode tests that dry-run mode logs decisions but doesn't throttle queries.
+func TestQueryThrottler_DryRunMode(t *testing.T) {
 	tests := []struct {
-		name             string
-		enabled          bool
-		dryRun           bool
-		throttleDecision registry.ThrottleDecision
-		expectError      bool
-		expectDryRunLog  bool
-		expectedLogMsg   string
+		name                      string
+		enabled                   bool
+		dryRun                    bool
+		throttleDecision          registry.ThrottleDecision
+		expectError               bool
+		expectDryRunLog           bool
+		expectedLogMsg            string
+		expectedTotalRequests     int64
+		expectedThrottledRequests int64
 	}{
 		{
 			name:    "Disabled throttler - no checks performed",
@@ -164,8 +167,9 @@ func TestIncomingQueryThrottler_DryRunMode(t *testing.T) {
 				Throttle: false,
 				Message:  "Query allowed",
 			},
-			expectError:     false,
-			expectDryRunLog: false,
+			expectError:           false,
+			expectDryRunLog:       false,
+			expectedTotalRequests: 1,
 		},
 		{
 			name:    "Normal mode - query throttled",
@@ -179,8 +183,10 @@ func TestIncomingQueryThrottler_DryRunMode(t *testing.T) {
 				Threshold:          80.0,
 				ThrottlePercentage: 1.0,
 			},
-			expectError:     true,
-			expectDryRunLog: false,
+			expectError:               true,
+			expectDryRunLog:           false,
+			expectedTotalRequests:     1,
+			expectedThrottledRequests: 1,
 		},
 		{
 			name:    "Dry-run mode - query would be throttled but allowed",
@@ -194,9 +200,11 @@ func TestIncomingQueryThrottler_DryRunMode(t *testing.T) {
 				Threshold:          80.0,
 				ThrottlePercentage: 1.0,
 			},
-			expectError:     false,
-			expectDryRunLog: true,
-			expectedLogMsg:  "[DRY-RUN] Query throttled: metric=cpu value=95.0 threshold=80.0",
+			expectError:               false,
+			expectDryRunLog:           true,
+			expectedLogMsg:            "[DRY-RUN] Query throttled: metric=cpu value=95.0 threshold=80.0, metric name: cpu, metric value: 95.000000",
+			expectedTotalRequests:     1,
+			expectedThrottledRequests: 1,
 		},
 		{
 			name:    "Dry-run mode - query allowed normally",
@@ -206,8 +214,9 @@ func TestIncomingQueryThrottler_DryRunMode(t *testing.T) {
 				Throttle: false,
 				Message:  "Query allowed",
 			},
-			expectError:     false,
-			expectDryRunLog: false,
+			expectError:           false,
+			expectDryRunLog:       false,
+			expectedTotalRequests: 1,
 		},
 	}
 
@@ -218,6 +227,8 @@ func TestIncomingQueryThrottler_DryRunMode(t *testing.T) {
 				decision: tt.throttleDecision,
 			}
 
+			env := tabletenv.NewEnv(vtenv.NewTestEnv(), &tabletenv.TabletConfig{}, "TestThrottler")
+
 			// Create throttler with controlled config
 			iqt := &QueryThrottler{
 				ctx: context.Background(),
@@ -225,8 +236,18 @@ func TestIncomingQueryThrottler_DryRunMode(t *testing.T) {
 					Enabled: tt.enabled,
 					DryRun:  tt.dryRun,
 				},
+				env: env,
+				stats: Stats{
+					requestsTotal:     env.Exporter().NewCountersWithMultiLabels(queryThrottlerAppName+"Requests", "TestThrottler requests", []string{"Strategy", "Workload", "Priority"}),
+					requestsThrottled: env.Exporter().NewCountersWithMultiLabels(queryThrottlerAppName+"Throttled", "TestThrottler throttled", []string{"Strategy", "Workload", "Priority", "MetricName", "MetricValue", "DryRun"}),
+					totalLatency:      env.Exporter().NewMultiTimings(queryThrottlerAppName+"TotalLatencyMs", "Total latency of QueryThrottler.Throttle in milliseconds", []string{"Strategy", "Workload", "Priority"}),
+					evaluateLatency:   env.Exporter().NewMultiTimings(queryThrottlerAppName+"EvaluateLatencyMs", "Latency from Throttle entry to completion of Evaluate in milliseconds", []string{"Strategy", "Workload", "Priority"}),
+				},
 				strategyHandlerInstance: mockStrategy,
 			}
+
+			iqt.stats.requestsTotal.ResetAll()
+			iqt.stats.requestsThrottled.ResetAll()
 
 			// Capture log output
 			logCapture := &testLogCapture{}
@@ -265,6 +286,12 @@ func TestIncomingQueryThrottler_DryRunMode(t *testing.T) {
 			} else {
 				require.Empty(t, logCapture.logs, "Expected no log messages")
 			}
+
+			// Verify stats expectation
+			totalRequests := stats.CounterForDimension(iqt.stats.requestsTotal, "Strategy")
+			throttledRequests := stats.CounterForDimension(iqt.stats.requestsThrottled, "Strategy")
+			require.Equal(t, tt.expectedTotalRequests, totalRequests.Counts()["MockStrategy"], "Total requests should match expected")
+			require.Equal(t, tt.expectedThrottledRequests, throttledRequests.Counts()["MockStrategy"], "Throttled requests should match expected")
 		})
 	}
 }
@@ -774,7 +801,7 @@ func TestQueryThrottler_startSrvKeyspaceWatch_InitialLoadFailure(t *testing.T) {
 	// Configure PassthroughSrvTopoServer to return an error on GetSrvKeyspace
 	srvTopoServer := srvtopotest.NewPassthroughSrvTopoServer()
 	srvTopoServer.SrvKeyspace = nil
-	srvTopoServer.SrvKeyspaceError = fmt.Errorf("failed to fetch keyspace")
+	srvTopoServer.SrvKeyspaceError = errors.New("failed to fetch keyspace")
 
 	throttler := &throttle.Throttler{}
 	qt := NewQueryThrottler(ctx, throttler, env, &topodatapb.TabletAlias{Cell: "test-cell", Uid: uint32(123)}, srvTopoServer)
@@ -962,8 +989,8 @@ func TestQueryThrottler_startSrvKeyspaceWatch_WatchCallback(t *testing.T) {
 					qt.cfg.StrategyName == tt.expectedStrategy &&
 					qt.cfg.DryRun == tt.expectedDryRun
 			}, 2*time.Second, 10*time.Millisecond, "Config should be updated correctly after callback is invoked")
-
-		})
+		},
+		)
 	}
 }
 

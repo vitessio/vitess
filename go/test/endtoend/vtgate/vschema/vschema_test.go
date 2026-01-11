@@ -101,7 +101,7 @@ func TestMain(m *testing.M) {
 			Name:      keyspaceName,
 			SchemaSQL: sqlSchema,
 		}
-		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false); err != nil {
+		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false, clusterInstance.Cell); err != nil {
 			return 1, err
 		}
 
@@ -133,7 +133,7 @@ func writeConfig(path string, cfg map[string]string) error {
 }
 
 func TestVSchema(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

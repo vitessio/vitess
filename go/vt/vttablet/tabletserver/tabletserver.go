@@ -466,6 +466,7 @@ func (tsv *TabletServer) IsHealthy() error {
 		_, err := tsv.Execute(
 			tabletenv.LocalContext(),
 			nil,
+			nil,
 			"/* health */ select 1 from dual",
 			nil,
 			0,
@@ -537,7 +538,7 @@ func (tsv *TabletServer) SchemaEngine() *schema.Engine {
 }
 
 // Begin starts a new transaction. This is allowed only if the state is StateServing.
-func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (state queryservice.TransactionState, err error) {
+func (tsv *TabletServer) Begin(ctx context.Context, session queryservice.Session, target *querypb.Target, options *querypb.ExecuteOptions) (state queryservice.TransactionState, err error) {
 	return tsv.begin(ctx, target, nil, 0, nil, options)
 }
 
@@ -905,7 +906,7 @@ func (tsv *TabletServer) UnresolvedTransactions(ctx context.Context, target *que
 }
 
 // Execute executes the query and returns the result as response.
-func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
+func (tsv *TabletServer) Execute(ctx context.Context, session queryservice.Session, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
 	span, ctx := trace.NewSpan(ctx, "TabletServer.Execute")
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
 	defer span.Finish()
@@ -1011,7 +1012,7 @@ func smallerTimeout(t1, t2 time.Duration) time.Duration {
 // StreamExecute executes the query and streams the result.
 // The first QueryResult will have Fields set (and Rows nil).
 // The subsequent QueryResult will have Rows set (and Fields nil).
-func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (err error) {
+func (tsv *TabletServer) StreamExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (err error) {
 	if transactionID != 0 && reservedID != 0 && transactionID != reservedID {
 		return vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] transactionID and reserveID must match if both are non-zero")
 	}
@@ -1079,7 +1080,7 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 }
 
 // BeginExecute combines Begin and Execute.
-func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Target, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (queryservice.TransactionState, *sqltypes.Result, error) {
+func (tsv *TabletServer) BeginExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (queryservice.TransactionState, *sqltypes.Result, error) {
 	// Disable hot row protection in case of reserve connection.
 	if tsv.enableHotRowProtection && reservedID == 0 {
 		txDone, err := tsv.beginWaitForSameRangeTransactions(ctx, target, options, sql, bindVariables)
@@ -1096,13 +1097,14 @@ func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Targe
 		return state, nil, err
 	}
 
-	result, err := tsv.Execute(ctx, target, sql, bindVariables, state.TransactionID, reservedID, options)
+	result, err := tsv.Execute(ctx, session, target, sql, bindVariables, state.TransactionID, reservedID, options)
 	return state, result, err
 }
 
 // BeginStreamExecute combines Begin and StreamExecute.
 func (tsv *TabletServer) BeginStreamExecute(
 	ctx context.Context,
+	session queryservice.Session,
 	target *querypb.Target,
 	postBeginQueries []string,
 	sql string,
@@ -1116,7 +1118,7 @@ func (tsv *TabletServer) BeginStreamExecute(
 		return state, err
 	}
 
-	err = tsv.StreamExecute(ctx, target, sql, bindVariables, state.TransactionID, reservedID, options, callback)
+	err = tsv.StreamExecute(ctx, session, target, sql, bindVariables, state.TransactionID, reservedID, options, callback)
 	return state, err
 }
 
@@ -1273,7 +1275,7 @@ func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, qu
 		return 0, err
 	}
 
-	state, err := tsv.Begin(ctx, target, nil)
+	state, err := tsv.Begin(ctx, nil, target, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -1284,7 +1286,7 @@ func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, qu
 			tsv.Rollback(ctx, target, state.TransactionID)
 		}
 	}()
-	qr, err := tsv.Execute(ctx, target, query, bv, state.TransactionID, 0, nil)
+	qr, err := tsv.Execute(ctx, nil, target, query, bv, state.TransactionID, 0, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -1337,7 +1339,7 @@ func (tsv *TabletServer) VStreamResults(ctx context.Context, target *querypb.Tar
 }
 
 // ReserveBeginExecute implements the QueryService interface
-func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *querypb.Target, settings []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (state queryservice.ReservedTransactionState, result *sqltypes.Result, err error) {
+func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, settings []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (state queryservice.ReservedTransactionState, result *sqltypes.Result, err error) {
 	state, result, err = tsv.beginExecuteWithSettings(ctx, target, settings, postBeginQueries, sql, bindVariables, options)
 	// If there is an error and the error message is about allowing query in reserved connection only,
 	// then we do not return an error from here and continue to use the reserved connection path.
@@ -1398,7 +1400,6 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *queryp
 			return nil
 		},
 	)
-
 	if err != nil {
 		return state, nil, err
 	}
@@ -1413,6 +1414,7 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *queryp
 // ReserveBeginStreamExecute combines Begin and StreamExecute.
 func (tsv *TabletServer) ReserveBeginStreamExecute(
 	ctx context.Context,
+	session queryservice.Session,
 	target *querypb.Target,
 	settings []string,
 	postBeginQueries []string,
@@ -1431,7 +1433,7 @@ func (tsv *TabletServer) ReserveBeginStreamExecute(
 }
 
 // ReserveExecute implements the QueryService interface
-func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Target, settings []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (state queryservice.ReservedState, result *sqltypes.Result, err error) {
+func (tsv *TabletServer) ReserveExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, settings []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (state queryservice.ReservedState, result *sqltypes.Result, err error) {
 	result, err = tsv.executeWithSettings(ctx, target, settings, sql, bindVariables, transactionID, options)
 	// If there is an error and the error message is about allowing query in reserved connection only,
 	// then we do not return an error from here and continue to use the reserved connection path.
@@ -1466,7 +1468,6 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 			return nil
 		},
 	)
-
 	if err != nil {
 		return state, nil, err
 	}
@@ -1478,6 +1479,7 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 // ReserveStreamExecute combines Begin and StreamExecute.
 func (tsv *TabletServer) ReserveStreamExecute(
 	ctx context.Context,
+	session queryservice.Session,
 	target *querypb.Target,
 	settings []string,
 	sql string,
