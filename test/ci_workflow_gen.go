@@ -193,8 +193,7 @@ type GitMeta struct {
 }
 
 type GitMetas struct {
-	Goimports     *GitMeta
-	GoJunitReport *GitMeta
+	Goimports *GitMeta
 }
 
 type unitTest struct {
@@ -243,7 +242,7 @@ func getGitRefSHA(ctx context.Context, url, branchOrTag string) (string, error) 
 	// SHA and a reference. We expect the stdout to be a single line, which
 	// should always be true but we still validate.
 	// Example:
-	//    $ git ls-remote https://github.com/vitessio/go-junit-report HEAD
+	//    $ git ls-remote https://github.com/vitessio/vitess HEAD
 	//    99fa7f0daf16db969f54a49139a14471e633e6e8	HEAD
 	for line := range strings.Lines(stdout.String()) {
 		fields := strings.Fields(line)
@@ -281,18 +280,6 @@ func getGitMetas(ctx context.Context) (*GitMetas, error) {
 		metasMu.Lock()
 		defer metasMu.Unlock()
 		metas.Goimports = &GitMeta{SHA: sha, Comment: goimportsTag}
-		return nil
-	})
-
-	// vitessio/go-junit-report
-	eg.Go(func() error {
-		sha, err := getGitRefSHA(egCtx, "https://github.com/vitessio/go-junit-report", "HEAD")
-		if err != nil {
-			return err
-		}
-		metasMu.Lock()
-		defer metasMu.Unlock()
-		metas.GoJunitReport = &GitMeta{SHA: sha, Comment: "HEAD"}
 		return nil
 	})
 
