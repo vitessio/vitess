@@ -577,7 +577,7 @@ func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.
 		DbName:                  topoproto.TabletDbName(tablet),
 		MaxRows:                 req.MaxRows,
 		DisableBinlogs:          req.DisableBinlogs,
-		ReloadSchema:            req.DisableBinlogs,
+		ReloadSchema:            req.ReloadSchema,
 		DisableForeignKeyChecks: req.DisableForeignKeyChecks,
 	})
 	if err != nil {
@@ -613,7 +613,7 @@ func (client *Client) ExecuteMultiFetchAsDba(ctx context.Context, tablet *topoda
 		DbName:                  topoproto.TabletDbName(tablet),
 		MaxRows:                 req.MaxRows,
 		DisableBinlogs:          req.DisableBinlogs,
-		ReloadSchema:            req.DisableBinlogs,
+		ReloadSchema:            req.ReloadSchema,
 		DisableForeignKeyChecks: req.DisableForeignKeyChecks,
 	})
 	if err != nil {
