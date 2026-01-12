@@ -6,6 +6,7 @@
 - **[Major Changes](#major-changes)**
     - **[New Support](#new-support)**
         - [Window function pushdown for sharded keyspaces](#window-function-pushdown)
+    - [View Routing Rules](#view-routing-rules)
 - **[Minor Changes](#minor-changes)**
     - **[VTGate](#minor-changes-vtgate)**
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
@@ -33,6 +34,36 @@ This release introduces an optimization that allows window functions to be pushe
 Previously, all window function queries required single-shard routing, which limited their applicability on sharded tables. With this change, queries where the `PARTITION BY` clause aligns with a unique vindex can now be pushed down and executed on each shard.
 
 For examples and more details, see the [documentation](https://vitess.io/docs/24.0/reference/compatibility/mysql-compatibility/#window-functions).
+
+### <a id="view-routing-rules"/>View Routing Rules</a>
+
+Vitess now supports routing rules for views, and can be applied the same as tables with `vtctldclient ApplyRoutingRules`. When a view routing rule is active, VTGate rewrites queries that reference the source view to use the target view's definition instead. For example, given this routing rule:
+
+```json
+{
+  "rules": [
+    {
+      "from_table": "source_ks.my_view",
+      "to_tables": ["target_ks.my_view"]
+    }
+  ]
+}
+```
+
+And this view definition:
+
+```sql
+CREATE VIEW target_ks.my_view AS SELECT id, name FROM user;
+```
+
+A query like `SELECT * FROM source_ks.my_view` would be internally rewritten to:
+
+```sql
+SELECT * FROM (SELECT id, name FROM target_ks.user) AS my_view;
+```
+
+View routing rules require the schema tracker to monitor views, which means VTGate must be started with the `--enable-views` flag and VTTablet with the `--queryserver-enable-views` flag. The target view must exist in the specified keyspace for the routing rule to function correctly. For more details, see the [Schema Routing Rules documentation](https://vitess.io/docs/24.0/reference/features/schema-routing-rules/).
+
 
 ## <a id="minor-changes"/>Minor Changes</a>
 
