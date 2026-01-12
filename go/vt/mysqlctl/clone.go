@@ -122,7 +122,7 @@ func CloneFromDonor(ctx context.Context, topoServer *topo.Server, mysqld MysqlDa
 	log.Infof("Clone executor configured for donor %s:%d", executor.DonorHost, executor.DonorPort)
 
 	// Execute the clone operation.
-	// Note: ExecuteClone will wait for myqld to restart and for CLONE to report
+	// Note: ExecuteClone will wait for mysqld to restart and for the CLONE plugin to report successful completion
 	// success via performance_schema before returning.
 	if err := executor.ExecuteClone(ctx, mysqld, cloneRestartWaitTimeout); err != nil {
 		return replication.Position{}, fmt.Errorf("clone execution failed: %v", err)
