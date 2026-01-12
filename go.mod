@@ -282,3 +282,5 @@ require (
 )
 
 exclude github.com/DataDog/opentelemetry-mapping-go/pkg/otlp/attributes v0.33.0
+
+tool gotest.tools/gotestsum
