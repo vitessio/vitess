@@ -295,3 +295,4 @@ func IsError(err error, code string) bool {
 	}
 	return strings.Contains(err.Error(), code)
 }
+
