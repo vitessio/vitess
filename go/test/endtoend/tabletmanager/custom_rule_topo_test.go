@@ -32,7 +32,7 @@ import (
 )
 
 func TestTopoCustomRule(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &primaryTabletParams)
 	require.NoError(t, err)
 	defer conn.Close()

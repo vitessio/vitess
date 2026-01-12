@@ -17,7 +17,6 @@ limitations under the License.
 package tablethealthcheck
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -132,7 +131,7 @@ func TestMain(m *testing.M) {
 // TestHealthCheckExternallyReparentNewTablet ensures that calling TabletExternallyReparented on a new tablet will switch the primary tablet
 // without having to wait for the tabletRefreshInterval.
 func TestHealthCheckExternallyReparentNewTablet(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// verify output of `show vitess_tablets` and `INSERT` statement
 	vtgateConn, err := mysql.Connect(ctx, &vtParams)
