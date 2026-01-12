@@ -2918,3 +2918,67 @@ func TestMigrateAllowsSourceEqualsTarget(t *testing.T) {
 	})
 	require.NotContains(t, err.Error(), "source and target keyspace must be different for MoveTables workflows")
 }
+
+func TestFinalizeMigrateWorkflowCancelKeepDataRebuildsSrvVSchema(t *testing.T) {
+	ctx := context.Background()
+
+	workflowName := "wf_rebuild"
+	tableName1 := "t1"
+	tableName2 := "t2"
+
+	sourceKeyspace := &testKeyspace{"source_keyspace", []string{"-"}}
+	targetKeyspace := &testKeyspace{"target_keyspace", []string{"-"}}
+
+	te := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer te.close()
+
+	te.tmc.schema = map[string]*tabletmanagerdatapb.SchemaDefinition{
+		tableName1: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{Name: tableName1, Schema: fmt.Sprintf("create table %s(id int)", tableName1)}},
+		},
+		tableName2: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{Name: tableName2, Schema: fmt.Sprintf("create table %s(id int)", tableName2)}},
+		},
+	}
+
+	err := te.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name: targetKeyspace.KeyspaceName,
+		Keyspace: &vschemapb.Keyspace{
+			Sharded: false,
+			Tables: map[string]*vschemapb.Table{
+				tableName1: {},
+				tableName2: {},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	err = te.ts.RebuildSrvVSchema(ctx, nil)
+	require.NoError(t, err)
+
+	srv, err := te.ts.GetSrvVSchema(ctx, defaultCellName)
+	require.NoError(t, err)
+	require.Contains(t, srv.Keyspaces, targetKeyspace.KeyspaceName)
+	require.Contains(t, srv.Keyspaces[targetKeyspace.KeyspaceName].Tables, tableName1)
+	require.Contains(t, srv.Keyspaces[targetKeyspace.KeyspaceName].Tables, tableName2)
+
+	ts, _, err := te.ws.getWorkflowState(ctx, targetKeyspace.KeyspaceName, workflowName)
+	require.NoError(t, err)
+
+	te.tmc.expectVRQuery(200, "delete from _vt.vreplication where db_name = 'vt_target_keyspace' and workflow = 'wf_rebuild'", nil)
+	te.tmc.expectVRQuery(200, "drop table `vt_target_keyspace`.`t1`", nil)
+	te.tmc.expectVRQuery(200, "drop table `vt_target_keyspace`.`t2`", nil)
+
+	_, err = te.ws.finalizeMigrateWorkflow(ctx, ts, "", true, false, false, false)
+	require.NoError(t, err)
+
+	ksvs, err := te.ts.GetVSchema(ctx, targetKeyspace.KeyspaceName)
+	require.NoError(t, err)
+	assert.Empty(t, ksvs.Tables)
+
+	srvAfter, err := te.ts.GetSrvVSchema(ctx, defaultCellName)
+	require.NoError(t, err)
+	assert.NotContains(t, srvAfter.Keyspaces[targetKeyspace.KeyspaceName].Tables, tableName1)
+	assert.NotContains(t, srvAfter.Keyspaces[targetKeyspace.KeyspaceName].Tables, tableName2)
+	assert.Empty(t, srvAfter.Keyspaces[targetKeyspace.KeyspaceName].Tables)
+}

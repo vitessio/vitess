@@ -2701,6 +2701,9 @@ func (s *Server) finalizeMigrateWorkflow(ctx context.Context, ts *trafficSwitche
 		if err := sw.removeTargetTables(ctx); err != nil {
 			return nil, err
 		}
+		if err := ts.TopoServer().RebuildSrvVSchema(ctx, nil); err != nil {
+			return nil, err
+		}
 	}
 	return sw.logs(), nil
 }
