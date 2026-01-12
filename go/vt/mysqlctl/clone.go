@@ -77,7 +77,7 @@ func CloneFromDonor(ctx context.Context, topoServer *topo.Server, mysqld MysqlDa
 		return replication.Position{}, errors.New("--clone-from-primary and --clone-from-tablet are mutually exclusive")
 	case cloneFromPrimary:
 		// Look up the primary tablet from topology.
-		log.Infof("Looking up primary tablet for shard %s/%s", keyspace, shard)
+		log.Infof("Looking up primary tablet for shard %s/%s for use as CLONE REMOTE donor", keyspace, shard)
 		si, err := topoServer.GetShard(ctx, keyspace, shard)
 		if err != nil {
 			return replication.Position{}, fmt.Errorf("failed to get shard %s/%s: %v", keyspace, shard, err)
@@ -86,10 +86,10 @@ func CloneFromDonor(ctx context.Context, topoServer *topo.Server, mysqld MysqlDa
 			return replication.Position{}, fmt.Errorf("shard %s/%s has no primary", keyspace, shard)
 		}
 		donorAlias = si.PrimaryAlias
-		log.Infof("Found primary tablet: %s", topoproto.TabletAliasString(donorAlias))
+		log.Infof("Found primary tablet %s for use as CLONE REMOTE donor", topoproto.TabletAliasString(donorAlias))
 	case cloneFromTablet != "":
 		// Parse the explicit donor tablet alias.
-		log.Infof("Starting clone from tablet %s", cloneFromTablet)
+		log.Infof("Using tablet %s for use as CLONE REMOTE donor", cloneFromTablet)
 		donorAlias, err = topoproto.ParseTabletAlias(cloneFromTablet)
 		if err != nil {
 			return replication.Position{}, fmt.Errorf("invalid tablet alias %q: %v", cloneFromTablet, err)
