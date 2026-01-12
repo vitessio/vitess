@@ -115,6 +115,9 @@ jobs:
 
         sudo service etcd stop
 
+        # install JUnit report formatter
+        go install github.com/vitessio/go-junit-report@{{.GoJunitReport.SHA}} # {{.GoJunitReport.Comment}}
+
         {{if .InstallXtraBackup}}
 
         wget "https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb"
@@ -185,7 +188,8 @@ jobs:
         EOF
         {{end}}
 
-        JUNIT_OUTPUT=report.xml JSON_OUTPUT=report.json go run test.go -docker={{if .Docker}}true -flavor={{.Platform}}{{else}}false{{end}} -follow -shard {{.Shard}}{{if .PartialKeyspace}} -partial-keyspace=true {{end}}
+        # run the tests however you normally do, then produce a JUnit XML file
+        go run test.go -docker={{if .Docker}}true -flavor={{.Platform}}{{else}}false{{end}} -follow -shard {{.Shard}}{{if .PartialKeyspace}} -partial-keyspace=true {{end}} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Record test results in launchable if PR is not a draft
       if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main' && !cancelled()
