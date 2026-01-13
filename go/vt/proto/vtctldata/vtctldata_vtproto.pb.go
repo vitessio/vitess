@@ -126,6 +126,11 @@ func (m *MaterializeSettings) CloneVT() *MaterializeSettings {
 		copy(tmpContainer, rhs)
 		r.ReferenceTables = tmpContainer
 	}
+	if rhs := m.Views; rhs != nil {
+		tmpContainer := make([]string, len(rhs))
+		copy(tmpContainer, rhs)
+		r.Views = tmpContainer
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -269,6 +274,11 @@ func (m *WorkflowOptions) CloneVT() *WorkflowOptions {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
 		r.LookupVindexes = tmpContainer
+	}
+	if rhs := m.Views; rhs != nil {
+		tmpContainer := make([]string, len(rhs))
+		copy(tmpContainer, rhs)
+		r.Views = tmpContainer
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -3601,6 +3611,8 @@ func (m *MoveTablesCreateRequest) CloneVT() *MoveTablesCreateRequest {
 	r.NoRoutingRules = m.NoRoutingRules
 	r.AtomicCopy = m.AtomicCopy
 	r.WorkflowOptions = m.WorkflowOptions.CloneVT()
+	r.AllViews = m.AllViews
+	r.SkipViewValidation = m.SkipViewValidation
 	if rhs := m.Cells; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
@@ -3625,6 +3637,16 @@ func (m *MoveTablesCreateRequest) CloneVT() *MoveTablesCreateRequest {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
 		r.ExcludeTables = tmpContainer
+	}
+	if rhs := m.IncludeViews; rhs != nil {
+		tmpContainer := make([]string, len(rhs))
+		copy(tmpContainer, rhs)
+		r.IncludeViews = tmpContainer
+	}
+	if rhs := m.ExcludeViews; rhs != nil {
+		tmpContainer := make([]string, len(rhs))
+		copy(tmpContainer, rhs)
+		r.ExcludeViews = tmpContainer
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -6221,6 +6243,17 @@ func (m *MaterializeSettings) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.Views) > 0 {
+		for iNdEx := len(m.Views) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Views[iNdEx])
+			copy(dAtA[i:], m.Views[iNdEx])
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Views[iNdEx])))
+			i--
+			dAtA[i] = 0x1
+			i--
+			dAtA[i] = 0x9a
+		}
+	}
 	if len(m.ReferenceTables) > 0 {
 		for iNdEx := len(m.ReferenceTables) - 1; iNdEx >= 0; iNdEx-- {
 			i -= len(m.ReferenceTables[iNdEx])
@@ -7043,6 +7076,15 @@ func (m *WorkflowOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.Views) > 0 {
+		for iNdEx := len(m.Views) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Views[iNdEx])
+			copy(dAtA[i:], m.Views[iNdEx])
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Views[iNdEx])))
+			i--
+			dAtA[i] = 0x3a
+		}
 	}
 	if len(m.LookupVindexes) > 0 {
 		for iNdEx := len(m.LookupVindexes) - 1; iNdEx >= 0; iNdEx-- {
@@ -15920,6 +15962,52 @@ func (m *MoveTablesCreateRequest) MarshalToSizedBufferVT(dAtA []byte) (int, erro
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.SkipViewValidation {
+		i--
+		if m.SkipViewValidation {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xc0
+	}
+	if len(m.ExcludeViews) > 0 {
+		for iNdEx := len(m.ExcludeViews) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.ExcludeViews[iNdEx])
+			copy(dAtA[i:], m.ExcludeViews[iNdEx])
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.ExcludeViews[iNdEx])))
+			i--
+			dAtA[i] = 0x1
+			i--
+			dAtA[i] = 0xba
+		}
+	}
+	if len(m.IncludeViews) > 0 {
+		for iNdEx := len(m.IncludeViews) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.IncludeViews[iNdEx])
+			copy(dAtA[i:], m.IncludeViews[iNdEx])
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.IncludeViews[iNdEx])))
+			i--
+			dAtA[i] = 0x1
+			i--
+			dAtA[i] = 0xb2
+		}
+	}
+	if m.AllViews {
+		i--
+		if m.AllViews {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xa8
+	}
 	if m.WorkflowOptions != nil {
 		size, err := m.WorkflowOptions.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
@@ -22711,6 +22799,12 @@ func (m *MaterializeSettings) SizeVT() (n int) {
 			n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
 	}
+	if len(m.Views) > 0 {
+		for _, s := range m.Views {
+			l = len(s)
+			n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
+		}
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -22998,6 +23092,12 @@ func (m *WorkflowOptions) SizeVT() (n int) {
 	}
 	if len(m.LookupVindexes) > 0 {
 		for _, s := range m.LookupVindexes {
+			l = len(s)
+			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+		}
+	}
+	if len(m.Views) > 0 {
+		for _, s := range m.Views {
 			l = len(s)
 			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
@@ -26356,6 +26456,24 @@ func (m *MoveTablesCreateRequest) SizeVT() (n int) {
 		l = m.WorkflowOptions.SizeVT()
 		n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
+	if m.AllViews {
+		n += 3
+	}
+	if len(m.IncludeViews) > 0 {
+		for _, s := range m.IncludeViews {
+			l = len(s)
+			n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
+		}
+	}
+	if len(m.ExcludeViews) > 0 {
+		for _, s := range m.ExcludeViews {
+			l = len(s)
+			n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
+		}
+	}
+	if m.SkipViewValidation {
+		n += 3
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -29686,6 +29804,38 @@ func (m *MaterializeSettings) UnmarshalVT(dAtA []byte) error {
 			}
 			m.ReferenceTables = append(m.ReferenceTables, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
+		case 19:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Views", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Views = append(m.Views, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -31874,6 +32024,38 @@ func (m *WorkflowOptions) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.LookupVindexes = append(m.LookupVindexes, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Views", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Views = append(m.Views, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -53798,6 +53980,110 @@ func (m *MoveTablesCreateRequest) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 21:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AllViews", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.AllViews = bool(v != 0)
+		case 22:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IncludeViews", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.IncludeViews = append(m.IncludeViews, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		case 23:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ExcludeViews", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ExcludeViews = append(m.ExcludeViews, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		case 24:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SkipViewValidation", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.SkipViewValidation = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

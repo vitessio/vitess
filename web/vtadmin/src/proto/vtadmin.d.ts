@@ -52990,6 +52990,9 @@ export namespace vtctldata {
 
         /** MaterializeSettings reference_tables */
         reference_tables?: (string[]|null);
+
+        /** MaterializeSettings views */
+        views?: (string[]|null);
     }
 
     /** Represents a MaterializeSettings. */
@@ -53054,6 +53057,9 @@ export namespace vtctldata {
 
         /** MaterializeSettings reference_tables. */
         public reference_tables: string[];
+
+        /** MaterializeSettings views. */
+        public views: string[];
 
         /**
          * Creates a new MaterializeSettings instance using the specified properties.
@@ -53823,6 +53829,9 @@ export namespace vtctldata {
 
         /** WorkflowOptions lookup_vindexes */
         lookup_vindexes?: (string[]|null);
+
+        /** WorkflowOptions views */
+        views?: (string[]|null);
     }
 
     /** Represents a WorkflowOptions. */
@@ -53851,6 +53860,9 @@ export namespace vtctldata {
 
         /** WorkflowOptions lookup_vindexes. */
         public lookup_vindexes: string[];
+
+        /** WorkflowOptions views. */
+        public views: string[];
 
         /**
          * Creates a new WorkflowOptions instance using the specified properties.
@@ -70795,6 +70807,18 @@ export namespace vtctldata {
 
         /** MoveTablesCreateRequest workflow_options */
         workflow_options?: (vtctldata.IWorkflowOptions|null);
+
+        /** MoveTablesCreateRequest all_views */
+        all_views?: (boolean|null);
+
+        /** MoveTablesCreateRequest include_views */
+        include_views?: (string[]|null);
+
+        /** MoveTablesCreateRequest exclude_views */
+        exclude_views?: (string[]|null);
+
+        /** MoveTablesCreateRequest skip_view_validation */
+        skip_view_validation?: (boolean|null);
     }
 
     /** Represents a MoveTablesCreateRequest. */
@@ -70865,6 +70889,18 @@ export namespace vtctldata {
 
         /** MoveTablesCreateRequest workflow_options. */
         public workflow_options?: (vtctldata.IWorkflowOptions|null);
+
+        /** MoveTablesCreateRequest all_views. */
+        public all_views: boolean;
+
+        /** MoveTablesCreateRequest include_views. */
+        public include_views: string[];
+
+        /** MoveTablesCreateRequest exclude_views. */
+        public exclude_views: string[];
+
+        /** MoveTablesCreateRequest skip_view_validation. */
+        public skip_view_validation: boolean;
 
         /**
          * Creates a new MoveTablesCreateRequest instance using the specified properties.

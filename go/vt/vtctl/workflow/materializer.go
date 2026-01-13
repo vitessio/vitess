@@ -145,6 +145,10 @@ func (mz *materializer) createWorkflowStreams(req *tabletmanagerdatapb.CreateVRe
 		return err
 	}
 
+	if err := mz.deployViews(mz.ctx, mz.ms.GetViews()); err != nil {
+		return err
+	}
+
 	return forAllShards(mz.targetShards, func(target *topo.ShardInfo) error {
 		targetPrimary, err := mz.ts.GetTablet(mz.ctx, target.PrimaryAlias)
 		if err != nil {
@@ -342,7 +346,7 @@ func (mz *materializer) deploySchema() error {
 				// Only get DDLs for tables once and lazily: if we need to copy the schema from source
 				// to target then we copy schemas from primaries on the source keyspace; we have found
 				// use cases where the user just has a replica (no primary) in the source keyspace.
-				sourceDDLs, err = getSourceTableDDLs(mz.ctx, mz.sourceTs, mz.tmc, mz.sourceShards)
+				sourceDDLs, err = getSourceDDLs(mz.ctx, mz.sourceTs, mz.tmc, mz.sourceShards, false)
 			}
 			mu.Unlock()
 			if err != nil {
