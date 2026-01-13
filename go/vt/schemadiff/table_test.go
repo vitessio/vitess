@@ -3044,6 +3044,12 @@ func TestValidate(t *testing.T) {
 			alter: "alter table t drop key `i`",
 			to:    "create table t (id int primary key, i int, key i2 (i), constraint f foreign key (i) references parent(id))",
 		},
+		{
+			name:  "drop constraint foreign key",
+			from:  "create table t (id int primary key, i int, key i_idx (i), constraint f foreign key (i) references parent(id))",
+			alter: "alter table t drop constraint f",
+			to:    "create table t (id int primary key, i int, key i_idx (i))",
+		},
 	}
 	hints := DiffHints{}
 	env := NewTestEnv()
