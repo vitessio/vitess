@@ -286,20 +286,20 @@ func TestGetChildForeignKeysList(t *testing.T) {
 			semTable: &SemTable{
 				childForeignKeysInvolved: map[TableSet][]vindexes.ChildFKInfo{
 					SingleTableSet(0): {
-						ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
-						ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
+						ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict, sqlparser.Restrict),
+						ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull, sqlparser.SetNull),
 					},
 					SingleTableSet(1): {
-						ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
-						ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
+						ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade, sqlparser.Cascade),
+						ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict, sqlparser.Restrict),
 					},
 				},
 			},
 			childFksWanted: []vindexes.ChildFKInfo{
-				ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
-				ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
-				ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
-				ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
+				ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict, sqlparser.Restrict),
+				ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull, sqlparser.SetNull),
+				ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade, sqlparser.Cascade),
+				ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict, sqlparser.Restrict),
 			},
 		},
 		{
@@ -534,15 +534,15 @@ func TestRemoveNonRequiredForeignKeys(t *testing.T) {
 			semTable: &SemTable{
 				childForeignKeysInvolved: map[TableSet][]vindexes.ChildFKInfo{
 					SingleTableSet(0): {
-						ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
-						ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
-						ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
-						ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
+						ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict, sqlparser.Restrict),
+						ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull, sqlparser.SetNull),
+						ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade, sqlparser.Cascade),
+						ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict, sqlparser.Restrict),
 					},
 					SingleTableSet(1): {
-						ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
-						ckInfo(nil, []string{"colc", "colx"}, []string{"child_colc", "child_colx"}, sqlparser.SetNull),
-						ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
+						ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict, sqlparser.Restrict),
+						ckInfo(nil, []string{"colc", "colx"}, []string{"child_colc", "child_colx"}, sqlparser.SetNull, sqlparser.SetNull),
+						ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade, sqlparser.Cascade),
 					},
 				},
 				parentForeignKeysInvolved: map[TableSet][]vindexes.ParentFKInfo{
@@ -558,15 +558,15 @@ func TestRemoveNonRequiredForeignKeys(t *testing.T) {
 			},
 			childFkWanted: map[TableSet][]vindexes.ChildFKInfo{
 				SingleTableSet(0): {
-					ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
-					ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
-					ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
-					ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
+					ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict, sqlparser.Restrict),
+					ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull, sqlparser.SetNull),
+					ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade, sqlparser.Cascade),
+					ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict, sqlparser.Restrict),
 				},
 				SingleTableSet(1): {
-					ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
-					ckInfo(nil, []string{"colc", "colx"}, []string{"child_colc", "child_colx"}, sqlparser.SetNull),
-					ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
+					ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict, sqlparser.Restrict),
+					ckInfo(nil, []string{"colc", "colx"}, []string{"child_colc", "child_colx"}, sqlparser.SetNull, sqlparser.SetNull),
+					ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade, sqlparser.Cascade),
 				},
 			},
 			parentFkWanted: map[TableSet][]vindexes.ParentFKInfo{
@@ -653,20 +653,20 @@ func TestRemoveNonRequiredForeignKeys(t *testing.T) {
 				},
 				childForeignKeysInvolved: map[TableSet][]vindexes.ChildFKInfo{
 					SingleTableSet(0): {
-						ckInfo(t3Table, []string{"cola", "colx"}, []string{"cola", "colx"}, sqlparser.Restrict),
+						ckInfo(t3Table, []string{"cola", "colx"}, []string{"cola", "colx"}, sqlparser.Restrict, sqlparser.Restrict),
 					},
 					SingleTableSet(1): {
-						ckInfo(t3Table, []string{"colc", "colx"}, []string{"colc", "colx"}, sqlparser.Cascade),
+						ckInfo(t3Table, []string{"colc", "colx"}, []string{"colc", "colx"}, sqlparser.Cascade, sqlparser.Cascade),
 					},
 				},
 				parentForeignKeysInvolved: map[TableSet][]vindexes.ParentFKInfo{},
 			},
 			childFkWanted: map[TableSet][]vindexes.ChildFKInfo{
 				SingleTableSet(0): {
-					ckInfo(t3Table, []string{"cola", "colx"}, []string{"cola", "colx"}, sqlparser.Restrict),
+					ckInfo(t3Table, []string{"cola", "colx"}, []string{"cola", "colx"}, sqlparser.Restrict, sqlparser.Restrict),
 				},
 				SingleTableSet(1): {
-					ckInfo(t3Table, []string{"colc", "colx"}, []string{"colc", "colx"}, sqlparser.Cascade),
+					ckInfo(t3Table, []string{"colc", "colx"}, []string{"colc", "colx"}, sqlparser.Cascade, sqlparser.Cascade),
 				},
 			},
 			parentFkWanted: map[TableSet][]vindexes.ParentFKInfo{},
@@ -684,21 +684,21 @@ func TestRemoveNonRequiredForeignKeys(t *testing.T) {
 				},
 				childForeignKeysInvolved: map[TableSet][]vindexes.ChildFKInfo{
 					SingleTableSet(0): {
-						ckInfo(t4Table, []string{"cola", "colx"}, []string{"cola", "colx"}, sqlparser.Restrict),
-						ckInfo(t4Table, []string{"cola", "coly"}, []string{"cola", "coly"}, sqlparser.Cascade),
+						ckInfo(t4Table, []string{"cola", "colx"}, []string{"cola", "colx"}, sqlparser.Restrict, sqlparser.Restrict),
+						ckInfo(t4Table, []string{"cola", "coly"}, []string{"cola", "coly"}, sqlparser.Cascade, sqlparser.Cascade),
 					},
 					SingleTableSet(1): {
-						ckInfo(t4Table, []string{"colc", "colx"}, []string{"colc", "colx"}, sqlparser.Restrict),
+						ckInfo(t4Table, []string{"colc", "colx"}, []string{"colc", "colx"}, sqlparser.Restrict, sqlparser.Restrict),
 					},
 				},
 				parentForeignKeysInvolved: map[TableSet][]vindexes.ParentFKInfo{},
 			},
 			childFkWanted: map[TableSet][]vindexes.ChildFKInfo{
 				SingleTableSet(0): {
-					ckInfo(t4Table, []string{"cola", "coly"}, []string{"cola", "coly"}, sqlparser.Cascade),
+					ckInfo(t4Table, []string{"cola", "coly"}, []string{"cola", "coly"}, sqlparser.Cascade, sqlparser.Cascade),
 				},
 				SingleTableSet(1): {
-					ckInfo(t4Table, []string{"colc", "colx"}, []string{"colc", "colx"}, sqlparser.Restrict),
+					ckInfo(t4Table, []string{"colc", "colx"}, []string{"colc", "colx"}, sqlparser.Restrict, sqlparser.Restrict),
 				},
 			},
 			parentFkWanted: map[TableSet][]vindexes.ParentFKInfo{},
@@ -777,7 +777,7 @@ func TestIsFkDependentColumnUpdated(t *testing.T) {
 						Name:     sqlparser.NewIdentifierCS("t1"),
 						Keyspace: &vindexes.Keyspace{Name: keyspaceName},
 						ChildForeignKeys: []vindexes.ChildFKInfo{
-							ckInfo(t3Table, []string{"col"}, []string{"col"}, sqlparser.Cascade),
+							ckInfo(t3Table, []string{"col"}, []string{"col"}, sqlparser.Cascade, sqlparser.Cascade),
 						},
 					},
 				},
@@ -870,6 +870,349 @@ func TestIsFkDependentColumnUpdated(t *testing.T) {
 	}
 }
 
+func TestRequiresForeignKeyEmulation(t *testing.T) {
+	hashVindex := &vindexes.Hash{}
+
+	shardedKeyspace := &vindexes.Keyspace{
+		Name:    "sharded_ks",
+		Sharded: true,
+	}
+	unshardedKeyspace := &vindexes.Keyspace{
+		Name:    "unsharded_ks",
+		Sharded: false,
+	}
+	otherUnshardedKeyspace := &vindexes.Keyspace{
+		Name:    "other_ks",
+		Sharded: false,
+	}
+
+	t3Table := &vindexes.BaseTable{
+		Keyspace: unshardedKeyspace,
+		Name:     sqlparser.NewIdentifierCS("t3"),
+	}
+	tests := []struct {
+		name              string
+		query             string
+		fakeSi            *FakeSI
+		requiresEmulation bool
+	}{
+		{
+			name:  "child foreign key in different keyspace",
+			query: "update t1 set col = 1 where foo = 3",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					unshardedKeyspace.Name:      vschemapb.Keyspace_managed,
+					otherUnshardedKeyspace.Name: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.BaseTable{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: unshardedKeyspace,
+						ChildForeignKeys: []vindexes.ChildFKInfo{
+							ckInfo(&vindexes.BaseTable{
+								Keyspace: otherUnshardedKeyspace,
+								Name:     sqlparser.NewIdentifierCS("t3"),
+							}, []string{"col"}, []string{"col"}, sqlparser.Cascade, sqlparser.Cascade),
+						},
+					},
+				},
+			},
+			requiresEmulation: true,
+		},
+		{
+			name:  "child foreign key with cascade action that is not shard scoped",
+			query: "update t1 set col = 1 where foo = 3",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					shardedKeyspace.Name: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.BaseTable{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: shardedKeyspace,
+
+						ColumnVindexes: []*vindexes.ColumnVindex{
+							{
+								Vindex:  hashVindex,
+								Columns: sqlparser.MakeColumns("pcola", "pcolb", "pcolc"),
+							},
+						},
+
+						ChildForeignKeys: []vindexes.ChildFKInfo{
+							ckInfo(&vindexes.BaseTable{
+								Keyspace: shardedKeyspace,
+								Name:     sqlparser.NewIdentifierCS("t3"),
+
+								ColumnVindexes: []*vindexes.ColumnVindex{
+									{
+										Vindex:  hashVindex,
+										Columns: sqlparser.MakeColumns("col"),
+									},
+								},
+							}, []string{"col"}, []string{"col"}, sqlparser.Cascade, sqlparser.Cascade),
+						},
+					},
+				},
+			},
+			requiresEmulation: true,
+		},
+		{
+			name:  "child foreign key with cascade action that is shard scoped",
+			query: "update t1 set col = 1 where foo = 3",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					shardedKeyspace.Name: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.BaseTable{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: shardedKeyspace,
+
+						ColumnVindexes: []*vindexes.ColumnVindex{
+							{
+								Vindex:  hashVindex,
+								Columns: sqlparser.MakeColumns("col"),
+							},
+						},
+
+						ChildForeignKeys: []vindexes.ChildFKInfo{
+							ckInfo(&vindexes.BaseTable{
+								Keyspace: shardedKeyspace,
+								Name:     sqlparser.NewIdentifierCS("t3"),
+
+								ColumnVindexes: []*vindexes.ColumnVindex{
+									{
+										Vindex:  hashVindex,
+										Columns: sqlparser.MakeColumns("col"),
+									},
+								},
+							}, []string{"col"}, []string{"col"}, sqlparser.Cascade, sqlparser.Cascade),
+						},
+					},
+				},
+			},
+			requiresEmulation: true,
+		},
+		{
+			name:  "child foreign key with restrict action that is shard scoped",
+			query: "update t1 set col = 1 where foo = 3",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					shardedKeyspace.Name: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.BaseTable{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: shardedKeyspace,
+
+						ColumnVindexes: []*vindexes.ColumnVindex{
+							{
+								Vindex:  hashVindex,
+								Columns: sqlparser.MakeColumns("col"),
+							},
+						},
+
+						ChildForeignKeys: []vindexes.ChildFKInfo{
+							ckInfo(&vindexes.BaseTable{
+								Keyspace: shardedKeyspace,
+								Name:     sqlparser.NewIdentifierCS("t3"),
+								ColumnVindexes: []*vindexes.ColumnVindex{
+									{
+										Vindex:  hashVindex,
+										Columns: sqlparser.MakeColumns("col"),
+									},
+								},
+							}, []string{"col"}, []string{"col"}, sqlparser.Restrict, sqlparser.Restrict),
+						},
+					},
+				},
+			},
+			requiresEmulation: false,
+		},
+		{
+			name:  "child foreign key in same unsharded keyspace with cascade action",
+			query: "update t1 set col = 1 where foo = 3",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					unshardedKeyspace.Name: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.BaseTable{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: unshardedKeyspace,
+						ChildForeignKeys: []vindexes.ChildFKInfo{
+							ckInfo(t3Table, []string{"col"}, []string{"col"}, sqlparser.Cascade, sqlparser.Cascade),
+						},
+					},
+				},
+			},
+			requiresEmulation: true,
+		},
+		{
+			name:  "child foreign key in same unsharded keyspace with restrict action",
+			query: "update t1 set col = 1 where foo = 3",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					unshardedKeyspace.Name: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.BaseTable{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: unshardedKeyspace,
+						ChildForeignKeys: []vindexes.ChildFKInfo{
+							ckInfo(t3Table, []string{"col"}, []string{"col"}, sqlparser.Restrict, sqlparser.Restrict),
+						},
+					},
+				},
+			},
+			requiresEmulation: false,
+		},
+		{
+			name:  "parent foreign key in same unsharded keyspace",
+			query: "update t1 set col = 1 where foo = 3",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					unshardedKeyspace.Name: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.BaseTable{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: unshardedKeyspace,
+						ParentForeignKeys: []vindexes.ParentFKInfo{
+							pkInfo(t3Table, []string{"col"}, []string{"col"}),
+						},
+					},
+				},
+			},
+			requiresEmulation: false,
+		},
+		{
+			name:  "parent foreign key in different keyspace",
+			query: "update t1 set col = 1 where foo = 3",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					unshardedKeyspace.Name:      vschemapb.Keyspace_managed,
+					otherUnshardedKeyspace.Name: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.BaseTable{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: unshardedKeyspace,
+						ParentForeignKeys: []vindexes.ParentFKInfo{
+							pkInfo(&vindexes.BaseTable{
+								Keyspace: otherUnshardedKeyspace,
+								Name:     sqlparser.NewIdentifierCS("t3"),
+							}, []string{"col"}, []string{"col"}),
+						},
+					},
+				},
+			},
+			requiresEmulation: true,
+		},
+		{
+			name:  "parent foreign key in sharded keyspace that is not shard scoped",
+			query: "update t1 set col = 1 where foo = 3",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					shardedKeyspace.Name: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.BaseTable{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: shardedKeyspace,
+
+						ColumnVindexes: []*vindexes.ColumnVindex{
+							{
+								Vindex:  hashVindex,
+								Columns: sqlparser.MakeColumns("pcola", "pcolb", "pcolc"),
+							},
+						},
+
+						ParentForeignKeys: []vindexes.ParentFKInfo{
+							pkInfo(&vindexes.BaseTable{
+								Keyspace: shardedKeyspace,
+								Name:     sqlparser.NewIdentifierCS("t3"),
+
+								ColumnVindexes: []*vindexes.ColumnVindex{
+									{
+										Vindex:  hashVindex,
+										Columns: sqlparser.MakeColumns("col"),
+									},
+								},
+							}, []string{"col"}, []string{"col"}),
+						},
+					},
+				},
+			},
+			requiresEmulation: true,
+		},
+		{
+			name:  "parent foreign key in sharded keyspace that is shard scoped",
+			query: "update t1 set col = 1 where foo = 3",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					shardedKeyspace.Name: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.BaseTable{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: shardedKeyspace,
+
+						ColumnVindexes: []*vindexes.ColumnVindex{
+							{
+								Vindex:  hashVindex,
+								Columns: sqlparser.MakeColumns("col"),
+							},
+						},
+
+						ParentForeignKeys: []vindexes.ParentFKInfo{
+							pkInfo(&vindexes.BaseTable{
+								Keyspace: shardedKeyspace,
+								Name:     sqlparser.NewIdentifierCS("t3"),
+
+								ColumnVindexes: []*vindexes.ColumnVindex{
+									{
+										Vindex:  hashVindex,
+										Columns: sqlparser.MakeColumns("col"),
+									},
+								},
+							}, []string{"col"}, []string{"col"}),
+						},
+					},
+				},
+			},
+			requiresEmulation: false,
+		},
+		{
+			name:  "no foreign keys",
+			query: "update t1 set col = 1 where foo = 3",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					unshardedKeyspace.Name: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.BaseTable{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: unshardedKeyspace,
+					},
+				},
+			},
+			requiresEmulation: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := sqlparser.NewTestParser().Parse(tt.query)
+			require.NoError(t, err)
+			semTable, err := Analyze(stmt, unshardedKeyspace.Name, tt.fakeSi)
+			require.NoError(t, err)
+			got := semTable.RequiresForeignKeyEmulation(stmt.(*sqlparser.Update).Exprs)
+			require.EqualValues(t, tt.requiresEmulation, got)
+		})
+	}
+}
+
 func TestHasNonLiteralForeignKeyUpdate(t *testing.T) {
 	keyspaceName := "ks"
 	t3Table := &vindexes.BaseTable{
@@ -894,7 +1237,7 @@ func TestHasNonLiteralForeignKeyUpdate(t *testing.T) {
 						Name:     sqlparser.NewIdentifierCS("t1"),
 						Keyspace: &vindexes.Keyspace{Name: keyspaceName},
 						ChildForeignKeys: []vindexes.ChildFKInfo{
-							ckInfo(t3Table, []string{"col"}, []string{"col"}, sqlparser.Cascade),
+							ckInfo(t3Table, []string{"col"}, []string{"col"}, sqlparser.Cascade, sqlparser.Cascade),
 						},
 					},
 				},
