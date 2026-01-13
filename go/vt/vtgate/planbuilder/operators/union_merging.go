@@ -131,6 +131,9 @@ func mergeUnionInputs(
 		if res != nil {
 			return res, exprs
 		}
+
+	case a == infoSchema && b == infoSchema:
+		return tryMergeUnionInfoSchemaRouting(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct)
 	}
 	return nil, nil
 }
@@ -174,6 +177,47 @@ func tryMergeUnionShardedRouting(
 	}
 
 	return nil, nil
+}
+
+func tryMergeUnionInfoSchemaRouting(
+	ctx *plancontext.PlanningContext,
+	routeA, routeB *Route,
+	exprsA, exprsB []sqlparser.SelectExpr,
+	distinct bool,
+) (Operator, []sqlparser.SelectExpr) {
+	isrA := routeA.Routing.(*InfoSchemaRouting)
+	isrB := routeB.Routing.(*InfoSchemaRouting)
+	emptyA := len(isrA.SysTableTableName) == 0 && len(isrA.SysTableTableSchema) == 0
+	emptyB := len(isrB.SysTableTableName) == 0 && len(isrB.SysTableTableSchema) == 0
+
+	switch {
+	// if either side has no predicates to help us route, we can merge them
+	case emptyA:
+		return createMergedUnion(ctx, routeA, routeB, exprsA, exprsB, distinct, isrB, nil)
+	case emptyB:
+		return createMergedUnion(ctx, routeA, routeB, exprsA, exprsB, distinct, isrA, nil)
+
+	// if we have no schema predicates on either side, we can merge if the table info is compatible
+	case len(isrA.SysTableTableSchema) == 0 && len(isrB.SysTableTableSchema) == 0:
+		for k, expr := range isrB.SysTableTableName {
+			if e, found := isrA.SysTableTableName[k]; found && !sqlparser.Equals.Expr(expr, e) {
+				// contradicting table names, give up
+				return nil, nil
+			}
+			isrA.SysTableTableName[k] = expr
+		}
+		return createMergedUnion(ctx, routeA, routeB, exprsA, exprsB, distinct, isrA, nil)
+
+	// if both sides have the same schema predicate, we can safely merge them
+	case equalExprs(isrA.SysTableTableSchema, isrB.SysTableTableSchema):
+		for k, expr := range isrB.SysTableTableName {
+			isrA.SysTableTableName[k] = expr
+		}
+		return createMergedUnion(ctx, routeA, routeB, exprsA, exprsB, distinct, isrA, nil)
+
+	default:
+		return nil, nil
+	}
 }
 
 func createMergedUnion(

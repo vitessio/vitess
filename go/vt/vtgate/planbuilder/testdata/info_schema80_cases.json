@@ -98,41 +98,18 @@
     "comment": "union of information_schema",
     "query": "select TABLE_NAME from information_schema.columns union select table_schema from information_schema.tables",
     "plan": {
-      "Type": "Complex",
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select TABLE_NAME from information_schema.columns union select table_schema from information_schema.tables",
       "Instructions": {
-        "OperatorType": "Distinct",
-        "Collations": [
-          "0: utf8mb3_general_ci"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Concatenate",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "DBA",
-                "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
-                },
-                "FieldQuery": "select `TABLE_NAME` from information_schema.`columns` where 1 != 1",
-                "Query": "select distinct `TABLE_NAME` from information_schema.`columns`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "DBA",
-                "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
-                },
-                "FieldQuery": "select table_schema from information_schema.`tables` where 1 != 1",
-                "Query": "select distinct table_schema from information_schema.`tables`"
-              }
-            ]
-          }
-        ]
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select `TABLE_NAME` from information_schema.`columns` where 1 != 1 union select table_schema from information_schema.`tables` where 1 != 1",
+        "Query": "select `TABLE_NAME` from information_schema.`columns` union select table_schema from information_schema.`tables`"
       }
     }
   },
@@ -837,42 +814,19 @@
     "comment": "select sum(found) from (select 1 as found from information_schema.`tables` where table_schema = 'music' union all (select 1 as found from information_schema.views where table_schema = 'music' limit 1)) as t",
     "query": "select sum(found) from (select 1 as found from information_schema.`tables` where table_schema = 'music' union all (select 1 as found from information_schema.views where table_schema = 'music' limit 1)) as t",
     "plan": {
-      "Type": "Complex",
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select sum(found) from (select 1 as found from information_schema.`tables` where table_schema = 'music' union all (select 1 as found from information_schema.views where table_schema = 'music' limit 1)) as t",
       "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Scalar",
-        "Aggregates": "sum(0) AS sum(`found`)",
-        "Inputs": [
-          {
-            "OperatorType": "Concatenate",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "DBA",
-                "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
-                },
-                "FieldQuery": "select 1 as `found` from information_schema.`tables` where 1 != 1",
-                "Query": "select 1 as `found` from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */",
-                "SysTableTableSchema": "['music']"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "DBA",
-                "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
-                },
-                "FieldQuery": "select 1 as `found` from information_schema.views where 1 != 1",
-                "Query": "select 1 as `found` from information_schema.views where table_schema = :__vtschemaname /* VARCHAR */ limit 1",
-                "SysTableTableSchema": "['music']"
-              }
-            ]
-          }
-        ]
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select sum(`found`) from (select 1 as `found` from information_schema.`tables` where 1 != 1 union all (select 1 as `found` from information_schema.views where 1 != 1)) as t where 1 != 1",
+        "Query": "select sum(`found`) from (select 1 as `found` from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */ union all (select 1 as `found` from information_schema.views where table_schema = :__vtschemaname /* VARCHAR */ limit 1)) as t",
+        "SysTableTableSchema": "['music']"
       }
     }
   },
@@ -880,35 +834,19 @@
     "comment": "union as a derived table",
     "query": "select found from (select 1 as found from information_schema.`tables` where table_schema = 'music' union all (select 1 as found from information_schema.views where table_schema = 'music' limit 1)) as t",
     "plan": {
-      "Type": "Complex",
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select found from (select 1 as found from information_schema.`tables` where table_schema = 'music' union all (select 1 as found from information_schema.views where table_schema = 'music' limit 1)) as t",
       "Instructions": {
-        "OperatorType": "Concatenate",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "DBA",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select 1 as `found` from information_schema.`tables` where 1 != 1",
-            "Query": "select 1 as `found` from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */",
-            "SysTableTableSchema": "['music']"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "DBA",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select 1 as `found` from information_schema.views where 1 != 1",
-            "Query": "select 1 as `found` from information_schema.views where table_schema = :__vtschemaname /* VARCHAR */ limit 1",
-            "SysTableTableSchema": "['music']"
-          }
-        ]
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select `found` from (select 1 as `found` from information_schema.`tables` where 1 != 1 union all (select 1 as `found` from information_schema.views where 1 != 1)) as t where 1 != 1",
+        "Query": "select `found` from (select 1 as `found` from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */ union all (select 1 as `found` from information_schema.views where table_schema = :__vtschemaname /* VARCHAR */ limit 1)) as t",
+        "SysTableTableSchema": "['music']"
       }
     }
   },
@@ -988,63 +926,19 @@
     "comment": "merge union subquery with outer query referencing the same system schemas",
     "query": "select 1 as found from information_schema.`tables` where table_name = 'music' and table_name = 'Music' and exists (select 1 as found from information_schema.`tables` where table_name = 'music' and table_name = 'Music' union all (select 1 as found from information_schema.views where table_name = 'music' and table_name = 'user' limit 1))",
     "plan": {
-      "Type": "Complex",
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select 1 as found from information_schema.`tables` where table_name = 'music' and table_name = 'Music' and exists (select 1 as found from information_schema.`tables` where table_name = 'music' and table_name = 'Music' union all (select 1 as found from information_schema.views where table_name = 'music' and table_name = 'user' limit 1))",
       "Instructions": {
-        "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutExists",
-        "PulloutVars": [
-          "__sq_has_values"
-        ],
-        "Inputs": [
-          {
-            "InputName": "SubQuery",
-            "OperatorType": "Limit",
-            "Count": "1",
-            "Inputs": [
-              {
-                "OperatorType": "Concatenate",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "DBA",
-                    "Keyspace": {
-                      "Name": "main",
-                      "Sharded": false
-                    },
-                    "FieldQuery": "select 1 as `found` from information_schema.`tables` where 1 != 1",
-                    "Query": "select 1 as `found` from information_schema.`tables` where `table_name` = :table_name1 /* VARCHAR */ and `table_name` = :table_name1 /* VARCHAR */ limit :__upper_limit",
-                    "SysTableTableName": "[table_name1:'Music']"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "DBA",
-                    "Keyspace": {
-                      "Name": "main",
-                      "Sharded": false
-                    },
-                    "FieldQuery": "select 1 as `found` from information_schema.views where 1 != 1",
-                    "Query": "select 1 as `found` from information_schema.views where `table_name` = :table_name2 /* VARCHAR */ and `table_name` = :table_name2 /* VARCHAR */ limit :__upper_limit",
-                    "SysTableTableName": "[table_name2:'user']"
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "InputName": "Outer",
-            "OperatorType": "Route",
-            "Variant": "DBA",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select 1 as `found` from information_schema.`tables` where 1 != 1",
-            "Query": "select 1 as `found` from information_schema.`tables` where `table_name` = :table_name /* VARCHAR */ and `table_name` = :table_name /* VARCHAR */ and :__sq_has_values",
-            "SysTableTableName": "[table_name:'Music']"
-          }
-        ]
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 as `found` from information_schema.`tables` where 1 != 1",
+        "Query": "select 1 as `found` from information_schema.`tables` where `table_name` = :table_name /* VARCHAR */ and `table_name` = :table_name /* VARCHAR */ and exists (select 1 as `found` from information_schema.`tables` where `table_name` = :table_name1 /* VARCHAR */ and `table_name` = :table_name1 /* VARCHAR */ union all (select 1 as `found` from information_schema.views where `table_name` = :table_name2 /* VARCHAR */ and `table_name` = :table_name2 /* VARCHAR */ limit 1))",
+        "SysTableTableName": "[table_name1:'Music', table_name2:'user', table_name:'Music']"
       }
     }
   },
@@ -1052,42 +946,19 @@
     "comment": "merge even one side have schema name in derived table",
     "query": "select * from (select TABLE_NAME from information_schema.tables t where t.TABLE_SCHEMA = 'a' union select TABLE_NAME from information_schema.columns) dt",
     "plan": {
-      "Type": "Complex",
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select * from (select TABLE_NAME from information_schema.tables t where t.TABLE_SCHEMA = 'a' union select TABLE_NAME from information_schema.columns) dt",
       "Instructions": {
-        "OperatorType": "Distinct",
-        "Collations": [
-          "0: utf8mb3_general_ci"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Concatenate",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "DBA",
-                "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
-                },
-                "FieldQuery": "select `TABLE_NAME` from information_schema.`tables` as t where 1 != 1",
-                "Query": "select distinct `TABLE_NAME` from information_schema.`tables` as t where t.TABLE_SCHEMA = :__vtschemaname /* VARCHAR */",
-                "SysTableTableSchema": "['a']"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "DBA",
-                "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
-                },
-                "FieldQuery": "select `TABLE_NAME` from information_schema.`columns` where 1 != 1",
-                "Query": "select distinct `TABLE_NAME` from information_schema.`columns`"
-              }
-            ]
-          }
-        ]
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select `TABLE_NAME` from (select `TABLE_NAME` from information_schema.`tables` as t where 1 != 1 union select `TABLE_NAME` from information_schema.`columns` where 1 != 1) as dt where 1 != 1",
+        "Query": "select `TABLE_NAME` from (select `TABLE_NAME` from information_schema.`tables` as t where t.TABLE_SCHEMA = :__vtschemaname /* VARCHAR */ union select `TABLE_NAME` from information_schema.`columns`) as dt",
+        "SysTableTableSchema": "['a']"
       }
     }
   },
@@ -1095,64 +966,19 @@
     "comment": "merge even one side have schema name in subquery",
     "query": "select `COLLATION_NAME` from information_schema.`COLUMNS` t where `COLUMN_NAME` in (select `TABLE_NAME` from information_schema.tables t where t.TABLE_SCHEMA = 'a' union select `COLUMN_NAME` from information_schema.columns)",
     "plan": {
-      "Type": "Complex",
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select `COLLATION_NAME` from information_schema.`COLUMNS` t where `COLUMN_NAME` in (select `TABLE_NAME` from information_schema.tables t where t.TABLE_SCHEMA = 'a' union select `COLUMN_NAME` from information_schema.columns)",
       "Instructions": {
-        "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "InputName": "SubQuery",
-            "OperatorType": "Distinct",
-            "Collations": [
-              "0: utf8mb3_general_ci"
-            ],
-            "Inputs": [
-              {
-                "OperatorType": "Concatenate",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "DBA",
-                    "Keyspace": {
-                      "Name": "main",
-                      "Sharded": false
-                    },
-                    "FieldQuery": "select `TABLE_NAME` from information_schema.`tables` as t where 1 != 1",
-                    "Query": "select distinct `TABLE_NAME` from information_schema.`tables` as t where t.TABLE_SCHEMA = :__vtschemaname /* VARCHAR */",
-                    "SysTableTableSchema": "['a']"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "DBA",
-                    "Keyspace": {
-                      "Name": "main",
-                      "Sharded": false
-                    },
-                    "FieldQuery": "select `COLUMN_NAME` from information_schema.`columns` where 1 != 1",
-                    "Query": "select distinct `COLUMN_NAME` from information_schema.`columns`"
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "InputName": "Outer",
-            "OperatorType": "Route",
-            "Variant": "DBA",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select COLLATION_NAME from information_schema.`COLUMNS` as t where 1 != 1",
-            "Query": "select COLLATION_NAME from information_schema.`COLUMNS` as t where :__sq_has_values and `COLUMN_NAME` in ::__sq1"
-          }
-        ]
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select COLLATION_NAME from information_schema.`COLUMNS` as t where 1 != 1",
+        "Query": "select COLLATION_NAME from information_schema.`COLUMNS` as t where `COLUMN_NAME` in (select `TABLE_NAME` from information_schema.`tables` as t where t.TABLE_SCHEMA = :__vtschemaname /* VARCHAR */ union select `COLUMN_NAME` from information_schema.`columns`)",
+        "SysTableTableSchema": "['a']"
       }
     }
   },
