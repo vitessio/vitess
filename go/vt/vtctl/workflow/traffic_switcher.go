@@ -1571,7 +1571,10 @@ func (ts *trafficSwitcher) mirrorTableTraffic(ctx context.Context, types []topod
 			if percent == 0 {
 				// When percent is 0, remove mirror rule if it exists.
 				if _, ok := mrs[fromTable][toTable]; ok {
-					delete(mrs, fromTable)
+					delete(mrs[fromTable], toTable)
+					if len(mrs[fromTable]) == 0 {
+						delete(mrs, fromTable)
+					}
 				}
 			} else {
 				mrs[fromTable][toTable] = percent
