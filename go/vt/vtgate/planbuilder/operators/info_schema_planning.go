@@ -42,6 +42,25 @@ type InfoSchemaRouting struct {
 	seenPredicates []sqlparser.Expr
 }
 
+func (isr *InfoSchemaRouting) extraInfo() string {
+	var parts []string
+	if len(isr.SysTableTableSchema) > 0 {
+		var exprs []string
+		for _, expr := range isr.SysTableTableSchema {
+			exprs = append(exprs, sqlparser.String(expr))
+		}
+		parts = append(parts, "SysTableTableSchema:["+strings.Join(exprs, ", ")+"]")
+	}
+	if len(isr.SysTableTableName) > 0 {
+		var exprs []string
+		for k, expr := range isr.SysTableTableName {
+			exprs = append(exprs, k+"="+sqlparser.String(expr))
+		}
+		parts = append(parts, "SysTableTableName:["+strings.Join(exprs, ", ")+"]")
+	}
+	return strings.Join(parts, " ")
+}
+
 func (isr *InfoSchemaRouting) UpdateRoutingParams(ctx *plancontext.PlanningContext, rp *engine.RoutingParameters) {
 	rp.SysTableTableSchema = nil
 	for _, expr := range isr.SysTableTableSchema {
@@ -224,15 +243,12 @@ func tryMergeInfoSchemaRoutings(ctx *plancontext.PlanningContext, routingA, rout
 }
 
 func equalExprs(a, b []sqlparser.Expr) bool {
-	if len(a) != len(b) {
-		return false
-	}
 	for i := range a {
-		if !sqlparser.Equals.Expr(a[i], b[i]) {
-			return false
+		if sqlparser.Equals.Expr(a[i], b[i]) {
+			return true
 		}
 	}
-	return true
+	return false
 }
 
 var (
