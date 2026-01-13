@@ -2107,7 +2107,7 @@ func sortAlterOptions(diff *AlterTableEntityDiff) {
 	optionOrder := func(opt sqlparser.AlterOption) int {
 		switch opt := opt.(type) {
 		case *sqlparser.DropKey:
-			if opt.Type == sqlparser.ForeignKeyType {
+			if opt.Type == sqlparser.ForeignKeyType || opt.Type == sqlparser.ConstraintType {
 				return 1
 			}
 			return 2
@@ -2267,7 +2267,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 						break
 					}
 				}
-			case sqlparser.ForeignKeyType, sqlparser.CheckKeyType:
+			case sqlparser.ForeignKeyType, sqlparser.CheckKeyType, sqlparser.ConstraintType:
 				for i, constraint := range c.TableSpec.Constraints {
 					if strings.EqualFold(constraint.Name.String(), opt.Name.String()) {
 						found = true
