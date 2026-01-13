@@ -2953,6 +2953,18 @@ func TestValidate(t *testing.T) {
 			alter: "alter table t drop column e",
 			to:    "create table t (id int, dateT datetime, primary key (id), constraint unix_epoch check (dateT < '1970-01-01'))",
 		},
+		{
+			name:      "drop check for foreign key constraint",
+			from:      "create table t (id int primary key, i int, constraint f foreign key (i) references parent(id))",
+			alter:     "alter table t drop check f",
+			expectErr: &ApplyKeyNotFoundError{Table: "t", Key: "f"},
+		},
+		{
+			name:      "drop foreign key for check constraint",
+			from:      "create table t (id int primary key, i int, constraint chk check (i > 0))",
+			alter:     "alter table t drop foreign key chk",
+			expectErr: &ApplyKeyNotFoundError{Table: "t", Key: "chk"},
+		},
 		// Foreign keys
 		{
 			name:      "existing foreign key, no such column",
