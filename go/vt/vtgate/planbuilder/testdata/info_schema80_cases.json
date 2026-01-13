@@ -854,35 +854,19 @@
     "comment": "merge system schema queries as long as they have any same table_schema",
     "query": "select 1 as found from information_schema.`tables` where table_schema = 'music' and table_schema = 'Music' union all (select 1 as found from information_schema.views where table_schema = 'music' and table_schema = 'user' limit 1)",
     "plan": {
-      "Type": "Complex",
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select 1 as found from information_schema.`tables` where table_schema = 'music' and table_schema = 'Music' union all (select 1 as found from information_schema.views where table_schema = 'music' and table_schema = 'user' limit 1)",
       "Instructions": {
-        "OperatorType": "Concatenate",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "DBA",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select 1 as `found` from information_schema.`tables` where 1 != 1",
-            "Query": "select 1 as `found` from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */ and table_schema = :__vtschemaname /* VARCHAR */",
-            "SysTableTableSchema": "['music', 'Music']"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "DBA",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select 1 as `found` from information_schema.views where 1 != 1",
-            "Query": "select 1 as `found` from information_schema.views where table_schema = :__vtschemaname /* VARCHAR */ and table_schema = :__vtschemaname /* VARCHAR */ limit 1",
-            "SysTableTableSchema": "['music', 'user']"
-          }
-        ]
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 as `found` from information_schema.`tables` where 1 != 1 union all (select 1 as `found` from information_schema.views where 1 != 1)",
+        "Query": "select 1 as `found` from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */ and table_schema = :__vtschemaname /* VARCHAR */ union all (select 1 as `found` from information_schema.views where table_schema = :__vtschemaname /* VARCHAR */ and table_schema = :__vtschemaname /* VARCHAR */ limit 1)",
+        "SysTableTableSchema": "['music', 'Music']"
       }
     }
   },
@@ -890,35 +874,19 @@
     "comment": "merge system schema queries as long as they have any same table_name",
     "query": "select 1 as found from information_schema.`tables` where table_schema = 'music' and table_schema = 'Music' union all (select 1 as found from information_schema.views where table_schema = 'music' and table_schema = 'user' limit 1)",
     "plan": {
-      "Type": "Complex",
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select 1 as found from information_schema.`tables` where table_schema = 'music' and table_schema = 'Music' union all (select 1 as found from information_schema.views where table_schema = 'music' and table_schema = 'user' limit 1)",
       "Instructions": {
-        "OperatorType": "Concatenate",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "DBA",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select 1 as `found` from information_schema.`tables` where 1 != 1",
-            "Query": "select 1 as `found` from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */ and table_schema = :__vtschemaname /* VARCHAR */",
-            "SysTableTableSchema": "['music', 'Music']"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "DBA",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select 1 as `found` from information_schema.views where 1 != 1",
-            "Query": "select 1 as `found` from information_schema.views where table_schema = :__vtschemaname /* VARCHAR */ and table_schema = :__vtschemaname /* VARCHAR */ limit 1",
-            "SysTableTableSchema": "['music', 'user']"
-          }
-        ]
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 as `found` from information_schema.`tables` where 1 != 1 union all (select 1 as `found` from information_schema.views where 1 != 1)",
+        "Query": "select 1 as `found` from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */ and table_schema = :__vtschemaname /* VARCHAR */ union all (select 1 as `found` from information_schema.views where table_schema = :__vtschemaname /* VARCHAR */ and table_schema = :__vtschemaname /* VARCHAR */ limit 1)",
+        "SysTableTableSchema": "['music', 'Music']"
       }
     }
   },
