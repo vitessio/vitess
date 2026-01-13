@@ -104,6 +104,10 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 		offsets[ae.ColumnName()] = i
 	}
 
+	if jp, ok := expr.(*predicates.JoinPredicate); ok {
+		expr = jp.Current()
+	}
+
 	needsFilter, exprPerSource := u.predicatePerSource(expr, offsets)
 	if needsFilter {
 		return newFilter(u, expr)
@@ -119,11 +123,6 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 func (u *Union) predicatePerSource(expr sqlparser.Expr, offsets map[string]int) (bool, []sqlparser.Expr) {
 	needsFilter := false
 	exprPerSource := make([]sqlparser.Expr, len(u.Sources))
-
-	// Unwrap JoinPredicate if needed
-	if jp, ok := expr.(*predicates.JoinPredicate); ok {
-		expr = jp.Current()
-	}
 
 	for i := range u.Sources {
 		predicate := sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
