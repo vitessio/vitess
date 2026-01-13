@@ -56,9 +56,11 @@ func TestNewSpan(t *testing.T) {
 	}
 	clientSpan, ctx := svc.New(t.Context(), "test-label")
 	require.NotEmpty(t, clientSpan)
+	require.NotNil(t, ctx)
 
 	clientSpan, ctx = svc.New(ctx, "client-span")
 	require.NotEmpty(t, clientSpan)
+	require.NotNil(t, ctx)
 
 	spanFromCtx, ok := svc.FromContext(context.Background())
 	require.False(t, ok)
