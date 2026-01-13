@@ -130,7 +130,7 @@ func (u *Union) predicatePerSource(expr sqlparser.Expr, offsets map[string]int) 
 
 			idx, ok := offsets[col.Name.Lowered()]
 			if !ok {
-				panic(vterrors.VT13001(fmt.Sprintf("column '%s' not found in UNION output columns", col.Name.String())))
+				panic(vterrors.VT13001(fmt.Sprintf("could not find the column '%s' on the UNION", sqlparser.String(col))))
 			}
 
 			sel := u.GetSelectFor(i)
