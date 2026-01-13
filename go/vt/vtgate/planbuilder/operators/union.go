@@ -109,11 +109,7 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 		ctx.PredTracker.Skip(jp.ID)
 	}
 
-	needsFilter, exprPerSource := u.predicatePerSource(expr, offsets)
-	if needsFilter {
-		return newFilter(u, expr)
-	}
-
+	exprPerSource := u.predicatePerSource(expr, offsets)
 	for i, src := range u.Sources {
 		u.Sources[i] = src.AddPredicate(ctx, exprPerSource[i])
 	}
@@ -121,8 +117,7 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	return u
 }
 
-func (u *Union) predicatePerSource(expr sqlparser.Expr, offsets map[string]int) (bool, []sqlparser.Expr) {
-	needsFilter := false
+func (u *Union) predicatePerSource(expr sqlparser.Expr, offsets map[string]int) []sqlparser.Expr {
 	exprPerSource := make([]sqlparser.Expr, len(u.Sources))
 
 	for i := range u.Sources {
@@ -134,9 +129,7 @@ func (u *Union) predicatePerSource(expr sqlparser.Expr, offsets map[string]int) 
 
 			idx, ok := offsets[col.Name.Lowered()]
 			if !ok {
-				needsFilter = true
-				cursor.StopTreeWalk()
-				return
+				panic(vterrors.VT13001(fmt.Sprintf("column '%s' not found in UNION output columns", col.Name.String())))
 			}
 
 			sel := u.GetSelectFor(i)
@@ -151,7 +144,7 @@ func (u *Union) predicatePerSource(expr sqlparser.Expr, offsets map[string]int) 
 		exprPerSource[i] = predicate
 	}
 
-	return needsFilter, exprPerSource
+	return exprPerSource
 }
 
 func (u *Union) GetSelectFor(source int) *sqlparser.Select {
