@@ -106,6 +106,7 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 
 	if jp, ok := expr.(*predicates.JoinPredicate); ok {
 		expr = jp.Current()
+		ctx.PredTracker.Skip(jp.ID)
 	}
 
 	needsFilter, exprPerSource := u.predicatePerSource(expr, offsets)
