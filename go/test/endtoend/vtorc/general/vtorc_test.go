@@ -681,7 +681,7 @@ func TestFullStatusConnectionPooling(t *testing.T) {
 	_ = curPrimary.VttabletProcess.Kill()
 
 	// Wait until VTOrc notices some problems
-	status, resp := utils.MakeAPICallRetry(t, vtorc, "/api/replication-analysis", func(_ int, response string) bool {
+	status, resp := utils.MakeAPICallRetry(t, vtorc, "/api/detection-analysis", func(_ int, response string) bool {
 		return response == "null"
 	})
 	assert.Equal(t, 200, status)
@@ -697,7 +697,7 @@ func TestFullStatusConnectionPooling(t *testing.T) {
 
 	// See that VTOrc eventually reports no errors.
 	// Wait until there are no problems and the api endpoint returns null
-	status, resp = utils.MakeAPICallRetry(t, vtorc, "/api/replication-analysis", func(_ int, response string) bool {
+	status, resp = utils.MakeAPICallRetry(t, vtorc, "/api/detection-analysis", func(_ int, response string) bool {
 		return response != "null"
 	})
 	assert.Equal(t, 200, status)
@@ -708,7 +708,7 @@ func TestFullStatusConnectionPooling(t *testing.T) {
 	_ = curPrimary.VttabletProcess.Kill()
 
 	// Wait until VTOrc notices some problems
-	status, resp = utils.MakeAPICallRetry(t, vtorc, "/api/replication-analysis", func(_ int, response string) bool {
+	status, resp = utils.MakeAPICallRetry(t, vtorc, "/api/detection-analysis", func(_ int, response string) bool {
 		return response == "null"
 	})
 	assert.Equal(t, 200, status)
@@ -724,7 +724,7 @@ func TestFullStatusConnectionPooling(t *testing.T) {
 
 	// See that VTOrc eventually reports no errors.
 	// Wait until there are no problems and the api endpoint returns null
-	status, resp = utils.MakeAPICallRetry(t, vtorc, "/api/replication-analysis", func(_ int, response string) bool {
+	status, resp = utils.MakeAPICallRetry(t, vtorc, "/api/detection-analysis", func(_ int, response string) bool {
 		return response != "null"
 	})
 	assert.Equal(t, 200, status)
