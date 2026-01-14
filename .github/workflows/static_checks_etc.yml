@@ -30,7 +30,7 @@ jobs:
           persist-credentials: 'false'
 
       - name: Run FOSSA scan and upload build data
-        uses: fossa-contrib/fossa-action@v3
+        uses: fossa-contrib/fossa-action@3d2ef181b1820d6dcd1972f86a767d18167fa19b # v3.0.1
         with:
           # This is a push-only API token: https://github.com/fossa-contrib/fossa-action#push-only-api-token
           fossa-api-key: f62c11ef0c249fef239947f01279aa0f
@@ -188,7 +188,7 @@ jobs:
 
       - name: Run golangci-lint
         if: steps.changes.outputs.go_files == 'true'
-        uses: golangci/golangci-lint-action@v9
+        uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.0.0
         with:
           args: --timeout 10m
           install-mode: "goinstall"
@@ -212,7 +212,7 @@ jobs:
 
       - name: Setup Node
         if: steps.changes.outputs.proto_changes == 'true'
-        uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4.0.3
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           # make proto requires newer node than the pre-installed one
           node-version: '22.13.1'
