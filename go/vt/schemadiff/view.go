@@ -324,18 +324,18 @@ func NewCreateViewEntityFromSQL(env *Environment, sql string) (*CreateViewEntity
 
 func (c *CreateViewEntity) normalize() {
 	// Drop the default algorithm
-	if strings.EqualFold(c.CreateView.Algorithm, "undefined") {
-		c.CreateView.Algorithm = ""
+	if strings.EqualFold(c.Algorithm, "undefined") {
+		c.Algorithm = ""
 	}
 	// Drop the default security model
-	if strings.EqualFold(c.CreateView.Security, "definer") {
-		c.CreateView.Security = ""
+	if strings.EqualFold(c.Security, "definer") {
+		c.Security = ""
 	}
 }
 
 // Name implements Entity interface
 func (c *CreateViewEntity) Name() string {
-	return c.CreateView.GetTable().Name.String()
+	return c.GetTable().Name.String()
 }
 
 // Diff implements Entity interface function
@@ -355,7 +355,7 @@ func (c *CreateViewEntity) ViewDiff(other *CreateViewEntity, _ *DiffHints) (*Alt
 	if !c.IsFullyParsed() {
 		return nil, &NotFullyParsedError{Entity: c.Name(), Statement: sqlparser.CanonicalString(c.CreateView)}
 	}
-	if !other.CreateView.IsFullyParsed() {
+	if !other.IsFullyParsed() {
 		return nil, &NotFullyParsedError{Entity: c.Name(), Statement: sqlparser.CanonicalString(other.CreateView)}
 	}
 
@@ -364,13 +364,13 @@ func (c *CreateViewEntity) ViewDiff(other *CreateViewEntity, _ *DiffHints) (*Alt
 	}
 
 	alterView := &sqlparser.AlterView{
-		ViewName:    c.CreateView.ViewName,
-		Algorithm:   other.CreateView.Algorithm,
-		Definer:     other.CreateView.Definer,
-		Security:    other.CreateView.Security,
-		Columns:     other.CreateView.Columns,
-		Select:      other.CreateView.Select,
-		CheckOption: other.CreateView.CheckOption,
+		ViewName:    c.ViewName,
+		Algorithm:   other.Algorithm,
+		Definer:     other.Definer,
+		Security:    other.Security,
+		Columns:     other.Columns,
+		Select:      other.Select,
+		CheckOption: other.CheckOption,
 	}
 	return &AlterViewEntityDiff{alterView: alterView, from: c, to: other}, nil
 }

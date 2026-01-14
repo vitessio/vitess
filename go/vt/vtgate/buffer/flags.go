@@ -47,7 +47,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagBoolVar(fs, &bufferEnabled, "enable-buffer", false, "Enable buffering (stalling) of primary traffic during failovers.")
 	utils.SetFlagBoolVar(fs, &bufferEnabledDryRun, "enable-buffer-dry-run", false, "Detect and log failover events, but do not actually buffer requests.")
 
-	utils.SetFlagDurationVar(fs, &bufferWindow, "buffer-window", 10*time.Second, "Duration for how long a request should be buffered at most.")
+	utils.SetFlagDurationVar(fs, &bufferWindow, "buffer-window", 10*time.Second, "Duration for how long a request should be buffered at most (should not be larger than --buffer-max-failover-duration).")
 	utils.SetFlagIntVar(fs, &bufferSize, "buffer-size", 1000, "Maximum number of buffered requests in flight (across all ongoing failovers).")
 	utils.SetFlagDurationVar(fs, &bufferMaxFailoverDuration, "buffer-max-failover-duration", 20*time.Second, "Stop buffering completely if a failover takes longer than this duration.")
 	utils.SetFlagDurationVar(fs, &bufferMinTimeBetweenFailovers, "buffer-min-time-between-failovers", 1*time.Minute, "Minimum time between the end of a failover and the start of the next one (tracked per shard). Faster consecutive failovers will not trigger buffering.")

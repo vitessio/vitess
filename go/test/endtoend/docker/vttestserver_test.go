@@ -17,17 +17,15 @@ limitations under the License.
 package docker
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-
-	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 func TestMain(m *testing.M) {
@@ -54,7 +52,7 @@ func TestUnsharded(t *testing.T) {
 			err = vtest.waitUntilDockerHealthy(10)
 			require.NoError(t, err)
 
-			ctx := context.Background()
+			ctx := t.Context()
 			vttestParams := mysql.ConnParams{
 				Host: "localhost",
 				Port: vtest.basePort + 3,
@@ -83,7 +81,7 @@ func TestSharded(t *testing.T) {
 			err = vtest.waitUntilDockerHealthy(10)
 			require.NoError(t, err)
 
-			ctx := context.Background()
+			ctx := t.Context()
 			vttestParams := mysql.ConnParams{
 				Host: "localhost",
 				Port: vtest.basePort + 3,
@@ -113,7 +111,7 @@ func TestMysqlMaxCons(t *testing.T) {
 			err = vtest.waitUntilDockerHealthy(10)
 			require.NoError(t, err)
 
-			ctx := context.Background()
+			ctx := t.Context()
 			vttestParams := mysql.ConnParams{
 				Host: "localhost",
 				Port: vtest.basePort + 3,
@@ -169,7 +167,7 @@ func TestLargeNumberOfKeyspaces(t *testing.T) {
 			err = vtest.waitUntilDockerHealthy(15)
 			require.NoError(t, err)
 
-			ctx := context.Background()
+			ctx := t.Context()
 			vttestParams := mysql.ConnParams{
 				Host: "localhost",
 				Port: vtest.basePort + 3,

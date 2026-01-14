@@ -65,7 +65,7 @@ func NewDBConnection(ctx context.Context, info dbconfigs.Connector) (*DBConnecti
 // Reconnect replaces the existing underlying connection with a new one,
 // if possible. Recycle should still be called afterwards.
 func (dbc *DBConnection) Reconnect(ctx context.Context) error {
-	dbc.Conn.Close()
+	dbc.Close()
 	newConn, err := dbc.info.Connect(ctx)
 	if err != nil {
 		return err

@@ -16,6 +16,7 @@
 
 set -u
 
+cell=${CELL:-'test'}
 external=${EXTERNAL_DB:-0}
 web_port=${WEB_PORT:-'8080'}
 config=${VTORC_CONFIG:-/vt/vtorc/config.json}
@@ -35,7 +36,8 @@ fi
 
 echo "Starting vtorc..."
 exec /vt/bin/vtorc \
-$TOPOLOGY_FLAGS \
---logtostderr=true \
---port $web_port \
---config $config
+  $TOPOLOGY_FLAGS \
+  --logtostderr=true \
+  --cell $cell \
+  --port $web_port \
+  --config $config

@@ -61,9 +61,9 @@ require (
 	github.com/uber/jaeger-lib v2.4.1+incompatible // indirect
 	github.com/yudai/golcs v0.0.0-20170316035057-ecda9a501e82
 	github.com/z-division/go-zookeeper v1.0.0
-	go.etcd.io/etcd/api/v3 v3.5.23
-	go.etcd.io/etcd/client/pkg/v3 v3.5.23
-	go.etcd.io/etcd/client/v3 v3.5.23
+	go.etcd.io/etcd/api/v3 v3.5.25
+	go.etcd.io/etcd/client/pkg/v3 v3.5.25
+	go.etcd.io/etcd/client/v3 v3.5.25
 	go.uber.org/mock v0.5.0
 	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/mod v0.29.0 // indirect
@@ -97,7 +97,6 @@ require (
 	github.com/bndr/gotabulate v1.1.2
 	github.com/dustin/go-humanize v1.0.1
 	github.com/gammazero/deque v1.1.0
-	github.com/google/go-github/v76 v76.0.0
 	github.com/google/safehtml v0.1.0
 	github.com/hashicorp/go-version v1.7.0
 	github.com/kr/pretty v0.3.1
@@ -126,14 +125,15 @@ require (
 	github.com/DataDog/go-runtime-metrics-internal v0.0.4-0.20250721125240-fdf1ef85b633 // indirect
 	github.com/DataDog/opentelemetry-mapping-go/pkg/otlp/attributes v0.29.1 // indirect
 	github.com/Masterminds/semver/v3 v3.4.0 // indirect
+	github.com/bitfield/gotestdox v0.2.2 // indirect
 	github.com/cihub/seelog v0.0.0-20170130134532-f561c5e57575 // indirect
 	github.com/cilium/ebpf v0.19.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.2.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
+	github.com/dnephin/pflag v1.0.7 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/google/btree v1.1.3 // indirect
-	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/pprof v0.0.0-20250820193118-f64d9cf942d6 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
@@ -152,6 +152,7 @@ require (
 	go.opentelemetry.io/otel/log v0.14.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
+	gotest.tools/gotestsum v1.13.0 // indirect
 	k8s.io/apimachinery v0.33.4 // indirect
 )
 
@@ -271,3 +272,5 @@ require (
 )
 
 exclude github.com/DataDog/opentelemetry-mapping-go/pkg/otlp/attributes v0.33.0
+
+tool gotest.tools/gotestsum

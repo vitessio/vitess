@@ -102,6 +102,7 @@ var (
 		regexp.MustCompile(`Illegal argument to a regular expression`),
 		regexp.MustCompile(`Incorrect arguments to regexp_substr`),
 		regexp.MustCompile(`Incorrect arguments to regexp_replace`),
+		regexp.MustCompile(`Invalid JSON path expression\. The error is around character position (\d+)\.`),
 	}
 )
 

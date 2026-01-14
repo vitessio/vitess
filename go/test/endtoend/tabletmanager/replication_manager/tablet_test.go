@@ -94,7 +94,7 @@ func TestMain(m *testing.M) {
 			VSchema:   vSchema,
 		}
 
-		if err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {
+		if err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false, clusterInstance.Cell); err != nil {
 			return 1
 		}
 
@@ -177,7 +177,7 @@ func getSidecarDBDDLQueryCount(tablet *cluster.VttabletProcess) (int64, error) {
 	return int64(val.(float64)), nil
 }
 func TestReplicationRepairAfterPrimaryTabletChange(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	// Check that initially replication is setup correctly on the replica tablet
 	err := waitForSourcePort(ctx, t, replicaTablet, int32(primaryTablet.MySQLPort))
 	require.NoError(t, err)

@@ -134,7 +134,7 @@ jobs:
       - name: Install goimports
         if: (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.visitor == 'true')
         run: |
-          go install golang.org/x/tools/cmd/goimports@latest
+          go install golang.org/x/tools/cmd/goimports@034e59c473362f8f2be47694d98fd3f12a1ad497 # v0.39.0
 
       - name: Run goimports
         if: steps.changes.outputs.go_files == 'true'

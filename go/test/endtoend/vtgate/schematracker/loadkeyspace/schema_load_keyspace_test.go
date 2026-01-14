@@ -73,7 +73,7 @@ func TestLoadKeyspaceWithNoTablet(t *testing.T) {
 		SchemaSQL: sqlSchema,
 	}
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-config-schema-change-signal")
-	err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false)
+	err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false, clusterInstance.Cell)
 	require.NoError(t, err)
 
 	// teardown vttablets
