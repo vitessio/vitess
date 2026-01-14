@@ -54,7 +54,7 @@ var (
 )
 
 func init() {
-	for _, cmd := range []string{"vttablet", "vtbackup"} {
+	for _, cmd := range []string{"vtcombo", "vttablet", "vtbackup", "vttestserver"} {
 		servenv.OnParseFor(cmd, registerCloneFlags)
 	}
 }

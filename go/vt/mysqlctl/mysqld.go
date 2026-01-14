@@ -138,7 +138,7 @@ func init() {
 	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtcombo", "vttablet", "vttestserver"} {
 		servenv.OnParseFor(cmd, registerPoolFlags)
 	}
-	for _, cmd := range []string{"vttablet", "vtbackup"} {
+	for _, cmd := range []string{"vtcombo", "vttablet", "vtbackup", "vttestserver"} {
 		servenv.OnParseFor(cmd, registerMySQLDCloneFlags)
 	}
 }
