@@ -33,9 +33,6 @@ import (
 type Session interface {
 	// GetSessionUUID returns the session's UUID.
 	GetSessionUUID() string
-
-	// GetOptions returns the current execute options.
-	GetOptions() *querypb.ExecuteOptions
 }
 
 // QueryService is the interface implemented by the tablet's query service.
@@ -50,7 +47,7 @@ type QueryService interface {
 	// Transaction management
 
 	// Begin returns the transaction id to use for further operations
-	Begin(ctx context.Context, session Session, target *querypb.Target) (TransactionState, error)
+	Begin(ctx context.Context, session Session, target *querypb.Target, options *querypb.ExecuteOptions) (TransactionState, error)
 
 	// Commit commits the current transaction
 	Commit(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error)
@@ -89,16 +86,16 @@ type QueryService interface {
 	UnresolvedTransactions(ctx context.Context, target *querypb.Target, abandonAgeSeconds int64) ([]*querypb.TransactionMetadata, error)
 
 	// Execute for query execution
-	Execute(ctx context.Context, session Session, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64) (*sqltypes.Result, error)
+	Execute(ctx context.Context, session Session, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error)
 	// StreamExecute for query execution with streaming
-	StreamExecute(ctx context.Context, session Session, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, callback func(*sqltypes.Result) error) error
+	StreamExecute(ctx context.Context, session Session, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error
 
 	// Combo methods, they also return the transactionID from the
 	// Begin part. If err != nil, the transactionID may still be
 	// non-zero, and needs to be propagated back (like for a DB
 	// Integrity Error)
-	BeginExecute(ctx context.Context, session Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64) (TransactionState, *sqltypes.Result, error)
-	BeginStreamExecute(ctx context.Context, session Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, callback func(*sqltypes.Result) error) (TransactionState, error)
+	BeginExecute(ctx context.Context, session Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (TransactionState, *sqltypes.Result, error)
+	BeginStreamExecute(ctx context.Context, session Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (TransactionState, error)
 
 	// Messaging methods.
 	MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) error
@@ -123,13 +120,13 @@ type QueryService interface {
 	// HandlePanic will be called if any of the functions panic.
 	HandlePanic(err *error)
 
-	ReserveBeginExecute(ctx context.Context, session Session, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable) (ReservedTransactionState, *sqltypes.Result, error)
+	ReserveBeginExecute(ctx context.Context, session Session, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (ReservedTransactionState, *sqltypes.Result, error)
 
-	ReserveBeginStreamExecute(ctx context.Context, session Session, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (ReservedTransactionState, error)
+	ReserveBeginStreamExecute(ctx context.Context, session Session, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (ReservedTransactionState, error)
 
-	ReserveExecute(ctx context.Context, session Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64) (ReservedState, *sqltypes.Result, error)
+	ReserveExecute(ctx context.Context, session Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (ReservedState, *sqltypes.Result, error)
 
-	ReserveStreamExecute(ctx context.Context, session Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, callback func(*sqltypes.Result) error) (ReservedState, error)
+	ReserveStreamExecute(ctx context.Context, session Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (ReservedState, error)
 
 	Release(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error
 

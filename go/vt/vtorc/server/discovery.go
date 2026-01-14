@@ -17,12 +17,44 @@ limitations under the License.
 package server
 
 import (
+	"context"
+
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/logic"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
+// validateCell checks that the provided cell exists.
+func validateCell(cell string) error {
+	if cell == "" {
+		// TODO: remove warning in v25+, make flag required.
+		log.Warning("WARNING: --cell will become a required vtorc flag in v25 and up")
+		return nil
+	}
+
+	// TODO: pass a single *topo.Server into VTOrc down from StartVTOrcDiscovery().
+	// This will require some general refactoring.
+	ts := topo.Open()
+	defer ts.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+	defer cancel()
+	_, err := ts.GetCellInfo(ctx, cell, true /* strongRead */)
+	return err
+}
+
 // StartVTOrcDiscovery starts VTOrc discovery serving
-func StartVTOrcDiscovery() {
+func StartVTOrcDiscovery() error {
+	cell := config.GetCell()
+	if err := validateCell(cell); err != nil {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to validate cell %s: %+v", cell, err)
+	}
+
 	log.Info("Starting Discovery")
 	go logic.ContinuousDiscovery()
+	return nil
 }

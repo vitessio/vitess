@@ -52,7 +52,7 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 	vc.AddKeyspace(t, []*Cell{defaultCell}, defaultSourceKs, "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
 	verifyClusterHealth(t, vc)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
 	if err != nil {
 		log.Fatal(err)
@@ -228,7 +228,7 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 	t.Run("VStreamFrom", func(t *testing.T) {
 		testVStreamFrom(t, vtgate, "product", 2)
 	})
-	ctx := context.Background()
+	ctx := t.Context()
 	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
 	if err != nil {
 		log.Fatal(err)
@@ -439,7 +439,7 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "sharded", "-80,80-", vschemaSharded, schemaSharded, defaultReplicas, defaultRdonly, baseTabletID+200, nil)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
 	if err != nil {
 		log.Fatal(err)
@@ -582,7 +582,7 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEven
 	_, err = vc.AddKeyspace(t, []*Cell{defaultCell}, "sharded", "-80,80-", vschemaSharded, schemaSharded, defaultReplicas, defaultRdonly, baseTabletID+200, nil)
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
 	if err != nil {
 		log.Fatal(err)
@@ -706,7 +706,7 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEven
 // old shards -- which are in the VGTID from the previous stream -- and that
 // we miss no row events during the process.
 func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ks := "testks"
 	wf := "multiVStreamsKeyspaceReshard"
 	baseTabletID := 100
@@ -903,7 +903,7 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 // TestMultiVStreamsKeyspaceStopOnReshard confirms that journal events are received
 // when resuming a VStream after a reshard.
 func TestMultiVStreamsKeyspaceStopOnReshard(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ks := "testks"
 	wf := "multiVStreamsKeyspaceReshard"
 	baseTabletID := 100

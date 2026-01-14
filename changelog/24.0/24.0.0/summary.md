@@ -14,11 +14,13 @@
         - [JSON_EXTRACT now supports dynamic path arguments](#query-serving-json-extract-dynamic-args)
     - **[VTTablet](#minor-changes-vttablet)**
         - [New Experimental flag `--init-tablet-type-lookup`](#vttablet-init-tablet-type-lookup)
+        - [QueryThrottler Observability Metrics](#vttablet-querythrottler-metrics)
         - [New `in_order_completion_pending_count` field in OnlineDDL outputs](#vttablet-onlineddl-in-order-completion-count)
         - [Tablet Shutdown Tracking and Connection Validation](#vttablet-tablet-shutdown-validation)
     - **[VTOrc](#minor-changes-vtorc)**
         - [Deprecated VTOrc Metric Removed](#vtorc-deprecated-metric-removed)
         - [Improved VTOrc Discovery Logging](#vtorc-improved-discovery-logging)
+        - [New `--cell` Flag](#vtorc-cell-flag)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -74,6 +76,21 @@ When enabled, the tablet uses its alias to look up the tablet type from the exis
 
 **Note**: Vitess Operator–managed deployments generally do not keep tablet records in the topo between restarts, so this feature will not take effect in those environments.
 
+#### <a id="vttablet-querythrottler-metrics"/>QueryThrottler Observability Metrics</a>
+
+VTTablet now exposes new metrics to track QueryThrottler behavior.
+
+Four new metrics have been added:
+
+- **QueryThrottlerRequests**: Total number of requests evaluated by the query throttler
+- **QueryThrottlerThrottled**: Number of requests that were throttled
+- **QueryThrottlerTotalLatencyNs**: Total time each request takes in query throttling, including evaluation, metric checks, and other overhead (nanoseconds)
+- **QueryThrottlerEvaluateLatencyNs**: Time taken to make the throttling decision (nanoseconds)
+
+All metrics include labels for `Strategy`, `Workload`, and `Priority`. The `QueryThrottlerThrottled` metric has additional labels for `MetricName`, `MetricValue`, and `DryRun` to identify which metric triggered the throttling and whether it occurred in dry-run mode.
+
+These metrics help monitor throttling patterns, identify which workloads are throttled, measure performance overhead, and validate behavior in dry-run mode before configuration changes.
+
 #### <a id="vttablet-onlineddl-in-order-completion-count"/>New `in_order_completion_pending_count` field in OnlineDDL outputs</a>
 
 OnlineDDL migration outputs now include a new `in_order_completion_pending_count` field. When using the `--in-order-completion` flag, this field shows how many migrations must complete before the current migration. The field is visible in `SHOW vitess_migrations` queries and `vtctldclient OnlineDDL <db> show` outputs.
@@ -105,3 +122,13 @@ The `discoverInstanceTimings` metric has been removed from VTOrc in v24.0.0. Thi
 VTOrc's `DiscoverInstance` function now includes the tablet alias in all log messages and uses the correct log level when errors occur. Previously, error messages did not indicate which tablet failed discovery, and errors were logged at INFO level instead of ERROR level.
 
 This improvement makes it easier to identify and debug issues with specific tablets when discovery operations fail.
+
+#### <a id="vtorc-cell-flag"/>New `--cell` Flag</a>
+
+VTOrc now supports a `--cell` flag that specifies which Vitess cell the VTOrc process is running in. The flag is optional in v24 but will be required in v25+, similar to VTGate's `--cell` flag.
+
+When provided, VTOrc validates that the cell exists in the topology service on startup. Without the flag, VTOrc logs a warning about the v25+ flag requirement.
+
+This enables future cross-cell problem validation, where VTOrc will be able to ask another cell to validate detected problems before taking recovery actions. The flag is currently validated but not yet used in VTOrc recovery logic.
+
+**Note**: If you're running VTOrc in a multi-cell deployment, start using the `--cell` flag now to prepare for the v25 requirement.

@@ -1,5 +1,5 @@
 /*
-Copyright 2025 The Vitess Authors.
+Copyright 2026 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,29 +18,30 @@ package mysqlctl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/olekukonko/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/logutil"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtenv"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vttls"
 )
 
 func TestBuildCloneCommand(t *testing.T) {
@@ -71,12 +72,105 @@ func TestBuildCloneCommand(t *testing.T) {
 			},
 			expected: "CLONE INSTANCE FROM 'clone_user'@'10.0.0.50':3307 IDENTIFIED BY 'password' REQUIRE NO SSL",
 		},
+		{
+			name: "with escaping",
+			executor: &CloneExecutor{
+				DonorHost:     "host'one",
+				DonorPort:     3310,
+				DonorUser:     "user\\name",
+				DonorPassword: "pass'word",
+				UseSSL:        true,
+			},
+			expected: fmt.Sprintf("CLONE INSTANCE FROM %s@%s:%d IDENTIFIED BY %s REQUIRE SSL",
+				sqltypes.EncodeStringSQL("user\\name"),
+				sqltypes.EncodeStringSQL("host'one"),
+				3310,
+				sqltypes.EncodeStringSQL("pass'word")),
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := tt.executor.buildCloneCommand()
 			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestDonorConnParamsSSLMode(t *testing.T) {
+	tests := []struct {
+		name     string
+		useSSL   bool
+		expected vttls.SslMode
+	}{
+		{
+			name:     "ssl required",
+			useSSL:   true,
+			expected: vttls.Required,
+		},
+		{
+			name:     "ssl disabled",
+			useSSL:   false,
+			expected: vttls.Disabled,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			executor := &CloneExecutor{
+				DonorHost:     "127.0.0.1",
+				DonorPort:     3306,
+				DonorUser:     "vt_clone",
+				DonorPassword: "secret",
+				UseSSL:        tt.useSSL,
+			}
+
+			params := executor.donorConnParams()
+			assert.Equal(t, tt.expected, params.SslMode)
+		})
+	}
+}
+
+func TestIsCloneConnError(t *testing.T) {
+	serverGone := sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "gone")
+	serverLost := sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "lost")
+	accessDenied := sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, sqlerror.SSUnknownSQLState, "access denied")
+
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{
+			name:     "server gone",
+			err:      serverGone,
+			expected: true,
+		},
+		{
+			name:     "server lost",
+			err:      serverLost,
+			expected: true,
+		},
+		{
+			name:     "wrapped server lost",
+			err:      fmt.Errorf("wrapped: %w", serverLost),
+			expected: true,
+		},
+		{
+			name:     "access denied",
+			err:      accessDenied,
+			expected: false,
+		},
+		{
+			name:     "non sql error",
+			err:      assert.AnError,
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, isCloneConnError(tt.err))
 		})
 	}
 }
@@ -177,7 +271,7 @@ func Test_waitForCloneComplete(t *testing.T) {
 			err := executor.waitForCloneComplete(context.Background(), fmd, 5*time.Second)
 			if tt.expectError {
 				require.Error(t, err)
-				assert.Contains(t, err.Error(), tt.errorContain)
+				assert.ErrorContains(t, err, tt.errorContain)
 			} else {
 				require.NoError(t, err)
 			}
@@ -201,7 +295,7 @@ func Test_waitForCloneComplete_Timeout(t *testing.T) {
 
 	err := executor.waitForCloneComplete(context.Background(), fmd, 100*time.Millisecond)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "timeout")
+	assert.ErrorContains(t, err, "timeout")
 }
 
 func Test_waitForCloneComplete_ContextCanceled(t *testing.T) {
@@ -276,7 +370,7 @@ func TestValidateRecipient(t *testing.T) {
 			fmd.Version = tt.version
 			if tt.pluginQuery != nil {
 				fmd.FetchSuperQueryMap = map[string]*sqltypes.Result{
-					"SELECT PLUGIN_STATUS FROM information_schema.PLUGINS WHERE PLUGIN_NAME = 'clone'": tt.pluginQuery,
+					clonePluginStatusQuery: tt.pluginQuery,
 				}
 			}
 
@@ -288,10 +382,10 @@ func TestValidateRecipient(t *testing.T) {
 				UseSSL:        false,
 			}
 
-			err := executor.ValidateRecipient(context.Background(), fmd)
+			err := executor.validateRecipient(context.Background(), fmd)
 			if tt.expectError {
 				require.Error(t, err)
-				assert.Contains(t, err.Error(), tt.errorContain)
+				assert.ErrorContains(t, err, tt.errorContain)
 			} else {
 				require.NoError(t, err)
 			}
@@ -498,6 +592,16 @@ func TestCloneFromDonor(t *testing.T) {
 		wantErrContains  string
 	}{
 		{
+			name:             "both cloneFromPrimary and cloneFromTablet specified",
+			cloneFromPrimary: true,
+			cloneFromTablet:  "cell1-100",
+			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
+				// No setup needed, mutual exclusivity check happens first
+			},
+			wantErr:         true,
+			wantErrContains: "mutually exclusive",
+		},
+		{
 			name:             "clone from primary, get shard fails",
 			cloneFromPrimary: true,
 			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
@@ -561,16 +665,6 @@ func TestCloneFromDonor(t *testing.T) {
 			wantErrContains: "clone user not configured",
 		},
 		{
-			name:            "recipient validation fails",
-			cloneFromTablet: "cell1-100",
-			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
-				// Configure mysqld to return an old MySQL version
-				env.mysqld.Version = "8.0.16"
-			},
-			wantErr:         true,
-			wantErrContains: "recipient validation failed",
-		},
-		{
 			name:            "get position after clone fails",
 			cloneFromTablet: "cell1-100",
 			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
@@ -581,7 +675,12 @@ func TestCloneFromDonor(t *testing.T) {
 			wantErrContains: "failed to get position after clone",
 		},
 		{
-			name:            "success",
+			name:             "success with clone-from-primary",
+			cloneFromPrimary: true,
+			wantErr:          false,
+		},
+		{
+			name:            "success with clone-from-tablet",
 			cloneFromTablet: "cell1-100",
 			wantErr:         false,
 		},

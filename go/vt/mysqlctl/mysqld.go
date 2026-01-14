@@ -138,7 +138,7 @@ func init() {
 	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtcombo", "vttablet", "vttestserver"} {
 		servenv.OnParseFor(cmd, registerPoolFlags)
 	}
-	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtcombo", "vttablet", "vttestserver", "vtbackup"} {
+	for _, cmd := range []string{"vttablet", "vtbackup"} {
 		servenv.OnParseFor(cmd, registerMySQLDCloneFlags)
 	}
 }
@@ -150,10 +150,6 @@ func registerMySQLDFlags(fs *pflag.FlagSet) {
 	utils.SetFlagDurationVar(fs, &replicationConnectRetry, "replication-connect-retry", replicationConnectRetry, "how long to wait in between replica reconnect attempts. Only precise to the second.")
 }
 
-func registerMySQLDCloneFlags(fs *pflag.FlagSet) {
-	utils.SetFlagBoolVar(fs, &mysqlCloneEnabled, "mysql-clone-enabled", mysqlCloneEnabled, "Enable MySQL CLONE plugin and user for backup/replica provisioning (requires MySQL 8.0.17+)")
-}
-
 // MySQLCloneEnabled returns whether MySQL CLONE support is enabled.
 func MySQLCloneEnabled() bool {
 	return mysqlCloneEnabled
@@ -162,6 +158,10 @@ func MySQLCloneEnabled() bool {
 // SetMySQLCloneEnabled sets the MySQL CLONE enabled flag. This is intended for testing.
 func SetMySQLCloneEnabled(enabled bool) {
 	mysqlCloneEnabled = enabled
+}
+
+func registerMySQLDCloneFlags(fs *pflag.FlagSet) {
+	utils.SetFlagBoolVar(fs, &mysqlCloneEnabled, "mysql-clone-enabled", mysqlCloneEnabled, "Enable MySQL CLONE plugin and user for backup/replica provisioning (requires MySQL 8.0.17+)")
 }
 
 func registerReparentFlags(fs *pflag.FlagSet) {
@@ -995,9 +995,15 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 	myTemplateSource.WriteString(versionConfig)
 
 	// Conditionally include clone plugin config
-	if mysqlCloneEnabled && mysqld.capabilities.isMySQLLike() {
-		myTemplateSource.WriteString("\n## Clone plugin (--mysql-clone-enabled)\n")
-		myTemplateSource.WriteString(config.MycnfClone)
+	if mysqlCloneEnabled && f == FlavorMySQL {
+		v := mysqld.capabilities.version
+		if v.Major < 8 || (v.Major == 8 && v.Minor == 0 && v.Patch < 17) {
+			log.Warningf("--mysql-clone-enabled is set but MySQL version %d.%d.%d does not support CLONE (requires 8.0.17+); flag will be ignored",
+				v.Major, v.Minor, v.Patch)
+		} else {
+			myTemplateSource.WriteString("\n## Clone plugin (--mysql-clone-enabled)\n")
+			myTemplateSource.WriteString(config.MycnfClone)
+		}
 	}
 
 	if extraCnf := os.Getenv("EXTRA_MY_CNF"); extraCnf != "" {
