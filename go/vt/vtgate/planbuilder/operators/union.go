@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
@@ -103,6 +104,11 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 		offsets[ae.ColumnName()] = i
 	}
 
+	if jp, ok := expr.(*predicates.JoinPredicate); ok {
+		expr = jp.Current()
+		ctx.PredTracker.Skip(jp.ID)
+	}
+
 	needsFilter, exprPerSource := u.predicatePerSource(expr, offsets)
 	if needsFilter {
 		return newFilter(u, expr)
@@ -118,6 +124,7 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 func (u *Union) predicatePerSource(expr sqlparser.Expr, offsets map[string]int) (bool, []sqlparser.Expr) {
 	needsFilter := false
 	exprPerSource := make([]sqlparser.Expr, len(u.Sources))
+
 	for i := range u.Sources {
 		predicate := sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 			col, ok := cursor.Node().(*sqlparser.ColName)
@@ -137,11 +144,13 @@ func (u *Union) predicatePerSource(expr sqlparser.Expr, offsets map[string]int) 
 			if !ok {
 				panic(vterrors.VT09015())
 			}
+
 			cursor.Replace(ae.Expr)
 		}, nil).(sqlparser.Expr)
 
 		exprPerSource[i] = predicate
 	}
+
 	return needsFilter, exprPerSource
 }
 
