@@ -2086,68 +2086,6 @@
         "user.user"
       ]
     }
-<<<<<<< HEAD
-=======
-  },
-  {
-    "comment": "UNION with column aliases ",
-    "query": "(SELECT `team_id` AS `foo` FROM user WHERE `team_id` = 1 ORDER BY `id` DESC LIMIT 1) UNION ALL (SELECT `team_id` AS `foo` FROM user WHERE `team_id` = 2 ORDER BY `id` DESC LIMIT 1)",
-    "plan": {
-      "Type": "Complex",
-      "QueryType": "SELECT",
-      "Original": "(SELECT `team_id` AS `foo` FROM user WHERE `team_id` = 1 ORDER BY `id` DESC LIMIT 1) UNION ALL (SELECT `team_id` AS `foo` FROM user WHERE `team_id` = 2 ORDER BY `id` DESC LIMIT 1)",
-      "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "ColumnNames": [
-          "0:foo"
-        ],
-        "Columns": "0",
-        "Inputs": [
-          {
-            "OperatorType": "Concatenate",
-            "Inputs": [
-              {
-                "OperatorType": "Limit",
-                "Count": "1",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select team_id as foo, id, weight_string(id) from `user` where 1 != 1",
-                    "OrderBy": "(1|2) DESC",
-                    "Query": "select team_id as foo, id, weight_string(id) from `user` where team_id = 1 order by id desc limit 1"
-                  }
-                ]
-              },
-              {
-                "OperatorType": "Limit",
-                "Count": "1",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select team_id as foo, id, weight_string(id) from `user` where 1 != 1",
-                    "OrderBy": "(1|2) DESC",
-                    "Query": "select team_id as foo, id, weight_string(id) from `user` where team_id = 2 order by id desc limit 1"
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      },
-      "TablesUsed": [
-        "user.user"
-      ]
-    }
   },
   {
     "comment": "join with derived table containing UNION with aliased columns across different keyspaces",
@@ -2163,6 +2101,7 @@
         "JoinVars": {
           "u_id": 0
         },
+        "TableName": "`user`_`user`_unsharded",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2172,7 +2111,8 @@
               "Sharded": true
             },
             "FieldQuery": "select u.id from `user` as u where 1 != 1",
-            "Query": "select u.id from `user` as u"
+            "Query": "select u.id from `user` as u",
+            "Table": "`user`"
           },
           {
             "OperatorType": "Distinct",
@@ -2192,6 +2132,7 @@
                     },
                     "FieldQuery": "select dt.c0 as pid, weight_string(dt.c0) from (select id as pid from `user` where 1 != 1) as dt(c0) where 1 != 1",
                     "Query": "select dt.c0 as pid, weight_string(dt.c0) from (select distinct id as pid from `user` where id = 1 and id = :u_id) as dt(c0)",
+                    "Table": "`user`",
                     "Values": [
                       ":u_id"
                     ],
@@ -2205,7 +2146,8 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select dt.c0 as pid, weight_string(dt.c0) from (select id as pid from unsharded where 1 != 1) as dt(c0) where 1 != 1",
-                    "Query": "select dt.c0 as pid, weight_string(dt.c0) from (select distinct id as pid from unsharded where id = 1 and id = :u_id) as dt(c0)"
+                    "Query": "select dt.c0 as pid, weight_string(dt.c0) from (select distinct id as pid from unsharded where id = 1 and id = :u_id) as dt(c0)",
+                    "Table": "unsharded"
                   }
                 ]
               }
@@ -2218,6 +2160,5 @@
         "user.user"
       ]
     }
->>>>>>> 737e635fbd (Fix cross shard/keyspace joins with derived tables containing a `UNION`. (#19046))
   }
 ]
