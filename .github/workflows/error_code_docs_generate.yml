@@ -1,0 +1,72 @@
+# Generates error code documentation when go/vt/vterrors/code.go is modified.
+name: Generate error code docs
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    paths:
+      - "go/vt/vterrors/code.go"
+
+permissions:
+  contents: read
+
+jobs:
+  generate_error_codes:
+    name: Generate error codes
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout vitess
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        with:
+          go-version-file: go.mod
+
+      - name: Generate error codes
+        run: |
+          go run ./go/vt/vterrors/vterrorsgen > /tmp/error_codes.txt
+          echo "Error codes generated successfully"
+
+      - name: Determine docs version
+        id: docs_version
+        run: |
+          BASE_REF="${{ github.base_ref }}"
+
+          if [[ "$BASE_REF" == "main" ]]; then
+            echo "target_branch=main" >> "$GITHUB_OUTPUT"
+            echo "Targeting main branch, version will be determined by update workflow"
+          elif [[ "$BASE_REF" =~ ^release-([0-9]+\.[0-9]+)$ ]]; then
+            VERSION="${BASH_REMATCH[1]}"
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "target_branch=$BASE_REF" >> "$GITHUB_OUTPUT"
+            echo "Docs version (from release branch): $VERSION"
+          else
+            echo "Unknown base ref: $BASE_REF, skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Prepare artifact metadata
+        if: steps.docs_version.outputs.skip != 'true'
+        run: |
+          mkdir -p /tmp/artifact
+          cp /tmp/error_codes.txt /tmp/artifact/
+
+          cat > /tmp/artifact/metadata.json << EOF
+          {
+            "pr_number": ${{ github.event.pull_request.number }},
+            "base_ref": "${{ github.base_ref }}",
+            "version": "${{ steps.docs_version.outputs.version }}",
+            "target_branch": "${{ steps.docs_version.outputs.target_branch }}",
+            "head_sha": "${{ github.event.pull_request.head.sha }}"
+          }
+          EOF
+
+      - name: Upload artifact
+        if: steps.docs_version.outputs.skip != 'true'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: error-codes-${{ github.event.pull_request.number }}
+          path: /tmp/artifact/
+          retention-days: 1
