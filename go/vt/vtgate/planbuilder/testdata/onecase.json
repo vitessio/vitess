@@ -1,8 +1,9 @@
 [
   {
-    "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "",
+    "comment": "systable union query in derived tables with join",
+    "query": "SELECT 1 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu  INNER JOIN (SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS cols WHERE cols.TABLE_SCHEMA = 'ks' AND cols.TABLE_NAME = 't1' UNION SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS cols WHERE cols.TABLE_SCHEMA = 'ks' AND cols.TABLE_NAME = 't7_xxhash') cols ON kcu.TABLE_SCHEMA = cols.TABLE_SCHEMA AND kcu.TABLE_NAME = cols.TABLE_NAME AND kcu.COLUMN_NAME = cols.COLUMN_NAME WHERE kcu.TABLE_SCHEMA = 'ks' AND kcu.TABLE_NAME = 't1'",
     "plan": {
+
     }
   }
 ]

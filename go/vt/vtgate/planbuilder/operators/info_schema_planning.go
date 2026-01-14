@@ -100,7 +100,7 @@ func (isr *InfoSchemaRouting) Clone() Routing {
 
 func (isr *InfoSchemaRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Routing {
 	isr.seenPredicates = append(isr.seenPredicates, expr)
-	isTableSchema, bvName, out := extractInfoSchemaRoutingPredicate(ctx, expr)
+	isTableSchema, bvName, out := extractInfoSchemaRoutingPredicate(ctx, sqlparser.CloneExpr(expr))
 	if out == nil {
 		return isr
 	}
@@ -220,6 +220,7 @@ func tryMergeInfoSchemaRoutings(ctx *plancontext.PlanningContext, routingA, rout
 
 	// if we have no schema predicates on either side, we can merge if the table info is the same
 	case len(isrA.SysTableTableSchema) == 0 && len(isrB.SysTableTableSchema) == 0:
+		isrA.seenPredicates = append(isrA.seenPredicates, isrB.seenPredicates...)
 		for k, expr := range isrB.SysTableTableName {
 			if e, found := isrA.SysTableTableName[k]; found && !sqlparser.Equals.Expr(expr, e) {
 				// schema names are the same, but we have contradicting table names, so we give up
@@ -231,6 +232,7 @@ func tryMergeInfoSchemaRoutings(ctx *plancontext.PlanningContext, routingA, rout
 
 	// if both sides have the same schema predicate, we can safely merge them
 	case equalExprs(isrA.SysTableTableSchema, isrB.SysTableTableSchema):
+		isrA.seenPredicates = append(isrA.seenPredicates, isrB.seenPredicates...)
 		for k, expr := range isrB.SysTableTableName {
 			isrA.SysTableTableName[k] = expr
 		}

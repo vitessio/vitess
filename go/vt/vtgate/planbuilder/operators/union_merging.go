@@ -199,6 +199,7 @@ func tryMergeUnionInfoSchemaRouting(
 
 	// if we have no schema predicates on either side, we can merge if the table info is compatible
 	case len(isrA.SysTableTableSchema) == 0 && len(isrB.SysTableTableSchema) == 0:
+		isrA.seenPredicates = append(isrA.seenPredicates, isrB.seenPredicates...)
 		for k, expr := range isrB.SysTableTableName {
 			if e, found := isrA.SysTableTableName[k]; found && !sqlparser.Equals.Expr(expr, e) {
 				// contradicting table names, give up
@@ -210,6 +211,7 @@ func tryMergeUnionInfoSchemaRouting(
 
 	// if both sides have the same schema predicate, we can safely merge them
 	case equalExprs(isrA.SysTableTableSchema, isrB.SysTableTableSchema):
+		isrA.seenPredicates = append(isrA.seenPredicates, isrB.seenPredicates...)
 		for k, expr := range isrB.SysTableTableName {
 			isrA.SysTableTableName[k] = expr
 		}
