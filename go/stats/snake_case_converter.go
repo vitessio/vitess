@@ -34,35 +34,18 @@ func GetSnakeName(name string) string {
 // It converts CamelCase to camel_case, and CAMEL_CASE to camel_case.
 // For numbers, it converts 0.5 to v0_5.
 func toSnakeCase(name string) string {
-	// Fast path: read lock for cache lookup (allows concurrent reads)
-	if cached, ok := func() (string, bool) {
-		snakeMemoizer.RLock()
-		defer snakeMemoizer.RUnlock()
-
-		val, found := snakeMemoizer.memo[name]
-		return val, found
-	}(); ok {
-		return cached
+	if cached, ok := snakeMemoizer.Load(name); ok {
+		return cached.(string)
 	}
 
-	// Slow path: compute and store with write lock
-	snakeMemoizer.Lock()
-	defer snakeMemoizer.Unlock()
-
-	// Double-check after acquiring write lock (another goroutine may have computed it)
-	if cached, ok := snakeMemoizer.memo[name]; ok {
-		return cached
-	}
-
-	// Compute the snake case
 	result := name
 	for _, converter := range snakeConverters {
 		result = converter.re.ReplaceAllString(result, converter.repl)
 	}
 	result = strings.ToLower(result)
-	snakeMemoizer.memo[name] = result
 
-	return result
+	actual, _ := snakeMemoizer.LoadOrStore(name, result)
+	return actual.(string)
 }
 
 var snakeConverters = []struct {
@@ -77,15 +60,4 @@ var snakeConverters = []struct {
 	{regexp.MustCompile("-"), "_"},
 }
 
-var memoizer = memoizerType{
-	memo: make(map[string]string),
-}
-
-type memoizerType struct {
-	sync.RWMutex
-	memo map[string]string
-}
-
-var snakeMemoizer = memoizerType{
-	memo: make(map[string]string),
-}
+var snakeMemoizer sync.Map

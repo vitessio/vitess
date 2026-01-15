@@ -45,17 +45,17 @@ func TestToSnakeCase(t *testing.T) {
 }
 
 func TestSnakeMemoize(t *testing.T) {
-	key := "Test"
-	if snakeMemoizer.memo[key] != "" {
-		t.Errorf("want '', got '%s'", snakeMemoizer.memo[key])
+	key := "TestMemoize"
+	if _, ok := snakeMemoizer.Load(key); ok {
+		t.Errorf("expected key %q to not be memoized yet", key)
 	}
 	toSnakeCase(key)
-	if snakeMemoizer.memo[key] != "test" {
-		t.Errorf("want 'test', got '%s'", snakeMemoizer.memo[key])
+	if val, ok := snakeMemoizer.Load(key); !ok || val.(string) != "test_memoize" {
+		t.Errorf("want 'test_memoize', got '%v'", val)
 	}
 }
 
-// TestSnakeCaseConcurrent tests that the RWMutex-based memoization
+// TestSnakeCaseConcurrent tests that the sync.Map-based memoization
 // works correctly under concurrent access from multiple goroutines.
 func TestSnakeCaseConcurrent(t *testing.T) {
 	const numGoroutines = 100
@@ -100,4 +100,26 @@ func TestSnakeCaseConcurrent(t *testing.T) {
 	for err := range errChan {
 		t.Error(err)
 	}
+}
+
+// BenchmarkSnakeCaseCachedRead benchmarks the read path when values are
+// already cached, which is the common case in production.
+func BenchmarkSnakeCaseCachedRead(b *testing.B) {
+	// Pre-populate the cache
+	inputs := []string{
+		"CamelCase", "AnotherCamelCase", "YetAnotherOne",
+		"HTTPServer", "JSONParser", "XMLReader",
+	}
+	for _, input := range inputs {
+		GetSnakeName(input)
+	}
+
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		i := 0
+		for pb.Next() {
+			GetSnakeName(inputs[i%len(inputs)])
+			i++
+		}
+	})
 }
