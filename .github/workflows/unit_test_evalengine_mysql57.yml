@@ -91,9 +91,6 @@ jobs:
         go mod download
         go install golang.org/x/tools/cmd/goimports@034e59c473362f8f2be47694d98fd3f12a1ad497 # v0.39.0
 
-        # install JUnit report formatter
-        go install github.com/vitessio/go-junit-report@99fa7f0daf16db969f54a49139a14471e633e6e8 # HEAD
-
     - name: Run make tools
       if: steps.changes.outputs.unit_tests == 'true'
       run: |
@@ -127,7 +124,7 @@ jobs:
         # testing, e.g. MySQL 5.7 vs 8.0.
         export CI_DB_PLATFORM="mysql57"
 
-        make unit_test | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        JUNIT_OUTPUT=report.xml JSON_OUTPUT=report.json make unit_test
 
     - name: Record test results in launchable if PR is not a draft
       if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.unit_tests == 'true' && github.base_ref == 'main' && !cancelled()
@@ -135,15 +132,17 @@ jobs:
         # send recorded tests to launchable
         launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
 
-    - name: Print test output
-      if: steps.changes.outputs.unit_tests == 'true' && !cancelled()
-      run: |
-        # print test output
-        cat output.txt
-
     - name: Test Summary
       if: steps.changes.outputs.unit_tests == 'true' && !cancelled()
       uses: test-summary/action@31493c76ec9e7aa675f1585d3ed6f1da69269a86 # v2.4
       with:
         paths: "report.xml"
         show: "fail"
+
+    - name: Slowest Tests
+      if: steps.changes.outputs.unit_tests == 'true' && !cancelled()
+      run: |
+        echo '## Slowest Tests' >> "$GITHUB_STEP_SUMMARY"
+        echo '```' >> "$GITHUB_STEP_SUMMARY"
+        go tool gotestsum tool slowest --num 20 --jsonfile report.json | tee -a "$GITHUB_STEP_SUMMARY"
+        echo '```' >> "$GITHUB_STEP_SUMMARY"

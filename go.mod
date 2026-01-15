@@ -127,10 +127,12 @@ require (
 	github.com/DataDog/go-runtime-metrics-internal v0.0.4-0.20250721125240-fdf1ef85b633 // indirect
 	github.com/DataDog/opentelemetry-mapping-go/pkg/otlp/attributes v0.29.1 // indirect
 	github.com/Masterminds/semver/v3 v3.4.0 // indirect
+	github.com/bitfield/gotestdox v0.2.2 // indirect
 	github.com/cihub/seelog v0.0.0-20170130134532-f561c5e57575 // indirect
 	github.com/cilium/ebpf v0.19.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.2.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
+	github.com/dnephin/pflag v1.0.7 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/google/btree v1.1.3 // indirect
@@ -152,6 +154,7 @@ require (
 	go.opentelemetry.io/otel/log v0.14.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
+	gotest.tools/gotestsum v1.13.0 // indirect
 	k8s.io/apimachinery v0.33.4 // indirect
 )
 
@@ -271,3 +274,5 @@ require (
 )
 
 exclude github.com/DataDog/opentelemetry-mapping-go/pkg/otlp/attributes v0.33.0
+
+tool gotest.tools/gotestsum

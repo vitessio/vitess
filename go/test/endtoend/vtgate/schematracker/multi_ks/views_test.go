@@ -17,7 +17,6 @@ limitations under the License.
 package multiks
 
 import (
-	"context"
 	_ "embed"
 	"flag"
 	"fmt"
@@ -117,7 +116,7 @@ func TestMain(m *testing.M) {
 
 // TestViewQueries validates that view tracking works as expected with qualified and unqualified views.
 func TestViewQueries(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

@@ -133,7 +133,7 @@ func writeConfig(path string, cfg map[string]string) error {
 }
 
 func TestVSchema(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

@@ -50,11 +50,11 @@ func TestErrorConditions(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestNewClientSpan(t *testing.T) {
+func TestNewSpan(t *testing.T) {
 	svc := openTracingService{
 		Tracer: &fakeTracer{},
 	}
-	clientSpan := svc.NewClientSpan(nil, "test-svc", "test-label")
+	clientSpan := svc.New(nil, "test-label")
 	require.NotEmpty(t, clientSpan)
 
 	clientSpan = svc.New(clientSpan, "client-span")

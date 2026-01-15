@@ -15,19 +15,17 @@ limitations under the License.
 package prefixfanout
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
 	"testing"
-
-	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 var (
@@ -158,7 +156,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestCFCPrefixQueryNoHash(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := clusterInstance.GetVTParams(sKs)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
@@ -195,7 +193,7 @@ func TestCFCPrefixQueryNoHash(t *testing.T) {
 }
 
 func TestCFCPrefixQueryWithHash(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := clusterInstance.GetVTParams(sKsMD5)
 
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -237,7 +235,7 @@ func TestCFCPrefixQueryWithHash(t *testing.T) {
 }
 
 func TestCFCInsert(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	vtParams := clusterInstance.GetVTParams(sKs)
 	conn, err := mysql.Connect(ctx, &vtParams)

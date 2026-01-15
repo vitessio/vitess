@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -58,6 +59,7 @@ func TestVStreamSkew(t *testing.T) {
 			time.Sleep(time.Duration(idx*100) * time.Millisecond)
 		}
 	}
+
 	type skewTestCase struct {
 		numEventsPerShard    int64
 		shard0idx, shard1idx int64
@@ -84,55 +86,57 @@ func TestVStreamSkew(t *testing.T) {
 	cell := "aa"
 	for idx, tcase := range tcases {
 		t.Run("", func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			synctest.Test(t, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
 
-			ks := fmt.Sprintf("TestVStreamSkew-%d", idx)
-			_ = createSandbox(ks)
-			hc := discovery.NewFakeHealthCheck(nil)
-			st := getSandboxTopo(ctx, cell, ks, []string{"-20", "20-40"})
-			vsm := newTestVStreamManager(ctx, hc, st, cell)
-			vgtid := &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{}}
-			want := int64(0)
-			var sbc0, sbc1 *sandboxconn.SandboxConn
-			if tcase.shard0idx != 0 {
-				sbc0 = hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
-				addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
-				sbc0.VStreamCh = make(chan *binlogdatapb.VEvent)
-				want += 2 * tcase.numEventsPerShard
-				vgtid.ShardGtids = append(vgtid.ShardGtids, &binlogdatapb.ShardGtid{Keyspace: ks, Gtid: "pos", Shard: "-20"})
-				go stream(sbc0, ks, "-20", tcase.numEventsPerShard, tcase.shard0idx)
-			}
-			if tcase.shard1idx != 0 {
-				sbc1 = hc.AddTestTablet(cell, "1.1.1.1", 1002, ks, "20-40", topodatapb.TabletType_PRIMARY, true, 1, nil)
-				addTabletToSandboxTopo(t, ctx, st, ks, "20-40", sbc1.Tablet())
-				sbc1.VStreamCh = make(chan *binlogdatapb.VEvent)
-				want += 2 * tcase.numEventsPerShard
-				vgtid.ShardGtids = append(vgtid.ShardGtids, &binlogdatapb.ShardGtid{Keyspace: ks, Gtid: "pos", Shard: "20-40"})
-				go stream(sbc1, ks, "20-40", tcase.numEventsPerShard, tcase.shard1idx)
-			}
-
-			vstreamCtx, vstreamCancel := context.WithTimeout(ctx, 1*time.Minute)
-			defer vstreamCancel()
-
-			receivedEvents := make([]*binlogdatapb.VEvent, 0)
-			err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{MinimizeSkew: true}, func(events []*binlogdatapb.VEvent) error {
-				receivedEvents = append(receivedEvents, events...)
-
-				if int64(len(receivedEvents)) == want {
-					// Stop streaming after receiving both expected responses.
-					vstreamCancel()
+				ks := fmt.Sprintf("TestVStreamSkew-%d", idx)
+				_ = createSandbox(ks)
+				hc := discovery.NewFakeHealthCheck(nil)
+				st := getSandboxTopo(ctx, cell, ks, []string{"-20", "20-40"})
+				vsm := newTestVStreamManager(ctx, hc, st, cell)
+				vgtid := &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{}}
+				want := int64(0)
+				var sbc0, sbc1 *sandboxconn.SandboxConn
+				if tcase.shard0idx != 0 {
+					sbc0 = hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
+					addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
+					sbc0.VStreamCh = make(chan *binlogdatapb.VEvent)
+					want += 2 * tcase.numEventsPerShard
+					vgtid.ShardGtids = append(vgtid.ShardGtids, &binlogdatapb.ShardGtid{Keyspace: ks, Gtid: "pos", Shard: "-20"})
+					go stream(sbc0, ks, "-20", tcase.numEventsPerShard, tcase.shard0idx)
+				}
+				if tcase.shard1idx != 0 {
+					sbc1 = hc.AddTestTablet(cell, "1.1.1.1", 1002, ks, "20-40", topodatapb.TabletType_PRIMARY, true, 1, nil)
+					addTabletToSandboxTopo(t, ctx, st, ks, "20-40", sbc1.Tablet())
+					sbc1.VStreamCh = make(chan *binlogdatapb.VEvent)
+					want += 2 * tcase.numEventsPerShard
+					vgtid.ShardGtids = append(vgtid.ShardGtids, &binlogdatapb.ShardGtid{Keyspace: ks, Gtid: "pos", Shard: "20-40"})
+					go stream(sbc1, ks, "20-40", tcase.numEventsPerShard, tcase.shard1idx)
 				}
 
-				return nil
+				vstreamCtx, vstreamCancel := context.WithTimeout(ctx, 1*time.Minute)
+				defer vstreamCancel()
+
+				receivedEvents := make([]*binlogdatapb.VEvent, 0)
+				err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{MinimizeSkew: true}, func(events []*binlogdatapb.VEvent) error {
+					receivedEvents = append(receivedEvents, events...)
+
+					if int64(len(receivedEvents)) == want {
+						// Stop streaming after receiving both expected responses.
+						vstreamCancel()
+					}
+
+					return nil
+				})
+
+				require.Error(t, err)
+				require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
+
+				require.Equal(t, int(want), int(len(receivedEvents)))
+				require.Equal(t, tcase.expectedDelays, vsm.GetTotalStreamDelay()-previousDelays)
+				previousDelays = vsm.GetTotalStreamDelay()
 			})
-
-			require.Error(t, err)
-			require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
-
-			require.Equal(t, int(want), int(len(receivedEvents)))
-			require.Equal(t, tcase.expectedDelays, vsm.GetTotalStreamDelay()-previousDelays)
-			previousDelays = vsm.GetTotalStreamDelay()
 		})
 	}
 }

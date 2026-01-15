@@ -17,19 +17,17 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
 	"testing"
-
-	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 var (
@@ -303,7 +301,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestVindexHexTypes(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -324,7 +322,7 @@ func TestVindexHexTypes(t *testing.T) {
 }
 
 func TestVindexBindVarOverlap(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()

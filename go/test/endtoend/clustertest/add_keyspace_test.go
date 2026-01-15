@@ -19,16 +19,13 @@ This adds sharded keyspace dynamically in this test only and test sql insert, se
 package clustertest
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/log"
 )
 
 var (
@@ -71,7 +68,7 @@ func TestAddKeyspace(t *testing.T) {
 	_ = clusterInstance.VtgateProcess.Setup()
 	clusterInstance.WaitForTabletsToHealthyInVtgate()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := mysql.ConnParams{
 		Host: clusterInstance.Hostname,
 		Port: clusterInstance.VtgateMySQLPort,

@@ -17,7 +17,6 @@ limitations under the License.
 package stress
 
 import (
-	"context"
 	_ "embed"
 	"flag"
 	"fmt"
@@ -113,7 +112,7 @@ func TestMain(m *testing.M) {
 }
 
 func start(t *testing.T) (*mysql.Conn, func()) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	cleanup(t)

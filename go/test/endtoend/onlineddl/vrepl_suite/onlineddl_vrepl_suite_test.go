@@ -17,7 +17,6 @@ limitations under the License.
 package vreplsuite
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -26,6 +25,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/config"
@@ -36,9 +38,6 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	"vitess.io/vitess/go/test/endtoend/throttler"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -386,7 +385,7 @@ func mysqlParams() *mysql.ConnParams {
 func mysqlExec(t *testing.T, sql string, expectError string) *sqltypes.Result {
 	t.Helper()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, mysqlParams())
 	require.Nil(t, err)
 	defer conn.Close()

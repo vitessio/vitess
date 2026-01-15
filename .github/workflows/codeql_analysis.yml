@@ -63,12 +63,9 @@ jobs:
 
           # Install everything else we need, and configure
           sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
-          
+
           sudo service etcd stop
-          
-          # install JUnit report formatter
-          go install github.com/vitessio/go-junit-report@99fa7f0daf16db969f54a49139a14471e633e6e8 # HEAD
-          
+
       - name: Building binaries
         timeout-minutes: 30
         run: |
