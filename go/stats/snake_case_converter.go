@@ -38,8 +38,9 @@ func toSnakeCase(name string) string {
 	if cached, ok := func() (string, bool) {
 		snakeMemoizer.RLock()
 		defer snakeMemoizer.RUnlock()
-		cached, ok := snakeMemoizer.memo[name]
-		return cached, ok
+
+		val, found := snakeMemoizer.memo[name]
+		return val, found
 	}(); ok {
 		return cached
 	}
