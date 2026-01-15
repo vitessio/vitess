@@ -16,6 +16,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+        with:
+          egress-policy: audit
+
       - name: Checkout vitess
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
@@ -31,9 +36,9 @@ jobs:
 
       - name: Determine docs version
         id: docs_version
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          BASE_REF="${{ github.base_ref }}"
-
           if [[ "$BASE_REF" == "main" ]]; then
             echo "target_branch=main" >> "$GITHUB_OUTPUT"
             echo "Targeting main branch, version will be determined by update workflow"
@@ -49,17 +54,23 @@ jobs:
 
       - name: Prepare artifact metadata
         if: steps.docs_version.outputs.skip != 'true'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.base_ref }}
+          VERSION: ${{ steps.docs_version.outputs.version }}
+          TARGET_BRANCH: ${{ steps.docs_version.outputs.target_branch }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           mkdir -p /tmp/artifact
           cp /tmp/error_codes.txt /tmp/artifact/
 
           cat > /tmp/artifact/metadata.json << EOF
           {
-            "pr_number": ${{ github.event.pull_request.number }},
-            "base_ref": "${{ github.base_ref }}",
-            "version": "${{ steps.docs_version.outputs.version }}",
-            "target_branch": "${{ steps.docs_version.outputs.target_branch }}",
-            "head_sha": "${{ github.event.pull_request.head.sha }}"
+            "pr_number": ${PR_NUMBER},
+            "base_ref": "${BASE_REF}",
+            "version": "${VERSION}",
+            "target_branch": "${TARGET_BRANCH}",
+            "head_sha": "${HEAD_SHA}"
           }
           EOF
 
