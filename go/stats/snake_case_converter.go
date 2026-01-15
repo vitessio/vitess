@@ -35,12 +35,14 @@ func GetSnakeName(name string) string {
 // For numbers, it converts 0.5 to v0_5.
 func toSnakeCase(name string) string {
 	// Fast path: read lock for cache lookup (allows concurrent reads)
-	snakeMemoizer.RLock()
-	if cached, ok := snakeMemoizer.memo[name]; ok {
-		snakeMemoizer.RUnlock()
+	if cached, ok := func() (string, bool) {
+		snakeMemoizer.RLock()
+		defer snakeMemoizer.RUnlock()
+		cached, ok := snakeMemoizer.memo[name]
+		return cached, ok
+	}(); ok {
 		return cached
 	}
-	snakeMemoizer.RUnlock()
 
 	// Slow path: compute and store with write lock
 	snakeMemoizer.Lock()
@@ -58,6 +60,7 @@ func toSnakeCase(name string) string {
 	}
 	result = strings.ToLower(result)
 	snakeMemoizer.memo[name] = result
+
 	return result
 }
 
