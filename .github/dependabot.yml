@@ -4,21 +4,37 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      all:
+        patterns:
+          - "*"
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      all:
+        patterns:
+          - "*"
 
   - package-ecosystem: "maven"
     directory: "/java"
     schedule:
       interval: "weekly"
+    groups:
+      all:
+        patterns:
+          - "*"
 
   - package-ecosystem: "npm"
     directory: "/web/vtadmin"
     schedule:
       interval: "weekly"
+    groups:
+      all:
+        patterns:
+          - "*"
 
   - package-ecosystem: "docker"
     directories:
@@ -32,3 +48,7 @@ updates:
       - "/go/mysql/collations/tools/colldump"
     schedule:
       interval: "weekly"
+    groups:
+      all:
+        patterns:
+          - "*"
