@@ -46,7 +46,7 @@ jobs:
 
       # Initializes the CodeQL tools for scanning.
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@4bdb89f48054571735e3792627da6195c57459e2 # v3.28.18
         with:
           languages: ${{ matrix.language }}
           # If you wish to specify cu stom queries, you can do so here or in a config file.
@@ -78,11 +78,11 @@ jobs:
           make build
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@4bdb89f48054571735e3792627da6195c57459e2 # v3.28.18
 
       - name: Slack Workflow Notification
         if: ${{ failure() }}
-        uses: Gamesight/slack-workflow-status@master
+        uses: Gamesight/slack-workflow-status@68bf00d0dbdbcb206c278399aa1ef6c14f74347a # v1.3.0
         with:
           repo_token: ${{secrets.GITHUB_TOKEN}}
           slack_webhook_url: ${{secrets.SLACK_WEBHOOK_URL}}
