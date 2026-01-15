@@ -18,6 +18,7 @@ package db
 
 import (
 	"database/sql"
+	"strings"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
@@ -99,6 +100,25 @@ func ClearVTOrcDatabase() {
 	}
 }
 
+// getSqlitePragmaSQLs returns a slice of SQL statements to set sqlite PRAGMAs.
+func getSqlitePragmaSQLs() []string {
+	// PRAGMAs: https://www.sqlite.org/pragma.html
+	pragmaSQLs := []string{
+		`PRAGMA journal_mode = WAL`,
+		`PRAGMA synchronous = NORMAL`,
+	}
+
+	// Enable read_uncommitted transaction isolation (no read locks) when in shared cache mode.
+	// Dirty reads should not be a concern for VTOrc's use of sqlite/transactions. No read
+	// locks allows updates to tables to not be blocked by reads.
+	// https://www.sqlite.org/pragma.html#pragma_read_uncommitted
+	if strings.Contains(config.GetSQLiteDataFile(), "cache=shared") {
+		pragmaSQLs = append(pragmaSQLs, `PRAGMA read_uncommitted = 1`)
+	}
+
+	return pragmaSQLs
+}
+
 // initVTOrcDB attempts to create/upgrade the vtorc backend database. It is created once in the
 // application's lifetime.
 func initVTOrcDB(db *sql.DB) error {
@@ -110,11 +130,12 @@ func initVTOrcDB(db *sql.DB) error {
 	if err := registerVTOrcDeployment(db); err != nil {
 		return err
 	}
-	if _, err := ExecVTOrc(`PRAGMA journal_mode = WAL`); err != nil {
-		return err
-	}
-	if _, err := ExecVTOrc(`PRAGMA synchronous = NORMAL`); err != nil {
-		return err
+
+	for _, pragmaSQL := range getSqlitePragmaSQLs() {
+		if _, err := ExecVTOrc(pragmaSQL); err != nil {
+			log.Errorf("Failed to execute PRAGMA query %q: %+v", pragmaSQL, err)
+			return err
+		}
 	}
 	return nil
 }
