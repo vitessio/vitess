@@ -1,4 +1,7 @@
 name: vtop_example
+
+permissions: read-all
+
 on:
   push:
     branches:

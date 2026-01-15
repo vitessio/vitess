@@ -1,5 +1,7 @@
 name: Backport and Forwardport PRs
 
+permissions: read-all
+
 on:
   pull_request_target:
     types: [closed]
@@ -20,6 +22,8 @@ on:
 jobs:
   backport:
     name: Backport/Forwardport PR
+    permissions:
+      pull-requests: write
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     steps:

@@ -2,6 +2,9 @@
 # - Adds a review checklist comment
 # - Adds initial labels (NeedsWebsiteDocsUpdate, NeedsDescriptionUpdate, NeedsIssue, NeedsBackportReason)
 name: PR opened tasks
+
+permissions: read-all
+
 on:
   pull_request_target:
     types: [opened]
@@ -46,6 +49,8 @@ jobs:
 
   add_review_checklist:
     name: Add Review Checklist
+    permissions:
+      pull-requests: write
     runs-on: ubuntu-latest
     needs: check_labels
     if: needs.check_labels.outputs.skip != 'true'

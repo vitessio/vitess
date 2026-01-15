@@ -3,17 +3,19 @@
 # it immediately and do not save it as a DRAFT.
 
 name: Release
+
+permissions: read-all
+
 on:
   release:
     types: [created]
 
-permissions:
-  contents: write
-  actions: read
-
 jobs:
   build:
     name: Create Release
+    permissions:
+      contents: write
+      actions: read
     runs-on: ubuntu-24.04
     steps:
     - name: Harden the runner (Audit all outbound calls)
