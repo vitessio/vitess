@@ -271,7 +271,7 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 					// Collect lastpk. Needed for logging at the end.
 					lastpk = result.args.lastpk
 				case vcopierCopyTaskFail:
-					return vterrors.Wrapf(result.err, "task error")
+					return result.err
 				}
 			} else {
 				return io.EOF
@@ -280,10 +280,19 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 		}
 		return nil
 	}, vstreamOptions)
-	if serr != nil {
-		log.Info(fmt.Sprintf("VStreamTables failed: %v", serr))
-		return serr
+
+	if copyWorkQueue != nil {
+		copyWorkQueue.close()
 	}
+
+	// When tasks are executed async, there may be tasks that complete (or fail)
+	// after the last VStreamTables callback exits. Drain any remaining results
+	// and aggregate errors.
+	if terr := drainAndAggregateErrors(resultCh, serr); terr != nil {
+		log.Warn(fmt.Sprintf("task errors in workflow %s: %v", vc.vr.WorkflowName, terr))
+		return terr
+	}
+
 	// A context expiration was probably caused by a PlannedReparentShard or an
 	// elapsed copy phase duration. CopyAll is not resilient to these events.
 	select {
@@ -291,9 +300,6 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 		log.Info(fmt.Sprintf("Copy of %v stopped", state.currentTableName))
 		return errors.New("CopyAll was interrupted due to context expiration")
 	default:
-		if copyWorkQueue != nil {
-			copyWorkQueue.close()
-		}
 		if err := vc.runPostCopyActionsAndDeleteCopyState(ctx, state.currentTableName); err != nil {
 			return err
 		}
@@ -321,6 +327,31 @@ func (vc *vcopier) runPostCopyActionsAndDeleteCopyState(ctx context.Context, tab
 	)
 	if _, err := vc.vr.dbClient.Execute(delQueryBuf.String()); err != nil {
 		return err
+	}
+	return nil
+}
+
+// drainAndAggregateErrors drains any remaining results from the result channel,
+// collects errors from failed tasks, and combines them with an optional vstream
+// error into a single aggregated error.
+func drainAndAggregateErrors(resultCh <-chan *vcopierCopyTaskResult, vstreamErr error) error {
+	var terrs []error
+	for {
+		select {
+		case result := <-resultCh:
+			if result != nil && result.state == vcopierCopyTaskFail {
+				terrs = append(terrs, result.err)
+			}
+		default:
+			goto done
+		}
+	}
+done:
+	if vstreamErr != nil {
+		terrs = append(terrs, vstreamErr)
+	}
+	if len(terrs) > 0 {
+		return vterrors.Wrapf(vterrors.Aggregate(terrs), "task error")
 	}
 	return nil
 }
