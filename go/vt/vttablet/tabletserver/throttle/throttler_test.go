@@ -18,7 +18,6 @@ package throttle
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"sync"
@@ -31,14 +30,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-
 	"vitess.io/vitess/go/protoutil"
-
-	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/grpctmclient"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -49,6 +44,7 @@ import (
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -844,19 +840,45 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 	})
 }
 
-func TestIsDialTCPError(t *testing.T) {
-	// Verify that IsDialTCPError actually recognizes grpc dial errors
-	cc, err := grpcclient.DialContext(t.Context(), ":0", true, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-	defer cc.Close()
+func TestIsTabletRPCError(t *testing.T) {
+	c := grpctmclient.NewClient()
 
-	err = cc.Invoke(context.Background(), "/Fail", nil, nil)
+	// simulate an RPC cancellation using .CheckThrottler().
+	t.Run("CANCELLED", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel() // cancel before check
 
-	require.True(t, base.IsDialTCPError(err))
-	require.True(t, base.IsDialTCPError(fmt.Errorf("wrapped: %w", err)))
+		_, err := c.CheckThrottler(ctx, &topodatapb.Tablet{
+			Hostname: "this.should.fail",
+			PortMap: map[string]int32{
+				"grpc": 12345,
+			},
+		}, &tabletmanagerdatapb.CheckThrottlerRequest{})
+		require.Equal(t, vtrpcpb.Code_CANCELED, vterrors.Code(err))
+		require.True(t, base.IsTabletRPCError(err))
+	})
 
-	nonDialErr := errors.New("rpc error: code = NotFound desc = method not found")
-	require.False(t, base.IsDialTCPError(nonDialErr))
+	// simulate an RPC failure (dial error) using .CheckThrottler() to a host we cannot resolve.
+	t.Run("DEADLINE_EXCEEDED", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+		defer cancel()
+
+		_, err := c.CheckThrottler(ctx, &topodatapb.Tablet{
+			Hostname: "this.should.fail",
+			PortMap: map[string]int32{
+				"grpc": 12345,
+			},
+		}, &tabletmanagerdatapb.CheckThrottlerRequest{})
+		require.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, vterrors.Code(err))
+		require.True(t, base.IsTabletRPCError(err))
+		require.ErrorContains(t, err, "rpc error: code = DeadlineExceeded desc = latest balancer error: connection error")
+	})
+
+	// simulate hypothetical NOT_FOUND RPC failure.
+	t.Run("NOT_FOUND", func(t *testing.T) {
+		nonDialErr := vterrors.New(vtrpcpb.Code_NOT_FOUND, "rpc error: code = NotFound desc = method not found")
+		require.True(t, base.IsTabletRPCError(nonDialErr))
+	})
 }
 
 func TestProbeWithUnavailableHost(t *testing.T) {
@@ -893,7 +915,7 @@ func TestProbeWithUnavailableHost(t *testing.T) {
 	probeFunc := throttler.generateTabletProbeFunction(base.ShardScope, probe)
 
 	metrics := probeFunc(t.Context(), tmClient)
-	require.True(t, base.IsDialTCPError(metrics["custom"].Err))
+	require.True(t, base.IsTabletRPCError(metrics["custom"].Err))
 
 	tabletResultsMap := base.TabletResultMap{
 		"cell1-100": base.MetricResultMap{
@@ -939,7 +961,7 @@ func TestProbeWithEmptyHostAndPort(t *testing.T) {
 	probeFunc := throttler.generateTabletProbeFunction(base.ShardScope, probe)
 
 	metrics := probeFunc(t.Context(), tmClient)
-	require.True(t, base.IsDialTCPError(metrics["custom"].Err))
+	require.True(t, base.IsTabletRPCError(metrics["custom"].Err))
 
 	tabletResultsMap := base.TabletResultMap{
 		"cell1-100": base.MetricResultMap{

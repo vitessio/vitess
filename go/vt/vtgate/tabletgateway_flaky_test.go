@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"testing"
+	"testing/synctest"
 	"time"
 
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
@@ -94,7 +95,7 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 	sbc.SetResults([]*sqltypes.Result{sqlResult1})
 
 	// run a query that we indeed get the result added to the sandbox connection back
-	res, err := tg.Execute(ctx, target, "query", nil, 0, 0, nil)
+	res, err := tg.Execute(ctx, nil, target, "query", nil, 0, 0, nil)
 	require.NoError(t, err)
 	require.Equal(t, res, sqlResult1)
 
@@ -114,7 +115,7 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 	// execute the query in a go routine since it should be buffered, and check that it eventually succeed
 	queryChan := make(chan struct{})
 	go func() {
-		res, err = tg.Execute(ctx, target, "query", nil, 0, 0, nil)
+		res, err = tg.Execute(ctx, nil, target, "query", nil, 0, 0, nil)
 		queryChan <- struct{}{}
 	}()
 
@@ -137,131 +138,135 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 
 // TestGatewayBufferingWhileReparenting is used to test that the buffering mechanism buffers the queries when a PRS happens
 // the healthchecks that happen during a PRS are simulated in this test
+// TestGatewayBufferingWhileReparenting is used to test that the buffering mechanism buffers the queries when a PRS happens
+// the healthchecks that happen during a PRS are simulated in this test
 func TestGatewayBufferingWhileReparenting(t *testing.T) {
-	ctx := utils.LeakCheckContext(t)
+	synctest.Test(t, func(t *testing.T) {
+		ctx := utils.LeakCheckContext(t)
 
-	buffer.SetBufferingModeInTestingEnv(true)
-	defer func() {
-		buffer.SetBufferingModeInTestingEnv(false)
-	}()
+		buffer.SetBufferingModeInTestingEnv(true)
+		defer func() {
+			buffer.SetBufferingModeInTestingEnv(false)
+		}()
 
-	keyspace := "ks1"
-	shard := "-80"
-	tabletType := topodatapb.TabletType_PRIMARY
-	host := "1.1.1.1"
-	hostReplica := "1.1.1.2"
-	port := int32(1001)
-	portReplica := int32(1002)
-	target := &querypb.Target{
-		Keyspace:   keyspace,
-		Shard:      shard,
-		TabletType: tabletType,
-	}
-
-	ts := &econtext.FakeTopoServer{}
-	// create a new fake health check. We want to check the buffering code which uses Subscribe, so we must also pass a channel
-	hc := discovery.NewFakeHealthCheck(make(chan *discovery.TabletHealth))
-	// create a new tablet gateway
-	tg := NewTabletGateway(ctx, hc, ts, "cell")
-	defer tg.Close(ctx)
-
-	// add a primary tablet which is serving
-	sbc := hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
-	// also add a replica which is serving
-	sbcReplica := hc.AddTestTablet("cell", hostReplica, portReplica, keyspace, shard, topodatapb.TabletType_REPLICA, true, 0, nil)
-
-	// add a result to the sandbox connection
-	sqlResult1 := &sqltypes.Result{
-		Fields: []*querypb.Field{{
-			Name:    "col1",
-			Type:    sqltypes.VarChar,
-			Charset: uint32(collations.MySQL8().DefaultConnectionCharset()),
-		}},
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.VarChar, []byte("bb")),
-		}},
-	}
-	sbc.SetResults([]*sqltypes.Result{sqlResult1})
-
-	// run a query that we indeed get the result added to the sandbox connection back
-	// this also checks that the query reaches the primary tablet and not the replica
-	res, err := tg.Execute(ctx, target, "query", nil, 0, 0, nil)
-	require.NoError(t, err)
-	require.Equal(t, res, sqlResult1)
-
-	// get the primary and replica tablet from the fake health check
-	tablets := hc.GetAllTablets()
-	var primaryTablet *topodatapb.Tablet
-	var replicaTablet *topodatapb.Tablet
-
-	for _, tablet := range tablets {
-		if tablet.Type == topodatapb.TabletType_PRIMARY {
-			primaryTablet = tablet
-		} else {
-			replicaTablet = tablet
+		keyspace := "ks1"
+		shard := "-80"
+		tabletType := topodatapb.TabletType_PRIMARY
+		host := "1.1.1.1"
+		hostReplica := "1.1.1.2"
+		port := int32(1001)
+		portReplica := int32(1002)
+		target := &querypb.Target{
+			Keyspace:   keyspace,
+			Shard:      shard,
+			TabletType: tabletType,
 		}
-	}
-	require.NotNil(t, primaryTablet)
-	require.NotNil(t, replicaTablet)
 
-	// broadcast its state initially
-	hc.Broadcast(primaryTablet)
-	// set the serving type for the primary tablet false and broadcast it so that the buffering code registers this change
-	hc.SetServing(primaryTablet, false)
-	// We call the broadcast twice to ensure that the change has been processed by the keyspace event watcher.
-	// The second broadcast call is blocking until the first one has been processed.
-	hc.Broadcast(primaryTablet)
-	hc.Broadcast(primaryTablet)
+		ts := &econtext.FakeTopoServer{}
+		// create a new fake health check. We want to check the buffering code which uses Subscribe, so we must also pass a channel
+		hc := discovery.NewFakeHealthCheck(make(chan *discovery.TabletHealth))
+		// create a new tablet gateway
+		tg := NewTabletGateway(ctx, hc, ts, "cell")
+		defer tg.Close(ctx)
 
-	require.Len(t, tg.hc.GetHealthyTabletStats(target), 0, "GetHealthyTabletStats has tablets even though it shouldn't")
-	_, shouldStartBuffering := tg.kev.ShouldStartBufferingForTarget(ctx, target)
-	require.True(t, shouldStartBuffering)
+		// add a primary tablet which is serving
+		sbc := hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
+		// also add a replica which is serving
+		sbcReplica := hc.AddTestTablet("cell", hostReplica, portReplica, keyspace, shard, topodatapb.TabletType_REPLICA, true, 0, nil)
 
-	// add a result to the sandbox connection of the new primary
-	sbcReplica.SetResults([]*sqltypes.Result{sqlResult1})
+		// add a result to the sandbox connection
+		sqlResult1 := &sqltypes.Result{
+			Fields: []*querypb.Field{{
+				Name:    "col1",
+				Type:    sqltypes.VarChar,
+				Charset: uint32(collations.MySQL8().DefaultConnectionCharset()),
+			}},
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{{
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("bb")),
+			}},
+		}
+		sbc.SetResults([]*sqltypes.Result{sqlResult1})
 
-	// execute the query in a go routine since it should be buffered, and check that it eventually succeed
-	queryChan := make(chan struct{})
-	go func() {
-		res, err = tg.Execute(ctx, target, "query", nil, 0, 0, nil)
-		queryChan <- struct{}{}
-	}()
+		// run a query that we indeed get the result added to the sandbox connection back
+		// this also checks that the query reaches the primary tablet and not the replica
+		res, err := tg.Execute(ctx, nil, target, "query", nil, 0, 0, nil)
+		require.NoError(t, err)
+		require.Equal(t, res, sqlResult1)
 
-	// set the serving type for the new primary tablet true and broadcast it so that the buffering code registers this change
-	// this should stop the buffering and the query executed in the go routine should work. This should be done with some delay so
-	// that we know that the query was buffered
-	time.Sleep(1 * time.Second)
-	// change the tablets types to simulate a PRS.
-	hc.SetTabletType(primaryTablet, topodatapb.TabletType_REPLICA)
-	hc.Broadcast(primaryTablet)
-	hc.SetTabletType(replicaTablet, topodatapb.TabletType_PRIMARY)
-	hc.SetPrimaryTimestamp(replicaTablet, 100) // We set a higher timestamp than before to simulate a PRS.
-	hc.SetServing(replicaTablet, true)
-	hc.Broadcast(replicaTablet)
+		// get the primary and replica tablet from the fake health check
+		tablets := hc.GetAllTablets()
+		var primaryTablet *topodatapb.Tablet
+		var replicaTablet *topodatapb.Tablet
 
-	timeout := time.After(1 * time.Minute)
-outer:
-	for {
-		select {
-		case <-timeout:
-			require.Fail(t, "timed out - could not verify the new primary")
-		case <-time.After(10 * time.Millisecond):
-			newPrimary, shouldBuffer := tg.kev.ShouldStartBufferingForTarget(ctx, target)
-			if newPrimary != nil && newPrimary.Uid == replicaTablet.Alias.Uid && !shouldBuffer {
-				break outer
+		for _, tablet := range tablets {
+			if tablet.Type == topodatapb.TabletType_PRIMARY {
+				primaryTablet = tablet
+			} else {
+				replicaTablet = tablet
 			}
 		}
-	}
+		require.NotNil(t, primaryTablet)
+		require.NotNil(t, replicaTablet)
 
-	// wait for the query to execute before checking for results
-	select {
-	case <-queryChan:
-		require.NoError(t, err)
-		require.Equal(t, sqlResult1, res)
-	case <-time.After(15 * time.Second):
-		t.Fatalf("timed out waiting for query to execute")
-	}
+		// broadcast its state initially
+		hc.Broadcast(primaryTablet)
+		// set the serving type for the primary tablet false and broadcast it so that the buffering code registers this change
+		hc.SetServing(primaryTablet, false)
+		// We call the broadcast twice to ensure that the change has been processed by the keyspace event watcher.
+		// The second broadcast call is blocking until the first one has been processed.
+		hc.Broadcast(primaryTablet)
+		hc.Broadcast(primaryTablet)
+
+		require.Len(t, tg.hc.GetHealthyTabletStats(target), 0, "GetHealthyTabletStats has tablets even though it shouldn't")
+		_, shouldStartBuffering := tg.kev.ShouldStartBufferingForTarget(ctx, target)
+		require.True(t, shouldStartBuffering)
+
+		// add a result to the sandbox connection of the new primary
+		sbcReplica.SetResults([]*sqltypes.Result{sqlResult1})
+
+		// execute the query in a go routine since it should be buffered, and check that it eventually succeed
+		queryChan := make(chan struct{})
+		go func() {
+			res, err = tg.Execute(ctx, nil, target, "query", nil, 0, 0, nil)
+			queryChan <- struct{}{}
+		}()
+
+		// set the serving type for the new primary tablet true and broadcast it so that the buffering code registers this change
+		// this should stop the buffering and the query executed in the go routine should work. This should be done with some delay so
+		// that we know that the query was buffered
+		time.Sleep(1 * time.Second)
+		// change the tablets types to simulate a PRS.
+		hc.SetTabletType(primaryTablet, topodatapb.TabletType_REPLICA)
+		hc.Broadcast(primaryTablet)
+		hc.SetTabletType(replicaTablet, topodatapb.TabletType_PRIMARY)
+		hc.SetPrimaryTimestamp(replicaTablet, 100) // We set a higher timestamp than before to simulate a PRS.
+		hc.SetServing(replicaTablet, true)
+		hc.Broadcast(replicaTablet)
+
+		timeout := time.After(1 * time.Minute)
+	outer:
+		for {
+			select {
+			case <-timeout:
+				require.Fail(t, "timed out - could not verify the new primary")
+			case <-time.After(10 * time.Millisecond):
+				newPrimary, shouldBuffer := tg.kev.ShouldStartBufferingForTarget(ctx, target)
+				if newPrimary != nil && newPrimary.Uid == replicaTablet.Alias.Uid && !shouldBuffer {
+					break outer
+				}
+			}
+		}
+
+		// wait for the query to execute before checking for results
+		select {
+		case <-queryChan:
+			require.NoError(t, err)
+			require.Equal(t, sqlResult1, res)
+		case <-time.After(15 * time.Second):
+			t.Fatalf("timed out waiting for query to execute")
+		}
+	})
 }
 
 // TestInconsistentStateDetectedBuffering simulates the case where we have used up all our buffering retries and in the
@@ -332,7 +337,7 @@ func TestInconsistentStateDetectedBuffering(t *testing.T) {
 	var err error
 	queryChan := make(chan struct{})
 	go func() {
-		res, err = tg.Execute(ctx, target, "query", nil, 0, 0, nil)
+		res, err = tg.Execute(ctx, nil, target, "query", nil, 0, 0, nil)
 		queryChan <- struct{}{}
 	}()
 
@@ -341,8 +346,8 @@ func TestInconsistentStateDetectedBuffering(t *testing.T) {
 		require.Nil(t, res)
 		require.Error(t, err)
 		// depending on whether the health check ticks before or after the buffering code, we might get different errors
-		if !(err.Error() == "target: ks1.-80.primary: inconsistent state detected, primary is serving but initially found no available tablet" ||
-			err.Error() == "target: ks1.-80.primary: no healthy tablet available for 'keyspace:\"ks1\" shard:\"-80\" tablet_type:PRIMARY'") {
+		if err.Error() != "target: ks1.-80.primary: inconsistent state detected, primary is serving but initially found no available tablet" &&
+			err.Error() != "target: ks1.-80.primary: no healthy tablet available for 'keyspace:\"ks1\" shard:\"-80\" tablet_type:PRIMARY'" {
 			t.Fatalf("wrong error returned: %v", err)
 		}
 	case <-time.After(15 * time.Second):

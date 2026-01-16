@@ -1903,9 +1903,10 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 			} else {
 				return err
 			}
+		} else {
+			// Copy the vschema from the base keyspace to the new one.
+			ksvs.Keyspace = bksvs.Keyspace.CloneVT()
 		}
-		// Copy the vschema from the base keyspace to the new one.
-		ksvs.Keyspace = bksvs.Keyspace.CloneVT()
 		// SNAPSHOT keyspaces are excluded from global routing.
 		ksvs.RequireExplicitRouting = true
 		if err := wr.TopoServer().SaveVSchema(ctx, ksvs); err != nil {
@@ -3936,7 +3937,7 @@ type loggerWriter struct {
 }
 
 func (lw loggerWriter) Write(p []byte) (int, error) {
-	lw.Logger.Printf("%s", p)
+	lw.Printf("%s", p)
 	return len(p), nil
 }
 

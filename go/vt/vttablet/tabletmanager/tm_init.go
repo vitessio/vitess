@@ -289,6 +289,8 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 		DbNameOverride:       initDbNameOverride,
 		Tags:                 mergeTags(buildTags, initTags),
 		DefaultConnCollation: uint32(charset),
+		TabletStartTime:      protoutil.TimeToProto(time.Now()),
+		TabletShutdownTime:   nil,
 	}, nil
 }
 
@@ -508,6 +510,8 @@ func (tm *TabletManager) Close() {
 		tablet.Hostname = ""
 		tablet.MysqlHostname = ""
 		tablet.PortMap = nil
+		tablet.TabletStartTime = nil
+		tablet.TabletShutdownTime = protoutil.TimeToProto(time.Now())
 		return nil
 	}
 
@@ -1070,7 +1074,7 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 	}
 
 	// Set primary and start replication.
-	if currentPrimary.Tablet.MysqlHostname == "" {
+	if currentPrimary.MysqlHostname == "" {
 		log.Warningf("primary tablet in the shard record does not have mysql hostname specified, possibly because that tablet has been shut down.")
 		return "", nil
 	}
@@ -1105,7 +1109,7 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 		return "", vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("Errant GTID detected - %s; Primary GTID - %s, Replica GTID - %s", errantGtid, primaryPosition, replicaPos.String()))
 	}
 
-	if err := tm.MysqlDaemon.SetReplicationSource(ctx, currentPrimary.Tablet.MysqlHostname, currentPrimary.Tablet.MysqlPort, 0, true, true); err != nil {
+	if err := tm.MysqlDaemon.SetReplicationSource(ctx, currentPrimary.MysqlHostname, currentPrimary.MysqlPort, 0, true, true); err != nil {
 		return "", vterrors.Wrap(err, "MysqlDaemon.SetReplicationSource failed")
 	}
 

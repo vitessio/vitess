@@ -42,6 +42,7 @@ var (
 	localCluster *cluster.LocalProcessCluster
 	cell1        = "zone1"
 	cell2        = "zone2"
+	vtorcCell    = cell1
 	hostname     = "localhost"
 	keyspaceName = "ks"
 	tableName    = "test_table"
@@ -208,7 +209,7 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
-		if err := localCluster.StartVTOrc(keyspaceName); err != nil {
+		if err := localCluster.StartVTOrc(vtorcCell, keyspaceName); err != nil {
 			return 1, err
 		}
 

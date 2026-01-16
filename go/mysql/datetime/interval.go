@@ -225,7 +225,7 @@ func parseIntervalFields(itv string, negate *bool) (fields []int) {
 	}
 
 	for {
-		for len(itv) > 0 && !('0' <= itv[0] && itv[0] <= '9') {
+		for len(itv) > 0 && ('0' > itv[0] || itv[0] > '9') {
 			itv = itv[1:]
 		}
 		if len(itv) == 0 {
@@ -308,7 +308,7 @@ func (itv *Interval) setFromFields(fields []int, unit IntervalType) bool {
 // the one we calculated when parsing the Interval.
 func (itv *Interval) precision(stradd bool) uint8 {
 	if stradd {
-		if itv.timeparts.nsec != 0 {
+		if itv.nsec != 0 {
 			return DefaultPrecision
 		}
 		return 0

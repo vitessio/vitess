@@ -66,13 +66,6 @@ func (jf openTracingService) AddGrpcClientOptions(addInterceptors func(s grpc.St
 	addInterceptors(otgrpc.OpenTracingStreamClientInterceptor(ot), otgrpc.OpenTracingClientInterceptor(ot))
 }
 
-// NewClientSpan is part of an interface implementation
-func (jf openTracingService) NewClientSpan(parent Span, serviceName, label string) Span {
-	span := jf.New(parent, label)
-	span.Annotate("peer.service", serviceName)
-	return span
-}
-
 // New is part of an interface implementation
 func (jf openTracingService) New(parent Span, label string) Span {
 	var innerSpan opentracing.Span

@@ -45,12 +45,14 @@ import (
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/executorcontext"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 
 	// Ensure dialers are registered (needed by ExecOnTablet and ExecOnVTGate).
@@ -76,6 +78,11 @@ var (
 
 	// PerfTest controls whether to run the slower end-to-end tests that check the system's performance
 	PerfTest = flag.Bool("perf-test", false, "include end-to-end performance tests")
+
+	// DefaultVtorcsByCell is a default that puts a single vtorc in the DefaultCell (a const).
+	DefaultVtorcsByCell = map[string]int{
+		DefaultCell: 1,
+	}
 )
 
 // LocalProcessCluster Testcases need to use this to iniate a cluster
@@ -278,9 +285,9 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 }
 
 // StartVTOrc starts a VTOrc instance
-func (cluster *LocalProcessCluster) StartVTOrc(keyspace string) error {
+func (cluster *LocalProcessCluster) StartVTOrc(cell, keyspace string) error {
 	// Start vtorc
-	vtorcProcess := cluster.NewVTOrcProcess(VTOrcConfiguration{})
+	vtorcProcess := cluster.NewVTOrcProcess(VTOrcConfiguration{}, cell)
 	err := vtorcProcess.Setup()
 	if err != nil {
 		log.Error(err.Error())
@@ -294,11 +301,11 @@ func (cluster *LocalProcessCluster) StartVTOrc(keyspace string) error {
 }
 
 // StartUnshardedKeyspace starts unshared keyspace with shard name as "0"
-func (cluster *LocalProcessCluster) StartUnshardedKeyspace(keyspace Keyspace, replicaCount int, rdonly bool) error {
-	return cluster.StartKeyspace(keyspace, []string{"0"}, replicaCount, rdonly)
+func (cluster *LocalProcessCluster) StartUnshardedKeyspace(keyspace Keyspace, replicaCount int, rdonly bool, vtorcCell string) error {
+	return cluster.StartKeyspace(keyspace, []string{"0"}, replicaCount, rdonly, vtorcCell)
 }
 
-func (cluster *LocalProcessCluster) startPartialKeyspace(keyspace Keyspace, shardNames []string, movedShard string, replicaCount int, rdonly bool, customizers ...any) (err error) {
+func (cluster *LocalProcessCluster) startPartialKeyspace(keyspace Keyspace, shardNames []string, movedShard string, replicaCount int, rdonly bool, vtorcCell string, customizers ...any) (err error) {
 	cluster.HasPartialKeyspaces = true
 	routedKeyspace := &Keyspace{
 		Name:             keyspace.Name + "_routed",
@@ -307,7 +314,7 @@ func (cluster *LocalProcessCluster) startPartialKeyspace(keyspace Keyspace, shar
 		DurabilityPolicy: keyspace.DurabilityPolicy,
 	}
 
-	err = cluster.startKeyspace(*routedKeyspace, shardNames, replicaCount, rdonly, customizers...)
+	err = cluster.startKeyspace(*routedKeyspace, shardNames, replicaCount, rdonly, vtorcCell, customizers...)
 	if err != nil {
 		return err
 	}
@@ -323,15 +330,15 @@ func (cluster *LocalProcessCluster) startPartialKeyspace(keyspace Keyspace, shar
 	return nil
 }
 
-func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames []string, replicaCount int, rdonly bool, customizers ...any) (err error) {
-	err = cluster.startKeyspace(keyspace, shardNames, replicaCount, rdonly, customizers...)
+func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames []string, replicaCount int, rdonly bool, vtorcCell string, customizers ...any) (err error) {
+	err = cluster.startKeyspace(keyspace, shardNames, replicaCount, rdonly, vtorcCell, customizers...)
 	if err != nil {
 		return err
 	}
 
 	if *partialKeyspace && len(shardNames) > 1 {
 		movedShard := shardNames[0]
-		return cluster.startPartialKeyspace(keyspace, shardNames, movedShard, replicaCount, rdonly, customizers...)
+		return cluster.startPartialKeyspace(keyspace, shardNames, movedShard, replicaCount, rdonly, vtorcCell, customizers...)
 	}
 	return nil
 }
@@ -381,7 +388,7 @@ func (cluster *LocalProcessCluster) InitTablet(tablet *Vttablet, keyspace string
 // rdonly: whether readonly tablets needed
 // customizers: functions like "func(*VttabletProcess)" that can modify settings of various objects
 // after they're created.
-func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames []string, replicaCount int, rdonly bool, customizers ...any) (err error) {
+func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames []string, replicaCount int, rdonly bool, vtorcCell string, customizers ...any) (err error) {
 	totalTabletsRequired := replicaCount + 1 // + 1 is for primary
 	if rdonly {
 		totalTabletsRequired = totalTabletsRequired + 1 // + 1 for rdonly
@@ -429,7 +436,7 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 
 		log.Infof("Done creating keyspace: %v ", keyspace.Name)
 
-		err = cluster.StartVTOrc(keyspace.Name)
+		err = cluster.StartVTOrc(vtorcCell, keyspace.Name)
 		if err != nil {
 			log.Errorf("Error starting VTOrc - %v", err)
 			return err
@@ -807,7 +814,7 @@ func NewBareCluster(cell string, hostname string) *LocalProcessCluster {
 		// path/to/whatever exists
 		cluster.ReusingVTDATAROOT = true
 	} else {
-		err = createDirectory(cluster.CurrentVTDATAROOT, 0700)
+		err = createDirectory(cluster.CurrentVTDATAROOT, 0o700)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -948,7 +955,8 @@ func (cluster *LocalProcessCluster) ExecOnTablet(ctx context.Context, vttablet *
 
 	txID, reservedID := 0, 0
 
-	return conn.Execute(ctx, &querypb.Target{
+	session := executorcontext.NewSafeSession(&vtgatepb.Session{Options: opts})
+	return conn.Execute(ctx, session, &querypb.Target{
 		Keyspace:   tablet.Keyspace,
 		Shard:      tablet.Shard,
 		TabletType: tablet.Type,
@@ -1165,7 +1173,8 @@ func (cluster *LocalProcessCluster) waitForMySQLProcessToExit(mysqlctlProcessLis
 
 // StartVtbackup starts a vtbackup
 func (cluster *LocalProcessCluster) StartVtbackup(newInitDBFile string, initialBackup bool,
-	keyspace string, shard string, cell string, extraArgs ...string) error {
+	keyspace string, shard string, cell string, extraArgs ...string,
+) error {
 	log.Info("Starting vtbackup")
 	cluster.VtbackupProcess = *VtbackupProcessInstance(
 		cluster.GetAndReserveTabletUID(),
@@ -1195,7 +1204,6 @@ func (cluster *LocalProcessCluster) GetAndReservePort() int {
 		cluster.nextPortForProcess = cluster.nextPortForProcess + 1
 		log.Infof("Attempting to reserve port: %v", cluster.nextPortForProcess)
 		ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(cluster.nextPortForProcess)))
-
 		if err != nil {
 			log.Errorf("Can't listen on port %v: %s, trying next port", cluster.nextPortForProcess, err)
 			continue
@@ -1218,7 +1226,7 @@ const portFileTimeout = 1 * time.Hour
 // If yes, then return that port, and save port + 200 in the same file
 // here, assumptions is 200 ports might be consumed for all tests in a package
 func getPort() int {
-	portFile, err := os.OpenFile(path.Join(os.TempDir(), "endtoend.port"), os.O_CREATE|os.O_RDWR, 0644)
+	portFile, err := os.OpenFile(path.Join(os.TempDir(), "endtoend.port"), os.O_CREATE|os.O_RDWR, 0o644)
 	if err != nil {
 		panic(err)
 	}
@@ -1301,10 +1309,11 @@ func (cluster *LocalProcessCluster) NewVttabletInstance(tabletType string, UID i
 }
 
 // NewVTOrcProcess creates a new VTOrcProcess object
-func (cluster *LocalProcessCluster) NewVTOrcProcess(config VTOrcConfiguration) *VTOrcProcess {
+func (cluster *LocalProcessCluster) NewVTOrcProcess(config VTOrcConfiguration, cell string) *VTOrcProcess {
 	base := VtProcessInstance("vtorc", "vtorc", cluster.TopoProcess.Port, cluster.Hostname)
 	return &VTOrcProcess{
 		VtProcess: base,
+		Cell:      cell,
 		LogDir:    cluster.TmpDirectory,
 		Config:    config,
 		Port:      cluster.GetAndReservePort(),

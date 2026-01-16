@@ -118,7 +118,7 @@ func getConnectionNoError(t *testing.T, hostname string, port int) *mysql.Conn {
 		Port:  port,
 		Uname: "vt_dba",
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
 		return nil
@@ -133,7 +133,7 @@ func getConnection(t *testing.T, hostname string, port int) *mysql.Conn {
 		Uname:            "vt_dba",
 		ConnectTimeoutMs: 1000,
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoErrorf(t, err, "error connecting to vtgate on %s:%d", hostname, port)
 	return conn

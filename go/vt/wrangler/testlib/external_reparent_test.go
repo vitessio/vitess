@@ -529,7 +529,7 @@ func TestRPCTabletExternallyReparentedDemotesPrimaryToConfiguredTabletType(t *te
 		t.Fatalf("GetTablet failed: %v", err)
 	}
 
-	if err := wr.TabletExternallyReparented(context.Background(), ti.Tablet.Alias); err != nil {
+	if err := wr.TabletExternallyReparented(context.Background(), ti.Alias); err != nil {
 		t.Fatalf("TabletExternallyReparented failed: %v", err)
 	}
 

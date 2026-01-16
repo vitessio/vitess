@@ -146,7 +146,7 @@ func TestSecureTransport(t *testing.T) {
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand(vtctlInitArgs...)
 	require.NoError(t, err)
 
-	err = clusterInstance.StartVTOrc("test_keyspace")
+	err = clusterInstance.StartVTOrc(cell, "test_keyspace")
 	require.NoError(t, err)
 
 	// Apply schema.
@@ -170,7 +170,7 @@ func TestSecureTransport(t *testing.T) {
 
 	// 'vtgate client 1' is authorized to access vt_insert_test
 	setCreds(t, "vtgate-client-1", "vtgate-server")
-	ctx := context.Background()
+	ctx := t.Context()
 	request := getRequest("select * from vt_insert_test")
 	vc, err := getVitessClient(ctx, grpcAddress)
 	require.NoError(t, err)
