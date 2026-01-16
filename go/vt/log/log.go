@@ -36,130 +36,57 @@ type Level = glog.Level
 
 var (
 	// V quickly checks if the logging verbosity meets a threshold.
-	//
-	// Note: This function is deprecated. Use the new structured logging API: log.SDebug() or log.STrace().
 	V = glog.V
 
 	// Flush ensures any pending I/O is written.
-	//
-	// Note: This function is deprecated. Use the new structured logging API. Structured logging does not require explicit flushing.
-	Flush = glogFlush
+	Flush = glog.Flush
 
 	// Info formats arguments like fmt.Print.
-	//
-	// Note: This function is deprecated. Use the new structured logging API: log.SInfo().Msg().
-	Info = func(args ...any) { glogInfo(1, args...) }
-
+	Info = glog.Info
 	// Infof formats arguments like fmt.Printf.
-	//
-	// Note: This function is deprecated. Use the new structured logging API: log.SInfo().Msgf().
-	Infof = func(format string, args ...any) { glogInfof(1, format, args...) }
-
+	Infof = glog.Infof
 	// InfoDepth formats arguments like fmt.Print and uses depth to choose which call frame to log.
-	//
-	// Note: This function is deprecated. Use the new structured logging API: log.SInfo().Msg().
-	InfoDepth = func(depth int, args ...any) { glogInfo(depth+1, args...) }
-
-	// InfofDepth formats arguments like fmt.Printf and uses depth to choose which call frame to log.
-	//
-	// Note: This function is deprecated. Use the new structured logging API: log.SInfo().Msgf().
-	InfofDepth = func(depth int, format string, args ...any) { glogInfof(depth+1, format, args...) }
+	InfoDepth = glog.InfoDepth
 
 	// Warning formats arguments like fmt.Print.
-	//
-	// Note: This function is deprecated. Use the new structured logging API: log.SWarn().Msg().
-	Warning = func(args ...any) { glogWarning(1, args...) }
-
+	Warning = glog.Warning
 	// Warningf formats arguments like fmt.Printf.
-	//
-	// Note: This function is deprecated. Use the new structured logging API: log.SWarn().Msgf().
-	Warningf = func(format string, args ...any) { glogWarningf(1, format, args...) }
-
+	Warningf = glog.Warningf
 	// WarningDepth formats arguments like fmt.Print and uses depth to choose which call frame to log.
-	//
-	// Note: This function is deprecated. Use the new structured logging API: log.SWarn().Msg().
-	WarningDepth = func(depth int, args ...any) { glogWarning(depth+1, args...) }
-
-	// WarningfDepth formats arguments like fmt.Printf and uses depth to choose which call frame to log.
-	//
-	// Note: This function is deprecated. Use the new structured logging API: log.SWarn().Msgf().
-	WarningfDepth = func(depth int, format string, args ...any) { glogWarningf(depth+1, format, args...) }
+	WarningDepth = glog.WarningDepth
 
 	// Error formats arguments like fmt.Print.
-	//
-	// Note: This function is deprecated. Use the new structured logging API: log.SError().Msg().
-	Error = func(args ...any) { glogError(1, args...) }
-
+	Error = glog.Error
 	// Errorf formats arguments like fmt.Printf.
-	//
-	// Note: This function is deprecated. Use the new structured logging API: log.SError().Msgf().
-	Errorf = func(format string, args ...any) { glogErrorf(1, format, args...) }
-
+	Errorf = glog.Errorf
 	// ErrorDepth formats arguments like fmt.Print and uses depth to choose which call frame to log.
-	//
-	// Note: This function is deprecated. Use the new structured logging API: log.SError().Msg().
-	ErrorDepth = func(depth int, args ...any) { glogError(depth+1, args...) }
-
-	// ErrorfDepth formats arguments like fmt.Printf and uses depth to choose which call frame to log.
-	//
-	// Note: This function is deprecated. Use the new structured logging API: log.SError().Msgf().
-	ErrorfDepth = func(depth int, format string, args ...any) { glogErrorf(depth+1, format, args...) }
+	ErrorDepth = glog.ErrorDepth
 
 	// Exit formats arguments like fmt.Print.
-	//
-	// Note: This function is deprecated. Use the new structured logging API: log.SFatal().Msg().
-	Exit = func(args ...any) { glogExit(1, args...) }
-
+	Exit = glog.Exit
 	// Exitf formats arguments like fmt.Printf.
-	//
-	// Note: This function is deprecated. Use the new structured logging API: log.SFatal().Msgf().
-	Exitf = func(format string, args ...any) { glogExitf(1, format, args...) }
-
+	Exitf = glog.Exitf
 	// ExitDepth formats arguments like fmt.Print and uses depth to choose which call frame to log.
-	//
-	// Note: This function is deprecated. Use the new structured logging API: log.SFatal().Msg().
-	ExitDepth = func(depth int, args ...any) { glogExit(depth+1, args...) }
-
-	// ExitfDepth formats arguments like fmt.Printf and uses depth to choose which call frame to log.
-	//
-	// Note: This function is deprecated. Use the new structured logging API: log.SFatal().Msgf().
-	ExitfDepth = func(depth int, format string, args ...any) { glogExitf(depth+1, format, args...) }
+	ExitDepth = glog.ExitDepth
 
 	// Fatal formats arguments like fmt.Print.
-	//
-	// Note: This function is deprecated. Use the new structured logging API: log.SFatal().Msg().
-	Fatal = func(args ...any) { glogFatal(1, args...) }
-
-	// Fatalf formats arguments like fmt.Printf.
-	//
-	// Note: This function is deprecated. Use the new structured logging API: log.SFatal().Msgf().
-	Fatalf = func(format string, args ...any) { glogFatalf(1, format, args...) }
-
+	Fatal = glog.Fatal
+	// Fatalf formats arguments like fmt.Printf
+	Fatalf = glog.Fatalf
 	// FatalDepth formats arguments like fmt.Print and uses depth to choose which call frame to log.
-	//
-	// Note: This function is deprecated. Use the new structured logging API: log.SFatal().Msg().
-	FatalDepth = func(depth int, args ...any) { glogFatal(depth+1, args...) }
-
-	// FatalfDepth formats arguments like fmt.Printf and uses depth to choose which call frame to log.
-	//
-	// Note: This function is deprecated. Use the new structured logging API: log.SFatal().Msgf().
-	FatalfDepth = func(depth int, format string, args ...any) { glogFatalf(depth+1, format, args...) }
+	FatalDepth = glog.FatalDepth
 )
 
 // RegisterFlags installs log flags on the given FlagSet.
 //
-// `go/cmd/*` entrypoints should either use servenv.ParseFlags(WithArgs)? which calls this function,
-// or call this function directly before parsing command-line arguments.
+// `go/cmd/*` entrypoints should either use servenv.ParseFlags(WithArgs)? which
+// calls this function, or call this function directly before parsing
+// command-line arguments.
 func RegisterFlags(fs *pflag.FlagSet) {
 	flagVal := logRotateMaxSize{
 		val: strconv.FormatUint(atomic.LoadUint64(&glog.MaxSize), 10),
 	}
 	utils.SetFlagVar(fs, &flagVal, "log-rotate-max-size", "size in bytes at which logs are rotated (glog.MaxSize)")
-
-	fs.BoolVar(&structuredLogging, "structured-logging", true, "Enable structured logging")
-	fs.StringVar(&structuredLoggingLevel, "structured-logging-level", "info", "Log level for structured logging: trace, debug, info, warn, error, fatal, panic, disabled")
-	fs.BoolVar(&structuredLoggingPretty, "structured-logging-pretty", false, "Enable pretty console output for structured logging")
-	fs.StringVar(&structuredLoggingFile, "structured-logging-file", "", "Path to log file for structured logging with rotation (empty means stdout)")
 }
 
 // logRotateMaxSize implements pflag.Value and is used to
@@ -204,70 +131,75 @@ func (pl *PrefixedLogger) Flush() {
 
 func (pl *PrefixedLogger) Info(args ...any) {
 	args = append([]interface{}{pl.prefix}, args...)
-	InfoDepth(1, args...)
+	Info(args...)
 }
 
 func (pl *PrefixedLogger) Infof(format string, args ...any) {
-	InfofDepth(1, pl.prefix+format, args...)
+	args = append([]interface{}{pl.prefix}, args...)
+	Infof("%s"+format, args...)
 }
 
 func (pl *PrefixedLogger) InfoDepth(depth int, args ...any) {
 	args = append([]interface{}{pl.prefix}, args...)
-	InfoDepth(depth+1, args...)
+	InfoDepth(depth, args...)
 }
 
 func (pl *PrefixedLogger) Warning(args ...any) {
 	args = append([]interface{}{pl.prefix}, args...)
-	WarningDepth(1, args...)
+	Warning(args...)
 }
 
 func (pl *PrefixedLogger) Warningf(format string, args ...any) {
-	WarningfDepth(1, pl.prefix+format, args...)
+	args = append([]interface{}{pl.prefix}, args...)
+	Warningf("%s"+format, args...)
 }
 
 func (pl *PrefixedLogger) WarningDepth(depth int, args ...any) {
 	args = append([]interface{}{pl.prefix}, args...)
-	WarningDepth(depth+1, args...)
+	WarningDepth(depth, args...)
 }
 
 func (pl *PrefixedLogger) Error(args ...any) {
 	args = append([]interface{}{pl.prefix}, args...)
-	ErrorDepth(1, args...)
+	Error(args...)
 }
 
 func (pl *PrefixedLogger) Errorf(format string, args ...any) {
-	ErrorfDepth(1, pl.prefix+format, args...)
+	args = append([]interface{}{pl.prefix}, args...)
+	Errorf("%s"+format, args...)
 }
 
 func (pl *PrefixedLogger) ErrorDepth(depth int, args ...any) {
 	args = append([]interface{}{pl.prefix}, args...)
-	ErrorDepth(depth+1, args...)
+	ErrorDepth(depth, args...)
 }
 
 func (pl *PrefixedLogger) Exit(args ...any) {
 	args = append([]interface{}{pl.prefix}, args...)
-	ExitDepth(1, args...)
+	Exit(args...)
 }
 
 func (pl *PrefixedLogger) Exitf(format string, args ...any) {
-	ExitfDepth(1, pl.prefix+format, args...)
+	args = append([]interface{}{pl.prefix}, args...)
+	Exitf("%s"+format, args...)
 }
 
 func (pl *PrefixedLogger) ExitDepth(depth int, args ...any) {
 	args = append([]interface{}{pl.prefix}, args...)
-	ExitDepth(depth+1, args...)
+	ExitDepth(depth, args...)
 }
 
 func (pl *PrefixedLogger) Fatal(args ...any) {
 	args = append([]interface{}{pl.prefix}, args...)
-	FatalDepth(1, args...)
+	Fatal(args...)
 }
 
 func (pl *PrefixedLogger) Fatalf(format string, args ...any) {
-	FatalfDepth(1, pl.prefix+format, args...)
+	args = append([]interface{}{pl.prefix}, args...)
+	Fatalf("%s"+format, args...)
 }
 
 func (pl *PrefixedLogger) FatalDepth(depth int, args ...any) {
 	args = append([]interface{}{pl.prefix}, args...)
-	FatalDepth(depth+1, args...)
+	FatalDepth(depth, args...)
 }

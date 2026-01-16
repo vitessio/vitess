@@ -319,10 +319,6 @@ func ParseFlags(cmd string) {
 
 	loadViper(cmd)
 
-	if err := log.Init(fs); err != nil {
-		log.Exitf("%s: %v", cmd, err)
-	}
-
 	logutil.PurgeLogs()
 }
 
@@ -335,10 +331,6 @@ func ParseFlagsForTests(cmd string) {
 	pflag.Parse()
 	viperutil.BindFlags(fs)
 	loadViper(cmd)
-
-	if err := log.Init(fs); err != nil {
-		log.Exitf("%s: %v", cmd, err)
-	}
 }
 
 // MoveFlagsToCobraCommand moves the servenv-registered flags to the flagset of
@@ -379,11 +371,6 @@ func moveFlags(name string, fs *pflag.FlagSet) {
 // functions.
 func CobraPreRunE(cmd *cobra.Command, args []string) error {
 	_flag.TrickGlog()
-
-	if err := log.Init(cmd.Flags()); err != nil {
-		return fmt.Errorf("%s: %v", cmd.Name(), err)
-	}
-
 	// Register logging on config file change.
 	ch := make(chan struct{})
 	viperutil.NotifyConfigReload(ch)
@@ -440,10 +427,6 @@ func ParseFlagsWithArgs(cmd string) []string {
 	}
 
 	loadViper(cmd)
-
-	if err := log.Init(fs); err != nil {
-		log.Exitf("%s: %v", cmd, err)
-	}
 
 	logutil.PurgeLogs()
 
