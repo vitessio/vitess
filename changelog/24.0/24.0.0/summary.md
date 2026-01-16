@@ -43,13 +43,15 @@ VTGate now supports routing queries to a specific tablet by alias using an exten
 USE keyspace:shard@tablet_type|tablet_alias;
 ```
 
-For example, to target a specific primary tablet:
+For example, to target a specific replica tablet:
 
 ```sql
-USE commerce:-80@primary|zone1-0000000100;
+USE commerce:-80@replica|zone1-0000000100;
 ```
 
 Once set, all subsequent queries in the session route to the specified tablet until cleared with a standard `USE keyspace` or `USE keyspace@tablet_type` statement. This is useful for debugging, per-tablet monitoring, cache warming, and other operational tasks where targeting a specific tablet is required.
+
+Note: A shard must be specified when using tablet targeting. Like shard targeting, this bypasses vindex-based routing, so use with care.
 
 ## <a id="minor-changes"/>Minor Changes</a>
 
