@@ -29,11 +29,13 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
 func max(a, b int64) int64 {
@@ -299,6 +301,118 @@ func TestReconcileExtraRows(t *testing.T) {
 		require.Equal(t, int64(4), dr.ExtraRowsTarget)
 
 		require.Equal(t, int64(2), dr.MatchingRows)
+	})
+}
+
+func TestReconcileReferenceTables(t *testing.T) {
+	ctx := t.Context()
+	vdenv := newTestVDiffEnv(t)
+	defer vdenv.close()
+	UUID := uuid.New()
+	controllerQR := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		vdiffTestCols,
+		vdiffTestColTypes,
+	),
+		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, vdiffenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, PendingState, optionsJS),
+	)
+
+	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
+	ct := vdenv.newController(t, controllerQR)
+	ct.sourceKeyspace = tstenv.KeyspaceName
+	wd, err := newWorkflowDiffer(ct, vdiffenv.opts, collations.MySQL8())
+	require.NoError(t, err)
+
+	// Create VSchema for the source keyspace with a reference table.
+	err = tstenv.TopoServ.EnsureVSchema(ctx, tstenv.KeyspaceName)
+	require.NoError(t, err)
+	sourceVS := &vschemapb.Keyspace{
+		Tables: map[string]*vschemapb.Table{
+			"ref_table": {
+				Type: "reference",
+			},
+		},
+	}
+	err = tstenv.TopoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name:     tstenv.KeyspaceName,
+		Keyspace: sourceVS,
+	})
+	require.NoError(t, err)
+
+	t.Run("division by zero with zero matching rows - source side", func(t *testing.T) {
+		dr := &DiffReport{
+			TableName:            "ref_table",
+			ProcessedRows:        10,
+			MatchingRows:         0,
+			MismatchedRows:       0, // Must be 0 to enter reconciliation logic
+			ExtraRowsSource:      10,
+			ExtraRowsSourceDiffs: []*RowDiff{{Row: map[string]string{"id": "1"}}},
+			ExtraRowsTarget:      0,
+		}
+
+		err := wd.reconcileReferenceTables(dr)
+		require.NoError(t, err)
+
+		// Values should remain unchanged since MatchingRows is 0.
+		require.Equal(t, int64(10), dr.ExtraRowsSource)
+		require.Equal(t, int64(0), dr.ExtraRowsTarget)
+	})
+
+	t.Run("division by zero with zero matching rows - target side", func(t *testing.T) {
+		dr := &DiffReport{
+			TableName:            "ref_table",
+			ProcessedRows:        10,
+			MatchingRows:         0,
+			MismatchedRows:       0, // Must be 0 to enter reconciliation logic
+			ExtraRowsSource:      0,
+			ExtraRowsTarget:      10,
+			ExtraRowsTargetDiffs: []*RowDiff{{Row: map[string]string{"id": "1"}}},
+		}
+
+		err := wd.reconcileReferenceTables(dr)
+		require.NoError(t, err)
+
+		// Values should remain unchanged since MatchingRows is 0.
+		require.Equal(t, int64(0), dr.ExtraRowsSource)
+		require.Equal(t, int64(10), dr.ExtraRowsTarget)
+	})
+
+	t.Run("reference table with positive matching rows - works correctly", func(t *testing.T) {
+		dr := &DiffReport{
+			TableName:            "ref_table",
+			ProcessedRows:        15,
+			MatchingRows:         5,
+			MismatchedRows:       0,
+			ExtraRowsSource:      10, // 10 % 5 = 0, so it's a multiple.
+			ExtraRowsSourceDiffs: []*RowDiff{{Row: map[string]string{"id": "1"}}},
+			ExtraRowsTarget:      0,
+		}
+
+		err := wd.reconcileReferenceTables(dr)
+		require.NoError(t, err)
+
+		// ExtraRowsSource should be cleared since it's a multiple of MatchingRows.
+		require.Equal(t, int64(0), dr.ExtraRowsSource)
+		require.Equal(t, 0, len(dr.ExtraRowsSourceDiffs))
+	})
+
+	t.Run("mismatched rows - reconciliation skipped entirely", func(t *testing.T) {
+		// With mismatched rows, reconciliation is skipped, so no VSchema access.
+		dr := &DiffReport{
+			TableName:            "ref_table",
+			ProcessedRows:        10,
+			MatchingRows:         0,
+			MismatchedRows:       5, // Non-zero means early return, no VSchema access
+			ExtraRowsSource:      10,
+			ExtraRowsSourceDiffs: []*RowDiff{{Row: map[string]string{"id": "1"}}},
+			ExtraRowsTarget:      0,
+		}
+
+		err := wd.reconcileReferenceTables(dr)
+		require.NoError(t, err)
+
+		// Values should remain unchanged.
+		require.Equal(t, int64(10), dr.ExtraRowsSource)
+		require.Equal(t, int64(0), dr.ExtraRowsTarget)
 	})
 }
 
