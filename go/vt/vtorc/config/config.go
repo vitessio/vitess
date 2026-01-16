@@ -261,6 +261,8 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.Bool("change-tablets-with-errant-gtid-to-drained", convertTabletsWithErrantGTIDs.Default(), "Whether VTOrc should be changing the type of tablets with errant GTIDs to DRAINED")
 	fs.Bool("enable-primary-disk-stalled-recovery", enablePrimaryDiskStalledRecovery.Default(), "Whether VTOrc should detect a stalled disk on the primary and failover")
 
+	registerGossipFlags(fs)
+
 	viperutil.BindFlags(fs,
 		cell,
 		instancePollTime,

@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/gossip"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
@@ -4492,6 +4493,7 @@ func TestBuildReadVReplicationWorkflowsQuery(t *testing.T) {
 		DBConfigs: &dbconfigs.DBConfigs{
 			DBName: "vt_testks",
 		},
+		Gossip: gossip.New(gossip.Config{}, nil, nil),
 	}
 	tests := []struct {
 		name    string
@@ -4537,6 +4539,7 @@ func TestBuildUpdateVReplicationWorkflowsQuery(t *testing.T) {
 		DBConfigs: &dbconfigs.DBConfigs{
 			DBName: "vt_testks",
 		},
+		Gossip: gossip.New(gossip.Config{}, nil, nil),
 	}
 	forVdiff := "for vdiff"
 	forPos := "for until position"

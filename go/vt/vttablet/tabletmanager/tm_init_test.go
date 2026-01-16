@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/gossip"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
@@ -426,6 +427,7 @@ func TestStartCheckMysql(t *testing.T) {
 		MysqlDaemon:         newTestMysqlDaemon(t, 1),
 		DBConfigs:           dbconfigs.NewTestDBConfigs(cp, cp, ""),
 		QueryServiceControl: tabletservermock.NewController(),
+		Gossip:              gossip.New(gossip.Config{}, nil, nil),
 	}
 	err := tm.Start(tablet, nil)
 	require.NoError(t, err)
@@ -454,6 +456,7 @@ func TestStartFindMysqlPort(t *testing.T) {
 		MysqlDaemon:         fmd,
 		DBConfigs:           &dbconfigs.DBConfigs{},
 		QueryServiceControl: tabletservermock.NewController(),
+		Gossip:              gossip.New(gossip.Config{}, nil, nil),
 	}
 	err := tm.Start(tablet, nil)
 	require.NoError(t, err)
@@ -720,6 +723,7 @@ func newTestTM(t *testing.T, ts *topo.Server, uid int, keyspace, shard string, t
 		DBConfigs:           &dbconfigs.DBConfigs{},
 		SemiSyncMonitor:     semisyncmonitor.CreateTestSemiSyncMonitor(fakeDb.DB(), exporter),
 		QueryServiceControl: tabletservermock.NewController(),
+		Gossip:              gossip.New(gossip.Config{}, nil, nil),
 	}
 	err := tm.Start(tablet, nil)
 	require.NoError(t, err)
@@ -914,6 +918,7 @@ func TestWaitForDBAGrants(t *testing.T) {
 			tm := TabletManager{
 				_waitForGrantsComplete: make(chan struct{}),
 				MysqlDaemon:            dm,
+				Gossip:                 gossip.New(gossip.Config{}, nil, nil),
 			}
 			err := tm.waitForDBAGrants(config, tt.waitTime)
 			if tt.errWanted == "" {
