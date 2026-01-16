@@ -67,7 +67,8 @@ func (jf openTracingService) AddGrpcClientOptions(addInterceptors func(s grpc.St
 }
 
 // New is part of an interface implementation
-func (jf openTracingService) New(parent Span, label string) Span {
+func (jf openTracingService) New(ctx context.Context, label string) (Span, context.Context) {
+	parent, _ := jf.FromContext(ctx)
 	var innerSpan opentracing.Span
 	if parent == nil {
 		innerSpan = jf.Tracer.GetOpenTracingTracer().StartSpan(label)
@@ -76,7 +77,8 @@ func (jf openTracingService) New(parent Span, label string) Span {
 		span := jaegerParent.otSpan
 		innerSpan = jf.Tracer.GetOpenTracingTracer().StartSpan(label, opentracing.ChildOf(span.Context()))
 	}
-	return openTracingSpan{otSpan: innerSpan}
+	span := openTracingSpan{otSpan: innerSpan}
+	return span, jf.NewContext(ctx, span)
 }
 
 func extractMapFromString(in string) (opentracing.TextMapCarrier, error) {
@@ -94,17 +96,18 @@ func extractMapFromString(in string) (opentracing.TextMapCarrier, error) {
 	return dat, nil
 }
 
-func (jf openTracingService) NewFromString(parent, label string) (Span, error) {
+func (jf openTracingService) NewFromString(ctx context.Context, parent, label string) (Span, context.Context, error) {
 	carrier, err := extractMapFromString(parent)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	spanContext, err := jf.Tracer.GetOpenTracingTracer().Extract(opentracing.TextMap, carrier)
 	if err != nil {
-		return nil, vterrors.Wrap(err, "failed to deserialize span context")
+		return nil, nil, vterrors.Wrap(err, "failed to deserialize span context")
 	}
 	innerSpan := jf.Tracer.GetOpenTracingTracer().StartSpan(label, opentracing.ChildOf(spanContext))
-	return openTracingSpan{otSpan: innerSpan}, nil
+	span := openTracingSpan{otSpan: innerSpan}
+	return span, jf.NewContext(ctx, span), nil
 }
 
 // FromContext is part of an interface implementation
