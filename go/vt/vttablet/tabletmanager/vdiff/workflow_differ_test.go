@@ -35,11 +35,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-<<<<<<< HEAD
-=======
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
->>>>>>> cd546aba23 (VDiff: Prevent division by 0 when reconciling mismatches for reference tables (#19160))
 )
 
 func max(a, b int64) int64 {
