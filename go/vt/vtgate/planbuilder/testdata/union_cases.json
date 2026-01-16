@@ -1366,37 +1366,6 @@
             "OperatorType": "Concatenate",
             "Inputs": [
               {
-<<<<<<< HEAD
-                "OperatorType": "Concatenate",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "DBA",
-                    "Keyspace": {
-                      "Name": "main",
-                      "Sharded": false
-                    },
-                    "FieldQuery": "select kcu.`COLUMN_NAME` from information_schema.key_column_usage as kcu where 1 != 1",
-                    "Query": "select distinct kcu.`COLUMN_NAME` from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.`table_name` = :kcu_table_name /* VARCHAR */",
-                    "SysTableTableName": "[kcu_table_name:'user_extra']",
-                    "SysTableTableSchema": "['user']",
-                    "Table": "information_schema.key_column_usage"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "DBA",
-                    "Keyspace": {
-                      "Name": "main",
-                      "Sharded": false
-                    },
-                    "FieldQuery": "select kcu.`COLUMN_NAME` from information_schema.key_column_usage as kcu where 1 != 1",
-                    "Query": "select distinct kcu.`COLUMN_NAME` from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.`table_name` = :kcu_table_name1 /* VARCHAR */",
-                    "SysTableTableName": "[kcu_table_name1:'music']",
-                    "SysTableTableSchema": "['user']",
-                    "Table": "information_schema.key_column_usage"
-                  }
-                ]
-=======
                 "OperatorType": "Route",
                 "Variant": "DBA",
                 "Keyspace": {
@@ -1406,7 +1375,8 @@
                 "FieldQuery": "select kcu.`COLUMN_NAME` from information_schema.key_column_usage as kcu where 1 != 1",
                 "Query": "select distinct kcu.`COLUMN_NAME` from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.`table_name` = :kcu_table_name /* VARCHAR */ and `COLUMN_NAME` = 'primary'",
                 "SysTableTableName": "[kcu_table_name:'user_extra']",
-                "SysTableTableSchema": "['user']"
+                "SysTableTableSchema": "['user']",
+                "Table": "information_schema.key_column_usage"
               },
               {
                 "OperatorType": "Route",
@@ -1418,8 +1388,8 @@
                 "FieldQuery": "select kcu.`COLUMN_NAME` from information_schema.key_column_usage as kcu where 1 != 1",
                 "Query": "select distinct kcu.`COLUMN_NAME` from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.`table_name` = :kcu_table_name1 /* VARCHAR */ and `COLUMN_NAME` = 'primary'",
                 "SysTableTableName": "[kcu_table_name1:'music']",
-                "SysTableTableSchema": "['user']"
->>>>>>> 421111452d (Fix column offset tracking for `UNION`s to be case insensitive. (#19139))
+                "SysTableTableSchema": "['user']",
+                "Table": "information_schema.key_column_usage"
               }
             ]
           }
@@ -1483,37 +1453,6 @@
             "OperatorType": "Concatenate",
             "Inputs": [
               {
-<<<<<<< HEAD
-                "OperatorType": "Concatenate",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "DBA",
-                    "Keyspace": {
-                      "Name": "main",
-                      "Sharded": false
-                    },
-                    "FieldQuery": "select `CONSTRAINT_CATALOG`, `CONSTRAINT_SCHEMA`, `CONSTRAINT_NAME`, TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, `COLUMN_NAME`, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT, REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where 1 != 1",
-                    "Query": "select distinct `CONSTRAINT_CATALOG`, `CONSTRAINT_SCHEMA`, `CONSTRAINT_NAME`, TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, `COLUMN_NAME`, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT, REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.`table_name` = :kcu_table_name /* VARCHAR */",
-                    "SysTableTableName": "[kcu_table_name:'user_extra']",
-                    "SysTableTableSchema": "['user']",
-                    "Table": "information_schema.key_column_usage"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "DBA",
-                    "Keyspace": {
-                      "Name": "main",
-                      "Sharded": false
-                    },
-                    "FieldQuery": "select `CONSTRAINT_CATALOG`, `CONSTRAINT_SCHEMA`, `CONSTRAINT_NAME`, TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, `COLUMN_NAME`, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT, REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where 1 != 1",
-                    "Query": "select distinct `CONSTRAINT_CATALOG`, `CONSTRAINT_SCHEMA`, `CONSTRAINT_NAME`, TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, `COLUMN_NAME`, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT, REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.`table_name` = :kcu_table_name1 /* VARCHAR */",
-                    "SysTableTableName": "[kcu_table_name1:'music']",
-                    "SysTableTableSchema": "['user']",
-                    "Table": "information_schema.key_column_usage"
-                  }
-                ]
-=======
                 "OperatorType": "Route",
                 "Variant": "DBA",
                 "Keyspace": {
@@ -1523,7 +1462,8 @@
                 "FieldQuery": "select `CONSTRAINT_CATALOG`, `CONSTRAINT_SCHEMA`, `CONSTRAINT_NAME`, TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, `COLUMN_NAME`, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT, REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where 1 != 1",
                 "Query": "select distinct `CONSTRAINT_CATALOG`, `CONSTRAINT_SCHEMA`, `CONSTRAINT_NAME`, TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, `COLUMN_NAME`, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT, REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.`table_name` = :kcu_table_name /* VARCHAR */ and `CONSTRAINT_NAME` = 'primary'",
                 "SysTableTableName": "[kcu_table_name:'user_extra']",
-                "SysTableTableSchema": "['user']"
+                "SysTableTableSchema": "['user']",
+                "Table": "information_schema.key_column_usage"
               },
               {
                 "OperatorType": "Route",
@@ -1535,8 +1475,8 @@
                 "FieldQuery": "select `CONSTRAINT_CATALOG`, `CONSTRAINT_SCHEMA`, `CONSTRAINT_NAME`, TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, `COLUMN_NAME`, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT, REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where 1 != 1",
                 "Query": "select distinct `CONSTRAINT_CATALOG`, `CONSTRAINT_SCHEMA`, `CONSTRAINT_NAME`, TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, `COLUMN_NAME`, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT, REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.`table_name` = :kcu_table_name1 /* VARCHAR */ and `CONSTRAINT_NAME` = 'primary'",
                 "SysTableTableName": "[kcu_table_name1:'music']",
-                "SysTableTableSchema": "['user']"
->>>>>>> 421111452d (Fix column offset tracking for `UNION`s to be case insensitive. (#19139))
+                "SysTableTableSchema": "['user']",
+                "Table": "information_schema.key_column_usage"
               }
             ]
           }
