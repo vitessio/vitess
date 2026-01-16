@@ -44,7 +44,6 @@ updates:
       - "/docker/lite"
       - "/docker/mini"
       - "/docker/vttestserver"
-      - "/examples/compose/external_db/mysql"
       - "/go/mysql/collations/tools/colldump"
     schedule:
       interval: "weekly"
