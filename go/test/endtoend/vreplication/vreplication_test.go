@@ -282,6 +282,73 @@ func TestVreplicationCopyParallel(t *testing.T) {
 	testBasicVreplicationWorkflow(t, "")
 }
 
+// TestAtomicCopyErrorSurfacing tests that errors during atomic copy are properly
+// surfaced in the workflow status. Uses parallel insert workers to exercise the
+// error aggregation code path.
+func TestAtomicCopyErrorSurfacing(t *testing.T) {
+	vc = NewVitessCluster(t, nil)
+	defer vc.TearDown()
+	defaultReplicas = 0
+	defaultRdonly = 0
+	defer func() {
+		defaultReplicas = 1
+		defaultRdonly = 0
+	}()
+
+	extraVTTabletArgs = []string{
+		parallelInsertWorkers,
+		"--vstream-packet-size=1",
+	}
+	defer func() { extraVTTabletArgs = []string{} }()
+
+	defaultCell := vc.Cells[defaultCellName]
+	sourceSchema := "create table test_table(id int primary key, val varchar(100))"
+	sourceVSchema := `{"tables": {"test_table": {}}}`
+	vc.AddKeyspace(t, []*Cell{defaultCell}, defaultSourceKs, "0", sourceVSchema, sourceSchema, 0, 0, 100, nil)
+
+	targetSchema := "create table test_table(id int primary key, val varchar(100), required_col varchar(50) not null)"
+	targetVSchema := `{"tables": {"test_table": {}}}`
+	vc.AddKeyspace(t, []*Cell{defaultCell}, defaultTargetKs, "0", targetVSchema, targetSchema, 0, 0, 200, nil)
+
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	defer vtgateConn.Close()
+	verifyClusterHealth(t, vc)
+
+	// Insert enough rows so that with --vstream-packet-size=1, multiple batches are created
+	// and multiple parallel copy workers each encounter the schema mismatch error.
+	for i := range 10 {
+		execVtgateQuery(t, vtgateConn, defaultSourceKs,
+			fmt.Sprintf("insert into test_table(id, val) values (%d, 'val_%d')", i+1, i+1))
+	}
+
+	workflow := "atomic_copy_error_test"
+	ksWorkflow := fmt.Sprintf("%s.%s", defaultTargetKs, workflow)
+
+	_, err := vc.VtctldClient.ExecuteCommandWithOutput(
+		"MoveTables", "--target-keyspace", defaultTargetKs, "--workflow", workflow,
+		"--source-keyspace", defaultSourceKs, "--tables", "test_table", "--atomic-copy",
+		"Create",
+	)
+	require.NoError(t, err)
+
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Error.String())
+
+	message := getWorkflowMessage(t, vc, ksWorkflow)
+	require.NotEmpty(t, message, "workflow error message should not be empty")
+	require.NotContains(t, message, "UNKNOWN", "workflow error message should not be UNKNOWN")
+	require.Contains(t, message, "task error", "error should be wrapped with task error prefix")
+	require.Contains(t, message, "required_col", "error should reference the column causing the failure")
+	require.Contains(t, message, "doesn't have a default value", "error should contain the MySQL error message")
+	errorCount := strings.Count(message, "required_col")
+	require.Greater(t, errorCount, 1, "expected multiple aggregated errors, got %d", errorCount)
+	t.Logf("Workflow error message (%d aggregated errors): %s", errorCount, message)
+
+	_, err = vc.VtctldClient.ExecuteCommandWithOutput(
+		"MoveTables", "--target-keyspace", defaultTargetKs, "--workflow", workflow, "Cancel",
+	)
+	require.NoError(t, err)
+}
+
 func testBasicVreplicationWorkflow(t *testing.T, binlogRowImage string) {
 	testVreplicationWorkflows(t, false, binlogRowImage)
 }

@@ -412,6 +412,28 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 	}
 }
 
+// getWorkflowMessage returns the message field from the first stream in the workflow.
+func getWorkflowMessage(t *testing.T, vc *VitessCluster, ksWorkflow string) string {
+	keyspace, workflow := parseKeyspaceWorkflow(t, ksWorkflow)
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", keyspace, "show", "--workflow", workflow, "--compact", "--include-logs=false")
+	require.NoError(t, err, output)
+	var message string
+	shardStreams := gjson.Get(output, "workflows.0.shard_streams")
+	shardStreams.ForEach(func(shardStreamId, shardStream gjson.Result) bool {
+		streams := shardStream.Get("*")
+		streams.ForEach(func(streamId, stream gjson.Result) bool {
+			info := stream.Map()
+			if msg, ok := info["message"]; ok {
+				message = msg.String()
+				return false
+			}
+			return true
+		})
+		return message == ""
+	})
+	return message
+}
+
 // confirmTablesHaveSecondaryKeys confirms that the tables provided
 // as a CSV have secondary keys. This is useful when testing the
 // --defer-secondary-keys flag to confirm that the secondary keys
