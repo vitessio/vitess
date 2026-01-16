@@ -323,11 +323,10 @@ func TestReconcileReferenceTables(t *testing.T) {
 	wd, err := newWorkflowDiffer(ct, vdiffenv.opts, collations.MySQL8())
 	require.NoError(t, err)
 
-	// Create VSchema for source keyspace with a reference table.
+	// Create VSchema for the source keyspace with a reference table.
 	err = tstenv.TopoServ.EnsureVSchema(ctx, tstenv.KeyspaceName)
 	require.NoError(t, err)
 	sourceVS := &vschemapb.Keyspace{
-		Sharded: true,
 		Tables: map[string]*vschemapb.Table{
 			"ref_table": {
 				Type: "reference",
@@ -373,7 +372,7 @@ func TestReconcileReferenceTables(t *testing.T) {
 		err := wd.reconcileReferenceTables(dr)
 		require.NoError(t, err)
 
-		// Values should remain unchanged since MatchingRows is 0
+		// Values should remain unchanged since MatchingRows is 0.
 		require.Equal(t, int64(0), dr.ExtraRowsSource)
 		require.Equal(t, int64(10), dr.ExtraRowsTarget)
 	})

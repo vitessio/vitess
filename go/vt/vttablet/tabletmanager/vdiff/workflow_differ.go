@@ -82,7 +82,7 @@ func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompa
 }
 
 func (wd *workflowDiffer) reconcileReferenceTables(dr *DiffReport) error {
-	if dr.MismatchedRows == 0 {
+	if dr.MismatchedRows == 0 && dr.MatchingRows > 0 {
 		// Get the VSchema on the target and source keyspaces. We can then use this
 		// for handling additional edge cases, such as adjusting results for reference
 		// tables when the shard count is different between the source and target as
@@ -97,16 +97,14 @@ func (wd *workflowDiffer) reconcileReferenceTables(dr *DiffReport) error {
 		}
 		svt, sok := srcvschema.Tables[dr.TableName]
 		tvt, tok := tgtvschema.Tables[dr.TableName]
-		if dr.ExtraRowsSource > 0 && sok && svt.Type == vindexes.TypeReference &&
-			(dr.MatchingRows > 0 && dr.ExtraRowsSource%dr.MatchingRows == 0) {
+		if dr.ExtraRowsSource > 0 && sok && svt.Type == vindexes.TypeReference && dr.ExtraRowsSource%dr.MatchingRows == 0 {
 			// We have a reference table with no mismatched rows and the number of
 			// extra rows on the source is a multiple of the matching rows. This
 			// means that there's no actual diff.
 			dr.ExtraRowsSource = 0
 			dr.ExtraRowsSourceDiffs = nil
 		}
-		if dr.ExtraRowsTarget > 0 && tok && tvt.Type == vindexes.TypeReference &&
-			(dr.MatchingRows > 0 && dr.ExtraRowsTarget%dr.MatchingRows == 0) {
+		if dr.ExtraRowsTarget > 0 && tok && tvt.Type == vindexes.TypeReference && dr.ExtraRowsTarget%dr.MatchingRows == 0 {
 			// We have a reference table with no mismatched rows and the number of
 			// extra rows on the target is a multiple of the matching rows. This
 			// means that there's no actual diff.
