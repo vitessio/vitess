@@ -65,7 +65,7 @@ type (
 
 		logging *ExecuteLogger
 
-		// targetTabletAlias is set when using tablet-specific routing via USE keyspace@tablet-alias.
+		// targetTabletAlias is set when using tablet-specific routing via USE keyspace:shard@tablet_type|tablet-alias.
 		// This causes all queries to route to the specified tablet until cleared.
 		// Note: This is stored in the Go wrapper, not in the protobuf Session.
 		targetTabletAlias *topodatapb.TabletAlias

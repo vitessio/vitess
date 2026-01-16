@@ -679,8 +679,7 @@ func TestActionInfoWithTabletAlias(t *testing.T) {
 		session.SetTargetTabletAlias(tabletAlias) // zone1-100, different from zone1-50
 
 		_, _, err := actionInfo(ctx, target, session, false, vtgatepb.TransactionMode_MULTI)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "cannot change tablet target mid-transaction")
+		require.ErrorContains(t, err, "cannot change tablet target mid-transaction")
 	})
 
 	t.Run("no tablet alias - existing behavior", func(t *testing.T) {

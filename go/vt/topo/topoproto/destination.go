@@ -42,6 +42,9 @@ func ParseDestination(targetString string, defaultTabletType topodatapb.TabletTy
 	last := strings.LastIndexAny(targetString, "@")
 	if last != -1 {
 		afterAt := targetString[last+1:]
+		if afterAt == "" {
+			return "", defaultTabletType, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "empty tablet type after @")
+		}
 		// Check for explicit tablet_type|tablet_alias syntax (e.g., "replica|zone1-0000000100")
 		if pipeIdx := strings.Index(afterAt, "|"); pipeIdx != -1 {
 			typeStr := afterAt[:pipeIdx]

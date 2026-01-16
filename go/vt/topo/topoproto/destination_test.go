@@ -21,6 +21,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/key"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -125,61 +127,38 @@ func TestParseDestination(t *testing.T) {
 	}
 
 	_, _, _, _, err := ParseDestination("ks[20-40-60]", topodatapb.TabletType_PRIMARY)
-	want := "single keyrange expected in 20-40-60"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec error: %v, want %s", err, want)
-	}
+	require.EqualError(t, err, "single keyrange expected in 20-40-60")
 
 	_, _, _, _, err = ParseDestination("ks[--60]", topodatapb.TabletType_PRIMARY)
-	want = "malformed spec: MinKey/MaxKey cannot be in the middle of the spec: \"--60\""
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec error: %v, want %s", err, want)
-	}
+	require.EqualError(t, err, "malformed spec: MinKey/MaxKey cannot be in the middle of the spec: \"--60\"")
 
 	_, _, _, _, err = ParseDestination("ks[qrnqorrs]@primary", topodatapb.TabletType_PRIMARY)
-	want = "expected valid hex in keyspace id qrnqorrs"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec error: %v, want %s", err, want)
-	}
+	require.EqualError(t, err, "expected valid hex in keyspace id qrnqorrs")
 
 	_, _, _, _, err = ParseDestination("ks@primary|zone1-0000000100", topodatapb.TabletType_PRIMARY)
-	want = "tablet alias must be used with a shard"
-	if err == nil || err.Error() != want {
-		t.Errorf("ParseDestination error: %v, want %s", err, want)
-	}
+	require.EqualError(t, err, "tablet alias must be used with a shard")
 
 	// Test invalid tablet type in pipe syntax
 	_, _, _, _, err = ParseDestination("ks:-80@invalid|zone1-0000000100", topodatapb.TabletType_PRIMARY)
-	want = "invalid tablet type in target: invalid"
-	if err == nil || err.Error() != want {
-		t.Errorf("ParseDestination error: %v, want %s", err, want)
-	}
+	require.EqualError(t, err, "invalid tablet type in target: invalid")
 
 	// Test invalid tablet alias in pipe syntax
 	_, _, _, _, err = ParseDestination("ks:-80@primary|invalid-alias", topodatapb.TabletType_PRIMARY)
-	want = "invalid tablet alias in target: invalid-alias"
-	if err == nil || err.Error() != want {
-		t.Errorf("ParseDestination error: %v, want %s", err, want)
-	}
+	require.EqualError(t, err, "invalid tablet alias in target: invalid-alias")
 
 	// Test unknown tablet type in pipe syntax
 	_, _, _, _, err = ParseDestination("ks:-80@unknown|zone1-0000000100", topodatapb.TabletType_PRIMARY)
-	want = "invalid tablet type in target: unknown"
-	if err == nil || err.Error() != want {
-		t.Errorf("ParseDestination error: %v, want %s", err, want)
-	}
+	require.EqualError(t, err, "invalid tablet type in target: unknown")
 
 	// Test empty tablet type in pipe syntax
 	_, _, _, _, err = ParseDestination("ks:-80@|zone1-0000000100", topodatapb.TabletType_PRIMARY)
-	want = "invalid tablet type in target: "
-	if err == nil || err.Error() != want {
-		t.Errorf("ParseDestination error: %v, want %s", err, want)
-	}
+	require.EqualError(t, err, "invalid tablet type in target: ")
 
 	// Test empty tablet alias in pipe syntax
 	_, _, _, _, err = ParseDestination("ks:-80@primary|", topodatapb.TabletType_PRIMARY)
-	want = "invalid tablet alias in target: "
-	if err == nil || err.Error() != want {
-		t.Errorf("ParseDestination error: %v, want %s", err, want)
-	}
+	require.EqualError(t, err, "invalid tablet alias in target: ")
+
+	// Test empty string after @
+	_, _, _, _, err = ParseDestination("ks@", topodatapb.TabletType_PRIMARY)
+	require.EqualError(t, err, "empty tablet type after @")
 }

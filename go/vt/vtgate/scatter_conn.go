@@ -909,7 +909,7 @@ func actionInfo(ctx context.Context, target *querypb.Target, session *econtext.S
 			info.alias = targetAlias
 		} else if !proto.Equal(info.alias, targetAlias) {
 			return nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
-				"cannot change tablet target mid-transaction: session has %v, target is %v",
+				"cannot change tablet target mid-transaction: session has %s, target is %s",
 				topoproto.TabletAliasString(info.alias), topoproto.TabletAliasString(targetAlias))
 		}
 	}
