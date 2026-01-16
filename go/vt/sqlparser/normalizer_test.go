@@ -947,16 +947,16 @@ func TestRewrites(in *testing.T) {
 
 type fakeViews struct{}
 
-func (*fakeViews) FindView(name TableName) TableStatement {
+func (*fakeViews) FindView(name TableName) (TableStatement, *TableName) {
 	if name.Name.String() != "user_details" {
-		return nil
+		return nil, nil
 	}
 	parser := NewTestParser()
 	statement, err := parser.Parse("select user.id, user.name, user_extra.salary from user join user_extra where user.id = user_extra.user_id")
 	if err != nil {
-		return nil
+		return nil, nil
 	}
-	return statement.(TableStatement)
+	return statement.(TableStatement), nil
 }
 
 func TestRewritesWithSetVarComment(in *testing.T) {

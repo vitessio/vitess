@@ -465,15 +465,15 @@ func (vc *VCursorImpl) FindTable(name sqlparser.TableName) (*vindexes.BaseTable,
 	return table, destKeyspace, destTabletType, dest, err
 }
 
-func (vc *VCursorImpl) FindView(name sqlparser.TableName) sqlparser.TableStatement {
+func (vc *VCursorImpl) FindView(name sqlparser.TableName) (sqlparser.TableStatement, *sqlparser.TableName) {
 	ks, _, _, err := vc.parseDestinationTarget(name.Qualifier.String())
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 	if ks == "" {
 		ks = vc.keyspace
 	}
-	return vc.vschema.FindView(ks, name.Name.String())
+	return vc.vschema.FindRoutedView(ks, name.Name.String(), vc.tabletType)
 }
 
 func (vc *VCursorImpl) FindRoutedTable(name sqlparser.TableName) (*vindexes.BaseTable, error) {

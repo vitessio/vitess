@@ -235,8 +235,9 @@ func TestVSchemaUpdate(t *testing.T) {
 			},
 		},
 		expected: &vindexes.VSchema{
-			MirrorRules:  map[string]*vindexes.MirrorRule{},
-			RoutingRules: map[string]*vindexes.RoutingRule{},
+			MirrorRules:      map[string]*vindexes.MirrorRule{},
+			RoutingRules:     map[string]*vindexes.RoutingRule{},
+			ViewRoutingRules: map[string]*vindexes.ViewRoutingRule{},
 			Keyspaces: map[string]*vindexes.KeyspaceSchema{
 				"ks": {
 					Keyspace:       ks,
@@ -501,8 +502,9 @@ func TestVSchemaUDFsUpdate(t *testing.T) {
 	}, nil)
 
 	utils.MustMatchFn(".globalTables", ".uniqueVindexes")(t, &vindexes.VSchema{
-		MirrorRules:  map[string]*vindexes.MirrorRule{},
-		RoutingRules: map[string]*vindexes.RoutingRule{},
+		MirrorRules:      map[string]*vindexes.MirrorRule{},
+		ViewRoutingRules: map[string]*vindexes.ViewRoutingRule{},
+		RoutingRules:     map[string]*vindexes.RoutingRule{},
 		Keyspaces: map[string]*vindexes.KeyspaceSchema{
 			"ks": {
 				Keyspace:       ks,
@@ -655,7 +657,8 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 				return vschema
 			},
 			errWanted: "",
-		}, {
+		},
+		{
 			name: "Self-referencing foreign key with delete cascade",
 			getVschema: func() *vindexes.VSchema {
 				vschema := &vindexes.VSchema{
@@ -683,7 +686,8 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 				return vschema
 			},
 			errWanted: "VT09019: keyspace 'ks' has cyclic foreign keys. Cycle exists between [ks.t1.id ks.t1.id]",
-		}, {
+		},
+		{
 			name: "Self-referencing foreign key without delete cascade",
 			getVschema: func() *vindexes.VSchema {
 				vschema := &vindexes.VSchema{
@@ -711,7 +715,8 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 				return vschema
 			},
 			errWanted: "",
-		}, {
+		},
+		{
 			name: "Has an indirect cycle because of cascades",
 			getVschema: func() *vindexes.VSchema {
 				vschema := &vindexes.VSchema{
@@ -758,7 +763,8 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 				return vschema
 			},
 			errWanted: "VT09019: keyspace 'ks' has cyclic foreign keys",
-		}, {
+		},
+		{
 			name: "Cycle part of a multi-column foreign key",
 			getVschema: func() *vindexes.VSchema {
 				vschema := &vindexes.VSchema{
@@ -862,8 +868,9 @@ func TestVSchemaUpdateWithFKReferenceToInternalTables(t *testing.T) {
 	}, nil)
 
 	utils.MustMatchFn(".globalTables", ".uniqueVindexes")(t, &vindexes.VSchema{
-		MirrorRules:  map[string]*vindexes.MirrorRule{},
-		RoutingRules: map[string]*vindexes.RoutingRule{},
+		MirrorRules:      map[string]*vindexes.MirrorRule{},
+		RoutingRules:     map[string]*vindexes.RoutingRule{},
+		ViewRoutingRules: map[string]*vindexes.ViewRoutingRule{},
 		Keyspaces: map[string]*vindexes.KeyspaceSchema{
 			"ks": {
 				Keyspace:       ks,
@@ -976,9 +983,10 @@ func makeTestVSchema(ks string, sharded bool, tbls map[string]*vindexes.BaseTabl
 
 func makeTestEmptyVSchema() *vindexes.VSchema {
 	return &vindexes.VSchema{
-		MirrorRules:  map[string]*vindexes.MirrorRule{},
-		RoutingRules: map[string]*vindexes.RoutingRule{},
-		Keyspaces:    map[string]*vindexes.KeyspaceSchema{},
+		MirrorRules:      map[string]*vindexes.MirrorRule{},
+		RoutingRules:     map[string]*vindexes.RoutingRule{},
+		ViewRoutingRules: map[string]*vindexes.ViewRoutingRule{},
+		Keyspaces:        map[string]*vindexes.KeyspaceSchema{},
 	}
 }
 
@@ -991,6 +999,88 @@ func makeTestSrvVSchema(ks string, sharded bool, tbls map[string]*vschemapb.Tabl
 	}
 	return &vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{ks: keyspaceSchema},
+	}
+}
+
+// TestViewRoutingRules tests that routing rules targeting views are created as view routing rules.
+func TestViewRoutingRules(t *testing.T) {
+	vm := &VSchemaManager{}
+	var vs *vindexes.VSchema
+	vm.subscriber = func(vschema *vindexes.VSchema, _ *VSchemaStats) {
+		vs = vschema
+		vs.ResetCreated()
+	}
+	vm.schema = &fakeSchema{
+		views: map[string]map[string]sqlparser.TableStatement{
+			"source_ks": {"v1": testView("t1")},
+			"target_ks": {"v1": testView("t2")},
+		},
+	}
+
+	vm.VSchemaUpdate(&vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"source_ks": {},
+			"target_ks": {},
+		},
+		RoutingRules: &vschemapb.RoutingRules{
+			Rules: []*vschemapb.RoutingRule{
+				{FromTable: "source_ks.v1", ToTables: []string{"target_ks.v1"}},
+			},
+		},
+	}, nil)
+
+	require.NotNil(t, vs)
+	require.Contains(t, vs.ViewRoutingRules, "source_ks.v1")
+	assert.Equal(t, "target_ks", vs.ViewRoutingRules["source_ks.v1"].TargetKeyspace)
+	assert.Equal(t, "v1", vs.ViewRoutingRules["source_ks.v1"].TargetViewName)
+}
+
+// TestViewRoutingRulesRebuild tests that view routing rules are correctly created when views
+// are added after the initial vschema is built.
+func TestViewRoutingRulesRebuild(t *testing.T) {
+	vm := &VSchemaManager{}
+	var vs *vindexes.VSchema
+	vm.subscriber = func(vschema *vindexes.VSchema, _ *VSchemaStats) {
+		vs = vschema
+		vs.ResetCreated()
+	}
+
+	srvVSchema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"source_ks": {},
+			"target_ks": {},
+		},
+		RoutingRules: &vschemapb.RoutingRules{
+			Rules: []*vschemapb.RoutingRule{
+				{FromTable: "source_ks.v1", ToTables: []string{"target_ks.v1"}},
+			},
+		},
+	}
+
+	fs := &fakeSchema{}
+	vm.schema = fs
+
+	vm.VSchemaUpdate(srvVSchema, nil)
+	require.NotNil(t, vs)
+	assert.NotContains(t, vs.ViewRoutingRules, "source_ks.v1")
+
+	fs.views = map[string]map[string]sqlparser.TableStatement{
+		"source_ks": {"v1": testView("t1")},
+		"target_ks": {"v1": testView("t2")},
+	}
+
+	vm.Rebuild()
+
+	require.Contains(t, vs.ViewRoutingRules, "source_ks.v1")
+	assert.Equal(t, "target_ks", vs.ViewRoutingRules["source_ks.v1"].TargetKeyspace)
+	assert.Equal(t, "v1", vs.ViewRoutingRules["source_ks.v1"].TargetViewName)
+}
+
+// testView creates a simple view selecting from the given table.
+func testView(tableName string) *sqlparser.Select {
+	return &sqlparser.Select{
+		SelectExprs: &sqlparser.SelectExprs{Exprs: []sqlparser.SelectExpr{sqlparser.NewAliasedExpr(sqlparser.NewIntLiteral("1"), "")}},
+		From:        []sqlparser.TableExpr{sqlparser.NewAliasedTableExpr(sqlparser.NewTableName(tableName), "")},
 	}
 }
 

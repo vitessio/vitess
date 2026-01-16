@@ -466,6 +466,7 @@ func TestVSchemaRoutingRules(t *testing.T) {
 				Error: errors.New("table t2 not found"),
 			},
 		},
+		ViewRoutingRules: map[string]*ViewRoutingRule{},
 		globalTables: map[string]Table{
 			"t1": t1,
 			"t2": t2,

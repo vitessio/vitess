@@ -247,12 +247,12 @@ func (vw *VSchemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.BaseTabl
 	return table, destKeyspace, destTabletType, destTarget, nil
 }
 
-func (vw *VSchemaWrapper) FindView(tab sqlparser.TableName) sqlparser.TableStatement {
+func (vw *VSchemaWrapper) FindView(tab sqlparser.TableName) (sqlparser.TableStatement, *sqlparser.TableName) {
 	destKeyspace, _, _, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
-	return vw.V.FindView(destKeyspace, tab.Name.String())
+	return vw.V.FindView(destKeyspace, tab.Name.String()), nil
 }
 
 func (vw *VSchemaWrapper) FindViewTarget(name sqlparser.TableName) (*vindexes.Keyspace, error) {

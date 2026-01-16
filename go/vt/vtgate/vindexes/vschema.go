@@ -65,6 +65,9 @@ type VSchema struct {
 	MirrorRules  map[string]*MirrorRule  `json:"mirror_rules"`
 	RoutingRules map[string]*RoutingRule `json:"routing_rules"`
 
+	// ViewRoutingRules stores routing rules for views.
+	ViewRoutingRules map[string]*ViewRoutingRule `json:"view_routing_rules"`
+
 	// globalTables contains the name of all tables in all keyspaces. If the
 	// table is uniquely named, the value will be the qualified Table object
 	// with the keyspace where this table exists. If multiple keyspaces have a
@@ -117,6 +120,20 @@ func (rr *RoutingRule) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(tables)
+}
+
+// ViewRoutingRule represents a routing rule for a view.
+type ViewRoutingRule struct {
+	// TargetKeyspace is the keyspace where the target view resides.
+	TargetKeyspace string
+
+	// TargetViewName is the name of the view to route to.
+	TargetViewName string
+}
+
+// MarshalJSON returns a JSON representation of ViewRoutingRule.
+func (vrr *ViewRoutingRule) MarshalJSON() ([]byte, error) {
+	return json.Marshal(vrr.TargetKeyspace + "." + vrr.TargetViewName)
 }
 
 // View represents a view in VSchema.
@@ -352,12 +369,13 @@ func (source *Source) String() string {
 // BuildVSchema builds a VSchema from a SrvVSchema.
 func BuildVSchema(source *vschemapb.SrvVSchema, parser *sqlparser.Parser) (vschema *VSchema) {
 	vschema = &VSchema{
-		MirrorRules:    make(map[string]*MirrorRule),
-		RoutingRules:   make(map[string]*RoutingRule),
-		globalTables:   make(map[string]Table),
-		uniqueVindexes: make(map[string]Vindex),
-		Keyspaces:      make(map[string]*KeyspaceSchema),
-		created:        time.Now(),
+		MirrorRules:      make(map[string]*MirrorRule),
+		RoutingRules:     make(map[string]*RoutingRule),
+		ViewRoutingRules: make(map[string]*ViewRoutingRule),
+		globalTables:     make(map[string]Table),
+		uniqueVindexes:   make(map[string]Vindex),
+		Keyspaces:        make(map[string]*KeyspaceSchema),
+		created:          time.Now(),
 	}
 	buildKeyspaces(source, vschema, parser)
 	// buildGlobalTables before buildReferences so that buildReferences can
@@ -1069,6 +1087,20 @@ outer:
 				}
 				continue outer
 			}
+
+			// Check for views first. We do this first because FindTable may return a virtual table for
+			// unsharded keyspaces even if the table doesn't exist in the vschema. By checking for views
+			// first, we ensure that routing rules targeting views are correctly identified, rather than
+			// assuming the reference is a table.
+			if vschema.FindView(toKeyspace, toTableName) != nil {
+				vschema.ViewRoutingRules[rule.FromTable] = &ViewRoutingRule{
+					TargetKeyspace: toKeyspace,
+					TargetViewName: toTableName,
+				}
+
+				continue outer
+			}
+
 			t, err := vschema.FindTable(toKeyspace, toTableName)
 			if err != nil {
 				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
@@ -1090,6 +1122,13 @@ func buildShardRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	for _, rule := range source.ShardRoutingRules.Rules {
 		vschema.ShardRoutingRules[getShardRoutingRulesKey(rule.FromKeyspace, rule.Shard)] = rule.ToKeyspace
 	}
+}
+
+// RebuildRoutingRules rebuilds the routing rules.
+func RebuildRoutingRules(source *vschemapb.SrvVSchema, vschema *VSchema, parser *sqlparser.Parser) {
+	vschema.RoutingRules = make(map[string]*RoutingRule)
+	vschema.ViewRoutingRules = make(map[string]*ViewRoutingRule)
+	buildRoutingRule(source, vschema, parser)
 }
 
 func buildKeyspaceRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {
@@ -1533,6 +1572,33 @@ func (vschema *VSchema) FindView(keyspace, name string) sqlparser.TableStatement
 			cursor.Replace(sqlparser.NewColNameWithQualifier(col.Name.String(), col.Qualifier))
 		}
 	}, nil).(sqlparser.TableStatement)
+}
+
+// FindRoutedView finds a view, checking the view routing rules first. Returns the view's definition if found,
+// along with the target view name if a routing rule matched.
+func (vschema *VSchema) FindRoutedView(keyspace, viewName string, tabletType topodatapb.TabletType) (sqlparser.TableStatement, *sqlparser.TableName) {
+	// Apply keyspace routing rules first
+	keyspace = vschema.findRoutedKeyspace(keyspace, tabletType)
+
+	// Build lookup keys
+	qualified := viewName
+	if keyspace != "" {
+		qualified = keyspace + "." + viewName
+	}
+	fqvn := qualified + TabletTypeSuffix[tabletType]
+
+	// Check view routing rules
+	for _, name := range []string{fqvn, qualified, viewName + TabletTypeSuffix[tabletType], viewName} {
+		if rr, ok := vschema.ViewRoutingRules[name]; ok {
+			routedView := vschema.FindView(rr.TargetKeyspace, rr.TargetViewName)
+			routedViewName := sqlparser.NewTableNameWithQualifier(rr.TargetViewName, rr.TargetKeyspace)
+
+			return routedView, &routedViewName
+		}
+	}
+
+	// No routing rule matched, lookup view normally.
+	return vschema.FindView(keyspace, viewName), nil
 }
 
 // NotFoundError represents the error where the table name was not found
