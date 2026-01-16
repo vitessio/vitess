@@ -315,11 +315,6 @@
     "plan": "VT12001: unsupported: nesting of UNIONs on the right-hand side"
   },
   {
-    "comment": "Cannot have more than one aggr(distinct...",
-    "query": "select count(distinct a), count(distinct b) from user",
-    "plan": "VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: count(distinct b)"
-  },
-  {
     "comment": "subqueries not supported in the join condition of outer joins",
     "query": "select unsharded_a.col from unsharded_a left join unsharded_b on unsharded_a.col IN (select col from user)",
     "plan": "VT12001: unsupported: subquery in outer join predicate"
@@ -368,11 +363,6 @@
     "comment": "count aggregation function having multiple column",
     "query": "select count(distinct user_id, name) from user",
     "plan": "VT12001: unsupported: distinct aggregation function with multiple expressions 'count(distinct user_id, `name`)'"
-  },
-  {
-    "comment": "count and sum distinct on different columns",
-    "query": "SELECT COUNT(DISTINCT col), SUM(DISTINCT id) FROM user",
-    "plan": "VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: sum(distinct id)"
   },
   {
     "comment": "Over clause isn't supported in sharded cases",

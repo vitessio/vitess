@@ -369,6 +369,8 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 		aggrParam.OrigOpcode = aggr.OriginalOpCode
 		aggrParam.WCol = aggr.WSOffset
 		aggrParam.Type = aggr.GetTypeCollation(ctx)
+		// Pass hash-based distinct flag from planner to engine
+		aggrParam.UseHashDistinct = aggr.UseHashDistinct || op.UseHashDistinct
 		aggregates = append(aggregates, aggrParam)
 	}
 

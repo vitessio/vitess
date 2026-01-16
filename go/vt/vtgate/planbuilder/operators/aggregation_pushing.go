@@ -169,7 +169,14 @@ func pushAggregationThroughRoute(
 
 // pushAggregations splits aggregations between the original aggregator and the one we are pushing down
 func pushAggregations(ctx *plancontext.PlanningContext, aggregator *Aggregator, aggrBelowRoute *Aggregator) {
-	canPushDistinctAggr, distinctExprs := checkIfWeCanPush(ctx, aggregator)
+	canPushDistinctAggr, distinctExprs, hasMultipleDifferentDistinct := checkIfWeCanPush(ctx, aggregator)
+
+	// If we have multiple distinct aggregations with different expressions and can't push them,
+	// we need to use hash-based distinct tracking
+	useHashDistinct := !canPushDistinctAggr && hasMultipleDifferentDistinct
+	if useHashDistinct {
+		aggregator.UseHashDistinct = true
+	}
 
 	distinctAggrGroupByAdded := false
 
@@ -181,35 +188,45 @@ func pushAggregations(ctx *plancontext.PlanningContext, aggregator *Aggregator, 
 			continue
 		}
 
-		if len(distinctExprs) != 1 {
+		// Mark this aggregation for hash-based distinct if we're using that approach
+		if useHashDistinct {
+			aggregator.Aggregations[i].UseHashDistinct = true
+		}
+
+		args := aggr.Func.GetArgs()
+		if len(args) != 1 {
 			errDistinctAggrWithMultiExpr(aggr.Func)
 		}
 
-		// We handle a distinct aggregation by turning it into a group by and
-		// doing the aggregating on the vtgate level instead
-		aeDistinctExpr := aeWrap(distinctExprs[0])
+		// We handle a distinct aggregation by adding the distinct expression as a column
+		// For hash-based distinct, we don't need to add GROUP BY, just ensure the column is available
+		aeDistinctExpr := aeWrap(args[0])
 		aggrBelowRoute.Columns[aggr.ColOffset] = aeDistinctExpr
 
-		// We handle a distinct aggregation by turning it into a group by and
-		// doing the aggregating on the vtgate level instead
-		// Adding to group by can be done only once even though there are multiple distinct aggregation with same expression.
-		if !distinctAggrGroupByAdded {
-			groupBy := NewGroupBy(distinctExprs[0])
+		// For sort-based distinct (single distinct expression), we add GROUP BY
+		// For hash-based distinct (multiple different expressions), we skip GROUP BY
+		if !useHashDistinct && !distinctAggrGroupByAdded {
+			groupBy := NewGroupBy(args[0])
 			groupBy.ColOffset = aggr.ColOffset
 			aggrBelowRoute.Grouping = append(aggrBelowRoute.Grouping, groupBy)
 			distinctAggrGroupByAdded = true
 		}
 	}
 
-	if !canPushDistinctAggr {
+	// For sort-based distinct, store the single distinct expression for ordering
+	if !canPushDistinctAggr && !useHashDistinct && len(distinctExprs) > 0 {
 		aggregator.DistinctExpr = distinctExprs[0]
 	}
 }
 
-func checkIfWeCanPush(ctx *plancontext.PlanningContext, aggregator *Aggregator) (bool, []sqlparser.Expr) {
-	canPush := true
-	var distinctExprs []sqlparser.Expr
-	var differentExpr *sqlparser.AliasedExpr
+// checkIfWeCanPush checks if distinct aggregations can be pushed down to MySQL.
+// Returns:
+//   - canPush: true if all distinct aggregations have unique vindexes and can be pushed
+//   - distinctExprs: the expressions from the first distinct aggregation (used for single-distinct case)
+//   - hasMultipleDifferentDistinct: true if there are multiple distinct aggregations with different expressions
+func checkIfWeCanPush(ctx *plancontext.PlanningContext, aggregator *Aggregator) (canPush bool, distinctExprs []sqlparser.Expr, hasMultipleDifferentDistinct bool) {
+	canPush = true
+	hasMultipleDifferentDistinct = false
 
 	for _, aggr := range aggregator.Aggregations {
 		if !aggr.Distinct {
@@ -229,20 +246,21 @@ func checkIfWeCanPush(ctx *plancontext.PlanningContext, aggregator *Aggregator) 
 		}
 		if len(distinctExprs) == 0 {
 			distinctExprs = args
-		}
-		for idx, expr := range distinctExprs {
-			if !ctx.SemTable.EqualsExpr(expr, args[idx]) {
-				differentExpr = aggr.Original
-				break
+		} else {
+			// Check if this distinct aggregation has different expressions
+			for idx, expr := range distinctExprs {
+				if idx >= len(args) || !ctx.SemTable.EqualsExpr(expr, args[idx]) {
+					hasMultipleDifferentDistinct = true
+					break
+				}
+			}
+			if len(args) != len(distinctExprs) {
+				hasMultipleDifferentDistinct = true
 			}
 		}
 	}
 
-	if !canPush && differentExpr != nil {
-		panic(vterrors.VT12001("only one DISTINCT aggregation is allowed in a SELECT: " + sqlparser.String(differentExpr)))
-	}
-
-	return canPush, distinctExprs
+	return canPush, distinctExprs, hasMultipleDifferentDistinct
 }
 
 func pushAggregationThroughFilter(
@@ -541,15 +559,25 @@ func splitAggrColumnsToLeftAndRight(
 		outerJoin:   leftJoin,
 	}
 
-	canPushDistinctAggr, distinctExprs := checkIfWeCanPush(ctx, aggregator)
+	canPushDistinctAggr, distinctExprs, hasMultipleDifferentDistinct := checkIfWeCanPush(ctx, aggregator)
 
 	// Distinctable aggregation cannot be pushed down in the join.
 	// We keep node of the distinct aggregation expression to be used later for ordering.
 	if !canPushDistinctAggr {
-		if len(distinctExprs) != 1 {
+		if hasMultipleDifferentDistinct {
+			// For multiple different distinct expressions, we use hash-based tracking
+			aggregator.UseHashDistinct = true
+			for i := range aggregator.Aggregations {
+				if aggregator.Aggregations[i].Distinct {
+					aggregator.Aggregations[i].UseHashDistinct = true
+				}
+			}
+		} else if len(distinctExprs) == 1 {
+			// For single distinct expression, use sort-based (existing behavior)
+			aggregator.DistinctExpr = distinctExprs[0]
+		} else {
 			errDistinctAggrWithMultiExpr(nil)
 		}
-		aggregator.DistinctExpr = distinctExprs[0]
 		return nil, errAbortAggrPushing
 	}
 

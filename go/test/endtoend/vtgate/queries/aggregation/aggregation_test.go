@@ -666,15 +666,15 @@ func TestDistinctAggregation(t *testing.T) {
 		expectedErr string
 		minVersion  int
 	}{{
-		query:       `SELECT COUNT(DISTINCT value), SUM(DISTINCT shardkey) FROM t1`,
-		expectedErr: "VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: sum(distinct shardkey) (errno 1235) (sqlstate 42000)",
+		// Multiple distinct aggregations with different columns - now supported via hash-based distinct
+		query: `SELECT COUNT(DISTINCT value), SUM(DISTINCT shardkey) FROM t1`,
 	}, {
 		query: `SELECT a.t1_id, SUM(DISTINCT b.shardkey) FROM t1 a, t1 b group by a.t1_id`,
 	}, {
 		query: `SELECT a.value, SUM(DISTINCT b.shardkey) FROM t1 a, t1 b group by a.value`,
 	}, {
-		query:       `SELECT count(distinct a.value), SUM(DISTINCT b.t1_id) FROM t1 a, t1 b`,
-		expectedErr: "VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: sum(distinct b.t1_id) (errno 1235) (sqlstate 42000)",
+		// Multiple distinct aggregations in join - now supported via hash-based distinct
+		query: `SELECT count(distinct a.value), SUM(DISTINCT b.t1_id) FROM t1 a, t1 b`,
 	}, {
 		query: `SELECT a.value, SUM(DISTINCT b.t1_id), min(DISTINCT a.t1_id) FROM t1 a, t1 b group by a.value`,
 	}, {
