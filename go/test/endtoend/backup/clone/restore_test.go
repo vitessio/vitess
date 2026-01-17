@@ -19,6 +19,7 @@ package clone
 import (
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -35,6 +36,10 @@ func TestCloneRestore(t *testing.T) {
 	t.Cleanup(func() { removeBackups(t) })
 	t.Cleanup(tearDownRestoreTest)
 
+	// Disable VTOrc recoveries, so that it's not racing with InitShardPrimary
+	// call to set the primary.
+	localCluster.DisableVTOrcRecoveries(t)
+
 	// Initialize primary and replica1 first (need replica for semi-sync durability).
 	for _, tablet := range []*cluster.Vttablet{primary, replica1} {
 		err := localCluster.InitTablet(tablet, keyspaceName, shardName)
@@ -47,12 +52,14 @@ func TestCloneRestore(t *testing.T) {
 	err := localCluster.VtctldClientProcess.InitShardPrimary(keyspaceName, shardName, cell, primary.TabletUID)
 	require.NoError(t, err)
 
-	// Wait for replica1 to catch up.
-	time.Sleep(2 * time.Second)
-
 	// Now check if MySQL version supports clone (need vttablet running to query).
 	if !mysqlVersionSupportsClone(t, primary) {
-		t.Skip("Skipping clone test: MySQL version does not support CLONE (requires 8.0.17+)")
+		ci, ok := os.LookupEnv("CI")
+		if !ok || strings.ToLower(ci) != "true" {
+			t.Skip("Skipping clone test: MySQL version does not support CLONE (requires 8.0.17+)")
+		} else {
+			require.FailNow(t, "CI should be running versions of mysqld that support CLONE")
+		}
 	}
 
 	// Check if clone plugin is available.
@@ -91,21 +98,16 @@ func TestCloneRestore(t *testing.T) {
 	require.NoError(t, err)
 	restoreWithClone(t, replica2, "replica", "SERVING")
 
-	// Wait for data to exist.
-	require.Eventually(t, func() bool {
-		qr, _ := replica2.VttabletProcess.QueryTablet("select * from vt_insert_test", keyspaceName, true)
-		if qr != nil {
-			if len(qr.Rows) == 3 {
-				return true
-			}
-		}
-		return false
-	}, 5*time.Minute, 10*time.Second)
-
 	// Verify clone worked: clone_status confirms, replication is set up.
-	verifyClonedData(t, replica2)
+	waitInsertedRows(
+		t,
+		replica2,
+		[]string{"clone_restore_1", "clone_restore_2", "clone_restore_3"},
+		30*time.Second,
+		100*time.Millisecond,
+	)
 	verifyCloneWasUsed(t, replica2)
-	verifyReplicationTopology(t, replica2)
+	waitReplicationTopology(t, replica2)
 
 	// Insert rows on primary and verify they replicate to the cloned replica.
 	for i := 1; i <= 5; i++ {
@@ -114,17 +116,25 @@ func TestCloneRestore(t *testing.T) {
 			keyspaceName, true)
 		require.NoError(t, err)
 	}
-	time.Sleep(5 * time.Second)
 
-	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 8)
+	// Wait for replica to catch up.
+	waitInsertedRows(
+		t,
+		replica2,
+		[]string{"clone_restore_1", "clone_restore_2", "clone_restore_3", "after_clone_1", "after_clone_2", "after_clone_3", "after_clone_4", "after_clone_5"},
+		30*time.Second,
+		100*time.Millisecond,
+	)
+
 	verifyPostCloneReplication(t, replica2)
 }
 
 // restoreWithClone starts a tablet that will use MySQL CLONE to get its data.
 func restoreWithClone(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForState string) {
-	tablet.VttabletProcess.ExtraArgs = []string{
-		"--db-credentials-file", dbCredentialFile,
-		"--mysql-clone-enabled",
+	// Start with the base vttablet flags (includes replication flags)
+	cloneArgs := append([]string{}, vttabletExtraArgs...)
+	// Add clone-specific flags
+	cloneArgs = append(cloneArgs,
 		// Enable restore with clone - this triggers the clone logic.
 		"--restore-from-backup=false",
 		"--restore-with-clone",
@@ -133,7 +143,8 @@ func restoreWithClone(t *testing.T, tablet *cluster.Vttablet, tabletType string,
 		"--db-clone-user", "vt_clone",
 		"--db-clone-password", "",
 		"--db-clone-use-ssl=false",
-	}
+	)
+	tablet.VttabletProcess.ExtraArgs = cloneArgs
 	tablet.VttabletProcess.TabletType = tabletType
 	tablet.VttabletProcess.ServingStatus = waitForState
 	tablet.VttabletProcess.SupportsBackup = true
@@ -142,44 +153,32 @@ func restoreWithClone(t *testing.T, tablet *cluster.Vttablet, tabletType string,
 	require.NoError(t, err)
 }
 
-// verifyClonedData checks that the specific test data we inserted on primary
-// exists on the cloned replica. This proves data was actually transferred.
-func verifyClonedData(t *testing.T, tablet *cluster.Vttablet) {
-	qr, err := tablet.VttabletProcess.QueryTablet(
-		"SELECT msg FROM vt_insert_test ORDER BY id",
-		keyspaceName,
-		true,
-	)
-	require.NoError(t, err)
-	require.Len(t, qr.Rows, 3, "Expected 3 rows from clone")
-
-	expectedValues := []string{"clone_restore_1", "clone_restore_2", "clone_restore_3"}
-	for i, row := range qr.Rows {
-		assert.Equal(t, expectedValues[i], row[0].ToString())
-	}
-}
-
-// verifyReplicationTopology checks that the cloned replica has properly joined
+// waitReplicationTopology checks that the cloned replica has properly joined
 // the replication topology and is replicating from the primary.
-func verifyReplicationTopology(t *testing.T, tablet *cluster.Vttablet) {
-	qr, err := tablet.VttabletProcess.QueryTablet("SHOW REPLICA STATUS", keyspaceName, true)
-	require.NoError(t, err)
-	require.NotEmpty(t, qr.Rows, "Replica status is empty - not replicating")
-
-	// Find column indices.
-	var ioRunningIdx, sqlRunningIdx = -1, -1
-	for i, field := range qr.Fields {
-		switch field.Name {
-		case "Replica_IO_Running":
-			ioRunningIdx = i
-		case "Replica_SQL_Running":
-			sqlRunningIdx = i
+func waitReplicationTopology(t *testing.T, tablet *cluster.Vttablet) {
+	require.Eventually(t, func() bool {
+		qr, err := tablet.VttabletProcess.QueryTablet("SHOW REPLICA STATUS", keyspaceName, true)
+		if err != nil {
+			return false
 		}
-	}
+		if len(qr.Rows) == 0 {
+			return false
+		}
 
-	row := qr.Rows[0]
-	assert.Equal(t, "Yes", row[ioRunningIdx].ToString(), "Replica IO thread not running")
-	assert.Equal(t, "Yes", row[sqlRunningIdx].ToString(), "Replica SQL thread not running")
+		// Find column indices.
+		var ioRunningIdx, sqlRunningIdx = -1, -1
+		for i, field := range qr.Fields {
+			switch field.Name {
+			case "Replica_IO_Running":
+				ioRunningIdx = i
+			case "Replica_SQL_Running":
+				sqlRunningIdx = i
+			}
+		}
+
+		row := qr.Rows[0]
+		return row[ioRunningIdx].ToString() == "Yes" && row[sqlRunningIdx].ToString() == "Yes"
+	}, 10*time.Second, 100*time.Millisecond)
 }
 
 // verifyPostCloneReplication checks that data inserted after the clone

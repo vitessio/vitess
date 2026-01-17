@@ -17,20 +17,18 @@ limitations under the License.
 package clone
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"path"
-	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/capabilities"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
@@ -231,45 +229,11 @@ func clonePluginAvailable(t *testing.T, tablet *cluster.Vttablet) bool {
 	return status == "ACTIVE"
 }
 
-// parseVersionFromRow parses MySQL version from a result row
-func parseVersionFromRow(row []sqltypes.Value) (int, int, int, error) {
-	if len(row) == 0 {
-		return 0, 0, 0, errors.New("empty row")
-	}
-
-	versionStr := row[0].ToString()
-	// Version format: "8.0.35" or "8.0.35-27"
-	parts := strings.Split(versionStr, "-")
-	versionPart := parts[0]
-
-	versionNums := strings.Split(versionPart, ".")
-	if len(versionNums) < 3 {
-		return 0, 0, 0, fmt.Errorf("invalid version format: %s", versionStr)
-	}
-
-	major, err := strconv.Atoi(versionNums[0])
-	if err != nil {
-		return 0, 0, 0, fmt.Errorf("invalid major version: %s", versionNums[0])
-	}
-
-	minor, err := strconv.Atoi(versionNums[1])
-	if err != nil {
-		return 0, 0, 0, fmt.Errorf("invalid minor version: %s", versionNums[1])
-	}
-
-	patch, err := strconv.Atoi(versionNums[2])
-	if err != nil {
-		return 0, 0, 0, fmt.Errorf("invalid patch version: %s", versionNums[2])
-	}
-
-	return major, minor, patch, nil
-}
-
 // removeBackups removes all backups for the test shard.
 func removeBackups(t *testing.T) {
 	backups, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("GetBackups", shardKsName)
 	require.NoError(t, err)
-	for _, backup := range splitLines(backups) {
+	for backup := range strings.SplitSeq(backups, "\n") {
 		if backup != "" {
 			_, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("RemoveBackup", shardKsName, backup)
 			require.NoError(t, err)
@@ -277,20 +241,33 @@ func removeBackups(t *testing.T) {
 	}
 }
 
-// splitLines splits a string by newlines, filtering out empty lines.
-func splitLines(s string) []string {
-	var result []string
-	start := 0
-	for i, c := range s {
-		if c == '\n' {
-			if i > start {
-				result = append(result, s[start:i])
-			}
-			start = i + 1
+// waitInsertedRows checks that the specific test data we inserted on primary
+// exists on the cloned replica. This proves data was actually transferred.
+func waitInsertedRows(
+	t *testing.T,
+	tablet *cluster.Vttablet,
+	expectedValues []string,
+	waitFor time.Duration,
+	tickInterval time.Duration,
+) {
+	require.Eventually(t, func() bool {
+		qr, err := tablet.VttabletProcess.QueryTablet(
+			"SELECT msg FROM vt_insert_test ORDER BY id",
+			keyspaceName,
+			true,
+		)
+		if err != nil {
+			return false
 		}
-	}
-	if start < len(s) {
-		result = append(result, s[start:])
-	}
-	return result
+		if len(qr.Rows) != len(expectedValues) {
+			return false
+		}
+
+		for i, row := range qr.Rows {
+			if row[0].ToString() != expectedValues[i] {
+				return false
+			}
+		}
+		return true
+	}, waitFor, tickInterval)
 }

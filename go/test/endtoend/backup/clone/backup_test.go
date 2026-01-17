@@ -18,6 +18,7 @@ package clone
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -33,6 +34,10 @@ func TestCloneBackup(t *testing.T) {
 	t.Cleanup(func() { removeBackups(t) })
 	t.Cleanup(tearDown)
 
+	// Disable VTOrc recoveries, so that it's not racing with InitShardPrimary
+	// call to set the primary.
+	localCluster.DisableVTOrcRecoveries(t)
+
 	// Initialize tablets first so we can connect to MySQL.
 	for _, tablet := range []*cluster.Vttablet{primary, replica1} {
 		err := localCluster.InitTablet(tablet, keyspaceName, shardName)
@@ -47,7 +52,12 @@ func TestCloneBackup(t *testing.T) {
 
 	// Now check if MySQL version supports clone (need vttablet running to query).
 	if !mysqlVersionSupportsClone(t, primary) {
-		t.Skip("Skipping clone test: MySQL version does not support CLONE (requires 8.0.17+)")
+		ci, ok := os.LookupEnv("CI")
+		if !ok || strings.ToLower(ci) != "true" {
+			t.Skip("Skipping clone test: MySQL version does not support CLONE (requires 8.0.17+)")
+		} else {
+			require.FailNow(t, "CI should be running versions of mysqld that support CLONE")
+		}
 	}
 
 	// Check if clone plugin is available.
@@ -69,8 +79,13 @@ func TestCloneBackup(t *testing.T) {
 	cluster.VerifyRowsInTablet(t, primary, keyspaceName, 2)
 
 	// Wait for replica to catch up.
-	time.Sleep(2 * time.Second)
-	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 2)
+	waitInsertedRows(
+		t,
+		replica1,
+		[]string{"clone_test_1", "clone_test_2"},
+		30*time.Second,
+		100*time.Millisecond,
+	)
 
 	// Take a backup using clone from primary.
 	log.Infof("Starting vtbackup with --clone-from-primary")
@@ -93,13 +108,16 @@ func TestCloneBackup(t *testing.T) {
 	require.NoError(t, err)
 	restore(t, replica2, "replica", "SERVING")
 
-	// Give replica2 time to catch up via replication.
-	time.Sleep(5 * time.Second)
-
 	// Verify replica2 has ALL the data (2 rows from before backup + 1 from after).
 	// The 2 pre-backup rows prove the clone-based backup worked.
 	// The 3rd row proves replication is working after restore.
-	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 3)
+	waitInsertedRows(
+		t,
+		replica2,
+		[]string{"clone_test_1", "clone_test_2", "after_backup"},
+		30*time.Second,
+		100*time.Millisecond,
+	)
 	log.Infof("Clone backup verification successful: replica2 has all data")
 }
 
@@ -109,7 +127,7 @@ func vtbackupWithClone(t *testing.T) error {
 	defer os.Remove(mysqlSocket.Name())
 
 	extraArgs := []string{
-		"--allow_first_backup",
+		"--allow-first-backup",
 		"--db-credentials-file", dbCredentialFile,
 		"--mysql-clone-enabled",
 		vtutils.GetFlagVariantForTests("--mysql-socket"), mysqlSocket.Name(),
@@ -132,19 +150,19 @@ func verifyBackupCount(t *testing.T, shardKsName string, expected int) []string 
 	require.NoError(t, err)
 
 	var result []string
-	for _, line := range splitLines(backups) {
+	for line := range strings.SplitSeq(backups, "\n") {
 		if line != "" {
 			result = append(result, line)
 		}
 	}
-	assert.Equalf(t, expected, len(result), "expected %d backups, got %d", expected, len(result))
+	assert.Len(t, result, expected, "expected %d backups, got %d", expected, len(result))
 	return result
 }
 
 func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForState string) {
 	// Start tablet with restore enabled. MySQL is already running from TestMain.
 	log.Infof("restoring tablet %s", time.Now())
-	tablet.VttabletProcess.ExtraArgs = []string{"--db-credentials-file", dbCredentialFile}
+	tablet.VttabletProcess.ExtraArgs = vttabletExtraArgs
 	tablet.VttabletProcess.TabletType = tabletType
 	tablet.VttabletProcess.ServingStatus = waitForState
 	tablet.VttabletProcess.SupportsBackup = true

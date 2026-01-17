@@ -53,6 +53,7 @@ import (
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -463,7 +464,7 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 	if restoreWithClone {
 		restorePos, err = mysqlctl.CloneFromDonor(ctx, topoServer, mysqld, initKeyspace, initShard)
 		if err != nil {
-			return fmt.Errorf("restore with clone failed: %v", err)
+			return vterrors.Wrap(err, "restore with clone failed")
 		}
 	} else {
 		phase.Set(phaseNameRestoreLastBackup, int64(1))
@@ -493,11 +494,11 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 		case mysqlctl.ErrNoBackup:
 			// There is no backup found, but we may be taking the initial backup of a shard
 			if !allowFirstBackup {
-				return errors.New("no backup found; not starting up empty since --initial_backup flag was not enabled")
+				return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "no backup found; not starting up empty since --initial_backup flag was not enabled")
 			}
 			restorePos = replication.Position{}
 		default:
-			return fmt.Errorf("can't restore from backup: %v", err)
+			return vterrors.Wrap(err, "can't restore from backup")
 		}
 		deprecatedDurationByPhase.Set("RestoreLastBackup", int64(time.Since(restoreAt).Seconds()))
 		phase.Set(phaseNameRestoreLastBackup, int64(0))
