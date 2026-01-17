@@ -1,5 +1,3 @@
-# AGENTS.md
-
 ## Overview
 
 Vitess is a cloud native, horizontally scalable database platform built around MySQL. It provides sharding, orchestration, and operational tooling for running large MySQL fleets. Core services like vtgate and vttablet handle query routing, tablet management, and topology coordination.
