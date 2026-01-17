@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -89,7 +90,7 @@ type (
 		epoch     uint64
 
 		stop    chan struct{}
-		stopped chan struct{}
+		stopped atomic.Bool
 	}
 )
 
@@ -128,7 +129,7 @@ func New(cfg Config, transport Transport, clock Clock) *Gossip {
 		states:    make(map[NodeID]State),
 		detectors: make(map[NodeID]*phiAccrual),
 		stop:      make(chan struct{}),
-		stopped:   make(chan struct{}),
+		stopped:   atomic.Bool{},
 	}
 
 	if cfg.NodeID != "" {
@@ -153,7 +154,9 @@ func (g *Gossip) Start(ctx context.Context) error {
 
 	ticker := time.NewTicker(g.cfg.PingInterval)
 	go func() {
-		defer close(g.stopped)
+		g.stopped.Store(false)
+		g.stop = make(chan struct{})
+		defer g.stopped.Store(true)
 		defer ticker.Stop()
 		for {
 			select {
@@ -173,13 +176,11 @@ func (g *Gossip) Start(ctx context.Context) error {
 }
 
 func (g *Gossip) Stop() {
-	select {
-	case <-g.stopped:
+	if !g.stopped.Load() {
 		return
-	default:
-		close(g.stop)
-		<-g.stopped
 	}
+	close(g.stop)
+	g.stopped.Store(true)
 }
 
 func (g *Gossip) UpdateLocal(snapshot HealthSnapshot) {
