@@ -689,6 +689,7 @@ func (c *Cluster) findTablets(ctx context.Context, filter func(*vtadminpb.Tablet
 type FindWorkflowsOptions struct {
 	ActiveOnly      bool
 	IgnoreKeyspaces sets.Set[string]
+	SummaryOnly     bool
 	Filter          func(workflow *vtadminpb.Workflow) bool
 }
 
@@ -799,7 +800,8 @@ func (c *Cluster) findWorkflows(ctx context.Context, keyspaces []string, opts Fi
 			resp, err := c.Vtctld.GetWorkflows(ctx, &vtctldatapb.GetWorkflowsRequest{
 				Keyspace:    ks,
 				ActiveOnly:  opts.ActiveOnly,
-				IncludeLogs: true,
+				IncludeLogs: !opts.SummaryOnly,
+				SummaryOnly: opts.SummaryOnly,
 			})
 			c.workflowReadPool.Release()
 
@@ -2041,6 +2043,7 @@ func (c *Cluster) GetWorkflow(ctx context.Context, keyspace string, name string,
 type GetWorkflowsOptions struct {
 	ActiveOnly      bool
 	IgnoreKeyspaces sets.Set[string]
+	SummaryOnly     bool
 }
 
 // GetWorkflows returns a list of Workflows in this cluster, across the given
@@ -2059,6 +2062,7 @@ func (c *Cluster) GetWorkflows(ctx context.Context, keyspaces []string, opts Get
 	return c.findWorkflows(ctx, keyspaces, FindWorkflowsOptions{
 		ActiveOnly:      opts.ActiveOnly,
 		IgnoreKeyspaces: opts.IgnoreKeyspaces,
+		SummaryOnly:     opts.SummaryOnly,
 		Filter:          func(_ *vtadminpb.Workflow) bool { return true },
 	})
 }
