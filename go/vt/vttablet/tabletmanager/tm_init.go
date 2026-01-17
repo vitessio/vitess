@@ -663,6 +663,11 @@ func (tm *TabletManager) stopRebuildKeyspace() {
 	}
 }
 
+// GetTabletAlias returns the tablet alias of the tabletmanager server.
+func (tm *TabletManager) GetTabletAlias() *topodatapb.TabletAlias {
+	return tm.tabletAlias
+}
+
 func (tm *TabletManager) rebuildKeyspace(ctx context.Context, done chan<- struct{}, keyspace string, retryInterval time.Duration) {
 	var srvKeyspace *topodatapb.SrvKeyspace
 

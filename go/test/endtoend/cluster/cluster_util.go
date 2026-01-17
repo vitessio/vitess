@@ -27,21 +27,19 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/grpc"
-
-	"vitess.io/vitess/go/vt/grpcclient"
-	"vitess.io/vitess/go/vt/log"
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
-	"vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
-
 	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
-
+	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/log"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
@@ -104,10 +102,10 @@ func GetPrimaryPosition(t *testing.T, vttablet Vttablet, hostname string) (strin
 }
 
 // FullStatus gets the full status from the given tablet.
-func FullStatus(t *testing.T, vttablet *Vttablet, hostname string) *replicationdatapb.FullStatus {
+func FullStatus(t *testing.T, vttablet *Vttablet, hostname string, req *tabletmanagerdatapb.FullStatusRequest) *replicationdatapb.FullStatus {
 	ctx := t.Context()
 	vtablet := getTablet(vttablet.GrpcPort, hostname)
-	status, err := tmClient.FullStatus(ctx, vtablet)
+	status, err := tmClient.FullStatus(ctx, vtablet, req)
 	require.NoError(t, err)
 	return status
 }

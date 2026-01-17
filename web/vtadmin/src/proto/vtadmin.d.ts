@@ -30947,6 +30947,15 @@ export namespace tabletmanagerdata {
 
     /** Properties of a FullStatusRequest. */
     interface IFullStatusRequest {
+
+        /** FullStatusRequest proxy_target */
+        proxy_target?: (topodata.ITablet|null);
+
+        /** FullStatusRequest proxy_timeout_ms */
+        proxy_timeout_ms?: (number|Long|null);
+
+        /** FullStatusRequest proxied_by */
+        proxied_by?: (topodata.ITabletAlias|null);
     }
 
     /** Represents a FullStatusRequest. */
@@ -30957,6 +30966,15 @@ export namespace tabletmanagerdata {
          * @param [properties] Properties to set
          */
         constructor(properties?: tabletmanagerdata.IFullStatusRequest);
+
+        /** FullStatusRequest proxy_target. */
+        public proxy_target?: (topodata.ITablet|null);
+
+        /** FullStatusRequest proxy_timeout_ms. */
+        public proxy_timeout_ms: (number|Long);
+
+        /** FullStatusRequest proxied_by. */
+        public proxied_by?: (topodata.ITabletAlias|null);
 
         /**
          * Creates a new FullStatusRequest instance using the specified properties.

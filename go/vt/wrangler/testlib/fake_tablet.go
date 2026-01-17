@@ -217,7 +217,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 	ft.Tablet = ft.TM.Tablet()
 
 	// Register the gRPC server, and starts listening.
-	grpctmserver.RegisterForTest(ft.RPCServer, ft.TM)
+	grpctmserver.RegisterForTest(ft.RPCServer, ft.TM, nil)
 	go ft.RPCServer.Serve(ft.Listener)
 
 	// And wait for it to serve, so we don't start using it before it's

@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/utils"
 	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
@@ -197,9 +198,9 @@ func tmcStartReplicationUntilAfter(ctx context.Context, tabletGrpcPort int, posi
 	return tmClient.StartReplicationUntilAfter(ctx, vtablet, positon, waittime)
 }
 
-func tmcFullStatus(ctx context.Context, tabletGrpcPort int) (*replicationdatapb.FullStatus, error) {
+func tmcFullStatus(ctx context.Context, tabletGrpcPort int, req *tabletmanagerdata.FullStatusRequest) (*replicationdatapb.FullStatus, error) {
 	vtablet := getTablet(tabletGrpcPort)
-	return tmClient.FullStatus(ctx, vtablet)
+	return tmClient.FullStatus(ctx, vtablet, req)
 }
 
 func tmcStopReplicationAndGetStatus(ctx context.Context, tabletGrpcPort int, mode replicationdatapb.StopReplicationMode) (*replicationdatapb.StopReplicationStatus, error) {
