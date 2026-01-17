@@ -303,9 +303,14 @@ func (wf *workflowFetcher) buildWorkflows(
 				return shardStreams.Streams[i].Id < shardStreams.Streams[j].Id
 			})
 		}
+
+		workflow.Status = computeWorkflowStatus(workflow)
+		if req.SummaryOnly {
+			workflow.ShardStreams = nil
+		}
 	}
 
-	if req.IncludeLogs {
+	if req.IncludeLogs && !req.SummaryOnly {
 		var fetchLogsWG sync.WaitGroup
 
 		for _, workflow := range workflowsMap {
@@ -683,4 +688,63 @@ func getVReplicationTrxLag(trxTs, updatedTs, heartbeatTs *vttimepb.Time, state b
 	}
 	now := time.Now().Unix() // Seconds since epoch
 	return float64(now - lastTransactionTime)
+}
+
+// throttledRecencySeconds is how recently a stream must have reported a
+// throttle event for the workflow to be considered currently throttled.
+// The time_throttled column is only ever written on throttle events — it is
+// never cleared — so recency, not presence, is the signal.
+const throttledRecencySeconds = 60
+
+func computeWorkflowStatus(workflow *vtctldatapb.Workflow) *vtctldatapb.Workflow_WorkflowStatus {
+	status := &vtctldatapb.Workflow_WorkflowStatus{}
+	errorMessages := sets.New[string]()
+	var laggingStreams int32
+
+	for _, shardStream := range workflow.ShardStreams {
+		for _, stream := range shardStream.Streams {
+			status.TotalStreams++
+
+			switch stream.State {
+			case binlogdatapb.VReplicationWorkflowState_Running.String():
+				status.RunningStreams++
+			case binlogdatapb.VReplicationWorkflowState_Stopped.String():
+				status.StoppedStreams++
+			case binlogdatapb.VReplicationWorkflowState_Copying.String():
+				status.CopyingStreams++
+			case binlogdatapb.VReplicationWorkflowState_Error.String():
+				status.ErrorStreams++
+				if stream.Message != "" {
+					errorMessages.Insert(stream.Message)
+				}
+			case binlogdatapb.VReplicationWorkflowState_Lagging.String():
+				status.RunningStreams++
+				laggingStreams++
+			}
+
+			if stream.ThrottlerStatus != nil && stream.ThrottlerStatus.ComponentThrottled != "" &&
+				time.Now().Unix()-stream.ThrottlerStatus.TimeThrottled.GetSeconds() <= throttledRecencySeconds {
+				status.IsThrottled = true
+			}
+		}
+	}
+
+	status.Errors = sets.List(errorMessages)
+
+	switch {
+	case status.ErrorStreams > 0:
+		status.State = vtctldatapb.Workflow_WorkflowStatus_ERROR
+	case status.CopyingStreams > 0:
+		status.State = vtctldatapb.Workflow_WorkflowStatus_COPYING
+	case laggingStreams > 0:
+		status.State = vtctldatapb.Workflow_WorkflowStatus_LAGGING
+	case status.RunningStreams > 0:
+		status.State = vtctldatapb.Workflow_WorkflowStatus_RUNNING
+	case status.StoppedStreams > 0 && status.StoppedStreams == status.TotalStreams:
+		status.State = vtctldatapb.Workflow_WorkflowStatus_STOPPED
+	default:
+		status.State = vtctldatapb.Workflow_WorkflowStatus_UNKNOWN
+	}
+
+	return status
 }

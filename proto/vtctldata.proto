@@ -256,6 +256,59 @@ message Workflow {
   // These are additional (optional) settings for vreplication workflows. Previously we used to add it to the
   // binlogdata.BinlogSource proto object. More details in go/vt/sidecardb/schema/vreplication.sql.
   WorkflowOptions options = 10;
+  // Status contains an aggregated summary of the workflow state across all
+  // streams.
+  WorkflowStatus status = 11;
+
+  // WorkflowStatus contains aggregated status information for a workflow.
+  message WorkflowStatus {
+    // Total number of streams in the workflow. Streams in states that have
+    // no dedicated counter below (e.g. Init) are only counted here, so the
+    // counters may not sum to total_streams.
+    int32 total_streams = 1;
+    // Number of streams that are currently running. Lagging streams are
+    // counted as running.
+    int32 running_streams = 2;
+    // Number of streams that are stopped.
+    int32 stopped_streams = 3;
+    // Number of streams that are in the copy phase.
+    int32 copying_streams = 4;
+    // Number of streams that have errors.
+    int32 error_streams = 5;
+    // Unique aggregated error messages across all streams.
+    repeated string errors = 6;
+    // True if any stream reported a throttle event within the last minute.
+    bool is_throttled = 7;
+    // Consolidated workflow state.
+    State state = 8;
+    // The traffic switching state for the workflow, e.g. "Reads Not
+    // Switched. Writes Not Switched". Only populated when summary_only is
+    // set on the request and the workflow is of a type that can switch
+    // traffic (MoveTables, Migrate, Reshard). Empty if the state could not
+    // be determined; such failures are logged on the server.
+    string traffic_state = 9;
+
+    // State is the consolidated state of the workflow, derived from the
+    // states of its individual streams. When streams are in different
+    // states, the highest-precedence matching state wins, in the order:
+    // ERROR, COPYING, LAGGING, RUNNING, STOPPED.
+    enum State {
+      // The workflow has no streams, or no state below applies (e.g. some
+      // streams are still in Init).
+      UNKNOWN = 0;
+      // At least one stream is running or lagging; other streams may be
+      // stopped.
+      RUNNING = 1;
+      // At least one stream is in the copy phase.
+      COPYING = 2;
+      // At least one stream has an error.
+      ERROR = 3;
+      // All streams are stopped.
+      STOPPED = 4;
+      // At least one stream is in the Lagging state.
+      LAGGING = 5;
+    }
+  }
 
   message ReplicationLocation {
     string keyspace = 1;
@@ -1239,6 +1292,9 @@ message GetWorkflowsRequest {
   string workflow = 4;
   bool include_logs = 5;
   repeated string shards = 6;
+  // SummaryOnly returns only the aggregated status per workflow, omitting
+  // per-stream details, copy states, and logs.
+  bool summary_only = 7;
 }
 
 message GetWorkflowsResponse {

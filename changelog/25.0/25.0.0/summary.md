@@ -18,6 +18,7 @@
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
+        - [Summary mode for `workflow show` / `GetWorkflows`](#vreplication-workflow-show-summary)
     - **[VTGate](#minor-changes-vtgate)**
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
@@ -143,6 +144,14 @@ When calling `cancel` or `complete` on an auto-generated `_reverse` workflow wit
 The `--keep-data` flag help text has been updated to note this default explicitly. This change applies to MoveTables, Reshard, and other VReplication workflow types that use the shared cancel/complete paths.
 
 See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
+
+#### <a id="vreplication-workflow-show-summary"/>Summary mode for `workflow show` / `GetWorkflows`</a>
+
+`vtctldclient workflow show` gains a `--summary` flag, backed by a new `summary_only` field on the `GetWorkflows` RPC and also exposed through VTAdmin's workflows API. Instead of the full per-stream payload — binlog sources, positions, copy states, and logs — the response carries a compact aggregated `status` block per workflow: stream counts by state, deduplicated error messages, a consolidated workflow state, whether any stream was recently throttled, and, for workflow types that can switch traffic (MoveTables, Migrate, Reshard), the traffic switching state.
+
+The aggregated `status` block is also always populated on regular (non-summary) `GetWorkflows` responses.
+
+See [#20600](https://github.com/vitessio/vitess/pull/20600) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
