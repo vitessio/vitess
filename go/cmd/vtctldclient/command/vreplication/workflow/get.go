@@ -50,6 +50,7 @@ func commandGetWorkflows(cmd *cobra.Command, args []string) error {
 		Keyspace:    ks,
 		ActiveOnly:  !getWorkflowsOptions.ShowAll,
 		IncludeLogs: workflowShowOptions.IncludeLogs,
+		SummaryOnly: workflowShowOptions.SummaryOnly,
 	})
 
 	if err != nil {
