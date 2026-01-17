@@ -59,6 +59,7 @@ import (
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
+	"vitess.io/vitess/go/vt/gossip"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -169,6 +170,8 @@ type TabletManager struct {
 	SemiSyncMonitor     *semisyncmonitor.Monitor
 	VDiffEngine         *vdiff.Engine
 	Env                 *vtenv.Environment
+	Gossip              *gossip.Gossip
+	GossipEnabled       bool
 
 	// tmc is used to run an RPC against other vttablets.
 	tmc tmclient.TabletManagerClient
@@ -225,6 +228,8 @@ type TabletManager struct {
 	// _isBackupRunning tells us whether there is a backup that is currently running
 	_isBackupRunning bool
 }
+
+// SetGossip sets the gossip agent used by the tablet manager.
 
 // BuildTabletFromInput builds a tablet record from input parameters.
 func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, db *dbconfigs.DBConfigs, collationEnv *collations.Environment) (*topodatapb.Tablet, error) {
@@ -420,6 +425,18 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 
 	ctx, cancel := context.WithTimeout(tm.BatchCtx, initTimeout)
 	defer cancel()
+	if tm.Gossip == nil {
+		if agent, enabled := newGossipAgent(vttabletGossipConfig, tablet); enabled {
+			tm.Gossip = agent
+			tm.GossipEnabled = enabled
+		}
+	}
+	if tm.Gossip != nil && tm.GossipEnabled {
+		if err := tm.Gossip.Start(tm.BatchCtx); err != nil {
+			return err
+		}
+		servenv.OnTerm(tm.Gossip.Stop)
+	}
 	si, err := tm.createKeyspaceShard(ctx)
 	if err != nil {
 		return err
@@ -465,6 +482,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	tm.startShardSync()
 	tm.exportStats()
 	servenv.OnRun(tm.registerTabletManager)
+	servenv.OnRun(func() { registerGossipService(tm) })
 
 	restoring, err := tm.handleRestore(tm.BatchCtx, config)
 	if err != nil {
@@ -534,6 +552,10 @@ func (tm *TabletManager) Stop() {
 	// here in addition to in Close() because tests do not call Close().
 	tm.stopShardSync()
 	tm.stopRebuildKeyspace()
+
+	if tm.Gossip != nil {
+		tm.Gossip.Stop()
+	}
 
 	if tm.QueryServiceControl != nil {
 		tm.QueryServiceControl.Stats().Stop()
