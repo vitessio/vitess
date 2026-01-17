@@ -256,6 +256,45 @@ message Workflow {
   // These are additional (optional) settings for vreplication workflows. Previously we used to add it to the
   // binlogdata.BinlogSource proto object. More details in go/vt/sidecardb/schema/vreplication.sql.
   WorkflowOptions options = 10;
+  // Status contains an aggregated summary of the workflow state across all
+  // streams. This is useful for monitoring and quick status checks without
+  // having to parse all individual stream details.
+  WorkflowStatus status = 11;
+
+  // WorkflowStatus contains aggregated status information for a workflow.
+  message WorkflowStatus {
+    // Total number of streams in the workflow.
+    int32 total_streams = 1;
+    // Number of streams that are currently running.
+    int32 running_streams = 2;
+    // Number of streams that are stopped.
+    int32 stopped_streams = 3;
+    // Number of streams that are in the copy phase.
+    int32 copying_streams = 4;
+    // Number of streams that have errors.
+    int32 error_streams = 5;
+    // Unique aggregated error messages across all streams.
+    repeated string errors = 6;
+    // True if any stream is currently throttled.
+    bool is_throttled = 7;
+    // Consolidated workflow state.
+    State state = 8;
+
+    enum State {
+      // Unknown state.
+      UNKNOWN = 0;
+      // All streams are running normally.
+      RUNNING = 1;
+      // At least one stream is in the copy phase.
+      COPYING = 2;
+      // At least one stream has an error.
+      ERROR = 3;
+      // All streams are stopped.
+      STOPPED = 4;
+      // At least one stream is lagging significantly.
+      LAGGING = 5;
+    }
+  }
 
   message ReplicationLocation {
     string keyspace = 1;
@@ -1239,6 +1278,10 @@ message GetWorkflowsRequest {
   string workflow = 4;
   bool include_logs = 5;
   repeated string shards = 6;
+  // SummaryOnly returns only summary information about the workflow, omitting
+  // per-stream details, copy states, and logs. This is useful for monitoring
+  // and reduces response size significantly.
+  bool summary_only = 7;
 }
 
 message GetWorkflowsResponse {

@@ -257,3 +257,287 @@ func TestFetchCopyStatesByShardStream(t *testing.T) {
 
 	assert.Nil(t, copyStatesByStreamId["80-/2"])
 }
+
+func TestComputeWorkflowStatus(t *testing.T) {
+	testCases := []struct {
+		name     string
+		workflow *vtctldatapb.Workflow
+		want     *vtctldatapb.Workflow_WorkflowStatus
+	}{
+		{
+			name: "all running",
+			workflow: &vtctldatapb.Workflow{
+				ShardStreams: map[string]*vtctldatapb.Workflow_ShardStream{
+					"-80/zone1-100": {
+						IsPrimaryServing: true,
+						Streams: []*vtctldatapb.Workflow_Stream{
+							{State: "Running"},
+							{State: "Running"},
+						},
+					},
+					"80-/zone1-101": {
+						IsPrimaryServing: true,
+						Streams: []*vtctldatapb.Workflow_Stream{
+							{State: "Running"},
+						},
+					},
+				},
+			},
+			want: &vtctldatapb.Workflow_WorkflowStatus{
+				TotalStreams:   3,
+				RunningStreams: 3,
+				State:          vtctldatapb.Workflow_WorkflowStatus_RUNNING,
+			},
+		},
+		{
+			name: "some copying",
+			workflow: &vtctldatapb.Workflow{
+				ShardStreams: map[string]*vtctldatapb.Workflow_ShardStream{
+					"-80/zone1-100": {
+						Streams: []*vtctldatapb.Workflow_Stream{
+							{State: "Running"},
+							{State: "Copying"},
+						},
+					},
+				},
+			},
+			want: &vtctldatapb.Workflow_WorkflowStatus{
+				TotalStreams:   2,
+				RunningStreams: 1,
+				CopyingStreams: 1,
+				State:          vtctldatapb.Workflow_WorkflowStatus_COPYING,
+			},
+		},
+		{
+			name: "with errors",
+			workflow: &vtctldatapb.Workflow{
+				ShardStreams: map[string]*vtctldatapb.Workflow_ShardStream{
+					"-80/zone1-100": {
+						Streams: []*vtctldatapb.Workflow_Stream{
+							{State: "Running"},
+							{State: "Error", Message: "connection failed"},
+							{State: "Error", Message: "connection failed"}, // duplicate error
+							{State: "Error", Message: "timeout"},
+						},
+					},
+				},
+			},
+			want: &vtctldatapb.Workflow_WorkflowStatus{
+				TotalStreams:   4,
+				RunningStreams: 1,
+				ErrorStreams:   3,
+				Errors:         []string{"connection failed", "timeout"},
+				State:          vtctldatapb.Workflow_WorkflowStatus_ERROR,
+			},
+		},
+		{
+			name: "all stopped",
+			workflow: &vtctldatapb.Workflow{
+				ShardStreams: map[string]*vtctldatapb.Workflow_ShardStream{
+					"-80/zone1-100": {
+						Streams: []*vtctldatapb.Workflow_Stream{
+							{State: "Stopped"},
+							{State: "Stopped"},
+						},
+					},
+				},
+			},
+			want: &vtctldatapb.Workflow_WorkflowStatus{
+				TotalStreams:   2,
+				StoppedStreams: 2,
+				State:          vtctldatapb.Workflow_WorkflowStatus_STOPPED,
+			},
+		},
+		{
+			name: "lagging",
+			workflow: &vtctldatapb.Workflow{
+				ShardStreams: map[string]*vtctldatapb.Workflow_ShardStream{
+					"-80/zone1-100": {
+						Streams: []*vtctldatapb.Workflow_Stream{
+							{State: "Running"},
+							{State: "Lagging"},
+						},
+					},
+				},
+			},
+			want: &vtctldatapb.Workflow_WorkflowStatus{
+				TotalStreams:   2,
+				RunningStreams: 2, // Lagging counts as running
+				State:          vtctldatapb.Workflow_WorkflowStatus_LAGGING,
+			},
+		},
+		{
+			name: "throttled",
+			workflow: &vtctldatapb.Workflow{
+				ShardStreams: map[string]*vtctldatapb.Workflow_ShardStream{
+					"-80/zone1-100": {
+						Streams: []*vtctldatapb.Workflow_Stream{
+							{
+								State: "Running",
+								ThrottlerStatus: &vtctldatapb.Workflow_Stream_ThrottlerStatus{
+									ComponentThrottled: "vreplication",
+								},
+							},
+						},
+					},
+				},
+			},
+			want: &vtctldatapb.Workflow_WorkflowStatus{
+				TotalStreams:   1,
+				RunningStreams: 1,
+				IsThrottled:    true,
+				State:          vtctldatapb.Workflow_WorkflowStatus_RUNNING,
+			},
+		},
+		{
+			name:     "empty workflow",
+			workflow: &vtctldatapb.Workflow{},
+			want: &vtctldatapb.Workflow_WorkflowStatus{
+				State: vtctldatapb.Workflow_WorkflowStatus_UNKNOWN,
+			},
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			got := computeWorkflowStatus(tt.workflow)
+			assert.Equal(t, tt.want.TotalStreams, got.TotalStreams, "TotalStreams mismatch")
+			assert.Equal(t, tt.want.RunningStreams, got.RunningStreams, "RunningStreams mismatch")
+			assert.Equal(t, tt.want.StoppedStreams, got.StoppedStreams, "StoppedStreams mismatch")
+			assert.Equal(t, tt.want.CopyingStreams, got.CopyingStreams, "CopyingStreams mismatch")
+			assert.Equal(t, tt.want.ErrorStreams, got.ErrorStreams, "ErrorStreams mismatch")
+			assert.Equal(t, tt.want.IsThrottled, got.IsThrottled, "IsThrottled mismatch")
+			assert.Equal(t, tt.want.State, got.State, "State mismatch")
+			// For errors, check length and content (order may vary due to set usage)
+			assert.Equal(t, len(tt.want.Errors), len(got.Errors), "Errors count mismatch")
+			for _, wantErr := range tt.want.Errors {
+				assert.Contains(t, got.Errors, wantErr, "Expected error not found")
+			}
+		})
+	}
+}
+
+func TestDetermineOverallState(t *testing.T) {
+	testCases := []struct {
+		name     string
+		workflow *vtctldatapb.Workflow
+		want     vtctldatapb.Workflow_WorkflowStatus_State
+	}{
+		{
+			name: "error takes priority",
+			workflow: &vtctldatapb.Workflow{
+				ShardStreams: map[string]*vtctldatapb.Workflow_ShardStream{
+					"test": {
+						Streams: []*vtctldatapb.Workflow_Stream{
+							{State: "Running"},
+							{State: "Copying"},
+							{State: "Error"},
+							{State: "Lagging"},
+						},
+					},
+				},
+			},
+			want: vtctldatapb.Workflow_WorkflowStatus_ERROR,
+		},
+		{
+			name: "copying takes priority over lagging",
+			workflow: &vtctldatapb.Workflow{
+				ShardStreams: map[string]*vtctldatapb.Workflow_ShardStream{
+					"test": {
+						Streams: []*vtctldatapb.Workflow_Stream{
+							{State: "Running"},
+							{State: "Copying"},
+							{State: "Lagging"},
+						},
+					},
+				},
+			},
+			want: vtctldatapb.Workflow_WorkflowStatus_COPYING,
+		},
+		{
+			name: "lagging takes priority over running",
+			workflow: &vtctldatapb.Workflow{
+				ShardStreams: map[string]*vtctldatapb.Workflow_ShardStream{
+					"test": {
+						Streams: []*vtctldatapb.Workflow_Stream{
+							{State: "Running"},
+							{State: "Lagging"},
+						},
+					},
+				},
+			},
+			want: vtctldatapb.Workflow_WorkflowStatus_LAGGING,
+		},
+		{
+			name: "stopped only when all stopped",
+			workflow: &vtctldatapb.Workflow{
+				ShardStreams: map[string]*vtctldatapb.Workflow_ShardStream{
+					"test": {
+						Streams: []*vtctldatapb.Workflow_Stream{
+							{State: "Stopped"},
+							{State: "Running"},
+						},
+					},
+				},
+			},
+			want: vtctldatapb.Workflow_WorkflowStatus_RUNNING,
+		},
+		{
+			name: "all stopped",
+			workflow: &vtctldatapb.Workflow{
+				ShardStreams: map[string]*vtctldatapb.Workflow_ShardStream{
+					"test": {
+						Streams: []*vtctldatapb.Workflow_Stream{
+							{State: "Stopped"},
+							{State: "Stopped"},
+						},
+					},
+				},
+			},
+			want: vtctldatapb.Workflow_WorkflowStatus_STOPPED,
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			got := determineOverallState(tt.workflow)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestSummaryModePreservesStatus(t *testing.T) {
+	// This test verifies that when SummaryOnly mode is used, the status
+	// is computed before ShardStreams is cleared. This ensures users get
+	// the aggregated status even when detailed stream info is omitted.
+	workflow := &vtctldatapb.Workflow{
+		ShardStreams: map[string]*vtctldatapb.Workflow_ShardStream{
+			"-80/zone1-100": {
+				Streams: []*vtctldatapb.Workflow_Stream{
+					{State: "Running"},
+					{State: "Running"},
+				},
+			},
+			"80-/zone1-101": {
+				Streams: []*vtctldatapb.Workflow_Stream{
+					{State: "Copying"},
+				},
+			},
+		},
+	}
+
+	status := computeWorkflowStatus(workflow)
+
+	assert.Equal(t, int32(3), status.TotalStreams)
+	assert.Equal(t, int32(2), status.RunningStreams)
+	assert.Equal(t, int32(1), status.CopyingStreams)
+	assert.Equal(t, vtctldatapb.Workflow_WorkflowStatus_COPYING, status.State)
+
+	workflow.ShardStreams = nil
+	workflow.Status = status
+
+	assert.Nil(t, workflow.ShardStreams)
+	assert.NotNil(t, workflow.Status)
+	assert.Equal(t, int32(3), workflow.Status.TotalStreams)
+	assert.Equal(t, vtctldatapb.Workflow_WorkflowStatus_COPYING, workflow.Status.State)
+}
