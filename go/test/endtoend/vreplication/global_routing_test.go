@@ -55,13 +55,11 @@ type grHelpers struct {
 }
 
 func (h *grHelpers) getSchema(tables []string) string {
-	var createSQL string
-	var createSQLSb59 strings.Builder
+	var createSQL strings.Builder
 	for _, table := range tables {
-		createSQLSb59.WriteString(fmt.Sprintf("CREATE TABLE %s (id int primary key, val varchar(32)) ENGINE=InnoDB;\n", table))
+		fmt.Fprintf(&createSQL, "CREATE TABLE %s (id int primary key, val varchar(32)) ENGINE=InnoDB;\n", table)
 	}
-	createSQL += createSQLSb59.String()
-	return createSQL
+	return createSQL.String()
 }
 
 func (h *grHelpers) getShardedVSchema(tables []string) string {
@@ -214,17 +212,16 @@ func (h *grHelpers) getUnshardedVschema(unshardedHasVSchema bool, tables []strin
 	if !unshardedHasVSchema {
 		return ""
 	}
-	vschema := `{"tables": {`
-	var vschemaSb216 strings.Builder
+	var vschema strings.Builder
+	vschema.WriteString(`{"tables": {`)
 	for i, table := range tables {
 		if i != 0 {
-			vschemaSb216.WriteString(`,`)
+			vschema.WriteString(`,`)
 		}
-		vschemaSb216.WriteString(fmt.Sprintf(`"%s": {}`, table))
+		fmt.Fprintf(&vschema, `"%s": {}`, table)
 	}
-	vschema += vschemaSb216.String()
-	vschema += `}}`
-	return vschema
+	vschema.WriteString(`}}`)
+	return vschema.String()
 }
 
 func (h *grHelpers) rebuildGraphs(t *testing.T, keyspaces []string) {

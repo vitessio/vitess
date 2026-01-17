@@ -1051,19 +1051,15 @@ func getVReplicationConfig(t *testing.T, tab *cluster.VttabletProcess) map[strin
 
 // mapToCSV converts a golang map to a CSV string for use in defining the config overrides in vrep CLI commands.
 func mapToCSV(m map[string]string) string {
-	csv := ""
 	if len(m) == 0 {
-		return csv
+		return ""
 	}
-	var csvSb1062 strings.Builder
+	var csv strings.Builder
 	for k, v := range m {
-		csvSb1062.WriteString(fmt.Sprintf("%s=%s,", k, v))
+		fmt.Fprintf(&csv, "%s=%s,", k, v)
 	}
-	csv += csvSb1062.String()
-	if len(csv) == 0 {
-		return csv
-	}
-	return csv[:len(csv)-1]
+	result := csv.String()
+	return result[:len(result)-1]
 }
 
 // validateOverrides validates that the given vttablets have the expected config overrides.

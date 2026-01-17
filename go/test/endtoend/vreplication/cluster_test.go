@@ -462,16 +462,12 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 	res, err := throttler.UpdateThrottlerTopoConfigRaw(vc.VtctldClient, keyspace.Name, req, nil, nil)
 	require.NoError(t, err, res)
 
-	cellsToWatch := ""
-	var cellsToWatchSb466 strings.Builder
-	for i, cell := range cells {
-		if i > 0 {
-			cellsToWatchSb466.WriteString(",")
-		}
+	cellNames := make([]string, 0, len(cells))
+	for _, cell := range cells {
 		cell.Keyspaces[ksName] = keyspace
-		cellsToWatchSb466.WriteString(cell.Name)
+		cellNames = append(cellNames, cell.Name)
 	}
-	cellsToWatch += cellsToWatchSb466.String()
+	cellsToWatch := strings.Join(cellNames, ",")
 	for _, cell := range cells {
 		if len(cell.Vtgates) == 0 {
 			log.Info("Starting vtgate")
