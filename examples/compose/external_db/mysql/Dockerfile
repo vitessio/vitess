@@ -1,2 +1,2 @@
-FROM mysql:5.7@sha256:dab0a802b44617303694fb17d166501de279c3031ddeb28c56ecf7fcab5ef0da
+FROM mysql:9.5@sha256:57c892ddeb17e6c7dddf219914db017b2cf3e2797806a75424444b83622cc8ef
 COPY . /docker-entrypoint-initdb.d
