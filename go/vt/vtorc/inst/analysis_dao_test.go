@@ -993,6 +993,106 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 	}
 }
 
+// TestStalePrimary tests that an old primary that remains writable and is of tablet type PRIMARY
+// in the topo is demoted to a read-only replica by VTOrc.
+func TestStalePrimary(t *testing.T) {
+	oldDB := db.Db
+	defer func() {
+		db.Db = oldDB
+	}()
+
+	currentPrimaryTimestamp := time.Now().UTC().Truncate(time.Microsecond)
+	stalePrimaryTimestamp := currentPrimaryTimestamp.Add(-1 * time.Minute)
+	shardPrimaryTermTimestamp := currentPrimaryTimestamp.Format(sqlutils.DateTimeFormat)
+
+	// We set up a real primary and replica, and then a stale primary running as REPLICA but with
+	// tablet type PRIMARY in the topology.
+	info := []*test.InfoForRecoveryAnalysis{
+		{
+			TabletInfo: &topodatapb.Tablet{
+				Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+				Hostname:      "localhost",
+				Keyspace:      "ks",
+				Shard:         "0",
+				Type:          topodatapb.TabletType_PRIMARY,
+				MysqlHostname: "localhost",
+				MysqlPort:     6708,
+			},
+			DurabilityPolicy:                   policy.DurabilitySemiSync,
+			LastCheckValid:                     1,
+			CountReplicas:                      1,
+			CountValidReplicas:                 1,
+			CountValidReplicatingReplicas:      1,
+			IsPrimary:                          1,
+			SemiSyncPrimaryEnabled:             1,
+			SemiSyncPrimaryStatus:              1,
+			SemiSyncPrimaryWaitForReplicaCount: 1,
+			SemiSyncPrimaryClients:             1,
+			CurrentTabletType:                  int(topodatapb.TabletType_PRIMARY),
+			PrimaryTimestamp:                   &currentPrimaryTimestamp,
+			ShardPrimaryTermTimestamp:          shardPrimaryTermTimestamp,
+		},
+		{
+			TabletInfo: &topodatapb.Tablet{
+				Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+				Hostname:      "localhost",
+				Keyspace:      "ks",
+				Shard:         "0",
+				Type:          topodatapb.TabletType_REPLICA,
+				MysqlHostname: "localhost",
+				MysqlPort:     6709,
+			},
+			DurabilityPolicy: policy.DurabilitySemiSync,
+			PrimaryTabletInfo: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+			},
+			LastCheckValid:            1,
+			ReadOnly:                  1,
+			SemiSyncReplicaEnabled:    1,
+			ShardPrimaryTermTimestamp: shardPrimaryTermTimestamp,
+		},
+		{
+			TabletInfo: &topodatapb.Tablet{
+				Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 102},
+				Hostname:      "localhost",
+				Keyspace:      "ks",
+				Shard:         "0",
+				Type:          topodatapb.TabletType_PRIMARY,
+				MysqlHostname: "localhost",
+				MysqlPort:     6710,
+			},
+			DurabilityPolicy:                   policy.DurabilitySemiSync,
+			LastCheckValid:                     1,
+			IsPrimary:                          1,
+			ReadOnly:                           0,
+			SemiSyncPrimaryEnabled:             1,
+			SemiSyncPrimaryStatus:              1,
+			SemiSyncPrimaryWaitForReplicaCount: 2,
+			SemiSyncPrimaryClients:             1,
+			CurrentTabletType:                  int(topodatapb.TabletType_REPLICA),
+			PrimaryTimestamp:                   &stalePrimaryTimestamp,
+		},
+	}
+
+	var rowMaps []sqlutils.RowMap
+	for _, analysis := range info {
+		analysis.SetValuesFromTabletInfo()
+		rowMaps = append(rowMaps, analysis.ConvertToRowMap())
+	}
+	db.Db = test.NewTestDB([][]sqlutils.RowMap{rowMaps, rowMaps})
+
+	// Each sampling should yield the placeholder analysis that represents the future recovery behavior once
+	// the demotion logic is implemented, which makes this test fail until the actual fix is in place.
+	for range 2 {
+		got, err := GetDetectionAnalysis("", "", &DetectionAnalysisHints{})
+		require.NoError(t, err, "expected detection analysis to run without error")
+		require.Len(t, got, 1, "expected exactly one analysis entry for the shard")
+		require.Equal(t, AnalysisCode("StaleTopoPrimary"), got[0].Analysis, "expected stale primary analysis")
+		require.Equal(t, "ks", got[0].AnalyzedKeyspace, "expected analysis to target keyspace ks")
+		require.Equal(t, "0", got[0].AnalyzedShard, "expected analysis to target shard 0")
+	}
+}
+
 // TestGetDetectionAnalysis tests the entire GetDetectionAnalysis. It inserts data into the database and runs the function.
 // The database is not faked. This is intended to give more test coverage. This test is more comprehensive but more expensive than TestGetDetectionAnalysisDecision.
 // This test is somewhere between a unit test, and an end-to-end test. It is specifically useful for testing situations which are hard to come by in end-to-end test, but require
