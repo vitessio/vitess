@@ -108,7 +108,6 @@ type DetectionAnalysis struct {
 	// ShardPrimaryTermTimestamp is the primary term start time stored in the shard record.
 	ShardPrimaryTermTimestamp         time.Time
 	AnalyzedInstanceBinlogCoordinates BinlogCoordinates
-
 	IsPrimary                                 bool
 	IsClusterPrimary                          bool
 	LastCheckValid                            bool
