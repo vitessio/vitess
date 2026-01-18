@@ -6,7 +6,10 @@
 - **[Major Changes](#major-changes)**
     - **[New Support](#new-support)**
         - [Window function pushdown for sharded keyspaces](#window-function-pushdown)
+        - [Tablet targeting via USE statement](#tablet-targeting)
 - **[Minor Changes](#minor-changes)**
+    - **[VReplication](#minor-changes-vreplication)**
+        - [`--shards` flag for MoveTables/Reshard start and stop](#vreplication-shards-flag-start-stop)
     - **[VTGate](#minor-changes-vtgate)**
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
         - [New "session" mode for `--vtgate-balancer-mode` flag](#vtgate-session-balancer-mode)
@@ -14,10 +17,13 @@
         - [JSON_EXTRACT now supports dynamic path arguments](#query-serving-json-extract-dynamic-args)
     - **[VTTablet](#minor-changes-vttablet)**
         - [New Experimental flag `--init-tablet-type-lookup`](#vttablet-init-tablet-type-lookup)
+        - [QueryThrottler Observability Metrics](#vttablet-querythrottler-metrics)
+        - [New `in_order_completion_pending_count` field in OnlineDDL outputs](#vttablet-onlineddl-in-order-completion-count)
         - [Tablet Shutdown Tracking and Connection Validation](#vttablet-tablet-shutdown-validation)
     - **[VTOrc](#minor-changes-vtorc)**
         - [Deprecated VTOrc Metric Removed](#vtorc-deprecated-metric-removed)
         - [Improved VTOrc Discovery Logging](#vtorc-improved-discovery-logging)
+        - [New `--cell` Flag](#vtorc-cell-flag)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -31,7 +37,41 @@ Previously, all window function queries required single-shard routing, which lim
 
 For examples and more details, see the [documentation](https://vitess.io/docs/24.0/reference/compatibility/mysql-compatibility/#window-functions).
 
+#### <a id="tablet-targeting"/>Tablet targeting via USE statement</a>
+
+VTGate now supports routing queries to a specific tablet by alias using an extended `USE` statement syntax:
+
+```sql
+USE keyspace:shard@tablet_type|tablet_alias;
+```
+
+For example, to target a specific replica tablet:
+
+```sql
+USE commerce:-80@replica|zone1-0000000100;
+```
+
+Once set, all subsequent queries in the session route to the specified tablet until cleared with a standard `USE keyspace` or `USE keyspace@tablet_type` statement. This is useful for debugging, per-tablet monitoring, cache warming, and other operational tasks where targeting a specific tablet is required.
+
+Note: A shard must be specified when using tablet targeting. Like shard targeting, this bypasses vindex-based routing, so use with care.
+
 ## <a id="minor-changes"/>Minor Changes</a>
+
+### <a id="minor-changes-vreplication"/>VReplication</a>
+
+#### <a id="vreplication-shards-flag-start-stop"/>`--shards` flag for MoveTables/Reshard start and stop</a>
+
+The `start` and `stop` commands for MoveTables and Reshard workflows now support the `--shards` flag, allowing users to start or stop workflows on a specific subset of shards rather than all shards at once.
+
+**Example usage:**
+
+```bash
+# Start workflow on specific shards only
+vtctldclient MoveTables --target-keyspace customer --workflow commerce2customer start --shards="-80,80-"
+
+# Stop workflow on specific shards only
+vtctldclient Reshard --target-keyspace customer --workflow cust2cust stop --shards="80-"
+```
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
@@ -73,6 +113,27 @@ When enabled, the tablet uses its alias to look up the tablet type from the exis
 
 **Note**: Vitess Operator–managed deployments generally do not keep tablet records in the topo between restarts, so this feature will not take effect in those environments.
 
+#### <a id="vttablet-querythrottler-metrics"/>QueryThrottler Observability Metrics</a>
+
+VTTablet now exposes new metrics to track QueryThrottler behavior.
+
+Four new metrics have been added:
+
+- **QueryThrottlerRequests**: Total number of requests evaluated by the query throttler
+- **QueryThrottlerThrottled**: Number of requests that were throttled
+- **QueryThrottlerTotalLatencyNs**: Total time each request takes in query throttling, including evaluation, metric checks, and other overhead (nanoseconds)
+- **QueryThrottlerEvaluateLatencyNs**: Time taken to make the throttling decision (nanoseconds)
+
+All metrics include labels for `Strategy`, `Workload`, and `Priority`. The `QueryThrottlerThrottled` metric has additional labels for `MetricName`, `MetricValue`, and `DryRun` to identify which metric triggered the throttling and whether it occurred in dry-run mode.
+
+These metrics help monitor throttling patterns, identify which workloads are throttled, measure performance overhead, and validate behavior in dry-run mode before configuration changes.
+
+#### <a id="vttablet-onlineddl-in-order-completion-count"/>New `in_order_completion_pending_count` field in OnlineDDL outputs</a>
+
+OnlineDDL migration outputs now include a new `in_order_completion_pending_count` field. When using the `--in-order-completion` flag, this field shows how many migrations must complete before the current migration. The field is visible in `SHOW vitess_migrations` queries and `vtctldclient OnlineDDL <db> show` outputs.
+
+This provides better visibility into migration queue dependencies, making it easier to understand why a migration might be postponed. The count is automatically updated during the scheduler loop and cleared when migrations complete, fail, or are cancelled.
+
 #### <a id="vttablet-tablet-shutdown-validation"/>Tablet Shutdown Tracking and Connection Validation</a>
 
 Vitess now tracks when tablets cleanly shut down and validates tablet records before attempting connections, reducing unnecessary connection attempts and log noise.
@@ -98,3 +159,13 @@ The `discoverInstanceTimings` metric has been removed from VTOrc in v24.0.0. Thi
 VTOrc's `DiscoverInstance` function now includes the tablet alias in all log messages and uses the correct log level when errors occur. Previously, error messages did not indicate which tablet failed discovery, and errors were logged at INFO level instead of ERROR level.
 
 This improvement makes it easier to identify and debug issues with specific tablets when discovery operations fail.
+
+#### <a id="vtorc-cell-flag"/>New `--cell` Flag</a>
+
+VTOrc now supports a `--cell` flag that specifies which Vitess cell the VTOrc process is running in. The flag is optional in v24 but will be required in v25+, similar to VTGate's `--cell` flag.
+
+When provided, VTOrc validates that the cell exists in the topology service on startup. Without the flag, VTOrc logs a warning about the v25+ flag requirement.
+
+This enables future cross-cell problem validation, where VTOrc will be able to ask another cell to validate detected problems before taking recovery actions. The flag is currently validated but not yet used in VTOrc recovery logic.
+
+**Note**: If you're running VTOrc in a multi-cell deployment, start using the `--cell` flag now to prepare for the v25 requirement.

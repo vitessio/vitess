@@ -52,6 +52,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 
 	// Change the args such that they match how we would invoke VTOrc
 	args := map[string]string{
+		"--cell":                       clusterInfo.ClusterInstance.Cell,
 		"--topo-global-server-address": clusterInfo.ClusterInstance.VtctldClientProcess.TopoGlobalAddress,
 		"--topo-implementation":        clusterInfo.ClusterInstance.VtctldClientProcess.TopoImplementation,
 		"--topo-global-root":           clusterInfo.ClusterInstance.VtctldClientProcess.TopoGlobalRoot,

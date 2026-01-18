@@ -55,6 +55,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/sysvars"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -860,9 +861,16 @@ func (e *Executor) ShowShards(ctx context.Context, filter *sqlparser.ShowFilter,
 		}
 
 		_, _, shards, err := e.resolver.resolver.GetKeyspaceShards(ctx, keyspace, destTabletType)
-		if err != nil && vterrors.Code(err) != vtrpcpb.Code_INVALID_ARGUMENT {
-			// We only ignore invalid argument errors, as they mean the keyspace
+		if err != nil {
+			// Ignore invalid argument errors, as they mean the keyspace
 			// doesn't have any shards for the given tablet type.
+			if vterrors.Code(err) == vtrpcpb.Code_INVALID_ARGUMENT {
+				continue
+			}
+			// Keyspace does not exist, no shards and skip.
+			if topo.IsErrType(vterrors.UnwrapAll(err), topo.NoNode) {
+				continue
+			}
 			return nil, err
 		}
 
@@ -1012,7 +1020,7 @@ func (e *Executor) ShowVitessReplicationStatus(ctx context.Context, filter *sqlp
 				replicaSQLRunningField = "Slave_SQL_Running"
 				secondsBehindSourceField = "Seconds_Behind_Master"
 			}
-			results, err := e.txConn.tabletGateway.Execute(ctx, nil, ts.Target, sql, nil, 0, 0)
+			results, err := e.txConn.tabletGateway.Execute(ctx, nil, ts.Target, sql, nil, 0, 0, nil)
 			if err != nil || results == nil {
 				log.Warningf("Could not get replication status from %s: %v", tabletHostPort, err)
 			} else if row := results.Named().Row(); row != nil {
@@ -1108,7 +1116,7 @@ func (e *Executor) SaveVSchema(vschema *vindexes.VSchema, stats *VSchemaStats) {
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
-func (e *Executor) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.ShardDestination, error) {
+func (e *Executor) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.ShardDestination, *topodatapb.TabletAlias, error) {
 	return econtext.ParseDestinationTarget(targetString, defaultTabletType, e.VSchema())
 }
 

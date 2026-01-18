@@ -17,7 +17,6 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -43,7 +42,7 @@ var (
 
 // TabletCommands tests the basic tablet commands
 func TestTabletCommands(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &primaryTabletParams)
 	require.Nil(t, err)

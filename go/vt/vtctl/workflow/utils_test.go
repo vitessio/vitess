@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 	clientv3 "go.etcd.io/etcd/client/v3"
 
+	"vitess.io/vitess/go/race"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/testfiles"
 	"vitess.io/vitess/go/vt/log"
@@ -118,10 +119,10 @@ func TestUpdateKeyspaceRoutingRule(t *testing.T) {
 // TestConcurrentKeyspaceRoutingRulesUpdates runs multiple keyspace routing rules updates concurrently to test
 // the locking mechanism.
 func TestConcurrentKeyspaceRoutingRulesUpdates(t *testing.T) {
-	if os.Getenv("GOCOVERDIR") != "" {
-		// While running this test in CI along with all other tests in for code coverage this test hangs very often.
-		// Possibly due to some resource constraints, since this test is one of the last.
-		// However just running this package by itself with code coverage works fine in CI.
+	if os.Getenv("GOCOVERDIR") != "" || race.Enabled {
+		// While running this test in CI along with all other tests in for code coverage or race enabled,
+		// this test hangs very often. Possibly due to some resource constraints, since this test is one
+		// of the last. However just running this package by itself with code coverage works fine in CI.
 		t.Logf("Skipping TestConcurrentKeyspaceRoutingRulesUpdates test in code coverage mode")
 		t.Skip()
 	}

@@ -45,8 +45,13 @@ func registerReshardCommands(root *cobra.Command) {
 	reshard.AddCommand(common.GetShowCommand(opts))
 	reshard.AddCommand(common.GetStatusCommand(opts))
 
-	reshard.AddCommand(common.GetStartCommand(opts))
-	reshard.AddCommand(common.GetStopCommand(opts))
+	startCommand := common.GetStartCommand(opts)
+	common.AddShardSubsetFlag(startCommand, &common.StartStopOptions.Shards)
+	reshard.AddCommand(startCommand)
+
+	stopCommand := common.GetStopCommand(opts)
+	common.AddShardSubsetFlag(stopCommand, &common.StartStopOptions.Shards)
+	reshard.AddCommand(stopCommand)
 
 	switchTrafficCommand := common.GetSwitchTrafficCommand(opts)
 	common.AddCommonSwitchTrafficFlags(switchTrafficCommand, false)

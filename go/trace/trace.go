@@ -36,11 +36,11 @@ import (
 // Span represents a unit of work within a trace. After creating a Span with
 // NewSpan(), call one of the Start methods to mark the beginning of the work
 // represented by this Span. Call Finish() when that work is done to record the
-// Span. A Span may be reused by calling Start again.
+// Span.
 type Span interface {
 	Finish()
 	// Annotate records a key/value pair associated with a Span. It should be
-	// called between Start and Finish.
+	// called before Finish.
 	Annotate(key string, value any)
 }
 
