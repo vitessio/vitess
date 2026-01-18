@@ -192,6 +192,8 @@ func (g *Gossip) Start(ctx context.Context) error {
 }
 
 func (g *Gossip) Stop() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
 	if !g.stopped.Load() {
 		return
 	}
