@@ -31,6 +31,8 @@ import (
 
 	"encoding/json"
 
+	"github.com/google/go-containerregistry/pkg/crane"
+	gocr "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/hashicorp/go-version"
 	"github.com/spf13/cobra"
 )
@@ -63,6 +65,10 @@ const (
 	// to match the entire flag name + the default value (being the current bootstrap version)
 	// Example input: "flag.String("bootstrap-version", "20", "the version identifier to use for the docker images")"
 	regexpReplaceTestGoBootstrapVersion = `\"bootstrap-version\",[[:space:]]*\"([0-9.]+)\"`
+
+	// regexpReplaceGolangDockerImage replaces the Go version and image digest in Dockerfiles.
+	// Example input: "FROM --platform=linux/amd64 golang:1.25.3-bookworm@sha256:abc AS builder"
+	regexpReplaceGolangDockerImage = `(?i)(FROM[[:space:]]+--platform=linux/amd64[[:space:]]+golang:)([0-9.]+-bookworm)@sha256:[a-f0-9]{64}`
 )
 
 type (
@@ -367,6 +373,22 @@ func replaceGoVersionInCodebase(old, new *version.Version) error {
 		}
 	}
 
+	dockerDigest, err := resolveGolangImageDigest(new)
+	if err != nil {
+		return err
+	}
+
+	for _, fileToChange := range filesToChange {
+		err = replaceInFile(
+			[]*regexp.Regexp{regexp.MustCompile(regexpReplaceGolangDockerImage)},
+			[]string{fmt.Sprintf("${1}%s@%s", golangDockerTag(new), dockerDigest)},
+			fileToChange,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
 	if !isSameVersion(old, new) {
 		goModFiles := []string{"./go.mod"}
 		for _, file := range goModFiles {
@@ -381,6 +403,21 @@ func replaceGoVersionInCodebase(old, new *version.Version) error {
 		}
 	}
 	return nil
+}
+
+func resolveGolangImageDigest(goVersion *version.Version) (string, error) {
+	ref := "golang:" + golangDockerTag(goVersion)
+
+	digest, err := crane.Digest(ref, crane.WithPlatform(&gocr.Platform{OS: "linux", Architecture: "amd64"}))
+	if err != nil {
+		return "", fmt.Errorf("resolve golang digest for %s: %w", ref, err)
+	}
+
+	return digest, nil
+}
+
+func golangDockerTag(goVersion *version.Version) string {
+	return goVersion.String() + "-bookworm"
 }
 
 func updateBootstrapVersionInCodebase(old, new string, newGoVersion *version.Version) error {
