@@ -318,7 +318,7 @@ func getLatestStableGolangReleases() (version.Collection, error) {
 func chooseNewVersion(curVersion *version.Version, latestVersions version.Collection, allowMajorUpgrade bool) *version.Version {
 	selectedVersion := curVersion
 	for _, latestVersion := range latestVersions {
-		if !allowMajorUpgrade && !isSameVersion(latestVersion, selectedVersion) {
+		if !allowMajorUpgrade && !isSameMajorMinorVersion(latestVersion, selectedVersion) {
 			continue
 		}
 		if latestVersion.GreaterThan(selectedVersion) {
@@ -455,6 +455,10 @@ func updateBootstrapChangelog(new string, goVersion *version.Version) error {
 
 func isSameVersion(a, b *version.Version) bool {
 	return a.Segments()[0] == b.Segments()[0] && a.Segments()[1] == b.Segments()[1] && a.Segments()[2] == b.Segments()[2]
+}
+
+func isSameMajorMinorVersion(a, b *version.Version) bool {
+	return a.Segments()[0] == b.Segments()[0] && a.Segments()[1] == b.Segments()[1]
 }
 
 func getListOfFilesInPaths(pathsToExplore []string) ([]string, error) {
