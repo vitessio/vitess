@@ -896,11 +896,11 @@
   },
   {
     "comment": "Derived table pushdown optimization",
-    "query": "SELECT * FROM (SELECT DISTINCT id, col FROM user.ref WHERE id = 1 LIMIT 10) as sub",
+    "query": "SELECT * FROM (SELECT DISTINCT col FROM user.ref WHERE col = 1 LIMIT 10) as sub",
     "plan": {
       "Type": "Passthrough",
       "QueryType": "SELECT",
-      "Original": "SELECT * FROM (SELECT DISTINCT id, col FROM user.ref WHERE id = 1 LIMIT 10) as sub",
+      "Original": "SELECT * FROM (SELECT DISTINCT col FROM user.ref WHERE col = 1 LIMIT 10) as sub",
       "Instructions": {
         "OperatorType": "Route",
         "Variant": "Reference",
@@ -908,8 +908,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select id, col from (select id, col from ref where 1 != 1) as sub where 1 != 1",
-        "Query": "select id, col from (select distinct id, col from ref where id = 1 limit 10) as sub"
+        "FieldQuery": "select col from (select col from ref where 1 != 1) as sub where 1 != 1",
+        "Query": "select col from (select distinct col from ref where col = 1 limit 10) as sub"
       },
       "TablesUsed": [
         "user.ref"
