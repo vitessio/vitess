@@ -525,9 +525,6 @@ func (rt *restoreStateManager) finish(ctx context.Context, replCmd replicationCo
 		if err := rt.tm.startReplication(ctx, *replCmd.position, rt.prevTabletType); err != nil {
 			return vterrors.Wrapf(err, "failed to start replication with position %q", replCmd.position.String())
 		}
-	case replicationActionNone:
-		fallthrough
-	default:
 	}
 
 	// Transition to next tablet type.
