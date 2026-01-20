@@ -348,6 +348,7 @@ func main() {
 	if err := os.MkdirAll(junitDir, os.FileMode(0755)); err != nil {
 		log.Fatalf("Can't create junit directory: %v", err)
 	}
+
 	logFile, err := os.OpenFile(path.Join(outDir, "test.log"), os.O_RDWR|os.O_CREATE, 0644)
 	if err != nil {
 		log.Fatalf("Can't create log file: %v", err)
