@@ -40,6 +40,15 @@ import (
 const (
 	goDevAPI = "https://go.dev/dl/?mode=json"
 
+	// dockerPlatformOS is the target OS for the Go base image.
+	dockerPlatformOS = "linux"
+
+	// dockerPlatformArch is the target architecture for the Go base image.
+	dockerPlatformArch = "amd64"
+
+	// dockerImageDistro is the distro suffix used in Go base image tags.
+	dockerImageDistro = "bookworm"
+
 	// regexpFindBootstrapVersion greps the current bootstrap version from the Makefile. The bootstrap
 	// version is composed of either one or two numbers, for instance: 18.1 or 18.
 	// The expected format of the input is BOOTSTRAP_VERSION=18 or BOOTSTRAP_VERSION=18.1
@@ -65,10 +74,15 @@ const (
 	// to match the entire flag name + the default value (being the current bootstrap version)
 	// Example input: "flag.String("bootstrap-version", "20", "the version identifier to use for the docker images")"
 	regexpReplaceTestGoBootstrapVersion = `\"bootstrap-version\",[[:space:]]*\"([0-9.]+)\"`
+)
 
-	// regexpReplaceGolangDockerImage replaces the Go version and image digest in Dockerfiles.
-	// Example input: "FROM --platform=linux/amd64 golang:1.25.3-bookworm@sha256:abc AS builder"
-	regexpReplaceGolangDockerImage = `(?i)(FROM[[:space:]]+--platform=linux/amd64[[:space:]]+golang:)([0-9.]+-bookworm)@sha256:[a-f0-9]{64}`
+// regexpReplaceGolangDockerImage replaces the Go version and image digest in Dockerfiles.
+// Example input: "FROM --platform=linux/amd64 golang:1.25.3-bookworm@sha256:abc AS builder"
+var regexpReplaceGolangDockerImage = fmt.Sprintf(
+	`(?i)(FROM[[:space:]]+--platform=%s/%s[[:space:]]+golang:)([0-9.]+-%s)@sha256:[a-f0-9]{64}`,
+	dockerPlatformOS,
+	dockerPlatformArch,
+	dockerImageDistro,
 )
 
 type (
@@ -408,7 +422,7 @@ func replaceGoVersionInCodebase(old, new *version.Version) error {
 func resolveGolangImageDigest(goVersion *version.Version) (string, error) {
 	ref := "golang:" + golangDockerTag(goVersion)
 
-	digest, err := crane.Digest(ref, crane.WithPlatform(&gocr.Platform{OS: "linux", Architecture: "amd64"}))
+	digest, err := crane.Digest(ref, crane.WithPlatform(&gocr.Platform{OS: dockerPlatformOS, Architecture: dockerPlatformArch}))
 	if err != nil {
 		return "", fmt.Errorf("resolve golang digest for %s: %w", ref, err)
 	}
@@ -417,7 +431,7 @@ func resolveGolangImageDigest(goVersion *version.Version) (string, error) {
 }
 
 func golangDockerTag(goVersion *version.Version) string {
-	return goVersion.String() + "-bookworm"
+	return goVersion.String() + "-" + dockerImageDistro
 }
 
 func updateBootstrapVersionInCodebase(old, new string, newGoVersion *version.Version) error {
