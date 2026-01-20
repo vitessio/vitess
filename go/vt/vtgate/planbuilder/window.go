@@ -57,7 +57,7 @@ func isSingleShardPrimitive(route *engine.Route) bool {
 	if route == nil || route.RoutingParameters == nil {
 		return false
 	}
-	return route.RoutingParameters.Opcode.IsSingleShard()
+	return route.Opcode.IsSingleShard()
 }
 
 type windowTableInfo struct {

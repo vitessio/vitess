@@ -124,7 +124,7 @@ func TestChangeTypeWithoutSemiSync(t *testing.T) {
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	primary, replica := tablets[0], tablets[1]
 
@@ -294,7 +294,7 @@ func TestSemiSyncBlockDueToDisruption(t *testing.T) {
 
 	// Starting VTOrc later now, because we don't want it to fix the heartbeat interval
 	// on the replica's before the disruption has been introduced.
-	err := clusterInstance.StartVTOrc(clusterInstance.Keyspaces[0].Name)
+	err := clusterInstance.StartVTOrc(clusterInstance.Cell, clusterInstance.Keyspaces[0].Name)
 	require.NoError(t, err)
 	go func() {
 		for {

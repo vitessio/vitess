@@ -30,6 +30,11 @@ jobs:
     runs-on: {{.RunsOn}}
 
     steps:
+    - name: Harden the runner (Audit all outbound calls)
+      uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+      with:
+        egress-policy: audit
+
     - name: Skip CI
       run: |
         if [[ "{{"${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}"}}" == "true" ]]; then
@@ -116,7 +121,7 @@ jobs:
         sudo service etcd stop
 
         # install JUnit report formatter
-        go install github.com/vitessio/go-junit-report@{{.GoJunitReportSHA}}
+        go install github.com/vitessio/go-junit-report@{{.GoJunitReport.SHA}} # {{.GoJunitReport.Comment}}
 
         {{if .InstallXtraBackup}}
 

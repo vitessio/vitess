@@ -82,7 +82,7 @@ func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompa
 }
 
 func (wd *workflowDiffer) reconcileReferenceTables(dr *DiffReport) error {
-	if dr.MismatchedRows == 0 {
+	if dr.MismatchedRows == 0 && dr.MatchingRows > 0 {
 		// Get the VSchema on the target and source keyspaces. We can then use this
 		// for handling additional edge cases, such as adjusting results for reference
 		// tables when the shard count is different between the source and target as

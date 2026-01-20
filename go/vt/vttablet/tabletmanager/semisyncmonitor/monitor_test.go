@@ -297,7 +297,7 @@ func TestMonitorIsSemiSyncBlockedProgressDetection(t *testing.T) {
 
 			// Check if we're still blocked based on the actual logic in isSemiSyncBlocked.
 			// Returns false (not blocked) if: waitingSessions == 0 OR ackedTrxs increased.
-			isBlocked := !(followUpStats.waitingSessions == 0 || followUpStats.ackedTrxs > stats.ackedTrxs)
+			isBlocked := followUpStats.waitingSessions != 0 && followUpStats.ackedTrxs <= stats.ackedTrxs
 
 			require.Equal(t, tt.expectedBlocked, isBlocked, tt.description)
 		})

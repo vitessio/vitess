@@ -355,7 +355,7 @@ func TestFlushLock(t *testing.T) {
 
 	var cnt atomic.Int32
 	go func() {
-		ctx := context.Background()
+		ctx := t.Context()
 		conn2, err := mysql.Connect(ctx, &vtParams)
 		require.NoError(t, err)
 		defer conn2.Close()
@@ -823,7 +823,7 @@ func TestRowCountExceed(t *testing.T) {
 }
 
 func TestDDLTargeted(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -838,6 +838,169 @@ func TestDDLTargeted(t *testing.T) {
 	utils.Exec(t, conn, `rollback`)
 	// validating the row
 	utils.AssertMatches(t, conn, `select id from ddl_targeted`, `[[INT64(1)]]`)
+}
+
+// TestTabletTargeting tests tablet-specific routing with USE keyspace:shard@tablet-alias syntax.
+// When shard is specified, tablet-specific routing bypasses vindex-based shard resolution.
+func TestTabletTargeting(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	instances := make(map[string]map[string][]string)
+
+	for _, ks := range clusterInstance.Keyspaces {
+		if ks.Name != "ks" {
+			continue
+		}
+		for _, shard := range ks.Shards {
+			instances[shard.Name] = make(map[string][]string)
+			for _, tablet := range shard.Vttablets {
+				instances[shard.Name][tablet.Type] = append(instances[shard.Name][tablet.Type], tablet.Alias)
+			}
+		}
+	}
+
+	require.NotEmpty(t, instances["-80"]["primary"][0], "no PRIMARY tablet found for -80 shard")
+	require.NotEmpty(t, instances["80-"]["primary"][0], "no PRIMARY tablet found for 80- shard")
+	require.NotEmpty(t, instances["-80"]["replica"], "no REPLICA tablets found for -80 shard")
+	require.NotEmpty(t, instances["80-"]["replica"], "no REPLICA tablets found for 80- shard")
+
+	// Insert data that would normally hash to 80- shard, but goes to -80 because of shard targeting
+	useStmt := fmt.Sprintf("USE `ks:-80@primary|%s`", instances["-80"]["primary"][0])
+	utils.Exec(t, conn, useStmt)
+	utils.Exec(t, conn, "INSERT into t1(id1, id2) values(1, 100), (2, 200)")
+	// id1=4 hashes to 80-, but we're targeting -80 shard explicitly
+	utils.Exec(t, conn, "insert into t1(id1, id2) values(4, 400)")
+
+	// Verify the data went to -80 shard (not where vindex would have put it)
+	utils.Exec(t, conn, "USE `ks:-80`")
+	utils.AssertMatches(t, conn, "select id1 from t1 where id1 in (1, 2, 4) order by id1", "[[INT64(1)] [INT64(2)] [INT64(4)]]")
+
+	// Verify the data did NOT go to 80- shard (where vindex says id1=4 should be)
+	utils.Exec(t, conn, "USE `ks:80-`")
+	utils.AssertIsEmpty(t, conn, "select id1 from t1 where id1=4")
+
+	// Transaction with tablet-specific routing maintains sticky connection
+	useStmt = fmt.Sprintf("USE `ks:-80@primary|%s`", instances["-80"]["primary"][0])
+	utils.Exec(t, conn, useStmt)
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "insert into t1(id1, id2) values(10, 300)")
+	// Subsequent queries in transaction should go to same tablet
+	utils.AssertMatches(t, conn, "select id1 from t1 where id1=10", "[[INT64(10)]]")
+	utils.Exec(t, conn, "commit")
+	utils.AssertMatches(t, conn, "select id1 from t1 where id1=10", "[[INT64(10)]]")
+
+	// Rollback with tablet-specific routing
+	useStmt = fmt.Sprintf("USE `ks:-80@primary|%s`", instances["-80"]["primary"][0])
+	utils.Exec(t, conn, useStmt)
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "insert into t1(id1, id2) values(20, 500)")
+	utils.Exec(t, conn, "rollback")
+	utils.AssertIsEmpty(t, conn, "select id1 from t1 where id1=20")
+
+	// Invalid tablet alias should fail
+	useStmt = "USE `ks:-80@primary|nonexistent-tablet`"
+	_, err = conn.ExecuteFetch(useStmt, 1, false)
+	require.Error(t, err, "query should fail on invalid tablet")
+	require.Contains(t, err.Error(), "invalid tablet alias in target")
+
+	// Tablet alias without shard should fail
+	useStmt = fmt.Sprintf("USE `ks@primary|%s`", instances["-80"]["primary"][0])
+	_, err = conn.ExecuteFetch(useStmt, 1, false)
+	require.Error(t, err, "tablet alias must be used with a shard")
+
+	// Clear tablet targeting returns to normal routing
+	// With normal routing, the query for id1=4 will be sent to the wrong shard (80-), so it won't be found.
+	// This is expected and demonstrates that vindex routing is back in effect.
+	utils.Exec(t, conn, "USE ks")
+	utils.AssertMatches(t, conn, "select id1 from t1 where id1 in (1, 2, 4, 10) order by id1", "[[INT64(1)] [INT64(2)] [INT64(10)]]")
+
+	// Targeting a specific REPLICA tablet allows reads but not writes
+	replicaAlias := instances["-80"]["replica"][0]
+	useStmt = fmt.Sprintf("USE `ks:-80@replica|%s`", replicaAlias)
+	utils.Exec(t, conn, useStmt)
+
+	// Reads should work on replica (wait for replication)
+	require.Eventually(t, func() bool {
+		result, err := conn.ExecuteFetch("select id1 from t1 where id1 in (1, 2, 4, 10) order by id1", 10, false)
+		return err == nil && len(result.Rows) == 4
+	}, 15*time.Second, 100*time.Millisecond, "replication did not catch up for first replica read")
+
+	// Writes should fail on replica (replicas are read-only)
+	_, err = conn.ExecuteFetch("insert into t1(id1, id2) values(99, 999)", 1, false)
+	require.Error(t, err, "write should fail on replica tablet")
+	require.Contains(t, err.Error(), "1290")
+
+	// Targeting different REPLICA tablets in the same shard
+	secondReplicaAlias := instances["-80"]["replica"][1]
+	useStmt = fmt.Sprintf("USE `ks:-80@replica|%s`", secondReplicaAlias)
+	utils.Exec(t, conn, useStmt)
+
+	// Should still be able to read from this different replica (wait for replication)
+	require.Eventually(t, func() bool {
+		result, err := conn.ExecuteFetch("select id1 from t1 where id1 in (1, 2, 4, 10) order by id1", 10, false)
+		return err == nil && len(result.Rows) == 4
+	}, 15*time.Second, 100*time.Millisecond, "replication did not catch up for second replica read")
+
+	// Writes should still fail
+	_, err = conn.ExecuteFetch("insert into t1(id1, id2) values(98, 998)", 1, false)
+	require.Error(t, err, "write should fail on replica tablet")
+	require.Contains(t, err.Error(), "1290")
+
+	// Write to primary, verify it replicates to replica
+	// This tests that tablet-specific routing doesn't break replication
+	useStmt = fmt.Sprintf("USE `ks:-80@primary|%s`", instances["-80"]["primary"][0])
+	utils.Exec(t, conn, useStmt)
+	utils.Exec(t, conn, "insert into t1(id1, id2) values(50, 5000)")
+	utils.AssertMatches(t, conn, "select id1 from t1 where id1=50", "[[INT64(50)]]")
+
+	// Switch to replica and verify the data replicated
+	replicaAlias = instances["-80"]["replica"][0]
+	useStmt = fmt.Sprintf("USE `ks:-80@replica|%s`", replicaAlias)
+	utils.Exec(t, conn, useStmt)
+	// Wait for replication to catch up
+	require.Eventually(t, func() bool {
+		result, err := conn.ExecuteFetch("select id1 from t1 where id1=50", 1, false)
+		return err == nil && len(result.Rows) == 1
+	}, 15*time.Second, 100*time.Millisecond, "replication did not catch up")
+
+	// Query different replicas and verify different server UUIDs
+	// This proves we're actually hitting different physical tablets
+
+	// Get server UUID from first replica
+	useStmt = fmt.Sprintf("USE `ks:-80@replica|%s`", instances["-80"]["replica"][0])
+	utils.Exec(t, conn, useStmt)
+	var uuid1 string
+	for i := range 5 {
+		result1 := utils.Exec(t, conn, "SELECT @@server_uuid")
+		require.NotNil(t, result1)
+		require.Greater(t, len(result1.Rows), 0)
+		if i > 0 {
+			// UUID should be the same across multiple queries to same tablet
+			require.Equal(t, uuid1, result1.Rows[0][0].ToString())
+		}
+		uuid1 = result1.Rows[0][0].ToString()
+	}
+
+	// Get server UUID from second replica
+	useStmt = fmt.Sprintf("USE `ks:-80@replica|%s`", instances["-80"]["replica"][1])
+	utils.Exec(t, conn, useStmt)
+	var uuid2 string
+	for i := range 5 {
+		result2 := utils.Exec(t, conn, "SELECT @@server_uuid")
+		require.NotNil(t, result2)
+		require.Greater(t, len(result2.Rows), 0)
+		if i > 0 {
+			// UUID should be the same across multiple queries to same tablet
+			require.Equal(t, uuid2, result2.Rows[0][0].ToString())
+		}
+		uuid2 = result2.Rows[0][0].ToString()
+	}
+
+	// Server UUIDs should be different, proving we're targeting different tablets
+	require.NotEqual(t, uuid1, uuid2, "different replicas should have different server UUIDs")
 }
 
 // TestDynamicConfig tests the dynamic configurations.

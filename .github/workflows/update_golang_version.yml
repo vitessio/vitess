@@ -1,11 +1,10 @@
 name: Update Golang Version
 
+permissions: read-all
 on:
   schedule:
     - cron: "0 0 * * *" # Runs every day at midnight UTC
   workflow_dispatch:
-
-permissions: read-all
 
 jobs:
   update_golang_version:
@@ -15,10 +14,15 @@ jobs:
       pull-requests: write
     strategy:
       matrix:
-        branch: [ main, release-23.0, release-22.0, release-21.0, release-20.0 ]
+        branch: [ main, release-23.0, release-22.0 ]
     name: Update Golang Version
     runs-on: ubuntu-24.04
     steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+        with:
+          egress-policy: audit
+
       - name: Check out code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -39,10 +43,8 @@ jobs:
 
           if [[ "${{ matrix.branch }}" == "main" ]]; then
             go run ./go/tools/go-upgrade/go-upgrade.go upgrade --main --allow-major-upgrade
-          elif [[ ("${{ matrix.branch }}" == "release-21.0") || ("${{ matrix.branch }}" == "release-22.0") ]]; then
-            go run ./go/tools/go-upgrade/go-upgrade.go upgrade
           else
-            go run ./go/tools/go-upgrade/go-upgrade.go upgrade --workflow-update=false
+            go run ./go/tools/go-upgrade/go-upgrade.go upgrade
           fi
 
           output=$(git status -s)
@@ -66,7 +68,7 @@ jobs:
 
       - name: Create Pull Request
         if: steps.detect-and-update.outputs.create-pr == 'true'
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@98357b18bf14b5342f975ff684046ec3b2a07725 # v8.0.0
         with:
           token: ${{ secrets.CREATE_PR_VITESS_BOT }}
           branch: "upgrade-go-to-${{steps.detect-and-update.outputs.go-version}}-on-${{ matrix.branch }}"

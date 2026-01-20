@@ -85,6 +85,9 @@ type FakeMysqlDaemon struct {
 	// and ReplicationStatus.
 	CurrentPrimaryPosition replication.Position
 
+	// PrimaryPositionError is used by PrimaryPosition.
+	PrimaryPositionError error
+
 	// CurrentRelayLogPosition is returned by ReplicationStatus.
 	CurrentRelayLogPosition replication.Position
 
@@ -183,6 +186,10 @@ type FakeMysqlDaemon struct {
 
 	// FetchSuperQueryResults is used by FetchSuperQuery.
 	FetchSuperQueryMap map[string]*sqltypes.Result
+
+	// FetchSuperQueryCallback is an optional callback for dynamic query handling.
+	// If set, it takes precedence over FetchSuperQueryMap.
+	FetchSuperQueryCallback func(query string) (*sqltypes.Result, error)
 
 	// SemiSyncPrimaryEnabled represents the state of rpl_semi_sync_source_enabled.
 	SemiSyncPrimaryEnabled bool
@@ -411,6 +418,9 @@ func (fmd *FakeMysqlDaemon) GetPreviousGTIDs(ctx context.Context, binlog string)
 
 // PrimaryPosition is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) PrimaryPosition(ctx context.Context) (replication.Position, error) {
+	if fmd.PrimaryPositionError != nil {
+		return replication.Position{}, fmd.PrimaryPositionError
+	}
 	return fmd.GetPrimaryPositionLocked(), nil
 }
 
@@ -617,6 +627,11 @@ func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(ctx context.Context, queryList
 
 // FetchSuperQuery returns the results from the map, if any.
 func (fmd *FakeMysqlDaemon) FetchSuperQuery(ctx context.Context, query string) (*sqltypes.Result, error) {
+	// If a callback is set, use it for dynamic handling
+	if fmd.FetchSuperQueryCallback != nil {
+		return fmd.FetchSuperQueryCallback(query)
+	}
+
 	if fmd.FetchSuperQueryMap == nil {
 		return nil, fmt.Errorf("unexpected query: %v", query)
 	}

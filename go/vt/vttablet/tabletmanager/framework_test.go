@@ -217,7 +217,7 @@ type fakeTabletConn struct {
 }
 
 // fakeTabletConn implements the QueryService interface.
-func (ftc *fakeTabletConn) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (queryservice.TransactionState, error) {
+func (ftc *fakeTabletConn) Begin(ctx context.Context, session queryservice.Session, target *querypb.Target, options *querypb.ExecuteOptions) (queryservice.TransactionState, error) {
 	return queryservice.TransactionState{
 		TransactionID: 1,
 	}, nil
@@ -274,24 +274,24 @@ func (ftc *fakeTabletConn) ReadTransaction(ctx context.Context, target *querypb.
 }
 
 // fakeTabletConn implements the QueryService interface.
-func (ftc *fakeTabletConn) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (ftc *fakeTabletConn) Execute(ctx context.Context, session queryservice.Session, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	return nil, nil
 }
 
 // fakeTabletConn implements the QueryService interface.
-func (ftc *fakeTabletConn) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+func (ftc *fakeTabletConn) StreamExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	return nil
 }
 
 // fakeTabletConn implements the QueryService interface.
-func (ftc *fakeTabletConn) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (queryservice.TransactionState, *sqltypes.Result, error) {
+func (ftc *fakeTabletConn) BeginExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (queryservice.TransactionState, *sqltypes.Result, error) {
 	return queryservice.TransactionState{
 		TransactionID: 1,
 	}, nil, nil
 }
 
 // fakeTabletConn implements the QueryService interface.
-func (ftc *fakeTabletConn) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (queryservice.TransactionState, error) {
+func (ftc *fakeTabletConn) BeginStreamExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (queryservice.TransactionState, error) {
 	return queryservice.TransactionState{
 		TransactionID: 1,
 	}, nil
@@ -327,28 +327,28 @@ func (ftc *fakeTabletConn) HandlePanic(err *error) {
 }
 
 // fakeTabletConn implements the QueryService interface.
-func (ftc *fakeTabletConn) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (queryservice.ReservedTransactionState, *sqltypes.Result, error) {
+func (ftc *fakeTabletConn) ReserveBeginExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (queryservice.ReservedTransactionState, *sqltypes.Result, error) {
 	return queryservice.ReservedTransactionState{
 		ReservedID: 1,
 	}, nil, nil
 }
 
 // fakeTabletConn implements the QueryService interface.
-func (ftc *fakeTabletConn) ReserveBeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (queryservice.ReservedTransactionState, error) {
+func (ftc *fakeTabletConn) ReserveBeginStreamExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (queryservice.ReservedTransactionState, error) {
 	return queryservice.ReservedTransactionState{
 		ReservedID: 1,
 	}, nil
 }
 
 // fakeTabletConn implements the QueryService interface.
-func (ftc *fakeTabletConn) ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (queryservice.ReservedState, *sqltypes.Result, error) {
+func (ftc *fakeTabletConn) ReserveExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (queryservice.ReservedState, *sqltypes.Result, error) {
 	return queryservice.ReservedState{
 		ReservedID: 1,
 	}, nil, nil
 }
 
 // fakeTabletConn implements the QueryService interface.
-func (ftc *fakeTabletConn) ReserveStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (queryservice.ReservedState, error) {
+func (ftc *fakeTabletConn) ReserveStreamExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (queryservice.ReservedState, error) {
 	return queryservice.ReservedState{
 		ReservedID: 1,
 	}, nil

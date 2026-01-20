@@ -268,38 +268,29 @@ const (
 	sourcePasswordEnd   = "',\n"
 	masterPasswordStart = "  MASTER_PASSWORD = '"
 	masterPasswordEnd   = "',\n"
+	identifiedByStart   = " IDENTIFIED BY '"
+	identifiedByEnd     = "'"
 	passwordStart       = " PASSWORD = '"
 	passwordEnd         = "'"
 )
 
-func redactPassword(input string) string {
-	i := strings.Index(input, sourcePasswordStart)
-	// We have primary password in the query, try to redact it
-	if i != -1 {
-		j := strings.Index(input[i+len(sourcePasswordStart):], sourcePasswordEnd)
-		if j == -1 {
-			return input
-		}
-		input = input[:i+len(sourcePasswordStart)] + strings.Repeat("*", 4) + input[i+len(masterPasswordStart)+j:]
-	}
-
-	i = strings.Index(input, masterPasswordStart)
-	// We have primary password in the query, try to redact it
-	if i != -1 {
-		j := strings.Index(input[i+len(masterPasswordStart):], masterPasswordEnd)
-		if j == -1 {
-			return input
-		}
-		input = input[:i+len(masterPasswordStart)] + strings.Repeat("*", 4) + input[i+len(masterPasswordStart)+j:]
-	}
-	// We also check if we have any password keyword in the query
-	i = strings.Index(input, passwordStart)
+// redactBetween replaces content between start and end markers with asterisks.
+func redactBetween(input, start, end string) string {
+	i := strings.Index(input, start)
 	if i == -1 {
 		return input
 	}
-	j := strings.Index(input[i+len(passwordStart):], passwordEnd)
+	j := strings.Index(input[i+len(start):], end)
 	if j == -1 {
 		return input
 	}
-	return input[:i+len(passwordStart)] + strings.Repeat("*", 4) + input[i+len(passwordStart)+j:]
+	return input[:i+len(start)] + strings.Repeat("*", 4) + input[i+len(start)+j:]
+}
+
+func redactPassword(input string) string {
+	input = redactBetween(input, sourcePasswordStart, sourcePasswordEnd)
+	input = redactBetween(input, masterPasswordStart, masterPasswordEnd)
+	input = redactBetween(input, identifiedByStart, identifiedByEnd)
+	input = redactBetween(input, passwordStart, passwordEnd)
+	return input
 }

@@ -116,12 +116,13 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start unsharded keyspace
+		cell := clusterInstance.Cell
 		keyspace := cluster.Keyspace{
 			Name:      lookupKeyspace,
 			SchemaSQL: createUnshardedMessage,
 			VSchema:   lookupVschema,
 		}
-		if err := clusterInstance.StartUnshardedKeyspace(keyspace, 1, false); err != nil {
+		if err := clusterInstance.StartUnshardedKeyspace(keyspace, 1, false, cell); err != nil {
 			return 1, err
 		}
 
@@ -131,7 +132,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: createShardedMessage,
 			VSchema:   userVschema,
 		}
-		if err := clusterInstance.StartKeyspace(keyspace, []string{"-80", "80-"}, 1, false); err != nil {
+		if err := clusterInstance.StartKeyspace(keyspace, []string{"-80", "80-"}, 1, false, cell); err != nil {
 			return 1, err
 		}
 

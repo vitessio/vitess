@@ -377,7 +377,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// We will use a replica to confirm that vtgate's cascading works correctly.
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 2, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 2, false, clusterInstance.Cell); err != nil {
 			return 1, err
 		}
 
@@ -560,7 +560,7 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 		testName = fmt.Sprintf("%s/%s", testName, tcase.notes)
 	}
 	t.Run(testName, func(t *testing.T) {
-		ctx := context.Background()
+		ctx := t.Context()
 
 		t.Run("create schema", func(t *testing.T) {
 			createInitialSchema(t, tcase)
@@ -796,7 +796,7 @@ func validateTableDefinitions(t *testing.T, afterOnlineDDL bool) {
 
 // createInitialSchema creates the tables from scratch, and drops the foreign key constraints on the replica.
 func createInitialSchema(t *testing.T, tcase *testCase) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -1194,7 +1194,7 @@ func populateTables(t *testing.T, tcase *testCase) {
 	log.Infof("initTable begin")
 	defer log.Infof("initTable complete")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()

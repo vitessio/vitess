@@ -73,6 +73,8 @@ func TestConfigParse(t *testing.T) {
     user: b
   appdebug:
     password: '****'
+  clone:
+    password: '****'
   dba:
     password: '****'
     user: c

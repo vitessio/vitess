@@ -108,7 +108,7 @@ func (g *Generator) WriteToFile(out string) {
 	}
 
 	fmt.Fprintf(&file, ")\n\n")
-	g.Buffer.WriteTo(&file)
+	g.WriteTo(&file)
 
 	if err := os.WriteFile(out, file.Bytes(), 0644); err != nil {
 		g.Fail(fmt.Sprintf("failed to generate %q: %v", out, err))

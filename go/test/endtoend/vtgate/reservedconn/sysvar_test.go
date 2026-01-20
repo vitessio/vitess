@@ -32,7 +32,7 @@ import (
 )
 
 func TestSetSysVarSingle(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	type queriesWithExpectations struct {
 		name, expr string
 		expected   []string
