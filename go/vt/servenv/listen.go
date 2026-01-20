@@ -42,7 +42,7 @@ func Listen(protocol, address string) (net.Listener, error) {
 }
 
 func registerReusePortFlag(fs *pflag.FlagSet) {
-	utils.SetFlagBoolVar(fs, &reusePort, "reuse-port", false, "Enable SO_REUSEPORT when binding sockets")
+	utils.SetFlagBoolVar(fs, &reusePort, "reuse-port", reusePort, "Enable SO_REUSEPORT when binding sockets; available on Linux 3.9+ (default false)")
 }
 
 func init() {
