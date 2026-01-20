@@ -123,8 +123,10 @@ type Config struct {
 
 // Test is an entry from the test/config.json file.
 type Test struct {
-	File          string
-	Args, Command []string
+	File     string
+	Args     []string
+	Command  []string
+	Packages []string
 
 	// Manual means it won't be run unless explicitly specified.
 	Manual bool
@@ -185,6 +187,7 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 			if *keepData {
 				testCmd = append(testCmd, "-keep-data")
 			}
+
 		} else {
 			testCmd = []string{"test/" + t.File, "-v", "--skip-build", utils.GetFlagVariantForTests("--keep-logs")}
 			testCmd = append(testCmd, t.Args...)
@@ -224,6 +227,7 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 		// https://github.com/grpc/grpc/blob/master/doc/keepalive.md
 		"GRPC_ARG_HTTP2_MAX_PINGS_WITHOUT_DATA": "0",
 		"JUNIT_OUTPUT":                          junitOutput,
+		"PACKAGES":                              strings.Join(t.Packages, " "),
 		"VTROOT":                                "/vt/src/vitess.io/vitess",
 		"VTDATAROOT":                            dataDir,
 		"VTPORTSTART":                           strconv.FormatInt(int64(getPortStart(100)), 10),
