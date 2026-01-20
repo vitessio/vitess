@@ -187,7 +187,6 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 			if *keepData {
 				testCmd = append(testCmd, "-keep-data")
 			}
-
 		} else {
 			testCmd = []string{"test/" + t.File, "-v", "--skip-build", utils.GetFlagVariantForTests("--keep-logs")}
 			testCmd = append(testCmd, t.Args...)
