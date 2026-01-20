@@ -177,7 +177,7 @@ func waitReplicationTopology(t *testing.T, tablet *cluster.Vttablet) {
 		}
 
 		row := qr.Rows[0]
-		return row[ioRunningIdx].ToString() == "Yes" && row[sqlRunningIdx].ToString() == "Yes"
+		return strings.EqualFold(row[ioRunningIdx].ToString(), "Yes") && strings.EqualFold(row[sqlRunningIdx].ToString(), "Yes")
 	}, 10*time.Second, 100*time.Millisecond)
 }
 

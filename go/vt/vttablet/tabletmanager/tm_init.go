@@ -887,6 +887,18 @@ func (tm *TabletManager) handleRestore(ctx context.Context, config *tabletenv.Ta
 	if restoreFromBackup && restoreWithClone {
 		return false, errors.New("--restore-from-backup and --restore-with-clone are mutually exclusive")
 	}
+	if len(restoreFromBackupAllowedEngines) > 0 && restoreWithClone {
+		return false, errors.New("--restore-from-backup-allowed-engines and --restore-with-clone are mutually exclusive")
+	}
+	if restoreFromBackupTsStr != "" && restoreWithClone {
+		return false, errors.New("--restore-from-backup-ts and --restore-with-clone are mutually exclusive")
+	}
+	if restoreToPos != "" && restoreWithClone {
+		return false, errors.New("--restore-to-pos and --restore-with-clone are mutually exclusive")
+	}
+	if restoreToTimestampStr != "" && restoreWithClone {
+		return false, errors.New("--restore-to-timestamp and --restore-with-clone are mutually exclusive")
+	}
 	if restoreToTimestampStr != "" && restoreToPos != "" {
 		return false, errors.New("--restore-to-timestamp and --restore-to-pos are mutually exclusive")
 	}
