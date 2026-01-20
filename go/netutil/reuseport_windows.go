@@ -1,3 +1,5 @@
+//go:build windows
+
 /*
 Copyright 2026 The Vitess Authors.
 
@@ -17,13 +19,16 @@ limitations under the License.
 package netutil
 
 import (
+	"fmt"
 	"net"
+	"runtime"
 )
 
-// ListenerFunc is a function that can bind a host:port and return a
-// net.Listener, equivalent to net.Listen.
-type ListenerFunc func(network, address string) (net.Listener, error)
-
-// Listen is the function used to create listeners for gRPC servers,
-// http servers, and mysql servers.
-var Listen ListenerFunc = net.Listen
+// ListenReusePort binds a host:port and sets SO_REUSEPORT on the listener.
+// SO_REUSEPORT allows multiple processes to bind to the same port, enabling
+// kernel-level load balancing of incoming connections.
+//
+// Requires Linux 3.9+ or equivalent kernel support.
+func ListenReusePort(network, address string) (net.Listener, error) {
+	return nil, fmt.Errorf("SO_REUSEPORT: not supported on OS: %s", runtime.GOOS)
+}

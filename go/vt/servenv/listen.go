@@ -1,5 +1,3 @@
-//go:build !windows
-
 /*
 Copyright 2026 The Vitess Authors.
 
@@ -16,13 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package vtgate
+package servenv
 
 import (
+	"net"
+
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/netutil"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/utils"
 )
 
@@ -32,16 +31,20 @@ var (
 	reusePort = false
 )
 
+// Listen is used to bind sockets. By default, it is the same as
+// net.Listen, however it can be used to configure socket options.
+func Listen(protocol, address string) (net.Listener, error) {
+	if reusePort {
+		return netutil.ListenReusePort(protocol, address)
+	}
+
+	return net.Listen(protocol, address)
+}
+
 func registerReusePortFlag(fs *pflag.FlagSet) {
 	utils.SetFlagBoolVar(fs, &reusePort, "reuse-port", false, "Enable SO_REUSEPORT when binding sockets")
 }
 
 func init() {
-	servenv.OnParseFor("vtgate", registerReusePortFlag)
-
-	servenv.OnInit(func() {
-		if reusePort {
-			netutil.Listen = netutil.ListenReusePort
-		}
-	})
+	OnParseFor("vtgate", registerReusePortFlag)
 }

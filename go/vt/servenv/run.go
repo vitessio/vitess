@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/event"
-	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -45,7 +44,7 @@ func Run(bindAddress string, port int) {
 	serveGRPC()
 	serveSocketFile()
 
-	l, err := netutil.Listen("tcp", net.JoinHostPort(bindAddress, strconv.Itoa(port)))
+	l, err := Listen("tcp", net.JoinHostPort(bindAddress, strconv.Itoa(port)))
 	if err != nil {
 		log.Exit(err)
 	}

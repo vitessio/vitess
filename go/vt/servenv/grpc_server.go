@@ -35,7 +35,6 @@ import (
 	"google.golang.org/grpc/orca"
 	"google.golang.org/grpc/reflection"
 
-	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/grpcoptionaltls"
@@ -324,7 +323,8 @@ func serveGRPC() {
 
 	// listen on the port
 	log.Infof("Listening for gRPC calls on port %v", gRPCPort)
-	listener, err := netutil.Listen("tcp", net.JoinHostPort(gRPCBindAddress, strconv.Itoa(gRPCPort)))
+
+	listener, err := Listen("tcp", net.JoinHostPort(gRPCBindAddress, strconv.Itoa(gRPCPort)))
 	if err != nil {
 		log.Exitf("Cannot listen on port %v for gRPC: %v", gRPCPort, err)
 	}

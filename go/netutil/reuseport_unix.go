@@ -36,7 +36,7 @@ func ListenReusePort(network, address string) (net.Listener, error) {
 	switch network {
 	case "tcp", "tcp4", "tcp6":
 	default:
-		return net.Listen(network, address)
+		return nil, fmt.Errorf("SO_REUSEPORT: protocol not supported: %s", network)
 	}
 
 	lc := net.ListenConfig{
