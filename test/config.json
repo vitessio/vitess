@@ -9,7 +9,6 @@
 			],
 			"Manual": false,
 			"Shard": "java",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"client_test": {
@@ -20,7 +19,6 @@
 			],
 			"Manual": false,
 			"Shard": "java",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"e2e": {
@@ -31,7 +29,6 @@
 			],
 			"Manual": false,
 			"Shard": "",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"e2e_race": {
@@ -43,7 +40,6 @@
 			],
 			"Manual": false,
 			"Shard": "",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"unit": {
@@ -54,7 +50,6 @@
 			],
 			"Manual": false,
 			"Shard": "",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"unit_race": {
@@ -66,7 +61,6 @@
 			],
 			"Manual": false,
 			"Shard": "5",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"local_example": {
@@ -77,7 +71,6 @@
 			],
 			"Manual": false,
 			"Shard": "",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"region_example": {
@@ -88,7 +81,6 @@
 			],
 			"Manual": false,
 			"Shard": "",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"backup_pitr": {
@@ -97,7 +89,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "backup_pitr",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"backup_pitr_xtrabackup": {
@@ -106,7 +97,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "backup_pitr_xtrabackup",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"backup_pitr_mysqlshell": {
@@ -115,7 +105,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "backup_pitr_mysqlshell",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"backup": {
@@ -124,7 +113,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtctlbackup_sharded_clustertest_heavy",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"backup_mysqlctld": {
@@ -133,7 +121,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "21",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"backup_s3": {
@@ -142,7 +129,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "21",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"backup_only": {
@@ -151,7 +137,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtbackup",
-			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_backups"]
 		},
 		"backup_xtrabackup": {
@@ -160,7 +145,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "xb_backup",
-			"RetryMax": 2,
 			"Tags": []
 		},
 		"backup_xtrabackup_xbstream": {
@@ -169,7 +153,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "xb_backup",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"backup_xtrabackup_xbstream_lz4": {
@@ -178,7 +161,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "xb_backup",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"cellalias": {
@@ -187,7 +169,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "13",
-			"RetryMax": 3,
 			"Tags": []
 		},
 		"prepare_statement": {
@@ -196,7 +177,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "12",
-			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_query_serving_queries"]
 		},
 		"mysql_server": {
@@ -205,7 +185,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "mysql_server_vault",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"messaging": {
@@ -214,7 +193,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "12",
-			"RetryMax": 3,
 			"Tags": []
 		},
 		"clustertest": {
@@ -223,7 +201,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtctlbackup_sharded_clustertest_heavy",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"encrypted_replication": {
@@ -232,7 +209,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "12",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"encrypted_transport": {
@@ -241,7 +217,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "12",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"unmanaged_ssl_check": {
@@ -250,7 +225,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "12",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"keyspace": {
@@ -259,7 +233,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "12",
-			"RetryMax": 1,
 			"Tags": [
 				"site_test"
 			]
@@ -270,7 +243,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "12",
-			"RetryMax": 1,
 			"Tags": [
 				"site_test"
 			]
@@ -281,7 +253,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "12",
-			"RetryMax": 1,
 			"Tags": [
 				"site_test"
 			]
@@ -292,7 +263,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_vrepl",
-			"RetryMax": 2,
 			"Tags": []
 		},
 		"onlineddl_vrepl_stress": {
@@ -301,7 +271,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_vrepl_stress",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"onlineddl_vrepl_suite": {
@@ -310,7 +279,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_vrepl_suite",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"onlineddl_vrepl_stress_suite": {
@@ -319,7 +287,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_vrepl_stress_suite",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"onlineddl_revert": {
@@ -328,7 +295,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_revert",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"onlineddl_scheduler": {
@@ -337,7 +303,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_scheduler",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"onlineddl_flow": {
@@ -346,7 +311,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_flow",
-			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_onlineddl_flow"]
 		},
 		"schemadiff_vrepl": {
@@ -355,7 +319,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "schemadiff_vrepl",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"recovery": {
@@ -364,7 +327,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtctlbackup_sharded_clustertest_heavy",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"emergencyreparent": {
@@ -373,7 +335,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "ers_prs_newfeatures_heavy",
-			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_reparent"]
 		},
 		"plannedreparent": {
@@ -382,7 +343,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "ers_prs_newfeatures_heavy",
-			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_reparent"]
 		},
 		"newfeatures": {
@@ -391,7 +351,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "ers_prs_newfeatures_heavy",
-			"RetryMax": 1,
 			"Tags": [""]
 		},
 		"sharded": {
@@ -400,7 +359,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtctlbackup_sharded_clustertest_heavy",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"tabletgateway_buffer_reparent": {
@@ -409,7 +367,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "13",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"tabletgateway_buffer_reshard": {
@@ -418,7 +375,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "13",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"tabletgateway": {
@@ -427,7 +383,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "15",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtctldclient": {
@@ -436,7 +391,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "15",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"tabletmanager": {
@@ -445,7 +399,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "18",
-			"RetryMax": 1,
 			"Tags": [
 				"site_test"
 			]
@@ -456,7 +409,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "18",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"tabletmanager_replication_manager": {
@@ -465,7 +417,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "18",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"tabletmanager_consul": {
@@ -476,7 +427,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "tabletmanager_consul",
-			"RetryMax": 1,
 			"Tags": [
 				"site_test"
 			]
@@ -487,7 +437,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "tabletmanager_throttler_topo",
-			"RetryMax": 1,
 			"Tags": [
 				"site_test"
 			]
@@ -498,7 +447,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "tabletmanager_tablegc",
-			"RetryMax": 2,
 			"Tags": [
 				"site_test"
 			]
@@ -511,7 +459,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "docker_cluster",
-			"RetryMax": 1,
 			"Tags": [
 				"site_test"
 			]
@@ -522,7 +469,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "28",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate": {
@@ -531,7 +477,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_general_heavy",
-			"RetryMax": 2,
 			"Tags": []
 		},
 		"vtgate_tablet_healthcheck": {
@@ -540,7 +485,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_general_heavy",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_tabletbalancer": {
@@ -549,7 +493,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_general_heavy",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_connectiondrain": {
@@ -558,7 +501,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_general_heavy",
-			"RetryMax": 2,
 			"Tags": []
 		},
 		"vtgate_queries_derived": {
@@ -567,7 +509,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
-			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_query_serving_queries"]
 		},
 		"vtgate_queries_aggregation": {
@@ -576,7 +517,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
-			"RetryMax": 2,
 			"Tags": ["upgrade_downgrade_query_serving_queries"]
 		},
 		"vtgate_queries_foundrows": {
@@ -585,7 +525,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
-			"RetryMax": 2,
 			"Tags": ["upgrade_downgrade_query_serving_queries"]
 		},
 		"vtgate_queries_informationschema": {
@@ -594,7 +533,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
-			"RetryMax": 2,
 			"Tags": ["upgrade_downgrade_query_serving_queries"]
 		},
 		"vtgate_queries_misc": {
@@ -603,7 +541,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
-			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_query_serving_queries"]
 		},
 		"vtgate_queries_multi_query": {
@@ -612,7 +549,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
-			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_query_serving_queries"]
 		},
 		"vtgate_queries_timeout": {
@@ -621,7 +557,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
-			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_query_serving_queries"]
 		},
 		"vtgate_queries_normalize": {
@@ -630,7 +565,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
-			"RetryMax": 2,
 			"Tags": ["upgrade_downgrade_query_serving_queries"]
 		},
 		"vtgate_queries_no_scatter": {
@@ -639,7 +573,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
-			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_query_serving_queries"]
 		},
 		"vtgate_queries_orderby": {
@@ -648,7 +581,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
-			"RetryMax": 2,
 			"Tags": ["upgrade_downgrade_query_serving_queries"]
 		},
 		"vtgate_queries_tpch": {
@@ -657,7 +589,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
-			"RetryMax": 2,
 			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_queries_subquery": {
@@ -666,7 +597,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
-			"RetryMax": 2,
 			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_queries_union": {
@@ -675,7 +605,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
-			"RetryMax": 2,
 			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_queries_insert": {
@@ -684,7 +613,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
-			"RetryMax": 2,
 			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_queries_vexplain": {
@@ -693,7 +621,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
-			"RetryMax": 2,
 			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_queries_reference": {
@@ -702,7 +629,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
-			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_queries_random": {
@@ -711,7 +637,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
-			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_queries_lookup_queries": {
@@ -720,7 +645,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_queries_orderby_without_schematracker": {
@@ -729,7 +653,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"mysql_vs_vitess": {
@@ -738,7 +661,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_kill": {
@@ -747,7 +669,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
-			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_concurrentdml": {
@@ -756,7 +677,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_concurrentdml",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_schema": {
@@ -765,7 +685,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_schema",
-			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_query_serving_schema"]
 		},
 		"vtgate_schematracker_loadkeyspace": {
@@ -774,7 +693,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_schema_tracker",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_schematracker_restarttablet": {
@@ -783,7 +701,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_schema_tracker",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_schematracker_sharded": {
@@ -792,7 +709,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_schema_tracker",
-			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_query_serving_schema"]
 		},
 		"vtgate_schematracker_sharded_prs": {
@@ -801,7 +717,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_schema_tracker",
-			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_query_serving_schema"]
 		},
 		"vtgate_schematracker_unsharded": {
@@ -810,7 +725,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_schema_tracker",
-			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_query_serving_schema"]
 		},
 		"vtgate_schematracker_viewsdisabled": {
@@ -819,7 +733,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_schema_tracker",
-			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_query_serving_schema"]
 		},
 		"vtgate_schematracker_multi_ks": {
@@ -828,7 +741,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_schema_tracker",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_mysql84": {
@@ -837,7 +749,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "mysql84",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_sequence": {
@@ -846,7 +757,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_general_heavy",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_setstatement": {
@@ -855,7 +765,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_reservedconn",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_reserved_conn1": {
@@ -864,7 +773,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_reservedconn",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_reserved_conn2": {
@@ -873,7 +781,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_reservedconn",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_reserved_conn3": {
@@ -882,7 +789,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_reservedconn",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_reserved_conn4": {
@@ -891,7 +797,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_reservedconn",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_tablet_healthcheck_cache": {
@@ -900,7 +805,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_tablet_healthcheck_cache",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_transaction": {
@@ -909,7 +813,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_transaction",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_transaction_restart": {
@@ -918,7 +821,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_transaction",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_transaction_rollback": {
@@ -927,7 +829,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_transaction",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_transaction_single": {
@@ -936,7 +837,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_transaction",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_transaction_twopc": {
@@ -945,7 +845,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_transaction",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_transaction_twopc_metric": {
@@ -954,7 +853,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_transaction",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_transaction_twopc_stress": {
@@ -963,7 +861,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_transaction",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_transaction_twopc_fuzz": {
@@ -972,7 +869,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_transaction",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_transaction_timeout": {
@@ -981,7 +877,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_transaction",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_transaction_partial_exec": {
@@ -990,7 +885,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_transaction",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_plantests": {
@@ -999,7 +893,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_plantests",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_unsharded": {
@@ -1008,7 +901,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_unsharded",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_vschema": {
@@ -1017,7 +909,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_vschema",
-			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_query_serving_schema"]
 		},
 		"vtgate_readafterwrite": {
@@ -1026,7 +917,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_readafterwrite",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_dbddlplugin": {
@@ -1035,7 +925,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_general_heavy",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_foreignkey": {
@@ -1044,7 +933,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_foreignkey_stress",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_foreignkey_routing": {
@@ -1053,7 +941,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_foreignkey_stress",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_foreignkey_stress": {
@@ -1062,7 +949,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_foreignkey_stress",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_gen4": {
@@ -1071,7 +957,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_gen4",
-			"RetryMax": 2,
 			"Tags": []
 		},
 		"vtgate_godriver": {
@@ -1080,7 +965,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_godriver",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_watchkeyspace": {
@@ -1089,7 +973,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_topo",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_grpc_api": {
@@ -1098,7 +981,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_general_heavy",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"topo_zk2": {
@@ -1107,7 +989,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "docker_cluster",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"topo_consul": {
@@ -1116,7 +997,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_topo_consul",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"topo_etcd2": {
@@ -1125,7 +1005,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_topo_etcd",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"errs_as_warns": {
@@ -1134,7 +1013,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_general_heavy",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"consolidator": {
@@ -1143,7 +1021,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_general_heavy",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"prefixfanout": {
@@ -1152,7 +1029,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_vindex_heavy",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vindex_bindvars": {
@@ -1161,7 +1037,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_vindex_heavy",
-			"RetryMax": 2,
 			"Tags": []
 		},
 		"vindex_secondary": {
@@ -1170,7 +1045,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_vindex_heavy",
-			"RetryMax": 2,
 			"Tags": []
 		},
 		"vttest_sample": {
@@ -1179,7 +1053,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "docker_cluster",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtcombo_recreate": {
@@ -1188,7 +1061,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "docker_cluster",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"xb_recovery": {
@@ -1197,7 +1069,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "xb_recovery",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vreplication_materialize": {
@@ -1206,7 +1077,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_partial_movetables_and_materialize",
-			"RetryMax": 0,
 			"Tags": []
 		},
 		"vreplication_vtctldclient_materialize": {
@@ -1215,7 +1085,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_partial_movetables_and_materialize",
-			"RetryMax": 0,
 			"Tags": []
 		},
 		"vreplication_cellalias": {
@@ -1224,7 +1093,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_cellalias",
-			"RetryMax": 0,
 			"Tags": []
 		},
 		"vreplication_movetables_ignore_source_keyspace": {
@@ -1233,7 +1101,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_cellalias",
-			"RetryMax": 0,
 			"Tags": []
 		},
 		"vreplication_multi_tenant": {
@@ -1242,7 +1109,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_multi_tenant",
-			"RetryMax": 0,
 			"Tags": []
 		},
 		"vreplication_partial_movetables_basic": {
@@ -1251,7 +1117,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_partial_movetables_and_materialize",
-			"RetryMax": 0,
 			"Tags": []
 		},
 		"vdiff_multiple_movetables_test.go": {
@@ -1260,7 +1125,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_partial_movetables_and_materialize",
-			"RetryMax": 0,
 			"Tags": []
 		},
 		"vreplication_movetables_buffering": {
@@ -1269,7 +1133,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_cellalias",
-			"RetryMax": 0,
 			"Tags": []
 		},
 		"vreplication_onlineddl_vdiff": {
@@ -1278,7 +1141,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_cellalias",
-			"RetryMax": 2,
 			"Tags": []
 		},
 		"vreplication_vschema_load": {
@@ -1287,7 +1149,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_cellalias",
-			"RetryMax": 2,
 			"Tags": []
 		},
 		"sidecardb": {
@@ -1296,7 +1157,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "schemadiff_vrepl",
-			"RetryMax": 2,
 			"Tags": []
 		},
 		"vreplication_basic": {
@@ -1305,7 +1165,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_basic",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vreplication_copy_parallel": {
@@ -1314,7 +1173,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_copy_parallel",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vreplication_partial_movetables_sequences": {
@@ -1323,7 +1181,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_partial_movetables_and_materialize",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vreplication_sequence_reset_on_switch_traffic": {
@@ -1332,7 +1189,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_partial_movetables_and_materialize",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vstream_flush_binlog": {
@@ -1341,7 +1197,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_basic",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"multi_vstreams_keyspace_reshard": {
@@ -1350,7 +1205,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vstream",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vstream_failover": {
@@ -1359,7 +1213,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vstream",
-			"RetryMax": 3,
 			"Tags": []
 		},
 		"vstream_stoponreshard_true": {
@@ -1368,7 +1221,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vstream",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vstream_stoponreshard_false": {
@@ -1377,7 +1229,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vstream",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vstream_with_keyspaces_to_watch": {
@@ -1386,7 +1237,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vstream",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtop_example": {
@@ -1397,7 +1247,6 @@
 			],
 			"Manual": false,
 			"Shard": "",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtorc_primary_failure": {
@@ -1406,7 +1255,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtorc",
-			"RetryMax": 3,
 			"Tags": []
 		},
 		"vtorc_api": {
@@ -1415,7 +1263,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtorc",
-			"RetryMax": 3,
 			"Tags": []
 		},
 		"vtorc_general": {
@@ -1424,7 +1271,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtorc",
-			"RetryMax": 3,
 			"Tags": []
 		},
 		"vtorc_readtopologyinstance": {
@@ -1433,7 +1279,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtorc",
-			"RetryMax": 3,
 			"Tags": []
 		},
 		"vault": {
@@ -1442,7 +1287,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "mysql_server_vault",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vreplication_v2": {
@@ -1451,7 +1295,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_v2",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"global_routing": {
@@ -1460,7 +1303,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_v2",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vreplication_fk": {
@@ -1469,7 +1311,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_cellalias",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vreplication_foreign_key_stress": {
@@ -1478,7 +1319,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_foreign_key_stress",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vreplication_across_db_versions": {
@@ -1487,7 +1327,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_across_db_versions",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vreplication_mariadb_to_mysql": {
@@ -1496,7 +1335,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_mariadb_to_mysql",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vreplication_migrate": {
@@ -1505,7 +1343,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_migrate",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vdiff2": {
@@ -1514,7 +1351,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_vdiff2",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vreplication_vtctldclient_cli": {
@@ -1523,7 +1359,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_vtctldclient_movetables_tz",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vreplication_movetables_tz": {
@@ -1532,7 +1367,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_vtctldclient_movetables_tz",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"loopkup_index": {
@@ -1541,7 +1375,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_vtctldclient_movetables_tz",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtadmin": {
@@ -1550,7 +1383,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "15",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"topo_connection_cache": {
@@ -1559,7 +1391,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "topo_connection_cache",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"prscomplex": {
@@ -1568,7 +1399,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vttablet_prscomplex",
-			"RetryMax": 1,
 			"Tags": [""]
 		},
 		"prssettingspool": {
@@ -1577,7 +1407,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vttablet_prscomplex",
-			"RetryMax": 1,
 			"Tags": [""]
 		}
 	}

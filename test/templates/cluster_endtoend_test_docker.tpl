@@ -84,3 +84,10 @@ jobs:
         export VTDATAROOT="/tmp/"
 
         go run test.go -docker=true --follow -shard {{.Shard}}
+
+    - name: Test Summary
+      if: steps.changes.outputs.end_to_end == 'true' && !cancelled()
+      uses: test-summary/action@31493c76ec9e7aa675f1585d3ed6f1da69269a86 # v2.4
+      with:
+        paths: "_test/junit/*.xml"
+        show: "fail"

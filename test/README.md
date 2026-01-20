@@ -30,7 +30,6 @@ Each test is of the form:
 			"Command": [],
 			"Manual": false,
 			"Shard": 17,
-			"RetryMax": 0,
 			"Tags": []
 		},
 ```

@@ -1,4 +1,20 @@
 #!/bin/bash
+
 source build.env
+
 echo "running tests for " "$@"
-go test -v "$@" -alsologtostderr -count=1
+
+GOTESTSUM_ARGS=(
+	--format github-actions
+	--rerun-fails=3
+	--rerun-fails-max-failures=10
+	--rerun-fails-run-root-test
+	--format-hide-empty-pkg
+	--hide-summary=skipped
+)
+
+if [[ -n "${JUNIT_OUTPUT:-}" ]]; then
+	GOTESTSUM_ARGS+=("--junitfile" "$JUNIT_OUTPUT")
+fi
+
+go tool gotestsum "${GOTESTSUM_ARGS[@]}" -- -v -count=1 "$@" -args -alsologtostderr
