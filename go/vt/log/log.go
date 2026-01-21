@@ -14,14 +14,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// You can modify this file to hook up a different logging library instead of glog.
+// This package provides a thin adapter around glog with optional structured
+// logging via slog.
+//
+// By default, it uses glog and its flags. Structured logging is enabled only
+// when the log-fmt flag is explicitly set. When slog is enabled, the package
+// uses slog handlers directly and does not depend on glog output configuration.
+//
 // If you adapt to a different logging framework, you may need to use that
-// framework's equivalent of *Depth() functions so the file and line number printed
-// point to the real caller instead of your adapter function.
+// framework's equivalent of *Depth() functions so the file and line number
+// printed point to the real caller instead of your adapter function.
 
 package log
 
 import (
+	"fmt"
 	"strconv"
 	"sync/atomic"
 
@@ -31,13 +38,10 @@ import (
 	"vitess.io/vitess/go/vt/utils"
 )
 
-// Level is used with V() to test log verbosity.
+// Level is the glog verbosity level.
 type Level = glog.Level
 
 var (
-	// V quickly checks if the logging verbosity meets a threshold.
-	V = glog.V
-
 	// Flush ensures any pending I/O is written.
 	Flush = glog.Flush
 
@@ -61,32 +65,24 @@ var (
 	Errorf = glog.Errorf
 	// ErrorDepth formats arguments like fmt.Print and uses depth to choose which call frame to log.
 	ErrorDepth = glog.ErrorDepth
-
-	// Exit formats arguments like fmt.Print.
-	Exit = glog.Exit
-	// Exitf formats arguments like fmt.Printf.
-	Exitf = glog.Exitf
-	// ExitDepth formats arguments like fmt.Print and uses depth to choose which call frame to log.
-	ExitDepth = glog.ExitDepth
-
-	// Fatal formats arguments like fmt.Print.
-	Fatal = glog.Fatal
-	// Fatalf formats arguments like fmt.Printf
-	Fatalf = glog.Fatalf
-	// FatalDepth formats arguments like fmt.Print and uses depth to choose which call frame to log.
-	FatalDepth = glog.FatalDepth
 )
 
 // RegisterFlags installs log flags on the given FlagSet.
 //
-// `go/cmd/*` entrypoints should either use servenv.ParseFlags(WithArgs)? which
+// `go/cmd/*` entrypoints should either use servenv.ParseFlags(WithArgs), which
 // calls this function, or call this function directly before parsing
-// command-line arguments.
+// command-line arguments. When using structured logging, callers must invoke
+// Init after flags are parsed so these settings can be honored.
 func RegisterFlags(fs *pflag.FlagSet) {
 	flagVal := logRotateMaxSize{
 		val: strconv.FormatUint(atomic.LoadUint64(&glog.MaxSize), 10),
 	}
 	utils.SetFlagVar(fs, &flagVal, "log-rotate-max-size", "size in bytes at which logs are rotated (glog.MaxSize)")
+
+	utils.SetFlagStringVar(fs, &logFormat, "log-fmt", logFormat, "format for structured logging output: json or logfmt")
+	utils.SetFlagStringVar(fs, &logLevel, "log-level", logLevel, "minimum structured logging level: info, warn, debug, or error")
+
+	rememberFlagSet(fs)
 }
 
 // logRotateMaxSize implements pflag.Value and is used to
@@ -121,85 +117,51 @@ func NewPrefixedLogger(prefix string) *PrefixedLogger {
 	return &PrefixedLogger{prefix: prefix + ": "}
 }
 
-func (pl *PrefixedLogger) V(level glog.Level) glog.Verbose {
-	return V(level)
-}
-
 func (pl *PrefixedLogger) Flush() {
 	Flush()
 }
 
 func (pl *PrefixedLogger) Info(args ...any) {
-	args = append([]interface{}{pl.prefix}, args...)
-	Info(args...)
+	args = append([]any{pl.prefix}, args...)
+	InfoS(fmt.Sprint(args...))
 }
 
 func (pl *PrefixedLogger) Infof(format string, args ...any) {
-	args = append([]interface{}{pl.prefix}, args...)
-	Infof("%s"+format, args...)
+	args = append([]any{pl.prefix}, args...)
+	InfoS(fmt.Sprintf("%s"+format, args...))
 }
 
 func (pl *PrefixedLogger) InfoDepth(depth int, args ...any) {
-	args = append([]interface{}{pl.prefix}, args...)
-	InfoDepth(depth, args...)
+	args = append([]any{pl.prefix}, args...)
+	InfoSDepth(depth, fmt.Sprint(args...))
 }
 
 func (pl *PrefixedLogger) Warning(args ...any) {
-	args = append([]interface{}{pl.prefix}, args...)
-	Warning(args...)
+	args = append([]any{pl.prefix}, args...)
+	WarnS(fmt.Sprint(args...))
 }
 
 func (pl *PrefixedLogger) Warningf(format string, args ...any) {
-	args = append([]interface{}{pl.prefix}, args...)
-	Warningf("%s"+format, args...)
+	args = append([]any{pl.prefix}, args...)
+	WarnS(fmt.Sprintf("%s"+format, args...))
 }
 
 func (pl *PrefixedLogger) WarningDepth(depth int, args ...any) {
-	args = append([]interface{}{pl.prefix}, args...)
-	WarningDepth(depth, args...)
+	args = append([]any{pl.prefix}, args...)
+	WarnSDepth(depth, fmt.Sprint(args...))
 }
 
 func (pl *PrefixedLogger) Error(args ...any) {
-	args = append([]interface{}{pl.prefix}, args...)
-	Error(args...)
+	args = append([]any{pl.prefix}, args...)
+	ErrorS(fmt.Sprint(args...))
 }
 
 func (pl *PrefixedLogger) Errorf(format string, args ...any) {
-	args = append([]interface{}{pl.prefix}, args...)
-	Errorf("%s"+format, args...)
+	args = append([]any{pl.prefix}, args...)
+	ErrorS(fmt.Sprintf("%s"+format, args...))
 }
 
 func (pl *PrefixedLogger) ErrorDepth(depth int, args ...any) {
-	args = append([]interface{}{pl.prefix}, args...)
-	ErrorDepth(depth, args...)
-}
-
-func (pl *PrefixedLogger) Exit(args ...any) {
-	args = append([]interface{}{pl.prefix}, args...)
-	Exit(args...)
-}
-
-func (pl *PrefixedLogger) Exitf(format string, args ...any) {
-	args = append([]interface{}{pl.prefix}, args...)
-	Exitf("%s"+format, args...)
-}
-
-func (pl *PrefixedLogger) ExitDepth(depth int, args ...any) {
-	args = append([]interface{}{pl.prefix}, args...)
-	ExitDepth(depth, args...)
-}
-
-func (pl *PrefixedLogger) Fatal(args ...any) {
-	args = append([]interface{}{pl.prefix}, args...)
-	Fatal(args...)
-}
-
-func (pl *PrefixedLogger) Fatalf(format string, args ...any) {
-	args = append([]interface{}{pl.prefix}, args...)
-	Fatalf("%s"+format, args...)
-}
-
-func (pl *PrefixedLogger) FatalDepth(depth int, args ...any) {
-	args = append([]interface{}{pl.prefix}, args...)
-	FatalDepth(depth, args...)
+	args = append([]any{pl.prefix}, args...)
+	ErrorSDepth(depth, fmt.Sprint(args...))
 }
