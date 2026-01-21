@@ -406,6 +406,8 @@ func TestRepairAfterTER(t *testing.T) {
 // TestStalePrimary tests that an old primary that remains writable and of tablet type PRIMARY in the topo
 // is properly demoted to a read-only replica by VTOrc.
 func TestStalePrimary(t *testing.T) {
+	ctx := t.Context()
+
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 4, 0, []string{"--topo-information-refresh-duration", "1s"}, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
@@ -433,7 +435,7 @@ func TestStalePrimary(t *testing.T) {
 
 	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{badPrimary, healthyReplica}, 15*time.Second)
 
-	curPrimaryTopo, err := clusterInfo.Ts.GetTablet(context.Background(), curPrimary.GetAlias())
+	curPrimaryTopo, err := clusterInfo.Ts.GetTablet(ctx, curPrimary.GetAlias())
 	require.NoError(t, err, "expected to read current primary topo record")
 
 	curPrimaryTermStart := protoutil.TimeFromProto(curPrimaryTopo.PrimaryTermStartTime)
@@ -446,7 +448,7 @@ func TestStalePrimary(t *testing.T) {
 	// We set the tablet's type in the topology to PRIMARY. This mimics the situation where during a demotion
 	// in a hypothetical ERS, the old primary starts running as a replica, but fails before updating the topology
 	// accordingly.
-	_, err = clusterInfo.Ts.UpdateTabletFields(t.Context(), badPrimary.GetAlias(), func(tablet *topodatapb.Tablet) error {
+	_, err = clusterInfo.Ts.UpdateTabletFields(ctx, badPrimary.GetAlias(), func(tablet *topodatapb.Tablet) error {
 		tablet.Type = topodatapb.TabletType_PRIMARY
 		tablet.PrimaryTermStartTime = protoutil.TimeToProto(curPrimaryTermStart.Add(-1 * time.Minute))
 		return nil
@@ -455,7 +457,7 @@ func TestStalePrimary(t *testing.T) {
 
 	// Expect VTOrc to demote the stale primary to a read-only replica.
 	require.Eventuallyf(t, func() bool {
-		topoTablet, topoErr := clusterInfo.Ts.GetTablet(context.Background(), badPrimary.GetAlias())
+		topoTablet, topoErr := clusterInfo.Ts.GetTablet(ctx, badPrimary.GetAlias())
 		if topoErr != nil {
 			t.Logf("stale primary probe: topo error=%v", topoErr)
 			return false
