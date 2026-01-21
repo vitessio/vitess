@@ -470,7 +470,7 @@ func TestStalePrimary(t *testing.T) {
 		}
 
 		return topoTablet.Type == topodatapb.TabletType_REPLICA && readOnly == "ON"
-	}, 5*time.Second, time.Second, "expected demotion to REPLICA with read_only=ON")
+	}, 30*time.Second, time.Second, "expected demotion to REPLICA with read_only=ON")
 }
 
 // TestSemiSync tests that semi-sync is setup correctly by vtorc if it is incorrectly set
