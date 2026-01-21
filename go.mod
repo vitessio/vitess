@@ -130,14 +130,10 @@ require (
 	github.com/cilium/ebpf v0.19.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.2.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
-<<<<<<< HEAD
-=======
 	github.com/containerd/stargz-snapshotter/estargz v0.18.0 // indirect
-	github.com/dnephin/pflag v1.0.7 // indirect
 	github.com/docker/cli v29.0.3+incompatible // indirect
 	github.com/docker/distribution v2.8.3+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.9.3 // indirect
->>>>>>> 9779de7403 (Update go-upgrade to update docker image digests (#19178))
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/google/btree v1.1.3 // indirect
