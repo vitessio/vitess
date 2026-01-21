@@ -385,9 +385,6 @@ func replaceGoVersionInCodebase(old, new *version.Version) error {
 		}
 	}
 
-<<<<<<< HEAD
-	if !isSameMajorMinorVersion(old, new) {
-=======
 	dockerDigest, err := resolveGolangImageDigest(new)
 	if err != nil {
 		return err
@@ -404,8 +401,7 @@ func replaceGoVersionInCodebase(old, new *version.Version) error {
 		}
 	}
 
-	if !isSameVersion(old, new) {
->>>>>>> 9779de7403 (Update go-upgrade to update docker image digests (#19178))
+	if !isSameMajorMinorVersion(old, new) {
 		goModFiles := []string{"./go.mod"}
 		for _, file := range goModFiles {
 			err = replaceInFile(
