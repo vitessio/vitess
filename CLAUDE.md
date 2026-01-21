@@ -52,7 +52,7 @@ source dev.env
 
 ### Build
 
-Builds all Go binaries into `./bin` and also builds the VTAdmin web UI unless `NOVTADMINBUILD` is set. Set `NOVTADMINBUILD=1` to skip the web UI build.
+Builds all Go binaries into `./bin` and also builds the VTAdmin web UI unless `NOVTADMINBUILD` is set. If you are not touching VTAdmin, set `NOVTADMINBUILD=1` to skip the web UI build.
 
 ```sh
 make build
@@ -60,19 +60,20 @@ make build
 
 ### Unit tests
 
-Runs Go unit tests across the repository. Narrow the package list for faster feedback when iterating.
+Runs Go unit tests across the repository. Narrow the package list for faster feedback when iterating. Use `-count=1` to avoid cached results.
 
 ```sh
-go test ./go/...
+go test -count=1 ./go/...
 ```
 
 ### End to end tests
 
-Build first so that binaries contain the most up to date code, then run the end-to-end suites under `go/test/endtoend`. These tests bring up real Vitess components like topology services, mysqld, vttablets, and vtgates on the same machine, so they can take longer to finish. Tests use `VTDATAROOT` which defaults to `./vtdataroot`. Run only one package at a time, and preferably run only one test at a time.
+Rebuild the binaries before each end-to-end run so they contain the most up-to-date code, then run the end-to-end suites under `go/test/endtoend`. If you are not touching VTAdmin, set `NOVTADMINBUILD=1` to skip the web UI build. These tests bring up real Vitess components like topology services, mysqld, vttablets, and vtgates on the same machine, so they can take longer to finish. Tests use `VTDATAROOT` which defaults to `./vtdataroot`, so clear that directory between runs. Run only one package at a time, and preferably run only one test at a time. Use `-count=1` to avoid cached results.
 
 ```sh
-make build
-go test ./go/.../endtoend/...
+rm -rf ./vtdataroot
+NOVTADMINBUILD=1 make build
+go test -count=1 ./go/.../endtoend/...
 ```
 
 ### Formatting and linting
