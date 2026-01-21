@@ -38,7 +38,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -236,6 +235,7 @@ func NewFromListener(
 	handler Handler,
 	connReadTimeout time.Duration,
 	connWriteTimeout time.Duration,
+	proxyProtocol bool,
 	connBufferPooling bool,
 	keepAlivePeriod time.Duration,
 	flushDelay time.Duration,
@@ -253,6 +253,11 @@ func NewFromListener(
 		FlushDelay:          flushDelay,
 		MultiQuery:          multiQuery,
 	}
+
+	if proxyProtocol {
+		cfg.Listener = &proxyproto.Listener{Listener: l}
+	}
+
 	return NewListenerWithConfig(cfg)
 }
 
@@ -269,25 +274,12 @@ func NewListener(
 	flushDelay time.Duration,
 	multiQuery bool,
 ) (*Listener, error) {
-	var listener net.Listener
-	var err error
-
-	switch protocol {
-	case "tcp", "tcp4", "tcp6":
-		listener, err = servenv.Listen(protocol, address)
-	default:
-		listener, err = net.Listen(protocol, address)
-	}
+	listener, err := net.Listen(protocol, address)
 	if err != nil {
 		return nil, err
 	}
 
-	if proxyProtocol {
-		proxyListener := &proxyproto.Listener{Listener: listener}
-		return NewFromListener(proxyListener, authServer, handler, connReadTimeout, connWriteTimeout, connBufferPooling, keepAlivePeriod, flushDelay, multiQuery)
-	}
-
-	return NewFromListener(listener, authServer, handler, connReadTimeout, connWriteTimeout, connBufferPooling, keepAlivePeriod, flushDelay, multiQuery)
+	return NewFromListener(listener, authServer, handler, connReadTimeout, connWriteTimeout, proxyProtocol, connBufferPooling, keepAlivePeriod, flushDelay, multiQuery)
 }
 
 // ListenerConfig should be used with NewListenerWithConfig to specify listener parameters.
