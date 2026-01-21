@@ -46,12 +46,20 @@ func NewThrottledLogger(name string, maxInterval time.Duration) *ThrottledLogger
 	}
 }
 
-type logFunc func(int, ...any)
+type logFunc func(int, string)
 
 var (
-	infoDepth    = log.InfoDepth
-	warningDepth = log.WarningDepth
-	errorDepth   = log.ErrorDepth
+	infoDepth = func(depth int, msg string) {
+		log.InfoSDepth(depth, msg)
+	}
+
+	warningDepth = func(depth int, msg string) {
+		log.WarnSDepth(depth, msg)
+	}
+
+	errorDepth = func(depth int, msg string) {
+		log.ErrorSDepth(depth, msg)
+	}
 )
 
 // GetLastLogTime gets the last log time for the throttled logger.
