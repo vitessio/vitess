@@ -385,6 +385,22 @@ func replaceGoVersionInCodebase(old, new *version.Version) error {
 		}
 	}
 
+	dockerDigest, err := resolveGolangImageDigest(new)
+	if err != nil {
+		return err
+	}
+
+	for _, fileToChange := range filesToChange {
+		err = replaceInFile(
+			[]*regexp.Regexp{regexp.MustCompile(regexpReplaceGolangDockerImage)},
+			[]string{fmt.Sprintf("${1}%s@%s", golangDockerTag(new), dockerDigest)},
+			fileToChange,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
 	if !isSameVersion(old, new) {
 		goModFiles := []string{"./go.mod"}
 		for _, file := range goModFiles {
