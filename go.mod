@@ -66,6 +66,7 @@ require (
 	go.etcd.io/etcd/client/pkg/v3 v3.5.25
 	go.etcd.io/etcd/client/v3 v3.5.25
 	go.uber.org/mock v0.5.0
+<<<<<<< HEAD
 	golang.org/x/crypto v0.36.0 // indirect
 	golang.org/x/mod v0.24.0 // indirect
 	golang.org/x/net v0.38.0
@@ -78,6 +79,20 @@ require (
 	google.golang.org/api v0.226.0
 	google.golang.org/genproto v0.0.0-20250313205543-e70fdf4c4cb4 // indirect
 	google.golang.org/grpc v1.71.1
+=======
+	golang.org/x/crypto v0.45.0 // indirect
+	golang.org/x/mod v0.30.0 // indirect
+	golang.org/x/net v0.47.0
+	golang.org/x/oauth2 v0.33.0
+	golang.org/x/sys v0.38.0
+	golang.org/x/term v0.37.0
+	golang.org/x/text v0.31.0 // indirect
+	golang.org/x/time v0.13.0
+	golang.org/x/tools v0.39.0
+	google.golang.org/api v0.251.0
+	google.golang.org/genproto v0.0.0-20250929231259-57b25ae835d4 // indirect
+	google.golang.org/grpc v1.75.1
+>>>>>>> 9779de7403 (Update go-upgrade to update docker image digests (#19178))
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.5.1
 	google.golang.org/grpc/examples v0.0.0-20250204041003-947e2a4be2ba
 	google.golang.org/protobuf v1.36.5
@@ -97,7 +112,12 @@ require (
 	github.com/aws/smithy-go v1.22.3
 	github.com/bndr/gotabulate v1.1.2
 	github.com/dustin/go-humanize v1.0.1
+<<<<<<< HEAD
 	github.com/gammazero/deque v1.0.0
+=======
+	github.com/gammazero/deque v1.1.0
+	github.com/google/go-containerregistry v0.20.6
+>>>>>>> 9779de7403 (Update go-upgrade to update docker image digests (#19178))
 	github.com/google/safehtml v0.1.0
 	github.com/hashicorp/go-version v1.7.0
 	github.com/kr/pretty v0.3.1
@@ -115,6 +135,7 @@ require (
 )
 
 require (
+<<<<<<< HEAD
 	cel.dev/expr v0.22.0 // indirect
 	cloud.google.com/go v0.119.0 // indirect
 	cloud.google.com/go/auth v0.15.0 // indirect
@@ -128,6 +149,70 @@ require (
 	github.com/DataDog/go-libddwaf/v3 v3.5.4 // indirect
 	github.com/DataDog/go-sqllexer v0.1.3 // indirect
 	github.com/DataDog/go-tuf v1.1.0-0.5.2 // indirect
+=======
+	github.com/DataDog/datadog-agent/comp/core/tagger/origindetection v0.70.2 // indirect
+	github.com/DataDog/datadog-agent/pkg/proto v0.70.2 // indirect
+	github.com/DataDog/datadog-agent/pkg/trace v0.70.2 // indirect
+	github.com/DataDog/datadog-agent/pkg/util/log v0.70.2 // indirect
+	github.com/DataDog/datadog-agent/pkg/util/scrubber v0.70.2 // indirect
+	github.com/DataDog/datadog-agent/pkg/version v0.70.2 // indirect
+	github.com/DataDog/dd-trace-go/v2 v2.2.3 // indirect
+	github.com/DataDog/go-libddwaf/v4 v4.5.0 // indirect
+	github.com/DataDog/go-runtime-metrics-internal v0.0.4-0.20250721125240-fdf1ef85b633 // indirect
+	github.com/DataDog/opentelemetry-mapping-go/pkg/otlp/attributes v0.29.1 // indirect
+	github.com/Masterminds/semver/v3 v3.4.0 // indirect
+	github.com/bitfield/gotestdox v0.2.2 // indirect
+	github.com/cihub/seelog v0.0.0-20170130134532-f561c5e57575 // indirect
+	github.com/cilium/ebpf v0.19.0 // indirect
+	github.com/clipperhouse/uax29/v2 v2.2.0 // indirect
+	github.com/containerd/log v0.1.0 // indirect
+	github.com/containerd/stargz-snapshotter/estargz v0.18.0 // indirect
+	github.com/dnephin/pflag v1.0.7 // indirect
+	github.com/docker/cli v29.0.3+incompatible // indirect
+	github.com/docker/distribution v2.8.3+incompatible // indirect
+	github.com/docker/docker-credential-helpers v0.9.3 // indirect
+	github.com/docker/go-units v0.5.0 // indirect
+	github.com/godbus/dbus/v5 v5.1.0 // indirect
+	github.com/google/btree v1.1.3 // indirect
+	github.com/google/pprof v0.0.0-20250820193118-f64d9cf942d6 // indirect
+	github.com/json-iterator/go v1.1.12 // indirect
+	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
+	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
+	github.com/olekukonko/cat v0.0.0-20250911104152-50322a0618f6 // indirect
+	github.com/olekukonko/errors v1.1.0 // indirect
+	github.com/olekukonko/ll v0.1.1 // indirect
+	github.com/opencontainers/go-digest v1.0.0 // indirect
+	github.com/opencontainers/image-spec v1.1.1 // indirect
+	github.com/opencontainers/runtime-spec v1.2.1 // indirect
+	github.com/puzpuzpuz/xsync/v3 v3.5.1 // indirect
+	github.com/sirupsen/logrus v1.9.3 // indirect
+	github.com/vbatts/tar-split v0.12.2 // indirect
+	go.opentelemetry.io/collector/component v1.42.0 // indirect
+	go.opentelemetry.io/collector/featuregate v1.42.0 // indirect
+	go.opentelemetry.io/collector/internal/telemetry v0.136.0 // indirect
+	go.opentelemetry.io/collector/pdata v1.42.0 // indirect
+	go.opentelemetry.io/contrib/bridges/otelzap v0.13.0 // indirect
+	go.opentelemetry.io/otel/log v0.14.0 // indirect
+	go.yaml.in/yaml/v2 v2.4.3 // indirect
+	go.yaml.in/yaml/v3 v3.0.4 // indirect
+	gotest.tools/gotestsum v1.13.0 // indirect
+	k8s.io/apimachinery v0.33.4 // indirect
+)
+
+require (
+	cel.dev/expr v0.24.0 // indirect
+	cloud.google.com/go v0.123.0 // indirect
+	cloud.google.com/go/auth v0.16.5 // indirect
+	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
+	cloud.google.com/go/compute/metadata v0.9.0 // indirect
+	cloud.google.com/go/iam v1.5.2 // indirect
+	cloud.google.com/go/monitoring v1.24.2 // indirect
+	github.com/DataDog/appsec-internal-go v1.14.0 // indirect
+	github.com/DataDog/datadog-agent/pkg/obfuscate v0.70.2 // indirect
+	github.com/DataDog/datadog-agent/pkg/remoteconfig/state v0.70.2 // indirect
+	github.com/DataDog/go-sqllexer v0.1.8 // indirect
+	github.com/DataDog/go-tuf v1.1.1-0.5.2 // indirect
+>>>>>>> 9779de7403 (Update go-upgrade to update docker image digests (#19178))
 	github.com/DataDog/sketches-go v1.4.7 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.27.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.51.0 // indirect
