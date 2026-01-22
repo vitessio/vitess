@@ -30,7 +30,7 @@ import (
 func pprofInit() {
 	prof, err := parseProfileFlag(pprofFlag)
 	if err != nil {
-		log.ErrorS(fmt.Sprint(err))
+		log.Error(fmt.Sprint(err))
 		os.Exit(1)
 	}
 	if prof != nil {

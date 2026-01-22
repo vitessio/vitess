@@ -330,7 +330,7 @@ func (vtg *VTGate) VStream(request *vtgatepb.VStreamRequest, stream vtgateservic
 			})
 		})
 	if vtgErr != nil {
-		log.InfoS(fmt.Sprintf("VStream grpc error: %v", vtgErr))
+		log.Info(fmt.Sprintf("VStream grpc error: %v", vtgErr))
 	}
 	return vterrors.ToGRPC(vtgErr)
 }

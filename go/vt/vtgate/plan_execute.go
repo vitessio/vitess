@@ -185,7 +185,7 @@ func (e *Executor) newExecute(
 		// Retry if needed.
 		rootCause := vterrors.RootCause(err)
 		if rootCause != nil && strings.Contains(rootCause.Error(), "enforce denied tables") {
-			log.DebugS(fmt.Sprintf("Retry: %d, will retry query %s due to %v", try, sql, err))
+			log.Debug(fmt.Sprintf("Retry: %d, will retry query %s due to %v", try, sql, err))
 			if try == 0 { // We are going to retry at least once
 				defer func() {
 					// Prevent any plan cache pollution from queries planned against the wrong keyspace during a MoveTables

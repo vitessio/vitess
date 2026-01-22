@@ -141,11 +141,11 @@ func TestConsulTopo(t *testing.T) {
 	defer func() {
 		// Alerts command did not run successful
 		if err := cmd.Process.Kill(); err != nil {
-			log.ErrorS(fmt.Sprintf("cmd process kill has an error: %v", err))
+			log.Error(fmt.Sprintf("cmd process kill has an error: %v", err))
 		}
 		// Alerts command did not run successful
 		if err := cmd.Wait(); err != nil {
-			log.ErrorS(fmt.Sprintf("cmd wait has an error: %v", err))
+			log.Error(fmt.Sprintf("cmd wait has an error: %v", err))
 		}
 
 		os.Remove(configFilename)
@@ -200,11 +200,11 @@ func TestConsulTopoWithChecks(t *testing.T) {
 	defer func() {
 		// Alerts command did not run successful
 		if err := cmd.Process.Kill(); err != nil {
-			log.ErrorS(fmt.Sprintf("cmd process kill has an error: %v", err))
+			log.Error(fmt.Sprintf("cmd process kill has an error: %v", err))
 		}
 		// Alerts command did not run successful
 		if err := cmd.Wait(); err != nil {
-			log.ErrorS(fmt.Sprintf("cmd wait has an error: %v", err))
+			log.Error(fmt.Sprintf("cmd wait has an error: %v", err))
 		}
 
 		os.Remove(configFilename)
@@ -246,11 +246,11 @@ func TestConsulTopoWithAuth(t *testing.T) {
 	defer func() {
 		// Alerts command did not run successful
 		if err := cmd.Process.Kill(); err != nil {
-			log.ErrorS(fmt.Sprintf("cmd process kill has an error: %v", err))
+			log.Error(fmt.Sprintf("cmd process kill has an error: %v", err))
 		}
 		// Alerts command did not run successful
 		if err := cmd.Wait(); err != nil {
-			log.ErrorS(fmt.Sprintf("cmd process wait has an error: %v", err))
+			log.Error(fmt.Sprintf("cmd process wait has an error: %v", err))
 		}
 		os.Remove(configFilename)
 	}()
@@ -384,10 +384,10 @@ func TestConsulWatcherStormPrevention(t *testing.T) {
 	cmd, configFilename, serverAddr := startConsul(t, "")
 	defer func() {
 		if err := cmd.Process.Kill(); err != nil {
-			log.ErrorS(fmt.Sprintf("cmd process kill has an error: %v", err))
+			log.Error(fmt.Sprintf("cmd process kill has an error: %v", err))
 		}
 		if err := cmd.Wait(); err != nil {
-			log.ErrorS(fmt.Sprintf("cmd wait has an error: %v", err))
+			log.Error(fmt.Sprintf("cmd wait has an error: %v", err))
 		}
 		os.Remove(configFilename)
 	}()

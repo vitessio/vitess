@@ -27,10 +27,10 @@ import (
 type traceLogger struct{}
 
 // Log is part of the ddtrace.Logger interface. Datadog only ever logs errors.
-func (*traceLogger) Log(msg string) { log.ErrorS(msg) }
+func (*traceLogger) Log(msg string) { log.Error(msg) }
 
 // Error is part of the jaeger.Logger interface.
-func (*traceLogger) Error(msg string) { log.ErrorS(msg) }
+func (*traceLogger) Error(msg string) { log.Error(msg) }
 
 // Infof is part of the jaeger.Logger interface.
-func (*traceLogger) Infof(msg string, args ...any) { log.InfoS(fmt.Sprintf(msg, args...)) }
+func (*traceLogger) Infof(msg string, args ...any) { log.Info(fmt.Sprintf(msg, args...)) }

@@ -34,11 +34,11 @@ type AuthServerClientCert struct {
 // InitAuthServerClientCert is public so it can be called from plugin_auth_clientcert.go (go/cmd/vtgate)
 func InitAuthServerClientCert(clientcertAuthMethod string, caValue string) {
 	if caValue == "" {
-		log.InfoS("Not configuring AuthServerClientCert because mysql-server-ssl-ca is empty")
+		log.Info("Not configuring AuthServerClientCert because mysql-server-ssl-ca is empty")
 		return
 	}
 	if clientcertAuthMethod != string(MysqlClearPassword) && clientcertAuthMethod != string(MysqlDialog) {
-		log.ErrorS("Invalid mysql_clientcert_auth_method value: only support mysql_clear_password or dialog")
+		log.Error("Invalid mysql_clientcert_auth_method value: only support mysql_clear_password or dialog")
 		os.Exit(1)
 	}
 
@@ -58,7 +58,7 @@ func newAuthServerClientCert(clientcertAuthMethod string) *AuthServerClientCert 
 	case MysqlDialog:
 		authMethod = NewMysqlDialogAuthMethod(ascc, ascc, "")
 	default:
-		log.ErrorS("Invalid mysql_clientcert_auth_method value: only support mysql_clear_password or dialog")
+		log.Error("Invalid mysql_clientcert_auth_method value: only support mysql_clear_password or dialog")
 		os.Exit(1)
 	}
 

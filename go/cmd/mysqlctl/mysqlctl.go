@@ -30,7 +30,7 @@ func main() {
 	command.Root.SetGlobalNormalizationFunc(utils.NormalizeUnderscoresToDashes)
 
 	if err := command.Root.Execute(); err != nil {
-		log.ErrorS(fmt.Sprint(err))
+		log.Error(fmt.Sprint(err))
 		os.Exit(1)
 	}
 }

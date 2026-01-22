@@ -145,7 +145,7 @@ func createVttablets(clusterInstance *cluster.LocalProcessCluster, cellInfos []*
 	// Start MySql
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, tablet := range shard0.Vttablets {
-		log.InfoS(fmt.Sprintf("Starting MySql for tablet %v", tablet.Alias))
+		log.Info(fmt.Sprintf("Starting MySql for tablet %v", tablet.Alias))
 		proc, err := tablet.MysqlctlProcess.StartProcess()
 		if err != nil {
 			return err
@@ -258,7 +258,7 @@ func StopVTOrcs(t *testing.T, clusterInfo *VTOrcClusterInfo) {
 	// Stop vtorc
 	for _, vtorcProcess := range clusterInfo.ClusterInstance.VTOrcProcesses {
 		if err := vtorcProcess.TearDown(); err != nil {
-			log.ErrorS(fmt.Sprintf("Error in vtorc teardown: %v", err))
+			log.Error(fmt.Sprintf("Error in vtorc teardown: %v", err))
 		}
 	}
 	clusterInfo.ClusterInstance.VTOrcProcesses = nil
@@ -371,7 +371,7 @@ func ShardPrimaryTablet(t *testing.T, clusterInfo *VTOrcClusterInfo, keyspace *c
 		require.NoError(t, err)
 
 		if si.Shard.PrimaryAlias == nil {
-			log.WarnS(fmt.Sprintf("Shard %v/%v has no primary yet, sleep for 1 second\n", keyspace.Name, shard.Name))
+			log.Warn(fmt.Sprintf("Shard %v/%v has no primary yet, sleep for 1 second\n", keyspace.Name, shard.Name))
 			time.Sleep(time.Second)
 			continue
 		}
@@ -395,7 +395,7 @@ func CheckPrimaryTablet(t *testing.T, clusterInfo *VTOrcClusterInfo, tablet *clu
 		tabletInfo, err := clusterInfo.ClusterInstance.VtctldClientProcess.GetTablet(tablet.Alias)
 		require.NoError(t, err)
 		if topodatapb.TabletType_PRIMARY != tabletInfo.GetType() {
-			log.WarnS(fmt.Sprintf("Tablet %v is not primary yet, sleep for 1 second\n", tablet.Alias))
+			log.Warn(fmt.Sprintf("Tablet %v is not primary yet, sleep for 1 second\n", tablet.Alias))
 			time.Sleep(time.Second)
 			continue
 		}
@@ -406,13 +406,13 @@ func CheckPrimaryTablet(t *testing.T, clusterInfo *VTOrcClusterInfo, tablet *clu
 		streamHealthResponse := shrs[0]
 
 		if checkServing && !streamHealthResponse.GetServing() {
-			log.WarnS(fmt.Sprintf("Tablet %v is not serving in health stream yet, sleep for 1 second\n", tablet.Alias))
+			log.Warn(fmt.Sprintf("Tablet %v is not serving in health stream yet, sleep for 1 second\n", tablet.Alias))
 			time.Sleep(time.Second)
 			continue
 		}
 		tabletType := streamHealthResponse.GetTarget().GetTabletType()
 		if tabletType != topodatapb.TabletType_PRIMARY {
-			log.WarnS(fmt.Sprintf("Tablet %v is not primary in health stream yet, sleep for 1 second\n", tablet.Alias))
+			log.Warn(fmt.Sprintf("Tablet %v is not primary in health stream yet, sleep for 1 second\n", tablet.Alias))
 			time.Sleep(time.Second)
 			continue
 		}
@@ -440,7 +440,7 @@ func CheckReplication(t *testing.T, clusterInfo *VTOrcClusterInfo, primary *clus
 		default:
 			_, err := RunSQL(t, sqlSchema, primary, "")
 			if err != nil {
-				log.WarnS(fmt.Sprintf("create table failed on primary - %v, will retry", err))
+				log.Warn(fmt.Sprintf("create table failed on primary - %v, will retry", err))
 				time.Sleep(100 * time.Millisecond)
 				break
 			}
@@ -462,7 +462,7 @@ func VerifyWritesSucceed(t *testing.T, clusterInfo *VTOrcClusterInfo, primary *c
 
 func confirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*cluster.Vttablet, timeToWait time.Duration, valueToInsert int) {
 	t.Helper()
-	log.InfoS("Insert data into primary and check that it is replicated to replica")
+	log.Info("Insert data into primary and check that it is replicated to replica")
 	// insert data into the new primary, check the connected replica work
 	insertSQL := fmt.Sprintf("insert into vt_insert_test(id, msg) values (%d, 'test %d')", valueToInsert, valueToInsert)
 	_, err := RunSQL(t, insertSQL, primary, "vt_ks")
@@ -483,7 +483,7 @@ func confirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*clu
 				}
 			}
 			if err != nil {
-				log.WarnS(fmt.Sprintf("waiting for replication - error received - %v, will retry", err))
+				log.Warn(fmt.Sprintf("waiting for replication - error received - %v, will retry", err))
 				time.Sleep(300 * time.Millisecond)
 				break
 			}
@@ -547,7 +547,7 @@ func validateTopology(t *testing.T, clusterInfo *VTOrcClusterInfo, pingTablets b
 					output, err = clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("Validate")
 				}
 				if err != nil {
-					log.WarnS("Validate failed, retrying, output - " + output)
+					log.Warn("Validate failed, retrying, output - " + output)
 					time.Sleep(100 * time.Millisecond)
 					break
 				}
@@ -569,9 +569,9 @@ func validateTopology(t *testing.T, clusterInfo *VTOrcClusterInfo, pingTablets b
 // KillTablets is used to kill the tablets
 func KillTablets(vttablets []*cluster.Vttablet) {
 	for _, tablet := range vttablets {
-		log.InfoS(fmt.Sprintf("Shutting down MySQL for %v", tablet.Alias))
+		log.Info(fmt.Sprintf("Shutting down MySQL for %v", tablet.Alias))
 		_ = tablet.MysqlctlProcess.Stop()
-		log.InfoS(fmt.Sprintf("Calling TearDown on tablet %v", tablet.Alias))
+		log.Info(fmt.Sprintf("Calling TearDown on tablet %v", tablet.Alias))
 		_ = tablet.VttabletProcess.TearDown()
 	}
 }
@@ -718,7 +718,7 @@ func CheckSourcePort(t *testing.T, replica *cluster.Vttablet, source *cluster.Vt
 			require.NoError(t, err)
 
 			if len(res.Rows) != 1 {
-				log.WarnS("no replication status yet, will retry")
+				log.Warn("no replication status yet, will retry")
 				break
 			}
 
@@ -731,7 +731,7 @@ func CheckSourcePort(t *testing.T, replica *cluster.Vttablet, source *cluster.Vt
 					}
 				}
 			}
-			log.WarnS("source port not set correctly yet, will retry")
+			log.Warn("source port not set correctly yet, will retry")
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
@@ -751,7 +751,7 @@ func CheckHeartbeatInterval(t *testing.T, replica *cluster.Vttablet, heartbeatIn
 			require.NoError(t, err)
 
 			if len(res.Rows) != 1 {
-				log.WarnS("no replication configuration yet, will retry")
+				log.Warn("no replication configuration yet, will retry")
 				break
 			}
 
@@ -762,11 +762,11 @@ func CheckHeartbeatInterval(t *testing.T, replica *cluster.Vttablet, heartbeatIn
 					if readVal == heartbeatInterval {
 						return
 					} else {
-						log.WarnS(fmt.Sprintf("heartbeat interval set to - %v", readVal))
+						log.Warn(fmt.Sprintf("heartbeat interval set to - %v", readVal))
 					}
 				}
 			}
-			log.WarnS("heartbeat interval not set correctly yet, will retry")
+			log.Warn("heartbeat interval not set correctly yet, will retry")
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
@@ -835,7 +835,7 @@ func SetupNewClusterSemiSync(t *testing.T) *VTOrcClusterInfo {
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
-			log.InfoS(fmt.Sprintf("Starting MySql for tablet %v", tablet.Alias))
+			log.Info(fmt.Sprintf("Starting MySql for tablet %v", tablet.Alias))
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			if err != nil {
 				require.NoError(t, err, "Error starting start mysql: %v", err)
@@ -909,7 +909,7 @@ func AddSemiSyncKeyspace(t *testing.T, clusterInfo *VTOrcClusterInfo) {
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInfo.ClusterInstance.Keyspaces[1].Shards {
 		for _, tablet := range shard.Vttablets {
-			log.InfoS(fmt.Sprintf("Starting MySql for tablet %v", tablet.Alias))
+			log.Info(fmt.Sprintf("Starting MySql for tablet %v", tablet.Alias))
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			if err != nil {
 				require.NoError(t, err, "Error starting start mysql: %v", err)
@@ -1157,18 +1157,18 @@ func PrintVTOrcLogsOnFailure(t *testing.T, clusterInstance *cluster.LocalProcess
 		return
 	}
 
-	log.ErrorS("Printing VTOrc logs")
+	log.Error("Printing VTOrc logs")
 	for _, vtorc := range clusterInstance.VTOrcProcesses {
 		if vtorc == nil || vtorc.LogFileName == "" {
 			continue
 		}
 		filePath := path.Join(vtorc.LogDir, vtorc.LogFileName)
-		log.ErrorS("Printing file - " + filePath)
+		log.Error("Printing file - " + filePath)
 		content, err := os.ReadFile(filePath)
 		if err != nil {
-			log.ErrorS(fmt.Sprintf("Error while reading the file - %v", err))
+			log.Error(fmt.Sprintf("Error while reading the file - %v", err))
 		}
-		log.ErrorS(string(content))
+		log.Error(string(content))
 	}
 }
 

@@ -28,7 +28,7 @@ import (
 type logShim struct{}
 
 func (shim *logShim) Write(buf []byte) (n int, err error) {
-	log.InfoS(string(buf))
+	log.Info(string(buf))
 	return len(buf), nil
 }
 

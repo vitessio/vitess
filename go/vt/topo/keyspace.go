@@ -306,7 +306,7 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 			si, err := ts.GetShard(ctx, keyspace, shard)
 			switch {
 			case IsErrType(err, NoNode):
-				log.WarnS(fmt.Sprintf("GetShard(%s, %s) returned ErrNoNode, consider checking the topology.", keyspace, shard))
+				log.Warn(fmt.Sprintf("GetShard(%s, %s) returned ErrNoNode, consider checking the topology.", keyspace, shard))
 				return nil
 			case err == nil:
 				mu.Lock()

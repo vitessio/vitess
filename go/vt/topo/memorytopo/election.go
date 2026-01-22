@@ -108,7 +108,7 @@ func (mp *cLeaderParticipation) WaitForLeadership() (context.Context, error) {
 	go func() {
 		<-mp.stop
 		if err := ld.Unlock(context.Background()); err != nil {
-			log.ErrorS(fmt.Sprintf("failed to unlock LockDescriptor %v: %v", electionPath, err))
+			log.Error(fmt.Sprintf("failed to unlock LockDescriptor %v: %v", electionPath, err))
 		}
 		lockCancel()
 		close(mp.done)

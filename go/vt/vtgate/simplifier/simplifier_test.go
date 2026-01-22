@@ -136,7 +136,7 @@ func TestSimplifyEvalEngineExpr(t *testing.T) {
 		}
 		return toInt64 >= 8
 	})
-	log.ErrorS(fmt.Sprintf("simplest expr to evaluate to >= 8: [%s], started from: [%s]", sqlparser.String(expr), sqlparser.String(p0)))
+	log.Error(fmt.Sprintf("simplest expr to evaluate to >= 8: [%s], started from: [%s]", sqlparser.String(expr), sqlparser.String(p0)))
 }
 
 func plus(a, b sqlparser.Expr) sqlparser.Expr {

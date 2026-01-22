@@ -237,10 +237,10 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	qe.consolidatorMode.Store(config.Consolidator)
 	qe.consolidator = sync2.NewConsolidator()
 	if config.ConsolidatorStreamTotalSize > 0 && config.ConsolidatorStreamQuerySize > 0 {
-		log.InfoS(fmt.Sprintf("Stream consolidator is enabled with query size set to %d and total size set to %d.", config.ConsolidatorStreamQuerySize, config.ConsolidatorStreamTotalSize))
+		log.Info(fmt.Sprintf("Stream consolidator is enabled with query size set to %d and total size set to %d.", config.ConsolidatorStreamQuerySize, config.ConsolidatorStreamTotalSize))
 		qe.streamConsolidator = NewStreamConsolidator(config.ConsolidatorStreamTotalSize, config.ConsolidatorStreamQuerySize, returnStreamResult)
 	} else {
-		log.InfoS("Stream consolidator is not enabled.")
+		log.Info("Stream consolidator is not enabled.")
 	}
 	qe.txSerializer = txserializer.New(env)
 
@@ -252,13 +252,13 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	if config.TableACLExemptACL != "" {
 		if f, err := tableacl.GetCurrentACLFactory(); err == nil {
 			if exemptACL, err := f.New([]string{config.TableACLExemptACL}); err == nil {
-				log.InfoS(fmt.Sprintf("Setting Table ACL exempt rule for %v", config.TableACLExemptACL))
+				log.Info(fmt.Sprintf("Setting Table ACL exempt rule for %v", config.TableACLExemptACL))
 				qe.exemptACL = exemptACL
 			} else {
-				log.InfoS(fmt.Sprintf("Cannot build exempt ACL for table ACL: %v", err))
+				log.Info(fmt.Sprintf("Cannot build exempt ACL for table ACL: %v", err))
 			}
 		} else {
-			log.InfoS(fmt.Sprintf("Cannot get current ACL Factory: %v", err))
+			log.Info(fmt.Sprintf("Cannot get current ACL Factory: %v", err))
 		}
 	}
 
@@ -328,7 +328,7 @@ func (qe *QueryEngine) Open() error {
 	if qe.isOpen.Load() {
 		return nil
 	}
-	log.InfoS("Query Engine: opening")
+	log.Info("Query Engine: opening")
 
 	config := qe.env.Config()
 
@@ -372,7 +372,7 @@ func (qe *QueryEngine) Close() {
 
 	qe.streamConns.Close()
 	qe.conns.Close()
-	log.InfoS("Query Engine: closed")
+	log.Info("Query Engine: closed")
 }
 
 var errNoCache = errors.New("plan should not be cached")

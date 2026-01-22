@@ -491,7 +491,7 @@ func generateDelete(t *testing.T, conn *mysql.Conn) error {
 }
 
 func runSingleConnection(ctx context.Context, t *testing.T, sleepInterval time.Duration) {
-	log.InfoS("Running single connection")
+	log.Info("Running single connection")
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -515,7 +515,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, sleepInterval time.D
 		}
 		select {
 		case <-ctx.Done():
-			log.InfoS("Terminating single connection")
+			log.Info("Terminating single connection")
 			return
 		case <-ticker.C:
 		}
@@ -535,7 +535,7 @@ func runMultipleConnections(ctx context.Context, t *testing.T) {
 	singleConnectionSleepIntervalNanoseconds := float64(baseSleepInterval.Nanoseconds()) * sleepModifier
 	sleepInterval := time.Duration(int64(singleConnectionSleepIntervalNanoseconds))
 
-	log.InfoS(fmt.Sprintf("Running multiple connections: maxConcurrency=%v, sleep interval=%v", maxConcurrency, sleepInterval))
+	log.Info(fmt.Sprintf("Running multiple connections: maxConcurrency=%v, sleep interval=%v", maxConcurrency, sleepInterval))
 	var wg sync.WaitGroup
 	for i := 0; i < maxConcurrency; i++ {
 		wg.Add(1)
@@ -545,12 +545,12 @@ func runMultipleConnections(ctx context.Context, t *testing.T) {
 		}()
 	}
 	wg.Wait()
-	log.InfoS("Running multiple connections: done")
+	log.Info("Running multiple connections: done")
 }
 
 func initTable(t *testing.T) {
-	log.InfoS("initTable begin")
-	defer log.InfoS("initTable complete")
+	log.Info("initTable begin")
+	defer log.Info("initTable complete")
 
 	t.Run("cancel pending migrations", func(t *testing.T) {
 		cancelQuery := "alter vitess_migration cancel all"
@@ -594,7 +594,7 @@ func testSelectTableMetrics(t *testing.T) {
 		fmt.Printf("# max op_order in table: %d\n", maxOpOrder)
 	}
 
-	log.InfoS(writeMetrics.String())
+	log.Info(writeMetrics.String())
 
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -606,7 +606,7 @@ func testSelectTableMetrics(t *testing.T) {
 
 	row := rs.Named().Row()
 	require.NotNil(t, row)
-	log.InfoS(fmt.Sprintf("testSelectTableMetrics, row: %v", row))
+	log.Info(fmt.Sprintf("testSelectTableMetrics, row: %v", row))
 	numRows := row.AsInt64("num_rows", 0)
 	sumUpdates := row.AsInt64("sum_updates", 0)
 	assert.NotZero(t, numRows)

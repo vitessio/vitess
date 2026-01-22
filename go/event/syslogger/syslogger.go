@@ -94,55 +94,55 @@ func listener(ev Syslogger) {
 		if writer != nil {
 			err = writer.Emerg(msg)
 		} else {
-			log.ErrorS(msg)
+			log.Error(msg)
 		}
 	case syslog.LOG_ALERT:
 		if writer != nil {
 			err = writer.Alert(msg)
 		} else {
-			log.ErrorS(msg)
+			log.Error(msg)
 		}
 	case syslog.LOG_CRIT:
 		if writer != nil {
 			err = writer.Crit(msg)
 		} else {
-			log.ErrorS(msg)
+			log.Error(msg)
 		}
 	case syslog.LOG_ERR:
 		if writer != nil {
 			err = writer.Err(msg)
 		} else {
-			log.ErrorS(msg)
+			log.Error(msg)
 		}
 	case syslog.LOG_WARNING:
 		if writer != nil {
 			err = writer.Warning(msg)
 		} else {
-			log.WarnS(msg)
+			log.Warn(msg)
 		}
 	case syslog.LOG_NOTICE:
 		if writer != nil {
 			err = writer.Notice(msg)
 		} else {
-			log.InfoS(msg)
+			log.Info(msg)
 		}
 	case syslog.LOG_INFO:
 		if writer != nil {
 			err = writer.Info(msg)
 		} else {
-			log.InfoS(msg)
+			log.Info(msg)
 		}
 	case syslog.LOG_DEBUG:
 		if writer != nil {
 			err = writer.Debug(msg)
 		} else {
-			log.InfoS(msg)
+			log.Info(msg)
 		}
 	default:
 		err = fmt.Errorf("invalid syslog severity: %v", sev)
 	}
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("can't write syslog event: %v", err))
+		log.Error(fmt.Sprintf("can't write syslog event: %v", err))
 	}
 }
 
@@ -168,7 +168,7 @@ func initSyslog() {
 	var err error
 	writer, err = syslog.New(syslog.LOG_INFO|syslog.LOG_USER, os.Args[0])
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("can't connect to syslog: %v", err.Error()))
+		log.Error(fmt.Sprintf("can't connect to syslog: %v", err.Error()))
 		writer = nil
 	}
 

@@ -283,12 +283,12 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			c, id, err := dynamic.ClusterFromString(r.Context(), urlDecoded)
 			if id != "" {
 				if err != nil {
-					log.WarnS(fmt.Sprintf("failed to extract valid cluster from cookie; attempting to use existing cluster with id=%s; error: %s", id, err))
+					log.Warn(fmt.Sprintf("failed to extract valid cluster from cookie; attempting to use existing cluster with id=%s; error: %s", id, err))
 				}
 
 				dynamicAPI = api.WithCluster(c, id)
 			} else {
-				log.WarnS(fmt.Sprintf("failed to unmarshal dynamic cluster spec from cookie; falling back to static API; error: %s", err))
+				log.Warn(fmt.Sprintf("failed to unmarshal dynamic cluster spec from cookie; falling back to static API; error: %s", err))
 			}
 		}
 	}
@@ -324,14 +324,14 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) dynamic.API {
 		if exists {
 			isEqual, err := existingCluster.Equal(c)
 			if err != nil {
-				log.ErrorS(fmt.Sprintf("Error checking for existing cluster %s equality with new cluster %s: %v", existingCluster.ID, id, err))
+				log.Error(fmt.Sprintf("Error checking for existing cluster %s equality with new cluster %s: %v", existingCluster.ID, id, err))
 			}
 			shouldAddCluster = shouldAddCluster || !isEqual
 		}
 		if shouldAddCluster {
 			if existingCluster != nil {
 				if err := existingCluster.Close(); err != nil {
-					log.ErrorS(err.Error() + "; some connections and goroutines may linger")
+					log.Error(err.Error() + "; some connections and goroutines may linger")
 				}
 
 				idx := stdsort.Search(len(api.clusters), func(i int) bool {
@@ -350,7 +350,7 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) dynamic.API {
 
 			api.clusterCache.Set(id, c, cache.DefaultExpiration)
 		} else {
-			log.InfoS(fmt.Sprintf("API already has cluster with id %s, using that instead", id))
+			log.Info(fmt.Sprintf("API already has cluster with id %s, using that instead", id))
 		}
 	}
 
@@ -461,14 +461,14 @@ func (api *API) EjectDynamicCluster(key string, value any) {
 	if ok {
 		delete(api.clusterMap, key)
 		if err := c.Close(); err != nil {
-			log.ErrorS(err.Error() + "; some connections and goroutines may linger")
+			log.Error(err.Error() + "; some connections and goroutines may linger")
 		}
 	}
 
 	// Maintain order of clusters when removing dynamic cluster
 	clusterIndex := stdsort.Search(len(api.clusters), func(i int) bool { return api.clusters[i].ID == key })
 	if clusterIndex >= len(api.clusters) || clusterIndex < 0 {
-		log.ErrorS(fmt.Sprintf("Cannot remove cluster %s from api.clusters. Cluster index %d is out of range for clusters slice of %d length.", key, clusterIndex, len(api.clusters)))
+		log.Error(fmt.Sprintf("Cannot remove cluster %s from api.clusters. Cluster index %d is out of range for clusters slice of %d length.", key, clusterIndex, len(api.clusters)))
 	}
 
 	api.clusters = append(api.clusters[:clusterIndex], api.clusters[clusterIndex+1:]...)
@@ -765,7 +765,7 @@ func (api *API) FindSchema(ctx context.Context, req *vtadminpb.FindSchemaRequest
 				}
 			}
 
-			log.InfoS(fmt.Sprintf("cluster %s has no tables named %s", c.ID, req.Table))
+			log.Info(fmt.Sprintf("cluster %s has no tables named %s", c.ID, req.Table))
 		}(c)
 	}
 
@@ -2661,7 +2661,7 @@ func (api *API) VExplain(ctx context.Context, req *vtadminpb.VExplainRequest) (*
 // VTExplain is part of the vtadminpb.VTAdminServer interface.
 func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) (*vtadminpb.VTExplainResponse, error) {
 	// TODO (andrew): https://github.com/vitessio/vitess/issues/12161.
-	log.WarnS("VTAdminServer.VTExplain is deprecated; please use a vexplain query instead. For more details, see https://vitess.io/docs/user-guides/sql/vexplain/.")
+	log.Warn("VTAdminServer.VTExplain is deprecated; please use a vexplain query instead. For more details, see https://vitess.io/docs/user-guides/sql/vexplain/.")
 
 	span, ctx := trace.NewSpan(ctx, "API.VTExplain")
 	defer span.Finish()
@@ -2696,7 +2696,7 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	defer api.vtexplainLock.Unlock()
 
 	lockWaitTime := time.Since(lockWaitStart)
-	log.InfoS(fmt.Sprintf("vtexplain lock wait time: %s", lockWaitTime))
+	log.Info(fmt.Sprintf("vtexplain lock wait time: %s", lockWaitTime))
 
 	span.Annotate("vtexplain_lock_wait_time", lockWaitTime.String())
 

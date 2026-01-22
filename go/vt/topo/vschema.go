@@ -66,18 +66,18 @@ func (ts *Server) SaveVSchema(ctx context.Context, ksvs *KeyspaceVSchemaInfo) er
 
 	version, err := ts.globalCell.Update(ctx, nodePath, data, ksvs.version)
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("failed to update vschema for keyspace %s: %v", ksvs.Name, err))
+		log.Error(fmt.Sprintf("failed to update vschema for keyspace %s: %v", ksvs.Name, err))
 		return err
 	}
 	ksvs.version = version
-	log.InfoS(fmt.Sprintf("successfully updated vschema for keyspace %s: %+v", ksvs.Name, ksvs.Keyspace))
+	log.Info(fmt.Sprintf("successfully updated vschema for keyspace %s: %+v", ksvs.Name, ksvs.Keyspace))
 
 	return nil
 }
 
 // DeleteVSchema delete the keyspace if it exists
 func (ts *Server) DeleteVSchema(ctx context.Context, keyspace string) error {
-	log.InfoS("deleting vschema for keyspace " + keyspace)
+	log.Info("deleting vschema for keyspace " + keyspace)
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -113,7 +113,7 @@ func (ts *Server) GetVSchema(ctx context.Context, keyspace string) (*KeyspaceVSc
 func (ts *Server) EnsureVSchema(ctx context.Context, keyspace string) error {
 	ksvs, err := ts.GetVSchema(ctx, keyspace)
 	if err != nil && !IsErrType(err, NoNode) {
-		log.InfoS(fmt.Sprintf("error in getting vschema for keyspace %s: %v", keyspace, err))
+		log.Info(fmt.Sprintf("error in getting vschema for keyspace %s: %v", keyspace, err))
 	}
 	if ksvs == nil || ksvs.Keyspace == nil || IsErrType(err, NoNode) {
 		err = ts.SaveVSchema(ctx, &KeyspaceVSchemaInfo{
@@ -125,7 +125,7 @@ func (ts *Server) EnsureVSchema(ctx context.Context, keyspace string) error {
 			},
 		})
 		if err != nil {
-			log.ErrorS(fmt.Sprintf("could not create blank vschema: %v", err))
+			log.Error(fmt.Sprintf("could not create blank vschema: %v", err))
 			return err
 		}
 	}

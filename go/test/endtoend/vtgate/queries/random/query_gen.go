@@ -84,7 +84,7 @@ func newQueryGenerator(genConfig sqlparser.ExprGeneratorConfig, maxTables, maxAg
 
 func newSelectGenerator(genConfig sqlparser.ExprGeneratorConfig, maxTables, maxAggrs, maxGBs int, schemaTables []tableT) *selectGenerator {
 	if maxTables <= 0 {
-		log.ErrorS(fmt.Sprintf("maxTables must be at least 1, currently %d\n", maxTables))
+		log.Error(fmt.Sprintf("maxTables must be at least 1, currently %d\n", maxTables))
 		os.Exit(1)
 	}
 
@@ -388,7 +388,7 @@ func (sg *selectGenerator) createTablesAndJoin() ([]tableT, bool) {
 func (sg *selectGenerator) createJoin(tables []tableT) {
 	n := len(sg.sel.From)
 	if len(tables) != n+1 {
-		log.ErrorS(fmt.Sprintf("sel has %d tables and tables has %d tables", len(sg.sel.From), n))
+		log.Error(fmt.Sprintf("sel has %d tables and tables has %d tables", len(sg.sel.From), n))
 		os.Exit(1)
 	}
 
@@ -402,7 +402,7 @@ func (sg *selectGenerator) createJoin(tables []tableT) {
 // tables should have at least two elements
 func (sg *selectGenerator) createJoinPredicates(tables []tableT) []sqlparser.Expr {
 	if len(tables) < 2 {
-		log.ErrorS(fmt.Sprintf("tables has %d elements, needs at least 2", len(tables)))
+		log.Error(fmt.Sprintf("tables has %d elements, needs at least 2", len(tables)))
 		os.Exit(1)
 	}
 
@@ -444,7 +444,7 @@ func (sg *selectGenerator) createGroupBy(tables []tableT) (grouping []column) {
 // aliasGroupingColumns randomly aliases the grouping columns in the SelectExprs
 func (sg *selectGenerator) aliasGroupingColumns(grouping []column) []column {
 	if len(grouping) != len(sg.sel.SelectExprs.Exprs) {
-		log.ErrorS(fmt.Sprintf("grouping (length: %d) and sg.sel.SelectExprs (length: %d) should have the same length at this point", len(grouping), len(sg.sel.SelectExprs.Exprs)))
+		log.Error(fmt.Sprintf("grouping (length: %d) and sg.sel.SelectExprs (length: %d) should have the same length at this point", len(grouping), len(sg.sel.SelectExprs.Exprs)))
 		os.Exit(1)
 	}
 
@@ -536,7 +536,7 @@ func (sg *selectGenerator) createHavingPredicates(grouping []column) {
 // returns between minExprs and maxExprs random expressions using generators
 func (sg *selectGenerator) createRandomExprs(minExprs, maxExprs int, generators ...sqlparser.ExprGenerator) (predicates []sqlparser.Expr) {
 	if minExprs > maxExprs {
-		log.ErrorS(fmt.Sprintf("minExprs is greater than maxExprs; minExprs: %d, maxExprs: %d\n", minExprs, maxExprs))
+		log.Error(fmt.Sprintf("minExprs is greater than maxExprs; minExprs: %d, maxExprs: %d\n", minExprs, maxExprs))
 		os.Exit(1)
 	} else if maxExprs <= 0 {
 		return

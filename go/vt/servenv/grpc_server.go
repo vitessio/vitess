@@ -209,7 +209,7 @@ func isGRPCEnabled() bool {
 func createGRPCServer() {
 	// skip if not registered
 	if !isGRPCEnabled() {
-		log.InfoS("Skipping gRPC server creation")
+		log.Info("Skipping gRPC server creation")
 		return
 	}
 
@@ -217,14 +217,14 @@ func createGRPCServer() {
 	if gRPCCert != "" && gRPCKey != "" {
 		config, err := vttls.ServerConfig(gRPCCert, gRPCKey, gRPCCA, gRPCCRL, gRPCServerCA, tls.VersionTLS12)
 		if err != nil {
-			log.ErrorS(fmt.Sprintf("Failed to log gRPC cert/key/ca: %v", err))
+			log.Error(fmt.Sprintf("Failed to log gRPC cert/key/ca: %v", err))
 			os.Exit(1)
 		}
 
 		// create the creds server options
 		creds := credentials.NewTLS(config)
 		if gRPCEnableOptionalTLS {
-			log.WarnS("Optional TLS is active. Plain-text connections will be accepted")
+			log.Warn("Optional TLS is active. Plain-text connections will be accepted")
 			creds = grpcoptionaltls.New(creds)
 		}
 		opts = []grpc.ServerOption{grpc.Creds(creds)}
@@ -237,7 +237,7 @@ func createGRPCServer() {
 	// Note: For gRPC 1.0.0 it's sufficient to set the limit on the server only
 	// because it's not enforced on the client side.
 	msgSize := grpccommon.MaxMessageSize()
-	log.InfoS(fmt.Sprintf("Setting grpc max message size to %d", msgSize))
+	log.Info(fmt.Sprintf("Setting grpc max message size to %d", msgSize))
 	opts = append(opts, grpc.MaxRecvMsgSize(msgSize))
 	opts = append(opts, grpc.MaxSendMsgSize(msgSize))
 
@@ -247,12 +247,12 @@ func createGRPCServer() {
 	}
 
 	if gRPCInitialConnWindowSize != 0 {
-		log.InfoS(fmt.Sprintf("Setting grpc server initial conn window size to %d", int32(gRPCInitialConnWindowSize)))
+		log.Info(fmt.Sprintf("Setting grpc server initial conn window size to %d", int32(gRPCInitialConnWindowSize)))
 		opts = append(opts, grpc.InitialConnWindowSize(int32(gRPCInitialConnWindowSize)))
 	}
 
 	if gRPCInitialWindowSize != 0 {
-		log.InfoS(fmt.Sprintf("Setting grpc server initial window size to %d", int32(gRPCInitialWindowSize)))
+		log.Info(fmt.Sprintf("Setting grpc server initial window size to %d", int32(gRPCInitialWindowSize)))
 		opts = append(opts, grpc.InitialWindowSize(int32(gRPCInitialWindowSize)))
 	}
 
@@ -280,11 +280,11 @@ func interceptors() []grpc.ServerOption {
 	interceptors := &serverInterceptorBuilder{}
 
 	if gRPCAuth != "" {
-		log.InfoS(fmt.Sprintf("enabling auth plugin %v", gRPCAuth))
+		log.Info(fmt.Sprintf("enabling auth plugin %v", gRPCAuth))
 		pluginInitializer := GetAuthenticator(gRPCAuth)
 		authPluginImpl, err := pluginInitializer()
 		if err != nil {
-			log.ErrorS(fmt.Sprintf("Failed to load auth plugin: %v", err))
+			log.Error(fmt.Sprintf("Failed to load auth plugin: %v", err))
 			os.Exit(1)
 		}
 		authPlugin = authPluginImpl
@@ -326,10 +326,10 @@ func serveGRPC() {
 	}
 
 	// listen on the port
-	log.InfoS(fmt.Sprintf("Listening for gRPC calls on port %v", gRPCPort))
+	log.Info(fmt.Sprintf("Listening for gRPC calls on port %v", gRPCPort))
 	listener, err := net.Listen("tcp", net.JoinHostPort(gRPCBindAddress, strconv.Itoa(gRPCPort)))
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("Cannot listen on port %v for gRPC: %v", gRPCPort, err))
+		log.Error(fmt.Sprintf("Cannot listen on port %v for gRPC: %v", gRPCPort, err))
 		os.Exit(1)
 	}
 
@@ -342,15 +342,15 @@ func serveGRPC() {
 	go func() {
 		err := GRPCServer.Serve(listener)
 		if err != nil {
-			log.ErrorS(fmt.Sprintf("Failed to start grpc server: %v", err))
+			log.Error(fmt.Sprintf("Failed to start grpc server: %v", err))
 			os.Exit(1)
 		}
 	}()
 
 	OnTermSync(func() {
-		log.InfoS("Initiated graceful stop of gRPC server")
+		log.Info("Initiated graceful stop of gRPC server")
 		GRPCServer.GracefulStop()
-		log.InfoS("gRPC server stopped")
+		log.Info("gRPC server stopped")
 	})
 }
 
@@ -360,7 +360,7 @@ func registerOrca() {
 		MinReportingInterval:  30 * time.Second,
 		ServerMetricsProvider: GRPCServerMetricsRecorder,
 	}); err != nil {
-		log.ErrorS(fmt.Sprintf("Failed to register ORCA service: %v", err))
+		log.Error(fmt.Sprintf("Failed to register ORCA service: %v", err))
 		os.Exit(1)
 	}
 
@@ -449,7 +449,7 @@ func (collector *serverInterceptorBuilder) AddUnary(u grpc.UnaryServerIntercepto
 
 // Build returns DialOptions to add to the grpc.Dial call
 func (collector *serverInterceptorBuilder) Build() []grpc.ServerOption {
-	log.InfoS(fmt.Sprintf("Building interceptors with %d unary interceptors and %d stream interceptors", len(collector.unaryInterceptors), len(collector.streamInterceptors)))
+	log.Info(fmt.Sprintf("Building interceptors with %d unary interceptors and %d stream interceptors", len(collector.unaryInterceptors), len(collector.streamInterceptors)))
 	switch len(collector.unaryInterceptors) + len(collector.streamInterceptors) {
 	case 0:
 		return []grpc.ServerOption{}

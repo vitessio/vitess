@@ -108,7 +108,7 @@ func TestMain(m *testing.M) {
 		return m.Run(), nil
 	}()
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("top level error: %v\n", err))
+		log.Error(fmt.Sprintf("top level error: %v\n", err))
 		os.Exit(1)
 	} else {
 		os.Exit(exitcode)
@@ -165,7 +165,7 @@ func TestStandalone(t *testing.T) {
 func assertVSchemaExists(t *testing.T, grpcAddress string) {
 	tmpCmd := exec.Command("vtctldclient", "--server", grpcAddress, "--compact", "GetVSchema", "routed")
 
-	log.InfoS(fmt.Sprintf("Running vtctldclient with command: %v", tmpCmd.Args))
+	log.Info(fmt.Sprintf("Running vtctldclient with command: %v", tmpCmd.Args))
 
 	output, err := tmpCmd.CombinedOutput()
 	require.NoError(t, err, fmt.Sprintf("Output:\n%v", string(output)))
@@ -240,7 +240,7 @@ func insertManyRows(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateCo
 func assertTabletsPresent(t *testing.T) {
 	tmpCmd := exec.Command("vtctldclient", "--server", grpcAddress, "GetTablets", "--cell", "test")
 
-	log.InfoS(fmt.Sprintf("Running vtctldclient with command: %v", tmpCmd.Args))
+	log.Info(fmt.Sprintf("Running vtctldclient with command: %v", tmpCmd.Args))
 
 	output, err := tmpCmd.CombinedOutput()
 	require.NoError(t, err)

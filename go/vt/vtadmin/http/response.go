@@ -45,7 +45,7 @@ type errorBody struct {
 // 500 unknown.
 func NewJSONResponse(value any, err error) *JSONResponse {
 	if err != nil {
-		log.ErrorS(err.Error())
+		log.Error(err.Error())
 
 		switch e := err.(type) {
 		case errors.TypedError:

@@ -160,7 +160,7 @@ func ParseTabletURLTemplateFromFlag() {
 	tabletURLTemplate = template.New("")
 	_, err := tabletURLTemplate.ParseFromTrustedTemplate(uncheckedconversions.TrustedTemplateFromStringKnownToSatisfyTypeContract(TabletURLTemplateString))
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("error parsing template: %v", err))
+		log.Error(fmt.Sprintf("error parsing template: %v", err))
 		os.Exit(1)
 	}
 }

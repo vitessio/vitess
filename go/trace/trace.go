@@ -176,13 +176,13 @@ func StartTracing(serviceName string) io.Closer {
 
 	tracer, closer, err := factory(serviceName)
 	if err != nil {
-		log.ErrorS(fmt.Sprint(vterrors.Wrapf(err, "failed to create a %s tracer", tracingBackend)))
+		log.Error(fmt.Sprint(vterrors.Wrapf(err, "failed to create a %s tracer", tracingBackend)))
 		return &nilCloser{}
 	}
 
 	currentTracer = tracer
 	if tracingBackend != "noop" {
-		log.InfoS(fmt.Sprintf("successfully started tracing with [%s]", tracingBackend))
+		log.Info(fmt.Sprintf("successfully started tracing with [%s]", tracingBackend))
 	}
 
 	return closer
@@ -194,7 +194,7 @@ func fail(serviceName string) io.Closer {
 		options = append(options, k)
 	}
 	altStr := strings.Join(options, ", ")
-	log.ErrorS(fmt.Sprintf("no such [%s] tracing service found. alternatives are: %v", serviceName, altStr))
+	log.Error(fmt.Sprintf("no such [%s] tracing service found. alternatives are: %v", serviceName, altStr))
 	return &nilCloser{}
 }
 

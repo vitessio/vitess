@@ -344,7 +344,7 @@ func (tmc *testWranglerTMClient) ExecuteFetchAsApp(ctx context.Context, tablet *
 	result, ok := t.queryResults[string(req.Query)]
 	if !ok {
 		result = &querypb.QueryResult{}
-		log.ErrorS(fmt.Sprintf("Query: %s, Result :%v\n", string(req.Query), result))
+		log.Error(fmt.Sprintf("Query: %s, Result :%v\n", string(req.Query), result))
 	}
 	return result, nil
 }

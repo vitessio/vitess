@@ -31,7 +31,7 @@ func main() {
 
 	cli.Main.SetGlobalNormalizationFunc(utils.NormalizeUnderscoresToDashes)
 	if err := cli.Main.Execute(); err != nil {
-		log.ErrorS(fmt.Sprintf("%s", err))
+		log.Error(fmt.Sprintf("%s", err))
 		os.Exit(1)
 	}
 }

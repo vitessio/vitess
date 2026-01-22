@@ -272,7 +272,7 @@ func (c *ZkConn) withRetry(ctx context.Context, action func(conn *zk.Conn) error
 			c.conn = nil
 		}
 		c.mu.Unlock()
-		log.InfoS(fmt.Sprintf("zk conn: got ErrConnectionClosed for addr %v: closing", c.addr))
+		log.Info(fmt.Sprintf("zk conn: got ErrConnectionClosed for addr %v: closing", c.addr))
 		conn.Close()
 	}
 	return
@@ -303,18 +303,18 @@ func (c *ZkConn) maybeAddAuth(ctx context.Context) {
 	}
 	authInfoBytes, err := os.ReadFile(authFile)
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("failed to read topo-zk-auth-file: %v", err))
+		log.Error(fmt.Sprintf("failed to read topo-zk-auth-file: %v", err))
 		return
 	}
 	authInfo := strings.TrimRight(string(authInfoBytes), "\n")
 	authInfoParts := strings.SplitN(authInfo, ":", 2)
 	if len(authInfoParts) != 2 {
-		log.ErrorS("failed to parse topo-zk-auth-file contents, expected format <scheme>:<auth> but saw: " + authInfo)
+		log.Error("failed to parse topo-zk-auth-file contents, expected format <scheme>:<auth> but saw: " + authInfo)
 		return
 	}
 	err = c.conn.AddAuth(authInfoParts[0], []byte(authInfoParts[1]))
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("failed to add auth from topo-zk-auth-file: %v", err))
+		log.Error(fmt.Sprintf("failed to add auth from topo-zk-auth-file: %v", err))
 		return
 	}
 }
@@ -334,10 +334,10 @@ func (c *ZkConn) handleSessionEvents(conn *zk.Conn, session <-chan zk.Event) {
 			}
 			c.mu.Unlock()
 			conn.Close()
-			log.InfoS(fmt.Sprintf("zk conn: session for addr %v ended: %v", c.addr, event))
+			log.Info(fmt.Sprintf("zk conn: session for addr %v ended: %v", c.addr, event))
 			return
 		}
-		log.InfoS(fmt.Sprintf("zk conn: session for addr %v event: %v", c.addr, event))
+		log.Info(fmt.Sprintf("zk conn: session for addr %v event: %v", c.addr, event))
 	}
 }
 
@@ -350,22 +350,22 @@ func dialZk(ctx context.Context, addr string) (*zk.Conn, <-chan zk.Event, error)
 	// If TLS is enabled use a TLS enabled dialer option
 	if certPath != "" && keyPath != "" {
 		if strings.Contains(addr, ",") {
-			log.ErrorS("This TLS zk code requires that the all the zk servers validate to a single server name.")
+			log.Error("This TLS zk code requires that the all the zk servers validate to a single server name.")
 			os.Exit(1)
 		}
 
 		serverName := strings.Split(addr, ":")[0]
 
-		log.InfoS(fmt.Sprintf("Using TLS ZK, connecting to %v server name %v", addr, serverName))
+		log.Info(fmt.Sprintf("Using TLS ZK, connecting to %v server name %v", addr, serverName))
 		cert, err := tls.LoadX509KeyPair(certPath, keyPath)
 		if err != nil {
-			log.ErrorS(fmt.Sprintf("Unable to load cert %v and key %v, err %v", certPath, keyPath, err))
+			log.Error(fmt.Sprintf("Unable to load cert %v and key %v, err %v", certPath, keyPath, err))
 			os.Exit(1)
 		}
 
 		clientCACert, err := os.ReadFile(caPath)
 		if err != nil {
-			log.ErrorS(fmt.Sprintf("Unable to open ca cert %v, err %v", caPath, err))
+			log.Error(fmt.Sprintf("Unable to open ca cert %v, err %v", caPath, err))
 			os.Exit(1)
 		}
 

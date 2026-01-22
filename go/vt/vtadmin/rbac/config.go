@@ -119,7 +119,7 @@ func (c *Config) Reify() error {
 		return rec.Error()
 	}
 
-	log.InfoS(fmt.Sprintf("[rbac]: loaded authorizer with %d rules", len(c.Rules)))
+	log.Info(fmt.Sprintf("[rbac]: loaded authorizer with %d rules", len(c.Rules)))
 
 	c.cfg = byResource
 	c.authorizer = &Authorizer{
@@ -143,7 +143,7 @@ func (c *Config) Reify() error {
 
 		c.authenticator = factory()
 	default:
-		log.InfoS("[rbac]: no authenticator implementation specified")
+		log.Info("[rbac]: no authenticator implementation specified")
 		c.authenticator = nil // Technically a no-op, but being super explicit about it.
 	}
 
@@ -167,7 +167,7 @@ func (c *Config) GetAuthorizer() *Authorizer {
 // DefaultConfig returns a default config that allows all actions on all resources
 // It is mainly used in the case where users explicitly pass --no-rbac flag.
 func DefaultConfig() *Config {
-	log.InfoS("[rbac]: using default rbac configuration")
+	log.Info("[rbac]: using default rbac configuration")
 	actions := []string{
 		string(GetAction),
 		string(CreateAction),

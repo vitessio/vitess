@@ -45,9 +45,9 @@ func OpenVTOrc() (db *sql.DB, err error) {
 	var fromCache bool
 	db, fromCache, err = sqlutils.GetSQLiteDB(config.GetSQLiteDataFile())
 	if err == nil && !fromCache {
-		log.InfoS(fmt.Sprintf("Connected to vtorc backend: sqlite on %v", config.GetSQLiteDataFile()))
+		log.Info(fmt.Sprintf("Connected to vtorc backend: sqlite on %v", config.GetSQLiteDataFile()))
 		if err := initVTOrcDB(db); err != nil {
-			log.ErrorS(fmt.Sprintf("Cannot initiate vtorc: %+v", err))
+			log.Error(fmt.Sprintf("Cannot initiate vtorc: %+v", err))
 			os.Exit(1)
 		}
 	}
@@ -68,7 +68,7 @@ func registerVTOrcDeployment(db *sql.DB) error {
 		DATETIME('now')
 	)`
 	if _, err := execInternal(db, query, ""); err != nil {
-		log.ErrorS(fmt.Sprintf("Unable to write to vtorc_db_deployments: %+v", err))
+		log.Error(fmt.Sprintf("Unable to write to vtorc_db_deployments: %+v", err))
 		os.Exit(1)
 	}
 	return nil
@@ -95,7 +95,7 @@ func ClearVTOrcDatabase() {
 	db, _, _ := sqlutils.GetSQLiteDB(config.GetSQLiteDataFile())
 	if db != nil {
 		if err := initVTOrcDB(db); err != nil {
-			log.ErrorS(fmt.Sprintf("Cannot re-initiate vtorc: %+v", err))
+			log.Error(fmt.Sprintf("Cannot re-initiate vtorc: %+v", err))
 			os.Exit(1)
 		}
 	}
@@ -104,8 +104,8 @@ func ClearVTOrcDatabase() {
 // initVTOrcDB attempts to create/upgrade the vtorc backend database. It is created once in the
 // application's lifetime.
 func initVTOrcDB(db *sql.DB) error {
-	log.InfoS("Initializing vtorc")
-	log.InfoS("Migrating database schema")
+	log.Info("Initializing vtorc")
+	log.Info("Migrating database schema")
 	if err := deployStatements(db, vtorcBackend); err != nil {
 		return err
 	}
@@ -153,7 +153,7 @@ func QueryVTOrc(query string, argsArray []any, onRow func(sqlutils.RowMap) error
 	}
 
 	if err = sqlutils.QueryRowsMap(db, query, onRow, argsArray...); err != nil {
-		log.WarnS(err.Error())
+		log.Warn(err.Error())
 	}
 
 	return err

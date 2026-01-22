@@ -1368,7 +1368,7 @@ func generateDelete(t *testing.T, conn *mysql.Conn) error {
 }
 
 func runSingleConnection(ctx context.Context, t *testing.T, done *int64) {
-	log.InfoS("Running single connection")
+	log.Info("Running single connection")
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -1380,7 +1380,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, done *int64) {
 
 	for {
 		if atomic.LoadInt64(done) == 1 {
-			log.InfoS("Terminating single connection")
+			log.Info("Terminating single connection")
 			return
 		}
 		switch rand.Int32N(3) {
@@ -1397,7 +1397,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, done *int64) {
 }
 
 func runMultipleConnections(ctx context.Context, t *testing.T) {
-	log.InfoS("Running multiple connections")
+	log.Info("Running multiple connections")
 
 	require.True(t, checkTable(t, tableName, true))
 	var done int64
@@ -1411,14 +1411,14 @@ func runMultipleConnections(ctx context.Context, t *testing.T) {
 	}
 	<-ctx.Done()
 	atomic.StoreInt64(&done, 1)
-	log.InfoS("Running multiple connections: done")
+	log.Info("Running multiple connections: done")
 	wg.Wait()
-	log.InfoS("All connections cancelled")
+	log.Info("All connections cancelled")
 }
 
 func initTable(t *testing.T) {
-	log.InfoS("initTable begin")
-	defer log.InfoS("initTable complete")
+	log.Info("initTable begin")
+	defer log.Info("initTable complete")
 
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -1444,7 +1444,7 @@ func testSelectTableMetrics(t *testing.T) {
 	writeMetrics.mu.Lock()
 	defer writeMetrics.mu.Unlock()
 
-	log.InfoS(writeMetrics.String())
+	log.Info(writeMetrics.String())
 
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -1456,7 +1456,7 @@ func testSelectTableMetrics(t *testing.T) {
 
 	row := rs.Named().Row()
 	require.NotNil(t, row)
-	log.InfoS(fmt.Sprintf("testSelectTableMetrics, row: %v", row))
+	log.Info(fmt.Sprintf("testSelectTableMetrics, row: %v", row))
 	numRows := row.AsInt64("num_rows", 0)
 	sumUpdates := row.AsInt64("sum_updates", 0)
 

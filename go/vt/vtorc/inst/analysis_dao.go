@@ -287,7 +287,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		tablet := &topodatapb.Tablet{}
 		opts := prototext.UnmarshalOptions{DiscardUnknown: true}
 		if err := opts.Unmarshal([]byte(m.GetString("tablet_info")), tablet); err != nil {
-			log.ErrorS(fmt.Sprintf("could not read tablet %v: %v", m.GetString("tablet_info"), err))
+			log.Error(fmt.Sprintf("could not read tablet %v: %v", m.GetString("tablet_info"), err))
 			return nil
 		}
 
@@ -299,7 +299,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		primaryTablet := &topodatapb.Tablet{}
 		if str := m.GetString("primary_tablet_info"); str != "" {
 			if err := opts.Unmarshal([]byte(str), primaryTablet); err != nil {
-				log.ErrorS(fmt.Sprintf("could not read tablet %v: %v", str, err))
+				log.Error(fmt.Sprintf("could not read tablet %v: %v", str, err))
 				return nil
 			}
 		}
@@ -313,7 +313,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		a.PrimaryTimeStamp = m.GetTime("primary_timestamp")
 
 		if keyspaceType := topodatapb.KeyspaceType(m.GetInt32("keyspace_type")); keyspaceType == topodatapb.KeyspaceType_SNAPSHOT {
-			log.ErrorS(fmt.Sprintf("keyspace %v is a snapshot keyspace. Skipping.", a.AnalyzedKeyspace))
+			log.Error(fmt.Sprintf("keyspace %v is a snapshot keyspace. Skipping.", a.AnalyzedKeyspace))
 			return nil
 		}
 
@@ -372,7 +372,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 				a.AnalyzedInstanceAlias, a.AnalyzedKeyspace, a.AnalyzedShard, a.IsPrimary, a.LastCheckValid, a.LastCheckPartialSuccess, a.CountReplicas, a.CountValidReplicas, a.CountValidReplicatingReplicas, a.CountLaggingReplicas, a.CountDelayedReplicas,
 			)
 			if util.ClearToLog("analysis_dao", analysisMessage) {
-				log.InfoS(analysisMessage)
+				log.Info(analysisMessage)
 			}
 		}
 		keyspaceShard := getKeyspaceShardName(a.AnalyzedKeyspace, a.AnalyzedShard)
@@ -384,12 +384,12 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			}
 			durabilityPolicy := m.GetString("durability_policy")
 			if durabilityPolicy == "" {
-				log.ErrorS(fmt.Sprintf("ignoring keyspace %v because no durability_policy is set. Please set it using SetKeyspaceDurabilityPolicy", a.AnalyzedKeyspace))
+				log.Error(fmt.Sprintf("ignoring keyspace %v because no durability_policy is set. Please set it using SetKeyspaceDurabilityPolicy", a.AnalyzedKeyspace))
 				return nil
 			}
 			durability, err := policy.GetDurabilityPolicy(durabilityPolicy)
 			if err != nil {
-				log.ErrorS(fmt.Sprintf("can't get the durability policy %v - %v. Skipping keyspace - %v.", durabilityPolicy, err, a.AnalyzedKeyspace))
+				log.Error(fmt.Sprintf("can't get the durability policy %v - %v. Skipping keyspace - %v.", durabilityPolicy, err, a.AnalyzedKeyspace))
 				return nil
 			}
 			clusters[keyspaceShard].durability = durability
@@ -605,7 +605,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 	result = postProcessAnalyses(result, clusters)
 
 	if err != nil {
-		log.ErrorS(fmt.Sprint(err))
+		log.Error(fmt.Sprint(err))
 	}
 	// TODO: result, err = getConcensusDetectionAnalysis(result)
 	return result, err
@@ -683,12 +683,12 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 			string(analysisCode), tabletAlias, string(analysisCode),
 		)
 		if err != nil {
-			log.ErrorS(fmt.Sprint(err))
+			log.Error(fmt.Sprint(err))
 			return err
 		}
 		rows, err := sqlResult.RowsAffected()
 		if err != nil {
-			log.ErrorS(fmt.Sprint(err))
+			log.Error(fmt.Sprint(err))
 			return err
 		}
 		lastAnalysisChanged = rows > 0
@@ -712,12 +712,12 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 			tabletAlias, string(analysisCode),
 		)
 		if err != nil {
-			log.ErrorS(fmt.Sprint(err))
+			log.Error(fmt.Sprint(err))
 			return err
 		}
 		rows, err := sqlResult.RowsAffected()
 		if err != nil {
-			log.ErrorS(fmt.Sprint(err))
+			log.Error(fmt.Sprint(err))
 			return err
 		}
 		firstInsertion = rows > 0
@@ -743,7 +743,7 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 	if err == nil {
 		analysisChangeWriteCounter.Add(1)
 	} else {
-		log.ErrorS(fmt.Sprint(err))
+		log.Error(fmt.Sprint(err))
 	}
 	return err
 }
@@ -758,7 +758,7 @@ func ExpireInstanceAnalysisChangelog() error {
 		config.UnseenInstanceForgetHours,
 	)
 	if err != nil {
-		log.ErrorS(fmt.Sprint(err))
+		log.Error(fmt.Sprint(err))
 	}
 	return err
 }

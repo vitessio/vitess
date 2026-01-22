@@ -108,7 +108,7 @@ func deprecateQueryParam(r *http.Request, newName string, oldName string) {
 	q := r.URL.Query()
 
 	if q.Has(oldName) {
-		log.WarnS(fmt.Sprintf("query param %s is deprecated in favor of %s. support for %s will be dropped in the next version", oldName, newName, oldName))
+		log.Warn(fmt.Sprintf("query param %s is deprecated in favor of %s. support for %s will be dropped in the next version", oldName, newName, oldName))
 
 		newVals := sets.New(q[newName]...)
 		for _, oldVal := range q[oldName] {

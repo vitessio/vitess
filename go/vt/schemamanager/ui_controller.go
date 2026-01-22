@@ -103,7 +103,7 @@ func (controller *UIController) OnValidationFail(ctx context.Context, err error)
 func (controller *UIController) OnExecutorComplete(ctx context.Context, result *ExecuteResult) error {
 	data, err := json.Marshal(result)
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("Failed to serialize ExecuteResult: %v", err))
+		log.Error(fmt.Sprintf("Failed to serialize ExecuteResult: %v", err))
 		return err
 	}
 	fmt.Fprintf(controller.writer, "Executor succeeds: %s", string(data))

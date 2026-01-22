@@ -579,7 +579,7 @@ func RegisterAuthServer(name string, authServer AuthServer) {
 	mu.Lock()
 	defer mu.Unlock()
 	if _, ok := authServers[name]; ok {
-		log.ErrorS(fmt.Sprintf("AuthServer named %v already exists", name))
+		log.Error(fmt.Sprintf("AuthServer named %v already exists", name))
 		os.Exit(1)
 	}
 	authServers[name] = authServer
@@ -591,7 +591,7 @@ func GetAuthServer(name string) AuthServer {
 	defer mu.Unlock()
 	authServer, ok := authServers[name]
 	if !ok {
-		log.ErrorS(fmt.Sprintf("no AuthServer name %v registered", name))
+		log.Error(fmt.Sprintf("no AuthServer name %v registered", name))
 		os.Exit(1)
 	}
 	return authServer

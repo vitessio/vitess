@@ -58,7 +58,7 @@ func failoverExternalReparenting(t *testing.T, clusterInstance *cluster.LocalPro
 	minUnavailabilityInS := 1.0
 	if duration.Seconds() < minUnavailabilityInS {
 		w := minUnavailabilityInS - duration.Seconds()
-		log.InfoS(fmt.Sprintf("Waiting for %.1f seconds because the failover was too fast (took only %.3f seconds)", w, duration.Seconds()))
+		log.Info(fmt.Sprintf("Waiting for %.1f seconds because the failover was too fast (took only %.3f seconds)", w, duration.Seconds()))
 		time.Sleep(time.Duration(w) * time.Second)
 	}
 

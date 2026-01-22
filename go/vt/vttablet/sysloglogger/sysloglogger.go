@@ -60,7 +60,7 @@ func init() {
 			var err error
 			writer, err = syslog.New(syslog.LOG_INFO, "vtquerylogger")
 			if err != nil {
-				log.ErrorS(fmt.Sprintf("Query logger is unable to connect to syslog: %v", err))
+				log.Error(fmt.Sprintf("Query logger is unable to connect to syslog: %v", err))
 				return
 			}
 			go run()
@@ -70,7 +70,7 @@ func init() {
 
 // Run logs queries to syslog, if the "log_queries" flag is set to true when starting vttablet.
 func run() {
-	log.InfoS("Logging queries to syslog")
+	log.Info("Logging queries to syslog")
 	defer writer.Close()
 
 	// ch will only be non-nil in a unit test context, when a mock has been populated
@@ -85,11 +85,11 @@ func run() {
 	for stats := range ch {
 		b.Reset()
 		if err := stats.Logf(&b, formatParams); err != nil {
-			log.ErrorS(fmt.Sprintf("Error formatting logStats: %v", err))
+			log.Error(fmt.Sprintf("Error formatting logStats: %v", err))
 			continue
 		}
 		if err := writer.Info(b.String()); err != nil {
-			log.ErrorS(fmt.Sprintf("Error writing to syslog: %v", err))
+			log.Error(fmt.Sprintf("Error writing to syslog: %v", err))
 			continue
 		}
 	}

@@ -65,7 +65,7 @@ func ParsePrimaryStatus(fields map[string]string) PrimaryStatus {
 		var err error
 		status.FilePosition.GTIDSet, err = ParseFilePosGTIDSet(fmt.Sprintf("%s:%s", file, fileExecPosStr))
 		if err != nil {
-			log.WarnS(fmt.Sprintf("Error parsing GTID set %s:%s: %v", file, fileExecPosStr, err))
+			log.Warn(fmt.Sprintf("Error parsing GTID set %s:%s: %v", file, fileExecPosStr, err))
 		}
 	}
 

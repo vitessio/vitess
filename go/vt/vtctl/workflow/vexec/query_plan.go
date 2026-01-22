@@ -61,7 +61,7 @@ func (qp *FixedQueryPlan) Execute(ctx context.Context, target *topo.TabletInfo) 
 
 	defer func() {
 		if err != nil {
-			log.WarnS(fmt.Sprintf("Result on %v: %v", targetAliasStr, err))
+			log.Warn(fmt.Sprintf("Result on %v: %v", targetAliasStr, err))
 			return
 		}
 	}()
@@ -147,7 +147,7 @@ func (qp *PerTargetQueryPlan) Execute(ctx context.Context, target *topo.TabletIn
 
 	defer func() {
 		if err != nil {
-			log.WarnS(fmt.Sprintf("Result on %v: %v", targetAliasStr, err))
+			log.Warn(fmt.Sprintf("Result on %v: %v", targetAliasStr, err))
 			return
 		}
 	}()

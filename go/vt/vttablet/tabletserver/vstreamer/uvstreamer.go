@@ -116,7 +116,7 @@ func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se 
 		}
 		err := send(evs)
 		if err != nil {
-			log.InfoS(fmt.Sprintf("uvstreamer replicate send() returned with err %v", err))
+			log.Info(fmt.Sprintf("uvstreamer replicate send() returned with err %v", err))
 		}
 		return err
 	}
@@ -256,7 +256,7 @@ func getQuery(tableName string, filter string) string {
 }
 
 func (uvs *uvstreamer) Cancel() {
-	log.InfoS("uvstreamer context is being cancelled")
+	log.Info("uvstreamer context is being cancelled")
 	uvs.cancel()
 }
 
@@ -342,27 +342,27 @@ func (uvs *uvstreamer) send2(evs []*binlogdatapb.VEvent) error {
 	}
 	err := uvs.send(evs2)
 	if err != nil && err != io.EOF {
-		log.InfoS(fmt.Sprintf("uvstreamer catchup/fastforward send() returning with send error %v", err))
+		log.Info(fmt.Sprintf("uvstreamer catchup/fastforward send() returning with send error %v", err))
 		return err
 	}
 	for _, ev := range evs2 {
 		if ev.Type == binlogdatapb.VEventType_GTID {
 			uvs.pos, _ = replication.DecodePosition(ev.Gtid)
 			if !uvs.stopPos.IsZero() && uvs.pos.AtLeast(uvs.stopPos) {
-				log.InfoS(fmt.Sprintf("Reached stop position %v, returning io.EOF", uvs.stopPos))
+				log.Info(fmt.Sprintf("Reached stop position %v, returning io.EOF", uvs.stopPos))
 				err = io.EOF
 			}
 		}
 	}
 	if err != nil {
-		log.InfoS(fmt.Sprintf("uvstreamer catchup/fastforward returning with EOF error %v", err))
+		log.Info(fmt.Sprintf("uvstreamer catchup/fastforward returning with EOF error %v", err))
 		uvs.vse.errorCounts.Add("Send", 1)
 	}
 	return err
 }
 
 func (uvs *uvstreamer) sendEventsForCurrentPos() error {
-	log.InfoS("sendEventsForCurrentPos")
+	log.Info("sendEventsForCurrentPos")
 	evs := []*binlogdatapb.VEvent{{
 		Type: binlogdatapb.VEventType_GTID,
 		Gtid: replication.EncodePosition(uvs.pos),
@@ -437,14 +437,14 @@ func (uvs *uvstreamer) init() error {
 
 // Stream streams binlog events.
 func (uvs *uvstreamer) Stream() error {
-	log.InfoS("Stream() called")
+	log.Info("Stream() called")
 	if err := uvs.init(); err != nil {
 		return err
 	}
 	if len(uvs.plans) > 0 {
-		log.InfoS("TablePKs is not nil: starting vs.copy()")
+		log.Info("TablePKs is not nil: starting vs.copy()")
 		if err := uvs.copy(uvs.ctx); err != nil {
-			log.InfoS(fmt.Sprintf("uvstreamer.Stream() copy returned with err %s", err))
+			log.Info(fmt.Sprintf("uvstreamer.Stream() copy returned with err %s", err))
 			uvs.vse.errorCounts.Add("Copy", 1)
 			return err
 		}

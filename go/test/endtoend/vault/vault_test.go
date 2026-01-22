@@ -183,17 +183,17 @@ func setupVaultServer(t *testing.T, vs *Server) (string, string) {
 	setup.Stdout = logFile
 
 	setup.Env = append(setup.Env, os.Environ()...)
-	log.InfoS(fmt.Sprintf("Running Vault setup command: %v", strings.Join(setup.Args, " ")))
+	log.Info(fmt.Sprintf("Running Vault setup command: %v", strings.Join(setup.Args, " ")))
 	err := setup.Start()
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("Error during Vault setup: %v", err))
+		log.Error(fmt.Sprintf("Error during Vault setup: %v", err))
 	}
 
 	setup.Wait()
 	var secretID, roleID string
 	file, err := os.Open(logFilePath)
 	if err != nil {
-		log.ErrorS(fmt.Sprint(err))
+		log.Error(fmt.Sprint(err))
 	}
 	defer file.Close()
 
@@ -206,7 +206,7 @@ func setupVaultServer(t *testing.T, vs *Server) (string, string) {
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		log.ErrorS(fmt.Sprint(err))
+		log.Error(fmt.Sprint(err))
 	}
 
 	return roleID, secretID

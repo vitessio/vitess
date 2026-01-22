@@ -123,7 +123,7 @@ func TestShardedKeyspace(t *testing.T) {
 	require.Nil(t, err)
 
 	if err = clusterInstance.VtctldClientProcess.ApplyVSchema(keyspaceName, vSchema); err != nil {
-		log.ErrorS(err.Error())
+		log.Error(err.Error())
 		return
 	}
 
@@ -249,10 +249,10 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 		}
 
 		for _, tablet := range shard.Vttablets {
-			log.InfoS(fmt.Sprintf("Starting vttablet for tablet uid %d, grpc port %d", tablet.TabletUID, tablet.GrpcPort))
+			log.Info(fmt.Sprintf("Starting vttablet for tablet uid %d, grpc port %d", tablet.TabletUID, tablet.GrpcPort))
 
 			if err := tablet.VttabletProcess.Setup(); err != nil {
-				log.ErrorS(err.Error())
+				log.Error(err.Error())
 				return
 			}
 		}

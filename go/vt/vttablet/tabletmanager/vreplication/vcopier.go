@@ -380,7 +380,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	defer vc.vr.stats.PhaseTimings.Record("copy", time.Now())
 	defer vc.vr.stats.CopyLoopCount.Add(1)
 
-	log.InfoS(fmt.Sprintf("Copying table %s, lastpk: %v", tableName, copyState[tableName]))
+	log.Info(fmt.Sprintf("Copying table %s, lastpk: %v", tableName, copyState[tableName]))
 
 	plan, err := vc.vr.buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats, vc.vr.vre.env.CollationEnv(), vc.vr.vre.env.Parser())
 	if err != nil {
@@ -446,12 +446,12 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 						vc.vr.id, encodeString(tableName), vc.vr.id, encodeString(tableName))
 					dbClient := vc.vr.vre.getDBClient(false)
 					if err := dbClient.Connect(); err != nil {
-						log.ErrorS(fmt.Sprintf("Error while garbage collecting older copy_state rows, could not connect to database: %v", err))
+						log.Error(fmt.Sprintf("Error while garbage collecting older copy_state rows, could not connect to database: %v", err))
 						return
 					}
 					defer dbClient.Close()
 					if _, err := dbClient.ExecuteFetch(gcQuery, -1); err != nil {
-						log.ErrorS(fmt.Sprintf("Error while garbage collecting older copy_state rows with query %q: %v", gcQuery, err))
+						log.Error(fmt.Sprintf("Error while garbage collecting older copy_state rows with query %q: %v", gcQuery, err))
 					}
 				}()
 			case <-ctx.Done():
@@ -560,7 +560,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		})
 
 		if err := copyWorkQueue.enqueue(ctx, currT); err != nil {
-			log.WarnS(fmt.Sprintf("failed to enqueue task in workflow %s: %s", vc.vr.WorkflowName, err.Error()))
+			log.Warn(fmt.Sprintf("failed to enqueue task in workflow %s: %s", vc.vr.WorkflowName, err.Error()))
 			return err
 		}
 
@@ -581,7 +581,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			if result != nil {
 				switch result.state {
 				case vcopierCopyTaskCancel:
-					log.WarnS(fmt.Sprintf("task was canceled in workflow %s: %v", vc.vr.WorkflowName, result.err))
+					log.Warn(fmt.Sprintf("task was canceled in workflow %s: %v", vc.vr.WorkflowName, result.err))
 					return io.EOF
 				case vcopierCopyTaskComplete:
 					// Collect lastpk. Needed for logging at the end.
@@ -628,7 +628,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	}
 	if len(terrs) > 0 {
 		terr := vterrors.Aggregate(terrs)
-		log.WarnS(fmt.Sprintf("task error in workflow %s: %v", vc.vr.WorkflowName, terr))
+		log.Warn(fmt.Sprintf("task error in workflow %s: %v", vc.vr.WorkflowName, terr))
 		return vterrors.Wrapf(terr, "task error")
 	}
 
@@ -652,7 +652,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	// of a copy phase.
 	select {
 	case <-ctx.Done():
-		log.InfoS(fmt.Sprintf("Copy of %v stopped at lastpk: %v", tableName, lastpkbv))
+		log.Info(fmt.Sprintf("Copy of %v stopped at lastpk: %v", tableName, lastpkbv))
 		return nil
 	default:
 	}
@@ -665,7 +665,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		return vterrors.Wrapf(err, "failed to execute post copy actions for table %q", tableName)
 	}
 
-	log.InfoS(fmt.Sprintf("Copy of %v finished at lastpk: %v", tableName, lastpkbv))
+	log.Info(fmt.Sprintf("Copy of %v finished at lastpk: %v", tableName, lastpkbv))
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf(
 		"delete cs, pca from _vt.%s as cs left join _vt.%s as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name where cs.vrepl_id=%d and cs.table_name=%s",
@@ -923,7 +923,7 @@ func (vrh *vcopierCopyTaskResultHooks) sendTo(ch chan<- *vcopierCopyTaskResult) 
 		defer func() {
 			// This recover prevents panics when sending to a potentially closed channel.
 			if err := recover(); err != nil {
-				log.ErrorS(fmt.Sprintf("uncaught panic, vcopier copy task result: %v, error: %+v", result, err))
+				log.Error(fmt.Sprintf("uncaught panic, vcopier copy task result: %v, error: %+v", result, err))
 			}
 		}()
 		select {
@@ -1081,7 +1081,7 @@ func (vbc *vcopierCopyWorker) execute(ctx context.Context, task *vcopierCopyTask
 		case vcopierCopyTaskInsertCopyState:
 			advanceFn = func(ctx context.Context, args *vcopierCopyTaskArgs) error {
 				if vbc.copyStateInsert == nil { // we don't insert copy state for atomic copy
-					log.InfoS("Skipping copy_state insert")
+					log.Info("Skipping copy_state insert")
 					return nil
 				}
 				if err := vbc.insertCopyState(ctx, args.lastpk); err != nil {

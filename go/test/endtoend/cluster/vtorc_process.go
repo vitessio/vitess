@@ -96,12 +96,12 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	timeNow := time.Now().UnixNano()
 	err = os.MkdirAll(orc.LogDir, 0o755)
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("cannot create log directory for vtorc: %v", err))
+		log.Error(fmt.Sprintf("cannot create log directory for vtorc: %v", err))
 		return err
 	}
 	configFile, err := os.Create(path.Join(orc.LogDir, fmt.Sprintf("orc-config-%d.json", timeNow)))
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("cannot create config file for vtorc: %v", err))
+		log.Error(fmt.Sprintf("cannot create config file for vtorc: %v", err))
 		return err
 	}
 	orc.ConfigPath = configFile.Name()
@@ -110,7 +110,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	if !orc.NoOverride {
 		orc.Config.addValuesToCheckOverride()
 	}
-	log.ErrorS(fmt.Sprintf("configuration - %v", orc.Config.ToJSONString()))
+	log.Error(fmt.Sprintf("configuration - %v", orc.Config.ToJSONString()))
 	_, err = configFile.WriteString(orc.Config.ToJSONString())
 	if err != nil {
 		return err
@@ -164,7 +164,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	}
 	errFile, err := os.Create(path.Join(orc.LogDir, orc.LogFileName))
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("cannot create error log file for vtorc: %v", err))
+		log.Error(fmt.Sprintf("cannot create error log file for vtorc: %v", err))
 		return err
 	}
 	orc.proc.Stderr = errFile
@@ -172,7 +172,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	orc.proc.Env = append(orc.proc.Env, os.Environ()...)
 	orc.proc.Env = append(orc.proc.Env, DefaultVttestEnv)
 
-	log.InfoS(fmt.Sprintf("Running vtorc with command: %v", strings.Join(orc.proc.Args, " ")))
+	log.Info(fmt.Sprintf("Running vtorc with command: %v", strings.Join(orc.proc.Args, " ")))
 
 	err = orc.proc.Start()
 	if err != nil {

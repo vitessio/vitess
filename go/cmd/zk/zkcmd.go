@@ -43,7 +43,7 @@ func main() {
 	command.Root.SetGlobalNormalizationFunc(utils.NormalizeUnderscoresToDashes)
 	// Run the command.
 	if err := command.Root.ExecuteContext(ctx); err != nil {
-		log.ErrorS(fmt.Sprint(err))
+		log.Error(fmt.Sprint(err))
 		exit.Return(1)
 	}
 }

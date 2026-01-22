@@ -366,21 +366,21 @@ func (db *LocalCluster) Setup() error {
 	var err error
 
 	if db.Env == nil {
-		log.InfoS("No environment in cluster settings. Creating default...")
+		log.Info("No environment in cluster settings. Creating default...")
 		db.Env, err = NewDefaultEnv()
 		if err != nil {
 			return err
 		}
 	}
 
-	log.InfoS(fmt.Sprintf("LocalCluster environment: %+v", db.Env))
+	log.Info(fmt.Sprintf("LocalCluster environment: %+v", db.Env))
 
 	// Set up topo manager if we are using a remote topo server
 	if db.ExternalTopoImplementation != "" {
 		db.topo = db.Env.TopoManager(db.ExternalTopoImplementation, db.ExternalTopoGlobalServerAddress, db.ExternalTopoGlobalRoot, db.Topology)
-		log.InfoS(fmt.Sprintf("Initializing Topo Manager: %+v", db.topo))
+		log.Info(fmt.Sprintf("Initializing Topo Manager: %+v", db.topo))
 		if err := db.topo.Setup(); err != nil {
-			log.ErrorS(fmt.Sprintf("Failed to set up Topo Manager: %v", err))
+			log.Error(fmt.Sprintf("Failed to set up Topo Manager: %v", err))
 			return err
 		}
 	}
@@ -393,11 +393,11 @@ func (db *LocalCluster) Setup() error {
 	initializing := !db.PersistentMode || !dirExist(db.mysql.TabletDir())
 
 	if initializing {
-		log.InfoS(fmt.Sprintf("Initializing MySQL Manager (%T)...", db.mysql))
+		log.Info(fmt.Sprintf("Initializing MySQL Manager (%T)...", db.mysql))
 		if err := db.mysql.Setup(); err != nil {
-			log.ErrorS(fmt.Sprintf("Mysqlctl failed to start: %s", err))
+			log.Error(fmt.Sprintf("Mysqlctl failed to start: %s", err))
 			if err, ok := err.(*exec.ExitError); ok {
-				log.ErrorS(fmt.Sprintf("stderr: %s", err.Stderr))
+				log.Error(fmt.Sprintf("stderr: %s", err.Stderr))
 			}
 			return err
 		}
@@ -406,43 +406,43 @@ func (db *LocalCluster) Setup() error {
 			return err
 		}
 	} else {
-		log.InfoS(fmt.Sprintf("Starting MySQL Manager (%T)...", db.mysql))
+		log.Info(fmt.Sprintf("Starting MySQL Manager (%T)...", db.mysql))
 		if err := db.mysql.Start(); err != nil {
-			log.ErrorS(fmt.Sprintf("Mysqlctl failed to start: %s", err))
+			log.Error(fmt.Sprintf("Mysqlctl failed to start: %s", err))
 			if err, ok := err.(*exec.ExitError); ok {
-				log.ErrorS(fmt.Sprintf("stderr: %s", err.Stderr))
+				log.Error(fmt.Sprintf("stderr: %s", err.Stderr))
 			}
 			return err
 		}
 	}
 
 	mycfg, _ := json.Marshal(db.mysql.Params(""))
-	log.InfoS(fmt.Sprintf("MySQL up: %s", mycfg))
+	log.Info(fmt.Sprintf("MySQL up: %s", mycfg))
 
 	if !db.OnlyMySQL {
-		log.InfoS("Starting vtcombo...")
+		log.Info("Starting vtcombo...")
 		db.vt, _ = VtcomboProcess(db.Env, &db.Config, db.mysql)
 		if err := db.vt.WaitStart(); err != nil {
 			return err
 		}
-		log.InfoS("vtcombo up: " + db.vt.Address())
+		log.Info("vtcombo up: " + db.vt.Address())
 	}
 
 	if initializing {
-		log.InfoS("Mysql data directory does not exist. Initializing cluster with database and vschema migrations...")
+		log.Info("Mysql data directory does not exist. Initializing cluster with database and vschema migrations...")
 		// Load schema will apply db and vschema migrations. Running after vtcombo starts to be able to apply vschema migrations
 		if err := db.loadSchema(true); err != nil {
 			return err
 		}
 
 		if db.Seed != nil {
-			log.InfoS("Populating database with random data...")
+			log.Info("Populating database with random data...")
 			if err := db.populateWithRandomData(); err != nil {
 				return err
 			}
 		}
 	} else {
-		log.InfoS("Mysql data directory exists in persistent mode. Will only execute vschema migrations during startup")
+		log.Info("Mysql data directory exists in persistent mode. Will only execute vschema migrations during startup")
 		if err := db.loadSchema(false); err != nil {
 			return err
 		}
@@ -467,9 +467,9 @@ func (db *LocalCluster) TearDown() error {
 	if err := db.mysql.TearDown(); err != nil {
 		errors = append(errors, fmt.Sprintf("mysql: %s", err))
 
-		log.ErrorS(fmt.Sprintf("failed to shutdown MySQL: %s", err))
+		log.Error(fmt.Sprintf("failed to shutdown MySQL: %s", err))
 		if err, ok := err.(*exec.ExitError); ok {
-			log.ErrorS(fmt.Sprintf("stderr: %s", err.Stderr))
+			log.Error(fmt.Sprintf("stderr: %s", err.Stderr))
 		}
 	}
 
@@ -509,7 +509,7 @@ func (db *LocalCluster) loadSchema(shouldRunDatabaseMigrations bool) error {
 		return nil
 	}
 
-	log.InfoS("Loading custom schema...")
+	log.Info("Loading custom schema...")
 
 	if !isDir(db.SchemaDir) {
 		return errors.New("LoadSchema(): SchemaDir does not exist")
@@ -578,7 +578,7 @@ func (db *LocalCluster) createVTSchema() error {
 }
 
 func (db *LocalCluster) createDatabases() error {
-	log.InfoS("Creating databases in cluster...")
+	log.Info("Creating databases in cluster...")
 
 	// The tablets created in vttest do not follow the same tablet init process, so we need to explicitly create
 	// the sidecar database tables
@@ -612,7 +612,7 @@ func (db *LocalCluster) Execute(sql []string, dbname string) error {
 	}
 
 	for _, cmd := range sql {
-		log.InfoS(fmt.Sprintf("Execute(%s): \"%s\"", dbname, cmd))
+		log.Info(fmt.Sprintf("Execute(%s): \"%s\"", dbname, cmd))
 		_, err := conn.ExecuteFetch(cmd, -1, false)
 		if err != nil {
 			return err
@@ -633,7 +633,7 @@ func (db *LocalCluster) ExecuteFetch(sql string, dbname string) (*sqltypes.Resul
 	}
 	defer conn.Close()
 
-	log.InfoS(fmt.Sprintf("ExecuteFetch(%s): \"%s\"", dbname, sql))
+	log.Info(fmt.Sprintf("ExecuteFetch(%s): \"%s\"", dbname, sql))
 	rs, err := conn.ExecuteFetch(sql, -1, true)
 	return rs, err
 }
@@ -686,7 +686,7 @@ func (db *LocalCluster) applyVschema(keyspace string, migration string) error {
 	args := []string{"ApplyVSchema", "--sql", migration, keyspace}
 	fmt.Printf("Applying vschema %v", args)
 	err := vtctlclient.RunCommandAndWait(context.Background(), server, args, func(e *logutil.Event) {
-		log.InfoS(fmt.Sprint(e))
+		log.Info(fmt.Sprint(e))
 	})
 
 	return err
@@ -695,10 +695,10 @@ func (db *LocalCluster) applyVschema(keyspace string, migration string) error {
 func (db *LocalCluster) reloadSchemaKeyspace(keyspace string) error {
 	server := fmt.Sprintf("localhost:%v", db.vt.PortGrpc)
 	args := []string{"ReloadSchemaKeyspace", "--include_primary=true", keyspace}
-	log.InfoS(fmt.Sprintf("Reloading keyspace schema %v", args))
+	log.Info(fmt.Sprintf("Reloading keyspace schema %v", args))
 
 	err := vtctlclient.RunCommandAndWait(context.Background(), server, args, func(e *logutil.Event) {
-		log.InfoS(fmt.Sprint(e))
+		log.Info(fmt.Sprint(e))
 	})
 
 	return err

@@ -66,7 +66,7 @@ func commandCat(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			hasError = true
 			if !catArgs.Force || err != zk.ErrNoNode {
-				log.WarnS(fmt.Sprintf("cat: cannot access %v: %v", zkPath, err))
+				log.Warn(fmt.Sprintf("cat: cannot access %v: %v", zkPath, err))
 			}
 			continue
 		}
@@ -78,7 +78,7 @@ func commandCat(cmd *cobra.Command, args []string) error {
 		if catArgs.DecodeProto {
 			decoded, err = topo.DecodeContent(zkPath, data, false)
 			if err != nil {
-				log.WarnS(fmt.Sprintf("cat: cannot proto decode %v: %v", zkPath, err))
+				log.Warn(fmt.Sprintf("cat: cannot proto decode %v: %v", zkPath, err))
 				decoded = string(data)
 			}
 		} else {

@@ -180,7 +180,7 @@ func (tpc *TwoPC) Open(dbconfigs *dbconfigs.DBConfigs) error {
 	defer conn.Close()
 	tpc.readPool.Open(dbconfigs.AppWithDB(), dbconfigs.DbaWithDB(), dbconfigs.DbaWithDB())
 	tpc.initializeQueries()
-	log.InfoS("TwoPC: Engine open succeeded")
+	log.Info("TwoPC: Engine open succeeded")
 	return nil
 }
 
@@ -272,14 +272,14 @@ func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared, failed []*tx.Prepa
 			}
 			st, err := row[1].ToCastInt64()
 			if err != nil {
-				log.ErrorS(fmt.Sprintf("Error parsing state for dtid %s: %v.", dtid, err))
+				log.Error(fmt.Sprintf("Error parsing state for dtid %s: %v.", dtid, err))
 			}
 			switch st {
 			case RedoStatePrepared:
 				prepared = append(prepared, curTx)
 			default:
 				if st != RedoStateFailed {
-					log.ErrorS(fmt.Sprintf("Unexpected state for dtid %s: %d. Treating it as a failure.", dtid, st))
+					log.Error(fmt.Sprintf("Unexpected state for dtid %s: %d. Treating it as a failure.", dtid, st))
 				}
 				failed = append(failed, curTx)
 			}
@@ -488,11 +488,11 @@ func (tpc *TwoPC) ReadAllTransactions(ctx context.Context) ([]*tx.DistributedTx,
 			// Just log on error and continue. The state will show up as UNKNOWN
 			// on the display.
 			if err != nil {
-				log.ErrorS(fmt.Sprintf("Error parsing state for dtid %s: %v.", dtid, err))
+				log.Error(fmt.Sprintf("Error parsing state for dtid %s: %v.", dtid, err))
 			}
 			protostate := querypb.TransactionState(st)
 			if protostate < DTStatePrepare || protostate > DTStateCommit {
-				log.ErrorS(fmt.Sprintf("Unexpected state for dtid %s: %v.", dtid, protostate))
+				log.Error(fmt.Sprintf("Unexpected state for dtid %s: %v.", dtid, protostate))
 			}
 			curTx = &tx.DistributedTx{
 				Dtid:    dtid,

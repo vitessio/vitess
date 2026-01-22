@@ -165,9 +165,9 @@ func (thc *tabletHealthCache) Get(ctx context.Context, tabletAlias *topodatapb.T
 		thc.tabletMap[tabletAliasStr] = th
 
 		go func() {
-			log.InfoS(fmt.Sprintf("starting health stream for tablet %v", tabletAlias))
+			log.Info(fmt.Sprintf("starting health stream for tablet %v", tabletAlias))
 			err := th.stream(context.Background(), thc.ts, tabletAlias)
-			log.InfoS(fmt.Sprintf("tablet %v health stream ended, error: %v", tabletAlias, err))
+			log.Info(fmt.Sprintf("tablet %v health stream ended, error: %v", tabletAlias, err))
 			thc.delete(tabletAliasStr)
 		}()
 	}

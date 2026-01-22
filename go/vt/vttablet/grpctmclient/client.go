@@ -1190,7 +1190,7 @@ func (client *Client) UpdateSequenceTables(ctx context.Context, tablet *topodata
 
 // VDiff is part of the tmclient.TabletManagerClient interface.
 func (client *Client) VDiff(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
-	log.InfoS(fmt.Sprintf("VDiff for tablet %s, request %+v", tablet.Alias.String(), req))
+	log.Info(fmt.Sprintf("VDiff for tablet %s, request %+v", tablet.Alias.String(), req))
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err

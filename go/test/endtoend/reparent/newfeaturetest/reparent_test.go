@@ -281,7 +281,7 @@ func TestSemiSyncBlockDueToDisruption(t *testing.T) {
 	// runCommandWithSudo(t, "pfctl", "-e")
 	runCommandWithSudo(t, "pfctl", "-f", "/etc/pf.conf")
 	rules := runCommandWithSudo(t, "pfctl", "-s", "rules")
-	log.ErrorS(fmt.Sprintf("Rules enforced - %v", rules))
+	log.Error(fmt.Sprintf("Rules enforced - %v", rules))
 
 	// Start a write that will be blocked by the primary waiting for semi-sync ACKs
 	ch := make(chan any)
@@ -304,7 +304,7 @@ func TestSemiSyncBlockDueToDisruption(t *testing.T) {
 			case <-time.After(1 * time.Second):
 				str, isPresent := tablets[0].VttabletProcess.GetVars()["SemiSyncMonitorWritesBlocked"]
 				if isPresent {
-					log.ErrorS(fmt.Sprintf("SemiSyncMonitorWritesBlocked - %v", str))
+					log.Error(fmt.Sprintf("SemiSyncMonitorWritesBlocked - %v", str))
 				}
 			}
 		}
@@ -322,7 +322,7 @@ func TestSemiSyncBlockDueToDisruption(t *testing.T) {
 	case <-time.After(30 * time.Second):
 		t.Errorf("Timed out waiting for semi-sync to be unblocked")
 	case <-ch:
-		log.ErrorS("Woohoo, write finished!")
+		log.Error("Woohoo, write finished!")
 	}
 }
 

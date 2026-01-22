@@ -85,7 +85,7 @@ func doRecover(err any, recoverAll bool) {
 		exitFunc(int(code))
 	default:
 		if recoverAll {
-			log.ErrorS(fmt.Sprintf("panic: %v", tb.Errorf("%v", err)))
+			log.Error(fmt.Sprintf("panic: %v", tb.Errorf("%v", err)))
 			exitFunc(255)
 		} else {
 			panic(err)

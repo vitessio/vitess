@@ -680,13 +680,13 @@ func testVStreamCellFlag(t *testing.T) {
 				switch err {
 				case nil:
 					if len(events) > 0 {
-						log.InfoS(fmt.Sprintf("received %d events", len(events)))
+						log.Info(fmt.Sprintf("received %d events", len(events)))
 						rowsReceived = true
 					}
 				case io.EOF:
-					log.InfoS("stream ended without data")
+					log.Info("stream ended without data")
 				default:
-					log.InfoS(fmt.Sprintf("%s:: remote error: %v", time.Now(), err))
+					log.Info(fmt.Sprintf("%s:: remote error: %v", time.Now(), err))
 				}
 			}()
 			wg.Wait()
@@ -792,11 +792,11 @@ func testVStreamFrom(t *testing.T, vtgate *cluster.VtgateProcess, table string, 
 
 		gotRows, err := streamConn.FetchNext(nil)
 		require.NoError(t, err)
-		log.InfoS(fmt.Sprintf("QR1:%v\n", gotRows))
+		log.Info(fmt.Sprintf("QR1:%v\n", gotRows))
 
 		gotRows, err = streamConn.FetchNext(nil)
 		require.NoError(t, err)
-		log.InfoS(fmt.Sprintf("QR2:%+v\n", gotRows))
+		log.Info(fmt.Sprintf("QR2:%+v\n", gotRows))
 
 		ch <- true
 	}()
@@ -1183,11 +1183,11 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 		for _, tab := range tablets {
 			if strings.Contains(targetShards, ","+tab.Shard+",") {
 				targetTablets = append(targetTablets, tab)
-				log.InfoS(fmt.Sprintf("Waiting for vrepl to catch up on %s since it IS a target shard", tab.Shard))
+				log.Info(fmt.Sprintf("Waiting for vrepl to catch up on %s since it IS a target shard", tab.Shard))
 				catchup(t, tab, workflow, "Reshard")
 			} else {
 				sourceTablets = append(sourceTablets, tab)
-				log.InfoS(fmt.Sprintf("Not waiting for vrepl to catch up on %s since it is NOT a target shard", tab.Shard))
+				log.Info(fmt.Sprintf("Not waiting for vrepl to catch up on %s since it is NOT a target shard", tab.Shard))
 				continue
 			}
 		}
@@ -1569,10 +1569,10 @@ func waitForLowLag(t *testing.T, keyspace, workflow string) {
 
 		require.NoError(t, err)
 		if lagSeconds <= acceptableLagSeconds {
-			log.InfoS(fmt.Sprintf("waitForLowLag acceptable for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds))
+			log.Info(fmt.Sprintf("waitForLowLag acceptable for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds))
 			break
 		} else {
-			log.InfoS(fmt.Sprintf("waitForLowLag too high for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds))
+			log.Info(fmt.Sprintf("waitForLowLag too high for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds))
 		}
 		time.Sleep(waitDuration)
 		duration -= waitDuration
@@ -1657,7 +1657,7 @@ func reshardAction(t *testing.T, action, workflow, keyspaceName, sourceShards, t
 	args = append(args, extraFlags...)
 	output, err := vc.VtctldClient.ExecuteCommandWithOutput(args...)
 	if output != "" {
-		log.InfoS(fmt.Sprintf("Output of vtctldclient Reshard %s for %s workflow:\n++++++\n%s\n--------\n", action, workflow, output))
+		log.Info(fmt.Sprintf("Output of vtctldclient Reshard %s for %s workflow:\n++++++\n%s\n--------\n", action, workflow, output))
 	}
 	if err != nil {
 		t.Fatalf("Reshard %s command failed with %+v\nOutput: %s", action, err, output)
@@ -1778,7 +1778,7 @@ func testSwitchTrafficPermissionChecks(t *testing.T, workflowType, sourceKeyspac
 	applyPrivileges := func(query string) {
 		for _, shard := range sourceShards {
 			primary := vc.getPrimaryTablet(t, sourceKeyspace, shard)
-			log.InfoS(fmt.Sprintf("Running permission query on %s: %s", primary.Name, query))
+			log.Info(fmt.Sprintf("Running permission query on %s: %s", primary.Name, query))
 			_, err := primary.QueryTablet(query, primary.Keyspace, false)
 			require.NoError(t, err)
 		}
@@ -1989,7 +1989,7 @@ func printSwitchWritesExtraDebug(t *testing.T, ksWorkflow, msg string) {
 	// Temporary code: print lots of info for debugging occasional flaky failures in customer reshard in CI for multicell test
 	debug := true
 	if debug {
-		log.InfoS(fmt.Sprintf("------------------- START Extra debug info %s Switch writes %s", msg, ksWorkflow))
+		log.Info(fmt.Sprintf("------------------- START Extra debug info %s Switch writes %s", msg, ksWorkflow))
 		ksShards := []string{defaultSourceKs + "/0", defaultTargetKs + "/-80", defaultTargetKs + "/80-"}
 		printShardPositions(vc, ksShards)
 		defaultCell := vc.Cells[vc.CellNames[0]]
@@ -2008,10 +2008,10 @@ func printSwitchWritesExtraDebug(t *testing.T, ksWorkflow, msg string) {
 			for _, query := range queries {
 				qr, err := tab.QueryTablet(query, "", false)
 				require.NoError(t, err)
-				log.InfoS(fmt.Sprintf("\nTablet:%s.%s.%s.%d\nQuery: %s\n%+v\n", tab.Cell, tab.Keyspace, tab.Shard, tab.TabletUID, query, qr.Rows))
+				log.Info(fmt.Sprintf("\nTablet:%s.%s.%s.%d\nQuery: %s\n%+v\n", tab.Cell, tab.Keyspace, tab.Shard, tab.TabletUID, query, qr.Rows))
 			}
 		}
-		log.InfoS(fmt.Sprintf("------------------- END Extra debug info %s SwitchWrites %s", msg, ksWorkflow))
+		log.Info(fmt.Sprintf("------------------- END Extra debug info %s SwitchWrites %s", msg, ksWorkflow))
 	}
 }
 

@@ -139,7 +139,7 @@ func populateListeningURL(port int32) {
 	if err != nil {
 		host, err = os.Hostname()
 		if err != nil {
-			log.ErrorS(fmt.Sprintf("os.Hostname() failed: %v", err))
+			log.Error(fmt.Sprintf("os.Hostname() failed: %v", err))
 			os.Exit(1)
 		}
 	}
@@ -194,7 +194,7 @@ func fireOnCloseHooks(timeout time.Duration) bool {
 // fireHooksWithTimeout returns true iff all the hooks finish before the timeout.
 func fireHooksWithTimeout(timeout time.Duration, name string, hookFn func()) bool {
 	defer log.Flush()
-	log.InfoS(fmt.Sprintf("Firing %s hooks and waiting up to %v for them", name, timeout))
+	log.Info(fmt.Sprintf("Firing %s hooks and waiting up to %v for them", name, timeout))
 
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
@@ -207,10 +207,10 @@ func fireHooksWithTimeout(timeout time.Duration, name string, hookFn func()) boo
 
 	select {
 	case <-done:
-		log.InfoS(name + " hooks finished")
+		log.Info(name + " hooks finished")
 		return true
 	case <-timer.C:
-		log.InfoS(name + " hooks timed out")
+		log.Info(name + " hooks timed out")
 		return false
 	}
 }
@@ -308,7 +308,7 @@ func ParseFlags(cmd string) {
 	_flag.Parse(fs)
 
 	if err := log.Init(fs); err != nil {
-		log.ErrorS(fmt.Sprintf("log.Init failed: %v", err))
+		log.Error(fmt.Sprintf("log.Init failed: %v", err))
 		os.Exit(1)
 	}
 
@@ -320,7 +320,7 @@ func ParseFlags(cmd string) {
 	args := fs.Args()
 	if len(args) > 0 {
 		_flag.Usage()
-		log.ErrorS(fmt.Sprintf("%s doesn't take any positional arguments, got '%s'", cmd, strings.Join(args, " ")))
+		log.Error(fmt.Sprintf("%s doesn't take any positional arguments, got '%s'", cmd, strings.Join(args, " ")))
 		os.Exit(1)
 	}
 
@@ -339,7 +339,7 @@ func ParseFlagsForTests(cmd string) {
 	viperutil.BindFlags(fs)
 
 	if err := log.Init(fs); err != nil {
-		log.ErrorS(fmt.Sprintf("log.Init failed: %v", err))
+		log.Error(fmt.Sprintf("log.Init failed: %v", err))
 		os.Exit(1)
 	}
 	loadViper(cmd)
@@ -391,7 +391,7 @@ func CobraPreRunE(cmd *cobra.Command, args []string) error {
 	viperutil.NotifyConfigReload(ch)
 	go func() {
 		for range ch {
-			log.InfoS(fmt.Sprintf("Change in configuration - %v", viperdebug.AllSettings()))
+			log.Info(fmt.Sprintf("Change in configuration - %v", viperdebug.AllSettings()))
 		}
 	}()
 
@@ -432,7 +432,7 @@ func ParseFlagsWithArgs(cmd string) []string {
 	_flag.Parse(fs)
 
 	if err := log.Init(fs); err != nil {
-		log.ErrorS(fmt.Sprintf("log.Init failed: %v", err))
+		log.Error(fmt.Sprintf("log.Init failed: %v", err))
 		os.Exit(1)
 	}
 
@@ -443,7 +443,7 @@ func ParseFlagsWithArgs(cmd string) []string {
 
 	args := fs.Args()
 	if len(args) == 0 {
-		log.ErrorS(cmd + " expected at least one positional argument")
+		log.Error(cmd + " expected at least one positional argument")
 		os.Exit(1)
 	}
 
@@ -457,7 +457,7 @@ func ParseFlagsWithArgs(cmd string) []string {
 func loadViper(cmd string) {
 	watchCancel, err := viperutil.LoadConfig()
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("%s: failed to read in config: %s", cmd, err.Error()))
+		log.Error(fmt.Sprintf("%s: failed to read in config: %s", cmd, err.Error()))
 		os.Exit(1)
 	}
 	OnTerm(watchCancel)

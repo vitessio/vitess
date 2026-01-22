@@ -381,7 +381,7 @@ func (txc *TxConn) errActionAndLogWarn(
 		commitUnresolved.Add(1)
 	}
 	if rollbackErr != nil {
-		log.WarnS(fmt.Sprintf("Rollback failed after %s failure: %v", phaseMessage[txPhase], rollbackErr))
+		log.Warn(fmt.Sprintf("Rollback failed after %s failure: %v", phaseMessage[txPhase], rollbackErr))
 		commitUnresolved.Add(1)
 	}
 
@@ -531,11 +531,11 @@ func (txc *TxConn) ResolveTransactions(ctx context.Context, target *querypb.Targ
 
 	failedResolution := 0
 	for _, txRecord := range transactions {
-		log.InfoS("Resolving transaction ID: " + txRecord.Dtid)
+		log.Info("Resolving transaction ID: " + txRecord.Dtid)
 		err = txc.resolveTx(ctx, target, txRecord)
 		if err != nil {
 			failedResolution++
-			log.ErrorS(fmt.Sprintf("Failed to resolve transaction ID: %s with error: %v", txRecord.Dtid, err))
+			log.Error(fmt.Sprintf("Failed to resolve transaction ID: %s with error: %v", txRecord.Dtid, err))
 		}
 	}
 	if failedResolution == 0 {

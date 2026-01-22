@@ -49,15 +49,15 @@ func Init() {
 		signal.Notify(sigChan, syscall.SIGPIPE)
 		go func() {
 			<-sigChan
-			log.WarnS("Caught SIGPIPE (ignoring all future SIGPIPEs)")
+			log.Warn("Caught SIGPIPE (ignoring all future SIGPIPEs)")
 			signal.Ignore(syscall.SIGPIPE)
 		}()
 	}
 
 	// Add version tag to every info log
-	log.InfoS(AppVersion.String())
+	log.Info(AppVersion.String())
 	if inited {
-		log.ErrorS("servenv.Init called second time")
+		log.Error("servenv.Init called second time")
 		os.Exit(1)
 	}
 	inited = true
@@ -65,7 +65,7 @@ func Init() {
 	// Once you run as root, you pretty much destroy the chances of a
 	// non-privileged user starting the program correctly.
 	if uid := os.Getuid(); uid == 0 {
-		log.ErrorS("servenv.Init: running this as root makes no sense")
+		log.Error("servenv.Init: running this as root makes no sense")
 		os.Exit(1)
 	}
 
@@ -76,7 +76,7 @@ func Init() {
 	// the server.
 	fdLimit := &syscall.Rlimit{}
 	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, fdLimit); err != nil {
-		log.ErrorS(fmt.Sprintf("max-open-fds failed: %v", err))
+		log.Error(fmt.Sprintf("max-open-fds failed: %v", err))
 	}
 	fdl := stats.NewGauge("MaxFds", "File descriptor limit")
 	fdl.Set(int64(fdLimit.Cur))

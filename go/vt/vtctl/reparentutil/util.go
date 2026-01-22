@@ -262,7 +262,7 @@ func ShardReplicationStatuses(ctx context.Context, ts *topo.Server, tmc tmclient
 	}
 	tablets := maps.Values(tabletMap)
 
-	log.InfoS(fmt.Sprintf("Gathering tablet replication status for: %v", tablets))
+	log.Info(fmt.Sprintf("Gathering tablet replication status for: %v", tablets))
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 	result := make([]*replicationdatapb.Status, len(tablets))

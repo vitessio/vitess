@@ -57,7 +57,7 @@ func FindAllTargetsAndKeyspaces(ctx context.Context, ts Server, cell string, key
 				if topo.IsErrType(err, topo.NoNode) {
 					// Possibly a race condition, or leftover
 					// crud in the topology service. Just log it.
-					log.WarnS(fmt.Sprintf("GetSrvKeyspace(%v, %v) returned ErrNoNode, skipping that SrvKeyspace", cell, keyspace))
+					log.Warn(fmt.Sprintf("GetSrvKeyspace(%v, %v) returned ErrNoNode, skipping that SrvKeyspace", cell, keyspace))
 				} else {
 					// More serious error, abort.
 					errRecorder.RecordError(err)

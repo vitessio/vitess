@@ -50,15 +50,15 @@ type logFunc func(int, string)
 
 var (
 	infoDepth = func(depth int, msg string) {
-		log.InfoSDepth(depth, msg)
+		log.InfoDepth(depth, msg)
 	}
 
 	warningDepth = func(depth int, msg string) {
-		log.WarnSDepth(depth, msg)
+		log.WarnDepth(depth, msg)
 	}
 
 	errorDepth = func(depth int, msg string) {
-		log.ErrorSDepth(depth, msg)
+		log.ErrorDepth(depth, msg)
 	}
 )
 

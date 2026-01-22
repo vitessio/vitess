@@ -82,7 +82,7 @@ type ResilientServer struct {
 // based on the provided topo.Server.
 func NewResilientServer(ctx context.Context, base *topo.Server, counts *stats.CountersWithSingleLabel) *ResilientServer {
 	if srvTopoCacheRefresh > srvTopoCacheTTL {
-		log.ErrorS("srv-topo-cache-refresh must be less than or equal to srv-topo-cache-ttl")
+		log.Error("srv-topo-cache-refresh must be less than or equal to srv-topo-cache-ttl")
 		os.Exit(1)
 	}
 

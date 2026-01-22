@@ -186,7 +186,7 @@ func commandInitShardPrimary(cmd *cobra.Command, args []string) error {
 	}
 
 	for _, event := range resp.Events {
-		log.InfoS(fmt.Sprintf("%v", event))
+		log.Info(fmt.Sprintf("%v", event))
 	}
 
 	return err

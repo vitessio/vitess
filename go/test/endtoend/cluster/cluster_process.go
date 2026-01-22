@@ -244,38 +244,38 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 	cluster.TmpDirectory = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/tmp_%d", cluster.GetAndReservePort()))
 	cluster.TopoProcess = *TopoProcessInstance(cluster.TopoPort, cluster.GetAndReservePort(), cluster.Hostname, *topoFlavor, "global")
 
-	log.InfoS(fmt.Sprintf("Starting topo server %v on port: %d", *topoFlavor, cluster.TopoPort))
+	log.Info(fmt.Sprintf("Starting topo server %v on port: %d", *topoFlavor, cluster.TopoPort))
 	if err = cluster.TopoProcess.Setup(*topoFlavor, cluster); err != nil {
-		log.ErrorS(err.Error())
+		log.Error(err.Error())
 		return
 	}
 
 	if *topoFlavor == "etcd2" {
-		log.InfoS("Creating global and cell topo dirs")
+		log.Info("Creating global and cell topo dirs")
 		if err = cluster.TopoProcess.ManageTopoDir("mkdir", "/vitess/global"); err != nil {
-			log.ErrorS(err.Error())
+			log.Error(err.Error())
 			return
 		}
 
 		if err = cluster.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+cluster.Cell); err != nil {
-			log.ErrorS(err.Error())
+			log.Error(err.Error())
 			return
 		}
 	}
 
 	cluster.VtctldProcess = *VtctldProcessInstance(cluster.GetAndReservePort(), cluster.GetAndReservePort(),
 		cluster.TopoProcess.Port, cluster.Hostname, cluster.TmpDirectory)
-	log.InfoS(fmt.Sprintf("Starting vtctld server on port: %d", cluster.VtctldProcess.Port))
+	log.Info(fmt.Sprintf("Starting vtctld server on port: %d", cluster.VtctldProcess.Port))
 	cluster.VtctldHTTPPort = cluster.VtctldProcess.Port
 	if err = cluster.VtctldProcess.Setup(cluster.Cell, cluster.VtctldExtraArgs...); err != nil {
-		log.ErrorS(err.Error())
+		log.Error(err.Error())
 		return
 	}
 
 	cluster.VtctldClientProcess = *cluster.NewVtctldClientProcessInstance("localhost", cluster.VtctldProcess.GrpcPort, cluster.TmpDirectory)
 	if !cluster.ReusingVTDATAROOT {
 		if err = cluster.VtctldClientProcess.AddCellInfo(cluster.Cell); err != nil {
-			log.ErrorS(fmt.Sprint(err))
+			log.Error(fmt.Sprint(err))
 			return
 		}
 		cluster.VtctldClientProcess.LogDir = cluster.TmpDirectory
@@ -290,7 +290,7 @@ func (cluster *LocalProcessCluster) StartVTOrc(cell, keyspace string) error {
 	vtorcProcess := cluster.NewVTOrcProcess(VTOrcConfiguration{}, cell)
 	err := vtorcProcess.Setup()
 	if err != nil {
-		log.ErrorS(err.Error())
+		log.Error(err.Error())
 		return err
 	}
 	if keyspace != "" {
@@ -394,7 +394,7 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 		totalTabletsRequired = totalTabletsRequired + 1 // + 1 for rdonly
 	}
 
-	log.InfoS(fmt.Sprintf("Starting keyspace: %v", keyspace.Name))
+	log.Info(fmt.Sprintf("Starting keyspace: %v", keyspace.Name))
 	if keyspace.SidecarDBName == "" {
 		keyspace.SidecarDBName = sidecar.DefaultName
 	}
@@ -421,7 +421,7 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 		// Apply Schema SQL
 		if keyspace.SchemaSQL != "" {
 			if err = cluster.VtctldClientProcess.ApplySchema(keyspace.Name, keyspace.SchemaSQL); err != nil {
-				log.ErrorS(fmt.Sprintf("error applying schema: %v, %v", keyspace.SchemaSQL, err))
+				log.Error(fmt.Sprintf("error applying schema: %v, %v", keyspace.SchemaSQL, err))
 				return
 			}
 		}
@@ -429,16 +429,16 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 		// Apply VSchema
 		if keyspace.VSchema != "" {
 			if err = cluster.VtctldClientProcess.ApplyVSchema(keyspace.Name, keyspace.VSchema); err != nil {
-				log.ErrorS(fmt.Sprintf("error applying vschema: %v, %v", keyspace.VSchema, err))
+				log.Error(fmt.Sprintf("error applying vschema: %v, %v", keyspace.VSchema, err))
 				return
 			}
 		}
 
-		log.InfoS(fmt.Sprintf("Done creating keyspace: %v ", keyspace.Name))
+		log.Info(fmt.Sprintf("Done creating keyspace: %v ", keyspace.Name))
 
 		err = cluster.StartVTOrc(vtorcCell, keyspace.Name)
 		if err != nil {
-			log.ErrorS(fmt.Sprintf("Error starting VTOrc - %v", err))
+			log.Error(fmt.Sprintf("Error starting VTOrc - %v", err))
 			return err
 		}
 	}
@@ -450,7 +450,7 @@ func (cluster *LocalProcessCluster) AddShard(keyspaceName string, shardName stri
 	shard := &Shard{
 		Name: shardName,
 	}
-	log.InfoS(fmt.Sprintf("Starting shard: %v", shardName))
+	log.Info(fmt.Sprintf("Starting shard: %v", shardName))
 	var mysqlctlProcessList []*exec.Cmd
 	for i := 0; i < totalTabletsRequired; i++ {
 		// instantiate vttablet object with reserved ports
@@ -470,7 +470,7 @@ func (cluster *LocalProcessCluster) AddShard(keyspaceName string, shardName stri
 			tablet.Type = "rdonly"
 		}
 		// Start Mysqlctl process
-		log.InfoS(fmt.Sprintf("Starting mysqlctl for table uid %d, mysql port %d", tablet.TabletUID, tablet.MySQLPort))
+		log.Info(fmt.Sprintf("Starting mysqlctl for table uid %d, mysql port %d", tablet.TabletUID, tablet.MySQLPort))
 		mysqlctlProcess, err := MysqlCtlProcessInstanceOptionalInit(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory, !cluster.ReusingVTDATAROOT)
 		if err != nil {
 			return nil, err
@@ -484,7 +484,7 @@ func (cluster *LocalProcessCluster) AddShard(keyspaceName string, shardName stri
 		tablet.MysqlctlProcess = *mysqlctlProcess
 		proc, err := tablet.MysqlctlProcess.StartProcess()
 		if err != nil {
-			log.ErrorS(fmt.Sprintf("error starting mysqlctl process: %v, %v", tablet.MysqlctldProcess, err))
+			log.Error(fmt.Sprintf("error starting mysqlctl process: %v, %v", tablet.MysqlctldProcess, err))
 			return nil, err
 		}
 		mysqlctlProcessList = append(mysqlctlProcessList, proc)
@@ -528,22 +528,22 @@ func (cluster *LocalProcessCluster) AddShard(keyspaceName string, shardName stri
 	// wait till all mysqlctl is instantiated
 	for _, proc := range mysqlctlProcessList {
 		if err := proc.Wait(); err != nil {
-			log.ErrorS(fmt.Sprintf("unable to start mysql process %v: %v", proc, err))
+			log.Error(fmt.Sprintf("unable to start mysql process %v: %v", proc, err))
 			return nil, err
 		}
 	}
 	for _, tablet := range shard.Vttablets {
-		log.InfoS(fmt.Sprintf("Starting vttablet for tablet uid %d, grpc port %d", tablet.TabletUID, tablet.GrpcPort))
+		log.Info(fmt.Sprintf("Starting vttablet for tablet uid %d, grpc port %d", tablet.TabletUID, tablet.GrpcPort))
 
 		if err := tablet.VttabletProcess.Setup(); err != nil {
-			log.ErrorS(fmt.Sprintf("error starting vttablet for tablet uid %d, grpc port %d: %v", tablet.TabletUID, tablet.GrpcPort, err))
+			log.Error(fmt.Sprintf("error starting vttablet for tablet uid %d, grpc port %d: %v", tablet.TabletUID, tablet.GrpcPort, err))
 			return nil, err
 		}
 	}
 
 	// Make first tablet as primary
 	if err := cluster.VtctldClientProcess.InitializeShard(keyspaceName, shardName, cluster.Cell, shard.Vttablets[0].TabletUID); err != nil {
-		log.ErrorS(fmt.Sprintf("error running InitializeShard on keyspace %v, shard %v: %v", keyspaceName, shardName, err))
+		log.Error(fmt.Sprintf("error running InitializeShard on keyspace %v, shard %v: %v", keyspaceName, shardName, err))
 		return nil, err
 	}
 	return shard, nil
@@ -567,7 +567,7 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 		totalTabletsRequired = totalTabletsRequired + 1 // + 1 for rdonly
 	}
 
-	log.InfoS(fmt.Sprintf("Starting keyspace: %v", keyspace.Name))
+	log.Info(fmt.Sprintf("Starting keyspace: %v", keyspace.Name))
 	if keyspace.SidecarDBName == "" {
 		keyspace.SidecarDBName = sidecar.DefaultName
 	}
@@ -578,7 +578,7 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 		shard := &Shard{
 			Name: shardName,
 		}
-		log.InfoS(fmt.Sprintf("Starting shard: %v", shardName))
+		log.Info(fmt.Sprintf("Starting shard: %v", shardName))
 		mysqlctlProcessList = []*exec.Cmd{}
 		for i := 0; i < totalTabletsRequired; i++ {
 			// instantiate vttablet object with reserved ports
@@ -597,7 +597,7 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 				tablet.Type = "rdonly"
 			}
 			// Start Mysqlctl process
-			log.InfoS(fmt.Sprintf("Starting mysqlctl for table uid %d, mysql port %d", tablet.TabletUID, tablet.MySQLPort))
+			log.Info(fmt.Sprintf("Starting mysqlctl for table uid %d, mysql port %d", tablet.TabletUID, tablet.MySQLPort))
 			mysqlctlProcess, err := MysqlCtlProcessInstanceOptionalInit(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory, !cluster.ReusingVTDATAROOT)
 			if err != nil {
 				return err
@@ -605,7 +605,7 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 			tablet.MysqlctlProcess = *mysqlctlProcess
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			if err != nil {
-				log.ErrorS(fmt.Sprintf("error starting mysqlctl process: %v, %v", tablet.MysqlctldProcess, err))
+				log.Error(fmt.Sprintf("error starting mysqlctl process: %v, %v", tablet.MysqlctldProcess, err))
 				return err
 			}
 			mysqlctlProcessList = append(mysqlctlProcessList, proc)
@@ -643,29 +643,29 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 		// wait till all mysqlctl is instantiated
 		for _, proc := range mysqlctlProcessList {
 			if err = proc.Wait(); err != nil {
-				log.ErrorS(fmt.Sprintf("unable to start mysql process %v: %v", proc, err))
+				log.Error(fmt.Sprintf("unable to start mysql process %v: %v", proc, err))
 				return err
 			}
 		}
 		for _, tablet := range shard.Vttablets {
 			if !cluster.ReusingVTDATAROOT {
 				if _, err = tablet.VttabletProcess.QueryTablet("create database vt_"+keyspace.Name, keyspace.Name, false); err != nil {
-					log.ErrorS(fmt.Sprintf("error creating database for keyspace %v: %v", keyspace.Name, err))
+					log.Error(fmt.Sprintf("error creating database for keyspace %v: %v", keyspace.Name, err))
 					return
 				}
 			}
 
-			log.InfoS(fmt.Sprintf("Starting vttablet for tablet uid %d, grpc port %d", tablet.TabletUID, tablet.GrpcPort))
+			log.Info(fmt.Sprintf("Starting vttablet for tablet uid %d, grpc port %d", tablet.TabletUID, tablet.GrpcPort))
 
 			if err = tablet.VttabletProcess.Setup(); err != nil {
-				log.ErrorS(fmt.Sprintf("error starting vttablet for tablet uid %d, grpc port %d: %v", tablet.TabletUID, tablet.GrpcPort, err))
+				log.Error(fmt.Sprintf("error starting vttablet for tablet uid %d, grpc port %d: %v", tablet.TabletUID, tablet.GrpcPort, err))
 				return
 			}
 		}
 
 		// Make first tablet as primary
 		if err = cluster.VtctldClientProcess.InitShardPrimary(keyspace.Name, shardName, cluster.Cell, shard.Vttablets[0].TabletUID); err != nil {
-			log.ErrorS(fmt.Sprintf("error running ISM on keyspace %v, shard %v: %v", keyspace.Name, shardName, err))
+			log.Error(fmt.Sprintf("error running ISM on keyspace %v, shard %v: %v", keyspace.Name, shardName, err))
 			return
 		}
 		keyspace.Shards = append(keyspace.Shards, *shard)
@@ -685,7 +685,7 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 	// Apply Schema SQL
 	if keyspace.SchemaSQL != "" {
 		if err = cluster.VtctldClientProcess.ApplySchema(keyspace.Name, keyspace.SchemaSQL); err != nil {
-			log.ErrorS(fmt.Sprintf("error applying schema: %v, %v", keyspace.SchemaSQL, err))
+			log.Error(fmt.Sprintf("error applying schema: %v, %v", keyspace.SchemaSQL, err))
 			return
 		}
 	}
@@ -693,12 +693,12 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 	// Apply VSchema
 	if keyspace.VSchema != "" {
 		if err = cluster.VtctldClientProcess.ApplyVSchema(keyspace.Name, keyspace.VSchema); err != nil {
-			log.ErrorS(fmt.Sprintf("error applying vschema: %v, %v", keyspace.VSchema, err))
+			log.Error(fmt.Sprintf("error applying vschema: %v, %v", keyspace.VSchema, err))
 			return
 		}
 	}
 
-	log.InfoS(fmt.Sprintf("Done creating keyspace: %v ", keyspace.Name))
+	log.Info(fmt.Sprintf("Done creating keyspace: %v ", keyspace.Name))
 	return
 }
 
@@ -707,7 +707,7 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 // This does not start any process and user have to explicitly start all
 // the required services (ex topo, vtgate, mysql and vttablet)
 func (cluster *LocalProcessCluster) SetupCluster(keyspace *Keyspace, shards []Shard) (err error) {
-	log.InfoS(fmt.Sprintf("Starting keyspace: %v", keyspace.Name))
+	log.Info(fmt.Sprintf("Starting keyspace: %v", keyspace.Name))
 
 	if keyspace.SidecarDBName == "" {
 		keyspace.SidecarDBName = sidecar.DefaultName
@@ -717,7 +717,7 @@ func (cluster *LocalProcessCluster) SetupCluster(keyspace *Keyspace, shards []Sh
 		// Create Keyspace
 		err = cluster.VtctldClientProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName, keyspace.DurabilityPolicy)
 		if err != nil {
-			log.ErrorS(fmt.Sprint(err))
+			log.Error(fmt.Sprint(err))
 			return
 		}
 	}
@@ -763,7 +763,7 @@ func (cluster *LocalProcessCluster) SetupCluster(keyspace *Keyspace, shards []Sh
 		cluster.Keyspaces = append(cluster.Keyspaces, *keyspace)
 	}
 
-	log.InfoS(fmt.Sprintf("Done launching keyspace: %v", keyspace.Name))
+	log.Info(fmt.Sprintf("Done launching keyspace: %v", keyspace.Name))
 	return err
 }
 
@@ -774,8 +774,8 @@ func (cluster *LocalProcessCluster) StartVtgate() (err error) {
 	}
 	vtgateInstance := *cluster.NewVtgateInstance()
 	cluster.VtgateProcess = vtgateInstance
-	log.InfoS(fmt.Sprintf("Starting vtgate on port %d", vtgateInstance.Port))
-	log.InfoS(fmt.Sprintf("Vtgate started, connect to mysql using : mysql -h 127.0.0.1 -P %d", cluster.VtgateMySQLPort))
+	log.Info(fmt.Sprintf("Starting vtgate on port %d", vtgateInstance.Port))
+	log.Info(fmt.Sprintf("Vtgate started, connect to mysql using : mysql -h 127.0.0.1 -P %d", cluster.VtgateMySQLPort))
 	return cluster.VtgateProcess.Setup()
 }
 
@@ -816,12 +816,12 @@ func NewBareCluster(cell string, hostname string) *LocalProcessCluster {
 	} else {
 		err = createDirectory(cluster.CurrentVTDATAROOT, 0o700)
 		if err != nil {
-			log.ErrorS(fmt.Sprint(err))
+			log.Error(fmt.Sprint(err))
 			os.Exit(1)
 		}
 	}
 	_ = os.Setenv("VTDATAROOT", cluster.CurrentVTDATAROOT)
-	log.InfoS(fmt.Sprintf("Created cluster on %s. ReusingVTDATAROOT=%v", cluster.CurrentVTDATAROOT, cluster.ReusingVTDATAROOT))
+	log.Info(fmt.Sprintf("Created cluster on %s. ReusingVTDATAROOT=%v", cluster.CurrentVTDATAROOT, cluster.ReusingVTDATAROOT))
 
 	return cluster
 }
@@ -832,7 +832,7 @@ func NewCluster(cell string, hostname string) *LocalProcessCluster {
 
 	err := cluster.populateVersionInfo()
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("Error populating version information - %v", err))
+		log.Error(fmt.Sprintf("Error populating version information - %v", err))
 	}
 	return cluster
 }
@@ -871,12 +871,12 @@ func GetMajorVersion(binaryName string) (int, error) {
 func (cluster *LocalProcessCluster) RestartVtgate() (err error) {
 	err = cluster.VtgateProcess.TearDown()
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("error stopping vtgate %v: %v", cluster.VtgateProcess, err))
+		log.Error(fmt.Sprintf("error stopping vtgate %v: %v", cluster.VtgateProcess, err))
 		return
 	}
 	err = cluster.StartVtgate()
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("error starting vtgate %v: %v", cluster.VtgateProcess, err))
+		log.Error(fmt.Sprintf("error starting vtgate %v: %v", cluster.VtgateProcess, err))
 		return
 	}
 	return err
@@ -1070,17 +1070,17 @@ func (cluster *LocalProcessCluster) Teardown() {
 		cluster.CancelFunc()
 	}
 	if err := cluster.VtgateProcess.TearDown(); err != nil {
-		log.ErrorS(fmt.Sprintf("Error in vtgate teardown: %v", err))
+		log.Error(fmt.Sprintf("Error in vtgate teardown: %v", err))
 	}
 
 	for _, vtorcProcess := range cluster.VTOrcProcesses {
 		if err := vtorcProcess.TearDown(); err != nil {
-			log.ErrorS(fmt.Sprintf("Error in vtorc teardown: %v", err))
+			log.Error(fmt.Sprintf("Error in vtorc teardown: %v", err))
 		}
 	}
 
 	if err := cluster.VtadminProcess.TearDown(); err != nil {
-		log.ErrorS(fmt.Sprintf("Error in vtadmin teardown: %v", err))
+		log.Error(fmt.Sprintf("Error in vtadmin teardown: %v", err))
 	}
 
 	var mysqlctlProcessList []*exec.Cmd
@@ -1090,7 +1090,7 @@ func (cluster *LocalProcessCluster) Teardown() {
 			for _, tablet := range shard.Vttablets {
 				if tablet.MysqlctlProcess.TabletUID > 0 {
 					if proc, err := tablet.MysqlctlProcess.StopProcess(); err != nil {
-						log.ErrorS(fmt.Sprintf("Error in mysqlctl teardown: %v", err))
+						log.Error(fmt.Sprintf("Error in mysqlctl teardown: %v", err))
 					} else {
 						mysqlctlProcessList = append(mysqlctlProcessList, proc)
 						mysqlctlTabletUIDs = append(mysqlctlTabletUIDs, tablet.MysqlctlProcess.TabletUID)
@@ -1098,12 +1098,12 @@ func (cluster *LocalProcessCluster) Teardown() {
 				}
 				if tablet.MysqlctldProcess.TabletUID > 0 {
 					if err := tablet.MysqlctldProcess.Stop(); err != nil {
-						log.ErrorS(fmt.Sprintf("Error in mysqlctl teardown: %v", err))
+						log.Error(fmt.Sprintf("Error in mysqlctl teardown: %v", err))
 					}
 				}
 
 				if err := tablet.VttabletProcess.TearDown(); err != nil {
-					log.ErrorS(fmt.Sprintf("Error in vttablet teardown: %v", err))
+					log.Error(fmt.Sprintf("Error in vttablet teardown: %v", err))
 				}
 			}
 		}
@@ -1116,11 +1116,11 @@ func (cluster *LocalProcessCluster) Teardown() {
 	cluster.waitForMySQLProcessToExit(mysqlctlProcessList, mysqlctlTabletUIDs)
 
 	if err := cluster.VtctldProcess.TearDown(); err != nil {
-		log.ErrorS(fmt.Sprintf("Error in vtctld teardown: %v", err))
+		log.Error(fmt.Sprintf("Error in vtctld teardown: %v", err))
 	}
 
 	if err := cluster.TopoProcess.TearDown(cluster.Cell, cluster.OriginalVTDATAROOT, cluster.CurrentVTDATAROOT, *keepData, *topoFlavor); err != nil {
-		log.ErrorS(fmt.Sprintf("Error in topo server teardown: %v", err))
+		log.Error(fmt.Sprintf("Error in topo server teardown: %v", err))
 	}
 
 	// reset the VTDATAROOT path.
@@ -1148,7 +1148,7 @@ func (cluster *LocalProcessCluster) waitForMySQLProcessToExit(mysqlctlProcessLis
 				if err == nil {
 					return
 				}
-				log.ErrorS(fmt.Sprintf("Error in mysqlctl teardown wait: %v", err))
+				log.Error(fmt.Sprintf("Error in mysqlctl teardown wait: %v", err))
 				break
 			}
 			pidFile := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.pid", tabletUID))
@@ -1160,12 +1160,12 @@ func (cluster *LocalProcessCluster) waitForMySQLProcessToExit(mysqlctlProcessLis
 			}
 			pid, err := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
 			if err != nil {
-				log.ErrorS(fmt.Sprintf("Error in conversion to integer: %v", err))
+				log.Error(fmt.Sprintf("Error in conversion to integer: %v", err))
 				return
 			}
 			err = syscallutil.Kill(pid, syscall.SIGKILL)
 			if err != nil {
-				log.ErrorS(fmt.Sprintf("Error in killing process: %v", err))
+				log.Error(fmt.Sprintf("Error in killing process: %v", err))
 			}
 		}(cmd, mysqlctlTabletUIDs[i])
 	}
@@ -1176,7 +1176,7 @@ func (cluster *LocalProcessCluster) waitForMySQLProcessToExit(mysqlctlProcessLis
 func (cluster *LocalProcessCluster) StartVtbackup(newInitDBFile string, initialBackup bool,
 	keyspace string, shard string, cell string, extraArgs ...string,
 ) error {
-	log.InfoS("Starting vtbackup")
+	log.Info("Starting vtbackup")
 	cluster.VtbackupProcess = *VtbackupProcessInstance(
 		cluster.GetAndReserveTabletUID(),
 		cluster.GetAndReservePort(),
@@ -1203,14 +1203,14 @@ func (cluster *LocalProcessCluster) GetAndReservePort() int {
 	}
 	for {
 		cluster.nextPortForProcess = cluster.nextPortForProcess + 1
-		log.InfoS(fmt.Sprintf("Attempting to reserve port: %v", cluster.nextPortForProcess))
+		log.Info(fmt.Sprintf("Attempting to reserve port: %v", cluster.nextPortForProcess))
 		ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(cluster.nextPortForProcess)))
 		if err != nil {
-			log.ErrorS(fmt.Sprintf("Can't listen on port %v: %s, trying next port", cluster.nextPortForProcess, err))
+			log.Error(fmt.Sprintf("Can't listen on port %v: %s, trying next port", cluster.nextPortForProcess, err))
 			continue
 		}
 
-		log.InfoS(fmt.Sprintf("Port %v is available, reserving..", cluster.nextPortForProcess))
+		log.Info(fmt.Sprintf("Port %v is available, reserving..", cluster.nextPortForProcess))
 		ln.Close()
 		break
 	}
@@ -1326,7 +1326,7 @@ func (cluster *LocalProcessCluster) NewVTOrcProcess(config VTOrcConfiguration, c
 func (cluster *LocalProcessCluster) NewVtctldClientProcessInstance(hostname string, grpcPort int, tmpDirectory string) *VtctldClientProcess {
 	version, err := GetMajorVersion("vtctldclient")
 	if err != nil {
-		log.WarnS(fmt.Sprintf("failed to get major vtctldclient version; interop with CLI changes for VEP-4 may not work: %v", err))
+		log.Warn(fmt.Sprintf("failed to get major vtctldclient version; interop with CLI changes for VEP-4 may not work: %v", err))
 	}
 
 	base := VtProcessInstance("vtctldclient", "vtctldclient", cluster.TopoProcess.Port, cluster.Hostname)
@@ -1426,9 +1426,9 @@ func (cluster *LocalProcessCluster) PrintMysqlctlLogFiles() {
 	files, _ := os.ReadDir(logDir)
 	for _, fileInfo := range files {
 		if !fileInfo.IsDir() && strings.Contains(fileInfo.Name(), "mysqlctl") {
-			log.ErrorS("Printing the log file - " + fileInfo.Name())
+			log.Error("Printing the log file - " + fileInfo.Name())
 			logOut, _ := os.ReadFile(path.Join(logDir, fileInfo.Name()))
-			log.ErrorS(string(logOut))
+			log.Error(string(logOut))
 		}
 	}
 }

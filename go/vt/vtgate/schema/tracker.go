@@ -126,7 +126,7 @@ func (t *Tracker) loadTables(conn queryservice.QueryService, target *querypb.Tar
 	if err != nil {
 		return err
 	}
-	log.InfoS(fmt.Sprintf("finished loading tables for keyspace %s. Found %d tables", target.Keyspace, numTables))
+	log.Info(fmt.Sprintf("finished loading tables for keyspace %s. Found %d tables", target.Keyspace, numTables))
 
 	return nil
 }
@@ -153,7 +153,7 @@ func (t *Tracker) loadViews(conn queryservice.QueryService, target *querypb.Targ
 	if err != nil {
 		return err
 	}
-	log.InfoS(fmt.Sprintf("finished loading views for keyspace %s. Found %d views", target.Keyspace, numViews))
+	log.Info(fmt.Sprintf("finished loading views for keyspace %s. Found %d views", target.Keyspace, numViews))
 	return nil
 }
 
@@ -177,17 +177,17 @@ func (t *Tracker) loadUDFs(conn queryservice.QueryService, target *querypb.Targe
 		return nil
 	})
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("error fetching new UDFs for %v: %v", target.Keyspace, err))
+		log.Error(fmt.Sprintf("error fetching new UDFs for %v: %v", target.Keyspace, err))
 		return err
 	}
 	t.udfs[target.Keyspace] = udfs
-	log.InfoS(fmt.Sprintf("finished loading %d UDFs for keyspace %s", len(udfs), target.Keyspace))
+	log.Info(fmt.Sprintf("finished loading %d UDFs for keyspace %s", len(udfs), target.Keyspace))
 	return nil
 }
 
 // Start starts the schema tracking.
 func (t *Tracker) Start() {
-	log.InfoS("Starting schema tracking")
+	log.Info("Starting schema tracking")
 	ctx, cancel := context.WithCancel(t.ctx)
 	t.cancel = cancel
 	go func(ctx context.Context, t *Tracker) {
@@ -239,7 +239,7 @@ func (t *Tracker) setLoaded(ks keyspaceStr, loaded bool) {
 func (t *Tracker) initKeyspace(th *discovery.TabletHealth) error {
 	err := t.LoadKeyspace(th.Conn, th.Target)
 	if err != nil {
-		log.WarnS(fmt.Sprintf("Unable to add the %s keyspace to the schema tracker: %v", th.Target.Keyspace, err))
+		log.Warn(fmt.Sprintf("Unable to add the %s keyspace to the schema tracker: %v", th.Target.Keyspace, err))
 		return err
 	}
 	return nil
@@ -247,7 +247,7 @@ func (t *Tracker) initKeyspace(th *discovery.TabletHealth) error {
 
 // Stop stops the schema tracking
 func (t *Tracker) Stop() {
-	log.InfoS("Stopping schema tracking")
+	log.Info("Stopping schema tracking")
 	t.cancel()
 }
 
@@ -357,7 +357,7 @@ func (t *Tracker) updatedTableSchema(th *discovery.TabletHealth) bool {
 	if err != nil {
 		t.setLoaded(th.Target.Keyspace, false)
 		// TODO: optimize for the tables that got errored out.
-		log.WarnS(fmt.Sprintf("error fetching new schema for %v, making them non-authoritative: %v", tablesUpdated, err))
+		log.Warn(fmt.Sprintf("error fetching new schema for %v, making them non-authoritative: %v", tablesUpdated, err))
 		return false
 	}
 	return true
@@ -367,12 +367,12 @@ func (t *Tracker) updateTables(keyspace string, res map[string]string) {
 	for tableName, tableDef := range res {
 		stmt, err := t.parser.ParseStrictDDL(tableDef)
 		if err != nil {
-			log.WarnS(fmt.Sprintf("error parsing table definition for %s: %v", tableName, err))
+			log.Warn(fmt.Sprintf("error parsing table definition for %s: %v", tableName, err))
 			continue
 		}
 		ddl, ok := stmt.(*sqlparser.CreateTable)
 		if !ok {
-			log.WarnS(fmt.Sprintf("parsed table definition for '%s' is not a create table definition", tableName))
+			log.Warn(fmt.Sprintf("parsed table definition for '%s' is not a create table definition", tableName))
 			continue
 		}
 
@@ -465,7 +465,7 @@ func (t *Tracker) updatedViewSchema(th *discovery.TabletHealth) bool {
 	if err != nil {
 		t.setLoaded(th.Target.Keyspace, false)
 		// TODO: optimize for the views that got errored out.
-		log.WarnS(fmt.Sprintf("error fetching new views definition for %v: %v", viewsUpdated, err))
+		log.Warn(fmt.Sprintf("error fetching new views definition for %v: %v", viewsUpdated, err))
 		return false
 	}
 	return true
@@ -550,12 +550,12 @@ func (vm *viewMap) set(ks, tbl, sql string) {
 	}
 	stmt, err := vm.parser.ParseStrictDDL(sql)
 	if err != nil {
-		log.WarnS(fmt.Sprintf("ignoring view '%s', parsing error in view definition: '%s'", tbl, sql))
+		log.Warn(fmt.Sprintf("ignoring view '%s', parsing error in view definition: '%s'", tbl, sql))
 		return
 	}
 	cv, ok := stmt.(*sqlparser.CreateView)
 	if !ok {
-		log.WarnS(fmt.Sprintf("ignoring view '%s', view definition is not a create view query: %T", tbl, stmt))
+		log.Warn(fmt.Sprintf("ignoring view '%s', view definition is not a create view query: %T", tbl, stmt))
 		return
 	}
 	sqlparser.AddKeyspace(cv.Select, ks)

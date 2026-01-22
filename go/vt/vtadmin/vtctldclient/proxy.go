@@ -129,7 +129,7 @@ func (vtctld *ClientProxy) dial(ctx context.Context) error {
 		return err
 	}
 
-	log.InfoS("Established gRPC connection to vtctld\n")
+	log.Info("Established gRPC connection to vtctld\n")
 
 	vtctld.m.Lock()
 	defer vtctld.m.Unlock()

@@ -57,7 +57,7 @@ func TestMultipleConcurrentVDiffs(t *testing.T) {
 		for {
 			select {
 			case <-loadCtx.Done():
-				log.InfoS("load cancelled")
+				log.Info("load cancelled")
 				return
 			default:
 				index += 1
@@ -111,7 +111,7 @@ func TestMultipleConcurrentVDiffs(t *testing.T) {
 	// confirm that show all shows the correct workflow and only that workflow.
 	output, err := vc.VtctldClient.ExecuteCommandWithOutput("VDiff", "--format", "json", "--workflow", "wf1", "--target-keyspace", defaultTargetKs, "show", "all")
 	require.NoError(t, err)
-	log.InfoS("VDiff output: " + output)
+	log.Info("VDiff output: " + output)
 	count := gjson.Get(output, "..#").Int()
 	wf := gjson.Get(output, "0.Workflow").String()
 	ksName := gjson.Get(output, "0.Keyspace").String()

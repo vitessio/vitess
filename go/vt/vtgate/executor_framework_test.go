@@ -157,7 +157,7 @@ func createExecutorEnvCallback(t testing.TB, eConfig ExecutorConfig, eachShard f
 		return ki.SidecarDbName, nil
 	})
 	if !created {
-		log.ErrorS("Failed to [re]create a sidecar database identifier cache!")
+		log.Error("Failed to [re]create a sidecar database identifier cache!")
 		os.Exit(1)
 	}
 

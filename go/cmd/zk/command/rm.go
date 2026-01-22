@@ -79,7 +79,7 @@ func commandRm(cmd *cobra.Command, args []string) error {
 		}
 		if err != nil && (!rmArgs.Force || err != zk.ErrNoNode) {
 			hasError = true
-			log.WarnS(fmt.Sprintf("rm: cannot delete %v: %v", zkPath, err))
+			log.Warn(fmt.Sprintf("rm: cannot delete %v: %v", zkPath, err))
 		}
 	}
 	if hasError {

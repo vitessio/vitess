@@ -41,9 +41,9 @@ func TestGetAllLogs(t *testing.T) {
 	tl := NewTestLogger()
 	defer tl.Close()
 
-	log.InfoS("Test info log")
-	log.ErrorS("Test error log")
-	log.WarnS("Test warning log")
+	log.Info("Test info log")
+	log.Error("Test error log")
+	log.Warn("Test warning log")
 
 	want := []string{"INFO:Test info log", "ERROR:Test error log", "WARNING:Test warning log"}
 	loggerMsgs := tl.GetAllLogs()

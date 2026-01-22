@@ -69,7 +69,7 @@ func (tr *TxResolver) Start() {
 
 func (tr *TxResolver) Stop() {
 	if tr.cancel != nil {
-		log.InfoS("Stopping transaction resolver")
+		log.Info("Stopping transaction resolver")
 		tr.cancel()
 	}
 }
@@ -79,7 +79,7 @@ func (tr *TxResolver) resolveTransactions(ctx context.Context, target *querypb.T
 	if !tr.tryLockTarget(dest) {
 		return
 	}
-	log.InfoS("resolving transactions for shard: " + dest)
+	log.Info("resolving transactions for shard: " + dest)
 
 	defer func() {
 		tr.mu.Lock()
@@ -88,10 +88,10 @@ func (tr *TxResolver) resolveTransactions(ctx context.Context, target *querypb.T
 	}()
 	err := tr.txConn.ResolveTransactions(ctx, target)
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("failed to resolve transactions for shard: %s, %v", dest, err))
+		log.Error(fmt.Sprintf("failed to resolve transactions for shard: %s, %v", dest, err))
 		return
 	}
-	log.InfoS("successfully resolved all the transactions for shard: " + dest)
+	log.Info("successfully resolved all the transactions for shard: " + dest)
 }
 
 func (tr *TxResolver) tryLockTarget(dest string) bool {

@@ -108,7 +108,7 @@ func TestMain(m *testing.M) {
 			"--queryserver-config-transaction-timeout", "3s",
 		}
 		if err := clusterInstance.StartKeyspace(*Keyspace, []string{"-80", "80-"}, 1, false, clusterInstance.Cell); err != nil {
-			log.ErrorS(err.Error())
+			log.Error(err.Error())
 			os.Exit(1)
 			return 1
 		}
@@ -116,7 +116,7 @@ func TestMain(m *testing.M) {
 		// Start vtgate
 		clusterInstance.VtGateExtraArgs = []string{utils.GetFlagVariantForTests("--warn-sharded-only") + "=true"}
 		if err := clusterInstance.StartVtgate(); err != nil {
-			log.ErrorS(err.Error())
+			log.Error(err.Error())
 			os.Exit(1)
 			return 1
 		}

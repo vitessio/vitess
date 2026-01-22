@@ -322,8 +322,8 @@ func runCluster() (cluster vttest.LocalCluster, err error) {
 		return
 	}
 
-	log.InfoS("Starting local cluster...")
-	log.InfoS(fmt.Sprintf("config: %#v", config))
+	log.Info("Starting local cluster...")
+	log.Info(fmt.Sprintf("config: %#v", config))
 	cluster = vttest.LocalCluster{
 		Config: config,
 		Env:    env,
@@ -333,7 +333,7 @@ func runCluster() (cluster vttest.LocalCluster, err error) {
 		return cluster, err
 	}
 
-	log.InfoS("Local cluster started.")
+	log.Info("Local cluster started.")
 
 	return cluster, nil
 }

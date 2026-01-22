@@ -94,7 +94,7 @@ func UpdateShardReplicationRecord(ctx context.Context, ts *Server, keyspace, sha
 		for _, node := range (*sr).Nodes {
 			if proto.Equal(node.TabletAlias, tabletAlias) {
 				if found {
-					log.WarnS(fmt.Sprintf("Found a second ShardReplication_Node for tablet %v, deleting it", tabletAlias))
+					log.Warn(fmt.Sprintf("Found a second ShardReplication_Node for tablet %v, deleting it", tabletAlias))
 					modified = true
 					continue
 				}

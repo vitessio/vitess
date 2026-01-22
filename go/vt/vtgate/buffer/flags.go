@@ -169,18 +169,18 @@ func NewDefaultConfig() *Config {
 
 func NewConfigFromFlags() *Config {
 	if err := verifyFlags(); err != nil {
-		log.ErrorS(fmt.Sprintf("Invalid buffer configuration: %v", err))
+		log.Error(fmt.Sprintf("Invalid buffer configuration: %v", err))
 		os.Exit(1)
 	}
 	bufferSizeStat.Set(int64(bufferSize))
 	keyspaces, shards := keyspaceShardsToSets(bufferKeyspaceShards)
 
 	if bufferEnabledDryRun {
-		log.InfoS("vtgate buffer in dry-run mode enabled for all requests. Dry-run bufferings will log failovers but not buffer requests.")
+		log.Info("vtgate buffer in dry-run mode enabled for all requests. Dry-run bufferings will log failovers but not buffer requests.")
 	}
 
 	if bufferEnabled {
-		log.InfoS("vtgate buffer enabled. PRIMARY requests will be buffered during detected failovers.")
+		log.Info("vtgate buffer enabled. PRIMARY requests will be buffered during detected failovers.")
 
 		// Log a second line if it's only enabled for some keyspaces or shards.
 		header := "Buffering limited to configured "
@@ -200,12 +200,12 @@ func NewConfigFromFlags() *Config {
 			if bufferEnabledDryRun {
 				dryRunOverride = " Dry-run mode is overridden for these entries and actual buffering will take place."
 			}
-			log.InfoS(fmt.Sprintf("%v.%v", limited, dryRunOverride))
+			log.Info(fmt.Sprintf("%v.%v", limited, dryRunOverride))
 		}
 	}
 
 	if !bufferEnabledDryRun && !bufferEnabled {
-		log.InfoS("vtgate buffer not enabled.")
+		log.Info("vtgate buffer not enabled.")
 	}
 
 	return &Config{

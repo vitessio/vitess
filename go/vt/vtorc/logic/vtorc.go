@@ -77,14 +77,14 @@ func init() {
 
 // closeVTOrc runs all the operations required to cleanly shutdown VTOrc
 func closeVTOrc() {
-	log.InfoS("Starting VTOrc shutdown")
+	log.Info("Starting VTOrc shutdown")
 	atomic.StoreInt32(&hasReceivedSIGTERM, 1)
 	// Poke other go routines to stop cleanly here ...
 	_ = inst.AuditOperation("shutdown", "", "Triggered via SIGTERM")
 	// wait for the locks to be released
 	waitForLocksRelease()
 	ts.Close()
-	log.InfoS("VTOrc closed")
+	log.Info("VTOrc closed")
 }
 
 // waitForLocksRelease is used to wait for release of locks
@@ -97,7 +97,7 @@ func waitForLocksRelease() {
 		}
 		select {
 		case <-timeout:
-			log.InfoS("wait for lock release timed out. Some locks might not have been released.")
+			log.Info("wait for lock release timed out. Some locks might not have been released.")
 		default:
 			time.Sleep(50 * time.Millisecond)
 			continue
@@ -135,7 +135,7 @@ func handleDiscoveryRequests() {
 // replicas (if any) are also checked.
 func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 	if inst.InstanceIsForgotten(tabletAlias) {
-		log.InfoS(fmt.Sprintf("discoverInstance: skipping discovery of %+v because it is set to be forgotten", tabletAlias))
+		log.Info(fmt.Sprintf("discoverInstance: skipping discovery of %+v because it is set to be forgotten", tabletAlias))
 		return
 	}
 
@@ -152,7 +152,7 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 		discoveryTime := latency.Elapsed("total")
 		if discoveryTime > config.GetInstancePollTime() {
 			instancePollSecondsExceededCounter.Add(1)
-			log.WarnS(fmt.Sprintf("discoverInstance exceeded InstancePollSeconds for %+v, took %.4fs", tabletAlias, discoveryTime.Seconds()))
+			log.Warn(fmt.Sprintf("discoverInstance exceeded InstancePollSeconds for %+v, took %.4fs", tabletAlias, discoveryTime.Seconds()))
 		}
 	}()
 
@@ -192,15 +192,15 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 	discoveryInstanceTimings.Add("Other", otherLatency)
 
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("Failed to discover %s (force: %t), err: %v", tabletAlias, forceDiscovery, err))
+		log.Error(fmt.Sprintf("Failed to discover %s (force: %t), err: %v", tabletAlias, forceDiscovery, err))
 	} else {
-		log.InfoS(fmt.Sprintf("Discovered %s (force: %t): %+v", tabletAlias, forceDiscovery, instance))
+		log.Info(fmt.Sprintf("Discovered %s (force: %t): %+v", tabletAlias, forceDiscovery, instance))
 	}
 
 	if instance == nil {
 		failedDiscoveriesCounter.Add(1)
 		if util.ClearToLog("discoverInstance", tabletAlias) {
-			log.WarnS(fmt.Sprintf("DiscoverInstance(%+v) instance is nil in %.3fs (Backend: %.3fs, Instance: %.3fs), error=%+v", tabletAlias,
+			log.Warn(fmt.Sprintf("DiscoverInstance(%+v) instance is nil in %.3fs (Backend: %.3fs, Instance: %.3fs), error=%+v", tabletAlias,
 				totalLatency.Seconds(),
 				backendLatency.Seconds(),
 				instanceLatency.Seconds(),
@@ -214,7 +214,7 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 func onHealthTick() {
 	tabletAliases, err := inst.ReadOutdatedInstanceKeys()
 	if err != nil {
-		log.ErrorS(fmt.Sprint(err))
+		log.Error(fmt.Sprint(err))
 	}
 
 	func() {
@@ -242,13 +242,13 @@ func onHealthTick() {
 // periodically investigated and their status captured, and long since unseen instances are
 // purged and forgotten.
 func ContinuousDiscovery() {
-	log.InfoS("continuous discovery: setting up")
+	log.Info("continuous discovery: setting up")
 	recentDiscoveryOperationKeys = cache.New(config.GetInstancePollTime(), time.Second)
 
 	if !config.GetAllowRecovery() {
-		log.InfoS("--allow-recovery is set to 'false', disabling recovery actions")
+		log.Info("--allow-recovery is set to 'false', disabling recovery actions")
 		if err := DisableRecovery(); err != nil {
-			log.ErrorS(fmt.Sprintf("failed to disable recoveries: %+v", err))
+			log.Error(fmt.Sprintf("failed to disable recoveries: %+v", err))
 			return
 		}
 	}
@@ -271,7 +271,7 @@ func ContinuousDiscovery() {
 	// On termination of the server, we should close VTOrc cleanly
 	servenv.OnTermSync(closeVTOrc)
 
-	log.InfoS("continuous discovery: starting")
+	log.Info("continuous discovery: starting")
 	for {
 		select {
 		case <-healthTick:
@@ -308,7 +308,7 @@ func ContinuousDiscovery() {
 		case <-tabletTopoTick:
 			ctx, cancel := context.WithTimeout(context.Background(), config.GetTopoInformationRefreshDuration())
 			if err := refreshAllInformation(ctx); err != nil {
-				log.ErrorS(fmt.Sprintf("failed to refresh topo information: %+v", err))
+				log.Error(fmt.Sprintf("failed to refresh topo information: %+v", err))
 			}
 			cancel()
 		}

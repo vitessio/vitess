@@ -207,14 +207,14 @@ func (entry *watchEntry) onErrorLocked(ctx context.Context, err error, init bool
 		// TTL cache is only checked if the error is a known error i.e topo.Error.
 		_, isTopoErr := err.(topo.Error)
 		if entry.value != nil && isTopoErr && time.Since(entry.lastValueTime) > entry.rw.cacheTTL {
-			log.ErrorS(fmt.Sprintf("WatchSrvKeyspace clearing cached entry for %v", entry.key))
+			log.Error(fmt.Sprintf("WatchSrvKeyspace clearing cached entry for %v", entry.key))
 			entry.value = nil
 		}
 	} else {
 		if !topo.IsErrType(err, topo.Interrupted) {
 			// No need to log if we're explicitly interrupted.
 			entry.lastError = fmt.Errorf("ResilientWatch stream failed for %v: %w", entry.key, err)
-			log.ErrorS(fmt.Sprintf("%v", entry.lastError))
+			log.Error(fmt.Sprintf("%v", entry.lastError))
 		}
 
 		// Even though we didn't get a new value, update the lastValueTime

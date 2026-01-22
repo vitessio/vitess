@@ -96,7 +96,7 @@ type Durabler interface {
 
 func RegisterDurability(name string, newDurablerFunc NewDurabler) {
 	if durabilityPolicies[name] != nil {
-		log.ErrorS(fmt.Sprintf("durability policy %v already registered", name))
+		log.Error(fmt.Sprintf("durability policy %v already registered", name))
 		os.Exit(1)
 	}
 	durabilityPolicies[name] = newDurablerFunc

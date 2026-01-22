@@ -60,7 +60,7 @@ func commandStat(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			hasError = true
 			if !statArgs.Force || err != zk.ErrNoNode {
-				log.WarnS(fmt.Sprintf("stat: cannot access %v: %v", zkPath, err))
+				log.Warn(fmt.Sprintf("stat: cannot access %v: %v", zkPath, err))
 			}
 			continue
 		}

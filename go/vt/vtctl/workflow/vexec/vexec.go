@@ -199,7 +199,7 @@ func (vx *VExec) execCallback(ctx context.Context, callback func(context.Context
 				allErrors.RecordError(err)
 			} else {
 				if qr == nil {
-					log.InfoS(fmt.Sprintf("Callback returned nil result for tablet %s-%d", primary.Alias.Cell, primary.Alias.Uid))
+					log.Info(fmt.Sprintf("Callback returned nil result for tablet %s-%d", primary.Alias.Cell, primary.Alias.Uid))
 					return // no result
 				}
 				mu.Lock()

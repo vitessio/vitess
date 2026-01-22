@@ -165,7 +165,7 @@ func queryzHandler(e *Executor, w http.ResponseWriter, r *http.Request) {
 	sort.Sort(&sorter)
 	for _, row := range sorter.rows {
 		if err := queryzTmpl.Execute(w, row); err != nil {
-			log.ErrorS(fmt.Sprintf("queryz: couldn't execute template: %v", err))
+			log.Error(fmt.Sprintf("queryz: couldn't execute template: %v", err))
 		}
 	}
 }

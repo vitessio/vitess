@@ -81,14 +81,14 @@ func TestMain(m *testing.M) {
 			VSchema:   VSchema,
 		}
 		if err := clusterInstance.StartUnshardedKeyspace(*Keyspace, 0, false, clusterInstance.Cell); err != nil {
-			log.ErrorS(err.Error())
+			log.Error(err.Error())
 			os.Exit(1)
 			return 1
 		}
 
 		// Start vtgate
 		if err := clusterInstance.StartVtgate(); err != nil {
-			log.ErrorS(err.Error())
+			log.Error(err.Error())
 			os.Exit(1)
 			return 1
 		}

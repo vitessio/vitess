@@ -148,7 +148,7 @@ func (w *heartbeatWriter) Open() {
 	defer func() {
 		w.isOpen = true
 	}()
-	log.InfoS("Heartbeat Writer: opening")
+	log.Info("Heartbeat Writer: opening")
 
 	// We cannot create the database and tables in this Open function
 	// since, this is run when a tablet changes to Primary type. The other replicas
@@ -206,7 +206,7 @@ func (w *heartbeatWriter) Close() {
 	}
 	w.onDemandRequestsRateLimiter.Store(nil)
 
-	log.InfoS("Heartbeat Writer: closed")
+	log.Info("Heartbeat Writer: closed")
 }
 
 // bindHeartbeatVars takes a heartbeat write (insert or update) and
@@ -340,7 +340,7 @@ func (w *heartbeatWriter) killWrite() error {
 	defer cancel()
 	killConn, err := w.allPrivsPool.Get(ctx)
 	if err != nil {
-		log.ErrorS("Kill conn didn't get connection :(")
+		log.Error("Kill conn didn't get connection :(")
 		return err
 	}
 	defer killConn.Recycle()

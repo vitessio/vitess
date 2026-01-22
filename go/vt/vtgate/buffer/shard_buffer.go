@@ -286,7 +286,7 @@ func (sb *shardBuffer) startBufferingLocked(ctx context.Context, kev *discovery.
 		msg = "Dry-run: Would have started buffering"
 	}
 	starts.Add(sb.statsKey, 1)
-	log.InfoS(fmt.Sprintf("%v for shard: %s (window: %v, size: %v, max failover duration: %v) (A failover was detected by this seen error: %v.)", msg,
+	log.Info(fmt.Sprintf("%v for shard: %s (window: %v, size: %v, max failover duration: %v) (A failover was detected by this seen error: %v.)", msg,
 		topoproto.KeyspaceShardString(sb.keyspace, sb.shard),
 		sb.buf.config.Window,
 		sb.buf.config.Size,
@@ -302,7 +302,7 @@ func (sb *shardBuffer) startBufferingLocked(ctx context.Context, kev *discovery.
 // that "sb.mu" must be locked before calling the method.
 func (sb *shardBuffer) logErrorIfStateNotLocked(state bufferState) {
 	if sb.state != state {
-		log.ErrorS(fmt.Sprintf("BUG: Buffer state should be '%v' and not '%v'. Full state of buffer object: %#v Stacktrace:\n%s", state, sb.state, sb, debug.Stack()))
+		log.Error(fmt.Sprintf("BUG: Buffer state should be '%v' and not '%v'. Full state of buffer object: %#v Stacktrace:\n%s", state, sb.state, sb, debug.Stack()))
 	}
 }
 
@@ -486,7 +486,7 @@ func (sb *shardBuffer) recordKeyspaceEvent(alias *topodatapb.TabletAlias, stillS
 	sb.mu.Lock()
 	defer sb.mu.Unlock()
 
-	log.DebugS(fmt.Sprintf("disruption in shard %s/%s resolved (serving: %v), movetable state %#v",
+	log.Debug(fmt.Sprintf("disruption in shard %s/%s resolved (serving: %v), movetable state %#v",
 		sb.keyspace, sb.shard, stillServing, keyspaceEvent.MoveTablesState))
 
 	if !topoproto.TabletAliasEqual(alias, sb.currentPrimary) {
@@ -558,7 +558,7 @@ func (sb *shardBuffer) stopBufferingLocked(reason stopReason, details string) {
 	if sb.mode == bufferModeDryRun {
 		msg = "Dry-run: Would have stopped buffering"
 	}
-	log.InfoS(fmt.Sprintf("%v for shard: %s after: %.1f seconds due to: %v. Draining %d buffered requests now.", msg, topoproto.KeyspaceShardString(sb.keyspace, sb.shard), d.Seconds(), details, len(q)))
+	log.Info(fmt.Sprintf("%v for shard: %s after: %.1f seconds due to: %v. Draining %d buffered requests now.", msg, topoproto.KeyspaceShardString(sb.keyspace, sb.shard), d.Seconds(), details, len(q)))
 
 	var clientEntryError error
 	if reason == stopShardMissing {
@@ -617,7 +617,7 @@ func (sb *shardBuffer) drain(q []*entry, err error) {
 	wg.Wait()
 
 	d := sb.timeNow().Sub(start)
-	log.InfoS(fmt.Sprintf("Draining finished for shard: %s Took: %v for: %d requests.", topoproto.KeyspaceShardString(sb.keyspace, sb.shard), d, len(q)))
+	log.Info(fmt.Sprintf("Draining finished for shard: %s Took: %v for: %d requests.", topoproto.KeyspaceShardString(sb.keyspace, sb.shard), d, len(q)))
 	requestsDrained.Add(sb.statsKey, int64(len(q)))
 
 	// Draining is done. Change state from "draining" to "idle".

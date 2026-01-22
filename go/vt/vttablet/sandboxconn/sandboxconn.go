@@ -575,7 +575,7 @@ func (sbc *SandboxConn) AddVStreamEvents(events []*binlogdatapb.VEvent, err erro
 // VStream is part of the QueryService interface.
 func (sbc *SandboxConn) VStream(ctx context.Context, request *binlogdatapb.VStreamRequest, send func([]*binlogdatapb.VEvent) error) error {
 	if sbc.StartPos != "" && sbc.StartPos != request.Position {
-		log.ErrorS(fmt.Sprintf("startPos(%v): %v, want %v", request.Target, request.Position, sbc.StartPos))
+		log.Error(fmt.Sprintf("startPos(%v): %v, want %v", request.Target, request.Position, sbc.StartPos))
 		return fmt.Errorf("startPos(%v): %v, want %v", request.Target, request.Position, sbc.StartPos)
 	}
 	done := false
@@ -600,7 +600,7 @@ func (sbc *SandboxConn) VStream(ctx context.Context, request *binlogdatapb.VStre
 				}}
 
 				if err := send(events); err != nil {
-					log.InfoS("error sending event in test sandbox " + err.Error())
+					log.Info("error sending event in test sandbox " + err.Error())
 					return err
 				}
 				lastTimestamp++
@@ -610,7 +610,7 @@ func (sbc *SandboxConn) VStream(ctx context.Context, request *binlogdatapb.VStre
 					done = true
 				}
 				if err := send([]*binlogdatapb.VEvent{ev}); err != nil {
-					log.InfoS("error sending event in test sandbox " + err.Error())
+					log.Info("error sending event in test sandbox " + err.Error())
 					return err
 				}
 				lastTimestamp = ev.Timestamp

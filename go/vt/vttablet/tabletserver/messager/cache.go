@@ -113,14 +113,14 @@ func (mc *cache) IsEmpty() bool {
 
 // Clear clears the cache.
 func (mc *cache) Clear() {
-	log.InfoS("messager cache - Clearing cache. Acquiring my lock")
+	log.Info("messager cache - Clearing cache. Acquiring my lock")
 	mc.mu.Lock()
-	log.InfoS("messager cache - acquired lock")
+	log.Info("messager cache - acquired lock")
 	defer mc.mu.Unlock()
 	mc.sendQueue = nil
 	mc.inQueue = make(map[string]*MessageRow)
 	mc.inFlight = make(map[string]bool)
-	log.InfoS("messager cache - cache cleared")
+	log.Info("messager cache - cache cleared")
 }
 
 // Add adds a MessageRow to the cache. It returns

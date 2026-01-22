@@ -131,7 +131,7 @@ func (ctl *Toxiproxyctl) run() error {
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to start toxiproxy")
 	}
-	log.InfoS(fmt.Sprintf("Toxiproxy starting on port: %d, logFile: %s", ctl.apiPort, ctl.logPath))
+	log.Info(fmt.Sprintf("Toxiproxy starting on port: %d, logFile: %s", ctl.apiPort, ctl.logPath))
 	ctl.cmd = cmd
 
 	attempt := 0
@@ -210,7 +210,7 @@ func (ctl *Toxiproxyctl) Params(dbname string) mysql.ConnParams {
 
 // AddTimeoutToxic adds a timeout toxic to the toxiproxy service.
 func (ctl *Toxiproxyctl) AddTimeoutToxic() error {
-	log.InfoS("Adding timeout toxic")
+	log.Info("Adding timeout toxic")
 	_, err := ctl.proxy.AddToxic("my-timeout", "timeout", "", 1, toxiproxy.Attributes{
 		"timeout": 0,
 	})
@@ -219,7 +219,7 @@ func (ctl *Toxiproxyctl) AddTimeoutToxic() error {
 
 // UpdateTimeoutToxicity updates the toxicity of the timeout toxic.
 func (ctl *Toxiproxyctl) UpdateTimeoutToxicity(toxicity float32) error {
-	log.InfoS(fmt.Sprintf("Updating timeout toxicity to %f", toxicity))
+	log.Info(fmt.Sprintf("Updating timeout toxicity to %f", toxicity))
 	_, err := ctl.proxy.UpdateToxic("my-timeout", toxicity, toxiproxy.Attributes{
 		"timeout": 0,
 	})
@@ -228,7 +228,7 @@ func (ctl *Toxiproxyctl) UpdateTimeoutToxicity(toxicity float32) error {
 
 // RemoveTimeoutToxic removes the timeout toxic from the toxiproxy service.
 func (ctl *Toxiproxyctl) RemoveTimeoutToxic() error {
-	log.InfoS("Removing timeout toxic")
+	log.Info("Removing timeout toxic")
 	return ctl.proxy.RemoveToxic("my-timeout")
 }
 

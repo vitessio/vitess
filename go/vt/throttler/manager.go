@@ -89,7 +89,7 @@ func (m *managerImpl) unregisterThrottler(name string) {
 	defer m.mu.Unlock()
 
 	if _, ok := m.throttlers[name]; !ok {
-		log.ErrorS(fmt.Sprintf("unregisterThrottler(): throttler with name '%v' is not registered", name))
+		log.Error(fmt.Sprintf("unregisterThrottler(): throttler with name '%v' is not registered", name))
 		return
 	}
 	delete(m.throttlers, name)

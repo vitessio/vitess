@@ -245,13 +245,13 @@ func main() {
 func applyJsonInMemoryPatch(vSchemaFile []byte, patchString string) []byte {
 	patch, err := jsonpatch.DecodePatch([]byte(patchString))
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("decoding vschema patch failed: %s", err))
+		log.Error(fmt.Sprintf("decoding vschema patch failed: %s", err))
 		os.Exit(1)
 	}
 
 	modified, err := patch.Apply(vSchemaFile)
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("applying vschema patch failed: %s", err))
+		log.Error(fmt.Sprintf("applying vschema patch failed: %s", err))
 		os.Exit(1)
 	}
 	return modified
@@ -260,13 +260,13 @@ func applyJsonInMemoryPatch(vSchemaFile []byte, patchString string) []byte {
 func applyInMemoryPatch(dockerYaml []byte, patchString string) []byte {
 	patch, err := yamlpatch.DecodePatch([]byte(patchString))
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("decoding patch failed: %s", err))
+		log.Error(fmt.Sprintf("decoding patch failed: %s", err))
 		os.Exit(1)
 	}
 
 	bs, err := patch.Apply(dockerYaml)
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("applying patch failed: %s", err))
+		log.Error(fmt.Sprintf("applying patch failed: %s", err))
 		os.Exit(1)
 	}
 	return bs
@@ -275,7 +275,7 @@ func applyInMemoryPatch(dockerYaml []byte, patchString string) []byte {
 func createFile(filePath string) *os.File {
 	f, err := os.Create(filePath)
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("creating %s %s", filePath, err))
+		log.Error(fmt.Sprintf("creating %s %s", filePath, err))
 		os.Exit(1)
 	}
 	return f
@@ -284,7 +284,7 @@ func createFile(filePath string) *os.File {
 func readFile(filePath string) []byte {
 	file, err := os.ReadFile(filePath)
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("reading %s: %s", filePath, err))
+		log.Error(fmt.Sprintf("reading %s: %s", filePath, err))
 		os.Exit(1)
 	}
 
@@ -294,14 +294,14 @@ func readFile(filePath string) []byte {
 func closeFile(file *os.File) {
 	err := file.Close()
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("Closing schema_file.sql %s", err))
+		log.Error(fmt.Sprintf("Closing schema_file.sql %s", err))
 		os.Exit(1)
 	}
 }
 
 func handleError(err error) {
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("Error: %s", err))
+		log.Error(fmt.Sprintf("Error: %s", err))
 		os.Exit(1)
 	}
 }
@@ -310,7 +310,7 @@ func appendToSqlFile(schemaFileNames []string, f *os.File) {
 	for _, file := range schemaFileNames {
 		data, err := os.ReadFile(tablesPath + file)
 		if err != nil {
-			log.ErrorS(fmt.Sprintf("reading %s: %s", tablesPath+file, err))
+			log.Error(fmt.Sprintf("reading %s: %s", tablesPath+file, err))
 			os.Exit(1)
 		}
 
@@ -328,7 +328,7 @@ func appendToSqlFile(schemaFileNames []string, f *os.File) {
 func getTableName(sqlFile string) string {
 	sqlFileData, err := os.ReadFile(sqlFile)
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("reading sqlFile file %s: %s", sqlFile, err))
+		log.Error(fmt.Sprintf("reading sqlFile file %s: %s", sqlFile, err))
 		os.Exit(1)
 	}
 
@@ -341,7 +341,7 @@ func getTableName(sqlFile string) string {
 func getPrimaryKey(sqlFile string) string {
 	sqlFileData, err := os.ReadFile(sqlFile)
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("reading sqlFile file %s: %s", sqlFile, err))
+		log.Error(fmt.Sprintf("reading sqlFile file %s: %s", sqlFile, err))
 		os.Exit(1)
 	}
 
@@ -354,7 +354,7 @@ func getPrimaryKey(sqlFile string) string {
 func getKeyColumns(sqlFile string) string {
 	sqlFileData, err := os.ReadFile(sqlFile)
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("reading sqlFile file %s: %s", sqlFile, err))
+		log.Error(fmt.Sprintf("reading sqlFile file %s: %s", sqlFile, err))
 		os.Exit(1)
 	}
 
@@ -422,7 +422,7 @@ func writeVschemaFile(file []byte, fileName string) {
 func writeFile(file []byte, fileName string) {
 	err := os.WriteFile(fileName, file, 0o644)
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("writing %s %s", fileName, err))
+		log.Error(fmt.Sprintf("writing %s %s", fileName, err))
 		os.Exit(1)
 	}
 }

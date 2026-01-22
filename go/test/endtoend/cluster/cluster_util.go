@@ -488,7 +488,7 @@ func PrintFiles(t *testing.T, dir string, files ...string) {
 		directories = directories[1:]
 		entries, err := os.ReadDir(dir)
 		if err != nil {
-			log.ErrorS(fmt.Sprintf("Couldn't read directory - %v", dir))
+			log.Error(fmt.Sprintf("Couldn't read directory - %v", dir))
 			continue
 		}
 		for _, entry := range entries {
@@ -514,8 +514,8 @@ func PrintFiles(t *testing.T, dir string, files ...string) {
 			// Read and print the file.
 			res, err := os.ReadFile(name)
 			require.NoError(t, err)
-			log.ErrorS(fmt.Sprintf("READING FILE - %v", name))
-			log.ErrorS(string(res))
+			log.Error(fmt.Sprintf("READING FILE - %v", name))
+			log.Error(string(res))
 		}
 	}
 }

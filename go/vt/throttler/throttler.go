@@ -301,7 +301,7 @@ func (t *ThrottlerImpl) updateMaxRate() {
 	}
 
 	if maxRate != ZeroRateNoProgess && maxRate < int64(threadsRunning) {
-		log.WarnS(fmt.Sprintf("Set maxRate is less than the number of threads (%v). To prevent threads from starving, maxRate was increased from: %v to: %v.", threadsRunning, maxRate, threadsRunning))
+		log.Warn(fmt.Sprintf("Set maxRate is less than the number of threads (%v). To prevent threads from starving, maxRate was increased from: %v to: %v.", threadsRunning, maxRate, threadsRunning))
 		maxRate = int64(threadsRunning)
 	}
 	maxRatePerThread := maxRate / int64(threadsRunning)

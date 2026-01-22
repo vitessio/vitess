@@ -139,7 +139,7 @@ func main() {
 		TruncateErrLen:     servenv.TruncateErrLen,
 	})
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("cannot initialize sql parser: %v", err))
+		log.Error(fmt.Sprintf("cannot initialize sql parser: %v", err))
 		os.Exit(1)
 	}
 
@@ -173,7 +173,7 @@ func main() {
 
 		os.Args = append([]string{"vtctldclient"}, args[1:]...)
 		if err := command.Root.ExecuteContext(ctx); err != nil {
-			log.ErrorS(fmt.Sprintf("action failed: %v %v", action, err))
+			log.Error(fmt.Sprintf("action failed: %v %v", action, err))
 			exit.Return(255)
 		}
 	case strings.EqualFold(action, "LegacyVtctlCommand"):
@@ -182,7 +182,7 @@ func main() {
 		args = args[1:]
 		fallthrough
 	default:
-		log.WarnS("WARNING: vtctl should only be used for VDiff v1 workflows. Please use VDiff v2 and consider using vtctldclient for all other commands.")
+		log.Warn("WARNING: vtctl should only be used for VDiff v1 workflows. Please use VDiff v2 and consider using vtctldclient for all other commands.")
 		wr := wrangler.New(env, logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 		if args[0] == "--" {
@@ -200,7 +200,7 @@ func main() {
 		case nil:
 			// keep going
 		default:
-			log.ErrorS(fmt.Sprintf("action failed: %v %v", action, err))
+			log.Error(fmt.Sprintf("action failed: %v %v", action, err))
 			exit.Return(255)
 		}
 	}

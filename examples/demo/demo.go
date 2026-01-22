@@ -84,14 +84,14 @@ func runCluster() {
 	}
 	env, err := vttest.NewLocalTestEnv(12345)
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("Error: %v", err))
+		log.Error(fmt.Sprintf("Error: %v", err))
 		os.Exit(1)
 	}
 	cluster.Env = env
 	err = cluster.Setup()
 	if err != nil {
 		cluster.TearDown()
-		log.ErrorS(fmt.Sprintf("Error: %v", err))
+		log.Error(fmt.Sprintf("Error: %v", err))
 		os.Exit(1)
 	}
 }
@@ -191,7 +191,7 @@ func execQuery(conn *mysql.Conn, key, query, keyspace, shard string, response ma
 			"title": title,
 			"error": err.Error(),
 		}
-		log.ErrorS(fmt.Sprintf("error: %v", err))
+		log.Error(fmt.Sprintf("error: %v", err))
 		return
 	}
 	response[key] = resultToMap(title, qr)
@@ -209,7 +209,7 @@ func resultToMap(title string, qr *sqltypes.Result) map[string]any {
 			if value.Type() == sqltypes.VarBinary {
 				bytes, err := value.ToBytes()
 				if err != nil {
-					log.ErrorS(fmt.Sprintf("Error converting value to bytes: %v", err))
+					log.Error(fmt.Sprintf("Error converting value to bytes: %v", err))
 					return nil
 				}
 				srow = append(srow, hex.EncodeToString(bytes))
@@ -232,7 +232,7 @@ func streamQuerylog(port int) (<-chan string, error) {
 	request := fmt.Sprintf("http://localhost:%d/debug/querylog", port)
 	resp, err := http.Get(request)
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("Error reading stream: %v: %v", request, err))
+		log.Error(fmt.Sprintf("Error reading stream: %v: %v", request, err))
 		return nil, err
 	}
 	ch := make(chan string, 100)
@@ -241,7 +241,7 @@ func streamQuerylog(port int) (<-chan string, error) {
 		for {
 			str, err := buffered.ReadString('\n')
 			if err != nil {
-				log.ErrorS(fmt.Sprintf("Error reading stream: %v: %v", request, err))
+				log.Error(fmt.Sprintf("Error reading stream: %v: %v", request, err))
 				close(ch)
 				resp.Body.Close()
 				return

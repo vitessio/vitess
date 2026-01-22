@@ -32,7 +32,7 @@ func GetVReplicationConfig(options *binlogdatapb.VStreamOptions) (*vttablet.VRep
 	}
 	config, err := vttablet.NewVReplicationConfig(options.ConfigOverrides)
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("Error parsing VReplicationConfig: %v", err))
+		log.Error(fmt.Sprintf("Error parsing VReplicationConfig: %v", err))
 		return nil, vterrors.Wrapf(err, "failed to parse VReplicationConfig")
 	}
 	return config, nil

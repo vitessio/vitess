@@ -263,7 +263,7 @@ func TestColumnCollationHandling(t *testing.T) {
 func TestSetStatement(t *testing.T) {
 	if !checkIfOptionIsSupported(t, "log_builtin_as_identified_by_password") {
 		// the combination of setting this option and support for "set password" only works on a few flavors
-		log.InfoS("Cannot test SetStatement on this flavor")
+		log.Info("Cannot test SetStatement on this flavor")
 		return
 	}
 
@@ -551,9 +551,9 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 	}
 	ts.Init()
 	defer ts.Close()
-	log.InfoS("Pos before bulk insert: " + primaryPosition(t))
+	log.Info("Pos before bulk insert: " + primaryPosition(t))
 	insertSomeRows(t, 10)
-	log.InfoS("Pos after bulk insert: " + primaryPosition(t))
+	log.Info("Pos after bulk insert: " + primaryPosition(t))
 
 	ctx := context.Background()
 	qr, err := env.Mysqld.FetchSuperQuery(ctx, "SELECT count(*) as cnt from t1, t2 where t1.id11 = t2.id21")
@@ -644,7 +644,7 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 	}
 
 	runCases(t, filter, testcases, "vscopy", tablePKs)
-	log.InfoS("Pos at end of test: " + primaryPosition(t))
+	log.Info("Pos at end of test: " + primaryPosition(t))
 }
 
 func TestVStreamCopyWithDifferentFilters(t *testing.T) {
@@ -742,7 +742,7 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 				allEvents = append(allEvents, ev)
 			}
 			if len(allEvents) == len(expectedEvents) {
-				log.InfoS(fmt.Sprintf("Got %d events as expected", len(allEvents)))
+				log.Info(fmt.Sprintf("Got %d events as expected", len(allEvents)))
 				for i, ev := range allEvents {
 					ev.Timestamp = 0
 					switch ev.Type {

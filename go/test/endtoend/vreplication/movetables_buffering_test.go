@@ -47,8 +47,8 @@ func TestMoveTablesBuffering(t *testing.T) {
 		tstWorkflowReverseReadsAndWrites(t)
 		time.Sleep(loadTestBufferingWindowDuration + 1*time.Second)
 	}
-	log.InfoS("SwitchWrites done")
+	log.Info("SwitchWrites done")
 	lg.stop()
 
-	log.InfoS("TestMoveTablesBuffering: done")
+	log.Info("TestMoveTablesBuffering: done")
 }

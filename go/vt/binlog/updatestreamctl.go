@@ -172,7 +172,7 @@ func (updateStream *UpdateStreamImpl) RegisterService() {
 
 func logError() {
 	if x := recover(); x != nil {
-		log.ErrorS(fmt.Sprintf("%s at\n%s", x.(error).Error(), tb.Stack(4)))
+		log.Error(fmt.Sprintf("%s at\n%s", x.(error).Error(), tb.Stack(4)))
 	}
 }
 
@@ -187,7 +187,7 @@ func (updateStream *UpdateStreamImpl) Enable() {
 
 	updateStream.state.Store(usEnabled)
 	updateStream.streams.Init()
-	log.InfoS("Enabling update stream, dbname: " + updateStream.cp.DBName())
+	log.Info("Enabling update stream, dbname: " + updateStream.cp.DBName())
 }
 
 // Disable will disallow any connection to the service
@@ -202,7 +202,7 @@ func (updateStream *UpdateStreamImpl) Disable() {
 	updateStream.state.Store(usDisabled)
 	updateStream.streams.Stop()
 	updateStream.stateWaitGroup.Wait()
-	log.InfoS("Update Stream Disabled")
+	log.Info("Update Stream Disabled")
 }
 
 // IsEnabled returns true if UpdateStreamImpl is enabled
@@ -220,7 +220,7 @@ func (updateStream *UpdateStreamImpl) StreamKeyRange(ctx context.Context, positi
 	updateStream.actionLock.Lock()
 	if !updateStream.IsEnabled() {
 		updateStream.actionLock.Unlock()
-		log.ErrorS("Unable to serve client request: Update stream service is not enabled")
+		log.Error("Unable to serve client request: Update stream service is not enabled")
 		return errors.New("update stream service is not enabled")
 	}
 	updateStream.stateWaitGroup.Add(1)
@@ -229,7 +229,7 @@ func (updateStream *UpdateStreamImpl) StreamKeyRange(ctx context.Context, positi
 
 	streamCount.Add("KeyRange", 1)
 	defer streamCount.Add("KeyRange", -1)
-	log.InfoS(fmt.Sprintf("ServeUpdateStream starting @ %#v", pos))
+	log.Info(fmt.Sprintf("ServeUpdateStream starting @ %#v", pos))
 
 	// Calls cascade like this: binlog.Streamer->keyRangeFilterFunc->func(*binlogdatapb.BinlogTransaction)->callback
 	f := keyRangeFilterFunc(keyRange, func(trans *binlogdatapb.BinlogTransaction) error {
@@ -260,7 +260,7 @@ func (updateStream *UpdateStreamImpl) StreamTables(ctx context.Context, position
 	updateStream.actionLock.Lock()
 	if !updateStream.IsEnabled() {
 		updateStream.actionLock.Unlock()
-		log.ErrorS("Unable to serve client request: Update stream service is not enabled")
+		log.Error("Unable to serve client request: Update stream service is not enabled")
 		return errors.New("update stream service is not enabled")
 	}
 	updateStream.stateWaitGroup.Add(1)
@@ -269,7 +269,7 @@ func (updateStream *UpdateStreamImpl) StreamTables(ctx context.Context, position
 
 	streamCount.Add("Tables", 1)
 	defer streamCount.Add("Tables", -1)
-	log.InfoS(fmt.Sprintf("ServeUpdateStream starting @ %#v", pos))
+	log.Info(fmt.Sprintf("ServeUpdateStream starting @ %#v", pos))
 
 	// Calls cascade like this: binlog.Streamer->tablesFilterFunc->func(*binlogdatapb.BinlogTransaction)->callback
 	f := tablesFilterFunc(tables, func(trans *binlogdatapb.BinlogTransaction) error {
@@ -289,7 +289,7 @@ func (updateStream *UpdateStreamImpl) StreamTables(ctx context.Context, position
 // HandlePanic is part of the UpdateStream interface
 func (updateStream *UpdateStreamImpl) HandlePanic(err *error) {
 	if x := recover(); x != nil {
-		log.ErrorS(fmt.Sprintf("Uncaught panic:\n%v\n%s", x, tb.Stack(4)))
+		log.Error(fmt.Sprintf("Uncaught panic:\n%v\n%s", x, tb.Stack(4)))
 		*err = fmt.Errorf("uncaught panic: %v", x)
 	}
 }

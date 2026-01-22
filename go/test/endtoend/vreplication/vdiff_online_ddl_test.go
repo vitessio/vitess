@@ -163,7 +163,7 @@ func populate(ctx context.Context, t *testing.T, done chan bool, insertTemplate,
 	for {
 		select {
 		case <-ctx.Done():
-			log.InfoS("load cancelled")
+			log.Info("load cancelled")
 			return
 		default:
 			query := fmt.Sprintf(insertTemplate, id, id, id)

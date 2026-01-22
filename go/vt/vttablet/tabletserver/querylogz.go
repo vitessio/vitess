@@ -122,7 +122,7 @@ func querylogzHandler(ch chan *tabletenv.LogStats, w http.ResponseWriter, r *htt
 				Parser     *sqlparser.Parser
 			}{stats, level, parser}
 			if err := querylogzTmpl.Execute(w, tmplData); err != nil {
-				log.ErrorS(fmt.Sprintf("querylogz: couldn't execute template: %v", err))
+				log.Error(fmt.Sprintf("querylogz: couldn't execute template: %v", err))
 			}
 		case <-tmr.C:
 			return

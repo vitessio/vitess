@@ -51,7 +51,7 @@ func deleteShard(ctx context.Context, ts *topo.Server, keyspace string, shard st
 		return fmt.Errorf("failed to lock %s/%s; if you really want to delete this shard, re-run with Force=true: %w", keyspace, shard, lerr)
 	default:
 		// Failed to lock, but force=true. Warn and continue
-		log.WarnS(fmt.Sprintf("%s: failed to lock shard %s/%s for deletion, but force=true, proceeding anyway ...", lerr, keyspace, shard))
+		log.Warn(fmt.Sprintf("%s: failed to lock shard %s/%s for deletion, but force=true, proceeding anyway ...", lerr, keyspace, shard))
 	}
 
 	if unlock != nil {
@@ -75,7 +75,7 @@ func deleteShard(ctx context.Context, ts *topo.Server, keyspace string, shard st
 	shardInfo, err := ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		if topo.IsErrType(err, topo.NoNode) {
-			log.InfoS(fmt.Sprintf("Shard %v/%v doesn't seem to exist; cleaning up any potential leftover topo data", keyspace, shard))
+			log.Info(fmt.Sprintf("Shard %v/%v doesn't seem to exist; cleaning up any potential leftover topo data", keyspace, shard))
 
 			_ = ts.DeleteShard(ctx, keyspace, shard)
 			return nil
@@ -111,7 +111,7 @@ func deleteShard(ctx context.Context, ts *topo.Server, keyspace string, shard st
 	// regardless of whether they exist.
 	for _, cell := range cells {
 		if err := ts.DeleteShardReplication(ctx, cell, keyspace, shard); err != nil && !topo.IsErrType(err, topo.NoNode) {
-			log.WarnS(fmt.Sprintf("Cannot delete ShardReplication in cell %v for %v/%v: %v", cell, keyspace, shard, err))
+			log.Warn(fmt.Sprintf("Cannot delete ShardReplication in cell %v for %v/%v: %v", cell, keyspace, shard, err))
 		}
 	}
 
@@ -181,11 +181,11 @@ func deleteShardCell(ctx context.Context, ts *topo.Server, keyspace string, shar
 			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "Shard %v/%v still hase %v tablets in cell %v; use Recursive = true or remove them manually", keyspace, shard, len(tabletMap), cell)
 		}
 
-		log.InfoS(fmt.Sprintf("Deleting all %d tablets in shard %v/%v cell %v", len(tabletMap), keyspace, shard, cell))
+		log.Info(fmt.Sprintf("Deleting all %d tablets in shard %v/%v cell %v", len(tabletMap), keyspace, shard, cell))
 		for alias, tablet := range tabletMap {
 			// We don't care about updating the ShardReplication object, because
 			// later we're going to delete the entire object.
-			log.InfoS(fmt.Sprintf("Deleting tablet %v", alias))
+			log.Info(fmt.Sprintf("Deleting tablet %v", alias))
 			if err := ts.DeleteTablet(ctx, tablet.Alias); err != nil && !topo.IsErrType(err, topo.NoNode) {
 				// We don't want to continue if a DeleteTablet fails for any
 				// reason other than a missing tablet (in which case it's just
@@ -241,7 +241,7 @@ func deleteTablet(ctx context.Context, ts *topo.Server, alias *topodatapb.Tablet
 
 		if _, err := ts.UpdateShardFields(lockCtx, tablet.Keyspace, tablet.Shard, func(si *topo.ShardInfo) error {
 			if !topoproto.TabletAliasEqual(si.PrimaryAlias, alias) {
-				log.WarnS(fmt.Sprintf("Deleting primary %v from shard %v/%v but primary in Shard object was %v", topoproto.TabletAliasString(alias), tablet.Keyspace, tablet.Shard, topoproto.TabletAliasString(si.PrimaryAlias)))
+				log.Warn(fmt.Sprintf("Deleting primary %v from shard %v/%v but primary in Shard object was %v", topoproto.TabletAliasString(alias), tablet.Keyspace, tablet.Shard, topoproto.TabletAliasString(si.PrimaryAlias)))
 
 				return topo.NewError(topo.NoUpdateNeeded, si.Keyspace()+"/"+si.ShardName())
 			}
@@ -295,12 +295,12 @@ func removeShardCell(ctx context.Context, ts *topo.Server, cell string, keyspace
 	case err == nil:
 		// We have tablets in the shard in this cell.
 		if recursive {
-			log.InfoS(fmt.Sprintf("Deleting all tablets in cell %v in shard %v/%v", cell, keyspace, shardName))
+			log.Info(fmt.Sprintf("Deleting all tablets in cell %v in shard %v/%v", cell, keyspace, shardName))
 			for _, node := range replication.Nodes {
 				// We don't care about scrapping or updating the replication
 				// graph, because we're about to delete the entire replication
 				// graph.
-				log.InfoS(fmt.Sprintf("Deleting tablet %v", topoproto.TabletAliasString(node.TabletAlias)))
+				log.Info(fmt.Sprintf("Deleting tablet %v", topoproto.TabletAliasString(node.TabletAlias)))
 				if err := ts.DeleteTablet(ctx, node.TabletAlias); err != nil && !topo.IsErrType(err, topo.NoNode) {
 					return fmt.Errorf("cannot delete tablet %v: %w", topoproto.TabletAliasString(node.TabletAlias), err)
 				}
@@ -325,12 +325,12 @@ func removeShardCell(ctx context.Context, ts *topo.Server, cell string, keyspace
 			return err
 		}
 
-		log.WarnS(fmt.Sprintf("Cannot get ShardReplication from cell %v; assuming cell topo server is down and forcing removal", cell))
+		log.Warn(fmt.Sprintf("Cannot get ShardReplication from cell %v; assuming cell topo server is down and forcing removal", cell))
 	}
 
 	// Finally, update the shard.
 
-	log.InfoS(fmt.Sprintf("Removing cell %v from SrvKeyspace %v/%v", cell, keyspace, shardName))
+	log.Info(fmt.Sprintf("Removing cell %v from SrvKeyspace %v/%v", cell, keyspace, shardName))
 
 	ctx, unlock, lockErr := ts.LockKeyspace(ctx, keyspace, "Locking keyspace to remove shard from SrvKeyspace")
 	if lockErr != nil {

@@ -74,7 +74,7 @@ func (wr *Wrangler) Reshard(ctx context.Context, keyspace, workflow string, sour
 	}
 	if err := wr.ts.ValidateSrvKeyspace(ctx, keyspace, cell); err != nil {
 		err2 := vterrors.Wrapf(err, "SrvKeyspace for keyspace %s is corrupt in cell %s", keyspace, cell)
-		log.ErrorS(err2.Error())
+		log.Error(err2.Error())
 		return err2
 	}
 

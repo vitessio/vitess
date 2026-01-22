@@ -165,7 +165,7 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 	if err == nil && reloadSchema {
 		reloadErr := tm.QueryServiceControl.ReloadSchema(ctx)
 		if reloadErr != nil {
-			log.ErrorS(fmt.Sprintf("failed to reload the schema %v", reloadErr))
+			log.Error(fmt.Sprintf("failed to reload the schema %v", reloadErr))
 		}
 	}
 	return results, err
@@ -243,7 +243,7 @@ func (tm *TabletManager) ExecuteFetchAsAllPrivs(ctx context.Context, req *tablet
 	if err == nil && req.ReloadSchema {
 		reloadErr := tm.QueryServiceControl.ReloadSchema(ctx)
 		if reloadErr != nil {
-			log.ErrorS(fmt.Sprintf("failed to reload the schema %v", reloadErr))
+			log.Error(fmt.Sprintf("failed to reload the schema %v", reloadErr))
 		}
 	}
 	return sqltypes.ResultToProto3(result), err

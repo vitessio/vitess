@@ -466,7 +466,7 @@ func ReplaceExpr(root, from, to Expr) Expr {
 
 	expr, success := tmp.(Expr)
 	if !success {
-		log.ErrorS("Failed to rewrite expression. Rewriter returned a non-expression:  " + String(tmp))
+		log.Error("Failed to rewrite expression. Rewriter returned a non-expression:  " + String(tmp))
 		return from
 	}
 

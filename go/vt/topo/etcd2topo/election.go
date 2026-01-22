@@ -83,7 +83,7 @@ func (mp *etcdLeaderParticipation) WaitForLeadership() (context.Context, error) 
 		}
 		if ld != nil {
 			if err := ld.Unlock(context.Background()); err != nil {
-				log.ErrorS(fmt.Sprintf("failed to unlock electionPath %v: %v", electionPath, err))
+				log.Error(fmt.Sprintf("failed to unlock electionPath %v: %v", electionPath, err))
 			}
 		}
 		lockCancel()

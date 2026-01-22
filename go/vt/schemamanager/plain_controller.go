@@ -69,32 +69,32 @@ func (controller *PlainController) Keyspace() string {
 // OnReadSuccess is called when schemamanager successfully
 // reads all sql statements.
 func (controller *PlainController) OnReadSuccess(ctx context.Context) error {
-	log.InfoS("Successfully read all schema changes.")
+	log.Info("Successfully read all schema changes.")
 	return nil
 }
 
 // OnReadFail is called when schemamanager fails to read all sql statements.
 func (controller *PlainController) OnReadFail(ctx context.Context, err error) error {
-	log.ErrorS(fmt.Sprintf("Failed to read schema changes, error: %v\n", err))
+	log.Error(fmt.Sprintf("Failed to read schema changes, error: %v\n", err))
 	return err
 }
 
 // OnValidationSuccess is called when schemamanager successfully validates all sql statements.
 func (controller *PlainController) OnValidationSuccess(ctx context.Context) error {
-	log.InfoS("Successfully validated all SQL statements.")
+	log.Info("Successfully validated all SQL statements.")
 	return nil
 }
 
 // OnValidationFail is called when schemamanager fails to validate sql statements.
 func (controller *PlainController) OnValidationFail(ctx context.Context, err error) error {
-	log.ErrorS(fmt.Sprintf("Failed to validate SQL statements, error: %v\n", err))
+	log.Error(fmt.Sprintf("Failed to validate SQL statements, error: %v\n", err))
 	return err
 }
 
 // OnExecutorComplete  is called when schemamanager finishes applying schema changes.
 func (controller *PlainController) OnExecutorComplete(ctx context.Context, result *ExecuteResult) error {
 	out, _ := json.MarshalIndent(result, "", "  ")
-	log.InfoS(fmt.Sprintf("Executor finished, result: %s\n", string(out)))
+	log.Info(fmt.Sprintf("Executor finished, result: %s\n", string(out)))
 	return nil
 }
 

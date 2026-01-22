@@ -60,7 +60,7 @@ func initSchema(ctx context.Context) {
 		timer := timer.NewTimer(interval)
 		controllerFactory, err := schemamanager.GetControllerFactory(schemaChangeController)
 		if err != nil {
-			log.ErrorS(fmt.Sprintf("unable to get a controller factory, error: %v", err))
+			log.Error(fmt.Sprintf("unable to get a controller factory, error: %v", err))
 			os.Exit(1)
 		}
 
@@ -70,7 +70,7 @@ func initSchema(ctx context.Context) {
 				schemamanager.SchemaChangeUser:    schemaChangeUser,
 			})
 			if err != nil {
-				log.ErrorS(fmt.Sprintf("failed to get controller, error: %v", err))
+				log.Error(fmt.Sprintf("failed to get controller, error: %v", err))
 				return
 			}
 			wr := wrangler.New(env, logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
@@ -80,7 +80,7 @@ func initSchema(ctx context.Context) {
 				schemamanager.NewTabletExecutor("vtctld/schema", wr.TopoServer(), wr.TabletManagerClient(), wr.Logger(), schemaChangeReplicasTimeout, 0, env.Parser()),
 			)
 			if err != nil {
-				log.ErrorS(fmt.Sprintf("Schema change failed, error: %v", err))
+				log.Error(fmt.Sprintf("Schema change failed, error: %v", err))
 			}
 		})
 		servenv.OnClose(func() { timer.Stop() })

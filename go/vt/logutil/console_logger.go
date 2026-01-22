@@ -68,15 +68,15 @@ func (cl *ConsoleLogger) Printf(format string, v ...any) {
 
 // InfoDepth is part of the Logger interface.
 func (cl *ConsoleLogger) InfoDepth(depth int, s string) {
-	log.InfoSDepth(1+depth, s)
+	log.InfoDepth(1+depth, s)
 }
 
 // WarningDepth is part of the Logger interface.
 func (cl *ConsoleLogger) WarningDepth(depth int, s string) {
-	log.WarnSDepth(1+depth, s)
+	log.WarnDepth(1+depth, s)
 }
 
 // ErrorDepth is part of the Logger interface.
 func (cl *ConsoleLogger) ErrorDepth(depth int, s string) {
-	log.ErrorSDepth(1+depth, s)
+	log.ErrorDepth(1+depth, s)
 }

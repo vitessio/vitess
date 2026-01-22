@@ -58,7 +58,7 @@ primary key (id)
 func TestAddKeyspace(t *testing.T) {
 	cell := clusterInstance.Cell
 	if err := clusterInstance.StartKeyspace(*testKeyspace, []string{"-80", "80-"}, 0, false, cell); err != nil {
-		log.ErrorS(fmt.Sprintf("failed to AddKeyspace %v: %v", *testKeyspace, err))
+		log.Error(fmt.Sprintf("failed to AddKeyspace %v: %v", *testKeyspace, err))
 		t.Fatal(err)
 	}
 	// Restart vtgate process

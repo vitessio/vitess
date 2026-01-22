@@ -173,7 +173,7 @@ func (vtp *VtProcess) WaitStart() (err error) {
 		vtp.proc.Stdout = os.Stdout
 	}
 
-	log.InfoS(strings.Join(vtp.proc.Args, " "))
+	log.Info(strings.Join(vtp.proc.Args, " "))
 	err = vtp.proc.Start()
 	if err != nil {
 		return

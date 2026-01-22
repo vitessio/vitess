@@ -161,7 +161,7 @@ func (dte *DTExecutor) CommitPrepared(dtid string) (err error) {
 	ctx := trace.CopySpan(context.Background(), dte.ctx)
 	defer func() {
 		if err != nil {
-			log.WarnS(fmt.Sprintf("failed to commit the prepared transaction '%s' with error: %v", dtid, err))
+			log.Warn(fmt.Sprintf("failed to commit the prepared transaction '%s' with error: %v", dtid, err))
 			fail := dte.te.checkErrorAndMarkFailed(ctx, dtid, err, "TwopcCommit")
 			if fail {
 				dte.te.env.Stats().CommitPreparedFail.Add("NonRetryable", 1)
@@ -173,7 +173,7 @@ func (dte *DTExecutor) CommitPrepared(dtid string) (err error) {
 	}()
 	if DebugTwoPc {
 		if err := checkTestFailure(dte.ctx, dte.shardFunc()); err != nil {
-			log.ErrorS(fmt.Sprintf("failing test on commit prepared: %v", err))
+			log.Error(fmt.Sprintf("failing test on commit prepared: %v", err))
 			return err
 		}
 	}
@@ -283,7 +283,7 @@ func (dte *DTExecutor) SetRollback(dtid string, transactionID int64) error {
 		dte.te.Rollback(dte.ctx, transactionID)
 	} else {
 		// This is a warning because it should not happen in normal operation.
-		log.WarnS("SetRollback called with no transactionID for dtid " + dtid)
+		log.Warn("SetRollback called with no transactionID for dtid " + dtid)
 	}
 
 	return dte.inTransaction(func(conn *StatefulConnection) error {

@@ -80,7 +80,7 @@ func getTablesInKeyspace(ctx context.Context, ts *topo.Server, tmc tmclient.Tabl
 	if err != nil {
 		return nil, err
 	}
-	log.InfoS(fmt.Sprintf("got table schemas: %+v from source primary %v.", schema, primary))
+	log.Info(fmt.Sprintf("got table schemas: %+v from source primary %v.", schema, primary))
 
 	var sourceTables []string
 	for _, td := range schema.TableDefinitions {
@@ -153,7 +153,7 @@ func createDefaultShardRoutingRules(ctx context.Context, ms *vtctldatapb.Materia
 		if srr[fromSource] == "" && srr[fromTarget] == "" {
 			srr[fromTarget] = ms.SourceKeyspace
 			changed = true
-			log.InfoS(fmt.Sprintf("Added default shard routing rule from %q to %q", fromTarget, fromSource))
+			log.Info(fmt.Sprintf("Added default shard routing rule from %q to %q", fromTarget, fromSource))
 		}
 	}
 	if changed {

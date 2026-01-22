@@ -96,7 +96,7 @@ func initializeCluster(t *testing.T) (int, error) {
 	}
 
 	// create certs directory
-	log.InfoS("Creating certificates")
+	log.Info("Creating certificates")
 	certDirectory = path.Join(clusterInstance.TmpDirectory, "certs")
 	_ = encryption.CreateDirectory(certDirectory, 0o700)
 

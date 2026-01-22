@@ -62,7 +62,7 @@ func (le *LastError) Record(err error) {
 		// same error seen
 		if time.Since(le.lastSeen) > le.maxTimeInError {
 			// reset firstSeen, since it has been long enough since the last time we saw this error
-			log.InfoS(fmt.Sprintf("Resetting firstSeen for %s, since it is too long since the last one", le.name))
+			log.Info(fmt.Sprintf("Resetting firstSeen for %s, since it is too long since the last one", le.name))
 			le.firstSeen = time.Now()
 		}
 		le.lastSeen = time.Now()
@@ -83,6 +83,6 @@ func (le *LastError) ShouldRetry() bool {
 		// within the max time range
 		return true
 	}
-	log.ErrorS(fmt.Sprintf("%s: the same error was encountered continuously since %s, it is now assumed to be unrecoverable; any affected operations will need to be manually restarted once error '%s' has been addressed", le.name, le.firstSeen.UTC(), le.err))
+	log.Error(fmt.Sprintf("%s: the same error was encountered continuously since %s, it is now assumed to be unrecoverable; any affected operations will need to be manually restarted once error '%s' has been addressed", le.name, le.firstSeen.UTC(), le.err))
 	return false
 }

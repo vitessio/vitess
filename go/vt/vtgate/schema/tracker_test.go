@@ -58,7 +58,7 @@ func TestMain(m *testing.M) {
 			return ki.SidecarDbName, nil
 		})
 		if !created {
-			log.ErrorS("Failed to create a new sidecar database identifier cache as one already existed!")
+			log.Error("Failed to create a new sidecar database identifier cache as one already existed!")
 			return 1
 		}
 		return m.Run()

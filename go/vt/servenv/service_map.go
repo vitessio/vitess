@@ -66,9 +66,9 @@ func updateServiceMap() {
 // (and also logs how to enable / disable it)
 func checkServiceMap(protocol, name string) bool {
 	if serviceMap[protocol+"-"+name] {
-		log.InfoS(fmt.Sprintf("Registering %v for %v, disable it with -%v-%v service-map parameter", name, protocol, protocol, name))
+		log.Info(fmt.Sprintf("Registering %v for %v, disable it with -%v-%v service-map parameter", name, protocol, protocol, name))
 		return true
 	}
-	log.InfoS(fmt.Sprintf("Not registering %v for %v, enable it with %v-%v service-map parameter", name, protocol, protocol, name))
+	log.Info(fmt.Sprintf("Not registering %v for %v, enable it with %v-%v service-map parameter", name, protocol, protocol, name))
 	return false
 }

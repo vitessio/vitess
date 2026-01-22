@@ -65,7 +65,7 @@ func (te *testEnv) Environment() *vtenv.Environment { return te.env }
 
 func (te *testEnv) LogError() {
 	if x := recover(); x != nil {
-		log.ErrorS(fmt.Sprintf("Uncaught panic:\n%v\n%s", x, tb.Stack(4)))
+		log.Error(fmt.Sprintf("Uncaught panic:\n%v\n%s", x, tb.Stack(4)))
 		te.Stats().InternalErrors.Add("Panic", 1)
 	}
 }

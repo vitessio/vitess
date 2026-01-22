@@ -233,7 +233,7 @@ func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, ptsTime
 		state = StateNotConnected
 	}
 
-	log.InfoS(fmt.Sprintf("Starting transition to %v %v, primary term start timestamp: %v", tabletType, state, ptsTimestamp))
+	log.Info(fmt.Sprintf("Starting transition to %v %v, primary term start timestamp: %v", tabletType, state, ptsTimestamp))
 	if sm.mustTransition(tabletType, ptsTimestamp, state, reason) {
 		return sm.execTransition(tabletType, state)
 	}
@@ -299,7 +299,7 @@ func (sm *stateManager) retryTransition(message string) {
 	}
 	sm.retrying = true
 
-	log.ErrorS(message)
+	log.Error(message)
 	go func() {
 		for {
 			time.Sleep(transitionRetryInterval)
@@ -332,14 +332,14 @@ func (sm *stateManager) checkMySQL() {
 	if !sm.checkMySQLThrottler.TryAcquire(1) {
 		return
 	}
-	log.InfoS("CheckMySQL started")
+	log.Info("CheckMySQL started")
 	sm.checkMySQLRunning.Store(true)
 	go func() {
 		defer func() {
 			time.Sleep(1 * time.Second)
 			sm.checkMySQLRunning.Store(false)
 			sm.checkMySQLThrottler.Release(1)
-			log.InfoS("CheckMySQL finished")
+			log.Info("CheckMySQL finished")
 		}()
 
 		err := sm.qe.IsMySQLReachable()
@@ -385,7 +385,7 @@ func (sm *stateManager) isCheckMySQLRunning() int64 {
 func (sm *stateManager) StopService() {
 	defer close(sm.setTimeBomb())
 
-	log.InfoS("Stopping TabletServer")
+	log.Info("Stopping TabletServer")
 	sm.SetServingType(sm.Target().TabletType, time.Time{}, StateNotConnected, "service stopped")
 	sm.hcticks.Stop()
 	sm.hs.Close()
@@ -457,7 +457,7 @@ func (sm *stateManager) verifyTargetLocked(ctx context.Context, target *querypb.
 
 func (sm *stateManager) servePrimary() error {
 	sm.watcher.Close()
-	log.InfoS("servePrimary: binlog watcher closed")
+	log.Info("servePrimary: binlog watcher closed")
 
 	if err := sm.connect(topodatapb.TabletType_PRIMARY, true); err != nil {
 		return err
@@ -562,30 +562,30 @@ func (sm *stateManager) unserveCommon() {
 	// We create a wait group that tracks whether all the queries have been terminated or not.
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	log.InfoS("Started execution of unserveCommon")
+	log.Info("Started execution of unserveCommon")
 	cancel := sm.terminateAllQueries(&wg)
-	log.InfoS("Finished execution of terminateAllQueries")
+	log.Info("Finished execution of terminateAllQueries")
 	defer cancel()
 
-	log.InfoS("Started online ddl executor close")
+	log.Info("Started online ddl executor close")
 	sm.ddle.Close()
-	log.InfoS("Finished online ddl executor close. Started table garbage collector close")
+	log.Info("Finished online ddl executor close. Started table garbage collector close")
 	sm.tableGC.Close()
-	log.InfoS("Finished table garbage collector close. Started lag throttler close")
+	log.Info("Finished table garbage collector close. Started lag throttler close")
 	sm.throttler.Close()
-	log.InfoS("Finished lag throttler close. Started messager close")
+	log.Info("Finished lag throttler close. Started messager close")
 	sm.qThrottler.Close()
-	log.InfoS("Finished query throttler close. Started query throttler close")
+	log.Info("Finished query throttler close. Started query throttler close")
 	sm.messager.Close()
-	log.InfoS("Finished messager close. Started txEngine close")
+	log.Info("Finished messager close. Started txEngine close")
 	sm.te.Close()
-	log.InfoS("Finished txEngine close. Killing all OLAP queries")
+	log.Info("Finished txEngine close. Killing all OLAP queries")
 	sm.olapql.TerminateAll()
-	log.InfoS("Finished Killing all OLAP queries. Started tracker close")
+	log.Info("Finished Killing all OLAP queries. Started tracker close")
 	sm.tracker.Close()
-	log.InfoS("Finished tracker close. Started wait for requests")
+	log.Info("Finished tracker close. Started wait for requests")
 	sm.handleShutdownGracePeriod(&wg)
-	log.InfoS("Finished handling grace period. Finished execution of unserveCommon")
+	log.Info("Finished handling grace period. Finished execution of unserveCommon")
 }
 
 // handleShutdownGracePeriod checks if we have shutdwonGracePeriod specified.
@@ -622,17 +622,17 @@ func (sm *stateManager) terminateAllQueries(wg *sync.WaitGroup) (cancel func()) 
 		}
 		// Prevent any new queries from being added before we kill all the queries in the list.
 		sm.markClusterAction(ClusterActionNoQueries)
-		log.InfoS(fmt.Sprintf("Grace Period %v exceeded. Killing all OLTP queries.", sm.shutdownGracePeriod))
+		log.Info(fmt.Sprintf("Grace Period %v exceeded. Killing all OLTP queries.", sm.shutdownGracePeriod))
 		sm.statelessql.TerminateAll()
-		log.InfoS("Killed all stateless OLTP queries.")
+		log.Info("Killed all stateless OLTP queries.")
 		sm.statefulql.TerminateAll()
-		log.InfoS("Killed all OLTP queries.")
+		log.Info("Killed all OLTP queries.")
 		// We can rollback prepared transactions only after we have killed all the write queries in progress.
 		// This is essential because when we rollback a prepared transaction, it lets go of the locks it was holding.
 		// If there were some other conflicting write in progress that hadn't been killed, then it could potentially go through
 		// and cause data corruption since we won't be able to prepare the transaction again.
 		sm.te.RollbackPrepared()
-		log.InfoS("Rollbacked all prepared transactions")
+		log.Info("Rollbacked all prepared transactions")
 	}()
 	return cancel
 }
@@ -660,7 +660,7 @@ func (sm *stateManager) setTimeBomb() chan struct{} {
 		defer tmr.Stop()
 		select {
 		case <-tmr.C:
-			log.ErrorS("Shutdown took too long. Crashing")
+			log.Error("Shutdown took too long. Crashing")
 			os.Exit(1)
 		case <-done:
 		}
@@ -671,14 +671,14 @@ func (sm *stateManager) setTimeBomb() chan struct{} {
 // setState changes the state and logs the event.
 func (sm *stateManager) setState(tabletType topodatapb.TabletType, state servingState) {
 	defer logInitTime.Do(func() {
-		log.InfoS(fmt.Sprintf("Tablet Init took %d ms", time.Since(servenv.GetInitStartTime()).Milliseconds()))
+		log.Info(fmt.Sprintf("Tablet Init took %d ms", time.Since(servenv.GetInitStartTime()).Milliseconds()))
 	})
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	if tabletType == topodatapb.TabletType_UNKNOWN {
 		tabletType = sm.wantTabletType
 	}
-	log.InfoS(fmt.Sprintf("TabletServer transition: %v -> %v for tablet %s:%s/%s", sm.stateStringLocked(sm.target.TabletType, sm.state), sm.stateStringLocked(tabletType, state),
+	log.Info(fmt.Sprintf("TabletServer transition: %v -> %v for tablet %s:%s/%s", sm.stateStringLocked(sm.target.TabletType, sm.state), sm.stateStringLocked(tabletType, state),
 		sm.target.Cell, sm.target.Keyspace, sm.target.Shard))
 	sm.handleTransitionGracePeriod(tabletType)
 	sm.target.TabletType = tabletType
@@ -745,18 +745,18 @@ func (sm *stateManager) refreshReplHealthLocked() (time.Duration, error) {
 	lag, err := sm.rt.Status()
 	if err != nil {
 		if sm.replHealthy {
-			log.InfoS(fmt.Sprintf("Going unhealthy due to replication error: %v", err))
+			log.Info(fmt.Sprintf("Going unhealthy due to replication error: %v", err))
 		}
 		sm.replHealthy = false
 	} else {
 		if lag > time.Duration(sm.unhealthyThreshold.Load()) {
 			if sm.replHealthy {
-				log.InfoS(fmt.Sprintf("Going unhealthy due to high replication lag: %v", lag))
+				log.Info(fmt.Sprintf("Going unhealthy due to high replication lag: %v", lag))
 			}
 			sm.replHealthy = false
 		} else {
 			if !sm.replHealthy {
-				log.InfoS("Replication is healthy")
+				log.Info("Replication is healthy")
 			}
 			sm.replHealthy = true
 		}
@@ -769,7 +769,7 @@ func (sm *stateManager) refreshReplHealthLocked() (time.Duration, error) {
 // otherwise remains the same. Any subsequent calls to SetServingType will
 // cause the tabletserver to exit this mode.
 func (sm *stateManager) EnterLameduck() {
-	log.InfoS("State: entering lameduck")
+	log.Info("State: entering lameduck")
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	sm.lameduck = true
@@ -780,7 +780,7 @@ func (sm *stateManager) ExitLameduck() {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	sm.lameduck = false
-	log.InfoS("State: exiting lameduck")
+	log.Info("State: exiting lameduck")
 }
 
 // IsServing returns true if TabletServer is in SERVING state.

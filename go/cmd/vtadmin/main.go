@@ -80,7 +80,7 @@ var (
 // a log.Fatal call with the given args.
 func fatal(args ...any) {
 	trace.LogErrorsWhenClosing(traceCloser)
-	log.ErrorS(fmt.Sprint(args...))
+	log.Error(fmt.Sprint(args...))
 	os.Exit(1)
 }
 
@@ -89,12 +89,12 @@ func fatal(args ...any) {
 func startTracing(cmd *cobra.Command) {
 	tracer, err := cmd.Flags().GetString("tracer")
 	if err != nil {
-		log.WarnS(fmt.Sprintf("not starting tracer; err: %s", err))
+		log.Warn(fmt.Sprintf("not starting tracer; err: %s", err))
 		return
 	}
 
 	if tracer == "" || tracer == "noop" {
-		log.WarnS("starting tracing with noop tracer")
+		log.Warn("starting tracing with noop tracer")
 	}
 
 	traceCloser = trace.StartTracing("vtadmin")
@@ -139,7 +139,7 @@ func run(cmd *cobra.Command, args []string) {
 	}
 
 	if cacheRefreshKey == "" {
-		log.WarnS("no cache-refresh-key set; forcing cache refreshes will not be possible")
+		log.Warn("no cache-refresh-key set; forcing cache refreshes will not be possible")
 	}
 	cache.SetCacheRefreshKey(cacheRefreshKey)
 
@@ -231,7 +231,7 @@ func main() {
 
 	rootCmd.SetGlobalNormalizationFunc(utils.NormalizeUnderscoresToDashes)
 	if err := rootCmd.Execute(); err != nil {
-		log.ErrorS(fmt.Sprint(err))
+		log.Error(fmt.Sprint(err))
 		os.Exit(1)
 	}
 }

@@ -487,7 +487,7 @@ func (mysqld *Mysqld) SetReplicationPosition(ctx context.Context, pos replicatio
 	defer conn.Recycle()
 
 	cmds := conn.Conn.SetReplicationPositionCommands(pos)
-	log.InfoS(fmt.Sprintf("Executing commands to set replication position: %v", cmds))
+	log.Info(fmt.Sprintf("Executing commands to set replication position: %v", cmds))
 	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
 }
 
@@ -697,7 +697,7 @@ func (mysqld *Mysqld) semiSyncReplicationStatusQuery(ctx context.Context) (strin
 // SetSemiSyncEnabled enables or disables semi-sync replication for
 // primary and/or replica mode.
 func (mysqld *Mysqld) SetSemiSyncEnabled(ctx context.Context, primary, replica bool) error {
-	log.InfoS(fmt.Sprintf("Setting semi-sync mode: primary=%v, replica=%v", primary, replica))
+	log.Info(fmt.Sprintf("Setting semi-sync mode: primary=%v, replica=%v", primary, replica))
 
 	// Convert bool to int.
 	var p, s int

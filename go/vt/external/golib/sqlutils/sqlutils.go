@@ -230,7 +230,7 @@ func QueryRowsMap(db *sql.DB, query string, on_row func(RowMap) error, args ...a
 		defer rows.Close()
 	}
 	if err != nil && err != sql.ErrNoRows {
-		log.ErrorS(fmt.Sprint(err))
+		log.Error(fmt.Sprint(err))
 		return err
 	}
 	err = ScanRowsToMaps(rows, on_row)
@@ -247,7 +247,7 @@ func ExecNoPrepare(db *sql.DB, query string, args ...any) (res sql.Result, err e
 
 	res, err = db.Exec(query, args...)
 	if err != nil {
-		log.ErrorS(fmt.Sprint(err))
+		log.Error(fmt.Sprint(err))
 	}
 	return res, err
 }

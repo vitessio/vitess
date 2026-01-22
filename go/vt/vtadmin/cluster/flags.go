@@ -256,7 +256,7 @@ func parseOne(cfg *Config, name string, val string) error {
 			match := discoveryFlagRegexp.FindStringSubmatch(name)
 			if match == nil {
 				// not a discovery flag
-				log.WarnS(fmt.Sprintf("Attempted to parse %q as a discovery flag, ignoring ...", name))
+				log.Warn(fmt.Sprintf("Attempted to parse %q as a discovery flag, ignoring ...", name))
 				return nil
 			}
 

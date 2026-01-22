@@ -308,7 +308,7 @@ func clusterSetUp(t *testing.T) (int, error) {
 	}
 
 	// create all certs
-	log.InfoS("Creating certificates")
+	log.Info("Creating certificates")
 	certDirectory = path.Join(clusterInstance.TmpDirectory, "certs")
 	_ = encryption.CreateDirectory(certDirectory, 0o700)
 
@@ -397,7 +397,7 @@ func clusterSetUp(t *testing.T) (int, error) {
 }
 
 func createIntermediateCA(ca string, serial string, name string, commonName string) error {
-	log.InfoS("Creating intermediate signed cert and key " + commonName)
+	log.Info("Creating intermediate signed cert and key " + commonName)
 	tmpProcess := exec.Command(
 		"vttlstest",
 		"CreateIntermediateCA",
@@ -410,7 +410,7 @@ func createIntermediateCA(ca string, serial string, name string, commonName stri
 }
 
 func createSignedCert(ca string, serial string, name string, commonName string) error {
-	log.InfoS("Creating signed cert and key " + commonName)
+	log.Info("Creating signed cert and key " + commonName)
 	tmpProcess := exec.Command(
 		"vttlstest",
 		"CreateSignedCert",

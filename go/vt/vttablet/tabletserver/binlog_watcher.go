@@ -63,7 +63,7 @@ func (blw *BinlogWatcher) Open() {
 	if blw.cancel != nil || !blw.watchReplication {
 		return
 	}
-	log.InfoS("Binlog Watcher: opening")
+	log.Info("Binlog Watcher: opening")
 
 	ctx, cancel := context.WithCancel(tabletenv.LocalContext())
 	blw.cancel = cancel
@@ -79,7 +79,7 @@ func (blw *BinlogWatcher) Close() {
 	blw.cancel()
 	blw.cancel = nil
 	blw.wg.Wait()
-	log.InfoS("Binlog Watcher: closed")
+	log.Info("Binlog Watcher: closed")
 }
 
 func (blw *BinlogWatcher) process(ctx context.Context) {
@@ -97,7 +97,7 @@ func (blw *BinlogWatcher) process(ctx context.Context) {
 		err := blw.vs.Stream(ctx, "current", nil, filter, throttlerapp.BinlogWatcherName, func(events []*binlogdatapb.VEvent) error {
 			return nil
 		}, nil)
-		log.InfoS(fmt.Sprintf("ReplicationWatcher VStream ended: %v, retrying in 5 seconds", err))
+		log.Info(fmt.Sprintf("ReplicationWatcher VStream ended: %v, retrying in 5 seconds", err))
 		select {
 		case <-ctx.Done():
 			return

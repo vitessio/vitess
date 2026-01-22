@@ -54,7 +54,7 @@ func (fer *FirstErrorRecorder) RecordError(err error) {
 	if fer.errorCount == 1 {
 		fer.firstError = err
 	} else {
-		log.ErrorS(fmt.Sprintf("FirstErrorRecorder: error[%v]: %v", fer.errorCount, err))
+		log.Error(fmt.Sprintf("FirstErrorRecorder: error[%v]: %v", fer.errorCount, err))
 	}
 	fer.mu.Unlock()
 }

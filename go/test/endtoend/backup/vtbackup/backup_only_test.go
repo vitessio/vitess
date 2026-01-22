@@ -192,9 +192,9 @@ func firstBackupTest(t *testing.T, removeBackup bool) {
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 1)
 
 	// backup the replica
-	log.InfoS(fmt.Sprintf("taking backup %s", time.Now()))
+	log.Info(fmt.Sprintf("taking backup %s", time.Now()))
 	dataPointReader := vtBackup(t, false, true, true)
-	log.InfoS(fmt.Sprintf("done taking backup %s", time.Now()))
+	log.Info(fmt.Sprintf("done taking backup %s", time.Now()))
 
 	// check that the backup shows up in the listing
 	verifyBackupCount(t, shardKsName, len(backups)+1)
@@ -259,7 +259,7 @@ func startVtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disabl
 		go verifyDisableEnableRedoLogs(ctx, t, mysqlSocket.Name())
 	}
 
-	log.InfoS(fmt.Sprintf("starting backup tablet %s", time.Now()))
+	log.Info(fmt.Sprintf("starting backup tablet %s", time.Now()))
 	err = localCluster.StartVtbackup(newInitDBFile, initialBackup, keyspaceName, shardName, cell, extraArgs...)
 	if err != nil {
 		return nil, err
@@ -335,7 +335,7 @@ func initTablets(t *testing.T, startTablet bool, initShardPrimary bool) {
 
 func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForState string) {
 	// Erase mysql/tablet dir, then start tablet with restore enabled.
-	log.InfoS(fmt.Sprintf("restoring tablet %s", time.Now()))
+	log.Info(fmt.Sprintf("restoring tablet %s", time.Now()))
 	resetTabletDirectory(t, *tablet, true)
 
 	// Start tablets

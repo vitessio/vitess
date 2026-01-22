@@ -46,7 +46,7 @@ func SimplifyExpr(in sqlparser.Expr, test CheckF) sqlparser.Expr {
 			if valid {
 				break // we will still continue trying to simplify other expressions at this level
 			} else {
-				log.ErrorS(fmt.Sprintf("failed attempt: tried changing {%s} to {%s} in {%s}", sqlparser.String(node), sqlparser.String(expr), sqlparser.String(in)))
+				log.Error(fmt.Sprintf("failed attempt: tried changing {%s} to {%s} in {%s}", sqlparser.String(node), sqlparser.String(expr), sqlparser.String(in)))
 				// undo the change
 				cursor.Replace(node)
 			}

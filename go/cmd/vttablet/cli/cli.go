@@ -206,7 +206,7 @@ func initConfig(tabletAlias *topodatapb.TabletAlias, collationEnv *collations.En
 		}
 	}
 	gotBytes, _ := yaml2.Marshal(config)
-	log.InfoS(fmt.Sprintf("Loaded config file %s successfully:\n%s", tabletConfig, gotBytes))
+	log.Info(fmt.Sprintf("Loaded config file %s successfully:\n%s", tabletConfig, gotBytes))
 
 	var (
 		mycnf      *mysqlctl.Mycnf
@@ -224,7 +224,7 @@ func initConfig(tabletAlias *topodatapb.TabletAlias, collationEnv *collations.En
 
 		socketFile = mycnf.SocketFile
 	} else {
-		log.InfoS("connection parameters were specified. Not loading my.cnf.")
+		log.Info("connection parameters were specified. Not loading my.cnf.")
 	}
 
 	// If connection parameters were specified, socketFile will be empty.

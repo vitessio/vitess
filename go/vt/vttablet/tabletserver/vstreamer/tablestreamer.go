@@ -86,7 +86,7 @@ func newTableStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.En
 }
 
 func (ts *tableStreamer) Cancel() {
-	log.InfoS("TableStreamer Cancel() called")
+	log.Info("TableStreamer Cancel() called")
 	ts.cancel()
 }
 
@@ -118,7 +118,7 @@ func (ts *tableStreamer) Stream() error {
 	if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_write_timeout = %v", ts.config.NetWriteTimeout), 1, false); err != nil {
 		return err
 	}
-	log.InfoS(fmt.Sprintf("TableStreamer Stream() started with net read_timeout: %v, net write_timeout: %v", ts.config.NetReadTimeout, ts.config.NetWriteTimeout))
+	log.Info(fmt.Sprintf("TableStreamer Stream() started with net read_timeout: %v, net write_timeout: %v", ts.config.NetReadTimeout, ts.config.NetWriteTimeout))
 
 	rs, err := conn.ExecuteFetch("show full tables", -1, true)
 	if err != nil {
@@ -131,21 +131,21 @@ func (ts *tableStreamer) Stream() error {
 			continue
 		}
 		if schema2.IsInternalOperationTableName(tableName) {
-			log.InfoS("Skipping internal table " + tableName)
+			log.Info("Skipping internal table " + tableName)
 			continue
 		}
 		ts.tables = append(ts.tables, tableName)
 	}
-	log.InfoS(fmt.Sprintf("Found %d tables to stream: %s", len(ts.tables), strings.Join(ts.tables, ", ")))
+	log.Info(fmt.Sprintf("Found %d tables to stream: %s", len(ts.tables), strings.Join(ts.tables, ", ")))
 	for _, tableName := range ts.tables {
-		log.InfoS("Streaming table " + tableName)
+		log.Info("Streaming table " + tableName)
 		if err := ts.streamTable(ts.ctx, tableName); err != nil {
-			log.ErrorS(fmt.Sprintf("Streaming table %s failed: %v", tableName, err))
+			log.Error(fmt.Sprintf("Streaming table %s failed: %v", tableName, err))
 			return err
 		}
-		log.InfoS("Finished streaming table " + tableName)
+		log.Info("Finished streaming table " + tableName)
 	}
-	log.InfoS(fmt.Sprintf("Finished streaming %d tables", len(ts.tables)))
+	log.Info(fmt.Sprintf("Finished streaming %d tables", len(ts.tables)))
 	return nil
 }
 

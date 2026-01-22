@@ -47,13 +47,13 @@ func Run(bindAddress string, port int) {
 
 	l, err := net.Listen("tcp", net.JoinHostPort(bindAddress, strconv.Itoa(port)))
 	if err != nil {
-		log.ErrorS(fmt.Sprint(err))
+		log.Error(fmt.Sprint(err))
 		os.Exit(1)
 	}
 	go func() {
 		err := HTTPServe(l)
 		if err != nil {
-			log.ErrorS(fmt.Sprintf("http serve returned unexpected error: %v", err))
+			log.Error(fmt.Sprintf("http serve returned unexpected error: %v", err))
 		}
 	}()
 
@@ -63,18 +63,18 @@ func Run(bindAddress string, port int) {
 	<-ExitChan
 
 	startTime := time.Now()
-	log.InfoS(fmt.Sprintf("Entering lameduck mode for at least %v", timeouts.LameduckPeriod))
-	log.InfoS("Firing asynchronous OnTerm hooks")
+	log.Info(fmt.Sprintf("Entering lameduck mode for at least %v", timeouts.LameduckPeriod))
+	log.Info("Firing asynchronous OnTerm hooks")
 	go onTermHooks.Fire()
 
 	fireOnTermSyncHooks(timeouts.OnTermTimeout)
 	if remain := timeouts.LameduckPeriod - time.Since(startTime); remain > 0 {
-		log.InfoS(fmt.Sprintf("Sleeping an extra %v after OnTermSync to finish lameduck period", remain))
+		log.Info(fmt.Sprintf("Sleeping an extra %v after OnTermSync to finish lameduck period", remain))
 		time.Sleep(remain)
 	}
 	l.Close()
 
-	log.InfoS("Shutting down gracefully")
+	log.Info("Shutting down gracefully")
 	fireOnCloseHooks(timeouts.OnCloseTimeout)
 	ListeningURL = url.URL{}
 }

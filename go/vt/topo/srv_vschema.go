@@ -183,7 +183,7 @@ func (ts *Server) RebuildSrvVSchema(ctx context.Context, cells []string) error {
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
-				log.ErrorS(fmt.Sprintf("%v: GetVSchema(%v) failed", err, keyspace))
+				log.Error(fmt.Sprintf("%v: GetVSchema(%v) failed", err, keyspace))
 				finalErr = err
 				return
 			}
@@ -225,7 +225,7 @@ func (ts *Server) RebuildSrvVSchema(ctx context.Context, cells []string) error {
 		go func(cell string) {
 			defer wg.Done()
 			if err := ts.UpdateSrvVSchema(ctx, cell, srvVSchema); err != nil {
-				log.ErrorS(fmt.Sprintf("%v: UpdateSrvVSchema(%v) failed", err, cell))
+				log.Error(fmt.Sprintf("%v: UpdateSrvVSchema(%v) failed", err, cell))
 				mu.Lock()
 				finalErr = err
 				mu.Unlock()

@@ -229,7 +229,7 @@ func (svci *SysVarCheckAndIgnore) Execute(ctx context.Context, vcursor VCursor, 
 		// Rather than returning the error, we will just log the error
 		// as the intention for executing the query it to validate the current setting and eventually ignore it anyways.
 		// There is no benefit of returning the error back to client.
-		log.WarnS(fmt.Sprintf("unable to validate the current settings for '%s': %s", svci.Name, err.Error()))
+		log.Warn(fmt.Sprintf("unable to validate the current settings for '%s': %s", svci.Name, err.Error()))
 		return nil
 	}
 	return nil

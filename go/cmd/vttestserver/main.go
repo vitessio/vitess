@@ -29,7 +29,7 @@ func main() {
 	cmd := cli.New()
 	cmd.SetGlobalNormalizationFunc(utils.NormalizeUnderscoresToDashes)
 	if err := cmd.Execute(); err != nil {
-		log.ErrorS(fmt.Sprint(err))
+		log.Error(fmt.Sprint(err))
 		os.Exit(1)
 	}
 }

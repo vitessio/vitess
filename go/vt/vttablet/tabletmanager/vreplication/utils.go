@@ -93,7 +93,7 @@ func insertLog(dbClient *vdbClient, typ string, vreplID int32, state, message st
 	// a new log but increment the count. This prevents spamming of the log table in case the same message is logged continuously.
 	id, _, lastLogState, lastLogMessage, err := getLastLog(dbClient, vreplID)
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("Could not insert vreplication_log record because we failed to get the last log record: %v", err))
+		log.Error(fmt.Sprintf("Could not insert vreplication_log record because we failed to get the last log record: %v", err))
 		return
 	}
 	if typ == LogStateChange && state == lastLogState {
@@ -108,7 +108,7 @@ func insertLog(dbClient *vdbClient, typ string, vreplID int32, state, message st
 		if len(message) > maxVReplicationLogMessageLen {
 			message, err = textutil.TruncateText(message, maxVReplicationLogMessageLen, binlogplayer.TruncationLocation, binlogplayer.TruncationIndicator)
 			if err != nil {
-				log.ErrorS(fmt.Sprintf("Could not insert vreplication_log record because we failed to truncate the message: %v", err))
+				log.Error(fmt.Sprintf("Could not insert vreplication_log record because we failed to truncate the message: %v", err))
 				return
 			}
 		}
@@ -117,7 +117,7 @@ func insertLog(dbClient *vdbClient, typ string, vreplID int32, state, message st
 		query = buf.ParsedQuery().Query
 	}
 	if _, err = dbClient.ExecuteFetch(query, 10000); err != nil {
-		log.ErrorS(fmt.Sprintf("Could not insert into vreplication_log table: %v: %v", query, err))
+		log.Error(fmt.Sprintf("Could not insert into vreplication_log table: %v: %v", query, err))
 	}
 }
 
@@ -234,7 +234,7 @@ func isUnrecoverableError(err error) bool {
 		sqlerror.ERWrongParamcountToNativeFct,
 		sqlerror.ERVectorConversion,
 		sqlerror.ERWrongValueCountOnRow:
-		log.ErrorS(fmt.Sprintf("Got unrecoverable error: %v", sqlErr))
+		log.Error(fmt.Sprintf("Got unrecoverable error: %v", sqlErr))
 		return true
 	case sqlerror.ERErrorDuringCommit:
 		switch sqlErr.HaErrorCode() {
@@ -251,7 +251,7 @@ func isUnrecoverableError(err error) bool {
 			// These are recoverable errors.
 			return false
 		default:
-			log.ErrorS(fmt.Sprintf("Got unrecoverable error: %v", sqlErr))
+			log.Error(fmt.Sprintf("Got unrecoverable error: %v", sqlErr))
 			return true
 		}
 	}

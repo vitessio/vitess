@@ -175,7 +175,7 @@ func TestMainImpl(m *testing.M) {
 	}()
 
 	if err != nil {
-		log.ErrorS(err.Error())
+		log.Error(err.Error())
 		os.Exit(1)
 	} else {
 		os.Exit(exitCode)

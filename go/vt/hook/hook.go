@@ -121,7 +121,7 @@ func (hook *Hook) findHook(ctx context.Context) (*exec.Cmd, int, error) {
 	}
 
 	// Configure the command.
-	log.InfoS(fmt.Sprintf("hook: executing hook: %v %v", vthook, strings.Join(hook.Parameters, " ")))
+	log.Info(fmt.Sprintf("hook: executing hook: %v %v", vthook, strings.Join(hook.Parameters, " ")))
 	cmd := exec.CommandContext(ctx, vthook, hook.Parameters...)
 	if len(hook.ExtraEnv) > 0 {
 		cmd.Env = os.Environ()
@@ -158,7 +158,7 @@ func (hook *Hook) ExecuteContext(ctx context.Context) (result *HookResult) {
 	result.Stderr = stderr.String()
 
 	defer func() {
-		log.InfoS(fmt.Sprintf("hook: result is %v", result.String()))
+		log.Info(fmt.Sprintf("hook: result is %v", result.String()))
 	}()
 
 	if err == nil {
@@ -203,9 +203,9 @@ func (hook *Hook) ExecuteOptional() error {
 	hr := hook.Execute()
 	switch hr.ExitStatus {
 	case HOOK_DOES_NOT_EXIST:
-		log.InfoS(fmt.Sprintf("%v hook doesn't exist", hook.Name))
+		log.Info(fmt.Sprintf("%v hook doesn't exist", hook.Name))
 	case HOOK_VTROOT_ERROR:
-		log.InfoS(fmt.Sprintf("VTROOT not set, so %v hook doesn't exist", hook.Name))
+		log.Info(fmt.Sprintf("VTROOT not set, so %v hook doesn't exist", hook.Name))
 	case HOOK_SUCCESS:
 		// nothing to do here
 	default:

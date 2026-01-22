@@ -233,7 +233,7 @@ func RegisterPushBackend(name string, backend PushBackend) {
 	pushBackendsLock.Lock()
 	defer pushBackendsLock.Unlock()
 	if _, ok := pushBackends[name]; ok {
-		log.ErrorS(fmt.Sprintf("PushBackend %s already exists; can't register the same name multiple times", name))
+		log.Error(fmt.Sprintf("PushBackend %s already exists; can't register the same name multiple times", name))
 		os.Exit(1)
 	}
 	pushBackends[name] = backend
@@ -256,7 +256,7 @@ func emitToBackend(emitPeriod *time.Duration) {
 	for range ticker.C {
 		if err := pushAll(); err != nil {
 			// TODO(aaijazi): This might cause log spam...
-			log.WarnS(fmt.Sprintf("Pushing stats to backend %v failed: %v", statsBackend, err))
+			log.Warn(fmt.Sprintf("Pushing stats to backend %v failed: %v", statsBackend, err))
 		}
 	}
 }

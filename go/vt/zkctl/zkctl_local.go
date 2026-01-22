@@ -37,7 +37,7 @@ func StartLocalZk(id, port int) (*Zkd, string) {
 
 	// Init & start zk.
 	if err := zkd.Init(); err != nil {
-		log.ErrorS(fmt.Sprintf("zkd.Init(%d, %d) failed: %v", id, port, err))
+		log.Error(fmt.Sprintf("zkd.Init(%d, %d) failed: %v", id, port, err))
 		os.Exit(1)
 	}
 

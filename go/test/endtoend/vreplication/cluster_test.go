@@ -178,7 +178,7 @@ func (vc *VitessCluster) StartVTOrc(cell string) error {
 	}
 	err := vtorcProcess.Setup()
 	if err != nil {
-		log.ErrorS(err.Error())
+		log.Error(err.Error())
 		return err
 	}
 	vc.VTOrcProcess = vtorcProcess
@@ -432,10 +432,10 @@ func (vc *VitessCluster) CleanupDataroot(t *testing.T, recreate bool) {
 	retries := 3
 	for i := 1; i <= retries; i++ {
 		if err = os.RemoveAll(dir); err == nil {
-			log.InfoS(fmt.Sprintf("Deleted vtdataroot %q", dir))
+			log.Info(fmt.Sprintf("Deleted vtdataroot %q", dir))
 			break
 		}
-		log.ErrorS(fmt.Sprintf("Failed to delete vtdataroot (attempt %d of %d) %q: %v", i, retries, dir, err))
+		log.Error(fmt.Sprintf("Failed to delete vtdataroot (attempt %d of %d) %q: %v", i, retries, dir, err))
 		time.Sleep(1 * time.Second)
 	}
 	require.NoError(t, err)
@@ -457,7 +457,7 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 	err := vc.VtctldClient.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName, "")
 	require.NoError(t, err)
 
-	log.InfoS("Applying throttler config for keyspace " + keyspace.Name)
+	log.Info("Applying throttler config for keyspace " + keyspace.Name)
 	req := &vtctldatapb.UpdateThrottlerConfigRequest{Enable: true, Threshold: throttlerConfig.Threshold, CustomQuery: throttlerConfig.Query}
 	res, err := throttler.UpdateThrottlerTopoConfigRaw(vc.VtctldClient, keyspace.Name, req, nil, nil)
 	require.NoError(t, err, res)
@@ -472,7 +472,7 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 	}
 	for _, cell := range cells {
 		if len(cell.Vtgates) == 0 {
-			log.InfoS("Starting vtgate")
+			log.Info("Starting vtgate")
 			vc.StartVtgate(t, cell, cellsToWatch)
 		}
 	}
@@ -568,7 +568,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 	}
 
 	shardNames := strings.Split(names, ",")
-	log.InfoS(fmt.Sprintf("Addshards got %d shards with %+v", len(shardNames), shardNames))
+	log.Info(fmt.Sprintf("Addshards got %d shards with %+v", len(shardNames), shardNames))
 	isSharded := len(shardNames) > 1
 	primaryTabletUID := 0
 	for ind, shardName := range shardNames {
@@ -576,9 +576,9 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 		tabletIndex := 0
 		shard := &Shard{Name: shardName, IsSharded: isSharded, Tablets: make(map[string]*Tablet, 1)}
 		if _, ok := keyspace.Shards[shardName]; ok {
-			log.InfoS(fmt.Sprintf("Shard %s already exists, not adding", shardName))
+			log.Info(fmt.Sprintf("Shard %s already exists, not adding", shardName))
 		} else {
-			log.InfoS("Adding Shard " + shardName)
+			log.Info("Adding Shard " + shardName)
 			if err := vc.VtctldClient.ExecuteCommand("CreateShard", keyspace.Name+"/"+shardName); err != nil {
 				t.Fatalf("CreateShard command failed with %+v\n", err)
 			}
@@ -589,7 +589,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 			tablets := make([]*Tablet, 0)
 			if i == 0 {
 				// only add primary tablet for first cell, so first time CreateShard is called
-				log.InfoS("Adding Primary tablet")
+				log.Info("Adding Primary tablet")
 				primary, proc, err := vc.AddTablet(t, cell, keyspace, shard, "replica", tabletID+tabletIndex)
 				require.NoError(t, err)
 				require.NotNil(t, primary)
@@ -601,7 +601,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 			}
 
 			for i := 0; i < numReplicas; i++ {
-				log.InfoS("Adding Replica tablet")
+				log.Info("Adding Replica tablet")
 				tablet, proc, err := vc.AddTablet(t, cell, keyspace, shard, "replica", tabletID+tabletIndex)
 				require.NoError(t, err)
 				require.NotNil(t, tablet)
@@ -612,7 +612,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 			// Only create RDONLY tablets in the default cell
 			if cell.Name == cluster.DefaultCell {
 				for i := 0; i < numRdonly; i++ {
-					log.InfoS("Adding RdOnly tablet")
+					log.Info("Adding RdOnly tablet")
 					tablet, proc, err := vc.AddTablet(t, cell, keyspace, shard, "rdonly", tabletID+tabletIndex)
 					require.NoError(t, err)
 					require.NotNil(t, tablet)
@@ -623,7 +623,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 			}
 
 			for ind, proc := range dbProcesses {
-				log.InfoS("Waiting for mysql process for tablet " + tablets[ind].Name)
+				log.Info("Waiting for mysql process for tablet " + tablets[ind].Name)
 				if err := proc.Wait(); err != nil {
 					// Retry starting the database process before giving up.
 					t.Logf("%v :: Unable to start mysql server for %v. Will cleanup files and processes, then retry...", err, tablets[ind].Vttablet)
@@ -632,7 +632,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 					// want to use as that is the most common problem.
 					tablets[ind].DbServer.Stop()
 					if _, err = exec.Command("fuser", "-n", "tcp", "-k", strconv.Itoa(tablets[ind].DbServer.MySQLPort)).Output(); err != nil {
-						log.ErrorS(fmt.Sprintf("Failed to kill process listening on port %d: %v", tablets[ind].DbServer.MySQLPort, err))
+						log.Error(fmt.Sprintf("Failed to kill process listening on port %d: %v", tablets[ind].DbServer.MySQLPort, err))
 					}
 					// Sleep for the kernel's TCP TIME_WAIT timeout to avoid the
 					// port already in use error, which is the common cause for
@@ -647,16 +647,16 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 						mysqlctlLog := path.Join(vtdataroot, "/tmp/mysqlctl.INFO")
 						logBytes, ferr := os.ReadFile(mysqlctlLog)
 						if ferr == nil {
-							log.ErrorS("mysqlctl log contents:\n" + string(logBytes))
+							log.Error("mysqlctl log contents:\n" + string(logBytes))
 						} else {
-							log.ErrorS(fmt.Sprintf("Failed to read the mysqlctl log file %q: %v", mysqlctlLog, ferr))
+							log.Error(fmt.Sprintf("Failed to read the mysqlctl log file %q: %v", mysqlctlLog, ferr))
 						}
 						mysqldLog := path.Join(vtdataroot, fmt.Sprintf("/vt_%010d/error.log", tablets[ind].Vttablet.TabletUID))
 						logBytes, ferr = os.ReadFile(mysqldLog)
 						if ferr == nil {
-							log.ErrorS("mysqld error log contents:\n" + string(logBytes))
+							log.Error("mysqld error log contents:\n" + string(logBytes))
 						} else {
-							log.ErrorS(fmt.Sprintf("Failed to read the mysqld error log file %q: %v", mysqldLog, ferr))
+							log.Error(fmt.Sprintf("Failed to read the mysqld error log file %q: %v", mysqldLog, ferr))
 						}
 						output, _ := dbcmd.CombinedOutput()
 						t.Fatalf("%v :: Unable to start mysql server for %v; Output: %s", err,
@@ -665,7 +665,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 				}
 			}
 			for ind, tablet := range tablets {
-				log.InfoS("Running Setup() for vttablet " + tablets[ind].Name)
+				log.Info("Running Setup() for vttablet " + tablets[ind].Name)
 				err := tablet.Vttablet.Setup()
 				require.NoError(t, err)
 				// Set time_zone to UTC for all tablets. Without this it fails locally on some MacOS setups.
@@ -677,10 +677,10 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 			}
 		}
 		require.NotEqual(t, 0, primaryTabletUID, "Should have created a primary tablet")
-		log.InfoS(fmt.Sprintf("InitializeShard and make %d primary", primaryTabletUID))
+		log.Info(fmt.Sprintf("InitializeShard and make %d primary", primaryTabletUID))
 		require.NoError(t, vc.VtctldClient.InitializeShard(keyspace.Name, shardName, cells[0].Name, primaryTabletUID))
 
-		log.InfoS("Finished creating shard " + shard.Name)
+		log.Info("Finished creating shard " + shard.Name)
 	}
 	for _, shard := range shardNames {
 		require.NoError(t, cluster.WaitForHealthyShard(vc.VtctldClient, keyspace.Name, shard))
@@ -718,7 +718,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 	err := vc.VtctldClient.ExecuteCommand("RebuildKeyspaceGraph", keyspace.Name)
 	require.NoError(t, err)
 
-	log.InfoS("Waiting for throttler config to be applied on all shards")
+	log.Info("Waiting for throttler config to be applied on all shards")
 	for _, shardName := range shardNames {
 		shard := keyspace.Shards[shardName]
 		for _, tablet := range shard.Tablets {
@@ -726,11 +726,11 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 				Alias:    tablet.Name,
 				HTTPPort: tablet.Vttablet.Port,
 			}
-			log.InfoS(fmt.Sprintf("+ Waiting for throttler config to be applied on %s, type=%v", tablet.Name, tablet.Vttablet.TabletType))
+			log.Info(fmt.Sprintf("+ Waiting for throttler config to be applied on %s, type=%v", tablet.Name, tablet.Vttablet.TabletType))
 			throttler.WaitForThrottlerStatusEnabled(t, vc.VtctldClient, clusterTablet, true, nil, time.Minute)
 		}
 	}
-	log.InfoS("Throttler config applied on all shards")
+	log.Info("Throttler config applied on all shards")
 	return nil
 }
 
@@ -739,10 +739,10 @@ func (vc *VitessCluster) DeleteShard(t testing.TB, cellName string, ksName strin
 	shard := vc.Cells[cellName].Keyspaces[ksName].Shards[shardName]
 	require.NotNil(t, shard)
 	for _, tab := range shard.Tablets {
-		log.InfoS("Shutting down tablet " + tab.Name)
+		log.Info("Shutting down tablet " + tab.Name)
 		tab.Vttablet.TearDown()
 	}
-	log.InfoS("Deleting Shard " + shardName)
+	log.Info("Deleting Shard " + shardName)
 	// TODO how can we avoid the use of even_if_serving?
 	if output, err := vc.VtctldClient.ExecuteCommandWithOutput("DeleteShard", "--recursive", "--even-if-serving", ksName+"/"+shardName); err != nil {
 		t.Fatalf("DeleteShard command failed with error %+v and output %s\n", err, output)
@@ -780,9 +780,9 @@ func (vc *VitessCluster) teardown() {
 	for _, cell := range vc.Cells {
 		for _, vtgate := range cell.Vtgates {
 			if err := vtgate.TearDown(); err != nil {
-				log.ErrorS("Error in vtgate teardown - " + err.Error())
+				log.Error("Error in vtgate teardown - " + err.Error())
 			} else {
-				log.InfoS("vtgate teardown successful")
+				log.Info("vtgate teardown successful")
 			}
 		}
 	}
@@ -798,22 +798,22 @@ func (vc *VitessCluster) teardown() {
 		_ = vc.TearDownKeyspace(keyspace)
 	}
 	if err := vc.Vtctld.TearDown(); err != nil {
-		log.InfoS("Error stopping Vtctld:  " + err.Error())
+		log.Info("Error stopping Vtctld:  " + err.Error())
 	} else {
-		log.InfoS("Successfully stopped vtctld")
+		log.Info("Successfully stopped vtctld")
 	}
 
 	for _, cell := range vc.Cells {
 		if err := vc.Topo.TearDown(cell.Name, originalVtdataroot, vtdataroot, false, "etcd2"); err != nil {
-			log.InfoS("Error in etcd teardown - " + err.Error())
+			log.Info("Error in etcd teardown - " + err.Error())
 		} else {
-			log.InfoS("Successfully tore down topo " + vc.Topo.Name)
+			log.Info("Successfully tore down topo " + vc.Topo.Name)
 		}
 	}
 
 	if vc.VTOrcProcess != nil {
 		if err := vc.VTOrcProcess.TearDown(); err != nil {
-			log.InfoS("Error stopping VTOrc: " + err.Error())
+			log.Info("Error stopping VTOrc: " + err.Error())
 		}
 	}
 }
@@ -825,15 +825,15 @@ func (vc *VitessCluster) TearDownKeyspace(ks *Keyspace) error {
 			eg.Go(func() error {
 				if tablet.DbServer != nil && tablet.DbServer.TabletUID > 0 {
 					if err := tablet.DbServer.Stop(); err != nil {
-						log.InfoS(fmt.Sprintf("Error stopping mysql process associated with vttablet %s: %v", tablet.Name, err))
+						log.Info(fmt.Sprintf("Error stopping mysql process associated with vttablet %s: %v", tablet.Name, err))
 						return err
 					}
 				}
 				if err := tablet.Vttablet.TearDown(); err != nil {
-					log.InfoS(fmt.Sprintf("Error stopping vttablet %s: %v", tablet.Name, err))
+					log.Info(fmt.Sprintf("Error stopping vttablet %s: %v", tablet.Name, err))
 					return err
 				} else {
-					log.InfoS("Successfully stopped vttablet " + tablet.Name)
+					log.Info("Successfully stopped vttablet " + tablet.Name)
 				}
 				return nil
 			})
@@ -845,7 +845,7 @@ func (vc *VitessCluster) TearDownKeyspace(ks *Keyspace) error {
 func (vc *VitessCluster) DeleteKeyspace(t testing.TB, ksName string) {
 	out, err := vc.VtctldClient.ExecuteCommandWithOutput("DeleteKeyspace", ksName, "--recursive")
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("DeleteKeyspace failed with error: %v, output: %s", err, out))
+		log.Error(fmt.Sprintf("DeleteKeyspace failed with error: %v, output: %s", err, out))
 	}
 	require.NoError(t, err)
 }
@@ -862,9 +862,9 @@ func (vc *VitessCluster) TearDown() {
 	}()
 	select {
 	case <-done:
-		log.InfoS("TearDown() was successful")
+		log.Info("TearDown() was successful")
 	case <-time.After(1 * time.Minute):
-		log.InfoS("TearDown() timed out")
+		log.Info("TearDown() timed out")
 	}
 	// some processes seem to hang around for a bit
 	time.Sleep(5 * time.Second)
@@ -877,7 +877,7 @@ func (vc *VitessCluster) getVttabletsInKeyspace(t *testing.T, cell *Cell, ksName
 	for _, shard := range keyspace.Shards {
 		for _, tablet := range shard.Tablets {
 			if tablet.Vttablet.GetTabletStatus() == "SERVING" && (tabletType == "" || strings.EqualFold(tablet.Vttablet.GetTabletType(), tabletType)) {
-				log.InfoS(fmt.Sprintf("Serving status of tablet %s is %s, %s", tablet.Name, tablet.Vttablet.ServingStatus, tablet.Vttablet.GetTabletStatus()))
+				log.Info(fmt.Sprintf("Serving status of tablet %s is %s, %s", tablet.Name, tablet.Vttablet.ServingStatus, tablet.Vttablet.GetTabletStatus()))
 				tablets[tablet.Name] = tablet.Vttablet
 			}
 		}
@@ -926,14 +926,14 @@ func (vc *VitessCluster) startQuery(t *testing.T, query string) (func(t *testing
 
 	commit := func(t *testing.T) {
 		_, err = conn.ExecuteFetch("commit", 1000, false)
-		log.InfoS(fmt.Sprintf("startQuery:commit:err: %+v", err))
+		log.Info(fmt.Sprintf("startQuery:commit:err: %+v", err))
 		conn.Close()
-		log.InfoS("startQuery:after closing connection")
+		log.Info("startQuery:after closing connection")
 	}
 	rollback := func(t *testing.T) {
 		defer conn.Close()
 		_, err = conn.ExecuteFetch("rollback", 1000, false)
-		log.InfoS(fmt.Sprintf("startQuery:rollback:err: %+v", err))
+		log.Info(fmt.Sprintf("startQuery:rollback:err: %+v", err))
 	}
 	return commit, rollback
 }

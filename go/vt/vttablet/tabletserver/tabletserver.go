@@ -361,7 +361,7 @@ func (tsv *TabletServer) Environment() *vtenv.Environment {
 // LogError satisfies tabletenv.Env.
 func (tsv *TabletServer) LogError() {
 	if x := recover(); x != nil {
-		log.ErrorS(fmt.Sprintf("Uncaught panic:\n%v\n%s", x, tb.Stack(4)))
+		log.Error(fmt.Sprintf("Uncaught panic:\n%v\n%s", x, tb.Stack(4)))
 		tsv.stats.InternalErrors.Add("Panic", 1)
 	}
 }
@@ -408,9 +408,9 @@ func (tsv *TabletServer) InitACL(tableACLConfigFile string, reloadACLConfigFileI
 		for range sigChan {
 			err := tsv.initACL(tableACLConfigFile)
 			if err != nil {
-				log.ErrorS(fmt.Sprintf("Error reloading ACL config file %s in SIGHUP handler: %v", tableACLConfigFile, err))
+				log.Error(fmt.Sprintf("Error reloading ACL config file %s in SIGHUP handler: %v", tableACLConfigFile, err))
 			} else {
-				log.InfoS(fmt.Sprintf("Successfully reloaded ACL file %s in SIGHUP handler", tableACLConfigFile))
+				log.Info(fmt.Sprintf("Successfully reloaded ACL file %s in SIGHUP handler", tableACLConfigFile))
 			}
 		}
 	}()
@@ -636,7 +636,7 @@ func (tsv *TabletServer) getPriorityFromOptions(options *querypb.ExecuteOptions)
 	// This should never error out, as the value for Priority has been validated in the vtgate already.
 	// Still, handle it just to make sure.
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("The value of the %s query directive could not be converted to integer, using the "+
+		log.Error(fmt.Sprintf("The value of the %s query directive could not be converted to integer, using the "+
 			"default value %d. Error was: %v", sqlparser.DirectivePriority, priority, err))
 
 		return priority
@@ -1629,7 +1629,7 @@ func (tsv *TabletServer) handlePanicAndSendLogStats(
 			truncatedQuery = queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.env.Parser())
 			logMessage = fmt.Sprintf(messagef, truncatedQuery)
 		}
-		log.ErrorS(logMessage)
+		log.Error(logMessage)
 		tsv.stats.InternalErrors.Add("Panic", 1)
 		if logStats != nil {
 			logStats.Error = terr
@@ -1659,7 +1659,7 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 	}
 
 	logMethod := func(format string, args ...any) {
-		log.ErrorS(fmt.Sprintf(format, args...))
+		log.Error(fmt.Sprintf(format, args...))
 	}
 	// Suppress or demote some errors in logs.
 	switch errCode {
@@ -1669,11 +1669,11 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		logMethod = logPoolFull.Errorf
 	case vtrpcpb.Code_ABORTED:
 		logMethod = func(format string, args ...any) {
-			log.WarnS(fmt.Sprintf(format, args...))
+			log.Warn(fmt.Sprintf(format, args...))
 		}
 	case vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_DEADLINE_EXCEEDED:
 		logMethod = func(format string, args ...any) {
-			log.InfoS(fmt.Sprintf(format, args...))
+			log.Info(fmt.Sprintf(format, args...))
 		}
 	}
 

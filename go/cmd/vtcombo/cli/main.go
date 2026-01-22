@@ -187,7 +187,7 @@ func run(cmd *cobra.Command, args []string) (err error) {
 		TruncateErrLen:     servenv.TruncateErrLen,
 	})
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("unable to initialize env: %v", err))
+		log.Error(fmt.Sprintf("unable to initialize env: %v", err))
 		os.Exit(1)
 	}
 
@@ -322,7 +322,7 @@ func run(cmd *cobra.Command, args []string) (err error) {
 		}
 
 		if len(tabletTypes) == 0 {
-			log.ErrorS("tablet-types-to-wait should contain at least one serving tablet type")
+			log.Error("tablet-types-to-wait should contain at least one serving tablet type")
 			os.Exit(1)
 		}
 	} else {

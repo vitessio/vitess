@@ -169,7 +169,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 
 	output, err := wr.VDiff2(ctx, keyspace, workflowName, action, actionArg, vdiffUUID.String(), options)
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("vdiff2 returning with error: %v", err))
+		log.Error(fmt.Sprintf("vdiff2 returning with error: %v", err))
 		return err
 	}
 

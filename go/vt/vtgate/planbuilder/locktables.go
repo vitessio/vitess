@@ -29,7 +29,7 @@ import (
 
 // buildLockPlan plans lock tables statement.
 func buildLockPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, _ plancontext.VSchema) (*planResult, error) {
-	log.WarnS(fmt.Sprintf("Lock Tables statement is ignored: %v", stmt))
+	log.Warn(fmt.Sprintf("Lock Tables statement is ignored: %v", stmt))
 	return newPlanResult(engine.NewRowsPrimitive(make([][]sqltypes.Value, 0), make([]*querypb.Field, 0))), nil
 }
 

@@ -62,17 +62,17 @@ var (
 
 // infof formats an info message and emits it through the structured logger.
 func infof(format string, args ...any) {
-	log.InfoS(fmt.Sprintf(format, args...))
+	log.Info(fmt.Sprintf(format, args...))
 }
 
 // warnf formats a warning message and emits it through the structured logger.
 func warnf(format string, args ...any) {
-	log.WarnS(fmt.Sprintf(format, args...))
+	log.Warn(fmt.Sprintf(format, args...))
 }
 
 // errorf formats an error message and emits it through the structured logger.
 func errorf(format string, args ...any) {
-	log.ErrorS(fmt.Sprintf(format, args...))
+	log.Error(fmt.Sprintf(format, args...))
 }
 
 // criticalf formats an error message and terminates the process.
@@ -80,6 +80,6 @@ func errorf(format string, args ...any) {
 // It mirrors the behavior of log.Fatalf, but uses ErrorS and os.Exit
 // explicitly so callers do not depend on the removed Fatalf wrapper.
 func criticalf(format string, args ...any) {
-	log.ErrorS(fmt.Sprintf(format, args...))
+	log.Error(fmt.Sprintf(format, args...))
 	os.Exit(1)
 }

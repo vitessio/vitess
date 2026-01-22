@@ -221,7 +221,7 @@ func (logger *StreamLogger[T]) ServeLogs(url string, logf LogFormatter) {
 			w.(http.Flusher).Flush()
 		}
 	})
-	log.InfoS(fmt.Sprintf("Streaming logs from %s at %v.", logger.Name(), url))
+	log.Info(fmt.Sprintf("Streaming logs from %s at %v.", logger.Name(), url))
 }
 
 // LogToFile starts logging to the specified file path and will reopen the

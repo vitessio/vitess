@@ -111,7 +111,7 @@ func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engi
 }
 
 func (rs *rowStreamer) Cancel() {
-	log.InfoS("Rowstreamer Cancel() called")
+	log.Info("Rowstreamer Cancel() called")
 	rs.cancel()
 }
 
@@ -171,7 +171,7 @@ func (rs *rowStreamer) buildPlan() error {
 	// filtering will work.
 	rs.plan, err = buildTablePlan(rs.se.Environment(), ti, rs.vschema, rs.query)
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("Failed to build table plan for %s in row streamer: %v", ti.Name, err))
+		log.Error(fmt.Sprintf("Failed to build table plan for %s in row streamer: %v", ti.Name, err))
 		return err
 	}
 
@@ -349,7 +349,7 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 		rotatedLog bool
 		err        error
 	)
-	log.InfoS(fmt.Sprintf("Streaming rows for query: %s\n", rs.sendQuery))
+	log.Info(fmt.Sprintf("Streaming rows for query: %s\n", rs.sendQuery))
 	if rs.mode == RowStreamerModeSingleTable {
 		gtid, rotatedLog, err = rs.conn.streamWithSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
 		if err != nil {
@@ -415,7 +415,7 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 	logger := logutil.NewThrottledLogger(rs.vse.GetTabletInfo(), throttledLoggerInterval)
 	for {
 		if rs.ctx.Err() != nil {
-			log.InfoS("Row stream ended because of ctx.Done")
+			log.Info("Row stream ended because of ctx.Done")
 			return fmt.Errorf("row stream ended: %v", rs.ctx.Err())
 		}
 

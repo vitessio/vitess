@@ -28,7 +28,7 @@ func LogErrorsWhenClosing(in io.Closer) func() {
 	return func() {
 		err := in.Close()
 		if err != nil {
-			log.ErrorS(fmt.Sprint(err))
+			log.Error(fmt.Sprint(err))
 		}
 	}
 }

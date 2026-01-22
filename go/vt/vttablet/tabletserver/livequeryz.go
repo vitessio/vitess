@@ -84,7 +84,7 @@ func livequeryzHandler(queryLists []*QueryList, w http.ResponseWriter, r *http.R
 	w.Write(livequeryzHeader)
 	for i := range rows {
 		if err := livequeryzTmpl.Execute(w, rows[i]); err != nil {
-			log.ErrorS(fmt.Sprintf("livequeryz: couldn't execute template: %v", err))
+			log.Error(fmt.Sprintf("livequeryz: couldn't execute template: %v", err))
 		}
 	}
 }

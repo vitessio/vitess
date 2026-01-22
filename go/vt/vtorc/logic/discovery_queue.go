@@ -95,7 +95,7 @@ func (q *DiscoveryQueue) Consume() string {
 
 	timeOnQueue := time.Since(item.PushedAt)
 	if timeOnQueue > config.GetInstancePollTime() {
-		log.WarnS(fmt.Sprintf("key %v spent %.4fs waiting on a discovery queue", item.Key, timeOnQueue.Seconds()))
+		log.Warn(fmt.Sprintf("key %v spent %.4fs waiting on a discovery queue", item.Key, timeOnQueue.Seconds()))
 	}
 
 	return item.Key

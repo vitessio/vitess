@@ -136,7 +136,7 @@ func (mysqlctl *MysqlctlProcess) startProcess(init bool) (*exec.Cmd, error) {
 			extraMyCNF := path.Join(sslPath, "ssl.cnf")
 			fout, err := os.Create(extraMyCNF)
 			if err != nil {
-				log.ErrorS(fmt.Sprint(err))
+				log.Error(fmt.Sprint(err))
 				return nil, err
 			}
 
@@ -168,15 +168,15 @@ ssl_key={{.ServerKey}}
 	}
 	tmpProcess.Env = append(tmpProcess.Env, os.Environ()...)
 	tmpProcess.Env = append(tmpProcess.Env, DefaultVttestEnv)
-	log.InfoS(fmt.Sprintf("Starting mysqlctl with command: %v", tmpProcess.Args))
+	log.Info(fmt.Sprintf("Starting mysqlctl with command: %v", tmpProcess.Args))
 	return tmpProcess, tmpProcess.Start()
 }
 
 // Stop executes mysqlctl command to stop mysql instance and kills the mysql instance
 // if it doesn't shutdown in 30 seconds.
 func (mysqlctl *MysqlctlProcess) Stop() (err error) {
-	log.InfoS(fmt.Sprintf("Shutting down MySQL: %d", mysqlctl.TabletUID))
-	defer log.InfoS(fmt.Sprintf("MySQL shutdown complete: %d", mysqlctl.TabletUID))
+	log.Info(fmt.Sprintf("Shutting down MySQL: %d", mysqlctl.TabletUID))
+	defer log.Info(fmt.Sprintf("MySQL shutdown complete: %d", mysqlctl.TabletUID))
 	tmpProcess, err := mysqlctl.StopProcess()
 	if err != nil {
 		return err
@@ -268,7 +268,7 @@ func MysqlCtlProcessInstanceOptionalInit(tabletUID int, mySQLPort int, tmpDirect
 
 	version, err := GetMajorVersion("mysqlctl")
 	if err != nil {
-		log.WarnS(fmt.Sprintf("failed to get major mysqlctl version; backwards-compatibility for CLI changes may not work: %s", err))
+		log.Warn(fmt.Sprintf("failed to get major mysqlctl version; backwards-compatibility for CLI changes may not work: %s", err))
 	}
 	mysqlctl := &MysqlctlProcess{
 		Name:         "mysqlctl",
@@ -342,7 +342,7 @@ func (mysqlctl *MysqlctlProcess) ExecuteCommandWithOutput(args ...string) (resul
 		mysqlctl.Binary,
 		args...,
 	)
-	log.InfoS("Executing mysqlctl with arguments " + strings.Join(tmpProcess.Args, " "))
+	log.Info("Executing mysqlctl with arguments " + strings.Join(tmpProcess.Args, " "))
 	resultByte, err := tmpProcess.CombinedOutput()
 	return string(resultByte), err
 }

@@ -62,14 +62,14 @@ func (vs *Server) start() error {
 	vs.execPath = path.Join(os.Getenv("EXTRA_BIN"), vaultExecutableName)
 	fileStat, err := os.Stat(vs.execPath)
 	if err != nil || fileStat.Size() != vaultDownloadSize {
-		log.WarnS(fmt.Sprintf("Downloading Vault binary to: %v", vs.execPath))
+		log.Warn(fmt.Sprintf("Downloading Vault binary to: %v", vs.execPath))
 		err := downloadExecFile(vs.execPath, vaultDownloadSource)
 		if err != nil {
-			log.ErrorS(fmt.Sprint(err))
+			log.Error(fmt.Sprint(err))
 			return err
 		}
 	} else {
-		log.WarnS(fmt.Sprintf("Vault binary already present at %v , not re-downloading", vs.execPath))
+		log.Warn(fmt.Sprintf("Vault binary already present at %v , not re-downloading", vs.execPath))
 	}
 
 	// Create Vault log directory
@@ -77,7 +77,7 @@ func (vs *Server) start() error {
 	if _, err := os.Stat(vs.logDir); os.IsNotExist(err) {
 		err := os.Mkdir(vs.logDir, 0o700)
 		if err != nil {
-			log.ErrorS(fmt.Sprint(err))
+			log.Error(fmt.Sprint(err))
 			return err
 		}
 	}
@@ -92,7 +92,7 @@ func (vs *Server) start() error {
 	newHclFile := path.Join(vs.logDir, vaultConfigFileName)
 	err = os.WriteFile(newHclFile, hcl, 0o700)
 	if err != nil {
-		log.ErrorS(fmt.Sprint(err))
+		log.Error(fmt.Sprint(err))
 		return err
 	}
 
@@ -104,7 +104,7 @@ func (vs *Server) start() error {
 
 	logFile, err := os.Create(path.Join(vs.logDir, "log.txt"))
 	if err != nil {
-		log.ErrorS(fmt.Sprint(err))
+		log.Error(fmt.Sprint(err))
 		return err
 	}
 	vs.proc.Stderr = logFile
@@ -112,7 +112,7 @@ func (vs *Server) start() error {
 
 	vs.proc.Env = append(vs.proc.Env, os.Environ()...)
 
-	log.InfoS(fmt.Sprintf("Running Vault server with command: %v", strings.Join(vs.proc.Args, " ")))
+	log.Info(fmt.Sprintf("Running Vault server with command: %v", strings.Join(vs.proc.Args, " ")))
 
 	err = vs.proc.Start()
 	if err != nil {

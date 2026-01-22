@@ -75,7 +75,7 @@ func (pr *poolRefresh) startRefreshTicker() {
 			case <-pr.refreshTicker.C:
 				val, err := pr.refreshCheck()
 				if err != nil {
-					log.InfoS(fmt.Sprint(err))
+					log.Info(fmt.Sprint(err))
 				}
 				if val {
 					go pr.pool.reopen()

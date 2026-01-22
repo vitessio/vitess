@@ -95,11 +95,11 @@ func (h *historian) Open() error {
 	if h.isOpen {
 		return nil
 	}
-	log.InfoS("Historian: opening")
+	log.Info("Historian: opening")
 
 	ctx := tabletenv.LocalContext()
 	if err := h.loadFromDB(ctx); err != nil {
-		log.ErrorS(fmt.Sprintf("Historian failed to open: %v", err))
+		log.Error(fmt.Sprintf("Historian failed to open: %v", err))
 		return err
 	}
 
@@ -117,7 +117,7 @@ func (h *historian) Close() {
 
 	h.schemas = nil
 	h.isOpen = false
-	log.InfoS("Historian: closed")
+	log.Info("Historian: closed")
 }
 
 // RegisterVersionEvent is called by the vstream when it encounters a version event (an
@@ -144,7 +144,7 @@ func (h *historian) GetTableForPos(tableName sqlparser.IdentifierCS, gtid string
 		return nil, nil
 	}
 
-	log.DebugS(fmt.Sprintf("GetTableForPos called for %s with pos %s", tableName, gtid))
+	log.Debug(fmt.Sprintf("GetTableForPos called for %s with pos %s", tableName, gtid))
 	if gtid == "" {
 		return nil, nil
 	}
@@ -157,7 +157,7 @@ func (h *historian) GetTableForPos(tableName sqlparser.IdentifierCS, gtid string
 		t = h.getTableFromHistoryForPos(tableName, pos)
 	}
 	if t != nil {
-		log.DebugS(fmt.Sprintf("Returning table %s from history for pos %s, schema %s", tableName, gtid, t))
+		log.Debug(fmt.Sprintf("Returning table %s from history for pos %s, schema %s", tableName, gtid, t))
 	}
 	return t, nil
 }
@@ -182,7 +182,7 @@ func (h *historian) loadFromDB(ctx context.Context) error {
 	}
 
 	if err != nil {
-		log.InfoS(fmt.Sprintf("Error reading schema_tracking table %v, will operate with the latest available schema", err))
+		log.Info(fmt.Sprintf("Error reading schema_tracking table %v, will operate with the latest available schema", err))
 		return nil
 	}
 	for _, row := range tableData.Rows {
@@ -233,7 +233,7 @@ func (h *historian) readRow(row []sqltypes.Value) (*trackedSchema, int64, error)
 	if err := sch.UnmarshalVT(rowBytes); err != nil {
 		return nil, 0, err
 	}
-	log.DebugS(fmt.Sprintf("Read tracked schema from db: id %d, pos %v, ddl %s, schema len %d, time_updated %d \n",
+	log.Debug(fmt.Sprintf("Read tracked schema from db: id %d, pos %v, ddl %s, schema len %d, time_updated %d \n",
 		id, replication.EncodePosition(pos), ddl, len(sch.Tables), timeUpdated))
 
 	tables := map[string]*binlogdatapb.MinimalTable{}
@@ -288,7 +288,7 @@ func (h *historian) getTableFromHistoryForPos(tableName sqlparser.IdentifierCS, 
 		return pos.Equal(h.schemas[i].pos) || !pos.AtLeast(h.schemas[i].pos)
 	})
 	if idx >= len(h.schemas) || idx == 0 && !pos.Equal(h.schemas[idx].pos) { // beyond the range of the cache
-		log.InfoS(fmt.Sprintf("Schema not found in cache for %s with pos %s", tableName, pos))
+		log.Info(fmt.Sprintf("Schema not found in cache for %s with pos %s", tableName, pos))
 		return nil
 	}
 	if pos.Equal(h.schemas[idx].pos) { // exact match to a cache entry

@@ -154,7 +154,7 @@ func DialContext(ctx context.Context, target string, failFast FailFast, opts ...
 	for _, grpcDialOptionInitializer := range grpcDialOptions {
 		newopts, err = grpcDialOptionInitializer(newopts)
 		if err != nil {
-			log.ErrorS(fmt.Sprintf("There was an error initializing client grpc.DialOption: %v", err))
+			log.Error(fmt.Sprintf("There was an error initializing client grpc.DialOption: %v", err))
 			os.Exit(1)
 		}
 	}

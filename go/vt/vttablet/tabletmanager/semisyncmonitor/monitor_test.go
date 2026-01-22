@@ -1052,7 +1052,7 @@ func TestDeadlockOnClose(t *testing.T) {
 		// The test timed out, which means we deadlocked.
 		buf := make([]byte, 1<<16) // 64 KB buffer size
 		stackSize := runtime.Stack(buf, true)
-		log.ErrorS("Stack trace:\n" + string(buf[:stackSize]))
+		log.Error("Stack trace:\n" + string(buf[:stackSize]))
 		t.Fatalf("Deadlock occurred while closing the monitor")
 	}
 }

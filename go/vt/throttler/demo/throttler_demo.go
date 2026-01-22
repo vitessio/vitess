@@ -136,7 +136,7 @@ func newReplica(env *vtenv.Environment, lagUpdateInterval, degrationInterval, de
 
 	throttler, err := throttler.NewThrottler("replica", "TPS", 1, rate, throttler.ReplicationLagModuleDisabled)
 	if err != nil {
-		log.ErrorS(fmt.Sprint(err))
+		log.Error(fmt.Sprint(err))
 		os.Exit(1)
 	}
 
@@ -187,19 +187,19 @@ func (r *replica) processReplicationStream() {
 			lagTruncated := uint32(now.Unix() - msg.Unix())
 			// Display lag with a higher precision as well.
 			lag := now.Sub(msg).Seconds()
-			log.InfoS(fmt.Sprintf("current lag: %1ds (%1.1fs) replica rate: % 7.1f chan len: % 6d", lagTruncated, lag, float64(actualRate)/r.lagUpdateInterval.Seconds(), len(r.replicationStream)))
+			log.Info(fmt.Sprintf("current lag: %1ds (%1.1fs) replica rate: % 7.1f chan len: % 6d", lagTruncated, lag, float64(actualRate)/r.lagUpdateInterval.Seconds(), len(r.replicationStream)))
 			r.qs.AddHealthResponseWithReplicationLag(lagTruncated)
 			r.lastHealthUpdate = now
 			actualRate = 0
 		}
 		if !r.nextDegration.IsZero() && time.Now().After(r.nextDegration) && r.currentDegrationEnd.IsZero() {
 			degradedRate := rand.Int64N(rate)
-			log.InfoS(fmt.Sprintf("degrading the replica for %.f seconds from %v TPS to %v", r.degrationDuration.Seconds(), rate, degradedRate))
+			log.Info(fmt.Sprintf("degrading the replica for %.f seconds from %v TPS to %v", r.degrationDuration.Seconds(), rate, degradedRate))
 			r.throttler.SetMaxRate(degradedRate)
 			r.currentDegrationEnd = time.Now().Add(r.degrationDuration)
 		}
 		if !r.currentDegrationEnd.IsZero() && time.Now().After(r.currentDegrationEnd) {
-			log.InfoS(fmt.Sprintf("degrading the replica stopped. Restoring TPS to: %v", rate))
+			log.Info(fmt.Sprintf("degrading the replica stopped. Restoring TPS to: %v", rate))
 			r.throttler.SetMaxRate(rate)
 			r.currentDegrationEnd = time.Time{}
 			r.nextDegration = time.Now().Add(r.degrationInterval)
@@ -219,7 +219,7 @@ func (r *replica) processReplicationStream() {
 func (r *replica) stop() {
 	close(r.replicationStream)
 	close(r.stopChan)
-	log.InfoS("Triggered replica shutdown. Waiting for it to stop.")
+	log.Info("Triggered replica shutdown. Waiting for it to stop.")
 	r.wg.Wait()
 	r.fakeTablet.StopActionLoop(&testing.T{})
 }
@@ -240,7 +240,7 @@ type client struct {
 func newClient(ctx context.Context, primary *primary, replica *replica, ts *topo.Server) *client {
 	t, err := throttler.NewThrottler("client", "TPS", 1, throttler.MaxRateModuleDisabled, 5 /* seconds */)
 	if err != nil {
-		log.ErrorS(fmt.Sprint(err))
+		log.Error(fmt.Sprint(err))
 		os.Exit(1)
 	}
 
@@ -313,7 +313,7 @@ func main() {
 		http.Redirect(w, r, "/throttlerz", http.StatusTemporaryRedirect)
 	})
 
-	log.InfoS(fmt.Sprintf("start rate set to: %v", rate))
+	log.Info(fmt.Sprintf("start rate set to: %v", rate))
 	ts := memorytopo.NewServer(context.Background(), "cell1")
 	env, err := vtenv.New(vtenv.Options{
 		MySQLServerVersion: servenv.MySQLServerVersion(),
@@ -321,7 +321,7 @@ func main() {
 		TruncateErrLen:     servenv.TruncateErrLen,
 	})
 	if err != nil {
-		log.ErrorS(fmt.Sprint(err))
+		log.Error(fmt.Sprint(err))
 		os.Exit(1)
 	}
 	replica := newReplica(env, lagUpdateInterval, replicaDegrationInterval, replicaDegrationDuration, ts)

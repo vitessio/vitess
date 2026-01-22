@@ -87,13 +87,13 @@ func listThrottlers(w http.ResponseWriter, m *managerImpl) {
 	if err := listTemplate.Execute(w, map[string]any{
 		"Throttlers": throttlers,
 	}); err != nil {
-		log.ErrorS(fmt.Sprintf("listThrottlers failed :%v", err))
+		log.Error(fmt.Sprintf("listThrottlers failed :%v", err))
 	}
 }
 
 func showThrottlerDetails(w http.ResponseWriter, name string) {
 	// Log error
 	if err := detailsTemplate.Execute(w, name); err != nil {
-		log.ErrorS(fmt.Sprintf("showThrottlerDetails failed :%v", err))
+		log.Error(fmt.Sprintf("showThrottlerDetails failed :%v", err))
 	}
 }

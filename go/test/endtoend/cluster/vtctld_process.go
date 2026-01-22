@@ -82,12 +82,12 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 
 	err = os.MkdirAll(vtctld.LogDir, 0o755)
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("cannot create log directory for vtctld: %v", err))
+		log.Error(fmt.Sprintf("cannot create log directory for vtctld: %v", err))
 		return err
 	}
 	errFile, err := os.Create(path.Join(vtctld.LogDir, "vtctld-stderr.txt"))
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("cannot create error log file for vtctld: %v", err))
+		log.Error(fmt.Sprintf("cannot create error log file for vtctld: %v", err))
 		return err
 	}
 	vtctld.proc.Stderr = errFile
@@ -96,7 +96,7 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 	vtctld.proc.Env = append(vtctld.proc.Env, os.Environ()...)
 	vtctld.proc.Env = append(vtctld.proc.Env, DefaultVttestEnv)
 
-	log.InfoS(fmt.Sprintf("Starting vtctld with command: %v", strings.Join(vtctld.proc.Args, " ")))
+	log.Info(fmt.Sprintf("Starting vtctld with command: %v", strings.Join(vtctld.proc.Args, " ")))
 
 	err = vtctld.proc.Start()
 	if err != nil {
@@ -118,9 +118,9 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 		case err := <-vtctld.exit:
 			errBytes, ferr := os.ReadFile(vtctld.ErrorLog)
 			if ferr == nil {
-				log.ErrorS("vtctld error log contents:\n" + string(errBytes))
+				log.Error("vtctld error log contents:\n" + string(errBytes))
 			} else {
-				log.ErrorS(fmt.Sprintf("Failed to read the vtctld error log file %q: %v", vtctld.ErrorLog, ferr))
+				log.Error(fmt.Sprintf("Failed to read the vtctld error log file %q: %v", vtctld.ErrorLog, ferr))
 			}
 			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vtctld.Name, err)
 		default:

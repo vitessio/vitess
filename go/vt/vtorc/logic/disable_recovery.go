@@ -54,7 +54,7 @@ func IsRecoveryDisabled() (disabled bool, err error) {
 	})
 	if err != nil {
 		errMsg := fmt.Sprintf("recovery.IsRecoveryDisabled(): %v", err)
-		log.ErrorS(errMsg)
+		log.Error(errMsg)
 		err = errors.New(errMsg)
 	}
 	return disabled, err

@@ -60,7 +60,7 @@ func main() {
 	command.Root.SetGlobalNormalizationFunc(flagUtils.NormalizeUnderscoresToDashes)
 	// back to your regularly scheduled cobra programming
 	if err := command.Root.Execute(); err != nil {
-		log.ErrorS(fmt.Sprint(err))
+		log.Error(fmt.Sprint(err))
 		exit.Return(1)
 	}
 }

@@ -32,45 +32,45 @@ func (pl *PrefixedLogger) Flush() {
 
 func (pl *PrefixedLogger) Info(args ...any) {
 	args = append([]any{pl.prefix}, args...)
-	InfoS(fmt.Sprint(args...))
+	Info(fmt.Sprint(args...))
 }
 
 func (pl *PrefixedLogger) Infof(format string, args ...any) {
 	args = append([]any{pl.prefix}, args...)
-	InfoS(fmt.Sprintf("%s"+format, args...))
+	Info(fmt.Sprintf("%s"+format, args...))
 }
 
 func (pl *PrefixedLogger) InfoDepth(depth int, args ...any) {
 	args = append([]any{pl.prefix}, args...)
-	InfoSDepth(depth, fmt.Sprint(args...))
+	InfoDepth(depth, fmt.Sprint(args...))
 }
 
 func (pl *PrefixedLogger) Warning(args ...any) {
 	args = append([]any{pl.prefix}, args...)
-	WarnS(fmt.Sprint(args...))
+	Warn(fmt.Sprint(args...))
 }
 
 func (pl *PrefixedLogger) Warningf(format string, args ...any) {
 	args = append([]any{pl.prefix}, args...)
-	WarnS(fmt.Sprintf("%s"+format, args...))
+	Warn(fmt.Sprintf("%s"+format, args...))
 }
 
 func (pl *PrefixedLogger) WarningDepth(depth int, args ...any) {
 	args = append([]any{pl.prefix}, args...)
-	WarnSDepth(depth, fmt.Sprint(args...))
+	WarnDepth(depth, fmt.Sprint(args...))
 }
 
 func (pl *PrefixedLogger) Error(args ...any) {
 	args = append([]any{pl.prefix}, args...)
-	ErrorS(fmt.Sprint(args...))
+	Error(fmt.Sprint(args...))
 }
 
 func (pl *PrefixedLogger) Errorf(format string, args ...any) {
 	args = append([]any{pl.prefix}, args...)
-	ErrorS(fmt.Sprintf("%s"+format, args...))
+	Error(fmt.Sprintf("%s"+format, args...))
 }
 
 func (pl *PrefixedLogger) ErrorDepth(depth int, args ...any) {
 	args = append([]any{pl.prefix}, args...)
-	ErrorSDepth(depth, fmt.Sprint(args...))
+	ErrorDepth(depth, fmt.Sprint(args...))
 }

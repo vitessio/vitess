@@ -159,7 +159,7 @@ func TestFKWorkflow(t *testing.T) {
 	}
 	mt.SwitchReadsAndWrites()
 
-	log.InfoS("Switch traffic done")
+	log.Info("Switch traffic done")
 
 	if withLoad {
 		ctx, cancel = context.WithCancel(context.Background())
@@ -192,9 +192,9 @@ func insertInitialFKData(t *testing.T) {
 		sourceKeyspace := "fksource"
 		shard := "0"
 		db := fmt.Sprintf("%s:%s", sourceKeyspace, shard)
-		log.InfoS("Inserting initial FK data")
+		log.Info("Inserting initial FK data")
 		execMultipleQueries(t, vtgateConn, db, initialFKData)
-		log.InfoS("Done inserting initial FK data")
+		log.Info("Done inserting initial FK data")
 
 		type tableCounts struct {
 			name  string
@@ -243,7 +243,7 @@ func (ls *fkLoadSimulator) simulateLoad() {
 	var err error
 	for i := 0; ; i++ {
 		if i%1000 == 0 {
-			log.InfoS(fmt.Sprintf("Load simulation iteration %d", i))
+			log.Info(fmt.Sprintf("Load simulation iteration %d", i))
 		}
 		select {
 		case <-ls.ctx.Done():

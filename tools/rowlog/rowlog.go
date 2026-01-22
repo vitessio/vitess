@@ -77,12 +77,12 @@ func main() {
 		pflag.Usage()
 		return
 	}
-	log.InfoS(fmt.Sprintf("Starting rowlogger with config: %s", config))
+	log.Info(fmt.Sprintf("Starting rowlogger with config: %s", config))
 	fmt.Printf("Starting rowlogger with\n%v\n", config)
 	ts := topo.Open()
 	sourceTablet := getTablet(ctx, ts, config.cells, config.sourceKeyspace)
 	targetTablet := getTablet(ctx, ts, config.cells, config.targetKeyspace)
-	log.InfoS(fmt.Sprintf("Using tablets %s and %s to get positions", sourceTablet, targetTablet))
+	log.Info(fmt.Sprintf("Using tablets %s and %s to get positions", sourceTablet, targetTablet))
 
 	var wg sync.WaitGroup
 	stream := func(keyspace, tablet string) {
@@ -94,20 +94,20 @@ func main() {
 		for {
 			i++
 			if i > 100 {
-				log.ErrorS("returning without completion : Timing out for keyspace " + keyspace)
+				log.Error("returning without completion : Timing out for keyspace " + keyspace)
 				return
 			}
-			log.InfoS(fmt.Sprintf("%s Iteration:%d", keyspace, i))
+			log.Info(fmt.Sprintf("%s Iteration:%d", keyspace, i))
 			startPos, stopPos, done, fieldsPrinted, err = startStreaming(ctx, config.vtgate, config.vtctld, keyspace, tablet, config.table, config.pk, config.ids, startPos, stopPos, fieldsPrinted)
 			if done {
-				log.InfoS("Finished streaming all events for keyspace " + keyspace)
+				log.Info("Finished streaming all events for keyspace " + keyspace)
 				fmt.Printf("Finished streaming all events for keyspace %s\n", keyspace)
 				return
 			}
 			if startPos != "" {
-				log.InfoS(fmt.Sprintf("resuming streaming from %s, error received was %v", startPos, err))
+				log.Info(fmt.Sprintf("resuming streaming from %s, error received was %v", startPos, err))
 			} else {
-				log.ErrorS(fmt.Sprintf("returning without completion of keyspace %s because of error %v", keyspace, err))
+				log.Error(fmt.Sprintf("returning without completion of keyspace %s because of error %v", keyspace, err))
 				return
 			}
 		}
@@ -121,7 +121,7 @@ func main() {
 
 	wg.Wait()
 
-	log.InfoS("rowlog done streaming from both source and target")
+	log.Info("rowlog done streaming from both source and target")
 	fmt.Printf("\n\nRowlog completed\nIf the program worked you should see two log files with the related binlog entries: %s.log and %s.log\n",
 		config.sourceKeyspace, config.targetKeyspace)
 }
@@ -131,14 +131,14 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 	if startPos == "" {
 		flavor := getFlavor(ctx, vtctld, keyspace)
 		if flavor == "" {
-			log.ErrorS("Invalid flavor for " + keyspace)
+			log.Error("Invalid flavor for " + keyspace)
 			return "", "", false, false, nil
 		}
 		startPos, stopPos, _ = getPositions(ctx, vtctld, tablet)
 		startPos = flavor + "/" + startPos
 		stopPos = flavor + "/" + stopPos
 	}
-	log.InfoS(fmt.Sprintf("Streaming keyspace %s from %s upto %s", keyspace, startPos, stopPos))
+	log.Info(fmt.Sprintf("Streaming keyspace %s from %s upto %s", keyspace, startPos, stopPos))
 	fmt.Printf("Streaming keyspace %s from %s upto %s\n", keyspace, startPos, stopPos)
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
@@ -156,7 +156,7 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 	}
 	conn, err := vtgateconn.Dial(ctx, vtgate)
 	if err != nil {
-		log.ErrorS(fmt.Sprint(err))
+		log.Error(fmt.Sprint(err))
 		os.Exit(1)
 	}
 	defer conn.Close()
@@ -174,7 +174,7 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 				now := time.Now().Unix()
 				if now-lastLoggedAt > 60 && ev.Timestamp != 0 { // every minute
 					lastLoggedAt = now
-					log.InfoS(fmt.Sprintf("%s Progress: %d/%d rows, %s: %s", keyspace, filteredRows, totalRowsForTable,
+					log.Info(fmt.Sprintf("%s Progress: %d/%d rows, %s: %s", keyspace, filteredRows, totalRowsForTable,
 						time.Unix(ev.Timestamp, 0).Format(time.RFC3339), gtid))
 					fmt.Printf(".")
 				}
@@ -209,7 +209,7 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 				fmt.Printf("Error decoding position for %s:%vs\n", stopPos, err.Error())
 			}
 			if currentPosition.AtLeast(stopPosition) {
-				log.InfoS(fmt.Sprintf("Finished streaming keyspace %s from %s upto %s, total rows seen %d", keyspace, startPos, stopPos, totalRowsForTable))
+				log.Info(fmt.Sprintf("Finished streaming keyspace %s from %s upto %s, total rows seen %d", keyspace, startPos, stopPos, totalRowsForTable))
 				return "", "", true, true, nil
 			}
 
@@ -217,11 +217,11 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 				return gtid, stopPos, false, fieldsPrinted, nil
 			}
 		case io.EOF:
-			log.InfoS("stream ended before reaching stop pos")
+			log.Info("stream ended before reaching stop pos")
 			fmt.Printf("stream ended before reaching stop pos\n")
 			return "", "", false, fieldsPrinted, nil
 		default:
-			log.ErrorS(fmt.Sprintf("remote error: %s, returning gtid %s, stopPos %s", err, gtid, stopPos))
+			log.Error(fmt.Sprintf("remote error: %s, returning gtid %s, stopPos %s", err, gtid, stopPos))
 			fmt.Printf("remote error: %s, returning gtid %s, stopPos %s\n", err.Error(), gtid, stopPos)
 			return gtid, stopPos, false, fieldsPrinted, err
 		}
@@ -232,13 +232,13 @@ func output(filename, s string) {
 	f, err := os.OpenFile(filename+".log",
 		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
-		log.ErrorS(err.Error())
+		log.Error(err.Error())
 	}
 	defer f.Close()
 	if _, err := f.WriteString(s + "\n"); err != nil {
-		log.ErrorS(err.Error())
+		log.Error(err.Error())
 	}
-	log.InfoS(fmt.Sprintf("Writing to %s.log: %s", filename, s))
+	log.Info(fmt.Sprintf("Writing to %s.log: %s", filename, s))
 }
 
 func outputHeader(plan *TablePlan) {
@@ -470,7 +470,7 @@ func getPositions(ctx context.Context, server, tablet string) (string, string, e
 	results, err := execVtctl(ctx, server, []string{"ExecuteFetchAsDba", "--json", tablet, query})
 	if err != nil {
 		fmt.Println(err)
-		log.ErrorS(err.Error())
+		log.Error(err.Error())
 		return "", "", err
 	}
 	firstPos := parseExecOutput(strings.Join(results, ""))
@@ -479,7 +479,7 @@ func getPositions(ctx context.Context, server, tablet string) (string, string, e
 	results, err = execVtctl(ctx, server, []string{"ExecuteFetchAsDba", "--json", tablet, query})
 	if err != nil {
 		fmt.Println(err)
-		log.ErrorS(err.Error())
+		log.Error(err.Error())
 		return "", "", err
 	}
 	lastPos := parseExecOutput(strings.Join(results, ""))
@@ -524,7 +524,7 @@ func execVtctl(ctx context.Context, server string, args []string) ([]string, err
 		case io.EOF:
 			return results, nil
 		default:
-			log.ErrorS(fmt.Sprintf("remote error: %v", err))
+			log.Error(fmt.Sprintf("remote error: %v", err))
 			return nil, fmt.Errorf("remote error: %v", err)
 		}
 	}

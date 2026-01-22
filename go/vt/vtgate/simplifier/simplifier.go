@@ -81,7 +81,7 @@ func trySimplifyDistinct(in sqlparser.TableStatement, test func(statement sqlpar
 			if sel.Distinct {
 				sel.Distinct = false
 				if test(sel) {
-					log.ErrorS("removed distinct to yield: " + sqlparser.String(sel))
+					log.Error("removed distinct to yield: " + sqlparser.String(sel))
 					simplified = true
 				} else {
 					sel.Distinct = true
@@ -107,7 +107,7 @@ func trySimplifyExpressions(in sqlparser.TableStatement, test func(sqlparser.Tab
 		// first - let's try to remove the expression
 		if cursor.remove() {
 			if test(in) {
-				log.ErrorS("removed expression: " + sqlparser.String(cursor.expr))
+				log.Error("removed expression: " + sqlparser.String(cursor.expr))
 				simplified = true
 				// initially return false, but that made the rewriter prematurely abort, if it was the last selectExpr
 				return true
@@ -119,7 +119,7 @@ func trySimplifyExpressions(in sqlparser.TableStatement, test func(sqlparser.Tab
 		newExpr := SimplifyExpr(cursor.expr, func(expr sqlparser.Expr) bool {
 			cursor.replace(expr)
 			if test(in) {
-				log.ErrorS(fmt.Sprintf("simplified expression: %s -> %s", sqlparser.String(cursor.expr), sqlparser.String(expr)))
+				log.Error(fmt.Sprintf("simplified expression: %s -> %s", sqlparser.String(cursor.expr), sqlparser.String(expr)))
 				cursor.restore()
 				simplified = true
 				return true
@@ -168,14 +168,14 @@ func trySimplifyUnions(in sqlparser.TableStatement, test func(subquery sqlparser
 			cursor.Replace(node.Left)
 			clone := sqlparser.Clone(in)
 			if test(clone) {
-				log.ErrorS(fmt.Sprintf("replaced UNION with its left child: %s -> %s", sqlparser.String(node), sqlparser.String(node.Left)))
+				log.Error(fmt.Sprintf("replaced UNION with its left child: %s -> %s", sqlparser.String(node), sqlparser.String(node.Left)))
 				simplified = true
 				return true
 			}
 			cursor.Replace(node.Right)
 			clone = sqlparser.Clone(in)
 			if test(clone) {
-				log.ErrorS(fmt.Sprintf("replaced UNION with its right child: %s -> %s", sqlparser.String(node), sqlparser.String(node.Right)))
+				log.Error(fmt.Sprintf("replaced UNION with its right child: %s -> %s", sqlparser.String(node), sqlparser.String(node.Right)))
 				simplified = true
 				return true
 			}
@@ -201,7 +201,7 @@ func tryRemoveTable(tables []semantics.TableInfo, in sqlparser.TableStatement, c
 		simplified := removeTable(clone, searchedTS, currentDB, si)
 		name, _ := tbl.Name()
 		if simplified && test(clone) {
-			log.ErrorS(fmt.Sprintf("removed table `%s`: \n%s\n%s", sqlparser.String(name), sqlparser.String(in), sqlparser.String(clone)))
+			log.Error(fmt.Sprintf("removed table `%s`: \n%s\n%s", sqlparser.String(name), sqlparser.String(in), sqlparser.String(clone)))
 			return clone
 		}
 	}
@@ -234,7 +234,7 @@ func simplifyStarExpr(in sqlparser.TableStatement, test func(sqlparser.TableStat
 			Expr: sqlparser.NewIntLiteral("0"),
 		})
 		if test(in) {
-			log.ErrorS("replaced star with literal")
+			log.Error("replaced star with literal")
 			simplified = true
 			return true
 		}

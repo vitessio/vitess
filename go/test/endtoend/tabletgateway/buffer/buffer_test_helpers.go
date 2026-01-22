@@ -91,21 +91,21 @@ func (c *threadParams) threadRun(wg *sync.WaitGroup, vtParams *mysql.ConnParams)
 
 	conn, err := mysql.Connect(context.Background(), vtParams)
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("error connecting to mysql with params %v: %v", vtParams, err))
+		log.Error(fmt.Sprintf("error connecting to mysql with params %v: %v", vtParams, err))
 	}
 	defer conn.Close()
 	if c.reservedConn {
 		_, err = conn.ExecuteFetch("set default_week_format = 1", 1000, true)
 		if err != nil {
 			c.errors = append(c.errors, err)
-			log.ErrorS(fmt.Sprintf("error setting default_week_format: %v", err))
+			log.Error(fmt.Sprintf("error setting default_week_format: %v", err))
 		}
 	}
 	for !c.quit {
 		err = c.executeFunction(c, conn)
 		if err != nil {
 			c.errors = append(c.errors, err)
-			log.ErrorS(fmt.Sprintf("error executing function %s: %v", c.typ, err))
+			log.Error(fmt.Sprintf("error executing function %s: %v", c.typ, err))
 		}
 		c.rpcs++
 		// If notifications are requested, check if we already executed the
@@ -144,22 +144,22 @@ func readExecute(c *threadParams, conn *mysql.Conn) error {
 	}
 	qr, err := conn.ExecuteFetch(fmt.Sprintf("SELECT %s FROM buffer WHERE id = %d", sel, criticalReadRowID), 1000, true)
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("select attempt #%d, failed with err: %v", attempt, err))
+		log.Error(fmt.Sprintf("select attempt #%d, failed with err: %v", attempt, err))
 		// For a reserved connection, read query can fail as it does not go through the gateway and
 		// goes to tablet directly and later is directed to use Gateway if the error is caused due to cluster failover operation.
 		if c.reservedConn {
 			c.internalErrs++
 			if c.internalErrs > 1 {
-				log.ErrorS(fmt.Sprintf("More Read Errors: %d", c.internalErrs))
+				log.Error(fmt.Sprintf("More Read Errors: %d", c.internalErrs))
 				return err
 			}
-			log.ErrorS("This is okay once because we do not support buffering it.")
+			log.Error("This is okay once because we do not support buffering it.")
 			return nil
 		}
 		return err
 	}
 
-	log.InfoS(fmt.Sprintf("select attempt #%d, rows: %d", attempt, len(qr.Rows)))
+	log.Info(fmt.Sprintf("select attempt #%d, rows: %d", attempt, len(qr.Rows)))
 	return nil
 }
 
@@ -181,34 +181,34 @@ func updateExecute(c *threadParams, conn *mysql.Conn) error {
 	time.Sleep(dur)
 
 	if err == nil {
-		log.InfoS(fmt.Sprintf("update attempt #%d affected %v rows", attempt, result.RowsAffected))
+		log.Info(fmt.Sprintf("update attempt #%d affected %v rows", attempt, result.RowsAffected))
 		_, err = conn.ExecuteFetch("commit", 1000, true)
 		if err != nil {
-			log.ErrorS(fmt.Sprintf("UPDATE #%d failed during COMMIT, err: %v", attempt, err))
+			log.Error(fmt.Sprintf("UPDATE #%d failed during COMMIT, err: %v", attempt, err))
 			_, errRollback := conn.ExecuteFetch("rollback", 1000, true)
 			if errRollback != nil {
-				log.ErrorS(fmt.Sprintf("Error in rollback #%d: %v", attempt, errRollback))
+				log.Error(fmt.Sprintf("Error in rollback #%d: %v", attempt, errRollback))
 			}
 			c.internalErrs++
 			if c.internalErrs > 1 {
-				log.ErrorS(fmt.Sprintf("More Commit Errors: %d", c.internalErrs))
+				log.Error(fmt.Sprintf("More Commit Errors: %d", c.internalErrs))
 				return err
 			}
-			log.ErrorS("This is okay once because we do not support buffering it.")
+			log.Error("This is okay once because we do not support buffering it.")
 		}
 		return nil
 	}
-	log.ErrorS(fmt.Sprintf("UPDATE #%d failed with err: %v", attempt, err))
+	log.Error(fmt.Sprintf("UPDATE #%d failed with err: %v", attempt, err))
 	_, errRollback := conn.ExecuteFetch("rollback", 1000, true)
 	if errRollback != nil {
-		log.ErrorS(fmt.Sprintf("Error in rollback #%d: %v", attempt, errRollback))
+		log.Error(fmt.Sprintf("Error in rollback #%d: %v", attempt, errRollback))
 	}
 	c.internalErrs++
 	if c.internalErrs > 1 {
-		log.ErrorS(fmt.Sprintf("More Rollback Errors: %d", c.internalErrs))
+		log.Error(fmt.Sprintf("More Rollback Errors: %d", c.internalErrs))
 		return err
 	}
-	log.ErrorS("This is okay once because we do not support buffering it.")
+	log.Error("This is okay once because we do not support buffering it.")
 	return nil
 }
 
@@ -329,12 +329,12 @@ func (bt *BufferingTest) Test(t *testing.T) {
 	case <-readThreadInstance.waitForNotification:
 	case <-timeout:
 		timeout = time.After(100 * time.Millisecond)
-		log.ErrorS("failed to get read thread notification")
+		log.Error("failed to get read thread notification")
 	}
 	select {
 	case <-updateThreadInstance.waitForNotification:
 	case <-timeout:
-		log.ErrorS("failed to get update thread notification")
+		log.Error("failed to get update thread notification")
 	}
 
 	// Stop threads

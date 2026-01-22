@@ -209,7 +209,7 @@ func registerTopoFlags(fs *pflag.FlagSet) {
 // Call this in the 'init' function in your topology implementation module.
 func RegisterFactory(name string, factory Factory) {
 	if factories[name] != nil {
-		log.ErrorS(fmt.Sprintf("Duplicate topo.Factory registration for %v", name))
+		log.Error(fmt.Sprintf("Duplicate topo.Factory registration for %v", name))
 		os.Exit(1)
 	}
 	factories[name] = factory
@@ -258,16 +258,16 @@ func OpenServer(implementation, serverAddress, root string) (*Server, error) {
 // for implementation, address and root. It log.Exits out if an error occurs.
 func Open() *Server {
 	if topoGlobalServerAddress == "" {
-		log.ErrorS("topo-global-server-address must be configured")
+		log.Error("topo-global-server-address must be configured")
 		os.Exit(1)
 	}
 	if topoGlobalRoot == "" {
-		log.ErrorS("topo-global-root must be non-empty")
+		log.Error("topo-global-root must be non-empty")
 		os.Exit(1)
 	}
 	ts, err := OpenServer(topoImplementation, topoGlobalServerAddress, topoGlobalRoot)
 	if err != nil {
-		log.ErrorS(fmt.Sprintf("Failed to open topo server (%v,%v,%v): %v", topoImplementation, topoGlobalServerAddress, topoGlobalRoot, err))
+		log.Error(fmt.Sprintf("Failed to open topo server (%v,%v,%v): %v", topoImplementation, topoGlobalServerAddress, topoGlobalRoot, err))
 		os.Exit(1)
 	}
 	return ts

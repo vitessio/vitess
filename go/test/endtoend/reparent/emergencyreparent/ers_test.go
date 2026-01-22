@@ -47,14 +47,14 @@ func TestTrivialERS(t *testing.T) {
 	// is down, without issue
 	for i := 1; i <= 4; i++ {
 		out, err := utils.Ers(clusterInstance, nil, "60s", "30s")
-		log.InfoS(fmt.Sprintf("ERS loop %d.  EmergencyReparentShard Output: %v", i, out))
+		log.Info(fmt.Sprintf("ERS loop %d.  EmergencyReparentShard Output: %v", i, out))
 		require.NoError(t, err)
 		time.Sleep(5 * time.Second)
 	}
 	// We should do the same for vtctl binary
 	for i := 1; i <= 4; i++ {
 		out, err := utils.ErsWithVtctldClient(clusterInstance)
-		log.InfoS(fmt.Sprintf("ERS-vtctldclient loop %d.  EmergencyReparentShard Output: %v", i, out))
+		log.Info(fmt.Sprintf("ERS-vtctldclient loop %d.  EmergencyReparentShard Output: %v", i, out))
 		require.NoError(t, err)
 		time.Sleep(5 * time.Second)
 	}
@@ -120,7 +120,7 @@ func TestReparentDownPrimary(t *testing.T) {
 
 	// Run forced reparent operation, this should now proceed unimpeded.
 	out, err := utils.Ers(clusterInstance, tablets[1], "60s", "30s")
-	log.InfoS(fmt.Sprintf("EmergencyReparentShard Output: %v", out))
+	log.Info(fmt.Sprintf("EmergencyReparentShard Output: %v", out))
 	require.NoError(t, err)
 
 	// Check that old primary tablet is left around for human intervention.
@@ -543,7 +543,7 @@ func TestERSForInitialization(t *testing.T) {
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
-			log.InfoS(fmt.Sprintf("Starting MySql for tablet %v", tablet.Alias))
+			log.Info(fmt.Sprintf("Starting MySql for tablet %v", tablet.Alias))
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			require.NoError(t, err)
 			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)

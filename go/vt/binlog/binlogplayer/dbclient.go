@@ -136,7 +136,7 @@ func (dc *dbClientImpl) SupportsCapability(capability capabilities.FlavorCapabil
 
 // LogError logs a message after truncating it to avoid spamming logs
 func LogError(msg string, err error) {
-	log.ErrorS(fmt.Sprintf("%s: %s", msg, MessageTruncate(err.Error())))
+	log.Error(fmt.Sprintf("%s: %s", msg, MessageTruncate(err.Error())))
 }
 
 // LimitString truncates string to specified size
