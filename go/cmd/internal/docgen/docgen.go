@@ -59,13 +59,17 @@ import (
 // written to `dir`. The root command is also renamed to _index.md to remain
 // compatible with the vitessio/website content structure expectations.
 func GenerateMarkdownTree(cmd *cobra.Command, dir string) error {
+	if dir == "." || dir == "./" {
+		return errors.New("refusing to generate docs in the current directory")
+	}
+
 	sha, err := getCommitID("HEAD")
 	if err != nil {
 		return fmt.Errorf("failed to get commit id for HEAD: %w", err)
 	}
 	switch fi, err := os.Stat(dir); {
 	case errors.Is(err, fs.ErrNotExist):
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return fmt.Errorf("failed to create \"%s\" directory: %w", dir, err)
 		}
 	case err != nil:
@@ -123,7 +127,7 @@ func restructure(rootDir string, dir string, name string, commands []*cobra.Comm
 			// 2. Move its doc into that dir as "_index.md"
 			// 3. Restructure its children.
 			cmdDir := filepath.Join(dir, fullCmdFilename)
-			if err := os.MkdirAll(cmdDir, 0755); err != nil {
+			if err := os.MkdirAll(cmdDir, 0o755); err != nil {
 				return fmt.Errorf("failed to create subdir for %s: %w", fullCmdFilename, err)
 			}
 
