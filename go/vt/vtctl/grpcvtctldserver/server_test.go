@@ -15112,7 +15112,7 @@ func TestUpdateQueryThrottlerConfig(t *testing.T) {
 					DryRun:   false,
 				},
 			},
-			expected:  &vtctldatapb.UpdateQueryThrottlerConfigResponse{},
+			expected: &vtctldatapb.UpdateQueryThrottlerConfigResponse{},
 		},
 		{
 			name:  "update with dry run enabled",
@@ -15129,7 +15129,7 @@ func TestUpdateQueryThrottlerConfig(t *testing.T) {
 					DryRun:   true,
 				},
 			},
-			expected:  &vtctldatapb.UpdateQueryThrottlerConfigResponse{},
+			expected: &vtctldatapb.UpdateQueryThrottlerConfigResponse{},
 		},
 		{
 			name:  "keyspace not found",
