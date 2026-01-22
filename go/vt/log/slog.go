@@ -57,9 +57,9 @@ const (
 	// recording the caller program counter.
 	slogCallerDepth = 3
 
-	// glogCallerDepth accounts for logS and the public *S wrappers when
+	// glogCallerDepth accounts for logGlog, logS, and the public *S wrappers when
 	// forwarding to glog's *Depth helpers.
-	glogCallerDepth = 2
+	glogCallerDepth = 3
 )
 
 var (
@@ -68,9 +68,7 @@ var (
 
 	// logLevel stores the log-level flag value for Init.
 	logLevel = logLevelInfo
-)
 
-var (
 	// structuredLoggingEnabled reports whether slog is active for this process.
 	structuredLoggingEnabled atomic.Bool
 
@@ -81,61 +79,15 @@ var (
 	structuredLogger atomic.Pointer[slog.Logger]
 )
 
-// registeredFlagSet is the most recent FlagSet passed to RegisterFlags.
-var registeredFlagSet atomic.Pointer[pflag.FlagSet]
-
-var (
-	// initDone reports whether Init has completed.
-	initDone bool
-
-	// initErr stores the outcome of the first Init call.
-	initErr error
-)
-
-// rememberFlagSet records the most recent FlagSet that RegisterFlags updated.
-//
-// Init uses this pointer to discover which FlagSet should be queried for the
-// log-fmt and log-level settings after flags have been parsed.
-func rememberFlagSet(fs *pflag.FlagSet) {
-	registeredFlagSet.Store(fs)
-}
-
-// latestFlagSet returns the most recently registered FlagSet.
-//
-// Callers should treat the returned pointer as read-only.
-func latestFlagSet() *pflag.FlagSet {
-	return registeredFlagSet.Load()
-}
-
 // Init configures structured logging based on the parsed flags.
-//
-// Init is safe to call multiple times. The first call records its error, and
-// subsequent calls return that same error.
 //
 // Structured logging is enabled only when the log-fmt flag is explicitly set.
 // When enabled, Init configures the default slog logger and updates the global
 // structuredLoggingEnabled flag.
 //
 // The fs parameter should be the FlagSet used to parse the log flags. If fs is
-// nil, Init falls back to the most recently registered FlagSet.
+// nil, Init leaves structured logging disabled.
 func Init(fs *pflag.FlagSet) error {
-	if initDone {
-		return initErr
-	}
-
-	initDone = true
-	initErr = initStructuredLogging(fs)
-
-	return initErr
-}
-
-// initStructuredLogging inspects the parsed flag values and configures slog
-// when the log-fmt flag is explicitly set.
-func initStructuredLogging(fs *pflag.FlagSet) error {
-	if fs == nil {
-		fs = latestFlagSet()
-	}
-
 	// The parsed FlagSet is required to observe whether log-fmt was set.
 	if fs == nil {
 		return nil
@@ -180,7 +132,6 @@ func initStructuredLogging(fs *pflag.FlagSet) error {
 
 	// Update slog's default logger so callers can query slog.Default().Enabled.
 	slog.SetDefault(logger)
-
 	return nil
 }
 
@@ -278,7 +229,7 @@ func Enabled(level slog.Level) bool {
 //
 // This path is used when structured logging is disabled.
 func logGlog(level slog.Level, depth int, msg string, args ...any) {
-	// Adjust depth so the reported caller skips logS and the public wrapper.
+	// Adjust depth so the reported caller skips logGlog, logS, and the wrapper.
 	depth += glogCallerDepth
 
 	// Preserve the slog message as the first printed element.

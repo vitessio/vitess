@@ -81,8 +81,6 @@ func RegisterFlags(fs *pflag.FlagSet) {
 
 	utils.SetFlagStringVar(fs, &logFormat, "log-fmt", logFormat, "format for structured logging output: json or logfmt")
 	utils.SetFlagStringVar(fs, &logLevel, "log-level", logLevel, "minimum structured logging level: info, warn, debug, or error")
-
-	rememberFlagSet(fs)
 }
 
 // logRotateMaxSize implements pflag.Value and is used to
