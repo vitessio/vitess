@@ -129,7 +129,7 @@ func ResolveWildcards(ctx context.Context, zconn *ZkConn, zkPaths []string) ([]s
 			if err != nil {
 				mu.Lock()
 				if firstError != nil {
-					log.Infof("Multiple error: %v", err)
+					log.Info(fmt.Sprintf("Multiple error: %v", err))
 				} else {
 					firstError = err
 				}
@@ -201,7 +201,7 @@ func resolveRecursive(ctx context.Context, zconn *ZkConn, parts []string, toplev
 						if err != nil {
 							mu.Lock()
 							if firstError != nil {
-								log.Infof("Multiple error: %v", err)
+								log.Info(fmt.Sprintf("Multiple error: %v", err))
 							} else {
 								firstError = err
 							}

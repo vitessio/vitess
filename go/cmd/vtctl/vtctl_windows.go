@@ -19,9 +19,11 @@ limitations under the License.
 package main
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/vt/log"
 )
 
 func logSyslog(msg string) {
-	log.Warningf("windows does not have syslog support")
+	log.WarnS(fmt.Sprintf("windows does not have syslog support"))
 }

@@ -19,9 +19,11 @@ limitations under the License.
 package servenv
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/vt/log"
 )
 
 func pprofInit() {
-	log.Warningf("pprof is not supported on Windows")
+	log.WarnS(fmt.Sprintf("pprof is not supported on Windows"))
 }

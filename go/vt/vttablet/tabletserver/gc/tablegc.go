@@ -203,7 +203,7 @@ func (collector *TableGC) Open() (err error) {
 		delete(collector.lifecycleStates, schema.PurgeTableGCState)
 		delete(collector.lifecycleStates, schema.EvacTableGCState)
 	}
-	log.Infof("TableGC: MySQL version=%v, serverSupportsFastDrops=%v, lifecycleStates=%v", conn.ServerVersion, serverSupportsFastDrops, collector.lifecycleStates)
+	log.Info(fmt.Sprintf("TableGC: MySQL version=%v, serverSupportsFastDrops=%v, lifecycleStates=%v", conn.ServerVersion, serverSupportsFastDrops, collector.lifecycleStates))
 
 	ctx := context.Background()
 	ctx, collector.cancelOperation = context.WithCancel(ctx)
@@ -214,12 +214,12 @@ func (collector *TableGC) Open() (err error) {
 
 // Close frees resources
 func (collector *TableGC) Close() {
-	log.Infof("TableGC - started execution of Close. Acquiring initMutex lock")
+	log.Info("TableGC - started execution of Close. Acquiring initMutex lock")
 	collector.stateMutex.Lock()
 	defer collector.stateMutex.Unlock()
-	log.Infof("TableGC - acquired lock")
+	log.Info("TableGC - acquired lock")
 	if collector.isOpen == 0 {
-		log.Infof("TableGC - no collector is open")
+		log.Info("TableGC - no collector is open")
 		// not open
 		return
 	}
@@ -228,10 +228,10 @@ func (collector *TableGC) Close() {
 	if collector.cancelOperation != nil {
 		collector.cancelOperation()
 	}
-	log.Infof("TableGC - closing pool")
+	log.Info("TableGC - closing pool")
 	collector.pool.Close()
 	atomic.StoreInt64(&collector.isOpen, 0)
-	log.Infof("TableGC - finished execution of Close")
+	log.Info("TableGC - finished execution of Close")
 }
 
 // RequestChecks requests that the GC will do a table check right away, as well as in a few seconds.
@@ -277,7 +277,7 @@ func (collector *TableGC) operate(ctx context.Context) {
 			go tableCheckTicker.TickNow()
 		case <-tableCheckTicker.C:
 			if err := collector.readAndCheckTables(ctx, dropTablesChan, transitionRequestsChan); err != nil {
-				log.Error(err)
+				log.Error(fmt.Sprint(err))
 			}
 		case <-purgeReentranceTicker.C:
 			// relay the request
@@ -286,7 +286,7 @@ func (collector *TableGC) operate(ctx context.Context) {
 			go func() {
 				tableName, err := collector.purge(ctx)
 				if err != nil {
-					log.Errorf("TableGC: error purging table %s: %+v", tableName, err)
+					log.Error(fmt.Sprintf("TableGC: error purging table %s: %+v", tableName, err))
 					return
 				}
 				if tableName == "" {
@@ -303,14 +303,14 @@ func (collector *TableGC) operate(ctx context.Context) {
 				purgeReentranceTicker.TickAfter(nextPurgeReentry)
 			}()
 		case dropTable := <-dropTablesChan:
-			log.Infof("TableGC: found %v in dropTablesChan", dropTable.tableName)
+			log.Info(fmt.Sprintf("TableGC: found %v in dropTablesChan", dropTable.tableName))
 			if err := collector.dropTable(ctx, dropTable.tableName, dropTable.isBaseTable); err != nil {
-				log.Errorf("TableGC: error dropping table %s: %+v", dropTable.tableName, err)
+				log.Error(fmt.Sprintf("TableGC: error dropping table %s: %+v", dropTable.tableName, err))
 			}
 		case transition := <-transitionRequestsChan:
-			log.Info("TableGC: transitionRequestsChan, transition=%v", transition)
+			log.Info(fmt.Sprintf("TableGC: transitionRequestsChan, transition=%v", transition))
 			if err := collector.transitionTable(ctx, transition); err != nil {
-				log.Errorf("TableGC: error transitioning table %s to %+v: %+v", transition.fromTableName, transition.toGCState, err)
+				log.Error(fmt.Sprintf("TableGC: error transitioning table %s to %+v: %+v", transition.fromTableName, transition.toGCState, err))
 			}
 		}
 	}
@@ -355,7 +355,7 @@ func (collector *TableGC) generateTansition(ctx context.Context, fromState schem
 
 // submitTransitionRequest generates and queues a transition request for a given table
 func (collector *TableGC) submitTransitionRequest(ctx context.Context, transitionRequestsChan chan<- *transitionRequest, fromState schema.TableGCState, fromTableName string, isBaseTable bool, uuid string) {
-	log.Infof("TableGC: submitting transition request for %s", fromTableName)
+	log.Info("TableGC: submitting transition request for " + fromTableName)
 	go func() {
 		transition := collector.generateTansition(ctx, fromState, fromTableName, isBaseTable, uuid)
 		if transition != nil {
@@ -441,9 +441,8 @@ func (collector *TableGC) checkTables(ctx context.Context, gcTables []*gcTable, 
 	for i := range gcTables {
 		table := gcTables[i] // we capture as local variable as we will later use this in a goroutine
 		shouldTransition, state, uuid, err := collector.shouldTransitionTable(table.tableName)
-
 		if err != nil {
-			log.Errorf("TableGC: error while checking tables: %+v", err)
+			log.Error(fmt.Sprintf("TableGC: error while checking tables: %+v", err))
 			continue
 		}
 		if !shouldTransition {
@@ -451,7 +450,7 @@ func (collector *TableGC) checkTables(ctx context.Context, gcTables []*gcTable, 
 			continue
 		}
 
-		log.Infof("TableGC: will operate on table %s", table.tableName)
+		log.Info("TableGC: will operate on table " + table.tableName)
 
 		if state == schema.HoldTableGCState {
 			// Hold period expired. Moving to next state
@@ -539,13 +538,13 @@ func (collector *TableGC) purge(ctx context.Context) (tableName string, err erro
 	defer func() {
 		if sqlLogBinDisabled && !conn.IsClosed() {
 			if _, err := conn.ExecuteFetch("SET sql_log_bin = ON", 0, false); err != nil {
-				log.Errorf("TableGC: error setting sql_log_bin = ON: %+v", err)
+				log.Error(fmt.Sprintf("TableGC: error setting sql_log_bin = ON: %+v", err))
 				// a followup defer() will run conn.Close() at any case.
 			}
 		}
 	}()
 
-	log.Infof("TableGC: purge begin for %s", tableName)
+	log.Info("TableGC: purge begin for " + tableName)
 	for {
 		if ctx.Err() != nil {
 			// cancelled
@@ -563,7 +562,7 @@ func (collector *TableGC) purge(ctx context.Context) (tableName string, err erro
 			return tableName, err
 		}
 		if res.RowsAffected == 0 {
-			log.Infof("TableGC: purge complete for %s", tableName)
+			log.Info("TableGC: purge complete for " + tableName)
 			return tableName, nil
 		}
 	}
@@ -584,12 +583,12 @@ func (collector *TableGC) dropTable(ctx context.Context, tableName string, isBas
 	}
 	parsed := sqlparser.BuildParsedQuery(sqlDrop, tableName)
 
-	log.Infof("TableGC: dropping table: %s", tableName)
+	log.Info("TableGC: dropping table: " + tableName)
 	_, err = conn.Conn.ExecuteFetch(parsed.Query, 1, false)
 	if err != nil {
 		return err
 	}
-	log.Infof("TableGC: dropped table: %s, isBaseTable: %v", tableName, isBaseTable)
+	log.Info(fmt.Sprintf("TableGC: dropped table: %s, isBaseTable: %v", tableName, isBaseTable))
 	return nil
 }
 
@@ -621,12 +620,12 @@ func (collector *TableGC) transitionTable(ctx context.Context, transition *trans
 		return err
 	}
 
-	log.Infof("TableGC: renaming table: %s to %s", transition.fromTableName, toTableName)
+	log.Info(fmt.Sprintf("TableGC: renaming table: %s to %s", transition.fromTableName, toTableName))
 	_, err = conn.Conn.Exec(ctx, renameStatement, 1, true)
 	if err != nil {
 		return err
 	}
-	log.Infof("TableGC: renamed table: %s", transition.fromTableName)
+	log.Info("TableGC: renamed table: " + transition.fromTableName)
 	// Since the table has transitioned, there is a potential for more work on this table or on other tables,
 	// let's kick a check request.
 	collector.RequestChecks()

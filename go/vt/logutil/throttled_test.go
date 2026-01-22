@@ -17,7 +17,6 @@ limitations under the License.
 package logutil
 
 import (
-	"fmt"
 	"testing"
 	"time"
 )
@@ -31,8 +30,8 @@ func skippedCount(tl *ThrottledLogger) int {
 func TestThrottledLogger(t *testing.T) {
 	// Install a fake log func for testing.
 	log := make(chan string)
-	infoDepth = func(depth int, args ...any) {
-		log <- fmt.Sprint(args...)
+	infoDepth = func(depth int, msg string) {
+		log <- msg
 	}
 	interval := 100 * time.Millisecond
 	tl := NewThrottledLogger("name", interval)

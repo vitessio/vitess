@@ -340,7 +340,7 @@ func (w *heartbeatWriter) killWrite() error {
 	defer cancel()
 	killConn, err := w.allPrivsPool.Get(ctx)
 	if err != nil {
-		log.Errorf("Kill conn didn't get connection :(")
+		log.Error("Kill conn didn't get connection :(")
 		return err
 	}
 	defer killConn.Recycle()

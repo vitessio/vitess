@@ -115,7 +115,7 @@ func TestShardedKeyspace(t *testing.T) {
 
 	// apply the schema on the first shard through vtctl, so all tablets
 	// are the same.
-	//apply the schema on the second shard.
+	// apply the schema on the second shard.
 	_, err = shard1Primary.VttabletProcess.QueryTablet(sqlSchema, keyspaceName, true)
 	require.Nil(t, err)
 

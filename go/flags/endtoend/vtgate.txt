@@ -113,6 +113,8 @@ Flags:
       --lock-heartbeat-time duration                                     If there is lock function used. This will keep the lock connection active by using this heartbeat (default 5s)
       --lock-timeout duration                                            Maximum time to wait when attempting to acquire a lock from the topo server (default 45s)
       --log-err-stacks                                                   log stack traces for errors
+      --log-fmt string                                                   format for structured logging output: json or logfmt (default "json")
+      --log-level string                                                 minimum structured logging level: info, warn, debug, or error (default "info")
       --log-queries-to-file string                                       Enable query logging to the specified file
       --log-rotate-max-size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --log_backtrace_at traceLocations                                  when logging hits line file:N, emit a stack trace
