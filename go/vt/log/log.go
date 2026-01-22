@@ -54,6 +54,10 @@ var (
 )
 
 // RegisterFlags installs log flags on the given FlagSet.
+//
+// `go/cmd/*` entrypoints should either use servenv.ParseFlags(WithArgs)? which
+// calls this function, or call this function directly before parsing
+// command-line arguments.
 func RegisterFlags(fs *pflag.FlagSet) {
 	flagVal := logRotateMaxSize{
 		val: strconv.FormatUint(atomic.LoadUint64(&glog.MaxSize), 10),
@@ -128,10 +132,10 @@ func slogHandler(format string, opts *slog.HandlerOptions) (slog.Handler, error)
 	}
 }
 
-// logS emits a structured log record when structured logging is enabled.
-// When structured logging is disabled, logS forwards the call to glog
+// log emits a structured log record when structured logging is enabled.
+// When structured logging is disabled, log forwards the call to glog
 // using the severity implied by level.
-func logS(level slog.Level, depth int, msg string, args ...any) {
+func log(level slog.Level, depth int, msg string, args ...any) {
 	if !structuredLoggingEnabled.Load() {
 		logGlog(level, depth, msg, args...)
 		return
@@ -193,42 +197,66 @@ func logGlog(level slog.Level, depth int, msg string, args ...any) {
 
 // Info logs at the Info level.
 func Info(msg string, args ...any) {
-	logS(slog.LevelInfo, 0, msg, args...)
+	log(slog.LevelInfo, 0, msg, args...)
 }
 
 // InfoDepth logs at the Info level with an adjusted caller depth.
 func InfoDepth(depth int, msg string, args ...any) {
-	logS(slog.LevelInfo, depth, msg, args...)
+	log(slog.LevelInfo, depth, msg, args...)
 }
 
 // Warn logs at the Warn level.
 func Warn(msg string, args ...any) {
-	logS(slog.LevelWarn, 0, msg, args...)
+	log(slog.LevelWarn, 0, msg, args...)
 }
 
 // WarnDepth logs at the Warn level with an adjusted caller depth.
 func WarnDepth(depth int, msg string, args ...any) {
-	logS(slog.LevelWarn, depth, msg, args...)
+	log(slog.LevelWarn, depth, msg, args...)
 }
 
 // Debug logs at the Debug level.
 func Debug(msg string, args ...any) {
-	logS(slog.LevelDebug, 0, msg, args...)
+	log(slog.LevelDebug, 0, msg, args...)
 }
 
 // DebugDepth logs at the Debug level with an adjusted caller depth.
 func DebugDepth(depth int, msg string, args ...any) {
-	logS(slog.LevelDebug, depth, msg, args...)
+	log(slog.LevelDebug, depth, msg, args...)
 }
 
 // Error logs at the Error level.
 func Error(msg string, args ...any) {
-	logS(slog.LevelError, 0, msg, args...)
+	log(slog.LevelError, 0, msg, args...)
 }
 
 // ErrorDepth logs at the Error level with an adjusted caller depth.
 func ErrorDepth(depth int, msg string, args ...any) {
-	logS(slog.LevelError, depth, msg, args...)
+	log(slog.LevelError, depth, msg, args...)
+}
+
+// logRotateMaxSize implements pflag.Value and is used to
+// try and provide thread-safe access to glog.MaxSize.
+type logRotateMaxSize struct {
+	val string
+}
+
+func (lrms *logRotateMaxSize) Set(s string) error {
+	maxSize, err := strconv.ParseUint(s, 10, 64)
+	if err != nil {
+		return err
+	}
+	atomic.StoreUint64(&glog.MaxSize, maxSize)
+	lrms.val = s
+	return nil
+}
+
+func (lrms *logRotateMaxSize) String() string {
+	return lrms.val
+}
+
+func (lrms *logRotateMaxSize) Type() string {
+	return "uint64"
 }
 
 // SetLogger replaces the structured logger used by the log package. The returned function restores
