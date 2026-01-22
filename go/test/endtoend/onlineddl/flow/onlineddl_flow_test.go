@@ -196,7 +196,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestOnlineDDLFlow(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	require.NotNil(t, clusterInstance)
 	require.NotNil(t, primaryTablet)
@@ -584,7 +584,7 @@ func initTable(t *testing.T) {
 	log.Infof("initTable begin")
 	defer log.Infof("initTable complete")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()

@@ -359,7 +359,7 @@ func TestVersion(t *testing.T) {
 
 	execStatements(t, []string{
 		"create database if not exists _vt",
-		"create table if not exists _vt.schema_version(id int, pos varbinary(10000), time_updated bigint(20), ddl varchar(10000), schemax blob, primary key(id))",
+		"create table if not exists _vt.schema_version(id int, pos longblob, time_updated bigint(20), ddl varchar(10000), schemax blob, primary key(id))",
 	})
 	defer execStatements(t, []string{
 		"drop table _vt.schema_version",

@@ -639,7 +639,7 @@ func testVStreamCellFlag(t *testing.T) {
 			Filter: "select * from product",
 		}},
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 
 	type vstreamTestCase struct {
 		cells       string
@@ -746,7 +746,7 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 
 // testVStreamFrom confirms that the "vstream * from" endpoint is serving data
 func testVStreamFrom(t *testing.T, vtgate *cluster.VtgateProcess, table string, expectedRowCount int) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
 		Port: vtgate.MySQLServerPort,

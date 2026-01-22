@@ -276,7 +276,6 @@ func validateAnyState(t *testing.T, expectNumRows int64, states ...schema.TableG
 					// Now that the table is validated, we can drop it (test cleanup)
 					dropTable(t, tableName)
 				}
-				t.Logf("=== exists: %v, tableName: %v, rows: %v", exists, tableName, foundRows)
 				if exists == expectTableToExist {
 					// expectNumRows < 0 means "don't care"
 					if expectNumRows < 0 || (expectNumRows == foundRows) {
