@@ -114,6 +114,9 @@ type QueryService interface {
 	// VStreamResults streams results along with the gtid of the snapshot.
 	VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error
 
+	// BinlogDump streams raw binlog events from MySQL.
+	BinlogDump(ctx context.Context, request *binlogdatapb.BinlogDumpRequest, send func(*binlogdatapb.BinlogDumpResponse) error) error
+
 	// StreamHealth streams health status.
 	StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error
 

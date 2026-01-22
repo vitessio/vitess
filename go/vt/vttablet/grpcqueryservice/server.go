@@ -385,6 +385,17 @@ func (q *query) VStreamResults(request *binlogdatapb.VStreamResultsRequest, stre
 	return vterrors.ToGRPC(err)
 }
 
+// BinlogDump is part of the queryservice.QueryServer interface
+func (q *query) BinlogDump(request *binlogdatapb.BinlogDumpRequest, stream queryservicepb.Query_BinlogDumpServer) (err error) {
+	defer q.server.HandlePanic(&err)
+	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	err = q.server.BinlogDump(ctx, request, stream.Send)
+	return vterrors.ToGRPC(err)
+}
+
 // ReserveExecute implements the QueryServer interface
 func (q *query) ReserveExecute(ctx context.Context, request *querypb.ReserveExecuteRequest) (response *querypb.ReserveExecuteResponse, err error) {
 	defer q.server.HandlePanic(&err)

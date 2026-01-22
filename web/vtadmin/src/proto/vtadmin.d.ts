@@ -42098,6 +42098,230 @@ export namespace binlogdata {
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
+
+    /** Properties of a BinlogDumpRequest. */
+    interface IBinlogDumpRequest {
+
+        /** BinlogDumpRequest effective_caller_id */
+        effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** BinlogDumpRequest immediate_caller_id */
+        immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** BinlogDumpRequest target */
+        target?: (query.ITarget|null);
+
+        /** BinlogDumpRequest binlog_filename */
+        binlog_filename?: (string|null);
+
+        /** BinlogDumpRequest binlog_position */
+        binlog_position?: (number|Long|null);
+
+        /** BinlogDumpRequest gtid_set */
+        gtid_set?: (string|null);
+    }
+
+    /** Represents a BinlogDumpRequest. */
+    class BinlogDumpRequest implements IBinlogDumpRequest {
+
+        /**
+         * Constructs a new BinlogDumpRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IBinlogDumpRequest);
+
+        /** BinlogDumpRequest effective_caller_id. */
+        public effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** BinlogDumpRequest immediate_caller_id. */
+        public immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** BinlogDumpRequest target. */
+        public target?: (query.ITarget|null);
+
+        /** BinlogDumpRequest binlog_filename. */
+        public binlog_filename: string;
+
+        /** BinlogDumpRequest binlog_position. */
+        public binlog_position: (number|Long);
+
+        /** BinlogDumpRequest gtid_set. */
+        public gtid_set: string;
+
+        /**
+         * Creates a new BinlogDumpRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns BinlogDumpRequest instance
+         */
+        public static create(properties?: binlogdata.IBinlogDumpRequest): binlogdata.BinlogDumpRequest;
+
+        /**
+         * Encodes the specified BinlogDumpRequest message. Does not implicitly {@link binlogdata.BinlogDumpRequest.verify|verify} messages.
+         * @param message BinlogDumpRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IBinlogDumpRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified BinlogDumpRequest message, length delimited. Does not implicitly {@link binlogdata.BinlogDumpRequest.verify|verify} messages.
+         * @param message BinlogDumpRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IBinlogDumpRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a BinlogDumpRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns BinlogDumpRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.BinlogDumpRequest;
+
+        /**
+         * Decodes a BinlogDumpRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns BinlogDumpRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.BinlogDumpRequest;
+
+        /**
+         * Verifies a BinlogDumpRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a BinlogDumpRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns BinlogDumpRequest
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.BinlogDumpRequest;
+
+        /**
+         * Creates a plain object from a BinlogDumpRequest message. Also converts values to other types if specified.
+         * @param message BinlogDumpRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.BinlogDumpRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this BinlogDumpRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for BinlogDumpRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a BinlogDumpResponse. */
+    interface IBinlogDumpResponse {
+
+        /** BinlogDumpResponse packet */
+        packet?: (Uint8Array|null);
+    }
+
+    /** Represents a BinlogDumpResponse. */
+    class BinlogDumpResponse implements IBinlogDumpResponse {
+
+        /**
+         * Constructs a new BinlogDumpResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IBinlogDumpResponse);
+
+        /** BinlogDumpResponse packet. */
+        public packet: Uint8Array;
+
+        /**
+         * Creates a new BinlogDumpResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns BinlogDumpResponse instance
+         */
+        public static create(properties?: binlogdata.IBinlogDumpResponse): binlogdata.BinlogDumpResponse;
+
+        /**
+         * Encodes the specified BinlogDumpResponse message. Does not implicitly {@link binlogdata.BinlogDumpResponse.verify|verify} messages.
+         * @param message BinlogDumpResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IBinlogDumpResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified BinlogDumpResponse message, length delimited. Does not implicitly {@link binlogdata.BinlogDumpResponse.verify|verify} messages.
+         * @param message BinlogDumpResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IBinlogDumpResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a BinlogDumpResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns BinlogDumpResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.BinlogDumpResponse;
+
+        /**
+         * Decodes a BinlogDumpResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns BinlogDumpResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.BinlogDumpResponse;
+
+        /**
+         * Verifies a BinlogDumpResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a BinlogDumpResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns BinlogDumpResponse
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.BinlogDumpResponse;
+
+        /**
+         * Creates a plain object from a BinlogDumpResponse message. Also converts values to other types if specified.
+         * @param message BinlogDumpResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.BinlogDumpResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this BinlogDumpResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for BinlogDumpResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
 }
 
 /** Namespace query. */

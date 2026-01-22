@@ -857,6 +857,54 @@ func (conn *gRPCQueryClient) VStreamResults(ctx context.Context, target *querypb
 	}
 }
 
+// BinlogDump streams raw binlog events from MySQL.
+func (conn *gRPCQueryClient) BinlogDump(ctx context.Context, request *binlogdatapb.BinlogDumpRequest, send func(*binlogdatapb.BinlogDumpResponse) error) error {
+	// Please see comments in StreamExecute to see how this works.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	stream, err := func() (queryservicepb.Query_BinlogDumpClient, error) {
+		conn.mu.RLock()
+		defer conn.mu.RUnlock()
+		if conn.cc == nil {
+			return nil, tabletconn.ConnClosed
+		}
+
+		req := &binlogdatapb.BinlogDumpRequest{
+			Target:            request.Target,
+			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+			BinlogFilename:    request.BinlogFilename,
+			BinlogPosition:    request.BinlogPosition,
+			GtidSet:           request.GtidSet,
+		}
+		stream, err := conn.c.BinlogDump(ctx, req)
+		if err != nil {
+			return nil, tabletconn.ErrorFromGRPC(err)
+		}
+		return stream, nil
+	}()
+	if err != nil {
+		return err
+	}
+	for {
+		r, err := stream.Recv()
+		if err != nil {
+			return tabletconn.ErrorFromGRPC(err)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		if err := send(r); err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+	}
+}
+
 // HandlePanic is a no-op.
 func (conn *gRPCQueryClient) HandlePanic(err *error) {
 }

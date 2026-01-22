@@ -32,9 +32,9 @@ import (
 	"syscall"
 	"time"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler"
-
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
@@ -42,6 +42,7 @@ import (
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -65,6 +66,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/gc"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/repltracker"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -1336,6 +1338,109 @@ func (tsv *TabletServer) VStreamResults(ctx context.Context, target *querypb.Tar
 		return err
 	}
 	return tsv.vstreamer.StreamResults(ctx, query, send)
+}
+
+// BinlogDump streams raw binlog packets from MySQL.
+// It reads MySQL packets directly and forwards them to the client without parsing.
+// Each packet is streamed individually, including zero-length packets that terminate
+// multi-packet sequences. This provides true streaming with bounded memory usage.
+func (tsv *TabletServer) BinlogDump(ctx context.Context, request *binlogdatapb.BinlogDumpRequest, send func(*binlogdatapb.BinlogDumpResponse) error) error {
+	if err := tsv.sm.VerifyTarget(ctx, request.Target); err != nil {
+		return err
+	}
+
+	// Create a binlog connection to MySQL
+	conn, err := binlog.NewBinlogConnection(tsv.config.DB.FilteredWithDB())
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to create binlog connection")
+	}
+	defer conn.Close()
+
+	// Parse the GTID set from the request
+	var startPos replication.Position
+	if request.GtidSet != "" {
+		gtidSet, err := replication.ParseMysql56GTIDSet(request.GtidSet)
+		if err != nil {
+			return vterrors.Wrapf(err, "failed to parse GTID set: %s", request.GtidSet)
+		}
+		startPos = replication.Position{GTIDSet: gtidSet}
+	} else {
+		// If no GTID set is provided, get the current position from MySQL.
+		// This means we'll stream events starting from "now".
+		currentPos, err := conn.PrimaryPosition()
+		if err != nil {
+			return vterrors.Wrapf(err, "failed to get current position")
+		}
+		startPos = currentPos
+	}
+
+	// Send the binlog dump command to MySQL
+	if err := conn.SendBinlogDumpCommand(conn.ServerID(), request.BinlogFilename, startPos); err != nil {
+		return vterrors.Wrapf(err, "failed to send binlog dump command")
+	}
+
+	// Stream packets from MySQL to the client.
+	// Each iteration processes one complete message (which may span multiple packets).
+	//
+	// TODO: Optimize for zero-copy streaming using gRPC's mem.BufferSlice.
+	// Currently, packet data is copied during protobuf marshaling. To eliminate this:
+	// 1. Use mem.BufferPool to allocate read buffers (ReadOnePacketPooled)
+	// 2. Return mem.Buffer with reference counting
+	// 3. Implement BufferSliceMarshaler interface for BinlogDumpResponse
+	// 4. Update grpc_codec.go to check for BufferSliceMarshaler before vtprotoMessage
+	// 5. Build BufferSlice with [protobuf header, packet buffer] - no copy needed
+	// gRPC's mem.Buffer reference counting handles buffer lifecycle automatically.
+	// See: google.golang.org/grpc/mem and go/vt/servenv/grpc_codec.go
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		// Read first fragment of a message
+		packet, err := conn.ReadOnePacket()
+		if err != nil {
+			return vterrors.Wrapf(err, "failed to read binlog packet")
+		}
+
+		// First fragment must have content
+		if len(packet) == 0 {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected zero-length packet at start of message")
+		}
+
+		// Send first fragment
+		if err := send(&binlogdatapb.BinlogDumpResponse{Packet: packet}); err != nil {
+			return err
+		}
+
+		// Check status byte on first fragment
+		isEOF := packet[0] == mysql.EOFPacket
+		isError := packet[0] == mysql.ErrPacket
+
+		// Read remaining fragments if this is a multi-packet message
+		for len(packet) == mysql.MaxPacketSize {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+
+			packet, err = conn.ReadOnePacket()
+			if err != nil {
+				return vterrors.Wrapf(err, "failed to read continuation packet")
+			}
+
+			if err := send(&binlogdatapb.BinlogDumpResponse{Packet: packet}); err != nil {
+				return err
+			}
+		}
+
+		// Message complete - check if we should stop
+		if isEOF || isError {
+			return nil
+		}
+	}
 }
 
 // ReserveBeginExecute implements the QueryService interface

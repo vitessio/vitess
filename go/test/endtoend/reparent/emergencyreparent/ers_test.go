@@ -27,10 +27,16 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
+	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -133,6 +139,102 @@ func TestReparentDownPrimary(t *testing.T) {
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
 	utils.ConfirmReplication(t, tablets[1], []*cluster.Vttablet{tablets[2], tablets[3]})
 	utils.ResurrectTablet(ctx, t, clusterInstance, tablets[0])
+}
+
+func TestCallDumpBinlog(t *testing.T) {
+	c := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
+	defer utils.TeardownCluster(c)
+
+	err := c.StartVtgate()
+	require.NoError(t, err)
+
+	tablets := c.Keyspaces[0].Shards[0].Vttablets
+
+	tablet, err := c.VtctldClientProcess.GetTablet(tablets[0].Alias)
+	require.NoError(t, err)
+
+	// Get the current replication position of the primary
+	pos, _ := cluster.GetPrimaryPosition(t, *tablets[0], "localhost")
+	t.Logf("Primary position: %v", pos)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, err := tabletconn.GetDialer()(ctx, tablet, grpcclient.FailFast(false))
+	require.NoError(t, err)
+
+	wg := sync.WaitGroup{}
+	wg.Go(func() {
+		// t.Logf("Calling BinlogDump on tablet %s", tablets[0].Alias)
+		_ = conn.BinlogDump(ctx, &binlogdatapb.BinlogDumpRequest{
+			Target: &querypb.Target{
+				Keyspace:   utils.KeyspaceName,
+				Shard:      utils.ShardName,
+				TabletType: tablet.Type,
+			},
+
+			GtidSet: pos,
+		}, func(dbr *binlogdatapb.BinlogDumpResponse) error {
+			// fmt.Printf("Received binlog response: %v\n", dbr)
+			return nil
+		})
+
+		// t.Logf("DumpBinlog on tablet %s returned: %v", tablets[0].Alias, err)
+	})
+
+	wg.Go(func() {
+		t.Logf("Connecting to mysql on vtgate for tablet %s", tablets[0].Alias)
+		conn, err := mysql.Connect(ctx, &mysql.ConnParams{
+			Host:   c.Hostname,
+			Port:   c.VtgateMySQLPort,
+			DbName: utils.KeyspaceName + "/" + utils.ShardName,
+		})
+		require.NoError(t, err)
+		defer conn.Close()
+
+		// Close the connection after context is done
+		go func() {
+			<-ctx.Done()
+			conn.Close()
+		}()
+
+		replPosition, err := replication.DecodePosition(pos)
+		require.NoError(t, err)
+
+		t.Logf("Starting binlog dump from position: %v", replPosition)
+		conn.SendBinlogDumpCommand(0, "", replPosition)
+
+		// Read response packets
+		for {
+			// t.Logf("Waiting for binlog response...")
+			event, err := conn.ReadBinlogEvent()
+
+			if err != nil {
+				t.Logf("ReadPacket returned error: %v", err)
+				return
+			}
+
+			if !event.IsValid() {
+				t.Logf("Invalid binlog event: %v", event)
+				return
+			}
+
+			if event.IsWriteRows() {
+				t.Logf("Received WriteRows event: %v", event)
+			}
+		}
+	})
+
+	wg.Go(func() {
+		for range 5 {
+			time.Sleep(3 * time.Second)
+			t.Logf("Writing to primary tablet %s", tablets[0].Alias)
+			_ = utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
+			t.Logf("Done writing")
+		}
+	})
+
+	wg.Wait()
 }
 
 func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {

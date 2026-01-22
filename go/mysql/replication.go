@@ -18,10 +18,11 @@ package mysql
 
 import (
 	"fmt"
+	"io"
 	"math"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -39,7 +40,7 @@ func (c *Conn) WriteComBinlogDump(serverID uint32, binlogFilename string, binlog
 	// The binary log file position is a uint64, but the protocol command
 	// only uses 4 bytes for the file position.
 	if binlogPos > math.MaxUint32 {
-		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "binlog position %d is too large, it must fit into 32 bits", binlogPos)
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "binlog position %d is too large, it must fit into 32 bits", binlogPos)
 	}
 	c.sequence = 0
 	length := 1 + // ComBinlogDump
@@ -70,10 +71,10 @@ func (c *Conn) AnalyzeSemiSyncAckRequest(buf []byte) (strippedBuf []byte, ackReq
 	// semi sync indicator is expected
 	// see https://dev.mysql.com/doc/internals/en/semi-sync-binlog-event.html
 	if len(buf) < 2 {
-		return buf, false, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "semi sync indicator expected, but packet too small")
+		return buf, false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "semi sync indicator expected, but packet too small")
 	}
 	if buf[0] != semiSyncIndicator {
-		return buf, false, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "semi sync indicator expected, but not found")
+		return buf, false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "semi sync indicator expected, but not found")
 	}
 	return buf[2:], buf[1] == semiSyncAckRequested, nil
 }
@@ -143,6 +144,64 @@ func (c *Conn) WriteBinlogEvent(ev BinlogEvent, semiSyncEnabled bool) error {
 	if err := c.writeEphemeralPacket(); err != nil {
 		return sqlerror.NewSQLErrorf(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "%v", err)
 	}
+	return nil
+}
+
+// WritePacketPayload writes a raw packet payload as a MySQL packet.
+// The payload should include the packet type byte (e.g., 0x00 for OK/data)
+// as the first byte. This method handles the packet header (length + sequence).
+func (c *Conn) WritePacketPayload(payload []byte) error {
+	data, pos := c.startEphemeralPacketWithHeader(len(payload))
+	copy(data[pos:], payload)
+	if err := c.writeEphemeralPacket(); err != nil {
+		return sqlerror.NewSQLErrorf(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "%v", err)
+	}
+	return nil
+}
+
+// WritePacketDirect writes a single packet payload with the correct header.
+// Used for streaming pre-framed packets (like binlog events) directly.
+// The caller is responsible for sending zero-length terminators when needed.
+func (c *Conn) WritePacketDirect(payload []byte) error {
+	length := len(payload)
+
+	var w io.Writer
+	c.bufMu.Lock()
+	if c.bufferedWriter != nil {
+		w = c.bufferedWriter
+		defer func() {
+			c.startFlushTimer()
+			c.bufMu.Unlock()
+		}()
+	} else {
+		c.bufMu.Unlock()
+		w = c.conn
+	}
+
+	// Build header: 3 bytes length + 1 byte sequence
+	var header [4]byte
+	header[0] = byte(length)
+	header[1] = byte(length >> 8)
+	header[2] = byte(length >> 16)
+	header[3] = c.sequence
+
+	// Write header
+	if n, err := w.Write(header[:]); err != nil {
+		return vterrors.Wrapf(err, "Write(header) failed")
+	} else if n != 4 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Write(header) short write: %v < 4", n)
+	}
+
+	// Write payload
+	if length > 0 {
+		if n, err := w.Write(payload); err != nil {
+			return vterrors.Wrapf(err, "Write(payload) failed")
+		} else if n != length {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Write(payload) short write: %v < %v", n, length)
+		}
+	}
+
+	c.sequence++
 	return nil
 }
 

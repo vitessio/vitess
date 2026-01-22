@@ -32,19 +32,23 @@ import (
 	"github.com/google/uuid"
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
-
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -474,8 +478,150 @@ func (vh *vtgateHandler) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos 
 }
 
 // ComBinlogDumpGTID is part of the mysql.Handler interface.
-func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error {
-	return vterrors.VT12001("ComBinlogDumpGTID for the VTGate handler")
+// It handles binlog dump requests by forwarding them to a targeted vttablet.
+// The target tablet is determined from the session's TargetString, which can be set via:
+// 1. A USE statement (e.g., "USE `keyspace:shard@type|alias`"), or
+// 2. The username during connection (format: "user|keyspace:shard@type|alias")
+// The target format is "keyspace:shard@tablet_type|tablet_alias" (e.g., "commerce:-80@replica|zone1-100").
+func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet, nonBlock bool) error {
+	// Check for shutdown before starting a long-lived stream
+	if c.IsShuttingDown() {
+		c.MarkForClose()
+		return sqlerror.NewSQLError(sqlerror.ERServerShutdown, sqlerror.SSNetError, "Server shutdown in progress")
+	}
+
+	// Track this connection as busy for graceful shutdown
+	vh.busyConnections.Add(1)
+	defer vh.busyConnections.Add(-1)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Add call info for observability
+	ctx = callinfo.MysqlCallInfo(ctx, c)
+
+	// Fill in the ImmediateCallerID with the UserData returned by
+	// the AuthServer plugin for that user. If nothing was
+	// returned, use the User. This lets the plugin map a MySQL
+	// user used for authentication to a Vitess User used for
+	// Table ACLs and Vitess authentication in general.
+	im := c.UserData.Get()
+	ef := callerid.NewEffectiveCallerID(
+		c.User,                  /* principal: who */
+		c.RemoteAddr().String(), /* component: running client process */
+		"VTGate MySQL Connector" /* subcomponent: part of the client */)
+	ctx = callerid.NewContext(ctx, ef, im)
+
+	// Get the target from the session (set by USE statement or parsed from username during handshake)
+	session := vh.session(c)
+	targetString := session.TargetString
+
+	if targetString == "" {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no target specified for binlog dump; use 'USE keyspace:shard@type|alias' or connect with username 'user|keyspace:shard@type|alias'")
+	}
+
+	// Parse the target string to extract the tablet alias
+	keyspace, tabletType, dest, tabletAlias, err := topoproto.ParseDestination(targetString, topodatapb.TabletType_UNKNOWN)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to parse target: %s", targetString)
+	}
+	if tabletAlias == nil {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "target must include tablet alias (e.g., 'keyspace:shard@type|zone1-100'): %s", targetString)
+	}
+
+	// Build the target for the tablet connection
+	var target *querypb.Target
+	if keyspace != "" {
+		target = &querypb.Target{
+			Keyspace:   keyspace,
+			TabletType: tabletType,
+		}
+		if dest != nil {
+			// Extract shard from destination - need to type assert to get the raw shard name
+			if ds, ok := dest.(key.DestinationShard); ok {
+				target.Shard = string(ds)
+			} else {
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "binlog dump requires a specific shard, got: %s", dest.String())
+			}
+		}
+	}
+
+	// Get the query service connection to the tablet
+	qs, err := vh.vtg.Gateway().QueryServiceByAlias(ctx, tabletAlias, target)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to get connection to tablet %s", topoproto.TabletAliasString(tabletAlias))
+	}
+
+	// Build the BinlogDump request
+	request := &binlogdatapb.BinlogDumpRequest{
+		BinlogFilename: logFile,
+		BinlogPosition: logPos,
+	}
+	if gtidSet != nil {
+		request.GtidSet = gtidSet.String()
+	}
+	if target != nil {
+		request.Target = target
+	}
+
+	// TODO: Add support for replication session variables (for Fivetran MySQL adapter compatibility):
+	// - @master_heartbeat_period / @source_heartbeat_period: Controls heartbeat frequency
+	// - @master_binlog_checksum / @source_binlog_checksum: Controls checksum algorithm
+	// Implementation requires:
+	// 1. Add heartbeat_period_ns and binlog_checksum fields to BinlogDumpRequest proto
+	// 2. Extract user-defined variables from session.UserDefinedVariables here
+	// 3. Apply variables in vttablet's BinlogDump before sending COM_BINLOG_DUMP_GTID
+	// See: https://dev.mysql.com/doc/refman/8.0/en/replication-options-replica.html
+
+	// TODO: Handle nonBlock flag - if set, the client expects the server to
+	// return EOF when it reaches the end of the binlog instead of blocking.
+
+	// Track streaming state for proper error handling.
+	// If an error occurs mid-message (after sending a max-size packet fragment),
+	// we can't send a clean error packet - we must just close the connection.
+	var inProgressMessage bool
+	var streamingStarted bool
+
+	// Stream binlog packets from the tablet
+	err = qs.BinlogDump(ctx, request, func(response *binlogdatapb.BinlogDumpResponse) error {
+		streamingStarted = true
+		packet := response.Packet
+
+		if err := c.WritePacketDirect(packet); err != nil {
+			return err
+		}
+
+		// A packet of exactly MaxPacketSize indicates more fragments follow
+		inProgressMessage = len(packet) == mysql.MaxPacketSize
+		return nil
+	})
+	if err != nil {
+		// If streaming never started, return the error normally so the
+		// handler framework can send a proper error packet to the client.
+		if !streamingStarted {
+			return vterrors.Wrapf(err, "binlog dump failed")
+		}
+
+		// Streaming started. We need to handle the error carefully.
+		if inProgressMessage {
+			// We're mid-message (sent a max-size fragment). We can't send
+			// a clean error packet since the client is expecting more data.
+			// Just close the connection.
+			c.MarkForClose()
+			log.Errorf("ComBinlogDumpGTID: error mid-packet, closing connection: %v", err)
+			return nil
+		}
+
+		// At a message boundary - we can send a proper error packet.
+		if writeErr := c.WriteErrorPacketFromError(err); writeErr != nil {
+			log.Errorf("ComBinlogDumpGTID: failed to write error packet: %v", writeErr)
+		}
+		c.MarkForClose()
+		log.Errorf("ComBinlogDumpGTID: %v", err)
+		return nil
+	}
+
+	return nil
 }
 
 // KillConnection closes an open connection by connection ID.

@@ -347,7 +347,9 @@ func (c *Conn) endWriterBuffering() error {
 		c.bufferedWriter = nil
 	}()
 
-	c.flushTimer.Stop()
+	if c.flushTimer != nil {
+		c.flushTimer.Stop()
+	}
 	return c.bufferedWriter.Flush()
 }
 
@@ -590,6 +592,21 @@ func (c *Conn) readPacket() ([]byte, error) {
 // after this function returns.
 func (c *Conn) ReadPacket() ([]byte, error) {
 	result, err := c.readPacket()
+	if err != nil {
+		return nil, sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
+	}
+	return result, err
+}
+
+func (c *Conn) WritePacket(data []byte) error {
+	return c.writePacket(data)
+}
+
+// ReadOnePacket reads a single packet from the underlying connection without
+// reassembling multi-packet messages. This is useful for streaming raw packets.
+// Returns nil, nil for a zero-length packet (which follows a max-size packet).
+func (c *Conn) ReadOnePacket() ([]byte, error) {
+	result, err := c.readOnePacket()
 	if err != nil {
 		return nil, sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
 	}
@@ -879,6 +896,12 @@ func (c *Conn) writeErrorPacketFromError(err error) error {
 	return c.writeErrorPacket(sqlerror.ERUnknownError, sqlerror.SSUnknownSQLState, "unknown error: %v", err)
 }
 
+// WriteErrorPacketFromError is the exported version of writeErrorPacketFromError
+// for use by external packages (e.g., vtgate's binlog dump handler).
+func (c *Conn) WriteErrorPacketFromError(err error) error {
+	return c.writeErrorPacketFromError(err)
+}
+
 // writeEOFPacket writes an EOF packet, through the buffer, and
 // doesn't flush (as it is used as part of a query result).
 func (c *Conn) writeEOFPacket(flags uint16, warnings uint16) error {
@@ -977,11 +1000,11 @@ func (c *Conn) handleComRegisterReplica(handler Handler, data []byte) (kontinue 
 		return false
 	}
 	if err := handler.ComRegisterReplica(c, replicaHost, replicaPort, replicaUser, replicaPassword); err != nil {
-		c.writeErrorPacketFromError(err)
+		c.WriteErrorPacketFromError(err)
 		return false
 	}
 	if err := c.writeOKPacket(&PacketOK{}); err != nil {
-		c.writeErrorPacketFromError(err)
+		c.WriteErrorPacketFromError(err)
 	}
 	return true
 }
@@ -1022,13 +1045,19 @@ func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue b
 		}
 	}()
 
-	logFile, logPos, position, err := c.parseComBinlogDumpGTID(data)
+	logFile, logPos, position, nonBlock, err := c.parseComBinlogDumpGTID(data)
 	if err != nil {
 		log.Errorf("conn %v: parseComBinlogDumpGTID failed: %v", c.ID(), err)
+		if writeErr := c.WriteErrorPacketFromError(err); writeErr != nil {
+			log.Errorf("conn %v: failed to write error packet: %v", c.ID(), writeErr)
+		}
 		return false
 	}
-	if err := handler.ComBinlogDumpGTID(c, logFile, logPos, position.GTIDSet); err != nil {
-		log.Error(err.Error())
+	if err := handler.ComBinlogDumpGTID(c, logFile, logPos, position.GTIDSet, nonBlock); err != nil {
+		log.Errorf("conn %v: ComBinlogDumpGTID failed: %v", c.ID(), err)
+		if writeErr := c.WriteErrorPacketFromError(err); writeErr != nil {
+			log.Errorf("conn %v: failed to write error packet: %v", c.ID(), writeErr)
+		}
 		return false
 	}
 	return kontinue
@@ -1042,7 +1071,7 @@ func (c *Conn) handleComResetConnection(handler Handler) {
 	c.PrepareData = make(map[uint32]*PrepareData)
 	err := c.writeOKPacket(&PacketOK{})
 	if err != nil {
-		c.writeErrorPacketFromError(err)
+		c.WriteErrorPacketFromError(err)
 	}
 }
 

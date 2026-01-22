@@ -265,7 +265,7 @@ func (th *testHandler) ComRegisterReplica(c *Conn, replicaHost string, replicaPo
 func (th *testHandler) ComBinlogDump(c *Conn, logFile string, binlogPos uint32) error {
 	return nil
 }
-func (th *testHandler) ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error {
+func (th *testHandler) ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet, nonBlock bool) error {
 	return nil
 }
 
@@ -318,6 +318,37 @@ func TestConnectionFromListener(t *testing.T) {
 	c, err := Connect(ctx, params)
 	require.NoError(t, err, "Should be able to connect to server")
 	c.Close()
+}
+
+func TestConnectionWithUsernameKeyspaceExtension(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
+		Password: "password1",
+		UserData: "userData1",
+	}}
+	defer authServer.close()
+
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err, "NewListener failed")
+	host, port := getHostPort(t, l.Addr())
+	// Setup the right parameters.
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1@ks1",
+		Pass:  "password1",
+	}
+	go l.Accept()
+	defer cleanupListener(ctx, l, params)
+
+	c, err := Connect(ctx, params)
+	require.NoError(t, err, "Should be able to connect to server")
+	c.Close()
+
+	require.Equal(t, "ks1", th.LastConn().schemaName, "Schema name should be set from username extension")
 }
 
 func TestConnectionWithoutSourceHost(t *testing.T) {

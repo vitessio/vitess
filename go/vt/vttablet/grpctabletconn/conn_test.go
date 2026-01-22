@@ -181,6 +181,11 @@ func (m *mockQueryClient) GetSchema(ctx context.Context, in *querypb.GetSchemaRe
 	return nil, errors.New("A general error")
 }
 
+func (m *mockQueryClient) BinlogDump(ctx context.Context, in *binlogdatapb.BinlogDumpRequest, opts ...grpc.CallOption) (queryservicepb.Query_BinlogDumpClient, error) {
+	m.lastCallCtx = ctx
+	return nil, errors.New("A general error")
+}
+
 var _ queryservicepb.QueryClient = (*mockQueryClient)(nil)
 
 // TestGoRoutineLeakPrevention tests that after all the RPCs that stream queries, we end up closing the context that was passed to it, to prevent go routines from being leaked.

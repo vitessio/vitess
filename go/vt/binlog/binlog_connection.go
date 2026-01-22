@@ -81,6 +81,11 @@ func NewBinlogConnection(cp dbconfigs.Connector) (*BinlogConnection, error) {
 	return bc, nil
 }
 
+// ServerID returns the server ID used by this binlog connection.
+func (bc *BinlogConnection) ServerID() uint32 {
+	return bc.serverID
+}
+
 // connectForReplication create a MySQL connection ready to use for replication.
 func connectForReplication(cp dbconfigs.Connector) (*mysql.Conn, error) {
 	ctx := context.Background()
@@ -305,4 +310,8 @@ func (bc *BinlogConnection) Close() {
 		bc.Conn = nil
 		serverIDPool.Put(bc.serverID)
 	}
+}
+
+func (bc *BinlogConnection) GetServerID() uint32 {
+	return bc.serverID
 }
