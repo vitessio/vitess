@@ -263,24 +263,26 @@ func TestAPI(t *testing.T) {
 	}
 
 	expectedKeyspace1 := &topodatapb.Keyspace{
-		KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
-		BaseKeyspace:     "",
-		SnapshotTime:     nil,
-		DurabilityPolicy: policy.DurabilitySemiSync,
-		ThrottlerConfig:  nil,
-		SidecarDbName:    "_vt_sidecar_ks1",
+		KeyspaceType:          topodatapb.KeyspaceType_NORMAL,
+		BaseKeyspace:          "",
+		SnapshotTime:          nil,
+		DurabilityPolicy:      policy.DurabilitySemiSync,
+		ThrottlerConfig:       nil,
+		QueryThrottlerConfig:  nil,
+		SidecarDbName:         "_vt_sidecar_ks1",
 		VtorcState: &vtorcdatapb.Keyspace{
 			DisableEmergencyReparent: true,
 		},
 	}
 
 	expectedKeyspace2 := &topodatapb.Keyspace{
-		KeyspaceType:     topodatapb.KeyspaceType_SNAPSHOT,
-		BaseKeyspace:     "ks1",
-		SnapshotTime:     &vttime.Time{Seconds: 1136214245},
-		DurabilityPolicy: policy.DurabilityNone,
-		ThrottlerConfig:  nil,
-		SidecarDbName:    "_vt",
+		KeyspaceType:         topodatapb.KeyspaceType_SNAPSHOT,
+		BaseKeyspace:         "ks1",
+		SnapshotTime:         &vttime.Time{Seconds: 1136214245},
+		DurabilityPolicy:     policy.DurabilityNone,
+		ThrottlerConfig:      nil,
+		QueryThrottlerConfig: nil,
+		SidecarDbName:        "_vt",
 	}
 
 	expectedShard := &topodatapb.Shard{
