@@ -1,0 +1,41 @@
+ARG bootstrap_version
+ARG image="vitess/bootstrap:${bootstrap_version}-common"
+
+FROM --platform=linux/amd64 "${image}"
+
+USER root
+
+# Install Percona 8.0
+RUN for i in $(seq 1 10); do apt-key adv --no-tty --keyserver keyserver.ubuntu.com --recv-keys 9334A25F8507EFA5 && break; done \
+ && echo 'deb http://repo.percona.com/apt bookworm main' > /etc/apt/sources.list.d/percona.list && \
+    echo 'deb http://repo.percona.com/pxb-84-lts/apt bookworm main' >> /etc/apt/sources.list.d/percona.list && \
+    echo 'deb http://repo.percona.com/telemetry/apt bookworm main' > /etc/apt/sources.list.d/percona-telemetry.list && \
+    echo 'deb http://repo.percona.com/ps-84-lts/apt bookworm main' > /etc/apt/sources.list.d/percona84.list && \
+    { \
+        echo debconf debconf/frontend select Noninteractive; \
+        echo percona-server-server-8.4 percona-server-server/root_password password 'unused'; \
+        echo percona-server-server-8.4 percona-server-server/root_password_again password 'unused'; \
+    } | debconf-set-selections \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libperconaserverclient22 \
+        percona-telemetry-agent \
+        percona-server-rocksdb \
+        percona-server-server \
+        percona-xtrabackup-84 \
+	bzip2 \
+	libdbd-mysql-perl \
+	rsync \
+	libev4 \
+#    && rm -f /etc/apt/sources.list.d/percona.list \
+    && echo 'deb http://repo.percona.com/apt bookworm main' > /etc/apt/sources.list.d/percona.list \
+#    { \
+#        echo debconf debconf/frontend select Noninteractive; \
+#        echo percona-server-server-8.4 percona-server-server/root_password password 'unused'; \
+#        echo percona-server-server-8.4 percona-server-server/root_password_again password 'unused'; \
+#    } | debconf-set-selections \
+    && apt-get update -y \
+    && apt-get install -y --no-install-recommends percona-xtrabackup-84 \
+    && rm -rf /var/lib/apt/lists/*
+
+USER vitess
