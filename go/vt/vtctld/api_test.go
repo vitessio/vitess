@@ -263,13 +263,13 @@ func TestAPI(t *testing.T) {
 	}
 
 	expectedKeyspace1 := &topodatapb.Keyspace{
-		KeyspaceType:          topodatapb.KeyspaceType_NORMAL,
-		BaseKeyspace:          "",
-		SnapshotTime:          nil,
-		DurabilityPolicy:      policy.DurabilitySemiSync,
-		ThrottlerConfig:       nil,
-		QueryThrottlerConfig:  nil,
-		SidecarDbName:         "_vt_sidecar_ks1",
+		KeyspaceType:         topodatapb.KeyspaceType_NORMAL,
+		BaseKeyspace:         "",
+		SnapshotTime:         nil,
+		DurabilityPolicy:     policy.DurabilitySemiSync,
+		ThrottlerConfig:      nil,
+		QueryThrottlerConfig: nil,
+		SidecarDbName:        "_vt_sidecar_ks1",
 		VtorcState: &vtorcdatapb.Keyspace{
 			DisableEmergencyReparent: true,
 		},

@@ -63,6 +63,7 @@ import (
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/querythrottler"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -15085,6 +15086,115 @@ func TestValidateShard(t *testing.T) {
 		})
 	}
 }
+func TestUpdateQueryThrottlerConfig(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		cells     []string
+		keyspace  *vtctldatapb.Keyspace
+		req       *vtctldatapb.UpdateQueryThrottlerConfigRequest
+		expected  *vtctldatapb.UpdateQueryThrottlerConfigResponse
+		shouldErr bool
+	}{
+		{
+			name:  "successfully update query throttler config",
+			cells: []string{"zone1"},
+			keyspace: &vtctldatapb.Keyspace{
+				Name:     "testkeyspace",
+				Keyspace: &topodatapb.Keyspace{},
+			},
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "testkeyspace",
+				QueryThrottlerConfig: &querythrottler.Config{
+					Enabled:  true,
+					Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+					DryRun:   false,
+				},
+			},
+			expected:  &vtctldatapb.UpdateQueryThrottlerConfigResponse{},
+		},
+		{
+			name:  "update with dry run enabled",
+			cells: []string{"zone1"},
+			keyspace: &vtctldatapb.Keyspace{
+				Name:     "testkeyspace",
+				Keyspace: &topodatapb.Keyspace{},
+			},
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "testkeyspace",
+				QueryThrottlerConfig: &querythrottler.Config{
+					Enabled:  true,
+					Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+					DryRun:   true,
+				},
+			},
+			expected:  &vtctldatapb.UpdateQueryThrottlerConfigResponse{},
+		},
+		{
+			name:  "keyspace not found",
+			cells: []string{"zone1"},
+			keyspace: &vtctldatapb.Keyspace{
+				Name:     "otherkeyspace",
+				Keyspace: &topodatapb.Keyspace{},
+			},
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "nonexistent",
+				QueryThrottlerConfig: &querythrottler.Config{
+					Enabled: true,
+				},
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			ts := memorytopo.NewServer(ctx, tt.cells...)
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(vtenv.NewTestEnv(), ts)
+			})
+
+			// Add the keyspace
+			testutil.AddKeyspace(ctx, t, ts, tt.keyspace)
+
+			// Add SrvKeyspace for the keyspace in all cells
+			for _, cell := range tt.cells {
+				err := ts.UpdateSrvKeyspace(ctx, cell, tt.keyspace.Name, &topodatapb.SrvKeyspace{})
+				require.NoError(t, err)
+			}
+
+			// Call the RPC
+			resp, err := vtctld.UpdateQueryThrottlerConfig(ctx, tt.req)
+
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+
+			// Verify the keyspace was updated
+			ks, err := ts.GetKeyspace(ctx, tt.req.Keyspace)
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.req.QueryThrottlerConfig, ks.QueryThrottlerConfig)
+
+			// Verify SrvKeyspace was updated in all cells
+			for _, cell := range tt.cells {
+				srvKs, err := ts.GetSrvKeyspace(ctx, cell, tt.req.Keyspace)
+				require.NoError(t, err)
+				utils.MustMatch(t, tt.req.QueryThrottlerConfig, srvKs.QueryThrottlerConfig)
+			}
+		})
+	}
+}
+
 func TestMain(m *testing.M) {
 	_flag.ParseFlagsForTest()
 	os.Exit(m.Run())
