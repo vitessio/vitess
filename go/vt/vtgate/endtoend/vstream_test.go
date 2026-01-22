@@ -17,13 +17,16 @@ limitations under the License.
 package endtoend
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"regexp"
+	"slices"
 	"sort"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -164,6 +167,157 @@ func TestVStream(t *testing.T) {
 		}
 	}
 	cancel()
+}
+
+func TestVStreamDDLAddColumnMiddle(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	gconn, conn, mconn, closeConnections := initialize(ctx, t)
+	defer closeConnections()
+	_ = mconn
+	_, err := conn.ExecuteFetch("delete from vstream_test where id = 202", 1, false)
+	require.NoError(t, err)
+
+	primaryPos, err := mconn.PrimaryPosition()
+	require.NoError(t, err)
+	vgtid := &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{{
+		Keyspace: "ks",
+		Shard:    "-80",
+		Gtid:     fmt.Sprintf("%s/%s", primaryPos.GTIDSet.Flavor(), primaryPos),
+	}, {
+		Keyspace: "ks",
+		Shard:    "80-",
+		Gtid:     fmt.Sprintf("%s/%s", primaryPos.GTIDSet.Flavor(), primaryPos),
+	}}}
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "vstream_test",
+			Filter: "select * from vstream_test",
+		}},
+	}
+	flags := &vtgatepb.VStreamFlags{}
+	reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
+	require.NoError(t, err)
+	require.NotNil(t, reader)
+
+	eventsCh := make(chan []*binlogdatapb.VEvent, 10)
+	errCh := make(chan error, 1)
+	go func() {
+		for {
+			events, err := reader.Recv()
+			if err != nil {
+				errCh <- err
+				return
+			}
+			eventsCh <- events
+		}
+	}()
+
+	waitForRow := func(timeout time.Duration, wantRow *querypb.Row) (*binlogdatapb.FieldEvent, *binlogdatapb.RowEvent) {
+		deadline := time.After(timeout)
+		var lastField *binlogdatapb.FieldEvent
+		for {
+			select {
+			case <-deadline:
+				return nil, nil
+			case err := <-errCh:
+				require.NoError(t, err)
+			case events := <-eventsCh:
+				for _, ev := range events {
+					switch ev.Type {
+					case binlogdatapb.VEventType_FIELD:
+						if ev.FieldEvent.TableName == "ks.vstream_test" {
+							lastField = ev.FieldEvent
+						}
+					case binlogdatapb.VEventType_ROW:
+						if ev.RowEvent.TableName != "ks.vstream_test" {
+							continue
+						}
+						for _, change := range ev.RowEvent.RowChanges {
+							if change.After == nil {
+								continue
+							}
+							after := change.After
+							if slices.Equal(after.Lengths, wantRow.Lengths) && bytes.Equal(after.Values, wantRow.Values) {
+								return lastField, ev.RowEvent
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	_, err = conn.ExecuteFetch("insert into vstream_test(id, val) values(202, 111)", 1, false)
+	require.NoError(t, err)
+	preField, preRow := waitForRow(20*time.Second, &querypb.Row{Lengths: []int64{3, 3}, Values: []byte("202111")})
+	require.NotNil(t, preField)
+	require.NotNil(t, preRow)
+
+	_, err = mconn.ExecuteFetch("alter table `vt_ks_-80`.vstream_test add column mid bigint after id", 1, false)
+	require.NoError(t, err)
+	_, err = mconn.ExecuteFetch("alter table `vt_ks_80-`.vstream_test add column mid bigint after id", 1, false)
+	require.NoError(t, err)
+	defer func() {
+		_, _ = mconn.ExecuteFetch("alter table `vt_ks_-80`.vstream_test drop column mid", 1, false)
+		_, _ = mconn.ExecuteFetch("alter table `vt_ks_80-`.vstream_test drop column mid", 1, false)
+	}()
+
+	_, err = conn.ExecuteFetch("insert into vstream_test(id, mid, val) values(203, 22, 333)", 1, false)
+	require.NoError(t, err)
+
+	localField, localRow := waitForRow(20*time.Second, &querypb.Row{Lengths: []int64{3, 2, 3}, Values: []byte("20322333")})
+	require.NotNil(t, localField)
+	require.NotNil(t, localRow)
+
+	filteredFields := &binlogdatapb.FieldEvent{
+		TableName: localField.TableName,
+		Keyspace:  localField.Keyspace,
+		Shard:     localField.Shard,
+		Fields:    []*querypb.Field{},
+	}
+	for _, field := range localField.Fields {
+		filteredFields.Fields = append(filteredFields.Fields, &querypb.Field{
+			Name: field.Name,
+			Type: field.Type,
+		})
+	}
+
+	wantFields := &binlogdatapb.FieldEvent{
+		TableName: "ks.vstream_test",
+		Keyspace:  "ks",
+		Shard:     localField.Shard,
+		Fields: []*querypb.Field{{
+			Name: "id",
+			Type: querypb.Type_INT64,
+		}, {
+			Name: "mid",
+			Type: querypb.Type_INT64,
+		}, {
+			Name: "val",
+			Type: querypb.Type_INT64,
+		}},
+	}
+	require.True(t, proto.Equal(filteredFields, wantFields), "FieldEvent:\n%v, want\n%v", filteredFields, wantFields)
+
+	localRow.Flags = 0
+	localRow.Keyspace = "ks"
+	localRow.Shard = localField.Shard
+	localRow.TableName = "ks.vstream_test"
+	wantRow := &binlogdatapb.RowEvent{
+		TableName: "ks.vstream_test",
+		Keyspace:  "ks",
+		Shard:     localField.Shard,
+		RowChanges: []*binlogdatapb.RowChange{{
+			After: &querypb.Row{
+				Lengths: []int64{3, 2, 3},
+				Values:  []byte("20322333"),
+			},
+		}},
+		Flags: 0,
+	}
+	require.True(t, proto.Equal(localRow, wantRow), "RowEvent:\n%v, want\n%v", localRow, wantRow)
 }
 
 func TestVStreamCopyBasic(t *testing.T) {

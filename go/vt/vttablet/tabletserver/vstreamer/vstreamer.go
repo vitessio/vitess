@@ -426,6 +426,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			case <-ctx.Done():
 				return nil
 			default:
+				// We instead want to rebuild the plans as DDL come in.
 				if err := vs.rebuildPlans(); err != nil {
 					return vterrors.Wrap(err, "failed to rebuild replication plans")
 				}

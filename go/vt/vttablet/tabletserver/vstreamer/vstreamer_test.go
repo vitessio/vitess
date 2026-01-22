@@ -35,9 +35,11 @@ import (
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
@@ -1458,6 +1460,123 @@ func TestDDLAddColumn(t *testing.T) {
 		{"commit", nil},
 	}}
 	ts.Run()
+}
+
+func TestDDLAddColumnMiddle(t *testing.T) {
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "ddl_mid_test",
+			Filter: "select * from ddl_mid_test",
+		}},
+	}
+
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table ddl_mid_test(id int, val1 varbinary(128), val2 varbinary(128), primary key(id))",
+		},
+		options: &TestSpecOptions{
+			filter: filter,
+		},
+	}
+	defer ts.Close()
+
+	ts.Init()
+	startPos := primaryPosition(t)
+	alterQuery := "alter table ddl_mid_test add column mid varbinary(64) after val1, algorithm=instant"
+	insertPre := "insert into ddl_mid_test values(1, 'pre', 'post')"
+	insertPost := "insert into ddl_mid_test values(2, 'aaa', 'midval', 'val2')"
+	fe := ts.fieldEvents["ddl_mid_test"]
+	preRowEvent := getRowEvent(ts, fe, insertPre)
+	postRowEvent := (&TestRowEventSpec{table: "ddl_mid_test", changes: []TestRowChange{{after: []string{"2", "aaa", "midval", "val2"}}}}).String()
+	feAfter := &TestFieldEvent{
+		table: "ddl_mid_test",
+		db:    testenv.DBName,
+		cols: []*TestColumn{
+			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+			{name: "val1", dataType: "VARBINARY", colType: "varbinary(128)", len: 128, collationID: 63},
+			{name: "mid", dataType: "VARBINARY", colType: "varbinary(64)", len: 64, collationID: 63},
+			{name: "val2", dataType: "VARBINARY", colType: "varbinary(128)", len: 128, collationID: 63},
+		},
+	}
+
+	testcases := []testcase{{
+		input:  []string{insertPre},
+		output: [][]string{{"begin", fe.String(), preRowEvent, "gtid", "commit"}},
+	}, {
+		input:  []string{alterQuery},
+		output: [][]string{{"gtid", ts.getDDLEvent(alterQuery)}},
+	}, {
+		input:  []string{insertPost},
+		output: [][]string{{"begin", feAfter.String(), postRowEvent, "gtid", "commit"}},
+	}}
+
+	runCases(t, filter, testcases, startPos, nil)
+}
+
+func TestStalePlanWithSelectStarAfterDDL(t *testing.T) {
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "ddl_mid_test",
+			Filter: "select * from ddl_mid_test",
+		}},
+	}
+
+	preField := &querypb.Field{Name: "val1", Type: querypb.Type_VARBINARY}
+	midField := &querypb.Field{Name: "mid", Type: querypb.Type_VARBINARY}
+	postField := &querypb.Field{Name: "val2", Type: querypb.Type_VARBINARY}
+	plan := &Plan{
+		Table: &Table{Name: "ddl_mid_test", Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT32},
+			preField,
+			midField,
+			postField,
+		}},
+		ColExprs: []ColExpr{
+			{ColNum: 0, Field: &querypb.Field{Name: "id", Type: querypb.Type_INT32}},
+			{ColNum: 1, Field: preField},
+			{ColNum: 2, Field: postField},
+		},
+	}
+
+	pos, err := replication.DecodePosition(primaryPosition(t))
+	require.NoError(t, err)
+	vs := &vstreamer{
+		ctx:     context.Background(),
+		cp:      env.Dbcfgs.AppWithDB(),
+		se:      env.SchemaEngine,
+		filter:  filter,
+		plans:   map[uint64]*streamerPlan{1: {Plan: plan}},
+		vschema: testLocalVSchema,
+		vse:     engine,
+		config:  &vttablet.VReplicationConfig{},
+		pos:     pos,
+		format:  mysql.NewMySQL56BinlogFormat(),
+	}
+
+	plan.Table.Fields = []*querypb.Field{
+		{Name: "id", Type: querypb.Type_INT32},
+		preField,
+		midField,
+		postField,
+	}
+
+	fakeStream := mysql.NewFakeBinlogStream()
+	ddlEvent := mysql.NewQueryEvent(vs.format, fakeStream, mysql.Query{
+		Database: testenv.DBName,
+		SQL:      "alter table ddl_mid_test add column mid varbinary(64) after val1",
+	})
+	_, err = vs.parseEvent(ddlEvent, nil)
+	require.NoError(t, err)
+
+	plan = vs.plans[1].Plan
+	require.Len(t, plan.ColExprs, 4)
+	fields := plan.fields()
+	require.Len(t, fields, 4)
+	require.Equal(t, "id", fields[0].Name)
+	require.Equal(t, "val1", fields[1].Name)
+	require.Equal(t, "mid", fields[2].Name)
+	require.Equal(t, "val2", fields[3].Name)
 }
 
 func TestDDLDropColumn(t *testing.T) {
