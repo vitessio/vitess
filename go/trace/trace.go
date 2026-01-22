@@ -46,23 +46,14 @@ type Span interface {
 
 // NewSpan creates a new Span with the currently installed tracing plugin.
 // If no tracing plugin is installed, it returns a fake Span that does nothing.
-func NewSpan(inCtx context.Context, label string) (Span, context.Context) {
-	parent, _ := currentTracer.FromContext(inCtx)
-	span := currentTracer.New(parent, label)
-	outCtx := currentTracer.NewContext(inCtx, span)
-
-	return span, outCtx
+func NewSpan(ctx context.Context, label string) (Span, context.Context) {
+	return currentTracer.New(ctx, label)
 }
 
 // NewFromString creates a new Span with the currently installed tracing plugin, extracting the span context from
 // the provided string.
 func NewFromString(inCtx context.Context, parent, label string) (Span, context.Context, error) {
-	span, err := currentTracer.NewFromString(parent, label)
-	if err != nil {
-		return nil, nil, err
-	}
-	outCtx := currentTracer.NewContext(inCtx, span)
-	return span, outCtx, nil
+	return currentTracer.NewFromString(inCtx, parent, label)
 }
 
 // AnnotateSQL annotates information about a sql query in the span. This is done in a way
@@ -104,10 +95,10 @@ func AddGrpcClientOptions(addInterceptors func(s grpc.StreamClientInterceptor, u
 // tracingService is an interface for creating spans or extracting them from Contexts.
 type tracingService interface {
 	// New creates a new span from an existing one, if provided. The parent can also be nil
-	New(parent Span, label string) Span
+	New(ctx context.Context, label string) (Span, context.Context)
 
 	// NewFromString creates a new span and uses the provided string to reconstitute the parent span
-	NewFromString(parent, label string) (Span, error)
+	NewFromString(ctx context.Context, parent, label string) (Span, context.Context, error)
 
 	// FromContext extracts a span from a context, making it possible to annotate the span with additional information
 	FromContext(ctx context.Context) (Span, bool)
