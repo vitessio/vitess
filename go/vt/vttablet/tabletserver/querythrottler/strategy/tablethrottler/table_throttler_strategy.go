@@ -173,9 +173,7 @@ func (s *TabletThrottlerStrategy) Start() {
 		// Prime the cache immediately to eliminate initial cache misses
 		s.refreshCache()
 
-		//TODO(Siddharth) Fix this
-		updateInterval := time.Second
-		//updateInterval := s.tabletConfig.TabletThrottlerCacheUpdateInterval
+		updateInterval := s.tabletConfig.TabletThrottlerCacheUpdateInterval
 		s.updateTicker = time.NewTicker(updateInterval)
 		go s.runCacheUpdater()
 		log.Info("TabletThrottlerStrategy: started background throttle cache updater")

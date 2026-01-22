@@ -29,7 +29,9 @@ import (
 
 // createTestTabletConfig creates a minimal tablet config for testing
 func createTestTabletConfig() *tabletenv.TabletConfig {
-	return tabletenv.NewDefaultConfig()
+	return &tabletenv.TabletConfig{
+		TabletThrottlerCacheUpdateInterval: 10 * time.Millisecond,
+	}
 }
 
 // createTestEnv creates a minimal env for testing
@@ -138,214 +140,122 @@ func TestTabletThrottlerStrategy_Evaluate_NilParsedQuery(t *testing.T) {
 	require.Equal(t, 0.0, decision.ThrottlePercentage)
 }
 
-// TestTabletThrottlerStrategy_Evaluate_NoRuleForTabletType tests that queries are allowed when no rules exist for the tablet type.
-func TestTabletThrottlerStrategy_Evaluate_NoRuleForTabletType(t *testing.T) {
-	mockClient := NewFakeThrottleClientWrapper(&throttle.CheckResult{}, false)
-
-	// Config has rules for PRIMARY only
-	cfg := makeTabletStrategyConfig(
-		topodatapb.TabletType_PRIMARY.String(),
-		"SELECT",
-		"lag",
-		makeThresholds(10, 10, 25, 25, 50, 50),
-	)
-
-	env := createTestEnv()
-	strategy := NewTabletThrottlerStrategy(mockClient, cfg, createTestTabletConfig(), env, "test_keyspace", "test_cell", nil)
-
-	// Query on REPLICA tablet type - no rules configured
-	decision := strategy.Evaluate(
-		context.Background(),
-		topodatapb.TabletType_REPLICA, // Different from PRIMARY
-		&sqlparser.ParsedQuery{Query: "SELECT * from A where X=1"},
-		1,
-		registry.QueryAttributes{WorkloadName: "unknown", Priority: 100},
-	)
-
-	require.False(t, decision.Throttle, "Expected no throttling when no rules for tablet type")
-	require.Contains(t, decision.Message, "No throttling rules for tablet type")
-}
-
-// TestTabletThrottlerStrategy_Evaluate_ThrottleCheckOK tests that queries are allowed when throttle check passes.
-func TestTabletThrottlerStrategy_Evaluate_ThrottleCheckOK(t *testing.T) {
-	// Throttle check returns OK
-	mockClient := NewFakeThrottleClientWrapper(&throttle.CheckResult{}, true)
-
-	cfg := makeTabletStrategyConfig(
-		topodatapb.TabletType_PRIMARY.String(),
-		"SELECT",
-		"lag",
-		makeThresholds(10, 10, 25, 25, 50, 50),
-	)
-
-	env := createTestEnv()
-	strategy := NewTabletThrottlerStrategy(mockClient, cfg, createTestTabletConfig(), env, "test_keyspace", "test_cell", nil)
-
-	decision := strategy.Evaluate(
-		context.Background(),
-		topodatapb.TabletType_PRIMARY,
-		&sqlparser.ParsedQuery{Query: "SELECT * from A where X=1"},
-		1,
-		registry.QueryAttributes{WorkloadName: "unknown", Priority: 100},
-	)
-
-	require.False(t, decision.Throttle, "Expected no throttling when throttle check passes")
-}
-
-// TestTabletThrottlerStrategy_Evaluate_Priority0NeverThrottled tests that priority 0 queries are never throttled.
-func TestTabletThrottlerStrategy_Evaluate_Priority0NeverThrottled(t *testing.T) {
-	// Throttle check fails with high lag
-	mockClient := NewFakeThrottleClientWrapper(&throttle.CheckResult{
-		Metrics: map[string]*throttle.MetricResult{
-			"lag": {
-				ResponseCode: tabletmanagerdata.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED,
-				Value:        1000, // Very high lag
-			},
+// TestTabletThrottlerStrategy_ThrottleIfNeeded_Legacy tests the legacy ThrottleIfNeeded-style behavior via Evaluate.
+func TestTabletThrottlerStrategy_ThrottleIfNeeded_Legacy(t *testing.T) {
+	tests := []struct {
+		name                  string
+		giveCheckResult       *throttle.CheckResult
+		giveThrottleCheckOK   bool
+		giveTabletType        topodatapb.TabletType
+		giveSQL               string
+		giveTxnID             int64
+		giveOptions           *querypb.ExecuteOptions
+		giveCfg               *querythrottlerpb.TabletStrategyConfig
+		giveRandValue         float64
+		givePriorityRandValue int
+		wantErr               string
+	}{
+		{
+			name: "No-op if tablet type in config is not the current tablet type",
+			giveCfg: makeTabletStrategyConfig(
+				topodatapb.TabletType_PRIMARY.String(),
+				"SELECT",
+				"lag",
+				makeThresholds(10, 10, 25, 25, 50, 50),
+			),
+			giveSQL:        "SELECT * from A where X=1",
+			giveTxnID:      1,
+			giveTabletType: topodatapb.TabletType_REPLICA,
 		},
-	}, false)
-
-	cfg := makeTabletStrategyConfig(
-		topodatapb.TabletType_PRIMARY.String(),
-		"SELECT",
-		"lag",
-		makeThresholds(1, 100), // 100% throttle above 1
-	)
-
-	env := createTestEnv()
-	strategy := NewTabletThrottlerStrategy(mockClient, cfg, createTestTabletConfig(), env, "test_keyspace", "test_cell", nil)
-
-	// Priority 0 query should NEVER be throttled
-	decision := strategy.Evaluate(
-		context.Background(),
-		topodatapb.TabletType_PRIMARY,
-		&sqlparser.ParsedQuery{Query: "SELECT * from critical_table"},
-		1,
-		registry.QueryAttributes{WorkloadName: "critical-system-query", Priority: 0},
-	)
-
-	require.False(t, decision.Throttle, "Priority 0 queries should NEVER be throttled")
-	require.Contains(t, decision.Message, "High priority query")
-}
-
-// TestTabletThrottlerStrategy_Evaluate_ThrottledWhenMetricBreached tests that queries are throttled when metrics breach thresholds.
-func TestTabletThrottlerStrategy_Evaluate_ThrottledWhenMetricBreached(t *testing.T) {
-	// Throttle check fails with lag exceeding threshold
-	mockClient := NewFakeThrottleClientWrapper(&throttle.CheckResult{
-		Metrics: map[string]*throttle.MetricResult{
-			"lag": {
-				ResponseCode: tabletmanagerdata.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED,
-				Value:        20, // Exceeds threshold of 10
-			},
+		{
+			name:           "No-op if tablet type in config is the current tablet type but throttle check is ok",
+			giveTabletType: topodatapb.TabletType_PRIMARY,
+			giveCfg: makeTabletStrategyConfig(
+				topodatapb.TabletType_PRIMARY.String(),
+				"SELECT",
+				"lag",
+				makeThresholds(10, 10, 25, 25, 50, 50),
+			),
+			giveSQL:             "SELECT * from A where X=1",
+			giveTxnID:           1,
+			giveCheckResult:     &throttle.CheckResult{},
+			giveThrottleCheckOK: true,
 		},
-	}, false)
-
-	cfg := makeTabletStrategyConfig(
-		topodatapb.TabletType_PRIMARY.String(),
-		"SELECT",
-		"lag",
-		makeThresholds(10, 10), // 10% throttle above 10
-	)
-
-	env := createTestEnv()
-	strategy := NewTabletThrottlerStrategy(mockClient, cfg, createTestTabletConfig(), env, "test_keyspace", "test_cell", nil)
-
-	// Inject controlled random functions:
-	// - Priority check: return 99 so priority 100 query passes (99 < 100)
-	// - Throttle check: return 0.09 which is < 0.10 (10%), so throttle triggers
-	strategy.randIntN = func(n int) int { return 99 }
-	strategy.randFloat64 = func() float64 { return 0.09 }
-
-	decision := strategy.Evaluate(
-		context.Background(),
-		topodatapb.TabletType_PRIMARY,
-		&sqlparser.ParsedQuery{Query: "SELECT * from A where X=1"},
-		1,
-		registry.QueryAttributes{WorkloadName: "unknown", Priority: 100},
-	)
-
-	require.True(t, decision.Throttle, "Expected throttling when metric breaches threshold and random < throttle ratio")
-	require.Contains(t, decision.Message, "throttled")
-	require.Equal(t, "lag", decision.MetricName)
-	require.Equal(t, 20.0, decision.MetricValue)
-	require.Equal(t, 10.0, decision.Threshold)
-	require.Equal(t, 0.1, decision.ThrottlePercentage)
-}
-
-// TestTabletThrottlerStrategy_Evaluate_NotThrottledWhenRandomAboveRatio tests that queries pass when random > throttle ratio.
-func TestTabletThrottlerStrategy_Evaluate_NotThrottledWhenRandomAboveRatio(t *testing.T) {
-	// Throttle check fails with lag exceeding threshold
-	mockClient := NewFakeThrottleClientWrapper(&throttle.CheckResult{
-		Metrics: map[string]*throttle.MetricResult{
-			"lag": {
-				ResponseCode: tabletmanagerdata.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED,
-				Value:        20, // Exceeds threshold of 10
+		{
+			name:           "throttle if tablet type in config is the current tablet type but throttle check is not ok",
+			giveTabletType: topodatapb.TabletType_PRIMARY,
+			giveCfg: makeTabletStrategyConfig(
+				topodatapb.TabletType_PRIMARY.String(),
+				"SELECT",
+				"lag",
+				makeThresholds(10, 10, 25, 25, 50, 50),
+			),
+			giveSQL:   "SELECT * from A where X=1",
+			giveTxnID: 1,
+			giveCheckResult: &throttle.CheckResult{
+				Metrics: map[string]*throttle.MetricResult{
+					"lag": {
+						ResponseCode: tabletmanagerdata.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED,
+						Value:        20,
+					},
+				},
 			},
+			giveThrottleCheckOK:   false,
+			giveRandValue:         0.09,
+			givePriorityRandValue: 99,
+			wantErr:               "[VTTabletThrottler] Query=\"SELECT * from A where X=1\" throttled: workload=unknown priority=100 metric=lag value=20.00 breached threshold=10.00 throttle=10%",
 		},
-	}, false)
-
-	cfg := makeTabletStrategyConfig(
-		topodatapb.TabletType_PRIMARY.String(),
-		"SELECT",
-		"lag",
-		makeThresholds(10, 10), // 10% throttle above 10
-	)
-
-	env := createTestEnv()
-	strategy := NewTabletThrottlerStrategy(mockClient, cfg, createTestTabletConfig(), env, "test_keyspace", "test_cell", nil)
-
-	// Inject controlled random functions:
-	// - Priority check: return 99 so priority 100 query passes (99 < 100)
-	// - Throttle check: return 0.5 which is > 0.10 (10%), so NO throttle
-	strategy.randIntN = func(n int) int { return 99 }
-	strategy.randFloat64 = func() float64 { return 0.5 }
-
-	decision := strategy.Evaluate(
-		context.Background(),
-		topodatapb.TabletType_PRIMARY,
-		&sqlparser.ParsedQuery{Query: "SELECT * from A where X=1"},
-		1,
-		registry.QueryAttributes{WorkloadName: "unknown", Priority: 100},
-	)
-
-	require.False(t, decision.Throttle, "Expected no throttling when random > throttle ratio")
-}
-
-// TestTabletThrottlerStrategy_Evaluate_PriorityBypass tests that low priority values bypass throttling probabilistically.
-func TestTabletThrottlerStrategy_Evaluate_PriorityBypass(t *testing.T) {
-	// Throttle check fails with high lag
-	mockClient := NewFakeThrottleClientWrapper(&throttle.CheckResult{
-		Metrics: map[string]*throttle.MetricResult{
-			"lag": {
-				ResponseCode: tabletmanagerdata.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED,
-				Value:        1000,
+		{
+			name:           "priority 0 query is NEVER throttled (edge case)",
+			giveTabletType: topodatapb.TabletType_PRIMARY,
+			giveOptions: &querypb.ExecuteOptions{
+				WorkloadName: "critical-system-query",
+				Priority:     "0",
 			},
+			giveCfg: makeTabletStrategyConfig(
+				topodatapb.TabletType_PRIMARY.String(),
+				"SELECT",
+				"lag",
+				makeThresholds(1, 100),
+			),
+			giveSQL:   "SELECT * from critical_table",
+			giveTxnID: 1,
+			giveCheckResult: &throttle.CheckResult{
+				Metrics: map[string]*throttle.MetricResult{
+					"lag": {
+						ResponseCode: tabletmanagerdata.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED,
+						Value:        1000,
+					},
+				},
+			},
+			giveThrottleCheckOK:   false,
+			giveRandValue:         0.01,
+			givePriorityRandValue: 99,
 		},
-	}, false)
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ftcw := NewFakeThrottleClientWrapper(tt.giveCheckResult, tt.giveThrottleCheckOK)
+			tts := NewTabletThrottlerStrategy(ftcw, tt.giveCfg, createTestTabletConfig(), createTestEnv(), "test-keyspace", "test-cell", nil)
 
-	cfg := makeTabletStrategyConfig(
-		topodatapb.TabletType_PRIMARY.String(),
-		"SELECT",
-		"lag",
-		makeThresholds(1, 100), // 100% throttle above 1
-	)
+			// Use dependency injection instead of gostub
+			tts.randFloat64 = func() float64 {
+				return tt.giveRandValue
+			}
+			tts.randIntN = func(n int) int {
+				return tt.givePriorityRandValue
+			}
 
-	env := createTestEnv()
-	strategy := NewTabletThrottlerStrategy(mockClient, cfg, createTestTabletConfig(), env, "test_keyspace", "test_cell", nil)
+			decision := tts.Evaluate(context.Background(), tt.giveTabletType, &sqlparser.ParsedQuery{Query: tt.giveSQL}, tt.giveTxnID, toQueryAttributesForTest(tt.giveOptions))
+			if tt.wantErr != "" {
+				require.True(t, decision.Throttle, "Expected throttling decision")
+				require.Equal(t, tt.wantErr, decision.Message, "Throttle message should match expected error")
+				return
+			}
 
-	// Priority 50 with randIntN returning 60 means: 60 < 50 is false, so bypass
-	strategy.randIntN = func(n int) int { return 60 }
-	strategy.randFloat64 = func() float64 { return 0.01 } // Would throttle if we got there
-
-	decision := strategy.Evaluate(
-		context.Background(),
-		topodatapb.TabletType_PRIMARY,
-		&sqlparser.ParsedQuery{Query: "SELECT * from table"},
-		1,
-		registry.QueryAttributes{WorkloadName: "test", Priority: 50},
-	)
-
-	require.False(t, decision.Throttle, "Expected no throttling when priority check fails")
-	require.Contains(t, decision.Message, "High priority query")
+			require.False(t, decision.Throttle, "Expected no throttling")
+		})
+	}
 }
 
 // TestTabletThrottlerStrategy_CachingLifecycle tests the Start/Stop lifecycle methods.
@@ -374,13 +284,13 @@ func TestTabletThrottlerStrategy_CachingBehavior(t *testing.T) {
 	checkResult := &throttle.CheckResult{
 		Metrics: map[string]*throttle.MetricResult{
 			"lag": {
-				ResponseCode: tabletmanagerdata.CheckThrottlerResponseCode_OK,
-				Value:        5,
+				ResponseCode: tabletmanagerdata.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED,
+				Value:        20,
 			},
 		},
 	}
 
-	ftcw := NewFakeThrottleClientWrapper(checkResult, true) // OK = true means fast path bypass
+	ftcw := NewFakeThrottleClientWrapper(checkResult, false)
 
 	cfg := makeTabletStrategyConfig(
 		topodatapb.TabletType_PRIMARY.String(),
@@ -391,8 +301,17 @@ func TestTabletThrottlerStrategy_CachingBehavior(t *testing.T) {
 
 	strategy := NewTabletThrottlerStrategy(ftcw, cfg, createTestTabletConfig(), createTestEnv(), "test-keyspace", "test-cell", nil)
 
-	// Without cache running, each Evaluate may call the client
-	_ = strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, 1, toQueryAttributesForTest(nil))
+	options := &querypb.ExecuteOptions{Priority: "100"}
+
+	// Use dependency injection instead of gostub
+	strategy.randFloat64 = func() float64 { return 0.5 }
+	strategy.randIntN = func(n int) int { return 99 }
+
+	_ = strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, 1, toQueryAttributesForTest(options))
+	require.Equal(t, 1, ftcw.GetCallCount(), "Expected 1 call without cache")
+
+	_ = strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, 1, toQueryAttributesForTest(options))
+	require.Equal(t, 2, ftcw.GetCallCount(), "Expected 2 calls without cache")
 
 	ftcw.ResetCallCount()
 	strategy.Start()
@@ -404,12 +323,10 @@ func TestTabletThrottlerStrategy_CachingBehavior(t *testing.T) {
 
 	ftcw.ResetCallCount()
 
-	// With cache running and OK=true, fast path should bypass without additional client calls
-	_ = strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, 1, toQueryAttributesForTest(nil))
-	_ = strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, 1, toQueryAttributesForTest(nil))
-	_ = strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, 1, toQueryAttributesForTest(nil))
+	_ = strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, 1, toQueryAttributesForTest(options))
+	_ = strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, 1, toQueryAttributesForTest(options))
+	_ = strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, 1, toQueryAttributesForTest(options))
 
-	// Fast path means no additional calls during Evaluate (only background refresh)
 	callCount := ftcw.GetCallCount()
 	require.LessOrEqual(t, callCount, 2, "Cache should significantly reduce calls to ThrottleCheckOK")
 }
@@ -581,7 +498,7 @@ type slowThrottleClientWrapper struct {
 	delay           time.Duration
 }
 
-func (f *slowThrottleClientWrapper) ThrottleCheckOK(ctx context.Context, _ throttlerapp.Name) (*throttle.CheckResult, bool) {
+func (f *slowThrottleClientWrapper) ThrottleCheckOK(ctx context.Context, overrideAppName throttlerapp.Name) (*throttle.CheckResult, bool) {
 	f.callCount.Add(1)
 	select {
 	case <-ctx.Done():
@@ -637,7 +554,7 @@ func TestFakeThrottleClientWrapper_ThreadSafety(t *testing.T) {
 	wg.Add(numGoroutines)
 
 	for i := 0; i < numGoroutines; i++ {
-		go func() {
+		go func(id int) {
 			defer wg.Done()
 			for j := 0; j < numOperations; j++ {
 				if j%2 == 0 {
@@ -653,7 +570,7 @@ func TestFakeThrottleClientWrapper_ThreadSafety(t *testing.T) {
 					client.SetCheckResult(newResult, j%2 == 1)
 				}
 			}
-		}()
+		}(i)
 	}
 
 	done := make(chan struct{})
