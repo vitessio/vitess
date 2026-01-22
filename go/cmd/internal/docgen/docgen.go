@@ -59,10 +59,6 @@ import (
 // written to `dir`. The root command is also renamed to _index.md to remain
 // compatible with the vitessio/website content structure expectations.
 func GenerateMarkdownTree(cmd *cobra.Command, dir string) error {
-	if dir == "." || dir == "./" {
-		return errors.New("refusing to generate docs in the current directory")
-	}
-
 	sha, err := getCommitID("HEAD")
 	if err != nil {
 		return fmt.Errorf("failed to get commit id for HEAD: %w", err)
