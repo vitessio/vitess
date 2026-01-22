@@ -14,7 +14,7 @@ jobs:
       pull-requests: write
     strategy:
       matrix:
-        branch: [ main, release-23.0, release-22.0, release-21.0, release-20.0 ]
+        branch: [ main, release-23.0, release-22.0 ]
     name: Update Golang Version
     runs-on: ubuntu-24.04
     steps:
@@ -43,10 +43,8 @@ jobs:
 
           if [[ "${{ matrix.branch }}" == "main" ]]; then
             go run ./go/tools/go-upgrade/go-upgrade.go upgrade --main --allow-major-upgrade
-          elif [[ ("${{ matrix.branch }}" == "release-21.0") || ("${{ matrix.branch }}" == "release-22.0") ]]; then
-            go run ./go/tools/go-upgrade/go-upgrade.go upgrade
           else
-            go run ./go/tools/go-upgrade/go-upgrade.go upgrade --workflow-update=false
+            go run ./go/tools/go-upgrade/go-upgrade.go upgrade
           fi
 
           output=$(git status -s)
@@ -84,9 +82,8 @@ jobs:
 
             > Do not trust the bot blindly. A thorough code review must be done to ensure all the files have been correctly modified.
 
-            There are a few manual steps remaining:
-              - [ ] Make sure you update the Golang version used in the previous and next release branches for the Upgrade/Downgrade tests.
-              - [ ] Build and Push the bootstrap images to Docker Hub, the bot cannot handle that.
+            There are manual steps remaining:
+              - [ ] Build and Push the bootstrap images to Docker Hub, the bot cannot handle that
             
             cc @vitessio/release
           base: ${{ matrix.branch }}
