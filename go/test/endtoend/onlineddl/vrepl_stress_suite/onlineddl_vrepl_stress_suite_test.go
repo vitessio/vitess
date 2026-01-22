@@ -417,7 +417,7 @@ func TestMain(m *testing.M) {
 		defer clusterInstance.Teardown()
 
 		if _, err := os.Stat(schemaChangeDirectory); os.IsNotExist(err) {
-			_ = os.Mkdir(schemaChangeDirectory, 0700)
+			_ = os.Mkdir(schemaChangeDirectory, 0o700)
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
@@ -675,7 +675,7 @@ func generateDelete(t *testing.T, conn *mysql.Conn) error {
 }
 
 func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, done *int64) {
-	log.Infof("Running single connection")
+	log.InfoS("Running single connection")
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -691,7 +691,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, 
 	defer periodicRest.Stop()
 	for {
 		if atomic.LoadInt64(done) == 1 {
-			log.Infof("Terminating single connection")
+			log.InfoS("Terminating single connection")
 			return
 		}
 		switch rand.Int32N(3) {
@@ -732,7 +732,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, 
 }
 
 func runMultipleConnections(ctx context.Context, t *testing.T, autoIncInsert bool) {
-	log.Infof("Running multiple connections")
+	log.InfoS("Running multiple connections")
 	var done int64
 	var wg sync.WaitGroup
 	for i := 0; i < maxConcurrency; i++ {
@@ -744,14 +744,14 @@ func runMultipleConnections(ctx context.Context, t *testing.T, autoIncInsert boo
 	}
 	<-ctx.Done()
 	atomic.StoreInt64(&done, 1)
-	log.Infof("Running multiple connections: done")
+	log.InfoS("Running multiple connections: done")
 	wg.Wait()
-	log.Infof("All connections cancelled")
+	log.InfoS("All connections cancelled")
 }
 
 func initTable(t *testing.T) {
-	log.Infof("initTable begin")
-	defer log.Infof("initTable complete")
+	log.InfoS("initTable begin")
+	defer log.InfoS("initTable complete")
 
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)

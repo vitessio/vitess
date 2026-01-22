@@ -1769,7 +1769,7 @@ func (s *Server) getCopyProgress(ctx context.Context, ts *trafficSwitcher) (*cop
 	}
 	getTablesQuery := "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = %d"
 	getRowCountQuery := "select table_name, table_rows, data_length from information_schema.tables where table_schema = %s and table_name in (%s)"
-	var inProgressTables = make(map[string]struct{})
+	inProgressTables := make(map[string]struct{})
 	var mu sync.Mutex
 	err := ts.ForAllTargets(func(target *MigrationTarget) error {
 		for id := range target.Sources {
@@ -3387,7 +3387,7 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, maxAllowedR
 				msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s %s shard (%v):\n  %v\n",
 					si.Keyspace(), si.ShardName(), stype, err, partialDetails)
 				if partial && ts.force {
-					log.Warning(msg)
+					log.WarnS(msg)
 				} else {
 					m.Lock()
 					refreshErrors.WriteString(msg)

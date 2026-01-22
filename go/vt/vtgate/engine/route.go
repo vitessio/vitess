@@ -41,12 +41,10 @@ import (
 
 var _ Primitive = (*Route)(nil)
 
-var (
-	replicaWarmingReadsMirrored = stats.NewCountersWithMultiLabels(
-		"ReplicaWarmingReadsMirrored",
-		"Number of reads mirrored to replicas to warm their bufferpools",
-		[]string{"Keyspace"})
-)
+var replicaWarmingReadsMirrored = stats.NewCountersWithMultiLabels(
+	"ReplicaWarmingReadsMirrored",
+	"Number of reads mirrored to replicas to warm their bufferpools",
+	[]string{"Keyspace"})
 
 // Route represents the instructions to route a read query to
 // one or many vttablets.
@@ -103,9 +101,7 @@ func NewRoute(opcode Opcode, keyspace *vindexes.Keyspace, query, fieldQuery stri
 	}
 }
 
-var (
-	partialSuccessScatterQueries = stats.NewCounter("PartialSuccessScatterQueries", "Count of partially successful scatter queries")
-)
+var partialSuccessScatterQueries = stats.NewCounter("PartialSuccessScatterQueries", "Count of partially successful scatter queries")
 
 // TryExecute performs a non-streaming exec.
 func (route *Route) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
@@ -529,12 +525,12 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 
 			_, errs := replicaVCursor.ExecuteMultiShard(ctx, route, rss, queries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
 			if len(errs) > 0 {
-				log.Warningf("Failed to execute warming replica read: %v", errs)
+				log.WarnS(fmt.Sprintf("Failed to execute warming replica read: %v", errs))
 			} else {
 				replicaWarmingReadsMirrored.Add([]string{route.Keyspace.Name}, 1)
 			}
 		}(replicaVCursor)
 	default:
-		log.Warning("Failed to execute warming replica read as pool is full")
+		log.WarnS("Failed to execute warming replica read as pool is full")
 	}
 }

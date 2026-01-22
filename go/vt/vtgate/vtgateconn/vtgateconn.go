@@ -103,7 +103,8 @@ type VStreamReader interface {
 
 // VStream streams binlog events.
 func (conn *VTGateConn) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid,
-	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags) (VStreamReader, error) {
+	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags,
+) (VStreamReader, error) {
 	return conn.impl.VStream(ctx, tabletType, vgtid, filter, flags)
 }
 
@@ -228,7 +229,7 @@ func RegisterDialer(name string, dialer DialerFunc) {
 	defer dialersM.Unlock()
 
 	if _, ok := dialers[name]; ok {
-		log.Warningf("Dialer %s already exists, overwriting it", name)
+		log.WarnS(fmt.Sprintf("Dialer %s already exists, overwriting it", name))
 	}
 	dialers[name] = dialer
 }

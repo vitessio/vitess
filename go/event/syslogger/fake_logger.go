@@ -27,46 +27,46 @@ type loggerMsg struct {
 	level string
 }
 type testLogger struct {
-	logs          []loggerMsg
-	savedInfof    func(format string, args ...any)
-	savedWarningf func(format string, args ...any)
-	savedErrorf   func(format string, args ...any)
+	logs            []loggerMsg
+	savedInfoDepth  func(depth int, args ...any)
+	savedWarnDepth  func(depth int, args ...any)
+	savedErrorDepth func(depth int, args ...any)
 }
 
 func NewTestLogger() *testLogger {
 	tl := &testLogger{
-		savedInfof:    log.Infof,
-		savedWarningf: log.Warningf,
-		savedErrorf:   log.Errorf,
+		savedInfoDepth:  log.InfoDepth,
+		savedWarnDepth:  log.WarningDepth,
+		savedErrorDepth: log.ErrorDepth,
 	}
-	log.Infof = tl.recordInfof
-	log.Warningf = tl.recordWarningf
-	log.Errorf = tl.recordErrorf
+	log.InfoDepth = tl.recordInfo
+	log.WarningDepth = tl.recordWarn
+	log.ErrorDepth = tl.recordError
 	return tl
 }
 
 func (tl *testLogger) Close() {
-	log.Infof = tl.savedInfof
-	log.Warningf = tl.savedWarningf
-	log.Errorf = tl.savedErrorf
+	log.InfoDepth = tl.savedInfoDepth
+	log.WarningDepth = tl.savedWarnDepth
+	log.ErrorDepth = tl.savedErrorDepth
 }
 
-func (tl *testLogger) recordInfof(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
+func (tl *testLogger) recordInfo(depth int, args ...any) {
+	msg := fmt.Sprint(args...)
 	tl.logs = append(tl.logs, loggerMsg{msg, "INFO"})
-	tl.savedInfof(msg)
+	tl.savedInfoDepth(depth, msg)
 }
 
-func (tl *testLogger) recordWarningf(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
+func (tl *testLogger) recordWarn(depth int, args ...any) {
+	msg := fmt.Sprint(args...)
 	tl.logs = append(tl.logs, loggerMsg{msg, "WARNING"})
-	tl.savedWarningf(msg)
+	tl.savedWarnDepth(depth, msg)
 }
 
-func (tl *testLogger) recordErrorf(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
+func (tl *testLogger) recordError(depth int, args ...any) {
+	msg := fmt.Sprint(args...)
 	tl.logs = append(tl.logs, loggerMsg{msg, "ERROR"})
-	tl.savedErrorf(msg)
+	tl.savedErrorDepth(depth, msg)
 }
 
 func (tl *testLogger) getLog() loggerMsg {

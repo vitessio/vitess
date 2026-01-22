@@ -100,7 +100,7 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 		"--initial-cluster", fmt.Sprintf("%s=%s", topo.Name, topo.PeerURL),
 	)
 
-	err = createDirectory(topo.DataDirectory, 0700)
+	err = createDirectory(topo.DataDirectory, 0o700)
 	if err != nil && !os.IsExist(err) {
 		return err
 	}
@@ -115,7 +115,7 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 	topo.proc.Env = append(topo.proc.Env, os.Environ()...)
 	topo.proc.Env = append(topo.proc.Env, DefaultVttestEnv)
 
-	log.Infof("Starting etcd with command: %v", strings.Join(topo.proc.Args, " "))
+	log.InfoS(fmt.Sprintf("Starting etcd with command: %v", strings.Join(topo.proc.Args, " ")))
 
 	err = topo.proc.Start()
 	if err != nil {
@@ -145,9 +145,9 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 		case err := <-topo.exit:
 			errBytes, ferr := os.ReadFile(topo.ErrorLog)
 			if ferr == nil {
-				log.Errorf("%s error log contents:\n%s", topo.Binary, string(errBytes))
+				log.ErrorS(fmt.Sprintf("%s error log contents:\n%s", topo.Binary, string(errBytes)))
 			} else {
-				log.Errorf("Failed to read the %s error log file %q: %v", topo.Binary, topo.ErrorLog, ferr)
+				log.ErrorS(fmt.Sprintf("Failed to read the %s error log file %q: %v", topo.Binary, topo.ErrorLog, ferr))
 			}
 			return fmt.Errorf("process '%s' exited prematurely (err: %s)", topo.Binary, err)
 		default:
@@ -175,20 +175,20 @@ func (topo *TopoProcess) SetupZookeeper(cluster *LocalProcessCluster) error {
 		"init",
 	)
 
-	err = os.MkdirAll(topo.LogDirectory, 0755)
+	err = os.MkdirAll(topo.LogDirectory, 0o755)
 	if err != nil {
-		log.Errorf("Failed to create log directory for zookeeper: %v", err)
+		log.ErrorS(fmt.Sprintf("Failed to create log directory for zookeeper: %v", err))
 		return err
 	}
 	errFile, err := os.Create(path.Join(topo.LogDirectory, "topo-stderr.txt"))
 	if err != nil {
-		log.Errorf("Failed to create file for zookeeper stderr: %v", err)
+		log.ErrorS(fmt.Sprintf("Failed to create file for zookeeper stderr: %v", err))
 		return err
 	}
 	topo.proc.Stderr = errFile
 	topo.proc.Env = append(topo.proc.Env, os.Environ()...)
 
-	log.Infof("Starting zookeeper with args %v", strings.Join(topo.proc.Args, " "))
+	log.InfoS(fmt.Sprintf("Starting zookeeper with args %v", strings.Join(topo.proc.Args, " ")))
 	return topo.proc.Run()
 }
 
@@ -215,12 +215,12 @@ func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 
 	err = os.MkdirAll(topo.LogDirectory, os.ModePerm)
 	if err != nil {
-		log.Errorf("Failed to create directory for consul logs: %v", err)
+		log.ErrorS(fmt.Sprintf("Failed to create directory for consul logs: %v", err))
 		return
 	}
 	err = os.MkdirAll(topo.DataDirectory, os.ModePerm)
 	if err != nil {
-		log.Errorf("Failed to create directory for consul data: %v", err)
+		log.ErrorS(fmt.Sprintf("Failed to create directory for consul data: %v", err))
 		return
 	}
 
@@ -229,7 +229,7 @@ func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 	logFile := path.Join(topo.LogDirectory, "/consul.log")
 	_, err = os.Create(logFile)
 	if err != nil {
-		log.Errorf("Failed to create file for consul logs: %v", err)
+		log.ErrorS(fmt.Sprintf("Failed to create file for consul logs: %v", err))
 		return
 	}
 
@@ -247,11 +247,11 @@ func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 	}
 	config, err = json.Marshal(configs)
 	if err != nil {
-		log.Error(err.Error())
+		log.ErrorS(err.Error())
 		return
 	}
 
-	err = os.WriteFile(configFile, config, 0666)
+	err = os.WriteFile(configFile, config, 0o666)
 	if err != nil {
 		return
 	}
@@ -267,14 +267,14 @@ func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 
 	errFile, err := os.Create(path.Join(topo.LogDirectory, "topo-stderr.txt"))
 	if err != nil {
-		log.Errorf("Failed to create file for consul stderr: %v", err)
+		log.ErrorS(fmt.Sprintf("Failed to create file for consul stderr: %v", err))
 		return
 	}
 	topo.proc.Stderr = errFile
 
 	topo.proc.Env = append(topo.proc.Env, os.Environ()...)
 
-	log.Errorf("Starting consul with args %v", strings.Join(topo.proc.Args, " "))
+	log.ErrorS(fmt.Sprintf("Starting consul with args %v", strings.Join(topo.proc.Args, " ")))
 	err = topo.proc.Start()
 	if err != nil {
 		return
@@ -314,7 +314,7 @@ func (topo *TopoProcess) TearDown(Cell string, originalVtRoot string, currentRoo
 		case *clientv3.Client:
 			_ = cli.Close()
 		default:
-			log.Errorf("Unknown topo client type %T", cli)
+			log.ErrorS(fmt.Sprintf("Unknown topo client type %T", cli))
 		}
 	}
 
@@ -380,10 +380,10 @@ func (topo *TopoProcess) IsHealthy() bool {
 
 func (topo *TopoProcess) removeTopoDirectories(Cell string) {
 	if err := topo.ManageTopoDir("rmdir", "/vitess/global"); err != nil {
-		log.Errorf("Failed to remove global topo directory: %v", err)
+		log.ErrorS(fmt.Sprintf("Failed to remove global topo directory: %v", err))
 	}
 	if err := topo.ManageTopoDir("rmdir", "/vitess/"+Cell); err != nil {
-		log.Errorf("Failed to remove local topo directory: %v", err)
+		log.ErrorS(fmt.Sprintf("Failed to remove local topo directory: %v", err))
 	}
 }
 

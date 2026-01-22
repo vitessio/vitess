@@ -139,8 +139,10 @@ func (rm *RowMap) GetTime(key string) time.Time {
 }
 
 // knownDBs is a DB cache by uri
-var knownDBs = make(map[string]*sql.DB)
-var knownDBsMutex = &sync.Mutex{}
+var (
+	knownDBs      = make(map[string]*sql.DB)
+	knownDBsMutex = &sync.Mutex{}
+)
 
 // GetSQLiteDB returns a SQLite DB instance based on DB file name.
 // bool result indicates whether the DB was returned from cache; err
@@ -228,7 +230,7 @@ func QueryRowsMap(db *sql.DB, query string, on_row func(RowMap) error, args ...a
 		defer rows.Close()
 	}
 	if err != nil && err != sql.ErrNoRows {
-		log.Error(err)
+		log.ErrorS(fmt.Sprint(err))
 		return err
 	}
 	err = ScanRowsToMaps(rows, on_row)
@@ -245,7 +247,7 @@ func ExecNoPrepare(db *sql.DB, query string, args ...any) (res sql.Result, err e
 
 	res, err = db.Exec(query, args...)
 	if err != nil {
-		log.Error(err)
+		log.ErrorS(fmt.Sprint(err))
 	}
 	return res, err
 }

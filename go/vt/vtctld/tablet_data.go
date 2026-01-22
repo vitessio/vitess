@@ -18,6 +18,7 @@ package vtctld
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -40,9 +41,7 @@ import (
 // connections with tablets, and updates its internal state with the
 // result.
 
-var (
-	tabletHealthKeepAlive = 5 * time.Minute
-)
+var tabletHealthKeepAlive = 5 * time.Minute
 
 type tabletHealth struct {
 	mu sync.Mutex
@@ -166,9 +165,9 @@ func (thc *tabletHealthCache) Get(ctx context.Context, tabletAlias *topodatapb.T
 		thc.tabletMap[tabletAliasStr] = th
 
 		go func() {
-			log.Infof("starting health stream for tablet %v", tabletAlias)
+			log.InfoS(fmt.Sprintf("starting health stream for tablet %v", tabletAlias))
 			err := th.stream(context.Background(), thc.ts, tabletAlias)
-			log.Infof("tablet %v health stream ended, error: %v", tabletAlias, err)
+			log.InfoS(fmt.Sprintf("tablet %v health stream ended, error: %v", tabletAlias, err))
 			thc.delete(tabletAliasStr)
 		}()
 	}

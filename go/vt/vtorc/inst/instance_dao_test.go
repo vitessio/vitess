@@ -21,9 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/db"
 )
 
-var (
-	spacesRegexp = regexp.MustCompile(`[ \t\n\r]+`)
-)
+var spacesRegexp = regexp.MustCompile(`[ \t\n\r]+`)
 
 func normalizeQuery(name string) string {
 	name = strings.ReplaceAll(name, "`", "")
@@ -595,7 +593,7 @@ last_attempted_check <= last_checked as use1,
 last_checked < DATETIME('now', '-1500 second') as is_outdated1,
 last_checked < DATETIME('now', '-3000 second') as is_outdated2
 from database_instance`, func(rowMap sqlutils.RowMap) error {
-				log.Errorf("Row in database_instance - %+v", rowMap)
+				log.ErrorS(fmt.Sprintf("Row in database_instance - %+v", rowMap))
 				return nil
 			})
 			require.NoError(t, errInDataCollection)
@@ -906,7 +904,8 @@ func TestDetectErrantGTIDs(t *testing.T) {
 				ServerUUID:             "316d193c-70e5-11e5-adb2-ecf4bb2262ff",
 				SourceUUID:             "230ea8ea-81e3-11e4-972a-e25ec4bd140a",
 			},
-		}, {
+		},
+		{
 			name: "Errant GTIDs on replica",
 			instance: &Instance{
 				ExecutedGtidSet:        "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10539,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:34",
@@ -941,7 +940,8 @@ func TestDetectErrantGTIDs(t *testing.T) {
 				ExecutedGtidSet: "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10589,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-341",
 			},
 			wantErrantGTID: "316d193c-70e5-11e5-adb2-ecf4bb2262ff:342",
-		}, {
+		},
+		{
 			name: "Old information for new primary",
 			instance: &Instance{
 				ExecutedGtidSet: "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10539,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-342",

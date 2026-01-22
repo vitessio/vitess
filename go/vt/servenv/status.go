@@ -251,7 +251,7 @@ func (sp *statusPage) statusHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err := sp.tmpl.ExecuteTemplate(w, "status", data); err != nil {
 		if _, ok := err.(net.Error); !ok {
-			log.Errorf("servenv: couldn't execute template: %v", err)
+			log.ErrorS(fmt.Sprintf("servenv: couldn't execute template: %v", err))
 		}
 	}
 }
@@ -300,7 +300,7 @@ func registerDebugBlockProfileRate() {
 		}
 		blockProfileRate = rate
 		runtime.SetBlockProfileRate(rate)
-		log.Infof("Set block profile rate to: %d", rate)
+		log.InfoS(fmt.Sprintf("Set block profile rate to: %d", rate))
 		w.Header().Set("Content-Type", "text/plain")
 		io.WriteString(w, message)
 	})
@@ -328,7 +328,7 @@ func registerDebugMutexProfileFraction() {
 			message = fmt.Sprintf("Mutex profiling set to fraction %d", fraction)
 		}
 		runtime.SetMutexProfileFraction(fraction)
-		log.Infof("Set mutex profiling fraction to: %d", fraction)
+		log.InfoS(fmt.Sprintf("Set mutex profiling fraction to: %d", fraction))
 		w.Header().Set("Content-Type", "text/plain")
 		io.WriteString(w, message)
 	})
@@ -338,6 +338,7 @@ func init() {
 	var err error
 	hostname, err = os.Hostname()
 	if err != nil {
-		log.Exitf("os.Hostname: %v", err)
+		log.ErrorS(fmt.Sprintf("os.Hostname: %v", err))
+		os.Exit(1)
 	}
 }

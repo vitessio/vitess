@@ -72,7 +72,7 @@ func (mysqld *Mysqld) WaitForReparentJournal(ctx context.Context, timeCreatedNS 
 	for {
 		qr, err := mysqld.FetchSuperQuery(ctx, queryReparentJournal(timeCreatedNS))
 		if err != nil {
-			log.Infof("Error querying reparent journal: %v", err)
+			log.InfoS(fmt.Sprintf("Error querying reparent journal: %v", err))
 		}
 		if err == nil && len(qr.Rows) == 1 {
 			// we have the row, we're done
@@ -83,7 +83,7 @@ func (mysqld *Mysqld) WaitForReparentJournal(ctx context.Context, timeCreatedNS 
 		t := time.After(100 * time.Millisecond)
 		select {
 		case <-ctx.Done():
-			log.Warning("WaitForReparentJournal failed to see row before timeout.")
+			log.WarnS("WaitForReparentJournal failed to see row before timeout.")
 			return ctx.Err()
 		case <-t:
 		}

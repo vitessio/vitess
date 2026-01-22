@@ -211,7 +211,7 @@ func (lg *SimpleLoadGenerator) execQueryWithRetry(query string) (*sqltypes.Resul
 			default:
 			}
 			if lg.runCtx != nil && lg.runCtx.Err() != nil {
-				log.Infof("Load generator run context done, query never completed: %q", query)
+				log.InfoS(fmt.Sprintf("Load generator run context done, query never completed: %q", query))
 				errCh <- errors.New("load generator stopped")
 				return
 			}
@@ -246,7 +246,7 @@ func (lg *SimpleLoadGenerator) execQueryWithRetry(query string) (*sqltypes.Resul
 	case qr := <-qrCh:
 		return qr, nil
 	case err := <-errCh:
-		log.Infof("query %q failed with error %v", query, err)
+		log.InfoS(fmt.Sprintf("query %q failed with error %v", query, err))
 		return nil, err
 	}
 }
@@ -254,8 +254,8 @@ func (lg *SimpleLoadGenerator) execQueryWithRetry(query string) (*sqltypes.Resul
 func (lg *SimpleLoadGenerator) Load() error {
 	lg.state = LoadGeneratorStateLoading
 	defer func() { lg.state = LoadGeneratorStateStopped }()
-	log.Infof("Inserting initial FK data")
-	var queries = []string{
+	log.InfoS("Inserting initial FK data")
+	queries := []string{
 		"insert into parent values(1, 'parent1'), (2, 'parent2');",
 		"insert into child values(1, 1, 'child11'), (2, 1, 'child21'), (3, 2, 'child32');",
 	}
@@ -263,20 +263,20 @@ func (lg *SimpleLoadGenerator) Load() error {
 		_, err := lg.exec(query)
 		require.NoError(lg.vc.t, err)
 	}
-	log.Infof("Done inserting initial FK data")
+	log.InfoS("Done inserting initial FK data")
 	return nil
 }
 
 func (lg *SimpleLoadGenerator) Start() error {
 	if lg.state == LoadGeneratorStateRunning {
-		log.Infof("Load generator already running")
+		log.InfoS("Load generator already running")
 		return nil
 	}
 	lg.state = LoadGeneratorStateRunning
 	go func() {
 		defer func() {
 			lg.state = LoadGeneratorStateStopped
-			log.Infof("Load generator stopped")
+			log.InfoS("Load generator stopped")
 		}()
 		lg.runCtx, lg.runCtxCancel = context.WithCancel(lg.ctx)
 		defer func() {
@@ -285,19 +285,19 @@ func (lg *SimpleLoadGenerator) Start() error {
 		}()
 		t := lg.vc.t
 		var err error
-		log.Infof("Load generator starting")
+		log.InfoS("Load generator starting")
 		for i := 0; ; i++ {
 			if i%1000 == 0 {
 				// Log occasionally to show that the test is still running.
-				log.Infof("Load simulation iteration %d", i)
+				log.InfoS(fmt.Sprintf("Load simulation iteration %d", i))
 			}
 			select {
 			case <-lg.ctx.Done():
-				log.Infof("Load generator context done")
+				log.InfoS("Load generator context done")
 				lg.ch <- true
 				return
 			case <-lg.runCtx.Done():
-				log.Infof("Load generator run context done")
+				log.InfoS("Load generator run context done")
 				lg.ch <- true
 				return
 			default:
@@ -320,22 +320,22 @@ func (lg *SimpleLoadGenerator) Start() error {
 
 func (lg *SimpleLoadGenerator) Stop() error {
 	if lg.state == LoadGeneratorStateStopped {
-		log.Infof("Load generator already stopped")
+		log.InfoS("Load generator already stopped")
 		return nil
 	}
 	if lg.runCtx != nil && lg.runCtxCancel != nil {
-		log.Infof("Canceling load generator")
+		log.InfoS("Canceling load generator")
 		lg.runCtxCancel()
 	}
 	// Wait for ch to be closed or we hit a timeout.
 	timeout := vdiffTimeout
 	select {
 	case <-lg.ch:
-		log.Infof("Load generator stopped")
+		log.InfoS("Load generator stopped")
 		lg.state = LoadGeneratorStateStopped
 		return nil
 	case <-time.After(timeout):
-		log.Infof("Timed out waiting for load generator to stop")
+		log.InfoS("Timed out waiting for load generator to stop")
 		return errors.New("timed out waiting for load generator to stop")
 	}
 }
@@ -495,7 +495,7 @@ func waitForColumn(t *testing.T, vtgateProcess *cluster.VtgateProcess, ks, tbl, 
 					break
 				}
 				if colName, exists := colDef["name"]; exists && colName == col {
-					log.Infof("Found column '%s' in table '%s' for keyspace '%s'", col, tbl, ks)
+					log.InfoS(fmt.Sprintf("Found column '%s' in table '%s' for keyspace '%s'", col, tbl, ks))
 					return nil
 				}
 			}

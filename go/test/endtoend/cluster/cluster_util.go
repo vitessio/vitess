@@ -320,7 +320,7 @@ func WriteDbCredentialToTmp(tmpDir string) string {
         "vt_filtered": ["VtFilteredPass"]
 	}`)
 	dbCredentialFile = path.Join(tmpDir, "db_credentials.json")
-	os.WriteFile(dbCredentialFile, data, 0666)
+	os.WriteFile(dbCredentialFile, data, 0o666)
 	return dbCredentialFile
 }
 
@@ -488,7 +488,7 @@ func PrintFiles(t *testing.T, dir string, files ...string) {
 		directories = directories[1:]
 		entries, err := os.ReadDir(dir)
 		if err != nil {
-			log.Errorf("Couldn't read directory - %v", dir)
+			log.ErrorS(fmt.Sprintf("Couldn't read directory - %v", dir))
 			continue
 		}
 		for _, entry := range entries {
@@ -514,8 +514,8 @@ func PrintFiles(t *testing.T, dir string, files ...string) {
 			// Read and print the file.
 			res, err := os.ReadFile(name)
 			require.NoError(t, err)
-			log.Errorf("READING FILE - %v", name)
-			log.Errorf("%v", string(res))
+			log.ErrorS(fmt.Sprintf("READING FILE - %v", name))
+			log.ErrorS(string(res))
 		}
 	}
 }

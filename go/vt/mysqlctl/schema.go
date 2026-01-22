@@ -314,7 +314,7 @@ func GetColumnsList(dbName, tableName string, exec func(string, int, bool) (*sql
 	}
 	if qr == nil || len(qr.Rows) == 0 {
 		err := &EmptyColumnsErr{dbName: dbName, tableName: tableName, query: query}
-		log.Error(err.Error())
+		log.ErrorS(err.Error())
 		return "", err
 	}
 	selectColumns := ""
@@ -500,7 +500,7 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 		schemaDiffs := tmutils.DiffSchemaToArray("actual", beforeSchema, "expected", change.BeforeSchema)
 		if len(schemaDiffs) > 0 {
 			for _, msg := range schemaDiffs {
-				log.Warningf("BeforeSchema differs: %v", msg)
+				log.WarnS(fmt.Sprintf("BeforeSchema differs: %v", msg))
 			}
 
 			// let's see if the schema was already applied
@@ -512,12 +512,13 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 					// schema, we already applied it
 					return &tabletmanagerdatapb.SchemaChangeResult{
 						BeforeSchema: beforeSchema,
-						AfterSchema:  beforeSchema}, nil
+						AfterSchema:  beforeSchema,
+					}, nil
 				}
 			}
 
 			if change.Force {
-				log.Warningf("BeforeSchema differs, applying anyway")
+				log.WarnS("BeforeSchema differs, applying anyway")
 			} else {
 				return nil, errors.New("BeforeSchema differs")
 			}
@@ -560,10 +561,10 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 		schemaDiffs := tmutils.DiffSchemaToArray("actual", afterSchema, "expected", change.AfterSchema)
 		if len(schemaDiffs) > 0 {
 			for _, msg := range schemaDiffs {
-				log.Warningf("AfterSchema differs: %v", msg)
+				log.WarnS(fmt.Sprintf("AfterSchema differs: %v", msg))
 			}
 			if change.Force {
-				log.Warningf("AfterSchema differs, not reporting error")
+				log.WarnS("AfterSchema differs, not reporting error")
 			} else {
 				return nil, errors.New("AfterSchema differs")
 			}

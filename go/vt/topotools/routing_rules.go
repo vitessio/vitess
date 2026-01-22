@@ -56,7 +56,7 @@ func GetRoutingRules(ctx context.Context, ts *topo.Server) (map[string][]string,
 // SaveRoutingRules converts a mapping of fromTable=>[]toTables into a
 // vschemapb.RoutingRules protobuf message and saves it in the topology.
 func SaveRoutingRules(ctx context.Context, ts *topo.Server, rules map[string][]string) error {
-	log.Infof("Saving routing rules %v\n", rules)
+	log.InfoS(fmt.Sprintf("Saving routing rules %v\n", rules))
 
 	rrs := &vschemapb.RoutingRules{Rules: make([]*vschemapb.RoutingRule, 0, len(rules))}
 	for from, to := range rules {
@@ -76,6 +76,7 @@ func SaveRoutingRules(ctx context.Context, ts *topo.Server, rules map[string][]s
 func GetShardRoutingRuleKey(fromKeyspace, shard string) string {
 	return fmt.Sprintf("%s.%s", fromKeyspace, shard)
 }
+
 func ParseShardRoutingRuleKey(key string) (string, string) {
 	arr := strings.Split(key, ".")
 	return arr[0], arr[1]
@@ -108,7 +109,7 @@ func GetShardRoutingRules(ctx context.Context, ts *topo.Server) (map[string]stri
 // SaveShardRoutingRules converts a mapping of fromKeyspace.Shard=>toKeyspace into a
 // vschemapb.ShardRoutingRules protobuf message and saves it in the topology.
 func SaveShardRoutingRules(ctx context.Context, ts *topo.Server, srr map[string]string) error {
-	log.Infof("Saving shard routing rules %v\n", srr)
+	log.InfoS(fmt.Sprintf("Saving shard routing rules %v\n", srr))
 
 	srs := &vschemapb.ShardRoutingRules{Rules: make([]*vschemapb.ShardRoutingRule, 0, len(srr))}
 	for from, to := range srr {
@@ -179,7 +180,8 @@ func saveKeyspaceRoutingRulesLocked(ctx context.Context, ts *topo.Server, rules 
 // error. When the routing rules already exist, it will acquire a RoutingRulesLock and
 // then modify the keyspace routing rules in-place.
 func UpdateKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, reason string,
-	update func(ctx context.Context, rules *map[string]string) error) (err error) {
+	update func(ctx context.Context, rules *map[string]string) error,
+) (err error) {
 	lockCtx, unlock, lockErr := ts.LockRoutingRules(ctx, reason)
 	if lockErr != nil {
 		// If the key does not yet exist then let's create it.

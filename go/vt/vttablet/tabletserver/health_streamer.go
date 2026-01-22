@@ -239,7 +239,7 @@ func (hs *healthStreamer) broadCastToClients(shr *querypb.StreamHealthResponse) 
 			// when there hasn't been an update and/or move away from using channels toward a model where
 			// old updates can be purged from the buffer in favor of more recent updates (since only the
 			// most recent health state really matters to gates).
-			log.Warning("A streaming health buffer is full. Closing the channel")
+			log.WarnS("A streaming health buffer is full. Closing the channel")
 			close(ch)
 			delete(hs.clients, ch)
 		}
@@ -283,7 +283,7 @@ func (hs *healthStreamer) SetUnhealthyThreshold(v time.Duration) {
 		select {
 		case ch <- shr:
 		default:
-			log.Info("Resetting health streamer clients due to unhealthy threshold change")
+			log.InfoS("Resetting health streamer clients due to unhealthy threshold change")
 			close(ch)
 			delete(hs.clients, ch)
 		}
@@ -303,7 +303,7 @@ func (hs *healthStreamer) MakePrimary(serving bool) {
 	if serving && hs.signalWhenSchemaChange {
 		hs.se.RegisterNotifier("healthStreamer", func(full map[string]*schema.Table, created, altered, dropped []*schema.Table, udfsChanged bool) {
 			if err := hs.reload(created, altered, dropped, udfsChanged); err != nil {
-				log.Errorf("periodic schema reload failed in health stream: %v", err)
+				log.ErrorS(fmt.Sprintf("periodic schema reload failed in health stream: %v", err))
 			}
 		}, false)
 	}

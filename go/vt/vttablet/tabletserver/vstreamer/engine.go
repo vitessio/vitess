@@ -164,7 +164,7 @@ func (vse *Engine) InitDBConfig(keyspace, shard string) {
 
 // Open starts the Engine service.
 func (vse *Engine) Open() {
-	log.Info("VStreamer: opening")
+	log.InfoS("VStreamer: opening")
 	// If it's not already open, then open it now.
 	atomic.CompareAndSwapInt32(&vse.isOpen, 0, 1)
 }
@@ -198,7 +198,7 @@ func (vse *Engine) Close() {
 	// Wait only after releasing the lock because the end of every
 	// stream will use the lock to remove the entry from streamers.
 	vse.wg.Wait()
-	log.Info("VStreamer: closed")
+	log.InfoS("VStreamer: closed")
 }
 
 func (vse *Engine) vschema() *vindexes.VSchema {
@@ -236,7 +236,8 @@ func (vse *Engine) validateBinlogRowImage(ctx context.Context, db dbconfigs.Conn
 // This streams events from the binary logs
 func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK,
 	filter *binlogdatapb.Filter, throttlerApp throttlerapp.Name,
-	send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions) error {
+	send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions,
+) error {
 	if err := vse.validateBinlogRowImage(ctx, vse.se.GetDBConnector()); err != nil {
 		return err
 	}
@@ -282,12 +283,13 @@ func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binl
 // StreamRows streams rows.
 // This streams the table data rows (so we can copy the table data snapshot)
 func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltypes.Value,
-	send func(*binlogdatapb.VStreamRowsResponse) error, options *binlogdatapb.VStreamOptions) error {
+	send func(*binlogdatapb.VStreamRowsResponse) error, options *binlogdatapb.VStreamOptions,
+) error {
 	// Ensure vschema is initialized and the watcher is started.
 	// Starting of the watcher has to be delayed till the first call to Stream
 	// because this overhead should be incurred only if someone uses this feature.
 	vse.watcherOnce.Do(vse.setWatch)
-	log.Infof("Streaming rows for query %s, lastpk: %s", query, lastpk)
+	log.InfoS(fmt.Sprintf("Streaming rows for query %s, lastpk: %s", query, lastpk))
 
 	// Create stream and add it to the map.
 	rowStreamer, idx, err := func() (*rowStreamer, int, error) {
@@ -325,12 +327,13 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 
 // StreamTables streams all tables.
 func (vse *Engine) StreamTables(ctx context.Context,
-	send func(*binlogdatapb.VStreamTablesResponse) error, options *binlogdatapb.VStreamOptions) error {
+	send func(*binlogdatapb.VStreamTablesResponse) error, options *binlogdatapb.VStreamOptions,
+) error {
 	// Ensure vschema is initialized and the watcher is started.
 	// Starting of the watcher is delayed till the first call to StreamTables
 	// so that this overhead is incurred only if someone uses this feature.
 	vse.watcherOnce.Do(vse.setWatch)
-	log.Infof("Streaming all tables")
+	log.InfoS("Streaming all tables")
 
 	// Create stream and add it to the map.
 	tableStreamer, idx, err := func() (*tableStreamer, int, error) {
@@ -367,7 +370,8 @@ func (vse *Engine) StreamTables(ctx context.Context,
 
 // StreamResults streams results of the query with the gtid.
 func (vse *Engine) StreamResults(ctx context.Context, query string,
-	send func(*binlogdatapb.VStreamResultsResponse) error) error {
+	send func(*binlogdatapb.VStreamResultsResponse) error,
+) error {
 	// Create stream and add it to the map.
 	resultStreamer, idx, err := func() (*resultStreamer, int, error) {
 		if atomic.LoadInt32(&vse.isOpen) == 0 {
@@ -439,7 +443,7 @@ func (vse *Engine) setWatch() {
 		case topo.IsErrType(err, topo.NoNode):
 			v = nil
 		default:
-			log.Errorf("Error fetching vschema: %v", err)
+			log.ErrorS(fmt.Sprintf("Error fetching vschema: %v", err))
 			vse.vschemaErrors.Add(1)
 			return true
 		}
@@ -447,7 +451,7 @@ func (vse *Engine) setWatch() {
 		if v != nil {
 			vschema = vindexes.BuildVSchema(v, vse.env.Environment().Parser())
 			if err != nil {
-				log.Errorf("Error building vschema: %v", err)
+				log.ErrorS(fmt.Sprintf("Error building vschema: %v", err))
 				vse.vschemaErrors.Add(1)
 				return true
 			}
@@ -463,7 +467,7 @@ func (vse *Engine) setWatch() {
 			vschema:  vschema,
 		}
 		b, _ := json.MarshalIndent(vschema, "", "  ")
-		log.V(2).Infof("Updated vschema: %s", b)
+		log.DebugS(fmt.Sprintf("Updated vschema: %s", b))
 		for _, s := range vse.streamers {
 			s.SetVSchema(vse.lvschema)
 		}
@@ -503,8 +507,7 @@ func (vse *Engine) waitForMySQL(ctx context.Context, db dbconfigs.Connector, tab
 		if hll <= mhll && rpl <= mrls {
 			ready = true
 		} else {
-			log.Infof("VStream source (%s) is not ready to stream more rows. Max InnoDB history length is %d and it was %d, max replication lag is %d (seconds) and it was %d. Will pause and retry.",
-				sourceEndpoint, mhll, hll, mrls, rpl)
+			log.InfoS(fmt.Sprintf("VStream source (%s) is not ready to stream more rows. Max InnoDB history length is %d and it was %d, max replication lag is %d (seconds) and it was %d. Will pause and retry.", sourceEndpoint, mhll, hll, mrls, rpl))
 		}
 		return nil
 	}

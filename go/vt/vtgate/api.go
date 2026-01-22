@@ -37,7 +37,7 @@ const (
 
 func httpErrorf(w http.ResponseWriter, r *http.Request, format string, args ...any) {
 	errMsg := fmt.Sprintf(format, args...)
-	log.Errorf("HTTP error on %v: %v, request: %#v", r.URL.Path, errMsg, r)
+	log.ErrorS(fmt.Sprintf("HTTP error on %v: %v, request: %#v", r.URL.Path, errMsg, r))
 	http.Error(w, errMsg, http.StatusInternalServerError)
 }
 

@@ -18,6 +18,8 @@ package faketopo
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -312,8 +314,7 @@ func (f *FakeConn) Delete(ctx context.Context, filePath string, version topo.Ver
 }
 
 // fakeLockDescriptor implements the topo.LockDescriptor interface
-type fakeLockDescriptor struct {
-}
+type fakeLockDescriptor struct{}
 
 // Check implements the topo.LockDescriptor interface
 func (f fakeLockDescriptor) Check(ctx context.Context) error {
@@ -404,11 +405,13 @@ func (f *FakeConn) Close() {
 func NewFakeTopoServer(ctx context.Context, factory *FakeFactory) *topo.Server {
 	ts, err := topo.NewWithFactory(factory, "" /*serverAddress*/, "" /*root*/)
 	if err != nil {
-		log.Exitf("topo.NewWithFactory() failed: %v", err)
+		log.ErrorS(fmt.Sprintf("topo.NewWithFactory() failed: %v", err))
+		os.Exit(1)
 	}
 	for cell := range factory.cells {
 		if err := ts.CreateCellInfo(ctx, cell, &topodatapb.CellInfo{}); err != nil {
-			log.Exitf("ts.CreateCellInfo(%v) failed: %v", cell, err)
+			log.ErrorS(fmt.Sprintf("ts.CreateCellInfo(%v) failed: %v", cell, err))
+			os.Exit(1)
 		}
 	}
 	return ts

@@ -108,9 +108,7 @@ var (
 	`
 )
 
-var (
-	countIterations = 5
-)
+var countIterations = 5
 
 const (
 	maxTableRows         = 4096
@@ -128,7 +126,7 @@ func TestMain(m *testing.M) {
 		defer clusterInstance.Teardown()
 
 		if _, err := os.Stat(schemaChangeDirectory); os.IsNotExist(err) {
-			_ = os.Mkdir(schemaChangeDirectory, 0700)
+			_ = os.Mkdir(schemaChangeDirectory, 0o700)
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
@@ -521,7 +519,7 @@ func generateDelete(t *testing.T, conn *mysql.Conn) error {
 }
 
 func runSingleConnection(ctx context.Context, t *testing.T, sleepInterval time.Duration) {
-	log.Infof("Running single connection")
+	log.InfoS("Running single connection")
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -547,7 +545,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, sleepInterval time.D
 		}
 		select {
 		case <-ctx.Done():
-			log.Infof("Terminating single connection")
+			log.InfoS("Terminating single connection")
 			return
 		case <-ticker.C:
 		}
@@ -567,7 +565,7 @@ func runMultipleConnections(ctx context.Context, t *testing.T) {
 	singleConnectionSleepIntervalNanoseconds := float64(baseSleepInterval.Nanoseconds()) * sleepModifier
 	sleepInterval := time.Duration(int64(singleConnectionSleepIntervalNanoseconds))
 
-	log.Infof("Running multiple connections: maxConcurrency=%v, sleep interval=%v", maxConcurrency, sleepInterval)
+	log.InfoS(fmt.Sprintf("Running multiple connections: maxConcurrency=%v, sleep interval=%v", maxConcurrency, sleepInterval))
 	var wg sync.WaitGroup
 	for i := 0; i < maxConcurrency; i++ {
 		wg.Add(1)
@@ -577,12 +575,12 @@ func runMultipleConnections(ctx context.Context, t *testing.T) {
 		}()
 	}
 	wg.Wait()
-	log.Infof("Running multiple connections: done")
+	log.InfoS("Running multiple connections: done")
 }
 
 func initTable(t *testing.T) {
-	log.Infof("initTable begin")
-	defer log.Infof("initTable complete")
+	log.InfoS("initTable begin")
+	defer log.InfoS("initTable complete")
 
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)

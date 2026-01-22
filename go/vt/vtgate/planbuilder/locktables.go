@@ -17,6 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -27,7 +29,7 @@ import (
 
 // buildLockPlan plans lock tables statement.
 func buildLockPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, _ plancontext.VSchema) (*planResult, error) {
-	log.Warningf("Lock Tables statement is ignored: %v", stmt)
+	log.WarnS(fmt.Sprintf("Lock Tables statement is ignored: %v", stmt))
 	return newPlanResult(engine.NewRowsPrimitive(make([][]sqltypes.Value, 0), make([]*querypb.Field, 0))), nil
 }
 

@@ -173,7 +173,7 @@ func (vtp *VtProcess) WaitStart() (err error) {
 		vtp.proc.Stdout = os.Stdout
 	}
 
-	log.Infof("%v %v", strings.Join(vtp.proc.Args, " "))
+	log.InfoS(strings.Join(vtp.proc.Args, " "))
 	err = vtp.proc.Start()
 	if err != nil {
 		return
@@ -251,7 +251,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	}
 	protoTopo, _ := prototext.Marshal(args.Topology)
 	vt.ExtraArgs = append(vt.ExtraArgs, []string{
-		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--db-charset", charset,
 		"--db-app-user", user,
 		"--db-app-password", pass,
@@ -290,7 +290,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	vt.ExtraArgs = append(vt.ExtraArgs, QueryServerArgs...)
 	vt.ExtraArgs = append(vt.ExtraArgs, environment.VtcomboArguments()...)
 
-	//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+	// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 	if args.SchemaDir != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--schema-dir", args.SchemaDir}...)
 	}

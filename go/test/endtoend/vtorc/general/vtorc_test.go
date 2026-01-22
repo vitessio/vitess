@@ -496,7 +496,7 @@ func TestSemiSync(t *testing.T) {
 				utils.IsPrimarySemiSyncSetupCorrectly(t, primary, "ON") {
 				return
 			}
-			log.Warningf("semi sync settings not fixed yet")
+			log.WarnS("semi sync settings not fixed yet")
 			time.Sleep(1 * time.Second)
 		}
 	}

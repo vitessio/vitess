@@ -88,7 +88,7 @@ func (rt *ReplTracker) InitDBConfig(target *querypb.Target, mysqld mysqlctl.Mysq
 func (rt *ReplTracker) MakePrimary() {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
-	log.Info("Replication Tracker: going into primary mode")
+	log.InfoS("Replication Tracker: going into primary mode")
 
 	rt.isPrimary = true
 	if rt.mode == tabletenv.Heartbeat {
@@ -103,7 +103,7 @@ func (rt *ReplTracker) MakePrimary() {
 func (rt *ReplTracker) MakeNonPrimary() {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
-	log.Info("Replication Tracker: going into non-primary mode")
+	log.InfoS("Replication Tracker: going into non-primary mode")
 
 	rt.isPrimary = false
 	switch rt.mode {
@@ -121,7 +121,7 @@ func (rt *ReplTracker) MakeNonPrimary() {
 func (rt *ReplTracker) Close() {
 	rt.hw.Close()
 	rt.hr.Close()
-	log.Info("Replication Tracker: closed")
+	log.InfoS("Replication Tracker: closed")
 }
 
 // Status reports the replication status.

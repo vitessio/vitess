@@ -37,7 +37,7 @@ func PanicRecoveryHandler(next http.Handler) http.Handler {
 		name := mux.CurrentRoute(r).GetName()
 		defer func() {
 			if err := recover(); err != nil {
-				log.Errorf("uncaught panic in %s: %s", name, err)
+				log.ErrorS(fmt.Sprintf("uncaught panic in %s: %s", name, err))
 				http.Error(w, fmt.Sprintf("%v", err), http.StatusInternalServerError)
 			}
 		}()

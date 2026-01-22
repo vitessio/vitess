@@ -32,14 +32,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var (
-	oneTableOutput = `+---+
+var oneTableOutput = `+---+
 | a |
 +---+
 | 1 |
 +---+
 `
-)
 
 func TestVtctldProcess(t *testing.T) {
 	url := fmt.Sprintf("http://%s:%d/api/keyspaces/", clusterInstance.Hostname, clusterInstance.VtctldHTTPPort)
@@ -121,7 +119,7 @@ func testTabletStatus(t *testing.T) {
 	respByte, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	result := string(respByte)
-	log.Infof("Tablet status response: %v", result)
+	log.InfoS(fmt.Sprintf("Tablet status response: %v", result))
 	assert.True(t, strings.Contains(result, `/debug/health`))
 	assert.True(t, strings.Contains(result, `</html>`))
 }

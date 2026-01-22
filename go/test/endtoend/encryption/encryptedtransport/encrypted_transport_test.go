@@ -150,7 +150,7 @@ func TestSecureTransport(t *testing.T) {
 	require.NoError(t, err)
 
 	// Apply schema.
-	var vtctlApplySchemaArgs = append(vtctldClientArgs, "ApplySchema", "--sql", createVtInsertTest, "test_keyspace")
+	vtctlApplySchemaArgs := append(vtctldClientArgs, "ApplySchema", "--sql", createVtInsertTest, "test_keyspace")
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand(vtctlApplySchemaArgs...)
 	require.NoError(t, err)
 
@@ -308,9 +308,9 @@ func clusterSetUp(t *testing.T) (int, error) {
 	}
 
 	// create all certs
-	log.Info("Creating certificates")
+	log.InfoS("Creating certificates")
 	certDirectory = path.Join(clusterInstance.TmpDirectory, "certs")
-	_ = encryption.CreateDirectory(certDirectory, 0700)
+	_ = encryption.CreateDirectory(certDirectory, 0o700)
 
 	err := encryption.ExecuteVttlstestCommand("--root", certDirectory, "CreateCA")
 	require.NoError(t, err)
@@ -397,7 +397,7 @@ func clusterSetUp(t *testing.T) (int, error) {
 }
 
 func createIntermediateCA(ca string, serial string, name string, commonName string) error {
-	log.Infof("Creating intermediate signed cert and key %s", commonName)
+	log.InfoS("Creating intermediate signed cert and key " + commonName)
 	tmpProcess := exec.Command(
 		"vttlstest",
 		"CreateIntermediateCA",
@@ -410,7 +410,7 @@ func createIntermediateCA(ca string, serial string, name string, commonName stri
 }
 
 func createSignedCert(ca string, serial string, name string, commonName string) error {
-	log.Infof("Creating signed cert and key %s", commonName)
+	log.InfoS("Creating signed cert and key " + commonName)
 	tmpProcess := exec.Command(
 		"vttlstest",
 		"CreateSignedCert",
@@ -433,19 +433,23 @@ func serverExtraArguments(name string, ca string) []string {
 
 func tmclientExtraArgs(name string) []string {
 	ca := "vttablet-server"
-	var args = []string{"--tablet-manager-grpc-cert", certDirectory + "/" + name + "-cert.pem",
+	args := []string{
+		"--tablet-manager-grpc-cert", certDirectory + "/" + name + "-cert.pem",
 		"--tablet-manager-grpc-key", certDirectory + "/" + name + "-key.pem",
 		"--tablet-manager-grpc-ca", certDirectory + "/" + ca + "-cert.pem",
-		"--tablet-manager-grpc-server-name", "vttablet server instance"}
+		"--tablet-manager-grpc-server-name", "vttablet server instance",
+	}
 	return args
 }
 
 func tabletConnExtraArgs(name string) []string {
 	ca := "vttablet-server"
-	args := []string{utils.GetFlagVariantForTests("--tablet-grpc-cert"), certDirectory + "/" + name + "-cert.pem",
+	args := []string{
+		utils.GetFlagVariantForTests("--tablet-grpc-cert"), certDirectory + "/" + name + "-cert.pem",
 		utils.GetFlagVariantForTests("--tablet-grpc-key"), certDirectory + "/" + name + "-key.pem",
 		utils.GetFlagVariantForTests("--tablet-grpc-ca"), certDirectory + "/" + ca + "-cert.pem",
-		utils.GetFlagVariantForTests("--tablet-grpc-server-name"), "vttablet server instance"}
+		utils.GetFlagVariantForTests("--tablet-grpc-server-name"), "vttablet server instance",
+	}
 	return args
 }
 

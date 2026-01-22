@@ -183,7 +183,7 @@ func (bls *Streamer) Stream(ctx context.Context) (err error) {
 		if err != nil && err != ErrBinlogUnavailable {
 			err = fmt.Errorf("stream error @ (including the GTID we failed to process) %v: %v", stopPos, err)
 		}
-		log.Infof("stream ended @ %v, err = %v", stopPos, err)
+		log.InfoS(fmt.Sprintf("stream ended @ %v, err = %v", stopPos, err))
 	}()
 
 	if bls.conn, err = NewBinlogConnection(bls.cp); err != nil {
@@ -203,7 +203,7 @@ func (bls *Streamer) Stream(ctx context.Context) (err error) {
 		if err != nil {
 			return fmt.Errorf("can't get charset to check binlog stream: %v", err)
 		}
-		log.Infof("binlog stream client charset = %v, server charset = %v", bls.clientCharset, cs)
+		log.InfoS(fmt.Sprintf("binlog stream client charset = %v, server charset = %v", bls.clientCharset, cs))
 		if !proto.Equal(cs, bls.clientCharset) {
 			return fmt.Errorf("binlog stream client charset (%v) doesn't match server (%v)", bls.clientCharset, cs)
 		}
@@ -264,7 +264,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	begin := func() {
 		if statements != nil {
 			// If this happened, it would be a legitimate error.
-			log.Errorf("BEGIN in binlog stream while still in another transaction; dropping %d statements: %v", len(statements), statements)
+			log.ErrorS(fmt.Sprintf("BEGIN in binlog stream while still in another transaction; dropping %d statements: %v", len(statements), statements))
 			binlogStreamerErrors.Add("ParseEvents", 1)
 		}
 		statements = make([]FullBinlogStatement, 0, 10)
@@ -299,13 +299,13 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		case ev, ok = <-events:
 			if !ok {
 				// events channel has been closed, which means the connection died.
-				log.Infof("reached end of binlog event stream")
+				log.InfoS("reached end of binlog event stream")
 				return pos, ErrServerEOF
 			}
 		case err = <-errs:
 			return pos, err
 		case <-ctx.Done():
-			log.Infof("stopping early due to binlog Streamer service shutdown or client disconnect")
+			log.InfoS("stopping early due to binlog Streamer service shutdown or client disconnect")
 			return pos, ctx.Err()
 		}
 
@@ -615,7 +615,7 @@ func (bls *Streamer) appendInserts(statements []FullBinlogStatement, tce *tableC
 
 		keyspaceIDCell, pkValues, err := writeValuesAsSQL(sql, tce, rows, i, tce.pkNames != nil)
 		if err != nil {
-			log.Warningf("writeValuesAsSQL(%v) failed: %v", i, err)
+			log.WarnS(fmt.Sprintf("writeValuesAsSQL(%v) failed: %v", i, err))
 			continue
 		}
 
@@ -625,7 +625,7 @@ func (bls *Streamer) appendInserts(statements []FullBinlogStatement, tce *tableC
 			var err error
 			ksid, err = tce.resolver.keyspaceID(keyspaceIDCell)
 			if err != nil {
-				log.Warningf("resolver(%v) failed: %v", err)
+				log.WarnS(fmt.Sprintf("resolver(%v) failed: %v", keyspaceIDCell, err))
 			}
 		}
 
@@ -651,14 +651,14 @@ func (bls *Streamer) appendUpdates(statements []FullBinlogStatement, tce *tableC
 
 		keyspaceIDCell, pkValues, err := writeValuesAsSQL(sql, tce, rows, i, tce.pkNames != nil)
 		if err != nil {
-			log.Warningf("writeValuesAsSQL(%v) failed: %v", i, err)
+			log.WarnS(fmt.Sprintf("writeValuesAsSQL(%v) failed: %v", i, err))
 			continue
 		}
 
 		sql.WriteString(" WHERE ")
 
 		if _, _, err := writeIdentifiersAsSQL(sql, tce, rows, i, false); err != nil {
-			log.Warningf("writeIdentifiesAsSQL(%v) failed: %v", i, err)
+			log.WarnS(fmt.Sprintf("writeIdentifiesAsSQL(%v) failed: %v", i, err))
 			continue
 		}
 
@@ -668,7 +668,7 @@ func (bls *Streamer) appendUpdates(statements []FullBinlogStatement, tce *tableC
 			var err error
 			ksid, err = tce.resolver.keyspaceID(keyspaceIDCell)
 			if err != nil {
-				log.Warningf("resolver(%v) failed: %v", err)
+				log.WarnS(fmt.Sprintf("resolver(%v) failed: %v", keyspaceIDCell, err))
 			}
 		}
 
@@ -694,7 +694,7 @@ func (bls *Streamer) appendDeletes(statements []FullBinlogStatement, tce *tableC
 
 		keyspaceIDCell, pkValues, err := writeIdentifiersAsSQL(sql, tce, rows, i, tce.pkNames != nil)
 		if err != nil {
-			log.Warningf("writeIdentifiesAsSQL(%v) failed: %v", i, err)
+			log.WarnS(fmt.Sprintf("writeIdentifiesAsSQL(%v) failed: %v", i, err))
 			continue
 		}
 
@@ -704,7 +704,7 @@ func (bls *Streamer) appendDeletes(statements []FullBinlogStatement, tce *tableC
 			var err error
 			ksid, err = tce.resolver.keyspaceID(keyspaceIDCell)
 			if err != nil {
-				log.Warningf("resolver(%v) failed: %v", err)
+				log.WarnS(fmt.Sprintf("resolver(%v) failed: %v", keyspaceIDCell, err))
 			}
 		}
 

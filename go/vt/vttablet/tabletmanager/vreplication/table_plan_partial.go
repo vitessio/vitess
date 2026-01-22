@@ -145,7 +145,7 @@ func (tpb *tablePlanBuilder) createPartialUpdateQuery(dataColumns *binlogdatapb.
 	separator := ""
 	for i, cexpr := range tpb.colExprs {
 		if int64(i) >= dataColumns.Count {
-			log.Errorf("Ran out of columns trying to generate query for %s", tpb.name.CompliantName())
+			log.ErrorS("Ran out of columns trying to generate query for " + tpb.name.CompliantName())
 			return nil
 		}
 		if cexpr.isPK || cexpr.isGenerated || !isBitSet(dataColumns.Cols, i) {
@@ -175,6 +175,7 @@ func (tpb *tablePlanBuilder) createPartialUpdateQuery(dataColumns *binlogdatapb.
 	tpb.generateWhere(buf, bvf)
 	return buf.ParsedQuery()
 }
+
 func (tp *TablePlan) getPartialInsertQuery(dataColumns *binlogdatapb.RowChange_Bitmap) (*sqlparser.ParsedQuery, error) {
 	key := hex.EncodeToString(dataColumns.Cols)
 	ins, ok := tp.PartialInserts[key]

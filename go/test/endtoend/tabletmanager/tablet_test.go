@@ -45,7 +45,7 @@ func TestEnsureDB(t *testing.T) {
 	err = tablet.MysqlctlProcess.Start()
 	require.NoError(t, err)
 
-	log.Info(fmt.Sprintf("Started vttablet %v", tablet))
+	log.InfoS(fmt.Sprintf("Started vttablet %v", tablet))
 	// Start vttablet process as replica. It won't be able to serve because there's no db.
 	err = clusterInstance.StartVttablet(tablet, false, "NOT_SERVING", false, cell, "dbtest", hostname, "0")
 	require.NoError(t, err)
@@ -81,7 +81,7 @@ func TestGRPCErrorCode_UNAVAILABLE(t *testing.T) {
 	err = tablet.MysqlctlProcess.Start()
 	require.NoError(t, err)
 
-	log.Info(fmt.Sprintf("Started vttablet %v", tablet))
+	log.InfoS(fmt.Sprintf("Started vttablet %v", tablet))
 	// Start vttablet process as replica. It won't be able to serve because there's no db.
 	err = clusterInstance.StartVttablet(tablet, false, "SERVING", false, cell, "dbtest", hostname, "0")
 	require.NoError(t, err)
@@ -108,7 +108,7 @@ func TestResetReplicationParameters(t *testing.T) {
 	err = tablet.MysqlctlProcess.Start()
 	require.NoError(t, err)
 
-	log.Info(fmt.Sprintf("Started vttablet %v", tablet))
+	log.InfoS(fmt.Sprintf("Started vttablet %v", tablet))
 	// Start vttablet process as replica. It won't be able to serve because there's no db.
 	err = clusterInstance.StartVttablet(tablet, false, "NOT_SERVING", false, cell, "dbtest", hostname, "0")
 	require.NoError(t, err)
@@ -170,7 +170,7 @@ func TestStopReplicationAndGetStatus(t *testing.T) {
 	// Start vttablet process as replica.
 	err = clusterInstance.StartVttablet(tablet, false, "SERVING", false, cell, keyspaceName, hostname, "0")
 	require.NoError(t, err)
-	log.Info(fmt.Sprintf("Started vttablet %v", tablet))
+	log.InfoS(fmt.Sprintf("Started vttablet %v", tablet))
 
 	// Setup semi-sync on keyspace and wait for tablet to enable semi-sync.
 	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")

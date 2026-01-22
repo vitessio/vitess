@@ -283,12 +283,12 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			c, id, err := dynamic.ClusterFromString(r.Context(), urlDecoded)
 			if id != "" {
 				if err != nil {
-					log.Warningf("failed to extract valid cluster from cookie; attempting to use existing cluster with id=%s; error: %s", id, err)
+					log.WarnS(fmt.Sprintf("failed to extract valid cluster from cookie; attempting to use existing cluster with id=%s; error: %s", id, err))
 				}
 
 				dynamicAPI = api.WithCluster(c, id)
 			} else {
-				log.Warningf("failed to unmarshal dynamic cluster spec from cookie; falling back to static API; error: %s", err)
+				log.WarnS(fmt.Sprintf("failed to unmarshal dynamic cluster spec from cookie; falling back to static API; error: %s", err))
 			}
 		}
 	}
@@ -324,14 +324,14 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) dynamic.API {
 		if exists {
 			isEqual, err := existingCluster.Equal(c)
 			if err != nil {
-				log.Errorf("Error checking for existing cluster %s equality with new cluster %s: %v", existingCluster.ID, id, err)
+				log.ErrorS(fmt.Sprintf("Error checking for existing cluster %s equality with new cluster %s: %v", existingCluster.ID, id, err))
 			}
 			shouldAddCluster = shouldAddCluster || !isEqual
 		}
 		if shouldAddCluster {
 			if existingCluster != nil {
 				if err := existingCluster.Close(); err != nil {
-					log.Errorf("%s; some connections and goroutines may linger", err.Error())
+					log.ErrorS(err.Error() + "; some connections and goroutines may linger")
 				}
 
 				idx := stdsort.Search(len(api.clusters), func(i int) bool {
@@ -350,7 +350,7 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) dynamic.API {
 
 			api.clusterCache.Set(id, c, cache.DefaultExpiration)
 		} else {
-			log.Infof("API already has cluster with id %s, using that instead", id)
+			log.InfoS(fmt.Sprintf("API already has cluster with id %s, using that instead", id))
 		}
 	}
 
@@ -461,14 +461,14 @@ func (api *API) EjectDynamicCluster(key string, value any) {
 	if ok {
 		delete(api.clusterMap, key)
 		if err := c.Close(); err != nil {
-			log.Errorf("%s; some connections and goroutines may linger", err.Error())
+			log.ErrorS(err.Error() + "; some connections and goroutines may linger")
 		}
 	}
 
 	// Maintain order of clusters when removing dynamic cluster
 	clusterIndex := stdsort.Search(len(api.clusters), func(i int) bool { return api.clusters[i].ID == key })
 	if clusterIndex >= len(api.clusters) || clusterIndex < 0 {
-		log.Errorf("Cannot remove cluster %s from api.clusters. Cluster index %d is out of range for clusters slice of %d length.", key, clusterIndex, len(api.clusters))
+		log.ErrorS(fmt.Sprintf("Cannot remove cluster %s from api.clusters. Cluster index %d is out of range for clusters slice of %d length.", key, clusterIndex, len(api.clusters)))
 	}
 
 	api.clusters = append(api.clusters[:clusterIndex], api.clusters[clusterIndex+1:]...)
@@ -765,7 +765,7 @@ func (api *API) FindSchema(ctx context.Context, req *vtadminpb.FindSchemaRequest
 				}
 			}
 
-			log.Infof("cluster %s has no tables named %s", c.ID, req.Table)
+			log.InfoS(fmt.Sprintf("cluster %s has no tables named %s", c.ID, req.Table))
 		}(c)
 	}
 
@@ -1381,7 +1381,6 @@ func (api *API) GetSrvKeyspaces(ctx context.Context, req *vtadminpb.GetSrvKeyspa
 			defer span.Finish()
 
 			sk, err := c.GetSrvKeyspaces(ctx, req.Cells)
-
 			if err != nil {
 				er.RecordError(err)
 				return
@@ -1451,7 +1450,6 @@ func (api *API) GetSrvVSchemas(ctx context.Context, req *vtadminpb.GetSrvVSchema
 			defer wg.Done()
 
 			s, err := c.GetSrvVSchemas(ctx, req.Cells)
-
 			if err != nil {
 				er.RecordError(err)
 				return
@@ -2129,7 +2127,6 @@ func (api *API) PingTablet(ctx context.Context, req *vtadminpb.PingTabletRequest
 	_, err = c.Vtctld.PingTablet(ctx, &vtctldatapb.PingTabletRequest{
 		TabletAlias: tablet.Tablet.Alias,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -2176,7 +2173,6 @@ func (api *API) RebuildKeyspaceGraph(ctx context.Context, req *vtadminpb.Rebuild
 		AllowPartial: req.AllowPartial,
 		Cells:        req.Cells,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -2285,7 +2281,6 @@ func (api *API) RemoveKeyspaceCell(ctx context.Context, req *vtadminpb.RemoveKey
 		Force:     req.Force,
 		Recursive: req.Recursive,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -2301,7 +2296,6 @@ func (api *API) ReloadSchemaShard(ctx context.Context, req *vtadminpb.ReloadSche
 	defer span.Finish()
 
 	c, err := api.getClusterForRequest(req.ClusterId)
-
 	if err != nil {
 		return nil, err
 	}
@@ -2311,7 +2305,6 @@ func (api *API) ReloadSchemaShard(ctx context.Context, req *vtadminpb.ReloadSche
 		IncludePrimary: req.IncludePrimary,
 		Concurrency:    req.Concurrency,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -2355,7 +2348,6 @@ func (api *API) RunHealthCheck(ctx context.Context, req *vtadminpb.RunHealthChec
 	_, err = c.Vtctld.RunHealthCheck(ctx, &vtctldatapb.RunHealthCheckRequest{
 		TabletAlias: tablet.Tablet.Alias,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -2480,7 +2472,6 @@ func (api *API) Validate(ctx context.Context, req *vtadminpb.ValidateRequest) (*
 	res, err := c.Vtctld.Validate(ctx, &vtctldatapb.ValidateRequest{
 		PingTablets: req.PingTablets,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -2506,7 +2497,6 @@ func (api *API) ValidateKeyspace(ctx context.Context, req *vtadminpb.ValidateKey
 		Keyspace:    req.Keyspace,
 		PingTablets: req.PingTablets,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -2531,7 +2521,6 @@ func (api *API) ValidateSchemaKeyspace(ctx context.Context, req *vtadminpb.Valid
 	res, err := c.Vtctld.ValidateSchemaKeyspace(ctx, &vtctldatapb.ValidateSchemaKeyspaceRequest{
 		Keyspace: req.Keyspace,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -2558,7 +2547,6 @@ func (api *API) ValidateShard(ctx context.Context, req *vtadminpb.ValidateShardR
 		Shard:       req.Shard,
 		PingTablets: req.PingTablets,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -2583,7 +2571,6 @@ func (api *API) ValidateVersionKeyspace(ctx context.Context, req *vtadminpb.Vali
 	res, err := c.Vtctld.ValidateVersionKeyspace(ctx, &vtctldatapb.ValidateVersionKeyspaceRequest{
 		Keyspace: req.Keyspace,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -2609,7 +2596,6 @@ func (api *API) ValidateVersionShard(ctx context.Context, req *vtadminpb.Validat
 		Keyspace: req.Keyspace,
 		Shard:    req.Shard,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -2665,7 +2651,6 @@ func (api *API) VExplain(ctx context.Context, req *vtadminpb.VExplainRequest) (*
 	// Canonicalize the SQL using the AST, to prevent use of raw user input.
 	canonicalQuery := sqlparser.String(vexplainStmt)
 	response, err := c.DB.VExplain(ctx, canonicalQuery, vexplainStmt)
-
 	if err != nil {
 		return nil, err
 	}
@@ -2676,7 +2661,7 @@ func (api *API) VExplain(ctx context.Context, req *vtadminpb.VExplainRequest) (*
 // VTExplain is part of the vtadminpb.VTAdminServer interface.
 func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) (*vtadminpb.VTExplainResponse, error) {
 	// TODO (andrew): https://github.com/vitessio/vitess/issues/12161.
-	log.Warningf("VTAdminServer.VTExplain is deprecated; please use a vexplain query instead. For more details, see https://vitess.io/docs/user-guides/sql/vexplain/.")
+	log.WarnS("VTAdminServer.VTExplain is deprecated; please use a vexplain query instead. For more details, see https://vitess.io/docs/user-guides/sql/vexplain/.")
 
 	span, ctx := trace.NewSpan(ctx, "API.VTExplain")
 	defer span.Finish()
@@ -2711,7 +2696,7 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	defer api.vtexplainLock.Unlock()
 
 	lockWaitTime := time.Since(lockWaitStart)
-	log.Infof("vtexplain lock wait time: %s", lockWaitTime)
+	log.InfoS(fmt.Sprintf("vtexplain lock wait time: %s", lockWaitTime))
 
 	span.Annotate("vtexplain_lock_wait_time", lockWaitTime.String())
 
@@ -2771,7 +2756,6 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 		res, err := c.Vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{
 			Cell: tablet.Tablet.Alias.Cell,
 		})
-
 		if err != nil {
 			er.RecordError(fmt.Errorf("GetSrvVSchema(%s): %w", tablet.Tablet.Alias.Cell, err))
 			return

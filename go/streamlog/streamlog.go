@@ -221,7 +221,7 @@ func (logger *StreamLogger[T]) ServeLogs(url string, logf LogFormatter) {
 			w.(http.Flusher).Flush()
 		}
 	})
-	log.Infof("Streaming logs from %s at %v.", logger.Name(), url)
+	log.InfoS(fmt.Sprintf("Streaming logs from %s at %v.", logger.Name(), url))
 }
 
 // LogToFile starts logging to the specified file path and will reopen the
@@ -236,7 +236,7 @@ func (logger *StreamLogger[T]) LogToFile(path string, logf LogFormatter) (chan T
 	logChan := logger.Subscribe("FileLog")
 	formatParams := map[string][]string{"full": {}}
 
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o644)
 	if err != nil {
 		return nil, err
 	}
@@ -248,7 +248,7 @@ func (logger *StreamLogger[T]) LogToFile(path string, logf LogFormatter) (chan T
 				logf(f, formatParams, record) //nolint:errcheck
 			case <-rotateChan:
 				f.Close()
-				f, _ = os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+				f, _ = os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o644)
 			}
 		}
 	}()

@@ -19,6 +19,7 @@ package mysql
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"io"
 	"net"
 	"strings"
@@ -358,7 +359,7 @@ func (l *Listener) Accept() {
 			if l.PreHandleFunc != nil {
 				conn, err = l.PreHandleFunc(ctx, conn, connectionID)
 				if err != nil {
-					log.Errorf("mysql_server pre hook: %s", err)
+					log.ErrorS(fmt.Sprintf("mysql_server pre hook: %s", err))
 					return
 				}
 			}
@@ -380,7 +381,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	// Catch panics, and close the connection in any case.
 	defer func() {
 		if x := recover(); x != nil {
-			log.Errorf("mysql_server caught panic:\n%v\n%s", x, tb.Stack(4))
+			log.ErrorS(fmt.Sprintf("mysql_server caught panic:\n%v\n%s", x, tb.Stack(4)))
 		}
 		// We call endWriterBuffering here in case there's a premature return after
 		// startWriterBuffering is called
@@ -404,7 +405,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	serverAuthPluginData, err := c.writeHandshakeV10(l.ServerVersion, l.authServer, uint8(l.charset), l.TLSConfig.Load() != nil)
 	if err != nil {
 		if err != io.EOF {
-			log.Errorf("Cannot send HandshakeV10 packet to %s: %v", c, err)
+			log.ErrorS(fmt.Sprintf("Cannot send HandshakeV10 packet to %s: %v", c, err))
 		}
 		return
 	}
@@ -415,13 +416,13 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	if err != nil {
 		// Don't log EOF errors. They cause too much spam, same as main read loop.
 		if err != io.EOF {
-			log.Infof("Cannot read client handshake response from %s: %v, it may not be a valid MySQL client", c, err)
+			log.InfoS(fmt.Sprintf("Cannot read client handshake response from %s: %v, it may not be a valid MySQL client", c, err))
 		}
 		return
 	}
 	user, clientAuthMethod, clientAuthResponse, err := l.parseClientHandshakePacket(c, true, response)
 	if err != nil {
-		log.Errorf("Cannot parse client handshake response from %s: %v", c, err)
+		log.ErrorS(fmt.Sprintf("Cannot parse client handshake response from %s: %v", c, err))
 		return
 	}
 
@@ -431,14 +432,14 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		// SSL was enabled. We need to re-read the auth packet.
 		response, err = c.readEphemeralPacket()
 		if err != nil {
-			log.Errorf("Cannot read post-SSL client handshake response from %s: %v", c, err)
+			log.ErrorS(fmt.Sprintf("Cannot read post-SSL client handshake response from %s: %v", c, err))
 			return
 		}
 
 		// Returns copies of the data, so we can recycle the buffer.
 		user, clientAuthMethod, clientAuthResponse, err = l.parseClientHandshakePacket(c, false, response)
 		if err != nil {
-			log.Errorf("Cannot parse post-SSL client handshake response from %s: %v", c, err)
+			log.ErrorS(fmt.Sprintf("Cannot parse post-SSL client handshake response from %s: %v", c, err))
 			return
 		}
 		c.recycleReadPacket()
@@ -495,18 +496,18 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 		serverAuthPluginData, err = negotiatedAuthMethod.AuthPluginData()
 		if err != nil {
-			log.Errorf("Error generating auth switch packet for %s: %v", c, err)
+			log.ErrorS(fmt.Sprintf("Error generating auth switch packet for %s: %v", c, err))
 			return
 		}
 
 		if err := c.writeAuthSwitchRequest(string(negotiatedAuthMethod.Name()), serverAuthPluginData); err != nil {
-			log.Errorf("Error writing auth switch packet for %s: %v", c, err)
+			log.ErrorS(fmt.Sprintf("Error writing auth switch packet for %s: %v", c, err))
 			return
 		}
 
 		clientAuthResponse, err = c.readEphemeralPacket()
 		if err != nil {
-			log.Errorf("Error reading auth switch response for %s: %v", c, err)
+			log.ErrorS(fmt.Sprintf("Error reading auth switch response for %s: %v", c, err))
 			return
 		}
 		c.recycleReadPacket()
@@ -514,7 +515,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 	userData, err := negotiatedAuthMethod.HandleAuthPluginData(c, user, serverAuthPluginData, clientAuthResponse, conn.RemoteAddr())
 	if err != nil {
-		log.Warningf("Error authenticating user %s using: %s", user, negotiatedAuthMethod.Name())
+		log.WarnS(fmt.Sprintf("Error authenticating user %s using: %s", user, negotiatedAuthMethod.Name()))
 		c.writeErrorPacketFromError(err)
 		return
 	}
@@ -540,7 +541,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 	// Negotiation worked, send OK packet.
 	if err := c.writeOKPacket(&PacketOK{statusFlags: c.StatusFlags}); err != nil {
-		log.Errorf("Cannot write OK packet to %s: %v", c, err)
+		log.ErrorS(fmt.Sprintf("Cannot write OK packet to %s: %v", c, err))
 		return
 	}
 
@@ -551,7 +552,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	connectTime := time.Since(acceptTime).Nanoseconds()
 	if threshold := l.SlowConnectWarnThreshold.Load(); threshold != 0 && connectTime > threshold {
 		connSlow.Add(1)
-		log.Warningf("Slow connection from %s: %v", c, connectTime)
+		log.WarnS(fmt.Sprintf("Slow connection from %s: %v", c, connectTime))
 	}
 
 	// Tell our handler that we're finished handshake and are ready to
@@ -612,20 +613,19 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, ch
 		authMethod = MysqlNativePassword
 	}
 
-	length :=
-		1 + // protocol version
-			lenNullString(serverVersion) +
-			4 + // connection ID
-			8 + // first part of plugin auth data
-			1 + // filler byte
-			2 + // capability flags (lower 2 bytes)
-			1 + // character set
-			2 + // status flag
-			2 + // capability flags (upper 2 bytes)
-			1 + // length of auth plugin data
-			10 + // reserved (0)
-			13 + // auth-plugin-data
-			lenNullString(string(authMethod)) // auth-plugin-name
+	length := 1 + // protocol version
+		lenNullString(serverVersion) +
+		4 + // connection ID
+		8 + // first part of plugin auth data
+		1 + // filler byte
+		2 + // capability flags (lower 2 bytes)
+		1 + // character set
+		2 + // status flag
+		2 + // capability flags (upper 2 bytes)
+		1 + // length of auth plugin data
+		10 + // reserved (0)
+		13 + // auth-plugin-data
+		lenNullString(string(authMethod)) // auth-plugin-name
 
 	data, pos := c.startEphemeralPacketWithHeader(length)
 
@@ -817,7 +817,7 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 	if clientFlags&CapabilityClientConnAttr != 0 {
 		clientAttributes, _, err := parseConnAttrs(data, pos)
 		if err != nil {
-			log.Warningf("Decode connection attributes send by the client: %v", err)
+			log.WarnS(fmt.Sprintf("Decode connection attributes send by the client: %v", err))
 		}
 
 		c.Attributes = clientAttributes

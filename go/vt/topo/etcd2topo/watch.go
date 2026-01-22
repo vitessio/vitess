@@ -18,6 +18,7 @@ package etcd2topo
 
 import (
 	"context"
+	"fmt"
 	"path"
 	"strings"
 	"time"
@@ -82,7 +83,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 		defer close(notifications)
 		defer outerCancel()
 
-		var rev = initial.Header.Revision
+		rev := initial.Header.Revision
 		var watchRetries int
 		for {
 			select {
@@ -115,7 +116,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 					watchCtx, watchCancel = context.WithCancel(ctx)
 					newWatcher := s.cli.Watch(watchCtx, nodePath, clientv3.WithRev(rev))
 					if newWatcher == nil {
-						log.Warningf("watch %v failed and get a nil channel returned, rev: %v", nodePath, rev)
+						log.WarnS(fmt.Sprintf("watch %v failed and get a nil channel returned, rev: %v", nodePath, rev))
 					} else {
 						watcher = newWatcher
 					}
@@ -209,7 +210,7 @@ func (s *Server) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.Wa
 		defer close(notifications)
 		defer outerCancel()
 
-		var rev = initial.Header.Revision
+		rev := initial.Header.Revision
 		var watchRetries int
 		for {
 			select {
@@ -239,7 +240,7 @@ func (s *Server) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.Wa
 
 					newWatcher := s.cli.Watch(watchCtx, nodePath, clientv3.WithRev(rev), clientv3.WithPrefix())
 					if newWatcher == nil {
-						log.Warningf("watch %v failed and get a nil channel returned, rev: %v", nodePath, rev)
+						log.WarnS(fmt.Sprintf("watch %v failed and get a nil channel returned, rev: %v", nodePath, rev))
 					} else {
 						watcher = newWatcher
 					}

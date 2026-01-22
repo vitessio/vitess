@@ -18,6 +18,7 @@ limitations under the License.
 package filecustomrule
 
 import (
+	"fmt"
 	"os"
 	"path"
 	"time"
@@ -75,14 +76,14 @@ func NewFileCustomRule() (fcr *FileCustomRule) {
 func ParseRules(path string) (*rules.Rules, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		log.Warningf("Error reading file %v: %v", path, err)
+		log.WarnS(fmt.Sprintf("Error reading file %v: %v", path, err))
 		// Don't update any internal cache, just return error
 		return nil, err
 	}
 	qrs := rules.New()
 	err = qrs.UnmarshalJSON(data)
 	if err != nil {
-		log.Warningf("Error unmarshaling query rules %v", err)
+		log.WarnS(fmt.Sprintf("Error unmarshaling query rules %v", err))
 		return nil, err
 	}
 	return qrs, nil
@@ -104,7 +105,7 @@ func (fcr *FileCustomRule) Open(qsc tabletserver.Controller, rulePath string) er
 	fcr.currentRuleSet = qrs.Copy()
 	// Push query rules to vttablet
 	qsc.SetQueryRules(FileCustomRuleSource, qrs.Copy())
-	log.Infof("Custom rule loaded from file: %s", fcr.path)
+	log.InfoS("Custom rule loaded from file: " + fcr.path)
 	return nil
 }
 
@@ -128,7 +129,8 @@ func ActivateFileCustomRules(qsc tabletserver.Controller) {
 
 		watcher, err := fsnotify.NewWatcher()
 		if err != nil {
-			log.Fatalf("Unable create new fsnotify watcher: %v", err)
+			log.ErrorS(fmt.Sprintf("Unable create new fsnotify watcher: %v", err))
+			os.Exit(1)
 		}
 		servenv.OnTerm(func() { watcher.Close() })
 
@@ -143,21 +145,22 @@ func ActivateFileCustomRules(qsc tabletserver.Controller) {
 						continue
 					}
 					if err := fileCustomRule.Open(tsc, fileRulePath); err != nil {
-						log.Infof("Failed to load custom rules from %q: %v", fileRulePath, err)
+						log.InfoS(fmt.Sprintf("Failed to load custom rules from %q: %v", fileRulePath, err))
 					} else {
-						log.Infof("Loaded custom rules from %q", fileRulePath)
+						log.InfoS(fmt.Sprintf("Loaded custom rules from %q", fileRulePath))
 					}
 				case err, ok := <-watcher.Errors:
 					if !ok {
 						return
 					}
-					log.Errorf("Error watching %v: %v", fileRulePath, err)
+					log.ErrorS(fmt.Sprintf("Error watching %v: %v", fileRulePath, err))
 				}
 			}
 		}(qsc)
 
 		if err = watcher.Add(baseDir); err != nil {
-			log.Fatalf("Unable to set up watcher for %v + %v: %v", baseDir, ruleFileName, err)
+			log.ErrorS(fmt.Sprintf("Unable to set up watcher for %v + %v: %v", baseDir, ruleFileName, err))
+			os.Exit(1)
 		}
 	}
 }

@@ -18,6 +18,7 @@ package zk2topo
 
 import (
 	"context"
+	"fmt"
 	"path"
 	"sort"
 
@@ -141,23 +142,23 @@ func (mp *zkLeaderParticipation) watchLeadership(ctx context.Context, conn *ZkCo
 	// get to work watching our own proposal
 	_, stats, events, err := conn.GetW(ctx, proposal)
 	if err != nil {
-		log.Warningf("Cannot watch proposal while being Leader, stopping: %v", err)
+		log.WarnS(fmt.Sprintf("Cannot watch proposal while being Leader, stopping: %v", err))
 		return
 	}
 
 	select {
 	case <-mp.stopCtx.Done():
 		// we were asked to stop, we're done. Remove our node.
-		log.Infof("Canceling leadership '%v' upon Stop.", mp.name)
+		log.InfoS(fmt.Sprintf("Canceling leadership '%v' upon Stop.", mp.name))
 
 		if err := conn.Delete(ctx, proposal, stats.Version); err != nil {
-			log.Warningf("Error deleting our proposal %v: %v", proposal, err)
+			log.WarnS(fmt.Sprintf("Error deleting our proposal %v: %v", proposal, err))
 		}
 		close(mp.done)
 
 	case e := <-events:
 		// something happened to our proposal, that can only be bad.
-		log.Warningf("Watch on proposal triggered, canceling leadership '%v': %v", mp.name, e)
+		log.WarnS(fmt.Sprintf("Watch on proposal triggered, canceling leadership '%v': %v", mp.name, e))
 	}
 }
 

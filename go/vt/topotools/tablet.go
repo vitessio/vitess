@@ -262,7 +262,7 @@ func DeleteTablet(ctx context.Context, ts *topo.Server, tablet *topodatapb.Table
 			err = nil
 		}
 		if err != nil {
-			log.Warningf("remove replication data for %v failed: %v", topoproto.TabletAliasString(tablet.Alias), err)
+			log.WarnS(fmt.Sprintf("remove replication data for %v failed: %v", topoproto.TabletAliasString(tablet.Alias), err))
 		}
 	}
 

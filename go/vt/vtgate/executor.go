@@ -833,7 +833,7 @@ func (e *Executor) ShowShards(ctx context.Context, filter *sqlparser.ShowFilter,
 
 		if filter.Filter != nil {
 			// TODO build a query planner I guess? lol that should be fun
-			log.Infof("SHOW VITESS_SHARDS where clause %+v. Ignoring this (for now).", filter.Filter)
+			log.InfoS(fmt.Sprintf("SHOW VITESS_SHARDS where clause %+v. Ignoring this (for now).", filter.Filter))
 		}
 
 		return keyspaceFilters, shardFilters
@@ -917,7 +917,7 @@ func (e *Executor) ShowTablets(filter *sqlparser.ShowFilter) (*sqltypes.Result, 
 		}
 
 		if filter.Filter != nil {
-			log.Infof("SHOW VITESS_TABLETS where clause: %+v. Ignoring this (for now).", filter.Filter)
+			log.InfoS(fmt.Sprintf("SHOW VITESS_TABLETS where clause: %+v. Ignoring this (for now).", filter.Filter))
 		}
 
 		return filters
@@ -996,7 +996,7 @@ func (e *Executor) ShowVitessReplicationStatus(ctx context.Context, filter *sqlp
 			tabletHostPort := ts.GetTabletHostPort()
 			throttlerStatus, err := getTabletThrottlerStatus(tabletHostPort)
 			if err != nil {
-				log.Warningf("Could not get throttler status from %s: %v", topoproto.TabletAliasString(ts.Tablet.Alias), err)
+				log.WarnS(fmt.Sprintf("Could not get throttler status from %s: %v", topoproto.TabletAliasString(ts.Tablet.Alias), err))
 			}
 
 			replSourceHost := ""
@@ -1022,7 +1022,7 @@ func (e *Executor) ShowVitessReplicationStatus(ctx context.Context, filter *sqlp
 			}
 			results, err := e.txConn.tabletGateway.Execute(ctx, nil, ts.Target, sql, nil, 0, 0, nil)
 			if err != nil || results == nil {
-				log.Warningf("Could not get replication status from %s: %v", tabletHostPort, err)
+				log.WarnS(fmt.Sprintf("Could not get replication status from %s: %v", tabletHostPort, err))
 			} else if row := results.Named().Row(); row != nil {
 				replSourceHost = row[sourceHostField].ToString()
 				replSourcePort, _ = row[sourcePortField].ToInt64()

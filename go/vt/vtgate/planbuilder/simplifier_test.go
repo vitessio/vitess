@@ -94,7 +94,7 @@ func TestUnsupportedFile(t *testing.T) {
 	fmt.Println(vschema)
 	for _, tcase := range readJSONTests("unsupported_cases.txt") {
 		t.Run(tcase.Query, func(t *testing.T) {
-			log.Errorf("unsupported_cases.txt - %s", tcase.Query)
+			log.ErrorS("unsupported_cases.txt - " + tcase.Query)
 			stmt, reserved, err := sqlparser.NewTestParser().Parse2(tcase.Query)
 			require.NoError(t, err)
 			_, ok := stmt.(sqlparser.TableStatement)
@@ -159,13 +159,13 @@ func keepPanicking(query string, reservedVars *sqlparser.ReservedVars, vschema *
 		defer func() {
 			r := recover()
 			if r != nil {
-				log.Errorf("panicked with %v", r)
+				log.ErrorS(fmt.Sprintf("panicked with %v", r))
 				res = true
 			}
 		}()
-		log.Errorf("trying %s", sqlparser.String(statement))
+		log.ErrorS("trying " + sqlparser.String(statement))
 		_, _ = BuildFromStmt(context.Background(), query, statement, reservedVars, vschema, needs, staticConfig{})
-		log.Errorf("did not panic")
+		log.ErrorS("did not panic")
 
 		return false
 	}

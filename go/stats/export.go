@@ -32,6 +32,7 @@ import (
 	"context"
 	"expvar"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -208,9 +209,11 @@ type PushBackend interface {
 	PushOne(name string, v Variable) error
 }
 
-var pushBackends = make(map[string]PushBackend)
-var pushBackendsLock sync.Mutex
-var once sync.Once
+var (
+	pushBackends     = make(map[string]PushBackend)
+	pushBackendsLock sync.Mutex
+	once             sync.Once
+)
 
 func AwaitBackend(ctx context.Context) error {
 	if statsBackend == "" {
@@ -230,7 +233,8 @@ func RegisterPushBackend(name string, backend PushBackend) {
 	pushBackendsLock.Lock()
 	defer pushBackendsLock.Unlock()
 	if _, ok := pushBackends[name]; ok {
-		log.Fatalf("PushBackend %s already exists; can't register the same name multiple times", name)
+		log.ErrorS(fmt.Sprintf("PushBackend %s already exists; can't register the same name multiple times", name))
+		os.Exit(1)
 	}
 	pushBackends[name] = backend
 	if name == statsBackend {
@@ -252,7 +256,7 @@ func emitToBackend(emitPeriod *time.Duration) {
 	for range ticker.C {
 		if err := pushAll(); err != nil {
 			// TODO(aaijazi): This might cause log spam...
-			log.Warningf("Pushing stats to backend %v failed: %v", statsBackend, err)
+			log.WarnS(fmt.Sprintf("Pushing stats to backend %v failed: %v", statsBackend, err))
 		}
 	}
 }

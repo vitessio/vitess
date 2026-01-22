@@ -78,9 +78,9 @@ func limitString(s string, limit int) string {
 func (mysqld *Mysqld) executeSuperQueryListConn(ctx context.Context, conn *dbconnpool.PooledDBConnection, queryList []string) error {
 	const LogQueryLengthLimit = 200
 	for _, query := range queryList {
-		log.Infof("exec %s", limitString(redactPassword(query), LogQueryLengthLimit))
+		log.InfoS("exec " + limitString(redactPassword(query), LogQueryLengthLimit))
 		if _, err := mysqld.executeFetchContext(ctx, conn, query, 10000, false); err != nil {
-			log.Errorf("ExecuteFetch(%v) failed: %v", redactPassword(query), redactPassword(err.Error()))
+			log.ErrorS(fmt.Sprintf("ExecuteFetch(%v) failed: %v", redactPassword(query), redactPassword(err.Error())))
 			return fmt.Errorf("ExecuteFetch(%v) failed: %v", redactPassword(query), redactPassword(err.Error()))
 		}
 	}
@@ -138,10 +138,10 @@ func (mysqld *Mysqld) executeFetchContext(ctx context.Context, conn *dbconnpool.
 		// The context expired or was canceled.
 		// Try to kill the connection to effectively cancel the ExecuteFetch().
 		connID := conn.Conn.ID()
-		log.Infof("Mysqld.executeFetchContext(): killing connID %v due to timeout of query: %v", connID, query)
+		log.InfoS(fmt.Sprintf("Mysqld.executeFetchContext(): killing connID %v due to timeout of query: %v", connID, query))
 		if killErr := mysqld.killConnection(connID); killErr != nil {
 			// Log it, but go ahead and wait for the query anyway.
-			log.Warningf("Mysqld.executeFetchContext(): failed to kill connID %v: %v", connID, killErr)
+			log.WarnS(fmt.Sprintf("Mysqld.executeFetchContext(): failed to kill connID %v: %v", connID, killErr))
 		}
 		// Wait for the conn.ExecuteFetch() call to return.
 		<-done

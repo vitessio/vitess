@@ -42,7 +42,7 @@ import (
 const (
 	// CA is the name of the CA toplevel cert.
 	CA          = "ca"
-	permissions = 0700
+	permissions = 0o700
 )
 
 func loadCert(certPath string) (*x509.Certificate, error) {
@@ -164,28 +164,32 @@ func signCert(parent *x509.Certificate, parentPriv crypto.PrivateKey, certPub cr
 // in the provided directory. Temporary files are also created in that
 // directory.
 func CreateCA(root string) {
-	log.Infof("Creating test root CA in %v", root)
+	log.InfoS(fmt.Sprintf("Creating test root CA in %v", root))
 	keyPath := path.Join(root, "ca-key.pem")
 	certPath := path.Join(root, "ca-cert.pem")
 
 	priv, err := generateKey()
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 
 	err = saveKey(priv, keyPath)
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 
 	ca, err := signCert(nil, priv, publicKey(priv), CA, 1, true)
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 
 	err = saveCert(ca, certPath)
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 }
 
@@ -197,35 +201,42 @@ func CreateIntermediateCA(root, parent, serial, name, commonName string) {
 
 	caKey, err := loadKey(caKeyPath)
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 	caCert, err := loadCert(caCertPath)
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 
 	priv, err := generateKey()
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 
 	err = saveKey(priv, keyPath)
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 
 	serialNr, err := strconv.ParseInt(serial, 10, 64)
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 
 	intermediate, err := signCert(caCert, caKey, publicKey(priv), commonName, serialNr, true)
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 	err = saveCert(intermediate, certPath)
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 }
 
@@ -233,7 +244,7 @@ func CreateIntermediateCA(root, parent, serial, name, commonName string) {
 // with the provided serial number, name and common name.
 // name is the file name to use. Common Name is the certificate common name.
 func CreateSignedCert(root, parent, serial, name, commonName string) {
-	log.Infof("Creating signed cert and key %v", commonName)
+	log.InfoS(fmt.Sprintf("Creating signed cert and key %v", commonName))
 
 	caKeyPath := path.Join(root, parent+"-key.pem")
 	caCertPath := path.Join(root, parent+"-cert.pem")
@@ -242,54 +253,63 @@ func CreateSignedCert(root, parent, serial, name, commonName string) {
 
 	caKey, err := loadKey(caKeyPath)
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 	caCert, err := loadCert(caCertPath)
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 
 	priv, err := generateKey()
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 
 	err = saveKey(priv, keyPath)
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 
 	serialNr, err := strconv.ParseInt(serial, 10, 64)
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 
 	leaf, err := signCert(caCert, caKey, publicKey(priv), commonName, serialNr, false)
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 
 	err = saveCert(leaf, certPath)
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 }
 
 // CreateCRL creates a new empty certificate revocation list
 // for the provided parent
 func CreateCRL(root, parent string) {
-	log.Infof("Creating CRL for root CA in %v", root)
+	log.InfoS(fmt.Sprintf("Creating CRL for root CA in %v", root))
 	caKeyPath := path.Join(root, parent+"-key.pem")
 	caCertPath := path.Join(root, parent+"-cert.pem")
 	crlPath := path.Join(root, parent+"-crl.pem")
 
 	caKey, err := loadKey(caKeyPath)
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 	caCert, err := loadCert(caCertPath)
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 
 	crlList, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
@@ -297,25 +317,28 @@ func CreateCRL(root, parent string) {
 		Number:              big.NewInt(1),
 	}, caCert, caKey.(crypto.Signer))
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 
 	out := &bytes.Buffer{}
 	err = pem.Encode(out, &pem.Block{Type: "X509 CRL", Bytes: crlList})
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 
 	err = os.WriteFile(crlPath, out.Bytes(), permissions)
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 }
 
 // RevokeCertAndRegenerateCRL revokes a provided certificate under the
 // provided parent CA and regenerates the CRL file for that parent
 func RevokeCertAndRegenerateCRL(root, parent, name string) {
-	log.Infof("Revoking certificate %s", name)
+	log.InfoS("Revoking certificate " + name)
 	caKeyPath := path.Join(root, parent+"-key.pem")
 	caCertPath := path.Join(root, parent+"-cert.pem")
 	crlPath := path.Join(root, parent+"-crl.pem")
@@ -323,7 +346,8 @@ func RevokeCertAndRegenerateCRL(root, parent, name string) {
 
 	certificate, err := loadCert(certPath)
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 
 	// Check if CRL already exists. If it doesn't,
@@ -335,17 +359,20 @@ func RevokeCertAndRegenerateCRL(root, parent, name string) {
 
 	data, err := os.ReadFile(crlPath)
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 
 	block, _ := pem.Decode(data)
 	if block == nil || block.Type != "X509 CRL" {
-		log.Fatal("failed to parse CRL PEM")
+		log.ErrorS("failed to parse CRL PEM")
+		os.Exit(1)
 	}
 
 	crlList, err := x509.ParseRevocationList(block.Bytes)
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 
 	revoked := crlList.RevokedCertificateEntries
@@ -356,11 +383,13 @@ func RevokeCertAndRegenerateCRL(root, parent, name string) {
 
 	caKey, err := loadKey(caKeyPath)
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 	caCert, err := loadCert(caCertPath)
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 
 	var crlNumber big.Int
@@ -369,18 +398,21 @@ func RevokeCertAndRegenerateCRL(root, parent, name string) {
 		Number:                    crlNumber.Add(crlList.Number, big.NewInt(1)),
 	}, caCert, caKey.(crypto.Signer))
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 
 	out := &bytes.Buffer{}
 	err = pem.Encode(out, &pem.Block{Type: "X509 CRL", Bytes: newCrl})
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 
 	err = os.WriteFile(crlPath, out.Bytes(), permissions)
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 }
 
@@ -450,17 +482,20 @@ func CreateClientServerCertPairs(root string) ClientServerKeyPairs {
 
 	serverCRLBytes, err := os.ReadFile(serverCRLPath)
 	if err != nil {
-		log.Fatalf("Could not read server CRL file")
+		log.ErrorS("Could not read server CRL file")
+		os.Exit(1)
 	}
 
 	clientCRLBytes, err := os.ReadFile(clientCRLPath)
 	if err != nil {
-		log.Fatalf("Could not read client CRL file")
+		log.ErrorS("Could not read client CRL file")
+		os.Exit(1)
 	}
 
 	err = os.WriteFile(combinedCRLPath, append(serverCRLBytes, clientCRLBytes...), permissions)
 	if err != nil {
-		log.Fatalf("Could not write combined CRL file")
+		log.ErrorS("Could not write combined CRL file")
+		os.Exit(1)
 	}
 
 	return ClientServerKeyPairs{

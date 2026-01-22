@@ -18,6 +18,7 @@ package tabletserver
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -76,7 +77,7 @@ func NewStatefulConnPool(env tabletenv.Env) *StatefulConnectionPool {
 // Open makes the TxPool operational. This also starts the transaction killer
 // that will kill long-running transactions.
 func (sf *StatefulConnectionPool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
-	log.Infof("Starting transaction id: %d", sf.lastID.Load())
+	log.InfoS(fmt.Sprintf("Starting transaction id: %d", sf.lastID.Load()))
 	sf.conns.Open(appParams, dbaParams, appDebugParams)
 	foundRowsParam, _ := appParams.MysqlParams()
 	foundRowsParam.EnableClientFoundRows()
@@ -93,7 +94,7 @@ func (sf *StatefulConnectionPool) Close() {
 		if conn.IsInTransaction() {
 			thing = "transaction"
 		}
-		log.Warningf("killing %s for shutdown: %s", thing, conn.String(sf.env.Config().SanitizeLogMessages, sf.env.Environment().Parser()))
+		log.WarnS(fmt.Sprintf("killing %s for shutdown: %s", thing, conn.String(sf.env.Config().SanitizeLogMessages, sf.env.Environment().Parser())))
 		sf.env.Stats().InternalErrors.Add("StrayTransactions", 1)
 		conn.Close()
 		conn.ReleaseString("pool closed")
@@ -130,7 +131,7 @@ func (sf *StatefulConnectionPool) ShutdownAll() []*StatefulConnection {
 // no dtid collisions with future transactions.
 func (sf *StatefulConnectionPool) AdjustLastID(id int64) {
 	if current := sf.lastID.Load(); current < id {
-		log.Infof("Adjusting transaction id to: %d", id)
+		log.InfoS(fmt.Sprintf("Adjusting transaction id to: %d", id))
 		sf.lastID.Store(id)
 	}
 }

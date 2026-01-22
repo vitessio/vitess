@@ -45,6 +45,7 @@ package topo
 import (
 	"context"
 	"fmt"
+	"os"
 	"path"
 	"sync"
 
@@ -181,8 +182,10 @@ var (
 		cellsToAliases: make(map[string]string),
 	}
 
-	FlagBinaries = []string{"vttablet", "vtctl", "vtctld", "vtcombo", "vtgate",
-		"vtorc", "vtbackup"}
+	FlagBinaries = []string{
+		"vttablet", "vtctl", "vtctld", "vtcombo", "vtgate",
+		"vtorc", "vtbackup",
+	}
 
 	// Default read concurrency to use in order to avoid overhwelming the topo server.
 	DefaultReadConcurrency int64 = 32
@@ -206,7 +209,8 @@ func registerTopoFlags(fs *pflag.FlagSet) {
 // Call this in the 'init' function in your topology implementation module.
 func RegisterFactory(name string, factory Factory) {
 	if factories[name] != nil {
-		log.Fatalf("Duplicate topo.Factory registration for %v", name)
+		log.ErrorS(fmt.Sprintf("Duplicate topo.Factory registration for %v", name))
+		os.Exit(1)
 	}
 	factories[name] = factory
 }
@@ -254,14 +258,17 @@ func OpenServer(implementation, serverAddress, root string) (*Server, error) {
 // for implementation, address and root. It log.Exits out if an error occurs.
 func Open() *Server {
 	if topoGlobalServerAddress == "" {
-		log.Exitf("topo-global-server-address must be configured")
+		log.ErrorS("topo-global-server-address must be configured")
+		os.Exit(1)
 	}
 	if topoGlobalRoot == "" {
-		log.Exit("topo-global-root must be non-empty")
+		log.ErrorS("topo-global-root must be non-empty")
+		os.Exit(1)
 	}
 	ts, err := OpenServer(topoImplementation, topoGlobalServerAddress, topoGlobalRoot)
 	if err != nil {
-		log.Exitf("Failed to open topo server (%v,%v,%v): %v", topoImplementation, topoGlobalServerAddress, topoGlobalRoot, err)
+		log.ErrorS(fmt.Sprintf("Failed to open topo server (%v,%v,%v): %v", topoImplementation, topoGlobalServerAddress, topoGlobalRoot, err))
+		os.Exit(1)
 	}
 	return ts
 }

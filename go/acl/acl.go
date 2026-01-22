@@ -38,6 +38,7 @@ package acl
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"sync"
 
 	"github.com/spf13/pflag"
@@ -80,7 +81,8 @@ func RegisterFlags(fs *pflag.FlagSet) {
 // functions when needed.
 func RegisterPolicy(name string, policy Policy) {
 	if _, ok := policies[name]; ok {
-		log.Fatalf("policy %s is already registered", name)
+		log.ErrorS(fmt.Sprintf("policy %s is already registered", name))
+		os.Exit(1)
 	}
 	policies[name] = policy
 }
@@ -95,7 +97,7 @@ func savePolicy() {
 		currentPolicy = policy
 		return
 	}
-	log.Warningf("security-policy %q not found; using fallback policy (deny-all)", securityPolicy)
+	log.WarnS(fmt.Sprintf("security-policy %q not found; using fallback policy (deny-all)", securityPolicy))
 	currentPolicy = denyAllPolicy{}
 }
 

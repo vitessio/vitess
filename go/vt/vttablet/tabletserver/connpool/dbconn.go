@@ -456,7 +456,7 @@ func (dbc *Conn) KillQuery(reason string, elapsed time.Duration) error {
 // vttablet.
 func (dbc *Conn) kill(ctx context.Context, reason string, elapsed time.Duration) error {
 	dbc.stats.KillCounters.Add("Connections", 1)
-	log.Infof("Due to %s, elapsed time: %v, killing connection ID %v %s", reason, elapsed, dbc.conn.ID(), dbc.CurrentForLogging())
+	log.InfoS(fmt.Sprintf("Due to %s, elapsed time: %v, killing connection ID %v %s", reason, elapsed, dbc.conn.ID(), dbc.CurrentForLogging()))
 
 	// Client side action. Set error and close connection.
 	dbc.errmu.Lock()
@@ -467,7 +467,7 @@ func (dbc *Conn) kill(ctx context.Context, reason string, elapsed time.Duration)
 	// Server side action. Kill the session.
 	killConn, err := dbc.dbaPool.Get(ctx)
 	if err != nil {
-		log.Warningf("Failed to get conn from dba pool: %v", err)
+		log.WarnS(fmt.Sprintf("Failed to get conn from dba pool: %v", err))
 		return err
 	}
 	defer killConn.Recycle()
@@ -485,11 +485,11 @@ func (dbc *Conn) kill(ctx context.Context, reason string, elapsed time.Duration)
 		killConn.Close()
 
 		dbc.stats.InternalErrors.Add("HungConnection", 1)
-		log.Warningf("Failed to kill MySQL connection ID %d which was executing the following query, it may be hung: %s", dbc.conn.ID(), dbc.CurrentForLogging())
+		log.WarnS(fmt.Sprintf("Failed to kill MySQL connection ID %d which was executing the following query, it may be hung: %s", dbc.conn.ID(), dbc.CurrentForLogging()))
 		return context.Cause(ctx)
 	case err := <-ch:
 		if err != nil {
-			log.Errorf("Could not kill connection ID %v %s: %v", dbc.conn.ID(), dbc.CurrentForLogging(), err)
+			log.ErrorS(fmt.Sprintf("Could not kill connection ID %v %s: %v", dbc.conn.ID(), dbc.CurrentForLogging(), err))
 			return err
 		}
 		return nil
@@ -500,7 +500,7 @@ func (dbc *Conn) kill(ctx context.Context, reason string, elapsed time.Duration)
 // and on the connection side.
 func (dbc *Conn) killQuery(ctx context.Context, reason string, elapsed time.Duration) error {
 	dbc.stats.KillCounters.Add("Queries", 1)
-	log.Infof("Due to %s, elapsed time: %v, killing query ID %v %s", reason, elapsed, dbc.conn.ID(), dbc.CurrentForLogging())
+	log.InfoS(fmt.Sprintf("Due to %s, elapsed time: %v, killing query ID %v %s", reason, elapsed, dbc.conn.ID(), dbc.CurrentForLogging()))
 
 	// Client side action. Set error for killing the query on timeout.
 	dbc.errmu.Lock()
@@ -510,7 +510,7 @@ func (dbc *Conn) killQuery(ctx context.Context, reason string, elapsed time.Dura
 	// Server side action. Kill the executing query.
 	killConn, err := dbc.dbaPool.Get(ctx)
 	if err != nil {
-		log.Warningf("Failed to get conn from dba pool: %v", err)
+		log.WarnS(fmt.Sprintf("Failed to get conn from dba pool: %v", err))
 		return err
 	}
 	defer killConn.Recycle()
@@ -528,11 +528,11 @@ func (dbc *Conn) killQuery(ctx context.Context, reason string, elapsed time.Dura
 		killConn.Close()
 
 		dbc.stats.InternalErrors.Add("HungQuery", 1)
-		log.Warningf("Failed to kill MySQL query ID %d which was executing the following query, it may be hung: %s", dbc.conn.ID(), dbc.CurrentForLogging())
+		log.WarnS(fmt.Sprintf("Failed to kill MySQL query ID %d which was executing the following query, it may be hung: %s", dbc.conn.ID(), dbc.CurrentForLogging()))
 		return context.Cause(ctx)
 	case err := <-ch:
 		if err != nil {
-			log.Errorf("Could not kill query ID %v %s: %v", dbc.conn.ID(), dbc.CurrentForLogging(), err)
+			log.ErrorS(fmt.Sprintf("Could not kill query ID %v %s: %v", dbc.conn.ID(), dbc.CurrentForLogging(), err))
 			return err
 		}
 		return nil

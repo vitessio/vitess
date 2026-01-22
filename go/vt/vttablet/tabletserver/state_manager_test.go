@@ -19,6 +19,7 @@ package tabletserver
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -322,7 +323,7 @@ func TestStateManagerSetServingTypeRace(t *testing.T) {
 }
 
 func TestStateManagerSetServingTypeNoChange(t *testing.T) {
-	log.Infof("starting")
+	log.InfoS("starting")
 	sm := newTestStateManager()
 	defer sm.StopService()
 	err := sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
@@ -402,8 +403,7 @@ func TestStateManagerNotConnectedType(t *testing.T) {
 	assert.Equal(t, StateNotConnected, sm.state)
 }
 
-type delayedTxEngine struct {
-}
+type delayedTxEngine struct{}
 
 func (te *delayedTxEngine) AcceptReadWrite() {
 }
@@ -831,7 +831,7 @@ func newTestStateManager() *stateManager {
 	}
 	sm.Init(env, &querypb.Target{})
 	sm.hs.InitDBConfig(&querypb.Target{})
-	log.Infof("returning sm: %p", sm)
+	log.InfoS(fmt.Sprintf("returning sm: %p", sm))
 	return sm
 }
 

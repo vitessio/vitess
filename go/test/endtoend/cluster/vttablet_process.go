@@ -100,7 +100,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	}
 	vttablet.proc = exec.Command(
 		vttablet.Binary,
-		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--topo_implementation", vttablet.TopoImplementation,
 		"--topo_global_server_address", vttablet.TopoGlobalAddress,
 		"--topo_global_root", vttablet.TopoGlobalRoot,
@@ -130,11 +130,11 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		vttablet.proc.Args = append(vttablet.proc.Args, "--pprof", "cpu,waitSig,path=vttablet_pprof_"+vttablet.Name)
 	}
 
-	//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+	// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 	if vttablet.SupportsBackup {
 		vttablet.proc.Args = append(vttablet.proc.Args, "--restore_from_backup")
 	}
-	//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+	// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 	if vttablet.DbFlavor != "" {
 		vttablet.proc.Args = append(vttablet.proc.Args, "--db_flavor="+vttablet.DbFlavor)
 	}
@@ -148,7 +148,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	vttablet.proc.Env = append(vttablet.proc.Env, os.Environ()...)
 	vttablet.proc.Env = append(vttablet.proc.Env, DefaultVttestEnv)
 
-	log.Infof("Running vttablet with command: %v", strings.Join(vttablet.proc.Args, " "))
+	log.InfoS(fmt.Sprintf("Running vttablet with command: %v", strings.Join(vttablet.proc.Args, " ")))
 
 	err = vttablet.proc.Start()
 	if err != nil {
@@ -177,7 +177,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		if err = vttablet.WaitForTabletStatuses(servingStatus); err != nil {
 			errFileContent, _ := os.ReadFile(fname)
 			if errFileContent != nil {
-				log.Infof("vttablet error:\n%s\n", string(errFileContent))
+				log.InfoS(fmt.Sprintf("vttablet error:\n%s\n", string(errFileContent)))
 			}
 			return fmt.Errorf("process '%s' timed out after 10s (err: %s)", vttablet.Name, err)
 		}
@@ -324,9 +324,9 @@ func (vttablet *VttabletProcess) WaitForTabletStatusesForTimeout(expectedStatuse
 		case err := <-vttablet.exit:
 			errBytes, ferr := os.ReadFile(vttablet.ErrorLog)
 			if ferr == nil {
-				log.Errorf("vttablet error log contents:\n%s", string(errBytes))
+				log.ErrorS("vttablet error log contents:\n" + string(errBytes))
 			} else {
-				log.Errorf("Failed to read the vttablet error log file %q: %v", vttablet.ErrorLog, ferr)
+				log.ErrorS(fmt.Sprintf("Failed to read the vttablet error log file %q: %v", vttablet.ErrorLog, ferr))
 			}
 			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vttablet.Name, err)
 		default:
@@ -523,7 +523,7 @@ func (vttablet *VttabletProcess) QueryTabletMultiple(queries []string, keyspace 
 	defer conn.Close()
 
 	for _, query := range queries {
-		log.Infof("Executing query %s (on %s)", query, vttablet.Name)
+		log.InfoS(fmt.Sprintf("Executing query %s (on %s)", query, vttablet.Name))
 		_, err := executeQuery(conn, query)
 		if err != nil {
 			return err
@@ -590,7 +590,7 @@ func executeQuery(dbConn *mysql.Conn, query string) (*sqltypes.Result, error) {
 	for i := 0; i < retries; i++ {
 		if i > 0 {
 			// We only audit from 2nd attempt and onwards, otherwise this is just too verbose.
-			log.Infof("Executing query %s (attempt %d of %d)", query, (i + 1), retries)
+			log.InfoS(fmt.Sprintf("Executing query %s (attempt %d of %d)", query, (i + 1), retries))
 		}
 		result, err = dbConn.ExecuteFetch(query, 10000, true)
 		if err == nil {
@@ -610,7 +610,7 @@ func executeMultiQuery(dbConn *mysql.Conn, query string) (err error) {
 	for i := 0; i < retries; i++ {
 		if i > 0 {
 			// We only audit from 2nd attempt and onwards, otherwise this is just too verbose.
-			log.Infof("Executing query %s (attempt %d of %d)", query, (i + 1), retries)
+			log.InfoS(fmt.Sprintf("Executing query %s (attempt %d of %d)", query, (i + 1), retries))
 		}
 		err = dbConn.ExecuteFetchMultiDrain(query)
 		if err == nil {
@@ -671,7 +671,7 @@ func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, work
 	for ind, query := range queries {
 		waitDuration := 500 * time.Millisecond
 		for duration > 0 {
-			log.Infof("Executing query %s on %s", query, vttablet.TabletPath)
+			log.InfoS(fmt.Sprintf("Executing query %s on %s", query, vttablet.TabletPath))
 			lastChecked = time.Now()
 			qr, err := executeQuery(conn, query)
 			if err != nil {
@@ -680,7 +680,7 @@ func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, work
 			if qr != nil && qr.Rows != nil && len(qr.Rows) > 0 && fmt.Sprintf("%v", qr.Rows[0]) == string(results[ind]) {
 				break
 			} else {
-				log.Infof("In WaitForVReplicationToCatchup: %s %+v", query, qr.Rows)
+				log.InfoS(fmt.Sprintf("In WaitForVReplicationToCatchup: %s %+v", query, qr.Rows))
 			}
 			time.Sleep(waitDuration)
 			duration -= waitDuration
@@ -689,7 +689,7 @@ func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, work
 			t.Fatalf("WaitForVReplicationToCatchup timed out for workflow %s, keyspace %s", workflow, database)
 		}
 	}
-	log.Infof("WaitForVReplicationToCatchup succeeded at %v", lastChecked)
+	log.InfoS(fmt.Sprintf("WaitForVReplicationToCatchup succeeded at %v", lastChecked))
 }
 
 // BulkLoad performs a bulk load of rows into a given vttablet.
@@ -700,7 +700,7 @@ func (vttablet *VttabletProcess) BulkLoad(t testing.TB, db, table string, bulkIn
 	}
 	defer os.Remove(tmpbulk.Name())
 
-	log.Infof("create temporary file for bulk loading %q", tmpbulk.Name())
+	log.InfoS(fmt.Sprintf("create temporary file for bulk loading %q", tmpbulk.Name()))
 	bufStart := time.Now()
 
 	bulkBuffer := bufio.NewWriter(tmpbulk)
@@ -709,7 +709,7 @@ func (vttablet *VttabletProcess) BulkLoad(t testing.TB, db, table string, bulkIn
 
 	pos, _ := tmpbulk.Seek(0, 1)
 	bufFinish := time.Now()
-	log.Infof("bulk loading %d bytes from %q...", pos, tmpbulk.Name())
+	log.InfoS(fmt.Sprintf("bulk loading %d bytes from %q...", pos, tmpbulk.Name()))
 
 	if err := tmpbulk.Close(); err != nil {
 		t.Fatal(err)
@@ -728,8 +728,7 @@ func (vttablet *VttabletProcess) BulkLoad(t testing.TB, db, table string, bulkIn
 	}
 
 	end := time.Now()
-	log.Infof("bulk insert successful (write tmp file = %v, mysql bulk load = %v, total = %v",
-		bufFinish.Sub(bufStart), end.Sub(bufFinish), end.Sub(bufStart))
+	log.InfoS(fmt.Sprintf("bulk insert successful (write tmp file = %v, mysql bulk load = %v, total = %v", bufFinish.Sub(bufStart), end.Sub(bufFinish), end.Sub(bufStart)))
 }
 
 // IsShutdown returns whether a vttablet is shutdown or not
@@ -746,7 +745,7 @@ func (vttablet *VttabletProcess) ConfirmDataDirHasNoGlobalPerms(t *testing.T) {
 		return
 	}
 
-	var allowedFiles = []string{
+	allowedFiles := []string{
 		// These are intentionally created with the world/other read bit set by mysqld itself
 		// during the --initialize[-insecure] step.
 		// See: https://dev.mysql.com/doc/mysql-security-excerpt/en/creating-ssl-rsa-files-using-mysql.html
@@ -780,7 +779,7 @@ func (vttablet *VttabletProcess) ConfirmDataDirHasNoGlobalPerms(t *testing.T) {
 		}
 
 		// check if any global bit is on the filemode
-		if info.Mode()&0007 != 0 {
+		if info.Mode()&0o007 != 0 {
 			matches = append(matches, fmt.Sprintf(
 				"%s (%s)",
 				path.Join(datadir, p),

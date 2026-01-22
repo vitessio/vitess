@@ -67,6 +67,7 @@ func testComplete(t *testing.T, vrwf *VReplicationWorkflow) error {
 	_, err := vrwf.Complete()
 	return err
 }
+
 func TestReshardingWorkflowErrorsAndMisc(t *testing.T) {
 	mtwf := getMoveTablesWorkflow(t, "cell1,cell2", "replica,rdonly")
 	require.False(t, mtwf.Exists())
@@ -217,7 +218,7 @@ func TestCopyProgress(t *testing.T) {
 	var cp *CopyProgress
 	cp, err = wf.GetCopyProgress()
 	require.NoError(t, err)
-	log.Infof("CopyProgress is %+v,%+v", (*cp)["t1"], (*cp)["t2"])
+	log.InfoS(fmt.Sprintf("CopyProgress is %+v,%+v", (*cp)["t1"], (*cp)["t2"]))
 
 	require.Equal(t, int64(800), (*cp)["t1"].SourceRowCount)
 	require.Equal(t, int64(200), (*cp)["t1"].TargetRowCount)
@@ -520,7 +521,7 @@ func TestMoveTablesV2Complete(t *testing.T) {
 	require.NoError(t, testSwitchForward(t, wf))
 	require.Equal(t, WorkflowStateAllSwitched, wf.CurrentState())
 
-	//16 rules, 8 per table t1,t2 eg: t1,t1@replica,t1@rdonly,ks1.t1,ks1.t1@replica,ks1.t1@rdonly,ks2.t1@replica,ks2.t1@rdonly
+	// 16 rules, 8 per table t1,t2 eg: t1,t1@replica,t1@rdonly,ks1.t1,ks1.t1@replica,ks1.t1@rdonly,ks2.t1@replica,ks2.t1@rdonly
 	validateRoutingRuleCount(ctx, t, wf.wr.ts, 16)
 	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t1"))
 	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t2"))

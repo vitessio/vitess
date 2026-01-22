@@ -2272,7 +2272,9 @@ func TestVStreamManagerHealthCheckResponseHandling(t *testing.T) {
 	// handling in SandboxConn's implementation and then we're not actually testing the
 	// production code.
 	logger := logutil.NewMemoryLogger()
-	log.Warningf = logger.Warningf
+	log.WarningDepth = func(depth int, args ...any) {
+		logger.WarningDepth(depth, fmt.Sprint(args...))
+	}
 
 	cell := "aa"
 	ks := "TestVStream"

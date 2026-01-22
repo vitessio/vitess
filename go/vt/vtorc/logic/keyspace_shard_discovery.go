@@ -18,6 +18,7 @@ package logic
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"golang.org/x/exp/maps"
@@ -123,12 +124,12 @@ func refreshShard(keyspaceName, shardName string) error {
 func refreshKeyspaceHelper(ctx context.Context, keyspaceName string) error {
 	keyspaceInfo, err := ts.GetKeyspace(ctx, keyspaceName)
 	if err != nil {
-		log.Error(err)
+		log.ErrorS(fmt.Sprint(err))
 		return err
 	}
 	err = inst.SaveKeyspace(keyspaceInfo)
 	if err != nil {
-		log.Error(err)
+		log.ErrorS(fmt.Sprint(err))
 	}
 	return err
 }
@@ -143,7 +144,7 @@ func refreshAllShards(ctx context.Context, keyspaceName string) error {
 		Concurrency: 8,
 	})
 	if err != nil {
-		log.Error(err)
+		log.ErrorS(fmt.Sprint(err))
 		return err
 	}
 
@@ -154,7 +155,7 @@ func refreshAllShards(ctx context.Context, keyspaceName string) error {
 			continue
 		}
 		if err = inst.SaveShard(shardInfo); err != nil {
-			log.Error(err)
+			log.ErrorS(fmt.Sprint(err))
 			return err
 		}
 		savedShards[shardInfo.ShardName()] = true
@@ -163,7 +164,7 @@ func refreshAllShards(ctx context.Context, keyspaceName string) error {
 	// delete shards that were not saved, indicating they are stale.
 	shards, err := inst.ReadShardNames(keyspaceName)
 	if err != nil {
-		log.Error(err)
+		log.ErrorS(fmt.Sprint(err))
 		return err
 	}
 	for _, shard := range shards {
@@ -171,9 +172,9 @@ func refreshAllShards(ctx context.Context, keyspaceName string) error {
 			continue
 		}
 		shardName := topoproto.KeyspaceShardString(keyspaceName, shard)
-		log.Infof("Forgetting shard: %s", shardName)
+		log.InfoS("Forgetting shard: " + shardName)
 		if err = inst.DeleteShard(keyspaceName, shard); err != nil {
-			log.Errorf("Failed to delete shard %s: %+v", shardName, err)
+			log.ErrorS(fmt.Sprintf("Failed to delete shard %s: %+v", shardName, err))
 			return err
 		}
 	}
@@ -185,12 +186,12 @@ func refreshAllShards(ctx context.Context, keyspaceName string) error {
 func refreshSingleShardHelper(ctx context.Context, keyspaceName string, shardName string) error {
 	shardInfo, err := ts.GetShard(ctx, keyspaceName, shardName)
 	if err != nil {
-		log.Error(err)
+		log.ErrorS(fmt.Sprint(err))
 		return err
 	}
 	err = inst.SaveShard(shardInfo)
 	if err != nil {
-		log.Error(err)
+		log.ErrorS(fmt.Sprint(err))
 	}
 	return err
 }

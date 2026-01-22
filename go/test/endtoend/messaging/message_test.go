@@ -42,8 +42,10 @@ import (
 	cmp "vitess.io/vitess/go/test/utils"
 )
 
-var testMessage = "{\"message\": \"hello world\"}"
-var testShardedMessagef = "{\"message\": \"hello world\", \"id\": %d}"
+var (
+	testMessage         = "{\"message\": \"hello world\"}"
+	testShardedMessagef = "{\"message\": \"hello world\", \"id\": %d}"
+)
 
 var createMessage = `
 create table vitess_message(
@@ -594,7 +596,7 @@ func (stream *VTGateStream) MessageStream(ks, shard string, keyRange *topodatapb
 		for {
 			qr, err := resultStream.Recv()
 			if err != nil {
-				log.Infof("Message stream ended: %v", err)
+				log.InfoS(fmt.Sprintf("Message stream ended: %v", err))
 				return
 			}
 

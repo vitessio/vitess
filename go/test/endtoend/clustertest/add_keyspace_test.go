@@ -28,15 +28,14 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
-var (
-	testKeyspace = &cluster.Keyspace{
-		Name: "kstest",
-		SchemaSQL: `create table vt_user (
+var testKeyspace = &cluster.Keyspace{
+	Name: "kstest",
+	SchemaSQL: `create table vt_user (
 id bigint,
 name varchar(64),
 primary key (id)
 ) Engine=InnoDB`,
-		VSchema: `{
+	VSchema: `{
  "sharded": true,
  "vindexes": {
    "hash_index": {
@@ -54,13 +53,12 @@ primary key (id)
    }
  }
 }`,
-	}
-)
+}
 
 func TestAddKeyspace(t *testing.T) {
 	cell := clusterInstance.Cell
 	if err := clusterInstance.StartKeyspace(*testKeyspace, []string{"-80", "80-"}, 0, false, cell); err != nil {
-		log.Errorf("failed to AddKeyspace %v: %v", *testKeyspace, err)
+		log.ErrorS(fmt.Sprintf("failed to AddKeyspace %v: %v", *testKeyspace, err))
 		t.Fatal(err)
 	}
 	// Restart vtgate process

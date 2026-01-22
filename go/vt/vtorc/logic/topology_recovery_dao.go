@@ -50,12 +50,12 @@ func InsertRecoveryDetection(analysisEntry *inst.DetectionAnalysis) error {
 		analysisEntry.AnalyzedShard,
 	)
 	if err != nil {
-		log.Error(err)
+		log.ErrorS(fmt.Sprint(err))
 		return err
 	}
 	id, err := sqlResult.LastInsertId()
 	if err != nil {
-		log.Error(err)
+		log.ErrorS(fmt.Sprint(err))
 		return err
 	}
 	analysisEntry.RecoveryId = id
@@ -113,12 +113,12 @@ func AttemptRecoveryRegistration(analysisEntry *inst.DetectionAnalysis) (*Topolo
 	// Check if there is an active recovery in progress for the cluster of the given instance.
 	recoveries, err := ReadActiveClusterRecoveries(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 	if err != nil {
-		log.Error(err)
+		log.ErrorS(fmt.Sprint(err))
 		return nil, err
 	}
 	if len(recoveries) > 0 {
 		errMsg := fmt.Sprintf("AttemptRecoveryRegistration: Active recovery (id:%v) in the cluster %s:%s for %s", recoveries[0].ID, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, recoveries[0].AnalysisEntry.Analysis)
-		log.Errorf(errMsg)
+		log.ErrorS(errMsg)
 		return nil, errors.New(errMsg)
 	}
 
@@ -126,7 +126,7 @@ func AttemptRecoveryRegistration(analysisEntry *inst.DetectionAnalysis) (*Topolo
 
 	topologyRecovery, err = writeTopologyRecovery(topologyRecovery)
 	if err != nil {
-		log.Error(err)
+		log.ErrorS(fmt.Sprint(err))
 		return nil, err
 	}
 	return topologyRecovery, nil
@@ -150,7 +150,7 @@ func writeResolveRecovery(topologyRecovery *TopologyRecovery) error {
 		topologyRecovery.ID,
 	)
 	if err != nil {
-		log.Error(err)
+		log.ErrorS(fmt.Sprint(err))
 	}
 	return err
 }
@@ -201,9 +201,8 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 		res = append(res, &topologyRecovery)
 		return nil
 	})
-
 	if err != nil {
-		log.Error(err)
+		log.ErrorS(fmt.Sprint(err))
 	}
 	return res, err
 }
@@ -249,12 +248,12 @@ func writeTopologyRecoveryStep(topologyRecoveryStep *TopologyRecoveryStep) error
 		topologyRecoveryStep.Message,
 	)
 	if err != nil {
-		log.Error(err)
+		log.ErrorS(fmt.Sprint(err))
 		return err
 	}
 	topologyRecoveryStep.ID, err = sqlResult.LastInsertId()
 	if err != nil {
-		log.Error(err)
+		log.ErrorS(fmt.Sprint(err))
 	}
 	return err
 }

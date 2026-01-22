@@ -39,14 +39,12 @@ import (
 	"vitess.io/vitess/go/vt/utils"
 )
 
-var (
-	vtInsertTest = `
+var vtInsertTest = `
 		create table if not exists vt_insert_test (
 		id bigint auto_increment,
 		msg varchar(64),
 		primary key (id)
 		) Engine=InnoDB;`
-)
 
 func TestFailingReplication(t *testing.T) {
 	prepareCluster(t)
@@ -194,9 +192,9 @@ func firstBackupTest(t *testing.T, removeBackup bool) {
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 1)
 
 	// backup the replica
-	log.Infof("taking backup %s", time.Now())
+	log.InfoS(fmt.Sprintf("taking backup %s", time.Now()))
 	dataPointReader := vtBackup(t, false, true, true)
-	log.Infof("done taking backup %s", time.Now())
+	log.InfoS(fmt.Sprintf("done taking backup %s", time.Now()))
 
 	// check that the backup shows up in the listing
 	verifyBackupCount(t, shardKsName, len(backups)+1)
@@ -261,7 +259,7 @@ func startVtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disabl
 		go verifyDisableEnableRedoLogs(ctx, t, mysqlSocket.Name())
 	}
 
-	log.Infof("starting backup tablet %s", time.Now())
+	log.InfoS(fmt.Sprintf("starting backup tablet %s", time.Now()))
 	err = localCluster.StartVtbackup(newInitDBFile, initialBackup, keyspaceName, shardName, cell, extraArgs...)
 	if err != nil {
 		return nil, err
@@ -337,7 +335,7 @@ func initTablets(t *testing.T, startTablet bool, initShardPrimary bool) {
 
 func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForState string) {
 	// Erase mysql/tablet dir, then start tablet with restore enabled.
-	log.Infof("restoring tablet %s", time.Now())
+	log.InfoS(fmt.Sprintf("restoring tablet %s", time.Now()))
 	resetTabletDirectory(t, *tablet, true)
 
 	// Start tablets
@@ -478,7 +476,7 @@ func waitForReplicationToCatchup(tablets []cluster.Vttablet) bool {
 		case <-timeout:
 			return false
 		default:
-			var replicaCount = 0
+			replicaCount := 0
 			for _, tablet := range tablets {
 				status := tablet.VttabletProcess.GetStatusDetails()
 				json.Unmarshal([]byte(status), &statuslst)

@@ -18,6 +18,7 @@ package zkctl
 
 import (
 	"fmt"
+	"os"
 
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/log"
@@ -36,7 +37,8 @@ func StartLocalZk(id, port int) (*Zkd, string) {
 
 	// Init & start zk.
 	if err := zkd.Init(); err != nil {
-		log.Exitf("zkd.Init(%d, %d) failed: %v", id, port, err)
+		log.ErrorS(fmt.Sprintf("zkd.Init(%d, %d) failed: %v", id, port, err))
+		os.Exit(1)
 	}
 
 	return zkd, fmt.Sprintf("%v:%v", hostname, port+2)

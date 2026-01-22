@@ -178,7 +178,7 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 	}
 	testCmd := t.Command
 	if len(testCmd) == 0 {
-		if strings.Contains(fmt.Sprintf("%v", t.File), ".go") {
+		if strings.Contains(t.File, ".go") {
 			testCmd = []string{"tools/e2e_go_test.sh"}
 			testCmd = append(testCmd, t.Args...)
 			if *keepData {
@@ -282,7 +282,6 @@ func loadOneConfig(fileName string) (*Config, error) {
 		return nil, err
 	}
 	return config2, nil
-
 }
 
 // Get test configs.
@@ -441,7 +440,7 @@ func main() {
 			command.Env = append(os.Environ(), "NOVTADMINBUILD=1")
 		}
 		if *buildTag != "" {
-			command.Env = append(command.Env, fmt.Sprintf(`EXTRA_BUILD_TAGS=%s`, *buildTag))
+			command.Env = append(command.Env, "EXTRA_BUILD_TAGS="+*buildTag)
 		}
 		if out, err := command.CombinedOutput(); err != nil {
 			log.Fatalf("make build failed; exit code: %d, error: %v\n%s",

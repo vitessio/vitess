@@ -36,34 +36,34 @@ import (
 func (uvs *uvstreamer) copy(ctx context.Context) error {
 	for len(uvs.tablesToCopy) > 0 {
 		tableName := uvs.tablesToCopy[0]
-		log.V(2).Infof("Copystate not empty starting catchupAndCopy on table %s", tableName)
+		log.DebugS("Copystate not empty starting catchupAndCopy on table " + tableName)
 		if err := uvs.catchupAndCopy(ctx, tableName); err != nil {
 			uvs.vse.errorCounts.Add("Copy", 1)
 			return err
 		}
 	}
-	log.Info("No tables left to copy")
+	log.InfoS("No tables left to copy")
 	return nil
 }
 
 // first does a catchup for tables already fully or partially copied (upto last pk)
 func (uvs *uvstreamer) catchupAndCopy(ctx context.Context, tableName string) error {
-	log.Infof("catchupAndCopy for %s", tableName)
+	log.InfoS("catchupAndCopy for " + tableName)
 	if !uvs.pos.IsZero() {
 		if err := uvs.catchup(ctx); err != nil {
-			log.Infof("catchupAndCopy: catchup returned %v", err)
+			log.InfoS(fmt.Sprintf("catchupAndCopy: catchup returned %v", err))
 			uvs.vse.errorCounts.Add("Catchup", 1)
 			return err
 		}
 	}
-	log.Infof("catchupAndCopy: before copyTable %s", tableName)
+	log.InfoS("catchupAndCopy: before copyTable " + tableName)
 	uvs.fields = nil
 	return uvs.copyTable(ctx, tableName)
 }
 
 // catchup on events for tables already fully or partially copied (upto last pk) until replication lag is small
 func (uvs *uvstreamer) catchup(ctx context.Context) error {
-	log.Infof("starting catchup ...")
+	log.InfoS("starting catchup ...")
 	uvs.setReplicationLagSeconds(math.MaxInt64)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -79,7 +79,7 @@ func (uvs *uvstreamer) catchup(ctx context.Context) error {
 		uvs.setVs(vs)
 		errch <- vs.Stream()
 		uvs.setVs(nil)
-		log.Infof("catchup vs.stream returned with vs.pos %s", vs.pos.String())
+		log.InfoS("catchup vs.stream returned with vs.pos " + vs.pos.String())
 	}()
 
 	// Wait for catchup.
@@ -89,7 +89,7 @@ func (uvs *uvstreamer) catchup(ctx context.Context) error {
 	for {
 		sbm := uvs.getReplicationLagSeconds()
 		if sbm <= seconds {
-			log.Infof("Canceling context because lag is %d:%d", sbm, seconds)
+			log.InfoS(fmt.Sprintf("Canceling context because lag is %d:%d", sbm, seconds))
 			cancel()
 			// Make sure vplayer returns before returning.
 			<-errch
@@ -118,11 +118,11 @@ func (uvs *uvstreamer) sendFieldEvent(ctx context.Context, gtid string, fieldEve
 		Type:       binlogdatapb.VEventType_FIELD,
 		FieldEvent: fieldEvent,
 	}}
-	log.V(2).Infof("Sending field event %v, gtid is %s", fieldEvent, gtid)
+	log.DebugS(fmt.Sprintf("Sending field event %v, gtid is %s", fieldEvent, gtid))
 	uvs.send(evs)
 
 	if err := uvs.setPosition(gtid, true); err != nil {
-		log.Infof("setPosition returned error %v", err)
+		log.InfoS(fmt.Sprintf("setPosition returned error %v", err))
 		return err
 	}
 	return nil
@@ -170,7 +170,7 @@ func (uvs *uvstreamer) sendEventsForRows(ctx context.Context, tableName string, 
 	})
 
 	if err := uvs.send(evs); err != nil {
-		log.Infof("send returned error %v", err)
+		log.InfoS(fmt.Sprintf("send returned error %v", err))
 		return err
 	}
 	return nil
@@ -184,7 +184,7 @@ func getLastPKFromQR(qr *querypb.QueryResult) []sqltypes.Value {
 	var lastPK []sqltypes.Value
 	r := sqltypes.Proto3ToResult(qr)
 	if len(r.Rows) != 1 {
-		log.Errorf("unexpected lastpk input: %v", qr)
+		log.ErrorS(fmt.Sprintf("unexpected lastpk input: %v", qr))
 		return nil
 	}
 	lastPK = r.Rows[0]
@@ -213,13 +213,13 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 	lastPK := getLastPKFromQR(uvs.plans[tableName].tablePK.Lastpk)
 	filter := uvs.plans[tableName].rule.Filter
 
-	log.Infof("Starting copyTable for %s, Filter: %s, LastPK: %v", tableName, filter, lastPK)
+	log.InfoS(fmt.Sprintf("Starting copyTable for %s, Filter: %s, LastPK: %v", tableName, filter, lastPK))
 	uvs.sendTestEvent("Copy Start " + tableName)
 
 	err := uvs.vse.StreamRows(ctx, filter, lastPK, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		select {
 		case <-ctx.Done():
-			log.Infof("Returning io.EOF in StreamRows")
+			log.InfoS("Returning io.EOF in StreamRows")
 			return io.EOF
 		default:
 		}
@@ -231,7 +231,7 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 			if !uvs.pos.IsZero() && !uvs.pos.AtLeast(pos) {
 				if err := uvs.fastForward(rows.Gtid); err != nil {
 					uvs.setVs(nil)
-					log.Infof("fastForward returned error %v", err)
+					log.InfoS(fmt.Sprintf("fastForward returned error %v", err))
 					return err
 				}
 				uvs.setVs(nil)
@@ -242,7 +242,7 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 					return err
 				}
 			} else {
-				log.V(2).Infof("Not starting fastforward pos is %s, uvs.pos is %s, rows.gtid %s", pos, uvs.pos, rows.Gtid)
+				log.DebugS(fmt.Sprintf("Not starting fastforward pos is %s, uvs.pos is %s, rows.gtid %s", pos, uvs.pos, rows.Gtid))
 			}
 
 			// Store a copy of the fields and pkfields because the original will be cleared
@@ -268,7 +268,7 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 				EnumSetStringValues: true,
 			}
 			if err := uvs.sendFieldEvent(ctx, rows.Gtid, fieldEvent); err != nil {
-				log.Infof("sendFieldEvent returned error %v", err)
+				log.InfoS(fmt.Sprintf("sendFieldEvent returned error %v", err))
 				return err
 			}
 			// sendFieldEvent() sends a BEGIN event first.
@@ -276,7 +276,7 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 		}
 
 		if len(rows.Rows) == 0 {
-			log.V(2).Infof("0 rows returned for table %s", tableName)
+			log.DebugS("0 rows returned for table " + tableName)
 			return nil
 		}
 
@@ -296,16 +296,16 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 			Rows:   []*querypb.Row{rows.Lastpk.CloneVT()},
 		})
 		qrLastPK := sqltypes.ResultToProto3(newLastPK)
-		log.V(2).Infof("Calling sendEventForRows with gtid %s", rows.Gtid)
+		log.DebugS("Calling sendEventForRows with gtid " + rows.Gtid)
 		if err := uvs.sendEventsForRows(ctx, tableName, rows, qrLastPK); err != nil {
-			log.Infof("sendEventsForRows returned error %v", err)
+			log.InfoS(fmt.Sprintf("sendEventsForRows returned error %v", err))
 			return err
 		}
 		// sendEventsForRows() sends a COMMIT event last.
 		uvs.inTransaction = false
 
 		uvs.setCopyState(tableName, qrLastPK)
-		log.V(2).Infof("NewLastPK: %v", qrLastPK)
+		log.DebugS(fmt.Sprintf("NewLastPK: %v", qrLastPK))
 		return nil
 	}, nil)
 	if err != nil {
@@ -315,12 +315,12 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 
 	select {
 	case <-ctx.Done():
-		log.Infof("Context done: Copy of %v stopped at lastpk: %v", tableName, newLastPK)
+		log.InfoS(fmt.Sprintf("Context done: Copy of %v stopped at lastpk: %v", tableName, newLastPK))
 		return ctx.Err()
 	default:
 	}
 
-	log.Infof("Copy of %v finished at lastpk: %v", tableName, newLastPK)
+	log.InfoS(fmt.Sprintf("Copy of %v finished at lastpk: %v", tableName, newLastPK))
 	if err := uvs.copyComplete(tableName); err != nil {
 		return err
 	}
@@ -332,7 +332,7 @@ func (uvs *uvstreamer) fastForward(stopPos string) error {
 	defer func() {
 		uvs.vse.vstreamerPhaseTimings.Record("fastforward", time.Now())
 	}()
-	log.Infof("starting fastForward from %s upto pos %s", replication.EncodePosition(uvs.pos), stopPos)
+	log.InfoS(fmt.Sprintf("starting fastForward from %s upto pos %s", replication.EncodePosition(uvs.pos), stopPos))
 	uvs.stopPos, _ = replication.DecodePosition(stopPos)
 	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, replication.EncodePosition(uvs.pos), "", uvs.filter, uvs.getVSchema(), uvs.throttlerApp, uvs.send2, "fastforward", uvs.vse, nil)
 	uvs.setVs(vs)

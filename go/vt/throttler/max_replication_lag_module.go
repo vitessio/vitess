@@ -618,7 +618,7 @@ func (m *MaxReplicationLagModule) decreaseAndGuessRate(r *Result, now time.Time,
 	d := lagRecordNow.time.Sub(lagRecordBefore.time)
 	lagDifference := time.Duration(lagRecordNow.lag()-lagRecordBefore.lag()) * time.Second
 	if lagDifference > d {
-		log.Errorf("Replication lag increase is higher than the elapsed time: %v > %v. This should not happen. Replication Lag Data points: Before: %+v Now: %+v", lagDifference, d, lagRecordBefore, lagRecordNow)
+		log.ErrorS(fmt.Sprintf("Replication lag increase is higher than the elapsed time: %v > %v. This should not happen. Replication Lag Data points: Before: %+v Now: %+v", lagDifference, d, lagRecordBefore, lagRecordNow))
 		d = lagDifference
 	}
 
@@ -637,7 +637,7 @@ func (m *MaxReplicationLagModule) guessReplicationRate(r *Result, avgPrimaryRate
 	// from the relative change in the replication lag.
 	avgReplicationRate := avgPrimaryRate * (d - lagDifference).Seconds() / d.Seconds()
 	if avgReplicationRate <= 0 {
-		log.Warningf("guessed Replication rate was <= 0 (%v). Primary rate: %v d: %.1f lag difference: %.1f", avgReplicationRate, avgPrimaryRate, d.Seconds(), lagDifference.Seconds())
+		log.WarnS(fmt.Sprintf("guessed Replication rate was <= 0 (%v). Primary rate: %v d: %.1f lag difference: %.1f", avgReplicationRate, avgPrimaryRate, d.Seconds(), lagDifference.Seconds()))
 		avgReplicationRate = 1
 	}
 	r.PrimaryRate = int64(avgPrimaryRate)

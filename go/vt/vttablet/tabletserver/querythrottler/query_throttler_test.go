@@ -285,14 +285,14 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 
 			// Capture log output
 			logCapture := &testLogCapture{}
-			originalLogWarningf := log.Warningf
+			originalLogWarningDepth := log.WarningDepth
 			defer func() {
 				// Restore original logging function
-				log.Warningf = originalLogWarningf
+				log.WarningDepth = originalLogWarningDepth
 			}()
 
-			// Mock log.Warningf to capture output
-			log.Warningf = logCapture.captureLog
+			// Mock log.WarningDepth to capture output
+			log.WarningDepth = logCapture.captureLog
 
 			// Test the enforcement
 			err := iqt.Throttle(
@@ -358,8 +358,8 @@ type testLogCapture struct {
 	logs []string
 }
 
-func (lc *testLogCapture) captureLog(msg string, args ...interface{}) {
-	lc.logs = append(lc.logs, fmt.Sprintf(msg, args...))
+func (lc *testLogCapture) captureLog(depth int, args ...any) {
+	lc.logs = append(lc.logs, fmt.Sprint(args...))
 }
 
 func TestQueryThrottler_extractWorkloadName(t *testing.T) {

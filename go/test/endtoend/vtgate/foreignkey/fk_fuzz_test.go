@@ -653,7 +653,8 @@ func TestFkFuzzTest(t *testing.T) {
 			insertShare:    100,
 			deleteShare:    0,
 			updateShare:    0,
-		}, {
+		},
+		{
 			name:           "Single Thread - Balanced Inserts and Deletes",
 			concurrency:    1,
 			timeForTesting: 5 * time.Second,
@@ -662,7 +663,8 @@ func TestFkFuzzTest(t *testing.T) {
 			insertShare:    50,
 			deleteShare:    50,
 			updateShare:    0,
-		}, {
+		},
+		{
 			name:           "Single Thread - Balanced Inserts and Updates",
 			concurrency:    1,
 			timeForTesting: 5 * time.Second,
@@ -691,7 +693,8 @@ func TestFkFuzzTest(t *testing.T) {
 			insertShare:    100,
 			deleteShare:    0,
 			updateShare:    0,
-		}, {
+		},
+		{
 			name:           "Multi Thread - Balanced Inserts, Updates and Deletes",
 			concurrency:    30,
 			timeForTesting: 5 * time.Second,
@@ -747,10 +750,10 @@ func TestFkFuzzTest(t *testing.T) {
 
 						// We encountered an error while running the fuzzer. Let's print out the information!
 						if fz.firstFailureInfo != nil {
-							log.Errorf("Failing query - %v", fz.firstFailureInfo.queryToFail)
+							log.ErrorS(fmt.Sprintf("Failing query - %v", fz.firstFailureInfo.queryToFail))
 							for idx, table := range fkTables {
-								log.Errorf("MySQL data for %v -\n%v", table, fz.firstFailureInfo.mysqlState[idx].Rows)
-								log.Errorf("Vitess data for %v -\n%v", table, fz.firstFailureInfo.vitessState[idx].Rows)
+								log.ErrorS(fmt.Sprintf("MySQL data for %v -\n%v", table, fz.firstFailureInfo.mysqlState[idx].Rows))
+								log.ErrorS(fmt.Sprintf("Vitess data for %v -\n%v", table, fz.firstFailureInfo.vitessState[idx].Rows))
 							}
 						}
 

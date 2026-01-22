@@ -37,13 +37,13 @@ var singletonBackend stats.PushBackend
 func Init(prefix string) {
 	// Needs to happen in servenv.OnRun() instead of init because it requires flag parsing and logging
 	servenv.OnRun(func() {
-		log.Info("Initializing opentsdb backend...")
+		log.InfoS("Initializing opentsdb backend...")
 		backend, err := InitWithoutServenv(prefix)
 		if err != nil {
-			log.Infof("Failed to initialize singleton opentsdb backend: %v", err)
+			log.InfoS(fmt.Sprintf("Failed to initialize singleton opentsdb backend: %v", err))
 		} else {
 			singletonBackend = backend
-			log.Info("Initialized opentsdb backend.")
+			log.InfoS("Initialized opentsdb backend.")
 		}
 	})
 }
@@ -51,7 +51,6 @@ func Init(prefix string) {
 // InitWithoutServenv initializes the opentsdb without servenv
 func InitWithoutServenv(prefix string) (stats.PushBackend, error) {
 	b, err := newBackend(prefix)
-
 	if err != nil {
 		return nil, err
 	}

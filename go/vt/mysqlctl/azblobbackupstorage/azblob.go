@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/url"
 	"os"
 	"strings"
@@ -135,7 +136,7 @@ func azInternalCredentials() (string, string, error) {
 
 	var actKey string
 	if keyFile := accountKeyFile.Get(); keyFile != "" {
-		log.Infof("Getting Azure Storage Account key from file: %s", keyFile)
+		log.InfoS("Getting Azure Storage Account key from file: " + keyFile)
 		dat, err := os.ReadFile(keyFile)
 		if err != nil {
 			return "", "", err
@@ -173,25 +174,26 @@ func azServiceURL(credentials *azblob.SharedKeyCredential) azblob.ServiceURL {
 			Log: func(level pipeline.LogLevel, message string) {
 				switch level {
 				case pipeline.LogFatal, pipeline.LogPanic:
-					log.Fatal(message)
+					log.ErrorS(message)
+					os.Exit(1)
 				case pipeline.LogError:
-					log.Error(message)
+					log.ErrorS(message)
 				case pipeline.LogWarning:
-					log.Warning(message)
+					log.WarnS(message)
 				case pipeline.LogInfo, pipeline.LogDebug:
-					log.Info(message)
+					log.InfoS(message)
 				}
 			},
 			ShouldLog: func(level pipeline.LogLevel) bool {
 				switch level {
-				case pipeline.LogFatal, pipeline.LogPanic:
-					return bool(log.V(3))
-				case pipeline.LogError:
-					return bool(log.V(3))
+				case pipeline.LogFatal, pipeline.LogPanic, pipeline.LogError:
+					return log.Enabled(slog.LevelError)
 				case pipeline.LogWarning:
-					return bool(log.V(2))
-				case pipeline.LogInfo, pipeline.LogDebug:
-					return bool(log.V(1))
+					return log.Enabled(slog.LevelWarn)
+				case pipeline.LogInfo:
+					return log.Enabled(slog.LevelInfo)
+				case pipeline.LogDebug:
+					return log.Enabled(slog.LevelDebug)
 				}
 				return false
 			},
@@ -305,15 +307,14 @@ func (bh *AZBlobBackupHandle) ReadFile(ctx context.Context, filename string) (io
 	return resp.Body(azblob.RetryReaderOptions{
 		MaxRetryRequests: defaultRetryCount,
 		NotifyFailedRead: func(failureCount int, lastError error, offset int64, count int64, willRetry bool) {
-			log.Warningf("ReadFile: [azblob] container: %s, directory: %s, filename: %s, error: %v", containerName, objName(bh.dir, ""), filename, lastError)
+			log.WarnS(fmt.Sprintf("ReadFile: [azblob] container: %s, directory: %s, filename: %s, error: %v", containerName, objName(bh.dir, ""), filename, lastError))
 		},
 		TreatEarlyCloseAsError: true,
 	}), nil
 }
 
 // AZBlobBackupStorage structs implements the BackupStorage interface for AZBlob
-type AZBlobBackupStorage struct {
-}
+type AZBlobBackupStorage struct{}
 
 func (bs *AZBlobBackupStorage) containerURL() (*azblob.ContainerURL, error) {
 	credentials, err := azCredentials()
@@ -333,7 +334,7 @@ func (bs *AZBlobBackupStorage) ListBackups(ctx context.Context, dir string) ([]b
 		searchPrefix = objName(dir, "")
 	}
 
-	log.Infof("ListBackups: [azblob] container: %s, directory: %v", containerName, searchPrefix)
+	log.InfoS(fmt.Sprintf("ListBackups: [azblob] container: %s, directory: %v", containerName, searchPrefix))
 
 	containerURL, err := bs.containerURL()
 	if err != nil {
@@ -349,7 +350,6 @@ func (bs *AZBlobBackupStorage) ListBackups(ctx context.Context, dir string) ([]b
 			Prefix:     searchPrefix,
 			MaxResults: 0,
 		})
-
 		if err != nil {
 			return nil, err
 		}
@@ -393,7 +393,7 @@ func (bs *AZBlobBackupStorage) StartBackup(ctx context.Context, dir, name string
 
 // RemoveBackup implements BackupStorage.
 func (bs *AZBlobBackupStorage) RemoveBackup(ctx context.Context, dir, name string) error {
-	log.Infof("ListBackups: [azblob] container: %s, directory: %s", containerName, objName(dir, ""))
+	log.InfoS(fmt.Sprintf("ListBackups: [azblob] container: %s, directory: %s", containerName, objName(dir, "")))
 
 	containerURL, err := bs.containerURL()
 	if err != nil {
@@ -407,7 +407,6 @@ func (bs *AZBlobBackupStorage) RemoveBackup(ctx context.Context, dir, name strin
 			Prefix:     searchPrefix,
 			MaxResults: 0,
 		})
-
 		if err != nil {
 			return err
 		}
@@ -435,7 +434,7 @@ func (bs *AZBlobBackupStorage) RemoveBackup(ctx context.Context, dir, name strin
 			return err
 		}
 
-		log.Infof("Removing backup directory: %v", strings.TrimSuffix(searchPrefix, "/"))
+		log.InfoS(fmt.Sprintf("Removing backup directory: %v", strings.TrimSuffix(searchPrefix, "/")))
 		_, err = containerURL.NewBlobURL(strings.TrimSuffix(searchPrefix, "/")).Delete(ctx, azblob.DeleteSnapshotsOptionNone, azblob.BlobAccessConditions{})
 		if err == nil {
 			break

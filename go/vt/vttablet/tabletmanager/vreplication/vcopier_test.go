@@ -1786,7 +1786,7 @@ func supportsInvisibleColumns() bool {
 	if env.HasCapability(testenv.ServerCapabilityInvisibleColumn) {
 		return true
 	}
-	log.Infof("invisible columns not supported in %d.%d.%d", env.DBMajorVersion, env.DBMinorVersion, env.DBPatchVersion)
+	log.InfoS(fmt.Sprintf("invisible columns not supported in %d.%d.%d", env.DBMajorVersion, env.DBMinorVersion, env.DBPatchVersion))
 	return false
 }
 

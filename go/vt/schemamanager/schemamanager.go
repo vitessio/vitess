@@ -17,11 +17,10 @@ limitations under the License.
 package schemamanager
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -39,9 +38,7 @@ const (
 // ControllerFactory takes a set params and construct a Controller instance.
 type ControllerFactory func(params map[string]string) (Controller, error)
 
-var (
-	controllerFactories = make(map[string]ControllerFactory)
-)
+var controllerFactories = make(map[string]ControllerFactory)
 
 // Controller is responsible for getting schema change for a
 // certain keyspace and also handling various events happened during schema
@@ -96,13 +93,13 @@ type ShardResult struct {
 // Run applies schema changes on Vitess through VtGate.
 func Run(ctx context.Context, controller Controller, executor Executor) (execResult *ExecuteResult, err error) {
 	if err := controller.Open(ctx); err != nil {
-		log.Errorf("failed to open data sourcer: %v", err)
+		log.ErrorS(fmt.Sprintf("failed to open data sourcer: %v", err))
 		return execResult, err
 	}
 	defer controller.Close()
 	sqls, err := controller.Read(ctx)
 	if err != nil {
-		log.Errorf("failed to read data from data sourcer: %v", err)
+		log.ErrorS(fmt.Sprintf("failed to read data from data sourcer: %v", err))
 		controller.OnReadFail(ctx, err)
 		return execResult, err
 	}
@@ -112,12 +109,12 @@ func Run(ctx context.Context, controller Controller, executor Executor) (execRes
 	}
 	keyspace := controller.Keyspace()
 	if err := executor.Open(ctx, keyspace); err != nil {
-		log.Errorf("failed to open executor: %v", err)
+		log.ErrorS(fmt.Sprintf("failed to open executor: %v", err))
 		return execResult, err
 	}
 	defer executor.Close()
 	if err := executor.Validate(ctx, sqls); err != nil {
-		log.Errorf("validation fail: %v", err)
+		log.ErrorS(fmt.Sprintf("validation fail: %v", err))
 		controller.OnValidationFail(ctx, err)
 		return execResult, err
 	}

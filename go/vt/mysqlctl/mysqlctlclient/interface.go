@@ -21,6 +21,7 @@ package mysqlctlclient
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/spf13/pflag"
 
@@ -78,7 +79,8 @@ var factories = make(map[string]Factory)
 // RegisterFactory allows a client implementation to register itself
 func RegisterFactory(name string, factory Factory) {
 	if _, ok := factories[name]; ok {
-		log.Fatalf("RegisterFactory %s already exists", name)
+		log.ErrorS(fmt.Sprintf("RegisterFactory %s already exists", name))
+		os.Exit(1)
 	}
 	factories[name] = factory
 }

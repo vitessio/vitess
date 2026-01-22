@@ -18,6 +18,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cmd/vtctldclient/command"
@@ -59,7 +60,7 @@ func main() {
 	command.Root.SetGlobalNormalizationFunc(flagUtils.NormalizeUnderscoresToDashes)
 	// back to your regularly scheduled cobra programming
 	if err := command.Root.Execute(); err != nil {
-		log.Error(err)
+		log.ErrorS(fmt.Sprint(err))
 		exit.Return(1)
 	}
 }

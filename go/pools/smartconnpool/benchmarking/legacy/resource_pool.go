@@ -226,7 +226,7 @@ func (rp *ResourcePool) reopen() {
 	rp.reopenMutex.Lock() // Avoid race, since we can refresh asynchronously
 	defer rp.reopenMutex.Unlock()
 	capacity := int(rp.capacity.Load())
-	log.Infof("Draining and reopening resource pool with capacity %d by request", capacity)
+	log.InfoS(fmt.Sprintf("Draining and reopening resource pool with capacity %d by request", capacity))
 	rp.Close()
 	_ = rp.SetCapacity(capacity)
 	if rp.idleTimer != nil {

@@ -56,9 +56,11 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-const maxTableCount = 10000
-const maxPartitionsPerTable = 8192
-const maxIndexesPerTable = 64
+const (
+	maxTableCount         = 10000
+	maxPartitionsPerTable = 8192
+	maxIndexesPerTable    = 64
+)
 
 type notifier func(full map[string]*Table, created, altered, dropped []*Table, udfsChanged bool)
 
@@ -162,9 +164,9 @@ func (se *Engine) InitDBConfig(cp dbconfigs.Connector) {
 // in a future version (>v16) once the new schema init functionality
 // is stable.
 func (se *Engine) syncSidecarDB(ctx context.Context, conn *dbconnpool.DBConnection) error {
-	log.Infof("In syncSidecarDB")
+	log.InfoS("In syncSidecarDB")
 	defer func(start time.Time) {
-		log.Infof("syncSidecarDB took %d ms", time.Since(start).Milliseconds())
+		log.InfoS(fmt.Sprintf("syncSidecarDB took %d ms", time.Since(start).Milliseconds()))
 	}(time.Now())
 
 	var exec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
@@ -177,15 +179,15 @@ func (se *Engine) syncSidecarDB(ctx context.Context, conn *dbconnpool.DBConnecti
 		return conn.ExecuteFetch(query, maxRows, true)
 	}
 	if err := sidecardb.Init(ctx, se.env.Environment(), exec); err != nil {
-		log.Errorf("Error in sidecardb.Init: %+v", err)
+		log.ErrorS(fmt.Sprintf("Error in sidecardb.Init: %+v", err))
 		if se.env.Config().DB.HasGlobalSettings() {
-			log.Warning("Ignoring sidecardb.Init error for unmanaged tablets")
+			log.WarnS("Ignoring sidecardb.Init error for unmanaged tablets")
 			return nil
 		}
-		log.Errorf("syncSidecarDB error %+v", err)
+		log.ErrorS(fmt.Sprintf("syncSidecarDB error %+v", err))
 		return err
 	}
-	log.Infof("syncSidecarDB done")
+	log.InfoS("syncSidecarDB done")
 	return nil
 }
 
@@ -229,13 +231,13 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType, servin
 	if err != nil {
 		if !se.dbCreationFailed {
 			// This is the first failure.
-			log.Errorf("db creation failed for %v: %v, will keep retrying", dbname, err)
+			log.ErrorS(fmt.Sprintf("db creation failed for %v: %v, will keep retrying", dbname, err))
 			se.dbCreationFailed = true
 		}
 		return err
 	}
 
-	log.Infof("db %v created", dbname)
+	log.InfoS(fmt.Sprintf("db %v created", dbname))
 	se.dbCreationFailed = false
 	// creates sidecar schema, the first time the database is created
 	if err := se.syncSidecarDB(ctx, conn); err != nil {
@@ -252,7 +254,7 @@ func (se *Engine) Open() error {
 	if se.isOpen {
 		return nil
 	}
-	log.Info("Schema Engine: opening")
+	log.InfoS("Schema Engine: opening")
 
 	ctx := tabletenv.LocalContext()
 
@@ -284,7 +286,7 @@ func (se *Engine) Open() error {
 	se.ticks.Start(func() {
 		// update stats on periodic reloads
 		if err := se.reloadAndIncludeStats(ctx); err != nil {
-			log.Errorf("periodic schema reload failed: %v", err)
+			log.ErrorS(fmt.Sprintf("periodic schema reload failed: %v", err))
 		}
 	})
 
@@ -309,7 +311,7 @@ func (se *Engine) Close() {
 	}
 
 	se.closeLocked()
-	log.Info("Schema Engine: closed")
+	log.InfoS("Schema Engine: closed")
 }
 
 // closeLocked closes the schema engine. It is meant to be called after locking the mutex of the schema engine.
@@ -399,11 +401,11 @@ func (se *Engine) ReloadAtEx(ctx context.Context, pos replication.Position, incl
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	if !se.isOpen {
-		log.Warning("Schema reload called for an engine that is not yet open")
+		log.WarnS("Schema reload called for an engine that is not yet open")
 		return nil
 	}
 	if !pos.IsZero() && se.reloadAtPos.AtLeast(pos) {
-		log.V(2).Infof("ReloadAtEx: found cached schema at %s", replication.EncodePosition(pos))
+		log.DebugS("ReloadAtEx: found cached schema at " + replication.EncodePosition(pos))
 		return nil
 	}
 	if err := se.reload(ctx, includeStats); err != nil {
@@ -496,7 +498,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		includeStats = false
 
 		if err := se.updateTableIndexMetrics(ctx, conn.Conn); err != nil {
-			log.Errorf("Updating index/table statistics failed, error: %v", err)
+			log.ErrorS(fmt.Sprintf("Updating index/table statistics failed, error: %v", err))
 		}
 	}
 	tableData, err := getTableData(ctx, conn.Conn, includeStats)
@@ -594,7 +596,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 			continue
 		}
 
-		log.V(2).Infof("Reading schema for table: %s", tableName)
+		log.DebugS("Reading schema for table: " + tableName)
 		tableType := row[1].String()
 		table, err := LoadTable(conn, se.cp.DBName(), tableName, tableType, row[3].ToString(), se.env.Environment().CollationEnv())
 		if err != nil {
@@ -634,7 +636,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		// So, we do this step in the end when we can receive no more errors that fail the reload operation.
 		err = reloadDataInDB(ctx, conn.Conn, altered, created, dropped, udfsChanged, se.env.Environment().Parser())
 		if err != nil {
-			log.Errorf("error in updating schema information in Engine.reload() - %v", err)
+			log.ErrorS(fmt.Sprintf("error in updating schema information in Engine.reload() - %v", err))
 		}
 	}
 
@@ -644,7 +646,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	}
 	se.lastChange = curTime
 	if len(created) > 0 || len(altered) > 0 || len(dropped) > 0 {
-		log.Infof("schema engine created %v, altered %v, dropped %v", extractNamesFromTablesList(created), extractNamesFromTablesList(altered), extractNamesFromTablesList(dropped))
+		log.InfoS(fmt.Sprintf("schema engine created %v, altered %v, dropped %v", extractNamesFromTablesList(created), extractNamesFromTablesList(altered), extractNamesFromTablesList(dropped)))
 	}
 	se.broadcast(created, altered, dropped, udfsChanged)
 	return nil
@@ -711,7 +713,7 @@ func (se *Engine) updateInnoDBRowsRead(ctx context.Context, conn *connpool.Conn)
 
 		se.innoDbReadRowsCounter.Set(value)
 	} else {
-		log.Warningf("got strange results from 'show status': %v", readRowsData.Rows)
+		log.WarnS(fmt.Sprintf("got strange results from 'show status': %v", readRowsData.Rows))
 	}
 	return nil
 }
@@ -901,7 +903,7 @@ func (se *Engine) RegisterVersionEvent() error {
 func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.IdentifierCS, gtid string) (*binlogdatapb.MinimalTable, error) {
 	mt, err := se.historian.GetTableForPos(tableName, gtid)
 	if err != nil {
-		log.Infof("GetTableForPos returned error: %s", err.Error())
+		log.InfoS("GetTableForPos returned error: " + err.Error())
 		return nil, err
 	}
 	if mt != nil {
@@ -941,7 +943,7 @@ func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.Identi
 	// It's expected that internal tables are not found within VReplication workflows.
 	// No need to refresh the cache for internal tables.
 	if schema.IsInternalOperationTableName(tableNameStr) {
-		log.Infof("internal table %v found in vttablet schema: skipping for GTID search", tableNameStr)
+		log.InfoS(fmt.Sprintf("internal table %v found in vttablet schema: skipping for GTID search", tableNameStr))
 		return nil, nil
 	}
 	// We don't currently have the non-internal table in the cache. This can happen when
@@ -965,7 +967,7 @@ func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.Identi
 		}
 	}
 
-	log.Infof("table %v not found in vttablet schema, current tables: %v", tableNameStr, se.tables)
+	log.InfoS(fmt.Sprintf("table %v not found in vttablet schema, current tables: %v", tableNameStr, se.tables))
 	return nil, fmt.Errorf("table %v not found in vttablet schema", tableNameStr)
 }
 
@@ -995,17 +997,17 @@ func (se *Engine) RegisterNotifier(name string, f notifier, runNotifier bool) {
 // UnregisterNotifier unregisters the notifier function.
 func (se *Engine) UnregisterNotifier(name string) {
 	if !se.isOpen {
-		log.Infof("schema Engine is not open")
+		log.InfoS("schema Engine is not open")
 		return
 	}
 
-	log.Infof("schema Engine - acquiring notifierMu lock")
+	log.InfoS("schema Engine - acquiring notifierMu lock")
 	se.notifierMu.Lock()
-	log.Infof("schema Engine - acquired notifierMu lock")
+	log.InfoS("schema Engine - acquired notifierMu lock")
 	defer se.notifierMu.Unlock()
 
 	delete(se.notifiers, name)
-	log.Infof("schema Engine - finished UnregisterNotifier")
+	log.InfoS("schema Engine - finished UnregisterNotifier")
 }
 
 // broadcast must be called while holding a lock on se.mu.
@@ -1149,7 +1151,7 @@ func (se *Engine) ResetSequences(tables []string) error {
 	for _, tableName := range tables {
 		if table, ok := se.tables[tableName]; ok {
 			if table.SequenceInfo != nil {
-				log.Infof("Resetting sequence info for table %s: %+v", tableName, table.SequenceInfo)
+				log.InfoS(fmt.Sprintf("Resetting sequence info for table %s: %+v", tableName, table.SequenceInfo))
 				table.SequenceInfo.Reset()
 			}
 		} else {

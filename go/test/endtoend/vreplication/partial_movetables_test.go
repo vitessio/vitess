@@ -238,14 +238,14 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 	// Confirm shard targeting works before we switch any traffic.
 	// Everything should be routed to the source keyspace (customer).
 
-	log.Infof("Testing reverse route (target->source) for shard being switched")
+	log.InfoS("Testing reverse route (target->source) for shard being switched")
 	_, err = vtgateConn.ExecuteFetch("use `customer2:80-`", 0, false)
 	require.NoError(t, err)
 	_, err = vtgateConn.ExecuteFetch(shard80DashRoutedQuery, 0, false)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), fmt.Sprintf("target: %s.80-.primary", sourceKeyspace), "Query was routed to the target before any SwitchTraffic")
 
-	log.Infof("Testing reverse route (target->source) for shard NOT being switched")
+	log.InfoS("Testing reverse route (target->source) for shard NOT being switched")
 	_, err = vtgateConn.ExecuteFetch("use `customer2:-80`", 0, false)
 	require.NoError(t, err)
 	_, err = vtgateConn.ExecuteFetch(shardDash80RoutedQuery, 0, false)

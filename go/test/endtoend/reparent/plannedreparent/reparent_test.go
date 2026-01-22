@@ -237,7 +237,7 @@ func TestReparentFromOutsideWithNoPrimary(t *testing.T) {
 	// FIXME: @Deepthi: is this needed, since we teardown the cluster, does this achieve any additional test coverage?
 	// We will have to restart mysql to avoid hanging/locks due to external Reparent
 	for _, tablet := range tablets {
-		log.Infof("Restarting MySql for tablet %v", tablet.Alias)
+		log.InfoS(fmt.Sprintf("Restarting MySql for tablet %v", tablet.Alias))
 		err := tablet.MysqlctlProcess.Stop()
 		require.NoError(t, err)
 		tablet.MysqlctlProcess.InitMysql = false

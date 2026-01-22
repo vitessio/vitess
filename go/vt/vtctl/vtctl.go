@@ -2074,7 +2074,8 @@ func getSourceKeyspace(clusterKeyspace string) (clusterName string, sourceKeyspa
 // commandVReplicationWorkflow is the common entry point for MoveTables/Reshard/Migrate workflows
 // FIXME: this function needs a refactor. Also validations for params should to be done per workflow type
 func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string,
-	workflowType wrangler.VReplicationWorkflowType) error {
+	workflowType wrangler.VReplicationWorkflowType,
+) error {
 	const defaultWaitTime = time.Duration(30 * time.Second)
 	// for backward compatibility we default the lag to match the timeout for switching primary traffic
 	// this should probably be much smaller so that target and source are almost in sync before switching traffic
@@ -2200,7 +2201,7 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 
 	wrapError := func(wf *wrangler.VReplicationWorkflow, err error) error {
 		wr.Logger().Errorf("\n%s\n", err.Error())
-		log.Infof("In wrapError wf is %+v", wf)
+		log.InfoS(fmt.Sprintf("In wrapError wf is %+v", wf))
 		wr.Logger().Infof("Workflow Status: %s\n", wf.CurrentState())
 		if wf.Exists() {
 			printDetails()
@@ -2326,7 +2327,7 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 	vrwp.ShardSubset = *shards
 	wf, err := wr.NewVReplicationWorkflow(ctx, workflowType, vrwp)
 	if err != nil {
-		log.Warningf("NewVReplicationWorkflow returned error %+v", wf)
+		log.WarnS(fmt.Sprintf("NewVReplicationWorkflow returned error %+v", wf))
 		return err
 	}
 	if !wf.Exists() && action != vReplicationWorkflowActionCreate {
@@ -2335,8 +2336,7 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 
 	if len(vrwp.ShardSubset) > 0 {
 		if workflowType == wrangler.MoveTablesWorkflow && action != vReplicationWorkflowActionCreate && wf.IsPartialMigration() {
-			log.Infof("Subset of shards: %s have been specified for keyspace %s, workflow %s, for action %s",
-				vrwp.ShardSubset, target, workflowName, action)
+			log.InfoS(fmt.Sprintf("Subset of shards: %s have been specified for keyspace %s, workflow %s, for action %s", vrwp.ShardSubset, target, workflowName, action))
 		} else {
 			return errors.New("The --shards option can only be specified for existing Partial MoveTables workflows")
 		}
@@ -2486,7 +2486,7 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 		return fmt.Errorf("found unsupported action %s", originalAction)
 	}
 	if err != nil {
-		log.Warningf(" %s error: %v", originalAction, wf)
+		log.WarnS(fmt.Sprintf(" %s error: %v", originalAction, wf))
 		return wrapError(wf, err)
 	}
 	if *dryRun {
@@ -2606,7 +2606,7 @@ func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.Fl
 	_, err = wr.VDiff(ctx, keyspace, workflow, *sourceCell, *targetCell, *tabletTypesStr, *filteredReplicationWaitTime, *format,
 		*maxRows, *tables, *debugQuery, *onlyPks, *maxExtraRowsToCompare)
 	if err != nil {
-		log.Errorf("vdiff returning with error: %v", err)
+		log.ErrorS(fmt.Sprintf("vdiff returning with error: %v", err))
 		if strings.Contains(err.Error(), "context deadline exceeded") {
 			return errors.New("vdiff timed out: you may want to increase it with the flag --filtered_replication_wait_time=<timeoutSeconds>")
 		}
@@ -2685,7 +2685,6 @@ func commandListAllTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		Keyspace:   *keyspaceFilter,
 		TabletType: tabletTypeFilter,
 	})
-
 	if err != nil {
 		return err
 	}
@@ -2898,7 +2897,6 @@ func commandValidateSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, s
 		SkipNoPrimary:  *skipNoPrimary,
 		IncludeVschema: *includeVSchema,
 	})
-
 	if err != nil {
 		wr.Logger().Errorf("%s\n", err.Error())
 		return err
@@ -2956,7 +2954,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 		return err
 	}
 
-	log.Info("Calling ApplySchema on VtctldServer")
+	log.InfoS("Calling ApplySchema on VtctldServer")
 
 	resp, err := wr.VtctldServer().ApplySchema(ctx, &vtctldatapb.ApplySchemaRequest{
 		Keyspace:            keyspace,
@@ -2968,7 +2966,6 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 		CallerId:            cID,
 		BatchSize:           *batchSize,
 	})
-
 	if err != nil {
 		wr.Logger().Errorf("%s\n", err.Error())
 		return err
@@ -3072,9 +3069,7 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfla
 		executeFetchQuery = fmt.Sprintf(`select
 				*
 				from _vt.schema_migrations where %s %s %s`, condition, order, skipLimit)
-	case
-		"retry",
-		"cleanup":
+	case "retry", "cleanup":
 		// Do not support 'ALL' argument
 		applySchemaQuery, err = generateOnlineDDLQuery(command, arg, false)
 	case
@@ -3098,7 +3093,7 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfla
 	}
 
 	if applySchemaQuery != "" {
-		log.Info("Calling ApplySchema on VtctldServer")
+		log.InfoS("Calling ApplySchema on VtctldServer")
 
 		resp, err := wr.VtctldServer().ApplySchema(ctx, &vtctldatapb.ApplySchemaRequest{
 			Keyspace:            keyspace,
@@ -3205,7 +3200,6 @@ func commandValidateVersionKeyspace(ctx context.Context, wr *wrangler.Wrangler, 
 
 	keyspace := subFlags.Arg(0)
 	res, err := wr.VtctldServer().ValidateVersionKeyspace(ctx, &vtctldatapb.ValidateVersionKeyspaceRequest{Keyspace: keyspace})
-
 	if err != nil {
 		return err
 	}
@@ -3735,7 +3729,7 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 		return errors.New(usage)
 	}
 	if len(*shards) > 0 {
-		log.Infof("Subset of shards specified: %d, %v", len(*shards), strings.Join(*shards, ","))
+		log.InfoS(fmt.Sprintf("Subset of shards specified: %d, %v", len(*shards), strings.Join(*shards, ",")))
 	}
 	keyspace := subFlags.Arg(0)
 	action := strings.ToLower(subFlags.Arg(1))
@@ -4095,7 +4089,7 @@ func PrintAllCommands(logger logutil.Logger) {
 
 // queryResultForTabletResults aggregates given results into a combined result set
 func queryResultForTabletResults(results map[string]*sqltypes.Result) *sqltypes.Result {
-	var qr = &sqltypes.Result{}
+	qr := &sqltypes.Result{}
 	defaultFields := []*querypb.Field{{
 		Name:    "Tablet",
 		Type:    sqltypes.VarBinary,

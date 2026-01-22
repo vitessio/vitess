@@ -678,7 +678,7 @@ func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantQuery 
 					ch <- errors.New("stream gtid is empty")
 				}
 				if got := engine.rowStreamers[engine.streamIdx-1].sendQuery; got != wantQuery {
-					log.Infof("Got: %v", got)
+					log.InfoS(fmt.Sprintf("Got: %v", got))
 					ch <- fmt.Errorf("query sent:\n%v, want\n%v", got, wantQuery)
 				}
 			}

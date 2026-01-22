@@ -127,7 +127,7 @@ func (b *Bench) Run(ctx context.Context) error {
 }
 
 func (b *Bench) createConns(ctx context.Context) error {
-	log.V(10).Infof("creating %d client connections...", b.Threads)
+	log.DebugS(fmt.Sprintf("creating %d client connections...", b.Threads))
 	start := time.Now()
 	reportInterval := 2 * time.Second
 	report := start.Add(reportInterval)
@@ -141,15 +141,15 @@ func (b *Bench) createConns(ctx context.Context) error {
 
 		switch b.ConnParams.Protocol {
 		case MySQL:
-			log.V(5).Infof("connecting to %s using mysql protocol...", host)
+			log.DebugS(fmt.Sprintf("connecting to %s using mysql protocol...", host))
 			conn = &mysqlClientConn{}
 			err = conn.connect(ctx, cp)
 		case GRPCVtgate:
-			log.V(5).Infof("connecting to %s using grpc vtgate protocol...", host)
+			log.DebugS(fmt.Sprintf("connecting to %s using grpc vtgate protocol...", host))
 			conn = &grpcVtgateConn{}
 			err = conn.connect(ctx, cp)
 		case GRPCVttablet:
-			log.V(5).Infof("connecting to %s using grpc vttablet protocol...", host)
+			log.DebugS(fmt.Sprintf("connecting to %s using grpc vttablet protocol...", host))
 			conn = &grpcVttabletConn{}
 			err = conn.connect(ctx, cp)
 		default:
@@ -189,13 +189,13 @@ func (b *Bench) createThreads(ctx context.Context) {
 	// Create a barrier so all the threads start at the same time
 	b.lock.Lock()
 
-	log.V(10).Infof("starting %d threads", b.Threads)
+	log.DebugS(fmt.Sprintf("starting %d threads", b.Threads))
 	for i := 0; i < b.Threads; i++ {
 		b.wg.Add(1)
 		go b.threads[i].clientLoop(ctx)
 	}
 
-	log.V(10).Infof("waiting for %d threads to start", b.Threads)
+	log.DebugS(fmt.Sprintf("waiting for %d threads to start", b.Threads))
 	b.wg.Wait()
 
 	b.wg.Add(b.Threads)
@@ -207,7 +207,7 @@ func (b *Bench) runTest(ctx context.Context) error {
 	b.lock.Unlock()
 
 	// Then wait for them all to finish looping
-	log.V(10).Infof("waiting for %d threads to finish", b.Threads)
+	log.DebugS(fmt.Sprintf("waiting for %d threads to finish", b.Threads))
 	b.wg.Wait()
 	b.TotalTime = time.Since(start)
 
@@ -220,16 +220,16 @@ func (bt *benchThread) clientLoop(ctx context.Context) {
 	// Declare that startup is finished and wait for
 	// the barrier
 	b.wg.Done()
-	log.V(10).Infof("thread %d waiting for startup barrier", bt.i)
+	log.DebugS(fmt.Sprintf("thread %d waiting for startup barrier", bt.i))
 	b.lock.RLock()
-	log.V(10).Infof("thread %d starting loop", bt.i)
+	log.DebugS(fmt.Sprintf("thread %d starting loop", bt.i))
 
 	for i := 0; i < b.Count; i++ {
 		start := time.Now()
 		result, err := bt.conn.execute(ctx, bt.query, bt.bindVars)
 		b.Timings.Record("query", start)
 		if err != nil {
-			log.Errorf("query error: %v", err)
+			log.ErrorS(fmt.Sprintf("query error: %v", err))
 			break
 		} else {
 			b.Rows.Add(int64(len(result.Rows)))

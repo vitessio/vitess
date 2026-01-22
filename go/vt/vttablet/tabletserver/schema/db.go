@@ -361,7 +361,7 @@ func getChangedUserDefinedFunctions(ctx context.Context, conn *connpool.Conn, is
 		return false, err
 	}
 	if udfsChanged {
-		log.Info("Underlying User Defined Functions have changed")
+		log.InfoS("Underlying User Defined Functions have changed")
 	}
 	return udfsChanged, nil
 }

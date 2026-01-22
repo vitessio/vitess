@@ -184,7 +184,7 @@ func MakeZkConfigFromString(cmdLine string, myID uint32) *ZkConfig {
 		zkConfig.Servers = append(zkConfig.Servers, zkServer)
 	}
 	hostname := netutil.FullyQualifiedHostnameOrPanic()
-	log.Infof("Fully qualified machine hostname was detected as: %v", hostname)
+	log.InfoS(fmt.Sprintf("Fully qualified machine hostname was detected as: %v", hostname))
 	for _, zkServer := range zkConfig.Servers {
 		if (myID > 0 && myID == zkServer.ServerId) || (myID == 0 && zkServer.Hostname == hostname) {
 			zkConfig.ServerId = zkServer.ServerId

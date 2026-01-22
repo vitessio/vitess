@@ -100,7 +100,8 @@ func (tm *TabletManager) RestoreData(
 	restoreToTimetamp time.Time,
 	restoreToPos string,
 	allowedBackupEngines []string,
-	mysqlShutdownTimeout time.Duration) error {
+	mysqlShutdownTimeout time.Duration,
+) error {
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
@@ -135,9 +136,9 @@ func (tm *TabletManager) RestoreData(
 			switch hr.ExitStatus {
 			case hook.HOOK_SUCCESS:
 			case hook.HOOK_DOES_NOT_EXIST:
-				log.Info("No vttablet_restore_done hook.")
+				log.InfoS("No vttablet_restore_done hook.")
 			default:
-				log.Warning("vttablet_restore_done hook failed")
+				log.WarnS("vttablet_restore_done hook failed")
 			}
 		}()
 	}()
@@ -177,7 +178,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 			return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, fmt.Sprintf("snapshot keyspace %v has no base_keyspace set", tablet.Keyspace))
 		}
 		keyspace = keyspaceInfo.BaseKeyspace
-		log.Infof("Using base_keyspace %v to restore keyspace %v using a backup time of %v", keyspace, tablet.Keyspace, protoutil.TimeFromProto(request.BackupTime).UTC())
+		log.InfoS(fmt.Sprintf("Using base_keyspace %v to restore keyspace %v using a backup time of %v", keyspace, tablet.Keyspace, protoutil.TimeFromProto(request.BackupTime).UTC()))
 	}
 
 	startTime := protoutil.TimeFromProto(request.BackupTime).UTC()
@@ -253,7 +254,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 			break
 		}
 
-		log.Infof("No backup found. Waiting %v (from -wait-for-backup-interval flag) to check again.", waitForBackupInterval)
+		log.InfoS(fmt.Sprintf("No backup found. Waiting %v (from -wait-for-backup-interval flag) to check again.", waitForBackupInterval))
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -299,7 +300,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		bgCtx := context.Background()
 		// If anything failed, we should reset the original tablet type
 		if err := tm.tmState.ChangeTabletType(bgCtx, originalType, DBActionNone); err != nil {
-			log.Errorf("Could not change back to original tablet type %v: %v", originalType, err)
+			log.ErrorS(fmt.Sprintf("Could not change back to original tablet type %v: %v", originalType, err))
 		}
 		return vterrors.Wrap(err, "Can't restore backup")
 	}

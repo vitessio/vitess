@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/user"
 	"sync"
@@ -163,7 +164,7 @@ func (l *Lock) lock(ctx context.Context, ts *Server, lt iTopoLock, opts ...LockO
 	for _, o := range opts {
 		o.apply(&l.Options)
 	}
-	log.Infof("Locking %s %s for action %s with options: %+v", lt.Type(), lt.ResourceName(), l.Action, l.Options)
+	log.InfoS(fmt.Sprintf("Locking %s %s for action %s with options: %+v", lt.Type(), lt.ResourceName(), l.Action, l.Options))
 
 	ctx, cancel := context.WithTimeout(ctx, LockTimeout)
 	defer cancel()
@@ -212,10 +213,10 @@ func (l *Lock) unlock(ctx context.Context, lt iTopoLock, lockDescriptor LockDesc
 
 	// first update the actionNode
 	if actionError != nil {
-		log.Infof("Unlocking %v %v for action %v with error %v", lt.Type(), lt.ResourceName(), l.Action, actionError)
+		log.InfoS(fmt.Sprintf("Unlocking %v %v for action %v with error %v", lt.Type(), lt.ResourceName(), l.Action, actionError))
 		l.Status = "Error: " + actionError.Error()
 	} else {
-		log.Infof("Unlocking %v %v for successful action %v", lt.Type(), lt.ResourceName(), l.Action)
+		log.InfoS(fmt.Sprintf("Unlocking %v %v for successful action %v", lt.Type(), lt.ResourceName(), l.Action))
 		l.Status = "Done"
 	}
 	return lockDescriptor.Unlock(ctx)
@@ -253,7 +254,7 @@ func (ts *Server) internalLock(ctx context.Context, lt iTopoLock, action string,
 
 		if _, ok := i.info[lt.ResourceName()]; !ok {
 			if *finalErr != nil {
-				log.Errorf("trying to unlock %v %v multiple times", lt.Type(), lt.ResourceName())
+				log.ErrorS(fmt.Sprintf("trying to unlock %v %v multiple times", lt.Type(), lt.ResourceName()))
 			} else {
 				*finalErr = vterrors.Errorf(vtrpc.Code_INTERNAL, "trying to unlock %v %v multiple times", lt.Type(), lt.ResourceName())
 			}
@@ -265,7 +266,7 @@ func (ts *Server) internalLock(ctx context.Context, lt iTopoLock, action string,
 		if *finalErr != nil {
 			if err != nil {
 				// both error are set, just log the unlock error
-				log.Warningf("unlock %v %v failed: %v", lt.Type(), lt.ResourceName(), err)
+				log.WarnS(fmt.Sprintf("unlock %v %v failed: %v", lt.Type(), lt.ResourceName(), err))
 			}
 		} else {
 			*finalErr = err

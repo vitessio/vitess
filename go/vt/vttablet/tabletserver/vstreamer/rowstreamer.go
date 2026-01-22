@@ -42,9 +42,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-var (
-	rowStreamertHeartbeatInterval = 10 * time.Second
-)
+var rowStreamertHeartbeatInterval = 10 * time.Second
 
 type RowStreamerMode int32
 
@@ -87,7 +85,8 @@ type rowStreamer struct {
 
 func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string,
 	lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine,
-	mode RowStreamerMode, conn *snapshotConn, options *binlogdatapb.VStreamOptions) *rowStreamer {
+	mode RowStreamerMode, conn *snapshotConn, options *binlogdatapb.VStreamOptions,
+) *rowStreamer {
 	config, err := GetVReplicationConfig(options)
 	if err != nil {
 		return nil
@@ -112,7 +111,7 @@ func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engi
 }
 
 func (rs *rowStreamer) Cancel() {
-	log.Info("Rowstreamer Cancel() called")
+	log.InfoS("Rowstreamer Cancel() called")
 	rs.cancel()
 }
 
@@ -172,7 +171,7 @@ func (rs *rowStreamer) buildPlan() error {
 	// filtering will work.
 	rs.plan, err = buildTablePlan(rs.se.Environment(), ti, rs.vschema, rs.query)
 	if err != nil {
-		log.Errorf("Failed to build table plan for %s in row streamer: %v", ti.Name, err)
+		log.ErrorS(fmt.Sprintf("Failed to build table plan for %s in row streamer: %v", ti.Name, err))
 		return err
 	}
 
@@ -202,7 +201,7 @@ func (rs *rowStreamer) buildPlan() error {
 
 // buildPKColumnsFromUniqueKey assumes a unique key is indicated,
 func (rs *rowStreamer) buildPKColumnsFromUniqueKey() ([]int, error) {
-	var pkColumns = make([]int, 0)
+	pkColumns := make([]int, 0)
 	// We wish to utilize a UNIQUE KEY which is not the PRIMARY KEY/
 
 	for _, colName := range rs.ukColumnNames {
@@ -219,7 +218,7 @@ func (rs *rowStreamer) buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, err
 	if len(rs.ukColumnNames) > 0 {
 		return rs.buildPKColumnsFromUniqueKey()
 	}
-	var pkColumns = make([]int, 0)
+	pkColumns := make([]int, 0)
 	if len(st.PKColumns) == 0 {
 		// Use a PK equivalent if one exists.
 		pkColumns, err := rs.vse.mapPKEquivalentCols(rs.ctx, rs.cp, st)
@@ -350,7 +349,7 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 		rotatedLog bool
 		err        error
 	)
-	log.Infof("Streaming rows for query: %s\n", rs.sendQuery)
+	log.InfoS(fmt.Sprintf("Streaming rows for query: %s\n", rs.sendQuery))
 	if rs.mode == RowStreamerModeSingleTable {
 		gtid, rotatedLog, err = rs.conn.streamWithSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
 		if err != nil {
@@ -416,7 +415,7 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 	logger := logutil.NewThrottledLogger(rs.vse.GetTabletInfo(), throttledLoggerInterval)
 	for {
 		if rs.ctx.Err() != nil {
-			log.Infof("Row stream ended because of ctx.Done")
+			log.InfoS("Row stream ended because of ctx.Done")
 			return fmt.Errorf("row stream ended: %v", rs.ctx.Err())
 		}
 

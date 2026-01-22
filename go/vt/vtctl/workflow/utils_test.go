@@ -136,7 +136,7 @@ func TestConcurrentKeyspaceRoutingRulesUpdates(t *testing.T) {
 	})
 
 	etcdServerAddress := startEtcd(t)
-	log.Infof("Successfully started etcd server at %s", etcdServerAddress)
+	log.InfoS("Successfully started etcd server at " + etcdServerAddress)
 	topoName := "etcd2_test" // "etcd2" is already registered on init(), so using a different name
 	topo.RegisterFactory(topoName, etcd2topo.Factory{})
 	ts, err := topo.OpenServer(topoName, etcdServerAddress, "/vitess")
@@ -156,7 +156,7 @@ func testConcurrentKeyspaceRoutingRulesUpdates(t *testing.T, ctx context.Context
 
 	shortCtx, cancel := context.WithTimeout(ctx, duration)
 	defer cancel()
-	log.Infof("Starting %d concurrent updates", concurrency)
+	log.InfoS(fmt.Sprintf("Starting %d concurrent updates", concurrency))
 	for i := 0; i < concurrency; i++ {
 		go func(id int) {
 			defer wg.Done()
@@ -171,7 +171,7 @@ func testConcurrentKeyspaceRoutingRulesUpdates(t *testing.T, ctx context.Context
 		}(i)
 	}
 	wg.Wait()
-	log.Infof("All updates completed")
+	log.InfoS("All updates completed")
 	rules, err := ts.GetKeyspaceRoutingRules(ctx)
 	require.NoError(t, err)
 	require.LessOrEqual(t, concurrency, len(rules.Rules))
@@ -241,7 +241,7 @@ func startEtcd(t *testing.T) string {
 	}
 	t.Cleanup(func() {
 		if cmd.Process.Kill() != nil {
-			log.Infof("cmd.Process.Kill() failed : %v", err)
+			log.InfoS(fmt.Sprintf("cmd.Process.Kill() failed : %v", err))
 		}
 	})
 

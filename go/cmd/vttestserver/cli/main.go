@@ -20,6 +20,7 @@ package cli
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/signal"
 	"path"
@@ -321,8 +322,8 @@ func runCluster() (cluster vttest.LocalCluster, err error) {
 		return
 	}
 
-	log.Infof("Starting local cluster...")
-	log.Infof("config: %#v", config)
+	log.InfoS("Starting local cluster...")
+	log.InfoS(fmt.Sprintf("config: %#v", config))
 	cluster = vttest.LocalCluster{
 		Config: config,
 		Env:    env,
@@ -332,7 +333,7 @@ func runCluster() (cluster vttest.LocalCluster, err error) {
 		return cluster, err
 	}
 
-	log.Info("Local cluster started.")
+	log.InfoS("Local cluster started.")
 
 	return cluster, nil
 }

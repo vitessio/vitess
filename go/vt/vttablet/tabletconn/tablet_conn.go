@@ -18,6 +18,8 @@ package tabletconn
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"sync"
 
 	"github.com/spf13/pflag"
@@ -80,7 +82,8 @@ func RegisterDialer(name string, dialer TabletDialer) {
 	mu.Lock()
 	defer mu.Unlock()
 	if _, ok := dialers[name]; ok {
-		log.Fatalf("Dialer %s already exists", name)
+		log.ErrorS(fmt.Sprintf("Dialer %s already exists", name))
+		os.Exit(1)
 	}
 	dialers[name] = dialer
 }
@@ -91,7 +94,8 @@ func GetDialer() TabletDialer {
 	defer mu.Unlock()
 	td, ok := dialers[tabletProtocol]
 	if !ok {
-		log.Exitf("No dialer registered for tablet protocol %s", tabletProtocol)
+		log.ErrorS("No dialer registered for tablet protocol " + tabletProtocol)
+		os.Exit(1)
 	}
 	return td
 }

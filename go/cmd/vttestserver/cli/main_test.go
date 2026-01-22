@@ -278,11 +278,11 @@ func TestExternalTopoServerConsul(t *testing.T) {
 	defer func() {
 		// Alerts command did not run successful
 		if err := cmd.Process.Kill(); err != nil {
-			log.Errorf("cmd process kill has an error: %v", err)
+			log.ErrorS(fmt.Sprintf("cmd process kill has an error: %v", err))
 		}
 		// Alerts command did not run successful
 		if err := cmd.Wait(); err != nil {
-			log.Errorf("cmd process wait has an error: %v", err)
+			log.ErrorS(fmt.Sprintf("cmd process wait has an error: %v", err))
 		}
 	}()
 

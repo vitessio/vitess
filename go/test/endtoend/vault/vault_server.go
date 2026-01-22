@@ -62,22 +62,22 @@ func (vs *Server) start() error {
 	vs.execPath = path.Join(os.Getenv("EXTRA_BIN"), vaultExecutableName)
 	fileStat, err := os.Stat(vs.execPath)
 	if err != nil || fileStat.Size() != vaultDownloadSize {
-		log.Warningf("Downloading Vault binary to: %v", vs.execPath)
+		log.WarnS(fmt.Sprintf("Downloading Vault binary to: %v", vs.execPath))
 		err := downloadExecFile(vs.execPath, vaultDownloadSource)
 		if err != nil {
-			log.Error(err)
+			log.ErrorS(fmt.Sprint(err))
 			return err
 		}
 	} else {
-		log.Warningf("Vault binary already present at %v , not re-downloading", vs.execPath)
+		log.WarnS(fmt.Sprintf("Vault binary already present at %v , not re-downloading", vs.execPath))
 	}
 
 	// Create Vault log directory
 	vs.logDir = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("%s_%d", vaultDirName, vs.port1))
 	if _, err := os.Stat(vs.logDir); os.IsNotExist(err) {
-		err := os.Mkdir(vs.logDir, 0700)
+		err := os.Mkdir(vs.logDir, 0o700)
 		if err != nil {
-			log.Error(err)
+			log.ErrorS(fmt.Sprint(err))
 			return err
 		}
 	}
@@ -90,9 +90,9 @@ func (vs *Server) start() error {
 	hcl = bytes.Replace(hcl, []byte("$cert"), []byte(path.Join(os.Getenv("PWD"), vaultCertFileName)), 1)
 	hcl = bytes.Replace(hcl, []byte("$key"), []byte(path.Join(os.Getenv("PWD"), vaultKeyFileName)), 1)
 	newHclFile := path.Join(vs.logDir, vaultConfigFileName)
-	err = os.WriteFile(newHclFile, hcl, 0700)
+	err = os.WriteFile(newHclFile, hcl, 0o700)
 	if err != nil {
-		log.Error(err)
+		log.ErrorS(fmt.Sprint(err))
 		return err
 	}
 
@@ -104,7 +104,7 @@ func (vs *Server) start() error {
 
 	logFile, err := os.Create(path.Join(vs.logDir, "log.txt"))
 	if err != nil {
-		log.Error(err)
+		log.ErrorS(fmt.Sprint(err))
 		return err
 	}
 	vs.proc.Stderr = logFile
@@ -112,7 +112,7 @@ func (vs *Server) start() error {
 
 	vs.proc.Env = append(vs.proc.Env, os.Environ()...)
 
-	log.Infof("Running Vault server with command: %v", strings.Join(vs.proc.Args, " "))
+	log.InfoS(fmt.Sprintf("Running Vault server with command: %v", strings.Join(vs.proc.Args, " ")))
 
 	err = vs.proc.Start()
 	if err != nil {
@@ -154,7 +154,7 @@ func downloadExecFile(path string, url string) error {
 	}
 	defer resp.Body.Close()
 
-	err = os.WriteFile(path, []byte(""), 0700)
+	err = os.WriteFile(path, []byte(""), 0o700)
 	if err != nil {
 		return err
 	}

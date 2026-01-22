@@ -19,6 +19,7 @@ package stress
 import (
 	"context"
 	"fmt"
+	"math/rand/v2"
 	"os"
 	"path"
 	"strconv"
@@ -27,8 +28,6 @@ import (
 	"syscall"
 	"testing"
 	"time"
-
-	"math/rand/v2"
 
 	"github.com/stretchr/testify/require"
 
@@ -43,14 +42,12 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 )
 
-var (
-	// idVals are the primary key values to use while creating insert queries that ensures all the three shards get an insert.
-	idVals = [3]int{
-		4, // 4 maps to 0x20 and ends up in the first shard (-40)
-		6, // 6 maps to 0x60 and ends up in the second shard (40-80)
-		9, // 9 maps to 0x90 and ends up in the third shard (80-)
-	}
-)
+// idVals are the primary key values to use while creating insert queries that ensures all the three shards get an insert.
+var idVals = [3]int{
+	4, // 4 maps to 0x20 and ends up in the first shard (-40)
+	6, // 6 maps to 0x60 and ends up in the second shard (40-80)
+	9, // 9 maps to 0x90 and ends up in the third shard (80-)
+}
 
 func TestSettings(t *testing.T) {
 	testcases := []struct {
@@ -338,7 +335,7 @@ func mysqlRestartShard3(t *testing.T) error {
 	shard := clusterInstance.Keyspaces[0].Shards[2]
 	vttablets := shard.Vttablets
 	tablet := vttablets[0]
-	log.Errorf("Restarting MySQL for - %v/%v tablet - %v", keyspaceName, shard.Name, tablet.Alias)
+	log.ErrorS(fmt.Sprintf("Restarting MySQL for - %v/%v tablet - %v", keyspaceName, shard.Name, tablet.Alias))
 	pidFile := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.pid", tablet.TabletUID))
 	pidBytes, err := os.ReadFile(pidFile)
 	if err != nil {

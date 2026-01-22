@@ -118,7 +118,7 @@ func staticAuthPluginInitializer() (Authenticator, error) {
 	staticAuthPlugin := &StaticAuthPlugin{
 		entries: entries,
 	}
-	log.Info("static auth plugin have initialized successfully with config from grpc-auth-static-password-file")
+	log.InfoS("static auth plugin have initialized successfully with config from grpc-auth-static-password-file")
 	return staticAuthPlugin, nil
 }
 

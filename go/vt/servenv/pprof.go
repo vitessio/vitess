@@ -150,7 +150,8 @@ func startCallback(start func()) func() {
 		if atomic.CompareAndSwapUint32(&profileStarted, 0, 1) {
 			start()
 		} else {
-			log.Fatal("profile: Start() already called")
+			log.ErrorS("profile: Start() already called")
+			os.Exit(1)
 		}
 	}
 }
@@ -172,22 +173,26 @@ func (prof *profile) mkprofile() io.WriteCloser {
 
 	if prof.path != "" {
 		path = prof.path
-		err = os.MkdirAll(path, 0777)
+		err = os.MkdirAll(path, 0o777)
 	} else {
 		path, err = os.MkdirTemp("", "profile")
 	}
 	if err != nil {
-		log.Fatalf("pprof: could not create initial output directory: %v", err)
+		log.ErrorS(fmt.Sprintf("pprof: could not create initial output directory: %v", err))
+		os.Exit(1)
 	}
 
 	if !prof.quiet {
-		logf = log.Infof
+		logf = func(format string, args ...any) {
+			log.InfoS(fmt.Sprintf(format, args...))
+		}
 	}
 
 	fn := filepath.Join(path, prof.mode.filename())
 	f, err := os.Create(fn)
 	if err != nil {
-		log.Fatalf("pprof: could not create profile %q: %v", fn, err)
+		log.ErrorS(fmt.Sprintf("pprof: could not create profile %q: %v", fn, err))
+		os.Exit(1)
 	}
 	logf("pprof: %s profiling enabled, %s", string(prof.mode), fn)
 
@@ -272,7 +277,8 @@ func (prof *profile) init() (start func(), stop func()) {
 		start = startCallback(func() {
 			pf = prof.mkprofile()
 			if err := trace.Start(pf); err != nil {
-				log.Fatalf("pprof: could not start trace: %v", err)
+				log.ErrorS(fmt.Sprintf("pprof: could not start trace: %v", err))
+				os.Exit(1)
 			}
 		})
 		stop = stopCallback(func() {

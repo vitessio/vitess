@@ -124,7 +124,7 @@ func (vde *Engine) Open(ctx context.Context, vre *vreplication.Engine) {
 	if vde.ts == nil || vde.isOpen {
 		return
 	}
-	log.Infof("VDiff Engine: opening...")
+	log.InfoS("VDiff Engine: opening...")
 
 	if vde.cancelRetry != nil {
 		vde.cancelRetry()
@@ -132,7 +132,7 @@ func (vde *Engine) Open(ctx context.Context, vre *vreplication.Engine) {
 	}
 	vde.vre = vre
 	if err := vde.openLocked(ctx); err != nil {
-		log.Infof("openLocked error: %s", err)
+		log.InfoS(fmt.Sprintf("openLocked error: %s", err))
 		ctx, cancel := context.WithCancel(ctx)
 		vde.cancelRetry = cancel
 		go vde.retry(ctx, err)
@@ -142,7 +142,7 @@ func (vde *Engine) Open(ctx context.Context, vre *vreplication.Engine) {
 func (vde *Engine) openLocked(ctx context.Context) error {
 	// This should never happen
 	if len(vde.controllers) > 0 {
-		log.Warningf("VDiff Engine invalid state detected: %d controllers existed when opening; resetting state", len(vde.controllers))
+		log.WarnS(fmt.Sprintf("VDiff Engine invalid state detected: %d controllers existed when opening; resetting state", len(vde.controllers)))
 		vde.resetControllers()
 	}
 
@@ -179,7 +179,7 @@ func (vde *Engine) openLocked(ctx context.Context) error {
 var openRetryInterval = 1 * time.Second
 
 func (vde *Engine) retry(ctx context.Context, err error) {
-	log.Errorf("Error starting vdiff engine: %v, will keep retrying.", err)
+	log.ErrorS(fmt.Sprintf("Error starting vdiff engine: %v, will keep retrying.", err))
 	for {
 		timer := time.NewTimer(openRetryInterval)
 		select {
@@ -200,7 +200,7 @@ func (vde *Engine) retry(ctx context.Context, err error) {
 		default:
 		}
 		if err := vde.openLocked(ctx); err == nil {
-			log.Infof("VDiff engine: opened successfully")
+			log.InfoS("VDiff engine: opened successfully")
 			// Don't invoke cancelRetry because openLocked
 			// will hold on to this context for later cancellation.
 			vde.cancelRetry = nil
@@ -280,7 +280,7 @@ func (vde *Engine) Close() {
 
 	vde.isOpen = false
 
-	log.Infof("VDiff Engine: closed")
+	log.InfoS("VDiff Engine: closed")
 }
 
 func (vde *Engine) getVDiffsToRun(ctx context.Context) (*sqltypes.Result, error) {
@@ -360,7 +360,7 @@ func (vde *Engine) retryVDiffs(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		log.Infof("Retrying vdiff %s that had an ephemeral error of '%v'", uuid, lastError)
+		log.InfoS(fmt.Sprintf("Retrying vdiff %s that had an ephemeral error of '%v'", uuid, lastError))
 		query, err := sqlparser.ParseAndBind(sqlRetryVDiff, sqltypes.Int64BindVariable(id))
 		if err != nil {
 			return err
@@ -385,13 +385,13 @@ func (vde *Engine) retryErroredVDiffs() {
 	for {
 		select {
 		case <-vde.ctx.Done():
-			log.Info("VDiff engine: closing...")
+			log.InfoS("VDiff engine: closing...")
 			return
 		case <-tkr.C:
 		}
 
 		if err := vde.retryVDiffs(vde.ctx); err != nil {
-			log.Errorf("Error retrying vdiffs: %v", err)
+			log.ErrorS(fmt.Sprintf("Error retrying vdiffs: %v", err))
 		}
 	}
 }

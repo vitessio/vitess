@@ -80,9 +80,7 @@ vtclient --server vtgate:15991 --target '@primary' --bind_variables '[ 12345, 1,
 	}
 )
 
-var (
-	seqChan = make(chan int, 10)
-)
+var seqChan = make(chan int, 10)
 
 func InitializeFlags() {
 	servenv.MoveFlagsToCobraCommand(Main)
@@ -197,7 +195,7 @@ func _run(cmd *cobra.Command, args []string) (*results, error) {
 		return nil, fmt.Errorf("client error: %w", err)
 	}
 
-	log.Infof("Sending the query...")
+	log.InfoS("Sending the query...")
 
 	ctx, cancel := context.WithTimeout(cmd.Context(), timeout)
 	defer cancel()

@@ -17,6 +17,9 @@ limitations under the License.
 package cli
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/acl"
@@ -29,11 +32,10 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/server"
 )
 
-var (
-	Main = &cobra.Command{
-		Use:   "vtorc",
-		Short: "VTOrc is the automated fault detection and repair tool in Vitess.",
-		Example: `vtorc \
+var Main = &cobra.Command{
+	Use:   "vtorc",
+	Short: "VTOrc is the automated fault detection and repair tool in Vitess.",
+	Example: `vtorc \
 	--topo-implementation etcd2 \
 	--topo-global-server-address localhost:2379 \
 	--topo-global-root /vitess/global \
@@ -42,27 +44,27 @@ var (
 	--instance-poll-time "1s" \
 	--topo-information-refresh-duration "30s" \
 	--alsologtostderr`,
-		Args:    cobra.NoArgs,
-		Version: servenv.AppVersion.String(),
-		PreRunE: servenv.CobraPreRunE,
-		Run:     run,
-	}
-)
+	Args:    cobra.NoArgs,
+	Version: servenv.AppVersion.String(),
+	PreRunE: servenv.CobraPreRunE,
+	Run:     run,
+}
 
 func run(cmd *cobra.Command, args []string) {
 	servenv.Init()
 	inst.RegisterStats()
 
-	log.Info("Starting vtorc")
+	log.InfoS("Starting vtorc")
 	if config.GetAuditToSyslog() {
 		inst.EnableAuditSyslog()
 	}
 	config.MarkConfigurationLoaded()
 
 	// Log final config values to debug if something goes wrong.
-	log.Infof("Running with Configuration - %v", debug.AllSettings())
+	log.InfoS(fmt.Sprintf("Running with Configuration - %v", debug.AllSettings()))
 	if err := server.StartVTOrcDiscovery(); err != nil {
-		log.Fatalf("Failed to start vtorc: %+v", err)
+		log.ErrorS(fmt.Sprintf("Failed to start vtorc: %+v", err))
+		os.Exit(1)
 	}
 
 	server.RegisterVTOrcAPIEndpoints()

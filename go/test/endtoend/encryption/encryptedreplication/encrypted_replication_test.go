@@ -96,9 +96,9 @@ func initializeCluster(t *testing.T) (int, error) {
 	}
 
 	// create certs directory
-	log.Info("Creating certificates")
+	log.InfoS("Creating certificates")
 	certDirectory = path.Join(clusterInstance.TmpDirectory, "certs")
-	_ = encryption.CreateDirectory(certDirectory, 0700)
+	_ = encryption.CreateDirectory(certDirectory, 0o700)
 
 	err := encryption.ExecuteVttlstestCommand("CreateCA", "--root", certDirectory)
 	require.NoError(t, err)

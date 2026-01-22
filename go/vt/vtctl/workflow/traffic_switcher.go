@@ -258,6 +258,7 @@ func (ts *trafficSwitcher) Logger() logutil.Logger {
 	}
 	return ts.logger
 }
+
 func (ts *trafficSwitcher) VReplicationExec(ctx context.Context, alias *topodatapb.TabletAlias, query string) (*querypb.QueryResult, error) {
 	return ts.ws.VReplicationExec(ctx, alias, query)
 }
@@ -480,7 +481,7 @@ func (ts *trafficSwitcher) dropSourceDeniedTables(ctx context.Context) error {
 			msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s source shard (%v):\n  %v",
 				source.GetShard().Keyspace(), source.GetShard().ShardName(), err, partialDetails)
 			if ts.force {
-				log.Warning(msg)
+				log.WarnS(msg)
 				return nil
 			} else {
 				return errors.New(msg)
@@ -504,7 +505,7 @@ func (ts *trafficSwitcher) dropTargetDeniedTables(ctx context.Context) error {
 			msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s target shard (%v):\n  %v",
 				target.GetShard().Keyspace(), target.GetShard().ShardName(), err, partialDetails)
 			if ts.force {
-				log.Warning(msg)
+				log.WarnS(msg)
 				return nil
 			} else {
 				return errors.New(msg)
@@ -1099,7 +1100,7 @@ func (ts *trafficSwitcher) switchDeniedTables(ctx context.Context, backward bool
 				msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s source shard (%v):\n  %v",
 					source.GetShard().Keyspace(), source.GetShard().ShardName(), err, partialDetails)
 				if ts.force {
-					log.Warning(msg)
+					log.WarnS(msg)
 					return nil
 				} else {
 					return errors.New(msg)
@@ -1122,7 +1123,7 @@ func (ts *trafficSwitcher) switchDeniedTables(ctx context.Context, backward bool
 				msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s target shard (%v):\n  %v",
 					target.GetShard().Keyspace(), target.GetShard().ShardName(), err, partialDetails)
 				if ts.force {
-					log.Warning(msg)
+					log.WarnS(msg)
 					return nil
 				} else {
 					return errors.New(msg)
@@ -1385,7 +1386,6 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 
 			return nil
 		})
-
 		if err != nil {
 			return err
 		}

@@ -115,22 +115,28 @@ func latestFlagSet() *pflag.FlagSet {
 // Structured logging is enabled only when the log-fmt flag is explicitly set.
 // When enabled, Init configures the default slog logger and updates the global
 // structuredLoggingEnabled flag.
-func Init() error {
+//
+// The fs parameter should be the FlagSet used to parse the log flags. If fs is
+// nil, Init falls back to the most recently registered FlagSet.
+func Init(fs *pflag.FlagSet) error {
 	if initDone {
 		return initErr
 	}
 
 	initDone = true
-	initErr = initStructuredLogging()
+	initErr = initStructuredLogging(fs)
 
 	return initErr
 }
 
 // initStructuredLogging inspects the parsed flag values and configures slog
 // when the log-fmt flag is explicitly set.
-func initStructuredLogging() error {
-	// The latest FlagSet is the only one that can reflect the parsed values.
-	fs := latestFlagSet()
+func initStructuredLogging(fs *pflag.FlagSet) error {
+	if fs == nil {
+		fs = latestFlagSet()
+	}
+
+	// The parsed FlagSet is required to observe whether log-fmt was set.
 	if fs == nil {
 		return nil
 	}
@@ -247,6 +253,27 @@ func logS(level slog.Level, depth int, msg string, args ...any) {
 	_ = logger.Handler().Handle(ctx, record)
 }
 
+// Enabled reports whether a log call at the provided level would be emitted.
+//
+// When structured logging is enabled, Enabled consults the configured slog
+// logger. When structured logging is disabled, Enabled returns true for info
+// and above, and uses glog verbosity to gate debug logging.
+func Enabled(level slog.Level) bool {
+	if structuredLoggingEnabled.Load() {
+		logger := structuredLogger.Load()
+		if logger == nil {
+			logger = slog.Default()
+		}
+		return logger.Enabled(context.Background(), level)
+	}
+
+	if level < slog.LevelInfo {
+		return bool(glog.V(glog.Level(1)))
+	}
+
+	return true
+}
+
 // logGlog formats a structured log call as a glog message.
 //
 // This path is used when structured logging is disabled.
@@ -259,13 +286,13 @@ func logGlog(level slog.Level, depth int, msg string, args ...any) {
 
 	switch level {
 	case slog.LevelDebug, slog.LevelInfo:
-		glog.InfoDepth(depth, args...)
+		InfoDepth(depth, args...)
 	case slog.LevelWarn:
-		glog.WarningDepth(depth, args...)
+		WarningDepth(depth, args...)
 	case slog.LevelError:
-		glog.ErrorDepth(depth, args...)
+		ErrorDepth(depth, args...)
 	default:
-		glog.InfoDepth(depth, args...)
+		InfoDepth(depth, args...)
 	}
 }
 

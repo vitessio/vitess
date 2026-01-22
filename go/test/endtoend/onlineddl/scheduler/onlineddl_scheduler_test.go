@@ -242,7 +242,7 @@ func TestMain(m *testing.M) {
 		defer clusterInstance.Teardown()
 
 		if _, err := os.Stat(schemaChangeDirectory); os.IsNotExist(err) {
-			_ = os.Mkdir(schemaChangeDirectory, 0700)
+			_ = os.Mkdir(schemaChangeDirectory, 0o700)
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
@@ -2149,6 +2149,7 @@ DROP TABLE IF EXISTS stress_test
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, revertUUID, schema.OnlineDDLStatusCancelled)
 	})
 }
+
 func testDeclarative(t *testing.T) {
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
@@ -2341,8 +2342,8 @@ func testDeclarative(t *testing.T) {
 	}
 
 	initTable := func(t *testing.T) {
-		log.Infof("initTable begin")
-		defer log.Infof("initTable complete")
+		log.InfoS("initTable begin")
+		defer log.InfoS("initTable complete")
 
 		ctx := t.Context()
 		conn, err := mysql.Connect(ctx, &vtParams)
@@ -2368,7 +2369,7 @@ func testDeclarative(t *testing.T) {
 		writeMetrics.mu.Lock()
 		defer writeMetrics.mu.Unlock()
 
-		log.Infof("%s", writeMetrics.String())
+		log.InfoS(writeMetrics.String())
 
 		ctx := t.Context()
 		conn, err := mysql.Connect(ctx, &vtParams)
@@ -2380,7 +2381,7 @@ func testDeclarative(t *testing.T) {
 
 		row := rs.Named().Row()
 		require.NotNil(t, row)
-		log.Infof("testSelectTableMetrics, row: %v", row)
+		log.InfoS(fmt.Sprintf("testSelectTableMetrics, row: %v", row))
 		numRows := row.AsInt64("num_rows", 0)
 		sumUpdates := row.AsInt64("sum_updates", 0)
 
@@ -2869,7 +2870,7 @@ func testForeignKeys(t *testing.T) {
 		expectCountUUIDs          int
 		onlyIfFKOnlineDDLPossible bool
 	}
-	var testCases = []testCase{
+	testCases := []testCase{
 		{
 			name:             "modify parent, not allowed",
 			sql:              "alter table parent_table engine=innodb",

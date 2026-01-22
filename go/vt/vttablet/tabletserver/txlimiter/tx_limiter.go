@@ -117,12 +117,12 @@ func (txl *Impl) Get(immediate *querypb.VTGateCallerID, effective *vtrpcpb.Calle
 	}
 
 	if txl.dryRun {
-		log.Infof("TxLimiter: DRY RUN: user over limit: %s", key)
+		log.InfoS("TxLimiter: DRY RUN: user over limit: " + key)
 		txl.rejectionsDryRun.Add(key, 1)
 		return true
 	}
 
-	log.Infof("TxLimiter: Over limit, rejecting transaction request for user: %s", key)
+	log.InfoS("TxLimiter: Over limit, rejecting transaction request for user: " + key)
 	txl.rejections.Add(key, 1)
 	return false
 }

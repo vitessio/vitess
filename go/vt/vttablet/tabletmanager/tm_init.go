@@ -39,6 +39,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -235,9 +236,9 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 		if err != nil {
 			return nil, err
 		}
-		log.Infof("Using detected machine hostname: %v, to change this, fix your machine network configuration or override it with --tablet-hostname. Tablet %s", hostname, alias.String())
+		log.InfoS(fmt.Sprintf("Using detected machine hostname: %v, to change this, fix your machine network configuration or override it with --tablet-hostname. Tablet %s", hostname, alias.String()))
 	} else {
-		log.Infof("Using hostname: %v from --tablet-hostname flag. Tablet %s", hostname, alias.String())
+		log.InfoS(fmt.Sprintf("Using hostname: %v from --tablet-hostname flag. Tablet %s", hostname, alias.String()))
 	}
 
 	if initKeyspace == "" || initShard == "" {
@@ -314,7 +315,7 @@ func getBuildTags(buildTags map[string]string, skipTagsCSV string) (map[string]s
 			}
 		} else {
 			skippers[i] = func(s string) bool {
-				log.Warningf(skipTag)
+				log.WarnS(skipTag)
 				return s == skipTag
 			}
 		}
@@ -370,9 +371,9 @@ func setTabletTagsStats(tablet *topodatapb.Tablet) {
 // Start starts the TabletManager.
 func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.TabletConfig) error {
 	defer func() {
-		log.Infof("TabletManager Start took ~%d ms", time.Since(servenv.GetInitStartTime()).Milliseconds())
+		log.InfoS(fmt.Sprintf("TabletManager Start took ~%d ms", time.Since(servenv.GetInitStartTime()).Milliseconds()))
 	}()
-	log.Infof("TabletManager Start")
+	log.InfoS("TabletManager Start")
 	tm.DBConfigs.DBName = topoproto.TabletDbName(tablet)
 	tm.tabletAlias = tablet.Alias
 	tm.tmc = tmclient.NewTabletManagerClient()
@@ -391,25 +392,23 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 		switch {
 		case err != nil:
 			// No existing tablet record found, use init-tablet-type
-			log.Infof("No existing tablet record found, using init-tablet-type: %v", tablet.Type)
+			log.InfoS(fmt.Sprintf("No existing tablet record found, using init-tablet-type: %v", tablet.Type))
 		case existingTablet.Type == topodatapb.TabletType_PRIMARY:
 			// Don't set to PRIMARY yet - let checkPrimaryShip() validate and decide
 			// checkPrimaryShip() has the logic to verify shard records and determine if this tablet should really be PRIMARY
-			log.Infof("Found existing tablet record with PRIMARY type, setting to REPLICA and allowing checkPrimaryShip() to validate")
+			log.InfoS("Found existing tablet record with PRIMARY type, setting to REPLICA and allowing checkPrimaryShip() to validate")
 			tablet.Type = topodatapb.TabletType_REPLICA
 		case existingTablet.Type == topodatapb.TabletType_BACKUP || existingTablet.Type == topodatapb.TabletType_RESTORE:
 			// Skip transient operational types (BACKUP, RESTORE)
 			// These are temporary states that should not be preserved across restarts
-			log.Infof("Found existing tablet record with transient type %v, using init-tablet-type %v instead",
-				existingTablet.Type, tablet.Type)
+			log.InfoS(fmt.Sprintf("Found existing tablet record with transient type %v, using init-tablet-type %v instead", existingTablet.Type, tablet.Type))
 		default:
 			// Safe to restore the type for non-PRIMARY, non-transient types
-			log.Infof("Found existing tablet record with --init-tablet-type-lookup enabled, using tablet type %v from topology instead of init-tablet-type %v",
-				existingTablet.Type, tablet.Type)
+			log.InfoS(fmt.Sprintf("Found existing tablet record with --init-tablet-type-lookup enabled, using tablet type %v from topology instead of init-tablet-type %v", existingTablet.Type, tablet.Type))
 			tablet.Type = existingTablet.Type
 		}
 	} else {
-		log.Infof("Using init-tablet-type %v", tablet.Type)
+		log.InfoS(fmt.Sprintf("Using init-tablet-type %v", tablet.Type))
 	}
 
 	tm.tmState = newTMState(tm, tablet)
@@ -519,7 +518,7 @@ func (tm *TabletManager) Close() {
 	defer updateCancel()
 
 	if _, err := tm.TopoServer.UpdateTabletFields(updateCtx, tm.tabletAlias, f); err != nil {
-		log.Warningf("Failed to update tablet record, may contain stale identifiers: %v", err)
+		log.WarnS(fmt.Sprintf("Failed to update tablet record, may contain stale identifiers: %v", err))
 	}
 
 	tm.tmState.Close()
@@ -561,7 +560,7 @@ func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardIn
 	defer tm.mutex.Unlock()
 
 	tablet := tm.Tablet()
-	log.Infof("Reading/creating keyspace and shard records for %v/%v", tablet.Keyspace, tablet.Shard)
+	log.InfoS(fmt.Sprintf("Reading/creating keyspace and shard records for %v/%v", tablet.Keyspace, tablet.Shard))
 
 	// Read the shard, create it if necessary.
 	var shardInfo *topo.ShardInfo
@@ -667,11 +666,11 @@ func (tm *TabletManager) rebuildKeyspace(ctx context.Context, done chan<- struct
 	var srvKeyspace *topodatapb.SrvKeyspace
 
 	defer func() {
-		log.Infof("Keyspace rebuilt: %v", keyspace)
+		log.InfoS(fmt.Sprintf("Keyspace rebuilt: %v", keyspace))
 		if ctx.Err() == nil {
 			err := tm.tmState.RefreshFromTopoInfo(tm.BatchCtx, nil, srvKeyspace)
 			if err != nil {
-				log.Errorf("Error refreshing topo information - %v", err)
+				log.ErrorS(fmt.Sprintf("Error refreshing topo information - %v", err))
 			}
 		}
 		close(done)
@@ -699,7 +698,7 @@ func (tm *TabletManager) rebuildKeyspace(ctx context.Context, done chan<- struct
 			}
 		}
 		if firstTime {
-			log.Warningf("rebuildKeyspace failed, will retry every %v: %v", retryInterval, err)
+			log.WarnS(fmt.Sprintf("rebuildKeyspace failed, will retry every %v: %v", retryInterval, err))
 		}
 		firstTime = false
 		time.Sleep(retryInterval)
@@ -717,7 +716,7 @@ func (tm *TabletManager) checkPrimaryShip(ctx context.Context, si *topo.ShardInf
 		case topo.IsErrType(err, topo.NoNode):
 			// There's no existing tablet record, so we can assume
 			// no one has left us a message to step down.
-			log.Infof("Shard primary alias matches, but there is no existing tablet record. Switching to primary with 'Now' as time")
+			log.InfoS("Shard primary alias matches, but there is no existing tablet record. Switching to primary with 'Now' as time")
 			tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
 				tablet.Type = topodatapb.TabletType_PRIMARY
 				// Update the primary term start time (current value is 0) because we
@@ -727,7 +726,7 @@ func (tm *TabletManager) checkPrimaryShip(ctx context.Context, si *topo.ShardInf
 			})
 		case err == nil:
 			if oldTablet.Type == topodatapb.TabletType_PRIMARY {
-				log.Infof("Shard primary alias matches, and existing tablet agrees. Switching to primary with tablet's primary term start time: %v", oldTablet.PrimaryTermStartTime)
+				log.InfoS(fmt.Sprintf("Shard primary alias matches, and existing tablet agrees. Switching to primary with tablet's primary term start time: %v", oldTablet.PrimaryTermStartTime))
 				// We're marked as primary in the shard record,
 				// and our existing tablet record agrees.
 				tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
@@ -735,7 +734,7 @@ func (tm *TabletManager) checkPrimaryShip(ctx context.Context, si *topo.ShardInf
 					tablet.PrimaryTermStartTime = oldTablet.PrimaryTermStartTime
 				})
 			} else {
-				log.Warningf("Shard primary alias matches, but existing tablet is not primary. Switching from %v to primary with the shard's primary term start time: %v", oldTablet.Type, si.PrimaryTermStartTime)
+				log.WarnS(fmt.Sprintf("Shard primary alias matches, but existing tablet is not primary. Switching from %v to primary with the shard's primary term start time: %v", oldTablet.Type, si.PrimaryTermStartTime))
 				tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
 					tablet.Type = topodatapb.TabletType_PRIMARY
 					tablet.PrimaryTermStartTime = si.PrimaryTermStartTime
@@ -756,13 +755,13 @@ func (tm *TabletManager) checkPrimaryShip(ctx context.Context, si *topo.ShardInf
 				oldPrimaryTermStartTime := oldTablet.GetPrimaryTermStartTime()
 				currentShardTime := si.GetPrimaryTermStartTime()
 				if oldPrimaryTermStartTime.After(currentShardTime) {
-					log.Infof("Shard primary alias does not match, but the tablet's primary term start time is newer. Switching to primary with tablet's primary term start time: %v", oldTablet.PrimaryTermStartTime)
+					log.InfoS(fmt.Sprintf("Shard primary alias does not match, but the tablet's primary term start time is newer. Switching to primary with tablet's primary term start time: %v", oldTablet.PrimaryTermStartTime))
 					tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
 						tablet.Type = topodatapb.TabletType_PRIMARY
 						tablet.PrimaryTermStartTime = oldTablet.PrimaryTermStartTime
 					})
 				} else {
-					log.Infof("Existing tablet type is primary, but the shard record has a different primary with a newer timestamp. Remaining a replica")
+					log.InfoS("Existing tablet type is primary, but the shard record has a different primary with a newer timestamp. Remaining a replica")
 				}
 			}
 		default:
@@ -789,7 +788,7 @@ func (tm *TabletManager) checkMysql(ctx context.Context) error {
 		})
 		mysqlPort, err := tm.MysqlDaemon.GetMysqlPort(ctx)
 		if err != nil {
-			log.Warningf("Cannot get current mysql port, will keep retrying every %v: %v", mysqlPortRetryInterval, err)
+			log.WarnS(fmt.Sprintf("Cannot get current mysql port, will keep retrying every %v: %v", mysqlPortRetryInterval, err))
 			go tm.findMysqlPort(mysqlPortRetryInterval)
 		} else {
 			tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
@@ -815,7 +814,7 @@ func (tm *TabletManager) findMysqlPort(retryInterval time.Duration) {
 		if err != nil || mport == 0 {
 			continue
 		}
-		log.Infof("Identified mysql port: %v", mport)
+		log.InfoS(fmt.Sprintf("Identified mysql port: %v", mport))
 		tm.tmState.SetMysqlPort(mport)
 		return
 	}
@@ -829,7 +828,7 @@ func (tm *TabletManager) redoPreparedTransactionsAndSetReadWrite(ctx context.Con
 		// Ignore the error if the sever doesn't support super read only variable.
 		// We should just redo the preapred transactions before we set it to read-write.
 		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
-			log.Warningf("server does not know about super_read_only, continuing anyway...")
+			log.WarnS("server does not know about super_read_only, continuing anyway...")
 		} else {
 			return err
 		}
@@ -864,10 +863,10 @@ func (tm *TabletManager) initTablet(ctx context.Context) error {
 		// instance of a startup timeout). Upon running this code
 		// again, we want to fix ShardReplication.
 		if updateErr := topo.UpdateTabletReplicationData(ctx, tm.TopoServer, tablet); updateErr != nil {
-			log.Errorf("UpdateTabletReplicationData failed for tablet %v: %v", topoproto.TabletAliasString(tablet.Alias), updateErr)
+			log.ErrorS(fmt.Sprintf("UpdateTabletReplicationData failed for tablet %v: %v", topoproto.TabletAliasString(tablet.Alias), updateErr))
 			return vterrors.Wrap(updateErr, "UpdateTabletReplicationData failed")
 		}
-		log.Infof("Successfully updated tablet replication data for alias: %v", topoproto.TabletAliasString(tablet.Alias))
+		log.InfoS(fmt.Sprintf("Successfully updated tablet replication data for alias: %v", topoproto.TabletAliasString(tablet.Alias)))
 
 		// Then overwrite everything, ignoring version mismatch.
 		if err := tm.TopoServer.UpdateTablet(ctx, topo.NewTabletInfo(tablet, nil)); err != nil {
@@ -898,7 +897,8 @@ func (tm *TabletManager) handleRestore(ctx context.Context, config *tabletenv.Ta
 				var err error
 				backupTime, err = time.Parse(mysqlctl.BackupTimestampFormat, restoreFromBackupTsStr)
 				if err != nil {
-					log.Exitf(fmt.Sprintf("RestoreFromBackup failed: unable to parse the backup timestamp value provided of '%s'", restoreFromBackupTsStr))
+					log.ErrorS(fmt.Sprintf("RestoreFromBackup failed: unable to parse the backup timestamp value provided of '%s'", restoreFromBackupTsStr))
+					os.Exit(1)
 				}
 			}
 
@@ -907,20 +907,23 @@ func (tm *TabletManager) handleRestore(ctx context.Context, config *tabletenv.Ta
 				var err error
 				restoreToTimestamp, err = mysqlctl.ParseRFC3339(restoreToTimestampStr)
 				if err != nil {
-					log.Exitf(fmt.Sprintf("RestoreFromBackup failed: unable to parse the --restore-to-timestamp value provided of '%s'. Error: %v", restoreToTimestampStr, err))
+					log.ErrorS(fmt.Sprintf("RestoreFromBackup failed: unable to parse the --restore-to-timestamp value provided of '%s'. Error: %v", restoreToTimestampStr, err))
+					os.Exit(1)
 				}
 			}
 
 			// restoreFromBackup will just be a regular action
 			// (same as if it was triggered remotely)
 			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), waitForBackupInterval, false /* deleteBeforeRestore */, backupTime, restoreToTimestamp, restoreToPos, restoreFromBackupAllowedEngines, mysqlShutdownTimeout); err != nil {
-				log.Exitf("RestoreFromBackup failed: %v", err)
+				log.ErrorS(fmt.Sprintf("RestoreFromBackup failed: %v", err))
+				os.Exit(1)
 			}
 
 			// Make sure we have the correct privileges for the DBA user before we start the state manager.
 			err := tm.waitForDBAGrants(config, mysqlctl.DbaGrantWaitTime)
 			if err != nil {
-				log.Exitf("Failed waiting for DBA grants: %v", err)
+				log.ErrorS(fmt.Sprintf("Failed waiting for DBA grants: %v", err))
+				os.Exit(1)
 			}
 
 			// Open the state manager after restore is done.
@@ -975,7 +978,7 @@ func (tm *TabletManager) withRetry(ctx context.Context, description string, work
 			return err
 		}
 
-		log.Warningf("%v failed (%v), backing off %v before retrying", description, err, backoff)
+		log.WarnS(fmt.Sprintf("%v failed (%v), backing off %v before retrying", description, err, backoff))
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -1035,14 +1038,14 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 	}
 	if si.PrimaryAlias == nil {
 		// There's no primary. This is fine, since there might be no primary currently
-		log.Warningf("cannot start replication during initialization: shard %v/%v has no primary.", tablet.Keyspace, tablet.Shard)
+		log.WarnS(fmt.Sprintf("cannot start replication during initialization: shard %v/%v has no primary.", tablet.Keyspace, tablet.Shard))
 		return "", nil
 	}
 	if topoproto.TabletAliasEqual(si.PrimaryAlias, tablet.Alias) {
 		// We used to be the primary before we got restarted,
 		// and no other primary has been elected in the meantime.
 		// There isn't anything to do here either.
-		log.Warningf("cannot start replication during initialization: primary in shard record still points to this tablet.")
+		log.WarnS("cannot start replication during initialization: primary in shard record still points to this tablet.")
 		return "", nil
 	}
 	currentPrimary, err := tm.TopoServer.GetTablet(ctx, si.PrimaryAlias)
@@ -1054,7 +1057,7 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 	if err != nil {
 		return "", vterrors.Wrapf(err, "cannot read keyspace durability policy %v", tablet.Keyspace)
 	}
-	log.Infof("Getting a new durability policy for %v", durabilityName)
+	log.InfoS(fmt.Sprintf("Getting a new durability policy for %v", durabilityName))
 	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return "", vterrors.Wrapf(err, "cannot get durability policy %v", durabilityName)
@@ -1075,7 +1078,7 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 
 	// Set primary and start replication.
 	if currentPrimary.MysqlHostname == "" {
-		log.Warningf("primary tablet in the shard record does not have mysql hostname specified, possibly because that tablet has been shut down.")
+		log.WarnS("primary tablet in the shard record does not have mysql hostname specified, possibly because that tablet has been shut down.")
 		return "", nil
 	}
 

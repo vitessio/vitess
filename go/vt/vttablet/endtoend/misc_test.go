@@ -525,36 +525,36 @@ func TestDBAStatements(t *testing.T) {
 }
 
 type testLogger struct {
-	logs        []string
-	savedInfof  func(format string, args ...any)
-	savedErrorf func(format string, args ...any)
+	logs            []string
+	savedInfoDepth  func(depth int, args ...any)
+	savedErrorDepth func(depth int, args ...any)
 }
 
 func newTestLogger() *testLogger {
 	tl := &testLogger{
-		savedInfof:  log.Infof,
-		savedErrorf: log.Errorf,
+		savedInfoDepth:  log.InfoDepth,
+		savedErrorDepth: log.ErrorDepth,
 	}
-	log.Infof = tl.recordInfof
-	log.Errorf = tl.recordErrorf
+	log.InfoDepth = tl.recordInfo
+	log.ErrorDepth = tl.recordError
 	return tl
 }
 
 func (tl *testLogger) Close() {
-	log.Infof = tl.savedInfof
-	log.Errorf = tl.savedErrorf
+	log.InfoDepth = tl.savedInfoDepth
+	log.ErrorDepth = tl.savedErrorDepth
 }
 
-func (tl *testLogger) recordInfof(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
+func (tl *testLogger) recordInfo(depth int, args ...any) {
+	msg := fmt.Sprint(args...)
 	tl.logs = append(tl.logs, msg)
-	tl.savedInfof(msg)
+	tl.savedInfoDepth(depth, msg)
 }
 
-func (tl *testLogger) recordErrorf(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
+func (tl *testLogger) recordError(depth int, args ...any) {
+	msg := fmt.Sprint(args...)
 	tl.logs = append(tl.logs, msg)
-	tl.savedErrorf(msg)
+	tl.savedErrorDepth(depth, msg)
 }
 
 func (tl *testLogger) getLog(i int) string {

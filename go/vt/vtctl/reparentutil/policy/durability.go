@@ -18,6 +18,7 @@ package policy
 
 import (
 	"fmt"
+	"os"
 
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -32,10 +33,8 @@ import (
 // register a NewDurabler function.
 type NewDurabler func() Durabler
 
-var (
-	// durabilityPolicies is a map that stores the functions needed to create a new Durabler
-	durabilityPolicies = make(map[string]NewDurabler)
-)
+// durabilityPolicies is a map that stores the functions needed to create a new Durabler
+var durabilityPolicies = make(map[string]NewDurabler)
 
 const (
 	// DurabilityNone is the name of the durability policy that has no semi-sync setup.
@@ -97,7 +96,8 @@ type Durabler interface {
 
 func RegisterDurability(name string, newDurablerFunc NewDurabler) {
 	if durabilityPolicies[name] != nil {
-		log.Fatalf("durability policy %v already registered", name)
+		log.ErrorS(fmt.Sprintf("durability policy %v already registered", name))
+		os.Exit(1)
 	}
 	durabilityPolicies[name] = newDurablerFunc
 }

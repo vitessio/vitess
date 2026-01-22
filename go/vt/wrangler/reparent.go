@@ -110,7 +110,7 @@ func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard 
 func (wr *Wrangler) TabletExternallyReparented(ctx context.Context, newPrimaryAlias *topodatapb.TabletAlias) error {
 	tabletInfo, err := wr.ts.GetTablet(ctx, newPrimaryAlias)
 	if err != nil {
-		log.Warningf("TabletExternallyReparented: failed to read tablet record for %v: %v", newPrimaryAlias, err)
+		log.WarnS(fmt.Sprintf("TabletExternallyReparented: failed to read tablet record for %v: %v", newPrimaryAlias, err))
 		return err
 	}
 
@@ -118,19 +118,19 @@ func (wr *Wrangler) TabletExternallyReparented(ctx context.Context, newPrimaryAl
 	tablet := tabletInfo.Tablet
 	si, err := wr.ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
-		log.Warningf("TabletExternallyReparented: failed to read global shard record for %v/%v: %v", tablet.Keyspace, tablet.Shard, err)
+		log.WarnS(fmt.Sprintf("TabletExternallyReparented: failed to read global shard record for %v/%v: %v", tablet.Keyspace, tablet.Shard, err))
 		return err
 	}
 
 	// We update the tablet only if it is not currently primary
 	if tablet.Type != topodatapb.TabletType_PRIMARY {
-		log.Infof("TabletExternallyReparented: executing tablet type change to PRIMARY")
+		log.InfoS("TabletExternallyReparented: executing tablet type change to PRIMARY")
 
 		durabilityName, err := wr.ts.GetKeyspaceDurability(ctx, tablet.Keyspace)
 		if err != nil {
 			return err
 		}
-		log.Infof("Getting a new durability policy for %v", durabilityName)
+		log.InfoS(fmt.Sprintf("Getting a new durability policy for %v", durabilityName))
 		durability, err := policy.GetDurabilityPolicy(durabilityName)
 		if err != nil {
 			return err
@@ -153,7 +153,7 @@ func (wr *Wrangler) TabletExternallyReparented(ctx context.Context, newPrimaryAl
 		event.DispatchUpdate(ev, "starting external reparent")
 
 		if err := wr.tmc.ChangeType(ctx, tablet, topodatapb.TabletType_PRIMARY, policy.SemiSyncAckers(durability, tablet) > 0); err != nil {
-			log.Warningf("Error calling ChangeType on new primary %v: %v", topoproto.TabletAliasString(newPrimaryAlias), err)
+			log.WarnS(fmt.Sprintf("Error calling ChangeType on new primary %v: %v", topoproto.TabletAliasString(newPrimaryAlias), err))
 			return err
 		}
 		event.DispatchUpdate(ev, "finished")

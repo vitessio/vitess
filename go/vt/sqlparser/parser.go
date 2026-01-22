@@ -81,7 +81,7 @@ func (p *Parser) Parse2(sql string) (Statement, BindVars, error) {
 			if typ, val := tokenizer.Scan(); typ != 0 {
 				return nil, nil, fmt.Errorf("extra characters encountered after end of DDL: '%s'", val)
 			}
-			log.Warningf("ignoring error parsing DDL '%s': %v", sql, tokenizer.LastError)
+			log.WarnS(fmt.Sprintf("ignoring error parsing DDL '%s': %v", sql, tokenizer.LastError))
 			switch x := tokenizer.partialDDL.(type) {
 			case DBDDLStatement:
 				x.SetFullyParsed(false)
@@ -150,7 +150,7 @@ func checkParseTreesError(tokenizer *Tokenizer) error {
 
 // ConvertMySQLVersionToCommentVersion converts the MySQL version into comment version format.
 func ConvertMySQLVersionToCommentVersion(version string) (string, error) {
-	var res = make([]int, 3)
+	res := make([]int, 3)
 	idx := 0
 	val := ""
 	for _, c := range version {

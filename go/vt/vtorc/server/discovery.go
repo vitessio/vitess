@@ -32,7 +32,7 @@ import (
 func validateCell(cell string) error {
 	if cell == "" {
 		// TODO: remove warning in v25+, make flag required.
-		log.Warning("WARNING: --cell will become a required vtorc flag in v25 and up")
+		log.WarnS("WARNING: --cell will become a required vtorc flag in v25 and up")
 		return nil
 	}
 
@@ -54,7 +54,7 @@ func StartVTOrcDiscovery() error {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to validate cell %s: %+v", cell, err)
 	}
 
-	log.Info("Starting Discovery")
+	log.InfoS("Starting Discovery")
 	go logic.ContinuousDiscovery()
 	return nil
 }

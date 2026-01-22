@@ -160,7 +160,7 @@ func (m *Monitor) Open() {
 	}
 	// Set the monitor to be open.
 	m.isOpen = true
-	log.Info("SemiSync Monitor: opening")
+	log.InfoS("SemiSync Monitor: opening")
 
 	// This function could be running from within a unit test scope, in which case we use
 	// mock pools that are already open. This is why we test for the pool being open.
@@ -176,7 +176,7 @@ func (m *Monitor) Close() {
 	// First acquire the timer mutex to prevent deadlock - we acquire in a consistent order
 	m.timerMu.Lock()
 	defer m.timerMu.Unlock()
-	log.Info("SemiSync Monitor: closing")
+	log.InfoS("SemiSync Monitor: closing")
 	// We close the ticks before we acquire the mu mutex to prevent deadlock.
 	// The timer Close should not be called while holding a mutex that the function
 	// the timer runs also acquires.
@@ -199,7 +199,7 @@ func (m *Monitor) checkAndFixSemiSyncBlocked() {
 		m.errorCount.Add(1)
 		// If we are unable to determine whether the primary is blocked or not,
 		// then we can just abort the function and try again later.
-		log.Errorf("SemiSync Monitor: failed to check if primary is blocked on semi-sync: %v", err)
+		log.ErrorS(fmt.Sprintf("SemiSync Monitor: failed to check if primary is blocked on semi-sync: %v", err))
 		return
 	}
 	// Set the isBlocked state.
@@ -256,19 +256,19 @@ func (m *Monitor) WaitUntilSemiSyncUnblocked(ctx context.Context) error {
 	if !m.stillBlocked() {
 		// If we find that the primary isn't blocked, we're good,
 		// we don't need to wait for anything.
-		log.Infof("Primary not blocked on semi-sync ACKs")
+		log.InfoS("Primary not blocked on semi-sync ACKs")
 		return nil
 	}
-	log.Infof("Waiting for semi-sync to be unblocked")
+	log.InfoS("Waiting for semi-sync to be unblocked")
 	// The primary is blocked. We need to wait for it to be unblocked
 	// or the context to expire.
 	ch := m.addWaiter()
 	select {
 	case <-ch:
-		log.Infof("Finished waiting for semi-sync to be unblocked")
+		log.InfoS("Finished waiting for semi-sync to be unblocked")
 		return nil
 	case <-ctx.Done():
-		log.Infof("Error while waiting for semi-sync to be unblocked - %s", ctx.Err().Error())
+		log.InfoS("Error while waiting for semi-sync to be unblocked - " + ctx.Err().Error())
 		return ctx.Err()
 	}
 }
@@ -373,14 +373,14 @@ func (m *Monitor) write() {
 	conn, err := m.appPool.Get(ctx)
 	if err != nil {
 		m.errorCount.Add(1)
-		log.Errorf("SemiSync Monitor: failed to get a connection when writing to semisync_heartbeat table: %v", err)
+		log.ErrorS(fmt.Sprintf("SemiSync Monitor: failed to get a connection when writing to semisync_heartbeat table: %v", err))
 		return
 	}
 	err = conn.Conn.ExecuteFetchMultiDrain(m.addLockWaitTimeout(m.bindSideCarDBName(semiSyncHeartbeatWrite)))
 	conn.Recycle()
 	if err != nil {
 		m.errorCount.Add(1)
-		log.Errorf("SemiSync Monitor: failed to write to semisync_heartbeat table: %v", err)
+		log.ErrorS(fmt.Sprintf("SemiSync Monitor: failed to write to semisync_heartbeat table: %v", err))
 	} else {
 		// One of the writes went through without an error.
 		// This means that we aren't blocked on semi-sync anymore.
@@ -412,14 +412,14 @@ func (m *Monitor) clearAllData() {
 	conn, err := m.appPool.Get(ctx)
 	if err != nil {
 		m.errorCount.Add(1)
-		log.Errorf("SemiSync Monitor: failed get a connection to clear semisync_heartbeat table: %v", err)
+		log.ErrorS(fmt.Sprintf("SemiSync Monitor: failed get a connection to clear semisync_heartbeat table: %v", err))
 		return
 	}
 	defer conn.Recycle()
 	_, _, err = conn.Conn.ExecuteFetchMulti(m.addLockWaitTimeout(m.bindSideCarDBName(semiSyncHeartbeatClear)), 0, false)
 	if err != nil {
 		m.errorCount.Add(1)
-		log.Errorf("SemiSync Monitor: failed to clear semisync_heartbeat table: %v", err)
+		log.ErrorS(fmt.Sprintf("SemiSync Monitor: failed to clear semisync_heartbeat table: %v", err))
 	}
 }
 

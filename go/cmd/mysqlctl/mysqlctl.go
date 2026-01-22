@@ -18,6 +18,9 @@ limitations under the License.
 package main
 
 import (
+	"fmt"
+	"os"
+
 	"vitess.io/vitess/go/cmd/mysqlctl/command"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/utils"
@@ -27,6 +30,7 @@ func main() {
 	command.Root.SetGlobalNormalizationFunc(utils.NormalizeUnderscoresToDashes)
 
 	if err := command.Root.Execute(); err != nil {
-		log.Exit(err)
+		log.ErrorS(fmt.Sprint(err))
+		os.Exit(1)
 	}
 }

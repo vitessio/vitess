@@ -18,6 +18,7 @@ package s3
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -27,14 +28,13 @@ import (
 	"testing"
 	"time"
 
-	"log"
-
 	"github.com/minio/minio-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
@@ -60,16 +60,19 @@ func TestMain(m *testing.M) {
 	f := func() int {
 		minioPath, err := exec.LookPath("minio")
 		if err != nil {
-			log.Fatalf("minio binary not found: %v", err)
+			log.ErrorS(fmt.Sprintf("minio binary not found: %v", err))
+			os.Exit(1)
 		}
 
 		dataDir, err := os.MkdirTemp("", "")
 		if err != nil {
-			log.Fatalf("could not create temporary directory: %v", err)
+			log.ErrorS(fmt.Sprintf("could not create temporary directory: %v", err))
+			os.Exit(1)
 		}
-		err = os.MkdirAll(dataDir, 0755)
+		err = os.MkdirAll(dataDir, 0o755)
 		if err != nil {
-			log.Fatalf("failed to create MinIO data directory: %v", err)
+			log.ErrorS(fmt.Sprintf("failed to create MinIO data directory: %v", err))
+			os.Exit(1)
 		}
 
 		cmd := exec.Command(minioPath, "server", dataDir, "--console-address", ":9001")
@@ -78,7 +81,8 @@ func TestMain(m *testing.M) {
 
 		err = cmd.Start()
 		if err != nil {
-			log.Fatalf("failed to start MinIO: %v", err)
+			log.ErrorS(fmt.Sprintf("failed to start MinIO: %v", err))
+			os.Exit(1)
 		}
 		defer func() {
 			cmd.Process.Kill()
@@ -93,13 +97,15 @@ func TestMain(m *testing.M) {
 
 		client, err := minio.New("localhost:9000", accessKey, secretKey, false)
 		if err != nil {
-			log.Fatalf("failed to create MinIO client: %v", err)
+			log.ErrorS(fmt.Sprintf("failed to create MinIO client: %v", err))
+			os.Exit(1)
 		}
 		waitForMinio(client)
 
 		err = client.MakeBucket(bucketName, region)
 		if err != nil {
-			log.Fatalf("failed to create test bucket: %v", err)
+			log.ErrorS(fmt.Sprintf("failed to create test bucket: %v", err))
+			os.Exit(1)
 		}
 
 		// Same env variables that are used between AWS S3 and Minio
@@ -123,7 +129,8 @@ func waitForMinio(client *minio.Client) {
 		}
 		time.Sleep(1 * time.Second)
 	}
-	log.Fatalf("MinIO server did not become ready in time")
+	log.ErrorS("MinIO server did not become ready in time")
+	os.Exit(1)
 }
 
 func checkEnvForS3(t *testing.T) {

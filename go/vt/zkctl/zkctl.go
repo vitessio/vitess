@@ -73,7 +73,7 @@ func (zkd *Zkd) Done() <-chan struct{} {
 
 // Start runs an already initialized ZooKeeper server.
 func (zkd *Zkd) Start() error {
-	log.Infof("zkctl.Start")
+	log.InfoS("zkctl.Start")
 	// NOTE(msolomon) use a script here so we can detach and continue to run
 	// if the wrangler process dies. this pretty much the same as mysqld_safe.
 	args := []string{
@@ -130,7 +130,7 @@ func (zkd *Zkd) Start() error {
 
 // Shutdown kills a ZooKeeper server, but keeps its data dir intact.
 func (zkd *Zkd) Shutdown() error {
-	log.Infof("zkctl.Shutdown")
+	log.InfoS("zkctl.Shutdown")
 	pidData, err := os.ReadFile(zkd.config.PidFile())
 	if err != nil {
 		return err
@@ -168,10 +168,10 @@ func (zkd *Zkd) Init() error {
 		return errors.New("zk already inited")
 	}
 
-	log.Infof("zkd.Init")
+	log.InfoS("zkd.Init")
 	for _, path := range zkd.config.DirectoryList() {
-		if err := os.MkdirAll(path, 0775); err != nil {
-			log.Errorf("%v", err)
+		if err := os.MkdirAll(path, 0o775); err != nil {
+			log.ErrorS(fmt.Sprintf("%v", err))
 			return err
 		}
 		// FIXME(msolomon) validate permissions?
@@ -179,21 +179,21 @@ func (zkd *Zkd) Init() error {
 
 	configData, err := zkd.makeCfg()
 	if err == nil {
-		err = os.WriteFile(zkd.config.ConfigFile(), []byte(configData), 0664)
+		err = os.WriteFile(zkd.config.ConfigFile(), []byte(configData), 0o664)
 	}
 	if err != nil {
-		log.Errorf("failed creating %v: %v", zkd.config.ConfigFile(), err)
+		log.ErrorS(fmt.Sprintf("failed creating %v: %v", zkd.config.ConfigFile(), err))
 		return err
 	}
 
 	err = zkd.config.WriteMyid()
 	if err != nil {
-		log.Errorf("failed creating %v: %v", zkd.config.MyidFile(), err)
+		log.ErrorS(fmt.Sprintf("failed creating %v: %v", zkd.config.MyidFile(), err))
 		return err
 	}
 
 	if err = zkd.Start(); err != nil {
-		log.Errorf("failed starting, check %v", zkd.config.LogDir())
+		log.ErrorS(fmt.Sprintf("failed starting, check %v", zkd.config.LogDir()))
 		return err
 	}
 
@@ -230,14 +230,14 @@ func (zkd *Zkd) Init() error {
 
 // Teardown shuts down the server and removes its data dir.
 func (zkd *Zkd) Teardown() error {
-	log.Infof("zkctl.Teardown")
+	log.InfoS("zkctl.Teardown")
 	if err := zkd.Shutdown(); err != nil {
-		log.Warningf("failed zookeeper shutdown: %v", err.Error())
+		log.WarnS(fmt.Sprintf("failed zookeeper shutdown: %v", err.Error()))
 	}
 	var removalErr error
 	for _, dir := range zkd.config.DirectoryList() {
 		if err := os.RemoveAll(dir); err != nil {
-			log.Errorf("failed removing %v: %v", dir, err.Error())
+			log.ErrorS(fmt.Sprintf("failed removing %v: %v", dir, err.Error()))
 			removalErr = err
 		}
 	}

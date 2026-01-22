@@ -19,6 +19,7 @@ package vtgate
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	"vitess.io/vitess/go/vt/graph"
@@ -99,7 +100,7 @@ func (vm *VSchemaManager) UpdateVSchema(ctx context.Context, ks *topo.KeyspaceVS
 		cellErr := topoServer.UpdateSrvVSchema(ctx, cell, srv)
 		if cellErr != nil {
 			err = cellErr
-			log.Errorf("error updating vschema in cell %s: %v", cell, cellErr)
+			log.ErrorS(fmt.Sprintf("error updating vschema in cell %s: %v", cell, cellErr))
 		}
 	}
 	if err != nil {
@@ -114,7 +115,7 @@ func (vm *VSchemaManager) UpdateVSchema(ctx context.Context, ks *topo.KeyspaceVS
 
 // VSchemaUpdate builds the VSchema from SrvVschema and call subscribers.
 func (vm *VSchemaManager) VSchemaUpdate(v *vschemapb.SrvVSchema, err error) bool {
-	log.Infof("Received vschema update")
+	log.InfoS("Received vschema update")
 	switch {
 	case err == nil:
 		// Good case, we can try to save that value.
@@ -123,7 +124,7 @@ func (vm *VSchemaManager) VSchemaUpdate(v *vschemapb.SrvVSchema, err error) bool
 		// Otherwise, keep what we already had before.
 		v = nil
 	default:
-		log.Errorf("SrvVschema watch error: %v", err)
+		log.ErrorS(fmt.Sprintf("SrvVschema watch error: %v", err))
 		// Watch error, increment our counters.
 		if vschemaCounters != nil {
 			vschemaCounters.Add("WatchError", 1)
@@ -176,9 +177,9 @@ func (vm *VSchemaManager) Rebuild() {
 	v := vm.currentSrvVschema
 	vm.mu.Unlock()
 
-	log.Infof("Received schema update")
+	log.InfoS("Received schema update")
 	if v == nil {
-		log.Infof("No vschema to enhance")
+		log.InfoS("No vschema to enhance")
 		return
 	}
 
@@ -189,7 +190,7 @@ func (vm *VSchemaManager) Rebuild() {
 
 	if vm.subscriber != nil {
 		vm.subscriber(vschema, vSchemaStats(nil, vschema))
-		log.Infof("Sent vschema to subscriber")
+		log.InfoS("Sent vschema to subscriber")
 	}
 }
 
@@ -248,7 +249,7 @@ func (vm *VSchemaManager) updateTableInfo(vschema *vindexes.VSchema, ks *vindexe
 		// We should only add foreign key table info to the routed tables only where the DML operations will be routed.
 		rTbl, _ := vschema.FindRoutedTable(ksName, tblName, topodatapb.TabletType_PRIMARY)
 		if rTbl == nil {
-			log.Warningf("unable to find routed table %s in %s", tblName, ksName)
+			log.WarnS(fmt.Sprintf("unable to find routed table %s in %s", tblName, ksName))
 			continue
 		}
 
@@ -257,7 +258,7 @@ func (vm *VSchemaManager) updateTableInfo(vschema *vindexes.VSchema, ks *vindexe
 		// otherwise, even in routing rules, table names are expected to be the same.
 		// Ideally they should be in different keyspaces.
 		if rTbl.Keyspace.Name != ksName || rTbl.Name.String() != tblName {
-			log.Warningf("table '%s' in keyspace '%s' routed to table '%s'", tblName, ksName, rTbl.String())
+			log.WarnS(fmt.Sprintf("table '%s' in keyspace '%s' routed to table '%s'", tblName, ksName, rTbl.String()))
 			continue
 		}
 
@@ -268,7 +269,7 @@ func (vm *VSchemaManager) updateTableInfo(vschema *vindexes.VSchema, ks *vindexe
 			}
 			parentTbl, err := vschema.FindRoutedTable(ksName, fkDef.ReferenceDefinition.ReferencedTable.Name.String(), topodatapb.TabletType_PRIMARY)
 			if err != nil || parentTbl == nil {
-				log.Errorf("error finding parent table %s: %v", fkDef.ReferenceDefinition.ReferencedTable.Name.String(), err)
+				log.ErrorS(fmt.Sprintf("error finding parent table %s: %v", fkDef.ReferenceDefinition.ReferencedTable.Name.String(), err))
 				continue
 			}
 			rTbl.ParentForeignKeys = append(rTbl.ParentForeignKeys, vindexes.NewParentFkInfo(parentTbl, fkDef))

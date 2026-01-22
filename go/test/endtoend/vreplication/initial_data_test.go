@@ -31,13 +31,13 @@ func insertInitialData(t *testing.T) {
 	t.Run("insertInitialData", func(t *testing.T) {
 		vtgateConn, closeConn := getVTGateConn()
 		defer closeConn()
-		log.Infof("Inserting initial data")
+		log.InfoS("Inserting initial data")
 		lines, _ := os.ReadFile("unsharded_init_data.sql")
 		execMultipleQueries(t, vtgateConn, defaultSourceKs+":0", string(lines))
 		execVtgateQuery(t, vtgateConn, defaultSourceKs+":0", "insert into customer_seq(id, next_id, cache) values(0, 100, 100);")
 		execVtgateQuery(t, vtgateConn, defaultSourceKs+":0", "insert into order_seq(id, next_id, cache) values(0, 100, 100);")
 		execVtgateQuery(t, vtgateConn, defaultSourceKs+":0", "insert into customer_seq2(id, next_id, cache) values(0, 100, 100);")
-		log.Infof("Done inserting initial data")
+		log.InfoS("Done inserting initial data")
 
 		waitForRowCount(t, vtgateConn, defaultSourceKs+":0", "product", 2)
 		waitForRowCount(t, vtgateConn, defaultSourceKs+":0", "customer", 3)
@@ -47,10 +47,10 @@ func insertInitialData(t *testing.T) {
 		insertJSONValues(t)
 
 		insertLargeTransactionForChunkTesting(t, vtgateConn, defaultSourceKs+":0", 50000)
-		log.Infof("Inserted large transaction for chunking tests")
+		log.InfoS("Inserted large transaction for chunking tests")
 
 		execVtgateQuery(t, vtgateConn, defaultSourceKs, "delete from customer where cid >= 50000 and cid < 50100")
-		log.Infof("Cleaned up chunk testing rows from source keyspace")
+		log.InfoS("Cleaned up chunk testing rows from source keyspace")
 	})
 }
 

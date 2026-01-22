@@ -141,13 +141,13 @@ func setTMClientProtocol(protocol string) (reset func()) {
 	case nil:
 		reset = func() { setTMClientProtocol(oldVal) }
 	default:
-		log.Errorf("failed to get string value for flag %q: %v", tmclientProtocolFlagName, err)
+		log.ErrorS(fmt.Sprintf("failed to get string value for flag %q: %v", tmclientProtocolFlagName, err))
 		reset = func() {}
 	}
 
 	if err := fs.Set(tmclientProtocolFlagName, protocol); err != nil {
 		msg := "failed to set flag %q to %q: %v"
-		log.Errorf(msg, tmclientProtocolFlagName, protocol, err)
+		log.ErrorS(fmt.Sprintf(msg, tmclientProtocolFlagName, protocol, err))
 		reset = func() {}
 	}
 
@@ -443,12 +443,12 @@ func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.
 	go func() {
 		if testdata.EventInterval == 0 {
 			testdata.EventInterval = 10 * time.Millisecond
-			log.Warningf("testutil.TabletManagerClient.Backup faked with no event interval for %s, defaulting to %s", key, testdata.EventInterval)
+			log.WarnS(fmt.Sprintf("testutil.TabletManagerClient.Backup faked with no event interval for %s, defaulting to %s", key, testdata.EventInterval))
 		}
 
 		if testdata.EventJitter == 0 {
 			testdata.EventJitter = time.Millisecond
-			log.Warningf("testutil.TabletManagerClient.Backup faked with no event jitter for %s, defaulting to %s", key, testdata.EventJitter)
+			log.WarnS(fmt.Sprintf("testutil.TabletManagerClient.Backup faked with no event jitter for %s, defaulting to %s", key, testdata.EventJitter))
 		}
 
 		errCtx, errCancel := context.WithCancel(context.Background())
@@ -1166,12 +1166,12 @@ func (fake *TabletManagerClient) RestoreFromBackup(ctx context.Context, tablet *
 	go func() {
 		if testdata.EventInterval == 0 {
 			testdata.EventInterval = 10 * time.Millisecond
-			log.Warningf("testutil.TabletManagerClient.RestoreFromBackup faked with no event interval for %s, defaulting to %s", key, testdata.EventInterval)
+			log.WarnS(fmt.Sprintf("testutil.TabletManagerClient.RestoreFromBackup faked with no event interval for %s, defaulting to %s", key, testdata.EventInterval))
 		}
 
 		if testdata.EventJitter == 0 {
 			testdata.EventJitter = time.Millisecond
-			log.Warningf("testutil.TabletManagerClient.RestoreFromBackup faked with no event jitter for %s, defaulting to %s", key, testdata.EventJitter)
+			log.WarnS(fmt.Sprintf("testutil.TabletManagerClient.RestoreFromBackup faked with no event jitter for %s, defaulting to %s", key, testdata.EventJitter))
 		}
 
 		errCtx, errCancel := context.WithCancel(context.Background())

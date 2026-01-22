@@ -18,6 +18,7 @@ package txresolver
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"vitess.io/vitess/go/vt/discovery"
@@ -68,7 +69,7 @@ func (tr *TxResolver) Start() {
 
 func (tr *TxResolver) Stop() {
 	if tr.cancel != nil {
-		log.Info("Stopping transaction resolver")
+		log.InfoS("Stopping transaction resolver")
 		tr.cancel()
 	}
 }
@@ -78,7 +79,7 @@ func (tr *TxResolver) resolveTransactions(ctx context.Context, target *querypb.T
 	if !tr.tryLockTarget(dest) {
 		return
 	}
-	log.Infof("resolving transactions for shard: %s", dest)
+	log.InfoS("resolving transactions for shard: " + dest)
 
 	defer func() {
 		tr.mu.Lock()
@@ -87,10 +88,10 @@ func (tr *TxResolver) resolveTransactions(ctx context.Context, target *querypb.T
 	}()
 	err := tr.txConn.ResolveTransactions(ctx, target)
 	if err != nil {
-		log.Errorf("failed to resolve transactions for shard: %s, %v", dest, err)
+		log.ErrorS(fmt.Sprintf("failed to resolve transactions for shard: %s, %v", dest, err))
 		return
 	}
-	log.Infof("successfully resolved all the transactions for shard: %s", dest)
+	log.InfoS("successfully resolved all the transactions for shard: " + dest)
 }
 
 func (tr *TxResolver) tryLockTarget(dest string) bool {

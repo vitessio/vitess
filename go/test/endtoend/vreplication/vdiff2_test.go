@@ -260,7 +260,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 		// rows for each second in the diff duration, depending on the test host vCPU count.
 		perSecondCount := int64(math.Min(float64(perVCpuCount*int64(runtime.NumCPU())), 1000000))
 		totalRowsToCreate := seconds * perSecondCount
-		log.Infof("Test host has %d vCPUs. Generating %d rows in the customer table to test --max-diff-duration", runtime.NumCPU(), totalRowsToCreate)
+		log.InfoS(fmt.Sprintf("Test host has %d vCPUs. Generating %d rows in the customer table to test --max-diff-duration", runtime.NumCPU(), totalRowsToCreate))
 		for i := int64(0); i < totalRowsToCreate; i += chunkSize {
 			generateMoreCustomers(t, tc.sourceKs, chunkSize)
 		}

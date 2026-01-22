@@ -123,11 +123,15 @@ func isValid(planType planbuilder.PlanType, hasReservedCon bool, hasSysSettings 
 
 // _______________________________________________
 
-type PlanCacheKey = theine.StringKey
-type PlanCache = theine.Store[PlanCacheKey, *TabletPlan]
+type (
+	PlanCacheKey = theine.StringKey
+	PlanCache    = theine.Store[PlanCacheKey, *TabletPlan]
+)
 
-type SettingsCacheKey = theine.StringKey
-type SettingsCache = theine.Store[SettingsCacheKey, *smartconnpool.Setting]
+type (
+	SettingsCacheKey = theine.StringKey
+	SettingsCache    = theine.Store[SettingsCacheKey, *smartconnpool.Setting]
+)
 
 type currentSchema struct {
 	tables map[string]*schema.Table
@@ -220,7 +224,7 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	// cache for connection settings: default to 1/4th of the size for the query cache and do
 	// not use a doorkeeper because custom connection settings are rarely one-off and we always
 	// want to cache them
-	var settingsCacheMemory = config.QueryCacheMemory / 4
+	settingsCacheMemory := config.QueryCacheMemory / 4
 	qe.settings = theine.NewStore[SettingsCacheKey, *smartconnpool.Setting](settingsCacheMemory, false)
 
 	qe.schema.Store(&currentSchema{
@@ -233,11 +237,10 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	qe.consolidatorMode.Store(config.Consolidator)
 	qe.consolidator = sync2.NewConsolidator()
 	if config.ConsolidatorStreamTotalSize > 0 && config.ConsolidatorStreamQuerySize > 0 {
-		log.Infof("Stream consolidator is enabled with query size set to %d and total size set to %d.",
-			config.ConsolidatorStreamQuerySize, config.ConsolidatorStreamTotalSize)
+		log.InfoS(fmt.Sprintf("Stream consolidator is enabled with query size set to %d and total size set to %d.", config.ConsolidatorStreamQuerySize, config.ConsolidatorStreamTotalSize))
 		qe.streamConsolidator = NewStreamConsolidator(config.ConsolidatorStreamTotalSize, config.ConsolidatorStreamQuerySize, returnStreamResult)
 	} else {
-		log.Info("Stream consolidator is not enabled.")
+		log.InfoS("Stream consolidator is not enabled.")
 	}
 	qe.txSerializer = txserializer.New(env)
 
@@ -249,13 +252,13 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	if config.TableACLExemptACL != "" {
 		if f, err := tableacl.GetCurrentACLFactory(); err == nil {
 			if exemptACL, err := f.New([]string{config.TableACLExemptACL}); err == nil {
-				log.Infof("Setting Table ACL exempt rule for %v", config.TableACLExemptACL)
+				log.InfoS(fmt.Sprintf("Setting Table ACL exempt rule for %v", config.TableACLExemptACL))
 				qe.exemptACL = exemptACL
 			} else {
-				log.Infof("Cannot build exempt ACL for table ACL: %v", err)
+				log.InfoS(fmt.Sprintf("Cannot build exempt ACL for table ACL: %v", err))
 			}
 		} else {
-			log.Infof("Cannot get current ACL Factory: %v", err)
+			log.InfoS(fmt.Sprintf("Cannot get current ACL Factory: %v", err))
 		}
 	}
 
@@ -325,7 +328,7 @@ func (qe *QueryEngine) Open() error {
 	if qe.isOpen.Load() {
 		return nil
 	}
-	log.Info("Query Engine: opening")
+	log.InfoS("Query Engine: opening")
 
 	config := qe.env.Config()
 
@@ -369,7 +372,7 @@ func (qe *QueryEngine) Close() {
 
 	qe.streamConns.Close()
 	qe.conns.Close()
-	log.Info("Query Engine: closed")
+	log.InfoS("Query Engine: closed")
 }
 
 var errNoCache = errors.New("plan should not be cached")
@@ -424,7 +427,6 @@ func (qe *QueryEngine) getStreamPlan(curSchema *currentSchema, sql string) (*Tab
 	}
 
 	splan, err := planbuilder.BuildStreaming(statement, curSchema.tables)
-
 	if err != nil {
 		return nil, err
 	}

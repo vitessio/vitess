@@ -48,6 +48,7 @@ called from main(). See Recover() and Return() for more details.
 package exit
 
 import (
+	"fmt"
 	"os"
 
 	"vitess.io/vitess/go/tb"
@@ -56,9 +57,7 @@ import (
 
 type exitCode int
 
-var (
-	exitFunc = os.Exit // can be faked out for testing
-)
+var exitFunc = os.Exit // can be faked out for testing
 
 // Recover should be deferred as the first line of main(). It recovers the
 // panic initiated by Return and converts it to a call to os.Exit. Any
@@ -86,7 +85,7 @@ func doRecover(err any, recoverAll bool) {
 		exitFunc(int(code))
 	default:
 		if recoverAll {
-			log.Errorf("panic: %v", tb.Errorf("%v", err))
+			log.ErrorS(fmt.Sprintf("panic: %v", tb.Errorf("%v", err)))
 			exitFunc(255)
 		} else {
 			panic(err)

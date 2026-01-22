@@ -49,7 +49,8 @@ var (
 		vtutils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
 		vtutils.GetFlagVariantForTests("--watch-replication-stream"),
 		vtutils.GetFlagVariantForTests("--enable-replication-reporter"),
-		vtutils.GetFlagVariantForTests("--serving-state-grace-period"), "1s"}
+		vtutils.GetFlagVariantForTests("--serving-state-grace-period"), "1s",
+	}
 )
 
 func TestMain(m *testing.M) {
@@ -95,7 +96,7 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
-		err = os.WriteFile(newInitDBFile, []byte(sql), 0666)
+		err = os.WriteFile(newInitDBFile, []byte(sql), 0o666)
 		if err != nil {
 			return 1, err
 		}
@@ -149,7 +150,7 @@ func TestMain(m *testing.M) {
 	}()
 
 	if err != nil {
-		log.Error(err.Error())
+		log.ErrorS(err.Error())
 		os.Exit(1)
 	} else {
 		os.Exit(exitCode)

@@ -119,7 +119,7 @@ func run(cmd *cobra.Command, args []string) error {
 	mycnfFile := mysqlctl.MycnfFile(tabletUID)
 	if _, statErr := os.Stat(mycnfFile); os.IsNotExist(statErr) {
 		// Generate my.cnf from scratch and use it to find mysqld.
-		log.Infof("mycnf file (%s) doesn't exist, initializing", mycnfFile)
+		log.InfoS(fmt.Sprintf("mycnf file (%s) doesn't exist, initializing", mycnfFile))
 
 		var err error
 		mysqld, cnf, err = mysqlctl.CreateMysqldAndMycnf(tabletUID, mysqlSocket, mysqlPort, collationEnv)
@@ -135,7 +135,7 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 	} else {
 		// There ought to be an existing my.cnf, so use it to find mysqld.
-		log.Infof("mycnf file (%s) already exists, starting without init", mycnfFile)
+		log.InfoS(fmt.Sprintf("mycnf file (%s) already exists, starting without init", mycnfFile))
 
 		var err error
 		mysqld, cnf, err = mysqlctl.OpenMysqldAndMycnf(tabletUID, collationEnv)
@@ -158,7 +158,7 @@ func run(cmd *cobra.Command, args []string) error {
 				return fmt.Errorf("failed to start mysqld: %w", err)
 			}
 		} else {
-			log.Infof("found interrupted restore, not starting mysqld")
+			log.InfoS("found interrupted restore, not starting mysqld")
 		}
 	}
 	cancel()
@@ -167,11 +167,11 @@ func run(cmd *cobra.Command, args []string) error {
 
 	// Take mysqld down with us on SIGTERM before entering lame duck.
 	servenv.OnTermSync(func() {
-		log.Infof("mysqlctl received SIGTERM, shutting down mysqld first")
+		log.InfoS("mysqlctl received SIGTERM, shutting down mysqld first")
 		ctx, cancel := context.WithTimeout(cmd.Context(), shutdownWaitTime+10*time.Second)
 		defer cancel()
 		if err := mysqld.Shutdown(ctx, cnf, true, shutdownWaitTime); err != nil {
-			log.Errorf("failed to shutdown mysqld: %v", err)
+			log.ErrorS(fmt.Sprintf("failed to shutdown mysqld: %v", err))
 		}
 	})
 
@@ -184,9 +184,9 @@ func run(cmd *cobra.Command, args []string) error {
 
 	select {
 	case <-mysqldTerminated:
-		log.Infof("mysqld shut down on its own, exiting mysqlctld")
+		log.InfoS("mysqld shut down on its own, exiting mysqlctld")
 	case <-mysqlctldTerminated:
-		log.Infof("mysqlctld shut down gracefully")
+		log.InfoS("mysqlctld shut down gracefully")
 	}
 
 	return nil

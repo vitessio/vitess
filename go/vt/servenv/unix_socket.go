@@ -17,6 +17,7 @@ limitations under the License.
 package servenv
 
 import (
+	"fmt"
 	"net"
 	"os"
 
@@ -26,16 +27,14 @@ import (
 	"vitess.io/vitess/go/vt/utils"
 )
 
-var (
-	// socketFile has the flag used when calling
-	// RegisterDefaultSocketFileFlags.
-	socketFile string
-)
+// socketFile has the flag used when calling
+// RegisterDefaultSocketFileFlags.
+var socketFile string
 
 // serveSocketFile listen to the named socket and serves RPCs on it.
 func serveSocketFile() {
 	if socketFile == "" {
-		log.Infof("Not listening on socket file")
+		log.InfoS("Not listening on socket file")
 		return
 	}
 	name := socketFile
@@ -44,15 +43,17 @@ func serveSocketFile() {
 	if _, err := os.Stat(name); err == nil {
 		err = os.Remove(name)
 		if err != nil {
-			log.Exitf("Cannot remove socket file %v: %v", name, err)
+			log.ErrorS(fmt.Sprintf("Cannot remove socket file %v: %v", name, err))
+			os.Exit(1)
 		}
 	}
 
 	l, err := net.Listen("unix", name)
 	if err != nil {
-		log.Exitf("Error listening on socket file %v: %v", name, err)
+		log.ErrorS(fmt.Sprintf("Error listening on socket file %v: %v", name, err))
+		os.Exit(1)
 	}
-	log.Infof("Listening on socket file %v for gRPC", name)
+	log.InfoS(fmt.Sprintf("Listening on socket file %v for gRPC", name))
 	go GRPCServer.Serve(l)
 }
 

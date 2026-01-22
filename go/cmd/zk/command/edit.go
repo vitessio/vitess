@@ -50,7 +50,7 @@ func commandEdit(cmd *cobra.Command, args []string) error {
 	data, stat, err := fs.Conn.Get(cmd.Context(), zkPath)
 	if err != nil {
 		if !editArgs.Force || err != zk.ErrNoNode {
-			log.Warningf("edit: cannot access %v: %v", zkPath, err)
+			log.WarnS(fmt.Sprintf("edit: cannot access %v: %v", zkPath, err))
 		}
 		return fmt.Errorf("edit: cannot access %v: %v", zkPath, err)
 	}

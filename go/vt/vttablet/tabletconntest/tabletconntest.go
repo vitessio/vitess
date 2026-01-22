@@ -20,6 +20,7 @@ package tabletconntest
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -1088,6 +1089,6 @@ func SetProtocol(name string, protocol string) {
 
 	if err := pflag.Set(tabletProtocolFlagName, protocol); err != nil {
 		msg := "failed to set flag %q to %q: %v"
-		log.Errorf(msg, tabletProtocolFlagName, protocol, err)
+		log.ErrorS(fmt.Sprintf(msg, tabletProtocolFlagName, protocol, err))
 	}
 }

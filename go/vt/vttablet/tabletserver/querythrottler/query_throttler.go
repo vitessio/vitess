@@ -18,6 +18,7 @@ package querythrottler
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"sync"
 	"time"
@@ -158,7 +159,7 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 
 	// If dry-run mode is enabled, log the decision but don't throttle
 	if tCfg.DryRun {
-		log.Warningf("[DRY-RUN] %s, metric name: %s, metric value: %f", decision.Message, decision.MetricName, decision.MetricValue)
+		log.WarnS(fmt.Sprintf("[DRY-RUN] %s, metric name: %s, metric value: %f", decision.Message, decision.MetricName, decision.MetricValue))
 		return nil
 	}
 
@@ -196,7 +197,7 @@ func extractPriority(options *querypb.ExecuteOptions) int {
 	// This should never error out, as the value for Priority has been validated in the vtgate already.
 	// Still, handle it just to make sure.
 	if err != nil || optionsPriority < 0 || optionsPriority > 100 {
-		log.Warningf("Invalid priority value '%s' in ExecuteOptions, expected integer 0-100, using default priority %d", options.Priority, defaultPriority)
+		log.WarnS(fmt.Sprintf("Invalid priority value '%s' in ExecuteOptions, expected integer 0-100, using default priority %d", options.Priority, defaultPriority))
 		return defaultPriority
 	}
 

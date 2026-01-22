@@ -34,8 +34,10 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 )
 
-type planExec func(ctx context.Context, plan *engine.Plan, vc *econtext.VCursorImpl, bindVars map[string]*querypb.BindVariable, startTime time.Time) error
-type txResult func(sqlparser.StatementType, *sqltypes.Result) error
+type (
+	planExec func(ctx context.Context, plan *engine.Plan, vc *econtext.VCursorImpl, bindVars map[string]*querypb.BindVariable, startTime time.Time) error
+	txResult func(sqlparser.StatementType, *sqltypes.Result) error
+)
 
 var vschemaWaitTimeout = 30 * time.Second
 
@@ -183,7 +185,7 @@ func (e *Executor) newExecute(
 		// Retry if needed.
 		rootCause := vterrors.RootCause(err)
 		if rootCause != nil && strings.Contains(rootCause.Error(), "enforce denied tables") {
-			log.V(2).Infof("Retry: %d, will retry query %s due to %v", try, sql, err)
+			log.DebugS(fmt.Sprintf("Retry: %d, will retry query %s due to %v", try, sql, err))
 			if try == 0 { // We are going to retry at least once
 				defer func() {
 					// Prevent any plan cache pollution from queries planned against the wrong keyspace during a MoveTables

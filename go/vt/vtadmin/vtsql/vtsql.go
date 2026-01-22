@@ -160,7 +160,7 @@ func (vtgate *VTGateProxy) dial(ctx context.Context, target string, opts ...grpc
 		return fmt.Errorf("error dialing vtgate: %w", err)
 	}
 
-	log.Infof("Established gRPC connection to vtgate\n")
+	log.InfoS("Established gRPC connection to vtgate\n")
 
 	vtgate.m.Lock()
 	defer vtgate.m.Unlock()

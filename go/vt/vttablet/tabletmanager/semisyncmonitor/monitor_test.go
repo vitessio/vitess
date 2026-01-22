@@ -38,9 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
-var (
-	exporter = servenv.NewExporter("TestSemiSyncMonitor", "")
-)
+var exporter = servenv.NewExporter("TestSemiSyncMonitor", "")
 
 // createFakeDBAndMonitor created a fake DB and a monitor for testing.
 func createFakeDBAndMonitor(t *testing.T) (*fakesqldb.DB, *Monitor) {
@@ -1054,7 +1052,7 @@ func TestDeadlockOnClose(t *testing.T) {
 		// The test timed out, which means we deadlocked.
 		buf := make([]byte, 1<<16) // 64 KB buffer size
 		stackSize := runtime.Stack(buf, true)
-		log.Errorf("Stack trace:\n%s", string(buf[:stackSize]))
+		log.ErrorS("Stack trace:\n" + string(buf[:stackSize]))
 		t.Fatalf("Deadlock occurred while closing the monitor")
 	}
 }

@@ -40,10 +40,8 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 )
 
-var (
-	// configFilePath is where the configs/credentials for backups will be stored.
-	configFilePath string
-)
+// configFilePath is where the configs/credentials for backups will be stored.
+var configFilePath string
 
 func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &configFilePath, "ceph-backup-storage-config", "ceph_backup_config.json",
@@ -205,16 +203,15 @@ func (bs *CephBackupStorage) StartBackup(ctx context.Context, dir, name string) 
 	bucket := alterBucketName(dir)
 
 	found, err := c.BucketExists(bucket)
-
 	if err != nil {
-		log.Info("Error from BucketExists: %v, quitting", bucket)
+		log.InfoS(fmt.Sprintf("Error from BucketExists: %v, quitting", err))
 		return nil, errors.New("Error checking whether bucket exists: " + bucket)
 	}
 	if !found {
-		log.Info("Bucket: %v doesn't exist, creating new bucket with the required name", bucket)
+		log.InfoS(fmt.Sprintf("Bucket: %v doesn't exist, creating new bucket with the required name", bucket))
 		err = c.MakeBucket(bucket, "")
 		if err != nil {
-			log.Info("Error creating Bucket: %v, quitting", bucket)
+			log.InfoS(fmt.Sprintf("Error creating Bucket: %v, quitting", err))
 			return nil, errors.New("Error creating new bucket: " + bucket)
 		}
 	}

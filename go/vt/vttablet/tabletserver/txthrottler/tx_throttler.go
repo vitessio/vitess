@@ -18,6 +18,7 @@ package txthrottler
 
 import (
 	"context"
+	"fmt"
 	"math/rand/v2"
 	"slices"
 	"strings"
@@ -40,8 +41,10 @@ import (
 // These vars store the functions used to create the topo server, healthcheck,
 // and go/vt/throttler. These are provided here so that they can be overridden
 // in tests to generate mocks.
-type healthCheckFactoryFunc func(ctx context.Context, topoServer *topo.Server, cell, keyspace, shard string, cellsToWatch []string) (discovery.HealthCheck, error)
-type throttlerFactoryFunc func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (throttler.Throttler, error)
+type (
+	healthCheckFactoryFunc func(ctx context.Context, topoServer *topo.Server, cell, keyspace, shard string, cellsToWatch []string) (discovery.HealthCheck, error)
+	throttlerFactoryFunc   func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (throttler.Throttler, error)
+)
 
 var (
 	healthCheckFactory healthCheckFactoryFunc
@@ -84,7 +87,7 @@ const TxThrottlerName = "TransactionThrottler"
 func fetchKnownCells(ctx context.Context, topoServer *topo.Server, target *querypb.Target) []string {
 	cells, err := topoServer.GetKnownCells(ctx)
 	if err != nil {
-		log.Errorf("txThrottler: falling back to local cell due to error fetching cells from topology: %+v", err)
+		log.ErrorS(fmt.Sprintf("txThrottler: falling back to local cell due to error fetching cells from topology: %+v", err))
 		cells = []string{target.Cell}
 	}
 	return cells
@@ -173,13 +176,9 @@ func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) TxThrottler {
 	config := env.Config()
 	if config.EnableTxThrottler {
 		if len(config.TxThrottlerHealthCheckCells) == 0 {
-			defer log.Infof("Initialized transaction throttler using tabletTypes: %+v, cellsFromTopo: true, topoRefreshInterval: %s, throttlerConfig: %q",
-				config.TxThrottlerTabletTypes, config.TxThrottlerTopoRefreshInterval, config.TxThrottlerConfig.Get(),
-			)
+			defer log.InfoS(fmt.Sprintf("Initialized transaction throttler using tabletTypes: %+v, cellsFromTopo: true, topoRefreshInterval: %s, throttlerConfig: %q", config.TxThrottlerTabletTypes, config.TxThrottlerTopoRefreshInterval, config.TxThrottlerConfig.Get()))
 		} else {
-			defer log.Infof("Initialized transaction throttler using tabletTypes: %+v, healthCheckCells: %+v, throttlerConfig: %q",
-				config.TxThrottlerTabletTypes, config.TxThrottlerHealthCheckCells, config.TxThrottlerConfig.Get(),
-			)
+			defer log.InfoS(fmt.Sprintf("Initialized transaction throttler using tabletTypes: %+v, healthCheckCells: %+v, throttlerConfig: %q", config.TxThrottlerTabletTypes, config.TxThrottlerHealthCheckCells, config.TxThrottlerConfig.Get()))
 		}
 	}
 
@@ -207,7 +206,7 @@ func (t *txThrottler) Open() (err error) {
 	if t.state != nil {
 		return nil
 	}
-	log.Info("txThrottler: opening")
+	log.InfoS("txThrottler: opening")
 	t.throttlerRunning.Set(1)
 	t.state, err = newTxThrottlerState(t, t.config, t.target)
 	return err
@@ -226,7 +225,7 @@ func (t *txThrottler) Close() {
 	t.state.deallocateResources()
 	t.state = nil
 	t.throttlerRunning.Set(0)
-	log.Info("txThrottler: closed")
+	log.InfoS("txThrottler: closed")
 }
 
 // Throttle should be called before a new transaction is started.
@@ -330,7 +329,7 @@ func (ts *txThrottlerStateImpl) updateHealthCheckCells(topoServer *topo.Server, 
 
 	knownCells := fetchKnownCells(fetchCtx, topoServer, target)
 	if !slices.Equal(knownCells, ts.healthCheckCells) {
-		log.Info("txThrottler: restarting healthcheck stream due to topology cells update")
+		log.InfoS("txThrottler: restarting healthcheck stream due to topology cells update")
 		ts.healthCheckCells = knownCells
 		ts.closeHealthCheckStream()
 		return ts.initHealthCheckStream(topoServer, target)
@@ -351,7 +350,7 @@ func (ts *txThrottlerStateImpl) healthChecksProcessor(topoServer *topo.Server, t
 			return
 		case <-cellsUpdateTicks:
 			if err := ts.updateHealthCheckCells(topoServer, target); err != nil {
-				log.Errorf("txThrottler: failed to update cell list: %+v", err)
+				log.ErrorS(fmt.Sprintf("txThrottler: failed to update cell list: %+v", err))
 			}
 		case th := <-ts.healthCheckChan:
 			ts.StatsUpdate(th)
@@ -361,7 +360,7 @@ func (ts *txThrottlerStateImpl) healthChecksProcessor(topoServer *topo.Server, t
 
 func (ts *txThrottlerStateImpl) throttle() bool {
 	if ts.throttler == nil {
-		log.Error("txThrottler: throttle called after deallocateResources was called")
+		log.ErrorS("txThrottler: throttle called after deallocateResources was called")
 		return false
 	}
 	// Serialize calls to ts.throttle.Throttle()

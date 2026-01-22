@@ -200,7 +200,7 @@ func (v *VRepl) executeAnalyzeTable(ctx context.Context, conn *dbconnpool.DBConn
 		if _, err := conn.ExecuteFetch(sqlEnableFastAnalyzeTable, 1, false); err != nil {
 			return err
 		}
-		log.Infof("@@fast_analyze_table enabled")
+		log.InfoS("@@fast_analyze_table enabled")
 		defer conn.ExecuteFetch(sqlDisableFastAnalyzeTable, 1, false)
 	}
 

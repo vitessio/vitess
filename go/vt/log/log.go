@@ -72,7 +72,7 @@ var (
 // `go/cmd/*` entrypoints should either use servenv.ParseFlags(WithArgs), which
 // calls this function, or call this function directly before parsing
 // command-line arguments. When using structured logging, callers must invoke
-// Init after flags are parsed so these settings can be honored.
+// Init with the parsed FlagSet so these settings can be honored.
 func RegisterFlags(fs *pflag.FlagSet) {
 	flagVal := logRotateMaxSize{
 		val: strconv.FormatUint(atomic.LoadUint64(&glog.MaxSize), 10),

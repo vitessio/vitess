@@ -48,7 +48,7 @@ func TestOnlineDDLVDiff(t *testing.T) {
 	var output string
 
 	t.Run("OnlineDDL VDiff", func(t *testing.T) {
-		var done = make(chan bool)
+		done := make(chan bool)
 		go populate(ctx, t, done, insertTemplate, updateTemplate)
 
 		waitForAdditionalRows(t, keyspace, "temp", 100)
@@ -163,7 +163,7 @@ func populate(ctx context.Context, t *testing.T, done chan bool, insertTemplate,
 	for {
 		select {
 		case <-ctx.Done():
-			log.Infof("load cancelled")
+			log.InfoS("load cancelled")
 			return
 		default:
 			query := fmt.Sprintf(insertTemplate, id, id, id)

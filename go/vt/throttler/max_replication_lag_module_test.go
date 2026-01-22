@@ -414,7 +414,7 @@ func TestMaxReplicationLagModule_Increase_BadRateUpperBound(t *testing.T) {
 
 	// Assume that a bad value of 150 was set @ 30s and log error
 	if err := tf.m.memory.markBad(150, sinceZero(30*time.Second)); err != nil {
-		log.Errorf("tf.m.memory.markBad(150, sinceZero(30*time.Second)) falied : %v", err)
+		log.ErrorS(fmt.Sprintf("tf.m.memory.markBad(150, sinceZero(30*time.Second)) falied : %v", err))
 	}
 
 	// r2 @  70s, 0s lag

@@ -155,7 +155,7 @@ func TestMoveTablesTZ(t *testing.T) {
 			hoursBehind = 8
 		}
 		// extra logging, so that we can spot any issues in CI test runs
-		log.Infof("times are %s, %s, hours behind %d", dt2a, dt2b, hoursBehind)
+		log.InfoS(fmt.Sprintf("times are %s, %s, hours behind %d", dt2a, dt2b, hoursBehind))
 		require.Equal(t, hoursBehind*3600, targetUTCTUnix-sourceUSPacific)
 	}
 

@@ -296,7 +296,7 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 
 	err = cleanupMySQL(ctx, params, shouldDeleteUsers)
 	if err != nil {
-		log.Errorf(err.Error())
+		log.ErrorS(err.Error())
 		// time.Sleep(time.Minute * 2)
 		return nil, vterrors.Wrap(err, "error cleaning MySQL")
 	}

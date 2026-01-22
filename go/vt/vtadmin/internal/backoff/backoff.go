@@ -112,7 +112,7 @@ func (None) Backoff(int) time.Duration { return 0 }
 func Get(strategy string, cfg grpcbackoff.Config) Strategy {
 	switch strings.ToLower(strategy) {
 	case "":
-		log.Warningf("no backoff strategy specified; defaulting to exponential")
+		log.WarnS("no backoff strategy specified; defaulting to exponential")
 		fallthrough
 	case "exponential":
 		return Exponential{cfg}

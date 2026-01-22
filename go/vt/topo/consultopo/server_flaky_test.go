@@ -51,7 +51,7 @@ func startConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
 	configDir := t.TempDir()
 
 	configFilename := path.Join(configDir, "consul.json")
-	configFile, err := os.OpenFile(configFilename, os.O_RDWR|os.O_CREATE, 0600)
+	configFile, err := os.OpenFile(configFilename, os.O_RDWR|os.O_CREATE, 0o600)
 	if err != nil {
 		t.Fatalf("cannot create tempfile: %v", err)
 	}
@@ -141,11 +141,11 @@ func TestConsulTopo(t *testing.T) {
 	defer func() {
 		// Alerts command did not run successful
 		if err := cmd.Process.Kill(); err != nil {
-			log.Errorf("cmd process kill has an error: %v", err)
+			log.ErrorS(fmt.Sprintf("cmd process kill has an error: %v", err))
 		}
 		// Alerts command did not run successful
 		if err := cmd.Wait(); err != nil {
-			log.Errorf("cmd wait has an error: %v", err)
+			log.ErrorS(fmt.Sprintf("cmd wait has an error: %v", err))
 		}
 
 		os.Remove(configFilename)
@@ -200,11 +200,11 @@ func TestConsulTopoWithChecks(t *testing.T) {
 	defer func() {
 		// Alerts command did not run successful
 		if err := cmd.Process.Kill(); err != nil {
-			log.Errorf("cmd process kill has an error: %v", err)
+			log.ErrorS(fmt.Sprintf("cmd process kill has an error: %v", err))
 		}
 		// Alerts command did not run successful
 		if err := cmd.Wait(); err != nil {
-			log.Errorf("cmd wait has an error: %v", err)
+			log.ErrorS(fmt.Sprintf("cmd wait has an error: %v", err))
 		}
 
 		os.Remove(configFilename)
@@ -246,11 +246,11 @@ func TestConsulTopoWithAuth(t *testing.T) {
 	defer func() {
 		// Alerts command did not run successful
 		if err := cmd.Process.Kill(); err != nil {
-			log.Errorf("cmd process kill has an error: %v", err)
+			log.ErrorS(fmt.Sprintf("cmd process kill has an error: %v", err))
 		}
 		// Alerts command did not run successful
 		if err := cmd.Wait(); err != nil {
-			log.Errorf("cmd process wait has an error: %v", err)
+			log.ErrorS(fmt.Sprintf("cmd process wait has an error: %v", err))
 		}
 		os.Remove(configFilename)
 	}()
@@ -258,7 +258,6 @@ func TestConsulTopoWithAuth(t *testing.T) {
 	// Run the TopoServerTestSuite tests.
 	testIndex := 0
 	tmpFile, err := os.CreateTemp("", "consul_auth_client_static_file.json")
-
 	if err != nil {
 		t.Fatalf("couldn't create temp file: %v", err)
 	}
@@ -272,7 +271,7 @@ func TestConsulTopoWithAuth(t *testing.T) {
 	consulAuthClientStaticFile = tmpFile.Name()
 
 	jsonConfig := "{\"global\":{\"acl_token\":\"123456\"}, \"test\":{\"acl_token\":\"123456\"}}"
-	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0o600); err != nil {
 		t.Fatalf("couldn't write temp file: %v", err)
 	}
 
@@ -314,7 +313,6 @@ func TestConsulTopoWithAuthFailure(t *testing.T) {
 	}()
 
 	tmpFile, err := os.CreateTemp("", "consul_auth_client_static_file.json")
-
 	if err != nil {
 		t.Fatalf("couldn't create temp file: %v", err)
 	}
@@ -330,7 +328,7 @@ func TestConsulTopoWithAuthFailure(t *testing.T) {
 	// check valid, empty json causes error
 	{
 		jsonConfig := "{}"
-		if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+		if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0o600); err != nil {
 			t.Fatalf("couldn't write temp file: %v", err)
 		}
 
@@ -344,7 +342,7 @@ func TestConsulTopoWithAuthFailure(t *testing.T) {
 	// check bad token causes error
 	{
 		jsonConfig := "{\"global\":{\"acl_token\":\"badtoken\"}}"
-		if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+		if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0o600); err != nil {
 			t.Fatalf("couldn't write temp file: %v", err)
 		}
 
@@ -386,10 +384,10 @@ func TestConsulWatcherStormPrevention(t *testing.T) {
 	cmd, configFilename, serverAddr := startConsul(t, "")
 	defer func() {
 		if err := cmd.Process.Kill(); err != nil {
-			log.Errorf("cmd process kill has an error: %v", err)
+			log.ErrorS(fmt.Sprintf("cmd process kill has an error: %v", err))
 		}
 		if err := cmd.Wait(); err != nil {
-			log.Errorf("cmd wait has an error: %v", err)
+			log.ErrorS(fmt.Sprintf("cmd wait has an error: %v", err))
 		}
 		os.Remove(configFilename)
 	}()

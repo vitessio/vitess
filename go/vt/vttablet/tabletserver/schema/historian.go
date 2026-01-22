@@ -18,6 +18,7 @@ package schema
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -33,8 +34,10 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
-const getInitialSchemaVersions = "select id, pos, ddl, time_updated, schemax from %s.schema_version where time_updated > %d order by id asc"
-const getNextSchemaVersions = "select id, pos, ddl, time_updated, schemax from %s.schema_version where id > %d order by id asc"
+const (
+	getInitialSchemaVersions = "select id, pos, ddl, time_updated, schemax from %s.schema_version where time_updated > %d order by id asc"
+	getNextSchemaVersions    = "select id, pos, ddl, time_updated, schemax from %s.schema_version where id > %d order by id asc"
+)
 
 // vl defines the glog verbosity level for the package
 const vl = 10
@@ -92,11 +95,11 @@ func (h *historian) Open() error {
 	if h.isOpen {
 		return nil
 	}
-	log.Info("Historian: opening")
+	log.InfoS("Historian: opening")
 
 	ctx := tabletenv.LocalContext()
 	if err := h.loadFromDB(ctx); err != nil {
-		log.Errorf("Historian failed to open: %v", err)
+		log.ErrorS(fmt.Sprintf("Historian failed to open: %v", err))
 		return err
 	}
 
@@ -114,7 +117,7 @@ func (h *historian) Close() {
 
 	h.schemas = nil
 	h.isOpen = false
-	log.Info("Historian: closed")
+	log.InfoS("Historian: closed")
 }
 
 // RegisterVersionEvent is called by the vstream when it encounters a version event (an
@@ -141,7 +144,7 @@ func (h *historian) GetTableForPos(tableName sqlparser.IdentifierCS, gtid string
 		return nil, nil
 	}
 
-	log.V(2).Infof("GetTableForPos called for %s with pos %s", tableName, gtid)
+	log.DebugS(fmt.Sprintf("GetTableForPos called for %s with pos %s", tableName, gtid))
 	if gtid == "" {
 		return nil, nil
 	}
@@ -154,7 +157,7 @@ func (h *historian) GetTableForPos(tableName sqlparser.IdentifierCS, gtid string
 		t = h.getTableFromHistoryForPos(tableName, pos)
 	}
 	if t != nil {
-		log.V(2).Infof("Returning table %s from history for pos %s, schema %s", tableName, gtid, t)
+		log.DebugS(fmt.Sprintf("Returning table %s from history for pos %s, schema %s", tableName, gtid, t))
 	}
 	return t, nil
 }
@@ -179,7 +182,7 @@ func (h *historian) loadFromDB(ctx context.Context) error {
 	}
 
 	if err != nil {
-		log.Infof("Error reading schema_tracking table %v, will operate with the latest available schema", err)
+		log.InfoS(fmt.Sprintf("Error reading schema_tracking table %v, will operate with the latest available schema", err))
 		return nil
 	}
 	for _, row := range tableData.Rows {
@@ -230,8 +233,8 @@ func (h *historian) readRow(row []sqltypes.Value) (*trackedSchema, int64, error)
 	if err := sch.UnmarshalVT(rowBytes); err != nil {
 		return nil, 0, err
 	}
-	log.V(vl).Infof("Read tracked schema from db: id %d, pos %v, ddl %s, schema len %d, time_updated %d \n",
-		id, replication.EncodePosition(pos), ddl, len(sch.Tables), timeUpdated)
+	log.DebugS(fmt.Sprintf("Read tracked schema from db: id %d, pos %v, ddl %s, schema len %d, time_updated %d \n",
+		id, replication.EncodePosition(pos), ddl, len(sch.Tables), timeUpdated))
 
 	tables := map[string]*binlogdatapb.MinimalTable{}
 	for _, t := range sch.Tables {
@@ -285,12 +288,12 @@ func (h *historian) getTableFromHistoryForPos(tableName sqlparser.IdentifierCS, 
 		return pos.Equal(h.schemas[i].pos) || !pos.AtLeast(h.schemas[i].pos)
 	})
 	if idx >= len(h.schemas) || idx == 0 && !pos.Equal(h.schemas[idx].pos) { // beyond the range of the cache
-		log.Infof("Schema not found in cache for %s with pos %s", tableName, pos)
+		log.InfoS(fmt.Sprintf("Schema not found in cache for %s with pos %s", tableName, pos))
 		return nil
 	}
-	if pos.Equal(h.schemas[idx].pos) { //exact match to a cache entry
+	if pos.Equal(h.schemas[idx].pos) { // exact match to a cache entry
 		return h.schemas[idx].schema[tableName.String()]
 	}
-	//not an exact match, so based on our sort algo idx is one less than found: from 40,44,48 : 43 < 44 but we want 40
+	// not an exact match, so based on our sort algo idx is one less than found: from 40,44,48 : 43 < 44 but we want 40
 	return h.schemas[idx-1].schema[tableName.String()]
 }

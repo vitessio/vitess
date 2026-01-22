@@ -316,14 +316,14 @@ func (mysqld *Mysqld) SetReadOnly(ctx context.Context, on bool) error {
 func (mysqld *Mysqld) SetSuperReadOnly(ctx context.Context, on bool) (ResetSuperReadOnlyFunc, error) {
 	//  return function for switching `OFF` super_read_only
 	var resetFunc ResetSuperReadOnlyFunc
-	var disableFunc = func() error {
+	disableFunc := func() error {
 		query := "SET GLOBAL super_read_only = 'OFF'"
 		err := mysqld.ExecuteSuperQuery(context.Background(), query)
 		return err
 	}
 
 	//  return function for switching `ON` super_read_only.
-	var enableFunc = func() error {
+	enableFunc := func() error {
 		query := "SET GLOBAL super_read_only = 'ON'"
 		err := mysqld.ExecuteSuperQuery(context.Background(), query)
 		return err
@@ -487,7 +487,7 @@ func (mysqld *Mysqld) SetReplicationPosition(ctx context.Context, pos replicatio
 	defer conn.Recycle()
 
 	cmds := conn.Conn.SetReplicationPositionCommands(pos)
-	log.Infof("Executing commands to set replication position: %v", cmds)
+	log.InfoS(fmt.Sprintf("Executing commands to set replication position: %v", cmds))
 	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
 }
 
@@ -697,7 +697,7 @@ func (mysqld *Mysqld) semiSyncReplicationStatusQuery(ctx context.Context) (strin
 // SetSemiSyncEnabled enables or disables semi-sync replication for
 // primary and/or replica mode.
 func (mysqld *Mysqld) SetSemiSyncEnabled(ctx context.Context, primary, replica bool) error {
-	log.Infof("Setting semi-sync mode: primary=%v, replica=%v", primary, replica)
+	log.InfoS(fmt.Sprintf("Setting semi-sync mode: primary=%v, replica=%v", primary, replica))
 
 	// Convert bool to int.
 	var p, s int

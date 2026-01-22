@@ -1754,67 +1754,43 @@ type testLogger struct {
 	logsMu sync.Mutex
 	logs   []string
 
-	savedInfof  func(format string, args ...any)
-	savedInfo   func(args ...any)
-	savedErrorf func(format string, args ...any)
-	savedError  func(args ...any)
+	savedInfoDepth  func(depth int, args ...any)
+	savedErrorDepth func(depth int, args ...any)
 }
 
 func newTestLogger() *testLogger {
 	tl := &testLogger{
-		savedInfof:  log.Infof,
-		savedInfo:   log.Info,
-		savedErrorf: log.Errorf,
-		savedError:  log.Error,
+		savedInfoDepth:  log.InfoDepth,
+		savedErrorDepth: log.ErrorDepth,
 	}
 	tl.logsMu.Lock()
 	defer tl.logsMu.Unlock()
-	log.Infof = tl.recordInfof
-	log.Info = tl.recordInfo
-	log.Errorf = tl.recordErrorf
-	log.Error = tl.recordError
+	log.InfoDepth = tl.recordInfo
+	log.ErrorDepth = tl.recordError
 	return tl
 }
 
 func (tl *testLogger) Close() {
 	tl.logsMu.Lock()
 	defer tl.logsMu.Unlock()
-	log.Infof = tl.savedInfof
-	log.Info = tl.savedInfo
-	log.Errorf = tl.savedErrorf
-	log.Error = tl.savedError
+	log.InfoDepth = tl.savedInfoDepth
+	log.ErrorDepth = tl.savedErrorDepth
 }
 
-func (tl *testLogger) recordInfof(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	tl.logs = append(tl.logs, msg)
-	tl.savedInfof(msg)
-}
-
-func (tl *testLogger) recordInfo(args ...any) {
+func (tl *testLogger) recordInfo(depth int, args ...any) {
 	msg := fmt.Sprint(args...)
 	tl.logsMu.Lock()
 	defer tl.logsMu.Unlock()
 	tl.logs = append(tl.logs, msg)
-	tl.savedInfo(msg)
+	tl.savedInfoDepth(depth, msg)
 }
 
-func (tl *testLogger) recordErrorf(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	tl.logs = append(tl.logs, msg)
-	tl.savedErrorf(msg)
-}
-
-func (tl *testLogger) recordError(args ...any) {
+func (tl *testLogger) recordError(depth int, args ...any) {
 	msg := fmt.Sprint(args...)
 	tl.logsMu.Lock()
 	defer tl.logsMu.Unlock()
 	tl.logs = append(tl.logs, msg)
-	tl.savedError(msg)
+	tl.savedErrorDepth(depth, msg)
 }
 
 func (tl *testLogger) getLog(i int) string {

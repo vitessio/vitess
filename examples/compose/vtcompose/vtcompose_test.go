@@ -17,7 +17,6 @@
 package main
 
 import (
-	"fmt"
 	"strconv"
 	"testing"
 
@@ -69,9 +68,9 @@ func TestOptsAppliedThroughoutGeneratedFile(t *testing.T) {
 	assert.NotContains(t, yamlString, ":"+strconv.Itoa(DefaultMysqlPort))
 	assert.Contains(t, yamlString, ":"+strconv.Itoa(options.webPort))
 
-	assert.NotContains(t, yamlString, fmt.Sprintf("-cell %s", DefaultCell))
-	assert.Contains(t, yamlString, fmt.Sprintf("-cell %s", options.cell))
+	assert.NotContains(t, yamlString, "-cell "+DefaultCell)
+	assert.Contains(t, yamlString, "-cell "+options.cell)
 
-	assert.Contains(t, yamlString, fmt.Sprintf("- TOPOLOGY_FLAGS=%s", options.topologyFlags))
+	assert.Contains(t, yamlString, "- TOPOLOGY_FLAGS="+options.topologyFlags)
 	assert.NotContains(t, yamlString, DefaultTopologyFlags)
 }

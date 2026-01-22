@@ -361,7 +361,7 @@ func (tsv *TabletServer) Environment() *vtenv.Environment {
 // LogError satisfies tabletenv.Env.
 func (tsv *TabletServer) LogError() {
 	if x := recover(); x != nil {
-		log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
+		log.ErrorS(fmt.Sprintf("Uncaught panic:\n%v\n%s", x, tb.Stack(4)))
 		tsv.stats.InternalErrors.Add("Panic", 1)
 	}
 }
@@ -408,9 +408,9 @@ func (tsv *TabletServer) InitACL(tableACLConfigFile string, reloadACLConfigFileI
 		for range sigChan {
 			err := tsv.initACL(tableACLConfigFile)
 			if err != nil {
-				log.Errorf("Error reloading ACL config file %s in SIGHUP handler: %v", tableACLConfigFile, err)
+				log.ErrorS(fmt.Sprintf("Error reloading ACL config file %s in SIGHUP handler: %v", tableACLConfigFile, err))
 			} else {
-				log.Infof("Successfully reloaded ACL file %s in SIGHUP handler", tableACLConfigFile)
+				log.InfoS(fmt.Sprintf("Successfully reloaded ACL file %s in SIGHUP handler", tableACLConfigFile))
 			}
 		}
 	}()
@@ -636,10 +636,8 @@ func (tsv *TabletServer) getPriorityFromOptions(options *querypb.ExecuteOptions)
 	// This should never error out, as the value for Priority has been validated in the vtgate already.
 	// Still, handle it just to make sure.
 	if err != nil {
-		log.Errorf(
-			"The value of the %s query directive could not be converted to integer, using the "+
-				"default value. Error was: %s",
-			sqlparser.DirectivePriority, priority, err)
+		log.ErrorS(fmt.Sprintf("The value of the %s query directive could not be converted to integer, using the "+
+			"default value %d. Error was: %v", sqlparser.DirectivePriority, priority, err))
 
 		return priority
 	}
@@ -1631,7 +1629,7 @@ func (tsv *TabletServer) handlePanicAndSendLogStats(
 			truncatedQuery = queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.env.Parser())
 			logMessage = fmt.Sprintf(messagef, truncatedQuery)
 		}
-		log.Error(logMessage)
+		log.ErrorS(logMessage)
 		tsv.stats.InternalErrors.Add("Panic", 1)
 		if logStats != nil {
 			logStats.Error = terr
@@ -1660,7 +1658,9 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		callerID = fmt.Sprintf(" (CallerID: %s)", cid.Username)
 	}
 
-	logMethod := log.Errorf
+	logMethod := func(format string, args ...any) {
+		log.ErrorS(fmt.Sprintf(format, args...))
+	}
 	// Suppress or demote some errors in logs.
 	switch errCode {
 	case vtrpcpb.Code_FAILED_PRECONDITION, vtrpcpb.Code_ALREADY_EXISTS:
@@ -1668,9 +1668,13 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 	case vtrpcpb.Code_RESOURCE_EXHAUSTED:
 		logMethod = logPoolFull.Errorf
 	case vtrpcpb.Code_ABORTED:
-		logMethod = log.Warningf
+		logMethod = func(format string, args ...any) {
+			log.WarnS(fmt.Sprintf(format, args...))
+		}
 	case vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_DEADLINE_EXCEEDED:
-		logMethod = log.Infof
+		logMethod = func(format string, args ...any) {
+			log.InfoS(fmt.Sprintf(format, args...))
+		}
 	}
 
 	// If TerseErrors is on, strip the error message returned by MySQL and only

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/subtle"
 	"encoding/json"
+	"fmt"
 	"net"
 	"os"
 	"os/signal"
@@ -82,12 +83,13 @@ func InitAuthServerStatic(mysqlAuthServerStaticFile, mysqlAuthServerStaticString
 	// Check parameters.
 	if mysqlAuthServerStaticFile == "" && mysqlAuthServerStaticString == "" {
 		// Not configured, nothing to do.
-		log.Infof("Not configuring AuthServerStatic, as mysql_auth_server_static_file and mysql_auth_server_static_string are empty")
+		log.InfoS("Not configuring AuthServerStatic, as mysql_auth_server_static_file and mysql_auth_server_static_string are empty")
 		return
 	}
 	if mysqlAuthServerStaticFile != "" && mysqlAuthServerStaticString != "" {
 		// Both parameters specified, can only use one.
-		log.Exitf("Both mysql_auth_server_static_file and mysql_auth_server_static_string specified, can only use one.")
+		log.ErrorS("Both mysql_auth_server_static_file and mysql_auth_server_static_string specified, can only use one.")
+		os.Exit(1)
 	}
 
 	// Create and register auth server.
@@ -101,7 +103,8 @@ func InitAuthServerStatic(mysqlAuthServerStaticFile, mysqlAuthServerStaticString
 func RegisterAuthServerStaticFromParams(file, jsonConfig string, reloadInterval time.Duration) {
 	authServerStatic := NewAuthServerStatic(file, jsonConfig, reloadInterval)
 	if len(authServerStatic.entries) <= 0 {
-		log.Exitf("Failed to populate entries from file: %v", file)
+		log.ErrorS(fmt.Sprintf("Failed to populate entries from file: %v", file))
+		os.Exit(1)
 	}
 	RegisterAuthServer("static", authServerStatic)
 }
@@ -260,7 +263,7 @@ func (a *AuthServerStatic) reload() {
 	if a.file != "" {
 		data, err := os.ReadFile(a.file)
 		if err != nil {
-			log.Errorf("Failed to read mysql_auth_server_static_file file: %v", err)
+			log.ErrorS(fmt.Sprintf("Failed to read mysql_auth_server_static_file file: %v", err))
 			return
 		}
 		jsonBytes = data
@@ -268,7 +271,7 @@ func (a *AuthServerStatic) reload() {
 
 	entries := make(map[string][]*AuthServerStaticEntry)
 	if err := ParseConfig(jsonBytes, &entries); err != nil {
-		log.Errorf("Error parsing auth server config: %v", err)
+		log.ErrorS(fmt.Sprintf("Error parsing auth server config: %v", err))
 		return
 	}
 
@@ -343,7 +346,7 @@ func parseLegacyConfig(jsonBytes []byte, config *map[string][]*AuthServerStaticE
 	if err := decoder.Decode(&legacyConfig); err != nil {
 		return err
 	}
-	log.Warningf("Config parsed using legacy configuration. Please update to the latest format: {\"user\":[{\"Password\": \"xxx\"}, ...]}")
+	log.WarnS("Config parsed using legacy configuration. Please update to the latest format: {\"user\":[{\"Password\": \"xxx\"}, ...]}")
 	for key, value := range legacyConfig {
 		(*config)[key] = append((*config)[key], value)
 	}

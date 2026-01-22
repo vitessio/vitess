@@ -49,16 +49,17 @@ type AuthServerLdap struct {
 // Init is public so it can be called from plugin_auth_ldap.go (go/cmd/vtgate)
 func Init(ldapAuthConfigFile, ldapAuthConfigString, ldapAuthMethod string) {
 	if ldapAuthConfigFile == "" && ldapAuthConfigString == "" {
-		log.Infof("Not configuring AuthServerLdap because mysql_ldap_auth_config_file and mysql_ldap_auth_config_string are empty")
+		log.InfoS("Not configuring AuthServerLdap because mysql_ldap_auth_config_file and mysql_ldap_auth_config_string are empty")
 		return
 	}
 	if ldapAuthConfigFile != "" && ldapAuthConfigString != "" {
-		log.Infof("Both mysql_ldap_auth_config_file and mysql_ldap_auth_config_string are non-empty, can only use one.")
+		log.InfoS("Both mysql_ldap_auth_config_file and mysql_ldap_auth_config_string are non-empty, can only use one.")
 		return
 	}
 
 	if ldapAuthMethod != string(mysql.MysqlClearPassword) && ldapAuthMethod != string(mysql.MysqlDialog) {
-		log.Exitf("Invalid mysql_ldap_auth_method value: only support mysql_clear_password or dialog")
+		log.ErrorS("Invalid mysql_ldap_auth_method value: only support mysql_clear_password or dialog")
+		os.Exit(1)
 	}
 	ldapAuthServer := &AuthServerLdap{
 		Client:       &ClientImpl{},
@@ -70,11 +71,13 @@ func Init(ldapAuthConfigFile, ldapAuthConfigString, ldapAuthMethod string) {
 		var err error
 		data, err = os.ReadFile(ldapAuthConfigFile)
 		if err != nil {
-			log.Exitf("Failed to read mysql_ldap_auth_config_file: %v", err)
+			log.ErrorS(fmt.Sprintf("Failed to read mysql_ldap_auth_config_file: %v", err))
+			os.Exit(1)
 		}
 	}
 	if err := json.Unmarshal(data, ldapAuthServer); err != nil {
-		log.Exitf("Error parsing AuthServerLdap config: %v", err)
+		log.ErrorS(fmt.Sprintf("Error parsing AuthServerLdap config: %v", err))
+		os.Exit(1)
 	}
 
 	var authMethod mysql.AuthMethod
@@ -84,7 +87,8 @@ func Init(ldapAuthConfigFile, ldapAuthConfigString, ldapAuthMethod string) {
 	case mysql.MysqlDialog:
 		authMethod = mysql.NewMysqlDialogAuthMethod(ldapAuthServer, ldapAuthServer, "")
 	default:
-		log.Exitf("Invalid mysql_ldap_auth_method value: only support mysql_clear_password or dialog")
+		log.ErrorS("Invalid mysql_ldap_auth_method value: only support mysql_clear_password or dialog")
+		os.Exit(1)
 	}
 
 	ldapAuthServer.methods = []mysql.AuthMethod{authMethod}
@@ -177,13 +181,13 @@ func (lud *LdapUserData) update() {
 	lud.Unlock()
 	err := lud.asl.Connect("tcp", &lud.asl.ServerConfig)
 	if err != nil {
-		log.Errorf("Error updating LDAP user data: %v", err)
+		log.ErrorS(fmt.Sprintf("Error updating LDAP user data: %v", err))
 		return
 	}
-	defer lud.asl.Close() //after the error check
+	defer lud.asl.Close() // after the error check
 	groups, err := lud.asl.getGroups(lud.username)
 	if err != nil {
-		log.Errorf("Error updating LDAP user data: %v", err)
+		log.ErrorS(fmt.Sprintf("Error updating LDAP user data: %v", err))
 		return
 	}
 	lud.Lock()

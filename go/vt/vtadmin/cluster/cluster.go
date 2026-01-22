@@ -331,7 +331,7 @@ func (c *Cluster) parseTablet(rows *sql.Rows) (*vtadminpb.Tablet, error) {
 
 	if topotablet.Alias.Cell != cell {
 		// (TODO:@amason) ???
-		log.Warningf("tablet cell %s does not match alias %s. ignoring for now", cell, topoproto.TabletAliasString(topotablet.Alias))
+		log.WarnS(fmt.Sprintf("tablet cell %s does not match alias %s. ignoring for now", cell, topoproto.TabletAliasString(topotablet.Alias)))
 	}
 
 	if mtstStr != "" {
@@ -749,7 +749,7 @@ func (c *Cluster) findWorkflows(ctx context.Context, keyspaces []string, opts Fi
 
 		span.Finish()
 	} else if opts.IgnoreKeyspaces.Len() > 0 {
-		log.Warningf("Cluster.findWorkflows: IgnoreKeyspaces was set, but Keyspaces was not empty; ignoring IgnoreKeyspaces in favor of explicitly checking everything in Keyspaces: (%s)", strings.Join(keyspaces, ", "))
+		log.WarnS(fmt.Sprintf("Cluster.findWorkflows: IgnoreKeyspaces was set, but Keyspaces was not empty; ignoring IgnoreKeyspaces in favor of explicitly checking everything in Keyspaces: (%s)", strings.Join(keyspaces, ", ")))
 		opts.IgnoreKeyspaces = sets.New[string]()
 	}
 
@@ -772,7 +772,7 @@ func (c *Cluster) findWorkflows(ctx context.Context, keyspaces []string, opts Fi
 
 	for _, ks := range keyspaces {
 		if opts.IgnoreKeyspaces.Has(ks) {
-			log.Infof("Cluster.findWorkflows: ignoring keyspace %s", ks)
+			log.InfoS("Cluster.findWorkflows: ignoring keyspace " + ks)
 
 			continue
 		}
@@ -988,7 +988,7 @@ func (c *Cluster) getShardSets(ctx context.Context, keyspaces []string, keyspace
 					// vtctld side, and we can do better checking here.
 					// Since this is on the client-side of an RPC we can't
 					// even use topo.IsErrType(topo.NoNode) :(
-					log.Warningf("getShardSets(): keyspace %s does not exist in cluster %s", ksName, c.ID)
+					log.WarnS(fmt.Sprintf("getShardSets(): keyspace %s does not exist in cluster %s", ksName, c.ID))
 					m.Lock()
 					defer m.Unlock()
 
@@ -1015,7 +1015,7 @@ func (c *Cluster) getShardSets(ctx context.Context, keyspaces []string, keyspace
 
 			overlap := shardSet.Intersection(fullShardSet)
 			if overlap.Len() != shardSet.Len() {
-				log.Warningf("getShardSets(): keyspace %s is missing specified shards in cluster %s: %v", ksName, c.ID, sets.List(shardSet.Difference(overlap)))
+				log.WarnS(fmt.Sprintf("getShardSets(): keyspace %s is missing specified shards in cluster %s: %v", ksName, c.ID, sets.List(shardSet.Difference(overlap))))
 			}
 
 			m.Lock()
@@ -1065,7 +1065,7 @@ func (c *Cluster) GetCellInfos(ctx context.Context, req *vtadminpb.GetCellInfosR
 
 	namesOnly := req.NamesOnly
 	if namesOnly && len(req.Cells) > 0 {
-		log.Warning("Cluster.GetCellInfos: req.Cells and req.NamesOnly set, ignoring NamesOnly")
+		log.WarnS("Cluster.GetCellInfos: req.Cells and req.NamesOnly set, ignoring NamesOnly")
 		namesOnly = false
 	}
 
@@ -1399,7 +1399,7 @@ func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchema
 	}
 
 	if opts.TableSizeOptions.AggregateSizes && opts.BaseRequest.TableNamesOnly {
-		log.Warningf("GetSchema(cluster = %s) size aggregation is incompatible with TableNamesOnly, ignoring the latter in favor of aggregating sizes", c.ID)
+		log.WarnS(fmt.Sprintf("GetSchema(cluster = %s) size aggregation is incompatible with TableNamesOnly, ignoring the latter in favor of aggregating sizes", c.ID))
 		opts.BaseRequest.TableNamesOnly = false
 	}
 
@@ -1469,7 +1469,7 @@ func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vta
 	}
 
 	if opts.TableSizeOptions.AggregateSizes && opts.BaseRequest.TableNamesOnly {
-		log.Warningf("GetSchemas(cluster = %s) size aggregation is incompatible with TableNamesOnly, ignoring the latter in favor of aggregating sizes", c.ID)
+		log.WarnS(fmt.Sprintf("GetSchemas(cluster = %s) size aggregation is incompatible with TableNamesOnly, ignoring the latter in favor of aggregating sizes", c.ID))
 		opts.BaseRequest.TableNamesOnly = false
 	}
 
@@ -1491,10 +1491,10 @@ func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vta
 
 		span.Annotate("cache_hit", ok)
 		if ok {
-			log.Infof("GetSchemas(cluster = %s) fetching schemas from schema cache", c.ID)
+			log.InfoS(fmt.Sprintf("GetSchemas(cluster = %s) fetching schemas from schema cache", c.ID))
 			return schemas, err
 		} else {
-			log.Infof("GetSchemas(cluster = %s) bypassing schema cache", c.ID)
+			log.InfoS(fmt.Sprintf("GetSchemas(cluster = %s) bypassing schema cache", c.ID))
 		}
 	}
 
@@ -1569,7 +1569,7 @@ func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vta
 			if err != nil {
 				// Ignore keyspaces without any serving tablets.
 				if stderrors.Is(err, errors.ErrNoServingTablet) {
-					log.Infof(err.Error())
+					log.InfoS(err.Error())
 					return
 				}
 
@@ -1585,12 +1585,12 @@ func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vta
 
 			// Ignore keyspaces without schemas
 			if schema == nil {
-				log.Infof("No schemas for %s", ks.Keyspace.Name)
+				log.InfoS("No schemas for " + ks.Keyspace.Name)
 				return
 			}
 
 			if len(schema.TableDefinitions) == 0 {
-				log.Infof("No tables in schema for %s", ks.Keyspace.Name)
+				log.InfoS("No tables in schema for " + ks.Keyspace.Name)
 				return
 			}
 
@@ -1738,7 +1738,7 @@ func (c *Cluster) getSchemaFromTablets(ctx context.Context, keyspace string, tab
 
 				if _, ok = tableSize.ByShard[tablet.Tablet.Shard]; ok {
 					err := fmt.Errorf("duplicate shard queries for table %s on shard %s/%s", td.Name, keyspace, tablet.Tablet.Shard)
-					log.Warningf("Impossible: %s", err)
+					log.WarnS(fmt.Sprintf("Impossible: %s", err))
 					rec.RecordError(err)
 
 					return
@@ -1786,7 +1786,7 @@ func (c *Cluster) getTabletsToQueryForSchemas(ctx context.Context, keyspace stri
 			// primary (via PrimaryAlias) in addition to the IsPrimaryServing bit.
 			if !shard.Shard.IsPrimaryServing || shard.Shard.PrimaryAlias == nil {
 				if !opts.TableSizeOptions.IncludeNonServingShards {
-					log.Infof("%s/%s is not serving; ignoring because IncludeNonServingShards = false", keyspace, shard.Name)
+					log.InfoS(fmt.Sprintf("%s/%s is not serving; ignoring because IncludeNonServingShards = false", keyspace, shard.Name))
 					continue
 				}
 			}
@@ -1812,7 +1812,7 @@ func (c *Cluster) getTabletsToQueryForSchemas(ctx context.Context, keyspace stri
 
 	if len(keyspaceTablets) == 0 {
 		err := fmt.Errorf("%w for keyspace %s", errors.ErrNoServingTablet, keyspace)
-		log.Warningf("%s. Searched tablets: %v", err, vtadminproto.Tablets(tablets).AliasStringList())
+		log.WarnS(fmt.Sprintf("%s. Searched tablets: %v", err, vtadminproto.Tablets(tablets).AliasStringList()))
 		return nil, err
 	}
 
@@ -1909,7 +1909,6 @@ func (c *Cluster) GetSrvVSchema(ctx context.Context, cell string) (*vtadminpb.Sr
 	sv, err := c.Vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{
 		Cell: cell,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -1972,7 +1971,6 @@ func (c *Cluster) GetVSchema(ctx context.Context, keyspace string) (*vtadminpb.V
 	vschema, err := c.Vtctld.GetVSchema(ctx, &vtctldatapb.GetVSchemaRequest{
 		Keyspace: keyspace,
 	})
-
 	if err != nil {
 		return nil, err
 	}

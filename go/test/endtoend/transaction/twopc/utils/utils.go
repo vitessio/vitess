@@ -56,14 +56,14 @@ func ClearOutTable(t testing.TB, vtParams mysql.ConnParams, tableName string) {
 		}
 		conn, err := mysql.Connect(ctx, &vtParams)
 		if err != nil {
-			log.Errorf("Error in connection - %v\n", err)
+			log.ErrorS(fmt.Sprintf("Error in connection - %v\n", err))
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
 
 		res, err := conn.ExecuteFetch(fmt.Sprintf("SELECT count(*) FROM %v", tableName), 1, false)
 		if err != nil {
-			log.Errorf("Error in selecting - %v\n", err)
+			log.ErrorS(fmt.Sprintf("Error in selecting - %v\n", err))
 			conn.Close()
 			time.Sleep(100 * time.Millisecond)
 			continue
@@ -79,7 +79,7 @@ func ClearOutTable(t testing.TB, vtParams mysql.ConnParams, tableName string) {
 		_, err = conn.ExecuteFetch(fmt.Sprintf("DELETE FROM %v LIMIT 10000", tableName), 10000, false)
 		conn.Close()
 		if err != nil {
-			log.Errorf("Error in cleanup deletion - %v\n", err)
+			log.ErrorS(fmt.Sprintf("Error in cleanup deletion - %v\n", err))
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
@@ -91,7 +91,7 @@ func ClearOutTable(t testing.TB, vtParams mysql.ConnParams, tableName string) {
 func WriteTestCommunicationFile(t *testing.T, fileName string, content string) {
 	// Delete the file just to make sure it doesn't exist before we write to it.
 	DeleteFile(fileName)
-	err := os.WriteFile(path.Join(os.Getenv("VTDATAROOT"), fileName), []byte(content), 0644)
+	err := os.WriteFile(path.Join(os.Getenv("VTDATAROOT"), fileName), []byte(content), 0o644)
 	require.NoError(t, err)
 }
 
@@ -111,7 +111,7 @@ func RunMultiShardCommitWithDelay(t *testing.T, conn *mysql.Conn, commitDelayTim
 		defer wg.Done()
 		_, err := utils.ExecAllowError(t, conn, "commit")
 		if err != nil {
-			log.Errorf("Error in commit - %v", err)
+			log.ErrorS(fmt.Sprintf("Error in commit - %v", err))
 		}
 	}()
 }

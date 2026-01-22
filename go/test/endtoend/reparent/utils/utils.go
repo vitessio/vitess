@@ -151,7 +151,7 @@ func TeardownCluster(clusterInstance *cluster.LocalProcessCluster) {
 	// We're running in the CI, so free up disk space for any
 	// subsequent tests.
 	if err := os.RemoveAll(usedRoot); err != nil {
-		log.Errorf("Failed to remove previously used VTDATAROOT (%s): %v", usedRoot, err)
+		log.ErrorS(fmt.Sprintf("Failed to remove previously used VTDATAROOT (%s): %v", usedRoot, err))
 	}
 }
 
@@ -188,7 +188,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	shard.Vttablets = tablets
 
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--lock_tables_timeout", "5s",
 		"--track_schema_versions=true",
 		// disabling online-ddl for reparent tests. This is done to reduce flakiness.
@@ -207,7 +207,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
-			log.Infof("Starting MySql for tablet %v", tablet.Alias)
+			log.InfoS(fmt.Sprintf("Starting MySql for tablet %v", tablet.Alias))
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			require.NoError(t, err, "Error starting start mysql")
 			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
@@ -283,7 +283,7 @@ func StartNewVTTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 		clusterInstance.Hostname,
 		clusterInstance.TmpDirectory,
 		[]string{
-			//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+			// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 			"--lock_tables_timeout", "5s",
 			"--track_schema_versions=true",
 			"--queryserver_enable_online_ddl" + "=false",
@@ -291,7 +291,7 @@ func StartNewVTTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 		clusterInstance.DefaultCharset)
 	tablet.VttabletProcess.SupportsBackup = supportsBackup
 
-	log.Infof("Starting MySql for tablet %v", tablet.Alias)
+	log.InfoS(fmt.Sprintf("Starting MySql for tablet %v", tablet.Alias))
 	proc, err := tablet.MysqlctlProcess.StartProcess()
 	require.NoError(t, err, "Error starting start mysql")
 	if err := proc.Wait(); err != nil {
@@ -368,7 +368,8 @@ func PrsAvoid(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *c
 func PrsWithTimeout(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet, avoid bool, actionTimeout, waitTimeout string, extraArgs ...string) (string, error) {
 	args := []string{
 		"PlannedReparentShard",
-		fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
+		fmt.Sprintf("%s/%s", KeyspaceName, ShardName),
+	}
 	if actionTimeout != "" {
 		args = append(args, "--action_timeout", actionTimeout)
 	}
@@ -643,9 +644,9 @@ func GetShardReplicationPositions(t *testing.T, clusterInstance *cluster.LocalPr
 		strArray = strArray[:len(strArray)-1] // Truncate slice, remove empty line
 	}
 	if doPrint {
-		log.Infof("Positions:")
+		log.InfoS("Positions:")
 		for _, pos := range strArray {
-			log.Infof("\t%s", pos)
+			log.InfoS("\t" + pos)
 		}
 	}
 	return strArray

@@ -18,6 +18,8 @@ package tmclient
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -314,7 +316,8 @@ var tabletManagerClientFactories = make(map[string]TabletManagerClientFactory)
 // TabletManagerClient implementations. Should be called on init().
 func RegisterTabletManagerClientFactory(name string, factory TabletManagerClientFactory) {
 	if _, ok := tabletManagerClientFactories[name]; ok {
-		log.Fatalf("RegisterTabletManagerClient %s already exists", name)
+		log.ErrorS(fmt.Sprintf("RegisterTabletManagerClient %s already exists", name))
+		os.Exit(1)
 	}
 	tabletManagerClientFactories[name] = factory
 }
@@ -324,7 +327,8 @@ func RegisterTabletManagerClientFactory(name string, factory TabletManagerClient
 func NewTabletManagerClient() TabletManagerClient {
 	f, ok := tabletManagerClientFactories[tabletManagerProtocol]
 	if !ok {
-		log.Exitf("No TabletManagerProtocol registered with name %s", tabletManagerProtocol)
+		log.ErrorS("No TabletManagerProtocol registered with name " + tabletManagerProtocol)
+		os.Exit(1)
 	}
 
 	return f()

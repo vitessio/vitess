@@ -55,11 +55,12 @@ type AuthServerVault struct {
 func InitAuthServerVault(vaultAddr string, vaultTimeout time.Duration, vaultCACert, vaultPath string, vaultCacheTTL time.Duration, vaultTokenFile, vaultRoleID, vaultRoleSecretIDFile, vaultRoleMountPoint string) {
 	// Check critical parameters.
 	if vaultAddr == "" {
-		log.Infof("Not configuring AuthServerVault, as --mysql_auth_vault_addr is empty.")
+		log.InfoS("Not configuring AuthServerVault, as --mysql_auth_vault_addr is empty.")
 		return
 	}
 	if vaultPath == "" {
-		log.Exitf("If using Vault auth server, --mysql_auth_vault_path is required.")
+		log.ErrorS("If using Vault auth server, --mysql_auth_vault_path is required.")
+		os.Exit(1)
 	}
 
 	registerAuthServerVault(vaultAddr, vaultTimeout, vaultCACert, vaultPath, vaultCacheTTL, vaultTokenFile, vaultRoleID, vaultRoleSecretIDFile, vaultRoleMountPoint)
@@ -68,7 +69,8 @@ func InitAuthServerVault(vaultAddr string, vaultTimeout time.Duration, vaultCACe
 func registerAuthServerVault(addr string, timeout time.Duration, caCertPath string, path string, ttl time.Duration, tokenFilePath string, roleID string, secretIDPath string, roleMountPoint string) {
 	authServerVault, err := newAuthServerVault(addr, timeout, caCertPath, path, ttl, tokenFilePath, roleID, secretIDPath, roleMountPoint)
 	if err != nil {
-		log.Exitf("%s", err)
+		log.ErrorS(fmt.Sprintf("%s", err))
+		os.Exit(1)
 	}
 	mysql.RegisterAuthServer("vault", authServerVault)
 }
@@ -117,7 +119,7 @@ func newAuthServerVault(addr string, timeout time.Duration, caCertPath string, p
 
 	client, err := vaultapi.NewClient(config)
 	if err != nil || client == nil {
-		log.Errorf("Error in vault client initialization, will retry: %v", err)
+		log.ErrorS(fmt.Sprintf("Error in vault client initialization, will retry: %v", err))
 	}
 
 	a := &AuthServerVault{
@@ -222,7 +224,7 @@ func (a *AuthServerVault) reloadVault() error {
 		return errors.New("vtgate credentials from Vault empty! Not updating previously cached values")
 	}
 
-	log.Infof("reloadVault(): success. Client status: %s", a.vaultClient.GetStatus())
+	log.InfoS("reloadVault(): success. Client status: " + a.vaultClient.GetStatus())
 	a.mu.Lock()
 	a.entries = entries
 	a.mu.Unlock()
@@ -240,14 +242,14 @@ func (a *AuthServerVault) installSignalHandlers() {
 		for range a.sigChan {
 			err := a.reloadVault()
 			if err != nil {
-				log.Errorf("%s", err)
+				log.ErrorS(fmt.Sprintf("%s", err))
 			}
 		}
 	}()
 }
 
 func (a *AuthServerVault) close() {
-	log.Warningf("Closing AuthServerVault instance.")
+	log.WarnS("Closing AuthServerVault instance.")
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.vaultCacheExpireTicker != nil {
@@ -267,7 +269,7 @@ func readFromFile(filePath string) (string, error) {
 	}
 	fileBytes, err := os.ReadFile(filePath)
 	if err != nil {
-		log.Errorf("Could not read file: %s", filePath)
+		log.ErrorS("Could not read file: " + filePath)
 		return "", err
 	}
 	return strings.TrimSpace(string(fileBytes)), nil

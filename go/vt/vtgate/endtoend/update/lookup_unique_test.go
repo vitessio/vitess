@@ -157,9 +157,9 @@ func TestMain(m *testing.M) {
 		}
 		if err := cluster.Setup(); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
-			//log error
+			// log error
 			if err := cluster.TearDown(); err != nil {
-				log.Errorf("cluster.TearDown() did not work: ", err)
+				log.ErrorS(fmt.Sprintf("cluster.TearDown() did not work: %v", err))
 			}
 			return 1
 		}
@@ -180,7 +180,6 @@ func TestMain(m *testing.M) {
 func TestUpdateUnownedLookupVindexValidValue(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
-
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +202,6 @@ func TestUpdateUnownedLookupVindexValidValue(t *testing.T) {
 func TestUpdateUnownedLookupVindexInvalidValue(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
-
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -112,7 +112,7 @@ func txlogzHandler(w http.ResponseWriter, req *http.Request, redactUIQuery bool)
 				io.WriteString(w, `<tr class="error">`)
 				io.WriteString(w, err.Error())
 				io.WriteString(w, "</tr>")
-				log.Error(err)
+				log.ErrorS(fmt.Sprint(err))
 				continue
 			}
 			// not all StatefulConnections contain transactions
@@ -142,6 +142,6 @@ func writeTransactionData(w http.ResponseWriter, txc *StatefulConnection) {
 		ColorLevel string
 	}{txc, duration, level}
 	if err := txlogzTmpl.Execute(w, tmplData); err != nil {
-		log.Errorf("txlogz: couldn't execute template: %v", err)
+		log.ErrorS(fmt.Sprintf("txlogz: couldn't execute template: %v", err))
 	}
 }

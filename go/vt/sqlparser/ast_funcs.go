@@ -466,7 +466,7 @@ func ReplaceExpr(root, from, to Expr) Expr {
 
 	expr, success := tmp.(Expr)
 	if !success {
-		log.Errorf("Failed to rewrite expression. Rewriter returned a non-expression:  %s", String(tmp))
+		log.ErrorS("Failed to rewrite expression. Rewriter returned a non-expression:  " + String(tmp))
 		return from
 	}
 
@@ -3042,6 +3042,7 @@ func (node *Select) SetWherePredicate(expr Expr) {
 		Expr: expr,
 	}
 }
+
 func (node *Delete) GetFrom() []TableExpr {
 	return node.TableExprs
 }

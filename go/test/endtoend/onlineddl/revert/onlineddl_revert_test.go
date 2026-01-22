@@ -147,7 +147,7 @@ func TestMain(m *testing.M) {
 		defer clusterInstance.Teardown()
 
 		if _, err := os.Stat(schemaChangeDirectory); os.IsNotExist(err) {
-			_ = os.Mkdir(schemaChangeDirectory, 0700)
+			_ = os.Mkdir(schemaChangeDirectory, 0o700)
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
@@ -235,7 +235,7 @@ func testRevertible(t *testing.T) {
 		t.Logf("MySQL support for 'rename_table_preserve_foreign_key': %v", fkOnlineDDLPossible)
 	})
 
-	var testCases = []revertibleTestCase{
+	testCases := []revertibleTestCase{
 		{
 			name:       "identical schemas",
 			fromSchema: `id int primary key, i1 int not null default 0`,
@@ -1368,7 +1368,7 @@ func generateDelete(t *testing.T, conn *mysql.Conn) error {
 }
 
 func runSingleConnection(ctx context.Context, t *testing.T, done *int64) {
-	log.Infof("Running single connection")
+	log.InfoS("Running single connection")
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -1380,7 +1380,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, done *int64) {
 
 	for {
 		if atomic.LoadInt64(done) == 1 {
-			log.Infof("Terminating single connection")
+			log.InfoS("Terminating single connection")
 			return
 		}
 		switch rand.Int32N(3) {
@@ -1397,7 +1397,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, done *int64) {
 }
 
 func runMultipleConnections(ctx context.Context, t *testing.T) {
-	log.Infof("Running multiple connections")
+	log.InfoS("Running multiple connections")
 
 	require.True(t, checkTable(t, tableName, true))
 	var done int64
@@ -1411,14 +1411,14 @@ func runMultipleConnections(ctx context.Context, t *testing.T) {
 	}
 	<-ctx.Done()
 	atomic.StoreInt64(&done, 1)
-	log.Infof("Running multiple connections: done")
+	log.InfoS("Running multiple connections: done")
 	wg.Wait()
-	log.Infof("All connections cancelled")
+	log.InfoS("All connections cancelled")
 }
 
 func initTable(t *testing.T) {
-	log.Infof("initTable begin")
-	defer log.Infof("initTable complete")
+	log.InfoS("initTable begin")
+	defer log.InfoS("initTable complete")
 
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -1444,7 +1444,7 @@ func testSelectTableMetrics(t *testing.T) {
 	writeMetrics.mu.Lock()
 	defer writeMetrics.mu.Unlock()
 
-	log.Infof("%s", writeMetrics.String())
+	log.InfoS(writeMetrics.String())
 
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -1456,7 +1456,7 @@ func testSelectTableMetrics(t *testing.T) {
 
 	row := rs.Named().Row()
 	require.NotNil(t, row)
-	log.Infof("testSelectTableMetrics, row: %v", row)
+	log.InfoS(fmt.Sprintf("testSelectTableMetrics, row: %v", row))
 	numRows := row.AsInt64("num_rows", 0)
 	sumUpdates := row.AsInt64("sum_updates", 0)
 

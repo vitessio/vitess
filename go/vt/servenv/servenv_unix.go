@@ -19,6 +19,7 @@ limitations under the License.
 package servenv
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
 	"runtime/debug"
@@ -48,22 +49,24 @@ func Init() {
 		signal.Notify(sigChan, syscall.SIGPIPE)
 		go func() {
 			<-sigChan
-			log.Warning("Caught SIGPIPE (ignoring all future SIGPIPEs)")
+			log.WarnS("Caught SIGPIPE (ignoring all future SIGPIPEs)")
 			signal.Ignore(syscall.SIGPIPE)
 		}()
 	}
 
 	// Add version tag to every info log
-	log.Infof(AppVersion.String())
+	log.InfoS(AppVersion.String())
 	if inited {
-		log.Fatal("servenv.Init called second time")
+		log.ErrorS("servenv.Init called second time")
+		os.Exit(1)
 	}
 	inited = true
 
 	// Once you run as root, you pretty much destroy the chances of a
 	// non-privileged user starting the program correctly.
 	if uid := os.Getuid(); uid == 0 {
-		log.Exitf("servenv.Init: running this as root makes no sense")
+		log.ErrorS("servenv.Init: running this as root makes no sense")
+		os.Exit(1)
 	}
 
 	// We used to set this limit directly, but you pretty much have to
@@ -73,7 +76,7 @@ func Init() {
 	// the server.
 	fdLimit := &syscall.Rlimit{}
 	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, fdLimit); err != nil {
-		log.Errorf("max-open-fds failed: %v", err)
+		log.ErrorS(fmt.Sprintf("max-open-fds failed: %v", err))
 	}
 	fdl := stats.NewGauge("MaxFds", "File descriptor limit")
 	fdl.Set(int64(fdLimit.Cur))

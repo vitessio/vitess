@@ -18,22 +18,21 @@ package db
 
 import (
 	"database/sql"
+	"fmt"
+	"os"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtorc/config"
 )
 
-var (
-	Db DB = (*vtorcDB)(nil)
-)
+var Db DB = (*vtorcDB)(nil)
 
 type DB interface {
 	QueryVTOrc(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error
 }
 
-type vtorcDB struct {
-}
+type vtorcDB struct{}
 
 var _ DB = (*vtorcDB)(nil)
 
@@ -46,9 +45,10 @@ func OpenVTOrc() (db *sql.DB, err error) {
 	var fromCache bool
 	db, fromCache, err = sqlutils.GetSQLiteDB(config.GetSQLiteDataFile())
 	if err == nil && !fromCache {
-		log.Infof("Connected to vtorc backend: sqlite on %v", config.GetSQLiteDataFile())
+		log.InfoS(fmt.Sprintf("Connected to vtorc backend: sqlite on %v", config.GetSQLiteDataFile()))
 		if err := initVTOrcDB(db); err != nil {
-			log.Fatalf("Cannot initiate vtorc: %+v", err)
+			log.ErrorS(fmt.Sprintf("Cannot initiate vtorc: %+v", err))
+			os.Exit(1)
 		}
 	}
 	if db != nil {
@@ -68,7 +68,8 @@ func registerVTOrcDeployment(db *sql.DB) error {
 		DATETIME('now')
 	)`
 	if _, err := execInternal(db, query, ""); err != nil {
-		log.Fatalf("Unable to write to vtorc_db_deployments: %+v", err)
+		log.ErrorS(fmt.Sprintf("Unable to write to vtorc_db_deployments: %+v", err))
+		os.Exit(1)
 	}
 	return nil
 }
@@ -94,7 +95,8 @@ func ClearVTOrcDatabase() {
 	db, _, _ := sqlutils.GetSQLiteDB(config.GetSQLiteDataFile())
 	if db != nil {
 		if err := initVTOrcDB(db); err != nil {
-			log.Fatalf("Cannot re-initiate vtorc: %+v", err)
+			log.ErrorS(fmt.Sprintf("Cannot re-initiate vtorc: %+v", err))
+			os.Exit(1)
 		}
 	}
 }
@@ -102,8 +104,8 @@ func ClearVTOrcDatabase() {
 // initVTOrcDB attempts to create/upgrade the vtorc backend database. It is created once in the
 // application's lifetime.
 func initVTOrcDB(db *sql.DB) error {
-	log.Info("Initializing vtorc")
-	log.Info("Migrating database schema")
+	log.InfoS("Initializing vtorc")
+	log.InfoS("Migrating database schema")
 	if err := deployStatements(db, vtorcBackend); err != nil {
 		return err
 	}
@@ -151,7 +153,7 @@ func QueryVTOrc(query string, argsArray []any, onRow func(sqlutils.RowMap) error
 	}
 
 	if err = sqlutils.QueryRowsMap(db, query, onRow, argsArray...); err != nil {
-		log.Warning(err.Error())
+		log.WarnS(err.Error())
 	}
 
 	return err

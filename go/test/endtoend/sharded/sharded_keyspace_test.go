@@ -115,7 +115,7 @@ func TestShardedKeyspace(t *testing.T) {
 
 	// apply the schema on the first shard through vtctl, so all tablets
 	// are the same.
-	//apply the schema on the second shard.
+	// apply the schema on the second shard.
 	_, err = shard1Primary.VttabletProcess.QueryTablet(sqlSchema, keyspaceName, true)
 	require.Nil(t, err)
 
@@ -123,7 +123,7 @@ func TestShardedKeyspace(t *testing.T) {
 	require.Nil(t, err)
 
 	if err = clusterInstance.VtctldClientProcess.ApplyVSchema(keyspaceName, vSchema); err != nil {
-		log.Error(err.Error())
+		log.ErrorS(err.Error())
 		return
 	}
 
@@ -249,10 +249,10 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 		}
 
 		for _, tablet := range shard.Vttablets {
-			log.Info(fmt.Sprintf("Starting vttablet for tablet uid %d, grpc port %d", tablet.TabletUID, tablet.GrpcPort))
+			log.InfoS(fmt.Sprintf("Starting vttablet for tablet uid %d, grpc port %d", tablet.TabletUID, tablet.GrpcPort))
 
 			if err := tablet.VttabletProcess.Setup(); err != nil {
-				log.Error(err.Error())
+				log.ErrorS(err.Error())
 				return
 			}
 		}

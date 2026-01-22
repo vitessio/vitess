@@ -21,6 +21,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"sync"
@@ -88,7 +89,7 @@ func vrlogStatsHandler(ch chan *VrLogStats, w http.ResponseWriter, r *http.Reque
 			default:
 			}
 			if err := vrLogStatsTemplate.Execute(w, stats); err != nil {
-				log.Errorf("vrlog: couldn't execute template: %v", err)
+				log.ErrorS(fmt.Sprintf("vrlog: couldn't execute template: %v", err))
 			}
 			if f, ok := w.(http.Flusher); ok {
 				f.Flush()

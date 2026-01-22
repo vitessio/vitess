@@ -56,7 +56,8 @@ var (
 		vtutils.GetFlagVariantForTests("--degraded-threshold"), "5s",
 		vtutils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
 		vtutils.GetFlagVariantForTests("--watch-replication-stream"),
-		vtutils.GetFlagVariantForTests("--serving-state-grace-period"), "1s"}
+		vtutils.GetFlagVariantForTests("--serving-state-grace-period"), "1s",
+	}
 	recoveryKS1  = "recovery_ks1"
 	recoveryKS2  = "recovery_ks2"
 	vtInsertTest = `create table vt_insert_test (
@@ -104,7 +105,7 @@ func TestMainImpl(m *testing.M) {
 			return 1, err
 		}
 		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
-		os.WriteFile(newInitDBFile, []byte(sql), 0666)
+		os.WriteFile(newInitDBFile, []byte(sql), 0o666)
 
 		extraArgs := []string{"--db-credentials-file", dbCredentialFile}
 		commonTabletArg = append(commonTabletArg, "--db-credentials-file", dbCredentialFile)
@@ -174,7 +175,7 @@ func TestMainImpl(m *testing.M) {
 	}()
 
 	if err != nil {
-		log.Error(err.Error())
+		log.ErrorS(err.Error())
 		os.Exit(1)
 	} else {
 		os.Exit(exitCode)
@@ -288,7 +289,7 @@ func TestRecoveryImpl(t *testing.T) {
 	// only one row from first backup
 	cluster.VerifyRowsInTablet(t, replica3, keyspaceName, 1)
 
-	//verify that restored replica has value = test1
+	// verify that restored replica has value = test1
 	qr, err = replica3.VttabletProcess.QueryTablet("select msg from vt_insert_test where id = 1", keyspaceName, true)
 	assert.NoError(t, err)
 	assert.Equal(t, "test1", qr.Rows[0][0].ToString())

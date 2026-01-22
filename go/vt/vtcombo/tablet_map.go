@@ -92,7 +92,7 @@ func CreateTablet(
 		Cell: cell,
 		Uid:  uid,
 	}
-	log.Infof("Creating %v tablet %v for %v/%v", tabletType, topoproto.TabletAliasString(alias), keyspace, shard)
+	log.InfoS(fmt.Sprintf("Creating %v tablet %v for %v/%v", tabletType, topoproto.TabletAliasString(alias), keyspace, shard))
 
 	controller := tabletserver.NewServer(ctx, env, topoproto.TabletAliasString(alias), ts, alias, srvTopoCounts)
 	initTabletType := tabletType
@@ -418,7 +418,7 @@ func CreateKs(
 				return 0, fmt.Errorf("SaveVSchema(%v) failed: %v", keyspace, err)
 			}
 		} else {
-			log.Infof("File %v doesn't exist, skipping vschema for keyspace %v", f, keyspace)
+			log.InfoS(fmt.Sprintf("File %v doesn't exist, skipping vschema for keyspace %v", f, keyspace))
 		}
 	}
 

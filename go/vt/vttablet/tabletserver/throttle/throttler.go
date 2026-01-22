@@ -101,9 +101,7 @@ const (
 	throttlerConfigPrefix = "config/"
 )
 
-var (
-	throttleTabletTypes = "replica"
-)
+var throttleTabletTypes = "replica"
 
 var (
 	statsThrottlerHeartbeatRequests    = stats.NewCounter("ThrottlerHeartbeatRequests", "heartbeat requests")
@@ -119,9 +117,7 @@ func registerThrottlerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &throttleTabletTypes, "throttle-tablet-types", throttleTabletTypes, "Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' always implicitly included")
 }
 
-var (
-	ErrThrottlerNotOpen = errors.New("throttler not open")
-)
+var ErrThrottlerNotOpen = errors.New("throttler not open")
 
 // throttlerTopoService represents the functionality we expect from a TopoServer, abstracted so that
 // it can be mocked in unit tests
@@ -327,7 +323,7 @@ func (throttler *Throttler) GetMetricsThreshold() float64 {
 
 // initThrottler initializes config
 func (throttler *Throttler) initConfig() {
-	log.Infof("Throttler: initializing config")
+	log.InfoS("Throttler: initializing config")
 
 	throttler.configSettings = &config.ConfigurationSettings{
 		MySQLStore: config.MySQLConfigurationSettings{
@@ -343,7 +339,7 @@ func (throttler *Throttler) readThrottlerConfig(ctx context.Context) (*topodatap
 		if ti, err := throttler.ts.GetTablet(ctx, throttler.tabletAlias); err == nil {
 			throttler.tabletInfo.Store(ti)
 		} else {
-			log.Errorf("Throttler: error reading tablet info: %v", err)
+			log.ErrorS(fmt.Sprintf("Throttler: error reading tablet info: %v", err))
 		}
 	}
 
@@ -380,7 +376,7 @@ func (throttler *Throttler) normalizeThrottlerConfig(throttlerConfig *topodatapb
 func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspace, err error) bool {
 	if err != nil {
 		if !topo.IsErrType(err, topo.Interrupted) && !errors.Is(err, context.Canceled) {
-			log.Errorf("WatchSrvKeyspaceCallback error: %v", err)
+			log.ErrorS(fmt.Sprintf("WatchSrvKeyspaceCallback error: %v", err))
 		}
 		return true
 	}
@@ -424,7 +420,7 @@ func (throttler *Throttler) convergeMetricThresholds() {
 // This may cause the throttler to be enabled/disabled, and of course it affects the throttling query/threshold.
 // Note: you should be holding the initMutex when calling this function.
 func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerConfig *topodatapb.ThrottlerConfig) {
-	log.Infof("Throttler: applying topo config: %+v", throttlerConfig)
+	log.InfoS(fmt.Sprintf("Throttler: applying topo config: %+v", throttlerConfig))
 	throttler.customMetricsQuery.Store(throttlerConfig.CustomQuery)
 	if throttlerConfig.Threshold > 0 || throttlerConfig.CustomQuery != "" {
 		// We do not allow Threshold=0, unless there is a custom query.
@@ -527,10 +523,10 @@ func (throttler *Throttler) Enable() *sync.WaitGroup {
 	defer throttler.enableMutex.Unlock()
 
 	if wasEnabled := throttler.isEnabled.Swap(true); wasEnabled {
-		log.Infof("Throttler: already enabled")
+		log.InfoS("Throttler: already enabled")
 		return nil
 	}
-	log.Infof("Throttler: enabling")
+	log.InfoS("Throttler: enabling")
 
 	wg := &sync.WaitGroup{}
 	var ctx context.Context
@@ -551,10 +547,10 @@ func (throttler *Throttler) Disable() bool {
 	defer throttler.enableMutex.Unlock()
 
 	if wasEnabled := throttler.isEnabled.Swap(false); !wasEnabled {
-		log.Infof("Throttler: already disabled")
+		log.InfoS("Throttler: already disabled")
 		return false
 	}
-	log.Infof("Throttler: disabling")
+	log.InfoS("Throttler: disabling")
 
 	throttler.cancelEnableContext()
 	return true
@@ -574,7 +570,7 @@ func (throttler *Throttler) retryReadAndApplyThrottlerConfig(ctx context.Context
 	for {
 		if !throttler.IsOpen() {
 			// Throttler is not open so no need to keep retrying.
-			log.Warningf("Throttler.retryReadAndApplyThrottlerConfig(): throttler no longer seems to be open, exiting")
+			log.WarnS("Throttler.retryReadAndApplyThrottlerConfig(): throttler no longer seems to be open, exiting")
 			return
 		}
 
@@ -582,7 +578,7 @@ func (throttler *Throttler) retryReadAndApplyThrottlerConfig(ctx context.Context
 		defer requestCancel()
 		throttlerConfig, err := throttler.readThrottlerConfig(requestCtx)
 		if err == nil {
-			log.Infof("Throttler.retryReadAndApplyThrottlerConfig(): success reading throttler config: %+v", throttlerConfig)
+			log.InfoS(fmt.Sprintf("Throttler.retryReadAndApplyThrottlerConfig(): success reading throttler config: %+v", throttlerConfig))
 			// It's possible that during a retry-sleep, the throttler is closed and opened again, leading
 			// to two (or more) instances of this goroutine. That's not a big problem; it's fine if all
 			// attempt to read the throttler config; but we just want to ensure they don't step on each other
@@ -597,11 +593,11 @@ func (throttler *Throttler) retryReadAndApplyThrottlerConfig(ctx context.Context
 			})
 			return
 		}
-		log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): error reading throttler config. Will retry in %v. Err=%+v", retryInterval, err)
+		log.ErrorS(fmt.Sprintf("Throttler.retryReadAndApplyThrottlerConfig(): error reading throttler config. Will retry in %v. Err=%+v", retryInterval, err))
 		select {
 		case <-ctx.Done():
 			// Throttler is not open so no need to keep retrying.
-			log.Infof("Throttler.retryReadAndApplyThrottlerConfig(): throttler no longer seems to be open, exiting")
+			log.InfoS("Throttler.retryReadAndApplyThrottlerConfig(): throttler no longer seems to be open, exiting")
 			return
 		case <-retryTicker.C:
 		}
@@ -610,17 +606,17 @@ func (throttler *Throttler) retryReadAndApplyThrottlerConfig(ctx context.Context
 
 // Open opens database pool and initializes the schema
 func (throttler *Throttler) Open() error {
-	log.Infof("Throttler: started execution of Open. Acquiring initMutex lock")
+	log.InfoS("Throttler: started execution of Open. Acquiring initMutex lock")
 	throttler.initMutex.Lock()
 	defer throttler.initMutex.Unlock()
 
 	isOpen := throttler.isOpen.Swap(true)
 	if isOpen {
 		// already open
-		log.Infof("Throttler: throttler is already open")
+		log.InfoS("Throttler: throttler is already open")
 		return nil
 	}
-	log.Infof("Throttler: opening")
+	log.InfoS("Throttler: opening")
 	var ctx context.Context
 	ctx, throttler.cancelOpenContext = context.WithCancel(context.Background())
 	throttler.customMetricsQuery.Store("")
@@ -636,13 +632,13 @@ func (throttler *Throttler) Open() error {
 
 // Close frees resources
 func (throttler *Throttler) Close() {
-	log.Infof("Throttler: started execution of Close. Acquiring initMutex lock")
+	log.InfoS("Throttler: started execution of Close. Acquiring initMutex lock")
 	throttler.initMutex.Lock()
-	log.Infof("Throttler: acquired initMutex lock")
+	log.InfoS("Throttler: acquired initMutex lock")
 	defer throttler.initMutex.Unlock()
 	isOpen := throttler.isOpen.Swap(false)
 	if !isOpen {
-		log.Infof("Throttler: throttler is not open")
+		log.InfoS("Throttler: throttler is not open")
 		return
 	}
 	throttler.Disable()
@@ -651,13 +647,13 @@ func (throttler *Throttler) Close() {
 	// The below " != nil " checks are relevant to unit tests, where perhaps not all
 	// fields are supplied.
 	if throttler.pool != nil {
-		log.Infof("Throttler: closing pool")
+		log.InfoS("Throttler: closing pool")
 		throttler.pool.Close()
 	}
 	if throttler.cancelOpenContext != nil {
 		throttler.cancelOpenContext()
 	}
-	log.Infof("Throttler: finished execution of Close")
+	log.InfoS("Throttler: finished execution of Close")
 }
 
 // requestHeartbeats sends a heartbeat lease request to the heartbeat writer.
@@ -692,7 +688,7 @@ func (throttler *Throttler) stimulatePrimaryThrottler(ctx context.Context, tmCli
 		req := &tabletmanagerdatapb.CheckThrottlerRequest{AppName: throttlerapp.ThrottlerStimulatorName.String()}
 		_, err = tmClient.CheckThrottler(ctx, tablet.Tablet, req)
 		if err != nil {
-			log.Errorf("stimulatePrimaryThrottler: %+v", err)
+			log.ErrorS(fmt.Sprintf("stimulatePrimaryThrottler: %+v", err))
 		}
 		return err
 	}
@@ -762,7 +758,7 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 		}()
 		// we do not flush throttler.throttledApps because this is data submitted by the user; the user expects the data to survive a disable+enable
 
-		defer log.Infof("Throttler: Operate terminated, tickers stopped")
+		defer log.InfoS("Throttler: Operate terminated, tickers stopped")
 		for _, t := range tickers {
 			defer t.Stop()
 			// since we just started the tickers now, speed up the ticks by forcing an immediate tick
@@ -792,11 +788,11 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 					isLeader := throttler.isLeader.Swap(shouldBeLeader)
 					transitionedIntoLeader := false
 					if shouldBeLeader && !isLeader {
-						log.Infof("Throttler: transition into leadership")
+						log.InfoS("Throttler: transition into leadership")
 						transitionedIntoLeader = true
 					}
 					if !shouldBeLeader && isLeader {
-						log.Infof("Throttler: transition out of leadership")
+						log.InfoS("Throttler: transition out of leadership")
 					}
 
 					if transitionedIntoLeader {
@@ -1038,17 +1034,17 @@ func (throttler *Throttler) refreshInventory(ctx context.Context) error {
 	addProbe := func(alias string, tablet *topodatapb.Tablet, scope base.Scope, mysqlSettings *config.MySQLConfigurationSettings, probes base.Probes) bool {
 		for _, ignore := range mysqlSettings.IgnoreHosts {
 			if strings.Contains(alias, ignore) {
-				log.Infof("Throttler: tablet ignored: %+v", alias)
+				log.InfoS(fmt.Sprintf("Throttler: tablet ignored: %+v", alias))
 				return false
 			}
 		}
 		if scope != base.SelfScope {
 			if alias == "" {
-				log.Errorf("Throttler: got empty alias for scope: %+v", scope)
+				log.ErrorS(fmt.Sprintf("Throttler: got empty alias for scope: %+v", scope))
 				return false
 			}
 			if tablet == nil {
-				log.Errorf("Throttler: got nil tablet for alias: %v in scope: %+v", alias, scope)
+				log.ErrorS(fmt.Sprintf("Throttler: got nil tablet for alias: %v in scope: %+v", alias, scope))
 				return false
 			}
 		}
@@ -1083,7 +1079,7 @@ func (throttler *Throttler) refreshInventory(ctx context.Context) error {
 	}
 	throttler.convergeMetricThresholds()
 
-	var clusterSettingsCopy = throttler.configSettings.MySQLStore
+	clusterSettingsCopy := throttler.configSettings.MySQLStore
 	// config may dynamically change, but internal structure (config.Settings().MySQLStore.Clusters in our case)
 	// is immutable and can only be _replaced_. Hence, it's safe to read in a goroutine:
 	collect := func() error {
@@ -1125,7 +1121,7 @@ func (throttler *Throttler) refreshInventory(ctx context.Context) error {
 	}
 	go func() {
 		if err := collect(); err != nil {
-			log.Errorf("refreshInventory: %+v", err)
+			log.ErrorS(fmt.Sprintf("refreshInventory: %+v", err))
 		}
 	}()
 	return nil

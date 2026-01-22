@@ -67,12 +67,12 @@ func init() {
 		panic("could not parse MySQL version: " + err.Error())
 	}
 	MySQLVersion = fmt.Sprintf("%d.%d.%d", mv.Major, mv.Minor, mv.Patch)
-	log.Infof("MySQL version: %s", MySQLVersion)
+	log.InfoS("MySQL version: " + MySQLVersion)
 	CollationEnv = collations.NewEnvironment(MySQLVersion)
 	// utf8mb4_general_ci is the default for MySQL 5.7 and
 	// utf8mb4_0900_ai_ci is the default for MySQL 8.0.
 	DefaultCollationID = CollationEnv.DefaultConnectionCharset()
-	log.Infof("Default collation ID: %d", DefaultCollationID)
+	log.InfoS(fmt.Sprintf("Default collation ID: %d", DefaultCollationID))
 }
 
 // Env contains all the env vars for a test against a mysql instance.

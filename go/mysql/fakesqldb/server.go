@@ -413,7 +413,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 
 		// log error
 		if err := callback(&sqltypes.Result{}); err != nil {
-			log.Errorf("callback failed : %v", err)
+			log.ErrorS(fmt.Sprintf("callback failed : %v", err))
 		}
 		return nil
 	}
@@ -426,7 +426,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 
 		// log error
 		if err := callback(&sqltypes.Result{}); err != nil {
-			log.Errorf("callback failed : %v", err)
+			log.ErrorS(fmt.Sprintf("callback failed : %v", err))
 		}
 		return nil
 	}
@@ -471,7 +471,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	parser := sqlparser.NewTestParser()
 	err = fmt.Errorf("fakesqldb:: query: '%s' is not supported on %v",
 		parser.TruncateForUI(query), db.name)
-	log.Errorf("Query not found: %s", parser.TruncateForUI(query))
+	log.ErrorS("Query not found: " + parser.TruncateForUI(query))
 
 	return err
 }

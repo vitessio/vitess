@@ -52,13 +52,13 @@ func commandWatch(cmd *cobra.Command, args []string) error {
 		case <-cmd.Context().Done():
 			return nil
 		case event := <-eventChan:
-			log.Infof("watch: event %v: %v", event.Path, event)
+			log.InfoS(fmt.Sprintf("watch: event %v: %v", event.Path, event))
 			if event.Type == zk.EventNodeDataChanged {
 				data, stat, watch, err := fs.Conn.GetW(cmd.Context(), event.Path)
 				if err != nil {
 					return fmt.Errorf("ERROR: failed to watch %v", err)
 				}
-				log.Infof("watch: %v %v\n", event.Path, stat)
+				log.InfoS(fmt.Sprintf("watch: %v %v\n", event.Path, stat))
 				println(data)
 				go func() {
 					eventChan <- <-watch
@@ -66,7 +66,7 @@ func commandWatch(cmd *cobra.Command, args []string) error {
 			} else if event.State == zk.StateDisconnected {
 				return nil
 			} else if event.Type == zk.EventNodeDeleted {
-				log.Infof("watch: %v deleted\n", event.Path)
+				log.InfoS(fmt.Sprintf("watch: %v deleted\n", event.Path))
 			} else {
 				// Most likely a session event - try t
 				_, _, watch, err := fs.Conn.GetW(cmd.Context(), event.Path)

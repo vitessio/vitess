@@ -122,7 +122,7 @@ func New(name string, opts Options) *Server {
 	streamInterceptors = append(streamInterceptors, func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		err := handler(srv, ss)
 		if err != nil {
-			log.Errorf("%s error: %s", info.FullMethod, err)
+			log.ErrorS(fmt.Sprintf("%s error: %s", info.FullMethod, err))
 		}
 
 		return err
@@ -130,7 +130,7 @@ func New(name string, opts Options) *Server {
 	unaryInterceptors = append(unaryInterceptors, func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
 		resp, err = handler(ctx, req)
 		if err != nil {
-			log.Errorf("%s error: %s", info.FullMethod, err)
+			log.ErrorS(fmt.Sprintf("%s error: %s", info.FullMethod, err))
 		}
 
 		return resp, err
@@ -220,7 +220,7 @@ func (s *Server) ListenAndServe() error {
 	go func() {
 		sig := <-signals
 		err := fmt.Errorf("received signal: %v", sig)
-		log.Warning(err)
+		log.WarnS(fmt.Sprint(err))
 		shutdown <- err
 	}()
 
@@ -237,14 +237,14 @@ func (s *Server) ListenAndServe() error {
 	go func() {
 		err := s.gRPCServer.Serve(grpcLis)
 		err = fmt.Errorf("grpc server stopped: %w", err)
-		log.Warning(err)
+		log.WarnS(fmt.Sprint(err))
 		shutdown <- err
 	}()
 
 	go func() {
 		err := http.Serve(anyLis, s.router)
 		err = fmt.Errorf("http server stopped: %w", err)
-		log.Warning(err)
+		log.WarnS(fmt.Sprint(err))
 		shutdown <- err
 	}()
 
@@ -252,7 +252,7 @@ func (s *Server) ListenAndServe() error {
 	go func() {
 		err := lmux.Serve()
 		err = fmt.Errorf("listener closed: %w", err)
-		log.Warning(err)
+		log.WarnS(fmt.Sprint(err))
 		shutdown <- err
 	}()
 
@@ -261,22 +261,22 @@ func (s *Server) ListenAndServe() error {
 	}
 
 	s.setServing(true)
-	log.Infof("server %s listening on %s", s.name, s.opts.Addr)
+	log.InfoS(fmt.Sprintf("server %s listening on %s", s.name, s.opts.Addr))
 
 	reason := <-shutdown
-	log.Warningf("graceful shutdown triggered by: %v", reason)
+	log.WarnS(fmt.Sprintf("graceful shutdown triggered by: %v", reason))
 
 	if s.opts.LameDuckDuration > 0 {
-		log.Infof("entering lame duck period for %v", s.opts.LameDuckDuration)
+		log.InfoS(fmt.Sprintf("entering lame duck period for %v", s.opts.LameDuckDuration))
 		s.healthServer.Shutdown()
 		time.Sleep(s.opts.LameDuckDuration)
 	} else {
-		log.Infof("lame duck disabled")
+		log.InfoS("lame duck disabled")
 	}
 
-	log.Info("beginning graceful shutdown")
+	log.InfoS("beginning graceful shutdown")
 	s.gRPCServer.GracefulStop()
-	log.Info("graceful shutdown complete")
+	log.InfoS("graceful shutdown complete")
 
 	s.setServing(false)
 

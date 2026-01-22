@@ -58,10 +58,12 @@ var (
 	//go:embed unsharded_unmanaged_vschema.json
 	unshardedUnmanagedVSchema string
 
-	fkTables = []string{"fk_t1", "fk_t2", "fk_t3", "fk_t4", "fk_t5", "fk_t6", "fk_t7",
+	fkTables = []string{
+		"fk_t1", "fk_t2", "fk_t3", "fk_t4", "fk_t5", "fk_t6", "fk_t7",
 		"fk_t10", "fk_t11", "fk_t12", "fk_t13", "fk_t15", "fk_t16", "fk_t17", "fk_t18", "fk_t19", "fk_t20",
 		"fk_multicol_t1", "fk_multicol_t2", "fk_multicol_t3", "fk_multicol_t4", "fk_multicol_t5", "fk_multicol_t6", "fk_multicol_t7",
-		"fk_multicol_t10", "fk_multicol_t11", "fk_multicol_t12", "fk_multicol_t13", "fk_multicol_t15", "fk_multicol_t16", "fk_multicol_t17", "fk_multicol_t18", "fk_multicol_t19"}
+		"fk_multicol_t10", "fk_multicol_t11", "fk_multicol_t12", "fk_multicol_t13", "fk_multicol_t15", "fk_multicol_t16", "fk_multicol_t17", "fk_multicol_t18", "fk_multicol_t19",
+	}
 	fkReferences = []fkReference{
 		{parentTable: "fk_t1", childTable: "fk_t2"},
 		{parentTable: "fk_t2", childTable: "fk_t7"},
@@ -264,6 +266,6 @@ func setupExtraMyConfig() error {
 		return fmt.Errorf("failed to set EXTRA_MY_CNF environment variable: %v", err)
 	}
 
-	log.Infof("Set EXTRA_MY_CNF to: %s", configPath)
+	log.InfoS("Set EXTRA_MY_CNF to: " + configPath)
 	return nil
 }

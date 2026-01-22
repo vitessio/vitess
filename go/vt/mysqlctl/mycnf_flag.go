@@ -17,6 +17,7 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -101,7 +102,7 @@ func RegisterFlags() {
 // this, otherwise we'll panic.
 func NewMycnfFromFlags(uid uint32) (mycnf *Mycnf, err error) {
 	if flagServerID != 0 {
-		log.Info("mycnf-server-id is specified, using command line parameters for mysql config")
+		log.InfoS("mycnf-server-id is specified, using command line parameters for mysql config")
 		return &Mycnf{
 			ServerID:              uint32(flagServerID),
 			MysqlPort:             flagMysqlPort,
@@ -130,9 +131,9 @@ func NewMycnfFromFlags(uid uint32) (mycnf *Mycnf, err error) {
 
 	if flagMycnfFile == "" {
 		flagMycnfFile = MycnfFile(uid)
-		log.Infof("No mycnf-server-id, no mycnf-file specified, using default config for server id %v: %v", uid, flagMycnfFile)
+		log.InfoS(fmt.Sprintf("No mycnf-server-id, no mycnf-file specified, using default config for server id %v: %v", uid, flagMycnfFile))
 	} else {
-		log.Infof("No mycnf-server-id specified, using mycnf-file file %v", flagMycnfFile)
+		log.InfoS(fmt.Sprintf("No mycnf-server-id specified, using mycnf-file file %v", flagMycnfFile))
 	}
 	mycnf = NewMycnf(uid, 0)
 	mycnf.Path = flagMycnfFile

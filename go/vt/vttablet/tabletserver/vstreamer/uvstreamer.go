@@ -101,7 +101,8 @@ type uvstreamerConfig struct {
 
 func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se *schema.Engine, startPos string,
 	tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, vschema *localVSchema,
-	throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions) *uvstreamer {
+	throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions,
+) *uvstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	config := &uvstreamerConfig{
 		MaxReplicationLag: 1 * time.Nanosecond,
@@ -115,7 +116,7 @@ func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se 
 		}
 		err := send(evs)
 		if err != nil {
-			log.Infof("uvstreamer replicate send() returned with err %v", err)
+			log.InfoS(fmt.Sprintf("uvstreamer replicate send() returned with err %v", err))
 		}
 		return err
 	}
@@ -255,7 +256,7 @@ func getQuery(tableName string, filter string) string {
 }
 
 func (uvs *uvstreamer) Cancel() {
-	log.Infof("uvstreamer context is being cancelled")
+	log.InfoS("uvstreamer context is being cancelled")
 	uvs.cancel()
 }
 
@@ -341,27 +342,27 @@ func (uvs *uvstreamer) send2(evs []*binlogdatapb.VEvent) error {
 	}
 	err := uvs.send(evs2)
 	if err != nil && err != io.EOF {
-		log.Infof("uvstreamer catchup/fastforward send() returning with send error %v", err)
+		log.InfoS(fmt.Sprintf("uvstreamer catchup/fastforward send() returning with send error %v", err))
 		return err
 	}
 	for _, ev := range evs2 {
 		if ev.Type == binlogdatapb.VEventType_GTID {
 			uvs.pos, _ = replication.DecodePosition(ev.Gtid)
 			if !uvs.stopPos.IsZero() && uvs.pos.AtLeast(uvs.stopPos) {
-				log.Infof("Reached stop position %v, returning io.EOF", uvs.stopPos)
+				log.InfoS(fmt.Sprintf("Reached stop position %v, returning io.EOF", uvs.stopPos))
 				err = io.EOF
 			}
 		}
 	}
 	if err != nil {
-		log.Infof("uvstreamer catchup/fastforward returning with EOF error %v", err)
+		log.InfoS(fmt.Sprintf("uvstreamer catchup/fastforward returning with EOF error %v", err))
 		uvs.vse.errorCounts.Add("Send", 1)
 	}
 	return err
 }
 
 func (uvs *uvstreamer) sendEventsForCurrentPos() error {
-	log.Infof("sendEventsForCurrentPos")
+	log.InfoS("sendEventsForCurrentPos")
 	evs := []*binlogdatapb.VEvent{{
 		Type: binlogdatapb.VEventType_GTID,
 		Gtid: replication.EncodePosition(uvs.pos),
@@ -436,14 +437,14 @@ func (uvs *uvstreamer) init() error {
 
 // Stream streams binlog events.
 func (uvs *uvstreamer) Stream() error {
-	log.Info("Stream() called")
+	log.InfoS("Stream() called")
 	if err := uvs.init(); err != nil {
 		return err
 	}
 	if len(uvs.plans) > 0 {
-		log.Info("TablePKs is not nil: starting vs.copy()")
+		log.InfoS("TablePKs is not nil: starting vs.copy()")
 		if err := uvs.copy(uvs.ctx); err != nil {
-			log.Infof("uvstreamer.Stream() copy returned with err %s", err)
+			log.InfoS(fmt.Sprintf("uvstreamer.Stream() copy returned with err %s", err))
 			uvs.vse.errorCounts.Add("Copy", 1)
 			return err
 		}
