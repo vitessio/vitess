@@ -19,6 +19,7 @@ package vreplication
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math"
 	"os"
 	"regexp"
@@ -35,13 +36,22 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 )
+
+func logMessages(handler *log.CaptureHandler) string {
+	records := handler.Records()
+	messages := make([]string, 0, len(records))
+	for _, record := range records {
+		messages = append(messages, record.Message)
+	}
+
+	return strings.Join(messages, "\n")
+}
 
 // TestPlayerGeneratedInvisiblePrimaryKey confirms that the gipk column is replicated by vplayer, both for target
 // tables that have a gipk column and those that make it visible.
@@ -586,14 +596,9 @@ func TestPlayerStatementModeWithFilterAndErrorHandling(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	// We want to check for the expected log message.
-	ole := log.ErrorDepth
-	logger := logutil.NewMemoryLogger()
-	log.ErrorDepth = func(depth int, args ...any) {
-		logger.ErrorDepth(depth, fmt.Sprint(args...))
-	}
-	defer func() {
-		log.ErrorDepth = ole
-	}()
+	handler := log.NewCaptureHandler()
+	restoreLogger := log.SetLogger(slog.New(handler))
+	defer restoreLogger()
 
 	execStatements(t, []string{
 		"create table src1(id int, val varbinary(128), primary key(id))",
@@ -637,7 +642,7 @@ func TestPlayerStatementModeWithFilterAndErrorHandling(t *testing.T) {
 	execStatements(t, input)
 	expectDBClientQueries(t, output)
 
-	logs := logger.String()
+	logs := logMessages(handler)
 	require.Regexp(t, expectedMsg, logs)
 }
 
@@ -3817,18 +3822,15 @@ func TestPlayerStalls(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	// We want to check for the expected log messages.
-	ole := log.ErrorDepth
-	logger := logutil.NewMemoryLogger()
-	log.ErrorDepth = func(depth int, args ...any) {
-		logger.ErrorDepth(depth, fmt.Sprint(args...))
-	}
+	handler := log.NewCaptureHandler()
+	restoreLogger := log.SetLogger(slog.New(handler))
 
 	oldMinimumHeartbeatUpdateInterval := vreplicationMinimumHeartbeatUpdateInterval
 	oldProgressDeadline := vplayerProgressDeadline
 	oldRelayLogMaxItems := vttablet.DefaultVReplicationConfig.RelayLogMaxItems
 	oldRetryDelay := vttablet.DefaultVReplicationConfig.RetryDelay
 	defer func() {
-		log.ErrorDepth = ole
+		restoreLogger()
 		vreplicationMinimumHeartbeatUpdateInterval = oldMinimumHeartbeatUpdateInterval
 		vplayerProgressDeadline = oldProgressDeadline
 		vttablet.DefaultVReplicationConfig.RelayLogMaxItems = oldRelayLogMaxItems
@@ -3896,7 +3898,7 @@ func TestPlayerStalls(t *testing.T) {
 			postFunc: func() {
 				time.Sleep(vplayerProgressDeadline)
 				log.Flush()
-				require.Contains(t, logger.String(), relayLogIOStalledMsg, "expected log message not found")
+				require.Contains(t, logMessages(handler), relayLogIOStalledMsg, "expected log message not found")
 				execStatements(t, []string{"set @@session.binlog_format='ROW'"})
 			},
 		},
@@ -3932,7 +3934,7 @@ func TestPlayerStalls(t *testing.T) {
 				// Signal the preFunc goroutine to close the connection holding the row locks.
 				done <- struct{}{}
 				log.Flush()
-				require.Contains(t, logger.String(), failedToRecordHeartbeatMsg, "expected log message not found")
+				require.Contains(t, logMessages(handler), failedToRecordHeartbeatMsg, "expected log message not found")
 			},
 			// Nothing should get replicated because of the exclusing row locks
 			// held in the other connection from our preFunc.
@@ -3953,7 +3955,7 @@ func TestPlayerStalls(t *testing.T) {
 			if tc.postFunc != nil {
 				tc.postFunc()
 			}
-			logger.Clear()
+			handler.Reset()
 		})
 	}
 }

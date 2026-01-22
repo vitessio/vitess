@@ -17,7 +17,8 @@ limitations under the License.
 package syslogger
 
 import (
-	"fmt"
+	"log/slog"
+	"strings"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -27,59 +28,42 @@ type loggerMsg struct {
 	level string
 }
 type testLogger struct {
-	logs            []loggerMsg
-	savedInfoDepth  func(depth int, args ...any)
-	savedWarnDepth  func(depth int, args ...any)
-	savedErrorDepth func(depth int, args ...any)
+	handler *log.CaptureHandler
+	restore func()
 }
 
 func NewTestLogger() *testLogger {
-	tl := &testLogger{
-		savedInfoDepth:  log.InfoDepth,
-		savedWarnDepth:  log.WarningDepth,
-		savedErrorDepth: log.ErrorDepth,
+	handler := log.NewCaptureHandler()
+	restore := log.SetLogger(slog.New(handler))
+
+	return &testLogger{
+		handler: handler,
+		restore: restore,
 	}
-	log.InfoDepth = tl.recordInfo
-	log.WarningDepth = tl.recordWarn
-	log.ErrorDepth = tl.recordError
-	return tl
 }
 
 func (tl *testLogger) Close() {
-	log.InfoDepth = tl.savedInfoDepth
-	log.WarningDepth = tl.savedWarnDepth
-	log.ErrorDepth = tl.savedErrorDepth
-}
-
-func (tl *testLogger) recordInfo(depth int, args ...any) {
-	msg := fmt.Sprint(args...)
-	tl.logs = append(tl.logs, loggerMsg{msg, "INFO"})
-	tl.savedInfoDepth(depth, msg)
-}
-
-func (tl *testLogger) recordWarn(depth int, args ...any) {
-	msg := fmt.Sprint(args...)
-	tl.logs = append(tl.logs, loggerMsg{msg, "WARNING"})
-	tl.savedWarnDepth(depth, msg)
-}
-
-func (tl *testLogger) recordError(depth int, args ...any) {
-	msg := fmt.Sprint(args...)
-	tl.logs = append(tl.logs, loggerMsg{msg, "ERROR"})
-	tl.savedErrorDepth(depth, msg)
+	if tl.restore != nil {
+		tl.restore()
+	}
 }
 
 func (tl *testLogger) getLog() loggerMsg {
-	if len(tl.logs) > 0 {
-		return tl.logs[len(tl.logs)-1]
+	record, ok := tl.handler.Last()
+	if ok {
+		return loggerMsg{
+			msg:   record.Message,
+			level: strings.ToUpper(record.Level.String()),
+		}
 	}
 	return loggerMsg{"no logs!", "ERROR"}
 }
 
 func (tl *testLogger) GetAllLogs() []string {
 	var logs []string
-	for _, l := range tl.logs {
-		logs = append(logs, l.level+":"+l.msg)
+	for _, record := range tl.handler.Records() {
+		level := strings.ToUpper(record.Level.String())
+		logs = append(logs, level+":"+record.Message)
 	}
 	return logs
 }

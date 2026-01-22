@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -1751,61 +1752,43 @@ func TestQueryAsString(t *testing.T) {
 }
 
 type testLogger struct {
-	logsMu sync.Mutex
-	logs   []string
-
-	savedInfoDepth  func(depth int, args ...any)
-	savedErrorDepth func(depth int, args ...any)
+	handler *log.CaptureHandler
+	restore func()
 }
 
 func newTestLogger() *testLogger {
-	tl := &testLogger{
-		savedInfoDepth:  log.InfoDepth,
-		savedErrorDepth: log.ErrorDepth,
+	handler := log.NewCaptureHandler()
+	restore := log.SetLogger(slog.New(handler))
+
+	return &testLogger{
+		handler: handler,
+		restore: restore,
 	}
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	log.InfoDepth = tl.recordInfo
-	log.ErrorDepth = tl.recordError
-	return tl
 }
 
 func (tl *testLogger) Close() {
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	log.InfoDepth = tl.savedInfoDepth
-	log.ErrorDepth = tl.savedErrorDepth
-}
-
-func (tl *testLogger) recordInfo(depth int, args ...any) {
-	msg := fmt.Sprint(args...)
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	tl.logs = append(tl.logs, msg)
-	tl.savedInfoDepth(depth, msg)
-}
-
-func (tl *testLogger) recordError(depth int, args ...any) {
-	msg := fmt.Sprint(args...)
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	tl.logs = append(tl.logs, msg)
-	tl.savedErrorDepth(depth, msg)
+	if tl.restore != nil {
+		tl.restore()
+	}
 }
 
 func (tl *testLogger) getLog(i int) string {
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	if i < len(tl.logs) {
-		return tl.logs[i]
+	logs := tl.getLogs()
+	if i < len(logs) {
+		return logs[i]
 	}
-	return fmt.Sprintf("ERROR: log %d/%d does not exist", i, len(tl.logs))
+
+	return fmt.Sprintf("ERROR: log %d/%d does not exist", i, len(logs))
 }
 
 func (tl *testLogger) getLogs() []string {
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	return tl.logs
+	records := tl.handler.Records()
+	logs := make([]string, 0, len(records))
+	for _, record := range records {
+		logs = append(logs, record.Message)
+	}
+
+	return logs
 }
 
 func TestHandleExecTabletError(t *testing.T) {
@@ -2111,7 +2094,7 @@ func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
 	}
 
 	// errors during failover aren't logged at all
-	require.Empty(t, tl.logs, "unexpected error log during failover")
+	require.Empty(t, tl.getLogs(), "unexpected error log during failover")
 }
 
 var aclJSON1 = `{

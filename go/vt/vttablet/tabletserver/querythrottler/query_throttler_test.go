@@ -18,7 +18,7 @@ package querythrottler
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -284,15 +284,9 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 			iqt.stats.requestsThrottled.ResetAll()
 
 			// Capture log output
-			logCapture := &testLogCapture{}
-			originalLogWarningDepth := log.WarningDepth
-			defer func() {
-				// Restore original logging function
-				log.WarningDepth = originalLogWarningDepth
-			}()
-
-			// Mock log.WarningDepth to capture output
-			log.WarningDepth = logCapture.captureLog
+			handler := log.NewCaptureHandler()
+			restoreLogger := log.SetLogger(slog.New(handler))
+			defer restoreLogger()
 
 			// Test the enforcement
 			err := iqt.Throttle(
@@ -314,11 +308,12 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 			}
 
 			// Verify log expectation
+			records := handler.Records()
 			if tt.expectDryRunLog {
-				require.Len(t, logCapture.logs, 1, "Expected exactly one log message")
-				require.Equal(t, tt.expectedLogMsg, logCapture.logs[0], "Log message should match expected")
+				require.Len(t, records, 1, "Expected exactly one log message")
+				require.Equal(t, tt.expectedLogMsg, records[0].Message, "Log message should match expected")
 			} else {
-				require.Empty(t, logCapture.logs, "Expected no log messages")
+				require.Empty(t, records, "Expected no log messages")
 			}
 
 			// Verify stats expectation
@@ -351,15 +346,6 @@ func (m *mockThrottlingStrategy) Stop() {
 
 func (m *mockThrottlingStrategy) GetStrategyName() string {
 	return "MockStrategy"
-}
-
-// testLogCapture captures log output for testing
-type testLogCapture struct {
-	logs []string
-}
-
-func (lc *testLogCapture) captureLog(depth int, args ...any) {
-	lc.logs = append(lc.logs, fmt.Sprint(args...))
 }
 
 func TestQueryThrottler_extractWorkloadName(t *testing.T) {

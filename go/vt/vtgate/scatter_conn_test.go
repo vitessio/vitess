@@ -17,7 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
-	"fmt"
+	"log/slog"
 	"testing"
 
 	"github.com/aws/smithy-go/ptr"
@@ -274,20 +274,19 @@ func TestExecutePanic(t *testing.T) {
 		Autocommit: false,
 	}
 
-	original := log.ErrorDepth
-	defer func() {
-		log.ErrorDepth = original
-	}()
-
-	var logMessage string
-	log.ErrorDepth = func(depth int, args ...any) {
-		logMessage = fmt.Sprint(args...)
-	}
+	handler := log.NewCaptureHandler()
+	restoreLogger := log.SetLogger(slog.New(handler))
+	defer restoreLogger()
 
 	assert.Panics(t, func() {
 		_, _ = sc.ExecuteMultiShard(ctx, nil, rss, queries, econtext.NewSafeSession(session), true /*autocommit*/, false, nullResultsObserver{}, false)
 	})
-	require.Contains(t, logMessage, "(*ScatterConn).multiGoTransaction")
+
+	if record, ok := handler.Last(); ok {
+		require.Contains(t, record.Message, "(*ScatterConn).multiGoTransaction")
+	} else {
+		require.Fail(t, "expected log entry")
+	}
 }
 
 func TestReservedOnMultiReplica(t *testing.T) {

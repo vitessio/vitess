@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"runtime/pprof"
 	"strings"
@@ -35,7 +36,6 @@ import (
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -2271,10 +2271,9 @@ func TestVStreamManagerHealthCheckResponseHandling(t *testing.T) {
 	// Capture the vstream warning log. Otherwise we need to re-implement the vstream error
 	// handling in SandboxConn's implementation and then we're not actually testing the
 	// production code.
-	logger := logutil.NewMemoryLogger()
-	log.WarningDepth = func(depth int, args ...any) {
-		logger.WarningDepth(depth, fmt.Sprint(args...))
-	}
+	handler := log.NewCaptureHandler()
+	restoreLogger := log.SetLogger(slog.New(handler))
+	defer restoreLogger()
 
 	cell := "aa"
 	ks := "TestVStream"
@@ -2375,14 +2374,22 @@ func TestVStreamManagerHealthCheckResponseHandling(t *testing.T) {
 
 			if tc.wantErr != "" {
 				require.Error(t, err)
-				require.Contains(t, logger.String(), tc.wantErr)
+				records := handler.Records()
+				found := false
+				for _, record := range records {
+					if strings.Contains(record.Message, tc.wantErr) {
+						found = true
+						break
+					}
+				}
+				require.True(t, found, "expected warning log containing %q", tc.wantErr)
 			} else {
 				// Otherwise we simply expect the context to timeout
 				require.Error(t, err)
 				require.ErrorIs(t, vterrors.UnwrapAll(err), context.DeadlineExceeded)
 			}
 
-			logger.Clear()
+			handler.Reset()
 		})
 	}
 }

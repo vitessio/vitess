@@ -20,10 +20,13 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"vitess.io/vitess/go/vt/log"
 )
 
 func TestGetLogsForNoLogs(t *testing.T) {
 	tl := NewTestLogger()
+	defer tl.Close()
 	errLoggerMsg := tl.getLog()
 
 	want := loggerMsg{
@@ -36,9 +39,11 @@ func TestGetLogsForNoLogs(t *testing.T) {
 
 func TestGetAllLogs(t *testing.T) {
 	tl := NewTestLogger()
-	tl.recordInfo(0, "Test info log")
-	tl.recordError(0, "Test error log")
-	tl.recordWarn(0, "Test warning log")
+	defer tl.Close()
+
+	log.InfoS("Test info log")
+	log.ErrorS("Test error log")
+	log.WarnS("Test warning log")
 
 	want := []string{"INFO:Test info log", "ERROR:Test error log", "WARNING:Test warning log"}
 	loggerMsgs := tl.GetAllLogs()

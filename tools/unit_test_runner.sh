@@ -60,7 +60,9 @@ fi
 
 # Build gotestsum args. Failed tests are retried up to 3 times, but if more than 10 tests fail
 # initially we skip retries to avoid wasting time on a real widespread failure.
-GOTESTSUM_ARGS="--format github-actions --rerun-fails=3 --rerun-fails-max-failures=10 --rerun-fails-run-root-test --format-hide-empty-pkg --hide-summary=skipped"
+GOTESTSUM_FORMAT="${GOTESTSUM_FORMAT:-github-actions}"
+
+GOTESTSUM_ARGS="--format ${GOTESTSUM_FORMAT} --rerun-fails=3 --rerun-fails-max-failures=10 --rerun-fails-run-root-test --format-hide-empty-pkg --hide-summary=skipped"
 if [[ -n "${JUNIT_OUTPUT:-}" ]]; then
 	GOTESTSUM_ARGS="$GOTESTSUM_ARGS --junitfile $JUNIT_OUTPUT"
 fi
@@ -68,4 +70,5 @@ if [[ -n "${JSON_OUTPUT:-}" ]]; then
 	GOTESTSUM_ARGS="$GOTESTSUM_ARGS --jsonfile $JSON_OUTPUT"
 fi
 
+# shellcheck disable=SC2086
 go tool gotestsum $GOTESTSUM_ARGS --packages="$packages_with_tests" -- $VT_GO_PARALLEL $RACE_FLAG -count=1

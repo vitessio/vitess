@@ -30,192 +30,113 @@ import (
 	"github.com/spf13/pflag"
 )
 
-const (
-	// logFormatJSON selects slog's JSON handler.
-	logFormatJSON = "json"
-
-	// logFormatLogfmt selects slog's text handler, which emits logfmt-compatible output.
-	logFormatLogfmt = "logfmt"
-)
-
-const (
-	// logLevelDebug configures slog to emit debug records.
-	logLevelDebug = "debug"
-
-	// logLevelInfo configures slog to emit info records.
-	logLevelInfo = "info"
-
-	// logLevelWarn configures slog to emit warning records.
-	logLevelWarn = "warn"
-
-	// logLevelError configures slog to emit error records.
-	logLevelError = "error"
-)
-
-const (
-	// slogCallerDepth accounts for logS and the public *S wrappers when
-	// recording the caller program counter.
-	slogCallerDepth = 3
-
-	// glogCallerDepth accounts for logGlog, logS, and the public *S wrappers when
-	// forwarding to glog's *Depth helpers.
-	glogCallerDepth = 3
-)
-
 var (
-	// logFormat stores the log-fmt flag value for Init.
-	logFormat = logFormatJSON
+	// logFormat is the configured log format.
+	logFormat string
 
-	// logLevel stores the log-level flag value for Init.
-	logLevel = logLevelInfo
+	// logLevel is the configured log level.
+	logLevel string
 
-	// structuredLoggingEnabled reports whether slog is active for this process.
+	// structuredLoggingEnabled controls whether structured logging is enabled. If it's disabled,
+	// logging is performed through glog. If enabled, logging is instead through slog.
 	structuredLoggingEnabled atomic.Bool
-
-	// structuredLevel holds the minimum slog level configured by Init.
-	structuredLevel slog.LevelVar
-
-	// structuredLogger is the slog logger configured by Init when enabled.
-	structuredLogger atomic.Pointer[slog.Logger]
 )
 
-// Init configures structured logging based on the parsed flags.
-//
-// Structured logging is enabled only when the log-fmt flag is explicitly set.
-// When enabled, Init configures the default slog logger and updates the global
-// structuredLoggingEnabled flag.
-//
-// The fs parameter should be the FlagSet used to parse the log flags. If fs is
-// nil, Init leaves structured logging disabled.
+// Init configures logging based on the parsed flags.
 func Init(fs *pflag.FlagSet) error {
-	// The parsed FlagSet is required to observe whether log-fmt was set.
 	if fs == nil {
 		return nil
 	}
 
-	// The log-fmt flag must exist and be explicitly set to enable slog.
 	formatFlag := fs.Lookup("log-fmt")
-	if formatFlag == nil {
+	if formatFlag == nil || !formatFlag.Changed {
 		return nil
 	}
 
-	// Structured logging is opt-in, so skip initialization unless log-fmt was set.
-	if !formatFlag.Changed {
-		return nil
-	}
-
-	// Map the log-level flag into a slog severity.
-	level, err := slogLevelFromString(logLevel)
+	level, err := slogLevel(logLevel)
 	if err != nil {
 		return err
 	}
 
-	// Set the level before wiring it into the handler options.
-	structuredLevel.Set(level)
-
-	// Always include source location to match glog's default caller output.
-	opts := &slog.HandlerOptions{
-		AddSource: true,
-		Level:     &structuredLevel,
-	}
-
-	// Select the handler based on the requested log-fmt value.
-	handler, err := slogHandlerForFormat(logFormat, opts)
+	opts := &slog.HandlerOptions{AddSource: true, Level: level}
+	handler, err := slogHandler(logFormat, opts)
 	if err != nil {
 		return err
 	}
 
-	// The logger and global defaults become valid once the handler is ready.
 	logger := slog.New(handler)
-	structuredLogger.Store(logger)
 	structuredLoggingEnabled.Store(true)
-
-	// Update slog's default logger so callers can query slog.Default().Enabled.
 	slog.SetDefault(logger)
+
 	return nil
 }
 
-// slogLevelFromString maps the log-level flag value to a slog.Level.
-func slogLevelFromString(value string) (slog.Level, error) {
-	normalized := strings.ToLower(strings.TrimSpace(value))
+// slogLevel maps the log-level flag value to a slog.Level.
+func slogLevel(level string) (slog.Level, error) {
+	normalized := strings.ToLower(strings.TrimSpace(level))
 
 	switch normalized {
-	case logLevelDebug:
+	case "debug":
 		return slog.LevelDebug, nil
-	case logLevelInfo:
+	case "info":
 		return slog.LevelInfo, nil
-	case logLevelWarn:
+	case "warn":
 		return slog.LevelWarn, nil
-	case logLevelError:
+	case "error":
 		return slog.LevelError, nil
 	default:
-		return 0, fmt.Errorf("invalid log-level %q: expected debug, info, warn, or error", value)
+		return 0, fmt.Errorf("invalid log-level %q: expected debug, info, warn, or error", level)
 	}
 }
 
-// slogHandlerForFormat selects the appropriate slog handler for log-fmt.
-//
-// The handler always writes to standard error so it does not inherit any glog
-// file or stderr routing configuration.
-func slogHandlerForFormat(value string, opts *slog.HandlerOptions) (slog.Handler, error) {
-	normalized := strings.ToLower(strings.TrimSpace(value))
+// slogHandler returns a [slog.Handler] for the given format and options.
+func slogHandler(format string, opts *slog.HandlerOptions) (slog.Handler, error) {
+	normalized := strings.ToLower(strings.TrimSpace(format))
 
 	switch normalized {
-	case logFormatJSON:
+	case "json":
 		return slog.NewJSONHandler(os.Stderr, opts), nil
-	case logFormatLogfmt:
+	case "logfmt":
 		return slog.NewTextHandler(os.Stderr, opts), nil
 	default:
-		return nil, fmt.Errorf("invalid log-fmt %q: expected json or logfmt", value)
+		return nil, fmt.Errorf("invalid log-fmt %q: expected json or logfmt", format)
 	}
 }
 
 // logS emits a structured log record when structured logging is enabled.
-//
-// When structured logging is disabled, logS forwards the call to glog using
-// the severity implied by level.
+// When structured logging is disabled, logS forwards the call to glog
+// using the severity implied by level.
 func logS(level slog.Level, depth int, msg string, args ...any) {
 	if !structuredLoggingEnabled.Load() {
 		logGlog(level, depth, msg, args...)
 		return
 	}
 
-	// Prefer the configured logger, but fall back to slog.Default when needed.
-	logger := structuredLogger.Load()
-	if logger == nil {
-		logger = slog.Default()
-	}
+	logger := slog.Default()
 
-	// Avoid record construction when the handler would discard the level.
 	ctx := context.Background()
 	if !logger.Enabled(ctx, level) {
 		return
 	}
 
-	// Capture the caller program counter so slog can report the correct source.
+	// Adjust the caller depth (+3) to bypass the helper functions.
 	var pcs [1]uintptr
-	runtime.Callers(slogCallerDepth+depth, pcs[:])
+	runtime.Callers(depth+3, pcs[:])
 
-	// Build the record with the message and any structured attributes.
+	// Rebuild the record with the proper source.
 	record := slog.NewRecord(time.Now(), level, msg, pcs[0])
 	record.Add(args...)
 
-	// Ignore handler errors to match glog's fire-and-forget behavior.
 	_ = logger.Handler().Handle(ctx, record)
 }
 
 // Enabled reports whether a log call at the provided level would be emitted.
-//
 // When structured logging is enabled, Enabled consults the configured slog
 // logger. When structured logging is disabled, Enabled returns true for info
 // and above, and uses glog verbosity to gate debug logging.
 func Enabled(level slog.Level) bool {
 	if structuredLoggingEnabled.Load() {
-		logger := structuredLogger.Load()
-		if logger == nil {
-			logger = slog.Default()
-		}
-		return logger.Enabled(context.Background(), level)
+		return slog.Default().Enabled(context.Background(), level)
 	}
 
 	if level < slog.LevelInfo {
@@ -226,91 +147,80 @@ func Enabled(level slog.Level) bool {
 }
 
 // logGlog formats a structured log call as a glog message.
-//
-// This path is used when structured logging is disabled.
 func logGlog(level slog.Level, depth int, msg string, args ...any) {
 	// Adjust depth so the reported caller skips logGlog, logS, and the wrapper.
-	depth += glogCallerDepth
+	depth += 3
 
 	// Preserve the slog message as the first printed element.
 	args = append([]any{msg}, args...)
 
 	switch level {
 	case slog.LevelDebug, slog.LevelInfo:
-		InfoDepth(depth, args...)
+		glog.InfoDepth(depth, args...)
 	case slog.LevelWarn:
-		WarningDepth(depth, args...)
+		glog.WarningDepth(depth, args...)
 	case slog.LevelError:
-		ErrorDepth(depth, args...)
+		glog.ErrorDepth(depth, args...)
 	default:
-		InfoDepth(depth, args...)
+		glog.InfoDepth(depth, args...)
 	}
 }
 
-// InfoS logs an informational message using slog when enabled.
-//
-// The args are interpreted as slog attributes when structured logging is
-// enabled. When structured logging is disabled, the arguments are forwarded to
-// glog.
+// InfoS logs at the Info level.
 func InfoS(msg string, args ...any) {
 	logS(slog.LevelInfo, 0, msg, args...)
 }
 
-// InfoSDepth logs an informational message using slog with an adjusted call depth.
-//
-// Depth behaves like glog.InfoDepth and skips additional call frames beyond the
-// InfoSDepth wrapper.
+// InfoSDepth logs at the Info level with an adjusted caller depth.
 func InfoSDepth(depth int, msg string, args ...any) {
 	logS(slog.LevelInfo, depth, msg, args...)
 }
 
-// WarnS logs a warning message using slog when enabled.
-//
-// The args are interpreted as slog attributes when structured logging is
-// enabled. When structured logging is disabled, the arguments are forwarded to
-// glog.
+// WarnS logs at the Warn level.
 func WarnS(msg string, args ...any) {
 	logS(slog.LevelWarn, 0, msg, args...)
 }
 
-// WarnSDepth logs a warning message using slog with an adjusted call depth.
-//
-// Depth behaves like glog.WarningDepth and skips additional call frames beyond
-// the WarnSDepth wrapper.
+// WarnSDepth logs at the Warn level with an adjusted caller depth.
 func WarnSDepth(depth int, msg string, args ...any) {
 	logS(slog.LevelWarn, depth, msg, args...)
 }
 
-// DebugS logs a debug message using slog when enabled.
-//
-// The args are interpreted as slog attributes when structured logging is
-// enabled. When structured logging is disabled, the arguments are forwarded to
-// glog.
+// DebugS logs at the Debug level.
 func DebugS(msg string, args ...any) {
 	logS(slog.LevelDebug, 0, msg, args...)
 }
 
-// DebugSDepth logs a debug message using slog with an adjusted call depth.
-//
-// Depth behaves like glog.InfoDepth and skips additional call frames beyond the
-// DebugSDepth wrapper.
+// DebugSDepth logs at the Debug level with an adjusted caller depth.
 func DebugSDepth(depth int, msg string, args ...any) {
 	logS(slog.LevelDebug, depth, msg, args...)
 }
 
-// ErrorS logs an error message using slog when enabled.
-//
-// The args are interpreted as slog attributes when structured logging is
-// enabled. When structured logging is disabled, the arguments are forwarded to
-// glog.
+// ErrorS logs at the Error level.
 func ErrorS(msg string, args ...any) {
 	logS(slog.LevelError, 0, msg, args...)
 }
 
-// ErrorSDepth logs an error message using slog with an adjusted call depth.
-//
-// Depth behaves like glog.ErrorDepth and skips additional call frames beyond
-// the ErrorSDepth wrapper.
+// ErrorSDepth logs at the Error level with an adjusted caller depth.
 func ErrorSDepth(depth int, msg string, args ...any) {
 	logS(slog.LevelError, depth, msg, args...)
+}
+
+// SetLogger replaces the structured logger used by the log package. The returned function restores
+// the previous logger. Used for testing.
+func SetLogger(logger *slog.Logger) func() {
+	if logger == nil {
+		return func() {}
+	}
+
+	previousEnabled := structuredLoggingEnabled.Load()
+	previousDefault := slog.Default()
+
+	slog.SetDefault(logger)
+	structuredLoggingEnabled.Store(true)
+
+	return func() {
+		slog.SetDefault(previousDefault)
+		structuredLoggingEnabled.Store(previousEnabled)
+	}
 }
