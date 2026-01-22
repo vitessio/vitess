@@ -215,6 +215,7 @@ Flags:
       --tablet-protocol string                                           Protocol to use to make queryservice RPCs to vttablets. (default "grpc")
       --tablet-refresh-interval duration                                 Tablet refresh interval. (default 1m0s)
       --tablet-refresh-known-tablets                                     Whether to reload the tablet's address/port map from topo in case they change. (default true)
+      --tablet-throttler-cache-update-interval duration                  How frequently to refresh throttle check results for the tablet throttler strategy (default 10s)
       --tablet-types-to-wait strings                                     Wait till connected for specified tablet types during Gateway initialization. Should be provided as a comma-separated set of tablet types.
       --tablet-url-template string                                       Format string describing debug tablet url formatting. See getTabletDebugURL() for how to customize this. (default "http://{{ "{{.GetTabletHostPort}}" }}")
       --topo-consul-lock-delay duration                                  LockDelay for consul session. (default 15s)
