@@ -44,7 +44,7 @@ var (
 
 func setup() {
 	if cgroups.Mode() != cgroups.Unified {
-		log.Warn(fmt.Sprint("cgroup metrics are only supported with cgroup v2, will use host metrics"))
+		log.Warn("cgroup metrics are only supported with cgroup v2, will use host metrics")
 		return
 	}
 	manager, err := getCgroupManager()
