@@ -53,7 +53,7 @@ func (tl *testLogger) getLog() loggerMsg {
 	if ok {
 		return loggerMsg{
 			msg:   record.Message,
-			level: strings.ToUpper(record.Level.String()),
+			level: formatLevel(record.Level),
 		}
 	}
 	return loggerMsg{"no logs!", "ERROR"}
@@ -62,8 +62,16 @@ func (tl *testLogger) getLog() loggerMsg {
 func (tl *testLogger) GetAllLogs() []string {
 	var logs []string
 	for _, record := range tl.handler.Records() {
-		level := strings.ToUpper(record.Level.String())
+		level := formatLevel(record.Level)
 		logs = append(logs, level+":"+record.Message)
 	}
 	return logs
+}
+
+func formatLevel(level slog.Level) string {
+	if level == slog.LevelWarn {
+		return "WARNING"
+	}
+
+	return strings.ToUpper(level.String())
 }
