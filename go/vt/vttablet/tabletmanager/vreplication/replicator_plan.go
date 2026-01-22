@@ -653,13 +653,13 @@ func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
 		offset int64
 		field  *querypb.Field
 	}
-	rowInfo := make([]*colInfo, 0)
+	rowInfo := make([]colInfo, 0, len(tp.Fields))
 
 	offset := int64(0)
 	for i, field := range tp.Fields { // collect info required for fields to be bound
 		length := row.Lengths[i]
 		if !tp.FieldsToSkip[strings.ToLower(field.Name)] {
-			rowInfo = append(rowInfo, &colInfo{
+			rowInfo = append(rowInfo, colInfo{
 				typ:    field.Type,
 				length: length,
 				offset: offset,
