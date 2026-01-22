@@ -791,7 +791,6 @@ func (ts *Server) UpdateSrvKeyspaceQueryThrottlerConfig(ctx context.Context, key
 				return
 			}
 		}(cell)
-
 	}
 
 	wg.Wait()
