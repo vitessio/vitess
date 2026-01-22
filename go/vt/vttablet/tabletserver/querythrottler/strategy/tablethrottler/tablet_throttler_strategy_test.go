@@ -95,6 +95,24 @@ func makeTabletStrategyConfig(tabletType, stmtType, metricName string, threshold
 	}
 }
 
+// testRandomFuncs holds injectable random functions for testing.
+type testRandomFuncs struct {
+	randFloat64 func() float64
+	randIntN    func(n int) int
+}
+
+// newTestStrategyWithRandom creates a TabletThrottlerStrategy with injected random functions for deterministic testing.
+func newTestStrategyWithRandom(client ThrottleClientWrapper, cfg *querythrottlerpb.TabletStrategyConfig, randFuncs testRandomFuncs) *TabletThrottlerStrategy {
+	strategy := NewTabletThrottlerStrategy(client, cfg, createTestTabletConfig(), createTestEnv(), "test-keyspace", "test-cell", nil)
+	if randFuncs.randFloat64 != nil {
+		strategy.randFloat64 = randFuncs.randFloat64
+	}
+	if randFuncs.randIntN != nil {
+		strategy.randIntN = randFuncs.randIntN
+	}
+	return strategy
+}
+
 // createTestSrvKeyspaceWithConfig creates a test SrvKeyspace with the given TabletStrategyConfig.
 func createTestSrvKeyspaceWithConfig(cfg *querythrottlerpb.TabletStrategyConfig) *topodatapb.SrvKeyspace {
 	return &topodatapb.SrvKeyspace{
@@ -236,15 +254,10 @@ func TestTabletThrottlerStrategy_ThrottleIfNeeded_Legacy(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ftcw := NewFakeThrottleClientWrapper(tt.giveCheckResult, tt.giveThrottleCheckOK)
-			tts := NewTabletThrottlerStrategy(ftcw, tt.giveCfg, createTestTabletConfig(), createTestEnv(), "test-keyspace", "test-cell", nil)
-
-			// Use dependency injection instead of gostub
-			tts.randFloat64 = func() float64 {
-				return tt.giveRandValue
-			}
-			tts.randIntN = func(n int) int {
-				return tt.givePriorityRandValue
-			}
+			tts := newTestStrategyWithRandom(ftcw, tt.giveCfg, testRandomFuncs{
+				randFloat64: func() float64 { return tt.giveRandValue },
+				randIntN:    func(n int) int { return tt.givePriorityRandValue },
+			})
 
 			decision := tts.Evaluate(context.Background(), tt.giveTabletType, &sqlparser.ParsedQuery{Query: tt.giveSQL}, tt.giveTxnID, toQueryAttributesForTest(tt.giveOptions))
 			if tt.wantErr != "" {
@@ -299,13 +312,12 @@ func TestTabletThrottlerStrategy_CachingBehavior(t *testing.T) {
 		makeThresholds(10, 100),
 	)
 
-	strategy := NewTabletThrottlerStrategy(ftcw, cfg, createTestTabletConfig(), createTestEnv(), "test-keyspace", "test-cell", nil)
+	strategy := newTestStrategyWithRandom(ftcw, cfg, testRandomFuncs{
+		randFloat64: func() float64 { return 0.5 },
+		randIntN:    func(n int) int { return 99 },
+	})
 
 	options := &querypb.ExecuteOptions{Priority: "100"}
-
-	// Use dependency injection instead of gostub
-	strategy.randFloat64 = func() float64 { return 0.5 }
-	strategy.randIntN = func(n int) int { return 99 }
 
 	_ = strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, 1, toQueryAttributesForTest(options))
 	require.Equal(t, 1, ftcw.GetCallCount(), "Expected 1 call without cache")
