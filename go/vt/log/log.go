@@ -71,10 +71,12 @@ func Init(fs *pflag.FlagSet) error {
 		return nil
 	}
 
-	formatFlag := fs.Lookup("log-fmt")
-	if formatFlag == nil || !formatFlag.Changed {
-		return nil
-	}
+	// TODO: uncomment this. For now we're enabling structured logging
+	// by default so that we can benchmark it.
+	// formatFlag := fs.Lookup("log-fmt")
+	// if formatFlag == nil || !formatFlag.Changed {
+	// 	return nil
+	// }
 
 	level, err := slogLevel(logLevel)
 	if err != nil {
