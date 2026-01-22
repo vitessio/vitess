@@ -23,6 +23,7 @@ import (
 	"math"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -165,6 +166,30 @@ func parseExternalDbData(externalDbData string) map[string]externalDbInfo {
 	return externalDbInfoMap
 }
 
+func orderedKeyspaces(keyspaceInfoMap map[string]keyspaceInfo) []keyspaceInfo {
+	keys := make([]string, 0, len(keyspaceInfoMap))
+	for key := range keyspaceInfoMap {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	keyspaces := make([]keyspaceInfo, 0, len(keys))
+	for _, key := range keys {
+		keyspaces = append(keyspaces, keyspaceInfoMap[key])
+	}
+
+	return keyspaces
+}
+
+func orderedKeyspacesDescending(keyspaceInfoMap map[string]keyspaceInfo) []keyspaceInfo {
+	keyspaces := orderedKeyspaces(keyspaceInfoMap)
+	for i, j := 0, len(keyspaces)-1; i < j; i, j = i+1, j-1 {
+		keyspaces[i], keyspaces[j] = keyspaces[j], keyspaces[i]
+	}
+
+	return keyspaces
+}
+
 func main() {
 	pflag.Parse()
 	keyspaceInfoMap := parseKeyspaceInfo(*keyspaceData)
@@ -178,23 +203,23 @@ func main() {
 	}
 
 	// Write schemaFile.
-	for k, v := range keyspaceInfoMap {
-		if _, ok := externalDbInfoMap[k]; !ok {
-			v.schemaFile = createFile(fmt.Sprintf("%s%s_schema_file.sql", tablesPath, v.keyspace))
-			appendToSqlFile(v.schemaFileNames, v.schemaFile)
-			closeFile(v.schemaFile)
+	for _, keyspaceData := range orderedKeyspaces(keyspaceInfoMap) {
+		if _, ok := externalDbInfoMap[keyspaceData.keyspace]; !ok {
+			keyspaceData.schemaFile = createFile(fmt.Sprintf("%s%s_schema_file.sql", tablesPath, keyspaceData.keyspace))
+			appendToSqlFile(keyspaceData.schemaFileNames, keyspaceData.schemaFile)
+			closeFile(keyspaceData.schemaFile)
 		}
 	}
 
 	// Vschema Patching
-	for k, keyspaceData := range keyspaceInfoMap {
+	for _, keyspaceData := range orderedKeyspaces(keyspaceInfoMap) {
 		vSchemaFile := readFile(*baseVschemaFile)
 		if keyspaceData.shards == 0 {
 			vSchemaFile = applyJsonInMemoryPatch(vSchemaFile, `[{"op": "replace","path": "/sharded", "value": false}]`)
 		}
 
 		// Check if it is an external_db
-		if _, ok := externalDbInfoMap[k]; ok {
+		if _, ok := externalDbInfoMap[keyspaceData.keyspace]; ok {
 			// This is no longer necessary, but we'll keep it for reference
 			// https://github.com/vitessio/vitess/pull/4868, https://github.com/vitessio/vitess/pull/5010
 			// vSchemaFile = applyJsonInMemoryPatch(vSchemaFile,`[{"op": "add","path": "/tables/*", "value": {}}]`)
@@ -487,7 +512,7 @@ func applyDockerComposePatches(
 ) []byte {
 	// Vtctld, vtgate, vtwork patches.
 	dockerComposeFile = applyDefaultDockerPatches(dockerComposeFile, keyspaceInfoMap, externalDbInfoMap, vtOpts)
-	for _, keyspaceData := range keyspaceInfoMap {
+	for _, keyspaceData := range orderedKeyspaces(keyspaceInfoMap) {
 		dockerComposeFile = applyKeyspaceDependentPatches(dockerComposeFile, keyspaceData, externalDbInfoMap, vtOpts)
 	}
 
@@ -698,7 +723,7 @@ func generateVTOrc(dbInfo externalDbInfo, keyspaceInfoMap map[string]keyspaceInf
 	}
 
 	var depends []string
-	for _, keyspaceData := range keyspaceInfoMap {
+	for _, keyspaceData := range orderedKeyspacesDescending(keyspaceInfoMap) {
 		depends = append(depends, "set_keyspace_durability_policy_"+keyspaceData.keyspace)
 	}
 	depends = append(depends, "vtctld")
