@@ -5,7 +5,7 @@ FROM --platform=linux/amd64 "${image}"
 
 USER root
 
-# Install Percona 8.0
+# Install Percona 8.4
 RUN for i in $(seq 1 10); do apt-key adv --no-tty --keyserver keyserver.ubuntu.com --recv-keys 9334A25F8507EFA5 && break; done \
  && echo 'deb http://repo.percona.com/apt bookworm main' > /etc/apt/sources.list.d/percona.list && \
     echo 'deb http://repo.percona.com/pxb-84-lts/apt bookworm main' >> /etc/apt/sources.list.d/percona.list && \
