@@ -28,7 +28,7 @@ if [[ "$output" != "$expectedOutput" ]]; then
 	exit 1
 fi
 
-golangci-lint run --fix ./
+go tool gofumpt -w $CUR
 
 if ! diff -q $CUR $TMP >/dev/null; then
 	echo "ERROR: Regenerated parser $TMP does not match current version $(pwd)/sql.go:"
