@@ -79,9 +79,9 @@ func Init(fs *pflag.FlagSet) error {
 
 	// TODO: uncomment this. currently defaulting to structured logging for benchmarking.
 	// // If --log-format wasn't explicitly changed, continue using glog.
-	if logFormat == "" {
-		return nil
-	}
+	// if logFormat == "" {
+	// 	return nil
+	// }
 
 	// Since we currently use global logging, this is a slightly hacky way to automatically
 	// use pretty logging when running within a test, so that it's a bit easier to debug,
