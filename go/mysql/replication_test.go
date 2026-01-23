@@ -113,7 +113,8 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		assert.Equal(t, "moofarm", logFile)
 		assert.Equal(t, uint64(0x05060708090a0b0c), logPos)
 		assert.True(t, pos.IsZero())
-		require.True(t, nonBlock)
+		// flags 0x0d0e does not have BinlogDumpNonBlock (0x01) set
+		assert.False(t, nonBlock)
 	})
 
 	sConn.sequence = 0
@@ -150,7 +151,8 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		assert.Equal(t, "moofarm", logFile)
 		assert.Equal(t, uint64(0x05060708090a0b0c), logPos)
 		assert.Equal(t, gtidSet, pos.GTIDSet)
-		require.True(t, nonBlock)
+		// flags 0x0d0e does not have BinlogDumpNonBlock (0x01) set
+		assert.False(t, nonBlock)
 	})
 
 	sConn.sequence = 0
