@@ -307,7 +307,7 @@ func ParseFlags(cmd string) {
 
 	_flag.Parse(fs)
 
-	if err := log.Init(fs); err != nil {
+	if err := log.Init(); err != nil {
 		log.Error(fmt.Sprintf("log.Init failed: %v", err))
 		os.Exit(1)
 	}
@@ -338,7 +338,7 @@ func ParseFlagsForTests(cmd string) {
 	pflag.Parse()
 	viperutil.BindFlags(fs)
 
-	if err := log.Init(fs); err != nil {
+	if err := log.Init(); err != nil {
 		log.Error(fmt.Sprintf("log.Init failed: %v", err))
 		os.Exit(1)
 	}
@@ -383,7 +383,7 @@ func moveFlags(name string, fs *pflag.FlagSet) {
 // functions.
 func CobraPreRunE(cmd *cobra.Command, args []string) error {
 	_flag.TrickGlog()
-	if err := log.Init(cmd.Flags()); err != nil {
+	if err := log.Init(); err != nil {
 		return err
 	}
 	// Register logging on config file change.
@@ -431,7 +431,7 @@ func ParseFlagsWithArgs(cmd string) []string {
 
 	_flag.Parse(fs)
 
-	if err := log.Init(fs); err != nil {
+	if err := log.Init(); err != nil {
 		log.Error(fmt.Sprintf("log.Init failed: %v", err))
 		os.Exit(1)
 	}

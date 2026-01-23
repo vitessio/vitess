@@ -23,7 +23,6 @@ package log
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"log/slog"
 	"os"
@@ -34,7 +33,6 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	"github.com/lmittmann/tint"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/utils"
@@ -44,8 +42,8 @@ var (
 	// Flush ensures any pending I/O is written.
 	Flush = glog.Flush
 
-	// logFormat is the configured log format.
-	logFormat string
+	// logStructured is whether structured logging is enabled or not.
+	logStructured bool
 
 	// logLevel is the configured log level.
 	logLevel string
@@ -67,81 +65,29 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	utils.SetFlagVar(fs, &flagVal, "log-rotate-max-size", "size in bytes at which logs are rotated (glog.MaxSize)")
 
 	// Structured logging flags.
-	utils.SetFlagStringVar(fs, &logFormat, "log-format", "", "format for structured logging output: json or pretty (human-readable colored output)")
+	utils.SetFlagBoolVar(fs, &logStructured, "log-structured", true, "enable structured logging")
 	utils.SetFlagStringVar(fs, &logLevel, "log-level", "info", "minimum structured logging level: info, warn, debug, or error")
 }
 
 // Init configures logging based on the parsed flags.
-func Init(fs *pflag.FlagSet) error {
-	if fs == nil {
+func Init() error {
+	if !logStructured {
 		return nil
 	}
 
-	// TODO: uncomment this. currently defaulting to structured logging for benchmarking.
-	// // If --log-format wasn't explicitly changed, continue using glog.
-	// if logFormat == "" {
-	// 	return nil
-	// }
-
-	// Since we currently use global logging, this is a slightly hacky way to automatically
-	// use pretty logging when running within a test, so that it's a bit easier to debug,
-	// especially in CI.
-	if flag.Lookup("test.v") != nil {
-		logFormat = "pretty"
-	}
-
-	// Parse the log level.
 	level, err := slogLevel(logLevel)
 	if err != nil {
 		return err
 	}
 
-	// Create and set the proper handler based on the configured format.
-	handler, err := newHandler(logFormat, level)
-	if err != nil {
-		return err
-	}
+	opts := &slog.HandlerOptions{AddSource: true, Level: level}
+	handler := slog.NewJSONHandler(os.Stderr, opts)
 
 	logger := slog.New(handler)
 	structuredLoggingEnabled.Store(true)
 	slog.SetDefault(logger)
 
 	return nil
-}
-
-// newHandler returns a slog.Handler configured for the requested format and level.
-func newHandler(format string, level slog.Level) (slog.Handler, error) {
-	normalized := strings.ToLower(strings.TrimSpace(format))
-
-	switch normalized {
-	case "json":
-		opts := &slog.HandlerOptions{AddSource: true, Level: level}
-		return slog.NewJSONHandler(os.Stderr, opts), nil
-	case "pretty":
-		opts := &tint.Options{AddSource: true, Level: level, NoColor: isCI()}
-		return tint.NewHandler(os.Stderr, opts), nil
-	default:
-		return nil, fmt.Errorf("invalid --log-format %q: expected json or pretty", format)
-	}
-}
-
-// isCI detects if we're running in a CI environment. Used to turn off coloring
-// for the "pretty" handler.
-func isCI() bool {
-	// Common CI environment variables.
-	ciEnvVars := []string{
-		"CI", "CONTINUOUS_INTEGRATION", "BUILD_NUMBER",
-		"GITHUB_ACTIONS", "GITLAB_CI", "CIRCLECI", "TRAVIS",
-		"JENKINS_URL", "BUILDKITE", "TF_BUILD",
-	}
-
-	for _, envVar := range ciEnvVars {
-		if os.Getenv(envVar) != "" {
-			return true
-		}
-	}
-
-	return false
 }
 
 // slogLevel maps the log-level flag value to a slog.Level.
