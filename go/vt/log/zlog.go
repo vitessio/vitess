@@ -44,10 +44,9 @@ var slogger = zerolog.New(&glogWriter{}).With().Timestamp().Logger()
 // logs are written as JSON to stdout or to a file with rotation. In glog mode, zerolog builds JSON
 // but routes it through glog for output.
 func Init(fs *pflag.FlagSet) error {
-	// TODO: add this back. temporarily doing it for benchmarks.
-	// if err := validateFlags(fs); err != nil {
-	// 	return fmt.Errorf("%w", err)
-	// }
+	if err := validateFlags(fs); err != nil {
+		return fmt.Errorf("%w", err)
+	}
 
 	// exitLevel is a custom level used to mimic glog's Exit, which is like Fatal except it does
 	// not print a stack trace. By default, zerolog will print the number since it is an unknown level
