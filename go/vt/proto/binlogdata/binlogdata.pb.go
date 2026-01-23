@@ -2981,7 +2981,11 @@ type BinlogDumpRequest struct {
 	BinlogPosition uint64 `protobuf:"varint,5,opt,name=binlog_position,json=binlogPosition,proto3" json:"binlog_position,omitempty"`
 	// GTID set in string format (e.g., "uuid:1-5,uuid2:1-3")
 	// vttablet will convert to SIDBlock for MySQL
-	GtidSet       string `protobuf:"bytes,6,opt,name=gtid_set,json=gtidSet,proto3" json:"gtid_set,omitempty"`
+	GtidSet string `protobuf:"bytes,6,opt,name=gtid_set,json=gtidSet,proto3" json:"gtid_set,omitempty"`
+	// If true, MySQL will return EOF when it reaches the end of the binlog
+	// instead of blocking and waiting for new events. This corresponds to
+	// the BINLOG_DUMP_NON_BLOCK flag (0x01) in COM_BINLOG_DUMP_GTID.
+	NonBlock      bool `protobuf:"varint,7,opt,name=non_block,json=nonBlock,proto3" json:"non_block,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3056,6 +3060,13 @@ func (x *BinlogDumpRequest) GetGtidSet() string {
 		return x.GtidSet
 	}
 	return ""
+}
+
+func (x *BinlogDumpRequest) GetNonBlock() bool {
+	if x != nil {
+		return x.NonBlock
+	}
+	return false
 }
 
 // BinlogDumpResponse streams raw MySQL packet payloads.
@@ -3459,14 +3470,15 @@ const file_binlogdata_proto_rawDesc = "" +
 	"\x06fields\x18\x01 \x03(\v2\f.query.FieldR\x06fields\x12\x12\n" +
 	"\x04gtid\x18\x03 \x01(\tR\x04gtid\x12\x1e\n" +
 	"\x04rows\x18\x04 \x03(\v2\n" +
-	".query.RowR\x04rows\"\xaf\x02\n" +
+	".query.RowR\x04rows\"\xcc\x02\n" +
 	"\x11BinlogDumpRequest\x12?\n" +
 	"\x13effective_caller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\x11effectiveCallerId\x12E\n" +
 	"\x13immediate_caller_id\x18\x02 \x01(\v2\x15.query.VTGateCallerIDR\x11immediateCallerId\x12%\n" +
 	"\x06target\x18\x03 \x01(\v2\r.query.TargetR\x06target\x12'\n" +
 	"\x0fbinlog_filename\x18\x04 \x01(\tR\x0ebinlogFilename\x12'\n" +
 	"\x0fbinlog_position\x18\x05 \x01(\x04R\x0ebinlogPosition\x12\x19\n" +
-	"\bgtid_set\x18\x06 \x01(\tR\agtidSet\",\n" +
+	"\bgtid_set\x18\x06 \x01(\tR\agtidSet\x12\x1b\n" +
+	"\tnon_block\x18\a \x01(\bR\bnonBlock\",\n" +
 	"\x12BinlogDumpResponse\x12\x16\n" +
 	"\x06packet\x18\x01 \x01(\fR\x06packet*>\n" +
 	"\vOnDDLAction\x12\n" +

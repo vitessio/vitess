@@ -556,6 +556,7 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 	request := &binlogdatapb.BinlogDumpRequest{
 		BinlogFilename: logFile,
 		BinlogPosition: logPos,
+		NonBlock:       nonBlock,
 	}
 	if gtidSet != nil {
 		request.GtidSet = gtidSet.String()
@@ -572,9 +573,6 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 	// 2. Extract user-defined variables from session.UserDefinedVariables here
 	// 3. Apply variables in vttablet's BinlogDump before sending COM_BINLOG_DUMP_GTID
 	// See: https://dev.mysql.com/doc/refman/8.0/en/replication-options-replica.html
-
-	// TODO: Handle nonBlock flag - if set, the client expects the server to
-	// return EOF when it reaches the end of the binlog instead of blocking.
 
 	// Track streaming state for proper error handling.
 	// If an error occurs mid-message (after sending a max-size packet fragment),

@@ -526,3 +526,292 @@ func TestBinlogDumpFutureGTID(t *testing.T) {
 	t.Logf("Got unexpected response: first byte=0x%02x, length=%d", data[0], len(data))
 	t.Logf("MySQL may have sent existing events - behavior depends on MySQL version")
 }
+
+// TestBinlogDumpNonBlockReturnsEOF verifies that when the BINLOG_DUMP_NON_BLOCK flag is set,
+// the server returns an EOF packet when there are no more events to stream, instead of
+// blocking indefinitely waiting for new events.
+func TestBinlogDumpNonBlockReturnsEOF(t *testing.T) {
+	ctx := context.Background()
+
+	// Connect to insert some data first to ensure binlog has content
+	dataConn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer dataConn.Close()
+
+	// Insert data to ensure binlog is not empty
+	_, err = dataConn.ExecuteFetch("INSERT INTO binlog_test (msg) VALUES ('nonblock_test')", 1, false)
+	require.NoError(t, err)
+
+	// Get current GTID - we'll start streaming from here (after all existing events)
+	currentGTID := getCurrentGTID(t, dataConn)
+	t.Logf("Starting from GTID: %s (should have no pending events)", currentGTID)
+
+	// Connect for binlog streaming
+	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
+	targetString := fmt.Sprintf("%s:0@primary|%s", keyspaceName, primaryTablet.Alias)
+	binlogParams := mysql.ConnParams{
+		Host:  clusterInstance.Hostname,
+		Port:  clusterInstance.VtgateMySQLPort,
+		Uname: "vt_repl|" + targetString,
+	}
+
+	binlogConn, err := mysql.Connect(ctx, &binlogParams)
+	require.NoError(t, err)
+	defer binlogConn.Close()
+
+	// Start binlog dump with NONBLOCK flag - should return EOF when caught up
+	// Flags: BinlogDumpNonBlock (0x01) | BinlogThroughGTID (0x04) = 0x05
+	flags := uint16(mysql.BinlogDumpNonBlock | mysql.BinlogThroughGTID)
+	sidBlock := gtidToSIDBlock(t, currentGTID)
+	err = binlogConn.WriteComBinlogDumpGTID(1, "", 4, flags, sidBlock)
+	require.NoError(t, err)
+
+	// With nonBlock, we should receive an EOF packet relatively quickly
+	// since there are no events after the current GTID position
+	timeout := time.After(5 * time.Second)
+	var receivedEOF bool
+	var receivedEvents int
+
+readLoop:
+	for {
+		select {
+		case <-timeout:
+			t.Fatalf("Timeout waiting for EOF packet - nonBlock flag may not be implemented. Received %d events.", receivedEvents)
+		default:
+			data, err := binlogConn.ReadPacket()
+			if err != nil {
+				// Connection closed - could be server's way of signaling end
+				t.Logf("Connection closed: %v (received %d events)", err, receivedEvents)
+				break readLoop
+			}
+
+			if len(data) == 0 {
+				continue
+			}
+
+			switch data[0] {
+			case mysql.EOFPacket:
+				receivedEOF = true
+				t.Logf("Received EOF packet after %d events - nonBlock working correctly", receivedEvents)
+				break readLoop
+			case mysql.ErrPacket:
+				sqlErr := mysql.ParseErrorPacket(data)
+				t.Logf("Received error packet: %v", sqlErr)
+				break readLoop
+			case mysql.OKPacket:
+				receivedEvents++
+				t.Logf("Received event %d: size=%d bytes", receivedEvents, len(data))
+				// Continue reading - there might be a few events before EOF
+			default:
+				t.Logf("Received packet with first byte=0x%02x, size=%d", data[0], len(data))
+			}
+		}
+	}
+
+	assert.True(t, receivedEOF, "Should have received EOF packet with nonBlock flag set")
+}
+
+// TestBinlogDumpNonBlockWithPendingEvents verifies that when nonBlock is set and there
+// ARE pending events, the server streams them all and THEN returns EOF.
+func TestBinlogDumpNonBlockWithPendingEvents(t *testing.T) {
+	ctx := context.Background()
+
+	// Connect to insert data
+	dataConn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer dataConn.Close()
+
+	// Get GTID BEFORE inserting test data
+	startGTID := getCurrentGTID(t, dataConn)
+	t.Logf("Start GTID (before inserts): %s", startGTID)
+
+	// Insert several rows - these will be "pending" events when we start streaming
+	numInserts := 5
+	for i := 0; i < numInserts; i++ {
+		_, err := dataConn.ExecuteFetch(
+			fmt.Sprintf("INSERT INTO binlog_test (msg) VALUES ('nonblock_pending_%d')", i), 1, false)
+		require.NoError(t, err)
+	}
+
+	endGTID := getCurrentGTID(t, dataConn)
+	t.Logf("End GTID (after inserts): %s", endGTID)
+
+	// Connect for binlog streaming
+	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
+	targetString := fmt.Sprintf("%s:0@primary|%s", keyspaceName, primaryTablet.Alias)
+	binlogParams := mysql.ConnParams{
+		Host:  clusterInstance.Hostname,
+		Port:  clusterInstance.VtgateMySQLPort,
+		Uname: "vt_repl|" + targetString,
+	}
+
+	binlogConn, err := mysql.Connect(ctx, &binlogParams)
+	require.NoError(t, err)
+	defer binlogConn.Close()
+
+	// Start binlog dump with NONBLOCK flag from BEFORE the inserts
+	flags := uint16(mysql.BinlogDumpNonBlock | mysql.BinlogThroughGTID)
+	sidBlock := gtidToSIDBlock(t, startGTID)
+	err = binlogConn.WriteComBinlogDumpGTID(1, "", 4, flags, sidBlock)
+	require.NoError(t, err)
+
+	// Should receive the pending events, then EOF
+	timeout := time.After(10 * time.Second)
+	var receivedEOF bool
+	var receivedEvents int
+
+readLoop:
+	for {
+		select {
+		case <-timeout:
+			t.Fatalf("Timeout - received %d events but no EOF. NonBlock may not be implemented.", receivedEvents)
+		default:
+			data, err := binlogConn.ReadPacket()
+			if err != nil {
+				t.Logf("Connection closed: %v (received %d events)", err, receivedEvents)
+				break readLoop
+			}
+
+			if len(data) == 0 {
+				continue
+			}
+
+			switch data[0] {
+			case mysql.EOFPacket:
+				receivedEOF = true
+				t.Logf("Received EOF after %d events", receivedEvents)
+				break readLoop
+			case mysql.ErrPacket:
+				sqlErr := mysql.ParseErrorPacket(data)
+				t.Fatalf("Unexpected error packet: %v", sqlErr)
+			case mysql.OKPacket:
+				receivedEvents++
+				if receivedEvents <= 10 {
+					t.Logf("Received event %d: size=%d bytes", receivedEvents, len(data))
+				}
+			default:
+				t.Logf("Received packet with first byte=0x%02x, size=%d", data[0], len(data))
+			}
+		}
+	}
+
+	// We should have received events (binlog events for the inserts) and then EOF
+	assert.True(t, receivedEOF, "Should have received EOF packet after streaming pending events")
+	assert.GreaterOrEqual(t, receivedEvents, 1, "Should have received at least some binlog events for the inserts")
+	t.Logf("NonBlock with pending events: received %d events then EOF", receivedEvents)
+}
+
+// TestBinlogDumpBlockingMode verifies the default blocking behavior - when BINLOG_DUMP_NON_BLOCK
+// is NOT set, the server should block waiting for new events instead of returning EOF.
+// This test verifies that new events are received after an insert, demonstrating that the
+// connection stays open and continues to stream events.
+func TestBinlogDumpBlockingMode(t *testing.T) {
+	ctx := context.Background()
+
+	// Connect to get current position
+	dataConn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer dataConn.Close()
+
+	// Get current GTID - we'll start streaming from here
+	currentGTID := getCurrentGTID(t, dataConn)
+	t.Logf("Starting from GTID: %s", currentGTID)
+
+	// Connect for binlog streaming
+	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
+	targetString := fmt.Sprintf("%s:0@primary|%s", keyspaceName, primaryTablet.Alias)
+	binlogParams := mysql.ConnParams{
+		Host:  clusterInstance.Hostname,
+		Port:  clusterInstance.VtgateMySQLPort,
+		Uname: "vt_repl|" + targetString,
+	}
+
+	binlogConn, err := mysql.Connect(ctx, &binlogParams)
+	require.NoError(t, err)
+	defer binlogConn.Close()
+
+	// Start binlog dump WITHOUT nonBlock flag - should block when caught up
+	// Flags: only BinlogThroughGTID (0x04), NOT BinlogDumpNonBlock
+	flags := uint16(mysql.BinlogThroughGTID)
+	sidBlock := gtidToSIDBlock(t, currentGTID)
+	err = binlogConn.WriteComBinlogDumpGTID(1, "", 4, flags, sidBlock)
+	require.NoError(t, err)
+
+	// Channel for async packet reading - we'll read continuously
+	packetCh := make(chan []byte, 100)
+	errCh := make(chan error, 1)
+	doneCh := make(chan struct{})
+
+	// Start a goroutine to read packets continuously
+	go func() {
+		defer close(packetCh)
+		for {
+			select {
+			case <-doneCh:
+				return
+			default:
+			}
+			data, err := binlogConn.ReadPacket()
+			if err != nil {
+				select {
+				case errCh <- err:
+				default:
+				}
+				return
+			}
+			select {
+			case packetCh <- data:
+			case <-doneCh:
+				return
+			}
+		}
+	}()
+
+	// Give it a moment, then insert data
+	time.Sleep(100 * time.Millisecond)
+
+	// Insert data - this should generate binlog events that we receive
+	_, err = dataConn.ExecuteFetch("INSERT INTO binlog_test (msg) VALUES ('blocking_mode_test')", 1, false)
+	require.NoError(t, err)
+	t.Log("Inserted test row")
+
+	// Wait for events - in blocking mode we should receive the insert events
+	receivedEvents := 0
+	timeout := time.After(10 * time.Second)
+
+readLoop:
+	for {
+		select {
+		case data, ok := <-packetCh:
+			if !ok {
+				t.Log("Packet channel closed")
+				break readLoop
+			}
+			if len(data) > 0 {
+				receivedEvents++
+				if data[0] == mysql.EOFPacket {
+					t.Fatal("Received unexpected EOF in blocking mode")
+				}
+				t.Logf("Received event %d: first byte=0x%02x, size=%d", receivedEvents, data[0], len(data))
+				// After receiving some events, we can stop
+				if receivedEvents >= 3 {
+					t.Logf("Received %d events, blocking mode is working correctly", receivedEvents)
+					break readLoop
+				}
+			}
+		case err := <-errCh:
+			t.Fatalf("Error reading packet: %v", err)
+		case <-timeout:
+			if receivedEvents > 0 {
+				t.Logf("Timeout after receiving %d events - blocking mode works", receivedEvents)
+				break readLoop
+			}
+			t.Fatal("Timeout waiting for events in blocking mode")
+		}
+	}
+
+	// Signal the reader goroutine to stop
+	close(doneCh)
+
+	assert.GreaterOrEqual(t, receivedEvents, 1, "Should have received at least one event in blocking mode")
+}

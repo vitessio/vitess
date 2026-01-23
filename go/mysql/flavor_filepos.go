@@ -124,7 +124,8 @@ func (flv *filePosFlavor) startSQLThreadCommand() string {
 }
 
 // sendBinlogDumpCommand is part of the Flavor interface.
-func (flv *filePosFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, binlogFilename string, startPos replication.Position) error {
+// Note: nonBlock is not supported for file position based replication as it uses COM_BINLOG_DUMP.
+func (flv *filePosFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, binlogFilename string, startPos replication.Position, nonBlock bool) error {
 	rpos, ok := startPos.GTIDSet.(replication.FilePosGTID)
 	if !ok {
 		return fmt.Errorf("startPos.GTIDSet is wrong type - expected filePosGTID, got: %#v", startPos.GTIDSet)

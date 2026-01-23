@@ -105,7 +105,9 @@ type flavor interface {
 
 	// sendBinlogDumpCommand sends the packet required to start
 	// dumping binlogs from the specified location.
-	sendBinlogDumpCommand(c *Conn, serverID uint32, binlogFilename string, startPos replication.Position) error
+	// If nonBlock is true, the server will return EOF when it reaches the end
+	// of the binlog instead of blocking and waiting for new events.
+	sendBinlogDumpCommand(c *Conn, serverID uint32, binlogFilename string, startPos replication.Position, nonBlock bool) error
 
 	// readBinlogEvent reads the next BinlogEvent from the connection.
 	readBinlogEvent(c *Conn) (BinlogEvent, error)
@@ -351,8 +353,10 @@ func (c *Conn) StartSQLThreadCommand() string {
 // SendBinlogDumpCommand sends the flavor-specific version of
 // the COM_BINLOG_DUMP command to start dumping raw binlog
 // events over a server connection, starting at a given GTID.
-func (c *Conn) SendBinlogDumpCommand(serverID uint32, binlogFilename string, startPos replication.Position) error {
-	return c.flavor.sendBinlogDumpCommand(c, serverID, binlogFilename, startPos)
+// If nonBlock is true, the server will return EOF when it reaches the end
+// of the binlog instead of blocking and waiting for new events.
+func (c *Conn) SendBinlogDumpCommand(serverID uint32, binlogFilename string, startPos replication.Position, nonBlock bool) error {
+	return c.flavor.sendBinlogDumpCommand(c, serverID, binlogFilename, startPos, nonBlock)
 }
 
 // ReadBinlogEvent reads the next BinlogEvent. This must be used

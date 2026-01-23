@@ -876,6 +876,7 @@ func (conn *gRPCQueryClient) BinlogDump(ctx context.Context, request *binlogdata
 			BinlogFilename:    request.BinlogFilename,
 			BinlogPosition:    request.BinlogPosition,
 			GtidSet:           request.GtidSet,
+			NonBlock:          request.NonBlock,
 		}
 		stream, err := conn.c.BinlogDump(ctx, req)
 		if err != nil {

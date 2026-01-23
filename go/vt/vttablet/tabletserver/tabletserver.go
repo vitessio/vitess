@@ -1375,7 +1375,7 @@ func (tsv *TabletServer) BinlogDump(ctx context.Context, request *binlogdatapb.B
 	}
 
 	// Send the binlog dump command to MySQL
-	if err := conn.SendBinlogDumpCommand(conn.ServerID(), request.BinlogFilename, startPos); err != nil {
+	if err := conn.SendBinlogDumpCommand(conn.ServerID(), request.BinlogFilename, startPos, request.NonBlock); err != nil {
 		return vterrors.Wrapf(err, "failed to send binlog dump command")
 	}
 

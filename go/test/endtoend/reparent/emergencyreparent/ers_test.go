@@ -202,7 +202,7 @@ func TestCallDumpBinlog(t *testing.T) {
 		require.NoError(t, err)
 
 		t.Logf("Starting binlog dump from position: %v", replPosition)
-		conn.SendBinlogDumpCommand(0, "", replPosition)
+		conn.SendBinlogDumpCommand(0, "", replPosition, false)
 
 		// Read response packets
 		for {
