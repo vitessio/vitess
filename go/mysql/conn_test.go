@@ -1039,13 +1039,22 @@ func TestConnectionErrorWhileWritingComStmtExecute(t *testing.T) {
 func TestParseComBinlogDumpGTID(t *testing.T) {
 	sConn := newConn(testConn{}, DefaultFlushDelay, 0)
 
-	input, err := hex.DecodeString("1e0100000000001800000076745f303030303030303130302d62696e2e3030303030310400000000000000080000000000000000000000")
+	// Test packet structure (COM_BINLOG_DUMP_GTID):
+	// - 1 byte: command (0x1e)
+	// - 2 bytes: flags (0x0001 = NON_BLOCK)
+	// - 4 bytes: server_id (0)
+	// - 4 bytes: filename_len (24)
+	// - 24 bytes: filename ("vt_0000000100-bin.000001")
+	// - 8 bytes: log_pos (4)
+	// - 4 bytes: gtid_data_len (48)
+	// - 48 bytes: SID block for GTID "24bcf1e2-01e0-11ee-8c9c-0242ac120002:1-8"
+	input, err := hex.DecodeString("1e0100000000001800000076745f303030303030303130302d62696e2e303030303031040000000000000030000000010000000000000024bcf1e201e011ee8c9c0242ac120002010000000000000001000000000000000900000000000000")
 	require.NoError(t, err)
 
 	logFile, logPos, position, nonBlock, err := sConn.parseComBinlogDumpGTID(input)
 	require.NoError(t, err)
 
-	require.Equal(t, "vt_000000010-bin.000001", logFile)
+	require.Equal(t, "vt_0000000100-bin.000001", logFile)
 	require.Equal(t, uint64(4), logPos)
 	require.True(t, nonBlock)
 	require.Equal(t, "24bcf1e2-01e0-11ee-8c9c-0242ac120002:1-8", position.String())
