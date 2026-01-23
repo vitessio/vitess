@@ -18,7 +18,7 @@ limitations under the License.
 // logging via slog.
 //
 // By default, it uses glog and its flags. Structured logging is enabled only
-// when the --log-fmt flag is explicitly set.
+// when the --log-json flag is explicitly set.
 package log
 
 import (
@@ -42,8 +42,8 @@ var (
 	// Flush ensures any pending I/O is written.
 	Flush = glog.Flush
 
-	// logFormat is the configured log format.
-	logFormat string
+	// logJSON configures whether structured JSON logging is enabled.
+	logJSON bool
 
 	// logLevel is the configured log level.
 	logLevel string
@@ -65,7 +65,7 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	utils.SetFlagVar(fs, &flagVal, "log-rotate-max-size", "size in bytes at which logs are rotated (glog.MaxSize)")
 
 	// Structured logging flags.
-	utils.SetFlagStringVar(fs, &logFormat, "log-fmt", "json", "format for structured logging output: json or logfmt")
+	utils.SetFlagBoolVar(fs, &logJSON, "log-json", false, "enable structured logging in JSON format")
 	utils.SetFlagStringVar(fs, &logLevel, "log-level", "info", "minimum structured logging level: info, warn, debug, or error")
 }
 
@@ -77,8 +77,7 @@ func Init(fs *pflag.FlagSet) error {
 
 	// TODO: uncomment this. For now we're enabling structured logging
 	// by default so that we can benchmark it.
-	// formatFlag := fs.Lookup("log-fmt")
-	// if formatFlag == nil || !formatFlag.Changed {
+	// if !logJSON {
 	// 	return nil
 	// }
 
@@ -88,10 +87,7 @@ func Init(fs *pflag.FlagSet) error {
 	}
 
 	opts := &slog.HandlerOptions{AddSource: true, Level: level}
-	handler, err := slogHandler(logFormat, opts)
-	if err != nil {
-		return err
-	}
+	handler := slog.NewJSONHandler(os.Stderr, opts)
 
 	logger := slog.New(handler)
 	structuredLoggingEnabled.Store(true)
@@ -115,20 +111,6 @@ func slogLevel(level string) (slog.Level, error) {
 		return slog.LevelError, nil
 	default:
 		return 0, fmt.Errorf("invalid log-level %q: expected debug, info, warn, or error", level)
-	}
-}
-
-// slogHandler returns a [slog.Handler] for the given format and options.
-func slogHandler(format string, opts *slog.HandlerOptions) (slog.Handler, error) {
-	normalized := strings.ToLower(strings.TrimSpace(format))
-
-	switch normalized {
-	case "json":
-		return slog.NewJSONHandler(os.Stderr, opts), nil
-	case "logfmt":
-		return slog.NewTextHandler(os.Stderr, opts), nil
-	default:
-		return nil, fmt.Errorf("invalid log-fmt %q: expected json or logfmt", format)
 	}
 }
 
