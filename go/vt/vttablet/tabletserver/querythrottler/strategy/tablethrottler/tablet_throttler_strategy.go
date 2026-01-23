@@ -45,10 +45,63 @@ var (
 	// Compile-time interface compliance check
 	_ registry.ThrottlingStrategyHandler = (*TabletThrottlerStrategy)(nil)
 	_ registry.StrategyFactory           = (*tabletThrottlerStrategyFactory)(nil)
+
+	// Named exporter for TabletThrottlerStrategy metrics.
+	// Using a named exporter (non-empty name) ensures thread-safe deduplication
+	// via exporterMu mutex and exportedSingleCountVars/exportedTimingsVars maps.
+	// This prevents panics when switching strategies (TabletThrottler → Cinnamon → TabletThrottler)
+	// because the exporter returns existing metrics instead of re-registering them.
+	throttlerExporter = servenv.NewExporter("TabletThrottler", "Tablet")
+	sharedMetrics     *tabletThrottlerMetrics
 )
 
 func init() {
 	registry.Register(querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, &tabletThrottlerStrategyFactory{})
+}
+
+// initMetrics initializes metrics for TabletThrottlerStrategy using a dedicated named exporter.
+// Named exporters provide thread-safe deduplication via exporterMu mutex, preventing panics
+// when switching strategies (TabletThrottler → Cinnamon → TabletThrottler).
+//
+// Unlike unnamed exporters (empty name) which directly call expvar.Publish and panic on
+// duplicate names, named exporters check tracking maps first and return existing metrics.
+func initMetrics() *tabletThrottlerMetrics {
+	if sharedMetrics != nil {
+		return sharedMetrics
+	}
+
+	prefix := querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER.String()
+	sharedMetrics = &tabletThrottlerMetrics{
+		cacheMisses: throttlerExporter.NewCounter(
+			prefix+"CacheMisses",
+			"incoming query throttler cache misses",
+		),
+		cacheHits: throttlerExporter.NewCounter(
+			prefix+"CacheHits",
+			"incoming query throttler cache hits",
+		),
+		decisionCount: throttlerExporter.NewCountersWithMultiLabels(
+			prefix+"DecisionCount",
+			"tablet throttler decisions by outcome and reason",
+			[]string{"tablet_type", "stmt_type", "path", "outcome", "reason"},
+		),
+		fastDecisionLatency: throttlerExporter.NewMultiTimings(
+			prefix+"FastDecisionLatencyMicroseconds",
+			"fast-path tablet throttler decision latency in microseconds",
+			[]string{"tablet_type", "outcome"},
+		),
+		fullDecisionLatency: throttlerExporter.NewMultiTimings(
+			prefix+"FullDecisionLatencyMicroseconds",
+			"full-path tablet throttler decision latency in microseconds",
+			[]string{"tablet_type", "stmt_type", "outcome"},
+		),
+		cacheLoadLatency: throttlerExporter.NewMultiTimings(
+			prefix+"CacheLoadLatencyMilliseconds",
+			"tablet throttler cache load latency in milliseconds",
+			[]string{"status"},
+		),
+	}
+	return sharedMetrics
 }
 
 // tabletThrottlerStrategyFactory creates TabletThrottlerStrategy instances.
@@ -122,9 +175,8 @@ type TabletThrottlerStrategy struct {
 	// SrvKeyspace watch lifecycle management
 	watchStarted atomic.Bool
 
-	// metrics
-	metrics tabletThrottlerMetrics
-
+	// metrics - pointer to shared metrics using dedicated named exporter for thread-safe deduplication
+	metrics                   *tabletThrottlerMetrics
 	fastPathLatencySampleRate float64
 
 	// Injectable random functions for testing (defaults to math/rand/v2)
@@ -137,38 +189,15 @@ func NewTabletThrottlerStrategy(throttleClient ThrottleClientWrapper, cfg *query
 	ctx, cancel := context.WithCancel(context.Background())
 
 	strategy := &TabletThrottlerStrategy{
-		throttleClient: throttleClient,
-		tabletConfig:   tabletConfig,
-		ctx:            ctx,
-		cancel:         cancel,
-		keyspace:       keyspace,
-		cell:           cell,
-		srvTopoServer:  srvTopoServer,
-		done:           make(chan struct{}),
-		metrics: tabletThrottlerMetrics{
-			cacheMisses: env.Exporter().NewCounter(string(querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER.String())+"CacheMisses", "incoming query throttler cache misses"),
-			cacheHits:   env.Exporter().NewCounter(string(querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER.String())+"CacheHits", "incoming query throttler cache hits"),
-			decisionCount: env.Exporter().NewCountersWithMultiLabels(
-				string(querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER.String())+"DecisionCount",
-				"tablet throttler decisions by outcome and reason",
-				[]string{"tablet_type", "stmt_type", "path", "outcome", "reason"},
-			),
-			fastDecisionLatency: env.Exporter().NewMultiTimings(
-				string(querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER.String())+"FastDecisionLatencyMicroseconds",
-				"fast-path tablet throttler decision latency in microseconds",
-				[]string{"tablet_type", "outcome"},
-			),
-			fullDecisionLatency: env.Exporter().NewMultiTimings(
-				string(querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER.String())+"FullDecisionLatencyMicroseconds",
-				"full-path tablet throttler decision latency in microseconds",
-				[]string{"tablet_type", "stmt_type", "outcome"},
-			),
-			cacheLoadLatency: env.Exporter().NewMultiTimings(
-				string(querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER.String())+"CacheLoadLatencyMilliseconds",
-				"tablet throttler cache load latency in milliseconds",
-				[]string{"status"},
-			),
-		},
+		throttleClient:            throttleClient,
+		tabletConfig:              tabletConfig,
+		ctx:                       ctx,
+		cancel:                    cancel,
+		keyspace:                  keyspace,
+		cell:                      cell,
+		srvTopoServer:             srvTopoServer,
+		done:                      make(chan struct{}),
+		metrics:                   initMetrics(),
 		fastPathLatencySampleRate: 0.1,
 		randFloat64:               rand.Float64,
 		randIntN:                  rand.IntN,
