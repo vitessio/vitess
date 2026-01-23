@@ -56,15 +56,6 @@ else
   fi
 fi
 
-# Get list of Go files to lint
-gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '^go/.*\.go$')
-if [ -z "$gofiles" ]; then
-  exit 0
-fi
-
-# Get unique directories of the Go files
-gopackages=$(echo "$gofiles" | xargs -n1 dirname | sort -u | paste -sd ' ' -)
-
-# Lint the Go packages
-echo "Linting $gopackages"
-golangci-lint run $gopackages
+# Lint only new issues in staged changes
+echo "Linting staged changes..."
+golangci-lint run --new-from-rev=HEAD
