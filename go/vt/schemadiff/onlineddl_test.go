@@ -18,6 +18,7 @@ package schemadiff
 
 import (
 	"fmt"
+	"maps"
 	"strings"
 	"testing"
 
@@ -789,7 +790,7 @@ func TestRevertible(t *testing.T) {
 		expandedColumnNames         string
 	}
 
-	var testCases = []revertibleTestCase{
+	testCases := []revertibleTestCase{
 		{
 			name:       "identical schemas",
 			fromSchema: `id int primary key, i1 int not null default 0`,
@@ -943,9 +944,7 @@ func TestRevertible(t *testing.T) {
 		},
 	}
 
-	var (
-		createTableWrapper = `CREATE TABLE t (%s)`
-	)
+	createTableWrapper := `CREATE TABLE t (%s)`
 
 	env := NewTestEnv()
 	diffHints := &DiffHints{}
@@ -1230,9 +1229,7 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 			require.True(t, ok)
 
 			m := map[string]string{}
-			for k, v := range tc.m {
-				m[k] = v
-			}
+			maps.Copy(m, tc.m)
 			baseUUID := "a5a563da_dc1a_11ec_a416_0a43f95f28a3"
 			tableName := "t"
 			alters, err := ValidateAndEditAlterTableStatement(tableName, baseUUID, tc.capableOf, alterTable, m)

@@ -30,7 +30,7 @@ var _ ConfigLoader = (*FileBasedConfigLoader)(nil)
 type FileBasedConfigLoader struct {
 	configPath string
 	readFile   func(string) ([]byte, error)
-	unmarshal  func([]byte, interface{}) error
+	unmarshal  func([]byte, any) error
 }
 
 // NewFileBasedConfigLoader creates a new instance of FileBasedConfigLoader.
@@ -45,7 +45,7 @@ func NewFileBasedConfigLoader() *FileBasedConfigLoader {
 
 // NewFileBasedConfigLoaderWithDeps creates a new instance with custom dependencies for testing.
 // This allows injection of mock functions without global state modification.
-func NewFileBasedConfigLoaderWithDeps(configPath string, readFile func(string) ([]byte, error), unmarshal func([]byte, interface{}) error) *FileBasedConfigLoader {
+func NewFileBasedConfigLoaderWithDeps(configPath string, readFile func(string) ([]byte, error), unmarshal func([]byte, any) error) *FileBasedConfigLoader {
 	return &FileBasedConfigLoader{
 		configPath: configPath,
 		readFile:   readFile,

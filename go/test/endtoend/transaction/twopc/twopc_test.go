@@ -86,8 +86,7 @@ func TestDTCommit(t *testing.T) {
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ch := make(chan *binlogdatapb.VEvent)
 	runVStream(t, ctx, ch, vtgateConn)
@@ -231,8 +230,7 @@ func TestDTRollback(t *testing.T) {
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ch := make(chan *binlogdatapb.VEvent)
 	runVStream(t, ctx, ch, vtgateConn)
@@ -280,8 +278,7 @@ func TestDTCommitDMLOnlyOnMM(t *testing.T) {
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ch := make(chan *binlogdatapb.VEvent)
 	runVStream(t, ctx, ch, vtgateConn)
@@ -375,8 +372,7 @@ func TestDTCommitDMLOnlyOnRM(t *testing.T) {
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ch := make(chan *binlogdatapb.VEvent)
 	runVStream(t, ctx, ch, vtgateConn)
@@ -483,8 +479,7 @@ func TestDTPrepareFailOnRM(t *testing.T) {
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ch := make(chan *binlogdatapb.VEvent)
 	runVStream(t, ctx, ch, vtgateConn)
@@ -997,7 +992,8 @@ func toTxStatus(row sqltypes.Row) txStatus {
 }
 
 func testWarningAndTransactionStatus(t *testing.T, conn *vtgateconn.VTGateSession, warnMsg string,
-	txConcluded bool, txState string, txParticipants string) {
+	txConcluded bool, txState string, txParticipants string,
+) {
 	t.Helper()
 
 	qr, err := conn.Execute(context.Background(), "show warnings", nil, false)
@@ -1070,14 +1066,12 @@ func TestReadingUnresolvedTransactions(t *testing.T) {
 			// We will execute a commit in a go routine, because we know it will take some time to complete.
 			// While the commit is ongoing, we would like to check that we see the unresolved transaction.
 			var wg sync.WaitGroup
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				_, err := utils.ExecAllowError(t, conn, "commit")
 				if err != nil {
 					fmt.Println("Error in commit: ", err.Error())
 				}
-			}()
+			})
 			// Allow enough time for the commit to have started.
 			time.Sleep(1 * time.Second)
 			var lastRes *sqltypes.Result
@@ -1154,8 +1148,7 @@ func TestDTSavepoint(t *testing.T) {
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ch := make(chan *binlogdatapb.VEvent)
 	runVStream(t, ctx, ch, vtgateConn)
@@ -1204,7 +1197,8 @@ func TestDTSavepoint(t *testing.T) {
 
 	logTable = retrieveTransitions(t, ch, tableMap, dtMap)
 	expectations = map[string][]string{
-		"ks.twopc_user:80-": {"insert:[INT64(9) VARCHAR(\"baz\")]"}}
+		"ks.twopc_user:80-": {"insert:[INT64(9) VARCHAR(\"baz\")]"},
+	}
 	assert.Equal(t, expectations, logTable,
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
 

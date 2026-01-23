@@ -37,9 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/vttest"
 )
 
-var (
-	connParams mysql.ConnParams
-)
+var connParams mysql.ConnParams
 
 // assertSQLError makes sure we get the right error.
 func assertSQLError(t *testing.T, err error, code sqlerror.ErrorCode, sqlState string, subtext string, query string) {

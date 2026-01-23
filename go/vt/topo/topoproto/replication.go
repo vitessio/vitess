@@ -16,15 +16,17 @@ limitations under the License.
 
 package topoproto
 
-import topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+import (
+	"maps"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+)
 
 var shardReplicationErrorTypeName map[int32]string
 
 func init() {
 	shardReplicationErrorTypeName = make(map[int32]string, len(topodatapb.ShardReplicationError_Type_name))
-	for k, v := range topodatapb.ShardReplicationError_Type_name {
-		shardReplicationErrorTypeName[k] = v
-	}
+	maps.Copy(shardReplicationErrorTypeName, topodatapb.ShardReplicationError_Type_name)
 }
 
 // ShardReplicationErrorTypeString returns a string representation of the

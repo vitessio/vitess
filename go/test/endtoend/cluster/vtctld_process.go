@@ -56,11 +56,11 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 	if err != nil {
 		return err
 	}
-	_ = createDirectory(vtctld.LogDir, 0700)
-	_ = createDirectory(path.Join(vtctld.Directory, "backups"), 0700)
+	_ = createDirectory(vtctld.LogDir, 0o700)
+	_ = createDirectory(path.Join(vtctld.Directory, "backups"), 0o700)
 	vtctld.proc = exec.Command(
 		vtctld.Binary,
-		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--topo_implementation", vtctld.TopoImplementation,
 		"--topo_global_server_address", vtctld.TopoGlobalAddress,
 		"--topo_global_root", vtctld.TopoGlobalRoot,
@@ -80,7 +80,7 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 	}
 	vtctld.proc.Args = append(vtctld.proc.Args, extraArgs...)
 
-	err = os.MkdirAll(vtctld.LogDir, 0755)
+	err = os.MkdirAll(vtctld.LogDir, 0o755)
 	if err != nil {
 		log.Errorf("cannot create log directory for vtctld: %v", err)
 		return err

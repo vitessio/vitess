@@ -39,8 +39,7 @@ import (
 )
 
 func TestNewQueryThrottler_ConfigRefresh(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	config := &tabletenv.TabletConfig{
 		QueryThrottlerConfigRefreshInterval: 10 * time.Millisecond,
@@ -106,8 +105,7 @@ func TestSelectThrottlingStrategy(t *testing.T) {
 // TestQueryThrottler_StrategyLifecycleManagement tests that strategies are properly started and stopped.
 func TestQueryThrottler_StrategyLifecycleManagement(t *testing.T) {
 	// Test that initial strategy is started
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	throttler := &throttle.Throttler{}
 	config := &tabletenv.TabletConfig{
@@ -133,8 +131,7 @@ func TestQueryThrottler_StrategyLifecycleManagement(t *testing.T) {
 
 // TestQueryThrottler_Shutdown tests the Shutdown method.
 func TestQueryThrottler_Shutdown(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	config := &tabletenv.TabletConfig{
 		QueryThrottlerConfigRefreshInterval: 10 * time.Millisecond,
@@ -358,7 +355,7 @@ type testLogCapture struct {
 	logs []string
 }
 
-func (lc *testLogCapture) captureLog(msg string, args ...interface{}) {
+func (lc *testLogCapture) captureLog(msg string, args ...any) {
 	lc.logs = append(lc.logs, fmt.Sprintf(msg, args...))
 }
 

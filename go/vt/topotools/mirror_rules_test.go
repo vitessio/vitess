@@ -17,7 +17,6 @@ limitations under the License.
 package topotools
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -28,8 +27,7 @@ import (
 )
 
 func TestMirrorRulesRoundTrip(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
 
@@ -52,8 +50,7 @@ func TestMirrorRulesRoundTrip(t *testing.T) {
 }
 
 func TestMirrorRulesErrors(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts, factory := memorytopo.NewServerAndFactory(ctx, "zone1")
 	defer ts.Close()
 	factory.SetError(errors.New("topo failure for testing"))

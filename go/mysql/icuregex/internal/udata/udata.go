@@ -112,6 +112,7 @@ func (b *Bytes) Uint8() uint8 {
 	b.buf = b.buf[1:]
 	return u
 }
+
 func (b *Bytes) Uint16() uint16 {
 	u := b.enc.Uint16(b.buf)
 	b.buf = b.buf[2:]

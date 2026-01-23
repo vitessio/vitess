@@ -101,9 +101,7 @@ const (
 	throttlerConfigPrefix = "config/"
 )
 
-var (
-	throttleTabletTypes = "replica"
-)
+var throttleTabletTypes = "replica"
 
 var (
 	statsThrottlerHeartbeatRequests    = stats.NewCounter("ThrottlerHeartbeatRequests", "heartbeat requests")
@@ -119,9 +117,7 @@ func registerThrottlerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &throttleTabletTypes, "throttle-tablet-types", throttleTabletTypes, "Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' always implicitly included")
 }
 
-var (
-	ErrThrottlerNotOpen = errors.New("throttler not open")
-)
+var ErrThrottlerNotOpen = errors.New("throttler not open")
 
 // throttlerTopoService represents the functionality we expect from a TopoServer, abstracted so that
 // it can be mocked in unit tests
@@ -256,10 +252,7 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.throttledAppsSnapshotInterval = throttledAppsSnapshotInterval
 	throttler.dormantPeriod = dormantPeriod
 	throttler.recentCheckDormantDiff = int64(throttler.dormantPeriod / recentCheckRateLimiterInterval)
-	throttler.recentCheckDiff = int64(1 * time.Second / recentCheckRateLimiterInterval)
-	if throttler.recentCheckDiff < 1 {
-		throttler.recentCheckDiff = 1
-	}
+	throttler.recentCheckDiff = max(int64(1*time.Second/recentCheckRateLimiterInterval), 1)
 
 	throttler.StoreMetricsThreshold(base.RegisteredSelfMetrics[base.LagMetricName].DefaultThreshold())
 	throttler.readSelfThrottleMetrics = func(ctx context.Context, tmClient tmclient.TabletManagerClient) base.ThrottleMetrics {
@@ -749,10 +742,7 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 	primaryStimulatorRateLimiter := timer.NewRateLimiter(throttler.dormantPeriod)
 	throttler.recentCheckRateLimiter = timer.NewRateLimiter(recentCheckRateLimiterInterval)
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done() // Called last, once all tickers are stopped.
-
+	wg.Go(func() {
 		defer func() {
 			throttler.recentCheckRateLimiter.Stop()
 			primaryStimulatorRateLimiter.Stop()
@@ -870,7 +860,7 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 				f()
 			}
 		}
-	}()
+	})
 }
 
 func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, probe *base.Probe) (probeFunc func(context.Context, tmclient.TabletManagerClient) base.ThrottleMetrics) {
@@ -1083,7 +1073,7 @@ func (throttler *Throttler) refreshInventory(ctx context.Context) error {
 	}
 	throttler.convergeMetricThresholds()
 
-	var clusterSettingsCopy = throttler.configSettings.MySQLStore
+	clusterSettingsCopy := throttler.configSettings.MySQLStore
 	// config may dynamically change, but internal structure (config.Settings().MySQLStore.Clusters in our case)
 	// is immutable and can only be _replaced_. Hence, it's safe to read in a goroutine:
 	collect := func() error {

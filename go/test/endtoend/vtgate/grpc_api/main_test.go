@@ -89,7 +89,7 @@ func TestMain(m *testing.M) {
 
 		// Directory for authn / authz config files
 		authDirectory := path.Join(clusterInstance.TmpDirectory, "auth")
-		if err := os.Mkdir(authDirectory, 0700); err != nil {
+		if err := os.Mkdir(authDirectory, 0o700); err != nil {
 			return 1
 		}
 

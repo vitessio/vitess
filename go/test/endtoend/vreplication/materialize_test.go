@@ -126,6 +126,7 @@ const smMaterializeVSchemaSource = `
   }
 }
 `
+
 const smMaterializeSchemaTarget = `
 	CREATE TABLE mat2 (
 	id bigint NOT NULL,

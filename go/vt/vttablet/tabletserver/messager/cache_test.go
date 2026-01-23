@@ -66,7 +66,7 @@ func TestMessagerCacheOrder(t *testing.T) {
 		t.Fatal("Add returned false")
 	}
 	var rows []string
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		rows = append(rows, mc.Pop().Row[0].ToString())
 	}
 	want := []string{

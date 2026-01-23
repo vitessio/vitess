@@ -1,6 +1,7 @@
 package backupstats
 
 import (
+	"maps"
 	"sync"
 	"time"
 )
@@ -35,9 +36,7 @@ func (fs *FakeStats) Scope(scopes ...Scope) Stats {
 	defer fs.mutex.Unlock()
 	fs.ScopeCalls = append(fs.ScopeCalls, scopes)
 	newScopeV := map[ScopeType]ScopeValue{}
-	for t, v := range fs.ScopeV {
-		newScopeV[t] = v
-	}
+	maps.Copy(newScopeV, fs.ScopeV)
 	for _, s := range scopes {
 		if _, ok := newScopeV[s.Type]; !ok {
 			newScopeV[s.Type] = s.Value

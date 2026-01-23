@@ -31,6 +31,7 @@ func (noopTracingServer) NewFromString(parent, label string) (Span, error)      
 func (noopTracingServer) NewContext(parent context.Context, _ Span) context.Context { return parent }
 func (noopTracingServer) AddGrpcServerOptions(addInterceptors func(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor)) {
 }
+
 func (noopTracingServer) AddGrpcClientOptions(addInterceptors func(s grpc.StreamClientInterceptor, u grpc.UnaryClientInterceptor)) {
 }
 

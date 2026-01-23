@@ -131,22 +131,6 @@ jobs:
         if: steps.changes.outputs.go_files == 'true'
         uses: ./.github/actions/tune-os
 
-      - name: Run go fmt
-        if: steps.changes.outputs.go_files == 'true'
-        run: |
-          gofmt -l . | grep -vF vendor/ && exit 1 || echo "All files formatted correctly"
-
-      - name: Install goimports
-        if: (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.visitor == 'true')
-        run: |
-          go install golang.org/x/tools/cmd/goimports@034e59c473362f8f2be47694d98fd3f12a1ad497 # v0.39.0
-
-      - name: Run goimports
-        if: steps.changes.outputs.go_files == 'true'
-        run: |
-          out=$(goimports -local vitess.io/vitess -l -w $(find . -name "*.go" | grep -v ".pb.go"))
-          echo $out | grep go > /dev/null && echo -e "The following files are malformatted:\n$out" && exit 1 || echo "All the files are formatted correctly"
-
       - name: Get dependencies
         if: (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
         run: |
@@ -199,7 +183,7 @@ jobs:
           install-mode: "goinstall"
           skip-cache: true
           working-directory: go
-          version: v2.1.6
+          version: v2.8.0
 
       - name: Run go mod tidy
         if: steps.changes.outputs.go_files == 'true'

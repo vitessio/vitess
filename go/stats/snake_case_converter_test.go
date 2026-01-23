@@ -21,7 +21,7 @@ import (
 )
 
 func TestToSnakeCase(t *testing.T) {
-	var snakeCaseTest = []struct{ input, output string }{
+	snakeCaseTest := []struct{ input, output string }{
 		{"Camel", "camel"},
 		{"Camel", "camel"},
 		{"CamelCase", "camel_case"},

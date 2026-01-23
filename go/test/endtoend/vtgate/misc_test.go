@@ -814,7 +814,7 @@ func TestRowCountExceed(t *testing.T) {
 		conn.Close()
 	}()
 
-	for i := 0; i < 250; i++ {
+	for i := range 250 {
 		utils.Exec(t, conn, fmt.Sprintf("insert into t1 (id1, id2) values (%d, %d)", i, i+1))
 	}
 
@@ -933,7 +933,7 @@ func getVtgateApiErrorCounts(t *testing.T) float64 {
 	if apiErr == nil {
 		return 0
 	}
-	mapErrors := apiErr.(map[string]interface{})
+	mapErrors := apiErr.(map[string]any)
 	val, exists := mapErrors["Execute.ks.primary.ALREADY_EXISTS"]
 	if exists {
 		return val.(float64)
@@ -941,7 +941,7 @@ func getVtgateApiErrorCounts(t *testing.T) float64 {
 	return 0
 }
 
-func getVar(t *testing.T, key string) interface{} {
+func getVar(t *testing.T, key string) any {
 	vars := clusterInstance.VtgateProcess.GetVars()
 	require.NotNil(t, vars)
 

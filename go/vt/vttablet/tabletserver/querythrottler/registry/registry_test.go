@@ -80,7 +80,7 @@ func (c testConfig) GetStrategy() ThrottlingStrategy {
 	return c.strategy
 }
 
-func (c testConfig) GetTabletStrategyConfig() interface{} {
+func (c testConfig) GetTabletStrategyConfig() any {
 	return nil
 }
 

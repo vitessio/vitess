@@ -39,7 +39,7 @@ func TestFileBasedConfigLoader_Load(t *testing.T) {
 		name              string
 		configPath        string
 		mockReadFile      func(filename string) ([]byte, error)
-		mockJsonUnmarshal func(data []byte, v interface{}) error
+		mockJsonUnmarshal func(data []byte, v any) error
 		expectedConfig    Config
 		expectedError     string
 	}{
@@ -50,7 +50,7 @@ func TestFileBasedConfigLoader_Load(t *testing.T) {
 				require.Equal(t, "/config/throttler-config.json", filename)
 				return []byte(`{"enabled": true, "strategy": "TabletThrottler"}`), nil
 			},
-			mockJsonUnmarshal: func(data []byte, v interface{}) error {
+			mockJsonUnmarshal: func(data []byte, v any) error {
 				return json.Unmarshal(data, v)
 			},
 			expectedConfig: Config{
@@ -65,7 +65,7 @@ func TestFileBasedConfigLoader_Load(t *testing.T) {
 				require.Equal(t, "/config/throttler-config.json", filename)
 				return []byte(`{"enabled": false, "strategy": "TabletThrottler"}`), nil
 			},
-			mockJsonUnmarshal: func(data []byte, v interface{}) error {
+			mockJsonUnmarshal: func(data []byte, v any) error {
 				return json.Unmarshal(data, v)
 			},
 			expectedConfig: Config{
@@ -80,7 +80,7 @@ func TestFileBasedConfigLoader_Load(t *testing.T) {
 				require.Equal(t, "/nonexistent/config.json", filename)
 				return nil, errors.New("no such file or directory")
 			},
-			mockJsonUnmarshal: func(data []byte, v interface{}) error {
+			mockJsonUnmarshal: func(data []byte, v any) error {
 				return json.Unmarshal(data, v)
 			},
 			expectedConfig: Config{},
@@ -93,7 +93,7 @@ func TestFileBasedConfigLoader_Load(t *testing.T) {
 				require.Equal(t, "/config/throttler-config.json", filename)
 				return []byte(`{"enabled": true, "strategy": "TabletThrottler", "dry_run": true}`), nil
 			},
-			mockJsonUnmarshal: func(data []byte, v interface{}) error {
+			mockJsonUnmarshal: func(data []byte, v any) error {
 				return json.Unmarshal(data, v)
 			},
 			expectedConfig: Config{
@@ -109,7 +109,7 @@ func TestFileBasedConfigLoader_Load(t *testing.T) {
 				require.Equal(t, "/config/throttler-config.json", filename)
 				return nil, errors.New("permission denied")
 			},
-			mockJsonUnmarshal: func(data []byte, v interface{}) error {
+			mockJsonUnmarshal: func(data []byte, v any) error {
 				return json.Unmarshal(data, v)
 			},
 			expectedConfig: Config{},
@@ -122,7 +122,7 @@ func TestFileBasedConfigLoader_Load(t *testing.T) {
 				require.Equal(t, "/config/throttler-config.json", filename)
 				return []byte(`{"enabled": true`), nil
 			},
-			mockJsonUnmarshal: func(data []byte, v interface{}) error {
+			mockJsonUnmarshal: func(data []byte, v any) error {
 				return json.Unmarshal(data, v)
 			},
 			expectedConfig: Config{},
@@ -135,7 +135,7 @@ func TestFileBasedConfigLoader_Load(t *testing.T) {
 				require.Equal(t, "/config/throttler-config.json", filename)
 				return []byte(`{"enabled": "not_a_boolean", "strategy": "TabletThrottler"}`), nil
 			},
-			mockJsonUnmarshal: func(data []byte, v interface{}) error {
+			mockJsonUnmarshal: func(data []byte, v any) error {
 				return json.Unmarshal(data, v)
 			},
 			expectedConfig: Config{},
@@ -148,7 +148,7 @@ func TestFileBasedConfigLoader_Load(t *testing.T) {
 				require.Equal(t, "/config/throttler-config.json", filename)
 				return []byte(`{}`), nil
 			},
-			mockJsonUnmarshal: func(data []byte, v interface{}) error {
+			mockJsonUnmarshal: func(data []byte, v any) error {
 				return json.Unmarshal(data, v)
 			},
 			expectedConfig: Config{
@@ -188,7 +188,7 @@ func TestFileBasedConfigLoader_Load_ConfigPath(t *testing.T) {
 		return []byte(`{"enabled": true, "strategy": "TabletThrottler"}`), nil
 	}
 
-	mockJsonUnmarshal := func(data []byte, v interface{}) error {
+	mockJsonUnmarshal := func(data []byte, v any) error {
 		return json.Unmarshal(data, v)
 	}
 
@@ -212,7 +212,7 @@ func TestFileBasedConfigLoader_ImplementsConfigLoader(t *testing.T) {
 func TestNewFileBasedConfigLoaderWithDeps(t *testing.T) {
 	configPath := "/test/config.json"
 	mockReadFile := func(string) ([]byte, error) { return nil, nil }
-	mockUnmarshal := func([]byte, interface{}) error { return nil }
+	mockUnmarshal := func([]byte, any) error { return nil }
 
 	loader := NewFileBasedConfigLoaderWithDeps(configPath, mockReadFile, mockUnmarshal)
 

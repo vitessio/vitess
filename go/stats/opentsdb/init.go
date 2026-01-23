@@ -51,7 +51,6 @@ func Init(prefix string) {
 // InitWithoutServenv initializes the opentsdb without servenv
 func InitWithoutServenv(prefix string) (stats.PushBackend, error) {
 	b, err := newBackend(prefix)
-
 	if err != nil {
 		return nil, err
 	}

@@ -2,6 +2,11 @@ module vitess.io/vitess
 
 go 1.25.3
 
+tool (
+	gotest.tools/gotestsum
+	mvdan.cc/gofumpt
+)
+
 require (
 	cloud.google.com/go/storage v1.57.0
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20240806141605-e8a1dd7889d6
@@ -154,6 +159,7 @@ require (
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	gotest.tools/gotestsum v1.13.0 // indirect
 	k8s.io/apimachinery v0.33.4 // indirect
+	mvdan.cc/gofumpt v0.9.2 // indirect
 )
 
 require (
@@ -272,5 +278,3 @@ require (
 )
 
 exclude github.com/DataDog/opentelemetry-mapping-go/pkg/otlp/attributes v0.33.0
-
-tool gotest.tools/gotestsum

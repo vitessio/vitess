@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"time"
 
@@ -179,7 +180,8 @@ func (qrs *Rules) GetAction(
 	action Action,
 	cancelCtx context.Context,
 	timeout time.Duration,
-	desc string) {
+	desc string,
+) {
 	for _, qr := range qrs.rules {
 		if act := qr.GetAction(ip, user, bindVars, marginComments); act != QRContinue {
 			return act, qr.cancelCtx, qr.timeout, qr.Description
@@ -525,12 +527,7 @@ func planMatch(plans []planbuilder.PlanType, plan planbuilder.PlanType) bool {
 	if plans == nil {
 		return true
 	}
-	for _, p := range plans {
-		if p == plan {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(plans, plan)
 }
 
 func tableMatch(tableNames []string, otherNames []string) bool {

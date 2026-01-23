@@ -1344,7 +1344,7 @@ func getDestinations(ctx context.Context, vcursor *econtext.VCursorImpl) []strin
 	}
 
 	shards := make([]string, len(resolved))
-	for i := 0; i < len(shards); i++ {
+	for i := range shards {
 		shards[i] = resolved[i].Target.GetShard()
 	}
 	sort.Strings(shards)
