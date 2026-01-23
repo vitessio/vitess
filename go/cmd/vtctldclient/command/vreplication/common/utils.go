@@ -332,6 +332,10 @@ func AddCommonCreateFlags(cmd *cobra.Command) {
 	cmd.Flags().StringSliceVar(&CreateOptions.ConfigOverrides, "config-overrides", []string{}, "Specify one or more VReplication config flags to override as a comma-separated list of key=value pairs.")
 }
 
+var StartStopOptions = struct {
+	Shards []string
+}{}
+
 var MirrorTrafficOptions = struct {
 	DryRun      bool
 	Percent     float32

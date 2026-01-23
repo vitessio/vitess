@@ -300,6 +300,11 @@ func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string, callba
 		return
 	}
 
+	// Context may already be canceled during test cleanup - exit gracefully.
+	if ctx.Err() != nil {
+		return
+	}
+
 	// Update the backing topo server with the current sandbox vschemas.
 	for ks := range ksToSandbox {
 		ksvs := &topo.KeyspaceVSchemaInfo{
@@ -307,12 +312,23 @@ func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string, callba
 			Keyspace: srvVSchema.Keyspaces[ks],
 		}
 		if err := sct.topoServer.SaveVSchema(ctx, ksvs); err != nil {
+			if ctx.Err() != nil {
+				return
+			}
 			panic(fmt.Sprintf("sandboxTopo SaveVSchema returned an error: %v", err))
 		}
 	}
-	sct.topoServer.UpdateSrvVSchema(ctx, cell, srvVSchema)
+	if err := sct.topoServer.UpdateSrvVSchema(ctx, cell, srvVSchema); err != nil {
+		if ctx.Err() != nil {
+			return
+		}
+		panic(fmt.Sprintf("sandboxTopo UpdateSrvVSchema returned an error: %v", err))
+	}
 	current, updateChan, err := sct.topoServer.WatchSrvVSchema(ctx, cell)
 	if err != nil {
+		if ctx.Err() != nil {
+			return
+		}
 		panic(fmt.Sprintf("sandboxTopo WatchSrvVSchema returned an error: %v", err))
 	}
 	if !callback(current.Value, nil) {
