@@ -459,11 +459,14 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		defer connCountByTLSVer.Add(versionNoTLS, -1)
 	}
 
-	// If the username ends with `@<keyspace>:<shard>`, we need to extract the keyspace and shard information.
-	// TODO: Make this more robust, and maybe hide this behind a flag so that users can decide whether this should be supported.
-	if userParts := strings.SplitN(user, "@", 2); len(userParts) == 2 {
-		user = userParts[0]
-		c.schemaName = userParts[1]
+	// Check if username contains a target override (format: user|target).
+	// This allows replication clients to specify the target tablet in the username.
+	// The target string format is "keyspace:shard@type|alias" (e.g., "commerce:-80@replica|zone1-100").
+	// Note: We use strings.Index to find only the FIRST "|" since the target string itself
+	// may contain "|" to separate tablet type from alias.
+	if idx := strings.Index(user, "|"); idx != -1 {
+		c.schemaName = user[idx+1:]
+		user = user[:idx]
 	}
 
 	// See what auth method the AuthServer wants to use for that user.
@@ -527,14 +530,6 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 	c.User = user
 	c.UserData = userData
-
-	// Check if username contains a target override (format: user|target).
-	// This allows replication clients to specify the target tablet in the username.
-	// The target is stored in schemaName so it will be processed by the USE query below.
-	if idx := strings.Index(c.User, "|"); idx != -1 {
-		c.schemaName = c.User[idx+1:]
-		c.User = c.User[:idx]
-	}
 
 	if c.User != "" {
 		connCountPerUser.Add(c.User, 1)
