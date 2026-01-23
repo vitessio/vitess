@@ -215,7 +215,7 @@ Flags:
       --lock-tables-timeout duration                                     How long to keep the table locked before timing out (default 1m0s)
       --lock-timeout duration                                            Maximum time to wait when attempting to acquire a lock from the topo server (default 45s)
       --log-err-stacks                                                   log stack traces for errors
-      --log-json                                                         enable structured logging in JSON format
+      --log-format string                                                format for structured logging output: json or pretty (human-readable colored output)
       --log-level string                                                 minimum structured logging level: info, warn, debug, or error (default "info")
       --log-queries                                                      Enable query logging to syslog.
       --log-queries-to-file string                                       Enable query logging to the specified file
