@@ -69,8 +69,8 @@ func TestBinlogDumpGTID_Streaming(t *testing.T) {
 	err = binlogConn.WriteComBinlogDumpGTID(1, "", 4, mysql.BinlogThroughGTID, nil)
 	require.NoError(t, err, "Should be able to send COM_BINLOG_DUMP_GTID")
 
-	// Channel to receive events and errors
-	eventCh := make(chan []byte, 10)
+	// Channel to receive packets and errors
+	packetCh := make(chan []byte, 10)
 	errCh := make(chan error, 1)
 
 	// Start reading packets in a goroutine
@@ -78,7 +78,7 @@ func TestBinlogDumpGTID_Streaming(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		defer close(eventCh)
+		defer close(packetCh)
 		for {
 			data, err := binlogConn.ReadPacket()
 			if err != nil {
@@ -89,7 +89,7 @@ func TestBinlogDumpGTID_Streaming(t *testing.T) {
 				return
 			}
 			select {
-			case eventCh <- data:
+			case packetCh <- data:
 			default:
 				// Channel full, drop packet
 			}
@@ -99,45 +99,45 @@ func TestBinlogDumpGTID_Streaming(t *testing.T) {
 	// Give the binlog dump a moment to start
 	time.Sleep(100 * time.Millisecond)
 
-	// Now insert data to generate binlog events
+	// Now insert data to generate binlog packets
 	dataConn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer dataConn.Close()
 
-	t.Log("Inserting test data to generate binlog events")
+	t.Log("Inserting test data to generate binlog packets")
 	for i := 0; i < 3; i++ {
 		_, err := dataConn.ExecuteFetch(fmt.Sprintf("INSERT INTO binlog_test (msg) VALUES ('streaming_test_%d')", i), 1, false)
 		require.NoError(t, err)
 	}
 
-	// Wait for at least one event or timeout
-	receivedEvents := 0
+	// Wait for at least one packet or timeout
+	receivedPackets := 0
 	timeout := time.After(5 * time.Second)
 
-eventLoop:
+packetLoop:
 	for {
 		select {
-		case data, ok := <-eventCh:
+		case data, ok := <-packetCh:
 			if !ok {
 				// Channel closed
-				t.Logf("Event channel closed after receiving %d events", receivedEvents)
-				break eventLoop
+				t.Logf("Packet channel closed after receiving %d packets", receivedPackets)
+				break packetLoop
 			}
-			receivedEvents++
+			receivedPackets++
 			if len(data) > 0 {
-				t.Logf("Received event %d: first byte=0x%02x, length=%d", receivedEvents, data[0], len(data))
+				t.Logf("Received packet %d: first byte=0x%02x, length=%d", receivedPackets, data[0], len(data))
 			}
-			// We got an event, test passes
-			if receivedEvents >= 3 {
-				t.Logf("Received %d events, test passed", receivedEvents)
-				break eventLoop
+			// We got a packet, test passes
+			if receivedPackets >= 3 {
+				t.Logf("Received %d packets, test passed", receivedPackets)
+				break packetLoop
 			}
 		case err := <-errCh:
-			t.Logf("Got error from event reader: %v", err)
-			break eventLoop
+			t.Logf("Got error from packet reader: %v", err)
+			break packetLoop
 		case <-timeout:
-			t.Logf("Timeout after receiving %d events", receivedEvents)
-			break eventLoop
+			t.Logf("Timeout after receiving %d packets", receivedPackets)
+			break packetLoop
 		}
 	}
 
@@ -145,8 +145,8 @@ eventLoop:
 	binlogConn.Close()
 	wg.Wait()
 
-	// We should have received at least some events
-	assert.GreaterOrEqual(t, receivedEvents, 1, "Should have received at least one binlog event")
+	// We should have received at least some packets
+	assert.GreaterOrEqual(t, receivedPackets, 1, "Should have received at least one binlog packet")
 }
 
 // TestBinlogDumpGTID_NoTarget verifies that binlog dump returns an error packet without a target
@@ -203,8 +203,8 @@ func TestBinlogDumpGTID_LargeEvent(t *testing.T) {
 
 	t.Log("Binlog dump started")
 
-	// Channel to receive events
-	eventCh := make(chan []byte, 100)
+	// Channel to receive packets
+	packetCh := make(chan []byte, 100)
 	errCh := make(chan error, 1)
 
 	// Start reading packets in a goroutine
@@ -212,7 +212,7 @@ func TestBinlogDumpGTID_LargeEvent(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		defer close(eventCh)
+		defer close(packetCh)
 		for {
 			data, err := binlogConn.ReadPacket()
 			if err != nil {
@@ -223,7 +223,7 @@ func TestBinlogDumpGTID_LargeEvent(t *testing.T) {
 				return
 			}
 			select {
-			case eventCh <- data:
+			case packetCh <- data:
 			default:
 				// Channel full, drop packet
 			}
@@ -233,20 +233,20 @@ func TestBinlogDumpGTID_LargeEvent(t *testing.T) {
 	// Give the binlog dump a moment to start
 	time.Sleep(100 * time.Millisecond)
 
-	// Connect to insert data - this will generate binlog events AFTER we started dumping
+	// Connect to insert data - this will generate binlog packets AFTER we started dumping
 	dataConn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer dataConn.Close()
 
 	// Create a large blob of 32MB that spans multiple MySQL packets.
-	// The MySQL MaxPacketSize is 16777215 bytes (16MB - 1), so a 32MB event
+	// The MySQL MaxPacketSize is 16777215 bytes (16MB - 1), so a 32MB packet
 	// will be split across 2+ packets by MySQL, testing our multi-packet handling.
 	//
 	// The gRPC max message size is configured to 64MB in main_test.go to allow
-	// streaming these large events.
+	// streaming these large packets.
 	largeDataSize := 32 * 1024 * 1024 // 32MB
 
-	t.Logf("Inserting large blob of %d bytes (%d MB) to test multi-packet event handling", largeDataSize, largeDataSize/(1024*1024))
+	t.Logf("Inserting large blob of %d bytes (%d MB) to test multi-packet handling", largeDataSize, largeDataSize/(1024*1024))
 
 	// Insert the large blob using REPEAT to build the data in MySQL
 	baseSize := 1024 * 1024 // 1MB base
@@ -274,55 +274,55 @@ func TestBinlogDumpGTID_LargeEvent(t *testing.T) {
 	}
 	require.NoError(t, err, "Should be able to insert large blob")
 
-	t.Log("Large blob inserted successfully, waiting for binlog events...")
+	t.Log("Large blob inserted successfully, waiting for binlog packets...")
 
-	// Wait for events - we should receive the large event
-	var largeEventReceived bool
-	receivedEvents := 0
+	// Wait for packets - we should receive the large packet
+	var largePacketReceived bool
+	receivedPackets := 0
 	timeout := time.After(30 * time.Second) // Longer timeout for large data
 
-eventLoop:
+packetLoop:
 	for {
 		select {
-		case data, ok := <-eventCh:
+		case data, ok := <-packetCh:
 			if !ok {
-				t.Logf("Event channel closed after receiving %d events", receivedEvents)
-				break eventLoop
+				t.Logf("Packet channel closed after receiving %d packets", receivedPackets)
+				break packetLoop
 			}
-			receivedEvents++
-			eventSize := len(data)
+			receivedPackets++
+			packetSize := len(data)
 
-			// Log event details
-			if eventSize > 1024*1024 {
-				t.Logf("Received event %d: size=%d bytes (%.1f MB), first byte=0x%02x",
-					receivedEvents, eventSize, float64(eventSize)/(1024*1024), data[0])
+			// Log packet details
+			if packetSize > 1024*1024 {
+				t.Logf("Received packet %d: size=%d bytes (%.1f MB), first byte=0x%02x",
+					receivedPackets, packetSize, float64(packetSize)/(1024*1024), data[0])
 			} else {
-				t.Logf("Received event %d: size=%d bytes, first byte=0x%02x",
-					receivedEvents, eventSize, data[0])
+				t.Logf("Received packet %d: size=%d bytes, first byte=0x%02x",
+					receivedPackets, packetSize, data[0])
 			}
 
-			// Check if we received a large event (>30MB)
-			// The binlog event will be slightly larger than our data due to event headers
-			if eventSize > 30*1024*1024 {
-				largeEventReceived = true
-				t.Logf("SUCCESS: Received large event of %d bytes (%.1f MB) - multi-packet handling works!",
-					eventSize, float64(eventSize)/(1024*1024))
-				break eventLoop
+			// Check if we received a large packet (>30MB)
+			// The binlog packet will be slightly larger than our data due to event headers
+			if packetSize > 30*1024*1024 {
+				largePacketReceived = true
+				t.Logf("SUCCESS: Received large packet of %d bytes (%.1f MB) - multi-packet handling works!",
+					packetSize, float64(packetSize)/(1024*1024))
+				break packetLoop
 			}
 
 			// Safety limit - don't wait forever
-			if receivedEvents > 50 {
-				t.Log("Received 50 events, stopping")
-				break eventLoop
+			if receivedPackets > 50 {
+				t.Log("Received 50 packets, stopping")
+				break packetLoop
 			}
 
 		case err := <-errCh:
-			t.Logf("Got error from event reader: %v", err)
-			break eventLoop
+			t.Logf("Got error from packet reader: %v", err)
+			break packetLoop
 
 		case <-timeout:
-			t.Logf("Timeout after receiving %d events", receivedEvents)
-			break eventLoop
+			t.Logf("Timeout after receiving %d packets", receivedPackets)
+			break packetLoop
 		}
 	}
 
@@ -330,9 +330,9 @@ eventLoop:
 	binlogConn.Close()
 	wg.Wait()
 
-	// Verify we received the large event
-	assert.True(t, largeEventReceived, "Should have received a binlog event larger than 30MB")
-	assert.GreaterOrEqual(t, receivedEvents, 1, "Should have received at least one binlog event")
+	// Verify we received the large packet
+	assert.True(t, largePacketReceived, "Should have received a binlog packet larger than 30MB")
+	assert.GreaterOrEqual(t, receivedPackets, 1, "Should have received at least one binlog packet")
 }
 
 // getCurrentGTID returns the current gtid_executed value from MySQL
@@ -396,27 +396,27 @@ func TestBinlogDumpGTID_FromSpecificPosition(t *testing.T) {
 	err = binlogConn.WriteComBinlogDumpGTID(1, "", 4, mysql.BinlogThroughGTID, sidBlock)
 	require.NoError(t, err)
 
-	// Read events - should only get events after startGTID
-	receivedEvents := 0
+	// Read packets - should only get packets after startGTID
+	receivedPackets := 0
 	timeout := time.After(5 * time.Second)
 
-	for receivedEvents < 3 {
+	for receivedPackets < 3 {
 		select {
 		case <-timeout:
-			t.Fatalf("Timeout waiting for events, received %d", receivedEvents)
+			t.Fatalf("Timeout waiting for packets, received %d", receivedPackets)
 		default:
 			data, err := binlogConn.ReadPacket()
 			if err != nil {
 				t.Fatalf("Error reading packet: %v", err)
 			}
 			if len(data) > 0 && data[0] == mysql.OKPacket {
-				receivedEvents++
-				t.Logf("Received event %d: size=%d bytes", receivedEvents, len(data))
+				receivedPackets++
+				t.Logf("Received packet %d: size=%d bytes", receivedPackets, len(data))
 			}
 		}
 	}
 
-	t.Logf("Successfully received %d events from GTID position", receivedEvents)
+	t.Logf("Successfully received %d packets from GTID position", receivedPackets)
 }
 
 // TestBinlogDumpGTID_InvalidFormat verifies that an invalid GTID format returns a proper error packet.
@@ -573,21 +573,21 @@ func TestBinlogDumpGTID_NonBlockEOF(t *testing.T) {
 	require.NoError(t, err)
 
 	// With nonBlock, we should receive an EOF packet relatively quickly
-	// since there are no events after the current GTID position
+	// since there are no packets after the current GTID position
 	timeout := time.After(5 * time.Second)
 	var receivedEOF bool
-	var receivedEvents int
+	var receivedPackets int
 
 readLoop:
 	for {
 		select {
 		case <-timeout:
-			t.Fatalf("Timeout waiting for EOF packet - nonBlock flag may not be implemented. Received %d events.", receivedEvents)
+			t.Fatalf("Timeout waiting for EOF packet - nonBlock flag may not be implemented. Received %d packets.", receivedPackets)
 		default:
 			data, err := binlogConn.ReadPacket()
 			if err != nil {
 				// Connection closed - could be server's way of signaling end
-				t.Logf("Connection closed: %v (received %d events)", err, receivedEvents)
+				t.Logf("Connection closed: %v (received %d packets)", err, receivedPackets)
 				break readLoop
 			}
 
@@ -598,16 +598,16 @@ readLoop:
 			switch data[0] {
 			case mysql.EOFPacket:
 				receivedEOF = true
-				t.Logf("Received EOF packet after %d events - nonBlock working correctly", receivedEvents)
+				t.Logf("Received EOF packet after %d packets - nonBlock working correctly", receivedPackets)
 				break readLoop
 			case mysql.ErrPacket:
 				sqlErr := mysql.ParseErrorPacket(data)
 				t.Logf("Received error packet: %v", sqlErr)
 				break readLoop
 			case mysql.OKPacket:
-				receivedEvents++
-				t.Logf("Received event %d: size=%d bytes", receivedEvents, len(data))
-				// Continue reading - there might be a few events before EOF
+				receivedPackets++
+				t.Logf("Received packet %d: size=%d bytes", receivedPackets, len(data))
+				// Continue reading - there might be a few packets before EOF
 			default:
 				t.Logf("Received packet with first byte=0x%02x, size=%d", data[0], len(data))
 			}
@@ -661,20 +661,20 @@ func TestBinlogDumpGTID_NonBlockWithPendingEvents(t *testing.T) {
 	err = binlogConn.WriteComBinlogDumpGTID(1, "", 4, flags, sidBlock)
 	require.NoError(t, err)
 
-	// Should receive the pending events, then EOF
+	// Should receive the pending packets, then EOF
 	timeout := time.After(10 * time.Second)
 	var receivedEOF bool
-	var receivedEvents int
+	var receivedPackets int
 
 readLoop:
 	for {
 		select {
 		case <-timeout:
-			t.Fatalf("Timeout - received %d events but no EOF. NonBlock may not be implemented.", receivedEvents)
+			t.Fatalf("Timeout - received %d packets but no EOF. NonBlock may not be implemented.", receivedPackets)
 		default:
 			data, err := binlogConn.ReadPacket()
 			if err != nil {
-				t.Logf("Connection closed: %v (received %d events)", err, receivedEvents)
+				t.Logf("Connection closed: %v (received %d packets)", err, receivedPackets)
 				break readLoop
 			}
 
@@ -685,15 +685,15 @@ readLoop:
 			switch data[0] {
 			case mysql.EOFPacket:
 				receivedEOF = true
-				t.Logf("Received EOF after %d events", receivedEvents)
+				t.Logf("Received EOF after %d packets", receivedPackets)
 				break readLoop
 			case mysql.ErrPacket:
 				sqlErr := mysql.ParseErrorPacket(data)
 				t.Fatalf("Unexpected error packet: %v", sqlErr)
 			case mysql.OKPacket:
-				receivedEvents++
-				if receivedEvents <= 10 {
-					t.Logf("Received event %d: size=%d bytes", receivedEvents, len(data))
+				receivedPackets++
+				if receivedPackets <= 10 {
+					t.Logf("Received packet %d: size=%d bytes", receivedPackets, len(data))
 				}
 			default:
 				t.Logf("Received packet with first byte=0x%02x, size=%d", data[0], len(data))
@@ -701,10 +701,10 @@ readLoop:
 		}
 	}
 
-	// We should have received events (binlog events for the inserts) and then EOF
-	assert.True(t, receivedEOF, "Should have received EOF packet after streaming pending events")
-	assert.GreaterOrEqual(t, receivedEvents, 1, "Should have received at least some binlog events for the inserts")
-	t.Logf("NonBlock with pending events: received %d events then EOF", receivedEvents)
+	// We should have received packets (binlog packets for the inserts) and then EOF
+	assert.True(t, receivedEOF, "Should have received EOF packet after streaming pending packets")
+	assert.GreaterOrEqual(t, receivedPackets, 1, "Should have received at least some binlog packets for the inserts")
+	t.Logf("NonBlock with pending packets: received %d packets then EOF", receivedPackets)
 }
 
 // TestBinlogDumpGTID_BlockingMode verifies the default blocking behavior - when BINLOG_DUMP_NON_BLOCK
@@ -776,13 +776,13 @@ func TestBinlogDumpGTID_BlockingMode(t *testing.T) {
 	// Give it a moment, then insert data
 	time.Sleep(100 * time.Millisecond)
 
-	// Insert data - this should generate binlog events that we receive
+	// Insert data - this should generate binlog packets that we receive
 	_, err = dataConn.ExecuteFetch("INSERT INTO binlog_test (msg) VALUES ('blocking_mode_test')", 1, false)
 	require.NoError(t, err)
 	t.Log("Inserted test row")
 
-	// Wait for events - in blocking mode we should receive the insert events
-	receivedEvents := 0
+	// Wait for packets - in blocking mode we should receive the insert packets
+	receivedPackets := 0
 	timeout := time.After(10 * time.Second)
 
 readLoop:
@@ -794,32 +794,32 @@ readLoop:
 				break readLoop
 			}
 			if len(data) > 0 {
-				receivedEvents++
+				receivedPackets++
 				if data[0] == mysql.EOFPacket {
 					t.Fatal("Received unexpected EOF in blocking mode")
 				}
-				t.Logf("Received event %d: first byte=0x%02x, size=%d", receivedEvents, data[0], len(data))
-				// After receiving some events, we can stop
-				if receivedEvents >= 3 {
-					t.Logf("Received %d events, blocking mode is working correctly", receivedEvents)
+				t.Logf("Received packet %d: first byte=0x%02x, size=%d", receivedPackets, data[0], len(data))
+				// After receiving some packets, we can stop
+				if receivedPackets >= 3 {
+					t.Logf("Received %d packets, blocking mode is working correctly", receivedPackets)
 					break readLoop
 				}
 			}
 		case err := <-errCh:
 			t.Fatalf("Error reading packet: %v", err)
 		case <-timeout:
-			if receivedEvents > 0 {
-				t.Logf("Timeout after receiving %d events - blocking mode works", receivedEvents)
+			if receivedPackets > 0 {
+				t.Logf("Timeout after receiving %d packets - blocking mode works", receivedPackets)
 				break readLoop
 			}
-			t.Fatal("Timeout waiting for events in blocking mode")
+			t.Fatal("Timeout waiting for packets in blocking mode")
 		}
 	}
 
 	// Signal the reader goroutine to stop
 	close(doneCh)
 
-	assert.GreaterOrEqual(t, receivedEvents, 1, "Should have received at least one event in blocking mode")
+	assert.GreaterOrEqual(t, receivedPackets, 1, "Should have received at least one packet in blocking mode")
 }
 
 // TestBinlogDumpGTID_DirectGRPC tests GTID-based binlog streaming via direct gRPC connection to vttablet.
@@ -850,10 +850,10 @@ func TestBinlogDumpGTID_DirectGRPC(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close(grpcCtx)
 
-	var receivedEvents int
+	var receivedPackets int
 	var wg sync.WaitGroup
 
-	// Goroutine 1: Stream binlog events via direct gRPC
+	// Goroutine 1: Stream binlog packets via direct gRPC
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -865,8 +865,8 @@ func TestBinlogDumpGTID_DirectGRPC(t *testing.T) {
 			},
 			GtidSet: gtidSet,
 		}, func(response *binlogdatapb.BinlogDumpResponse) error {
-			receivedEvents++
-			t.Logf("Received event %d via gRPC: %d bytes", receivedEvents, len(response.Packet))
+			receivedPackets++
+			t.Logf("Received packet %d via gRPC: %d bytes", receivedPackets, len(response.Packet))
 			return nil
 		})
 		if err != nil {
@@ -874,7 +874,7 @@ func TestBinlogDumpGTID_DirectGRPC(t *testing.T) {
 		}
 	}()
 
-	// Goroutine 2: Write data to generate binlog events
+	// Goroutine 2: Write data to generate binlog packets
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -904,8 +904,8 @@ func TestBinlogDumpGTID_DirectGRPC(t *testing.T) {
 
 	wg.Wait()
 
-	assert.GreaterOrEqual(t, receivedEvents, 1, "Should have received binlog events via direct gRPC")
-	t.Logf("Successfully received %d events via direct gRPC to vttablet", receivedEvents)
+	assert.GreaterOrEqual(t, receivedPackets, 1, "Should have received binlog packets via direct gRPC")
+	t.Logf("Successfully received %d packets via direct gRPC to vttablet", receivedPackets)
 }
 
 // getBinlogFilePosition queries MySQL for the current binlog file and position.
@@ -970,7 +970,7 @@ func TestBinlogDump_VTGate(t *testing.T) {
 	err = binlogConn.WriteComBinlogDump(1, binlogFile, uint64(binlogPos), 0)
 	require.NoError(t, err, "Should be able to send COM_BINLOG_DUMP")
 
-	// Read binlog events using a goroutine with timeout
+	// Read binlog packets using a goroutine with timeout
 	packetCh := make(chan []byte, 100)
 	errCh := make(chan error, 1)
 	doneCh := make(chan struct{})
@@ -998,22 +998,22 @@ func TestBinlogDump_VTGate(t *testing.T) {
 		}
 	}()
 
-	var receivedEvents int
+	var receivedPackets int
 	timeout := time.After(5 * time.Second)
 
 readLoop:
 	for {
 		select {
 		case <-timeout:
-			t.Logf("Timeout reached after receiving %d events", receivedEvents)
+			t.Logf("Timeout reached after receiving %d packets", receivedPackets)
 			break readLoop
 		case err := <-errCh:
 			t.Logf("Read error: %v", err)
 			break readLoop
 		case data := <-packetCh:
 			if len(data) > 0 {
-				receivedEvents++
-				t.Logf("Received event %d: size=%d bytes, first byte=0x%02x", receivedEvents, len(data), data[0])
+				receivedPackets++
+				t.Logf("Received packet %d: size=%d bytes, first byte=0x%02x", receivedPackets, len(data), data[0])
 
 				// Check for EOF packet
 				if data[0] == mysql.EOFPacket && len(data) < 9 {
@@ -1027,8 +1027,8 @@ readLoop:
 					break readLoop
 				}
 
-				// Stop after receiving enough events
-				if receivedEvents >= 10 {
+				// Stop after receiving enough packets
+				if receivedPackets >= 10 {
 					break readLoop
 				}
 			}
@@ -1036,8 +1036,8 @@ readLoop:
 	}
 
 	close(doneCh)
-	assert.GreaterOrEqual(t, receivedEvents, 1, "Should have received at least one event via COM_BINLOG_DUMP")
-	t.Logf("Successfully received %d events via COM_BINLOG_DUMP (file/position)", receivedEvents)
+	assert.GreaterOrEqual(t, receivedPackets, 1, "Should have received at least one packet via COM_BINLOG_DUMP")
+	t.Logf("Successfully received %d packets via COM_BINLOG_DUMP (file/position)", receivedPackets)
 }
 
 // TestBinlogDump_DirectGRPC tests file/position-based binlog streaming via direct gRPC to vttablet.
@@ -1065,10 +1065,10 @@ func TestBinlogDump_DirectGRPC(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close(grpcCtx)
 
-	var receivedEvents int
+	var receivedPackets int
 	var wg sync.WaitGroup
 
-	// Goroutine 1: Stream binlog events via direct gRPC using file/position
+	// Goroutine 1: Stream binlog packets via direct gRPC using file/position
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -1081,8 +1081,8 @@ func TestBinlogDump_DirectGRPC(t *testing.T) {
 			BinlogFilename: binlogFile,
 			BinlogPosition: binlogPos,
 		}, func(response *binlogdatapb.BinlogDumpResponse) error {
-			receivedEvents++
-			t.Logf("Received event %d via gRPC (file/pos): %d bytes", receivedEvents, len(response.Packet))
+			receivedPackets++
+			t.Logf("Received packet %d via gRPC (file/pos): %d bytes", receivedPackets, len(response.Packet))
 			return nil
 		})
 		if err != nil {
@@ -1090,7 +1090,7 @@ func TestBinlogDump_DirectGRPC(t *testing.T) {
 		}
 	}()
 
-	// Goroutine 2: Write data to generate binlog events
+	// Goroutine 2: Write data to generate binlog packets
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -1120,8 +1120,8 @@ func TestBinlogDump_DirectGRPC(t *testing.T) {
 
 	wg.Wait()
 
-	assert.GreaterOrEqual(t, receivedEvents, 1, "Should have received binlog events via direct gRPC (file/position)")
-	t.Logf("Successfully received %d events via direct gRPC to vttablet (file/position)", receivedEvents)
+	assert.GreaterOrEqual(t, receivedPackets, 1, "Should have received binlog packets via direct gRPC (file/position)")
+	t.Logf("Successfully received %d packets via direct gRPC to vttablet (file/position)", receivedPackets)
 }
 
 // TestBinlogDump_NoTarget verifies that COM_BINLOG_DUMP returns an error packet without a target.
@@ -1186,8 +1186,8 @@ func TestBinlogDump_LargeEvent(t *testing.T) {
 
 	t.Log("Binlog dump started (file/position mode)")
 
-	// Channel to receive events
-	eventCh := make(chan []byte, 100)
+	// Channel to receive packets
+	packetCh := make(chan []byte, 100)
 	errCh := make(chan error, 1)
 
 	// Start reading packets in a goroutine
@@ -1195,7 +1195,7 @@ func TestBinlogDump_LargeEvent(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		defer close(eventCh)
+		defer close(packetCh)
 		for {
 			data, err := binlogConn.ReadPacket()
 			if err != nil {
@@ -1206,7 +1206,7 @@ func TestBinlogDump_LargeEvent(t *testing.T) {
 				return
 			}
 			select {
-			case eventCh <- data:
+			case packetCh <- data:
 			default:
 				// Channel full, drop packet
 			}
@@ -1216,7 +1216,7 @@ func TestBinlogDump_LargeEvent(t *testing.T) {
 	// Give the binlog dump a moment to start
 	time.Sleep(100 * time.Millisecond)
 
-	// Connect to insert data - this will generate binlog events AFTER we started dumping
+	// Connect to insert data - this will generate binlog packets AFTER we started dumping
 	dataConn, err = mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer dataConn.Close()
@@ -1224,7 +1224,7 @@ func TestBinlogDump_LargeEvent(t *testing.T) {
 	// Create a large blob of 32MB that spans multiple MySQL packets.
 	largeDataSize := 32 * 1024 * 1024 // 32MB
 
-	t.Logf("Inserting large blob of %d bytes (%d MB) to test multi-packet event handling", largeDataSize, largeDataSize/(1024*1024))
+	t.Logf("Inserting large blob of %d bytes (%d MB) to test multi-packet handling", largeDataSize, largeDataSize/(1024*1024))
 
 	// Insert the large blob using REPEAT to build the data in MySQL
 	baseSize := 1024 * 1024 // 1MB base
@@ -1252,54 +1252,54 @@ func TestBinlogDump_LargeEvent(t *testing.T) {
 	}
 	require.NoError(t, err, "Should be able to insert large blob")
 
-	t.Log("Large blob inserted successfully, waiting for binlog events...")
+	t.Log("Large blob inserted successfully, waiting for binlog packets...")
 
-	// Wait for events - we should receive the large event
-	var largeEventReceived bool
-	receivedEvents := 0
+	// Wait for packets - we should receive the large packet
+	var largePacketReceived bool
+	receivedPackets := 0
 	timeout := time.After(30 * time.Second) // Longer timeout for large data
 
-eventLoop:
+packetLoop:
 	for {
 		select {
-		case data, ok := <-eventCh:
+		case data, ok := <-packetCh:
 			if !ok {
-				t.Logf("Event channel closed after receiving %d events", receivedEvents)
-				break eventLoop
+				t.Logf("Packet channel closed after receiving %d packets", receivedPackets)
+				break packetLoop
 			}
-			receivedEvents++
-			eventSize := len(data)
+			receivedPackets++
+			packetSize := len(data)
 
-			// Log event details
-			if eventSize > 1024*1024 {
-				t.Logf("Received event %d: size=%d bytes (%.1f MB), first byte=0x%02x",
-					receivedEvents, eventSize, float64(eventSize)/(1024*1024), data[0])
+			// Log packet details
+			if packetSize > 1024*1024 {
+				t.Logf("Received packet %d: size=%d bytes (%.1f MB), first byte=0x%02x",
+					receivedPackets, packetSize, float64(packetSize)/(1024*1024), data[0])
 			} else {
-				t.Logf("Received event %d: size=%d bytes, first byte=0x%02x",
-					receivedEvents, eventSize, data[0])
+				t.Logf("Received packet %d: size=%d bytes, first byte=0x%02x",
+					receivedPackets, packetSize, data[0])
 			}
 
-			// Check if we received a large event (>30MB)
-			if eventSize > 30*1024*1024 {
-				largeEventReceived = true
-				t.Logf("SUCCESS: Received large event of %d bytes (%.1f MB) - multi-packet handling works!",
-					eventSize, float64(eventSize)/(1024*1024))
-				break eventLoop
+			// Check if we received a large packet (>30MB)
+			if packetSize > 30*1024*1024 {
+				largePacketReceived = true
+				t.Logf("SUCCESS: Received large packet of %d bytes (%.1f MB) - multi-packet handling works!",
+					packetSize, float64(packetSize)/(1024*1024))
+				break packetLoop
 			}
 
 			// Safety limit - don't wait forever
-			if receivedEvents > 50 {
-				t.Log("Received 50 events, stopping")
-				break eventLoop
+			if receivedPackets > 50 {
+				t.Log("Received 50 packets, stopping")
+				break packetLoop
 			}
 
 		case err := <-errCh:
-			t.Logf("Got error from event reader: %v", err)
-			break eventLoop
+			t.Logf("Got error from packet reader: %v", err)
+			break packetLoop
 
 		case <-timeout:
-			t.Logf("Timeout after receiving %d events", receivedEvents)
-			break eventLoop
+			t.Logf("Timeout after receiving %d packets", receivedPackets)
+			break packetLoop
 		}
 	}
 
@@ -1307,7 +1307,7 @@ eventLoop:
 	binlogConn.Close()
 	wg.Wait()
 
-	// Verify we received the large event
-	assert.True(t, largeEventReceived, "Should have received a binlog event larger than 30MB")
-	assert.GreaterOrEqual(t, receivedEvents, 1, "Should have received at least one binlog event")
+	// Verify we received the large packet
+	assert.True(t, largePacketReceived, "Should have received a binlog packet larger than 30MB")
+	assert.GreaterOrEqual(t, receivedPackets, 1, "Should have received at least one binlog packet")
 }
