@@ -31,6 +31,12 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 // TestBinlogDumpStreaming tests that binlog events are actually streamed from vttablet to the client.
@@ -814,4 +820,90 @@ readLoop:
 	close(doneCh)
 
 	assert.GreaterOrEqual(t, receivedEvents, 1, "Should have received at least one event in blocking mode")
+}
+
+// TestBinlogDumpDirectGRPC tests binlog streaming via direct gRPC connection to vttablet.
+func TestBinlogDumpDirectGRPC(t *testing.T) {
+	ctx := context.Background()
+
+	// Get the tablet info for direct gRPC connection
+	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
+	tablet, err := clusterInstance.VtctldClientProcess.GetTablet(primaryTablet.Alias)
+	require.NoError(t, err)
+
+	// Get current position - returns format like "MySQL56/uuid:1-44"
+	pos, _ := cluster.GetPrimaryPosition(t, *primaryTablet, hostname)
+	t.Logf("Primary position: %v", pos)
+
+	// Extract just the GTID set (strip the "MySQL56/" prefix)
+	gtidSet := pos
+	if idx := strings.Index(pos, "/"); idx != -1 {
+		gtidSet = pos[idx+1:]
+	}
+	t.Logf("GTID set for BinlogDump: %s", gtidSet)
+
+	grpcCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	// Connect directly to vttablet via gRPC
+	conn, err := tabletconn.GetDialer()(grpcCtx, tablet, grpcclient.FailFast(false))
+	require.NoError(t, err)
+	defer conn.Close(grpcCtx)
+
+	var receivedEvents int
+	var wg sync.WaitGroup
+
+	// Goroutine 1: Stream binlog events via direct gRPC
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := conn.BinlogDump(grpcCtx, &binlogdatapb.BinlogDumpRequest{
+			Target: &querypb.Target{
+				Keyspace:   keyspaceName,
+				Shard:      "0",
+				TabletType: tablet.Type,
+			},
+			GtidSet: gtidSet,
+		}, func(response *binlogdatapb.BinlogDumpResponse) error {
+			receivedEvents++
+			t.Logf("Received event %d via gRPC: %d bytes", receivedEvents, len(response.Packet))
+			return nil
+		})
+		if err != nil {
+			t.Logf("BinlogDump ended: %v", err)
+		}
+	}()
+
+	// Goroutine 2: Write data to generate binlog events
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		dataConn, err := mysql.Connect(grpcCtx, &vtParams)
+		if err != nil {
+			t.Logf("Failed to connect for writes: %v", err)
+			return
+		}
+		defer dataConn.Close()
+
+		for i := range 5 {
+			select {
+			case <-grpcCtx.Done():
+				return
+			default:
+			}
+			time.Sleep(1 * time.Second)
+			t.Logf("Writing row %d", i+1)
+			_, err := dataConn.ExecuteFetch(
+				fmt.Sprintf("INSERT INTO binlog_test (msg) VALUES ('grpc_test_%d')", i), 1, false)
+			if err != nil {
+				t.Logf("Insert failed: %v", err)
+				return
+			}
+		}
+	}()
+
+	wg.Wait()
+
+	assert.GreaterOrEqual(t, receivedEvents, 1, "Should have received binlog events via direct gRPC")
+	t.Logf("Successfully received %d events via direct gRPC to vttablet", receivedEvents)
 }
