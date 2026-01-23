@@ -39,8 +39,8 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-// TestBinlogDumpStreaming tests that binlog events are actually streamed from vttablet to the client.
-func TestBinlogDumpStreaming(t *testing.T) {
+// TestBinlogDumpGTID_Streaming tests that binlog events are actually streamed from vttablet to the client.
+func TestBinlogDumpGTID_Streaming(t *testing.T) {
 	ctx := context.Background()
 
 	// Get the primary tablet for our keyspace
@@ -149,8 +149,8 @@ eventLoop:
 	assert.GreaterOrEqual(t, receivedEvents, 1, "Should have received at least one binlog event")
 }
 
-// TestBinlogDumpNoTarget verifies that binlog dump returns an error packet without a target
-func TestBinlogDumpNoTarget(t *testing.T) {
+// TestBinlogDumpGTID_NoTarget verifies that binlog dump returns an error packet without a target
+func TestBinlogDumpGTID_NoTarget(t *testing.T) {
 	ctx := context.Background()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -173,10 +173,10 @@ func TestBinlogDumpNoTarget(t *testing.T) {
 	assert.Contains(t, sqlErr.Error(), "no target specified", "Error message should mention missing target")
 }
 
-// TestBinlogDumpLargeEvent tests that binlog events larger than 16MB (spanning multiple MySQL packets)
+// TestBinlogDumpGTID_LargeEvent tests that binlog events larger than 16MB (spanning multiple MySQL packets)
 // are correctly streamed through VTGate. This is critical because MySQL protocol uses 16MB max packet
 // size, and large events must be split into multiple packets and reassembled correctly.
-func TestBinlogDumpLargeEvent(t *testing.T) {
+func TestBinlogDumpGTID_LargeEvent(t *testing.T) {
 	ctx := context.Background()
 
 	// Get the primary tablet for our keyspace
@@ -350,9 +350,9 @@ func gtidToSIDBlock(t *testing.T, gtidStr string) []byte {
 	return gtidSet.SIDBlock()
 }
 
-// TestBinlogDumpFromSpecificGTID verifies that binlog streaming starts from the specified
+// TestBinlogDumpGTID_FromSpecificPosition verifies that binlog streaming starts from the specified
 // GTID position and only receives subsequent events.
-func TestBinlogDumpFromSpecificGTID(t *testing.T) {
+func TestBinlogDumpGTID_FromSpecificPosition(t *testing.T) {
 	ctx := context.Background()
 
 	// Connect to insert initial data
@@ -419,8 +419,8 @@ func TestBinlogDumpFromSpecificGTID(t *testing.T) {
 	t.Logf("Successfully received %d events from GTID position", receivedEvents)
 }
 
-// TestBinlogDumpInvalidGTIDFormat verifies that an invalid GTID format returns a proper error packet.
-func TestBinlogDumpInvalidGTIDFormat(t *testing.T) {
+// TestBinlogDumpGTID_InvalidFormat verifies that an invalid GTID format returns a proper error packet.
+func TestBinlogDumpGTID_InvalidFormat(t *testing.T) {
 	ctx := context.Background()
 
 	// Connect with proper target
@@ -454,10 +454,10 @@ func TestBinlogDumpInvalidGTIDFormat(t *testing.T) {
 	t.Logf("Got expected error: %v", sqlErr)
 }
 
-// TestBinlogDumpFutureGTID verifies that when requesting a GTID set that includes
+// TestBinlogDumpGTID_FuturePosition verifies that when requesting a GTID set that includes
 // transactions not yet in the binlog, MySQL returns an error.
 // This is expected MySQL behavior - you cannot request events from a position that doesn't exist.
-func TestBinlogDumpFutureGTID(t *testing.T) {
+func TestBinlogDumpGTID_FuturePosition(t *testing.T) {
 	ctx := context.Background()
 
 	// Connect to get current GTID
@@ -533,10 +533,10 @@ func TestBinlogDumpFutureGTID(t *testing.T) {
 	t.Logf("MySQL may have sent existing events - behavior depends on MySQL version")
 }
 
-// TestBinlogDumpNonBlockReturnsEOF verifies that when the BINLOG_DUMP_NON_BLOCK flag is set,
+// TestBinlogDumpGTID_NonBlockEOF verifies that when the BINLOG_DUMP_NON_BLOCK flag is set,
 // the server returns an EOF packet when there are no more events to stream, instead of
 // blocking indefinitely waiting for new events.
-func TestBinlogDumpNonBlockReturnsEOF(t *testing.T) {
+func TestBinlogDumpGTID_NonBlockEOF(t *testing.T) {
 	ctx := context.Background()
 
 	// Connect to insert some data first to ensure binlog has content
@@ -617,9 +617,9 @@ readLoop:
 	assert.True(t, receivedEOF, "Should have received EOF packet with nonBlock flag set")
 }
 
-// TestBinlogDumpNonBlockWithPendingEvents verifies that when nonBlock is set and there
+// TestBinlogDumpGTID_NonBlockWithPendingEvents verifies that when nonBlock is set and there
 // ARE pending events, the server streams them all and THEN returns EOF.
-func TestBinlogDumpNonBlockWithPendingEvents(t *testing.T) {
+func TestBinlogDumpGTID_NonBlockWithPendingEvents(t *testing.T) {
 	ctx := context.Background()
 
 	// Connect to insert data
@@ -707,11 +707,11 @@ readLoop:
 	t.Logf("NonBlock with pending events: received %d events then EOF", receivedEvents)
 }
 
-// TestBinlogDumpBlockingMode verifies the default blocking behavior - when BINLOG_DUMP_NON_BLOCK
+// TestBinlogDumpGTID_BlockingMode verifies the default blocking behavior - when BINLOG_DUMP_NON_BLOCK
 // is NOT set, the server should block waiting for new events instead of returning EOF.
 // This test verifies that new events are received after an insert, demonstrating that the
 // connection stays open and continues to stream events.
-func TestBinlogDumpBlockingMode(t *testing.T) {
+func TestBinlogDumpGTID_BlockingMode(t *testing.T) {
 	ctx := context.Background()
 
 	// Connect to get current position
@@ -822,8 +822,8 @@ readLoop:
 	assert.GreaterOrEqual(t, receivedEvents, 1, "Should have received at least one event in blocking mode")
 }
 
-// TestBinlogDumpDirectGRPC tests binlog streaming via direct gRPC connection to vttablet.
-func TestBinlogDumpDirectGRPC(t *testing.T) {
+// TestBinlogDumpGTID_DirectGRPC tests GTID-based binlog streaming via direct gRPC connection to vttablet.
+func TestBinlogDumpGTID_DirectGRPC(t *testing.T) {
 	ctx := context.Background()
 
 	// Get the tablet info for direct gRPC connection
@@ -857,7 +857,7 @@ func TestBinlogDumpDirectGRPC(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err := conn.BinlogDump(grpcCtx, &binlogdatapb.BinlogDumpRequest{
+		err := conn.BinlogDumpGTID(grpcCtx, &binlogdatapb.BinlogDumpGTIDRequest{
 			Target: &querypb.Target{
 				Keyspace:   keyspaceName,
 				Shard:      "0",
@@ -870,7 +870,7 @@ func TestBinlogDumpDirectGRPC(t *testing.T) {
 			return nil
 		})
 		if err != nil {
-			t.Logf("BinlogDump ended: %v", err)
+			t.Logf("BinlogDumpGTID ended: %v", err)
 		}
 	}()
 
@@ -906,4 +906,408 @@ func TestBinlogDumpDirectGRPC(t *testing.T) {
 
 	assert.GreaterOrEqual(t, receivedEvents, 1, "Should have received binlog events via direct gRPC")
 	t.Logf("Successfully received %d events via direct gRPC to vttablet", receivedEvents)
+}
+
+// getBinlogFilePosition queries MySQL for the current binlog file and position.
+func getBinlogFilePosition(t *testing.T, conn *mysql.Conn) (string, uint32) {
+	t.Helper()
+
+	// Try SHOW BINARY LOG STATUS first (MySQL 8.2+), fall back to SHOW MASTER STATUS
+	qr, err := conn.ExecuteFetch("SHOW BINARY LOG STATUS", 1, false)
+	if err != nil {
+		qr, err = conn.ExecuteFetch("SHOW MASTER STATUS", 1, false)
+		require.NoError(t, err, "Failed to get binlog position")
+	}
+	require.Len(t, qr.Rows, 1, "Expected one row from SHOW BINARY LOG STATUS")
+
+	file := qr.Rows[0][0].ToString()
+	posStr := qr.Rows[0][1].ToString()
+	pos, err := strconv.ParseUint(posStr, 10, 32)
+	require.NoError(t, err, "Failed to parse binlog position")
+
+	return file, uint32(pos)
+}
+
+// TestBinlogDump_VTGate tests COM_BINLOG_DUMP (file/position-based) via VTGate.
+func TestBinlogDump_VTGate(t *testing.T) {
+	ctx := context.Background()
+
+	// First, connect to MySQL directly (via vtgate) to get the current binlog position
+	dataConn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+
+	// Get current binlog file and position
+	binlogFile, binlogPos := getBinlogFilePosition(t, dataConn)
+	t.Logf("Starting binlog file: %s, position: %d", binlogFile, binlogPos)
+
+	// Insert some data so we have events to read
+	for i := range 3 {
+		_, err = dataConn.ExecuteFetch(
+			fmt.Sprintf("INSERT INTO binlog_test (msg) VALUES ('filepos_test_%d')", i), 1, false)
+		require.NoError(t, err)
+	}
+	dataConn.Close()
+
+	// Get the primary tablet for our keyspace
+	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
+	tabletAlias := primaryTablet.Alias
+
+	// Connect to vtgate for binlog streaming
+	targetString := fmt.Sprintf("%s:0@primary|%s", keyspaceName, tabletAlias)
+	binlogParams := mysql.ConnParams{
+		Host:  clusterInstance.Hostname,
+		Port:  clusterInstance.VtgateMySQLPort,
+		Uname: "vt_repl|" + targetString,
+	}
+
+	t.Logf("Connecting to VTGate for COM_BINLOG_DUMP with username: %s", binlogParams.Uname)
+
+	binlogConn, err := mysql.Connect(ctx, &binlogParams)
+	require.NoError(t, err)
+	defer binlogConn.Close()
+
+	// Send COM_BINLOG_DUMP with file and position
+	err = binlogConn.WriteComBinlogDump(1, binlogFile, uint64(binlogPos), 0)
+	require.NoError(t, err, "Should be able to send COM_BINLOG_DUMP")
+
+	// Read binlog events using a goroutine with timeout
+	packetCh := make(chan []byte, 100)
+	errCh := make(chan error, 1)
+	doneCh := make(chan struct{})
+
+	go func() {
+		for {
+			select {
+			case <-doneCh:
+				return
+			default:
+			}
+			data, err := binlogConn.ReadPacket()
+			if err != nil {
+				select {
+				case errCh <- err:
+				default:
+				}
+				return
+			}
+			select {
+			case packetCh <- data:
+			case <-doneCh:
+				return
+			}
+		}
+	}()
+
+	var receivedEvents int
+	timeout := time.After(5 * time.Second)
+
+readLoop:
+	for {
+		select {
+		case <-timeout:
+			t.Logf("Timeout reached after receiving %d events", receivedEvents)
+			break readLoop
+		case err := <-errCh:
+			t.Logf("Read error: %v", err)
+			break readLoop
+		case data := <-packetCh:
+			if len(data) > 0 {
+				receivedEvents++
+				t.Logf("Received event %d: size=%d bytes, first byte=0x%02x", receivedEvents, len(data), data[0])
+
+				// Check for EOF packet
+				if data[0] == mysql.EOFPacket && len(data) < 9 {
+					t.Log("Received EOF packet")
+					break readLoop
+				}
+
+				// Check for error packet
+				if data[0] == mysql.ErrPacket {
+					t.Logf("Received error packet")
+					break readLoop
+				}
+
+				// Stop after receiving enough events
+				if receivedEvents >= 10 {
+					break readLoop
+				}
+			}
+		}
+	}
+
+	close(doneCh)
+	assert.GreaterOrEqual(t, receivedEvents, 1, "Should have received at least one event via COM_BINLOG_DUMP")
+	t.Logf("Successfully received %d events via COM_BINLOG_DUMP (file/position)", receivedEvents)
+}
+
+// TestBinlogDump_DirectGRPC tests file/position-based binlog streaming via direct gRPC to vttablet.
+func TestBinlogDump_DirectGRPC(t *testing.T) {
+	ctx := context.Background()
+
+	// Get the tablet info for direct gRPC connection
+	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
+	tablet, err := clusterInstance.VtctldClientProcess.GetTablet(primaryTablet.Alias)
+	require.NoError(t, err)
+
+	// Connect to MySQL to get the binlog file and position
+	dataConn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+
+	binlogFile, binlogPos := getBinlogFilePosition(t, dataConn)
+	t.Logf("Starting binlog file: %s, position: %d", binlogFile, binlogPos)
+	dataConn.Close()
+
+	grpcCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	// Connect directly to vttablet via gRPC
+	conn, err := tabletconn.GetDialer()(grpcCtx, tablet, grpcclient.FailFast(false))
+	require.NoError(t, err)
+	defer conn.Close(grpcCtx)
+
+	var receivedEvents int
+	var wg sync.WaitGroup
+
+	// Goroutine 1: Stream binlog events via direct gRPC using file/position
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := conn.BinlogDump(grpcCtx, &binlogdatapb.BinlogDumpRequest{
+			Target: &querypb.Target{
+				Keyspace:   keyspaceName,
+				Shard:      "0",
+				TabletType: tablet.Type,
+			},
+			BinlogFilename: binlogFile,
+			BinlogPosition: binlogPos,
+		}, func(response *binlogdatapb.BinlogDumpResponse) error {
+			receivedEvents++
+			t.Logf("Received event %d via gRPC (file/pos): %d bytes", receivedEvents, len(response.Packet))
+			return nil
+		})
+		if err != nil {
+			t.Logf("BinlogDump (file/pos) ended: %v", err)
+		}
+	}()
+
+	// Goroutine 2: Write data to generate binlog events
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		writeConn, err := mysql.Connect(grpcCtx, &vtParams)
+		if err != nil {
+			t.Logf("Failed to connect for writes: %v", err)
+			return
+		}
+		defer writeConn.Close()
+
+		for i := range 5 {
+			select {
+			case <-grpcCtx.Done():
+				return
+			default:
+			}
+			time.Sleep(1 * time.Second)
+			t.Logf("Writing row %d", i+1)
+			_, err := writeConn.ExecuteFetch(
+				fmt.Sprintf("INSERT INTO binlog_test (msg) VALUES ('filepos_grpc_test_%d')", i), 1, false)
+			if err != nil {
+				t.Logf("Insert failed: %v", err)
+				return
+			}
+		}
+	}()
+
+	wg.Wait()
+
+	assert.GreaterOrEqual(t, receivedEvents, 1, "Should have received binlog events via direct gRPC (file/position)")
+	t.Logf("Successfully received %d events via direct gRPC to vttablet (file/position)", receivedEvents)
+}
+
+// TestBinlogDump_NoTarget verifies that COM_BINLOG_DUMP returns an error packet without a target.
+func TestBinlogDump_NoTarget(t *testing.T) {
+	ctx := context.Background()
+
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// Try to send COM_BINLOG_DUMP without setting a target
+	err = conn.WriteComBinlogDump(1, "binlog.000001", 4, 0)
+	require.NoError(t, err)
+
+	// Server should send an error packet when no target is specified
+	data, err := conn.ReadPacket()
+	require.NoError(t, err, "Should receive error packet, not connection close")
+	require.True(t, len(data) > 0, "Response should not be empty")
+	require.Equal(t, byte(mysql.ErrPacket), data[0], "Expected error packet")
+
+	// Parse the error packet and verify the message
+	sqlErr := mysql.ParseErrorPacket(data)
+	require.Error(t, sqlErr)
+	assert.Contains(t, sqlErr.Error(), "no target specified", "Error message should mention missing target")
+}
+
+// TestBinlogDump_LargeEvent tests that binlog events larger than 16MB (spanning multiple MySQL packets)
+// are correctly streamed through VTGate using COM_BINLOG_DUMP (file/position-based).
+// This verifies that multi-packet handling works correctly for the file/position code path.
+func TestBinlogDump_LargeEvent(t *testing.T) {
+	ctx := context.Background()
+
+	// Get the primary tablet for our keyspace
+	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
+	tabletAlias := primaryTablet.Alias
+
+	t.Logf("Tablet alias: %s", tabletAlias)
+
+	// First, get the current binlog file and position
+	dataConn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+
+	binlogFile, binlogPos := getBinlogFilePosition(t, dataConn)
+	t.Logf("Starting binlog file: %s, position: %d", binlogFile, binlogPos)
+	dataConn.Close()
+
+	// Connect to vtgate for binlog streaming
+	targetString := fmt.Sprintf("%s:0@primary|%s", keyspaceName, tabletAlias)
+	binlogParams := mysql.ConnParams{
+		Host:  clusterInstance.Hostname,
+		Port:  clusterInstance.VtgateMySQLPort,
+		Uname: "vt_repl|" + targetString,
+	}
+
+	binlogConn, err := mysql.Connect(ctx, &binlogParams)
+	require.NoError(t, err)
+	defer binlogConn.Close()
+
+	// Start binlog dump with file and position
+	err = binlogConn.WriteComBinlogDump(1, binlogFile, uint64(binlogPos), 0)
+	require.NoError(t, err, "Should be able to send COM_BINLOG_DUMP")
+
+	t.Log("Binlog dump started (file/position mode)")
+
+	// Channel to receive events
+	eventCh := make(chan []byte, 100)
+	errCh := make(chan error, 1)
+
+	// Start reading packets in a goroutine
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer close(eventCh)
+		for {
+			data, err := binlogConn.ReadPacket()
+			if err != nil {
+				select {
+				case errCh <- err:
+				default:
+				}
+				return
+			}
+			select {
+			case eventCh <- data:
+			default:
+				// Channel full, drop packet
+			}
+		}
+	}()
+
+	// Give the binlog dump a moment to start
+	time.Sleep(100 * time.Millisecond)
+
+	// Connect to insert data - this will generate binlog events AFTER we started dumping
+	dataConn, err = mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer dataConn.Close()
+
+	// Create a large blob of 32MB that spans multiple MySQL packets.
+	largeDataSize := 32 * 1024 * 1024 // 32MB
+
+	t.Logf("Inserting large blob of %d bytes (%d MB) to test multi-packet event handling", largeDataSize, largeDataSize/(1024*1024))
+
+	// Insert the large blob using REPEAT to build the data in MySQL
+	baseSize := 1024 * 1024 // 1MB base
+	repeatCount := 32       // 32 repetitions = 32MB
+
+	// Create base data (1MB of 'A' characters)
+	baseData := make([]byte, baseSize)
+	for i := range baseData {
+		baseData[i] = 'A'
+	}
+	hexBase := hex.EncodeToString(baseData)
+
+	// Use REPEAT to build the full blob in MySQL
+	insertSQL := fmt.Sprintf("INSERT INTO large_blob_test (data) VALUES (REPEAT(X'%s', %d))", hexBase, repeatCount)
+	_, err = dataConn.ExecuteFetch(insertSQL, 1, false)
+	if err != nil {
+		t.Logf("Insert error: %v", err)
+		// Try a smaller size if the large one fails
+		t.Log("Retrying with smaller blob size...")
+		insertSQL = fmt.Sprintf("INSERT INTO large_blob_test (data) VALUES (REPEAT(X'%s', %d))", hexBase, 5)
+		_, err = dataConn.ExecuteFetch(insertSQL, 1, false)
+		if err != nil {
+			t.Logf("Smaller insert also failed: %v", err)
+		}
+	}
+	require.NoError(t, err, "Should be able to insert large blob")
+
+	t.Log("Large blob inserted successfully, waiting for binlog events...")
+
+	// Wait for events - we should receive the large event
+	var largeEventReceived bool
+	receivedEvents := 0
+	timeout := time.After(30 * time.Second) // Longer timeout for large data
+
+eventLoop:
+	for {
+		select {
+		case data, ok := <-eventCh:
+			if !ok {
+				t.Logf("Event channel closed after receiving %d events", receivedEvents)
+				break eventLoop
+			}
+			receivedEvents++
+			eventSize := len(data)
+
+			// Log event details
+			if eventSize > 1024*1024 {
+				t.Logf("Received event %d: size=%d bytes (%.1f MB), first byte=0x%02x",
+					receivedEvents, eventSize, float64(eventSize)/(1024*1024), data[0])
+			} else {
+				t.Logf("Received event %d: size=%d bytes, first byte=0x%02x",
+					receivedEvents, eventSize, data[0])
+			}
+
+			// Check if we received a large event (>30MB)
+			if eventSize > 30*1024*1024 {
+				largeEventReceived = true
+				t.Logf("SUCCESS: Received large event of %d bytes (%.1f MB) - multi-packet handling works!",
+					eventSize, float64(eventSize)/(1024*1024))
+				break eventLoop
+			}
+
+			// Safety limit - don't wait forever
+			if receivedEvents > 50 {
+				t.Log("Received 50 events, stopping")
+				break eventLoop
+			}
+
+		case err := <-errCh:
+			t.Logf("Got error from event reader: %v", err)
+			break eventLoop
+
+		case <-timeout:
+			t.Logf("Timeout after receiving %d events", receivedEvents)
+			break eventLoop
+		}
+	}
+
+	// Close the connection to stop the reader goroutine
+	binlogConn.Close()
+	wg.Wait()
+
+	// Verify we received the large event
+	assert.True(t, largeEventReceived, "Should have received a binlog event larger than 30MB")
+	assert.GreaterOrEqual(t, receivedEvents, 1, "Should have received at least one binlog event")
 }

@@ -396,6 +396,17 @@ func (q *query) BinlogDump(request *binlogdatapb.BinlogDumpRequest, stream query
 	return vterrors.ToGRPC(err)
 }
 
+// BinlogDumpGTID is part of the queryservice.QueryServer interface
+func (q *query) BinlogDumpGTID(request *binlogdatapb.BinlogDumpGTIDRequest, stream queryservicepb.Query_BinlogDumpGTIDServer) (err error) {
+	defer q.server.HandlePanic(&err)
+	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	err = q.server.BinlogDumpGTID(ctx, request, stream.Send)
+	return vterrors.ToGRPC(err)
+}
+
 // ReserveExecute implements the QueryServer interface
 func (q *query) ReserveExecute(ctx context.Context, request *querypb.ReserveExecuteRequest) (response *querypb.ReserveExecuteResponse, err error) {
 	defer q.server.HandlePanic(&err)

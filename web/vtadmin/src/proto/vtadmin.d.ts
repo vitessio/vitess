@@ -42115,13 +42115,7 @@ export namespace binlogdata {
         binlog_filename?: (string|null);
 
         /** BinlogDumpRequest binlog_position */
-        binlog_position?: (number|Long|null);
-
-        /** BinlogDumpRequest gtid_set */
-        gtid_set?: (string|null);
-
-        /** BinlogDumpRequest non_block */
-        non_block?: (boolean|null);
+        binlog_position?: (number|null);
     }
 
     /** Represents a BinlogDumpRequest. */
@@ -42146,13 +42140,7 @@ export namespace binlogdata {
         public binlog_filename: string;
 
         /** BinlogDumpRequest binlog_position. */
-        public binlog_position: (number|Long);
-
-        /** BinlogDumpRequest gtid_set. */
-        public gtid_set: string;
-
-        /** BinlogDumpRequest non_block. */
-        public non_block: boolean;
+        public binlog_position: number;
 
         /**
          * Creates a new BinlogDumpRequest instance using the specified properties.
@@ -42226,6 +42214,139 @@ export namespace binlogdata {
 
         /**
          * Gets the default type url for BinlogDumpRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a BinlogDumpGTIDRequest. */
+    interface IBinlogDumpGTIDRequest {
+
+        /** BinlogDumpGTIDRequest effective_caller_id */
+        effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** BinlogDumpGTIDRequest immediate_caller_id */
+        immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** BinlogDumpGTIDRequest target */
+        target?: (query.ITarget|null);
+
+        /** BinlogDumpGTIDRequest binlog_filename */
+        binlog_filename?: (string|null);
+
+        /** BinlogDumpGTIDRequest binlog_position */
+        binlog_position?: (number|Long|null);
+
+        /** BinlogDumpGTIDRequest gtid_set */
+        gtid_set?: (string|null);
+
+        /** BinlogDumpGTIDRequest non_block */
+        non_block?: (boolean|null);
+    }
+
+    /** Represents a BinlogDumpGTIDRequest. */
+    class BinlogDumpGTIDRequest implements IBinlogDumpGTIDRequest {
+
+        /**
+         * Constructs a new BinlogDumpGTIDRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IBinlogDumpGTIDRequest);
+
+        /** BinlogDumpGTIDRequest effective_caller_id. */
+        public effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** BinlogDumpGTIDRequest immediate_caller_id. */
+        public immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** BinlogDumpGTIDRequest target. */
+        public target?: (query.ITarget|null);
+
+        /** BinlogDumpGTIDRequest binlog_filename. */
+        public binlog_filename: string;
+
+        /** BinlogDumpGTIDRequest binlog_position. */
+        public binlog_position: (number|Long);
+
+        /** BinlogDumpGTIDRequest gtid_set. */
+        public gtid_set: string;
+
+        /** BinlogDumpGTIDRequest non_block. */
+        public non_block: boolean;
+
+        /**
+         * Creates a new BinlogDumpGTIDRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns BinlogDumpGTIDRequest instance
+         */
+        public static create(properties?: binlogdata.IBinlogDumpGTIDRequest): binlogdata.BinlogDumpGTIDRequest;
+
+        /**
+         * Encodes the specified BinlogDumpGTIDRequest message. Does not implicitly {@link binlogdata.BinlogDumpGTIDRequest.verify|verify} messages.
+         * @param message BinlogDumpGTIDRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IBinlogDumpGTIDRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified BinlogDumpGTIDRequest message, length delimited. Does not implicitly {@link binlogdata.BinlogDumpGTIDRequest.verify|verify} messages.
+         * @param message BinlogDumpGTIDRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IBinlogDumpGTIDRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a BinlogDumpGTIDRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns BinlogDumpGTIDRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.BinlogDumpGTIDRequest;
+
+        /**
+         * Decodes a BinlogDumpGTIDRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns BinlogDumpGTIDRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.BinlogDumpGTIDRequest;
+
+        /**
+         * Verifies a BinlogDumpGTIDRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a BinlogDumpGTIDRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns BinlogDumpGTIDRequest
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.BinlogDumpGTIDRequest;
+
+        /**
+         * Creates a plain object from a BinlogDumpGTIDRequest message. Also converts values to other types if specified.
+         * @param message BinlogDumpGTIDRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.BinlogDumpGTIDRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this BinlogDumpGTIDRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for BinlogDumpGTIDRequest
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */

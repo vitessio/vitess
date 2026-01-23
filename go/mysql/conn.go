@@ -1023,11 +1023,17 @@ func (c *Conn) handleComBinlogDump(handler Handler, data []byte) (kontinue bool)
 
 	logfile, binlogPos, err := c.parseComBinlogDump(data)
 	if err != nil {
-		log.Errorf("conn %v: parseComBinlogDumpGTID failed: %v", c.ID(), err)
+		log.Errorf("conn %v: parseComBinlogDump failed: %v", c.ID(), err)
+		if writeErr := c.WriteErrorPacketFromError(err); writeErr != nil {
+			log.Errorf("conn %v: failed to write error packet: %v", c.ID(), writeErr)
+		}
 		return false
 	}
 	if err := handler.ComBinlogDump(c, logfile, binlogPos); err != nil {
-		log.Error(err.Error())
+		log.Errorf("conn %v: ComBinlogDump failed: %v", c.ID(), err)
+		if writeErr := c.WriteErrorPacketFromError(err); writeErr != nil {
+			log.Errorf("conn %v: failed to write error packet: %v", c.ID(), writeErr)
+		}
 		return false
 	}
 	return kontinue

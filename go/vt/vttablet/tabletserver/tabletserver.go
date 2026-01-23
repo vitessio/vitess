@@ -1340,11 +1340,35 @@ func (tsv *TabletServer) VStreamResults(ctx context.Context, target *querypb.Tar
 	return tsv.vstreamer.StreamResults(ctx, query, send)
 }
 
-// BinlogDump streams raw binlog packets from MySQL.
+// BinlogDump streams raw binlog packets from MySQL using COM_BINLOG_DUMP (file/position-based).
 // It reads MySQL packets directly and forwards them to the client without parsing.
 // Each packet is streamed individually, including zero-length packets that terminate
 // multi-packet sequences. This provides true streaming with bounded memory usage.
 func (tsv *TabletServer) BinlogDump(ctx context.Context, request *binlogdatapb.BinlogDumpRequest, send func(*binlogdatapb.BinlogDumpResponse) error) error {
+	if err := tsv.sm.VerifyTarget(ctx, request.Target); err != nil {
+		return err
+	}
+
+	// Create a binlog connection to MySQL
+	conn, err := binlog.NewBinlogConnection(tsv.config.DB.FilteredWithDB())
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to create binlog connection")
+	}
+	defer conn.Close()
+
+	// Send the binlog dump command to MySQL using file/position
+	if err := conn.SendBinlogDumpCommand(conn.ServerID(), request.BinlogFilename, request.BinlogPosition); err != nil {
+		return vterrors.Wrapf(err, "failed to send binlog dump command")
+	}
+
+	return tsv.streamBinlogPackets(ctx, conn, send)
+}
+
+// BinlogDumpGTID streams raw binlog packets from MySQL using COM_BINLOG_DUMP_GTID (GTID-based).
+// It reads MySQL packets directly and forwards them to the client without parsing.
+// Each packet is streamed individually, including zero-length packets that terminate
+// multi-packet sequences. This provides true streaming with bounded memory usage.
+func (tsv *TabletServer) BinlogDumpGTID(ctx context.Context, request *binlogdatapb.BinlogDumpGTIDRequest, send func(*binlogdatapb.BinlogDumpResponse) error) error {
 	if err := tsv.sm.VerifyTarget(ctx, request.Target); err != nil {
 		return err
 	}
@@ -1374,23 +1398,27 @@ func (tsv *TabletServer) BinlogDump(ctx context.Context, request *binlogdatapb.B
 		startPos = currentPos
 	}
 
-	// Send the binlog dump command to MySQL
-	if err := conn.SendBinlogDumpCommand(conn.ServerID(), request.BinlogFilename, startPos, request.NonBlock); err != nil {
+	// Send the binlog dump command to MySQL using GTID
+	if err := conn.SendBinlogDumpGTIDCommand(conn.ServerID(), request.BinlogFilename, startPos, request.NonBlock); err != nil {
 		return vterrors.Wrapf(err, "failed to send binlog dump command")
 	}
 
-	// Stream packets from MySQL to the client.
-	// Each iteration processes one complete message (which may span multiple packets).
-	//
-	// TODO: Optimize for zero-copy streaming using gRPC's mem.BufferSlice.
-	// Currently, packet data is copied during protobuf marshaling. To eliminate this:
-	// 1. Use mem.BufferPool to allocate read buffers (ReadOnePacketPooled)
-	// 2. Return mem.Buffer with reference counting
-	// 3. Implement BufferSliceMarshaler interface for BinlogDumpResponse
-	// 4. Update grpc_codec.go to check for BufferSliceMarshaler before vtprotoMessage
-	// 5. Build BufferSlice with [protobuf header, packet buffer] - no copy needed
-	// gRPC's mem.Buffer reference counting handles buffer lifecycle automatically.
-	// See: google.golang.org/grpc/mem and go/vt/servenv/grpc_codec.go
+	return tsv.streamBinlogPackets(ctx, conn, send)
+}
+
+// streamBinlogPackets streams binlog packets from the connection to the client.
+// This is shared by both BinlogDump and BinlogDumpGTID.
+//
+// TODO: Optimize for zero-copy streaming using gRPC's mem.BufferSlice.
+// Currently, packet data is copied during protobuf marshaling. To eliminate this:
+// 1. Use mem.BufferPool to allocate read buffers (ReadOnePacketPooled)
+// 2. Return mem.Buffer with reference counting
+// 3. Implement BufferSliceMarshaler interface for BinlogDumpResponse
+// 4. Update grpc_codec.go to check for BufferSliceMarshaler before vtprotoMessage
+// 5. Build BufferSlice with [protobuf header, packet buffer] - no copy needed
+// gRPC's mem.Buffer reference counting handles buffer lifecycle automatically.
+// See: google.golang.org/grpc/mem and go/vt/servenv/grpc_codec.go
+func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, conn *binlog.BinlogConnection, send func(*binlogdatapb.BinlogDumpResponse) error) error {
 	for {
 		select {
 		case <-ctx.Done():

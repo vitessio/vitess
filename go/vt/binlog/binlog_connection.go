@@ -130,7 +130,7 @@ func (bc *BinlogConnection) StartBinlogDumpFromPosition(ctx context.Context, bin
 
 	log.Infof("sending binlog dump command: startPos=%v, serverID=%v", startPos, bc.serverID)
 	// VStream uses blocking mode (nonBlock=false) - it continuously streams events
-	if err := bc.SendBinlogDumpCommand(bc.serverID, binlogFilename, startPos, false); err != nil {
+	if err := bc.SendBinlogDumpGTIDCommand(bc.serverID, binlogFilename, startPos, false); err != nil {
 		log.Errorf("couldn't send binlog dump command: %v", err)
 		return nil, nil, err
 	}

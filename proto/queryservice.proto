@@ -118,6 +118,9 @@ service Query {
   // GetSchema returns the schema information.
   rpc GetSchema(query.GetSchemaRequest) returns (stream query.GetSchemaResponse) {};
 
-  // BinlogDump streams raw binlog events from MySQL.
+  // BinlogDump streams raw binlog events from MySQL using COM_BINLOG_DUMP (file/position-based).
   rpc BinlogDump(binlogdata.BinlogDumpRequest) returns (stream binlogdata.BinlogDumpResponse) {};
+
+  // BinlogDumpGTID streams raw binlog events from MySQL using COM_BINLOG_DUMP_GTID (GTID-based).
+  rpc BinlogDumpGTID(binlogdata.BinlogDumpGTIDRequest) returns (stream binlogdata.BinlogDumpResponse) {};
 }

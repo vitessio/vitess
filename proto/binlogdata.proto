@@ -605,15 +605,29 @@ message VStreamResultsResponse {
   repeated query.Row rows = 4;
 }
 
-// BinlogDumpRequest is the payload for raw binlog streaming.
-// This streams raw binlog events directly from MySQL without transformation.
+// BinlogDumpRequest is the payload for COM_BINLOG_DUMP (file/position-based replication).
+// This is the older protocol that uses binlog filename and position.
 message BinlogDumpRequest {
   vtrpc.CallerID effective_caller_id = 1;
   query.VTGateCallerID immediate_caller_id = 2;
   query.Target target = 3;
 
-  // Parameters from COM_BINLOG_DUMP_GTID
+  // Binlog filename to start streaming from (e.g., "binlog.000001")
   string binlog_filename = 4;
+  // Position within the binlog file (32-bit for COM_BINLOG_DUMP)
+  uint32 binlog_position = 5;
+}
+
+// BinlogDumpGTIDRequest is the payload for COM_BINLOG_DUMP_GTID (GTID-based replication).
+// This is the newer protocol (MySQL 5.6+) that uses GTID sets.
+message BinlogDumpGTIDRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  query.VTGateCallerID immediate_caller_id = 2;
+  query.Target target = 3;
+
+  // Optional binlog filename (used with BinlogThroughPosition flag)
+  string binlog_filename = 4;
+  // Position within the binlog file (64-bit for COM_BINLOG_DUMP_GTID)
   uint64 binlog_position = 5;
   // GTID set in string format (e.g., "uuid:1-5,uuid2:1-3")
   // vttablet will convert to SIDBlock for MySQL
@@ -626,6 +640,7 @@ message BinlogDumpRequest {
 }
 
 // BinlogDumpResponse streams raw MySQL packet payloads.
+// Used by both BinlogDump and BinlogDumpGTID RPCs.
 message BinlogDumpResponse {
   // A single raw MySQL packet payload from the binlog stream.
   // Packets are streamed exactly as received from MySQL, including

@@ -671,6 +671,19 @@ func (sbc *SandboxConn) BinlogDump(ctx context.Context, request *binlogdatapb.Bi
 	return nil
 }
 
+// BinlogDumpGTID is part of the QueryService interface.
+func (sbc *SandboxConn) BinlogDumpGTID(ctx context.Context, request *binlogdatapb.BinlogDumpGTIDRequest, send func(*binlogdatapb.BinlogDumpResponse) error) error {
+	if sbc.BinlogDumpError != nil {
+		return sbc.BinlogDumpError
+	}
+	for _, response := range sbc.BinlogDumpResponses {
+		if err := send(response); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // QueryServiceByAlias is part of the Gateway interface.
 func (sbc *SandboxConn) QueryServiceByAlias(_ context.Context, _ *topodatapb.TabletAlias, _ *querypb.Target) (queryservice.QueryService, error) {
 	return sbc, nil
