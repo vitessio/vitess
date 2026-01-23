@@ -65,7 +65,7 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	utils.SetFlagVar(fs, &flagVal, "log-rotate-max-size", "size in bytes at which logs are rotated (glog.MaxSize)")
 
 	// Structured logging flags.
-	utils.SetFlagBoolVar(fs, &logStructured, "log-structured", true, "enable structured logging")
+	utils.SetFlagBoolVar(fs, &logStructured, "log-structured", false, "enable structured logging")
 	utils.SetFlagStringVar(fs, &logLevel, "log-level", "info", "minimum structured logging level: info, warn, debug, or error")
 }
 
