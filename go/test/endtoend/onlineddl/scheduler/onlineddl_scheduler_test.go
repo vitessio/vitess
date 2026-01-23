@@ -2756,6 +2756,16 @@ func testDeclarative(t *testing.T) {
 		checkTable(t, tableName, true)
 		testSelectTableMetrics(t)
 	})
+	t.Run("vtctldclient GetSchemaMigrations with zero date succeeds", func(t *testing.T) {
+		uuid := testOnlineDDL(t, createStatementZeroDate, "online -declarative --allow-zero-in-date", "vtgate", "", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+
+		output, err := clusterInstance.VtctldClientProcess.OnlineDDLShow(keyspaceName, uuid)
+		require.NoError(t, err, "vtctldclient OnlineDDL show failed")
+		require.NotEmpty(t, output, "expected output from OnlineDDL show")
+		require.Contains(t, output, uuid, "output should contain the migration UUID")
+	})
 	t.Run("CREATE TABLE with zero date and --allow-zero-in-date is successful", func(t *testing.T) {
 		uuid := testOnlineDDL(t, createStatementZeroDate, "online -declarative --allow-zero-in-date", "vtgate", "", "")
 		uuids = append(uuids, uuid)
