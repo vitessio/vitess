@@ -41,7 +41,7 @@ import (
 
 // TestBinlogDumpGTID_Streaming tests that binlog events are actually streamed from vttablet to the client.
 func TestBinlogDumpGTID_Streaming(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Get the primary tablet for our keyspace
 	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
@@ -151,7 +151,7 @@ eventLoop:
 
 // TestBinlogDumpGTID_NoTarget verifies that binlog dump returns an error packet without a target
 func TestBinlogDumpGTID_NoTarget(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -177,7 +177,7 @@ func TestBinlogDumpGTID_NoTarget(t *testing.T) {
 // are correctly streamed through VTGate. This is critical because MySQL protocol uses 16MB max packet
 // size, and large events must be split into multiple packets and reassembled correctly.
 func TestBinlogDumpGTID_LargeEvent(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Get the primary tablet for our keyspace
 	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
@@ -353,7 +353,7 @@ func gtidToSIDBlock(t *testing.T, gtidStr string) []byte {
 // TestBinlogDumpGTID_FromSpecificPosition verifies that binlog streaming starts from the specified
 // GTID position and only receives subsequent events.
 func TestBinlogDumpGTID_FromSpecificPosition(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Connect to insert initial data
 	dataConn, err := mysql.Connect(ctx, &vtParams)
@@ -421,7 +421,7 @@ func TestBinlogDumpGTID_FromSpecificPosition(t *testing.T) {
 
 // TestBinlogDumpGTID_InvalidFormat verifies that an invalid GTID format returns a proper error packet.
 func TestBinlogDumpGTID_InvalidFormat(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Connect with proper target
 	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
@@ -458,7 +458,7 @@ func TestBinlogDumpGTID_InvalidFormat(t *testing.T) {
 // transactions not yet in the binlog, MySQL returns an error.
 // This is expected MySQL behavior - you cannot request events from a position that doesn't exist.
 func TestBinlogDumpGTID_FuturePosition(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Connect to get current GTID
 	dataConn, err := mysql.Connect(ctx, &vtParams)
@@ -537,7 +537,7 @@ func TestBinlogDumpGTID_FuturePosition(t *testing.T) {
 // the server returns an EOF packet when there are no more events to stream, instead of
 // blocking indefinitely waiting for new events.
 func TestBinlogDumpGTID_NonBlockEOF(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Connect to insert some data first to ensure binlog has content
 	dataConn, err := mysql.Connect(ctx, &vtParams)
@@ -620,7 +620,7 @@ readLoop:
 // TestBinlogDumpGTID_NonBlockWithPendingEvents verifies that when nonBlock is set and there
 // ARE pending events, the server streams them all and THEN returns EOF.
 func TestBinlogDumpGTID_NonBlockWithPendingEvents(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Connect to insert data
 	dataConn, err := mysql.Connect(ctx, &vtParams)
@@ -712,7 +712,7 @@ readLoop:
 // This test verifies that new events are received after an insert, demonstrating that the
 // connection stays open and continues to stream events.
 func TestBinlogDumpGTID_BlockingMode(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Connect to get current position
 	dataConn, err := mysql.Connect(ctx, &vtParams)
@@ -824,7 +824,7 @@ readLoop:
 
 // TestBinlogDumpGTID_DirectGRPC tests GTID-based binlog streaming via direct gRPC connection to vttablet.
 func TestBinlogDumpGTID_DirectGRPC(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Get the tablet info for direct gRPC connection
 	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
@@ -930,7 +930,7 @@ func getBinlogFilePosition(t *testing.T, conn *mysql.Conn) (string, uint32) {
 
 // TestBinlogDump_VTGate tests COM_BINLOG_DUMP (file/position-based) via VTGate.
 func TestBinlogDump_VTGate(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// First, connect to MySQL directly (via vtgate) to get the current binlog position
 	dataConn, err := mysql.Connect(ctx, &vtParams)
@@ -1042,7 +1042,7 @@ readLoop:
 
 // TestBinlogDump_DirectGRPC tests file/position-based binlog streaming via direct gRPC to vttablet.
 func TestBinlogDump_DirectGRPC(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Get the tablet info for direct gRPC connection
 	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
@@ -1126,7 +1126,7 @@ func TestBinlogDump_DirectGRPC(t *testing.T) {
 
 // TestBinlogDump_NoTarget verifies that COM_BINLOG_DUMP returns an error packet without a target.
 func TestBinlogDump_NoTarget(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -1152,7 +1152,7 @@ func TestBinlogDump_NoTarget(t *testing.T) {
 // are correctly streamed through VTGate using COM_BINLOG_DUMP (file/position-based).
 // This verifies that multi-packet handling works correctly for the file/position code path.
 func TestBinlogDump_LargeEvent(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Get the primary tablet for our keyspace
 	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
