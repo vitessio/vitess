@@ -170,8 +170,7 @@ func TestVStream(t *testing.T) {
 }
 
 func TestVStreamDDLAddColumnMiddle(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	gconn, conn, mconn, closeConnections := initialize(ctx, t)
 	defer closeConnections()

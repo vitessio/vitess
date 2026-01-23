@@ -1462,58 +1462,6 @@ func TestDDLAddColumn(t *testing.T) {
 	ts.Run()
 }
 
-func TestDDLAddColumnMiddle(t *testing.T) {
-	filter := &binlogdatapb.Filter{
-		Rules: []*binlogdatapb.Rule{{
-			Match:  "ddl_mid_test",
-			Filter: "select * from ddl_mid_test",
-		}},
-	}
-
-	ts := &TestSpec{
-		t: t,
-		ddls: []string{
-			"create table ddl_mid_test(id int, val1 varbinary(128), val2 varbinary(128), primary key(id))",
-		},
-		options: &TestSpecOptions{
-			filter: filter,
-		},
-	}
-	defer ts.Close()
-
-	ts.Init()
-	startPos := primaryPosition(t)
-	alterQuery := "alter table ddl_mid_test add column mid varbinary(64) after val1, algorithm=instant"
-	insertPre := "insert into ddl_mid_test values(1, 'pre', 'post')"
-	insertPost := "insert into ddl_mid_test values(2, 'aaa', 'midval', 'val2')"
-	fe := ts.fieldEvents["ddl_mid_test"]
-	preRowEvent := getRowEvent(ts, fe, insertPre)
-	postRowEvent := (&TestRowEventSpec{table: "ddl_mid_test", changes: []TestRowChange{{after: []string{"2", "aaa", "midval", "val2"}}}}).String()
-	feAfter := &TestFieldEvent{
-		table: "ddl_mid_test",
-		db:    testenv.DBName,
-		cols: []*TestColumn{
-			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
-			{name: "val1", dataType: "VARBINARY", colType: "varbinary(128)", len: 128, collationID: 63},
-			{name: "mid", dataType: "VARBINARY", colType: "varbinary(64)", len: 64, collationID: 63},
-			{name: "val2", dataType: "VARBINARY", colType: "varbinary(128)", len: 128, collationID: 63},
-		},
-	}
-
-	testcases := []testcase{{
-		input:  []string{insertPre},
-		output: [][]string{{"begin", fe.String(), preRowEvent, "gtid", "commit"}},
-	}, {
-		input:  []string{alterQuery},
-		output: [][]string{{"gtid", ts.getDDLEvent(alterQuery)}},
-	}, {
-		input:  []string{insertPost},
-		output: [][]string{{"begin", feAfter.String(), postRowEvent, "gtid", "commit"}},
-	}}
-
-	runCases(t, filter, testcases, startPos, nil)
-}
-
 func TestStalePlanWithSelectStarAfterDDL(t *testing.T) {
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{

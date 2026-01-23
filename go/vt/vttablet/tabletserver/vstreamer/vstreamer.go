@@ -426,9 +426,8 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			case <-ctx.Done():
 				return nil
 			default:
-				// We instead want to rebuild the plans as DDL come in.
 				if err := vs.rebuildPlans(); err != nil {
-					return vterrors.Wrap(err, "failed to rebuild replication plans")
+					return vterrors.Wrap(err, "failed to rebuild replication plans after vschema change notification")
 				}
 			}
 		case err := <-errs:
@@ -594,7 +593,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 			if schema.MustReloadSchemaOnDDL(q.SQL, vs.cp.DBName(), vs.vse.env.Environment().Parser()) {
 				vs.se.ReloadAt(context.Background(), vs.pos)
 				if err := vs.rebuildPlans(); err != nil {
-					return nil, vterrors.Wrap(err, "failed to rebuild replication plans after DDL seen in stream")
+					return nil, vterrors.Wrap(err, "failed to rebuild replication plans after DDL encountered in stream")
 				}
 			}
 		case sqlparser.StmtSavepoint:
