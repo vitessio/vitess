@@ -19,12 +19,11 @@ limitations under the License.
 package streamlog
 
 import (
-	"fmt"
 	"os"
 
 	"vitess.io/vitess/go/vt/log"
 )
 
 func setupRotate(ch chan os.Signal) {
-	log.WarnS(fmt.Sprintf("signal based log rotation is not supported on Windows"))
+	log.Warn("signal based log rotation is not supported on Windows")
 }
