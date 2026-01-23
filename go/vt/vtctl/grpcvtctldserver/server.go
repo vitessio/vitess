@@ -1649,7 +1649,7 @@ func (s *VtctldServer) GetFullStatus(ctx context.Context, req *vtctldatapb.GetFu
 		return nil, err
 	}
 
-	res, err := s.tmc.FullStatus(ctx, ti.Tablet)
+	res, err := s.tmc.FullStatus(ctx, ti.Tablet, nil /* tabletmanagerpb.FullStatusRequest */)
 	if err != nil {
 		return nil, err
 	}

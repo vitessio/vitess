@@ -49,7 +49,7 @@ func grpcTestServer(t testing.TB, tm tabletmanager.RPCTM) (*net.TCPAddr, func())
 	}
 
 	s := grpc.NewServer()
-	grpctmserver.RegisterForTest(s, tm)
+	grpctmserver.RegisterForTest(s, tm, nil)
 	go s.Serve(lis)
 
 	var shutdownOnce sync.Once

@@ -94,7 +94,7 @@ func TestGRPCErrorCode_UNAVAILABLE(t *testing.T) {
 	// because this will try and fail to connect to mysql
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
-	_, err = tmcFullStatus(ctx, tablet.GrpcPort)
+	_, err = tmcFullStatus(ctx, tablet.GrpcPort, nil)
 	assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
 }
 
@@ -182,7 +182,7 @@ func TestStopReplicationAndGetStatus(t *testing.T) {
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
 		defer cancel()
-		resp, err := tmcFullStatus(ctx, tablet.GrpcPort)
+		resp, err := tmcFullStatus(ctx, tablet.GrpcPort, nil)
 		require.NoError(c, err)
 		require.True(c, resp.SemiSyncReplicaEnabled)
 		require.True(c, resp.SemiSyncReplicaStatus)
