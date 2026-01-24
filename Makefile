@@ -393,7 +393,7 @@ vtadmin_web_proto_types: vtadmin_web_install
 
 vtadmin_authz_testgen:
 	go generate ./go/vt/vtadmin/
-	go tool gofumpt ./go/vt/vtadmin/
+	go tool gofumpt -w ./go/vt/vtadmin/
 
 # Generate github CI actions workflow files for unit tests and cluster endtoend tests based on templates in the test/templates directory
 # Needs to be called if the templates change or if a new test "shard" is created. We do not need to rebuild tests if only the test/config.json
