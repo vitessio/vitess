@@ -144,6 +144,11 @@ jobs:
         run: |
           make minimaltools
 
+      - name: Install goimports
+        if: (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
+        run: |
+          go install golang.org/x/tools/cmd/goimports@034e59c473362f8f2be47694d98fd3f12a1ad497 # v0.39.0
+
       - name: check_go_versions
         run:
           tools/check_go_versions.sh || exit 1
