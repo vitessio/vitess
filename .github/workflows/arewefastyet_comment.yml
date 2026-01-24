@@ -1,5 +1,8 @@
 # Adds a comment with a link to arewefastyet when the "Benchmark me" label is added.
 name: arewefastyet comment
+
+permissions: read-all
+
 on:
   pull_request_target:
     types: [labeled]
@@ -7,12 +10,19 @@ on:
 jobs:
   add_arewefastyet_comment:
     name: Add arewefastyet comment
+    permissions:
+      pull-requests: write
     runs-on: ubuntu-latest
     if: github.event.label.name == 'Benchmark me'
 
     steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+        with:
+          egress-policy: audit
+
       - name: Generate GitHub App token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
         id: app-token
         with:
           app-id: ${{ vars.APP_ID }}
