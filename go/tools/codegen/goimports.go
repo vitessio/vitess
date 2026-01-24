@@ -46,11 +46,6 @@ func FormatJenFile(file *jen.File) ([]byte, error) {
 }
 
 func GoImports(fullPath string) error {
-	// We run goimports first to fix and group imports, then gofumpt to apply
-	// the stricter formatting rules enforced by this repository.
-	// gofumpt includes gofmt's simplification rules, so the final output stays
-	// in the canonical form expected by our linters.
-
 	cmd := exec.Command("goimports", "-local", "vitess.io/vitess", "-w", fullPath)
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
