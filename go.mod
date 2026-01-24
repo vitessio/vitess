@@ -212,7 +212,7 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cncf/xds/go v0.0.0-20250501225837-2ac532fd4443 // indirect
 	github.com/containerd/cgroups v1.1.0
-	github.com/containerd/cgroups/v3 v3.1.2
+	github.com/containerd/cgroups/v3 v3.0.5
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.6.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
