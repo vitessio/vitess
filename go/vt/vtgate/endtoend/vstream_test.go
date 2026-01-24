@@ -174,7 +174,6 @@ func TestVStreamDDLAddColumnMiddle(t *testing.T) {
 
 	gconn, conn, mconn, closeConnections := initialize(ctx, t)
 	defer closeConnections()
-	_ = mconn
 	_, err := conn.ExecuteFetch("delete from vstream_test where id = 202", 1, false)
 	require.NoError(t, err)
 
