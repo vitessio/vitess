@@ -179,3 +179,131 @@ func BenchmarkScalarAggregate(b *testing.B) {
 		})
 	}
 }
+
+// TestHashBasedDistinct verifies that hash-based distinct tracking correctly
+// identifies duplicate values even when data is not sorted.
+func TestHashBasedDistinct(t *testing.T) {
+	// Test data: unsorted values with duplicates
+	// Values: 1, 3, 2, 1, 3, 4 -> distinct count should be 4 (1, 2, 3, 4)
+	fields := sqltypes.MakeTestFields("col", "int64")
+	results := []*sqltypes.Result{{
+		Fields: fields,
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewInt64(1)},
+			{sqltypes.NewInt64(3)},
+			{sqltypes.NewInt64(2)},
+			{sqltypes.NewInt64(1)}, // duplicate
+			{sqltypes.NewInt64(3)}, // duplicate
+			{sqltypes.NewInt64(4)},
+		},
+	}}
+
+	fp := &fakePrimitive{
+		allResultsInOneCall: true,
+		results:             results,
+	}
+
+	// Test hash-based distinct count
+	oa := &ScalarAggregate{
+		Aggregates: []*AggregateParams{
+			{
+				Opcode:          AggregateCountDistinct,
+				Col:             0,
+				KeyCol:          0,
+				WCol:            -1,
+				UseHashDistinct: true, // Use hash-based distinct tracking
+			},
+		},
+		Input: fp,
+	}
+
+	result, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(result.Rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(result.Rows))
+	}
+
+	// Should count 4 distinct values
+	val, err := result.Rows[0][0].ToInt64()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if val != 4 {
+		t.Errorf("expected distinct count of 4, got %d", val)
+	}
+}
+
+// TestMultipleHashBasedDistinct verifies that multiple hash-based distinct
+// aggregations can work independently on different columns.
+func TestMultipleHashBasedDistinct(t *testing.T) {
+	// Test data with two integer columns for simpler hash behavior
+	// col1: 1, 1, 2, 2, 3 -> 3 distinct values
+	// col2: 10, 20, 10, 30, 40 -> 4 distinct values
+	fields := sqltypes.MakeTestFields("col1|col2", "int64|int64")
+	results := []*sqltypes.Result{{
+		Fields: fields,
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewInt64(1), sqltypes.NewInt64(10)},
+			{sqltypes.NewInt64(1), sqltypes.NewInt64(20)},
+			{sqltypes.NewInt64(2), sqltypes.NewInt64(10)},
+			{sqltypes.NewInt64(2), sqltypes.NewInt64(30)},
+			{sqltypes.NewInt64(3), sqltypes.NewInt64(40)},
+		},
+	}}
+
+	fp := &fakePrimitive{
+		allResultsInOneCall: true,
+		results:             results,
+	}
+
+	// Test two hash-based distinct counts on different columns
+	oa := &ScalarAggregate{
+		Aggregates: []*AggregateParams{
+			{
+				Opcode:          AggregateCountDistinct,
+				Col:             0,
+				KeyCol:          0,
+				WCol:            -1,
+				UseHashDistinct: true,
+			},
+			{
+				Opcode:          AggregateCountDistinct,
+				Col:             1,
+				KeyCol:          1,
+				WCol:            -1,
+				UseHashDistinct: true,
+			},
+		},
+		Input: fp,
+	}
+
+	result, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(result.Rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(result.Rows))
+	}
+
+	// First column should have 3 distinct values
+	val1, err := result.Rows[0][0].ToInt64()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if val1 != 3 {
+		t.Errorf("expected first distinct count of 3, got %d", val1)
+	}
+
+	// Second column should have 4 distinct values
+	val2, err := result.Rows[0][1].ToInt64()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if val2 != 4 {
+		t.Errorf("expected second distinct count of 4, got %d", val2)
+	}
+}
