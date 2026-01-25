@@ -35,6 +35,8 @@ import (
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
 
+	"vitess.io/vitess/go/vt/proto/querythrottler"
+
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/protoutil"
@@ -5895,4 +5897,52 @@ func (s *VtctldServer) GetKeyspaceRoutingRules(ctx context.Context, req *vtctlda
 	return &vtctldatapb.GetKeyspaceRoutingRulesResponse{
 		KeyspaceRoutingRules: rules,
 	}, nil
+}
+
+func (s *VtctldServer) UpdateQueryThrottlerConfig(ctx context.Context, req *vtctldatapb.UpdateQueryThrottlerConfigRequest) (resp *vtctldatapb.UpdateQueryThrottlerConfigResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.UpdateQueryThrottlerConfig")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.GetKeyspace())
+	span.Annotate("strategy", req.GetQueryThrottlerConfig().GetStrategy())
+
+	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "UpdateQueryThrottlerConfig")
+	if lockErr != nil {
+		return nil, lockErr
+	}
+	defer unlock(&err)
+
+	ki, err := s.ts.GetKeyspace(ctx, req.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	update := func(throttlerConfig *querythrottler.Config) *querythrottler.Config {
+		if throttlerConfig == nil {
+			throttlerConfig = &querythrottler.Config{}
+		}
+
+		throttlerConfig.Enabled = req.GetQueryThrottlerConfig().GetEnabled()
+		throttlerConfig.Strategy = req.GetQueryThrottlerConfig().GetStrategy()
+		throttlerConfig.TabletStrategyConfig = req.GetQueryThrottlerConfig().GetTabletStrategyConfig()
+		throttlerConfig.DryRun = req.GetQueryThrottlerConfig().GetDryRun()
+
+		return throttlerConfig
+	}
+
+	ki.QueryThrottlerConfig = update(ki.QueryThrottlerConfig)
+
+	err = s.ts.UpdateKeyspace(ctx, ki)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = s.ts.UpdateSrvKeyspaceQueryThrottlerConfig(ctx, req.Keyspace, nil, update)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to update SrvKeyspace QueryThrottlerConfig for keyspace %s", req.Keyspace)
+	}
+
+	return &vtctldatapb.UpdateQueryThrottlerConfigResponse{}, nil
 }

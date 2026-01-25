@@ -83265,4 +83265,198 @@ export namespace vtctldata {
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
+
+    /** Properties of an UpdateQueryThrottlerConfigRequest. */
+    interface IUpdateQueryThrottlerConfigRequest {
+
+        /** UpdateQueryThrottlerConfigRequest keyspace */
+        keyspace?: (string|null);
+
+        /** UpdateQueryThrottlerConfigRequest query_throttler_config */
+        query_throttler_config?: (querythrottler.IConfig|null);
+    }
+
+    /** Represents an UpdateQueryThrottlerConfigRequest. */
+    class UpdateQueryThrottlerConfigRequest implements IUpdateQueryThrottlerConfigRequest {
+
+        /**
+         * Constructs a new UpdateQueryThrottlerConfigRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IUpdateQueryThrottlerConfigRequest);
+
+        /** UpdateQueryThrottlerConfigRequest keyspace. */
+        public keyspace: string;
+
+        /** UpdateQueryThrottlerConfigRequest query_throttler_config. */
+        public query_throttler_config?: (querythrottler.IConfig|null);
+
+        /**
+         * Creates a new UpdateQueryThrottlerConfigRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns UpdateQueryThrottlerConfigRequest instance
+         */
+        public static create(properties?: vtctldata.IUpdateQueryThrottlerConfigRequest): vtctldata.UpdateQueryThrottlerConfigRequest;
+
+        /**
+         * Encodes the specified UpdateQueryThrottlerConfigRequest message. Does not implicitly {@link vtctldata.UpdateQueryThrottlerConfigRequest.verify|verify} messages.
+         * @param message UpdateQueryThrottlerConfigRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IUpdateQueryThrottlerConfigRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified UpdateQueryThrottlerConfigRequest message, length delimited. Does not implicitly {@link vtctldata.UpdateQueryThrottlerConfigRequest.verify|verify} messages.
+         * @param message UpdateQueryThrottlerConfigRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IUpdateQueryThrottlerConfigRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an UpdateQueryThrottlerConfigRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns UpdateQueryThrottlerConfigRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.UpdateQueryThrottlerConfigRequest;
+
+        /**
+         * Decodes an UpdateQueryThrottlerConfigRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns UpdateQueryThrottlerConfigRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.UpdateQueryThrottlerConfigRequest;
+
+        /**
+         * Verifies an UpdateQueryThrottlerConfigRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an UpdateQueryThrottlerConfigRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns UpdateQueryThrottlerConfigRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.UpdateQueryThrottlerConfigRequest;
+
+        /**
+         * Creates a plain object from an UpdateQueryThrottlerConfigRequest message. Also converts values to other types if specified.
+         * @param message UpdateQueryThrottlerConfigRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.UpdateQueryThrottlerConfigRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this UpdateQueryThrottlerConfigRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for UpdateQueryThrottlerConfigRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of an UpdateQueryThrottlerConfigResponse. */
+    interface IUpdateQueryThrottlerConfigResponse {
+    }
+
+    /** Represents an UpdateQueryThrottlerConfigResponse. */
+    class UpdateQueryThrottlerConfigResponse implements IUpdateQueryThrottlerConfigResponse {
+
+        /**
+         * Constructs a new UpdateQueryThrottlerConfigResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IUpdateQueryThrottlerConfigResponse);
+
+        /**
+         * Creates a new UpdateQueryThrottlerConfigResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns UpdateQueryThrottlerConfigResponse instance
+         */
+        public static create(properties?: vtctldata.IUpdateQueryThrottlerConfigResponse): vtctldata.UpdateQueryThrottlerConfigResponse;
+
+        /**
+         * Encodes the specified UpdateQueryThrottlerConfigResponse message. Does not implicitly {@link vtctldata.UpdateQueryThrottlerConfigResponse.verify|verify} messages.
+         * @param message UpdateQueryThrottlerConfigResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IUpdateQueryThrottlerConfigResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified UpdateQueryThrottlerConfigResponse message, length delimited. Does not implicitly {@link vtctldata.UpdateQueryThrottlerConfigResponse.verify|verify} messages.
+         * @param message UpdateQueryThrottlerConfigResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IUpdateQueryThrottlerConfigResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an UpdateQueryThrottlerConfigResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns UpdateQueryThrottlerConfigResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.UpdateQueryThrottlerConfigResponse;
+
+        /**
+         * Decodes an UpdateQueryThrottlerConfigResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns UpdateQueryThrottlerConfigResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.UpdateQueryThrottlerConfigResponse;
+
+        /**
+         * Verifies an UpdateQueryThrottlerConfigResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an UpdateQueryThrottlerConfigResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns UpdateQueryThrottlerConfigResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.UpdateQueryThrottlerConfigResponse;
+
+        /**
+         * Creates a plain object from an UpdateQueryThrottlerConfigResponse message. Also converts values to other types if specified.
+         * @param message UpdateQueryThrottlerConfigResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.UpdateQueryThrottlerConfigResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this UpdateQueryThrottlerConfigResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for UpdateQueryThrottlerConfigResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
 }
