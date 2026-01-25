@@ -52,12 +52,12 @@ jobs:
     {{end}}
 
     - name: Check out code
-      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       with:
         persist-credentials: 'false'
 
     - name: Check for changes in relevant files
-      uses: dorny/paths-filter@ebc4d7e9ebcb0b1eb21480bb8f43113e996ac77a # v3.0.1
+      uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
       id: changes
       with:
         token: ''
@@ -83,7 +83,7 @@ jobs:
 
     - name: Set up Go
       if: steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
       with:
         go-version-file: go.mod
 
@@ -95,7 +95,7 @@ jobs:
 
     - name: Set up python
       if: steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
+      uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
 
     - name: Tune the OS
       if: steps.changes.outputs.end_to_end == 'true'
@@ -120,7 +120,7 @@ jobs:
         sudo apt-get -qq install -y lsb-release gnupg2
         wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo percona-release setup ps80
+        sudo percona-release setup pdps8.0
         sudo apt-get -qq update
 
         sudo apt-get -qq install -y percona-server-server percona-server-client

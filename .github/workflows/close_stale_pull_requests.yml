@@ -19,7 +19,7 @@ jobs:
         with:
           egress-policy: audit
 
-      - uses: actions/stale@f7176fd3007623b69d27091f9b9d4ab7995f0a06 # v5.2.1
+      - uses: actions/stale@997185467fa4f803885201cee163a9f38240193d # v10.1.1
         with:
           days-before-stale: 30
           # Do not handle issues at all. We only want to handle PRs.
