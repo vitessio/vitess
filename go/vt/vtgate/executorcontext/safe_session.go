@@ -65,6 +65,11 @@ type (
 
 		logging *ExecuteLogger
 
+		// targetTabletAlias is set when using tablet-specific routing via USE keyspace:shard@tablet_type|tablet-alias.
+		// This causes all queries to route to the specified tablet until cleared.
+		// Note: This is stored in the Go wrapper, not in the protobuf Session.
+		targetTabletAlias *topodatapb.TabletAlias
+
 		*vtgatepb.Session
 	}
 
@@ -1142,4 +1147,20 @@ func (l *ExecuteLogger) GetLogs() []engine.ExecuteEntry {
 	result := make([]engine.ExecuteEntry, len(l.entries))
 	copy(result, l.entries)
 	return result
+}
+
+// SetTargetTabletAlias sets the tablet alias for tablet-specific routing.
+// When set, all queries will route to the specified tablet until cleared.
+func (session *SafeSession) SetTargetTabletAlias(alias *topodatapb.TabletAlias) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.targetTabletAlias = alias
+}
+
+// GetTargetTabletAlias returns the current tablet alias for tablet-specific routing,
+// or nil if not set.
+func (session *SafeSession) GetTargetTabletAlias() *topodatapb.TabletAlias {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.targetTabletAlias
 }

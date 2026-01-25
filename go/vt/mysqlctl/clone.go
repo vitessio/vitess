@@ -23,12 +23,21 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttls"
 )
@@ -37,6 +46,97 @@ const (
 	clonePluginStatusQuery = "SELECT PLUGIN_STATUS FROM information_schema.PLUGINS WHERE PLUGIN_NAME = 'clone'"
 	cloneStatusQuery       = "SELECT STATE, ERROR_NO, ERROR_MESSAGE FROM performance_schema.clone_status ORDER BY ID DESC LIMIT 1"
 )
+
+var (
+	cloneFromPrimary        = false
+	cloneFromTablet         = ""
+	cloneRestartWaitTimeout = 5 * time.Minute
+)
+
+func init() {
+	// TODO: enable these flags for vttablet and vtbackup.
+	for _, cmd := range []string{ /*"vttablet", "vtbackup"*/ } {
+		servenv.OnParseFor(cmd, registerCloneFlags)
+	}
+}
+
+func registerCloneFlags(fs *pflag.FlagSet) {
+	utils.SetFlagBoolVar(fs, &cloneFromPrimary, "clone-from-primary", cloneFromPrimary, "Clone data from the primary tablet in the shard using MySQL CLONE REMOTE instead of restoring from backup. Requires MySQL 8.0.17+. Mutually exclusive with --clone-from-tablet.")
+	utils.SetFlagStringVar(fs, &cloneFromTablet, "clone-from-tablet", cloneFromTablet, "Clone data from this tablet using MySQL CLONE REMOTE instead of restoring from backup (tablet alias, e.g., zone1-123). Requires MySQL 8.0.17+. Mutually exclusive with --clone-from-primary.")
+	utils.SetFlagDurationVar(fs, &cloneRestartWaitTimeout, "clone-restart-wait-timeout", cloneRestartWaitTimeout, "Timeout for waiting for MySQL to restart after CLONE REMOTE.")
+}
+
+// CloneFromDonor clones data from the specified donor tablet using MySQL CLONE REMOTE.
+// It returns the GTID position of the cloned data.
+func CloneFromDonor(ctx context.Context, topoServer *topo.Server, mysqld MysqlDaemon, keyspace, shard string) (replication.Position, error) {
+	var donorAlias *topodatapb.TabletAlias
+	var err error
+
+	switch {
+	case cloneFromPrimary && cloneFromTablet != "":
+		return replication.Position{}, errors.New("--clone-from-primary and --clone-from-tablet are mutually exclusive")
+	case cloneFromPrimary:
+		// Look up the primary tablet from topology.
+		log.Infof("Looking up primary tablet for shard %s/%s for use as CLONE REMOTE donor", keyspace, shard)
+		si, err := topoServer.GetShard(ctx, keyspace, shard)
+		if err != nil {
+			return replication.Position{}, fmt.Errorf("failed to get shard %s/%s: %v", keyspace, shard, err)
+		}
+		if topoproto.TabletAliasIsZero(si.PrimaryAlias) {
+			return replication.Position{}, fmt.Errorf("shard %s/%s has no primary", keyspace, shard)
+		}
+		donorAlias = si.PrimaryAlias
+		log.Infof("Found primary tablet %s for use as CLONE REMOTE donor", topoproto.TabletAliasString(donorAlias))
+	case cloneFromTablet != "":
+		// Parse the explicit donor tablet alias.
+		log.Infof("Using tablet %s for use as CLONE REMOTE donor", cloneFromTablet)
+		donorAlias, err = topoproto.ParseTabletAlias(cloneFromTablet)
+		if err != nil {
+			return replication.Position{}, fmt.Errorf("invalid tablet alias %q: %v", cloneFromTablet, err)
+		}
+	default:
+		return replication.Position{}, errors.New("no donor specified")
+	}
+
+	// Get donor tablet info from topology.
+	donorTablet, err := topoServer.GetTablet(ctx, donorAlias)
+	if err != nil {
+		return replication.Position{}, fmt.Errorf("failed to get tablet %s from topology: %v", topoproto.TabletAliasString(donorAlias), err)
+	}
+
+	// Get clone credentials.
+	cloneConfig := dbconfigs.GlobalDBConfigs.CloneUser
+	if cloneConfig.User == "" {
+		return replication.Position{}, errors.New("clone user not configured; set --db-clone-user flag")
+	}
+
+	// Create the clone executor.
+	executor := &CloneExecutor{
+		DonorHost:     donorTablet.MysqlHostname,
+		DonorPort:     int(donorTablet.MysqlPort),
+		DonorUser:     cloneConfig.User,
+		DonorPassword: cloneConfig.Password,
+		UseSSL:        cloneConfig.UseSSL,
+	}
+
+	log.Infof("Clone executor configured for donor %s:%d", executor.DonorHost, executor.DonorPort)
+
+	// Execute the clone operation.
+	// Note: ExecuteClone will wait for mysqld to restart and for the CLONE plugin to report successful completion
+	// success via performance_schema before returning.
+	if err := executor.ExecuteClone(ctx, mysqld, cloneRestartWaitTimeout); err != nil {
+		return replication.Position{}, fmt.Errorf("clone execution failed: %v", err)
+	}
+
+	// Get the GTID position from the cloned data.
+	pos, err := mysqld.PrimaryPosition(ctx)
+	if err != nil {
+		return replication.Position{}, fmt.Errorf("failed to get position after clone: %v", err)
+	}
+
+	log.Infof("Clone completed successfully at position %v", pos)
+	return pos, nil
+}
 
 // CloneExecutor handles MySQL CLONE REMOTE operations for backup and replica provisioning.
 // It executes CLONE INSTANCE FROM on the recipient to clone data from a donor.
