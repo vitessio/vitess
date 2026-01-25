@@ -86,7 +86,8 @@ func TestDTCommit(t *testing.T) {
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
-	ctx := t.Context()
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
 
 	ch := make(chan *binlogdatapb.VEvent)
 	runVStream(t, ctx, ch, vtgateConn)
@@ -230,7 +231,8 @@ func TestDTRollback(t *testing.T) {
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
-	ctx := t.Context()
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
 
 	ch := make(chan *binlogdatapb.VEvent)
 	runVStream(t, ctx, ch, vtgateConn)
@@ -278,7 +280,8 @@ func TestDTCommitDMLOnlyOnMM(t *testing.T) {
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
-	ctx := t.Context()
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
 
 	ch := make(chan *binlogdatapb.VEvent)
 	runVStream(t, ctx, ch, vtgateConn)
@@ -372,7 +375,8 @@ func TestDTCommitDMLOnlyOnRM(t *testing.T) {
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
-	ctx := t.Context()
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
 
 	ch := make(chan *binlogdatapb.VEvent)
 	runVStream(t, ctx, ch, vtgateConn)
@@ -479,7 +483,8 @@ func TestDTPrepareFailOnRM(t *testing.T) {
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
-	ctx := t.Context()
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
 
 	ch := make(chan *binlogdatapb.VEvent)
 	runVStream(t, ctx, ch, vtgateConn)
@@ -1148,7 +1153,8 @@ func TestDTSavepoint(t *testing.T) {
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
-	ctx := t.Context()
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
 
 	ch := make(chan *binlogdatapb.VEvent)
 	runVStream(t, ctx, ch, vtgateConn)

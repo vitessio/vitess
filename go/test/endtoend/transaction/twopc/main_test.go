@@ -31,8 +31,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
@@ -263,7 +261,7 @@ func runVStream(t *testing.T, ctx context.Context, ch chan *binlogdatapb.VEvent,
 	go func() {
 		for {
 			evs, err := vReader.Recv()
-			if err == io.EOF || ctx.Err() != nil || status.Code(err) == codes.Canceled {
+			if err == io.EOF || ctx.Err() != nil {
 				return
 			}
 			require.NoError(t, err)
