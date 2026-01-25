@@ -1049,7 +1049,6 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 						// Not interesting
 						return true, nil
 					}
-
 				}
 
 				return true, nil
