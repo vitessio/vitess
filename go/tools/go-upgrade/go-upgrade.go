@@ -401,12 +401,12 @@ func replaceGoVersionInCodebase(old, new *version.Version) error {
 		}
 	}
 
-	if !isSameMajorMinorVersion(old, new) {
+	if !isSameVersion(old, new) {
 		goModFiles := []string{"./go.mod"}
 		for _, file := range goModFiles {
 			err = replaceInFile(
 				[]*regexp.Regexp{regexp.MustCompile(regexpReplaceGoModGoVersion)},
-				[]string{fmt.Sprintf("go %d.%d", new.Segments()[0], new.Segments()[1])},
+				[]string{fmt.Sprintf("go %d.%d.%d", new.Segments()[0], new.Segments()[1], new.Segments()[2])},
 				file,
 			)
 			if err != nil {
@@ -500,6 +500,10 @@ func updateBootstrapChangelog(new string, goVersion *version.Version) error {
 		return err
 	}
 	return nil
+}
+
+func isSameVersion(a, b *version.Version) bool {
+	return a.Segments()[0] == b.Segments()[0] && a.Segments()[1] == b.Segments()[1] && a.Segments()[2] == b.Segments()[2]
 }
 
 func isSameMajorMinorVersion(a, b *version.Version) bool {
