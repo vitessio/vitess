@@ -14,7 +14,7 @@ jobs:
       pull-requests: write
     strategy:
       matrix:
-        branch: [ main, release-23.0, release-22.0, release-21.0, release-20.0 ]
+        branch: [ main, release-23.0, release-22.0 ]
     name: Update Golang Version
     runs-on: ubuntu-24.04
     steps:
@@ -24,12 +24,12 @@ jobs:
           egress-policy: audit
 
       - name: Check out code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           ref: ${{ matrix.branch }}
 
       - name: Set up Go
-        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
         with:
           go-version-file: go.mod
 
@@ -43,10 +43,8 @@ jobs:
 
           if [[ "${{ matrix.branch }}" == "main" ]]; then
             go run ./go/tools/go-upgrade/go-upgrade.go upgrade --main --allow-major-upgrade
-          elif [[ ("${{ matrix.branch }}" == "release-21.0") || ("${{ matrix.branch }}" == "release-22.0") ]]; then
-            go run ./go/tools/go-upgrade/go-upgrade.go upgrade
           else
-            go run ./go/tools/go-upgrade/go-upgrade.go upgrade --workflow-update=false
+            go run ./go/tools/go-upgrade/go-upgrade.go upgrade
           fi
 
           output=$(git status -s)
@@ -60,7 +58,7 @@ jobs:
           echo "bootstrap-version=${bootstrap_version}" >> $GITHUB_OUTPUT
 
           # Check if the PR already exists, if it does then do not create new PR.
-          gh pr list -S "is:open [${{ matrix.branch }}] Upgrade the Golang version to go${go_version}" > out.txt 2>&1 | true
+          gh pr list -S 'is:open "[${{ matrix.branch }}] Upgrade the Golang version to go${go_version}"' > out.txt 2>&1 | true
           if [ -s out.txt ]; then
             rm -f out.txt
             exit 0
@@ -84,9 +82,8 @@ jobs:
 
             > Do not trust the bot blindly. A thorough code review must be done to ensure all the files have been correctly modified.
 
-            There are a few manual steps remaining:
-              - [ ] Make sure you update the Golang version used in the previous and next release branches for the Upgrade/Downgrade tests.
-              - [ ] Build and Push the bootstrap images to Docker Hub, the bot cannot handle that.
+            There are manual steps remaining:
+              - [ ] Build and Push the bootstrap images to Docker Hub, the bot cannot handle that
             
             cc @vitessio/release
           base: ${{ matrix.branch }}
