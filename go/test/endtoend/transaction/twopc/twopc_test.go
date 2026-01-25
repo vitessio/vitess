@@ -82,7 +82,7 @@ func TestDTCommit(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 
-	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -226,7 +226,7 @@ func TestDTRollback(t *testing.T) {
 	utils.Exec(t, conn, "insert into twopc_user(id, name) values(7,'foo'), (8,'bar')")
 
 	// run vstream to stream binlogs
-	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -274,7 +274,7 @@ func TestDTCommitDMLOnlyOnMM(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 
-	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -368,7 +368,7 @@ func TestDTCommitDMLOnlyOnRM(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 
-	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -475,7 +475,7 @@ func TestDTPrepareFailOnRM(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 
-	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -489,7 +489,7 @@ func TestDTPrepareFailOnRM(t *testing.T) {
 	utils.Exec(t, conn, "insert into twopc_user(id, name) values(7,'foo')")
 	utils.Exec(t, conn, "insert into twopc_user(id, name) values(8,'bar')")
 
-	ctx2 := t.Context()
+	ctx2 := context.Background()
 	conn2, err := mysql.Connect(ctx2, &vtParams)
 	require.NoError(t, err)
 
@@ -596,18 +596,18 @@ func TestDTResolveAfterMMCommit(t *testing.T) {
 	// Do an insertion into a table that has a consistent lookup vindex.
 	utils.Exec(t, initconn, "insert into twopc_consistent_lookup(id, col, col_unique) values(4, 4, 6)")
 
-	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
-	ctx, cancel := context.WithCancel(t.Context())
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	ch := make(chan *binlogdatapb.VEvent)
 	runVStream(t, ctx, ch, vtgateConn)
 
 	conn := vtgateConn.Session("", nil)
-	qCtx, cancel := context.WithCancel(t.Context())
+	qCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// Insert into multiple shards
 	_, err = conn.Execute(qCtx, "begin", nil, false)
@@ -698,18 +698,18 @@ func TestDTResolveAfterRMPrepare(t *testing.T) {
 	// Do an insertion into a table that has a consistent lookup vindex.
 	utils.Exec(t, initconn, "insert into twopc_consistent_lookup(id, col, col_unique) values(4, 4, 6)")
 
-	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
-	ctx, cancel := context.WithCancel(t.Context())
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	ch := make(chan *binlogdatapb.VEvent)
 	runVStream(t, ctx, ch, vtgateConn)
 
 	conn := vtgateConn.Session("", nil)
-	qCtx, cancel := context.WithCancel(t.Context())
+	qCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// Insert into multiple shards
 	_, err = conn.Execute(qCtx, "begin", nil, false)
@@ -777,18 +777,18 @@ func TestDTResolveAfterRMPrepare(t *testing.T) {
 func TestDTResolveDuringRMPrepare(t *testing.T) {
 	defer cleanup(t)
 
-	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
-	ctx, cancel := context.WithCancel(t.Context())
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	ch := make(chan *binlogdatapb.VEvent)
 	runVStream(t, ctx, ch, vtgateConn)
 
 	conn := vtgateConn.Session("", nil)
-	qCtx, cancel := context.WithCancel(t.Context())
+	qCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// Insert into multiple shards
 	_, err = conn.Execute(qCtx, "begin", nil, false)
@@ -843,18 +843,18 @@ func TestDTResolveDuringRMPrepare(t *testing.T) {
 func TestDTResolveDuringRMCommit(t *testing.T) {
 	defer cleanup(t)
 
-	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
-	ctx, cancel := context.WithCancel(t.Context())
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	ch := make(chan *binlogdatapb.VEvent)
 	runVStream(t, ctx, ch, vtgateConn)
 
 	conn := vtgateConn.Session("", nil)
-	qCtx, cancel := context.WithCancel(t.Context())
+	qCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// Insert into multiple shards
 	_, err = conn.Execute(qCtx, "begin", nil, false)
@@ -926,18 +926,18 @@ func TestDTResolveDuringRMCommit(t *testing.T) {
 func TestDTResolveAfterTransactionRecord(t *testing.T) {
 	defer cleanup(t)
 
-	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
-	ctx, cancel := context.WithCancel(t.Context())
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	ch := make(chan *binlogdatapb.VEvent)
 	runVStream(t, ctx, ch, vtgateConn)
 
 	conn := vtgateConn.Session("", nil)
-	qCtx, cancel := context.WithCancel(t.Context())
+	qCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// Insert into multiple shards
 	_, err = conn.Execute(qCtx, "begin", nil, false)
@@ -996,7 +996,7 @@ func testWarningAndTransactionStatus(t *testing.T, conn *vtgateconn.VTGateSessio
 ) {
 	t.Helper()
 
-	qr, err := conn.Execute(t.Context(), "show warnings", nil, false)
+	qr, err := conn.Execute(context.Background(), "show warnings", nil, false)
 	require.NoError(t, err)
 	require.Len(t, qr.Rows, 1)
 
@@ -1011,7 +1011,7 @@ func testWarningAndTransactionStatus(t *testing.T, conn *vtgateconn.VTGateSessio
 	require.Greater(t, indx, 0)
 	dtid := w.Msg[:indx]
 
-	qr, err = conn.Execute(t.Context(), fmt.Sprintf(`show transaction status for '%v'`, dtid), nil, false)
+	qr, err = conn.Execute(context.Background(), fmt.Sprintf(`show transaction status for '%v'`, dtid), nil, false)
 	require.NoError(t, err)
 
 	// validate transaction status
@@ -1075,7 +1075,7 @@ func TestReadingUnresolvedTransactions(t *testing.T) {
 			// Allow enough time for the commit to have started.
 			time.Sleep(1 * time.Second)
 			var lastRes *sqltypes.Result
-			newConn, err := mysql.Connect(t.Context(), &vtParams)
+			newConn, err := mysql.Connect(context.Background(), &vtParams)
 			require.NoError(t, err)
 			defer newConn.Close()
 			for _, query := range testcase.queries {
@@ -1144,7 +1144,7 @@ func TestDTSavepointWithVanilaMySQL(t *testing.T) {
 func TestDTSavepoint(t *testing.T) {
 	defer cleanup(t)
 
-	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -1313,18 +1313,18 @@ func sortShard(ss *vtgateconn.VTGateSession) {
 func TestDTSavepointResolveAfterMMCommit(t *testing.T) {
 	defer cleanup(t)
 
-	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
-	ctx, cancel := context.WithCancel(t.Context())
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	ch := make(chan *binlogdatapb.VEvent)
 	runVStream(t, ctx, ch, vtgateConn)
 
 	conn := vtgateConn.Session("", nil)
-	qCtx, cancel := context.WithCancel(t.Context())
+	qCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// initial insert
@@ -1473,7 +1473,7 @@ func TestReadTransactionStatus(t *testing.T) {
 	// Create a tablet manager client and use it to read the transaction state.
 	tmc := grpctmclient.NewClient()
 	defer tmc.Close()
-	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
 	primaryTablet := getTablet(clusterInstance.Keyspaces[0].Shards[2].FindPrimaryTablet().GrpcPort)
@@ -1821,18 +1821,18 @@ func TestVindexes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			defer cleanup(t)
 
-			vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+			vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 			require.NoError(t, err)
 			defer vtgateConn.Close()
 
-			ctx, cancel := context.WithCancel(t.Context())
+			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
 			ch := make(chan *binlogdatapb.VEvent)
 			runVStream(t, ctx, ch, vtgateConn)
 
 			conn := vtgateConn.Session("", nil)
-			qCtx, cancel := context.WithCancel(t.Context())
+			qCtx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
 			// initial insert
