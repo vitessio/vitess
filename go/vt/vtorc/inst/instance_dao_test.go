@@ -888,6 +888,29 @@ func TestExpireTableData(t *testing.T) {
 }
 
 func TestDetectErrantGTIDs(t *testing.T) {
+	keyspaceName := "ks"
+	shardName := "0"
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone-1",
+			Uid:  100,
+		},
+		Keyspace: keyspaceName,
+		Shard:    shardName,
+	}
+	primaryTablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone-1",
+			Uid:  101,
+		},
+		Keyspace: keyspaceName,
+		Shard:    shardName,
+		Type:     topodatapb.TabletType_PRIMARY,
+
+		MysqlHostname: "primary-host",
+		MysqlPort:     6714,
+	}
+
 	tests := []struct {
 		name            string
 		instance        *Instance
@@ -938,6 +961,8 @@ func TestDetectErrantGTIDs(t *testing.T) {
 			primaryInstance: &Instance{
 				SourceHost:      "",
 				ExecutedGtidSet: "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10589,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-341",
+				Hostname:        primaryTablet.MysqlHostname,
+				Port:            int(primaryTablet.MysqlPort),
 			},
 			wantErrantGTID: "316d193c-70e5-11e5-adb2-ecf4bb2262ff:342",
 		},
@@ -955,28 +980,6 @@ func TestDetectErrantGTIDs(t *testing.T) {
 		},
 	}
 
-	keyspaceName := "ks"
-	shardName := "0"
-	tablet := &topodatapb.Tablet{
-		Alias: &topodatapb.TabletAlias{
-			Cell: "zone-1",
-			Uid:  100,
-		},
-		Keyspace: keyspaceName,
-		Shard:    shardName,
-	}
-	primaryTablet := &topodatapb.Tablet{
-		Alias: &topodatapb.TabletAlias{
-			Cell: "zone-1",
-			Uid:  101,
-		},
-		Keyspace: keyspaceName,
-		Shard:    shardName,
-		Type:     topodatapb.TabletType_PRIMARY,
-
-		MysqlHostname: "primary-host",
-		MysqlPort:     6714,
-	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
@@ -993,6 +996,7 @@ func TestDetectErrantGTIDs(t *testing.T) {
 
 			if tt.primaryInstance != nil {
 				tt.primaryInstance.InstanceAlias = topoproto.TabletAliasString(primaryTablet.Alias)
+
 				err = SaveTablet(primaryTablet)
 				require.NoError(t, err)
 				err = WriteInstance(tt.primaryInstance, true, nil)
