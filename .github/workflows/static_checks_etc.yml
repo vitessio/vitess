@@ -16,6 +16,9 @@ jobs:
     name: Static Code Checks Etc
     runs-on: ubuntu-24.04
 
+    permissions:
+      security-events: write
+
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
@@ -249,3 +252,8 @@ jobs:
           echo "$output"
           echo ""
           exit 1
+
+      - name: Run zizmor 🌈
+        uses: zizmorcore/zizmor-action@e639db99335bc9038abc0e066dfcd72e23d26fb4 # v0.3.0
+        with:
+          advanced-security: false
