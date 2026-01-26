@@ -111,6 +111,7 @@ func testAllModes(t *testing.T, stmts func(conn *mysql.Conn)) {
 		})
 	}
 }
+
 func TestPartialQueryFailureExplicitTx(t *testing.T) {
 	testAllModes(t, func(conn *mysql.Conn) {
 		utils.Exec(t, conn, `begin`)

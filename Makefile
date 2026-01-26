@@ -46,7 +46,7 @@ export REWRITER=go/vt/sqlparser/rewriter.go
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
 .NOTPARALLEL:
 
-.PHONY: all build install test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race minimaltools tools generate_ci_workflows generate-flag-testdata
+.PHONY: all build install test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race lint lint-fix minimaltools tools generate_ci_workflows generate-flag-testdata
 
 all: build
 
@@ -374,6 +374,14 @@ minimaltools:
 dependency_check:
 	./tools/dependency_check.sh
 
+# Checks for formatting and linting errors.
+lint:
+	golangci-lint run ./go/...
+
+# Applies autofixes for formatting and linting errors if supported.
+lint-fix:
+	golangci-lint run --fix ./go/...
+
 vtadmin_web_install:
 	cd web/vtadmin && npm install
 
@@ -385,7 +393,7 @@ vtadmin_web_proto_types: vtadmin_web_install
 
 vtadmin_authz_testgen:
 	go generate ./go/vt/vtadmin/
-	go fmt ./go/vt/vtadmin/
+	go tool gofumpt -w ./go/vt/vtadmin/
 
 # Generate github CI actions workflow files for unit tests and cluster endtoend tests based on templates in the test/templates directory
 # Needs to be called if the templates change or if a new test "shard" is created. We do not need to rebuild tests if only the test/config.json

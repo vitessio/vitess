@@ -65,6 +65,6 @@ type testLogCapture struct {
 	logs []string
 }
 
-func (lc *testLogCapture) captureLog(msg string, args ...interface{}) {
+func (lc *testLogCapture) captureLog(msg string, args ...any) {
 	lc.logs = append(lc.logs, fmt.Sprintf(msg, args...))
 }

@@ -17,6 +17,7 @@ limitations under the License.
 package semantics
 
 import (
+	"maps"
 	"reflect"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -267,9 +268,7 @@ func (s *scoper) up(cursor *sqlparser.Cursor) error {
 		}
 		if isParentDeleteOrUpdate(cursor) {
 			usingMap := s.currentScope().prepareUsingMap()
-			for ts, m := range usingMap {
-				s.binder.usingJoinInfo[ts] = m
-			}
+			maps.Copy(s.binder.usingJoinInfo, usingMap)
 		}
 	case *sqlparser.CommonTableExpr:
 		s.commonTableExprScopes = s.commonTableExprScopes[:len(s.commonTableExprScopes)-1]
@@ -342,9 +341,7 @@ func (s *scoper) push(sc *scope) {
 
 func (s *scoper) popScope() {
 	usingMap := s.currentScope().prepareUsingMap()
-	for ts, m := range usingMap {
-		s.binder.usingJoinInfo[ts] = m
-	}
+	maps.Copy(s.binder.usingJoinInfo, usingMap)
 	l := len(s.scopes) - 1
 	s.scopes = s.scopes[:l]
 }

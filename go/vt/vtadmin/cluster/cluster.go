@@ -1510,22 +1510,16 @@ func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vta
 	)
 
 	// Start by collecting the tablets and keyspace names concurrently.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
+	wg.Go(func() {
 		var err error
 		tablets, err = c.GetTablets(ctx)
 		if err != nil {
 			rec.RecordError(err)
 			return
 		}
-	}()
+	})
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
+	wg.Go(func() {
 		// TODO: (ajm188) we can't use c.GetKeyspaces because it also makes a
 		// FindAllShardsInKeyspace call for each keyspace, which we may or may
 		// not need. Refactor that method so we can get better code reuse.
@@ -1552,7 +1546,7 @@ func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vta
 				Keyspace: ks,
 			}
 		}
-	}()
+	})
 
 	wg.Wait()
 	if rec.HasErrors() {

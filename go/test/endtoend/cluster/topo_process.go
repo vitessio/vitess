@@ -57,7 +57,7 @@ type TopoProcess struct {
 	VerifyURL          string
 	PeerURL            string
 	ZKPorts            string
-	Client             interface{}
+	Client             any
 	Server             *vtopo.Server
 
 	proc *exec.Cmd

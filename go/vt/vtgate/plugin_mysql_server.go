@@ -800,7 +800,7 @@ func (srv *mysqlServer) rollbackAtShutdown() {
 
 	// If vtgate is instead busy executing a query, the number of open conns
 	// will be non-zero. Give another second for those queries to finish.
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		if srv.vtgateHandle.numConnections() == 0 {
 			log.Info("All connections have been rolled back.")
 			return

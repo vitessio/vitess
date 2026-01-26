@@ -416,7 +416,7 @@ func (fz *fuzzer) addRandomSavePoints(queries []string) []string {
 
 		savePointQueries := []string{"SAVEPOINT sp" + strconv.Itoa(savePointCount)}
 		randomDmlCount := rand.IntN(2) + 1
-		for i := 0; i < randomDmlCount; i++ {
+		for range randomDmlCount {
 			savePointQueries = append(savePointQueries, fz.randomDML())
 		}
 		savePointQueries = append(savePointQueries, "ROLLBACK TO sp"+strconv.Itoa(savePointCount))

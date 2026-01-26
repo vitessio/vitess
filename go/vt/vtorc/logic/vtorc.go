@@ -224,7 +224,7 @@ func onHealthTick() {
 		defer snapshotDiscoveryKeysMutex.Unlock()
 
 		countSnapshotKeys := len(snapshotDiscoveryKeys)
-		for i := 0; i < countSnapshotKeys; i++ {
+		for range countSnapshotKeys {
 			tabletAliases = append(tabletAliases, <-snapshotDiscoveryKeys)
 		}
 	}()

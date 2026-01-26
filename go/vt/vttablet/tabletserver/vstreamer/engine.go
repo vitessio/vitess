@@ -536,11 +536,7 @@ func (vse *Engine) waitForMySQL(ctx context.Context, db dbconfigs.Connector, tab
 				// Exponential backoff with 1.5 as a factor
 				if backoff != backoffLimit {
 					nb := time.Duration(float64(backoff) * 1.5)
-					if nb > backoffLimit {
-						backoff = backoffLimit
-					} else {
-						backoff = nb
-					}
+					backoff = min(nb, backoffLimit)
 				}
 			}
 		}

@@ -778,7 +778,7 @@ func BenchmarkFkFuzz(b *testing.B) {
 	numQueries := 1000
 	// Wait for schema-tracking to be complete.
 	waitForSchemaTrackingForFkTables(b)
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		queries, mysqlConn, vtConn, vtUnmanagedConn := setupBenchmark(b, maxValForId, maxValForCol, insertShare, deleteShare, updateShare, numQueries)
 
 		// Now we run the benchmarks!

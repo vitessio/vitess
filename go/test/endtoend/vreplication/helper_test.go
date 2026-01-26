@@ -72,8 +72,8 @@ func setSidecarDBName(dbName string) {
 }
 
 func execMultipleQueries(t *testing.T, conn *mysql.Conn, database string, lines string) {
-	queries := strings.Split(lines, "\n")
-	for _, query := range queries {
+	queries := strings.SplitSeq(lines, "\n")
+	for query := range queries {
 		if strings.HasPrefix(query, "--") {
 			continue
 		}
@@ -372,7 +372,7 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 				info := stream.Map()
 				state = info["state"].String()
 				if state == wantState {
-					for i := 0; i < len(fieldEqualityChecks); i++ {
+					for i := range fieldEqualityChecks {
 						if kvparts := strings.Split(fieldEqualityChecks[i], "=="); len(kvparts) == 2 {
 							key := kvparts[0]
 							val := kvparts[1]
@@ -702,7 +702,7 @@ func getShardRoutingRules(t *testing.T) string {
 		return shardI < shardJ
 	})
 	sb := strings.Builder{}
-	for i := 0; i < len(rules); i++ {
+	for i := range rules {
 		if i > 0 {
 			sb.WriteString(",")
 		}
@@ -763,7 +763,7 @@ func randHex(n int) (string, error) {
 	return hex.EncodeToString(bytes), nil
 }
 
-func getIntVal(t *testing.T, vars map[string]interface{}, key string) int {
+func getIntVal(t *testing.T, vars map[string]any, key string) int {
 	i, ok := vars[key].(float64)
 	require.True(t, ok)
 	return int(i)
@@ -773,8 +773,8 @@ func getPartialMetrics(t *testing.T, key string, tab *cluster.VttabletProcess) (
 	vars := tab.GetVars()
 	insertKey := key + ".insert"
 	updateKey := key + ".insert"
-	cacheSizes := vars["VReplicationPartialQueryCacheSize"].(map[string]interface{})
-	queryCounts := vars["VReplicationPartialQueryCount"].(map[string]interface{})
+	cacheSizes := vars["VReplicationPartialQueryCacheSize"].(map[string]any)
+	queryCounts := vars["VReplicationPartialQueryCount"].(map[string]any)
 	if cacheSizes[insertKey] == nil || cacheSizes[updateKey] == nil ||
 		queryCounts[insertKey] == nil || queryCounts[updateKey] == nil {
 		return 0, 0, 0, 0
@@ -862,9 +862,7 @@ func (lg *loadGenerator) start() {
 		default:
 			if int(connectionCount.Load()) < lg.connections {
 				connectionCount.Add(1)
-				lg.wg.Add(1)
-				go func() {
-					defer lg.wg.Done()
+				lg.wg.Go(func() {
 					defer connectionCount.Add(-1)
 					conn := vc.GetVTGateConn(t)
 					defer conn.Close()
@@ -904,7 +902,7 @@ func (lg *loadGenerator) start() {
 						}
 						time.Sleep(time.Duration(int64(float64(loadTestAvgWaitBetweenQueries.Microseconds()) * rand.Float64())))
 					}
-				}()
+				})
 			}
 		}
 	}
@@ -1057,9 +1055,11 @@ func mapToCSV(m map[string]string) string {
 	if len(m) == 0 {
 		return csv
 	}
+	var csvSb1062 strings.Builder
 	for k, v := range m {
-		csv += fmt.Sprintf("%s=%s,", k, v)
+		csvSb1062.WriteString(fmt.Sprintf("%s=%s,", k, v))
 	}
+	csv += csvSb1062.String()
 	if len(csv) == 0 {
 		return csv
 	}

@@ -403,7 +403,7 @@ func setVSchema(t *testing.T, vschema string) {
 	}
 	// Wait for curCount to go up.
 	updated := false
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		if engine.vschemaUpdates.Get() != curCount {
 			updated = true
 			break

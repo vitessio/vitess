@@ -252,10 +252,7 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.throttledAppsSnapshotInterval = throttledAppsSnapshotInterval
 	throttler.dormantPeriod = dormantPeriod
 	throttler.recentCheckDormantDiff = int64(throttler.dormantPeriod / recentCheckRateLimiterInterval)
-	throttler.recentCheckDiff = int64(1 * time.Second / recentCheckRateLimiterInterval)
-	if throttler.recentCheckDiff < 1 {
-		throttler.recentCheckDiff = 1
-	}
+	throttler.recentCheckDiff = max(int64(1*time.Second/recentCheckRateLimiterInterval), 1)
 
 	throttler.StoreMetricsThreshold(base.RegisteredSelfMetrics[base.LagMetricName].DefaultThreshold())
 	throttler.readSelfThrottleMetrics = func(ctx context.Context, tmClient tmclient.TabletManagerClient) base.ThrottleMetrics {
@@ -745,10 +742,7 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 	primaryStimulatorRateLimiter := timer.NewRateLimiter(throttler.dormantPeriod)
 	throttler.recentCheckRateLimiter = timer.NewRateLimiter(recentCheckRateLimiterInterval)
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done() // Called last, once all tickers are stopped.
-
+	wg.Go(func() {
 		defer func() {
 			throttler.recentCheckRateLimiter.Stop()
 			primaryStimulatorRateLimiter.Stop()
@@ -866,7 +860,7 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 				f()
 			}
 		}
-	}()
+	})
 }
 
 func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, probe *base.Probe) (probeFunc func(context.Context, tmclient.TabletManagerClient) base.ThrottleMetrics) {

@@ -151,8 +151,7 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 	err := clusterInstance.StartVtgate()
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &mysql.ConnParams{
 		Host: clusterInstance.Hostname,
@@ -186,10 +185,7 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 	// Try performing a write and ensure that it blocks.
 	writeSQL := `insert into test(id, msg) values (1, 'test 1')`
 	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
+	wg.Go(func() {
 		// Attempt writing via vtgate against the primary. This should block (because there's no replicas to ack the semi-sync),
 		// and fail on the vtgate query timeout. Async replicas will still receive this write (probably), because it is written
 		// to the PRIMARY binlog even when no ackers exist. This means we need to disable the vtgate buffer (above), because it
@@ -209,14 +205,14 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 		require.NotNil(t, vtgateVars)
 		require.NotNil(t, vtgateVars["QueryRoutes"])
 		require.NotNil(t, vtgateVars["VtgateApiErrorCounts"])
-		require.EqualValues(t, map[string]interface{}{
+		require.EqualValues(t, map[string]any{
 			"DDL.DirectDDL.PRIMARY":      float64(1),
 			"INSERT.Passthrough.PRIMARY": float64(1),
 		}, vtgateVars["QueryRoutes"])
-		require.EqualValues(t, map[string]interface{}{
+		require.EqualValues(t, map[string]any{
 			"Execute.ks.primary.DEADLINE_EXCEEDED": float64(1),
 		}, vtgateVars["VtgateApiErrorCounts"])
-	}()
+	})
 
 	wg.Add(1)
 	waitReplicasTimeout := time.Second * 10
@@ -517,7 +513,7 @@ func TestERSForInitialization(t *testing.T) {
 	require.NoError(t, err)
 	err = clusterInstance.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+"zone1")
 	require.NoError(t, err)
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		tablet := clusterInstance.NewVttabletInstance("replica", 100+i, "zone1")
 		tablets = append(tablets, tablet)
 	}
@@ -620,8 +616,7 @@ func TestERSFailFast(t *testing.T) {
 	utils.ConfirmReplication(t, tablets[0], tablets[1:])
 
 	// Context to be used in the go-routine to cleanly exit it after the test ends
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	strChan := make(chan string)
 	go func() {
 		// We expect this to fail since we have ignored all replica tablets and only the rdonly is left, which is not capable of sending semi-sync ACKs

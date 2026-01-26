@@ -78,8 +78,10 @@ func (env *Environment) BinaryCollationForCharset(charset string) ID {
 	return Unknown
 }
 
-var globalEnvironments = make(map[collver]*Environment)
-var globalEnvironmentsMu sync.Mutex
+var (
+	globalEnvironments   = make(map[collver]*Environment)
+	globalEnvironmentsMu sync.Mutex
+)
 
 // fetchCacheEnvironment returns a cached Environment from a global cache.
 // We can keep a single Environment per collver version because Environment
@@ -102,7 +104,7 @@ func fetchCacheEnvironment(version collver) *Environment {
 func NewEnvironment(serverVersion string) *Environment {
 	// 8.0 is the oldest fully supported version, so use that as the default.
 	// All newer MySQL versions including 9 are so far compatible as well.
-	var version = collverMySQL8
+	version := collverMySQL8
 	serverVersion = strings.TrimSpace(strings.ToLower(serverVersion))
 	switch {
 	case strings.Contains(serverVersion, "mariadb"):

@@ -153,8 +153,7 @@ func TestConsulTopo(t *testing.T) {
 
 	// Run the TopoServerTestSuite tests.
 	testIndex := 0
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	test.TopoServerTestSuite(t, ctx, func() *topo.Server {
 		// Each test will use its own sub-directories.
@@ -212,8 +211,7 @@ func TestConsulTopoWithChecks(t *testing.T) {
 
 	// Run the TopoServerTestSuite tests.
 	testIndex := 0
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	test.TopoServerTestSuite(t, ctx, func() *topo.Server {
 		// Each test will use its own sub-directories.
 		testRoot := fmt.Sprintf("test-%v", testIndex)
@@ -275,8 +273,7 @@ func TestConsulTopoWithAuth(t *testing.T) {
 		t.Fatalf("couldn't write temp file: %v", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	test.TopoServerTestSuite(t, ctx, func() *topo.Server {
 		// Each test will use its own sub-directories.
 		testRoot := fmt.Sprintf("test-%v", testIndex)
@@ -392,8 +389,7 @@ func TestConsulWatcherStormPrevention(t *testing.T) {
 		os.Remove(configFilename)
 	}()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	testRoot := "storm-test"
 

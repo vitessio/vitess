@@ -36,9 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/vitessdriver"
 )
 
-var (
-	server = pflag.String("server", "", "vtgate server to connect to")
-)
+var server = pflag.String("server", "", "vtgate server to connect to")
 
 func main() {
 	pflag.Parse()

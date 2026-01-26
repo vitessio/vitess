@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"sort"
 	"strconv"
@@ -848,9 +849,7 @@ func (vre *Engine) updateStats() {
 
 	globalStats.isOpen = vre.isOpen
 	globalStats.controllers = make(map[int32]*controller, len(vre.controllers))
-	for id, ct := range vre.controllers {
-		globalStats.controllers[id] = ct
-	}
+	maps.Copy(globalStats.controllers, vre.controllers)
 }
 
 func (vre *Engine) readAllRows(ctx context.Context) ([]map[string]string, error) {

@@ -375,12 +375,14 @@ func (route *Route) description() PrimitiveDescription {
 	}
 	if len(route.SysTableTableSchema) != 0 {
 		sysTabSchema := "["
+		var sysTabSchemaSb378 strings.Builder
 		for idx, tableSchema := range route.SysTableTableSchema {
 			if idx != 0 {
-				sysTabSchema += ", "
+				sysTabSchemaSb378.WriteString(", ")
 			}
-			sysTabSchema += sqlparser.String(tableSchema)
+			sysTabSchemaSb378.WriteString(sqlparser.String(tableSchema))
 		}
+		sysTabSchema += sysTabSchemaSb378.String()
 		sysTabSchema += "]"
 		other["SysTableTableSchema"] = sysTabSchema
 	}

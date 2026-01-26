@@ -17,7 +17,6 @@ limitations under the License.
 package grpc_api
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -30,8 +29,7 @@ import (
 // TestTransactionsWithGRPCAPI test the transaction queries through vtgate grpc apis.
 // It is done through both streaming api and non-streaming api.
 func TestPrepareWithGRPCAPI(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	vtgateConn, err := cluster.DialVTGate(ctx, t.Name(), vtgateGrpcAddress, "user_with_access", "test_password")
 	require.NoError(t, err)

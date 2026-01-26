@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	maps0 "maps"
 	"net/http"
 	"strings"
 	"sync"
@@ -323,11 +324,9 @@ func (se *Engine) closeLocked() {
 	// configured function to complete running and that function (ReloadAt) will block
 	// on the lock we have already acquired
 	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		se.ticks.Stop()
-		wg.Done()
-	}()
+	})
 	se.historian.Close()
 	se.conns.Close()
 
@@ -641,9 +640,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	}
 
 	// Update se.tables
-	for k, t := range changedTables {
-		se.tables[k] = t
-	}
+	maps0.Copy(se.tables, changedTables)
 	se.lastChange = curTime
 	if len(created) > 0 || len(altered) > 0 || len(dropped) > 0 {
 		log.Info(fmt.Sprintf("schema engine created %v, altered %v, dropped %v", extractNamesFromTablesList(created), extractNamesFromTablesList(altered), extractNamesFromTablesList(dropped)))

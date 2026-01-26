@@ -308,7 +308,7 @@ func TestReservedOnMultiReplica(t *testing.T) {
 
 	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: false, InReservedConn: true})
 	destinations := []key.ShardDestination{key.DestinationShard("0")}
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		executeOnShards(t, ctx, res, keyspace, sc, session, destinations)
 		assert.EqualValues(t, 1, sbc0_1.ReserveCount.Load()+sbc0_2.ReserveCount.Load(), "sbc0 reserve count")
 		assert.EqualValues(t, 0, sbc0_1.BeginCount.Load()+sbc0_2.BeginCount.Load(), "sbc0 begin count")

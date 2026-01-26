@@ -20,7 +20,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	maps0 "maps"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -1977,9 +1979,7 @@ func (ts *trafficSwitcher) addParticipatingTablesToKeyspace(ctx context.Context,
 		if err := json2.UnmarshalPB([]byte(wrap), ks); err != nil {
 			return err
 		}
-		for table, vtab := range ks.Tables {
-			vschema.Tables[table] = vtab
-		}
+		maps0.Copy(vschema.Tables, ks.Tables)
 	} else {
 		if vschema.Sharded {
 			return errors.New("no sharded vschema was provided, so you will need to update the vschema of the target manually for the moved tables")
@@ -2223,9 +2223,7 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 				ts.targetKeyspace, sequenceMetadata.usingTableName)
 		}
 		// Sort the values to find the max value across all shards.
-		sort.Slice(shardResults, func(i, j int) bool {
-			return shardResults[i] < shardResults[j]
-		})
+		slices.Sort(shardResults)
 		nextVal := shardResults[len(shardResults)-1] + 1
 		// Now we need to update the sequence table, if needed, in order to
 		// ensure that that the next value it provides is > the current max.

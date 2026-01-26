@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -787,13 +788,7 @@ func (vs *vstreamer) buildSidecarTablePlan(id uint64, tm *mysql.TableMap) ([]*bi
 		if vs.options == nil {
 			return nil, nil
 		}
-		found := false
-		for _, table := range vs.options.InternalTables {
-			if table == tableName {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(vs.options.InternalTables, tableName)
 		if !found {
 			return nil, nil
 		}

@@ -415,9 +415,9 @@ func newFakeTMClient() *fakeTMClient {
 
 // Note: ONLY breaks up change.SQL into individual statements and executes it. Does NOT fully implement ApplySchema.
 func (tmc *fakeTMClient) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
-	stmts := strings.Split(change.SQL, ";")
+	stmts := strings.SplitSeq(change.SQL, ";")
 
-	for _, stmt := range stmts {
+	for stmt := range stmts {
 		_, err := tmc.ExecuteFetchAsDba(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
 			Query:        []byte(stmt),
 			MaxRows:      0,

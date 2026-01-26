@@ -322,7 +322,7 @@ func waitForErrantGTIDTabletCount(t *testing.T, vtorc *cluster.VTOrcProcess, err
 
 func verifyErrantGTIDCount(t *testing.T, vtorc *cluster.VTOrcProcess, tabletAlias string, countWanted int) {
 	vars := vtorc.GetVars()
-	errantGTIDCounts := vars["CurrentErrantGTIDCount"].(map[string]interface{})
+	errantGTIDCounts := vars["CurrentErrantGTIDCount"].(map[string]any)
 	gtidCountVal, isPresent := errantGTIDCounts[tabletAlias]
 	require.True(t, isPresent, "Tablet %s not found in errant GTID counts", tabletAlias)
 	gtidCount := utils.GetIntFromValue(gtidCountVal)

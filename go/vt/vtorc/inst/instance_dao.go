@@ -419,7 +419,7 @@ func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error
 		// such that the replica may _seems_ to have more entries than the primary, when in fact
 		// it's just that the primary's probing is stale.
 		redactedExecutedGtidSet, _ := replication.ParseMysql56GTIDSet(instance.ExecutedGtidSet)
-		for _, uuid := range strings.Split(instance.AncestryUUID, ",") {
+		for uuid := range strings.SplitSeq(instance.AncestryUUID, ",") {
 			uuidSID, err := replication.ParseSID(uuid)
 			if err != nil {
 				continue
@@ -1172,10 +1172,7 @@ func SnapshotTopologies() error {
 }
 
 func ExpireStaleInstanceBinlogCoordinates() error {
-	expireSeconds := config.GetReasonableReplicationLagSeconds() * 2
-	if expireSeconds < config.StaleInstanceCoordinatesExpireSeconds {
-		expireSeconds = config.StaleInstanceCoordinatesExpireSeconds
-	}
+	expireSeconds := max(config.GetReasonableReplicationLagSeconds()*2, config.StaleInstanceCoordinatesExpireSeconds)
 	writeFunc := func() error {
 		_, err := db.ExecVTOrc(`DELETE
 			FROM database_instance_stale_binlog_coordinates

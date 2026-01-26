@@ -102,7 +102,7 @@ func (pg *EmbedPageGenerator) WriteTrailer(g *Generator, embedfile string) {
 }
 
 func (pg *EmbedPageGenerator) WriteToFile(out string) {
-	if err := os.WriteFile(out, pg.raw.Bytes(), 0644); err != nil {
+	if err := os.WriteFile(out, pg.raw.Bytes(), 0o644); err != nil {
 		log.Fatal(err)
 	}
 	log.Printf("written %q (%.02fkb)", out, float64(pg.raw.Len())/1024.0)

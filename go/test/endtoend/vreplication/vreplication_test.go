@@ -671,9 +671,7 @@ func testVStreamCellFlag(t *testing.T) {
 
 			rowsReceived := false
 			var wg sync.WaitGroup
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				defer cancel()
 
 				events, err := reader.Recv()
@@ -688,7 +686,7 @@ func testVStreamCellFlag(t *testing.T) {
 				default:
 					log.Info(fmt.Sprintf("%s:: remote error: %v", time.Now(), err))
 				}
-			}()
+			})
 			wg.Wait()
 
 			if tc.expectError {
@@ -1010,7 +1008,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			require.NoError(t, err, "Error getting denylist for customer:0")
 			require.False(t, exists)
 
-			for _, shard := range strings.Split("-80,80-", ",") {
+			for shard := range strings.SplitSeq("-80,80-", ",") {
 				expectNumberOfStreams(t, vtgateConn, "shardCustomerTargetStreams", "p2c", fmt.Sprintf("%s:%s", defaultTargetKs, shard), 0)
 			}
 
@@ -1087,7 +1085,7 @@ func reshardMerchant2to3SplitMerge(t *testing.T) {
 		var output string
 		var err error
 
-		for _, shard := range strings.Split("-80,80-", ",") {
+		for shard := range strings.SplitSeq("-80,80-", ",") {
 			output, err = vc.VtctldClient.ExecuteCommandWithOutput("GetShard", "merchant:"+shard)
 			if err == nil {
 				t.Fatal("GetShard merchant:-80 failed")
@@ -1095,7 +1093,7 @@ func reshardMerchant2to3SplitMerge(t *testing.T) {
 			assert.Contains(t, output, "node doesn't exist", "GetShard succeeded for dropped shard merchant:"+shard)
 		}
 
-		for _, shard := range strings.Split("-40,40-c0,c0-", ",") {
+		for shard := range strings.SplitSeq("-40,40-c0,c0-", ",") {
 			ksShard := fmt.Sprintf("%s:%s", merchantKeyspace, shard)
 			output, err = vc.VtctldClient.ExecuteCommandWithOutput("GetShard", ksShard)
 			if err != nil {
@@ -1105,7 +1103,7 @@ func reshardMerchant2to3SplitMerge(t *testing.T) {
 			assert.Contains(t, output, "primary_alias", "GetShard failed for valid shard "+ksShard)
 		}
 
-		for _, shard := range strings.Split("-40,40-c0,c0-", ",") {
+		for shard := range strings.SplitSeq("-40,40-c0,c0-", ",") {
 			ksShard := fmt.Sprintf("%s:%s", merchantKeyspace, shard)
 			expectNumberOfStreams(t, vtgateConn, "reshardMerchant2to3SplitMerge", "m2m3", ksShard, 0)
 		}
@@ -1869,7 +1867,7 @@ func testSwitchWritesErrorHandling(t *testing.T, sourceTablets, targetTablets []
 		startingTestRowID := 10000000
 		numTestRows := 100
 		addTestRows := func() {
-			for i := 0; i < numTestRows; i++ {
+			for i := range numTestRows {
 				execVtgateQuery(t, vtgateConn, sourceTablets[0].Keyspace, fmt.Sprintf("insert into customer (cid, name) values (%d, 'laggingCustomer')",
 					startingTestRowID+i))
 			}
@@ -1950,12 +1948,10 @@ func testSwitchWritesErrorHandling(t *testing.T, sourceTablets, targetTablets []
 		// after the timeout is reached -- as the vplayer query is blocking
 		// on the table lock in the MySQL layer.
 		wg := sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			out, err = vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", workflow, "--target-keyspace", targetKs,
 				"SwitchTraffic", "--tablet-types=primary", "--timeout", timeout.String())
-		}()
+		})
 		time.Sleep(timeout)
 		// Now we can unblock things and let it continue.
 		unlockTargetTable()

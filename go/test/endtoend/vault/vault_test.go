@@ -112,7 +112,7 @@ func TestVaultAuth(t *testing.T) {
 	defer vs.stop()
 
 	// Wait for Vault server to come up
-	for i := 0; i < 60; i++ {
+	for range 60 {
 		time.Sleep(250 * time.Millisecond)
 		ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", hostname, vs.port1))
 		if err != nil {

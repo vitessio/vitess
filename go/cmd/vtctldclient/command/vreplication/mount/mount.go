@@ -28,16 +28,14 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
-var (
-	// base is the base command for all actions related to the mount action.
-	base = &cobra.Command{
-		Use:                   "Mount [command] [command-flags]",
-		Short:                 "Mount is used to link an external Vitess cluster in order to migrate data from it.",
-		DisableFlagsInUseLine: true,
-		Aliases:               []string{"mount"},
-		Args:                  cobra.ExactArgs(1),
-	}
-)
+// base is the base command for all actions related to the mount action.
+var base = &cobra.Command{
+	Use:                   "Mount [command] [command-flags]",
+	Short:                 "Mount is used to link an external Vitess cluster in order to migrate data from it.",
+	DisableFlagsInUseLine: true,
+	Aliases:               []string{"mount"},
+	Args:                  cobra.ExactArgs(1),
+}
 
 var mountOptions struct {
 	Name       string

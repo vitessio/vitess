@@ -76,7 +76,7 @@ func TestTabletStatusAggregator(t *testing.T) {
 		t.Errorf("aggr.GetCacheStatus() =\n%+v, want =\n%+v", got, want)
 	}
 	// reset values in idx=0
-	for i := 0; i < 59; i++ {
+	for range 59 {
 		aggr.resetNextSlot()
 	}
 	qi = &queryInfo{

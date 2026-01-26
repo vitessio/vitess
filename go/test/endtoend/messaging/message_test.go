@@ -641,7 +641,7 @@ func assertClientCount(t *testing.T, expected int, vttablet *cluster.Vttablet) {
 	}
 }
 
-func parseDebugVars(t *testing.T, output interface{}, vttablet *cluster.Vttablet) {
+func parseDebugVars(t *testing.T, output any, vttablet *cluster.Vttablet) {
 	debugVarURL := fmt.Sprintf("http://%s:%d/debug/vars", vttablet.VttabletProcess.TabletHostname, vttablet.HTTPPort)
 	resp, err := http.Get(debugVarURL)
 	if err != nil {

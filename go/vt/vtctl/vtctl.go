@@ -2172,8 +2172,10 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 			ksShardKeys = append(ksShardKeys, ksShardKey)
 		}
 		sort.Strings(ksShardKeys)
+		var sSb2175 strings.Builder
 		for _, ksShard := range ksShardKeys {
 			statuses := res.ShardStatuses[ksShard].PrimaryReplicationStatuses
+			var sSb2177 strings.Builder
 			for _, st := range statuses {
 				msg := ""
 				if st.State == binlogdatapb.VReplicationWorkflowState_Error.String() {
@@ -2192,9 +2194,11 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 						msg += fmt.Sprintf(" Tx time: %s.", time.Unix(st.TransactionTimestamp, 0).Format(time.ANSIC))
 					}
 				}
-				s += fmt.Sprintf("id=%d on %s: Status: %s%s\n", st.ID, ksShard, st.State, msg)
+				sSb2177.WriteString(fmt.Sprintf("id=%d on %s: Status: %s%s\n", st.ID, ksShard, st.State, msg))
 			}
+			sSb2175.WriteString(sSb2177.String())
 		}
+		s += sSb2175.String()
 		wr.Logger().Printf("\n%s\n", s)
 		return nil
 	}
@@ -2356,6 +2360,7 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 			sort.Strings(tables)
 			s := ""
 			var progress wrangler.TableCopyProgress
+			var sSb2360 strings.Builder
 			for _, table := range tables {
 				var rowCountPct, tableSizePct int64
 				progress = *(*copyProgress)[table]
@@ -2365,10 +2370,11 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 				if progress.SourceTableSize > 0 {
 					tableSizePct = 100.0 * progress.TargetTableSize / progress.SourceTableSize
 				}
-				s += fmt.Sprintf("%s: rows copied %d/%d (%d%%), size copied %d/%d (%d%%)\n",
+				sSb2360.WriteString(fmt.Sprintf("%s: rows copied %d/%d (%d%%), size copied %d/%d (%d%%)\n",
 					table, progress.TargetRowCount, progress.SourceRowCount, rowCountPct,
-					progress.TargetTableSize, progress.SourceTableSize, tableSizePct)
+					progress.TargetTableSize, progress.SourceTableSize, tableSizePct))
 			}
+			s += sSb2360.String()
 			wr.Logger().Printf("\n%s\n", s)
 		}
 		return printDetails()

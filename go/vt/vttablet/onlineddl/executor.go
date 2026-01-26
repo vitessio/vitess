@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -338,12 +339,7 @@ func (e *Executor) matchesShards(commaDelimitedShards string) bool {
 		// Nothing explicitly defined, so implicitly all shards are allowed
 		return true
 	}
-	for _, shard := range shards {
-		if shard == e.shard {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(shards, e.shard)
 }
 
 // countOwnedRunningMigrations returns an estimate of current count of running migrations; this is
@@ -506,13 +502,10 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 	if err != nil {
 		// let's see if this error is actually acceptable
 		if merr, ok := err.(*sqlerror.SQLError); ok {
-			for _, acceptableCode := range acceptableMySQLErrorCodes {
-				if merr.Num == acceptableCode {
-					// we don't consider this to be an error.
-					acceptableErrorCodeFound = true
-					err = nil
-					break
-				}
+			if slices.Contains(acceptableMySQLErrorCodes, merr.Num) {
+				// we don't consider this to be an error.
+				acceptableErrorCodeFound = true
+				err = nil
 			}
 		}
 	}
@@ -654,12 +647,7 @@ func (e *Executor) killTableLockHoldersAndAccessors(ctx context.Context, uuid st
 	defer conn.Close()
 
 	skipKill := func(threadId int64) bool {
-		for _, excludeId := range excludeIds {
-			if threadId == excludeId {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(excludeIds, threadId)
 	}
 	{
 		// First, let's look at PROCESSLIST for queries that _might_ be operating on our table. This may have
@@ -3759,7 +3747,7 @@ func (e *Executor) updateMigrationSpecialPlan(ctx context.Context, uuid string, 
 	return err
 }
 
-func (e *Executor) updateMigrationStage(ctx context.Context, uuid string, stage string, args ...interface{}) error {
+func (e *Executor) updateMigrationStage(ctx context.Context, uuid string, stage string, args ...any) error {
 	msg := fmt.Sprintf(stage, args...)
 	log.Info(fmt.Sprintf("updateMigrationStage: uuid=%s, stage=%s", uuid, msg))
 	query, err := sqlparser.ParseAndBind(sqlUpdateStage,

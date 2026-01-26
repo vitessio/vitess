@@ -119,7 +119,7 @@ func createTxAndInsertRows(conn *mysql.Conn, t *testing.T, idx *int) {
 	_, err := conn.ExecuteFetch("begin", 0, false)
 	require.NoError(t, err)
 
-	for i := 0; i < 25; i++ {
+	for range 25 {
 		*idx += 5
 		_, err = conn.ExecuteFetch(utils.GetInsertMultipleValuesQuery(*idx, *idx+1, *idx+2, *idx+3), 0, false)
 		require.NoError(t, err)

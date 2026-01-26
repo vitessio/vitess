@@ -30,6 +30,7 @@ import (
 	"os/exec"
 	"path"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -358,12 +359,7 @@ func (vttablet *VttabletProcess) WaitForTabletTypesForTimeout(expectedTypes []st
 }
 
 func contains(arr []string, str string) bool {
-	for _, a := range arr {
-		if a == str {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(arr, str)
 }
 
 // WaitForBinLogPlayerCount waits till binlog player count var matches
@@ -587,7 +583,7 @@ func executeQuery(dbConn *mysql.Conn, query string) (*sqltypes.Result, error) {
 	)
 	retries := 10
 	retryDelay := 1 * time.Second
-	for i := 0; i < retries; i++ {
+	for i := range retries {
 		if i > 0 {
 			// We only audit from 2nd attempt and onwards, otherwise this is just too verbose.
 			log.Info(fmt.Sprintf("Executing query %s (attempt %d of %d)", query, (i + 1), retries))
@@ -607,7 +603,7 @@ func executeQuery(dbConn *mysql.Conn, query string) (*sqltypes.Result, error) {
 func executeMultiQuery(dbConn *mysql.Conn, query string) (err error) {
 	retries := 10
 	retryDelay := 1 * time.Second
-	for i := 0; i < retries; i++ {
+	for i := range retries {
 		if i > 0 {
 			// We only audit from 2nd attempt and onwards, otherwise this is just too verbose.
 			log.Info(fmt.Sprintf("Executing query %s (attempt %d of %d)", query, (i + 1), retries))

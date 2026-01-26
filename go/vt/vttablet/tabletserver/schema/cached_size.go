@@ -36,6 +36,7 @@ func (cached *MessageInfo) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Table) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

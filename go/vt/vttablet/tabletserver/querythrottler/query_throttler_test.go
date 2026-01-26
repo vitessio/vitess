@@ -76,8 +76,7 @@ func TestSelectThrottlingStrategy(t *testing.T) {
 // TestQueryThrottler_StrategyLifecycleManagement tests that strategies are properly started and stopped.
 func TestQueryThrottler_StrategyLifecycleManagement(t *testing.T) {
 	// Test that initial strategy is started
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	throttler := &throttle.Throttler{}
 	config := &tabletenv.TabletConfig{
@@ -102,8 +101,7 @@ func TestQueryThrottler_StrategyLifecycleManagement(t *testing.T) {
 
 // TestQueryThrottler_Shutdown tests the Shutdown method.
 func TestQueryThrottler_Shutdown(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	config := &tabletenv.TabletConfig{
 		QueryThrottlerConfigRefreshInterval: 10 * time.Millisecond,
@@ -448,8 +446,7 @@ func TestQueryThrottler_HandleConfigUpdate_ErrorHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			qt := &QueryThrottler{
 				ctx:                     ctx,
@@ -471,8 +468,7 @@ func TestQueryThrottler_HandleConfigUpdate_ErrorHandling(t *testing.T) {
 
 // TestQueryThrottler_HandleConfigUpdate__ConfigExtraction verifies config is properly extracted from SrvKeyspace.
 func TestQueryThrottler_HandleConfigUpdate__ConfigExtraction(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	oldCfg := &querythrottlerpb.Config{Enabled: false, Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, DryRun: false}
 	oldStrategy := &registry.NoOpStrategy{}
@@ -502,8 +498,7 @@ func TestQueryThrottler_HandleConfigUpdate__ConfigExtraction(t *testing.T) {
 
 // TestQueryThrottler_HandleConfigUpdate__SuccessfulConfigUpdate tests successful config update when strategy doesn't change.
 func TestQueryThrottler_HandleConfigUpdate__SuccessfulConfigUpdate(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	// Use a mock strategy to track state changes
 	oldStrategy := &mockThrottlingStrategy{}
@@ -536,8 +531,7 @@ func TestQueryThrottler_HandleConfigUpdate__SuccessfulConfigUpdate(t *testing.T)
 
 // TestQueryThrottler_HandleConfigUpdate__StrategySwitch tests that strategy is properly switched when strategy type changes.
 func TestQueryThrottler_HandleConfigUpdate__StrategySwitch(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	oldStrategy := &mockThrottlingStrategy{}
 
@@ -570,8 +564,7 @@ func TestQueryThrottler_HandleConfigUpdate__StrategySwitch(t *testing.T) {
 
 // TestQueryThrottler_HandleConfigUpdate__NoChange tests that nothing changes when the config is identical.
 func TestQueryThrottler_HandleConfigUpdate__NoChange(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	unchangedCfg := &querythrottlerpb.Config{Enabled: true, Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, DryRun: false}
 	oldStrategy := &registry.NoOpStrategy{}
@@ -757,8 +750,7 @@ func TestIsConfigUpdateRequired(t *testing.T) {
 
 // TestQueryThrottler_startSrvKeyspaceWatch_InitialLoad tests that initial configuration is loaded successfully when GetSrvKeyspace succeeds.
 func TestQueryThrottler_startSrvKeyspaceWatch_InitialLoad(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), &tabletenv.TabletConfig{}, "TestThrottler")
 
@@ -790,8 +782,7 @@ func TestQueryThrottler_startSrvKeyspaceWatch_InitialLoad(t *testing.T) {
 
 // TestQueryThrottler_startSrvKeyspaceWatch_InitialLoadFailure tests that watch starts even when initial GetSrvKeyspace fails.
 func TestQueryThrottler_startSrvKeyspaceWatch_InitialLoadFailure(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), &tabletenv.TabletConfig{}, "TestThrottler")
 
@@ -823,8 +814,7 @@ func TestQueryThrottler_startSrvKeyspaceWatch_InitialLoadFailure(t *testing.T) {
 
 // TestQueryThrottler_startSrvKeyspaceWatch_OnlyStartsOnce tests that watch only starts once even with concurrent calls (atomic flag protection).
 func TestQueryThrottler_startSrvKeyspaceWatch_OnlyStartsOnce(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), &tabletenv.TabletConfig{}, "TestThrottler")
 
@@ -843,16 +833,14 @@ func TestQueryThrottler_startSrvKeyspaceWatch_OnlyStartsOnce(t *testing.T) {
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
-	for i := 0; i < numGoroutines; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range numGoroutines {
+		wg.Go(func() {
 			// Each goroutine tries to start the watch
 			qt.startSrvKeyspaceWatch()
 			mu.Lock()
 			startedCount++
 			mu.Unlock()
-		}()
+		})
 	}
 
 	// Wait for all goroutines to complete
@@ -900,8 +888,7 @@ func TestQueryThrottler_startSrvKeyspaceWatch_RequiredFieldsValidation(t *testin
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			env := tabletenv.NewEnv(vtenv.NewTestEnv(), &tabletenv.TabletConfig{}, "TestThrottler")
 
@@ -959,8 +946,7 @@ func TestQueryThrottler_startSrvKeyspaceWatch_WatchCallback(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			env := tabletenv.NewEnv(vtenv.NewTestEnv(), &tabletenv.TabletConfig{}, "TestThrottler")
 
@@ -993,8 +979,7 @@ func TestQueryThrottler_startSrvKeyspaceWatch_WatchCallback(t *testing.T) {
 
 // TestQueryThrottler_startSrvKeyspaceWatch_ShutdownStopsWatch tests that Shutdown properly cancels the watch context and stops the watch goroutine.
 func TestQueryThrottler_startSrvKeyspaceWatch_ShutdownStopsWatch(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), &tabletenv.TabletConfig{}, "TestThrottler")
 

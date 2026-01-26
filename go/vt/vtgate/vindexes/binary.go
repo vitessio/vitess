@@ -99,7 +99,7 @@ func (vind *Binary) Hash(id sqltypes.Value) ([]byte, error) {
 
 // ReverseMap returns the associated ids for the ksids.
 func (*Binary) ReverseMap(_ VCursor, ksids [][]byte) ([]sqltypes.Value, error) {
-	var reverseIds = make([]sqltypes.Value, len(ksids))
+	reverseIds := make([]sqltypes.Value, len(ksids))
 	for rownum, keyspaceID := range ksids {
 		if keyspaceID == nil {
 			return nil, errors.New("Binary.ReverseMap: keyspaceId is nil")

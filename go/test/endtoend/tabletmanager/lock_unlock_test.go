@@ -81,7 +81,7 @@ func TestStartReplicationUntilAfter(t *testing.T) {
 	require.Nil(t, err)
 	defer replicaConn.Close()
 
-	//first we stop replication to the replica, so we can move forward step by step.
+	// first we stop replication to the replica, so we can move forward step by step.
 	err = tmcStopReplication(ctx, replicaTablet.GrpcPort)
 	require.Nil(t, err)
 

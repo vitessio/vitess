@@ -22,7 +22,9 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"maps"
 	"math"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -332,12 +334,7 @@ func shouldInclude(table string, excludes []string) bool {
 	if schema.IsInternalOperationTableName(table) {
 		return false
 	}
-	for _, t := range excludes {
-		if t == table {
-			return false
-		}
-	}
-	return true
+	return !slices.Contains(excludes, table)
 }
 
 // getMigrationID produces a reproducible hash based on the input parameters.
@@ -879,9 +876,7 @@ func updateKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, reason str
 	update := func() error {
 		return topotools.UpdateKeyspaceRoutingRules(ctx, ts, reason,
 			func(ctx context.Context, rules *map[string]string) error {
-				for fromKeyspace, toKeyspace := range routes {
-					(*rules)[fromKeyspace] = toKeyspace
-				}
+				maps.Copy((*rules), routes)
 				return nil
 			})
 	}
@@ -1031,14 +1026,7 @@ func validateSourceTablesExist(sourceKeyspace string, ksTables, tables []string)
 		if schema.IsInternalOperationTableName(table) {
 			continue
 		}
-		found := false
-
-		for _, ksTable := range ksTables {
-			if table == ksTable {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(ksTables, table)
 		if !found {
 			missingTables = append(missingTables, table)
 		}

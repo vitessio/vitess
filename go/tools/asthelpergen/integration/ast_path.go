@@ -84,6 +84,7 @@ func (s ASTStep) DebugString() string {
 	}
 	panic("unknown ASTStep")
 }
+
 func GetNodeFromPath(node AST, path ASTPath) AST {
 	for len(path) >= 2 {
 		step := path.nextPathStep()

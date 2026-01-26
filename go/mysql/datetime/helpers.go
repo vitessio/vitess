@@ -277,10 +277,7 @@ func parseNanoseconds[bytes []byte | string](value bytes, nbytes int) (ns int, l
 		ns *= 10
 	}
 
-	l = nbytes - 1
-	if l > 6 {
-		l = 6
-	}
+	l = min(nbytes-1, 6)
 
 	return
 }

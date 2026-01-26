@@ -233,7 +233,8 @@ func TestMySQLVersionCapableOf(t *testing.T) {
 			version:    "8.0.20",
 			capability: PerformanceSchemaDataLocksTableCapability,
 			isCapable:  true,
-		}, {
+		},
+		{
 			version:    "5.7.38",
 			capability: PerformanceSchemaMetadataLocksTableCapability,
 			isCapable:  false,

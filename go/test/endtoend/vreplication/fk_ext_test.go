@@ -153,8 +153,8 @@ func TestFKExt(t *testing.T) {
 		for i, shard := range strings.Split(threeShards, ",") {
 			tablets[shard] = vc.Cells[cellName].Keyspaces[keyspaceName].Shards[shard].Tablets[fmt.Sprintf("%s-%d", cellName, tabletID+i*100)].Vttablet
 		}
-		sqls := strings.Split(FKExtSourceSchema, "\n")
-		for _, sql := range sqls {
+		sqls := strings.SplitSeq(FKExtSourceSchema, "\n")
+		for sql := range sqls {
 			output, err := vc.VtctldClient.ExecuteCommandWithOutput("ApplySchema", utils.GetFlagVariantForTests("--ddl-strategy")+"=direct", "--sql", sql, keyspaceName)
 			require.NoErrorf(t, err, output)
 		}
@@ -166,8 +166,8 @@ func TestFKExt(t *testing.T) {
 		require.NoError(t, vc.AddShards(t, []*Cell{defaultCell}, ks, shard, numReplicas, 0, tabletID, nil))
 		tablets := make(map[string]*cluster.VttabletProcess)
 		tablets[shard] = vc.Cells[cellName].Keyspaces[keyspaceName].Shards[shard].Tablets[fmt.Sprintf("%s-%d", cellName, tabletID)].Vttablet
-		sqls := strings.Split(FKExtSourceSchema, "\n")
-		for _, sql := range sqls {
+		sqls := strings.SplitSeq(FKExtSourceSchema, "\n")
+		for sql := range sqls {
 			output, err := vc.VtctldClient.ExecuteCommandWithOutput("ApplySchema", utils.GetFlagVariantForTests("--ddl-strategy")+"=direct", "--sql", sql, keyspaceName)
 			require.NoErrorf(t, err, output)
 		}

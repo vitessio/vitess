@@ -451,13 +451,7 @@ func (si *ShardInfo) UpdateDeniedTables(ctx context.Context, tabletType topodata
 func (si *ShardInfo) updatePrimaryTabletControl(tc *topodatapb.Shard_TabletControl, remove bool, tables []string) error {
 	var newTables []string
 	for _, table := range tables {
-		exists := false
-		for _, blt := range tc.DeniedTables {
-			if blt == table {
-				exists = true
-				break
-			}
-		}
+		exists := slices.Contains(tc.DeniedTables, table)
 		if !exists {
 			newTables = append(newTables, table)
 		}
@@ -470,13 +464,7 @@ func (si *ShardInfo) updatePrimaryTabletControl(tc *topodatapb.Shard_TabletContr
 		var newDenyList []string
 		if len(tables) != 0 { // legacy uses
 			for _, blt := range tc.DeniedTables {
-				mustDelete := false
-				for _, table := range tables {
-					if blt == table {
-						mustDelete = true
-						break
-					}
-				}
+				mustDelete := slices.Contains(tables, blt)
 				if !mustDelete {
 					newDenyList = append(newDenyList, blt)
 				}
@@ -534,12 +522,7 @@ func InCellList(cell string, cells []string) bool {
 	if len(cells) == 0 {
 		return true
 	}
-	for _, c := range cells {
-		if c == cell {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(cells, cell)
 }
 
 // FindAllTabletAliasesInShard uses the replication graph to find all the

@@ -857,7 +857,7 @@ func testRevert(t *testing.T) {
 	// If they fail, it has nothing to do with revert.
 	// We run these tests because we expect their functionality to work in the next step.
 	var alterHints []string
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		testName := fmt.Sprintf("online ALTER TABLE %d", i)
 		hint := fmt.Sprintf("hint-alter-%d", i)
 		alterHints = append(alterHints, hint)
@@ -869,11 +869,9 @@ func testRevert(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			var wg sync.WaitGroup
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				runMultipleConnections(ctx, t)
-			}()
+			})
 
 			func() {
 				// Ensures runMultipleConnections completes before the overall
@@ -898,11 +896,9 @@ func testRevert(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			runMultipleConnections(ctx, t)
-		}()
+		})
 
 		func() {
 			// Ensures runMultipleConnections completes before the overall
@@ -926,11 +922,9 @@ func testRevert(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			runMultipleConnections(ctx, t)
-		}()
+		})
 
 		func() {
 			// Ensures runMultipleConnections completes before the overall
@@ -954,11 +948,9 @@ func testRevert(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			runMultipleConnections(ctx, t)
-		}()
+		})
 
 		func() {
 			// Ensures runMultipleConnections completes before the overall
@@ -981,11 +973,9 @@ func testRevert(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			runMultipleConnections(ctx, t)
-		}()
+		})
 
 		// Ensures runMultipleConnections completes before the overall
 		// test does, even in the face of calls to t.FailNow() in the
@@ -1402,12 +1392,10 @@ func runMultipleConnections(ctx context.Context, t *testing.T) {
 	require.True(t, checkTable(t, tableName, true))
 	var done int64
 	var wg sync.WaitGroup
-	for i := 0; i < maxConcurrency; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range maxConcurrency {
+		wg.Go(func() {
 			runSingleConnection(ctx, t, &done)
-		}()
+		})
 	}
 	<-ctx.Done()
 	atomic.StoreInt64(&done, 1)
@@ -1429,13 +1417,13 @@ func initTable(t *testing.T) {
 	_, err = conn.ExecuteFetch(truncateStatement, 1000, true)
 	require.Nil(t, err)
 
-	for i := 0; i < maxTableRows/2; i++ {
+	for range maxTableRows / 2 {
 		generateInsert(t, conn)
 	}
-	for i := 0; i < maxTableRows/4; i++ {
+	for range maxTableRows / 4 {
 		generateUpdate(t, conn)
 	}
-	for i := 0; i < maxTableRows/4; i++ {
+	for range maxTableRows / 4 {
 		generateDelete(t, conn)
 	}
 }

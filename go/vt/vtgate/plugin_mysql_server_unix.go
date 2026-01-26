@@ -28,7 +28,7 @@ func setupUnixSocket(srv *mysqlServer, authServer mysql.AuthServer, path string)
 	// Let's create this unix socket with permissions to all users. In this way,
 	// clients can connect to vtgate mysql server without being vtgate user
 	var err error
-	oldMask := syscall.Umask(000)
+	oldMask := syscall.Umask(0o00)
 	srv.unixListener, err = newMysqlUnixSocket(path, authServer, srv.vtgateHandle)
 	_ = syscall.Umask(oldMask)
 	if err != nil {

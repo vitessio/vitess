@@ -293,7 +293,7 @@ func (asm *assembler) BitShiftLeft_bu() {
 			out    = make([]byte, length)
 		)
 
-		for i := int64(0); i < length; i++ {
+		for i := range length {
 			pos := i + bytes + 1
 			switch {
 			case pos < length:
@@ -493,6 +493,7 @@ func (asm *assembler) Cmp_lt_n() {
 		return 1
 	}, "CMPFLAG LT [NULL]")
 }
+
 func (asm *assembler) Cmp_ne() {
 	asm.adjustStack(1)
 	asm.emit(func(env *ExpressionEnv) int {
@@ -1876,13 +1877,7 @@ func (asm *assembler) Fn_ROUND2_d() {
 		}
 
 		r.i = clampRounding(r.i)
-		digit := int32(r.i)
-		if digit < 0 {
-			digit = 0
-		}
-		if digit > d.length {
-			digit = d.length
-		}
+		digit := min(max(int32(r.i), 0), d.length)
 		rounded := d.dec.Round(int32(r.i))
 		if rounded.IsZero() {
 			d.dec = decimal.Zero
@@ -1963,13 +1958,7 @@ func (asm *assembler) Fn_TRUNCATE_d() {
 		}
 
 		r.i = clampRounding(r.i)
-		digit := int32(r.i)
-		if digit < 0 {
-			digit = 0
-		}
-		if digit > d.length {
-			digit = d.length
-		}
+		digit := min(max(int32(r.i), 0), d.length)
 		rounded := d.dec.Truncate(int32(r.i))
 		if rounded.IsZero() {
 			d.dec = decimal.Zero
@@ -4618,7 +4607,7 @@ func (asm *assembler) Fn_CONCAT(tt querypb.Type, tc collations.TypedCollation, a
 	asm.adjustStack(-args + 1)
 	asm.emit(func(env *ExpressionEnv) int {
 		var buf []byte
-		for i := 0; i < args; i++ {
+		for i := range args {
 			arg := env.vm.stack[env.vm.sp-args+i].(*evalBytes)
 			buf = append(buf, arg.bytes...)
 		}
@@ -4639,7 +4628,7 @@ func (asm *assembler) Fn_CONCAT_WS(tt querypb.Type, tc collations.TypedCollation
 		sep := env.vm.stack[env.vm.sp-args-1].(*evalBytes).bytes
 
 		first := true
-		for i := 0; i < args; i++ {
+		for i := range args {
 			if env.vm.stack[env.vm.sp-args+i] == nil {
 				continue
 			}
@@ -4665,7 +4654,7 @@ func (asm *assembler) Fn_CHAR(tt querypb.Type, tc collations.TypedCollation, arg
 	asm.adjustStack(-(args - 1))
 	asm.emit(func(env *ExpressionEnv) int {
 		buf := make([]byte, 0, args)
-		for i := 0; i < args; i++ {
+		for i := range args {
 			if env.vm.stack[env.vm.sp-args+i] == nil {
 				continue
 			}

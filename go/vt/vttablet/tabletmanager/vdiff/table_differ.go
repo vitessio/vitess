@@ -276,9 +276,7 @@ func (td *tableDiffer) selectTablets(ctx context.Context) error {
 		return vterrors.Wrap(err, "failed to get source topo server")
 	}
 	tabletPickerOptions := discovery.TabletPickerOptions{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		sourceErr = td.forEachSource(func(source *migrationSource) error {
 			sourceTablet, err := td.pickTablet(ctx, sourceTopoServer, sourceCells, td.wd.ct.sourceKeyspace,
 				source.shard, td.wd.opts.PickerOptions.TabletTypes, tabletPickerOptions)
@@ -288,11 +286,9 @@ func (td *tableDiffer) selectTablets(ctx context.Context) error {
 			source.tablet = sourceTablet
 			return nil
 		})
-	}()
+	})
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		if td.wd.ct.workflowType == binlogdatapb.VReplicationWorkflowType_Reshard {
 			// For resharding, the target shards could be non-serving if traffic has already been switched once.
 			// When shards are created their IsPrimaryServing attribute is set to true. However, when the traffic is switched
@@ -309,7 +305,7 @@ func (td *tableDiffer) selectTablets(ctx context.Context) error {
 			tablet: targetTablet,
 			shard:  targetTablet.Shard,
 		}
-	}()
+	})
 
 	wg.Wait()
 	if sourceErr != nil {

@@ -412,9 +412,8 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 						newVal = ptr.Of(sqltypes.MakeTrusted(querypb.Type_EXPRESSION, nil))
 					} else {
 						escapedName := sqlescape.EscapeID(field.Name)
-						newVal = ptr.Of(sqltypes.MakeTrusted(querypb.Type_EXPRESSION, []byte(
-							fmt.Sprintf(afterVals[i].RawStr(), escapedName),
-						)))
+						newVal = ptr.Of(sqltypes.MakeTrusted(querypb.Type_EXPRESSION,
+							fmt.Appendf(nil, afterVals[i].RawStr(), escapedName)))
 					}
 				default: // A JSON value (which may be a JSON null literal value)
 					newVal, err = vjson.MarshalSQLValue(afterVals[i].Raw())
@@ -510,9 +509,8 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 						buf.WriteByte('\'')
 						buf.Write(beforeVal)
 						buf.WriteByte('\'')
-						newVal := sqltypes.MakeTrusted(querypb.Type_EXPRESSION, []byte(
-							fmt.Sprintf(diff, buf.String()),
-						))
+						newVal := sqltypes.MakeTrusted(querypb.Type_EXPRESSION,
+							fmt.Appendf(nil, diff, buf.String()))
 						bv, err := tp.bindFieldVal(field, &newVal)
 						if err != nil {
 							return nil, vterrors.Wrapf(err, "failed to bind field value for %s.%s when building insert query",
@@ -680,6 +678,7 @@ func getQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.BindVariab
 	}
 	return sql, nil
 }
+
 func execParsedQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.BindVariable, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
 	query, err := getQuery(pq, bindvars)
 	if err != nil {

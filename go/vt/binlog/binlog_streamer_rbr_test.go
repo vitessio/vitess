@@ -172,7 +172,8 @@ func TestStreamerParseRBREvents(t *testing.T) {
 		mysql.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}),
+			SQL:      "BEGIN",
+		}),
 		mysql.NewWriteRowsEvent(f, s, tableID, insertRows),
 		mysql.NewUpdateRowsEvent(f, s, tableID, updateRows),
 		mysql.NewUpdateRowsEvent(f, s, tableID, updateRowsNull),
@@ -410,7 +411,8 @@ func TestStreamerParseRBRNameEscapes(t *testing.T) {
 		mysql.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}),
+			SQL:      "BEGIN",
+		}),
 		mysql.NewWriteRowsEvent(f, s, tableID, insertRows),
 		mysql.NewUpdateRowsEvent(f, s, tableID, updateRows),
 		mysql.NewUpdateRowsEvent(f, s, tableID, updateRowsNull),

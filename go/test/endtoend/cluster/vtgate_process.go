@@ -427,7 +427,7 @@ func (vtgate *VtgateProcess) GetVars() map[string]any {
 
 // ReadVSchema reads the vschema from the vtgate endpoint for it and returns
 // a pointer to the interface. To read this vschema, the caller must convert it to a map
-func (vtgate *VtgateProcess) ReadVSchema() (*interface{}, error) {
+func (vtgate *VtgateProcess) ReadVSchema() (*any, error) {
 	httpClient := &http.Client{Timeout: 5 * time.Second}
 	resp, err := httpClient.Get(vtgate.VSchemaURL)
 	if err != nil {
@@ -438,7 +438,7 @@ func (vtgate *VtgateProcess) ReadVSchema() (*interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	var results interface{}
+	var results any
 	err = json.Unmarshal(res, &results)
 	if err != nil {
 		return nil, err

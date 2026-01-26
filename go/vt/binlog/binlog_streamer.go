@@ -381,7 +381,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			statements = append(statements, FullBinlogStatement{
 				Statement: &binlogdatapb.BinlogTransaction_Statement{
 					Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-					Sql:      []byte(fmt.Sprintf("SET %s=%d", mysql.IntVarNames[typ], value)),
+					Sql:      fmt.Appendf(nil, "SET %s=%d", mysql.IntVarNames[typ], value),
 				},
 			})
 		case ev.IsRand(): // RAND_EVENT
@@ -392,7 +392,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			statements = append(statements, FullBinlogStatement{
 				Statement: &binlogdatapb.BinlogTransaction_Statement{
 					Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-					Sql:      []byte(fmt.Sprintf("SET @@RAND_SEED1=%d, @@RAND_SEED2=%d", seed1, seed2)),
+					Sql:      fmt.Appendf(nil, "SET @@RAND_SEED1=%d, @@RAND_SEED2=%d", seed1, seed2),
 				},
 			})
 		case ev.IsQuery(): // QUERY_EVENT
@@ -422,7 +422,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				}
 				setTimestamp := &binlogdatapb.BinlogTransaction_Statement{
 					Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-					Sql:      []byte(fmt.Sprintf("SET TIMESTAMP=%d", ev.Timestamp())),
+					Sql:      fmt.Appendf(nil, "SET TIMESTAMP=%d", ev.Timestamp()),
 				}
 				statement := &binlogdatapb.BinlogTransaction_Statement{
 					Category: cat,
@@ -526,7 +526,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			}
 			setTimestamp := &binlogdatapb.BinlogTransaction_Statement{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-				Sql:      []byte(fmt.Sprintf("SET TIMESTAMP=%d", ev.Timestamp())),
+				Sql:      fmt.Appendf(nil, "SET TIMESTAMP=%d", ev.Timestamp()),
 			}
 			statements = append(statements, FullBinlogStatement{
 				Statement: setTimestamp,
@@ -556,7 +556,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			}
 			setTimestamp := &binlogdatapb.BinlogTransaction_Statement{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-				Sql:      []byte(fmt.Sprintf("SET TIMESTAMP=%d", ev.Timestamp())),
+				Sql:      fmt.Appendf(nil, "SET TIMESTAMP=%d", ev.Timestamp()),
 			}
 			statements = append(statements, FullBinlogStatement{
 				Statement: setTimestamp,
@@ -586,7 +586,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			}
 			setTimestamp := &binlogdatapb.BinlogTransaction_Statement{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-				Sql:      []byte(fmt.Sprintf("SET TIMESTAMP=%d", ev.Timestamp())),
+				Sql:      fmt.Appendf(nil, "SET TIMESTAMP=%d", ev.Timestamp()),
 			}
 			statements = append(statements, FullBinlogStatement{
 				Statement: setTimestamp,

@@ -38,6 +38,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
 	"math/rand/v2"
 	"os"
 	"regexp"
@@ -350,13 +351,9 @@ func mergeTags(a, b map[string]string) map[string]string {
 	}
 
 	result := make(map[string]string, maxCap)
-	for k, v := range a {
-		result[k] = v
-	}
+	maps.Copy(result, a)
 
-	for k, v := range b {
-		result[k] = v
-	}
+	maps.Copy(result, b)
 
 	return result
 }

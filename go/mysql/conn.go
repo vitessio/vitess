@@ -623,10 +623,7 @@ func (c *Conn) writePacket(data []byte) error {
 	var header [packetHeaderSize]byte
 	for {
 		// toBeSent is capped to MaxPacketSize.
-		toBeSent := dataLength
-		if toBeSent > MaxPacketSize {
-			toBeSent = MaxPacketSize
-		}
+		toBeSent := min(dataLength, MaxPacketSize)
 
 		// save the first 4 bytes of the payload, we will overwrite them with the
 		// header below
@@ -826,7 +823,7 @@ func (c *Conn) writeOKPacketWithHeader(packetOk *PacketOK, headerType byte) erro
 	return c.writeEphemeralPacket()
 }
 
-func (c *Conn) WriteErrorAndLog(format string, args ...interface{}) bool {
+func (c *Conn) WriteErrorAndLog(format string, args ...any) bool {
 	return c.writeErrorAndLog(sqlerror.ERUnknownComError, sqlerror.SSNetError, format, args...)
 }
 

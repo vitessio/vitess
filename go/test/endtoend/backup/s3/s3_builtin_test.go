@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path"
@@ -122,7 +123,7 @@ func TestMain(m *testing.M) {
 }
 
 func waitForMinio(client *minio.Client) {
-	for i := 0; i < 60; i++ {
+	for range 60 {
 		_, err := client.ListBuckets()
 		if err == nil {
 			return

@@ -339,14 +339,12 @@ func refreshTablets(tablets []*topo.TabletInfo, query string, args []any, loader
 			log.Error(fmt.Sprint(err))
 			continue
 		}
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			if slices.Contains(tabletsToIgnore, topoproto.TabletAliasString(tablet.Alias)) {
 				return
 			}
 			loader(tabletAliasString)
-		}()
+		})
 		log.Info(fmt.Sprintf("Discovered: %v", tablet))
 	}
 	wg.Wait()

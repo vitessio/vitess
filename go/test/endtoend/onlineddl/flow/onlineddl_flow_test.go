@@ -567,12 +567,10 @@ func runMultipleConnections(ctx context.Context, t *testing.T) {
 
 	log.Info(fmt.Sprintf("Running multiple connections: maxConcurrency=%v, sleep interval=%v", maxConcurrency, sleepInterval))
 	var wg sync.WaitGroup
-	for i := 0; i < maxConcurrency; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range maxConcurrency {
+		wg.Go(func() {
 			runSingleConnection(ctx, t, sleepInterval)
-		}()
+		})
 	}
 	wg.Wait()
 	log.Info("Running multiple connections: done")
@@ -589,13 +587,13 @@ func initTable(t *testing.T) {
 
 	appliedDMLStart := totalAppliedDML.Load()
 
-	for i := 0; i < maxTableRows/2; i++ {
+	for range maxTableRows / 2 {
 		generateInsert(t, conn)
 	}
-	for i := 0; i < maxTableRows/4; i++ {
+	for range maxTableRows / 4 {
 		generateUpdate(t, conn)
 	}
-	for i := 0; i < maxTableRows/4; i++ {
+	for range maxTableRows / 4 {
 		generateDelete(t, conn)
 	}
 	appliedDMLEnd := totalAppliedDML.Load()

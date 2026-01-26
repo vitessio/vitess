@@ -92,7 +92,7 @@ func (e *Executor) newExecute(
 		cancel             context.CancelFunc
 	)
 
-	for try := 0; try < MaxBufferingRetries; try++ {
+	for try := range MaxBufferingRetries {
 		if try > 0 && !vs.GetCreated().After(lastVSchemaCreated) { // We need to wait for a vschema update
 			// Without a wait we fail non-deterministically since the previous vschema will not have
 			// the updated routing rules.

@@ -360,10 +360,7 @@ func (vs *vstream) stream(ctx context.Context) error {
 		defer vs.streamLivenessTimer.Stop()
 	}
 
-	vs.wg.Add(1)
-	go func() {
-		defer vs.wg.Done()
-
+	vs.wg.Go(func() {
 		// sendEvents returns either if the given context has been canceled or if
 		// an error is returned from the callback. If the callback returns an error,
 		// we need to cancel the context to stop the other stream goroutines
@@ -371,7 +368,7 @@ func (vs *vstream) stream(ctx context.Context) error {
 		defer vs.cancel()
 
 		vs.sendEvents(ctx)
-	}()
+	})
 
 	// Make a copy first, because the ShardGtids list can change once streaming starts.
 	copylist := append(([]*binlogdatapb.ShardGtid)(nil), vs.vgtid.ShardGtids...)
@@ -454,10 +451,7 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 
 // startOneStream sets up one shard stream.
 func (vs *vstream) startOneStream(ctx context.Context, sgtid *binlogdatapb.ShardGtid) {
-	vs.wg.Add(1)
-	go func() {
-		defer vs.wg.Done()
-
+	vs.wg.Go(func() {
 		labelValues := []string{sgtid.Keyspace, sgtid.Shard, vs.tabletType.String()}
 		// Initialize vstreamsEndedWithErrors metric to zero.
 		vs.vsm.vstreamsEndedWithErrors.Add(labelValues, 0)
@@ -481,7 +475,7 @@ func (vs *vstream) startOneStream(ctx context.Context, sgtid *binlogdatapb.Shard
 				vs.cancel()
 			})
 		}
-	}()
+	})
 }
 
 // MaxSkew is the threshold for a skew to be detected. Since MySQL timestamps are in seconds we account for
@@ -578,7 +572,7 @@ func (vs *vstream) alignStreams(ctx context.Context, event *binlogdatapb.VEvent,
 func (vs *vstream) getCells() []string {
 	var cells []string
 	if vs.optCells != "" {
-		for _, cell := range strings.Split(strings.TrimSpace(vs.optCells), ",") {
+		for cell := range strings.SplitSeq(strings.TrimSpace(vs.optCells), ",") {
 			cells = append(cells, strings.TrimSpace(cell))
 		}
 	}

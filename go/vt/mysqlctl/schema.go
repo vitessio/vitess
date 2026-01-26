@@ -436,19 +436,23 @@ func (mysqld *Mysqld) PreflightSchemaChange(ctx context.Context, dbName string, 
 	// We're not smart enough to create the tables in a foreign-key-compatible way,
 	// so we temporarily disable foreign key checks while adding the existing tables.
 	initialCopySQL += "SET foreign_key_checks = 0;\n"
+	var initialCopySQLSb439 strings.Builder
 	for _, td := range originalSchema.TableDefinitions {
 		if td.Type == tmutils.TableBaseTable {
-			initialCopySQL += td.Schema + ";\n"
+			initialCopySQLSb439.WriteString(td.Schema + ";\n")
 		}
 	}
+	initialCopySQL += initialCopySQLSb439.String()
+	var initialCopySQLSb444 strings.Builder
 	for _, td := range originalSchema.TableDefinitions {
 		if td.Type == tmutils.TableView {
 			// Views will have {{.DatabaseName}} in there, replace
 			// it with _vt_preflight
 			s := strings.ReplaceAll(td.Schema, "{{.DatabaseName}}", "`_vt_preflight`")
-			initialCopySQL += s + ";\n"
+			initialCopySQLSb444.WriteString(s + ";\n")
 		}
 	}
+	initialCopySQL += initialCopySQLSb444.String()
 	if err = mysqld.executeSchemaCommands(ctx, initialCopySQL); err != nil {
 		return nil, err
 	}

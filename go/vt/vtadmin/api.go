@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"math"
 	"net/http"
 	"net/http/pprof"
@@ -1387,9 +1388,7 @@ func (api *API) GetSrvKeyspaces(ctx context.Context, req *vtadminpb.GetSrvKeyspa
 			}
 
 			m.Lock()
-			for key, value := range sk {
-				sks[key] = value
-			}
+			maps.Copy(sks, sk)
 			m.Unlock()
 		}(c)
 	}

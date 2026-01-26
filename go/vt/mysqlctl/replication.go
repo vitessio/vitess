@@ -52,7 +52,7 @@ type ResetSuperReadOnlyFunc func() error
 // This validates the current primary is correct and can be connected to.
 func WaitForReplicationStart(ctx context.Context, mysqld MysqlDaemon, replicaStartDeadline int) (err error) {
 	var replicaStatus replication.ReplicationStatus
-	for replicaWait := 0; replicaWait < replicaStartDeadline; replicaWait++ {
+	for range replicaStartDeadline {
 		replicaStatus, err = mysqld.ReplicationStatus(ctx)
 		if err != nil {
 			return err

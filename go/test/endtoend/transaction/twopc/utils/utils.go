@@ -106,14 +106,12 @@ func RunMultiShardCommitWithDelay(t *testing.T, conn *mysql.Conn, commitDelayTim
 	WriteTestCommunicationFile(t, DebugDelayCommitTime, commitDelayTime)
 	// We will execute a commit in a go routine, because we know it will take some time to complete.
 	// While the commit is ongoing, we would like to run the disruption.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		_, err := utils.ExecAllowError(t, conn, "commit")
 		if err != nil {
 			log.Error(fmt.Sprintf("Error in commit - %v", err))
 		}
-	}()
+	})
 }
 
 // DeleteFile deletes the file specified.

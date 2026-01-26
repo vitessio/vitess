@@ -42,7 +42,7 @@ func NewUIController(
 		keyspace: keyspace,
 		writer:   writer,
 	}
-	for _, sql := range strings.Split(sqlStr, ";") {
+	for sql := range strings.SplitSeq(sqlStr, ";") {
 		s := strings.TrimSpace(sql)
 		if s != "" {
 			controller.sqls = append(controller.sqls, s)

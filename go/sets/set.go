@@ -16,7 +16,10 @@ limitations under the License.
 
 package sets
 
-import "sort"
+import (
+	"slices"
+	"sort"
+)
 
 // ordered is used to constraint the set to be only for
 // some basic ordered types. We only care about string here
@@ -58,12 +61,7 @@ func (s Set[T]) Has(item T) bool {
 
 // HasAny returns true if any items are contained in the set.
 func (s Set[T]) HasAny(items ...T) bool {
-	for _, item := range items {
-		if s.Has(item) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(items, s.Has)
 }
 
 // Difference returns a set of objects that are not in other.

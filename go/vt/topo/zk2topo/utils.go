@@ -146,7 +146,7 @@ func ResolveWildcards(ctx context.Context, zconn *ZkConn, zkPaths []string) ([]s
 	}
 
 	result := make([]string, 0, 32)
-	for i := 0; i < len(zkPaths); i++ {
+	for i := range zkPaths {
 		subResult := results[i]
 		if subResult != nil {
 			result = append(result, subResult...)

@@ -181,16 +181,14 @@ func TestSchemaVersioning(t *testing.T) {
 		}
 		return nil
 	}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		defer close(eventCh)
 		req := &binlogdatapb.VStreamRequest{Target: target, Position: "current", TableLastPKs: nil, Filter: filter}
 		if err := tsv.VStream(ctx, req, send); err != nil {
 			fmt.Printf("Error in tsv.VStream: %v", err)
 			t.Error(err)
 		}
-	}()
+	})
 	log.Info("\n\n\n=============================================== CURRENT EVENTS START HERE ======================\n\n\n")
 	runCases(ctx, t, cases, eventCh)
 
@@ -243,16 +241,14 @@ func TestSchemaVersioning(t *testing.T) {
 		}
 		return nil
 	}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		defer close(eventCh)
 		req := &binlogdatapb.VStreamRequest{Target: target, Position: startPos, TableLastPKs: nil, Filter: filter}
 		if err := tsv.VStream(ctx, req, send); err != nil {
 			fmt.Printf("Error in tsv.VStream: %v", err)
 			t.Error(err)
 		}
-	}()
+	})
 
 	// playing events from the past: same events as original since historian is providing the latest schema
 	output := append(append([]string{
@@ -319,16 +315,14 @@ func TestSchemaVersioning(t *testing.T) {
 		}
 		return nil
 	}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		defer close(eventCh)
 		req := &binlogdatapb.VStreamRequest{Target: target, Position: startPos, TableLastPKs: nil, Filter: filter}
 		if err := tsv.VStream(ctx, req, send); err != nil {
 			fmt.Printf("Error in tsv.VStream: %v", err)
 			t.Error(err)
 		}
-	}()
+	})
 
 	// playing events from the past: same as earlier except one below, see comments
 	output = append(append([]string{

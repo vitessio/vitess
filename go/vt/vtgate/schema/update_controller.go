@@ -17,6 +17,7 @@ limitations under the License.
 package schema
 
 import (
+	"slices"
 	"sync"
 	"time"
 
@@ -101,25 +102,13 @@ func (u *updateController) getItemFromQueueLocked() *discovery.TabletHealth {
 		// with all the table and view names.
 		for i := 1; i < itemsCount; i++ {
 			for _, table := range u.queue.items[i].Stats.TableSchemaChanged {
-				found := false
-				for _, itemTable := range item.Stats.TableSchemaChanged {
-					if itemTable == table {
-						found = true
-						break
-					}
-				}
+				found := slices.Contains(item.Stats.TableSchemaChanged, table)
 				if !found {
 					item.Stats.TableSchemaChanged = append(item.Stats.TableSchemaChanged, table)
 				}
 			}
 			for _, view := range u.queue.items[i].Stats.ViewSchemaChanged {
-				found := false
-				for _, itemView := range item.Stats.ViewSchemaChanged {
-					if itemView == view {
-						found = true
-						break
-					}
-				}
+				found := slices.Contains(item.Stats.ViewSchemaChanged, view)
 				if !found {
 					item.Stats.ViewSchemaChanged = append(item.Stats.ViewSchemaChanged, view)
 				}

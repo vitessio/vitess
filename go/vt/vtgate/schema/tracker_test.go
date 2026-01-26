@@ -191,7 +191,7 @@ func TestTrackerNoLock(t *testing.T) {
 		Stats:   &querypb.RealtimeStats{TableSchemaChanged: []string{"t1"}},
 	}
 
-	for i := 0; i < 500000; i++ {
+	for range 500000 {
 		select {
 		case ch <- th:
 		case <-time.After(50 * time.Millisecond):

@@ -180,15 +180,15 @@ func (f *FakeConn) ListDir(ctx context.Context, dirPath string, full bool) ([]to
 	for filePath := range f.getResultMap {
 		if strings.HasPrefix(filePath, dirPath) {
 			remaining := filePath[len(dirPath)+1:]
-			idx := strings.Index(remaining, "/")
-			if idx == -1 {
+			before, _, ok := strings.Cut(remaining, "/")
+			if !ok {
 				res = addToListOfDirEntries(res, topo.DirEntry{
 					Name: remaining,
 					Type: topo.TypeFile,
 				})
 			} else {
 				res = addToListOfDirEntries(res, topo.DirEntry{
-					Name: remaining[0:idx],
+					Name: before,
 					Type: topo.TypeDirectory,
 				})
 			}

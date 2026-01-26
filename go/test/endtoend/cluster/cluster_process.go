@@ -452,7 +452,7 @@ func (cluster *LocalProcessCluster) AddShard(keyspaceName string, shardName stri
 	}
 	log.Info(fmt.Sprintf("Starting shard: %v", shardName))
 	var mysqlctlProcessList []*exec.Cmd
-	for i := 0; i < totalTabletsRequired; i++ {
+	for i := range totalTabletsRequired {
 		// instantiate vttablet object with reserved ports
 		tabletUID := cluster.GetAndReserveTabletUID()
 		tablet := &Vttablet{

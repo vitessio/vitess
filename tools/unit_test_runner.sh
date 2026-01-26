@@ -60,7 +60,7 @@ fi
 
 # Build gotestsum args. Failed tests are retried up to 3 times, but if more than 10 tests fail
 # initially we skip retries to avoid wasting time on a real widespread failure.
-GOTESTSUM_FORMAT="${GOTESTSUM_FORMAT:-github-actions}"
+GOTESTSUM_FORMAT="${GOTESTSUM_FORMAT:-pkgname-and-test-fails}"
 
 GOTESTSUM_ARGS="--format ${GOTESTSUM_FORMAT} --rerun-fails=3 --rerun-fails-max-failures=10 --rerun-fails-run-root-test --format-hide-empty-pkg --hide-summary=skipped"
 if [[ -n "${JUNIT_OUTPUT:-}" ]]; then

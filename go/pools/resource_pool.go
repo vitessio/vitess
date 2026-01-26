@@ -117,7 +117,7 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 	rp.idleTimeout.Store(idleTimeout.Nanoseconds())
 	rp.maxLifetime.Store(maxLifetime.Nanoseconds())
 
-	for i := 0; i < capacity; i++ {
+	for range capacity {
 		rp.resources <- resourceWrapper{}
 	}
 
@@ -153,7 +153,7 @@ func (rp *ResourcePool) closeIdleResources() {
 	available := int(rp.Available())
 	idleTimeout := rp.IdleTimeout()
 
-	for i := 0; i < available; i++ {
+	for range available {
 		var wrapper resourceWrapper
 		select {
 		case wrapper = <-rp.resources:

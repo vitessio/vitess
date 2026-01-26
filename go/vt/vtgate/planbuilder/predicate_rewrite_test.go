@@ -128,7 +128,7 @@ func TestFuzzRewriting(t *testing.T) {
 }
 
 func testValues(t *testing.T, env *evalengine.ExpressionEnv, i int, original, simpler evalengine.Expr) {
-	for n := 0; n < 3; n++ {
+	for n := range 3 {
 		switch n {
 		case 0:
 			env.Row[i] = sqltypes.NewInt32(0)

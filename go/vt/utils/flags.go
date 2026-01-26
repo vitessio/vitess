@@ -37,8 +37,8 @@ Contains utility functions for working with flags during the flags refactor proj
 // one with dashes replaced by underscores and one with underscores replaced by dashes.
 func flagVariants(name string) (underscored, dashed string) {
 	prefix := "--"
-	if strings.HasPrefix(name, prefix) {
-		nameWithoutPrefix := strings.TrimPrefix(name, prefix)
+	if after, ok := strings.CutPrefix(name, prefix); ok {
+		nameWithoutPrefix := after
 		underscored = prefix + strings.ReplaceAll(nameWithoutPrefix, "-", "_")
 		dashed = prefix + strings.ReplaceAll(nameWithoutPrefix, "_", "-")
 	} else {
@@ -51,7 +51,8 @@ func flagVariants(name string) (underscored, dashed string) {
 // setFlagVar is a generic helper for registering flags.
 // setFunc should be a function with signature func(fs *pflag.FlagSet, p *T, name string, def T, usage string)
 func setFlagVar[T any](fs *pflag.FlagSet, p *T, name string, def T, usage string,
-	setFunc func(fs *pflag.FlagSet, p *T, name string, def T, usage string)) {
+	setFunc func(fs *pflag.FlagSet, p *T, name string, def T, usage string),
+) {
 	if strings.Contains(name, "_") {
 		fmt.Printf("[WARNING] Please use flag names with dashes instead of underscores, preparing for deprecation of underscores in flag names")
 	}
@@ -143,9 +144,7 @@ func GetFlagVariantForTestsByVersion(flagName string, majorVersion int) string {
 	return underscored
 }
 
-var (
-	deprecationWarningsEmitted = make(map[string]bool)
-)
+var deprecationWarningsEmitted = make(map[string]bool)
 
 // Translate flag names from underscores to dashes and print a deprecation warning.
 func NormalizeUnderscoresToDashes(f *pflag.FlagSet, name string) pflag.NormalizedName {

@@ -249,10 +249,8 @@ func (bh *AZBlobBackupHandle) AddFile(ctx context.Context, filename string, file
 	blockBlobURL := containerURL.NewBlockBlobURL(obj)
 
 	reader, writer := io.Pipe()
-	bh.waitGroup.Add(1)
 
-	go func() {
-		defer bh.waitGroup.Done()
+	bh.waitGroup.Go(func() {
 		_, err := azblob.UploadStreamToBlockBlob(bh.ctx, reader, blockBlobURL, azblob.UploadStreamToBlockBlobOptions{
 			BufferSize: azBlobBufferSize.Get(),
 			MaxBuffers: azBlobParallelism.Get(),
@@ -261,7 +259,7 @@ func (bh *AZBlobBackupHandle) AddFile(ctx context.Context, filename string, file
 			reader.CloseWithError(err)
 			bh.RecordError(filename, err)
 		}
-	}()
+	})
 
 	return writer, nil
 }

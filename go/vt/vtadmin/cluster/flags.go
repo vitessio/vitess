@@ -18,6 +18,7 @@ package cluster
 
 import (
 	"fmt"
+	"maps"
 	"regexp"
 	"strings"
 
@@ -42,9 +43,7 @@ func (base *FlagsByImpl) Merge(override map[string]map[string]string) {
 			(*base)[impl] = map[string]string{}
 		}
 
-		for k, v := range flags {
-			(*base)[impl][k] = v
-		}
+		maps.Copy((*base)[impl], flags)
 	}
 }
 
@@ -112,8 +111,8 @@ func (cf *ClustersFlag) Set(value string) error {
 var discoveryFlagRegexp = regexp.MustCompile(`^discovery-(?P<impl>\w+)-(?P<flag>.+)$`)
 
 func parseFlag(cfg *Config, value string) error {
-	args := strings.Split(value, ",")
-	for _, arg := range args {
+	args := strings.SplitSeq(value, ",")
+	for arg := range args {
 		var (
 			name string
 			val  string

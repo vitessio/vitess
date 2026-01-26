@@ -203,7 +203,7 @@ func (c *Collation_8bit_simple_ci) WeightString(dst, src []byte, numCodepoints i
 func (c *Collation_8bit_simple_ci) Hash(hasher *vthash.Hasher, src []byte, numCodepoints int) {
 	sortOrder := c.sort
 
-	var tocopy = len(src)
+	tocopy := len(src)
 	if numCodepoints > 0 {
 		tocopy = min(tocopy, numCodepoints)
 	}

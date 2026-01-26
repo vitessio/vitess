@@ -41,7 +41,7 @@ import (
 func (p *Plan) MarshalJSON() ([]byte, error) {
 	mplan := struct {
 		PlanID            PlanType
-		TableName         sqlparser.IdentifierCS `json:",omitempty"`
+		TableName         sqlparser.IdentifierCS
 		Permissions       []Permission           `json:",omitempty"`
 		FieldQuery        *sqlparser.ParsedQuery `json:",omitempty"`
 		FullQuery         *sqlparser.ParsedQuery `json:",omitempty"`

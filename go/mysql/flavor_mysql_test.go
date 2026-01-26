@@ -45,7 +45,7 @@ func TestMysql8SetReplicationSourceCommand(t *testing.T) {
 	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry)
 	assert.Equal(t, want, got, "mysqlFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
 
-	var heartbeatInterval = 5.4
+	heartbeatInterval := 5.4
 	want = `CHANGE REPLICATION SOURCE TO
   SOURCE_HOST = 'localhost',
   SOURCE_PORT = 123,
@@ -151,7 +151,7 @@ func TestMysql9SetReplicationSourceCommand(t *testing.T) {
 	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry)
 	assert.Equal(t, want, got, "mysqlFlavor9.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
 
-	var heartbeatInterval = 5.4
+	heartbeatInterval := 5.4
 	want = `CHANGE REPLICATION SOURCE TO
   SOURCE_HOST = 'localhost',
   SOURCE_PORT = 123,

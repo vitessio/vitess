@@ -37,6 +37,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"strings"
 
 	"google.golang.org/protobuf/proto"
 
@@ -274,9 +275,11 @@ func DeleteTablet(ctx context.Context, ts *topo.Server, tablet *topodatapb.Table
 func TabletIdent(tablet *topodatapb.Tablet) string {
 	tagStr := ""
 	if tablet.Tags != nil {
+		var tagStrSb277 strings.Builder
 		for key, val := range tablet.Tags {
-			tagStr = tagStr + fmt.Sprintf(" %s=%s", key, val)
+			tagStrSb277.WriteString(fmt.Sprintf(" %s=%s", key, val))
 		}
+		tagStr += tagStrSb277.String()
 	}
 
 	return fmt.Sprintf("%s-%d (%s%s)", tablet.Alias.Cell, tablet.Alias.Uid, tablet.Hostname, tagStr)

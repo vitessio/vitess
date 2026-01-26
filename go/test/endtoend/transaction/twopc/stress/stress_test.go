@@ -222,12 +222,10 @@ func TestDisruptions(t *testing.T) {
 			var writerWg sync.WaitGroup
 			// Run multiple threads to try to write to the database on the same values of id to ensure that we don't
 			// allow any writes while the transaction is prepared and not committed.
-			for i := 0; i < 10; i++ {
-				writerWg.Add(1)
-				go func() {
-					defer writerWg.Done()
+			for i := range 10 {
+				writerWg.Go(func() {
 					threadToWrite(t, writeCtx, idVals[i%3])
-				}()
+				})
 			}
 			// Run the disruption.
 			err := tt.disruption(t)

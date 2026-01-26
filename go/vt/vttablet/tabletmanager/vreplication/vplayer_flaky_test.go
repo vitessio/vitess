@@ -2752,7 +2752,7 @@ func TestPlayerTransactions(t *testing.T) {
 func TestPlayerRelayLogMaxSize(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		// First iteration checks max size, second checks max items
 		func() {
 			switch i {
@@ -3817,8 +3817,7 @@ func TestPlayerBatchMode(t *testing.T) {
 // a meaningful error -- which is stored in the vreplication record and the
 // vreplication_log table as well as being logged -- when it does.
 func TestPlayerStalls(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	defer deleteTablet(addTablet(100))
 
 	// We want to check for the expected log messages.

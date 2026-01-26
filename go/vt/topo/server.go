@@ -47,6 +47,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"slices"
 	"sync"
 
 	"github.com/spf13/pflag"
@@ -344,11 +345,9 @@ func GetAliasByCell(ctx context.Context, ts *Server, cell string) string {
 		}
 
 		for alias, cellsAlias := range cellAliases {
-			for _, cellAlias := range cellsAlias.Cells {
-				if cellAlias == cell {
-					cellsAliases.cellsToAliases[cell] = alias
-					return alias
-				}
+			if slices.Contains(cellsAlias.Cells, cell) {
+				cellsAliases.cellsToAliases[cell] = alias
+				return alias
 			}
 		}
 	}

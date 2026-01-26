@@ -62,8 +62,7 @@ func checkIfOptionIsSupported(t *testing.T, variable string) bool {
 // correct: that they don't contain the missing columns and that the
 // DataColumns bitmap is sent.
 func TestNoBlob(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	oldEngine := engine
 	engine = nil
 	oldEnv := env
@@ -659,8 +658,7 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 	ts.Init()
 	defer ts.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match: "/t2.*",
@@ -1481,8 +1479,7 @@ func TestDDLDropColumn(t *testing.T) {
 		"insert into ddl_test2 values(2, 'bbb')",
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ch := make(chan []*binlogdatapb.VEvent)
 	go func() {
@@ -1903,8 +1900,7 @@ func TestJournal(t *testing.T) {
 
 // TestMinimalMode confirms that we don't support minimal binlog_row_image mode.
 func TestMinimalMode(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	oldEngine := engine
 	engine = nil
 	oldEnv := env
@@ -1970,8 +1966,7 @@ func TestHeartbeat(t *testing.T) {
 }
 
 func TestFullyThrottledTimeout(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	origTimeout := fullyThrottledTimeout
 	origHeartbeatTime := HeartbeatTime
 	startingMetric := engine.errorCounts.Counts()[fullyThrottledMetricLabel]
@@ -2021,8 +2016,7 @@ func TestNoFutureGTID(t *testing.T) {
 	future := pos[:index+1] + strconv.Itoa(num+1)
 	t.Logf("future position: %v", future)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ch := make(chan []*binlogdatapb.VEvent)
 	go func() {

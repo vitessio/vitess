@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -278,7 +279,7 @@ func (svs *SysVarReservedConn) Execute(ctx context.Context, vcursor VCursor, env
 		return nil
 	}
 	queries := make([]*querypb.BoundQuery, len(rss))
-	for i := 0; i < len(rss); i++ {
+	for i := range rss {
 		queries[i] = &querypb.BoundQuery{
 			Sql:           fmt.Sprintf("set %s = %s", svs.Name, svs.Expr),
 			BindVariables: env.BindVars,
@@ -290,7 +291,7 @@ func (svs *SysVarReservedConn) Execute(ctx context.Context, vcursor VCursor, env
 
 func (svs *SysVarReservedConn) execSetStatement(ctx context.Context, vcursor VCursor, rss []*srvtopo.ResolvedShard, env *evalengine.ExpressionEnv) error {
 	queries := make([]*querypb.BoundQuery, len(rss))
-	for i := 0; i < len(rss); i++ {
+	for i := range rss {
 		queries[i] = &querypb.BoundQuery{
 			Sql:           fmt.Sprintf("set @@%s = %s", svs.Name, svs.Expr),
 			BindVariables: env.BindVars,
@@ -369,11 +370,8 @@ func sqlModeChangedValue(qr *sqltypes.Result) (bool, sqltypes.Value, error) {
 	unsupportedMode := ""
 	for _, nVal := range newValArr {
 		nVal = strings.ToUpper(nVal)
-		for _, mode := range unsupportedSQLModes {
-			if mode == nVal {
-				unsupportedMode = nVal
-				break
-			}
+		if slices.Contains(unsupportedSQLModes, nVal) {
+			unsupportedMode = nVal
 		}
 		notSeen, exists := origMap[nVal]
 		if !exists {
