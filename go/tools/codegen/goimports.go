@@ -24,8 +24,9 @@ import (
 	"github.com/dave/jennifer/jen"
 )
 
-// FormatJenFile formats the given *jen.File with goimports and return a slice
-// of byte corresponding to the formatted file.
+// FormatJenFile writes the given *jen.File to a temporary file, applies
+// goimports and gofumpt, and returns the formatted contents.
+// The output matches the repository's import grouping and formatting rules.
 func FormatJenFile(file *jen.File) ([]byte, error) {
 	tempFile, err := os.CreateTemp("/tmp", "*.go")
 	if err != nil {
@@ -45,16 +46,13 @@ func FormatJenFile(file *jen.File) ([]byte, error) {
 }
 
 func GoImports(fullPath string) error {
-	// we need to run both gofmt and goimports because goimports does not support the
-	// simplification flag (-s) that our static linter checks require.
-
-	cmd := exec.Command("gofmt", "-s", "-w", fullPath)
+	cmd := exec.Command("goimports", "-local", "vitess.io/vitess", "-w", fullPath)
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return err
 	}
 
-	cmd = exec.Command("goimports", "-local", "vitess.io/vitess", "-w", fullPath)
+	cmd = exec.Command("go", "tool", "gofumpt", "-w", fullPath)
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return err

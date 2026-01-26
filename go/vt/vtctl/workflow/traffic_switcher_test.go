@@ -19,6 +19,7 @@ package workflow
 import (
 	"context"
 	"fmt"
+	"maps"
 	"strconv"
 	"strings"
 	"testing"
@@ -604,9 +605,7 @@ func TestDeleteKeyspaceRoutingRulesPreservesUnrelated(t *testing.T) {
 		"otherks":                       "otherks",
 	}
 	require.NoError(t, topotools.UpdateKeyspaceRoutingRules(ctx, env.ts, "test", func(ctx context.Context, existing *map[string]string) error {
-		for key, value := range rules {
-			(*existing)[key] = value
-		}
+		maps.Copy((*existing), rules)
 		return nil
 	}))
 

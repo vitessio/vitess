@@ -34,8 +34,10 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 )
 
-type planExec func(ctx context.Context, plan *engine.Plan, vc *econtext.VCursorImpl, bindVars map[string]*querypb.BindVariable, startTime time.Time) error
-type txResult func(sqlparser.StatementType, *sqltypes.Result) error
+type (
+	planExec func(ctx context.Context, plan *engine.Plan, vc *econtext.VCursorImpl, bindVars map[string]*querypb.BindVariable, startTime time.Time) error
+	txResult func(sqlparser.StatementType, *sqltypes.Result) error
+)
 
 var vschemaWaitTimeout = 30 * time.Second
 
@@ -90,7 +92,7 @@ func (e *Executor) newExecute(
 		cancel             context.CancelFunc
 	)
 
-	for try := 0; try < MaxBufferingRetries; try++ {
+	for try := range MaxBufferingRetries {
 		if try > 0 && !vs.GetCreated().After(lastVSchemaCreated) { // We need to wait for a vschema update
 			// Without a wait we fail non-deterministically since the previous vschema will not have
 			// the updated routing rules.

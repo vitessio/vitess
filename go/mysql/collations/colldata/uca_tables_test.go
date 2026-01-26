@@ -76,7 +76,7 @@ func loadExpectedWeights(t *testing.T, weights string) map[rune][]uint16 {
 	dec := json.NewDecoder(weightsMysqlFile)
 	require.NoError(t, dec.Decode(&meta))
 
-	var result = make(map[rune][]uint16, len(meta.Weights))
+	result := make(map[rune][]uint16, len(meta.Weights))
 	for key, w := range meta.Weights {
 		cp, err := strconv.ParseInt(key[2:], 16, 32)
 		if err != nil {

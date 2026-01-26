@@ -191,7 +191,7 @@ func TestTrackerNoLock(t *testing.T) {
 		Stats:   &querypb.RealtimeStats{TableSchemaChanged: []string{"t1"}},
 	}
 
-	for i := 0; i < 500000; i++ {
+	for range 500000 {
 		select {
 		case ch <- th:
 		case <-time.After(50 * time.Millisecond):
@@ -302,21 +302,24 @@ func TestViewsTracking(t *testing.T) {
 	testcases := []testCases{{
 		testName: "initial view load",
 		expView: map[string]string{
-			"prior": "select 1 from ks.tbl"},
+			"prior": "select 1 from ks.tbl",
+		},
 	}, {
 		testName: "new view t1, V1",
 		updView:  []string{"t1", "V1"},
 		expView: map[string]string{
 			"t1":    "select 1 from ks.tbl1",
 			"V1":    "select 1 from ks.tbl2",
-			"prior": "select 1 from ks.tbl"},
+			"prior": "select 1 from ks.tbl",
+		},
 	}, {
 		testName: "delete prior, updated V1 and new t3",
 		updView:  []string{"prior", "V1", "t3"},
 		expView: map[string]string{
 			"t1": "select 1 from ks.tbl1",
 			"V1": "select 1, 2 from ks.tbl2",
-			"t3": "select 1 from ks.tbl3"},
+			"t3": "select 1 from ks.tbl3",
+		},
 	}, {
 		testName: "new t4",
 		updView:  []string{"t4"},
@@ -324,7 +327,8 @@ func TestViewsTracking(t *testing.T) {
 			"t1": "select 1 from ks.tbl1",
 			"V1": "select 1, 2 from ks.tbl2",
 			"t3": "select 1 from ks.tbl3",
-			"t4": "select 1 from ks.tbl4"},
+			"t4": "select 1 from ks.tbl4",
+		},
 	}, {
 		testName: "new broken t5",
 		updView:  []string{"t5"},
@@ -332,7 +336,8 @@ func TestViewsTracking(t *testing.T) {
 			"t1": "select 1 from ks.tbl1",
 			"V1": "select 1, 2 from ks.tbl2",
 			"t3": "select 1 from ks.tbl3",
-			"t4": "select 1 from ks.tbl4"},
+			"t4": "select 1 from ks.tbl4",
+		},
 	}}
 
 	testTracker(t, false, schemaDefResult, testcases)
@@ -472,7 +477,8 @@ func TestUDFRetrieval(t *testing.T) {
 		udfs(
 			udf("my_udf2", true, sqltypes.Char),
 			udf("my_udf4", true, sqltypes.Int32),
-		)}
+		),
+	}
 
 	testcases := []testCases{{
 		testName: "initial load",

@@ -42,7 +42,7 @@ import (
 const (
 	// CA is the name of the CA toplevel cert.
 	CA          = "ca"
-	permissions = 0700
+	permissions = 0o700
 )
 
 func loadCert(certPath string) (*x509.Certificate, error) {

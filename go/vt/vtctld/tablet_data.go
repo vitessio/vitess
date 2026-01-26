@@ -40,9 +40,7 @@ import (
 // connections with tablets, and updates its internal state with the
 // result.
 
-var (
-	tabletHealthKeepAlive = 5 * time.Minute
-)
+var tabletHealthKeepAlive = 5 * time.Minute
 
 type tabletHealth struct {
 	mu sync.Mutex

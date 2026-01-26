@@ -51,8 +51,7 @@ var (
 )
 
 func TestVDiffUnsharded(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestVDiffEnv(t, ctx, []string{"0"}, []string{"0"}, "", nil)
 	defer env.close()
 
@@ -120,24 +119,25 @@ func TestVDiffUnsharded(t *testing.T) {
 		id     string
 		result *sqltypes.Result
 		report string
-	}{{
-		id: "1",
-		result: sqltypes.MakeTestResult(fields,
-			"completed||t1|"+UUID+"|completed|3|"+starttime+"|3|"+comptime+"|0|"+
-				`{"TableName": "t1", "MatchingRows": 3, "ProcessedRows": 3, "MismatchedRows": 0, "ExtraRowsSource": 0, `+
-				`"ExtraRowsTarget": 0}`),
-		report: fmt.Sprintf(goodReportfmt,
-			env.targetKeyspace, UUID, 3, false, starttime, comptime,
-		),
-	}, {
-		id: "2",
-		result: sqltypes.MakeTestResult(fields,
-			"completed||t1|"+UUID+"|completed|3|"+starttime+"|3|"+comptime+"|1|"+
-				`{"TableName": "t1", "MatchingRows": 1, "ProcessedRows": 3, "MismatchedRows": 0, "ExtraRowsSource": 0, `+
-				`"ExtraRowsTarget": 2, "ExtraRowsTargetSample": [{"Row": {"c1": "2", "c2": "4"}}]}`),
-		report: fmt.Sprintf(badReportfmt,
-			env.targetKeyspace, UUID, 3, true, starttime, comptime, 3, 1, 0, 0, 2, 3, 1, 0, 0, 2,
-			`"ExtraRowsTargetSample": [
+	}{
+		{
+			id: "1",
+			result: sqltypes.MakeTestResult(fields,
+				"completed||t1|"+UUID+"|completed|3|"+starttime+"|3|"+comptime+"|0|"+
+					`{"TableName": "t1", "MatchingRows": 3, "ProcessedRows": 3, "MismatchedRows": 0, "ExtraRowsSource": 0, `+
+					`"ExtraRowsTarget": 0}`),
+			report: fmt.Sprintf(goodReportfmt,
+				env.targetKeyspace, UUID, 3, false, starttime, comptime,
+			),
+		}, {
+			id: "2",
+			result: sqltypes.MakeTestResult(fields,
+				"completed||t1|"+UUID+"|completed|3|"+starttime+"|3|"+comptime+"|1|"+
+					`{"TableName": "t1", "MatchingRows": 1, "ProcessedRows": 3, "MismatchedRows": 0, "ExtraRowsSource": 0, `+
+					`"ExtraRowsTarget": 2, "ExtraRowsTargetSample": [{"Row": {"c1": "2", "c2": "4"}}]}`),
+			report: fmt.Sprintf(badReportfmt,
+				env.targetKeyspace, UUID, 3, true, starttime, comptime, 3, 1, 0, 0, 2, 3, 1, 0, 0, 2,
+				`"ExtraRowsTargetSample": [
           {
             "Row": {
               "c1": "2",
@@ -145,15 +145,15 @@ func TestVDiffUnsharded(t *testing.T) {
             }
           }
         ]`),
-	}, {
-		id: "3",
-		result: sqltypes.MakeTestResult(fields,
-			"completed||t1|"+UUID+"|completed|3|"+starttime+"|3|"+comptime+"|1|"+
-				`{"TableName": "t1", "MatchingRows": 1, "ProcessedRows": 3, "MismatchedRows": 0, "ExtraRowsSource": 2, `+
-				`"ExtraRowsTarget": 0, "ExtraRowsSourceSample": [{"Row": {"c1": "2", "c2": "4"}}]}`),
-		report: fmt.Sprintf(badReportfmt,
-			env.targetKeyspace, UUID, 3, true, starttime, comptime, 3, 1, 0, 2, 0, 3, 1, 0, 2, 0,
-			`"ExtraRowsSourceSample": [
+		}, {
+			id: "3",
+			result: sqltypes.MakeTestResult(fields,
+				"completed||t1|"+UUID+"|completed|3|"+starttime+"|3|"+comptime+"|1|"+
+					`{"TableName": "t1", "MatchingRows": 1, "ProcessedRows": 3, "MismatchedRows": 0, "ExtraRowsSource": 2, `+
+					`"ExtraRowsTarget": 0, "ExtraRowsSourceSample": [{"Row": {"c1": "2", "c2": "4"}}]}`),
+			report: fmt.Sprintf(badReportfmt,
+				env.targetKeyspace, UUID, 3, true, starttime, comptime, 3, 1, 0, 2, 0, 3, 1, 0, 2, 0,
+				`"ExtraRowsSourceSample": [
           {
             "Row": {
               "c1": "2",
@@ -161,15 +161,15 @@ func TestVDiffUnsharded(t *testing.T) {
             }
           }
         ]`),
-	}, {
-		id: "4",
-		result: sqltypes.MakeTestResult(fields,
-			"completed||t1|"+UUID+"|completed|3|"+starttime+"|3|"+comptime+"|1|"+
-				`{"TableName": "t1", "MatchingRows": 2, "ProcessedRows": 3, "MismatchedRows": 0, "ExtraRowsSource": 1, `+
-				`"ExtraRowsTarget": 0, "ExtraRowsSourceSample": [{"Row": {"c1": "2", "c2": "4"}}]}`),
-		report: fmt.Sprintf(badReportfmt,
-			env.targetKeyspace, UUID, 3, true, starttime, comptime, 3, 2, 0, 1, 0, 3, 2, 0, 1, 0,
-			`"ExtraRowsSourceSample": [
+		}, {
+			id: "4",
+			result: sqltypes.MakeTestResult(fields,
+				"completed||t1|"+UUID+"|completed|3|"+starttime+"|3|"+comptime+"|1|"+
+					`{"TableName": "t1", "MatchingRows": 2, "ProcessedRows": 3, "MismatchedRows": 0, "ExtraRowsSource": 1, `+
+					`"ExtraRowsTarget": 0, "ExtraRowsSourceSample": [{"Row": {"c1": "2", "c2": "4"}}]}`),
+			report: fmt.Sprintf(badReportfmt,
+				env.targetKeyspace, UUID, 3, true, starttime, comptime, 3, 2, 0, 1, 0, 3, 2, 0, 1, 0,
+				`"ExtraRowsSourceSample": [
           {
             "Row": {
               "c1": "2",
@@ -177,15 +177,15 @@ func TestVDiffUnsharded(t *testing.T) {
             }
           }
         ]`),
-	}, {
-		id: "5",
-		result: sqltypes.MakeTestResult(fields,
-			"completed||t1|"+UUID+"|completed|3|"+starttime+"|3|"+comptime+"|1|"+
-				`{"TableName": "t1", "MatchingRows": 2, "ProcessedRows": 3, "MismatchedRows": 0, "ExtraRowsSource": 1, `+
-				`"ExtraRowsTarget": 0, "ExtraRowsSourceSample": [{"Row": {"c1": "2", "c2": "4"}}]}`),
-		report: fmt.Sprintf(badReportfmt,
-			env.targetKeyspace, UUID, 3, true, starttime, comptime, 3, 2, 0, 1, 0, 3, 2, 0, 1, 0,
-			`"ExtraRowsSourceSample": [
+		}, {
+			id: "5",
+			result: sqltypes.MakeTestResult(fields,
+				"completed||t1|"+UUID+"|completed|3|"+starttime+"|3|"+comptime+"|1|"+
+					`{"TableName": "t1", "MatchingRows": 2, "ProcessedRows": 3, "MismatchedRows": 0, "ExtraRowsSource": 1, `+
+					`"ExtraRowsTarget": 0, "ExtraRowsSourceSample": [{"Row": {"c1": "2", "c2": "4"}}]}`),
+			report: fmt.Sprintf(badReportfmt,
+				env.targetKeyspace, UUID, 3, true, starttime, comptime, 3, 2, 0, 1, 0, 3, 2, 0, 1, 0,
+				`"ExtraRowsSourceSample": [
           {
             "Row": {
               "c1": "2",
@@ -193,16 +193,16 @@ func TestVDiffUnsharded(t *testing.T) {
             }
           }
         ]`),
-	}, {
-		id: "6",
-		result: sqltypes.MakeTestResult(fields,
-			"completed||t1|"+UUID+"|completed|3|"+starttime+"|3|"+comptime+"|1|"+
-				`{"TableName": "t1", "MatchingRows": 2, "ProcessedRows": 3, "MismatchedRows": 1, "ExtraRowsSource": 0, `+
-				`"ExtraRowsTarget": 0, "MismatchedRowsSample": [{"Source": {"Row": {"c1": "2", "c2": "3"}}, `+
-				`"Target": {"Row": {"c1": "2", "c2": "4"}}}]}`),
-		report: fmt.Sprintf(badReportfmt,
-			env.targetKeyspace, UUID, 3, true, starttime, comptime, 3, 2, 1, 0, 0, 3, 2, 1, 0, 0,
-			`"MismatchedRowsSample": [
+		}, {
+			id: "6",
+			result: sqltypes.MakeTestResult(fields,
+				"completed||t1|"+UUID+"|completed|3|"+starttime+"|3|"+comptime+"|1|"+
+					`{"TableName": "t1", "MatchingRows": 2, "ProcessedRows": 3, "MismatchedRows": 1, "ExtraRowsSource": 0, `+
+					`"ExtraRowsTarget": 0, "MismatchedRowsSample": [{"Source": {"Row": {"c1": "2", "c2": "3"}}, `+
+					`"Target": {"Row": {"c1": "2", "c2": "4"}}}]}`),
+			report: fmt.Sprintf(badReportfmt,
+				env.targetKeyspace, UUID, 3, true, starttime, comptime, 3, 2, 1, 0, 0, 3, 2, 1, 0, 0,
+				`"MismatchedRowsSample": [
           {
             "Source": {
               "Row": {
@@ -218,16 +218,16 @@ func TestVDiffUnsharded(t *testing.T) {
             }
           }
         ]`),
-	}, {
-		id: "7", // --only_pks
-		result: sqltypes.MakeTestResult(fields,
-			"completed||t1|"+UUID+"|completed|3|"+starttime+"|3|"+comptime+"|1|"+
-				`{"TableName": "t1", "MatchingRows": 2, "ProcessedRows": 3, "MismatchedRows": 1, "ExtraRowsSource": 0, `+
-				`"ExtraRowsTarget": 0, "MismatchedRowsSample": [{"Source": {"Row": {"c1": "2"}}, `+
-				`"Target": {"Row": {"c1": "2"}}}]}`),
-		report: fmt.Sprintf(badReportfmt,
-			env.targetKeyspace, UUID, 3, true, starttime, comptime, 3, 2, 1, 0, 0, 3, 2, 1, 0, 0,
-			`"MismatchedRowsSample": [
+		}, {
+			id: "7", // --only_pks
+			result: sqltypes.MakeTestResult(fields,
+				"completed||t1|"+UUID+"|completed|3|"+starttime+"|3|"+comptime+"|1|"+
+					`{"TableName": "t1", "MatchingRows": 2, "ProcessedRows": 3, "MismatchedRows": 1, "ExtraRowsSource": 0, `+
+					`"ExtraRowsTarget": 0, "MismatchedRowsSample": [{"Source": {"Row": {"c1": "2"}}, `+
+					`"Target": {"Row": {"c1": "2"}}}]}`),
+			report: fmt.Sprintf(badReportfmt,
+				env.targetKeyspace, UUID, 3, true, starttime, comptime, 3, 2, 1, 0, 0, 3, 2, 1, 0, 0,
+				`"MismatchedRowsSample": [
           {
             "Source": {
               "Row": {
@@ -241,16 +241,16 @@ func TestVDiffUnsharded(t *testing.T) {
             }
           }
         ]`),
-	}, {
-		id: "8", // --debug_query
-		result: sqltypes.MakeTestResult(fields,
-			"completed||t1|"+UUID+"|completed|3|"+starttime+"|3|"+comptime+"|1|"+
-				`{"TableName": "t1", "MatchingRows": 2, "ProcessedRows": 3, "MismatchedRows": 1, "ExtraRowsSource": 0, `+
-				`"ExtraRowsTarget": 0, "MismatchedRowsSample": [{"Source": {"Row": {"c1": "2", "c2": "3"}, "Query": "select c1, c2 from t1 where c1=2;"}, `+
-				`"Target": {"Row": {"c1": "2", "c2": "4"}, "Query": "select c1, c2 from t1 where c1=2;"}}]}`),
-		report: fmt.Sprintf(badReportfmt,
-			env.targetKeyspace, UUID, 3, true, starttime, comptime, 3, 2, 1, 0, 0, 3, 2, 1, 0, 0,
-			`"MismatchedRowsSample": [
+		}, {
+			id: "8", // --debug_query
+			result: sqltypes.MakeTestResult(fields,
+				"completed||t1|"+UUID+"|completed|3|"+starttime+"|3|"+comptime+"|1|"+
+					`{"TableName": "t1", "MatchingRows": 2, "ProcessedRows": 3, "MismatchedRows": 1, "ExtraRowsSource": 0, `+
+					`"ExtraRowsTarget": 0, "MismatchedRowsSample": [{"Source": {"Row": {"c1": "2", "c2": "3"}, "Query": "select c1, c2 from t1 where c1=2;"}, `+
+					`"Target": {"Row": {"c1": "2", "c2": "4"}, "Query": "select c1, c2 from t1 where c1=2;"}}]}`),
+			report: fmt.Sprintf(badReportfmt,
+				env.targetKeyspace, UUID, 3, true, starttime, comptime, 3, 2, 1, 0, 0, 3, 2, 1, 0, 0,
+				`"MismatchedRowsSample": [
           {
             "Source": {
               "Row": {
@@ -268,36 +268,36 @@ func TestVDiffUnsharded(t *testing.T) {
             }
           }
         ]`),
-	}, {
-		id: "9", // --max-vdiff-report-rows=20 --only-pks
-		result: sqltypes.MakeTestResult(fields,
-			"completed||t1|"+UUID+"|completed|30|"+starttime+"|30|"+comptime+"|1|"+
-				`{"TableName": "t1", "MatchingRows": 10, "ProcessedRows": 30, "MismatchedRows": 20, "ExtraRowsSource": 0, `+
-				`"ExtraRowsTarget": 0, "MismatchedRowsSample": [`+
-				`{"Source": {"Row": {"c1": "2"}}, "Target": {"Row": {"c1": "2"}}},`+
-				`{"Source": {"Row": {"c1": "3"}}, "Target": {"Row": {"c1": "3"}}},`+
-				`{"Source": {"Row": {"c1": "4"}}, "Target": {"Row": {"c1": "4"}}},`+
-				`{"Source": {"Row": {"c1": "5"}}, "Target": {"Row": {"c1": "5"}}},`+
-				`{"Source": {"Row": {"c1": "6"}}, "Target": {"Row": {"c1": "6"}}},`+
-				`{"Source": {"Row": {"c1": "7"}}, "Target": {"Row": {"c1": "7"}}},`+
-				`{"Source": {"Row": {"c1": "8"}}, "Target": {"Row": {"c1": "8"}}},`+
-				`{"Source": {"Row": {"c1": "9"}}, "Target": {"Row": {"c1": "9"}}},`+
-				`{"Source": {"Row": {"c1": "10"}}, "Target": {"Row": {"c1": "10"}}},`+
-				`{"Source": {"Row": {"c1": "11"}}, "Target": {"Row": {"c1": "11"}}},`+
-				`{"Source": {"Row": {"c1": "12"}}, "Target": {"Row": {"c1": "12"}}},`+
-				`{"Source": {"Row": {"c1": "13"}}, "Target": {"Row": {"c1": "13"}}},`+
-				`{"Source": {"Row": {"c1": "14"}}, "Target": {"Row": {"c1": "14"}}},`+
-				`{"Source": {"Row": {"c1": "15"}}, "Target": {"Row": {"c1": "15"}}},`+
-				`{"Source": {"Row": {"c1": "16"}}, "Target": {"Row": {"c1": "16"}}},`+
-				`{"Source": {"Row": {"c1": "17"}}, "Target": {"Row": {"c1": "17"}}},`+
-				`{"Source": {"Row": {"c1": "18"}}, "Target": {"Row": {"c1": "18"}}},`+
-				`{"Source": {"Row": {"c1": "19"}}, "Target": {"Row": {"c1": "19"}}},`+
-				`{"Source": {"Row": {"c1": "20"}}, "Target": {"Row": {"c1": "20"}}},`+
-				`{"Source": {"Row": {"c1": "21"}}, "Target": {"Row": {"c1": "21"}}}`+
-				`]}`),
-		report: fmt.Sprintf(badReportfmt,
-			env.targetKeyspace, UUID, 30, true, starttime, comptime, 30, 10, 20, 0, 0, 30, 10, 20, 0, 0,
-			`"MismatchedRowsSample": [
+		}, {
+			id: "9", // --max-vdiff-report-rows=20 --only-pks
+			result: sqltypes.MakeTestResult(fields,
+				"completed||t1|"+UUID+"|completed|30|"+starttime+"|30|"+comptime+"|1|"+
+					`{"TableName": "t1", "MatchingRows": 10, "ProcessedRows": 30, "MismatchedRows": 20, "ExtraRowsSource": 0, `+
+					`"ExtraRowsTarget": 0, "MismatchedRowsSample": [`+
+					`{"Source": {"Row": {"c1": "2"}}, "Target": {"Row": {"c1": "2"}}},`+
+					`{"Source": {"Row": {"c1": "3"}}, "Target": {"Row": {"c1": "3"}}},`+
+					`{"Source": {"Row": {"c1": "4"}}, "Target": {"Row": {"c1": "4"}}},`+
+					`{"Source": {"Row": {"c1": "5"}}, "Target": {"Row": {"c1": "5"}}},`+
+					`{"Source": {"Row": {"c1": "6"}}, "Target": {"Row": {"c1": "6"}}},`+
+					`{"Source": {"Row": {"c1": "7"}}, "Target": {"Row": {"c1": "7"}}},`+
+					`{"Source": {"Row": {"c1": "8"}}, "Target": {"Row": {"c1": "8"}}},`+
+					`{"Source": {"Row": {"c1": "9"}}, "Target": {"Row": {"c1": "9"}}},`+
+					`{"Source": {"Row": {"c1": "10"}}, "Target": {"Row": {"c1": "10"}}},`+
+					`{"Source": {"Row": {"c1": "11"}}, "Target": {"Row": {"c1": "11"}}},`+
+					`{"Source": {"Row": {"c1": "12"}}, "Target": {"Row": {"c1": "12"}}},`+
+					`{"Source": {"Row": {"c1": "13"}}, "Target": {"Row": {"c1": "13"}}},`+
+					`{"Source": {"Row": {"c1": "14"}}, "Target": {"Row": {"c1": "14"}}},`+
+					`{"Source": {"Row": {"c1": "15"}}, "Target": {"Row": {"c1": "15"}}},`+
+					`{"Source": {"Row": {"c1": "16"}}, "Target": {"Row": {"c1": "16"}}},`+
+					`{"Source": {"Row": {"c1": "17"}}, "Target": {"Row": {"c1": "17"}}},`+
+					`{"Source": {"Row": {"c1": "18"}}, "Target": {"Row": {"c1": "18"}}},`+
+					`{"Source": {"Row": {"c1": "19"}}, "Target": {"Row": {"c1": "19"}}},`+
+					`{"Source": {"Row": {"c1": "20"}}, "Target": {"Row": {"c1": "20"}}},`+
+					`{"Source": {"Row": {"c1": "21"}}, "Target": {"Row": {"c1": "21"}}}`+
+					`]}`),
+			report: fmt.Sprintf(badReportfmt,
+				env.targetKeyspace, UUID, 30, true, starttime, comptime, 30, 10, 20, 0, 0, 30, 10, 20, 0, 0,
+				`"MismatchedRowsSample": [
           {
             "Source": {
               "Row": {
@@ -539,7 +539,7 @@ func TestVDiffUnsharded(t *testing.T) {
             }
           }
         ]`),
-	},
+		},
 	}
 
 	for _, tcase := range testcases {
@@ -568,8 +568,7 @@ func TestVDiffUnsharded(t *testing.T) {
 }
 
 func TestVDiffSharded(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestVDiffEnv(t, ctx, []string{"-40", "40-"}, []string{"-80", "80-"}, "", map[string]string{
 		"-80": "MySQL56/0e45e704-7cb9-11ed-a1eb-0242ac120002:1-890",
 		"80-": "MySQL56/1497ddb0-7cb9-11ed-a1eb-0242ac120002:1-891",
@@ -681,8 +680,7 @@ func TestVDiffSharded(t *testing.T) {
 }
 
 func TestVDiffTextTemplate(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestVDiffEnv(t, ctx, []string{"0"}, []string{"0"}, "", nil)
 	defer env.close()
 

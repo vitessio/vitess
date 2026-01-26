@@ -417,7 +417,7 @@ func TestMain(m *testing.M) {
 		defer clusterInstance.Teardown()
 
 		if _, err := os.Stat(schemaChangeDirectory); os.IsNotExist(err) {
-			_ = os.Mkdir(schemaChangeDirectory, 0700)
+			_ = os.Mkdir(schemaChangeDirectory, 0o700)
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
@@ -518,11 +518,9 @@ func TestVreplStressSchemaChanges(t *testing.T) {
 
 				ctx, cancel := context.WithCancel(context.Background())
 				var wg sync.WaitGroup
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
+				wg.Go(func() {
 					runMultipleConnections(ctx, t, testcase.autoIncInsert)
-				}()
+				})
 				uuid := testOnlineDDLStatement(t, fullStatement, onlineDDLStrategy, "vtgate", hintText)
 				expectStatus := schema.OnlineDDLStatusComplete
 				if testcase.expectFailure {
@@ -735,12 +733,10 @@ func runMultipleConnections(ctx context.Context, t *testing.T, autoIncInsert boo
 	log.Infof("Running multiple connections")
 	var done int64
 	var wg sync.WaitGroup
-	for i := 0; i < maxConcurrency; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range maxConcurrency {
+		wg.Go(func() {
 			runSingleConnection(ctx, t, autoIncInsert, &done)
-		}()
+		})
 	}
 	<-ctx.Done()
 	atomic.StoreInt64(&done, 1)
@@ -763,13 +759,13 @@ func initTable(t *testing.T) {
 	_, err = conn.ExecuteFetch(truncateStatement, 1000, true)
 	require.Nil(t, err)
 
-	for i := 0; i < maxTableRows/2; i++ {
+	for range maxTableRows / 2 {
 		generateInsert(t, conn, false)
 	}
-	for i := 0; i < maxTableRows/4; i++ {
+	for range maxTableRows / 4 {
 		generateUpdate(t, conn)
 	}
-	for i := 0; i < maxTableRows/4; i++ {
+	for range maxTableRows / 4 {
 		generateDelete(t, conn)
 	}
 	{

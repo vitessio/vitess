@@ -203,11 +203,9 @@ func NewWithEnv(t testing.TB, env *vtenv.Environment) *DB {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 
-	db.acceptWG.Add(1)
-	go func() {
-		defer db.acceptWG.Done()
+	db.acceptWG.Go(func() {
 		db.listener.Accept()
-	}()
+	})
 
 	db.AddQuery(useQuery, &sqltypes.Result{})
 	// Return the db.

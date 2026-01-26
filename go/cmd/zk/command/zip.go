@@ -64,8 +64,7 @@ func commandZip(cmd *cobra.Command, args []string) error {
 		}
 		for _, child := range children {
 			toAdd := path.Join(zkPath, child)
-			wg.Add(1)
-			go func() {
+			wg.Go(func() {
 				data, stat, err := fs.Conn.Get(cmd.Context(), toAdd)
 				items <- &zkfs.Item{
 					Path: toAdd,
@@ -73,8 +72,7 @@ func commandZip(cmd *cobra.Command, args []string) error {
 					Stat: stat,
 					Err:  err,
 				}
-				wg.Done()
-			}()
+			})
 		}
 	}
 	go func() {

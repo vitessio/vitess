@@ -19,6 +19,7 @@ package stress
 import (
 	"context"
 	"fmt"
+	"math/rand/v2"
 	"os"
 	"path"
 	"strconv"
@@ -27,8 +28,6 @@ import (
 	"syscall"
 	"testing"
 	"time"
-
-	"math/rand/v2"
 
 	"github.com/stretchr/testify/require"
 
@@ -43,14 +42,12 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 )
 
-var (
-	// idVals are the primary key values to use while creating insert queries that ensures all the three shards get an insert.
-	idVals = [3]int{
-		4, // 4 maps to 0x20 and ends up in the first shard (-40)
-		6, // 6 maps to 0x60 and ends up in the second shard (40-80)
-		9, // 9 maps to 0x90 and ends up in the third shard (80-)
-	}
-)
+// idVals are the primary key values to use while creating insert queries that ensures all the three shards get an insert.
+var idVals = [3]int{
+	4, // 4 maps to 0x20 and ends up in the first shard (-40)
+	6, // 6 maps to 0x60 and ends up in the second shard (40-80)
+	9, // 9 maps to 0x90 and ends up in the third shard (80-)
+}
 
 func TestSettings(t *testing.T) {
 	testcases := []struct {
@@ -225,12 +222,10 @@ func TestDisruptions(t *testing.T) {
 			var writerWg sync.WaitGroup
 			// Run multiple threads to try to write to the database on the same values of id to ensure that we don't
 			// allow any writes while the transaction is prepared and not committed.
-			for i := 0; i < 10; i++ {
-				writerWg.Add(1)
-				go func() {
-					defer writerWg.Done()
+			for i := range 10 {
+				writerWg.Go(func() {
 					threadToWrite(t, writeCtx, idVals[i%3])
-				}()
+				})
 			}
 			// Run the disruption.
 			err := tt.disruption(t)
