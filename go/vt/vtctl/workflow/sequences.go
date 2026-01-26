@@ -250,9 +250,27 @@ func (ts *trafficSwitcher) getCurrentSequenceValue(ctx context.Context, seq *seq
 	return currentVal, nil
 }
 
+<<<<<<< HEAD
 func (ts *trafficSwitcher) updateSequenceValue(ctx context.Context, seq *sequenceMetadata, currentMaxValue int64) error {
 	if err := seq.escapeValues(); err != nil {
 		return err
+=======
+func (ts *trafficSwitcher) updateSequenceValues(ctx context.Context, sequences []*sequenceMetadata, maxValues map[string]int64) error {
+	sequencesByShard := map[string][]*tabletmanagerdatapb.UpdateSequenceTablesRequest_SequenceMetadata{}
+	for _, seq := range sequences {
+		maxValue := maxValues[seq.backingTableName]
+		sequenceShard, ierr := ts.TopoServer().GetOnlyShard(ctx, seq.backingTableKeyspace)
+		if ierr != nil || sequenceShard == nil || sequenceShard.PrimaryAlias == nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
+				seq.backingTableKeyspace, ierr)
+		}
+		tabletAliasStr := topoproto.TabletAliasString(sequenceShard.PrimaryAlias)
+		sequencesByShard[tabletAliasStr] = append(sequencesByShard[tabletAliasStr], &tabletmanagerdatapb.UpdateSequenceTablesRequest_SequenceMetadata{
+			BackingTableName:   seq.backingTableName,
+			BackingTableDbName: seq.backingTableDBName,
+			MaxValue:           maxValue,
+		})
+>>>>>>> 81356abde1 (VReplication: Properly Handle Sequence Table Initialization For Empty Tables (#19226))
 	}
 	nextVal := currentMaxValue + 1
 	log.Infof("Updating sequence %s.%s to %d", seq.backingTableDBName, seq.backingTableName, nextVal)
