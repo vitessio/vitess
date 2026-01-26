@@ -153,7 +153,7 @@ func (t *noopVCursor) ShowExec(ctx context.Context, command sqlparser.ShowComman
 }
 
 // SetContextWithValue implements VCursor interface.
-func (t *noopVCursor) SetContextWithValue(key, value interface{}) func() {
+func (t *noopVCursor) SetContextWithValue(key, value any) func() {
 	return func() {}
 }
 

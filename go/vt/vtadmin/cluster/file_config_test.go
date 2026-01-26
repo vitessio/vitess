@@ -223,7 +223,7 @@ name="devcluster"`,
 
 			t.Cleanup(func() { os.Remove(f.Name()) })
 
-			err = os.WriteFile(f.Name(), []byte(tt.data), 0777)
+			err = os.WriteFile(f.Name(), []byte(tt.data), 0o777)
 			require.NoError(t, err)
 
 			fc := FileConfig{}

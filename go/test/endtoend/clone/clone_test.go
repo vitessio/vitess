@@ -242,7 +242,7 @@ func createInitDBWithCloneUser() (string, error) {
 
 	// Write to temp file
 	combinedPath := path.Join(clusterInstance.TmpDirectory, "init_db_with_clone.sql")
-	if err := os.WriteFile(combinedPath, []byte(combined), 0666); err != nil {
+	if err := os.WriteFile(combinedPath, []byte(combined), 0o666); err != nil {
 		return "", fmt.Errorf("failed to write combined init file: %v", err)
 	}
 

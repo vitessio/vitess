@@ -441,7 +441,6 @@ func (collector *TableGC) checkTables(ctx context.Context, gcTables []*gcTable, 
 	for i := range gcTables {
 		table := gcTables[i] // we capture as local variable as we will later use this in a goroutine
 		shouldTransition, state, uuid, err := collector.shouldTransitionTable(table.tableName)
-
 		if err != nil {
 			log.Errorf("TableGC: error while checking tables: %+v", err)
 			continue

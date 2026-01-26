@@ -40,8 +40,10 @@ var errJSONPath = errors.New("Invalid JSON path expression.")
 
 type evalJSON = json.Value
 
-var _ eval = (*evalJSON)(nil)
-var _ hashable = (*evalJSON)(nil)
+var (
+	_ eval     = (*evalJSON)(nil)
+	_ hashable = (*evalJSON)(nil)
+)
 
 func intoJSON(fn string, e eval) (*evalJSON, error) {
 	switch e := e.(type) {

@@ -100,7 +100,7 @@ func UnescapeAt(str string) (rune, string) {
 
 	var minDig, maxDig, n int
 	var braces bool
-	var bitsPerDigit = 4
+	bitsPerDigit := 4
 	var result rune
 
 	switch c {
@@ -213,7 +213,7 @@ func UnescapeAtRunes(str []rune) (rune, []rune) {
 
 	var minDig, maxDig, n int
 	var braces bool
-	var bitsPerDigit = 4
+	bitsPerDigit := 4
 	var result rune
 
 	switch c {

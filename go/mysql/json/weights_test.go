@@ -24,7 +24,7 @@ import (
 )
 
 func TestWeightStrings(t *testing.T) {
-	var cases = []struct {
+	cases := []struct {
 		l, r *Value
 	}{
 		{NewNumber("-2.3742940301417033", NumberTypeFloat), NewNumber("-0.024384053736998118", NumberTypeFloat)},

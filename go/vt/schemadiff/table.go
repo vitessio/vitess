@@ -1789,11 +1789,11 @@ func indexOnlyVisibilityChange(t1Key, t2Key *sqlparser.IndexDefinition) (bool, b
 func evaluateColumnReordering(t1SharedColumns, t2SharedColumns []*sqlparser.ColumnDefinition) map[string]int {
 	minimalColumnReordering := map[string]int{}
 
-	t1SharedColNames := make([]interface{}, 0, len(t1SharedColumns))
+	t1SharedColNames := make([]any, 0, len(t1SharedColumns))
 	for _, col := range t1SharedColumns {
 		t1SharedColNames = append(t1SharedColNames, col.Name.Lowered())
 	}
-	t2SharedColNames := make([]interface{}, 0, len(t2SharedColumns))
+	t2SharedColNames := make([]any, 0, len(t2SharedColumns))
 	for _, col := range t2SharedColumns {
 		t2SharedColNames = append(t2SharedColNames, col.Name.Lowered())
 	}

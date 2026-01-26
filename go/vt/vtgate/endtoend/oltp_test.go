@@ -53,10 +53,10 @@ func BenchmarkOLTP(b *testing.B) {
 		b.Logf("seeding database for benchmark...")
 
 		rows := 1
-		for i := 0; i < MaxRows/10; i++ {
+		for range MaxRows / 10 {
 			query.Reset()
 			query.WriteString("insert into oltp_test(id, k, c, pad) values ")
-			for j := 0; j < 10; j++ {
+			for j := range 10 {
 				if j > 0 {
 					query.WriteString(", ")
 				}

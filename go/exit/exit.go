@@ -56,9 +56,7 @@ import (
 
 type exitCode int
 
-var (
-	exitFunc = os.Exit // can be faked out for testing
-)
+var exitFunc = os.Exit // can be faked out for testing
 
 // Recover should be deferred as the first line of main(). It recovers the
 // panic initiated by Return and converts it to a call to os.Exit. Any

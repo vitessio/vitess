@@ -108,9 +108,7 @@ var (
 	`
 )
 
-var (
-	countIterations = 5
-)
+var countIterations = 5
 
 const (
 	maxTableRows         = 4096
@@ -128,7 +126,7 @@ func TestMain(m *testing.M) {
 		defer clusterInstance.Teardown()
 
 		if _, err := os.Stat(schemaChangeDirectory); os.IsNotExist(err) {
-			_ = os.Mkdir(schemaChangeDirectory, 0700)
+			_ = os.Mkdir(schemaChangeDirectory, 0o700)
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
@@ -569,12 +567,10 @@ func runMultipleConnections(ctx context.Context, t *testing.T) {
 
 	log.Infof("Running multiple connections: maxConcurrency=%v, sleep interval=%v", maxConcurrency, sleepInterval)
 	var wg sync.WaitGroup
-	for i := 0; i < maxConcurrency; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range maxConcurrency {
+		wg.Go(func() {
 			runSingleConnection(ctx, t, sleepInterval)
-		}()
+		})
 	}
 	wg.Wait()
 	log.Infof("Running multiple connections: done")
@@ -591,13 +587,13 @@ func initTable(t *testing.T) {
 
 	appliedDMLStart := totalAppliedDML.Load()
 
-	for i := 0; i < maxTableRows/2; i++ {
+	for range maxTableRows / 2 {
 		generateInsert(t, conn)
 	}
-	for i := 0; i < maxTableRows/4; i++ {
+	for range maxTableRows / 4 {
 		generateUpdate(t, conn)
 	}
-	for i := 0; i < maxTableRows/4; i++ {
+	for range maxTableRows / 4 {
 		generateDelete(t, conn)
 	}
 	appliedDMLEnd := totalAppliedDML.Load()

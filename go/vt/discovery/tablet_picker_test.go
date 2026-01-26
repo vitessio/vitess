@@ -96,7 +96,7 @@ func TestPickLocalPreferences(t *testing.T) {
 	type testCase struct {
 		name string
 
-		//inputs
+		// inputs
 		tablets       []tablet
 		envCells      []string
 		inCells       []string
@@ -104,7 +104,7 @@ func TestPickLocalPreferences(t *testing.T) {
 		inTabletTypes string
 		options       TabletPickerOptions
 
-		//expected
+		// expected
 		tpCells     []string
 		wantTablets []uint32
 	}
@@ -300,8 +300,7 @@ func TestPickLocalPreferences(t *testing.T) {
 
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			te := newPickerTestEnv(t, ctx, tcase.envCells)
 			var testTablets []*topodatapb.Tablet
 			for _, tab := range tcase.tablets {
@@ -319,7 +318,7 @@ func TestPickLocalPreferences(t *testing.T) {
 
 			var selectedTablets []uint32
 			selectedTabletMap := make(map[uint32]bool)
-			for i := 0; i < 40; i++ {
+			for range 40 {
 				tab, err := tp.PickForStreaming(ctx)
 				require.NoError(t, err)
 				selectedTabletMap[tab.Alias.Uid] = true
@@ -357,7 +356,7 @@ func TestPickCellPreferenceLocalCell(t *testing.T) {
 
 	// In 20 attempts, only tablet in "cell" will be picked because we give local cell priority by default
 	var picked1, picked2 bool
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		tablet, err := tp.PickForStreaming(ctx2)
 		require.NoError(t, err)
 		if proto.Equal(tablet, want1) {
@@ -412,7 +411,7 @@ func TestPickUsingCellAsAlias(t *testing.T) {
 	noWant := addTablet(ctx, te, 102, topodatapb.TabletType_REPLICA, "xtracell", true, true)
 	defer deleteTablet(t, te, noWant)
 	// Try it many times to be sure we don't ever pick the wrong one.
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		tablet, err := tp.PickForStreaming(ctx)
 		require.NoError(t, err)
 		assert.True(t, proto.Equal(want, tablet), "Pick: %v, want %v", tablet, want)
@@ -435,7 +434,7 @@ func TestPickWithIgnoreList(t *testing.T) {
 	require.NoError(t, err)
 
 	// Try it many times to be sure we don't ever pick from the ignore list.
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		tablet, err := tp.PickForStreaming(ctx)
 		require.NoError(t, err)
 		require.False(t, proto.Equal(dontWant, tablet), "Picked the tablet we shouldn't have: %v", dontWant)
@@ -475,7 +474,7 @@ func TestPickUsingCellAliasOnlySpecified(t *testing.T) {
 	// In 20 attempts each of the tablets should get picked at least once.
 	// Local cell is not given preference
 	var picked1, picked2 bool
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		tablet, err := tp.PickForStreaming(ctx3)
 		require.NoError(t, err)
 		if proto.Equal(tablet, want1) {
@@ -667,7 +666,7 @@ func TestPickNonServingTablets(t *testing.T) {
 	defer cancel3()
 	var picked1, picked2, picked3 bool
 	// IncludeNonServingTablets is true: both the healthy tablets should be picked even though one is not serving.
-	for i := 0; i < numTestIterations; i++ {
+	for range numTestIterations {
 		tablet, err := tp.PickForStreaming(ctx3)
 		require.NoError(t, err)
 		if proto.Equal(tablet, primaryTablet) {
@@ -722,7 +721,7 @@ func TestPickNonLaggingTablets(t *testing.T) {
 	defer cancel()
 
 	var pickedPrimary, pickedLaggingReplica, pickedNonLaggingReplica int
-	for i := 0; i < numTestIterations; i++ {
+	for range numTestIterations {
 		tablet, err := tp.PickForStreaming(ctx)
 		require.NoError(t, err)
 		if proto.Equal(tablet, primaryTablet) {
@@ -818,11 +817,11 @@ func deleteTablet(t *testing.T, te *pickerTestEnv, tablet *topodatapb.Tablet) {
 	if tablet == nil {
 		return
 	}
-	{ //log error
+	{ // log error
 		err := te.topoServ.DeleteTablet(context.Background(), tablet.Alias)
 		require.NoError(t, err, "failed to DeleteTablet with alias: %v", err)
 	}
-	{ //This is not automatically removed from shard replication, which results in log spam and log error
+	{ // This is not automatically removed from shard replication, which results in log spam and log error
 		err := topo.DeleteTabletReplicationData(context.Background(), te.topoServ, tablet)
 		require.NoError(t, err, "failed to automatically remove from shard replication: %v", err)
 	}

@@ -68,10 +68,12 @@ type (
 	}
 )
 
-var _ sqlparser.ExprGenerator = (*tableT)(nil)
-var _ sqlparser.ExprGenerator = (*column)(nil)
-var _ sqlparser.QueryGenerator = (*selectGenerator)(nil)
-var _ sqlparser.QueryGenerator = (*queryGenerator)(nil)
+var (
+	_ sqlparser.ExprGenerator  = (*tableT)(nil)
+	_ sqlparser.ExprGenerator  = (*column)(nil)
+	_ sqlparser.QueryGenerator = (*selectGenerator)(nil)
+	_ sqlparser.QueryGenerator = (*queryGenerator)(nil)
+)
 
 func newQueryGenerator(genConfig sqlparser.ExprGeneratorConfig, maxTables, maxAggrs, maxGBs int, schemaTables []tableT) *queryGenerator {
 	return &queryGenerator{
@@ -357,7 +359,7 @@ func (sg *selectGenerator) createTablesAndJoin() ([]tableT, bool) {
 	sg.sel.From = append(sg.sel.From, newAliasedTable(tables[0], "tbl0"))
 
 	numTables := rand.IntN(sg.maxTables)
-	for i := 0; i < numTables; i++ {
+	for i := range numTables {
 		tables = append(tables, randomEl(sg.schemaTables))
 		alias := fmt.Sprintf("tbl%d", i+1)
 		sg.sel.From = append(sg.sel.From, newAliasedTable(tables[i+1], alias))
@@ -416,7 +418,7 @@ func (sg *selectGenerator) createGroupBy(tables []tableT) (grouping []column) {
 		return
 	}
 	numGBs := rand.IntN(sg.maxGBs + 1)
-	for i := 0; i < numGBs; i++ {
+	for range numGBs {
 		tblIdx := rand.IntN(len(tables))
 		col := randomEl(tables[tblIdx].cols)
 		// TODO: grouping by a date column sometimes errors
@@ -534,7 +536,7 @@ func (sg *selectGenerator) createRandomExprs(minExprs, maxExprs int, generators 
 		return
 	}
 	numPredicates := rand.IntN(maxExprs-minExprs+1) + minExprs
-	for i := 0; i < numPredicates; i++ {
+	for range numPredicates {
 		predicates = append(predicates, sg.getRandomExpr(generators...))
 	}
 

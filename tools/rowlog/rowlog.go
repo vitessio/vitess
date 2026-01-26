@@ -85,7 +85,7 @@ func main() {
 	log.Infof("Using tablets %s and %s to get positions", sourceTablet, targetTablet)
 
 	var wg sync.WaitGroup
-	var stream = func(keyspace, tablet string) {
+	stream := func(keyspace, tablet string) {
 		defer wg.Done()
 		var startPos, stopPos string
 		var i int
@@ -229,7 +229,7 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 
 func output(filename, s string) {
 	f, err := os.OpenFile(filename+".log",
-		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		log.Errorf(err.Error())
 	}
@@ -398,8 +398,8 @@ func getTablet(ctx context.Context, ts *topo.Server, cells []string, keyspace st
 	}
 	tabletId := fmt.Sprintf("%s-%d", tab.Alias.Cell, tab.Alias.Uid)
 	return tabletId
-
 }
+
 func trickGlog() {
 	var args []string
 	os.Args, args = os.Args[:1], os.Args[1:]

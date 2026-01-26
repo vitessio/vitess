@@ -32,14 +32,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var (
-	oneTableOutput = `+---+
+var oneTableOutput = `+---+
 | a |
 +---+
 | 1 |
 +---+
 `
-)
 
 func TestVtctldProcess(t *testing.T) {
 	url := fmt.Sprintf("http://%s:%d/api/keyspaces/", clusterInstance.Hostname, clusterInstance.VtctldHTTPPort)

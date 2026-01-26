@@ -36,9 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
-var (
-	tablesBV, _ = sqltypes.BuildBindVariable([]string{"t1", "lead"})
-)
+var tablesBV, _ = sqltypes.BuildBindVariable([]string{"t1", "lead"})
 
 func TestGenerateFullQuery(t *testing.T) {
 	tests := []struct {

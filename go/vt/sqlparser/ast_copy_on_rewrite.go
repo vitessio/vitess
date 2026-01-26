@@ -609,6 +609,7 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return nil, false
 	}
 }
+
 func (c *cow) copyOnRewriteRefOfAddColumns(n *AddColumns, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -641,6 +642,7 @@ func (c *cow) copyOnRewriteRefOfAddColumns(n *AddColumns, parent SQLNode) (out S
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfAddConstraintDefinition(n *AddConstraintDefinition, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -663,6 +665,7 @@ func (c *cow) copyOnRewriteRefOfAddConstraintDefinition(n *AddConstraintDefiniti
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfAddIndexDefinition(n *AddIndexDefinition, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -685,6 +688,7 @@ func (c *cow) copyOnRewriteRefOfAddIndexDefinition(n *AddIndexDefinition, parent
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfAliasedExpr(n *AliasedExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -709,6 +713,7 @@ func (c *cow) copyOnRewriteRefOfAliasedExpr(n *AliasedExpr, parent SQLNode) (out
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfAliasedTableExpr(n *AliasedTableExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -739,6 +744,7 @@ func (c *cow) copyOnRewriteRefOfAliasedTableExpr(n *AliasedTableExpr, parent SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfAlterCharset(n *AlterCharset, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -751,6 +757,7 @@ func (c *cow) copyOnRewriteRefOfAlterCharset(n *AlterCharset, parent SQLNode) (o
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfAlterCheck(n *AlterCheck, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -773,6 +780,7 @@ func (c *cow) copyOnRewriteRefOfAlterCheck(n *AlterCheck, parent SQLNode) (out S
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfAlterColumn(n *AlterColumn, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -797,6 +805,7 @@ func (c *cow) copyOnRewriteRefOfAlterColumn(n *AlterColumn, parent SQLNode) (out
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfAlterDatabase(n *AlterDatabase, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -821,6 +830,7 @@ func (c *cow) copyOnRewriteRefOfAlterDatabase(n *AlterDatabase, parent SQLNode) 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfAlterIndex(n *AlterIndex, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -843,6 +853,7 @@ func (c *cow) copyOnRewriteRefOfAlterIndex(n *AlterIndex, parent SQLNode) (out S
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfAlterMigration(n *AlterMigration, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -865,6 +876,7 @@ func (c *cow) copyOnRewriteRefOfAlterMigration(n *AlterMigration, parent SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfAlterTable(n *AlterTable, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -903,6 +915,7 @@ func (c *cow) copyOnRewriteRefOfAlterTable(n *AlterTable, parent SQLNode) (out S
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfAlterView(n *AlterView, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -933,6 +946,7 @@ func (c *cow) copyOnRewriteRefOfAlterView(n *AlterView, parent SQLNode) (out SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfAlterVschema(n *AlterVschema, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -969,6 +983,7 @@ func (c *cow) copyOnRewriteRefOfAlterVschema(n *AlterVschema, parent SQLNode) (o
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfAnalyze(n *Analyze, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -991,6 +1006,7 @@ func (c *cow) copyOnRewriteRefOfAnalyze(n *Analyze, parent SQLNode) (out SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfAndExpr(n *AndExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1015,6 +1031,7 @@ func (c *cow) copyOnRewriteRefOfAndExpr(n *AndExpr, parent SQLNode) (out SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfAnyValue(n *AnyValue, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1037,6 +1054,7 @@ func (c *cow) copyOnRewriteRefOfAnyValue(n *AnyValue, parent SQLNode) (out SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfArgument(n *Argument, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1049,6 +1067,7 @@ func (c *cow) copyOnRewriteRefOfArgument(n *Argument, parent SQLNode) (out SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfArgumentLessWindowExpr(n *ArgumentLessWindowExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1071,6 +1090,7 @@ func (c *cow) copyOnRewriteRefOfArgumentLessWindowExpr(n *ArgumentLessWindowExpr
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfAssignmentExpr(n *AssignmentExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1095,6 +1115,7 @@ func (c *cow) copyOnRewriteRefOfAssignmentExpr(n *AssignmentExpr, parent SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfAutoIncSpec(n *AutoIncSpec, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1119,6 +1140,7 @@ func (c *cow) copyOnRewriteRefOfAutoIncSpec(n *AutoIncSpec, parent SQLNode) (out
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfAvg(n *Avg, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1143,6 +1165,7 @@ func (c *cow) copyOnRewriteRefOfAvg(n *Avg, parent SQLNode) (out SQLNode, change
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfBegin(n *Begin, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1155,6 +1178,7 @@ func (c *cow) copyOnRewriteRefOfBegin(n *Begin, parent SQLNode) (out SQLNode, ch
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfBeginEndStatement(n *BeginEndStatement, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1177,6 +1201,7 @@ func (c *cow) copyOnRewriteRefOfBeginEndStatement(n *BeginEndStatement, parent S
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfBetweenExpr(n *BetweenExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1203,6 +1228,7 @@ func (c *cow) copyOnRewriteRefOfBetweenExpr(n *BetweenExpr, parent SQLNode) (out
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfBinaryExpr(n *BinaryExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1227,6 +1253,7 @@ func (c *cow) copyOnRewriteRefOfBinaryExpr(n *BinaryExpr, parent SQLNode) (out S
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfBitAnd(n *BitAnd, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1251,6 +1278,7 @@ func (c *cow) copyOnRewriteRefOfBitAnd(n *BitAnd, parent SQLNode) (out SQLNode, 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfBitOr(n *BitOr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1275,6 +1303,7 @@ func (c *cow) copyOnRewriteRefOfBitOr(n *BitOr, parent SQLNode) (out SQLNode, ch
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfBitXor(n *BitXor, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1299,6 +1328,7 @@ func (c *cow) copyOnRewriteRefOfBitXor(n *BitXor, parent SQLNode) (out SQLNode, 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfCallProc(n *CallProc, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1331,6 +1361,7 @@ func (c *cow) copyOnRewriteRefOfCallProc(n *CallProc, parent SQLNode) (out SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfCaseExpr(n *CaseExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1365,6 +1396,7 @@ func (c *cow) copyOnRewriteRefOfCaseExpr(n *CaseExpr, parent SQLNode) (out SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfCastExpr(n *CastExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1389,6 +1421,7 @@ func (c *cow) copyOnRewriteRefOfCastExpr(n *CastExpr, parent SQLNode) (out SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfChangeColumn(n *ChangeColumn, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1415,6 +1448,7 @@ func (c *cow) copyOnRewriteRefOfChangeColumn(n *ChangeColumn, parent SQLNode) (o
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfCharExpr(n *CharExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1445,6 +1479,7 @@ func (c *cow) copyOnRewriteRefOfCharExpr(n *CharExpr, parent SQLNode) (out SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfCheckConstraintDefinition(n *CheckConstraintDefinition, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1467,6 +1502,7 @@ func (c *cow) copyOnRewriteRefOfCheckConstraintDefinition(n *CheckConstraintDefi
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfColName(n *ColName, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1491,6 +1527,7 @@ func (c *cow) copyOnRewriteRefOfColName(n *ColName, parent SQLNode) (out SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfCollateExpr(n *CollateExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1513,6 +1550,7 @@ func (c *cow) copyOnRewriteRefOfCollateExpr(n *CollateExpr, parent SQLNode) (out
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfColumnDefinition(n *ColumnDefinition, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1537,6 +1575,7 @@ func (c *cow) copyOnRewriteRefOfColumnDefinition(n *ColumnDefinition, parent SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfColumnType(n *ColumnType, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1549,6 +1588,7 @@ func (c *cow) copyOnRewriteRefOfColumnType(n *ColumnType, parent SQLNode) (out S
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteColumns(n Columns, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1572,6 +1612,7 @@ func (c *cow) copyOnRewriteColumns(n Columns, parent SQLNode) (out SQLNode, chan
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfCommentOnly(n *CommentOnly, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1584,6 +1625,7 @@ func (c *cow) copyOnRewriteRefOfCommentOnly(n *CommentOnly, parent SQLNode) (out
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfCommit(n *Commit, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1596,6 +1638,7 @@ func (c *cow) copyOnRewriteRefOfCommit(n *Commit, parent SQLNode) (out SQLNode, 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfCommonTableExpr(n *CommonTableExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1622,6 +1665,7 @@ func (c *cow) copyOnRewriteRefOfCommonTableExpr(n *CommonTableExpr, parent SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfComparisonExpr(n *ComparisonExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1648,6 +1692,7 @@ func (c *cow) copyOnRewriteRefOfComparisonExpr(n *ComparisonExpr, parent SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfCompoundStatements(n *CompoundStatements, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1678,6 +1723,7 @@ func (c *cow) copyOnRewriteRefOfCompoundStatements(n *CompoundStatements, parent
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfConstraintDefinition(n *ConstraintDefinition, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1702,6 +1748,7 @@ func (c *cow) copyOnRewriteRefOfConstraintDefinition(n *ConstraintDefinition, pa
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfConvertExpr(n *ConvertExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1726,6 +1773,7 @@ func (c *cow) copyOnRewriteRefOfConvertExpr(n *ConvertExpr, parent SQLNode) (out
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfConvertType(n *ConvertType, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1738,6 +1786,7 @@ func (c *cow) copyOnRewriteRefOfConvertType(n *ConvertType, parent SQLNode) (out
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfConvertUsingExpr(n *ConvertUsingExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1760,6 +1809,7 @@ func (c *cow) copyOnRewriteRefOfConvertUsingExpr(n *ConvertUsingExpr, parent SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfCount(n *Count, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1792,6 +1842,7 @@ func (c *cow) copyOnRewriteRefOfCount(n *Count, parent SQLNode) (out SQLNode, ch
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfCountStar(n *CountStar, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1814,6 +1865,7 @@ func (c *cow) copyOnRewriteRefOfCountStar(n *CountStar, parent SQLNode) (out SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfCreateDatabase(n *CreateDatabase, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1838,6 +1890,7 @@ func (c *cow) copyOnRewriteRefOfCreateDatabase(n *CreateDatabase, parent SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfCreateProcedure(n *CreateProcedure, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1876,6 +1929,7 @@ func (c *cow) copyOnRewriteRefOfCreateProcedure(n *CreateProcedure, parent SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfCreateTable(n *CreateTable, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1906,6 +1960,7 @@ func (c *cow) copyOnRewriteRefOfCreateTable(n *CreateTable, parent SQLNode) (out
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfCreateView(n *CreateView, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1936,6 +1991,7 @@ func (c *cow) copyOnRewriteRefOfCreateView(n *CreateView, parent SQLNode) (out S
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfCurTimeFuncExpr(n *CurTimeFuncExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1958,6 +2014,7 @@ func (c *cow) copyOnRewriteRefOfCurTimeFuncExpr(n *CurTimeFuncExpr, parent SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfDeallocateStmt(n *DeallocateStmt, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1982,6 +2039,7 @@ func (c *cow) copyOnRewriteRefOfDeallocateStmt(n *DeallocateStmt, parent SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfDeclareCondition(n *DeclareCondition, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2006,6 +2064,7 @@ func (c *cow) copyOnRewriteRefOfDeclareCondition(n *DeclareCondition, parent SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfDeclareHandler(n *DeclareHandler, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2038,6 +2097,7 @@ func (c *cow) copyOnRewriteRefOfDeclareHandler(n *DeclareHandler, parent SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfDeclareVar(n *DeclareVar, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2070,6 +2130,7 @@ func (c *cow) copyOnRewriteRefOfDeclareVar(n *DeclareVar, parent SQLNode) (out S
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfDefault(n *Default, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2082,6 +2143,7 @@ func (c *cow) copyOnRewriteRefOfDefault(n *Default, parent SQLNode) (out SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfDefiner(n *Definer, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2094,6 +2156,7 @@ func (c *cow) copyOnRewriteRefOfDefiner(n *Definer, parent SQLNode) (out SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfDelete(n *Delete, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2138,6 +2201,7 @@ func (c *cow) copyOnRewriteRefOfDelete(n *Delete, parent SQLNode) (out SQLNode, 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfDerivedTable(n *DerivedTable, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2160,6 +2224,7 @@ func (c *cow) copyOnRewriteRefOfDerivedTable(n *DerivedTable, parent SQLNode) (o
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfDropColumn(n *DropColumn, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2182,6 +2247,7 @@ func (c *cow) copyOnRewriteRefOfDropColumn(n *DropColumn, parent SQLNode) (out S
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfDropDatabase(n *DropDatabase, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2206,6 +2272,7 @@ func (c *cow) copyOnRewriteRefOfDropDatabase(n *DropDatabase, parent SQLNode) (o
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfDropKey(n *DropKey, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2228,6 +2295,7 @@ func (c *cow) copyOnRewriteRefOfDropKey(n *DropKey, parent SQLNode) (out SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfDropProcedure(n *DropProcedure, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2252,6 +2320,7 @@ func (c *cow) copyOnRewriteRefOfDropProcedure(n *DropProcedure, parent SQLNode) 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfDropTable(n *DropTable, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2276,6 +2345,7 @@ func (c *cow) copyOnRewriteRefOfDropTable(n *DropTable, parent SQLNode) (out SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfDropView(n *DropView, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2300,6 +2370,7 @@ func (c *cow) copyOnRewriteRefOfDropView(n *DropView, parent SQLNode) (out SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfElseIfBlock(n *ElseIfBlock, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2324,6 +2395,7 @@ func (c *cow) copyOnRewriteRefOfElseIfBlock(n *ElseIfBlock, parent SQLNode) (out
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfExecuteStmt(n *ExecuteStmt, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2358,6 +2430,7 @@ func (c *cow) copyOnRewriteRefOfExecuteStmt(n *ExecuteStmt, parent SQLNode) (out
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfExistsExpr(n *ExistsExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2380,6 +2453,7 @@ func (c *cow) copyOnRewriteRefOfExistsExpr(n *ExistsExpr, parent SQLNode) (out S
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfExplainStmt(n *ExplainStmt, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2404,6 +2478,7 @@ func (c *cow) copyOnRewriteRefOfExplainStmt(n *ExplainStmt, parent SQLNode) (out
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfExplainTab(n *ExplainTab, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2426,6 +2501,7 @@ func (c *cow) copyOnRewriteRefOfExplainTab(n *ExplainTab, parent SQLNode) (out S
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfExprs(n *Exprs, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2456,6 +2532,7 @@ func (c *cow) copyOnRewriteRefOfExprs(n *Exprs, parent SQLNode) (out SQLNode, ch
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfExtractFuncExpr(n *ExtractFuncExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2478,6 +2555,7 @@ func (c *cow) copyOnRewriteRefOfExtractFuncExpr(n *ExtractFuncExpr, parent SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfExtractValueExpr(n *ExtractValueExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2502,6 +2580,7 @@ func (c *cow) copyOnRewriteRefOfExtractValueExpr(n *ExtractValueExpr, parent SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfFirstOrLastValueExpr(n *FirstOrLastValueExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2528,6 +2607,7 @@ func (c *cow) copyOnRewriteRefOfFirstOrLastValueExpr(n *FirstOrLastValueExpr, pa
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfFlush(n *Flush, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2550,6 +2630,7 @@ func (c *cow) copyOnRewriteRefOfFlush(n *Flush, parent SQLNode) (out SQLNode, ch
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfForce(n *Force, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2562,6 +2643,7 @@ func (c *cow) copyOnRewriteRefOfForce(n *Force, parent SQLNode) (out SQLNode, ch
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfForeignKeyDefinition(n *ForeignKeyDefinition, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2588,6 +2670,7 @@ func (c *cow) copyOnRewriteRefOfForeignKeyDefinition(n *ForeignKeyDefinition, pa
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfFrameClause(n *FrameClause, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2612,6 +2695,7 @@ func (c *cow) copyOnRewriteRefOfFrameClause(n *FrameClause, parent SQLNode) (out
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfFramePoint(n *FramePoint, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2634,6 +2718,7 @@ func (c *cow) copyOnRewriteRefOfFramePoint(n *FramePoint, parent SQLNode) (out S
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfFromFirstLastClause(n *FromFirstLastClause, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2646,6 +2731,7 @@ func (c *cow) copyOnRewriteRefOfFromFirstLastClause(n *FromFirstLastClause, pare
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfFuncExpr(n *FuncExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2680,6 +2766,7 @@ func (c *cow) copyOnRewriteRefOfFuncExpr(n *FuncExpr, parent SQLNode) (out SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfGTIDFuncExpr(n *GTIDFuncExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2708,6 +2795,7 @@ func (c *cow) copyOnRewriteRefOfGTIDFuncExpr(n *GTIDFuncExpr, parent SQLNode) (o
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfGeoHashFromLatLongExpr(n *GeoHashFromLatLongExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2734,6 +2822,7 @@ func (c *cow) copyOnRewriteRefOfGeoHashFromLatLongExpr(n *GeoHashFromLatLongExpr
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfGeoHashFromPointExpr(n *GeoHashFromPointExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2758,6 +2847,7 @@ func (c *cow) copyOnRewriteRefOfGeoHashFromPointExpr(n *GeoHashFromPointExpr, pa
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfGeoJSONFromGeomExpr(n *GeoJSONFromGeomExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2784,6 +2874,7 @@ func (c *cow) copyOnRewriteRefOfGeoJSONFromGeomExpr(n *GeoJSONFromGeomExpr, pare
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfGeomCollPropertyFuncExpr(n *GeomCollPropertyFuncExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2808,6 +2899,7 @@ func (c *cow) copyOnRewriteRefOfGeomCollPropertyFuncExpr(n *GeomCollPropertyFunc
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfGeomFormatExpr(n *GeomFormatExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2832,6 +2924,7 @@ func (c *cow) copyOnRewriteRefOfGeomFormatExpr(n *GeomFormatExpr, parent SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfGeomFromGeoHashExpr(n *GeomFromGeoHashExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2856,6 +2949,7 @@ func (c *cow) copyOnRewriteRefOfGeomFromGeoHashExpr(n *GeomFromGeoHashExpr, pare
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfGeomFromGeoJSONExpr(n *GeomFromGeoJSONExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2882,6 +2976,7 @@ func (c *cow) copyOnRewriteRefOfGeomFromGeoJSONExpr(n *GeomFromGeoJSONExpr, pare
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfGeomFromTextExpr(n *GeomFromTextExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2908,6 +3003,7 @@ func (c *cow) copyOnRewriteRefOfGeomFromTextExpr(n *GeomFromTextExpr, parent SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfGeomFromWKBExpr(n *GeomFromWKBExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2934,6 +3030,7 @@ func (c *cow) copyOnRewriteRefOfGeomFromWKBExpr(n *GeomFromWKBExpr, parent SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfGeomPropertyFuncExpr(n *GeomPropertyFuncExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2956,6 +3053,7 @@ func (c *cow) copyOnRewriteRefOfGeomPropertyFuncExpr(n *GeomPropertyFuncExpr, pa
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfGroupBy(n *GroupBy, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2986,6 +3084,7 @@ func (c *cow) copyOnRewriteRefOfGroupBy(n *GroupBy, parent SQLNode) (out SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfGroupConcatExpr(n *GroupConcatExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3020,6 +3119,7 @@ func (c *cow) copyOnRewriteRefOfGroupConcatExpr(n *GroupConcatExpr, parent SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfHandlerConditionErrorCode(n *HandlerConditionErrorCode, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3032,6 +3132,7 @@ func (c *cow) copyOnRewriteRefOfHandlerConditionErrorCode(n *HandlerConditionErr
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfHandlerConditionNamed(n *HandlerConditionNamed, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3054,6 +3155,7 @@ func (c *cow) copyOnRewriteRefOfHandlerConditionNamed(n *HandlerConditionNamed, 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfHandlerConditionNotFound(n *HandlerConditionNotFound, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3066,6 +3168,7 @@ func (c *cow) copyOnRewriteRefOfHandlerConditionNotFound(n *HandlerConditionNotF
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfHandlerConditionSQLException(n *HandlerConditionSQLException, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3078,6 +3181,7 @@ func (c *cow) copyOnRewriteRefOfHandlerConditionSQLException(n *HandlerCondition
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfHandlerConditionSQLState(n *HandlerConditionSQLState, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3100,6 +3204,7 @@ func (c *cow) copyOnRewriteRefOfHandlerConditionSQLState(n *HandlerConditionSQLS
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfHandlerConditionSQLWarning(n *HandlerConditionSQLWarning, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3112,6 +3217,7 @@ func (c *cow) copyOnRewriteRefOfHandlerConditionSQLWarning(n *HandlerConditionSQ
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteIdentifierCI(n IdentifierCI, parent SQLNode) (out SQLNode, changed bool) {
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
@@ -3121,6 +3227,7 @@ func (c *cow) copyOnRewriteIdentifierCI(n IdentifierCI, parent SQLNode) (out SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteIdentifierCS(n IdentifierCS, parent SQLNode) (out SQLNode, changed bool) {
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
@@ -3130,6 +3237,7 @@ func (c *cow) copyOnRewriteIdentifierCS(n IdentifierCS, parent SQLNode) (out SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfIfStatement(n *IfStatement, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3166,6 +3274,7 @@ func (c *cow) copyOnRewriteRefOfIfStatement(n *IfStatement, parent SQLNode) (out
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfIndexDefinition(n *IndexDefinition, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3188,6 +3297,7 @@ func (c *cow) copyOnRewriteRefOfIndexDefinition(n *IndexDefinition, parent SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfIndexHint(n *IndexHint, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3218,6 +3328,7 @@ func (c *cow) copyOnRewriteRefOfIndexHint(n *IndexHint, parent SQLNode) (out SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteIndexHints(n IndexHints, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3241,6 +3352,7 @@ func (c *cow) copyOnRewriteIndexHints(n IndexHints, parent SQLNode) (out SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfIndexInfo(n *IndexInfo, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3265,6 +3377,7 @@ func (c *cow) copyOnRewriteRefOfIndexInfo(n *IndexInfo, parent SQLNode) (out SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfInsert(n *Insert, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3299,6 +3412,7 @@ func (c *cow) copyOnRewriteRefOfInsert(n *Insert, parent SQLNode) (out SQLNode, 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfInsertExpr(n *InsertExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3327,6 +3441,7 @@ func (c *cow) copyOnRewriteRefOfInsertExpr(n *InsertExpr, parent SQLNode) (out S
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfIntervalDateExpr(n *IntervalDateExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3351,6 +3466,7 @@ func (c *cow) copyOnRewriteRefOfIntervalDateExpr(n *IntervalDateExpr, parent SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfIntervalFuncExpr(n *IntervalFuncExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3383,6 +3499,7 @@ func (c *cow) copyOnRewriteRefOfIntervalFuncExpr(n *IntervalFuncExpr, parent SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfIntroducerExpr(n *IntroducerExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3405,6 +3522,7 @@ func (c *cow) copyOnRewriteRefOfIntroducerExpr(n *IntroducerExpr, parent SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfIsExpr(n *IsExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3427,6 +3545,7 @@ func (c *cow) copyOnRewriteRefOfIsExpr(n *IsExpr, parent SQLNode) (out SQLNode, 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfJSONArrayAgg(n *JSONArrayAgg, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3451,6 +3570,7 @@ func (c *cow) copyOnRewriteRefOfJSONArrayAgg(n *JSONArrayAgg, parent SQLNode) (o
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfJSONArrayExpr(n *JSONArrayExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3481,6 +3601,7 @@ func (c *cow) copyOnRewriteRefOfJSONArrayExpr(n *JSONArrayExpr, parent SQLNode) 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfJSONAttributesExpr(n *JSONAttributesExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3505,6 +3626,7 @@ func (c *cow) copyOnRewriteRefOfJSONAttributesExpr(n *JSONAttributesExpr, parent
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfJSONContainsExpr(n *JSONContainsExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3539,6 +3661,7 @@ func (c *cow) copyOnRewriteRefOfJSONContainsExpr(n *JSONContainsExpr, parent SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfJSONContainsPathExpr(n *JSONContainsPathExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3573,6 +3696,7 @@ func (c *cow) copyOnRewriteRefOfJSONContainsPathExpr(n *JSONContainsPathExpr, pa
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfJSONExtractExpr(n *JSONExtractExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3605,6 +3729,7 @@ func (c *cow) copyOnRewriteRefOfJSONExtractExpr(n *JSONExtractExpr, parent SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfJSONKeysExpr(n *JSONKeysExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3629,6 +3754,7 @@ func (c *cow) copyOnRewriteRefOfJSONKeysExpr(n *JSONKeysExpr, parent SQLNode) (o
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfJSONObjectAgg(n *JSONObjectAgg, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3655,6 +3781,7 @@ func (c *cow) copyOnRewriteRefOfJSONObjectAgg(n *JSONObjectAgg, parent SQLNode) 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfJSONObjectExpr(n *JSONObjectExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3685,6 +3812,7 @@ func (c *cow) copyOnRewriteRefOfJSONObjectExpr(n *JSONObjectExpr, parent SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfJSONObjectParam(n *JSONObjectParam, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3709,6 +3837,7 @@ func (c *cow) copyOnRewriteRefOfJSONObjectParam(n *JSONObjectParam, parent SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfJSONOverlapsExpr(n *JSONOverlapsExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3733,6 +3862,7 @@ func (c *cow) copyOnRewriteRefOfJSONOverlapsExpr(n *JSONOverlapsExpr, parent SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfJSONPrettyExpr(n *JSONPrettyExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3755,6 +3885,7 @@ func (c *cow) copyOnRewriteRefOfJSONPrettyExpr(n *JSONPrettyExpr, parent SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfJSONQuoteExpr(n *JSONQuoteExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3777,6 +3908,7 @@ func (c *cow) copyOnRewriteRefOfJSONQuoteExpr(n *JSONQuoteExpr, parent SQLNode) 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfJSONRemoveExpr(n *JSONRemoveExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3809,6 +3941,7 @@ func (c *cow) copyOnRewriteRefOfJSONRemoveExpr(n *JSONRemoveExpr, parent SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfJSONSchemaValidFuncExpr(n *JSONSchemaValidFuncExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3833,6 +3966,7 @@ func (c *cow) copyOnRewriteRefOfJSONSchemaValidFuncExpr(n *JSONSchemaValidFuncEx
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfJSONSchemaValidationReportFuncExpr(n *JSONSchemaValidationReportFuncExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3857,6 +3991,7 @@ func (c *cow) copyOnRewriteRefOfJSONSchemaValidationReportFuncExpr(n *JSONSchema
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfJSONSearchExpr(n *JSONSearchExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3895,6 +4030,7 @@ func (c *cow) copyOnRewriteRefOfJSONSearchExpr(n *JSONSearchExpr, parent SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfJSONStorageFreeExpr(n *JSONStorageFreeExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3917,6 +4053,7 @@ func (c *cow) copyOnRewriteRefOfJSONStorageFreeExpr(n *JSONStorageFreeExpr, pare
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfJSONStorageSizeExpr(n *JSONStorageSizeExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3939,6 +4076,7 @@ func (c *cow) copyOnRewriteRefOfJSONStorageSizeExpr(n *JSONStorageSizeExpr, pare
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfJSONTableExpr(n *JSONTableExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3975,6 +4113,7 @@ func (c *cow) copyOnRewriteRefOfJSONTableExpr(n *JSONTableExpr, parent SQLNode) 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfJSONUnquoteExpr(n *JSONUnquoteExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3997,6 +4136,7 @@ func (c *cow) copyOnRewriteRefOfJSONUnquoteExpr(n *JSONUnquoteExpr, parent SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfJSONValueExpr(n *JSONValueExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4027,6 +4167,7 @@ func (c *cow) copyOnRewriteRefOfJSONValueExpr(n *JSONValueExpr, parent SQLNode) 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfJSONValueMergeExpr(n *JSONValueMergeExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4059,6 +4200,7 @@ func (c *cow) copyOnRewriteRefOfJSONValueMergeExpr(n *JSONValueMergeExpr, parent
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfJSONValueModifierExpr(n *JSONValueModifierExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4091,6 +4233,7 @@ func (c *cow) copyOnRewriteRefOfJSONValueModifierExpr(n *JSONValueModifierExpr, 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfJoinCondition(n *JoinCondition, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4115,6 +4258,7 @@ func (c *cow) copyOnRewriteRefOfJoinCondition(n *JoinCondition, parent SQLNode) 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfJoinTableExpr(n *JoinTableExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4141,6 +4285,7 @@ func (c *cow) copyOnRewriteRefOfJoinTableExpr(n *JoinTableExpr, parent SQLNode) 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfJtColumnDefinition(n *JtColumnDefinition, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4153,6 +4298,7 @@ func (c *cow) copyOnRewriteRefOfJtColumnDefinition(n *JtColumnDefinition, parent
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfJtOnResponse(n *JtOnResponse, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4175,6 +4321,7 @@ func (c *cow) copyOnRewriteRefOfJtOnResponse(n *JtOnResponse, parent SQLNode) (o
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfKeyState(n *KeyState, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4187,6 +4334,7 @@ func (c *cow) copyOnRewriteRefOfKeyState(n *KeyState, parent SQLNode) (out SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfKill(n *Kill, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4199,6 +4347,7 @@ func (c *cow) copyOnRewriteRefOfKill(n *Kill, parent SQLNode) (out SQLNode, chan
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfLagLeadExpr(n *LagLeadExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4229,6 +4378,7 @@ func (c *cow) copyOnRewriteRefOfLagLeadExpr(n *LagLeadExpr, parent SQLNode) (out
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfLimit(n *Limit, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4253,6 +4403,7 @@ func (c *cow) copyOnRewriteRefOfLimit(n *Limit, parent SQLNode) (out SQLNode, ch
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfLineStringExpr(n *LineStringExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4283,6 +4434,7 @@ func (c *cow) copyOnRewriteRefOfLineStringExpr(n *LineStringExpr, parent SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfLinestrPropertyFuncExpr(n *LinestrPropertyFuncExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4307,6 +4459,7 @@ func (c *cow) copyOnRewriteRefOfLinestrPropertyFuncExpr(n *LinestrPropertyFuncEx
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfLiteral(n *Literal, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4319,6 +4472,7 @@ func (c *cow) copyOnRewriteRefOfLiteral(n *Literal, parent SQLNode) (out SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfLoad(n *Load, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4331,6 +4485,7 @@ func (c *cow) copyOnRewriteRefOfLoad(n *Load, parent SQLNode) (out SQLNode, chan
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfLocateExpr(n *LocateExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4357,6 +4512,7 @@ func (c *cow) copyOnRewriteRefOfLocateExpr(n *LocateExpr, parent SQLNode) (out S
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfLockOption(n *LockOption, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4369,6 +4525,7 @@ func (c *cow) copyOnRewriteRefOfLockOption(n *LockOption, parent SQLNode) (out S
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfLockTables(n *LockTables, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4381,6 +4538,7 @@ func (c *cow) copyOnRewriteRefOfLockTables(n *LockTables, parent SQLNode) (out S
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfLockingFunc(n *LockingFunc, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4405,6 +4563,7 @@ func (c *cow) copyOnRewriteRefOfLockingFunc(n *LockingFunc, parent SQLNode) (out
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfMatchExpr(n *MatchExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4437,6 +4596,7 @@ func (c *cow) copyOnRewriteRefOfMatchExpr(n *MatchExpr, parent SQLNode) (out SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfMax(n *Max, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4461,6 +4621,7 @@ func (c *cow) copyOnRewriteRefOfMax(n *Max, parent SQLNode) (out SQLNode, change
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfMemberOfExpr(n *MemberOfExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4485,6 +4646,7 @@ func (c *cow) copyOnRewriteRefOfMemberOfExpr(n *MemberOfExpr, parent SQLNode) (o
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfMin(n *Min, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4509,6 +4671,7 @@ func (c *cow) copyOnRewriteRefOfMin(n *Min, parent SQLNode) (out SQLNode, change
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfModifyColumn(n *ModifyColumn, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4533,6 +4696,7 @@ func (c *cow) copyOnRewriteRefOfModifyColumn(n *ModifyColumn, parent SQLNode) (o
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfMultiLinestringExpr(n *MultiLinestringExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4563,6 +4727,7 @@ func (c *cow) copyOnRewriteRefOfMultiLinestringExpr(n *MultiLinestringExpr, pare
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfMultiPointExpr(n *MultiPointExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4593,6 +4758,7 @@ func (c *cow) copyOnRewriteRefOfMultiPointExpr(n *MultiPointExpr, parent SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfMultiPolygonExpr(n *MultiPolygonExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4623,6 +4789,7 @@ func (c *cow) copyOnRewriteRefOfMultiPolygonExpr(n *MultiPolygonExpr, parent SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfNTHValueExpr(n *NTHValueExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4653,6 +4820,7 @@ func (c *cow) copyOnRewriteRefOfNTHValueExpr(n *NTHValueExpr, parent SQLNode) (o
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfNamedWindow(n *NamedWindow, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4675,6 +4843,7 @@ func (c *cow) copyOnRewriteRefOfNamedWindow(n *NamedWindow, parent SQLNode) (out
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteNamedWindows(n NamedWindows, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4698,6 +4867,7 @@ func (c *cow) copyOnRewriteNamedWindows(n NamedWindows, parent SQLNode) (out SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfNextval(n *Nextval, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4720,6 +4890,7 @@ func (c *cow) copyOnRewriteRefOfNextval(n *Nextval, parent SQLNode) (out SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfNotExpr(n *NotExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4742,6 +4913,7 @@ func (c *cow) copyOnRewriteRefOfNotExpr(n *NotExpr, parent SQLNode) (out SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfNtileExpr(n *NtileExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4766,6 +4938,7 @@ func (c *cow) copyOnRewriteRefOfNtileExpr(n *NtileExpr, parent SQLNode) (out SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfNullTreatmentClause(n *NullTreatmentClause, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4778,6 +4951,7 @@ func (c *cow) copyOnRewriteRefOfNullTreatmentClause(n *NullTreatmentClause, pare
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfNullVal(n *NullVal, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4790,6 +4964,7 @@ func (c *cow) copyOnRewriteRefOfNullVal(n *NullVal, parent SQLNode) (out SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfOffset(n *Offset, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4812,6 +4987,7 @@ func (c *cow) copyOnRewriteRefOfOffset(n *Offset, parent SQLNode) (out SQLNode, 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteOnDup(n OnDup, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4835,6 +5011,7 @@ func (c *cow) copyOnRewriteOnDup(n OnDup, parent SQLNode) (out SQLNode, changed 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfOptLike(n *OptLike, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4857,6 +5034,7 @@ func (c *cow) copyOnRewriteRefOfOptLike(n *OptLike, parent SQLNode) (out SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfOrExpr(n *OrExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4881,6 +5059,7 @@ func (c *cow) copyOnRewriteRefOfOrExpr(n *OrExpr, parent SQLNode) (out SQLNode, 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfOrder(n *Order, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4903,6 +5082,7 @@ func (c *cow) copyOnRewriteRefOfOrder(n *Order, parent SQLNode) (out SQLNode, ch
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteOrderBy(n OrderBy, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4926,6 +5106,7 @@ func (c *cow) copyOnRewriteOrderBy(n OrderBy, parent SQLNode) (out SQLNode, chan
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfOrderByOption(n *OrderByOption, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4948,6 +5129,7 @@ func (c *cow) copyOnRewriteRefOfOrderByOption(n *OrderByOption, parent SQLNode) 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfOtherAdmin(n *OtherAdmin, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4960,6 +5142,7 @@ func (c *cow) copyOnRewriteRefOfOtherAdmin(n *OtherAdmin, parent SQLNode) (out S
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfOverClause(n *OverClause, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4984,6 +5167,7 @@ func (c *cow) copyOnRewriteRefOfOverClause(n *OverClause, parent SQLNode) (out S
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfParenTableExpr(n *ParenTableExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5006,6 +5190,7 @@ func (c *cow) copyOnRewriteRefOfParenTableExpr(n *ParenTableExpr, parent SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfParsedComments(n *ParsedComments, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5018,6 +5203,7 @@ func (c *cow) copyOnRewriteRefOfParsedComments(n *ParsedComments, parent SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfPartitionDefinition(n *PartitionDefinition, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5042,6 +5228,7 @@ func (c *cow) copyOnRewriteRefOfPartitionDefinition(n *PartitionDefinition, pare
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfPartitionDefinitionOptions(n *PartitionDefinitionOptions, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5074,6 +5261,7 @@ func (c *cow) copyOnRewriteRefOfPartitionDefinitionOptions(n *PartitionDefinitio
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfPartitionEngine(n *PartitionEngine, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5086,6 +5274,7 @@ func (c *cow) copyOnRewriteRefOfPartitionEngine(n *PartitionEngine, parent SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfPartitionOption(n *PartitionOption, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5122,6 +5311,7 @@ func (c *cow) copyOnRewriteRefOfPartitionOption(n *PartitionOption, parent SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfPartitionSpec(n *PartitionSpec, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5158,6 +5348,7 @@ func (c *cow) copyOnRewriteRefOfPartitionSpec(n *PartitionSpec, parent SQLNode) 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfPartitionValueRange(n *PartitionValueRange, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5180,6 +5371,7 @@ func (c *cow) copyOnRewriteRefOfPartitionValueRange(n *PartitionValueRange, pare
 	}
 	return
 }
+
 func (c *cow) copyOnRewritePartitions(n Partitions, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5203,6 +5395,7 @@ func (c *cow) copyOnRewritePartitions(n Partitions, parent SQLNode) (out SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfPerformanceSchemaFuncExpr(n *PerformanceSchemaFuncExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5225,6 +5418,7 @@ func (c *cow) copyOnRewriteRefOfPerformanceSchemaFuncExpr(n *PerformanceSchemaFu
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfPointExpr(n *PointExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5249,6 +5443,7 @@ func (c *cow) copyOnRewriteRefOfPointExpr(n *PointExpr, parent SQLNode) (out SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfPointPropertyFuncExpr(n *PointPropertyFuncExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5273,6 +5468,7 @@ func (c *cow) copyOnRewriteRefOfPointPropertyFuncExpr(n *PointPropertyFuncExpr, 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfPolygonExpr(n *PolygonExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5303,6 +5499,7 @@ func (c *cow) copyOnRewriteRefOfPolygonExpr(n *PolygonExpr, parent SQLNode) (out
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfPolygonPropertyFuncExpr(n *PolygonPropertyFuncExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5327,6 +5524,7 @@ func (c *cow) copyOnRewriteRefOfPolygonPropertyFuncExpr(n *PolygonPropertyFuncEx
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfPrepareStmt(n *PrepareStmt, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5353,6 +5551,7 @@ func (c *cow) copyOnRewriteRefOfPrepareStmt(n *PrepareStmt, parent SQLNode) (out
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfProcParameter(n *ProcParameter, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5377,6 +5576,7 @@ func (c *cow) copyOnRewriteRefOfProcParameter(n *ProcParameter, parent SQLNode) 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfPurgeBinaryLogs(n *PurgeBinaryLogs, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5389,6 +5589,7 @@ func (c *cow) copyOnRewriteRefOfPurgeBinaryLogs(n *PurgeBinaryLogs, parent SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfReferenceDefinition(n *ReferenceDefinition, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5419,6 +5620,7 @@ func (c *cow) copyOnRewriteRefOfReferenceDefinition(n *ReferenceDefinition, pare
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfRegexpInstrExpr(n *RegexpInstrExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5451,6 +5653,7 @@ func (c *cow) copyOnRewriteRefOfRegexpInstrExpr(n *RegexpInstrExpr, parent SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfRegexpLikeExpr(n *RegexpLikeExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5477,6 +5680,7 @@ func (c *cow) copyOnRewriteRefOfRegexpLikeExpr(n *RegexpLikeExpr, parent SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfRegexpReplaceExpr(n *RegexpReplaceExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5509,6 +5713,7 @@ func (c *cow) copyOnRewriteRefOfRegexpReplaceExpr(n *RegexpReplaceExpr, parent S
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfRegexpSubstrExpr(n *RegexpSubstrExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5539,6 +5744,7 @@ func (c *cow) copyOnRewriteRefOfRegexpSubstrExpr(n *RegexpSubstrExpr, parent SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfRelease(n *Release, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5561,6 +5767,7 @@ func (c *cow) copyOnRewriteRefOfRelease(n *Release, parent SQLNode) (out SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfRenameColumn(n *RenameColumn, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5585,6 +5792,7 @@ func (c *cow) copyOnRewriteRefOfRenameColumn(n *RenameColumn, parent SQLNode) (o
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfRenameIndex(n *RenameIndex, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5609,6 +5817,7 @@ func (c *cow) copyOnRewriteRefOfRenameIndex(n *RenameIndex, parent SQLNode) (out
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfRenameTable(n *RenameTable, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5621,6 +5830,7 @@ func (c *cow) copyOnRewriteRefOfRenameTable(n *RenameTable, parent SQLNode) (out
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfRenameTableName(n *RenameTableName, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5643,6 +5853,7 @@ func (c *cow) copyOnRewriteRefOfRenameTableName(n *RenameTableName, parent SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfRevertMigration(n *RevertMigration, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5665,6 +5876,7 @@ func (c *cow) copyOnRewriteRefOfRevertMigration(n *RevertMigration, parent SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfRollback(n *Rollback, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5677,6 +5889,7 @@ func (c *cow) copyOnRewriteRefOfRollback(n *Rollback, parent SQLNode) (out SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRootNode(n RootNode, parent SQLNode) (out SQLNode, changed bool) {
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
@@ -5696,6 +5909,7 @@ func (c *cow) copyOnRewriteRootNode(n RootNode, parent SQLNode) (out SQLNode, ch
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfRowAlias(n *RowAlias, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5720,6 +5934,7 @@ func (c *cow) copyOnRewriteRefOfRowAlias(n *RowAlias, parent SQLNode) (out SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfSRollback(n *SRollback, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5742,6 +5957,7 @@ func (c *cow) copyOnRewriteRefOfSRollback(n *SRollback, parent SQLNode) (out SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfSavepoint(n *Savepoint, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5764,6 +5980,7 @@ func (c *cow) copyOnRewriteRefOfSavepoint(n *Savepoint, parent SQLNode) (out SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfSelect(n *Select, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5814,6 +6031,7 @@ func (c *cow) copyOnRewriteRefOfSelect(n *Select, parent SQLNode) (out SQLNode, 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfSelectExprs(n *SelectExprs, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5844,6 +6062,7 @@ func (c *cow) copyOnRewriteRefOfSelectExprs(n *SelectExprs, parent SQLNode) (out
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfSelectInto(n *SelectInto, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5874,6 +6093,7 @@ func (c *cow) copyOnRewriteRefOfSelectInto(n *SelectInto, parent SQLNode) (out S
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfSet(n *Set, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5898,6 +6118,7 @@ func (c *cow) copyOnRewriteRefOfSet(n *Set, parent SQLNode) (out SQLNode, change
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfSetExpr(n *SetExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5922,6 +6143,7 @@ func (c *cow) copyOnRewriteRefOfSetExpr(n *SetExpr, parent SQLNode) (out SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteSetExprs(n SetExprs, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5945,6 +6167,7 @@ func (c *cow) copyOnRewriteSetExprs(n SetExprs, parent SQLNode) (out SQLNode, ch
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfShow(n *Show, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5967,6 +6190,7 @@ func (c *cow) copyOnRewriteRefOfShow(n *Show, parent SQLNode) (out SQLNode, chan
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfShowBasic(n *ShowBasic, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5993,6 +6217,7 @@ func (c *cow) copyOnRewriteRefOfShowBasic(n *ShowBasic, parent SQLNode) (out SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfShowCreate(n *ShowCreate, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6015,6 +6240,7 @@ func (c *cow) copyOnRewriteRefOfShowCreate(n *ShowCreate, parent SQLNode) (out S
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfShowFilter(n *ShowFilter, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6037,6 +6263,7 @@ func (c *cow) copyOnRewriteRefOfShowFilter(n *ShowFilter, parent SQLNode) (out S
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfShowMigrationLogs(n *ShowMigrationLogs, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6059,6 +6286,7 @@ func (c *cow) copyOnRewriteRefOfShowMigrationLogs(n *ShowMigrationLogs, parent S
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfShowOther(n *ShowOther, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6071,6 +6299,7 @@ func (c *cow) copyOnRewriteRefOfShowOther(n *ShowOther, parent SQLNode) (out SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfShowThrottledApps(n *ShowThrottledApps, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6083,6 +6312,7 @@ func (c *cow) copyOnRewriteRefOfShowThrottledApps(n *ShowThrottledApps, parent S
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfShowThrottlerStatus(n *ShowThrottlerStatus, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6095,6 +6325,7 @@ func (c *cow) copyOnRewriteRefOfShowThrottlerStatus(n *ShowThrottlerStatus, pare
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfShowTransactionStatus(n *ShowTransactionStatus, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6107,6 +6338,7 @@ func (c *cow) copyOnRewriteRefOfShowTransactionStatus(n *ShowTransactionStatus, 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfSignal(n *Signal, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6139,6 +6371,7 @@ func (c *cow) copyOnRewriteRefOfSignal(n *Signal, parent SQLNode) (out SQLNode, 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfSignalSet(n *SignalSet, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6161,6 +6394,7 @@ func (c *cow) copyOnRewriteRefOfSignalSet(n *SignalSet, parent SQLNode) (out SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfSingleStatement(n *SingleStatement, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6183,6 +6417,7 @@ func (c *cow) copyOnRewriteRefOfSingleStatement(n *SingleStatement, parent SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfStarExpr(n *StarExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6205,6 +6440,7 @@ func (c *cow) copyOnRewriteRefOfStarExpr(n *StarExpr, parent SQLNode) (out SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfStd(n *Std, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6229,6 +6465,7 @@ func (c *cow) copyOnRewriteRefOfStd(n *Std, parent SQLNode) (out SQLNode, change
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfStdDev(n *StdDev, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6253,6 +6490,7 @@ func (c *cow) copyOnRewriteRefOfStdDev(n *StdDev, parent SQLNode) (out SQLNode, 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfStdPop(n *StdPop, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6277,6 +6515,7 @@ func (c *cow) copyOnRewriteRefOfStdPop(n *StdPop, parent SQLNode) (out SQLNode, 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfStdSamp(n *StdSamp, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6301,6 +6540,7 @@ func (c *cow) copyOnRewriteRefOfStdSamp(n *StdSamp, parent SQLNode) (out SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfStream(n *Stream, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6327,6 +6567,7 @@ func (c *cow) copyOnRewriteRefOfStream(n *Stream, parent SQLNode) (out SQLNode, 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfSubPartition(n *SubPartition, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6351,6 +6592,7 @@ func (c *cow) copyOnRewriteRefOfSubPartition(n *SubPartition, parent SQLNode) (o
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfSubPartitionDefinition(n *SubPartitionDefinition, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6375,6 +6617,7 @@ func (c *cow) copyOnRewriteRefOfSubPartitionDefinition(n *SubPartitionDefinition
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfSubPartitionDefinitionOptions(n *SubPartitionDefinitionOptions, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6403,6 +6646,7 @@ func (c *cow) copyOnRewriteRefOfSubPartitionDefinitionOptions(n *SubPartitionDef
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteSubPartitionDefinitions(n SubPartitionDefinitions, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6426,6 +6670,7 @@ func (c *cow) copyOnRewriteSubPartitionDefinitions(n SubPartitionDefinitions, pa
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfSubquery(n *Subquery, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6448,6 +6693,7 @@ func (c *cow) copyOnRewriteRefOfSubquery(n *Subquery, parent SQLNode) (out SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfSubstrExpr(n *SubstrExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6474,6 +6720,7 @@ func (c *cow) copyOnRewriteRefOfSubstrExpr(n *SubstrExpr, parent SQLNode) (out S
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfSum(n *Sum, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6498,6 +6745,7 @@ func (c *cow) copyOnRewriteRefOfSum(n *Sum, parent SQLNode) (out SQLNode, change
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteTableExprs(n TableExprs, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6521,6 +6769,7 @@ func (c *cow) copyOnRewriteTableExprs(n TableExprs, parent SQLNode) (out SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteTableName(n TableName, parent SQLNode) (out SQLNode, changed bool) {
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
@@ -6542,6 +6791,7 @@ func (c *cow) copyOnRewriteTableName(n TableName, parent SQLNode) (out SQLNode, 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteTableNames(n TableNames, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6565,6 +6815,7 @@ func (c *cow) copyOnRewriteTableNames(n TableNames, parent SQLNode) (out SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteTableOptions(n TableOptions, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6578,6 +6829,7 @@ func (c *cow) copyOnRewriteTableOptions(n TableOptions, parent SQLNode) (out SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfTableSpec(n *TableSpec, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6632,6 +6884,7 @@ func (c *cow) copyOnRewriteRefOfTableSpec(n *TableSpec, parent SQLNode) (out SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfTablespaceOperation(n *TablespaceOperation, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6644,6 +6897,7 @@ func (c *cow) copyOnRewriteRefOfTablespaceOperation(n *TablespaceOperation, pare
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfTimestampDiffExpr(n *TimestampDiffExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6668,6 +6922,7 @@ func (c *cow) copyOnRewriteRefOfTimestampDiffExpr(n *TimestampDiffExpr, parent S
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfTrimFuncExpr(n *TrimFuncExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6692,6 +6947,7 @@ func (c *cow) copyOnRewriteRefOfTrimFuncExpr(n *TrimFuncExpr, parent SQLNode) (o
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfTruncateTable(n *TruncateTable, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6714,6 +6970,7 @@ func (c *cow) copyOnRewriteRefOfTruncateTable(n *TruncateTable, parent SQLNode) 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfUnaryExpr(n *UnaryExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6736,6 +6993,7 @@ func (c *cow) copyOnRewriteRefOfUnaryExpr(n *UnaryExpr, parent SQLNode) (out SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfUnion(n *Union, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6768,6 +7026,7 @@ func (c *cow) copyOnRewriteRefOfUnion(n *Union, parent SQLNode) (out SQLNode, ch
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfUnlockTables(n *UnlockTables, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6780,6 +7039,7 @@ func (c *cow) copyOnRewriteRefOfUnlockTables(n *UnlockTables, parent SQLNode) (o
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfUpdate(n *Update, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6822,6 +7082,7 @@ func (c *cow) copyOnRewriteRefOfUpdate(n *Update, parent SQLNode) (out SQLNode, 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfUpdateExpr(n *UpdateExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6846,6 +7107,7 @@ func (c *cow) copyOnRewriteRefOfUpdateExpr(n *UpdateExpr, parent SQLNode) (out S
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteUpdateExprs(n UpdateExprs, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6869,6 +7131,7 @@ func (c *cow) copyOnRewriteUpdateExprs(n UpdateExprs, parent SQLNode) (out SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfUpdateXMLExpr(n *UpdateXMLExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6895,6 +7158,7 @@ func (c *cow) copyOnRewriteRefOfUpdateXMLExpr(n *UpdateXMLExpr, parent SQLNode) 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfUse(n *Use, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6917,6 +7181,7 @@ func (c *cow) copyOnRewriteRefOfUse(n *Use, parent SQLNode) (out SQLNode, change
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfVExplainStmt(n *VExplainStmt, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6941,6 +7206,7 @@ func (c *cow) copyOnRewriteRefOfVExplainStmt(n *VExplainStmt, parent SQLNode) (o
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfVStream(n *VStream, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6971,6 +7237,7 @@ func (c *cow) copyOnRewriteRefOfVStream(n *VStream, parent SQLNode) (out SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteValTuple(n ValTuple, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6994,6 +7261,7 @@ func (c *cow) copyOnRewriteValTuple(n ValTuple, parent SQLNode) (out SQLNode, ch
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfValidation(n *Validation, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -7006,6 +7274,7 @@ func (c *cow) copyOnRewriteRefOfValidation(n *Validation, parent SQLNode) (out S
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteValues(n Values, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -7029,6 +7298,7 @@ func (c *cow) copyOnRewriteValues(n Values, parent SQLNode) (out SQLNode, change
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfValuesFuncExpr(n *ValuesFuncExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -7051,6 +7321,7 @@ func (c *cow) copyOnRewriteRefOfValuesFuncExpr(n *ValuesFuncExpr, parent SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfValuesStatement(n *ValuesStatement, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -7083,6 +7354,7 @@ func (c *cow) copyOnRewriteRefOfValuesStatement(n *ValuesStatement, parent SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfVarPop(n *VarPop, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -7107,6 +7379,7 @@ func (c *cow) copyOnRewriteRefOfVarPop(n *VarPop, parent SQLNode) (out SQLNode, 
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfVarSamp(n *VarSamp, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -7131,6 +7404,7 @@ func (c *cow) copyOnRewriteRefOfVarSamp(n *VarSamp, parent SQLNode) (out SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfVariable(n *Variable, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -7153,6 +7427,7 @@ func (c *cow) copyOnRewriteRefOfVariable(n *Variable, parent SQLNode) (out SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfVariance(n *Variance, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -7177,6 +7452,7 @@ func (c *cow) copyOnRewriteRefOfVariance(n *Variance, parent SQLNode) (out SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteVindexParam(n VindexParam, parent SQLNode) (out SQLNode, changed bool) {
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
@@ -7196,6 +7472,7 @@ func (c *cow) copyOnRewriteVindexParam(n VindexParam, parent SQLNode) (out SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfVindexSpec(n *VindexSpec, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -7230,6 +7507,7 @@ func (c *cow) copyOnRewriteRefOfVindexSpec(n *VindexSpec, parent SQLNode) (out S
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfWeightStringFuncExpr(n *WeightStringFuncExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -7254,6 +7532,7 @@ func (c *cow) copyOnRewriteRefOfWeightStringFuncExpr(n *WeightStringFuncExpr, pa
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfWhen(n *When, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -7278,6 +7557,7 @@ func (c *cow) copyOnRewriteRefOfWhen(n *When, parent SQLNode) (out SQLNode, chan
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfWhere(n *Where, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -7300,6 +7580,7 @@ func (c *cow) copyOnRewriteRefOfWhere(n *Where, parent SQLNode) (out SQLNode, ch
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfWindowDefinition(n *WindowDefinition, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -7324,6 +7605,7 @@ func (c *cow) copyOnRewriteRefOfWindowDefinition(n *WindowDefinition, parent SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteWindowDefinitions(n WindowDefinitions, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -7347,6 +7629,7 @@ func (c *cow) copyOnRewriteWindowDefinitions(n WindowDefinitions, parent SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfWindowSpecification(n *WindowSpecification, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -7383,6 +7666,7 @@ func (c *cow) copyOnRewriteRefOfWindowSpecification(n *WindowSpecification, pare
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfWith(n *With, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -7413,6 +7697,7 @@ func (c *cow) copyOnRewriteRefOfWith(n *With, parent SQLNode) (out SQLNode, chan
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfXorExpr(n *XorExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -7437,6 +7722,7 @@ func (c *cow) copyOnRewriteRefOfXorExpr(n *XorExpr, parent SQLNode) (out SQLNode
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteAggrFunc(n AggrFunc, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -7489,6 +7775,7 @@ func (c *cow) copyOnRewriteAggrFunc(n AggrFunc, parent SQLNode) (out SQLNode, ch
 		return nil, false
 	}
 }
+
 func (c *cow) copyOnRewriteAlterOption(n AlterOption, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -7545,6 +7832,7 @@ func (c *cow) copyOnRewriteAlterOption(n AlterOption, parent SQLNode) (out SQLNo
 		return nil, false
 	}
 }
+
 func (c *cow) copyOnRewriteCallable(n Callable, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -7713,6 +8001,7 @@ func (c *cow) copyOnRewriteCallable(n Callable, parent SQLNode) (out SQLNode, ch
 		return nil, false
 	}
 }
+
 func (c *cow) copyOnRewriteColTuple(n ColTuple, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -7731,6 +8020,7 @@ func (c *cow) copyOnRewriteColTuple(n ColTuple, parent SQLNode) (out SQLNode, ch
 		return nil, false
 	}
 }
+
 func (c *cow) copyOnRewriteCompoundStatement(n CompoundStatement, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -7757,6 +8047,7 @@ func (c *cow) copyOnRewriteCompoundStatement(n CompoundStatement, parent SQLNode
 		return nil, false
 	}
 }
+
 func (c *cow) copyOnRewriteConstraintInfo(n ConstraintInfo, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -7773,6 +8064,7 @@ func (c *cow) copyOnRewriteConstraintInfo(n ConstraintInfo, parent SQLNode) (out
 		return nil, false
 	}
 }
+
 func (c *cow) copyOnRewriteDBDDLStatement(n DBDDLStatement, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -7791,6 +8083,7 @@ func (c *cow) copyOnRewriteDBDDLStatement(n DBDDLStatement, parent SQLNode) (out
 		return nil, false
 	}
 }
+
 func (c *cow) copyOnRewriteDDLStatement(n DDLStatement, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -7823,6 +8116,7 @@ func (c *cow) copyOnRewriteDDLStatement(n DDLStatement, parent SQLNode) (out SQL
 		return nil, false
 	}
 }
+
 func (c *cow) copyOnRewriteExplain(n Explain, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -7839,6 +8133,7 @@ func (c *cow) copyOnRewriteExplain(n Explain, parent SQLNode) (out SQLNode, chan
 		return nil, false
 	}
 }
+
 func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -8085,6 +8380,7 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return nil, false
 	}
 }
+
 func (c *cow) copyOnRewriteHandlerCondition(n HandlerCondition, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -8109,6 +8405,7 @@ func (c *cow) copyOnRewriteHandlerCondition(n HandlerCondition, parent SQLNode) 
 		return nil, false
 	}
 }
+
 func (c *cow) copyOnRewriteInsertRows(n InsertRows, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -8129,6 +8426,7 @@ func (c *cow) copyOnRewriteInsertRows(n InsertRows, parent SQLNode) (out SQLNode
 		return nil, false
 	}
 }
+
 func (c *cow) copyOnRewriteSelectExpr(n SelectExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -8147,6 +8445,7 @@ func (c *cow) copyOnRewriteSelectExpr(n SelectExpr, parent SQLNode) (out SQLNode
 		return nil, false
 	}
 }
+
 func (c *cow) copyOnRewriteSelectStatement(n SelectStatement, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -8163,6 +8462,7 @@ func (c *cow) copyOnRewriteSelectStatement(n SelectStatement, parent SQLNode) (o
 		return nil, false
 	}
 }
+
 func (c *cow) copyOnRewriteShowInternal(n ShowInternal, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -8183,6 +8483,7 @@ func (c *cow) copyOnRewriteShowInternal(n ShowInternal, parent SQLNode) (out SQL
 		return nil, false
 	}
 }
+
 func (c *cow) copyOnRewriteSimpleTableExpr(n SimpleTableExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -8199,6 +8500,7 @@ func (c *cow) copyOnRewriteSimpleTableExpr(n SimpleTableExpr, parent SQLNode) (o
 		return nil, false
 	}
 }
+
 func (c *cow) copyOnRewriteStatement(n Statement, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -8315,6 +8617,7 @@ func (c *cow) copyOnRewriteStatement(n Statement, parent SQLNode) (out SQLNode, 
 		return nil, false
 	}
 }
+
 func (c *cow) copyOnRewriteTableExpr(n TableExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -8335,6 +8638,7 @@ func (c *cow) copyOnRewriteTableExpr(n TableExpr, parent SQLNode) (out SQLNode, 
 		return nil, false
 	}
 }
+
 func (c *cow) copyOnRewriteTableStatement(n TableStatement, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -8353,6 +8657,7 @@ func (c *cow) copyOnRewriteTableStatement(n TableStatement, parent SQLNode) (out
 		return nil, false
 	}
 }
+
 func (c *cow) copyOnRewriteWindowFunc(n WindowFunc, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -8411,6 +8716,7 @@ func (c *cow) copyOnRewriteWindowFunc(n WindowFunc, parent SQLNode) (out SQLNode
 		return nil, false
 	}
 }
+
 func (c *cow) copyOnRewriteAlgorithmValue(n AlgorithmValue, parent SQLNode) (out SQLNode, changed bool) {
 	if c.cursor.stop {
 		return n, false
@@ -8425,6 +8731,7 @@ func (c *cow) copyOnRewriteAlgorithmValue(n AlgorithmValue, parent SQLNode) (out
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteBoolVal(n BoolVal, parent SQLNode) (out SQLNode, changed bool) {
 	if c.cursor.stop {
 		return n, false
@@ -8439,6 +8746,7 @@ func (c *cow) copyOnRewriteBoolVal(n BoolVal, parent SQLNode) (out SQLNode, chan
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteListArg(n ListArg, parent SQLNode) (out SQLNode, changed bool) {
 	if c.cursor.stop {
 		return n, false
@@ -8453,6 +8761,7 @@ func (c *cow) copyOnRewriteListArg(n ListArg, parent SQLNode) (out SQLNode, chan
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteMatchAction(n MatchAction, parent SQLNode) (out SQLNode, changed bool) {
 	if c.cursor.stop {
 		return n, false
@@ -8467,6 +8776,7 @@ func (c *cow) copyOnRewriteMatchAction(n MatchAction, parent SQLNode) (out SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteReferenceAction(n ReferenceAction, parent SQLNode) (out SQLNode, changed bool) {
 	if c.cursor.stop {
 		return n, false
@@ -8481,6 +8791,7 @@ func (c *cow) copyOnRewriteReferenceAction(n ReferenceAction, parent SQLNode) (o
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfIdentifierCI(n *IdentifierCI, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -8493,6 +8804,7 @@ func (c *cow) copyOnRewriteRefOfIdentifierCI(n *IdentifierCI, parent SQLNode) (o
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfIdentifierCS(n *IdentifierCS, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -8505,6 +8817,7 @@ func (c *cow) copyOnRewriteRefOfIdentifierCS(n *IdentifierCS, parent SQLNode) (o
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfRootNode(n *RootNode, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -8527,6 +8840,7 @@ func (c *cow) copyOnRewriteRefOfRootNode(n *RootNode, parent SQLNode) (out SQLNo
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfTableName(n *TableName, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -8551,6 +8865,7 @@ func (c *cow) copyOnRewriteRefOfTableName(n *TableName, parent SQLNode) (out SQL
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteRefOfVindexParam(n *VindexParam, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -8573,6 +8888,7 @@ func (c *cow) copyOnRewriteRefOfVindexParam(n *VindexParam, parent SQLNode) (out
 	}
 	return
 }
+
 func (c *cow) copyOnRewriteVisitable(n Visitable, parent SQLNode) (out SQLNode, changed bool) {
 	if c.cursor.stop {
 		return n, false

@@ -130,76 +130,76 @@ func (pl *PrefixedLogger) Flush() {
 }
 
 func (pl *PrefixedLogger) Info(args ...any) {
-	args = append([]interface{}{pl.prefix}, args...)
+	args = append([]any{pl.prefix}, args...)
 	Info(args...)
 }
 
 func (pl *PrefixedLogger) Infof(format string, args ...any) {
-	args = append([]interface{}{pl.prefix}, args...)
+	args = append([]any{pl.prefix}, args...)
 	Infof("%s"+format, args...)
 }
 
 func (pl *PrefixedLogger) InfoDepth(depth int, args ...any) {
-	args = append([]interface{}{pl.prefix}, args...)
+	args = append([]any{pl.prefix}, args...)
 	InfoDepth(depth, args...)
 }
 
 func (pl *PrefixedLogger) Warning(args ...any) {
-	args = append([]interface{}{pl.prefix}, args...)
+	args = append([]any{pl.prefix}, args...)
 	Warning(args...)
 }
 
 func (pl *PrefixedLogger) Warningf(format string, args ...any) {
-	args = append([]interface{}{pl.prefix}, args...)
+	args = append([]any{pl.prefix}, args...)
 	Warningf("%s"+format, args...)
 }
 
 func (pl *PrefixedLogger) WarningDepth(depth int, args ...any) {
-	args = append([]interface{}{pl.prefix}, args...)
+	args = append([]any{pl.prefix}, args...)
 	WarningDepth(depth, args...)
 }
 
 func (pl *PrefixedLogger) Error(args ...any) {
-	args = append([]interface{}{pl.prefix}, args...)
+	args = append([]any{pl.prefix}, args...)
 	Error(args...)
 }
 
 func (pl *PrefixedLogger) Errorf(format string, args ...any) {
-	args = append([]interface{}{pl.prefix}, args...)
+	args = append([]any{pl.prefix}, args...)
 	Errorf("%s"+format, args...)
 }
 
 func (pl *PrefixedLogger) ErrorDepth(depth int, args ...any) {
-	args = append([]interface{}{pl.prefix}, args...)
+	args = append([]any{pl.prefix}, args...)
 	ErrorDepth(depth, args...)
 }
 
 func (pl *PrefixedLogger) Exit(args ...any) {
-	args = append([]interface{}{pl.prefix}, args...)
+	args = append([]any{pl.prefix}, args...)
 	Exit(args...)
 }
 
 func (pl *PrefixedLogger) Exitf(format string, args ...any) {
-	args = append([]interface{}{pl.prefix}, args...)
+	args = append([]any{pl.prefix}, args...)
 	Exitf("%s"+format, args...)
 }
 
 func (pl *PrefixedLogger) ExitDepth(depth int, args ...any) {
-	args = append([]interface{}{pl.prefix}, args...)
+	args = append([]any{pl.prefix}, args...)
 	ExitDepth(depth, args...)
 }
 
 func (pl *PrefixedLogger) Fatal(args ...any) {
-	args = append([]interface{}{pl.prefix}, args...)
+	args = append([]any{pl.prefix}, args...)
 	Fatal(args...)
 }
 
 func (pl *PrefixedLogger) Fatalf(format string, args ...any) {
-	args = append([]interface{}{pl.prefix}, args...)
+	args = append([]any{pl.prefix}, args...)
 	Fatalf("%s"+format, args...)
 }
 
 func (pl *PrefixedLogger) FatalDepth(depth int, args ...any) {
-	args = append([]interface{}{pl.prefix}, args...)
+	args = append([]any{pl.prefix}, args...)
 	FatalDepth(depth, args...)
 }

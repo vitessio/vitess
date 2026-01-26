@@ -201,17 +201,22 @@ func insertInitialFKData(t *testing.T) {
 			count int
 		}
 		for _, table := range []tableCounts{
-			{"parent", 2}, {"child", 3},
-			{"t1", 2}, {"t2", 3},
-			{"t11", 1}, {"t12", 1},
+			{"parent", 2},
+			{"child", 3},
+			{"t1", 2},
+			{"t2", 3},
+			{"t11", 1},
+			{"t12", 1},
 		} {
 			waitForRowCount(t, vtgateConn, db, table.name, table.count)
 		}
 	})
 }
 
-var currentParentId int64
-var currentChildId int64
+var (
+	currentParentId int64
+	currentChildId  int64
+)
 
 func init() {
 	currentParentId = 100

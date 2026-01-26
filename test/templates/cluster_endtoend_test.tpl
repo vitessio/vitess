@@ -120,7 +120,7 @@ jobs:
         sudo apt-get -qq install -y lsb-release gnupg2
         wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo percona-release setup ps80
+        sudo percona-release setup pdps8.0
         sudo apt-get -qq update
 
         sudo apt-get -qq install -y percona-server-server percona-server-client

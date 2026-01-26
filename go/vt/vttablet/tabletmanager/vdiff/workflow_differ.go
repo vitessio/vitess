@@ -123,10 +123,7 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 	matchedTargetDiffs := make([]bool, len(dr.ExtraRowsTargetDiffs))
 	matchedDiffs := int64(0)
 
-	maxRows := int(dr.ExtraRowsSource)
-	if maxRows > int(maxExtraRowsToCompare) {
-		maxRows = int(maxExtraRowsToCompare)
-	}
+	maxRows := min(int(dr.ExtraRowsSource), int(maxExtraRowsToCompare))
 	log.Infof("Reconciling extra rows for table %s in vdiff %s, extra source rows %d, extra target rows %d, max rows %d",
 		dr.TableName, wd.ct.uuid, dr.ExtraRowsSource, dr.ExtraRowsTarget, maxRows)
 

@@ -34,7 +34,7 @@ func TestCreateUUID(t *testing.T) {
 }
 
 func TestIsOnlineDDLUUID(t *testing.T) {
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		uuid, err := CreateOnlineDDLUUID()
 		assert.NoError(t, err)
 		assert.True(t, IsOnlineDDLUUID(uuid))
@@ -55,7 +55,7 @@ func TestGetGCUUID(t *testing.T) {
 	parser := sqlparser.NewTestParser()
 	uuids := map[string]bool{}
 	count := 20
-	for i := 0; i < count; i++ {
+	for range count {
 		onlineDDL, err := NewOnlineDDL("ks", "tbl", "alter table t drop column c", NewDDLStrategySetting(DDLStrategyDirect, ""), "", "", parser)
 		assert.NoError(t, err)
 		gcUUID := onlineDDL.GetGCUUID()
@@ -64,6 +64,7 @@ func TestGetGCUUID(t *testing.T) {
 	}
 	assert.Equal(t, count, len(uuids))
 }
+
 func TestGetActionStr(t *testing.T) {
 	tt := []struct {
 		statement string

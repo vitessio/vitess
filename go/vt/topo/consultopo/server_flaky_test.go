@@ -51,7 +51,7 @@ func startConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
 	configDir := t.TempDir()
 
 	configFilename := path.Join(configDir, "consul.json")
-	configFile, err := os.OpenFile(configFilename, os.O_RDWR|os.O_CREATE, 0600)
+	configFile, err := os.OpenFile(configFilename, os.O_RDWR|os.O_CREATE, 0o600)
 	if err != nil {
 		t.Fatalf("cannot create tempfile: %v", err)
 	}
@@ -153,8 +153,7 @@ func TestConsulTopo(t *testing.T) {
 
 	// Run the TopoServerTestSuite tests.
 	testIndex := 0
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	test.TopoServerTestSuite(t, ctx, func() *topo.Server {
 		// Each test will use its own sub-directories.
@@ -212,8 +211,7 @@ func TestConsulTopoWithChecks(t *testing.T) {
 
 	// Run the TopoServerTestSuite tests.
 	testIndex := 0
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	test.TopoServerTestSuite(t, ctx, func() *topo.Server {
 		// Each test will use its own sub-directories.
 		testRoot := fmt.Sprintf("test-%v", testIndex)
@@ -258,7 +256,6 @@ func TestConsulTopoWithAuth(t *testing.T) {
 	// Run the TopoServerTestSuite tests.
 	testIndex := 0
 	tmpFile, err := os.CreateTemp("", "consul_auth_client_static_file.json")
-
 	if err != nil {
 		t.Fatalf("couldn't create temp file: %v", err)
 	}
@@ -272,12 +269,11 @@ func TestConsulTopoWithAuth(t *testing.T) {
 	consulAuthClientStaticFile = tmpFile.Name()
 
 	jsonConfig := "{\"global\":{\"acl_token\":\"123456\"}, \"test\":{\"acl_token\":\"123456\"}}"
-	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0o600); err != nil {
 		t.Fatalf("couldn't write temp file: %v", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	test.TopoServerTestSuite(t, ctx, func() *topo.Server {
 		// Each test will use its own sub-directories.
 		testRoot := fmt.Sprintf("test-%v", testIndex)
@@ -314,7 +310,6 @@ func TestConsulTopoWithAuthFailure(t *testing.T) {
 	}()
 
 	tmpFile, err := os.CreateTemp("", "consul_auth_client_static_file.json")
-
 	if err != nil {
 		t.Fatalf("couldn't create temp file: %v", err)
 	}
@@ -330,7 +325,7 @@ func TestConsulTopoWithAuthFailure(t *testing.T) {
 	// check valid, empty json causes error
 	{
 		jsonConfig := "{}"
-		if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+		if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0o600); err != nil {
 			t.Fatalf("couldn't write temp file: %v", err)
 		}
 
@@ -344,7 +339,7 @@ func TestConsulTopoWithAuthFailure(t *testing.T) {
 	// check bad token causes error
 	{
 		jsonConfig := "{\"global\":{\"acl_token\":\"badtoken\"}}"
-		if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+		if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0o600); err != nil {
 			t.Fatalf("couldn't write temp file: %v", err)
 		}
 
@@ -394,8 +389,7 @@ func TestConsulWatcherStormPrevention(t *testing.T) {
 		os.Remove(configFilename)
 	}()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	testRoot := "storm-test"
 

@@ -41,6 +41,7 @@ func (cached *eightbitWildcard) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *fastMatcher) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -55,6 +56,7 @@ func (cached *fastMatcher) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *unicodeWildcard) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

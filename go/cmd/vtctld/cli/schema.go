@@ -56,8 +56,7 @@ func initSchema(ctx context.Context) {
 			interval = time.Minute
 		}
 		timer := timer.NewTimer(interval)
-		controllerFactory, err :=
-			schemamanager.GetControllerFactory(schemaChangeController)
+		controllerFactory, err := schemamanager.GetControllerFactory(schemaChangeController)
 		if err != nil {
 			log.Fatalf("unable to get a controller factory, error: %v", err)
 		}

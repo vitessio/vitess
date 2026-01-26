@@ -95,7 +95,7 @@ func (db *LocalCluster) populateTable(dbname, table string) error {
 		fieldNames []string
 	)
 
-	for i := 0; i < numRows; i++ {
+	for range numRows {
 		var fields []string
 		for _, row := range fieldInfo.Rows {
 			fieldName := row[0].ToString()

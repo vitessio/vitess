@@ -34,13 +34,14 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
-const rsSelectFrozenQuery = "select 1 from _vt.vreplication where db_name='vt_ks' and message='FROZEN' and workflow_sub_type != 1"
-const insertPrefix = `/insert into _vt.vreplication\(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options\) values `
-const eol = "$"
+const (
+	rsSelectFrozenQuery = "select 1 from _vt.vreplication where db_name='vt_ks' and message='FROZEN' and workflow_sub_type != 1"
+	insertPrefix        = `/insert into _vt.vreplication\(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options\) values `
+	eol                 = "$"
+)
 
 func TestResharderOneToMany(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestResharderEnv(t, ctx, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
@@ -61,7 +62,7 @@ func TestResharderOneToMany(t *testing.T) {
 		cells       string
 		tabletTypes string
 	}
-	var newTestCase = func(cells, tabletTypes string) *testCase {
+	newTestCase := func(cells, tabletTypes string) *testCase {
 		return &testCase{
 			cells:       cells,
 			tabletTypes: tabletTypes,
@@ -117,8 +118,7 @@ func TestResharderOneToMany(t *testing.T) {
 }
 
 func TestResharderManyToOne(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestResharderEnv(t, ctx, []string{"-80", "80-"}, []string{"0"})
 	defer env.close()
 
@@ -152,8 +152,7 @@ func TestResharderManyToOne(t *testing.T) {
 }
 
 func TestResharderManyToMany(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestResharderEnv(t, ctx, []string{"-40", "40-"}, []string{"-80", "80-"})
 	defer env.close()
 
@@ -197,8 +196,7 @@ func TestResharderManyToMany(t *testing.T) {
 // TestResharderOneRefTable tests the case where there's one ref table, but no stream for it.
 // This means that the table is being updated manually.
 func TestResharderOneRefTable(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestResharderEnv(t, ctx, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
@@ -254,8 +252,7 @@ func TestResharderOneRefTable(t *testing.T) {
 
 // TestReshardStopFlags tests the flags -stop_started and -stop_after_copy
 func TestReshardStopFlags(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestResharderEnv(t, ctx, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
@@ -310,8 +307,7 @@ func TestReshardStopFlags(t *testing.T) {
 
 // TestResharderOneRefStream tests the case where there's one ref table and an associated stream.
 func TestResharderOneRefStream(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestResharderEnv(t, ctx, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
@@ -383,8 +379,7 @@ func TestResharderOneRefStream(t *testing.T) {
 
 // TestResharderNoRefStream tests the case where there's a stream, but it's not a reference.
 func TestResharderNoRefStream(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestResharderEnv(t, ctx, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
@@ -464,8 +459,7 @@ func TestResharderNoRefStream(t *testing.T) {
 }
 
 func TestResharderCopySchema(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestResharderEnv(t, ctx, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
@@ -506,8 +500,7 @@ func TestResharderCopySchema(t *testing.T) {
 }
 
 func TestResharderDupWorkflow(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestResharderEnv(t, ctx, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
@@ -539,8 +532,7 @@ func TestResharderDupWorkflow(t *testing.T) {
 }
 
 func TestResharderServingState(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestResharderEnv(t, ctx, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
@@ -583,8 +575,7 @@ func TestResharderServingState(t *testing.T) {
 }
 
 func TestResharderTargetAlreadyResharding(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestResharderEnv(t, ctx, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
@@ -618,8 +609,7 @@ func TestResharderTargetAlreadyResharding(t *testing.T) {
 }
 
 func TestResharderUnnamedStream(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestResharderEnv(t, ctx, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
@@ -671,8 +661,7 @@ func TestResharderUnnamedStream(t *testing.T) {
 }
 
 func TestResharderMismatchedRefStreams(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestResharderEnv(t, ctx, []string{"-80", "80-"}, []string{"0"})
 	defer env.close()
 
@@ -743,8 +732,7 @@ func TestResharderMismatchedRefStreams(t *testing.T) {
 }
 
 func TestResharderTableNotInVSchema(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestResharderEnv(t, ctx, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
@@ -782,8 +770,7 @@ func TestResharderTableNotInVSchema(t *testing.T) {
 }
 
 func TestResharderMixedTablesOrder1(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestResharderEnv(t, ctx, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
@@ -854,8 +841,7 @@ func TestResharderMixedTablesOrder1(t *testing.T) {
 }
 
 func TestResharderMixedTablesOrder2(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestResharderEnv(t, ctx, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 

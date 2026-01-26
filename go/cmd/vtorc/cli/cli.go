@@ -29,11 +29,10 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/server"
 )
 
-var (
-	Main = &cobra.Command{
-		Use:   "vtorc",
-		Short: "VTOrc is the automated fault detection and repair tool in Vitess.",
-		Example: `vtorc \
+var Main = &cobra.Command{
+	Use:   "vtorc",
+	Short: "VTOrc is the automated fault detection and repair tool in Vitess.",
+	Example: `vtorc \
 	--topo-implementation etcd2 \
 	--topo-global-server-address localhost:2379 \
 	--topo-global-root /vitess/global \
@@ -42,12 +41,11 @@ var (
 	--instance-poll-time "1s" \
 	--topo-information-refresh-duration "30s" \
 	--alsologtostderr`,
-		Args:    cobra.NoArgs,
-		Version: servenv.AppVersion.String(),
-		PreRunE: servenv.CobraPreRunE,
-		Run:     run,
-	}
-)
+	Args:    cobra.NoArgs,
+	Version: servenv.AppVersion.String(),
+	PreRunE: servenv.CobraPreRunE,
+	Run:     run,
+}
 
 func run(cmd *cobra.Command, args []string) {
 	servenv.Init()

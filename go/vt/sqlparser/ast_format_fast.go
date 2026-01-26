@@ -86,7 +86,6 @@ func (node *Select) FormatFast(buf *TrackedBuffer) {
 	node.Limit.FormatFast(buf)
 	buf.WriteString(node.Lock.ToString())
 	node.Into.FormatFast(buf)
-
 }
 
 // FormatFast formats the node.
@@ -138,7 +137,6 @@ func (node *VStream) FormatFast(buf *TrackedBuffer) {
 	node.SelectExpr.FormatFast(buf)
 	buf.WriteString(" from ")
 	node.Table.FormatFast(buf)
-
 }
 
 // FormatFast formats the node.
@@ -162,7 +160,6 @@ func (node *ValuesStatement) FormatFast(buf *TrackedBuffer) {
 
 	node.Order.FormatFast(buf)
 	node.Limit.FormatFast(buf)
-
 }
 
 // FormatFast formats the node.
@@ -172,7 +169,6 @@ func (node *Stream) FormatFast(buf *TrackedBuffer) {
 	node.SelectExpr.FormatFast(buf)
 	buf.WriteString(" from ")
 	node.Table.FormatFast(buf)
-
 }
 
 // FormatFast formats the node.

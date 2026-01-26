@@ -140,6 +140,7 @@ func TestMean(t *testing.T) {
 		}
 	}
 }
+
 func TestSampleCopy(t *testing.T) {
 	s := Sample{Xs: []float64{15, 20, 35, 40, 50}, Sorted: true}
 	copySample := s.Copy()

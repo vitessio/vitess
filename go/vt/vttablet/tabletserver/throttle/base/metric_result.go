@@ -43,8 +43,10 @@ func NewMetricResultMap() MetricResultMap {
 }
 
 // ErrThresholdExceeded is the common error one may get checking on metric result
-var ErrThresholdExceeded = errors.New("threshold exceeded")
-var ErrNoResultYet = errors.New("metric not collected yet")
+var (
+	ErrThresholdExceeded = errors.New("threshold exceeded")
+	ErrNoResultYet       = errors.New("metric not collected yet")
+)
 
 // ErrNoSuchMetric is for when a user requests a metric by an unknown metric name
 var ErrNoSuchMetric = errors.New("no such metric")

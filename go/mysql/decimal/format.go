@@ -85,8 +85,10 @@ func (d *Decimal) formatSlow(trim bool) []byte {
 	return buf
 }
 
-var zeroByte = []byte{'0'}
-var oneByte = []byte{'1'}
+var (
+	zeroByte = []byte{'0'}
+	oneByte  = []byte{'1'}
+)
 
 const smallsString = "00010203040506070809" +
 	"10111213141516171819" +
@@ -251,10 +253,7 @@ func (d *Decimal) formatFast(prec int, round bool, trim bool) []byte {
 		}
 	// log10(integral) < scale, so put "0." and fill with zeroes until integral: 0.00000123456
 	default:
-		end := len(integral)
-		if prec < end {
-			end = prec
-		}
+		end := min(prec, len(integral))
 		buf = alloc(len(zeroRadix) - radix + end)
 		buf = append(buf, zeroRadix...)
 		buf = appendZeroes(buf, -radix)

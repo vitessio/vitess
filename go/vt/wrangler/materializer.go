@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -122,19 +123,15 @@ func shouldInclude(table string, excludes []string) bool {
 	if schema.IsInternalOperationTableName(table) {
 		return false
 	}
-	for _, t := range excludes {
-		if t == table {
-			return false
-		}
-	}
-	return true
+	return !slices.Contains(excludes, table)
 }
 
 // MoveTables initiates moving table(s) over to another keyspace
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
 	cell, tabletTypesStr string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool,
 	externalCluster string, dropForeignKeys, deferSecondaryKeys bool, sourceTimeZone, onDDL string,
-	sourceShards []string, noRoutingRules bool, atomicCopy bool) (err error) {
+	sourceShards []string, noRoutingRules bool, atomicCopy bool,
+) (err error) {
 	// FIXME validate tableSpecs, allTables, excludeTables
 	var tables []string
 	var externalTopo *topo.Server
@@ -376,14 +373,7 @@ func (wr *Wrangler) validateSourceTablesExist(sourceKeyspace string, ksTables, t
 		if schema.IsInternalOperationTableName(table) {
 			continue
 		}
-		found := false
-
-		for _, ksTable := range ksTables {
-			if table == ksTable {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(ksTables, table)
 		if !found {
 			missingTables = append(missingTables, table)
 		}
@@ -1085,11 +1075,8 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 		isPartial = true
 		var sourceShards2 []*topo.ShardInfo
 		for _, shard := range sourceShards {
-			for _, shard2 := range ms.SourceShards {
-				if shard.ShardName() == shard2 {
-					sourceShards2 = append(sourceShards2, shard)
-					break
-				}
+			if slices.Contains(ms.SourceShards, shard.ShardName()) {
+				sourceShards2 = append(sourceShards2, shard)
 			}
 		}
 		sourceShards = sourceShards2
@@ -1105,11 +1092,8 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 	if len(ms.SourceShards) > 0 {
 		var targetShards2 []*topo.ShardInfo
 		for _, shard := range targetShards {
-			for _, shard2 := range ms.SourceShards {
-				if shard.ShardName() == shard2 {
-					targetShards2 = append(targetShards2, shard)
-					break
-				}
+			if slices.Contains(ms.SourceShards, shard.ShardName()) {
+				targetShards2 = append(targetShards2, shard)
 			}
 		}
 		targetShards = targetShards2

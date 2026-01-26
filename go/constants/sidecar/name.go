@@ -24,10 +24,8 @@ const (
 	DefaultName = "_vt"
 )
 
-var (
-	// This should be accessed via GetName()
-	sidecarDBName atomic.Value
-)
+// This should be accessed via GetName()
+var sidecarDBName atomic.Value
 
 func init() {
 	sidecarDBName.Store(DefaultName)

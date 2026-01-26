@@ -516,7 +516,7 @@ func TestSpecializedPlan(t *testing.T) {
 		stmt, err := dbo.Prepare(q.query)
 		require.NoError(t, err)
 
-		for i := 0; i < 5; i++ {
+		for range 5 {
 			rows, err := stmt.Query(q.args...)
 			require.NoError(t, err)
 			require.NoError(t, rows.Close())

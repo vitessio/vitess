@@ -65,7 +65,8 @@ type tableStreamer struct {
 }
 
 func newTableStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, vschema *localVSchema,
-	send func(response *binlogdatapb.VStreamTablesResponse) error, vse *Engine, options *binlogdatapb.VStreamOptions) *tableStreamer {
+	send func(response *binlogdatapb.VStreamTablesResponse) error, vse *Engine, options *binlogdatapb.VStreamOptions,
+) *tableStreamer {
 	config, err := GetVReplicationConfig(options)
 	if err != nil {
 		return nil
@@ -150,7 +151,8 @@ func (ts *tableStreamer) Stream() error {
 }
 
 func (ts *tableStreamer) newRowStreamer(ctx context.Context, query string, lastpk []sqltypes.Value,
-	send func(*binlogdatapb.VStreamRowsResponse) error) (*rowStreamer, func(), error) {
+	send func(*binlogdatapb.VStreamRowsResponse) error,
+) (*rowStreamer, func(), error) {
 	vse := ts.vse
 	if atomic.LoadInt32(&vse.isOpen) == 0 {
 		return nil, nil, errors.New("VStreamer is not open")

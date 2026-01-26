@@ -80,9 +80,7 @@ vtclient --server vtgate:15991 --target '@primary' --bind_variables '[ 12345, 1,
 	}
 )
 
-var (
-	seqChan = make(chan int, 10)
-)
+var seqChan = make(chan int, 10)
 
 func InitializeFlags() {
 	servenv.MoveFlagsToCobraCommand(Main)
@@ -223,11 +221,7 @@ func execMulti(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 
 	start := time.Now()
 	for i := 0; i < parallel; i++ {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			var ticker *time.Ticker
 			if isThrottled {
 				tickDuration := time.Second / time.Duration(qps)
@@ -259,7 +253,7 @@ func execMulti(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 					<-ticker.C
 				}
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	if all != nil {

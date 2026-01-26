@@ -65,7 +65,7 @@ func evalSetBits(values *EnumSetValues, value string) uint64 {
 	}
 
 	set := uint64(0)
-	for _, val := range strings.Split(value, ",") {
+	for val := range strings.SplitSeq(value, ",") {
 		idx := valueIdx(values, val)
 		if idx == -1 {
 			continue

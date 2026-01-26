@@ -45,8 +45,10 @@ type mariadbFlavor102 struct {
 	mariadbFlavor
 }
 
-var _ flavor = (*mariadbFlavor101)(nil)
-var _ flavor = (*mariadbFlavor102)(nil)
+var (
+	_ flavor = (*mariadbFlavor101)(nil)
+	_ flavor = (*mariadbFlavor102)(nil)
+)
 
 // primaryGTIDSet is part of the Flavor interface.
 func (mariadbFlavor) primaryGTIDSet(c *Conn) (replication.GTIDSet, error) {

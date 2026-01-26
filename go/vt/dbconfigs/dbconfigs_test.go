@@ -269,7 +269,7 @@ func TestCredentialsFileHUP(t *testing.T) {
 	dbCredentialsServer = "file"
 	oldStr := "str1"
 	jsonConfig := fmt.Sprintf("{\"%s\": [\"%s\"]}", oldStr, oldStr)
-	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0o600); err != nil {
 		t.Fatalf("couldn't write temp file: %v", err)
 	}
 	cs := GetCredentialsServer()
@@ -284,7 +284,7 @@ func TestCredentialsFileHUP(t *testing.T) {
 func hupTest(t *testing.T, tmpFile *os.File, oldStr, newStr string) {
 	cs := GetCredentialsServer()
 	jsonConfig := fmt.Sprintf("{\"%s\": [\"%s\"]}", newStr, newStr)
-	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0o600); err != nil {
 		t.Fatalf("couldn't overwrite temp file: %v", err)
 	}
 	_, pass, _ := cs.GetUserAndPassword(oldStr)

@@ -122,7 +122,8 @@ func addSchemaEngineQueries(db *fakesqldb.DB) {
 			mysql.BaseShowTablesWithSizesRow("test_table_03", false, ""),
 			mysql.BaseShowTablesWithSizesRow("seq", false, "vitess_sequence"),
 			mysql.BaseShowTablesWithSizesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
-		}})
+		},
+	})
 	db.AddQuery(mysql.BaseShowTables,
 		&sqltypes.Result{
 			Fields: mysql.BaseShowTablesFields,
@@ -453,7 +454,7 @@ func BenchmarkPlanCacheThroughput(b *testing.B) {
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		query := fmt.Sprintf("SELECT (a, b, c) FROM test_table_%d", rand.IntN(500))
 		_, err := qe.GetPlan(ctx, logStats, query, false, false)
 		if err != nil {
@@ -594,7 +595,7 @@ func TestPlanCachePollution(t *testing.T) {
 	}()
 
 	runner := func(totalQueries uint64, stats *Stats, sample func() string) {
-		for i := uint64(0); i < totalQueries; i++ {
+		for range totalQueries {
 			ctx := context.Background()
 			logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 			query := sample()

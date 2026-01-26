@@ -632,7 +632,8 @@ func testVStreamCellFlag(t *testing.T) {
 			Keyspace: defaultSourceKs,
 			Shard:    "0",
 			Gtid:     "",
-		}}}
+		}},
+	}
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match:  "product",
@@ -670,9 +671,7 @@ func testVStreamCellFlag(t *testing.T) {
 
 			rowsReceived := false
 			var wg sync.WaitGroup
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				defer cancel()
 
 				events, err := reader.Recv()
@@ -687,7 +686,7 @@ func testVStreamCellFlag(t *testing.T) {
 				default:
 					log.Infof("%s:: remote error: %v", time.Now(), err)
 				}
-			}()
+			})
 			wg.Wait()
 
 			if tc.expectError {
@@ -908,8 +907,10 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			// Confirm that the backticking of table names in the routing rules works.
 			tbls := []string{"Lead", "Lead-1"}
 			for _, tbl := range tbls {
-				output, err := osExec(t, "mysql", []string{"-u", "vtdba", "-P", strconv.Itoa(vc.ClusterConfig.vtgateMySQLPort),
-					"--host=127.0.0.1", "--default-character-set=utf8mb4", "-e", fmt.Sprintf("select * from `%s`", tbl)})
+				output, err := osExec(t, "mysql", []string{
+					"-u", "vtdba", "-P", strconv.Itoa(vc.ClusterConfig.vtgateMySQLPort),
+					"--host=127.0.0.1", "--default-character-set=utf8mb4", "-e", fmt.Sprintf("select * from `%s`", tbl),
+				})
 				if err != nil {
 					require.FailNow(t, output)
 				}
@@ -1007,7 +1008,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			require.NoError(t, err, "Error getting denylist for customer:0")
 			require.False(t, exists)
 
-			for _, shard := range strings.Split("-80,80-", ",") {
+			for shard := range strings.SplitSeq("-80,80-", ",") {
 				expectNumberOfStreams(t, vtgateConn, "shardCustomerTargetStreams", "p2c", fmt.Sprintf("%s:%s", defaultTargetKs, shard), 0)
 			}
 
@@ -1084,7 +1085,7 @@ func reshardMerchant2to3SplitMerge(t *testing.T) {
 		var output string
 		var err error
 
-		for _, shard := range strings.Split("-80,80-", ",") {
+		for shard := range strings.SplitSeq("-80,80-", ",") {
 			output, err = vc.VtctldClient.ExecuteCommandWithOutput("GetShard", "merchant:"+shard)
 			if err == nil {
 				t.Fatal("GetShard merchant:-80 failed")
@@ -1092,7 +1093,7 @@ func reshardMerchant2to3SplitMerge(t *testing.T) {
 			assert.Contains(t, output, "node doesn't exist", "GetShard succeeded for dropped shard merchant:"+shard)
 		}
 
-		for _, shard := range strings.Split("-40,40-c0,c0-", ",") {
+		for shard := range strings.SplitSeq("-40,40-c0,c0-", ",") {
 			ksShard := fmt.Sprintf("%s:%s", merchantKeyspace, shard)
 			output, err = vc.VtctldClient.ExecuteCommandWithOutput("GetShard", ksShard)
 			if err != nil {
@@ -1102,7 +1103,7 @@ func reshardMerchant2to3SplitMerge(t *testing.T) {
 			assert.Contains(t, output, "primary_alias", "GetShard failed for valid shard "+ksShard)
 		}
 
-		for _, shard := range strings.Split("-40,40-c0,c0-", ",") {
+		for shard := range strings.SplitSeq("-40,40-c0,c0-", ",") {
 			ksShard := fmt.Sprintf("%s:%s", merchantKeyspace, shard)
 			expectNumberOfStreams(t, vtgateConn, "reshardMerchant2to3SplitMerge", "m2m3", ksShard, 0)
 		}
@@ -1150,7 +1151,8 @@ func reshardCustomer3to1Merge(t *testing.T) { // to unsharded
 
 func reshard(t *testing.T, ksName string, tableName string, workflow string, sourceShards string, targetShards string,
 	tabletIDBase int, counts map[string]int, dryRunResultSwitchReads, dryRunResultSwitchWrites []string, cells []*Cell, sourceCellOrAlias string,
-	autoIncrementStep int) {
+	autoIncrementStep int,
+) {
 	t.Run("reshard", func(t *testing.T) {
 		defaultCell := vc.Cells[vc.CellNames[0]]
 		if cells == nil {
@@ -1274,8 +1276,10 @@ func shardMerchant(t *testing.T) {
 		printRoutingRules(t, vc, "After merchant movetables")
 
 		// confirm that the backticking of keyspaces in the routing rules works
-		output, err := osExec(t, "mysql", []string{"-u", "vtdba", "-P", strconv.Itoa(vc.ClusterConfig.vtgateMySQLPort),
-			"--host=" + vc.ClusterConfig.hostname, "--default-character-set=utf8mb4", "-e", "select * from merchant"})
+		output, err := osExec(t, "mysql", []string{
+			"-u", "vtdba", "-P", strconv.Itoa(vc.ClusterConfig.vtgateMySQLPort),
+			"--host=" + vc.ClusterConfig.hostname, "--default-character-set=utf8mb4", "-e", "select * from merchant",
+		})
 		if err != nil {
 			require.FailNow(t, output)
 		}
@@ -1864,7 +1868,7 @@ func testSwitchWritesErrorHandling(t *testing.T, sourceTablets, targetTablets []
 		startingTestRowID := 10000000
 		numTestRows := 100
 		addTestRows := func() {
-			for i := 0; i < numTestRows; i++ {
+			for i := range numTestRows {
 				execVtgateQuery(t, vtgateConn, sourceTablets[0].Keyspace, fmt.Sprintf("insert into customer (cid, name) values (%d, 'laggingCustomer')",
 					startingTestRowID+i))
 			}
@@ -1945,12 +1949,10 @@ func testSwitchWritesErrorHandling(t *testing.T, sourceTablets, targetTablets []
 		// after the timeout is reached -- as the vplayer query is blocking
 		// on the table lock in the MySQL layer.
 		wg := sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			out, err = vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", workflow, "--target-keyspace", targetKs,
 				"SwitchTraffic", "--tablet-types=primary", "--timeout", timeout.String())
-		}()
+		})
 		time.Sleep(timeout)
 		// Now we can unblock things and let it continue.
 		unlockTargetTable()
