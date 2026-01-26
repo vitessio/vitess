@@ -392,27 +392,37 @@ Cleanup:
 func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error) {
 	// If the tablet is not replicating from anyone, then it could be the previous primary.
 	// We should check for errant GTIDs by finding the difference with the shard's current primary.
-	if instance.primaryExecutedGtidSet == "" && instance.SourceHost == "" {
-		var primaryInstance *Instance
-		primaryAlias, _, _ := ReadShardPrimaryInformation(tablet.Keyspace, tablet.Shard)
-		if primaryAlias != "" {
-			// Check if the current tablet is the primary.
-			// If it is, then we don't need to run errant gtid detection on it.
-			if primaryAlias == instance.InstanceAlias {
-				return nil
-			}
-			primaryInstance, _, _ = ReadInstance(primaryAlias)
-		}
-		// Only run errant GTID detection, if we are sure that the data read of the current primary
-		// is up-to-date enough to reflect that it has been promoted. This is needed to prevent
-		// flagging incorrect errant GTIDs. If we were to use old data, we could have some GTIDs
-		// accepted by the old primary (this tablet) that don't show in the new primary's set.
-		if primaryInstance != nil {
-			if primaryInstance.SourceHost == "" {
-				instance.primaryExecutedGtidSet = primaryInstance.ExecutedGtidSet
-			}
+	var primaryInstance *Instance
+	primaryAlias, _, _ := ReadShardPrimaryInformation(tablet.Keyspace, tablet.Shard)
+
+	// Check if the current tablet is the primary. If it is, then we don't need to
+	// run errant GTID detection on it.
+	if primaryAlias == instance.InstanceAlias {
+		return nil
+	}
+
+	// If we can resolve a shard primary alias, read its last known instance row
+	// from the backend so we can compare GTID sets when safe to do so.
+	if primaryAlias != "" {
+		primaryInstance, _, _ = ReadInstance(primaryAlias)
+	}
+
+	// Only run errant GTID detection if we are sure that the data read of the current primary
+	// is up-to-date enough to reflect that it has been promoted. This is needed to prevent
+	// flagging incorrect errant GTIDs. If we were to use old data, we could have some GTIDs
+	// accepted by the old primary (this tablet) that don't show in the new primary's set.
+	if primaryInstance != nil && primaryInstance.SourceHost == "" {
+		// Decide whether to replace the replication source executed GTID set with the shard primary's.
+		switch {
+		// If the instance has no replication source and no primary GTID set yet...
+		case instance.SourceHost == "" && instance.primaryExecutedGtidSet == "":
+		// Or if the instance's replication source is not the primary...
+		case !sourceIsPrimary(instance, primaryInstance):
+			// ...use the shard primary's executed GTID set for comparison.
+			instance.primaryExecutedGtidSet = primaryInstance.ExecutedGtidSet
 		}
 	}
+
 	if instance.ExecutedGtidSet != "" && instance.primaryExecutedGtidSet != "" {
 		// Compare primary & replica GTID sets, but ignore the sets that present the primary's UUID.
 		// This is because vtorc may pool primary and replica at an inconvenient timing,
@@ -448,6 +458,19 @@ func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error
 		}
 	}
 	return err
+}
+
+// sourceIsPrimary returns true if the instance's replication source is the given primary.
+func sourceIsPrimary(instance *Instance, primaryInstance *Instance) bool {
+	if instance.SourceHost == "" {
+		return false
+	}
+
+	if instance.SourceUUID != "" && primaryInstance.ServerUUID != "" {
+		return instance.SourceUUID == primaryInstance.ServerUUID
+	}
+
+	return instance.SourceHost == primaryInstance.Hostname && instance.SourcePort == primaryInstance.Port
 }
 
 // getKeyspaceShardName returns a single string having both the keyspace and shard
