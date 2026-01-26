@@ -1712,7 +1712,7 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 	}
 
 	if logMethod != nil {
-		logMethod(message)
+		logMethod("%s", message)
 	}
 
 	if logStats != nil {
