@@ -320,12 +320,15 @@ func TestConnectionFromListener(t *testing.T) {
 	c.Close()
 }
 
-func TestConnectionWithUsernameKeyspaceExtension(t *testing.T) {
+// TestConnectionWithPipeInUsername tests that usernames with the format "user|target"
+// are correctly parsed - the target is extracted into schemaName and the user is stripped.
+// This is used for binlog dump connections where the target is specified in the username.
+func TestConnectionWithPipeInUsername(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic("", "", 0)
-	authServer.entries["user1"] = []*AuthServerStaticEntry{{
+	authServer.entries["vt_repl"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
@@ -334,11 +337,11 @@ func TestConnectionWithUsernameKeyspaceExtension(t *testing.T) {
 	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
 	require.NoError(t, err, "NewListener failed")
 	host, port := getHostPort(t, l.Addr())
-	// Setup the right parameters.
+	// Connect with username containing pipe-separated target
 	params := &ConnParams{
 		Host:  host,
 		Port:  port,
-		Uname: "user1@ks1",
+		Uname: "vt_repl|commerce:0@primary|zone1-100",
 		Pass:  "password1",
 	}
 	go l.Accept()
@@ -346,9 +349,12 @@ func TestConnectionWithUsernameKeyspaceExtension(t *testing.T) {
 
 	c, err := Connect(ctx, params)
 	require.NoError(t, err, "Should be able to connect to server")
-	c.Close()
+	defer c.Close()
 
-	require.Equal(t, "ks1", th.LastConn().schemaName, "Schema name should be set from username extension")
+	// The schemaName should contain the target (everything after the first pipe)
+	// Note: The USE statement will be issued with this schemaName, which in vtgate
+	// sets the session's TargetString.
+	require.Equal(t, "commerce:0@primary|zone1-100", th.LastConn().schemaName, "Schema name should contain the target from username")
 }
 
 func TestConnectionWithoutSourceHost(t *testing.T) {
