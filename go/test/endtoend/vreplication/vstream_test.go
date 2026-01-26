@@ -63,7 +63,8 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 			Keyspace: defaultSourceKs,
 			Shard:    "0",
 			Gtid:     "",
-		}}}
+		}},
+	}
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{
@@ -239,7 +240,8 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 			Keyspace: defaultSourceKs,
 			Shard:    "0",
 			Gtid:     "",
-		}}}
+		}},
+	}
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -357,6 +359,7 @@ const schemaUnsharded = `
 create table customer_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
 insert into customer_seq(id, next_id, cache) values(0, 1, 3);
 `
+
 const vschemaUnsharded = `
 {
   "tables": {
@@ -366,9 +369,11 @@ const vschemaUnsharded = `
   }
 }
 `
+
 const schemaSharded = `
 create table customer(cid int, name varbinary(128), primary key(cid)) TABLESPACE innodb_system CHARSET=utf8mb4;
 `
+
 const vschemaSharded = `
 {
   "sharded": true,
@@ -433,7 +438,7 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 	verifyClusterHealth(t, vc)
 
 	// some initial data
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		insertRow("sharded", "customer", i)
 	}
 
@@ -449,7 +454,8 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: "sharded",
 			Gtid:     "current",
-		}}}
+		}},
+	}
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -591,7 +597,8 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEven
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: "/.*",
-		}}}
+		}},
+	}
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -777,7 +784,8 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: "/.*", // Match all keyspaces just to be more realistic.
-		}}}
+		}},
+	}
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -976,7 +984,8 @@ func TestMultiVStreamsKeyspaceStopOnReshard(t *testing.T) {
 			// Only stream the keyspace that we're resharding. Otherwise the client stream
 			// will continue to run with only the tablet stream from the global keyspace.
 			Keyspace: ks,
-		}}}
+		}},
+	}
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -1169,7 +1178,8 @@ func doVStream(t *testing.T, vc *VitessCluster, flags *vtgatepb.VStreamFlags) (n
 			Keyspace: defaultSourceKs,
 			Shard:    "0",
 			Gtid:     "",
-		}}}
+		}},
+	}
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -1356,7 +1366,8 @@ func TestVStreamPushdownFilters(t *testing.T) {
 			Keyspace: ks,
 			Shard:    shard,
 			Gtid:     "",
-		}}}
+		}},
+	}
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -1385,7 +1396,8 @@ func TestVStreamPushdownFilters(t *testing.T) {
 // runVStreamAndGetNumOfRowEvents runs VStream with the specified filter and
 // returns number of copy phase and running phase row events.
 func runVStreamAndGetNumOfRowEvents(t *testing.T, ctx context.Context, vstreamConn *vtgateconn.VTGateConn,
-	vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, done chan struct{}) (copyPhaseRowEvents int, runningPhaseRowEvents int) {
+	vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, done chan struct{},
+) (copyPhaseRowEvents int, runningPhaseRowEvents int) {
 	copyPhase := true
 	func() {
 		reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, &vtgatepb.VStreamFlags{

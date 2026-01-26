@@ -17,9 +17,8 @@ limitations under the License.
 package etcd2topo
 
 import (
-	"errors"
-
 	"context"
+	"errors"
 
 	"go.etcd.io/etcd/api/v3/v3rpc/rpctypes"
 	"google.golang.org/grpc/codes"

@@ -32,20 +32,19 @@ import (
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 )
 
-var (
-	// LegacyVtctlCommand provides a shim to make legacy ExecuteVtctlCommand
-	// RPCs. This allows users to use a single binary to make RPCs against both
-	// the new and old vtctld gRPC APIs.
-	LegacyVtctlCommand = &cobra.Command{
-		Use:                   "LegacyVtctlCommand -- <command> [flags ...] [args ...]",
-		Short:                 "Invoke a legacy vtctlclient command. Flag parsing is best effort.",
-		DisableFlagsInUseLine: true,
-		Args:                  cobra.ArbitraryArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			cli.FinishedParsing(cmd)
-			return runLegacyCommand(cmd.Context(), args)
-		},
-		Long: strings.TrimSpace(`
+// LegacyVtctlCommand provides a shim to make legacy ExecuteVtctlCommand
+// RPCs. This allows users to use a single binary to make RPCs against both
+// the new and old vtctld gRPC APIs.
+var LegacyVtctlCommand = &cobra.Command{
+	Use:                   "LegacyVtctlCommand -- <command> [flags ...] [args ...]",
+	Short:                 "Invoke a legacy vtctlclient command. Flag parsing is best effort.",
+	DisableFlagsInUseLine: true,
+	Args:                  cobra.ArbitraryArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cli.FinishedParsing(cmd)
+		return runLegacyCommand(cmd.Context(), args)
+	},
+	Long: strings.TrimSpace(`
 LegacyVtctlCommand uses the legacy vtctl grpc client to make an ExecuteVtctlCommand
 rpc to a vtctld.
 
@@ -63,7 +62,7 @@ use the double-dash ("--") after the LegacyVtctlCommand subcommand string, or
 the client-side flag parsing library we are using will attempt to parse those
 flags (and fail).
 `),
-		Example: strings.TrimSpace(`
+	Example: strings.TrimSpace(`
 LegacyVtctlCommand help # displays this help message
 LegacyVtctlCommand -- help # displays help for supported legacy vtctl commands
 
@@ -73,8 +72,7 @@ LegacyVtctlCommand -- help # displays help for supported legacy vtctl commands
 # the second example.
 LegacyVtctlCommand AddCellInfo -- --server_address "localhost:1234" --root "/vitess/cell1"
 LegacyVtctlCommand -- AddCellInfo --server_address "localhost:5678" --root "/vitess/cell1"`),
-	}
-)
+}
 
 func runLegacyCommand(ctx context.Context, args []string) error {
 	// Duplicated (mostly) from go/cmd/vtctlclient/main.go.

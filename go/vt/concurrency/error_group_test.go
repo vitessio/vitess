@@ -123,7 +123,7 @@ func TestErrorGroup(t *testing.T) {
 }
 
 func spawnGoRoutines(errCh chan Error, shouldError bool, count int) {
-	for i := 0; i < count; i++ {
+	for range count {
 		go func() {
 			time.Sleep(100 * time.Millisecond)
 			var err Error
@@ -136,7 +136,7 @@ func spawnGoRoutines(errCh chan Error, shouldError bool, count int) {
 }
 
 func spawnDelayedGoRoutine(groupContext context.Context, errCh chan Error, mustWaitFor bool, count int) {
-	for i := 0; i < count; i++ {
+	for range count {
 		go func() {
 			select {
 			case <-groupContext.Done():

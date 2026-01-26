@@ -345,10 +345,7 @@ func batchSQLs(sqls []string, batchSize int) (batchedSQLs []string) {
 		return sqls
 	}
 	for len(sqls) > 0 {
-		nextBatchSize := batchSize
-		if nextBatchSize > len(sqls) {
-			nextBatchSize = len(sqls)
-		}
+		nextBatchSize := min(batchSize, len(sqls))
 		nextBatch := sqls[0:nextBatchSize]
 		nextBatchSql := strings.Join(nextBatch, ";")
 		batchedSQLs = append(batchedSQLs, nextBatchSql)
@@ -569,7 +566,8 @@ func (exec *TabletExecutor) executeOneTablet(
 	sql string,
 	viaQueryService bool,
 	errChan chan ShardWithError,
-	successChan chan ShardResult) {
+	successChan chan ShardResult,
+) {
 	var results []*querypb.QueryResult
 	var err error
 	if viaQueryService {

@@ -65,7 +65,7 @@ func grpcTestServer(t testing.TB, tm tabletmanager.RPCTM) (*net.TCPAddr, func())
 func BenchmarkCachedConnClientSteadyState(b *testing.B) {
 	tmserv := tmrpctest.NewFakeRPCTM(b)
 	tablets := make([]*topodatapb.Tablet, 1000)
-	for i := 0; i < len(tablets); i++ {
+	for i := range tablets {
 		addr, shutdown := grpcTestServer(b, tmserv)
 		defer shutdown()
 
@@ -85,7 +85,7 @@ func BenchmarkCachedConnClientSteadyState(b *testing.B) {
 	defer client.Close()
 
 	// fill the pool
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		err := client.Ping(context.Background(), tablets[i])
 		require.NoError(b, err)
 	}
@@ -100,18 +100,13 @@ func BenchmarkCachedConnClientSteadyState(b *testing.B) {
 		pingsPerProc = 2
 	}
 
-	b.ResetTimer()
-
 	// Begin the benchmark
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx, cancel := context.WithCancel(context.Background())
 
 		var wg sync.WaitGroup
 		for j := 0; j < procs; j++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-
+			wg.Go(func() {
 				for k := 0; k < pingsPerProc; k++ {
 					func() {
 						ctx, cancel := context.WithTimeout(ctx, time.Second*5)
@@ -122,7 +117,7 @@ func BenchmarkCachedConnClientSteadyState(b *testing.B) {
 						assert.NoError(b, err)
 					}()
 				}
-			}()
+			})
 		}
 
 		wg.Wait()
@@ -133,7 +128,7 @@ func BenchmarkCachedConnClientSteadyState(b *testing.B) {
 func BenchmarkCachedConnClientSteadyStateRedials(b *testing.B) {
 	tmserv := tmrpctest.NewFakeRPCTM(b)
 	tablets := make([]*topodatapb.Tablet, 1000)
-	for i := 0; i < len(tablets); i++ {
+	for i := range tablets {
 		addr, shutdown := grpcTestServer(b, tmserv)
 		defer shutdown()
 
@@ -153,7 +148,7 @@ func BenchmarkCachedConnClientSteadyStateRedials(b *testing.B) {
 	defer client.Close()
 
 	// fill the pool
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		err := client.Ping(context.Background(), tablets[i])
 		require.NoError(b, err)
 	}
@@ -168,18 +163,13 @@ func BenchmarkCachedConnClientSteadyStateRedials(b *testing.B) {
 		pingsPerProc = 2
 	}
 
-	b.ResetTimer()
-
 	// Begin the benchmark
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx, cancel := context.WithCancel(context.Background())
 
 		var wg sync.WaitGroup
 		for j := 0; j < procs; j++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-
+			wg.Go(func() {
 				for k := 0; k < pingsPerProc; k++ {
 					func() {
 						ctx, cancel := context.WithTimeout(ctx, time.Second*5)
@@ -190,7 +180,7 @@ func BenchmarkCachedConnClientSteadyStateRedials(b *testing.B) {
 						assert.NoError(b, err)
 					}()
 				}
-			}()
+			})
 		}
 
 		wg.Wait()
@@ -201,7 +191,7 @@ func BenchmarkCachedConnClientSteadyStateRedials(b *testing.B) {
 func BenchmarkCachedConnClientSteadyStateEvictions(b *testing.B) {
 	tmserv := tmrpctest.NewFakeRPCTM(b)
 	tablets := make([]*topodatapb.Tablet, 1000)
-	for i := 0; i < len(tablets); i++ {
+	for i := range tablets {
 		addr, shutdown := grpcTestServer(b, tmserv)
 		defer shutdown()
 
@@ -221,7 +211,7 @@ func BenchmarkCachedConnClientSteadyStateEvictions(b *testing.B) {
 	defer client.Close()
 
 	// fill the pool
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		err := client.Ping(context.Background(), tablets[i])
 		require.NoError(b, err)
 	}
@@ -234,19 +224,15 @@ func BenchmarkCachedConnClientSteadyStateEvictions(b *testing.B) {
 	}
 
 	start := 100
-	b.ResetTimer()
 
 	// Begin the benchmark
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx, cancel := context.WithCancel(context.Background())
 		ch := make(chan int, 100) // 100 dials per iteration
 
 		var wg sync.WaitGroup
 		for j := 0; j < procs; j++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-
+			wg.Go(func() {
 				for idx := range ch {
 					func() {
 						ctx, cancel := context.WithTimeout(ctx, time.Second*5)
@@ -256,7 +242,7 @@ func BenchmarkCachedConnClientSteadyStateEvictions(b *testing.B) {
 						assert.NoError(b, err)
 					}()
 				}
-			}()
+			})
 		}
 
 		for j := 0; j < cap(ch); j++ {
@@ -277,9 +263,7 @@ func TestCachedConnClient(t *testing.T) {
 	wg := sync.WaitGroup{}
 	procs := 0
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		procs = runtime.NumGoroutine()
 
 		for {
@@ -293,14 +277,14 @@ func TestCachedConnClient(t *testing.T) {
 				}
 			}
 		}
-	}()
+	})
 
 	numTablets := 100
 	numGoroutines := 8
 
 	tmserv := tmrpctest.NewFakeRPCTM(t)
 	tablets := make([]*topodatapb.Tablet, numTablets)
-	for i := 0; i < len(tablets); i++ {
+	for i := range tablets {
 		addr, shutdown := grpcTestServer(t, tmserv)
 		defer shutdown()
 
@@ -324,11 +308,8 @@ func TestCachedConnClient(t *testing.T) {
 
 	longestDials := make(chan time.Duration, numGoroutines)
 
-	for i := 0; i < numGoroutines; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
+	for range numGoroutines {
+		wg.Go(func() {
 			attempts := 0
 			jitter := time.Second * 0
 			longestDial := time.Duration(0)
@@ -359,7 +340,7 @@ func TestCachedConnClient(t *testing.T) {
 					closer.Close()
 				}
 			}
-		}()
+		})
 	}
 
 	time.Sleep(time.Minute)
@@ -383,7 +364,7 @@ func TestCachedConnClient(t *testing.T) {
 func TestCachedConnClient_evictions(t *testing.T) {
 	tmserv := tmrpctest.NewFakeRPCTM(t)
 	tablets := make([]*topodatapb.Tablet, 5)
-	for i := 0; i < len(tablets); i++ {
+	for i := range tablets {
 		addr, shutdown := grpcTestServer(t, tmserv)
 		defer shutdown()
 
@@ -399,8 +380,7 @@ func TestCachedConnClient_evictions(t *testing.T) {
 		}
 	}
 
-	testCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	testCtx := t.Context()
 
 	connHoldContext, connHoldCancel := context.WithCancel(testCtx)
 

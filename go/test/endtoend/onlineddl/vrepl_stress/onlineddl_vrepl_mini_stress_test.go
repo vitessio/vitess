@@ -136,9 +136,7 @@ var (
 	writeMetrics WriteMetrics
 )
 
-var (
-	countIterations = 5
-)
+var countIterations = 5
 
 const (
 	maxTableRows         = 4096
@@ -169,7 +167,7 @@ func TestMain(m *testing.M) {
 		defer clusterInstance.Teardown()
 
 		if _, err := os.Stat(schemaChangeDirectory); os.IsNotExist(err) {
-			_ = os.Mkdir(schemaChangeDirectory, 0700)
+			_ = os.Mkdir(schemaChangeDirectory, 0o700)
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
@@ -236,7 +234,7 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 		assert.Equal(t, 1, len(clusterInstance.Keyspaces[0].Shards))
 		testWithInitialSchema(t)
 	})
-	for i := 0; i < countIterations; i++ {
+	for i := range countIterations {
 		// This first tests the general functionality of initializing the table with data,
 		// no concurrency involved. Just counting.
 		testName := fmt.Sprintf("init table %d/%d", (i + 1), countIterations)
@@ -245,7 +243,7 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 			testSelectTableMetrics(t)
 		})
 	}
-	for i := 0; i < countIterations; i++ {
+	for i := range countIterations {
 		// This tests running a workload on the table, then comparing expected metrics with
 		// actual table metrics. All this without any ALTER TABLE: this is to validate
 		// that our testing/metrics logic is sound in the first place.
@@ -257,11 +255,9 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 			defer cancel()
 
 			var wg sync.WaitGroup
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				runMultipleConnections(ctx, t)
-			}()
+			})
 			wg.Wait()
 			testSelectTableMetrics(t)
 		})
@@ -277,7 +273,7 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 		testSelectTableMetrics(t)
 	})
 
-	for i := 0; i < countIterations; i++ {
+	for i := range countIterations {
 		// Finally, this is the real test:
 		// We populate a table, and begin a concurrent workload (this is the "mini stress")
 		// We then ALTER TABLE via vreplication.
@@ -298,11 +294,9 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 				defer cancel()
 
 				var wg sync.WaitGroup
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
+				wg.Go(func() {
 					runMultipleConnections(ctx, t)
-				}()
+				})
 				hint := fmt.Sprintf("hint-alter-with-workload-%d", i)
 				uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), onlineDDLStrategy, "vtgate", hint)
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
@@ -539,12 +533,10 @@ func runMultipleConnections(ctx context.Context, t *testing.T) {
 
 	log.Infof("Running multiple connections: maxConcurrency=%v, sleep interval=%v", maxConcurrency, sleepInterval)
 	var wg sync.WaitGroup
-	for i := 0; i < maxConcurrency; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range maxConcurrency {
+		wg.Go(func() {
 			runSingleConnection(ctx, t, sleepInterval)
-		}()
+		})
 	}
 	wg.Wait()
 	log.Infof("Running multiple connections: done")
@@ -572,13 +564,13 @@ func initTable(t *testing.T) {
 	_, err = conn.ExecuteFetch(truncateStatement, 1000, true)
 	require.Nil(t, err)
 
-	for i := 0; i < maxTableRows/2; i++ {
+	for range maxTableRows / 2 {
 		generateInsert(t, conn)
 	}
-	for i := 0; i < maxTableRows/4; i++ {
+	for range maxTableRows / 4 {
 		generateUpdate(t, conn)
 	}
-	for i := 0; i < maxTableRows/4; i++ {
+	for range maxTableRows / 4 {
 		generateDelete(t, conn)
 	}
 }

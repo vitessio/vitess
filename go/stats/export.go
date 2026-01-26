@@ -208,9 +208,11 @@ type PushBackend interface {
 	PushOne(name string, v Variable) error
 }
 
-var pushBackends = make(map[string]PushBackend)
-var pushBackendsLock sync.Mutex
-var once sync.Once
+var (
+	pushBackends     = make(map[string]PushBackend)
+	pushBackendsLock sync.Mutex
+	once             sync.Once
+)
 
 func AwaitBackend(ctx context.Context) error {
 	if statsBackend == "" {
