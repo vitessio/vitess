@@ -45,7 +45,7 @@ This tree highlights the main repo areas. Most core services and shared librarie
 
 Install third-party dependencies and tools, then load environment variables that point to the repo and built binaries.
 
-```sh
+```console
 make tools
 source dev.env
 ```
@@ -54,7 +54,7 @@ source dev.env
 
 Builds all Go binaries into `./bin` and also builds the VTAdmin web UI unless `NOVTADMINBUILD` is set. If you are not touching VTAdmin, set `NOVTADMINBUILD=1` to skip the web UI build.
 
-```sh
+```console
 make build
 ```
 
@@ -62,15 +62,17 @@ make build
 
 Runs Go unit tests across the repository. Narrow the package list for faster feedback when iterating. Use `-count=1` to avoid cached results.
 
-```sh
+```console
 go test -count=1 ./go/...
 ```
 
-### End to end tests
+### End-to-end tests
 
-Rebuild the binaries before each end-to-end run so they contain the most up-to-date code, then run the end-to-end suites under `go/test/endtoend`. If you are not touching VTAdmin, set `NOVTADMINBUILD=1` to skip the web UI build. These tests bring up real Vitess components like topology services, mysqld, vttablets, and vtgates on the same machine, so they can take longer to finish. Tests use `VTDATAROOT` which defaults to `./vtdataroot`, so clear that directory between runs. Run only one package at a time, and preferably run only one test at a time. Use `-count=1` to avoid cached results.
+End-to-end tests bring up real Vitess components like etcd, mysqld, vttablets, and vtgates on the same machine. They can take long to finish and are occasionally flaky. Tests use `VTDATAROOT` which defaults to `./vtdataroot`. Make sure to clear that directory between runs to reduce the chance of flakiness and stale test state.
 
-```sh
+The tests use real binaries in `$VTROOT/bin`, built from source. Rebuild the binaries before each end-to-end run so they contain the most up-to-date code, then run the end-to-end suites under `go/test/endtoend`. If you are not touching VTAdmin, set `NOVTADMINBUILD=1` to skip the web UI build.  Run only one package at a time, and preferably run only one test at a time. Use `-count=1` to avoid cached results.
+
+```console
 rm -rf ./vtdataroot
 NOVTADMINBUILD=1 make build
 go test -count=1 ./go/.../endtoend/...
@@ -78,29 +80,23 @@ go test -count=1 ./go/.../endtoend/...
 
 ### Formatting and linting
 
-Use go fmt for standard formatting:
+Run golangci-lint for linting and formatting (`gofumpt` and `goimports`):
 
-```sh
-go fmt ./go/...
-```
-
-Use goimports for import grouping with the Vitess local prefix:
-
-```sh
-goimports -local vitess.io/vitess -w path/to/file.go
-```
-
-Run golangci-lint for linting:
-
-```sh
+```console
 golangci-lint run ./go/...
+```
+
+Or only for current staged and unstaged changes:
+
+```console
+golangci-lint run --new-from-rev=HEAD
 ```
 
 ### Protobufs
 
 Regenerate Go, gRPC, and vtadmin-web types after editing files under `proto/`.
 
-```sh
+```console
 make proto
 ```
 
