@@ -137,14 +137,14 @@ func TestConvert(t *testing.T) {
 			want:       []byte("testDsttestSrc"),
 		},
 		{
-			src:        []byte{00, 65, 00, 66},
+			src:        []byte{0o0, 65, 0o0, 66},
 			srcCharset: Charset_ucs2{},
 			dst:        []byte("testDst"),
 			dstCharset: Charset_utf8mb3{},
 			want:       []byte("testDstAB"),
 		},
 		{
-			src:        []byte{00, 65, 00, 66},
+			src:        []byte{0o0, 65, 0o0, 66},
 			srcCharset: Charset_ucs2{},
 			dst:        nil,
 			dstCharset: Charset_utf8mb3{},

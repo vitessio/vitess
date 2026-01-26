@@ -210,10 +210,10 @@ func (tsa *TabletStatusAggregator) processQueryInfo(qi *queryInfo) {
 		// reset counters
 		tsa.QueryCount = 0
 		tsa.QueryError = 0
-		for i := 0; i < len(tsa.queryCountInMinute); i++ {
+		for i := range len(tsa.queryCountInMinute) {
 			tsa.queryCountInMinute[i] = 0
 		}
-		for i := 0; i < len(tsa.latencyInMinute); i++ {
+		for i := range len(tsa.latencyInMinute) {
 			tsa.latencyInMinute[i] = 0
 		}
 	}

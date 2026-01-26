@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	maps0 "maps"
 	"net/http"
 	"strings"
 	"sync"
@@ -56,9 +57,11 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-const maxTableCount = 10000
-const maxPartitionsPerTable = 8192
-const maxIndexesPerTable = 64
+const (
+	maxTableCount         = 10000
+	maxPartitionsPerTable = 8192
+	maxIndexesPerTable    = 64
+)
 
 type notifier func(full map[string]*Table, created, altered, dropped []*Table, udfsChanged bool)
 
@@ -321,11 +324,9 @@ func (se *Engine) closeLocked() {
 	// configured function to complete running and that function (ReloadAt) will block
 	// on the lock we have already acquired
 	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		se.ticks.Stop()
-		wg.Done()
-	}()
+	})
 	se.historian.Close()
 	se.conns.Close()
 
@@ -639,9 +640,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	}
 
 	// Update se.tables
-	for k, t := range changedTables {
-		se.tables[k] = t
-	}
+	maps0.Copy(se.tables, changedTables)
 	se.lastChange = curTime
 	if len(created) > 0 || len(altered) > 0 || len(dropped) > 0 {
 		log.Infof("schema engine created %v, altered %v, dropped %v", extractNamesFromTablesList(created), extractNamesFromTablesList(altered), extractNamesFromTablesList(dropped))

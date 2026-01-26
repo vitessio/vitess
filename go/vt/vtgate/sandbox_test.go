@@ -57,9 +57,11 @@ func init() {
 	tabletconntest.SetProtocol("go.vt.vtgate.sandbox_test", "sandbox")
 }
 
-var sandboxMu sync.Mutex
-var ksToSandbox map[string]*sandbox
-var sandboxMirrorRules string
+var (
+	sandboxMu          sync.Mutex
+	ksToSandbox        map[string]*sandbox
+	sandboxMirrorRules string
+)
 
 func createSandbox(keyspace string) *sandbox {
 	sandboxMu.Lock()
@@ -162,7 +164,7 @@ func createShardedSrvKeyspace(shardSpec, servedFromKeyspace string) (*topodatapb
 		return nil, err
 	}
 	shards := make([]*topodatapb.ShardReference, 0, len(shardKrArray))
-	for i := 0; i < len(shardKrArray); i++ {
+	for i := range shardKrArray {
 		shard := &topodatapb.ShardReference{
 			Name:     key.KeyRangeString(shardKrArray[i]),
 			KeyRange: shardKrArray[i],

@@ -21,9 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-var (
-	comRegisterReplicaPacketErr = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error reading BinlogDumpGTID packet")
-)
+var comRegisterReplicaPacketErr = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error reading BinlogDumpGTID packet")
 
 func (c *Conn) parseComRegisterReplica(data []byte) (
 	replicaHost string,

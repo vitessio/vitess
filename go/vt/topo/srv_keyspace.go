@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"path"
+	"slices"
 	"sync"
 
 	"vitess.io/vitess/go/vt/vterrors"
@@ -149,10 +150,8 @@ func (ts *Server) GetShardServingCells(ctx context.Context, si *ShardInfo) (serv
 								mu.Lock()
 								defer mu.Unlock()
 								// Check that this cell hasn't been added already
-								for _, servingCell := range servingCells {
-									if servingCell == cell {
-										return
-									}
+								if slices.Contains(servingCells, cell) {
+									return
 								}
 								servingCells = append(servingCells, cell)
 							}()
@@ -197,13 +196,7 @@ func (ts *Server) GetShardServingTypes(ctx context.Context, si *ShardInfo) (serv
 					mu.Lock()
 					defer mu.Unlock()
 					for _, partition := range srvKeyspace.GetPartitions() {
-						partitionAlreadyAdded := false
-						for _, servingType := range servingTypes {
-							if servingType == partition.ServedType {
-								partitionAlreadyAdded = true
-								break
-							}
-						}
+						partitionAlreadyAdded := slices.Contains(servingTypes, partition.ServedType)
 
 						if !partitionAlreadyAdded {
 							for _, shardReference := range partition.ShardReferences {

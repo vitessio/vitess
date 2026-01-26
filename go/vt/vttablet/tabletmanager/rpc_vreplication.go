@@ -154,7 +154,6 @@ func (tm *TabletManager) CreateVReplicationWorkflow(ctx context.Context, req *ta
 			return nil, err
 		}
 		streamres, err := tm.VREngine.Exec(stmt)
-
 		if err != nil {
 			return nil, err
 		}
@@ -271,7 +270,6 @@ func (tm *TabletManager) DeleteVReplicationWorkflow(ctx context.Context, req *ta
 		return nil, err
 	}
 	streamres, err := tm.VREngine.Exec(stmt)
-
 	if err != nil {
 		return nil, err
 	}
@@ -680,19 +678,23 @@ func getOptionSetString(config map[string]string) string {
 	if len(deletedKeys) > 0 {
 		// We need to quote the key in the json functions because flag names can contain hyphens.
 		clause = fmt.Sprintf("json_remove(options, '$.config.\"%s\"'", deletedKeys[0])
+		var clauseSb681 strings.Builder
 		for _, k := range deletedKeys[1:] {
-			clause += fmt.Sprintf(", '$.config.\"%s\"'", k)
+			clauseSb681.WriteString(fmt.Sprintf(", '$.config.\"%s\"'", k))
 		}
+		clause += clauseSb681.String()
 		clause += ")"
 	}
 	if len(keys) > 0 {
 		clause = fmt.Sprintf("json_set(%s, '$.config', json_object(), ", clause)
+		var clauseSb688 strings.Builder
 		for i, k := range keys {
 			if i > 0 {
-				clause += ", "
+				clauseSb688.WriteString(", ")
 			}
-			clause += fmt.Sprintf("'$.config.\"%s\"', '%s'", k, strings.TrimSpace(config[k]))
+			clauseSb688.WriteString(fmt.Sprintf("'$.config.\"%s\"', '%s'", k, strings.TrimSpace(config[k])))
 		}
+		clause += clauseSb688.String()
 		clause += ")"
 	}
 	options = ", options = " + clause
@@ -825,7 +827,7 @@ func (tm *TabletManager) updateSequenceValue(ctx context.Context, seq *tabletman
 	)
 	const maxTries = 2
 
-	for i := 0; i < maxTries; i++ {
+	for range maxTries {
 		// Attempt to initialize the sequence.
 		_, err = tm.ExecuteFetchAsApp(ctx, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
 			Query:   []byte(initQuery.Query),

@@ -234,7 +234,7 @@ const (
 	// ComStmtReset is COM_STMT_RESET
 	ComStmtReset = 0x1a
 
-	//ComStmtFetch is COM_STMT_FETCH
+	// ComStmtFetch is COM_STMT_FETCH
 	ComStmtFetch = 0x1c
 
 	// ComSetOption is COM_SET_OPTION
@@ -278,10 +278,12 @@ const (
 	AuthSwitchRequestPacket = 0xfe
 )
 
-var typeInt24, _ = sqltypes.TypeToMySQL(sqltypes.Int24)
-var typeTimestamp, _ = sqltypes.TypeToMySQL(sqltypes.Timestamp)
-var typeYear, _ = sqltypes.TypeToMySQL(sqltypes.Year)
-var typeNewDecimal, _ = sqltypes.TypeToMySQL(sqltypes.Decimal)
+var (
+	typeInt24, _      = sqltypes.TypeToMySQL(sqltypes.Int24)
+	typeTimestamp, _  = sqltypes.TypeToMySQL(sqltypes.Timestamp)
+	typeYear, _       = sqltypes.TypeToMySQL(sqltypes.Year)
+	typeNewDecimal, _ = sqltypes.TypeToMySQL(sqltypes.Decimal)
+)
 
 // IsNum returns true if a MySQL type is a numeric value.
 // It is the same as IS_NUM defined in mysql.h.

@@ -282,7 +282,6 @@ func loadOneConfig(fileName string) (*Config, error) {
 		return nil, err
 	}
 	return config2, nil
-
 }
 
 // Get test configs.
@@ -335,10 +334,10 @@ func main() {
 
 	// Make output directory.
 	outDir := path.Join("_test", fmt.Sprintf("%v.%v", startTime.Format("20060102-150405"), os.Getpid()))
-	if err := os.MkdirAll(outDir, os.FileMode(0755)); err != nil {
+	if err := os.MkdirAll(outDir, os.FileMode(0o755)); err != nil {
 		log.Fatalf("Can't create output directory: %v", err)
 	}
-	logFile, err := os.OpenFile(path.Join(outDir, "test.log"), os.O_RDWR|os.O_CREATE, 0644)
+	logFile, err := os.OpenFile(path.Join(outDir, "test.log"), os.O_RDWR|os.O_CREATE, 0o644)
 	if err != nil {
 		log.Fatalf("Can't create log file: %v", err)
 	}
@@ -537,7 +536,7 @@ func main() {
 						outFile := fmt.Sprintf("%v.%v-%v.%v.log", test.flavor, test.name, test.runIndex+1, try)
 						outFilePath := path.Join(outDir, outFile)
 						test.logf("saving test output to %v", outFilePath)
-						if fileErr := os.WriteFile(outFilePath, output, os.FileMode(0644)); fileErr != nil {
+						if fileErr := os.WriteFile(outFilePath, output, os.FileMode(0o644)); fileErr != nil {
 							test.logf("WriteFile error: %v", fileErr)
 						}
 					}
@@ -740,7 +739,7 @@ func updateTestStats(name string, update func(*TestStats)) {
 		log.Printf("Can't encode stats file: %v", err)
 		return
 	}
-	if err := os.WriteFile(statsFileName, data, 0644); err != nil {
+	if err := os.WriteFile(statsFileName, data, 0o644); err != nil {
 		log.Printf("Can't write stats file: %v", err)
 	}
 }

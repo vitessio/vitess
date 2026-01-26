@@ -66,7 +66,7 @@ func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 
 	// Read column headers. One packet per column.
 	// Build the fields.
-	for i := 0; i < colNumber; i++ {
+	for i := range colNumber {
 		fieldsPointers[i] = &fields[i]
 		if err := c.readColumnDefinition(fieldsPointers[i], i); err != nil {
 			return err

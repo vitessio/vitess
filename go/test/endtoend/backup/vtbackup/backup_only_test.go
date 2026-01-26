@@ -39,14 +39,12 @@ import (
 	"vitess.io/vitess/go/vt/utils"
 )
 
-var (
-	vtInsertTest = `
+var vtInsertTest = `
 		create table if not exists vt_insert_test (
 		id bigint auto_increment,
 		msg varchar(64),
 		primary key (id)
 		) Engine=InnoDB;`
-)
 
 func TestFailingReplication(t *testing.T) {
 	prepareCluster(t)
@@ -478,7 +476,7 @@ func waitForReplicationToCatchup(tablets []cluster.Vttablet) bool {
 		case <-timeout:
 			return false
 		default:
-			var replicaCount = 0
+			replicaCount := 0
 			for _, tablet := range tablets {
 				status := tablet.VttabletProcess.GetStatusDetails()
 				json.Unmarshal([]byte(status), &statuslst)

@@ -250,8 +250,7 @@ func TestEtcd2Topo(t *testing.T) {
 	}
 
 	// Run the TopoServerTestSuite tests.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	test.TopoServerTestSuite(t, ctx, func() *topo.Server {
 		return newServer()
 	}, []string{})
@@ -275,7 +274,7 @@ func TestEtcd2TopoGetTabletsPartialResults(t *testing.T) {
 	cellClientAddrs := make([]string, len(cells))
 	cellClientCmds := make([]*exec.Cmd, len(cells))
 	cellTSs := make([]*topo.Server, len(cells))
-	for i := 0; i < len(cells); i++ {
+	for i := range cells {
 		addr, cmd := startEtcd(t, testfiles.GoVtTopoEtcd2topoPort+(i+100*i))
 		cellClientAddrs[i] = addr
 		cellClientCmds[i] = cmd

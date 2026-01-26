@@ -531,6 +531,7 @@ func (p NotSingleRouteErr) Unwrap() error { return p.Inner }
 func (p ShardedError) Error() string {
 	return p.Inner.Error()
 }
+
 func (p ShardedError) Unwrap() error {
 	return p.Inner
 }

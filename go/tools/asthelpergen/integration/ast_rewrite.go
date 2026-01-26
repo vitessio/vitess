@@ -706,6 +706,7 @@ func (a *application) rewriteRefOfValueSliceContainer(parent AST, node *ValueSli
 	}
 	return true
 }
+
 func (a *application) rewriteVisitable(parent AST, node Visitable, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer

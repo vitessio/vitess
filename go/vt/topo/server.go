@@ -46,6 +46,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"slices"
 	"sync"
 
 	"github.com/spf13/pflag"
@@ -181,8 +182,10 @@ var (
 		cellsToAliases: make(map[string]string),
 	}
 
-	FlagBinaries = []string{"vttablet", "vtctl", "vtctld", "vtcombo", "vtgate",
-		"vtorc", "vtbackup"}
+	FlagBinaries = []string{
+		"vttablet", "vtctl", "vtctld", "vtcombo", "vtgate",
+		"vtorc", "vtbackup",
+	}
 
 	// Default read concurrency to use in order to avoid overhwelming the topo server.
 	DefaultReadConcurrency int64 = 32
@@ -337,11 +340,9 @@ func GetAliasByCell(ctx context.Context, ts *Server, cell string) string {
 		}
 
 		for alias, cellsAlias := range cellAliases {
-			for _, cellAlias := range cellsAlias.Cells {
-				if cellAlias == cell {
-					cellsAliases.cellsToAliases[cell] = alias
-					return alias
-				}
+			if slices.Contains(cellsAlias.Cells, cell) {
+				cellsAliases.cellsToAliases[cell] = alias
+				return alias
 			}
 		}
 	}
