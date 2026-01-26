@@ -303,9 +303,11 @@ func (wf *workflowFetcher) buildWorkflows(
 				return shardStreams.Streams[i].Id < shardStreams.Streams[j].Id
 			})
 		}
+
+		workflow.Status = computeWorkflowStatus(workflow)
 	}
 
-	if req.IncludeLogs {
+	if req.IncludeLogs && !req.SummaryOnly {
 		var fetchLogsWG sync.WaitGroup
 
 		for _, workflow := range workflowsMap {
@@ -319,6 +321,12 @@ func (wf *workflowFetcher) buildWorkflows(
 
 		// Wait for all the log fetchers to finish.
 		fetchLogsWG.Wait()
+	}
+
+	if req.SummaryOnly {
+		for _, workflow := range workflowsMap {
+			workflow.ShardStreams = nil
+		}
 	}
 
 	return maps.Values(workflowsMap), nil
@@ -683,4 +691,78 @@ func getVReplicationTrxLag(trxTs, updatedTs, heartbeatTs *vttimepb.Time, state b
 	}
 	now := time.Now().Unix() // Seconds since epoch
 	return float64(now - lastTransactionTime)
+}
+
+func computeWorkflowStatus(workflow *vtctldatapb.Workflow) *vtctldatapb.Workflow_WorkflowStatus {
+	status := &vtctldatapb.Workflow_WorkflowStatus{}
+	errorMessages := sets.New[string]()
+
+	for _, shardStream := range workflow.ShardStreams {
+		for _, stream := range shardStream.Streams {
+			status.TotalStreams++
+
+			switch stream.State {
+			case binlogdatapb.VReplicationWorkflowState_Running.String():
+				status.RunningStreams++
+			case binlogdatapb.VReplicationWorkflowState_Stopped.String():
+				status.StoppedStreams++
+			case binlogdatapb.VReplicationWorkflowState_Copying.String():
+				status.CopyingStreams++
+			case binlogdatapb.VReplicationWorkflowState_Error.String():
+				status.ErrorStreams++
+				if stream.Message != "" {
+					errorMessages.Insert(stream.Message)
+				}
+			case binlogdatapb.VReplicationWorkflowState_Lagging.String():
+				status.RunningStreams++
+			}
+
+			if stream.ThrottlerStatus != nil && stream.ThrottlerStatus.ComponentThrottled != "" {
+				status.IsThrottled = true
+			}
+		}
+	}
+
+	status.Errors = sets.List(errorMessages)
+	status.State = determineOverallState(workflow)
+
+	return status
+}
+
+// determineOverallState returns the workflow state with priority:
+// Error > Copying > Lagging > Stopped > Running.
+func determineOverallState(workflow *vtctldatapb.Workflow) vtctldatapb.Workflow_WorkflowStatus_State {
+	var hasError, hasCopying, hasLagging, hasStopped, hasRunning bool
+
+	for _, shardStream := range workflow.ShardStreams {
+		for _, stream := range shardStream.Streams {
+			switch stream.State {
+			case binlogdatapb.VReplicationWorkflowState_Error.String():
+				hasError = true
+			case binlogdatapb.VReplicationWorkflowState_Copying.String():
+				hasCopying = true
+			case binlogdatapb.VReplicationWorkflowState_Lagging.String():
+				hasLagging = true
+			case binlogdatapb.VReplicationWorkflowState_Stopped.String():
+				hasStopped = true
+			case binlogdatapb.VReplicationWorkflowState_Running.String():
+				hasRunning = true
+			}
+		}
+	}
+
+	switch {
+	case hasError:
+		return vtctldatapb.Workflow_WorkflowStatus_ERROR
+	case hasCopying:
+		return vtctldatapb.Workflow_WorkflowStatus_COPYING
+	case hasLagging:
+		return vtctldatapb.Workflow_WorkflowStatus_LAGGING
+	case hasStopped && !hasRunning:
+		return vtctldatapb.Workflow_WorkflowStatus_STOPPED
+	case hasRunning:
+		return vtctldatapb.Workflow_WorkflowStatus_RUNNING
+	default:
+		return vtctldatapb.Workflow_WorkflowStatus_UNKNOWN
+	}
 }
