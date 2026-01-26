@@ -402,7 +402,10 @@ func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error
 
 	var primaryInstance *Instance
 	if primaryAlias != "" {
-		primaryInstance, _, _ = ReadInstance(primaryAlias)
+		primaryInstance, _, err = ReadInstance(primaryAlias)
+		if err != nil {
+			return fmt.Errorf("failed to read primary instance %q: %w", primaryAlias, err)
+		}
 	}
 
 	// Only run errant GTID detection if we are sure that the data read of the current primary
