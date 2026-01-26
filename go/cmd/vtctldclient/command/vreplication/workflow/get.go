@@ -51,7 +51,6 @@ func commandGetWorkflows(cmd *cobra.Command, args []string) error {
 		ActiveOnly:  !getWorkflowsOptions.ShowAll,
 		IncludeLogs: workflowShowOptions.IncludeLogs,
 	})
-
 	if err != nil {
 		return err
 	}

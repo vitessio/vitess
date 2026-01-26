@@ -79,7 +79,7 @@ func vrlogStatsHandler(ch chan *VrLogStats, w http.ResponseWriter, r *http.Reque
 	timeout, limit := parseTimeoutLimitParams(r)
 	tmr := time.NewTimer(timeout)
 	defer tmr.Stop()
-	for i := 0; i < limit; i++ {
+	for range limit {
 		select {
 		case stats := <-ch:
 			select {

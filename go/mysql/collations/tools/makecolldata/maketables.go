@@ -38,9 +38,9 @@ func maketable(g *codegen.Generator, table string, collation *CollationMetadata,
 }
 
 func maketables(embed bool, output string, metadata AllMetadata) {
-	var pages = codegen.NewPageGenerator(embed)
-	var g = codegen.NewGenerator("vitess.io/vitess/go/mysql/collations/colldata")
-	var fastg = codegen.NewGenerator("vitess.io/vitess/go/mysql/collations/internal/uca")
+	pages := codegen.NewPageGenerator(embed)
+	g := codegen.NewGenerator("vitess.io/vitess/go/mysql/collations/colldata")
+	fastg := codegen.NewGenerator("vitess.io/vitess/go/mysql/collations/internal/uca")
 
 	tablegen := maketable(g, "uca900", metadata.get("utf8mb4_0900_ai_ci"), pages, uca.Layout_uca900{})
 	tablegen.WriteFastTables(fastg, uca.Layout_uca900{})

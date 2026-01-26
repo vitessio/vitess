@@ -472,10 +472,7 @@ func mergeLimitExpressions(l1, l2, off2 sqlparser.Expr) (expr sqlparser.Expr, fa
 		// Calculate the remaining limit after the offset.
 		off2int, _ := strconv.Atoi(off2.Val)
 		l1int, _ := strconv.Atoi(lim1str.Val)
-		lim := l1int - off2int
-		if lim < 0 {
-			lim = 0
-		}
+		lim := max(l1int-off2int, 0)
 		return sqlparser.NewIntLiteral(strconv.Itoa(lim)), false
 
 	default:
@@ -506,11 +503,9 @@ func mergeLimitExpressions(l1, l2, off2 sqlparser.Expr) (expr sqlparser.Expr, fa
 
 		v1, _ := strconv.Atoi(v1str.Val)
 		v2, _ := strconv.Atoi(v2str.Val)
-		lim := min(v2, v1-off2int)
-		if lim < 0 {
+		lim := max(min(v2, v1-off2int),
 			// If the combined limit is negative, set it to zero.
-			lim = 0
-		}
+			0)
 		return sqlparser.NewIntLiteral(strconv.Itoa(lim)), false
 	}
 }

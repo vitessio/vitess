@@ -143,7 +143,6 @@ func readExecute(c *threadParams, conn *mysql.Conn) error {
 		sel = "*, SLEEP(1)"
 	}
 	qr, err := conn.ExecuteFetch(fmt.Sprintf("SELECT %s FROM buffer WHERE id = %d", sel, criticalReadRowID), 1000, true)
-
 	if err != nil {
 		log.Errorf("select attempt #%d, failed with err: %v", attempt, err)
 		// For a reserved connection, read query can fail as it does not go through the gateway and
@@ -346,8 +345,8 @@ func (bt *BufferingTest) Test(t *testing.T) {
 	assert.Empty(t, readThreadInstance.errors, "found errors in read queries")
 	assert.Empty(t, updateThreadInstance.errors, "found errors in tx queries")
 
-	//At least one thread should have been buffered.
-	//This may fail if a failover is too fast. Add retries then.
+	// At least one thread should have been buffered.
+	// This may fail if a failover is too fast. Add retries then.
 	resp, err := http.Get(clusterInstance.VtgateProcess.VerifyURL)
 	require.NoError(t, err)
 	defer resp.Body.Close()

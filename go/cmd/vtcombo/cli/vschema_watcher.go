@@ -103,7 +103,7 @@ func persistNewSrvVSchema(srvVSchema *vschemapb.SrvVSchema) {
 			continue
 		}
 
-		err = os.WriteFile(path.Join(vschemaPersistenceDir, ksName+".json"), jsonBytes, 0644)
+		err = os.WriteFile(path.Join(vschemaPersistenceDir, ksName+".json"), jsonBytes, 0o644)
 		if err != nil {
 			log.Errorf("Error writing keyspace file: %v", err)
 		}
@@ -113,7 +113,7 @@ func persistNewSrvVSchema(srvVSchema *vschemapb.SrvVSchema) {
 
 func createDirectoryIfNotExists(dir string) error {
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		return os.Mkdir(dir, 0755)
+		return os.Mkdir(dir, 0o755)
 	}
 	return nil
 }

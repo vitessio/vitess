@@ -515,8 +515,7 @@ func TestVDiffPlanFailure(t *testing.T) {
 }
 
 func TestVDiffUnsharded(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestVDiffEnv(t, ctx, []string{"0"}, []string{"0"}, "", nil)
 	defer env.close()
 
@@ -691,16 +690,18 @@ func TestVDiffUnsharded(t *testing.T) {
 			TableName:      "t1",
 			MismatchedRowsSample: []*DiffMismatch{
 				{
-					Source: &RowDiff{Row: map[string]sqltypes.Value{
-						"c1": sqltypes.NewInt64(2),
-						"c2": sqltypes.NewInt64(3),
-					},
+					Source: &RowDiff{
+						Row: map[string]sqltypes.Value{
+							"c1": sqltypes.NewInt64(2),
+							"c2": sqltypes.NewInt64(3),
+						},
 						Query: "",
 					},
-					Target: &RowDiff{Row: map[string]sqltypes.Value{
-						"c1": sqltypes.NewInt64(2),
-						"c2": sqltypes.NewInt64(4),
-					},
+					Target: &RowDiff{
+						Row: map[string]sqltypes.Value{
+							"c1": sqltypes.NewInt64(2),
+							"c2": sqltypes.NewInt64(4),
+						},
 						Query: "",
 					},
 				},
@@ -728,14 +729,16 @@ func TestVDiffUnsharded(t *testing.T) {
 			TableName:      "t1",
 			MismatchedRowsSample: []*DiffMismatch{
 				{
-					Source: &RowDiff{Row: map[string]sqltypes.Value{
-						"c1": sqltypes.NewInt64(2),
-					},
+					Source: &RowDiff{
+						Row: map[string]sqltypes.Value{
+							"c1": sqltypes.NewInt64(2),
+						},
 						Query: "",
 					},
-					Target: &RowDiff{Row: map[string]sqltypes.Value{
-						"c1": sqltypes.NewInt64(2),
-					},
+					Target: &RowDiff{
+						Row: map[string]sqltypes.Value{
+							"c1": sqltypes.NewInt64(2),
+						},
 						Query: "",
 					},
 				},
@@ -763,16 +766,18 @@ func TestVDiffUnsharded(t *testing.T) {
 			TableName:      "t1",
 			MismatchedRowsSample: []*DiffMismatch{
 				{
-					Source: &RowDiff{Row: map[string]sqltypes.Value{
-						"c1": sqltypes.NewInt64(2),
-						"c2": sqltypes.NewInt64(3),
-					},
+					Source: &RowDiff{
+						Row: map[string]sqltypes.Value{
+							"c1": sqltypes.NewInt64(2),
+							"c2": sqltypes.NewInt64(3),
+						},
 						Query: "select c1, c2 from t1 where c1=2;",
 					},
-					Target: &RowDiff{Row: map[string]sqltypes.Value{
-						"c1": sqltypes.NewInt64(2),
-						"c2": sqltypes.NewInt64(4),
-					},
+					Target: &RowDiff{
+						Row: map[string]sqltypes.Value{
+							"c1": sqltypes.NewInt64(2),
+							"c2": sqltypes.NewInt64(4),
+						},
 						Query: "select c1, c2 from t1 where c1=2;",
 					},
 				},
@@ -795,8 +800,7 @@ func TestVDiffUnsharded(t *testing.T) {
 func TestVDiffSharded(t *testing.T) {
 	// Also test that highest position ""MariaDB/5-456-892" will be used
 	// if lower positions are found.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestVDiffEnv(t, ctx, []string{"-40", "40-"}, []string{"-80", "80-"}, "", map[string]string{
 		"-40-80": "MariaDB/5-456-890",
 		"40-80-": "MariaDB/5-456-891",
@@ -804,20 +808,22 @@ func TestVDiffSharded(t *testing.T) {
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
-		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
-			Name:              "t1",
-			Columns:           []string{"c1", "c2"},
-			PrimaryKeyColumns: []string{"c1"},
-			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
-			Schema:            "create table t1(c1 bigint, c2 bigint, primary key(c1))",
-		},
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+			{
+				Name:              "t1",
+				Columns:           []string{"c1", "c2"},
+				PrimaryKeyColumns: []string{"c1"},
+				Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+				Schema:            "create table t1(c1 bigint, c2 bigint, primary key(c1))",
+			},
 			{
 				Name:              "_t1_gho",
 				Columns:           []string{"c1", "c2", "c3"},
 				PrimaryKeyColumns: []string{"c2"},
 				Fields:            sqltypes.MakeTestFields("c1|c2|c3", "int64|int64|int64"),
 				Schema:            "create table _t1_gho(c1 bigint, c2 bigint, c3 bigint, primary key(c2))",
-			}},
+			},
+		},
 	}
 
 	env.tmc.schema = schm
@@ -870,8 +876,7 @@ func TestVDiffSharded(t *testing.T) {
 }
 
 func TestVDiffAggregates(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestVDiffEnv(t, ctx, []string{"-40", "40-"}, []string{"-80", "80-"}, "select c1, count(*) c2, sum(c3) c3 from t group by c1", nil)
 	defer env.close()
 
@@ -940,8 +945,7 @@ func TestVDiffAggregates(t *testing.T) {
 }
 
 func TestVDiffDefaults(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestVDiffEnv(t, ctx, []string{"0"}, []string{"0"}, "", nil)
 	defer env.close()
 
@@ -996,8 +1000,7 @@ func TestVDiffDefaults(t *testing.T) {
 }
 
 func TestVDiffReplicationWait(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestVDiffEnv(t, ctx, []string{"0"}, []string{"0"}, "", nil)
 	defer env.close()
 
@@ -1054,7 +1057,10 @@ func TestVDiffFindPKs(t *testing.T) {
 				SelectExprs: &sqlparser.SelectExprs{
 					Exprs: []sqlparser.SelectExpr{
 						&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c1")}},
-						&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c2")}}}}},
+						&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c2")}},
+					},
+				},
+			},
 			tdIn: &tableDiffer{
 				compareCols: []compareColInfo{{0, collations.Unknown, nil, false}, {1, collations.Unknown, nil, false}},
 				comparePKs:  []compareColInfo{},
@@ -1081,7 +1087,9 @@ func TestVDiffFindPKs(t *testing.T) {
 						&sqlparser.AliasedExpr{Expr: sqlparser.NewColName("c1")},
 						&sqlparser.AliasedExpr{Expr: sqlparser.NewColName("c2")},
 						&sqlparser.AliasedExpr{Expr: sqlparser.NewFuncExpr("c3")},
-						&sqlparser.AliasedExpr{Expr: sqlparser.NewColName("c4")}}},
+						&sqlparser.AliasedExpr{Expr: sqlparser.NewColName("c4")},
+					},
+				},
 			},
 			tdIn: &tableDiffer{
 				compareCols: []compareColInfo{{0, collations.Unknown, nil, false}, {1, collations.Unknown, nil, false}, {2, collations.Unknown, nil, false}, {3, collations.Unknown, nil, false}},

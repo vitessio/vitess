@@ -345,7 +345,7 @@ func TestMain(m *testing.M) {
 		defer clusterInstance.Teardown()
 
 		if _, err := os.Stat(schemaChangeDirectory); os.IsNotExist(err) {
-			_ = os.Mkdir(schemaChangeDirectory, 0700)
+			_ = os.Mkdir(schemaChangeDirectory, 0o700)
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
@@ -472,11 +472,9 @@ func waitForReplicationCatchup(t *testing.T) {
 	primaryPos := getTabletPosition(t, primary)
 	var wg sync.WaitGroup
 	for _, replica := range []*cluster.Vttablet{replicaNoFK, replicaFK} {
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			waitForReplicaCatchup(t, ctx, replica, primaryPos)
-			wg.Done()
-		}()
+		})
 	}
 	wg.Wait()
 }
@@ -592,11 +590,9 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 				var wg sync.WaitGroup
 				for i := 0; i < maxConcurrency; i++ {
 					tableName := tableNames[i%len(tableNames)]
-					wg.Add(1)
-					go func() {
-						defer wg.Done()
+					wg.Go(func() {
 						runSingleConnection(ctx, t, tableName, tcase, sleepInterval)
-					}()
+					})
 				}
 
 				if testOnlineDDL {
@@ -1231,13 +1227,13 @@ func populateTables(t *testing.T, tcase *testCase) {
 			t.Run(tableName, func(t *testing.T) {
 				t.Run("populating", func(t *testing.T) {
 					// populate parent, then child, child2, then grandchild
-					for i := 0; i < maxTableRows/2; i++ {
+					for range maxTableRows / 2 {
 						generateInsert(t, tableName, conn)
 					}
-					for i := 0; i < maxTableRows/4; i++ {
+					for range maxTableRows / 4 {
 						generateUpdate(t, tableName, conn)
 					}
-					for i := 0; i < maxTableRows/4; i++ {
+					for range maxTableRows / 4 {
 						generateDelete(t, tableName, conn)
 					}
 				})

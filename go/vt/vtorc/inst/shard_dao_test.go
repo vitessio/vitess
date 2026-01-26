@@ -58,7 +58,8 @@ func TestSaveReadAndDeleteShard(t *testing.T) {
 			},
 			primaryTimestampWanted: timeToUse.Add(1 * time.Hour).UTC(),
 			primaryAliasWanted:     "zone1-0000000301",
-		}, {
+		},
+		{
 			name:         "Success with empty primary alias",
 			keyspaceName: "ks1",
 			shardName:    "-",
@@ -67,7 +68,8 @@ func TestSaveReadAndDeleteShard(t *testing.T) {
 			},
 			primaryTimestampWanted: timeToUse.UTC(),
 			primaryAliasWanted:     "",
-		}, {
+		},
+		{
 			name:         "Success with empty primary term start time",
 			keyspaceName: "ks1",
 			shardName:    "80-",
@@ -126,7 +128,7 @@ func TestReadKeyspaceShardStats(t *testing.T) {
 
 	var uid uint32
 	for _, shard := range []string{"-40", "40-80", "80-c0", "c0-"} {
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			require.NoError(t, SaveTablet(&topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: "cell1",
