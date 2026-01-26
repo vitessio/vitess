@@ -112,6 +112,8 @@ func slogLevel(level string) (slog.Level, error) {
 // When structured logging is disabled, log forwards the call to glog
 // using the severity implied by level.
 func log(level slog.Level, depth int, msg string, args ...any) {
+	depth += 3
+
 	if !structuredLoggingEnabled.Load() {
 		logGlog(level, depth, msg, args...)
 		return
@@ -126,7 +128,7 @@ func log(level slog.Level, depth int, msg string, args ...any) {
 
 	// Adjust the caller depth (+3) to bypass the helper functions.
 	var pcs [1]uintptr
-	runtime.Callers(depth+3, pcs[:])
+	runtime.Callers(depth, pcs[:])
 
 	// Rebuild the record with the proper source.
 	record := slog.NewRecord(time.Now(), level, msg, pcs[0])
@@ -153,9 +155,6 @@ func Enabled(level slog.Level) bool {
 
 // logGlog formats a structured log call as a glog message.
 func logGlog(level slog.Level, depth int, msg string, args ...any) {
-	// Adjust depth so the reported caller skips logGlog, logS, and the wrapper.
-	depth += 3
-
 	// Preserve the slog message as the first printed element.
 	args = append([]any{msg}, args...)
 

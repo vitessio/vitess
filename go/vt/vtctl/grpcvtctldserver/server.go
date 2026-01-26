@@ -2407,6 +2407,8 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 			err = rec.Error()
 			return nil, err
 		}
+
+		log.Warn(fmt.Sprintf("GetTablets encountered non-fatal error %s; continuing because Strict=false", rec.Error()))
 	}
 
 	// Collect true primary term start times, and optionally filter out any
