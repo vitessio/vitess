@@ -412,13 +412,9 @@ func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error
 	// flagging incorrect errant GTIDs. If we were to use old data, we could have some GTIDs
 	// accepted by the old primary (this tablet) that don't show in the new primary's set.
 	if primaryInstance != nil && primaryInstance.SourceHost == "" {
-		// Decide whether to replace the replication source executed GTID set with the shard primary's.
-		switch {
-		// If the instance has no replication source and no primary GTID set yet...
-		case instance.SourceHost == "" && instance.primaryExecutedGtidSet == "":
-		// Or if the instance's replication source is not the primary...
-		case !sourceIsPrimary(instance, primaryInstance):
-			// ...use the shard primary's executed GTID set for comparison.
+		// If the instance has no replication source and no primary GTID set yet, or if the instance's replication
+		// source is not the primary, use the shard primary's executed GTID set for comparison.
+		if (instance.SourceHost == "" && instance.primaryExecutedGtidSet == "") || !sourceIsPrimary(instance, primaryInstance) {
 			instance.primaryExecutedGtidSet = primaryInstance.ExecutedGtidSet
 		}
 	}
