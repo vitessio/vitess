@@ -41,6 +41,7 @@ func (cached *KeyRange) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *ThrottledAppRule) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

@@ -278,7 +278,7 @@ func TestSemiSyncBlockDueToDisruption(t *testing.T) {
 	runCommandWithSudo(t, "sh", "-c", fmt.Sprintf("echo 'block in proto tcp from any to any port %d' | sudo tee -a /etc/pf.conf > /dev/null", tablets[0].MySQLPort))
 
 	// This following command is only required if pfctl is not already enabled
-	//runCommandWithSudo(t, "pfctl", "-e")
+	// runCommandWithSudo(t, "pfctl", "-e")
 	runCommandWithSudo(t, "pfctl", "-f", "/etc/pf.conf")
 	rules := runCommandWithSudo(t, "pfctl", "-s", "rules")
 	log.Errorf("Rules enforced - %v", rules)

@@ -252,7 +252,7 @@ func randomPort() (port int) {
 		portBase := int(rand.Int32N(20000) + 10000)
 		portInUse := false
 		portRange := make([]int, 0, 6)
-		for i := 0; i < 6; i++ {
+		for i := range 6 {
 			port = portBase + i
 			if slices.Contains(usedRandomPorts, port) {
 				portInUse = true
@@ -301,7 +301,7 @@ func NewLocalTestEnv(basePort int) (*LocalTestEnv, error) {
 // environment with a directory explicitly specified.
 func NewLocalTestEnvWithDirectory(basePort int, directory string) (*LocalTestEnv, error) {
 	if _, err := os.Stat(path.Join(directory, "logs")); os.IsNotExist(err) {
-		err := os.Mkdir(path.Join(directory, "logs"), 0700)
+		err := os.Mkdir(path.Join(directory, "logs"), 0o700)
 		if err != nil {
 			return nil, err
 		}

@@ -1969,9 +1969,9 @@ func TestSelectScatterOrderBy(t *testing.T) {
 		},
 		InsertID: 0,
 	}
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		// There should be a duplicate for each row returned.
-		for j := 0; j < 2; j++ {
+		for range 2 {
 			row := []sqltypes.Value{
 				sqltypes.NewInt32(1),
 				sqltypes.NewInt32(int32(3 - i)),
@@ -2042,9 +2042,9 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 		},
 		InsertID: 0,
 	}
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		// There should be a duplicate for each row returned.
-		for j := 0; j < 2; j++ {
+		for range 2 {
 			row := []sqltypes.Value{
 				sqltypes.NewInt32(1),
 				sqltypes.NewVarChar(strconv.Itoa(3 - i)),
@@ -2107,7 +2107,7 @@ func TestStreamSelectScatterOrderBy(t *testing.T) {
 			{Name: "col", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 		},
 	}
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		row := []sqltypes.Value{
 			sqltypes.NewInt32(1),
 			sqltypes.NewInt32(int32(3 - i)),
@@ -2169,7 +2169,7 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 			{Name: "textcol", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 		},
 	}
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		row := []sqltypes.Value{
 			sqltypes.NewInt32(1),
 			sqltypes.NewVarChar(strconv.Itoa(3 - i)),
@@ -2236,7 +2236,7 @@ func TestSelectScatterAggregate(t *testing.T) {
 		},
 		InsertID: 0,
 	}
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		row := []sqltypes.Value{
 			sqltypes.NewInt32(int32(i)),
 			sqltypes.NewDecimal(strconv.Itoa(i*2 + 4)),
@@ -2298,7 +2298,7 @@ func TestStreamSelectScatterAggregate(t *testing.T) {
 			{Name: "sum(foo)", Type: sqltypes.Decimal, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 		},
 	}
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		row := []sqltypes.Value{
 			sqltypes.NewInt32(int32(i)),
 			sqltypes.NewDecimal(strconv.Itoa(i*2 + 4)),
@@ -4614,11 +4614,11 @@ func TestStreamJoinQuery(t *testing.T) {
 		Fields: append(sandboxconn.SingleRowResult.Fields, sandboxconn.SingleRowResult.Fields...),
 	}
 	wantRow := append(sandboxconn.StreamRowResult.Rows[0], sandboxconn.StreamRowResult.Rows[0]...)
-	for i := 0; i < 64; i++ {
+	for range 64 {
 		wantResult.Rows = append(wantResult.Rows, wantRow)
 	}
 	require.Equal(t, len(wantResult.Rows), len(result.Rows))
-	for idx := 0; idx < 64; idx++ {
+	for idx := range 64 {
 		utils.MustMatch(t, wantResult.Rows[idx], result.Rows[idx], "mismatched on: ", strconv.Itoa(idx))
 	}
 }

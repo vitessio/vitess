@@ -20,6 +20,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"sort"
 	"strings"
@@ -526,9 +527,7 @@ func AddAdditionalGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	}
 
 	// Mark new tables found just once as globally routable, rest as ambiguous.
-	for k, v := range newTables {
-		vschema.globalTables[k] = v
-	}
+	maps.Copy(vschema.globalTables, newTables)
 }
 
 func buildKeyspaceGlobalTables(vschema *VSchema, ksvschema *KeyspaceSchema) {

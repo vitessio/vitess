@@ -214,8 +214,8 @@ func ValidateProto(config *tableaclpb.Config) (err error) {
 	for _, group := range config.TableGroups {
 		for _, name := range group.TableNamesOrPrefixes {
 			var prefix patricia.Prefix
-			if strings.HasSuffix(name, "%") {
-				prefix = []byte(strings.TrimSuffix(name, "%"))
+			if before, ok := strings.CutSuffix(name, "%"); ok {
+				prefix = []byte(before)
 			} else {
 				prefix = []byte(name + "\000")
 			}

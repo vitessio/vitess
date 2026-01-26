@@ -290,9 +290,11 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 func startFullyThrottledStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter, position string, tablePKs []*binlogdatapb.TableLastPK) (*sync.WaitGroup, <-chan []*binlogdatapb.VEvent) {
 	return startStreamWithAllOrNothingThrottlingOption(ctx, t, filter, position, tablePKs, true)
 }
+
 func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter, position string, tablePKs []*binlogdatapb.TableLastPK) (*sync.WaitGroup, <-chan []*binlogdatapb.VEvent) {
 	return startStreamWithAllOrNothingThrottlingOption(ctx, t, filter, position, tablePKs, false)
 }
+
 func startStreamWithAllOrNothingThrottlingOption(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter, position string, tablePKs []*binlogdatapb.TableLastPK, alwaysThrottle bool) (*sync.WaitGroup, <-chan []*binlogdatapb.VEvent) {
 	switch position {
 	case "":
@@ -401,7 +403,7 @@ func setVSchema(t *testing.T, vschema string) {
 	}
 	// Wait for curCount to go up.
 	updated := false
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		if engine.vschemaUpdates.Get() != curCount {
 			updated = true
 			break
