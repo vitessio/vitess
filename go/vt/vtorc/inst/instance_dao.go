@@ -400,8 +400,6 @@ func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error
 		return nil
 	}
 
-	// If we can resolve a shard primary alias, read its last known instance row
-	// from the backend so we can compare GTID sets when safe to do so.
 	var primaryInstance *Instance
 	if primaryAlias != "" {
 		primaryInstance, _, _ = ReadInstance(primaryAlias)
