@@ -111,51 +111,150 @@ func TestInitializeTargetSequences(t *testing.T) {
 		},
 	}
 
-	env.tmc.expectGetMaxValueForSequencesRequest(200, &getMaxValueForSequencesRequestResponse{
-		req: &tabletmanagerdatapb.GetMaxValueForSequencesRequest{
-			Sequences: []*tabletmanagerdatapb.GetMaxValueForSequencesRequest_SequenceMetadata{
-				{
-					BackingTableName:        "my-seq1",
-					UsingColEscaped:         "`my-col`",
-					UsingTableNameEscaped:   fmt.Sprintf("`%s`", tableName),
-					UsingTableDbNameEscaped: "`vt_targetks`",
-				},
-				{
-					BackingTableName:        "my-seq2",
-					UsingColEscaped:         "`my-col-2`",
-					UsingTableNameEscaped:   fmt.Sprintf("`%s`", tableName2),
-					UsingTableDbNameEscaped: "`vt_targetks`",
-				},
-			},
-		},
-		res: &tabletmanagerdatapb.GetMaxValueForSequencesResponse{
-			MaxValuesBySequenceTable: map[string]int64{
-				"my-seq1": 34,
-				"my-seq2": 10,
-			},
-		},
-	})
-	env.tmc.expectUpdateSequenceTablesRequest(100, &tabletmanagerdatapb.UpdateSequenceTablesRequest{
-		Sequences: []*tabletmanagerdatapb.UpdateSequenceTablesRequest_SequenceMetadata{
-			{
-				BackingTableName:   "my-seq1",
-				BackingTableDbName: "vt_" + sourceKeyspaceName,
-				MaxValue:           34,
-			},
-			{
-				BackingTableName:   "my-seq2",
-				BackingTableDbName: "vt_" + sourceKeyspaceName,
-				MaxValue:           10,
-			},
-		},
-	})
+	type testCase struct {
+		name                  string
+		maxValueRequest       *getMaxValueForSequencesRequestResponse
+		updateSeqTableRequest *tabletmanagerdatapb.UpdateSequenceTablesRequest
+	}
 
-	err = sw.initializeTargetSequences(ctx, sequencesByBackingTable)
-	assert.NoError(t, err)
+	testCases := []testCase{
+		{
+			name: "initialize sequence",
+			maxValueRequest: &getMaxValueForSequencesRequestResponse{
+				req: &tabletmanagerdatapb.GetMaxValueForSequencesRequest{
+					Sequences: []*tabletmanagerdatapb.GetMaxValueForSequencesRequest_SequenceMetadata{
+						{
+							BackingTableName:        "my-seq1",
+							UsingColEscaped:         "`my-col`",
+							UsingTableNameEscaped:   fmt.Sprintf("`%s`", tableName),
+							UsingTableDbNameEscaped: "`vt_targetks`",
+						},
+						{
+							BackingTableName:        "my-seq2",
+							UsingColEscaped:         "`my-col-2`",
+							UsingTableNameEscaped:   fmt.Sprintf("`%s`", tableName2),
+							UsingTableDbNameEscaped: "`vt_targetks`",
+						},
+					},
+				},
+				res: &tabletmanagerdatapb.GetMaxValueForSequencesResponse{
+					MaxValuesBySequenceTable: map[string]int64{
+						"my-seq1": 34,
+						"my-seq2": 10,
+					},
+				},
+			},
+			updateSeqTableRequest: &tabletmanagerdatapb.UpdateSequenceTablesRequest{
+				Sequences: []*tabletmanagerdatapb.UpdateSequenceTablesRequest_SequenceMetadata{
+					{
+						BackingTableName:   "my-seq1",
+						BackingTableDbName: "vt_" + sourceKeyspaceName,
+						MaxValue:           34,
+					},
+					{
+						BackingTableName:   "my-seq2",
+						BackingTableDbName: "vt_" + sourceKeyspaceName,
+						MaxValue:           10,
+					},
+				},
+			},
+		},
+		{
+			name: "initialize sequences",
+			maxValueRequest: &getMaxValueForSequencesRequestResponse{
+				req: &tabletmanagerdatapb.GetMaxValueForSequencesRequest{
+					Sequences: []*tabletmanagerdatapb.GetMaxValueForSequencesRequest_SequenceMetadata{
+						{
+							BackingTableName:        "my-seq1",
+							UsingColEscaped:         "`my-col`",
+							UsingTableNameEscaped:   fmt.Sprintf("`%s`", tableName),
+							UsingTableDbNameEscaped: "`vt_targetks`",
+						},
+						{
+							BackingTableName:        "my-seq2",
+							UsingColEscaped:         "`my-col-2`",
+							UsingTableNameEscaped:   fmt.Sprintf("`%s`", tableName2),
+							UsingTableDbNameEscaped: "`vt_targetks`",
+						},
+					},
+				},
+				res: &tabletmanagerdatapb.GetMaxValueForSequencesResponse{
+					MaxValuesBySequenceTable: map[string]int64{
+						"my-seq1": 34,
+						"my-seq2": 10,
+					},
+				},
+			},
+			updateSeqTableRequest: &tabletmanagerdatapb.UpdateSequenceTablesRequest{
+				Sequences: []*tabletmanagerdatapb.UpdateSequenceTablesRequest_SequenceMetadata{
+					{
+						BackingTableName:   "my-seq1",
+						BackingTableDbName: "vt_" + sourceKeyspaceName,
+						MaxValue:           34,
+					},
+					{
+						BackingTableName:   "my-seq2",
+						BackingTableDbName: "vt_" + sourceKeyspaceName,
+						MaxValue:           10,
+					},
+				},
+			},
+		},
+		{
+			name: "initialize sequences for empty tables",
+			maxValueRequest: &getMaxValueForSequencesRequestResponse{
+				req: &tabletmanagerdatapb.GetMaxValueForSequencesRequest{
+					Sequences: []*tabletmanagerdatapb.GetMaxValueForSequencesRequest_SequenceMetadata{
+						{
+							BackingTableName:        "my-seq1",
+							UsingColEscaped:         "`my-col`",
+							UsingTableNameEscaped:   fmt.Sprintf("`%s`", tableName),
+							UsingTableDbNameEscaped: "`vt_targetks`",
+						},
+						{
+							BackingTableName:        "my-seq2",
+							UsingColEscaped:         "`my-col-2`",
+							UsingTableNameEscaped:   fmt.Sprintf("`%s`", tableName2),
+							UsingTableDbNameEscaped: "`vt_targetks`",
+						},
+					},
+				},
+				res: &tabletmanagerdatapb.GetMaxValueForSequencesResponse{
+					MaxValuesBySequenceTable: map[string]int64{},
+				},
+			},
+			updateSeqTableRequest: &tabletmanagerdatapb.UpdateSequenceTablesRequest{
+				Sequences: []*tabletmanagerdatapb.UpdateSequenceTablesRequest_SequenceMetadata{
+					{
+						BackingTableName:   "my-seq1",
+						BackingTableDbName: "vt_" + sourceKeyspaceName,
+						MaxValue:           0,
+					},
+					{
+						BackingTableName:   "my-seq2",
+						BackingTableDbName: "vt_" + sourceKeyspaceName,
+						MaxValue:           0,
+					},
+				},
+			},
+		},
+	}
 
-	// Expect the requests to be cleared
-	assert.Emptyf(t, env.tmc.updateSequenceTablesRequests, "expected no remaining UpdateSequenceTables requests")
-	assert.Emptyf(t, env.tmc.getMaxValueForSequencesRequests, "expected no remaining GetMaxValueForSequences requests")
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.NotNil(t, tc.maxValueRequest)
+			require.NotNil(t, tc.updateSeqTableRequest)
+			env.tmc.expectGetMaxValueForSequencesRequest(200, tc.maxValueRequest)
+			env.tmc.expectUpdateSequenceTablesRequest(100, tc.updateSeqTableRequest)
+
+			err = sw.initializeTargetSequences(ctx, sequencesByBackingTable)
+			assert.NoError(t, err)
+
+			// Expect the requests to be cleared.
+			assert.Emptyf(t, env.tmc.updateSequenceTablesRequests, "expected no remaining UpdateSequenceTables requests")
+			assert.Emptyf(t, env.tmc.getMaxValueForSequencesRequests, "expected no remaining GetMaxValueForSequences requests")
+		})
+	}
 }
 
 func TestGetTargetSequenceMetadata(t *testing.T) {
