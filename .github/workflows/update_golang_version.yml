@@ -36,6 +36,7 @@ jobs:
       - name: Detect new version and update codebase
         env:
           GH_TOKEN: ${{ github.token }}
+          GOTOOLCHAIN: auto
         id: detect-and-update
         run: |
           old_go_version=$(go run ./go/tools/go-upgrade/go-upgrade.go get go-version)
