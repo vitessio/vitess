@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"slices"
 	"sync"
 
 	"github.com/google/shlex"
@@ -82,10 +83,8 @@ func registerBackupCompressionFlags(fs *pflag.FlagSet) {
 
 func getExtensionFromEngine(engine string) (string, error) {
 	for ext, eng := range engineExtensions {
-		for _, e := range eng {
-			if e == engine {
-				return ext, nil
-			}
+		if slices.Contains(eng, engine) {
+			return ext, nil
 		}
 	}
 	return "", fmt.Errorf("%w %q", errUnsupportedCompressionEngine, engine)

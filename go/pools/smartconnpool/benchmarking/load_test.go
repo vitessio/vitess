@@ -69,8 +69,10 @@ func (b *BenchConn) IsSameSetting(setting string) bool {
 	return b.setting != nil && b.setting.ApplyQuery() == setting
 }
 
-var _ smartconnpool.Connection = (*BenchConn)(nil)
-var _ pools.Resource = (*BenchConn)(nil)
+var (
+	_ smartconnpool.Connection = (*BenchConn)(nil)
+	_ pools.Resource           = (*BenchConn)(nil)
+)
 
 func (b *BenchConn) ApplySetting(ctx context.Context, setting *smartconnpool.Setting) error {
 	time.Sleep(b.latency)
@@ -98,8 +100,10 @@ func (b *BenchConn) Close() {
 	b.closed = true
 }
 
-type Trace []Request
-type Perform func(ctx context.Context, setting *smartconnpool.Setting, delay time.Duration)
+type (
+	Trace   []Request
+	Perform func(ctx context.Context, setting *smartconnpool.Setting, delay time.Duration)
+)
 
 type Benchmark struct {
 	t        testing.TB
@@ -458,7 +462,7 @@ func BenchmarkGetPut(b *testing.B) {
 				b.ReportAllocs()
 				b.SetParallelism(parallelism)
 				b.RunParallel(func(pb *testing.PB) {
-					var ctx = context.Background()
+					ctx := context.Background()
 					for pb.Next() {
 						if conn, err := pool.Get(ctx, nil); err != nil {
 							b.Error(err)
@@ -479,7 +483,7 @@ func BenchmarkGetPut(b *testing.B) {
 				b.ReportAllocs()
 				b.SetParallelism(parallelism)
 				b.RunParallel(func(pb *testing.PB) {
-					var ctx = context.Background()
+					ctx := context.Background()
 					for pb.Next() {
 						if conn, err := pool.Get(ctx, nil); err != nil {
 							b.Error(err)

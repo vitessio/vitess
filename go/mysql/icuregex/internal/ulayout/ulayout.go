@@ -30,9 +30,11 @@ import (
 	"vitess.io/vitess/go/mysql/icuregex/internal/utrie"
 )
 
-var inpcTrie *utrie.UcpTrie
-var inscTrie *utrie.UcpTrie
-var voTrie *utrie.UcpTrie
+var (
+	inpcTrie *utrie.UcpTrie
+	inscTrie *utrie.UcpTrie
+	voTrie   *utrie.UcpTrie
+)
 
 const (
 	ixInpcTrieTop = 1

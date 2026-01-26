@@ -70,8 +70,10 @@ const (
 // how long to wait for background operations to complete
 var BackgroundOperationTimeout = topo.RemoteOperationTimeout * 4
 
-var ErrMaxDiffDurationExceeded = vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "table diff was stopped due to exceeding the max-diff-duration time")
-var ErrVDiffStoppedByUser = vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped by user")
+var (
+	ErrMaxDiffDurationExceeded = vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "table diff was stopped due to exceeding the max-diff-duration time")
+	ErrVDiffStoppedByUser      = vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped by user")
+)
 
 // compareColInfo contains the metadata for a column of the table being diffed
 type compareColInfo struct {
@@ -276,9 +278,7 @@ func (td *tableDiffer) selectTablets(ctx context.Context) error {
 		return vterrors.Wrap(err, "failed to get source topo server")
 	}
 	tabletPickerOptions := discovery.TabletPickerOptions{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		sourceErr = td.forEachSource(func(source *migrationSource) error {
 			sourceTablet, err := td.pickTablet(ctx, sourceTopoServer, sourceCells, td.wd.ct.sourceKeyspace,
 				source.shard, td.wd.opts.PickerOptions.TabletTypes, tabletPickerOptions)
@@ -288,11 +288,9 @@ func (td *tableDiffer) selectTablets(ctx context.Context) error {
 			source.tablet = sourceTablet
 			return nil
 		})
-	}()
+	})
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		if td.wd.ct.workflowType == binlogdatapb.VReplicationWorkflowType_Reshard {
 			// For resharding, the target shards could be non-serving if traffic has already been switched once.
 			// When shards are created their IsPrimaryServing attribute is set to true. However, when the traffic is switched
@@ -309,7 +307,7 @@ func (td *tableDiffer) selectTablets(ctx context.Context) error {
 			tablet: targetTablet,
 			shard:  targetTablet.Shard,
 		}
-	}()
+	})
 
 	wg.Wait()
 	if sourceErr != nil {
@@ -319,7 +317,8 @@ func (td *tableDiffer) selectTablets(ctx context.Context) error {
 }
 
 func (td *tableDiffer) pickTablet(ctx context.Context, ts *topo.Server, cells []string, keyspace,
-	shard, tabletTypes string, options discovery.TabletPickerOptions) (*topodatapb.Tablet, error) {
+	shard, tabletTypes string, options discovery.TabletPickerOptions,
+) (*topodatapb.Tablet, error) {
 	tp, err := discovery.NewTabletPicker(ctx, ts, cells, td.wd.ct.vde.thisTablet.Alias.Cell, keyspace,
 		shard, tabletTypes, options)
 	if err != nil {

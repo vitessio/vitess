@@ -38,9 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
-var (
-	exporter = servenv.NewExporter("TestSemiSyncMonitor", "")
-)
+var exporter = servenv.NewExporter("TestSemiSyncMonitor", "")
 
 // createFakeDBAndMonitor created a fake DB and a monitor for testing.
 func createFakeDBAndMonitor(t *testing.T) (*fakesqldb.DB, *Monitor) {

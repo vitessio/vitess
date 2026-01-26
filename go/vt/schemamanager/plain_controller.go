@@ -17,10 +17,9 @@ limitations under the License.
 package schemamanager
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/log"
 )

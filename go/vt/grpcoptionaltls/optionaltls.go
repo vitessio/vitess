@@ -40,7 +40,7 @@ func (c *optionalTLSCreds) ServerHandshake(conn net.Conn) (net.Conn, credentials
 		return c.TransportCredentials.ServerHandshake(wc)
 	}
 
-	var authInfo = info{
+	authInfo := info{
 		CommonAuthInfo: credentials.CommonAuthInfo{SecurityLevel: credentials.NoSecurity},
 	}
 

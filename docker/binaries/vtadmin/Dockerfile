@@ -29,7 +29,7 @@ COPY --from=lite /vt/web/vtadmin /vt/web/vtadmin
 RUN npm --prefix /vt/web/vtadmin ci && \
     npm run --prefix /vt/web/vtadmin build
 
-FROM nginxinc/nginx-unprivileged:1.22 AS nginx
+FROM nginxinc/nginx-unprivileged:1.29 AS nginx
 
 ENV VTADMIN_WEB_PORT=14201
 

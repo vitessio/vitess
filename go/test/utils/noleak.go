@@ -71,7 +71,7 @@ func ensureNoLeaks() error {
 }
 
 func ensureNoGoroutines() error {
-	var ignored = []goleak.Option{
+	ignored := []goleak.Option{
 		goleak.IgnoreTopFunction("internal/synctest.Run"),
 		goleak.IgnoreTopFunction("testing/synctest.testingSynctestTest"),
 		goleak.IgnoreTopFunction("github.com/golang/glog.(*fileSink).flushDaemon"),
@@ -88,7 +88,7 @@ func ensureNoGoroutines() error {
 	}
 
 	var err error
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		err = goleak.Find(ignored...)
 		if err == nil {
 			return nil

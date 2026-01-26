@@ -138,8 +138,10 @@ func Usage() {
 
 // filterTestFlags returns two slices: the second one has just the flags for `go test` and the first one contains
 // the rest of the flags.
-const goTestFlagSuffix = "-test"
-const goTestRunFlag = "-test.run"
+const (
+	goTestFlagSuffix = "-test"
+	goTestRunFlag    = "-test.run"
+)
 
 func filterTestFlags() ([]string, []string) {
 	args := os.Args

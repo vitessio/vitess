@@ -17,7 +17,6 @@ limitations under the License.
 package grpc_api
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -29,8 +28,7 @@ import (
 
 // TestEffectiveCallerIDWithAccess verifies that an authenticated gRPC static user with an effectiveCallerID that has ACL access can execute queries
 func TestEffectiveCallerIDWithAccess(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	vtgateConn, err := cluster.DialVTGate(ctx, t.Name(), vtgateGrpcAddress, "some_other_user", "test_password")
 	require.NoError(t, err)
@@ -45,8 +43,7 @@ func TestEffectiveCallerIDWithAccess(t *testing.T) {
 
 // TestEffectiveCallerIDWithNoAccess verifies that an authenticated gRPC static user without an effectiveCallerID that has ACL access cannot execute queries
 func TestEffectiveCallerIDWithNoAccess(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	vtgateConn, err := cluster.DialVTGate(ctx, t.Name(), vtgateGrpcAddress, "another_unrelated_user", "test_password")
 	require.NoError(t, err)
@@ -63,8 +60,7 @@ func TestEffectiveCallerIDWithNoAccess(t *testing.T) {
 
 // TestAuthenticatedUserWithAccess verifies that an authenticated gRPC static user with ACL access can execute queries
 func TestAuthenticatedUserWithAccess(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	vtgateConn, err := cluster.DialVTGate(ctx, t.Name(), vtgateGrpcAddress, "user_with_access", "test_password")
 	require.NoError(t, err)
@@ -78,8 +74,7 @@ func TestAuthenticatedUserWithAccess(t *testing.T) {
 
 // TestAuthenticatedUserNoAccess verifies that an authenticated gRPC static user with no ACL access cannot execute queries
 func TestAuthenticatedUserNoAccess(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	vtgateConn, err := cluster.DialVTGate(ctx, t.Name(), vtgateGrpcAddress, "user_no_access", "test_password")
 	require.NoError(t, err)
@@ -95,8 +90,7 @@ func TestAuthenticatedUserNoAccess(t *testing.T) {
 
 // TestUnauthenticatedUser verifies that an unauthenticated gRPC user cannot execute queries
 func TestUnauthenticatedUser(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	vtgateConn, err := cluster.DialVTGate(ctx, t.Name(), vtgateGrpcAddress, "", "")
 	require.NoError(t, err)

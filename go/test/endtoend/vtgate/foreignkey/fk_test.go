@@ -261,7 +261,8 @@ func runVStream(t *testing.T, ctx context.Context, ch chan *binlogdatapb.VEvent,
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{
 			{Keyspace: unshardedKs, Shard: "0", Gtid: "current"},
-		}}
+		},
+	}
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match: "/u.*",
@@ -289,7 +290,7 @@ func runVStream(t *testing.T, ctx context.Context, ch chan *binlogdatapb.VEvent,
 
 func drainEvents(t *testing.T, ch chan *binlogdatapb.VEvent, count int) []string {
 	var rowEvents []string
-	for i := 0; i < count; i++ {
+	for i := range count {
 		select {
 		case re := <-ch:
 			rowEvents = append(rowEvents, re.RowEvent.String())
@@ -1016,14 +1017,16 @@ func TestFkQueries(t *testing.T) {
 				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
 				"update fk_t10 set col = id + 3",
 			},
-		}, {
+		},
+		{
 			name: "Non-literal update with order by",
 			queries: []string{
 				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
 				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
 				"update fk_t10 set col = id + 3 order by id desc",
 			},
-		}, {
+		},
+		{
 			name: "Non-literal update with order by that require parent and child foreign keys verification - success",
 			queries: []string{
 				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8)",
@@ -1032,7 +1035,8 @@ func TestFkQueries(t *testing.T) {
 				"insert into fk_t13 (id, col) values (1,1),(2,2)",
 				"update fk_t11 set col = id + 3 where id >= 3",
 			},
-		}, {
+		},
+		{
 			name: "Non-literal update with order by that require parent and child foreign keys verification - parent fails",
 			queries: []string{
 				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
@@ -1040,7 +1044,8 @@ func TestFkQueries(t *testing.T) {
 				"insert into fk_t12 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
 				"update fk_t11 set col = id + 3",
 			},
-		}, {
+		},
+		{
 			name: "Non-literal update with order by that require parent and child foreign keys verification - child fails",
 			queries: []string{
 				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8)",
@@ -1049,21 +1054,24 @@ func TestFkQueries(t *testing.T) {
 				"insert into fk_t13 (id, col) values (1,1),(2,2)",
 				"update fk_t11 set col = id + 3",
 			},
-		}, {
+		},
+		{
 			name: "Single column update in a multi-col table - success",
 			queries: []string{
 				"insert into fk_multicol_t1 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
 				"insert into fk_multicol_t2 (id, cola, colb) values (1, 1, 1)",
 				"update fk_multicol_t1 set colb = 4 + (colb) where id = 2",
 			},
-		}, {
+		},
+		{
 			name: "Single column update in a multi-col table - restrict failure",
 			queries: []string{
 				"insert into fk_multicol_t1 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
 				"insert into fk_multicol_t2 (id, cola, colb) values (1, 1, 1)",
 				"update fk_multicol_t1 set colb = 4 + (colb) where id = 1",
 			},
-		}, {
+		},
+		{
 			name: "Single column update in multi-col table - cascade and set null",
 			queries: []string{
 				"insert into fk_multicol_t15 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
@@ -1071,7 +1079,8 @@ func TestFkQueries(t *testing.T) {
 				"insert into fk_multicol_t17 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
 				"update fk_multicol_t15 set colb = 4 + (colb) where id = 1",
 			},
-		}, {
+		},
+		{
 			name: "Non literal update that evaluates to NULL - restricted",
 			queries: []string{
 				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
@@ -1079,7 +1088,8 @@ func TestFkQueries(t *testing.T) {
 				"insert into fk_t13 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
 				"update fk_t10 set col = id + null where id = 1",
 			},
-		}, {
+		},
+		{
 			name: "Non literal update that evaluates to NULL - success",
 			queries: []string{
 				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
@@ -1087,14 +1097,16 @@ func TestFkQueries(t *testing.T) {
 				"insert into fk_t12 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
 				"update fk_t10 set col = id + null where id = 1",
 			},
-		}, {
+		},
+		{
 			name: "Multi column foreign key update with one literal and one non-literal update",
 			queries: []string{
 				"insert into fk_multicol_t15 (id, cola, colb) values (1,1,1),(2,2,2)",
 				"insert into fk_multicol_t16 (id, cola, colb) values (1,1,1),(2,2,2)",
 				"update fk_multicol_t15 set cola = 3, colb = (id * 2) - 2",
 			},
-		}, {
+		},
+		{
 			name: "Update that sets to 0 and -0 values",
 			queries: []string{
 				"insert into fk_t15 (id, col) values (1,'-0'), (2, '0'), (3, '5'), (4, '-5')",

@@ -85,7 +85,8 @@ type controller struct {
 }
 
 func newController(row sqltypes.RowNamedValues, dbClientFactory func() binlogplayer.DBClient,
-	ts *topo.Server, vde *Engine, options *tabletmanagerdata.VDiffOptions) (*controller, error) {
+	ts *topo.Server, vde *Engine, options *tabletmanagerdata.VDiffOptions,
+) (*controller, error) {
 	log.Infof("VDiff controller initializing for %+v", row)
 	id, _ := row["id"].ToInt64()
 
@@ -335,10 +336,7 @@ func (ct *controller) saveErrorState(ctx context.Context, saveErr error) error {
 				return ErrVDiffStoppedByUser
 			case <-time.After(retryDelay):
 				if retryDelay < maxRetryDelay {
-					retryDelay = time.Duration(float64(retryDelay) * 1.5)
-					if retryDelay > maxRetryDelay {
-						retryDelay = maxRetryDelay
-					}
+					retryDelay = min(time.Duration(float64(retryDelay)*1.5), maxRetryDelay)
 				}
 				continue
 			}

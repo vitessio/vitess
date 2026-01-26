@@ -16085,6 +16085,7 @@ func (a *application) rewriteRefOfVindexParam(parent SQLNode, node *VindexParam,
 	}
 	return true
 }
+
 func (a *application) rewriteVisitable(parent SQLNode, node Visitable, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer

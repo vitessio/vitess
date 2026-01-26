@@ -18,6 +18,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -28,8 +29,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"encoding/json"
 
 	"github.com/google/go-containerregistry/pkg/crane"
 	gocr "github.com/google/go-containerregistry/pkg/v1"
@@ -338,7 +337,7 @@ func getLatestStableGolangReleases() (version.Collection, error) {
 func chooseNewVersion(curVersion *version.Version, latestVersions version.Collection, allowMajorUpgrade bool) *version.Version {
 	selectedVersion := curVersion
 	for _, latestVersion := range latestVersions {
-		if !allowMajorUpgrade && !isSameVersion(latestVersion, selectedVersion) {
+		if !allowMajorUpgrade && !isSameMajorMinorVersion(latestVersion, selectedVersion) {
 			continue
 		}
 		if latestVersion.GreaterThan(selectedVersion) {
@@ -481,7 +480,7 @@ func updateBootstrapVersionInCodebase(old, new string, newGoVersion *version.Ver
 }
 
 func updateBootstrapChangelog(new string, goVersion *version.Version) error {
-	file, err := os.OpenFile("./docker/bootstrap/CHANGELOG.md", os.O_RDWR, 0600)
+	file, err := os.OpenFile("./docker/bootstrap/CHANGELOG.md", os.O_RDWR, 0o600)
 	if err != nil {
 		return err
 	}
@@ -506,6 +505,10 @@ func updateBootstrapChangelog(new string, goVersion *version.Version) error {
 
 func isSameVersion(a, b *version.Version) bool {
 	return a.Segments()[0] == b.Segments()[0] && a.Segments()[1] == b.Segments()[1] && a.Segments()[2] == b.Segments()[2]
+}
+
+func isSameMajorMinorVersion(a, b *version.Version) bool {
+	return a.Segments()[0] == b.Segments()[0] && a.Segments()[1] == b.Segments()[1]
 }
 
 func getListOfFilesInPaths(pathsToExplore []string) ([]string, error) {
@@ -539,7 +542,7 @@ func replaceInFile(oldexps []*regexp.Regexp, new []string, fileToChange string) 
 		panic("old and new should be of the same length")
 	}
 
-	f, err := os.OpenFile(fileToChange, os.O_RDWR, 0600)
+	f, err := os.OpenFile(fileToChange, os.O_RDWR, 0o600)
 	if err != nil {
 		return err
 	}

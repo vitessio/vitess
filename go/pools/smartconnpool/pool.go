@@ -86,8 +86,10 @@ func (m *Metrics) ResetSettingCount() int64 {
 	return m.resetSetting.Load()
 }
 
-type Connector[C Connection] func(ctx context.Context) (C, error)
-type RefreshCheck func() (bool, error)
+type (
+	Connector[C Connection] func(ctx context.Context) (C, error)
+	RefreshCheck            func() (bool, error)
+)
 
 type Config[C Connection] struct {
 	Capacity        int64

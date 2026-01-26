@@ -1,5 +1,4 @@
 //go:build noasm || (!amd64 && !arm64 && !ppc64le)
-// +build noasm !amd64,!arm64,!ppc64le
 
 /*
 Copyright (c) 2017 Minio Inc. All rights reserved.

@@ -95,7 +95,7 @@ func querylogzHandler(ch chan *logstats.LogStats, w http.ResponseWriter, r *http
 
 	tmr := time.NewTimer(timeout)
 	defer tmr.Stop()
-	for i := 0; i < limit; i++ {
+	for range limit {
 		select {
 		case stats := <-ch:
 			select {

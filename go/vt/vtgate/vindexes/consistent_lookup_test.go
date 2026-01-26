@@ -646,7 +646,7 @@ func makeTestResult(numRows int) *sqltypes.Result {
 		Fields:       sqltypes.MakeTestFields("id|keyspace_id", "bigint|varbinary"),
 		RowsAffected: uint64(numRows),
 	}
-	for i := 0; i < numRows; i++ {
+	for i := range numRows {
 		result.Rows = append(result.Rows, []sqltypes.Value{
 			sqltypes.NewInt64(int64(i + 1)),
 			sqltypes.NewVarBinary(strconv.Itoa(i + 1)),
@@ -666,7 +666,7 @@ func makeTestResultLookup(numRows []int) *sqltypes.Result {
 		RowsAffected: uint64(total),
 	}
 	for i, row := range numRows {
-		for j := 0; j < row; j++ {
+		for j := range row {
 			result.Rows = append(result.Rows, []sqltypes.Value{
 				sqltypes.NewInt64(int64(i + 1)),
 				sqltypes.NewVarBinary(strconv.Itoa(j + 1)),

@@ -71,8 +71,7 @@ func (dp DestinationAnyShardPickerFirstShard) PickShard(shardCount int) int {
 }
 
 // keyRangeLookuper is for testing a lookup that returns a keyrange.
-type keyRangeLookuper struct {
-}
+type keyRangeLookuper struct{}
 
 func (v *keyRangeLookuper) String() string   { return "keyrange_lookuper" }
 func (*keyRangeLookuper) Cost() int          { return 0 }
@@ -81,6 +80,7 @@ func (*keyRangeLookuper) NeedsVCursor() bool { return false }
 func (*keyRangeLookuper) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
+
 func (*keyRangeLookuper) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
 	return []key.ShardDestination{
 		key.DestinationKeyRange{
@@ -96,8 +96,7 @@ func newKeyRangeLookuper(name string, params map[string]string) (vindexes.Vindex
 }
 
 // keyRangeLookuperUnique is for testing a unique lookup that returns a keyrange.
-type keyRangeLookuperUnique struct {
-}
+type keyRangeLookuperUnique struct{}
 
 func (v *keyRangeLookuperUnique) String() string   { return "keyrange_lookuper" }
 func (*keyRangeLookuperUnique) Cost() int          { return 0 }
@@ -106,6 +105,7 @@ func (*keyRangeLookuperUnique) NeedsVCursor() bool { return false }
 func (*keyRangeLookuperUnique) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
+
 func (*keyRangeLookuperUnique) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
 	return []key.ShardDestination{
 		key.DestinationKeyRange{
@@ -209,6 +209,7 @@ func createExecutorEnvWithConfig(t testing.TB, eConfig ExecutorConfig) (executor
 	})
 	return
 }
+
 func createCustomExecutor(t testing.TB, vschema string, mysqlVersion string) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn, ctx context.Context) {
 	var cancel context.CancelFunc
 	ctx, cancel = context.WithCancel(context.Background())

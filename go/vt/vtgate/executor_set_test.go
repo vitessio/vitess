@@ -569,7 +569,8 @@ func TestSetVarShowVariables(t *testing.T) {
 			"|only_full_group_by"),
 		// show query result
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"),
-			"sql_mode|ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE")})
+			"sql_mode|ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE"),
+	})
 
 	_, err := executorExecSession(ctx, executor, session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
@@ -614,7 +615,8 @@ func TestExecutorSetAndSelect(t *testing.T) {
 				sbc.SetResults([]*sqltypes.Result{
 					sqltypes.MakeTestResult(sqltypes.MakeTestFields(tcase.sysVar, "varchar"), tcase.val), // one for set prequeries
 					sqltypes.MakeTestResult(sqltypes.MakeTestFields(tcase.sysVar, "varchar"), tcase.val), // second for check query
-					sqltypes.MakeTestResult(nil)}) // third one for new set query
+					sqltypes.MakeTestResult(nil),
+				}) // third one for new set query
 
 				setQ := fmt.Sprintf("set %s = '%s'", tcase.sysVar, tcase.val)
 				_, err := executorExecSession(ctx, e, session, setQ, nil)

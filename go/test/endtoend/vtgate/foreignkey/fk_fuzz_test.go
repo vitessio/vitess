@@ -653,7 +653,8 @@ func TestFkFuzzTest(t *testing.T) {
 			insertShare:    100,
 			deleteShare:    0,
 			updateShare:    0,
-		}, {
+		},
+		{
 			name:           "Single Thread - Balanced Inserts and Deletes",
 			concurrency:    1,
 			timeForTesting: 5 * time.Second,
@@ -662,7 +663,8 @@ func TestFkFuzzTest(t *testing.T) {
 			insertShare:    50,
 			deleteShare:    50,
 			updateShare:    0,
-		}, {
+		},
+		{
 			name:           "Single Thread - Balanced Inserts and Updates",
 			concurrency:    1,
 			timeForTesting: 5 * time.Second,
@@ -691,7 +693,8 @@ func TestFkFuzzTest(t *testing.T) {
 			insertShare:    100,
 			deleteShare:    0,
 			updateShare:    0,
-		}, {
+		},
+		{
 			name:           "Multi Thread - Balanced Inserts, Updates and Deletes",
 			concurrency:    30,
 			timeForTesting: 5 * time.Second,
@@ -775,7 +778,7 @@ func BenchmarkFkFuzz(b *testing.B) {
 	numQueries := 1000
 	// Wait for schema-tracking to be complete.
 	waitForSchemaTrackingForFkTables(b)
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		queries, mysqlConn, vtConn, vtUnmanagedConn := setupBenchmark(b, maxValForId, maxValForCol, insertShare, deleteShare, updateShare, numQueries)
 
 		// Now we run the benchmarks!

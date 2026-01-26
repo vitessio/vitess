@@ -39,13 +39,6 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
-func max(a, b int64) int64 {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 // TestReconcileExtraRows tests reconcileExtraRows() by providing different types of source and target slices and validating
 // that the matching rows are correctly identified and removed.
 func TestReconcileExtraRows(t *testing.T) {

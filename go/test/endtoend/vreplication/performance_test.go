@@ -61,7 +61,7 @@ create table customer(cid int, name varbinary(128), meta json default null, typ 
 
 	tablet := defaultCell.Keyspaces[sourceKs].Shards["0"].Tablets["zone1-100"].Vttablet
 	tablet.BulkLoad(t, "stress_src", "largebin", func(w io.Writer) {
-		for i := 0; i < insertCount; i++ {
+		for i := range insertCount {
 			fmt.Fprintf(w, "\"%d\",%q\n", i, "foobar")
 		}
 	})

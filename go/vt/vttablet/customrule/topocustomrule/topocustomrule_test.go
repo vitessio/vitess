@@ -17,7 +17,6 @@ limitations under the License.
 package topocustomrule
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -78,8 +77,7 @@ func TestUpdate(t *testing.T) {
 
 	cell := "cell1"
 	filePath := "/keyspaces/ks1/configs/CustomRules"
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ts := memorytopo.NewServer(ctx, cell)
 	qsc := tabletservermock.NewController()

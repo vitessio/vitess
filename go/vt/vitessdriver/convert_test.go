@@ -53,7 +53,8 @@ func TestToNative(t *testing.T) {
 			convert: &converter{},
 			in:      sqltypes.TestValue(sqltypes.Int24, "1"),
 			out:     int64(1),
-		}, {
+		},
+		{
 			convert: &converter{},
 			in:      sqltypes.TestValue(sqltypes.Int32, "1"),
 			out:     int64(1),
@@ -77,7 +78,8 @@ func TestToNative(t *testing.T) {
 			convert: &converter{},
 			in:      sqltypes.TestValue(sqltypes.Uint24, "1"),
 			out:     uint64(1),
-		}, {
+		},
+		{
 			convert: &converter{},
 			in:      sqltypes.TestValue(sqltypes.Uint32, "1"),
 			out:     uint64(1),
@@ -100,7 +102,7 @@ func TestToNative(t *testing.T) {
 		{
 			convert: &converter{},
 			in:      sqltypes.TestValue(sqltypes.Timestamp, "2012-02-24 23:19:43"),
-			out:     time.Date(2012, 02, 24, 23, 19, 43, 0, time.UTC),
+			out:     time.Date(2012, 0o2, 24, 23, 19, 43, 0, time.UTC),
 		},
 		{
 			convert: &converter{},
@@ -110,22 +112,22 @@ func TestToNative(t *testing.T) {
 		{
 			convert: &converter{},
 			in:      sqltypes.TestValue(sqltypes.Date, "2012-02-24"),
-			out:     time.Date(2012, 02, 24, 0, 0, 0, 0, time.UTC),
+			out:     time.Date(2012, 0o2, 24, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			convert: &converter{},
 			in:      sqltypes.TestValue(sqltypes.Datetime, "2012-02-24 23:19:43"),
-			out:     time.Date(2012, 02, 24, 23, 19, 43, 0, time.UTC),
+			out:     time.Date(2012, 0o2, 24, 23, 19, 43, 0, time.UTC),
 		},
 		{
 			convert: convertTimeLocal,
 			in:      sqltypes.TestValue(sqltypes.Datetime, "2012-02-24 23:19:43"),
-			out:     time.Date(2012, 02, 24, 23, 19, 43, 0, time.Local),
+			out:     time.Date(2012, 0o2, 24, 23, 19, 43, 0, time.Local),
 		},
 		{
 			convert: convertTimeLocal,
 			in:      sqltypes.TestValue(sqltypes.Date, "2012-02-24"),
-			out:     time.Date(2012, 02, 24, 0, 0, 0, 0, time.Local),
+			out:     time.Date(2012, 0o2, 24, 0, 0, 0, 0, time.Local),
 		},
 		{
 			convert: &converter{},

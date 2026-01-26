@@ -21,8 +21,10 @@ import (
 	"vitess.io/vitess/go/vt/vthash/metro"
 )
 
-type Hasher = metro.Metro128
-type Hash = [16]byte
+type (
+	Hasher = metro.Metro128
+	Hash   = [16]byte
+)
 
 func New() Hasher {
 	h := Hasher{}
@@ -30,8 +32,10 @@ func New() Hasher {
 	return h
 }
 
-type Hasher256 = highway.Digest
-type Hash256 = [32]byte
+type (
+	Hasher256 = highway.Digest
+	Hash256   = [32]byte
+)
 
 var defaultHash256Key = [32]byte{}
 

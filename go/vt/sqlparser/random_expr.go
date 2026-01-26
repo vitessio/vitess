@@ -429,7 +429,7 @@ func (g *Generator) caseExpr(genConfig ExprGeneratorConfig) Expr {
 
 	size := rand.IntN(2) + 1
 	var whens []*When
-	for i := 0; i < size; i++ {
+	for range size {
 		var cond Expr
 		if exp == nil {
 			cond = g.Expression(genConfig.boolTypeConfig())

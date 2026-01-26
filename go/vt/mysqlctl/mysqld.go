@@ -1001,8 +1001,8 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 	}
 
 	if extraCnf := os.Getenv("EXTRA_MY_CNF"); extraCnf != "" {
-		parts := strings.Split(extraCnf, ":")
-		for _, path := range parts {
+		parts := strings.SplitSeq(extraCnf, ":")
+		for path := range parts {
 			data, dataErr := os.ReadFile(path)
 			if dataErr != nil {
 				log.Infof("could not open config file for mycnf: %v", path)

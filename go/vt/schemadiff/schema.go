@@ -18,6 +18,7 @@ package schemadiff
 
 import (
 	"errors"
+	"maps"
 	"sort"
 	"strings"
 
@@ -753,9 +754,7 @@ func (s *Schema) copy() *Schema {
 	dup.views = make([]*CreateViewEntity, len(s.views))
 	copy(dup.views, s.views)
 	dup.named = make(map[string]Entity, len(s.named))
-	for k, v := range s.named {
-		dup.named[k] = v
-	}
+	maps.Copy(dup.named, s.named)
 	dup.sorted = make([]Entity, len(s.sorted))
 	copy(dup.sorted, s.sorted)
 	return dup

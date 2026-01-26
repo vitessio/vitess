@@ -23,10 +23,9 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 )
 
-var (
-	// tabletTemplate contains the style sheet and the tablet itself.
-	// This template is a slight duplicate of the one in go/vt/vttablet/tabletserver/status.go.
-	tabletTemplate = `
+// tabletTemplate contains the style sheet and the tablet itself.
+// This template is a slight duplicate of the one in go/vt/vttablet/tabletserver/status.go.
+var tabletTemplate = `
 <style>
   table {
     border-collapse: collapse;
@@ -81,7 +80,6 @@ var (
   </tr>
 </table>
 `
-)
 
 func addStatusParts(qsc tabletserver.Controller) {
 	servenv.AddStatusPart("Tablet", tabletTemplate, func() any {

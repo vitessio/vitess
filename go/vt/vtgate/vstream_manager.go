@@ -202,7 +202,8 @@ func newVStreamManager(resolver *srvtopo.Resolver, serv srvtopo.Server, cell str
 }
 
 func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid,
-	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, send func(events []*binlogdatapb.VEvent) error) error {
+	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, send func(events []*binlogdatapb.VEvent) error,
+) error {
 	vgtid, filter, flags, err := vsm.resolveParams(ctx, tabletType, vgtid, filter, flags)
 	if err != nil {
 		return vterrors.Wrap(err, "failed to resolve vstream parameters")
@@ -259,7 +260,8 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 
 // resolveParams provides defaults for the inputs if they're not specified.
 func (vsm *vstreamManager) resolveParams(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid,
-	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags) (*binlogdatapb.VGtid, *binlogdatapb.Filter, *vtgatepb.VStreamFlags, error) {
+	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags,
+) (*binlogdatapb.VGtid, *binlogdatapb.Filter, *vtgatepb.VStreamFlags, error) {
 	if filter == nil {
 		filter = &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{
@@ -359,10 +361,7 @@ func (vs *vstream) stream(ctx context.Context) error {
 		defer vs.streamLivenessTimer.Stop()
 	}
 
-	vs.wg.Add(1)
-	go func() {
-		defer vs.wg.Done()
-
+	vs.wg.Go(func() {
 		// sendEvents returns either if the given context has been canceled or if
 		// an error is returned from the callback. If the callback returns an error,
 		// we need to cancel the context to stop the other stream goroutines
@@ -370,7 +369,7 @@ func (vs *vstream) stream(ctx context.Context) error {
 		defer vs.cancel()
 
 		vs.sendEvents(ctx)
-	}()
+	})
 
 	// Make a copy first, because the ShardGtids list can change once streaming starts.
 	copylist := append(([]*binlogdatapb.ShardGtid)(nil), vs.vgtid.ShardGtids...)
@@ -453,10 +452,7 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 
 // startOneStream sets up one shard stream.
 func (vs *vstream) startOneStream(ctx context.Context, sgtid *binlogdatapb.ShardGtid) {
-	vs.wg.Add(1)
-	go func() {
-		defer vs.wg.Done()
-
+	vs.wg.Go(func() {
 		labelValues := []string{sgtid.Keyspace, sgtid.Shard, vs.tabletType.String()}
 		// Initialize vstreamsEndedWithErrors metric to zero.
 		vs.vsm.vstreamsEndedWithErrors.Add(labelValues, 0)
@@ -464,7 +460,6 @@ func (vs *vstream) startOneStream(ctx context.Context, sgtid *binlogdatapb.Shard
 		vs.vsm.vstreamsCount.Add(labelValues, 1)
 
 		err := vs.streamFromTablet(ctx, sgtid)
-
 		// Set the error on exit. First one wins.
 		if err != nil {
 			log.Errorf("Error in vstream for %+v: %v", sgtid, err)
@@ -481,7 +476,7 @@ func (vs *vstream) startOneStream(ctx context.Context, sgtid *binlogdatapb.Shard
 				vs.cancel()
 			})
 		}
-	}()
+	})
 }
 
 // MaxSkew is the threshold for a skew to be detected. Since MySQL timestamps are in seconds we account for
@@ -578,7 +573,7 @@ func (vs *vstream) alignStreams(ctx context.Context, event *binlogdatapb.VEvent,
 func (vs *vstream) getCells() []string {
 	var cells []string
 	if vs.optCells != "" {
-		for _, cell := range strings.Split(strings.TrimSpace(vs.optCells), ",") {
+		for cell := range strings.SplitSeq(strings.TrimSpace(vs.optCells), ",") {
 			cells = append(cells, strings.TrimSpace(cell))
 		}
 	}
@@ -658,7 +653,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		}
 		tabletConn, err := vs.vsm.resolver.GetGateway().QueryServiceByAlias(ctx, tablet.Alias, target)
 		if err != nil {
-			log.Errorf(err.Error())
+			log.Errorf("%s", err.Error())
 			return vterrors.Wrapf(err, "failed to get tablet connection to %s", tabletAliasString)
 		}
 
@@ -961,7 +956,8 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 // duplicate table names. If we enable the ExcludeKeyspaceFromTableName flag to not update the table names, there is no need to
 // clone the entire event, whcih improves performance. This is typically safely used by clients only streaming one keyspace.
 func maybeUpdateTableName(event *binlogdatapb.VEvent, keyspace string, excludeKeyspaceFromTableName bool,
-	tableNameExtractor func(ev *binlogdatapb.VEvent) *string) *binlogdatapb.VEvent {
+	tableNameExtractor func(ev *binlogdatapb.VEvent) *string,
+) *binlogdatapb.VEvent {
 	if excludeKeyspaceFromTableName {
 		return event
 	}
@@ -1060,7 +1056,7 @@ func (vs *vstream) sendEventsLocked(ctx context.Context, sgtid *binlogdatapb.Sha
 					Shard:    event.Shard,
 				}
 			} else if event.Type == binlogdatapb.VEventType_LASTPK {
-				var foundIndex = -1
+				foundIndex := -1
 				eventTablePK := event.LastPKEvent.TableLastPK
 				for idx, pk := range sgtid.TablePKs {
 					if pk.TableName == eventTablePK.TableName {

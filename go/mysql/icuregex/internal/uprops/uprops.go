@@ -115,7 +115,7 @@ func getPropertyValueEnum(prop Property, alias string) int32 {
 }
 
 func findProperty(prop Property) int32 {
-	var i = int32(1)
+	i := int32(1)
 	valueMps := valueMaps()
 	for numRanges := int32(valueMps[0]); numRanges > 0; numRanges-- {
 		start := int32(valueMps[i])

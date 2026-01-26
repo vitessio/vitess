@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -337,15 +338,15 @@ func (node *ParsedComments) AddQueryHint(queryHint string) (Comments, error) {
 					return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Must have only one query hint")
 				}
 				hasQueryHint = true
-				idx := strings.Index(comment, "*/")
-				if idx == -1 {
+				before, _, ok := strings.Cut(comment, "*/")
+				if !ok {
 					return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Query hint comment is malformed")
 				}
 				if strings.Contains(comment, queryHint) {
 					newComments = append(Comments{comment}, newComments...)
 					continue
 				}
-				newComment := fmt.Sprintf("%s %s */", strings.TrimSpace(comment[:idx]), queryHint)
+				newComment := fmt.Sprintf("%s %s */", strings.TrimSpace(before), queryHint)
 				newComments = append(Comments{newComment}, newComments...)
 				continue
 			}
@@ -1062,12 +1063,7 @@ func (node IdentifierCI) EqualString(str string) bool {
 
 // EqualsAnyString returns true if any of these strings match
 func (node IdentifierCI) EqualsAnyString(str []string) bool {
-	for _, s := range str {
-		if node.EqualString(s) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(str, node.EqualString)
 }
 
 // MarshalJSON marshals into JSON.
@@ -2618,7 +2614,7 @@ func AndExpressions(exprs ...Expr) Expr {
 				continue outer
 			}
 
-			for j := 0; j < i; j++ {
+			for j := range i {
 				if Equals.Expr(expr, exprs[j]) {
 					continue outer
 				}
@@ -3042,6 +3038,7 @@ func (node *Select) SetWherePredicate(expr Expr) {
 		Expr: expr,
 	}
 }
+
 func (node *Delete) GetFrom() []TableExpr {
 	return node.TableExprs
 }

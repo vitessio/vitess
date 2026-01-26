@@ -2074,7 +2074,8 @@ func getSourceKeyspace(clusterKeyspace string) (clusterName string, sourceKeyspa
 // commandVReplicationWorkflow is the common entry point for MoveTables/Reshard/Migrate workflows
 // FIXME: this function needs a refactor. Also validations for params should to be done per workflow type
 func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string,
-	workflowType wrangler.VReplicationWorkflowType) error {
+	workflowType wrangler.VReplicationWorkflowType,
+) error {
 	const defaultWaitTime = time.Duration(30 * time.Second)
 	// for backward compatibility we default the lag to match the timeout for switching primary traffic
 	// this should probably be much smaller so that target and source are almost in sync before switching traffic
@@ -2171,8 +2172,10 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 			ksShardKeys = append(ksShardKeys, ksShardKey)
 		}
 		sort.Strings(ksShardKeys)
+		var sSb2175 strings.Builder
 		for _, ksShard := range ksShardKeys {
 			statuses := res.ShardStatuses[ksShard].PrimaryReplicationStatuses
+			var sSb2177 strings.Builder
 			for _, st := range statuses {
 				msg := ""
 				if st.State == binlogdatapb.VReplicationWorkflowState_Error.String() {
@@ -2191,9 +2194,11 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 						msg += fmt.Sprintf(" Tx time: %s.", time.Unix(st.TransactionTimestamp, 0).Format(time.ANSIC))
 					}
 				}
-				s += fmt.Sprintf("id=%d on %s: Status: %s%s\n", st.ID, ksShard, st.State, msg)
+				sSb2177.WriteString(fmt.Sprintf("id=%d on %s: Status: %s%s\n", st.ID, ksShard, st.State, msg))
 			}
+			sSb2175.WriteString(sSb2177.String())
 		}
+		s += sSb2175.String()
 		wr.Logger().Printf("\n%s\n", s)
 		return nil
 	}
@@ -2356,6 +2361,7 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 			sort.Strings(tables)
 			s := ""
 			var progress wrangler.TableCopyProgress
+			var sSb2360 strings.Builder
 			for _, table := range tables {
 				var rowCountPct, tableSizePct int64
 				progress = *(*copyProgress)[table]
@@ -2365,10 +2371,11 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 				if progress.SourceTableSize > 0 {
 					tableSizePct = 100.0 * progress.TargetTableSize / progress.SourceTableSize
 				}
-				s += fmt.Sprintf("%s: rows copied %d/%d (%d%%), size copied %d/%d (%d%%)\n",
+				sSb2360.WriteString(fmt.Sprintf("%s: rows copied %d/%d (%d%%), size copied %d/%d (%d%%)\n",
 					table, progress.TargetRowCount, progress.SourceRowCount, rowCountPct,
-					progress.TargetTableSize, progress.SourceTableSize, tableSizePct)
+					progress.TargetTableSize, progress.SourceTableSize, tableSizePct))
 			}
+			s += sSb2360.String()
 			wr.Logger().Printf("\n%s\n", s)
 		}
 		return printDetails()
@@ -2685,7 +2692,6 @@ func commandListAllTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		Keyspace:   *keyspaceFilter,
 		TabletType: tabletTypeFilter,
 	})
-
 	if err != nil {
 		return err
 	}
@@ -2898,7 +2904,6 @@ func commandValidateSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, s
 		SkipNoPrimary:  *skipNoPrimary,
 		IncludeVschema: *includeVSchema,
 	})
-
 	if err != nil {
 		wr.Logger().Errorf("%s\n", err.Error())
 		return err
@@ -2968,7 +2973,6 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 		CallerId:            cID,
 		BatchSize:           *batchSize,
 	})
-
 	if err != nil {
 		wr.Logger().Errorf("%s\n", err.Error())
 		return err
@@ -3072,9 +3076,7 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfla
 		executeFetchQuery = fmt.Sprintf(`select
 				*
 				from _vt.schema_migrations where %s %s %s`, condition, order, skipLimit)
-	case
-		"retry",
-		"cleanup":
+	case "retry", "cleanup":
 		// Do not support 'ALL' argument
 		applySchemaQuery, err = generateOnlineDDLQuery(command, arg, false)
 	case
@@ -3205,7 +3207,6 @@ func commandValidateVersionKeyspace(ctx context.Context, wr *wrangler.Wrangler, 
 
 	keyspace := subFlags.Arg(0)
 	res, err := wr.VtctldServer().ValidateVersionKeyspace(ctx, &vtctldatapb.ValidateVersionKeyspaceRequest{Keyspace: keyspace})
-
 	if err != nil {
 		return err
 	}
@@ -4095,7 +4096,7 @@ func PrintAllCommands(logger logutil.Logger) {
 
 // queryResultForTabletResults aggregates given results into a combined result set
 func queryResultForTabletResults(results map[string]*sqltypes.Result) *sqltypes.Result {
-	var qr = &sqltypes.Result{}
+	qr := &sqltypes.Result{}
 	defaultFields := []*querypb.Field{{
 		Name:    "Tablet",
 		Type:    sqltypes.VarBinary,

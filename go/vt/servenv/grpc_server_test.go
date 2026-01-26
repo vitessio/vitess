@@ -17,11 +17,10 @@ limitations under the License.
 package servenv
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"testing"
-
-	"context"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/orca"

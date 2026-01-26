@@ -45,13 +45,9 @@ const (
 
 type mysqlVersions []mysqlVersion
 
-var (
-	defaultMySQLVersions = []mysqlVersion{defaultMySQLVersion}
-)
+var defaultMySQLVersions = []mysqlVersion{defaultMySQLVersion}
 
-var (
-	unitTestDatabases = []mysqlVersion{mysql57, mysql80, mysql84}
-)
+var unitTestDatabases = []mysqlVersion{mysql57, mysql80, mysql84}
 
 var gitTimeout = time.Second * 10
 

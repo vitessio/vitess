@@ -85,7 +85,8 @@ func TestVSchemaChangesUnderLoad(t *testing.T) {
 				Keyspace: "product",
 				Shard:    "0",
 				Gtid:     "",
-			}}}
+			}},
+		}
 
 		filter := &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{
