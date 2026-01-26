@@ -119,47 +119,6 @@ func TestInitializeTargetSequences(t *testing.T) {
 
 	testCases := []testCase{
 		{
-			name: "initialize sequence",
-			maxValueRequest: &getMaxValueForSequencesRequestResponse{
-				req: &tabletmanagerdatapb.GetMaxValueForSequencesRequest{
-					Sequences: []*tabletmanagerdatapb.GetMaxValueForSequencesRequest_SequenceMetadata{
-						{
-							BackingTableName:        "my-seq1",
-							UsingColEscaped:         "`my-col`",
-							UsingTableNameEscaped:   fmt.Sprintf("`%s`", tableName),
-							UsingTableDbNameEscaped: "`vt_targetks`",
-						},
-						{
-							BackingTableName:        "my-seq2",
-							UsingColEscaped:         "`my-col-2`",
-							UsingTableNameEscaped:   fmt.Sprintf("`%s`", tableName2),
-							UsingTableDbNameEscaped: "`vt_targetks`",
-						},
-					},
-				},
-				res: &tabletmanagerdatapb.GetMaxValueForSequencesResponse{
-					MaxValuesBySequenceTable: map[string]int64{
-						"my-seq1": 34,
-						"my-seq2": 10,
-					},
-				},
-			},
-			updateSeqTableRequest: &tabletmanagerdatapb.UpdateSequenceTablesRequest{
-				Sequences: []*tabletmanagerdatapb.UpdateSequenceTablesRequest_SequenceMetadata{
-					{
-						BackingTableName:   "my-seq1",
-						BackingTableDbName: "vt_" + sourceKeyspaceName,
-						MaxValue:           34,
-					},
-					{
-						BackingTableName:   "my-seq2",
-						BackingTableDbName: "vt_" + sourceKeyspaceName,
-						MaxValue:           10,
-					},
-				},
-			},
-		},
-		{
 			name: "initialize sequences",
 			maxValueRequest: &getMaxValueForSequencesRequestResponse{
 				req: &tabletmanagerdatapb.GetMaxValueForSequencesRequest{
