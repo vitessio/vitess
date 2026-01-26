@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"sort"
 	"strconv"
@@ -123,11 +124,13 @@ type journalEvent struct {
 	shardGTIDs   map[string]*binlogdatapb.ShardGtid
 }
 
-type PostCopyActionType int
-type PostCopyAction struct {
-	Type PostCopyActionType `json:"type"`
-	Task string             `json:"task"`
-}
+type (
+	PostCopyActionType int
+	PostCopyAction     struct {
+		Type PostCopyActionType `json:"type"`
+		Task string             `json:"task"`
+	}
+)
 
 // NewEngine creates a new Engine.
 // A nil ts means that the Engine is disabled.
@@ -846,9 +849,7 @@ func (vre *Engine) updateStats() {
 
 	globalStats.isOpen = vre.isOpen
 	globalStats.controllers = make(map[int32]*controller, len(vre.controllers))
-	for id, ct := range vre.controllers {
-		globalStats.controllers[id] = ct
-	}
+	maps.Copy(globalStats.controllers, vre.controllers)
 }
 
 func (vre *Engine) readAllRows(ctx context.Context) ([]map[string]string, error) {

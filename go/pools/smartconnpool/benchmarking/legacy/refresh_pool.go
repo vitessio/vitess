@@ -66,9 +66,7 @@ func (pr *poolRefresh) startRefreshTicker() {
 	}
 	pr.refreshTicker = time.NewTicker(pr.refreshInterval)
 	pr.refreshStop = make(chan struct{})
-	pr.refreshWg.Add(1)
-	go func() {
-		defer pr.refreshWg.Done()
+	pr.refreshWg.Go(func() {
 		for {
 			select {
 			case <-pr.refreshTicker.C:
@@ -84,7 +82,7 @@ func (pr *poolRefresh) startRefreshTicker() {
 				return
 			}
 		}
-	}()
+	})
 }
 
 func (pr *poolRefresh) stop() {

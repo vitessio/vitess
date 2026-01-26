@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -174,7 +175,8 @@ var _ engine.StreamExecutor = (*shardStreamer)(nil)
 // VDiff reports differences between the sources and targets of a vreplication workflow.
 func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sourceCell, targetCell, tabletTypesStr string,
 	filteredReplicationWaitTime time.Duration, format string, maxRows int64, tables string, debug, onlyPks bool,
-	maxExtraRowsToCompare int) (map[string]*DiffReport, error) {
+	maxExtraRowsToCompare int,
+) (map[string]*DiffReport, error) {
 	log.Infof("Starting VDiff for %s.%s, sourceCell %s, targetCell %s, tabletTypes %s, timeout %s",
 		targetKeyspace, workflowName, sourceCell, targetCell, tabletTypesStr, filteredReplicationWaitTime.String())
 	// Assign defaults to sourceCell and targetCell if not specified.
@@ -473,13 +475,7 @@ func (df *vdiff) buildVDiffPlan(filter *binlogdatapb.Filter, schm *tabletmanager
 		}
 		include := true
 		if len(tablesToInclude) > 0 {
-			include = false
-			for _, t := range tablesToInclude {
-				if t == table.Name {
-					include = true
-					break
-				}
-			}
+			include = slices.Contains(tablesToInclude, table.Name)
 		}
 		if include {
 			df.differs[table.Name], err = df.buildTablePlan(table, query)
@@ -818,9 +814,7 @@ func (df *vdiff) selectTablets(ctx context.Context, ts *trafficSwitcher) error {
 	var err1, err2 error
 
 	// Parallelize all discovery.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		err1 = df.forAll(df.sources, func(shard string, source *shardStreamer) error {
 			sourceTopo := df.ts.TopoServer()
 			if ts.ExternalTopo() != nil {
@@ -839,11 +833,9 @@ func (df *vdiff) selectTablets(ctx context.Context, ts *trafficSwitcher) error {
 			source.tablet = tablet
 			return nil
 		})
-	}()
+	})
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		// For resharding, the target shards could be non-serving if traffic has already been switched once.
 		// When shards are created their IsPrimaryServing attribute is set to true. However, when the traffic is switched
 		// it is set to false for the shards we are switching from. We don't have a way to know if we have
@@ -865,7 +857,7 @@ func (df *vdiff) selectTablets(ctx context.Context, ts *trafficSwitcher) error {
 			target.tablet = tablet
 			return nil
 		})
-	}()
+	})
 
 	wg.Wait()
 	if err1 != nil {

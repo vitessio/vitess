@@ -336,11 +336,8 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 
 	if len(discovery.AllowedTabletTypes) > 0 {
 		var match bool
-		for _, allowed := range discovery.AllowedTabletTypes {
-			if allowed == target.TabletType {
-				match = true
-				break
-			}
+		if slices.Contains(discovery.AllowedTabletTypes, target.TabletType) {
+			match = true
 		}
 		if !match {
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "requested tablet type %v is not part of the allowed tablet types for this vtgate: %+v", target.TabletType.String(), discovery.AllowedTabletTypes)

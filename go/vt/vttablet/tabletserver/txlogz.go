@@ -103,7 +103,7 @@ func txlogzHandler(w http.ResponseWriter, req *http.Request, redactUIQuery bool)
 
 	tmr := time.NewTimer(timeout)
 	defer tmr.Stop()
-	for i := 0; i < limit; i++ {
+	for range limit {
 		select {
 		case out := <-ch:
 			txc, ok := out.(*StatefulConnection)

@@ -188,7 +188,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	shard.Vttablets = tablets
 
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--lock_tables_timeout", "5s",
 		"--track_schema_versions=true",
 		// disabling online-ddl for reparent tests. This is done to reduce flakiness.
@@ -283,7 +283,7 @@ func StartNewVTTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 		clusterInstance.Hostname,
 		clusterInstance.TmpDirectory,
 		[]string{
-			//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+			// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 			"--lock_tables_timeout", "5s",
 			"--track_schema_versions=true",
 			"--queryserver_enable_online_ddl" + "=false",
@@ -368,7 +368,8 @@ func PrsAvoid(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *c
 func PrsWithTimeout(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet, avoid bool, actionTimeout, waitTimeout string, extraArgs ...string) (string, error) {
 	args := []string{
 		"PlannedReparentShard",
-		fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
+		fmt.Sprintf("%s/%s", KeyspaceName, ShardName),
+	}
 	if actionTimeout != "" {
 		args = append(args, "--action_timeout", actionTimeout)
 	}

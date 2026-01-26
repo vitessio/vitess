@@ -273,7 +273,7 @@ func (txs *TxSerializer) unlockLocked(key string, returnSlot bool) {
 		delete(txs.queues, key)
 
 		if q.max > 1 {
-			var formattedKey = key
+			formattedKey := key
 			var logMsg string
 
 			if txs.env.Config().SanitizeLogMessages {

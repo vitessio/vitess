@@ -34,8 +34,10 @@ import (
 )
 
 // ErrTabletAliasNil is a fixed error message.
-var ErrTabletAliasNil = errors.New("tablet alias is nil")
-var tmc tmclient.TabletManagerClient
+var (
+	ErrTabletAliasNil = errors.New("tablet alias is nil")
+	tmc               tmclient.TabletManagerClient
+)
 
 // InitializeTMC initializes the tablet manager client to use for all VTOrc RPC calls.
 func InitializeTMC() tmclient.TabletManagerClient {

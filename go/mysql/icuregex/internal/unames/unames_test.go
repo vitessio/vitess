@@ -26,7 +26,7 @@ import (
 )
 
 func TestCharForName(t *testing.T) {
-	var TestNames = []struct {
+	TestNames := []struct {
 		code                   rune
 		name, oldName, extName string
 	}{

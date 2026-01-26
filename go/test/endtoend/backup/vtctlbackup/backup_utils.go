@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -231,7 +232,7 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 		shard.Vttablets = append(shard.Vttablets, tablet)
 		return nil
 	}
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		tabletType := tabletTypes[i]
 		if err := createTablet(tabletType); err != nil {
 			return 1, err
@@ -443,12 +444,7 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDe
 }
 
 func isRegistered(name string, runlist []string) bool {
-	for _, f := range runlist {
-		if f == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(runlist, name)
 }
 
 type restoreMethod func(t *testing.T, tablet *cluster.Vttablet)
@@ -879,7 +875,7 @@ func terminatedRestore(t *testing.T) {
 func checkTabletType(t *testing.T, alias string, tabletType topodata.TabletType) {
 	t.Helper()
 	// for loop for 15 seconds to check if tablet type is correct
-	for i := 0; i < 15; i++ {
+	for range 15 {
 		output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("GetTablet", alias)
 		require.NoError(t, err)
 		var tabletPB topodata.Tablet
@@ -1231,7 +1227,7 @@ func ReadRowsFromReplica(t *testing.T, replicaIndex int) (msgs []string) {
 func FlushBinaryLogsOnReplica(t *testing.T, replicaIndex int, count int) {
 	replica := getReplica(t, replicaIndex)
 	query := "flush binary logs"
-	for i := 0; i < count; i++ {
+	for range count {
 		_, err := replica.VttabletProcess.QueryTablet(query, keyspaceName, true)
 		require.NoError(t, err)
 	}

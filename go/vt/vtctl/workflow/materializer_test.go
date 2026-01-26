@@ -57,9 +57,7 @@ const (
 	getNonEmptyTable     = "select 1 from `t1` limit 1"
 )
 
-var (
-	defaultOnDDL = binlogdatapb.OnDDLAction_IGNORE.String()
-)
+var defaultOnDDL = binlogdatapb.OnDDLAction_IGNORE.String()
 
 func gtid(position string) string {
 	arr := strings.Split(position, "/")
@@ -297,8 +295,7 @@ func TestStripAutoIncrement(t *testing.T) {
 }
 
 func TestAddTablesToVSchema(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
 	srcks := "source"
@@ -511,8 +508,7 @@ func TestAddTablesToVSchema(t *testing.T) {
 }
 
 func TestMigrateVSchema(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "workflow",
 		Cell:           "cell",
@@ -545,7 +541,8 @@ func TestMigrateVSchema(t *testing.T) {
 	vschema, err := env.ws.ts.GetSrvVSchema(ctx, env.cell)
 	require.NoError(t, err)
 	got := fmt.Sprintf("%v", vschema)
-	want := []string{`keyspaces:{key:"sourceks" value:{}}`,
+	want := []string{
+		`keyspaces:{key:"sourceks" value:{}}`,
 		`keyspaces:{key:"sourceks" value:{}} keyspaces:{key:"targetks" value:{tables:{key:"t1" value:{}}}}`,
 		`rules:{from_table:"t1" to_tables:"sourceks.t1"}`,
 		`rules:{from_table:"targetks.t1" to_tables:"sourceks.t1"}`,
@@ -572,8 +569,7 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 
 	for onDDLAction := range binlogdatapb.OnDDLAction_value {
 		t.Run(fmt.Sprintf("OnDDL Flag:%v", onDDLAction), func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 			defer env.close()
 			// This is the default and go does not marshal defaults
@@ -910,8 +906,7 @@ func TestShardedAutoIncHandling(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			if tc.targetShards == nil {
 				tc.targetShards = []string{"0"}
 			}
@@ -977,8 +972,7 @@ func TestMoveTablesNoRoutingRules(t *testing.T) {
 		}},
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 	// This is the default and go does not marshal defaults
@@ -1045,8 +1039,7 @@ func TestMoveTablesCreateShardedVSchemaRollback(t *testing.T) {
 		}},
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"-"}, []string{"-"})
 	defer env.close()
 
@@ -1130,8 +1123,7 @@ func TestMoveTablesCreateUnshardedVSchemaRollback(t *testing.T) {
 		}},
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"-"}, []string{"-"})
 	defer env.close()
 
@@ -1244,8 +1236,7 @@ func TestCreateLookupVindexFull(t *testing.T) {
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -1387,8 +1378,7 @@ func TestCreateLookupVindexMultipleCreate(t *testing.T) {
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -1583,8 +1573,7 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -1983,8 +1972,7 @@ func TestCreateLookupVindexSourceVSchema(t *testing.T) {
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -2229,8 +2217,7 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -2480,8 +2467,7 @@ func TestCreateLookupVindexSameKeyspace(t *testing.T) {
 		SourceKeyspace: "ks",
 		TargetKeyspace: "ks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -2597,8 +2583,7 @@ func TestCreateCustomizedVindex(t *testing.T) {
 		SourceKeyspace: "ks",
 		TargetKeyspace: "ks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -2727,8 +2712,7 @@ func TestCreateLookupVindexIgnoreNulls(t *testing.T) {
 		SourceKeyspace: "ks",
 		TargetKeyspace: "ks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -2852,8 +2836,7 @@ func TestStopAfterCopyFlag(t *testing.T) {
 		SourceKeyspace: "ks",
 		TargetKeyspace: "ks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -2950,8 +2933,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 			},
 		},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
@@ -3637,8 +3619,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 }
 
 func TestValidateEmptyTables(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
 

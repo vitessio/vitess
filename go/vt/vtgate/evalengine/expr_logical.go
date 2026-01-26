@@ -67,10 +67,12 @@ type (
 	}
 )
 
-var _ IR = (*IntervalExpr)(nil)
-var _ IR = (*IsExpr)(nil)
-var _ IR = (*LogicalExpr)(nil)
-var _ IR = (*NotExpr)(nil)
+var (
+	_ IR = (*IntervalExpr)(nil)
+	_ IR = (*IsExpr)(nil)
+	_ IR = (*LogicalExpr)(nil)
+	_ IR = (*NotExpr)(nil)
+)
 
 const (
 	boolFalse boolean = 0
@@ -586,7 +588,7 @@ func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 	var ta typeAggregation
 	var ca collationAggregation
 	var result eval
-	var matched = false
+	matched := false
 
 	// From what we can tell, MySQL actually evaluates all the branches
 	// of a CASE expression, even after a truthy match. I.e. the CASE

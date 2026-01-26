@@ -19,7 +19,7 @@ import (
 // its metadata. Otherwise, the interceptor is a no-op, and the original stream
 // handler is invoked.
 func StreamServerInterceptor(api API) grpc.StreamServerInterceptor {
-	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		c, id, ok, err := clusterFromIncomingContextMetadata(ss.Context())
 		switch { // TODO: see if it's possible to de-duplicate this somehow. Unfortunately the callbacks have different signatures which might make it impossible.
 		case !ok:
@@ -47,7 +47,7 @@ func StreamServerInterceptor(api API) grpc.StreamServerInterceptor {
 // metadata. Otherwise, the interceptor is a no-op, and the original method
 // handler is invoked.
 func UnaryServerInterceptor(api API) grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
 		c, id, ok, err := clusterFromIncomingContextMetadata(ctx)
 		switch {
 		case !ok:
@@ -91,8 +91,8 @@ func clusterFromIncomingContextMetadata(ctx context.Context) (*cluster.Cluster, 
 }
 
 // dec returns a function that merges the src proto.Message into dst.
-func dec(src interface{}) func(dst interface{}) error {
-	return func(dst interface{}) error {
+func dec(src any) func(dst any) error {
+	return func(dst any) error {
 		// gRPC handlers expect a function called `dec` which
 		// decodes an arbitrary req into a req of the correct type
 		// for the particular handler.
@@ -121,7 +121,7 @@ var (
 // the init() below will fail to compile if our types ever stop aligning.
 //
 // c.f. https://github.com/grpc/grpc-go/blob/v1.39.0/server.go#L81
-type methodHandler func(srv interface{}, ctx context.Context, dec func(in interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error)
+type methodHandler func(srv any, ctx context.Context, dec func(in any) error, interceptor grpc.UnaryServerInterceptor) (any, error)
 
 func init() {
 	for _, m := range vtadminpb.VTAdmin_ServiceDesc.Methods {
