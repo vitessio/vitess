@@ -392,7 +392,6 @@ Cleanup:
 func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error) {
 	// If the tablet is not replicating from anyone, then it could be the previous primary.
 	// We should check for errant GTIDs by finding the difference with the shard's current primary.
-	var primaryInstance *Instance
 	primaryAlias, _, _ := ReadShardPrimaryInformation(tablet.Keyspace, tablet.Shard)
 
 	// Check if the current tablet is the primary. If it is, then we don't need to
@@ -403,6 +402,7 @@ func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error
 
 	// If we can resolve a shard primary alias, read its last known instance row
 	// from the backend so we can compare GTID sets when safe to do so.
+	var primaryInstance *Instance
 	if primaryAlias != "" {
 		primaryInstance, _, _ = ReadInstance(primaryAlias)
 	}
