@@ -17,7 +17,6 @@ limitations under the License.
 package vtctl
 
 import (
-	"context"
 	_ "embed"
 	"fmt"
 	"regexp"
@@ -50,8 +49,7 @@ var (
 func TestApplyVSchema(t *testing.T) {
 	shard := "0"
 	ks := "ks"
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestVTCtlEnv(ctx)
 	defer env.close()
 	_ = env.addTablet(100, ks, shard, &topodatapb.KeyRange{}, topodatapb.TabletType_PRIMARY)
@@ -139,8 +137,7 @@ func TestMoveTables(t *testing.T) {
 	wf := "testwf"
 	ksWf := fmt.Sprintf("%s.%s", targetKs, wf)
 	minTableSize := 16384 // a single 16KiB InnoDB page
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestVTCtlEnv(ctx)
 	defer env.close()
 	source := env.addTablet(100, sourceKs, shard, &topodatapb.KeyRange{}, topodatapb.TabletType_PRIMARY)

@@ -112,8 +112,8 @@ func newUnicodeWildcardMatcher(
 ) WildcardPattern {
 	var escape bool
 	var chOneCount, chManyCount, chEscCount int
-	var parsedPattern = make([]rune, 0, len(pat))
-	var patOriginal = pat
+	parsedPattern := make([]rune, 0, len(pat))
+	patOriginal := pat
 
 	if chOne == 0 {
 		chOne = '_'
@@ -193,8 +193,8 @@ func newUnicodeWildcardMatcher(
 func (wc *unicodeWildcard) matchIter(str []byte, pat []rune) bool {
 	var s []byte
 	var p []rune
-	var star = false
-	var cs = wc.charset
+	star := false
+	cs := wc.charset
 
 retry:
 	s = str
@@ -256,7 +256,7 @@ func (wc *unicodeWildcard) Match(in []byte) bool {
 }
 
 func (wc *unicodeWildcard) matchMany(in []byte, pat []rune, depth int) match {
-	var cs = wc.charset
+	cs := wc.charset
 	var p0 rune
 
 many:
@@ -313,7 +313,7 @@ func (wc *unicodeWildcard) matchRecursive(in []byte, pat []rune, depth int) matc
 		return matchFail
 	}
 
-	var cs = wc.charset
+	cs := wc.charset
 	for len(pat) > 0 {
 		if pat[0] == patternMatchMany {
 			return wc.matchMany(in, pat[1:], depth)
@@ -354,7 +354,7 @@ func newEightbitWildcardMatcher(
 	pat []byte, chOneRune, chManyRune, chEscRune rune,
 ) WildcardPattern {
 	var escape bool
-	var parsedPattern = make([]int16, 0, len(pat))
+	parsedPattern := make([]int16, 0, len(pat))
 	var chOne, chMany, chEsc byte = '_', '%', '\\'
 	var chOneCount, chManyCount, chEscCount int
 
@@ -514,7 +514,7 @@ func (wc *eightbitWildcard) matchRecursive(in []byte, pat []int16, depth int) ma
 func (wc *eightbitWildcard) matchIter(str []byte, pat []int16) bool {
 	var s []byte
 	var p []int16
-	var star = false
+	star := false
 
 retry:
 	s = str

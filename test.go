@@ -79,7 +79,7 @@ For example:
 // Flags
 var (
 	flavor           = flag.String("flavor", "mysql80", "comma-separated bootstrap flavor(s) to run against (when using Docker mode). Available flavors: all,"+flavors)
-	bootstrapVersion = flag.String("bootstrap-version", "49", "the version identifier to use for the docker images")
+	bootstrapVersion = flag.String("bootstrap-version", "50", "the version identifier to use for the docker images")
 	runCount         = flag.Int("runs", 1, "run each test this many times")
 	logPass          = flag.Bool("log-pass", false, "log test output even if it passes")
 	timeout          = flag.Duration("timeout", 30*time.Minute, "timeout for each test")
@@ -287,7 +287,6 @@ func loadOneConfig(fileName string) (*Config, error) {
 		return nil, err
 	}
 	return config2, nil
-
 }
 
 // Get test configs.
@@ -340,7 +339,7 @@ func main() {
 
 	// Make output directory.
 	outDir := path.Join("_test", fmt.Sprintf("%v.%v", startTime.Format("20060102-150405"), os.Getpid()))
-	if err := os.MkdirAll(outDir, os.FileMode(0755)); err != nil {
+	if err := os.MkdirAll(outDir, os.FileMode(0o755)); err != nil {
 		log.Fatalf("Can't create output directory: %v", err)
 	}
 
@@ -349,7 +348,7 @@ func main() {
 		log.Fatalf("Can't create junit directory: %v", err)
 	}
 
-	logFile, err := os.OpenFile(path.Join(outDir, "test.log"), os.O_RDWR|os.O_CREATE, 0644)
+	logFile, err := os.OpenFile(path.Join(outDir, "test.log"), os.O_RDWR|os.O_CREATE, 0o0644)
 	if err != nil {
 		log.Fatalf("Can't create log file: %v", err)
 	}
@@ -725,7 +724,7 @@ func updateTestStats(name string, update func(*TestStats)) {
 		log.Printf("Can't encode stats file: %v", err)
 		return
 	}
-	if err := os.WriteFile(statsFileName, data, 0644); err != nil {
+	if err := os.WriteFile(statsFileName, data, 0o644); err != nil {
 		log.Printf("Can't write stats file: %v", err)
 	}
 }

@@ -20,9 +20,7 @@ import (
 	"vitess.io/vitess/go/event"
 )
 
-var (
-	onFlushHooks event.Hooks
-)
+var onFlushHooks event.Hooks
 
 // OnFlush registers a function to be called when Flush() is invoked.
 func OnFlush(fn func()) {

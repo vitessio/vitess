@@ -75,7 +75,7 @@ func (vs *Server) start() error {
 	// Create Vault log directory
 	vs.logDir = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("%s_%d", vaultDirName, vs.port1))
 	if _, err := os.Stat(vs.logDir); os.IsNotExist(err) {
-		err := os.Mkdir(vs.logDir, 0700)
+		err := os.Mkdir(vs.logDir, 0o700)
 		if err != nil {
 			log.Error(err)
 			return err
@@ -90,7 +90,7 @@ func (vs *Server) start() error {
 	hcl = bytes.Replace(hcl, []byte("$cert"), []byte(path.Join(os.Getenv("PWD"), vaultCertFileName)), 1)
 	hcl = bytes.Replace(hcl, []byte("$key"), []byte(path.Join(os.Getenv("PWD"), vaultKeyFileName)), 1)
 	newHclFile := path.Join(vs.logDir, vaultConfigFileName)
-	err = os.WriteFile(newHclFile, hcl, 0700)
+	err = os.WriteFile(newHclFile, hcl, 0o700)
 	if err != nil {
 		log.Error(err)
 		return err
@@ -154,7 +154,7 @@ func downloadExecFile(path string, url string) error {
 	}
 	defer resp.Body.Close()
 
-	err = os.WriteFile(path, []byte(""), 0700)
+	err = os.WriteFile(path, []byte(""), 0o700)
 	if err != nil {
 		return err
 	}

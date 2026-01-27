@@ -1116,7 +1116,7 @@ func (e *Executor) SaveVSchema(vschema *vindexes.VSchema, stats *VSchemaStats) {
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
-func (e *Executor) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.ShardDestination, error) {
+func (e *Executor) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.ShardDestination, *topodatapb.TabletAlias, error) {
 	return econtext.ParseDestinationTarget(targetString, defaultTabletType, e.VSchema())
 }
 
@@ -1344,7 +1344,7 @@ func getDestinations(ctx context.Context, vcursor *econtext.VCursorImpl) []strin
 	}
 
 	shards := make([]string, len(resolved))
-	for i := 0; i < len(shards); i++ {
+	for i := range shards {
 		shards[i] = resolved[i].Target.GetShard()
 	}
 	sort.Strings(shards)

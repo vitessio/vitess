@@ -42,6 +42,7 @@ type (
 func (qb *queryBuilder) asSelectStatement() sqlparser.TableStatement {
 	return qb.stmt.(sqlparser.TableStatement)
 }
+
 func (qb *queryBuilder) asOrderAndLimit() sqlparser.OrderAndLimit {
 	return qb.stmt.(sqlparser.OrderAndLimit)
 }
@@ -279,9 +280,11 @@ type FromStatement interface {
 	SetWherePredicate(sqlparser.Expr)
 }
 
-var _ FromStatement = (*sqlparser.Select)(nil)
-var _ FromStatement = (*sqlparser.Update)(nil)
-var _ FromStatement = (*sqlparser.Delete)(nil)
+var (
+	_ FromStatement = (*sqlparser.Select)(nil)
+	_ FromStatement = (*sqlparser.Update)(nil)
+	_ FromStatement = (*sqlparser.Delete)(nil)
+)
 
 func (qb *queryBuilder) joinWith(other *queryBuilder, onCondition sqlparser.Expr, joinType sqlparser.JoinType) {
 	stmt := qb.stmt.(FromStatement)

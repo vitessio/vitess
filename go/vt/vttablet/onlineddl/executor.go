@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -76,21 +77,19 @@ var (
 	ErrMigrationNotFound = errors.New("migration not found")
 )
 
-var (
-	staleMigrationMinutesStats = stats.NewGauge("OnlineDDLStaleMigrationMinutes", "longest stale migration in minutes")
-)
+var staleMigrationMinutesStats = stats.NewGauge("OnlineDDLStaleMigrationMinutes", "longest stale migration in minutes")
+
+// fixCompletedTimestampDone fixes a nil `completed_timestamp` columns, see
+// https://github.com/vitessio/vitess/issues/13927
+// The fix is in release-18.0
+// TODO: remove in release-19.0
+var fixCompletedTimestampDone bool
 
 var (
-	// fixCompletedTimestampDone fixes a nil `completed_timestamp` columns, see
-	// https://github.com/vitessio/vitess/issues/13927
-	// The fix is in release-18.0
-	// TODO: remove in release-19.0
-	fixCompletedTimestampDone bool
+	emptyResult                           = &sqltypes.Result{}
+	acceptableDropTableIfExistsErrorCodes = []sqlerror.ErrorCode{sqlerror.ERCantFindFile, sqlerror.ERNoSuchTable}
+	copyAlgorithm                         = sqlparser.AlgorithmValue(sqlparser.CopyStr)
 )
-
-var emptyResult = &sqltypes.Result{}
-var acceptableDropTableIfExistsErrorCodes = []sqlerror.ErrorCode{sqlerror.ERCantFindFile, sqlerror.ERNoSuchTable}
-var copyAlgorithm = sqlparser.AlgorithmValue(sqlparser.CopyStr)
 
 var (
 	migrationCheckInterval  = 1 * time.Minute
@@ -340,12 +339,7 @@ func (e *Executor) matchesShards(commaDelimitedShards string) bool {
 		// Nothing explicitly defined, so implicitly all shards are allowed
 		return true
 	}
-	for _, shard := range shards {
-		if shard == e.shard {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(shards, e.shard)
 }
 
 // countOwnedRunningMigrations returns an estimate of current count of running migrations; this is
@@ -505,17 +499,13 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 		defer conn.ExecuteFetch("SET foreign_key_checks=@vt_onlineddl_foreign_key_checks", 0, false)
 	}
 	_, err = conn.ExecuteFetch(onlineDDL.SQL, 0, false)
-
 	if err != nil {
 		// let's see if this error is actually acceptable
 		if merr, ok := err.(*sqlerror.SQLError); ok {
-			for _, acceptableCode := range acceptableMySQLErrorCodes {
-				if merr.Num == acceptableCode {
-					// we don't consider this to be an error.
-					acceptableErrorCodeFound = true
-					err = nil
-					break
-				}
+			if slices.Contains(acceptableMySQLErrorCodes, merr.Num) {
+				// we don't consider this to be an error.
+				acceptableErrorCodeFound = true
+				err = nil
 			}
 		}
 	}
@@ -657,12 +647,7 @@ func (e *Executor) killTableLockHoldersAndAccessors(ctx context.Context, uuid st
 	defer conn.Close()
 
 	skipKill := func(threadId int64) bool {
-		for _, excludeId := range excludeIds {
-			if threadId == excludeId {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(excludeIds, threadId)
 	}
 	{
 		// First, let's look at PROCESSLIST for queries that _might_ be operating on our table. This may have
@@ -3762,7 +3747,7 @@ func (e *Executor) updateMigrationSpecialPlan(ctx context.Context, uuid string, 
 	return err
 }
 
-func (e *Executor) updateMigrationStage(ctx context.Context, uuid string, stage string, args ...interface{}) error {
+func (e *Executor) updateMigrationStage(ctx context.Context, uuid string, stage string, args ...any) error {
 	msg := fmt.Sprintf(stage, args...)
 	log.Infof("updateMigrationStage: uuid=%s, stage=%s", uuid, msg)
 	query, err := sqlparser.ParseAndBind(sqlUpdateStage,
@@ -3887,7 +3872,8 @@ func (e *Executor) updateSchemaAnalysis(ctx context.Context, uuid string,
 	addedUniqueKeys, removedUniqueKeys int, removedUniqueKeyNames string,
 	removedForeignKeyNames string,
 	droppedNoDefaultColumnNames string, expandedColumnNames string,
-	revertibleNotes []string) error {
+	revertibleNotes []string,
+) error {
 	notes := strings.Join(revertibleNotes, "\n")
 	query, err := sqlparser.ParseAndBind(sqlUpdateSchemaAnalysis,
 		sqltypes.Int64BindVariable(int64(addedUniqueKeys)),
@@ -4762,7 +4748,8 @@ func (e *Executor) ShowMigrationLogs(ctx context.Context, stmt *sqlparser.ShowMi
 
 // onSchemaMigrationStatus is called when a status is set/changed for a running migration
 func (e *Executor) onSchemaMigrationStatus(ctx context.Context,
-	uuid string, status schema.OnlineDDLStatus, dryRun bool, progressPct float64, etaSeconds int64, rowsCopied int64, hint string) (err error) {
+	uuid string, status schema.OnlineDDLStatus, dryRun bool, progressPct float64, etaSeconds int64, rowsCopied int64, hint string,
+) (err error) {
 	if dryRun && status != schema.OnlineDDLStatusFailed {
 		// We don't consider dry-run reports unless there's a failure
 		return nil

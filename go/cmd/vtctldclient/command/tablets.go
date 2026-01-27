@@ -304,7 +304,6 @@ func commandDeleteTablets(cmd *cobra.Command, args []string) error {
 		TabletAliases: aliases,
 		AllowPrimary:  deleteTabletsOptions.AllowPrimary,
 	})
-
 	if err != nil {
 		return fmt.Errorf("%w: while deleting %d tablets; please inspect the topo", err, len(aliases))
 	}

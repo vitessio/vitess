@@ -125,6 +125,7 @@ func (a *analyzer) checkJoin(j *sqlparser.JoinTableExpr) error {
 	}
 	return nil
 }
+
 func (a *analyzer) checkNextVal() error {
 	currScope := a.scoper.currentScope()
 	if currScope.parent != nil {
