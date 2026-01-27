@@ -166,18 +166,21 @@ func (ts *trafficSwitcher) getMaxSequenceValue(ctx context.Context, seq *sequenc
 			Query:   []byte(query.Query),
 			MaxRows: 1,
 		})
-		if terr != nil || len(qr.Rows) != 1 {
+		if terr != nil {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL,
 				"failed to get the max used sequence value for target table %s.%s on tablet %s in order to initialize the backing sequence table: %v",
 				ts.targetKeyspace, seq.usingTableName, topoproto.TabletAliasString(primary.Alias), terr)
 		}
-		rawVal := sqltypes.Proto3ToResult(qr).Rows[0][0]
 		maxID := int64(0)
-		if !rawVal.IsNull() { // If it's NULL then there are no rows and 0 remains the max
-			maxID, terr = rawVal.ToInt64()
-			if terr != nil {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s on tablet %s in order to initialize the backing sequence table: %v",
-					ts.targetKeyspace, seq.usingTableName, topoproto.TabletAliasString(primary.Alias), terr)
+		// If no rows are returned, max remains 0.
+		if len(qr.Rows) != 0 {
+			rawVal := sqltypes.Proto3ToResult(qr).Rows[0][0]
+			if !rawVal.IsNull() { // If it's NULL then 0 remains the max
+				maxID, terr = rawVal.ToInt64()
+				if terr != nil {
+					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s on tablet %s in order to initialize the backing sequence table: %v",
+						ts.targetKeyspace, seq.usingTableName, topoproto.TabletAliasString(primary.Alias), terr)
+				}
 			}
 		}
 		setMaxSequenceValue(maxID)
@@ -250,27 +253,9 @@ func (ts *trafficSwitcher) getCurrentSequenceValue(ctx context.Context, seq *seq
 	return currentVal, nil
 }
 
-<<<<<<< HEAD
 func (ts *trafficSwitcher) updateSequenceValue(ctx context.Context, seq *sequenceMetadata, currentMaxValue int64) error {
 	if err := seq.escapeValues(); err != nil {
 		return err
-=======
-func (ts *trafficSwitcher) updateSequenceValues(ctx context.Context, sequences []*sequenceMetadata, maxValues map[string]int64) error {
-	sequencesByShard := map[string][]*tabletmanagerdatapb.UpdateSequenceTablesRequest_SequenceMetadata{}
-	for _, seq := range sequences {
-		maxValue := maxValues[seq.backingTableName]
-		sequenceShard, ierr := ts.TopoServer().GetOnlyShard(ctx, seq.backingTableKeyspace)
-		if ierr != nil || sequenceShard == nil || sequenceShard.PrimaryAlias == nil {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
-				seq.backingTableKeyspace, ierr)
-		}
-		tabletAliasStr := topoproto.TabletAliasString(sequenceShard.PrimaryAlias)
-		sequencesByShard[tabletAliasStr] = append(sequencesByShard[tabletAliasStr], &tabletmanagerdatapb.UpdateSequenceTablesRequest_SequenceMetadata{
-			BackingTableName:   seq.backingTableName,
-			BackingTableDbName: seq.backingTableDBName,
-			MaxValue:           maxValue,
-		})
->>>>>>> 81356abde1 (VReplication: Properly Handle Sequence Table Initialization For Empty Tables (#19226))
 	}
 	nextVal := currentMaxValue + 1
 	log.Infof("Updating sequence %s.%s to %d", seq.backingTableDBName, seq.backingTableName, nextVal)
@@ -370,9 +355,6 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 	}
 	for _, sm := range sequencesByBackingTable {
 		maxValue := maxValues[sm.backingTableName]
-		if maxValue == 0 {
-			continue
-		}
 		if err := ts.updateSequenceValue(ctx, sm, maxValue); err != nil {
 			return err
 		}

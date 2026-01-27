@@ -28,12 +28,13 @@ import (
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/vschema"
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 func TestInitializeTargetSequences(t *testing.T) {
@@ -89,121 +90,48 @@ func TestInitializeTargetSequences(t *testing.T) {
 		},
 	}
 
-<<<<<<< HEAD
-	env.tmc.expectVRQuery(200, "/select max.*", sqltypes.MakeTestResult(sqltypes.MakeTestFields("maxval", "int64"), "34"))
-	// Expect the insert query to be executed with 35 as a params, since we provide a maxID of 34 in the last query
-	env.tmc.expectVRQuery(100, "/insert into.*35.*", &sqltypes.Result{RowsAffected: 1})
-=======
 	type testCase struct {
-		name                  string
-		maxValueRequest       *getMaxValueForSequencesRequestResponse
-		updateSeqTableRequest *tabletmanagerdatapb.UpdateSequenceTablesRequest
+		name            string
+		selectMaxQuery  string
+		selectMaxResult *sqltypes.Result
+		insertQuery     string
 	}
 
 	testCases := []testCase{
 		{
-			name: "initialize sequences",
-			maxValueRequest: &getMaxValueForSequencesRequestResponse{
-				req: &tabletmanagerdatapb.GetMaxValueForSequencesRequest{
-					Sequences: []*tabletmanagerdatapb.GetMaxValueForSequencesRequest_SequenceMetadata{
-						{
-							BackingTableName:        "my-seq1",
-							UsingColEscaped:         "`my-col`",
-							UsingTableNameEscaped:   fmt.Sprintf("`%s`", tableName),
-							UsingTableDbNameEscaped: "`vt_targetks`",
-						},
-						{
-							BackingTableName:        "my-seq2",
-							UsingColEscaped:         "`my-col-2`",
-							UsingTableNameEscaped:   fmt.Sprintf("`%s`", tableName2),
-							UsingTableDbNameEscaped: "`vt_targetks`",
-						},
-					},
-				},
-				res: &tabletmanagerdatapb.GetMaxValueForSequencesResponse{
-					MaxValuesBySequenceTable: map[string]int64{
-						"my-seq1": 34,
-						"my-seq2": 10,
-					},
-				},
-			},
-			updateSeqTableRequest: &tabletmanagerdatapb.UpdateSequenceTablesRequest{
-				Sequences: []*tabletmanagerdatapb.UpdateSequenceTablesRequest_SequenceMetadata{
-					{
-						BackingTableName:   "my-seq1",
-						BackingTableDbName: "vt_" + sourceKeyspaceName,
-						MaxValue:           34,
-					},
-					{
-						BackingTableName:   "my-seq2",
-						BackingTableDbName: "vt_" + sourceKeyspaceName,
-						MaxValue:           10,
-					},
-				},
-			},
+			name:           "initialize sequences",
+			selectMaxQuery: "/select max.*",
+			selectMaxResult: sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("maxval", "int64"),
+				"34",
+			),
+			insertQuery: "/insert into.*35.*",
 		},
 		{
-			name: "initialize sequences for empty tables",
-			maxValueRequest: &getMaxValueForSequencesRequestResponse{
-				req: &tabletmanagerdatapb.GetMaxValueForSequencesRequest{
-					Sequences: []*tabletmanagerdatapb.GetMaxValueForSequencesRequest_SequenceMetadata{
-						{
-							BackingTableName:        "my-seq1",
-							UsingColEscaped:         "`my-col`",
-							UsingTableNameEscaped:   fmt.Sprintf("`%s`", tableName),
-							UsingTableDbNameEscaped: "`vt_targetks`",
-						},
-						{
-							BackingTableName:        "my-seq2",
-							UsingColEscaped:         "`my-col-2`",
-							UsingTableNameEscaped:   fmt.Sprintf("`%s`", tableName2),
-							UsingTableDbNameEscaped: "`vt_targetks`",
-						},
-					},
-				},
-				res: &tabletmanagerdatapb.GetMaxValueForSequencesResponse{
-					MaxValuesBySequenceTable: map[string]int64{},
-				},
-			},
-			updateSeqTableRequest: &tabletmanagerdatapb.UpdateSequenceTablesRequest{
-				Sequences: []*tabletmanagerdatapb.UpdateSequenceTablesRequest_SequenceMetadata{
-					{
-						BackingTableName:   "my-seq1",
-						BackingTableDbName: "vt_" + sourceKeyspaceName,
-						MaxValue:           0,
-					},
-					{
-						BackingTableName:   "my-seq2",
-						BackingTableDbName: "vt_" + sourceKeyspaceName,
-						MaxValue:           0,
-					},
-				},
-			},
+			name:           "initialize sequences for empty tables",
+			selectMaxQuery: "/select max.*",
+			selectMaxResult: sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("maxval", "int64"),
+			),
+			insertQuery: "/insert into.*1.*",
 		},
 	}
->>>>>>> 81356abde1 (VReplication: Properly Handle Sequence Table Initialization For Empty Tables (#19226))
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			require.NotNil(t, tc.maxValueRequest)
-			require.NotNil(t, tc.updateSeqTableRequest)
-			env.tmc.expectGetMaxValueForSequencesRequest(200, tc.maxValueRequest)
-			env.tmc.expectUpdateSequenceTablesRequest(100, tc.updateSeqTableRequest)
+			// Expect the select max query to be executed
+			env.tmc.expectVRQuery(200, tc.selectMaxQuery, tc.selectMaxResult)
+			// Expect the insert query to be executed
+			env.tmc.expectVRQuery(100, tc.insertQuery, &sqltypes.Result{RowsAffected: 1})
 
-<<<<<<< HEAD
-	// Expect the queries to be cleared
-	assert.Emptyf(t, env.tmc.vrQueries[100], "expected no queries to be executed, found: %q", env.tmc.vrQueries[100])
-	assert.Empty(t, env.tmc.vrQueries[200], "expected no queries to be executed, found: %q", env.tmc.vrQueries[200])
-=======
 			err = sw.initializeTargetSequences(ctx, sequencesByBackingTable)
 			assert.NoError(t, err)
 
-			// Expect the requests to be cleared.
-			assert.Emptyf(t, env.tmc.updateSequenceTablesRequests, "expected no remaining UpdateSequenceTables requests")
-			assert.Emptyf(t, env.tmc.getMaxValueForSequencesRequests, "expected no remaining GetMaxValueForSequences requests")
+			// Expect the queries to be cleared
+			assert.Emptyf(t, env.tmc.vrQueries[100], "expected no queries to be executed, found: %q", env.tmc.vrQueries[100])
+			assert.Empty(t, env.tmc.vrQueries[200], "expected no queries to be executed, found: %q", env.tmc.vrQueries[200])
 		})
 	}
->>>>>>> 81356abde1 (VReplication: Properly Handle Sequence Table Initialization For Empty Tables (#19226))
 }
 
 func TestGetTargetSequenceMetadata(t *testing.T) {
