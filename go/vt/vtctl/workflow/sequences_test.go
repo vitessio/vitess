@@ -197,25 +197,7 @@ func TestInitializeTargetSequences(t *testing.T) {
 				},
 			},
 		},
-<<<<<<< HEAD
-	})
-	env.tmc.expectUpdateSequenceTablesRequest(100, &tabletmanagerdatapb.UpdateSequenceTablesRequest{
-		Sequences: []*tabletmanagerdatapb.UpdateSequenceTablesRequest_SequenceMetadata{
-			{
-				BackingTableName:   "my-seq1",
-				BackingTableDbName: fmt.Sprintf("vt_%s", sourceKeyspaceName),
-				MaxValue:           34,
-			},
-			{
-				BackingTableName:   "my-seq2",
-				BackingTableDbName: fmt.Sprintf("vt_%s", sourceKeyspaceName),
-				MaxValue:           10,
-			},
-		},
-	})
-=======
 	}
->>>>>>> 81356abde1 (VReplication: Properly Handle Sequence Table Initialization For Empty Tables (#19226))
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
