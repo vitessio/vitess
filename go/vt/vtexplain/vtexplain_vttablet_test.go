@@ -17,7 +17,6 @@ limitations under the License.
 package vtexplain
 
 import (
-	"context"
 	"encoding/json"
 	"testing"
 	"time"
@@ -74,8 +73,7 @@ create table t2 (
 		NumShards:       2,
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, Cell)
 	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
 	vte, err := Init(ctx, vtenv.NewTestEnv(), ts, testVSchema, testSchema, "", opts, srvTopoCounts)
@@ -134,8 +132,7 @@ create table test_partitioned (
 	if err != nil {
 		t.Fatalf("parseSchema: %v", err)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ts := memorytopo.NewServer(ctx, Cell)
 	vte := initTest(ctx, ts, ModeMulti, defaultTestOpts(), &testopts{}, t)

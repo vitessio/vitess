@@ -158,8 +158,7 @@ func parseExternalDbData(externalDbData string) map[string]externalDbInfo {
 	for _, v := range strings.Split(externalDbData, ";") {
 		tokens := strings.Split(v, ":")
 		if len(tokens) > 1 {
-			externalDbInfoMap[tokens[0]] =
-				newExternalDbInfo(tokens[0], tokens[1], tokens[2], tokens[3], tokens[4], tokens[5])
+			externalDbInfoMap[tokens[0]] = newExternalDbInfo(tokens[0], tokens[1], tokens[2], tokens[3], tokens[4], tokens[5])
 		}
 	}
 
@@ -196,9 +195,9 @@ func main() {
 
 		// Check if it is an external_db
 		if _, ok := externalDbInfoMap[k]; ok {
-			//This is no longer necessary, but we'll keep it for reference
-			//https://github.com/vitessio/vitess/pull/4868, https://github.com/vitessio/vitess/pull/5010
-			//vSchemaFile = applyJsonInMemoryPatch(vSchemaFile,`[{"op": "add","path": "/tables/*", "value": {}}]`)
+			// This is no longer necessary, but we'll keep it for reference
+			// https://github.com/vitessio/vitess/pull/4868, https://github.com/vitessio/vitess/pull/5010
+			// vSchemaFile = applyJsonInMemoryPatch(vSchemaFile,`[{"op": "add","path": "/tables/*", "value": {}}]`)
 		} else {
 			var primaryTableColumns map[string]string
 			vSchemaFile, primaryTableColumns = addTablesVschemaPatch(vSchemaFile, keyspaceData.schemaFileNames)
@@ -254,7 +253,6 @@ func createFile(filePath string) *os.File {
 
 func readFile(filePath string) []byte {
 	file, err := os.ReadFile(filePath)
-
 	if err != nil {
 		log.Fatalf("reading %s: %s", filePath, err)
 	}
@@ -385,7 +383,7 @@ func writeVschemaFile(file []byte, fileName string) {
 }
 
 func writeFile(file []byte, fileName string) {
-	err := os.WriteFile(fileName, file, 0644)
+	err := os.WriteFile(fileName, file, 0o644)
 	if err != nil {
 		log.Fatalf("writing %s %s", fileName, err)
 	}
@@ -452,7 +450,6 @@ func applyDefaultDockerPatches(
 	externalDbInfoMap map[string]externalDbInfo,
 	opts vtOptions,
 ) []byte {
-
 	var dbInfo externalDbInfo
 	// This is a workaround to check if there are any externalDBs defined
 	for _, keyspaceData := range keyspaceInfoMap {
@@ -506,7 +503,6 @@ func generateExternalPrimary(
 	dbInfo externalDbInfo,
 	opts vtOptions,
 ) string {
-
 	aliases := []int{tabAlias + 1} // primary alias, e.g. 201
 	for i := range keyspaceData.replicaTablets {
 		aliases = append(aliases, tabAlias+2+i) // replica aliases, e.g. 202, 203, ...

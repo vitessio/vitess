@@ -90,10 +90,12 @@ func TestStreamerParseEventsXID(t *testing.T) {
 		mysql.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}),
+			SQL:      "BEGIN",
+		}),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */",
+		}),
 		mysql.NewXIDEvent(f, s),
 	}
 
@@ -152,13 +154,16 @@ func TestStreamerParseEventsCommit(t *testing.T) {
 		mysql.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}),
+			SQL:      "BEGIN",
+		}),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */",
+		}),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "COMMIT"}),
+			SQL:      "COMMIT",
+		}),
 	}
 
 	events := make(chan mysql.BinlogEvent)
@@ -250,10 +255,12 @@ func TestStreamerParseEventsClientEOF(t *testing.T) {
 		mysql.NewFormatDescriptionEvent(f, s),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}),
+			SQL:      "BEGIN",
+		}),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */",
+		}),
 		mysql.NewXIDEvent(f, s),
 	}
 	want := ErrClientEOF
@@ -350,10 +357,12 @@ func TestStreamerParseEventsSendErrorXID(t *testing.T) {
 		mysql.NewFormatDescriptionEvent(f, s),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}),
+			SQL:      "BEGIN",
+		}),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */",
+		}),
 		mysql.NewXIDEvent(f, s),
 	}
 	want := "send reply error: foobar"
@@ -394,13 +403,16 @@ func TestStreamerParseEventsSendErrorCommit(t *testing.T) {
 		mysql.NewFormatDescriptionEvent(f, s),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}),
+			SQL:      "BEGIN",
+		}),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */",
+		}),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "COMMIT"}),
+			SQL:      "COMMIT",
+		}),
 	}
 	want := "send reply error: foobar"
 
@@ -439,7 +451,8 @@ func TestStreamerParseEventsInvalid(t *testing.T) {
 		mysql.NewFormatDescriptionEvent(f, s),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}),
+			SQL:      "BEGIN",
+		}),
 		mysql.NewInvalidEvent(),
 		mysql.NewXIDEvent(f, s),
 	}
@@ -480,10 +493,12 @@ func TestStreamerParseEventsInvalidFormat(t *testing.T) {
 		mysql.NewInvalidFormatDescriptionEvent(f, s),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}),
+			SQL:      "BEGIN",
+		}),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */",
+		}),
 		mysql.NewXIDEvent(f, s),
 	}
 	want := "can't parse FORMAT_DESCRIPTION_EVENT:"
@@ -520,13 +535,15 @@ func TestStreamerParseEventsNoFormat(t *testing.T) {
 
 	input := []mysql.BinlogEvent{
 		mysql.NewRotateEvent(f, s, 0, ""),
-		//mysql.NewFormatDescriptionEvent(f, s),
+		// mysql.NewFormatDescriptionEvent(f, s),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}),
+			SQL:      "BEGIN",
+		}),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */",
+		}),
 		mysql.NewXIDEvent(f, s),
 	}
 	want := "got a real event before FORMAT_DESCRIPTION_EVENT:"
@@ -566,7 +583,8 @@ func TestStreamerParseEventsInvalidQuery(t *testing.T) {
 		mysql.NewFormatDescriptionEvent(f, s),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}),
+			SQL:      "BEGIN",
+		}),
 		mysql.NewInvalidQueryEvent(f, s),
 		mysql.NewXIDEvent(f, s),
 	}
@@ -609,22 +627,28 @@ func TestStreamerParseEventsRollback(t *testing.T) {
 		mysql.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}),
+			SQL:      "BEGIN",
+		}),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */",
+		}),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */",
+		}),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "ROLLBACK"}),
+			SQL:      "ROLLBACK",
+		}),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}),
+			SQL:      "BEGIN",
+		}),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */",
+		}),
 		mysql.NewXIDEvent(f, s),
 	}
 
@@ -696,7 +720,8 @@ func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 		mysql.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */",
+		}),
 		mysql.NewXIDEvent(f, s),
 	}
 
@@ -769,10 +794,12 @@ func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 		mysql.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */",
+		}),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}),
+			SQL:      "BEGIN",
+		}),
 		mysql.NewXIDEvent(f, s),
 	}
 
@@ -845,11 +872,13 @@ func TestStreamerParseEventsSetInsertID(t *testing.T) {
 		mysql.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}),
+			SQL:      "BEGIN",
+		}),
 		mysql.NewIntVarEvent(f, s, mysql.IntVarInsertID, 101),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */",
+		}),
 		mysql.NewXIDEvent(f, s),
 	}
 
@@ -905,11 +934,13 @@ func TestStreamerParseEventsInvalidIntVar(t *testing.T) {
 		mysql.NewFormatDescriptionEvent(f, s),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}),
+			SQL:      "BEGIN",
+		}),
 		mysql.NewIntVarEvent(f, s, mysql.IntVarInvalidInt, 0), // Invalid intvar.
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */",
+		}),
 		mysql.NewXIDEvent(f, s),
 	}
 	want := "can't parse INTVAR_EVENT:"
@@ -950,13 +981,16 @@ func TestStreamerParseEventsOtherDB(t *testing.T) {
 		mysql.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}),
+			SQL:      "BEGIN",
+		}),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "other",
-			SQL:      "INSERT INTO test values (3, 4)"}),
+			SQL:      "INSERT INTO test values (3, 4)",
+		}),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */",
+		}),
 		mysql.NewXIDEvent(f, s),
 	}
 
@@ -1013,13 +1047,16 @@ func TestStreamerParseEventsOtherDBBegin(t *testing.T) {
 		mysql.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "other",
-			SQL:      "BEGIN"}), // Check that this doesn't get filtered out.
+			SQL:      "BEGIN",
+		}), // Check that this doesn't get filtered out.
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "other",
-			SQL:      "INSERT INTO test values (3, 4)"}),
+			SQL:      "INSERT INTO test values (3, 4)",
+		}),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */",
+		}),
 		mysql.NewXIDEvent(f, s),
 	}
 
@@ -1074,13 +1111,16 @@ func TestStreamerParseEventsBeginAgain(t *testing.T) {
 		mysql.NewFormatDescriptionEvent(f, s),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}),
+			SQL:      "BEGIN",
+		}),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */",
+		}),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}),
+			SQL:      "BEGIN",
+		}),
 	}
 
 	events := make(chan mysql.BinlogEvent)

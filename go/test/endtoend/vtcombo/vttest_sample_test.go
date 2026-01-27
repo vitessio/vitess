@@ -246,9 +246,9 @@ func assertTabletsPresent(t *testing.T) {
 	require.NoError(t, err)
 
 	numPrimary, numReplica, numRdonly, numDash80, num80Dash, numRouted := 0, 0, 0, 0, 0, 0
-	lines := strings.Split(string(output), "\n")
+	lines := strings.SplitSeq(string(output), "\n")
 
-	for _, line := range lines {
+	for line := range lines {
 		if !strings.HasPrefix(line, "test-") {
 			continue
 		}

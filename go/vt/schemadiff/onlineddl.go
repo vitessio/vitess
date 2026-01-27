@@ -45,12 +45,10 @@ const (
 	ForeignKeyConstraintType
 )
 
-var (
-	constraintIndicatorMap = map[int]string{
-		int(CheckConstraintType):      "chk",
-		int(ForeignKeyConstraintType): "fk",
-	}
-)
+var constraintIndicatorMap = map[int]string{
+	int(CheckConstraintType):      "chk",
+	int(ForeignKeyConstraintType): "fk",
+}
 
 func GetConstraintType(constraintInfo sqlparser.ConstraintInfo) ConstraintType {
 	if _, ok := constraintInfo.(*sqlparser.CheckConstraintDefinition); ok {

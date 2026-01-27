@@ -105,7 +105,8 @@ func (vrw *VReplicationWorkflow) String() string {
 // NewVReplicationWorkflow sets up a MoveTables or Reshard workflow based on options provided, deduces the state of the
 // workflow from the persistent state stored in the vreplication table and the topo
 func (wr *Wrangler) NewVReplicationWorkflow(ctx context.Context, workflowType VReplicationWorkflowType,
-	params *VReplicationWorkflowParams) (*VReplicationWorkflow, error) {
+	params *VReplicationWorkflowParams,
+) (*VReplicationWorkflow, error) {
 	wr.WorkflowParams = params
 	log.Infof("NewVReplicationWorkflow with params %+v", params)
 	vrw := &VReplicationWorkflow{wr: wr, ctx: ctx, params: params, workflowType: workflowType}
@@ -647,7 +648,7 @@ func (vrw *VReplicationWorkflow) GetCopyProgress() (*CopyProgress, error) {
 		sourceTableSizes[table] = 0
 	}
 
-	var getTableMetrics = func(tablet *topodatapb.Tablet, query string, rowCounts *map[string]int64, tableSizes *map[string]int64) error {
+	getTableMetrics := func(tablet *topodatapb.Tablet, query string, rowCounts *map[string]int64, tableSizes *map[string]int64) error {
 		p3qr, err := vrw.wr.tmc.ExecuteFetchAsDba(ctx, tablet, true, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
 			Query:   []byte(query),
 			MaxRows: uint64(len(tables)),

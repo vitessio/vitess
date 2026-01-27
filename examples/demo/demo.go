@@ -38,8 +38,10 @@ import (
 	"vitess.io/vitess/go/vt/vttest"
 )
 
-var cluster *vttest.LocalCluster
-var querylog <-chan string
+var (
+	cluster  *vttest.LocalCluster
+	querylog <-chan string
+)
 
 func main() {
 	flag.Parse()

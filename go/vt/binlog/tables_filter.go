@@ -17,6 +17,7 @@ limitations under the License.
 package binlog
 
 import (
+	"slices"
 	"strings"
 
 	"vitess.io/vitess/go/vt/log"
@@ -69,12 +70,9 @@ func tablesFilterFunc(tables []string, callback func(*binlogdatapb.BinlogTransac
 					}
 					tableName = sql[tableStart : tableStart+tableEnd]
 				}
-				for _, t := range tables {
-					if t == tableName {
-						filtered = append(filtered, statement.Statement)
-						matched = true
-						break
-					}
+				if slices.Contains(tables, tableName) {
+					filtered = append(filtered, statement.Statement)
+					matched = true
 				}
 			case binlogdatapb.BinlogTransaction_Statement_BL_UNRECOGNIZED:
 				updateStreamErrors.Add("TablesStream", 1)

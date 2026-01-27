@@ -107,7 +107,8 @@ func TestScopingWDerivedTables(t *testing.T) {
 			query:         "select uu.count from (select count(*) as `count` from t1) uu",
 			directDeps:    TS1,
 			recursiveDeps: TS0,
-		}}
+		},
+	}
 	for _, query := range queries {
 		t.Run(query.query, func(t *testing.T) {
 			parse, err := sqlparser.NewTestParser().Parse(query.query)
@@ -253,7 +254,7 @@ func BenchmarkAnalyzeDerivedTableQueries(b *testing.B) {
 		"select 1 from user uu where exists (select 1 from user where exists (select 1 from (select 1 from t1) uu where uu.user_id = uu.id))",
 	}
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, query := range queries {
 			parse, err := sqlparser.NewTestParser().Parse(query)
 			require.NoError(b, err)

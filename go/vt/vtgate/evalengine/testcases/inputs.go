@@ -24,13 +24,14 @@ import (
 )
 
 var inputJSONObjects = []string{
-	`[ { "a": 1 }, { "a": 2 } ]`,
-	`{ "a" : "foo", "b" : [ true, { "c" : 123, "c" : 456 } ] }`,
-	`{ "a" : "foo", "b" : [ true, { "c" : "123" } ] }`,
-	`{ "a" : "foo", "b" : [ true, { "c" : 123 } ] }`,
-	`{"a": 1, "b": 2, "c": {"d": 4}}`,
-	`["a", {"b": [true, false]}, [10, 20]]`,
-	`[10, 20, [30, 40]]`,
+	`'[ { "a": 1 }, { "a": 2 } ]'`,
+	`'{ "a" : "foo", "b" : [ true, { "c" : 123, "c" : 456 } ] }'`,
+	`'{ "a" : "foo", "b" : [ true, { "c" : "123" } ] }'`,
+	`'{ "a" : "foo", "b" : [ true, { "c" : 123 } ] }'`,
+	`'{"a": 1, "b": 2, "c": {"d": 4}}'`,
+	`'["a", {"b": [true, false]}, [10, 20]]'`,
+	`'[10, 20, [30, 40]]'`,
+	`NULL`,
 }
 
 var inputJSONPaths = []string{
@@ -396,7 +397,8 @@ var uuidInputs = []string{
 	"0x11EDF26609DB81F6A6F920FC8FD6830E",
 }
 
-var inputIntervals = []string{"day",
+var inputIntervals = []string{
+	"day",
 	"week",
 	"month",
 	"year",

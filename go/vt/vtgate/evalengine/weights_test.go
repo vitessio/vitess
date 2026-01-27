@@ -31,7 +31,7 @@ import (
 func TestTinyWeightStrings(t *testing.T) {
 	const Length = 10000
 
-	var cases = []struct {
+	cases := []struct {
 		typ    sqltypes.Type
 		gen    func() sqltypes.Value
 		col    collations.ID
@@ -66,7 +66,7 @@ func TestTinyWeightStrings(t *testing.T) {
 			}
 
 			items := make([]sqltypes.Value, 0, Length)
-			for i := 0; i < Length; i++ {
+			for range Length {
 				v := tc.gen()
 				weight(&v)
 				items = append(items, v)
@@ -87,7 +87,7 @@ func TestTinyWeightStrings(t *testing.T) {
 				return cmp
 			})
 
-			for i := 0; i < Length-1; i++ {
+			for i := range Length - 1 {
 				a := items[i]
 				b := items[i+1]
 
@@ -112,7 +112,7 @@ func TestWeightStrings(t *testing.T) {
 		weight string
 	}
 
-	var cases = []struct {
+	cases := []struct {
 		name   string
 		gen    func() sqltypes.Value
 		types  []sqltypes.Type
@@ -140,7 +140,7 @@ func TestWeightStrings(t *testing.T) {
 		for _, typ := range tc.types {
 			t.Run(fmt.Sprintf("%s/%v", tc.name, typ), func(t *testing.T) {
 				items := make([]item, 0, Length)
-				for i := 0; i < Length; i++ {
+				for range Length {
 					v := tc.gen()
 					w, _, err := WeightString(nil, v, typ, tc.col, tc.len, tc.prec, tc.values, 0)
 					require.NoError(t, err)
@@ -158,7 +158,7 @@ func TestWeightStrings(t *testing.T) {
 					}
 				})
 
-				for i := 0; i < Length-1; i++ {
+				for i := range Length - 1 {
 					a := items[i]
 					b := items[i+1]
 

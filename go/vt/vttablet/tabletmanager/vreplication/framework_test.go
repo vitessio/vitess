@@ -777,7 +777,8 @@ func customExpectData(t *testing.T, table string, values [][]string, exec func(c
 }
 
 func compareQueryResults(t *testing.T, query string, values [][]string,
-	exec func(ctx context.Context, query string) (*sqltypes.Result, error)) error {
+	exec func(ctx context.Context, query string) (*sqltypes.Result, error),
+) error {
 	t.Helper()
 	qr, err := exec(context.Background(), query)
 	if err != nil {
