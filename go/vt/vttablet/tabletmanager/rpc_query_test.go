@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/gossip"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -128,6 +129,7 @@ func TestTabletManager_ExecuteFetchAsDba(t *testing.T) {
 		QueryServiceControl:    tabletservermock.NewController(),
 		_waitForGrantsComplete: make(chan struct{}),
 		Env:                    vtenv.NewTestEnv(),
+		Gossip:                 gossip.New(gossip.Config{}, nil, nil),
 	}
 	close(tm._waitForGrantsComplete)
 

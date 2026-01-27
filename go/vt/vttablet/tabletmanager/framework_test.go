@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/gossip"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
@@ -192,6 +193,7 @@ func (tenv *testEnv) addTablet(t *testing.T, id int, keyspace, shard string) *fa
 		Env:                    vtenv.NewTestEnv(),
 		_waitForGrantsComplete: make(chan struct{}),
 		MysqlDaemon:            tenv.mysqld,
+		Gossip:                 gossip.New(gossip.Config{}, nil, nil),
 	}
 	close(tenv.tmc.tablets[id].tm._waitForGrantsComplete) // So that we don't wait for the grants
 	return tenv.tmc.tablets[id]
