@@ -1147,8 +1147,8 @@ func fixReplica(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logg
 }
 
 // demoteStaleTopoPrimary demotes a tablet that has a stale type of PRIMARY in the topology when a newer primary has
-// been elected. It sets the tablet to read-only, updates its type to REPLICA in the topology, and repoints replication
-// to the newest primary.
+// been elected. It demotes the tablet, updates its type to REPLICA in the topology, and sets its replication source
+// to the current primary.
 func demoteStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	// Register the recovery before touching topology so multiple VTOrc instances do not race the demotion.
 	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
@@ -1174,13 +1174,13 @@ func demoteStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAn
 
 	primaryTablet, err := shardPrimary(analyzedTablet.Keyspace, analyzedTablet.Shard)
 	if err != nil {
-		logger.Info("Could not compute primary for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard)
+		logger.Infof("Could not compute primary for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard)
 		return false, topologyRecovery, fmt.Errorf("failed to find primary for shard: %w", err)
 	}
 
 	durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet.Keyspace)
 	if err != nil {
-		logger.Info("Could not read the durability policy for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard)
+		logger.Infof("Could not read the durability policy for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard)
 		return false, topologyRecovery, fmt.Errorf("failed to read the durability policy for the keyspace: %w", err)
 	}
 
@@ -1196,6 +1196,12 @@ func demoteStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAn
 	err = changeTabletType(ctx, analyzedTablet, topodatapb.TabletType_REPLICA, semiSync)
 	if err != nil {
 		return true, topologyRecovery, fmt.Errorf("failed to set tablet type to REPLICA in topology: %w", err)
+	}
+
+	// Set the instance's replication source to the current primary.
+	err = setReplicationSource(ctx, analyzedTablet, primaryTablet, semiSync, float64(analysisEntry.ReplicaNetTimeout)/2)
+	if err != nil {
+		return true, topologyRecovery, fmt.Errorf("failed to repoint replication to primary: %w", err)
 	}
 
 	return true, topologyRecovery, err
