@@ -166,18 +166,21 @@ func (ts *trafficSwitcher) getMaxSequenceValue(ctx context.Context, seq *sequenc
 			Query:   []byte(query.Query),
 			MaxRows: 1,
 		})
-		if terr != nil || len(qr.Rows) != 1 {
+		if terr != nil {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL,
 				"failed to get the max used sequence value for target table %s.%s on tablet %s in order to initialize the backing sequence table: %v",
 				ts.targetKeyspace, seq.usingTableName, topoproto.TabletAliasString(primary.Alias), terr)
 		}
-		rawVal := sqltypes.Proto3ToResult(qr).Rows[0][0]
 		maxID := int64(0)
-		if !rawVal.IsNull() { // If it's NULL then there are no rows and 0 remains the max
-			maxID, terr = rawVal.ToInt64()
-			if terr != nil {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s on tablet %s in order to initialize the backing sequence table: %v",
-					ts.targetKeyspace, seq.usingTableName, topoproto.TabletAliasString(primary.Alias), terr)
+		// If no rows are returned, max remains 0.
+		if len(qr.Rows) != 0 {
+			rawVal := sqltypes.Proto3ToResult(qr).Rows[0][0]
+			if !rawVal.IsNull() { // If it's NULL then 0 remains the max
+				maxID, terr = rawVal.ToInt64()
+				if terr != nil {
+					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s on tablet %s in order to initialize the backing sequence table: %v",
+						ts.targetKeyspace, seq.usingTableName, topoproto.TabletAliasString(primary.Alias), terr)
+				}
 			}
 		}
 		setMaxSequenceValue(maxID)
@@ -352,9 +355,6 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 	}
 	for _, sm := range sequencesByBackingTable {
 		maxValue := maxValues[sm.backingTableName]
-		if maxValue == 0 {
-			continue
-		}
 		if err := ts.updateSequenceValue(ctx, sm, maxValue); err != nil {
 			return err
 		}
