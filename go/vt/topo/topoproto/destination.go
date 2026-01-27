@@ -46,9 +46,9 @@ func ParseDestination(targetString string, defaultTabletType topodatapb.TabletTy
 			return "", defaultTabletType, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "empty tablet type after @")
 		}
 		// Check for explicit tablet_type|tablet_alias syntax (e.g., "replica|zone1-0000000100")
-		if pipeIdx := strings.Index(afterAt, "|"); pipeIdx != -1 {
-			typeStr := afterAt[:pipeIdx]
-			aliasStr := afterAt[pipeIdx+1:]
+		if before, after, ok := strings.Cut(afterAt, "|"); ok {
+			typeStr := before
+			aliasStr := after
 
 			// Parse the tablet type
 			parsedTabletType, err := ParseTabletType(typeStr)

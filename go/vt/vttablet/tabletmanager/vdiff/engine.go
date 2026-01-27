@@ -164,14 +164,12 @@ func (vde *Engine) openLocked(ctx context.Context) error {
 
 	// At this point we've fully and successfully opened so begin
 	// retrying error'd VDiffs until the engine is closed.
-	vde.wg.Add(1)
-	go func() {
-		defer vde.wg.Done()
+	vde.wg.Go(func() {
 		if vde.fortests {
 			return
 		}
 		vde.retryErroredVDiffs()
-	}()
+	})
 
 	return nil
 }

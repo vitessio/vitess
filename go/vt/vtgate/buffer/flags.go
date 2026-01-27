@@ -110,7 +110,7 @@ func keyspaceShardsToSets(list string) (map[string]bool, map[string]bool) {
 		return keyspaces, shards
 	}
 
-	for _, item := range strings.Split(list, ",") {
+	for item := range strings.SplitSeq(list, ",") {
 		if strings.Contains(item, "/") {
 			shards[item] = true
 		} else {

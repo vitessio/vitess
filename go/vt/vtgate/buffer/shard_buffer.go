@@ -601,7 +601,7 @@ func (sb *shardBuffer) drain(q []*entry, err error) {
 	var rangeCounter atomic.Int64
 
 	wg.Add(parallelism)
-	for i := 0; i < parallelism; i++ {
+	for range parallelism {
 		go func() {
 			defer wg.Done()
 			for {

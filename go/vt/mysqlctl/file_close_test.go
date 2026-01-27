@@ -303,7 +303,7 @@ func TestBackupFileSourceCloseError(t *testing.T) {
 	tmpDir := t.TempDir()
 	// Create test source file.
 	sourceFile := path.Join(tmpDir, "source.txt")
-	err := os.WriteFile(sourceFile, []byte("test content"), 0644)
+	err := os.WriteFile(sourceFile, []byte("test content"), 0o644)
 	require.NoError(t, err)
 	// Create Mycnf pointing to our temp directory.
 	cnf := &Mycnf{
@@ -343,7 +343,7 @@ func TestBackupFileDestinationCloseError(t *testing.T) {
 	// Create test source file.
 	sourceFile := path.Join(tmpDir, "source.txt")
 	content := []byte("test content for destination close error")
-	err := os.WriteFile(sourceFile, content, 0644)
+	err := os.WriteFile(sourceFile, content, 0o644)
 	require.NoError(t, err)
 	// Create Mycnf pointing to our temp directory.
 	cnf := &Mycnf{
@@ -386,7 +386,7 @@ func TestBackupFileDestinationCloseMaxRetries(t *testing.T) {
 	// Create test destination file.
 	destFile := path.Join(tmpDir, "destination.txt")
 	content := []byte("test content for max retries")
-	err := os.WriteFile(destFile, content, 0644)
+	err := os.WriteFile(destFile, content, 0o644)
 	require.NoError(t, err)
 	// Create Mycnf pointing to our temp directory.
 	cnf := &Mycnf{

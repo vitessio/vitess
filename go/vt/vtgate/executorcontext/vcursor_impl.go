@@ -714,7 +714,7 @@ func (vc *VCursorImpl) TargetString() string {
 const MaxBufferingRetries = 3
 
 func (vc *VCursorImpl) ExecutePrimitive(ctx context.Context, primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	for try := 0; try < MaxBufferingRetries; try++ {
+	for range MaxBufferingRetries {
 		res, err := primitive.TryExecute(ctx, vc, bindVars, wantfields)
 		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
 			continue
@@ -757,7 +757,7 @@ func (vc *VCursorImpl) logShardsQueried(primitive engine.Primitive, shardsNb int
 func (vc *VCursorImpl) ExecutePrimitiveStandalone(ctx context.Context, primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	// clone the VCursorImpl with a new session.
 	newVC := vc.cloneWithAutocommitSession()
-	for try := 0; try < MaxBufferingRetries; try++ {
+	for range MaxBufferingRetries {
 		res, err := primitive.TryExecute(ctx, newVC, bindVars, wantfields)
 		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
 			continue
@@ -790,7 +790,7 @@ func (vc *VCursorImpl) wrapCallback(callback func(*sqltypes.Result) error, primi
 func (vc *VCursorImpl) StreamExecutePrimitive(ctx context.Context, primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	callback = vc.wrapCallback(callback, primitive)
 
-	for try := 0; try < MaxBufferingRetries; try++ {
+	for range MaxBufferingRetries {
 		err := primitive.TryStreamExecute(ctx, vc, bindVars, wantfields, callback)
 		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
 			continue
@@ -805,7 +805,7 @@ func (vc *VCursorImpl) StreamExecutePrimitiveStandalone(ctx context.Context, pri
 
 	// clone the VCursorImpl with a new session.
 	newVC := vc.cloneWithAutocommitSession()
-	for try := 0; try < MaxBufferingRetries; try++ {
+	for range MaxBufferingRetries {
 		err := primitive.TryStreamExecute(ctx, newVC, bindVars, wantfields, callback)
 		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
 			continue
@@ -1351,6 +1351,7 @@ func (vc *VCursorImpl) AddAdvisoryLock(name string) {
 func (vc *VCursorImpl) GetBindVars() map[string]*querypb.BindVariable {
 	return vc.bindVars
 }
+
 func (vc *VCursorImpl) SetBindVars(m map[string]*querypb.BindVariable) {
 	vc.bindVars = m
 }

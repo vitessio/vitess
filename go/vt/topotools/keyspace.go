@@ -127,7 +127,6 @@ func UpdateShardRecords(
 			}
 			return nil
 		})
-
 		if err != nil {
 			return err
 		}

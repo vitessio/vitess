@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -134,7 +135,8 @@ type streamerPlan struct {
 // send: callback function to send events.
 func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, stopPos string,
 	filter *binlogdatapb.Filter, vschema *localVSchema, throttlerApp throttlerapp.Name,
-	send func([]*binlogdatapb.VEvent) error, phase string, vse *Engine, options *binlogdatapb.VStreamOptions) *vstreamer {
+	send func([]*binlogdatapb.VEvent) error, phase string, vse *Engine, options *binlogdatapb.VStreamOptions,
+) *vstreamer {
 	config, err := GetVReplicationConfig(options)
 	if err != nil {
 		return nil
@@ -791,13 +793,7 @@ func (vs *vstreamer) buildSidecarTablePlan(id uint64, tm *mysql.TableMap) ([]*bi
 		if vs.options == nil {
 			return nil, nil
 		}
-		found := false
-		for _, table := range vs.options.InternalTables {
-			if table == tableName {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(vs.options.InternalTables, tableName)
 		if !found {
 			return nil, nil
 		}
@@ -850,7 +846,8 @@ func (vs *vstreamer) buildSidecarTablePlan(id uint64, tm *mysql.TableMap) ([]*bi
 				Keyspace:        vs.vse.keyspace,
 				Shard:           vs.vse.shard,
 				IsInternalTable: plan.IsInternal,
-			}})
+			},
+		})
 	}
 	return vevents, nil
 }
@@ -1186,7 +1183,8 @@ func (vs *vstreamer) rebuildPlans() error {
 }
 
 func (vs *vstreamer) getValues(plan *streamerPlan, data []byte,
-	dataColumns, nullColumns mysql.Bitmap, jsonPartialValues mysql.Bitmap) ([]sqltypes.Value, []collations.ID, bool, error) {
+	dataColumns, nullColumns mysql.Bitmap, jsonPartialValues mysql.Bitmap,
+) ([]sqltypes.Value, []collations.ID, bool, error) {
 	if len(data) == 0 {
 		return nil, nil, false, nil
 	}

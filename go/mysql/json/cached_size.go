@@ -36,6 +36,7 @@ func (cached *Object) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Value) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -57,6 +58,7 @@ func (cached *Value) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.s)))
 	return size
 }
+
 func (cached *kv) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

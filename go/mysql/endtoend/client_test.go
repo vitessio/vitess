@@ -241,6 +241,7 @@ func doTestMultiResult(t *testing.T, disableClientDeprecateEOF bool) {
 func TestMultiResultDeprecateEOF(t *testing.T) {
 	doTestMultiResult(t, false)
 }
+
 func TestMultiResultNoDeprecateEOF(t *testing.T) {
 	doTestMultiResult(t, true)
 }

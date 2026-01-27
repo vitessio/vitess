@@ -182,7 +182,8 @@ func createMergedUnion(
 	lhsExprs, rhsExprs []sqlparser.SelectExpr,
 	distinct bool,
 	routing Routing,
-	conditions []engine.Condition) (Operator, []sqlparser.SelectExpr) {
+	conditions []engine.Condition,
+) (Operator, []sqlparser.SelectExpr) {
 	// if there are `*` on either side, or a different number of SelectExpr items,
 	// we give up aligning the expressions and trust that we can push everything down
 	cols := make([]sqlparser.SelectExpr, len(lhsExprs))

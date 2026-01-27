@@ -38,15 +38,13 @@ var (
 	migrationContextValidatorRegexp   = regexp.MustCompile(`^[\w:-]*$`)
 )
 
-var (
-	onlineDDLInternalTableHintsMap = map[string]bool{
-		"vrp": true, // vreplication
-		"gho": true, // gh-ost
-		"ghc": true, // gh-ost
-		"del": true, // gh-ost
-		"new": true, // pt-osc
-	}
-)
+var onlineDDLInternalTableHintsMap = map[string]bool{
+	"vrp": true, // vreplication
+	"gho": true, // gh-ost
+	"ghc": true, // gh-ost
+	"del": true, // gh-ost
+	"new": true, // pt-osc
+}
 
 var (
 	// ErrDirectDDLDisabled is returned when direct DDL is disabled, and a user attempts to run a DDL statement
@@ -224,7 +222,8 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 				encodeDirective(table),
 				encodeDirective(string(ddlStrategySetting.Strategy)),
 				encodeDirective(ddlStrategySetting.Options),
-			)}
+			),
+		}
 
 		stmt, err := parser.Parse(sql)
 		if err != nil {
