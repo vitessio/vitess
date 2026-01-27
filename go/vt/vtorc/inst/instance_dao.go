@@ -392,7 +392,10 @@ Cleanup:
 func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error) {
 	// If the tablet is not replicating from anyone, then it could be the previous primary.
 	// We should check for errant GTIDs by finding the difference with the shard's current primary.
-	primaryAlias, _, _ := ReadShardPrimaryInformation(tablet.Keyspace, tablet.Shard)
+	primaryAlias, _, err := ReadShardPrimaryInformation(tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		return fmt.Errorf("failed to read shard primary for %s/%s: %w", tablet.Keyspace, tablet.Shard, err)
+	}
 
 	// Check if the current tablet is the primary. If it is, then we don't need to
 	// run errant GTID detection on it.
