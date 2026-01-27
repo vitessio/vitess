@@ -140,8 +140,8 @@ func findForeignKeyDefinition(createTable *sqlparser.CreateTable, constraintName
 	}
 	for _, cs := range createTable.TableSpec.Constraints {
 		if strings.EqualFold(cs.Name.String(), constraintName) {
-			if check, ok := cs.Details.(*sqlparser.ForeignKeyDefinition); ok {
-				return check
+			if fk, ok := cs.Details.(*sqlparser.ForeignKeyDefinition); ok {
+				return fk
 			}
 			return nil
 		}
@@ -1036,7 +1036,7 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 				case *sqlparser.DropKey:
 					switch node.Type {
 					case sqlparser.ForeignKeyType, sqlparser.ConstraintType:
-						// Dropping a foreign key; we need to understand which table this foreign key used to reference.
+						// Possibly dropping a foreign key; we need to check if this constraint references another table.
 						// The DropKey statement itself only _names_ the constraint, but does not have information
 						// about the parent, columns, etc. So we need to find the constraint in the CreateTable statement.
 						fk := findForeignKeyDefinition(diff.from.CreateTable, node.Name.String())
