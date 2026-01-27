@@ -43,7 +43,7 @@ RUN make install PREFIX=/vt/install
 FROM --platform=linux/amd64 debian:bookworm-slim@sha256:56ff6d36d4eb3db13a741b342ec466f121480b5edded42e4b7ee850ce7a418ee
 
 # Install locale required for mysqlsh
-RUN apt-get update && apt-get install -y locales \
+RUN apt-get update && apt-get install -y locales tar \
     && echo "en_US.UTF-8 UTF-8" > /etc/locale.gen \
     && locale-gen en_US.UTF-8
 
