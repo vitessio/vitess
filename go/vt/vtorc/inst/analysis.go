@@ -59,6 +59,10 @@ const (
 	PrimarySemiSyncBlocked                 AnalysisCode = "PrimarySemiSyncBlocked"
 	ErrantGTIDDetected                     AnalysisCode = "ErrantGTIDDetected"
 	PrimaryDiskStalled                     AnalysisCode = "PrimaryDiskStalled"
+
+	// StaleTopoPrimary describes when a tablet still has the type PRIMARY in the topology when a newer primary
+	// has been elected. VTOrc should demote this primary to a replica.
+	StaleTopoPrimary AnalysisCode = "StaleTopoPrimary"
 )
 
 type StructureAnalysisCode string
@@ -88,12 +92,18 @@ type ReplicationAnalysisHints struct {
 type ReplicationAnalysis struct {
 	AnalyzedInstanceAlias        string
 	AnalyzedInstancePrimaryAlias string
-	TabletType                   topodatapb.TabletType
-	CurrentTabletType            topodatapb.TabletType
-	PrimaryTimeStamp             time.Time
-	ClusterDetails               ClusterInfo
-	AnalyzedKeyspace             string
-	AnalyzedShard                string
+
+	// TabletType is the tablet's type as seen in the topology.
+	TabletType topodatapb.TabletType
+
+	// CurrentTabletType is the type this tablet is currently running as.
+	CurrentTabletType topodatapb.TabletType
+
+	PrimaryTimeStamp time.Time
+	ClusterDetails   ClusterInfo
+	AnalyzedKeyspace string
+	AnalyzedShard    string
+
 	// ShardPrimaryTermTimestamp is the primary term start time stored in the shard record.
 	ShardPrimaryTermTimestamp                 string
 	AnalyzedInstanceBinlogCoordinates         BinlogCoordinates
