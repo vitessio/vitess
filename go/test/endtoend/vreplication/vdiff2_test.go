@@ -601,7 +601,7 @@ func testAutoRetryError(t *testing.T, tc *testCase, cells string) {
 		expectedRows := rowsCompared + expectedNewRows
 
 		// Update the VDiff to simulate an ephemeral error having occurred.
-		for _, shard := range strings.Split(tc.targetShards, ",") {
+		for shard := range strings.SplitSeq(tc.targetShards, ",") {
 			tab := vc.getPrimaryTablet(t, tc.targetKs, shard)
 			res, err := tab.QueryTabletWithDB(sqlparser.BuildParsedQuery(sqlSimulateError, sidecarDBIdentifier, sidecarDBIdentifier, encodeString(uuid)).Query, "vt_"+tc.targetKs)
 			require.NoError(t, err)

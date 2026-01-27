@@ -17,7 +17,6 @@ limitations under the License.
 package reference
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -27,7 +26,7 @@ import (
 )
 
 func start(t *testing.T) (*mysql.Conn, func()) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtConn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 
@@ -159,8 +158,7 @@ func TestMultiReferenceQuery(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 
-	query :=
-		`select 1
+	query := `select 1
 		 from delivery_failure df1
 		 	join delivery_failure df2 on df1.id = df2.id
 		 	join uks.zip_detail zd1 on df1.zip_detail_id = zd1.zip_id

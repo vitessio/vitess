@@ -407,6 +407,7 @@ func TestFakeRotateEvent(t *testing.T) {
 	assert.Equal(t, 4, int(pos))
 	assert.Equal(t, "mysql-bin.000123", nextFile)
 }
+
 func TestLargeRowsEvent(t *testing.T) {
 	f := NewMySQL56BinlogFormat()
 	s := NewFakeBinlogStream()

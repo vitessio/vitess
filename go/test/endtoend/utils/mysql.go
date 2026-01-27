@@ -25,6 +25,7 @@ import (
 	"path"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -89,12 +90,13 @@ func NewMySQLWithMysqld(port int, hostname, dbName string, schemaSQL ...string) 
 		return mysql.ConnParams{}, nil, nil, nil, err
 	}
 
+	ctx := context.Background()
 	mysqlPort := port
 	mysqld, mycnf, err := CreateMysqldAndMycnf(uid, "", mysqlPort)
 	if err != nil {
 		return mysql.ConnParams{}, nil, nil, nil, err
 	}
-	err = initMysqld(mysqld, mycnf, initMySQLFile)
+	err = initMysqld(ctx, mysqld, mycnf, initMySQLFile)
 	if err != nil {
 		return mysql.ConnParams{}, nil, nil, nil, err
 	}
@@ -106,20 +108,19 @@ func NewMySQLWithMysqld(port int, hostname, dbName string, schemaSQL ...string) 
 		DbName:     dbName,
 	}
 	for _, sql := range schemaSQL {
-		err = prepareMySQLWithSchema(params, sql)
+		err = prepareMySQLWithSchema(ctx, params, sql)
 		if err != nil {
 			return mysql.ConnParams{}, nil, nil, nil, err
 		}
 	}
 	return params, mysqld, mycnf, func() {
-		ctx := context.Background()
 		_ = mysqld.Teardown(ctx, mycnf, true, mysqlShutdownTimeout)
 	}, nil
 }
 
 func createMySQLDir(portNo uint32) (string, error) {
 	mysqlDir := mysqlctl.TabletDir(portNo)
-	err := os.Mkdir(mysqlDir, 0700)
+	err := os.Mkdir(mysqlDir, 0o700)
 	if err != nil {
 		return "", err
 	}
@@ -144,14 +145,13 @@ func createInitSQLFile(mysqlDir, ksName string) (string, error) {
 	return initSQLFile, nil
 }
 
-func initMysqld(mysqld *mysqlctl.Mysqld, mycnf *mysqlctl.Mycnf, initSQLFile string) error {
+func initMysqld(ctx context.Context, mysqld *mysqlctl.Mysqld, mycnf *mysqlctl.Mycnf, initSQLFile string) error {
 	f, err := os.CreateTemp(path.Dir(mycnf.Path), "my.cnf")
 	if err != nil {
 		return err
 	}
 	f.Close()
 
-	ctx := context.Background()
 	err = mysqld.Init(ctx, mycnf, initSQLFile)
 	if err != nil {
 		return err
@@ -159,8 +159,7 @@ func initMysqld(mysqld *mysqlctl.Mysqld, mycnf *mysqlctl.Mycnf, initSQLFile stri
 	return nil
 }
 
-func prepareMySQLWithSchema(params mysql.ConnParams, sql string) error {
-	ctx := context.Background()
+func prepareMySQLWithSchema(ctx context.Context, params mysql.ConnParams, sql string) error {
 	conn, err := mysql.Connect(ctx, &params)
 	if err != nil {
 		return err
@@ -235,14 +234,18 @@ func CompareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, 
 	}
 
 	errStr := "Query (" + query + ") results mismatched.\nVitess Results:\n"
+	var errStrSb236 strings.Builder
 	for _, row := range vtQr.Rows {
-		errStr += fmt.Sprintf("%s\n", row)
+		errStrSb236.WriteString(fmt.Sprintf("%s\n", row))
 	}
+	errStr += errStrSb236.String()
 	errStr += fmt.Sprintf("Vitess RowsAffected: %v\n", vtQr.RowsAffected)
 	errStr += "MySQL Results:\n"
+	var errStrSb241 strings.Builder
 	for _, row := range mysqlQr.Rows {
-		errStr += fmt.Sprintf("%s\n", row)
+		errStrSb241.WriteString(fmt.Sprintf("%s\n", row))
 	}
+	errStr += errStrSb241.String()
 	errStr += fmt.Sprintf("MySQL RowsAffected: %v\n", mysqlQr.RowsAffected)
 	if vtConn != nil {
 		qr, _ := ExecAllowError(t, vtConn, "vexplain plan "+query)

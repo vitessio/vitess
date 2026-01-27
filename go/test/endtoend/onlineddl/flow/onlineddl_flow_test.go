@@ -108,9 +108,7 @@ var (
 	`
 )
 
-var (
-	countIterations = 5
-)
+var countIterations = 5
 
 const (
 	maxTableRows         = 4096
@@ -128,7 +126,7 @@ func TestMain(m *testing.M) {
 		defer clusterInstance.Teardown()
 
 		if _, err := os.Stat(schemaChangeDirectory); os.IsNotExist(err) {
-			_ = os.Mkdir(schemaChangeDirectory, 0700)
+			_ = os.Mkdir(schemaChangeDirectory, 0o700)
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
@@ -159,7 +157,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// No need for replicas in this stress test
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 1, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 1, false, clusterInstance.Cell); err != nil {
 			return 1, err
 		}
 
@@ -196,7 +194,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestOnlineDDLFlow(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	require.NotNil(t, clusterInstance)
 	require.NotNil(t, primaryTablet)
@@ -569,12 +567,10 @@ func runMultipleConnections(ctx context.Context, t *testing.T) {
 
 	log.Infof("Running multiple connections: maxConcurrency=%v, sleep interval=%v", maxConcurrency, sleepInterval)
 	var wg sync.WaitGroup
-	for i := 0; i < maxConcurrency; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range maxConcurrency {
+		wg.Go(func() {
 			runSingleConnection(ctx, t, sleepInterval)
-		}()
+		})
 	}
 	wg.Wait()
 	log.Infof("Running multiple connections: done")
@@ -584,20 +580,20 @@ func initTable(t *testing.T) {
 	log.Infof("initTable begin")
 	defer log.Infof("initTable complete")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
 
 	appliedDMLStart := totalAppliedDML.Load()
 
-	for i := 0; i < maxTableRows/2; i++ {
+	for range maxTableRows / 2 {
 		generateInsert(t, conn)
 	}
-	for i := 0; i < maxTableRows/4; i++ {
+	for range maxTableRows / 4 {
 		generateUpdate(t, conn)
 	}
-	for i := 0; i < maxTableRows/4; i++ {
+	for range maxTableRows / 4 {
 		generateDelete(t, conn)
 	}
 	appliedDMLEnd := totalAppliedDML.Load()

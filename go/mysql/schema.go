@@ -93,6 +93,7 @@ var BaseShowTablesWithSizesFields = append(BaseShowTablesFields, &querypb.Field{
 	Charset:      collations.CollationBinaryID,
 	Flags:        uint32(querypb.MySqlFlag_BINARY_FLAG | querypb.MySqlFlag_NUM_FLAG),
 })
+
 var BaseInnoDBTableSizesFields = []*querypb.Field{{
 	Name:         "it.name",
 	Type:         querypb.Type_VARCHAR,

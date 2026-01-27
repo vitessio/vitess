@@ -345,7 +345,7 @@ func TestMain(m *testing.M) {
 		defer clusterInstance.Teardown()
 
 		if _, err := os.Stat(schemaChangeDirectory); os.IsNotExist(err) {
-			_ = os.Mkdir(schemaChangeDirectory, 0700)
+			_ = os.Mkdir(schemaChangeDirectory, 0o700)
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
@@ -377,7 +377,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// We will use a replica to confirm that vtgate's cascading works correctly.
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 2, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 2, false, clusterInstance.Cell); err != nil {
 			return 1, err
 		}
 
@@ -472,11 +472,9 @@ func waitForReplicationCatchup(t *testing.T) {
 	primaryPos := getTabletPosition(t, primary)
 	var wg sync.WaitGroup
 	for _, replica := range []*cluster.Vttablet{replicaNoFK, replicaFK} {
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			waitForReplicaCatchup(t, ctx, replica, primaryPos)
-			wg.Done()
-		}()
+		})
 	}
 	wg.Wait()
 }
@@ -560,7 +558,7 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 		testName = fmt.Sprintf("%s/%s", testName, tcase.notes)
 	}
 	t.Run(testName, func(t *testing.T) {
-		ctx := context.Background()
+		ctx := t.Context()
 
 		t.Run("create schema", func(t *testing.T) {
 			createInitialSchema(t, tcase)
@@ -592,11 +590,9 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 				var wg sync.WaitGroup
 				for i := 0; i < maxConcurrency; i++ {
 					tableName := tableNames[i%len(tableNames)]
-					wg.Add(1)
-					go func() {
-						defer wg.Done()
+					wg.Go(func() {
 						runSingleConnection(ctx, t, tableName, tcase, sleepInterval)
-					}()
+					})
 				}
 
 				if testOnlineDDL {
@@ -796,7 +792,7 @@ func validateTableDefinitions(t *testing.T, afterOnlineDDL bool) {
 
 // createInitialSchema creates the tables from scratch, and drops the foreign key constraints on the replica.
 func createInitialSchema(t *testing.T, tcase *testCase) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -1194,7 +1190,7 @@ func populateTables(t *testing.T, tcase *testCase) {
 	log.Infof("initTable begin")
 	defer log.Infof("initTable complete")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -1231,13 +1227,13 @@ func populateTables(t *testing.T, tcase *testCase) {
 			t.Run(tableName, func(t *testing.T) {
 				t.Run("populating", func(t *testing.T) {
 					// populate parent, then child, child2, then grandchild
-					for i := 0; i < maxTableRows/2; i++ {
+					for range maxTableRows / 2 {
 						generateInsert(t, tableName, conn)
 					}
-					for i := 0; i < maxTableRows/4; i++ {
+					for range maxTableRows / 4 {
 						generateUpdate(t, tableName, conn)
 					}
-					for i := 0; i < maxTableRows/4; i++ {
+					for range maxTableRows / 4 {
 						generateDelete(t, tableName, conn)
 					}
 				})

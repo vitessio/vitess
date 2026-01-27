@@ -100,7 +100,8 @@ func (tm *TabletManager) RestoreData(
 	restoreToTimetamp time.Time,
 	restoreToPos string,
 	allowedBackupEngines []string,
-	mysqlShutdownTimeout time.Duration) error {
+	mysqlShutdownTimeout time.Duration,
+) error {
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}

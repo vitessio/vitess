@@ -1084,9 +1084,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		s.Logger().Infof("Successfully opened external topo: %+v", externalTopo)
 	}
 
-	origVSchema := &topo.KeyspaceVSchemaInfo{ // If we need to rollback a failed create
-		Name: targetKeyspace,
-	}
+	var origVSchema *topo.KeyspaceVSchemaInfo // If we need to rollback a failed create
 	vschema, err := s.ts.GetVSchema(ctx, targetKeyspace)
 	if err != nil {
 		return nil, err
@@ -1144,9 +1142,11 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	if !vschema.Sharded {
 		// Save the original in case we need to restore it for a late failure in
 		// the defer(). We do NOT want to clone the version field as we will
-		// intentionally be going back in time. So we only clone the internal
-		// vschemapb.Keyspace field.
-		origVSchema.Keyspace = vschema.Keyspace.CloneVT()
+		// intentionally be going back in time.
+		origVSchema = &topo.KeyspaceVSchemaInfo{
+			Name:     targetKeyspace,
+			Keyspace: vschema.Keyspace.CloneVT(),
+		}
 		if err := s.addTablesToVSchema(ctx, sourceKeyspace, vschema.Keyspace, tables, externalTopo == nil); err != nil {
 			return nil, err
 		}
@@ -1248,7 +1248,8 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 			if cerr := s.dropArtifacts(ctx, false, &switcher{s: s, ts: ts}); cerr != nil {
 				err = vterrors.Wrapf(err, "failed to cleanup workflow artifacts: %v", cerr)
 			}
-			if origVSchema == nil { // There's no previous version to restore
+			if vschema.Sharded || origVSchema == nil {
+				// We don't modify the vschema for sharded keyspaces, so there's nothing to restore.
 				return
 			}
 			if cerr := s.ts.SaveVSchema(ctx, origVSchema); cerr != nil {
@@ -1768,7 +1769,7 @@ func (s *Server) getCopyProgress(ctx context.Context, ts *trafficSwitcher) (*cop
 	}
 	getTablesQuery := "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = %d"
 	getRowCountQuery := "select table_name, table_rows, data_length from information_schema.tables where table_schema = %s and table_name in (%s)"
-	var inProgressTables = make(map[string]struct{})
+	inProgressTables := make(map[string]struct{})
 	var mu sync.Mutex
 	err := ts.ForAllTargets(func(target *MigrationTarget) error {
 		for id := range target.Sources {

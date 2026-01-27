@@ -271,44 +271,51 @@ func TestEvenShardsKeyRange(t *testing.T) {
 		wantSpec string
 		want     *topodatapb.KeyRange
 	}{
-		{0, 1,
+		{
+			0, 1,
 			"-",
 			&topodatapb.KeyRange{},
 		},
-		{0, 2,
+		{
+			0, 2,
 			"-80",
 			&topodatapb.KeyRange{
 				End: []byte{0x80},
 			},
 		},
-		{1, 2,
+		{
+			1, 2,
 			"80-",
 			&topodatapb.KeyRange{
 				Start: []byte{0x80},
 			},
 		},
-		{1, 4,
+		{
+			1, 4,
 			"40-80",
 			&topodatapb.KeyRange{
 				Start: []byte{0x40},
 				End:   []byte{0x80},
 			},
 		},
-		{2, 4,
+		{
+			2, 4,
 			"80-c0",
 			&topodatapb.KeyRange{
 				Start: []byte{0x80},
 				End:   []byte{0xc0},
 			},
 		},
-		{1, 256,
+		{
+			1, 256,
 			"01-02",
 			&topodatapb.KeyRange{
 				Start: []byte{0x01},
 				End:   []byte{0x02},
 			},
 		},
-		{256, 512,
+		{
+			256, 512,
 			"8000-8080",
 			&topodatapb.KeyRange{
 				Start: []byte{0x80, 0x00},
@@ -316,7 +323,8 @@ func TestEvenShardsKeyRange(t *testing.T) {
 			},
 		},
 		// Second to last shard out of 512.
-		{510, 512,
+		{
+			510, 512,
 			"ff00-ff80",
 			&topodatapb.KeyRange{
 				Start: []byte{0xff, 0x00},
@@ -324,7 +332,8 @@ func TestEvenShardsKeyRange(t *testing.T) {
 			},
 		},
 		// Last out of 512 shards.
-		{511, 512,
+		{
+			511, 512,
 			"ff80-",
 			&topodatapb.KeyRange{
 				Start: []byte{0xff, 0x80},
@@ -1043,7 +1052,7 @@ func TestKeyRangeComparisons(t *testing.T) {
 }
 
 func TestKeyRangeContains(t *testing.T) {
-	var table = []struct {
+	table := []struct {
 		kid       string
 		start     string
 		end       string
@@ -1231,7 +1240,7 @@ func TestKeyRangeContainsKeyRange(t *testing.T) {
 		a *topodatapb.KeyRange
 		b *topodatapb.KeyRange
 	}
-	var tests = []struct {
+	tests := []struct {
 		name string
 		args args
 		want bool
@@ -1396,7 +1405,7 @@ func BenchmarkUint64KeyBytes(b *testing.B) {
 		0, 1, 0x7FFFFFFFFFFFFFFF, 0x8000000000000000, 0xFFFFFFFFFFFFFFFF,
 	}
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, key := range keys {
 			key.Bytes()
 		}
@@ -1408,7 +1417,7 @@ func BenchmarkUint64KeyString(b *testing.B) {
 		0, 1, 0x7FFFFFFFFFFFFFFF, 0x8000000000000000, 0xFFFFFFFFFFFFFFFF,
 	}
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, key := range keys {
 			_ = key.String()
 		}
@@ -1428,7 +1437,7 @@ func BenchmarkKeyRangeContains(b *testing.B) {
 		{0x90, 0, 0, 0, 0, 0, 0, 0},
 	}
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, key := range keys {
 			KeyRangeContains(kr, key)
 		}
@@ -1445,7 +1454,7 @@ func BenchmarkKeyRangesIntersect(b *testing.B) {
 		End:   []byte{0x50, 0, 0, 0, 0, 0, 0, 0},
 	}
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		KeyRangeIntersect(kr1, kr2)
 	}
 }

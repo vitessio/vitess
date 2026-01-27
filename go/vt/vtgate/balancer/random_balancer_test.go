@@ -46,7 +46,7 @@ func TestRandomBalancerUniformDistribution(t *testing.T) {
 	const numPicks = 60000
 	pickCounts := make(map[uint32]int)
 
-	for i := 0; i < numPicks; i++ {
+	for range numPicks {
 		th := b.Pick(target, tablets)
 		require.NotNil(t, th, "Pick should not return nil")
 		pickCounts[th.Tablet.Alias.Uid]++
@@ -79,7 +79,7 @@ func TestRandomBalancerPickSingle(t *testing.T) {
 	b := newRandomBalancer("cell1", []string{})
 
 	// Pick multiple times, should always return the same tablet
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		th := b.Pick(target, tablets)
 		require.NotNil(t, th, "Pick should not return nil")
 		assert.Equal(t, tablets[0].Tablet.Alias.Uid, th.Tablet.Alias.Uid,
@@ -132,7 +132,7 @@ func TestRandomBalancerCellFiltering(t *testing.T) {
 	const numPicks = 10000
 	pickCounts := make(map[string]int)
 
-	for i := 0; i < numPicks; i++ {
+	for range numPicks {
 		th := b.Pick(target, tablets)
 		require.NotNil(t, th)
 		pickCounts[th.Tablet.Alias.Cell]++

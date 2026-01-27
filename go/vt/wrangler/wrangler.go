@@ -34,14 +34,12 @@ import (
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
 
-var (
-	// DefaultActionTimeout is a good default for interactive
-	// remote actions. We usually take a lock then do an action,
-	// lock actions use RemoteOperationTimeout,
-	// so basing this to be greater than RemoteOperationTimeout is good.
-	// Use this as the default value for Context that need a deadline.
-	DefaultActionTimeout = topo.RemoteOperationTimeout * 4
-)
+// DefaultActionTimeout is a good default for interactive
+// remote actions. We usually take a lock then do an action,
+// lock actions use RemoteOperationTimeout,
+// so basing this to be greater than RemoteOperationTimeout is good.
+// Use this as the default value for Context that need a deadline.
+var DefaultActionTimeout = topo.RemoteOperationTimeout * 4
 
 // Wrangler manages complex actions on the topology, like reparents,
 // backups, resharding, ...

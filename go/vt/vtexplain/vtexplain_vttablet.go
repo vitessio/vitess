@@ -155,7 +155,7 @@ func (vte *VTExplain) newTablet(ctx context.Context, env *vtenv.Environment, opt
 var _ queryservice.QueryService = (*explainTablet)(nil) // compile-time interface check
 
 // Begin is part of the QueryService interface.
-func (t *explainTablet) Begin(ctx context.Context, session queryservice.Session, target *querypb.Target) (queryservice.TransactionState, error) {
+func (t *explainTablet) Begin(ctx context.Context, session queryservice.Session, target *querypb.Target, options *querypb.ExecuteOptions) (queryservice.TransactionState, error) {
 	t.mu.Lock()
 	t.currentTime = t.vte.batchTime.Wait()
 	t.tabletQueries = append(t.tabletQueries, &TabletQuery{
@@ -165,7 +165,7 @@ func (t *explainTablet) Begin(ctx context.Context, session queryservice.Session,
 
 	t.mu.Unlock()
 
-	return t.tsv.Begin(ctx, session, target)
+	return t.tsv.Begin(ctx, session, target, options)
 }
 
 // Commit is part of the QueryService interface.
@@ -190,7 +190,7 @@ func (t *explainTablet) Rollback(ctx context.Context, target *querypb.Target, tr
 }
 
 // Execute is part of the QueryService interface.
-func (t *explainTablet) Execute(ctx context.Context, session queryservice.Session, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64) (*sqltypes.Result, error) {
+func (t *explainTablet) Execute(ctx context.Context, session queryservice.Session, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	t.mu.Lock()
 	t.currentTime = t.vte.batchTime.Wait()
 
@@ -204,7 +204,7 @@ func (t *explainTablet) Execute(ctx context.Context, session queryservice.Sessio
 	})
 	t.mu.Unlock()
 
-	return t.tsv.Execute(ctx, session, target, sql, bindVariables, transactionID, reservedID)
+	return t.tsv.Execute(ctx, session, target, sql, bindVariables, transactionID, reservedID, options)
 }
 
 // Prepare is part of the QueryService interface.
@@ -264,7 +264,7 @@ func (t *explainTablet) ReadTransaction(ctx context.Context, target *querypb.Tar
 }
 
 // BeginExecute is part of the QueryService interface.
-func (t *explainTablet) BeginExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64) (queryservice.TransactionState, *sqltypes.Result, error) {
+func (t *explainTablet) BeginExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (queryservice.TransactionState, *sqltypes.Result, error) {
 	t.mu.Lock()
 	t.currentTime = t.vte.batchTime.Wait()
 	bindVariables = sqltypes.CopyBindVariables(bindVariables)
@@ -275,7 +275,7 @@ func (t *explainTablet) BeginExecute(ctx context.Context, session queryservice.S
 	})
 	t.mu.Unlock()
 
-	return t.tsv.BeginExecute(ctx, session, target, preQueries, sql, bindVariables, reservedID)
+	return t.tsv.BeginExecute(ctx, session, target, preQueries, sql, bindVariables, reservedID, options)
 }
 
 // Close is part of the QueryService interface.
@@ -686,7 +686,7 @@ func (t *explainTablet) handleSelect(query string) (*sqltypes.Result, error) {
 		}
 	}
 
-	for j := 0; j < rowCount; j++ {
+	for j := range rowCount {
 		values := make([]sqltypes.Value, len(colNames))
 		for i, col := range colNames {
 			// Generate a fake value for the given column. For the column in the IN clause,

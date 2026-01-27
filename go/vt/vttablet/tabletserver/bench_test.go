@@ -18,7 +18,6 @@ package tabletserver
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"testing"
 
@@ -56,8 +55,7 @@ func init() {
 }
 
 func BenchmarkExecuteVarBinary(b *testing.B) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := b.Context()
 	db, tsv := setupTabletServerTest(b, ctx, "")
 	defer db.Close()
 	defer tsv.StopService()
@@ -73,15 +71,14 @@ func BenchmarkExecuteVarBinary(b *testing.B) {
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	db.SetAllowAll(true)
 	for b.Loop() {
-		if _, err := tsv.Execute(ctx, nil, &target, benchQuery, bv, 0, 0); err != nil {
+		if _, err := tsv.Execute(ctx, nil, &target, benchQuery, bv, 0, 0, nil); err != nil {
 			panic(err)
 		}
 	}
 }
 
 func BenchmarkExecuteExpression(b *testing.B) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := b.Context()
 	db, tsv := setupTabletServerTest(b, ctx, "")
 	defer db.Close()
 	defer tsv.StopService()
@@ -100,7 +97,7 @@ func BenchmarkExecuteExpression(b *testing.B) {
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	db.SetAllowAll(true)
 	for b.Loop() {
-		if _, err := tsv.Execute(ctx, nil, &target, benchQuery, bv, 0, 0); err != nil {
+		if _, err := tsv.Execute(ctx, nil, &target, benchQuery, bv, 0, 0, nil); err != nil {
 			panic(err)
 		}
 	}

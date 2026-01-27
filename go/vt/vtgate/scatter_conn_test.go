@@ -309,7 +309,7 @@ func TestReservedOnMultiReplica(t *testing.T) {
 
 	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: false, InReservedConn: true})
 	destinations := []key.ShardDestination{key.DestinationShard("0")}
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		executeOnShards(t, ctx, res, keyspace, sc, session, destinations)
 		assert.EqualValues(t, 1, sbc0_1.ReserveCount.Load()+sbc0_2.ReserveCount.Load(), "sbc0 reserve count")
 		assert.EqualValues(t, 0, sbc0_1.BeginCount.Load()+sbc0_2.BeginCount.Load(), "sbc0 begin count")
@@ -345,7 +345,8 @@ func TestReservedBeginTableDriven(t *testing.T) {
 				shards:      []string{"0", "1"},
 				transaction: true,
 				// nothing needs to be done
-			}},
+			},
+		},
 	}, {
 		name: "reserve",
 		actions: []testAction{
@@ -361,7 +362,8 @@ func TestReservedBeginTableDriven(t *testing.T) {
 				shards:   []string{"0", "1"},
 				reserved: true,
 				// nothing needs to be done
-			}},
+			},
+		},
 	}, {
 		name: "reserve everywhere",
 		actions: []testAction{
@@ -370,7 +372,8 @@ func TestReservedBeginTableDriven(t *testing.T) {
 				reserved:    true,
 				sbc0Reserve: 1,
 				sbc1Reserve: 1,
-			}},
+			},
+		},
 	}, {
 		name: "begin then reserve",
 		actions: []testAction{
@@ -385,7 +388,8 @@ func TestReservedBeginTableDriven(t *testing.T) {
 				sbc0Reserve: 1,
 				sbc1Reserve: 1,
 				sbc1Begin:   1,
-			}},
+			},
+		},
 	}, {
 		name: "reserve then begin",
 		actions: []testAction{
@@ -404,7 +408,8 @@ func TestReservedBeginTableDriven(t *testing.T) {
 				transaction: true,
 				reserved:    true,
 				sbc1Begin:   1,
-			}},
+			},
+		},
 	}, {
 		name: "reserveBegin",
 		actions: []testAction{
@@ -425,7 +430,8 @@ func TestReservedBeginTableDriven(t *testing.T) {
 				transaction: true,
 				reserved:    true,
 				// nothing needs to be done
-			}},
+			},
+		},
 	}, {
 		name: "reserveBegin everywhere",
 		actions: []testAction{
@@ -437,7 +443,8 @@ func TestReservedBeginTableDriven(t *testing.T) {
 				sbc0Begin:   1,
 				sbc1Reserve: 1,
 				sbc1Begin:   1,
-			}},
+			},
+		},
 	}}
 	for _, test := range tests {
 		keyspace := "keyspace"
@@ -596,7 +603,7 @@ func TestReservedConnFail(t *testing.T) {
 }
 
 func TestIsConnClosed(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		name      string
 		err       error
 		conClosed bool
@@ -631,4 +638,64 @@ func TestIsConnClosed(t *testing.T) {
 			assert.Equal(t, tCase.conClosed, wasConnectionClosed(tCase.err))
 		})
 	}
+}
+
+// TestActionInfoWithTabletAlias tests the actionInfo function with tablet-specific routing.
+func TestActionInfoWithTabletAlias(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	target := &querypb.Target{
+		Keyspace:   "ks",
+		Shard:      "-80",
+		TabletType: topodatapb.TabletType_PRIMARY,
+	}
+	tabletAlias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+
+	t.Run("non-transactional with tablet alias", func(t *testing.T) {
+		session := econtext.NewSafeSession(&vtgatepb.Session{})
+		session.SetTargetTabletAlias(tabletAlias)
+
+		info, shardSession, err := actionInfo(ctx, target, session, false, vtgatepb.TransactionMode_MULTI)
+		require.NoError(t, err)
+		assert.Nil(t, shardSession)
+		assert.Equal(t, nothing, info.actionNeeded)
+		assert.Equal(t, tabletAlias, info.alias)
+	})
+
+	t.Run("transaction begin with tablet alias", func(t *testing.T) {
+		session := econtext.NewSafeSession(&vtgatepb.Session{
+			InTransaction: true,
+		})
+		session.SetTargetTabletAlias(tabletAlias)
+
+		info, shardSession, err := actionInfo(ctx, target, session, false, vtgatepb.TransactionMode_MULTI)
+		require.NoError(t, err)
+		assert.Nil(t, shardSession)
+		assert.Equal(t, begin, info.actionNeeded)
+		assert.Equal(t, tabletAlias, info.alias)
+	})
+
+	t.Run("existing transaction with different tablet alias errors", func(t *testing.T) {
+		session := econtext.NewSafeSession(&vtgatepb.Session{
+			InTransaction: true,
+			ShardSessions: []*vtgatepb.Session_ShardSession{{
+				Target:        target,
+				TransactionId: 12345,
+				TabletAlias:   &topodatapb.TabletAlias{Cell: "zone1", Uid: 50},
+			}},
+		})
+		session.SetTargetTabletAlias(tabletAlias) // zone1-100, different from zone1-50
+
+		_, _, err := actionInfo(ctx, target, session, false, vtgatepb.TransactionMode_MULTI)
+		require.ErrorContains(t, err, "cannot change tablet target mid-transaction")
+	})
+
+	t.Run("no tablet alias - existing behavior", func(t *testing.T) {
+		session := econtext.NewSafeSession(&vtgatepb.Session{})
+
+		info, shardSession, err := actionInfo(ctx, target, session, false, vtgatepb.TransactionMode_MULTI)
+		require.NoError(t, err)
+		assert.Nil(t, shardSession)
+		assert.Equal(t, nothing, info.actionNeeded)
+		assert.Nil(t, info.alias)
+	})
 }
