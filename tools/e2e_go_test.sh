@@ -4,7 +4,7 @@ source build.env
 
 echo "running tests for $PACKAGES"
 
-if [[ -z "${PACKAGES:-}" ]]; then
+if [[ -z "$PACKAGES" ]]; then
 	echo "ERROR: PACKAGES is empty"
 	exit 1
 fi
@@ -18,7 +18,7 @@ GOTESTSUM_ARGS=(
 	--hide-summary=skipped
 )
 
-if [[ -n "${JUNIT_OUTPUT:-}" ]]; then
+if [[ -n "$JUNIT_OUTPUT" ]]; then
 	GOTESTSUM_ARGS+=("--junitfile" "$JUNIT_OUTPUT")
 fi
 
