@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.7
+
 FROM --platform=linux/amd64 golang:1.25.6-bookworm@sha256:2f768d462dbffbb0f0b3a5171009f162945b086f326e0b2a8fd5d29c3219ff14
 
 # Install Vitess build dependencies
@@ -33,7 +35,8 @@ COPY config /vt/src/vitess.io/vitess/config
 COPY tools /vt/src/vitess.io/vitess/tools
 
 # Create vitess user
-RUN groupadd -r vitess && useradd -r -g vitess vitess && \
+RUN groupadd -r -g 1000 vitess && \
+    useradd -r -u 1000 -g 1000 vitess && \
     mkdir -p /vt/vtdataroot /home/vitess && \
     chown -R vitess:vitess /vt /home/vitess
 
@@ -52,7 +55,8 @@ RUN su vitess -c "mkdir -p /vt/src/vitess.io/vitess/bin && rm -rf /vt/bin && ln 
 WORKDIR /vt/src/vitess.io/vitess
 
 USER vitess
-RUN ./bootstrap.sh
+RUN --mount=type=cache,target=/home/vitess/.m2,uid=1000,gid=1000 \
+    ./bootstrap.sh
 
 # If the user doesn't specify a command, load a shell.
 CMD ["/bin/bash"]
