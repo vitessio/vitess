@@ -18,6 +18,7 @@ package stats
 
 import (
 	"encoding/json"
+	"maps"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -136,9 +137,7 @@ func (t *Timings) Histograms() (h map[string]*Histogram) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	h = make(map[string]*Histogram, len(t.histograms))
-	for k, v := range t.histograms {
-		h[k] = v
-	}
+	maps.Copy(h, t.histograms)
 	return
 }
 

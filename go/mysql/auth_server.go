@@ -525,7 +525,6 @@ func (n *mysqlCachingSha2AuthMethod) HandleAuthPluginData(c *Conn, user string, 
 
 	salt := serverAuthPluginData[:len(serverAuthPluginData)-1]
 	result, cacheState, err := n.cache.UserEntryWithCacheHash(c, salt, user, clientAuthPluginData, remoteAddr)
-
 	if err != nil {
 		return nil, err
 	}

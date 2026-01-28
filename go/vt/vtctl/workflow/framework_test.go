@@ -216,7 +216,8 @@ func (env *testEnv) saveRoutingRules(t *testing.T, rules map[string][]string) {
 }
 
 func (env *testEnv) updateTableRoutingRules(t *testing.T, ctx context.Context,
-	tabletTypes []topodatapb.TabletType, tables []string, sourceKeyspace, targetKeyspace, toKeyspace string) {
+	tabletTypes []topodatapb.TabletType, tables []string, sourceKeyspace, targetKeyspace, toKeyspace string,
+) {
 	if len(tabletTypes) == 0 {
 		tabletTypes = defaultTabletTypes
 	}
@@ -581,9 +582,9 @@ func (tmc *testTMClient) ApplySchema(ctx context.Context, tablet *topodatapb.Tab
 		return expect.res, expect.err
 	}
 
-	stmts := strings.Split(change.SQL, ";")
+	stmts := strings.SplitSeq(change.SQL, ";")
 
-	for _, stmt := range stmts {
+	for stmt := range stmts {
 		_, err := tmc.ExecuteFetchAsDba(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
 			Query:        []byte(stmt),
 			MaxRows:      0,

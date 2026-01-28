@@ -33,7 +33,7 @@ func BenchmarkGetPut(b *testing.B) {
 				b.ReportAllocs()
 				b.SetParallelism(parallelism)
 				b.RunParallel(func(pb *testing.PB) {
-					var ctx = context.Background()
+					ctx := context.Background()
 					for pb.Next() {
 						if conn, err := pool.Get(ctx); err != nil {
 							b.Error(err)

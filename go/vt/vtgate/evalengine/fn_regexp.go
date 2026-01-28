@@ -763,7 +763,7 @@ func regexpReplace(m *icuregex.Matcher, inputRunes, replRunes []rune, pos, occ i
 	var err error
 	found := false
 	if occ > 0 {
-		for i := int64(0); i < occ; i++ {
+		for range occ {
 			found, err = m.Find()
 			if err != nil {
 				return nil, false, err

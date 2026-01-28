@@ -189,7 +189,6 @@ func fail(serviceName string) io.Closer {
 	return &nilCloser{}
 }
 
-type nilCloser struct {
-}
+type nilCloser struct{}
 
 func (c *nilCloser) Close() error { return nil }

@@ -686,7 +686,7 @@ func (t *explainTablet) handleSelect(query string) (*sqltypes.Result, error) {
 		}
 	}
 
-	for j := 0; j < rowCount; j++ {
+	for j := range rowCount {
 		values := make([]sqltypes.Value, len(colNames))
 		for i, col := range colNames {
 			// Generate a fake value for the given column. For the column in the IN clause,
