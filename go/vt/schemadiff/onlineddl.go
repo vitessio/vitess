@@ -671,7 +671,7 @@ func ValidateAndEditAlterTableStatement(originalTableName string, baseUUID strin
 	validateWalk := func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.DropKey:
-			if node.Type == sqlparser.CheckKeyType || node.Type == sqlparser.ForeignKeyType {
+			if node.Type == sqlparser.CheckKeyType || node.Type == sqlparser.ForeignKeyType || node.Type == sqlparser.ConstraintType {
 				// drop a check or a foreign key constraint
 				mappedName, ok := constraintMap[node.Name.String()]
 				if !ok {
