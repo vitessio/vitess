@@ -136,16 +136,9 @@ func (call *builtinJSONExtract) compile(c *compiler) (ctype, error) {
 	nullable := doct.nullable()
 	skip := c.compileNullCheck1(doct)
 
-	// TODO: `*compiler.compileParseJSON` should handle `sqltypes.Null`` properly but
-	//		 we'll handle it here until all call sites are fixed.
-	var jt ctype
-	if doct.Type != sqltypes.Null {
-		jt, err = c.compileParseJSON("JSON_EXTRACT", doct, 1)
-		if err != nil {
-			return ctype{}, err
-		}
-	} else {
-		jt = ctype{Type: sqltypes.Null, Flag: flagNull | flagNullable, Col: collationNull}
+	jt, err := c.compileParseJSON("JSON_EXTRACT", doct, 1)
+	if err != nil {
+		return ctype{}, err
 	}
 
 	staticPaths := make([]staticPath, 0, len(call.Arguments[1:]))
@@ -234,16 +227,9 @@ func (call *builtinJSONRemove) compile(c *compiler) (ctype, error) {
 	nullable := doct.nullable()
 	skip := c.compileNullCheck1(doct)
 
-	// TODO: `*compiler.compileParseJSON` should handle `sqltypes.Null`` properly but
-	//		 we'll handle it here until all call sites are fixed.
-	var jt ctype
-	if doct.Type != sqltypes.Null {
-		jt, err = c.compileParseJSON("JSON_REMOVE", doct, 1)
-		if err != nil {
-			return ctype{}, err
-		}
-	} else {
-		jt = ctype{Type: sqltypes.Null, Flag: flagNull | flagNullable, Col: collationNull}
+	jt, err := c.compileParseJSON("JSON_REMOVE", doct, 1)
+	if err != nil {
+		return ctype{}, err
 	}
 
 	staticPaths := make([]staticPath, 0, len(call.Arguments[1:]))
@@ -515,6 +501,13 @@ func (call *builtinJSONContainsPath) compile(c *compiler) (ctype, error) {
 		return ctype{}, c.unsupported(call)
 	}
 
+	skip := c.compileNullCheck1(doct)
+
+	_, err = c.compileParseJSON("JSON_CONTAINS_PATH", doct, 1)
+	if err != nil {
+		return ctype{}, err
+	}
+
 	match, err := c.jsonExtractOneOrAll("JSON_CONTAINS_PATH", call.Arguments[1])
 	if err != nil {
 		return ctype{}, err
@@ -530,12 +523,10 @@ func (call *builtinJSONContainsPath) compile(c *compiler) (ctype, error) {
 		paths = append(paths, jp)
 	}
 
-	_, err = c.compileParseJSON("JSON_CONTAINS_PATH", doct, 1)
-	if err != nil {
-		return ctype{}, err
-	}
-
 	c.asm.Fn_JSON_CONTAINS_PATH(match, paths)
+
+	c.asm.jumpDestination(skip)
+
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean | flagNullable}, nil
 }
 
@@ -626,6 +617,8 @@ func (call *builtinJSONKeys) compile(c *compiler) (ctype, error) {
 		return ctype{}, err
 	}
 
+	skip := c.compileNullCheck1(doc)
+
 	_, err = c.compileParseJSON("JSON_KEYS", doc, 1)
 	if err != nil {
 		return ctype{}, err
@@ -637,11 +630,11 @@ func (call *builtinJSONKeys) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		if jp.ContainsWildcards() {
-			return ctype{}, errInvalidPathForTransform
-		}
 	}
 
 	c.asm.Fn_JSON_KEYS(jp)
+
+	c.asm.jumpDestination(skip)
+
 	return ctype{Type: sqltypes.TypeJSON, Flag: flagNullable, Col: collationJSON}, nil
 }

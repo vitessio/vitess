@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtutils "vitess.io/vitess/go/vt/utils"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/logic"
 )
@@ -400,6 +401,76 @@ func TestRepairAfterTER(t *testing.T) {
 	require.NoError(t, err)
 
 	utils.CheckReplication(t, clusterInfo, newPrimary, []*cluster.Vttablet{curPrimary}, 15*time.Second)
+}
+
+// TestStalePrimary tests that an old primary that remains writable and of tablet type PRIMARY in the topo
+// is properly demoted to a read-only replica by VTOrc.
+func TestStalePrimary(t *testing.T) {
+	ctx := t.Context()
+
+	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 4, 0, []string{"--topo-information-refresh-duration", "1s"}, cluster.VTOrcConfiguration{
+		PreventCrossCellFailover: true,
+	}, cluster.DefaultVtorcsByCell, policy.DurabilitySemiSync)
+	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+
+	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	assert.NotNil(t, curPrimary, "should have elected a primary")
+	utils.CheckPrimaryTablet(t, clusterInfo, curPrimary, true)
+
+	var badPrimary, healthyReplica *cluster.Vttablet
+	for _, tablet := range shard0.Vttablets {
+		if tablet.Alias == curPrimary.Alias {
+			continue
+		}
+
+		if badPrimary == nil {
+			badPrimary = tablet
+			continue
+		}
+
+		healthyReplica = tablet
+	}
+
+	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{badPrimary, healthyReplica}, 15*time.Second)
+
+	curPrimaryTopo, err := clusterInfo.Ts.GetTablet(ctx, curPrimary.GetAlias())
+	require.NoError(t, err, "expected to read current primary topo record")
+
+	curPrimaryTermStart := protoutil.TimeFromProto(curPrimaryTopo.PrimaryTermStartTime)
+	require.False(t, curPrimaryTermStart.IsZero(), "expected current primary term start time to be set")
+
+	err = utils.RunSQLs(t, []string{"SET GLOBAL read_only = OFF"}, badPrimary, "")
+	require.NoError(t, err)
+	require.True(t, utils.WaitForReadOnlyValue(t, badPrimary, 0))
+
+	// We set the tablet's type in the topology to PRIMARY. This mimics the situation where during a demotion
+	// in a hypothetical ERS, the old primary starts running as a replica, but fails before updating the topology
+	// accordingly.
+	_, err = clusterInfo.Ts.UpdateTabletFields(ctx, badPrimary.GetAlias(), func(tablet *topodatapb.Tablet) error {
+		tablet.Type = topodatapb.TabletType_PRIMARY
+		tablet.PrimaryTermStartTime = protoutil.TimeToProto(curPrimaryTermStart.Add(-1 * time.Minute))
+		return nil
+	})
+	require.NoError(t, err)
+
+	// Expect VTOrc to demote the stale primary to a read-only replica.
+	require.Eventuallyf(t, func() bool {
+		topoTablet, topoErr := clusterInfo.Ts.GetTablet(ctx, badPrimary.GetAlias())
+		if topoErr != nil {
+			t.Logf("stale primary probe: topo error=%v", topoErr)
+			return false
+		}
+
+		readOnly, readErr := badPrimary.VttabletProcess.GetDBVar("read_only", "")
+		if readErr != nil {
+			t.Logf("stale primary probe: alias=%s topo=%v read_only error=%v", badPrimary.Alias, topoTablet.Type, readErr)
+			return false
+		}
+
+		return topoTablet.Type == topodatapb.TabletType_REPLICA && readOnly == "ON"
+	}, 30*time.Second, time.Second, "expected demotion to REPLICA with read_only=ON")
 }
 
 // TestSemiSync tests that semi-sync is setup correctly by vtorc if it is incorrectly set
