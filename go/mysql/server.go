@@ -235,6 +235,7 @@ func NewFromListener(
 	handler Handler,
 	connReadTimeout time.Duration,
 	connWriteTimeout time.Duration,
+	proxyProtocol bool,
 	connBufferPooling bool,
 	keepAlivePeriod time.Duration,
 	flushDelay time.Duration,
@@ -252,6 +253,11 @@ func NewFromListener(
 		FlushDelay:          flushDelay,
 		MultiQuery:          multiQuery,
 	}
+
+	if proxyProtocol {
+		cfg.Listener = &proxyproto.Listener{Listener: l}
+	}
+
 	return NewListenerWithConfig(cfg)
 }
 
@@ -272,12 +278,8 @@ func NewListener(
 	if err != nil {
 		return nil, err
 	}
-	if proxyProtocol {
-		proxyListener := &proxyproto.Listener{Listener: listener}
-		return NewFromListener(proxyListener, authServer, handler, connReadTimeout, connWriteTimeout, connBufferPooling, keepAlivePeriod, flushDelay, multiQuery)
-	}
 
-	return NewFromListener(listener, authServer, handler, connReadTimeout, connWriteTimeout, connBufferPooling, keepAlivePeriod, flushDelay, multiQuery)
+	return NewFromListener(listener, authServer, handler, connReadTimeout, connWriteTimeout, proxyProtocol, connBufferPooling, keepAlivePeriod, flushDelay, multiQuery)
 }
 
 // ListenerConfig should be used with NewListenerWithConfig to specify listener parameters.
