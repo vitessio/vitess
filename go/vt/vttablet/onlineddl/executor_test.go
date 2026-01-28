@@ -32,13 +32,14 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 func TestShouldCutOverAccordingToBackoff(t *testing.T) {
@@ -286,11 +287,12 @@ func TestInitDBConnectionLockWaitTimeout(t *testing.T) {
 }
 
 func TestExecuteDirectlySetsLockWaitTimeout(t *testing.T) {
+	ctx := t.Context()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	params := db.ConnParams()
 	connector := dbconfigs.NewTestDBConfigs(*params, *params, params.DbName).DbaWithDB()
-	conn, err := dbconnpool.NewDBConnection(context.Background(), connector)
+	conn, err := dbconnpool.NewDBConnection(ctx, connector)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -309,8 +311,8 @@ func TestExecuteDirectlySetsLockWaitTimeout(t *testing.T) {
 		return &fakeTabletManagerClient{}
 	})
 	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
-	ts := memorytopo.NewServer(context.Background(), "cell")
-	require.NoError(t, ts.CreateTablet(context.Background(), &topodatapb.Tablet{
+	ts := memorytopo.NewServer(ctx, "cell")
+	require.NoError(t, ts.CreateTablet(ctx, &topodatapb.Tablet{
 		Alias:    alias,
 		Keyspace: "ks",
 		Shard:    "0",
@@ -326,7 +328,7 @@ func TestExecuteDirectlySetsLockWaitTimeout(t *testing.T) {
 	}
 
 	onlineDDL := &schema.OnlineDDL{SQL: "create table test_lock_wait(id int)", CutOverThreshold: 5 * time.Second, UUID: "uuid"}
-	_, err = executor.executeDirectly(context.Background(), onlineDDL)
+	_, err = executor.executeDirectly(ctx, onlineDDL)
 	require.NoError(t, err)
 
 	queryLog := db.QueryLog()

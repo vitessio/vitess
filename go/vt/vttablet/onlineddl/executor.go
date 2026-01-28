@@ -1232,8 +1232,8 @@ func (e *Executor) initConnectionLockWaitTimeout(ctx context.Context, conn *conn
 func (e *Executor) initDBConnectionLockWaitTimeout(conn *dbconnpool.DBConnection, lockWaitTimeout time.Duration) (deferFunc func(), err error) {
 	deferFunc = func() {}
 
-	if _, err := conn.ExecuteFetch(`set @lock_wait_timeout=@@session.lock_wait_timeout`, 0, false); err != nil {
-		return deferFunc, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read lock_wait_timeout: %v", err)
+	if _, err := conn.ExecuteFetch("set @lock_wait_timeout=@@session.lock_wait_timeout", 0, false); err != nil {
+		return deferFunc, vterrors.Wrap(err, "could not read lock_wait_timeout")
 	}
 	timeoutSeconds := int64(lockWaitTimeout.Seconds())
 	setQuery := fmt.Sprintf("set @@session.lock_wait_timeout=%d", timeoutSeconds)

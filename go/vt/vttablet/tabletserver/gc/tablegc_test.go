@@ -432,48 +432,44 @@ func (c *fakeGCConn) SupportsCapability(capability capabilities.FlavorCapability
 
 func (c *fakeGCConn) Close() {}
 
-func TestOpenSkipsPurgeEvacWhenAHIOff(t *testing.T) {
-	collector := &TableGC{}
-	collector.lifecycleStates = map[schema.TableGCState]bool{
-		schema.HoldTableGCState:  true,
-		schema.PurgeTableGCState: true,
-		schema.EvacTableGCState:  true,
-		schema.DropTableGCState:  true,
+func TestOpenSkipsPurgeEvacBasedOnAHI(t *testing.T) {
+	type testCase struct {
+		name            string
+		ahiSetting      string
+		expectPurgeEvac bool
+		expectDrop      bool
 	}
-
-	conn := &fakeGCConn{
-		result: sqltypes.MakeTestResult(
-			sqltypes.MakeTestFields("variable_value", "varchar"),
-			"OFF",
-		),
+	testCases := []testCase{
+		{
+			name:            "AHI OFF",
+			ahiSetting:      "OFF",
+			expectPurgeEvac: false,
+		},
+		{
+			name:            "AHI ON",
+			ahiSetting:      "ON",
+			expectPurgeEvac: true,
+		},
 	}
-
-	states, err := adjustLifecycleForFastDrops(conn, collector.lifecycleStates)
-	require.NoError(t, err)
-	require.False(t, states[schema.PurgeTableGCState])
-	require.False(t, states[schema.EvacTableGCState])
-	require.True(t, states[schema.DropTableGCState])
-}
-
-func TestOpenKeepsPurgeEvacWhenAHIOn(t *testing.T) {
-	collector := &TableGC{}
-	collector.lifecycleStates = map[schema.TableGCState]bool{
-		schema.HoldTableGCState:  true,
-		schema.PurgeTableGCState: true,
-		schema.EvacTableGCState:  true,
-		schema.DropTableGCState:  true,
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			collector := &TableGC{}
+			collector.lifecycleStates = map[schema.TableGCState]bool{
+				schema.HoldTableGCState:  true,
+				schema.PurgeTableGCState: true,
+				schema.EvacTableGCState:  true,
+				schema.DropTableGCState:  true,
+			}
+			conn := &fakeGCConn{
+				result: sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("variable_value", "varchar"),
+					tc.ahiSetting,
+				),
+			}
+			states, err := adjustLifecycleForFastDrops(conn, collector.lifecycleStates)
+			require.NoError(t, err)
+			require.Equal(t, tc.expectPurgeEvac, states[schema.PurgeTableGCState])
+			require.Equal(t, tc.expectPurgeEvac, states[schema.EvacTableGCState])
+		})
 	}
-
-	conn := &fakeGCConn{
-		result: sqltypes.MakeTestResult(
-			sqltypes.MakeTestFields("variable_value", "varchar"),
-			"ON",
-		),
-	}
-
-	states, err := adjustLifecycleForFastDrops(conn, collector.lifecycleStates)
-	require.NoError(t, err)
-	require.True(t, states[schema.PurgeTableGCState])
-	require.True(t, states[schema.EvacTableGCState])
-	require.True(t, states[schema.DropTableGCState])
 }
