@@ -48,10 +48,6 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/servenv"
@@ -66,6 +62,11 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -78,12 +79,6 @@ var (
 )
 
 var staleMigrationMinutesStats = stats.NewGauge("OnlineDDLStaleMigrationMinutes", "longest stale migration in minutes")
-
-// fixCompletedTimestampDone fixes a nil `completed_timestamp` columns, see
-// https://github.com/vitessio/vitess/issues/13927
-// The fix is in release-18.0
-// TODO: remove in release-19.0
-var fixCompletedTimestampDone bool
 
 var (
 	emptyResult                           = &sqltypes.Result{}
@@ -118,7 +113,6 @@ func registerOnlineDDLFlags(fs *pflag.FlagSet) {
 }
 
 const (
-	maxPasswordLength                        = 32 // MySQL's *replication* password may not exceed 32 characters
 	staleMigrationFailMinutes                = 180
 	staleMigrationWarningMinutes             = 5
 	progressPctStarted               float64 = 0
@@ -498,6 +492,11 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 		}
 		defer conn.ExecuteFetch("SET foreign_key_checks=@vt_onlineddl_foreign_key_checks", 0, false)
 	}
+	restoreLockWaitTimeout, err := e.initDBConnectionLockWaitTimeout(conn, onlineDDL.CutOverThreshold)
+	if err != nil {
+		return false, vterrors.Wrap(err, "failed to set lock_wait_timeout on direct connection")
+	}
+	defer restoreLockWaitTimeout()
 	_, err = conn.ExecuteFetch(onlineDDL.SQL, 0, false)
 	if err != nil {
 		// let's see if this error is actually acceptable
@@ -1224,6 +1223,24 @@ func (e *Executor) initConnectionLockWaitTimeout(ctx context.Context, conn *conn
 	}
 	deferFunc = func() {
 		conn.Exec(ctx, "set @@session.lock_wait_timeout=@lock_wait_timeout", 0, false)
+	}
+	return deferFunc, nil
+}
+
+// initDBConnectionLockWaitTimeout sets the given lock_wait_timeout for the given direct connection, with a deferred value restoration function.
+func (e *Executor) initDBConnectionLockWaitTimeout(conn *dbconnpool.DBConnection, lockWaitTimeout time.Duration) (deferFunc func(), err error) {
+	deferFunc = func() {}
+
+	if _, err := conn.ExecuteFetch(`set @lock_wait_timeout=@@session.lock_wait_timeout`, 0, false); err != nil {
+		return deferFunc, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read lock_wait_timeout: %v", err)
+	}
+	timeoutSeconds := int64(lockWaitTimeout.Seconds())
+	setQuery := fmt.Sprintf("set @@session.lock_wait_timeout=%d", timeoutSeconds)
+	if _, err := conn.ExecuteFetch(setQuery, 0, false); err != nil {
+		return deferFunc, err
+	}
+	deferFunc = func() {
+		conn.ExecuteFetch("set @@session.lock_wait_timeout=@lock_wait_timeout", 0, false)
 	}
 	return deferFunc, nil
 }
@@ -3531,17 +3548,6 @@ func (e *Executor) gcArtifactTable(ctx context.Context, artifactTable, uuid stri
 func (e *Executor) gcArtifacts(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
-
-	// v18 fix. Remove in v19
-	if !fixCompletedTimestampDone {
-		if _, err := e.execQuery(ctx, sqlFixCompletedTimestamp); err != nil {
-			// This query fixes a bug where stale migrations were marked as 'cancelled' or 'failed' without updating 'completed_timestamp'
-			// Running this query retroactively sets completed_timestamp
-			// This fix is created in v18 and can be removed in v19
-			return err
-		}
-		fixCompletedTimestampDone = true
-	}
 
 	query, err := sqlparser.ParseAndBind(sqlSelectUncollectedArtifacts,
 		sqltypes.Int64BindVariable(int64((retainOnlineDDLTables).Seconds())),

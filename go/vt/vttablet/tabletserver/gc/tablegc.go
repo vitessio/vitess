@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -37,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/utils"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
@@ -200,8 +202,16 @@ func (collector *TableGC) Open() (err error) {
 		// go through the purging & evac cycle: once the table has been held for long enough, we can just
 		// move on to dropping it. Dropping a large table in 8.0.23 is expected to take several seconds, and
 		// should not block other queries or place any locks on the buffer pool.
-		delete(collector.lifecycleStates, schema.PurgeTableGCState)
-		delete(collector.lifecycleStates, schema.EvacTableGCState)
+		// BUT!!! You can still encounter these problems if the Adaptive Hash Indexes are enabled: https://bugs.mysql.com/bug.php?id=113312
+		res, err := conn.ExecuteFetch("SELECT variable_value FROM performance_schema.global_variables WHERE variable_name = 'innodb_adaptive_hash_index'", 1, false)
+		if err != nil || len(res.Rows) == 0 || len(res.Rows[0]) == 0 {
+			return vterrors.Wrap(err, "failed to check innodb_adaptive_hash_index setting")
+		}
+		if strings.ToLower(res.Rows[0][0].ToString()) != "on" {
+			// Now we know that it's truly safe to skip the purge & evac phases.
+			delete(collector.lifecycleStates, schema.PurgeTableGCState)
+			delete(collector.lifecycleStates, schema.EvacTableGCState)
+		}
 	}
 	log.Infof("TableGC: MySQL version=%v, serverSupportsFastDrops=%v, lifecycleStates=%v", conn.ServerVersion, serverSupportsFastDrops, collector.lifecycleStates)
 
