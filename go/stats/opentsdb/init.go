@@ -40,7 +40,7 @@ func Init(prefix string) {
 		log.Info("Initializing opentsdb backend...")
 		backend, err := InitWithoutServenv(prefix)
 		if err != nil {
-			log.Infof("Failed to initialize singleton opentsdb backend: %v", err)
+			log.Info(fmt.Sprintf("Failed to initialize singleton opentsdb backend: %v", err))
 		} else {
 			singletonBackend = backend
 			log.Info("Initialized opentsdb backend.")

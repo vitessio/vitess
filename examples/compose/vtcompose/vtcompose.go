@@ -23,6 +23,7 @@ import (
 	"math"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -165,6 +166,30 @@ func parseExternalDbData(externalDbData string) map[string]externalDbInfo {
 	return externalDbInfoMap
 }
 
+func orderedKeyspaces(keyspaceInfoMap map[string]keyspaceInfo) []keyspaceInfo {
+	keys := make([]string, 0, len(keyspaceInfoMap))
+	for key := range keyspaceInfoMap {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	keyspaces := make([]keyspaceInfo, 0, len(keys))
+	for _, key := range keys {
+		keyspaces = append(keyspaces, keyspaceInfoMap[key])
+	}
+
+	return keyspaces
+}
+
+func orderedKeyspacesDescending(keyspaceInfoMap map[string]keyspaceInfo) []keyspaceInfo {
+	keyspaces := orderedKeyspaces(keyspaceInfoMap)
+	for i, j := 0, len(keyspaces)-1; i < j; i, j = i+1, j-1 {
+		keyspaces[i], keyspaces[j] = keyspaces[j], keyspaces[i]
+	}
+
+	return keyspaces
+}
+
 func main() {
 	pflag.Parse()
 	keyspaceInfoMap := parseKeyspaceInfo(*keyspaceData)
@@ -178,23 +203,23 @@ func main() {
 	}
 
 	// Write schemaFile.
-	for k, v := range keyspaceInfoMap {
-		if _, ok := externalDbInfoMap[k]; !ok {
-			v.schemaFile = createFile(fmt.Sprintf("%s%s_schema_file.sql", tablesPath, v.keyspace))
-			appendToSqlFile(v.schemaFileNames, v.schemaFile)
-			closeFile(v.schemaFile)
+	for _, keyspaceData := range orderedKeyspaces(keyspaceInfoMap) {
+		if _, ok := externalDbInfoMap[keyspaceData.keyspace]; !ok {
+			keyspaceData.schemaFile = createFile(fmt.Sprintf("%s%s_schema_file.sql", tablesPath, keyspaceData.keyspace))
+			appendToSqlFile(keyspaceData.schemaFileNames, keyspaceData.schemaFile)
+			closeFile(keyspaceData.schemaFile)
 		}
 	}
 
 	// Vschema Patching
-	for k, keyspaceData := range keyspaceInfoMap {
+	for _, keyspaceData := range orderedKeyspaces(keyspaceInfoMap) {
 		vSchemaFile := readFile(*baseVschemaFile)
 		if keyspaceData.shards == 0 {
 			vSchemaFile = applyJsonInMemoryPatch(vSchemaFile, `[{"op": "replace","path": "/sharded", "value": false}]`)
 		}
 
 		// Check if it is an external_db
-		if _, ok := externalDbInfoMap[k]; ok {
+		if _, ok := externalDbInfoMap[keyspaceData.keyspace]; ok {
 			// This is no longer necessary, but we'll keep it for reference
 			// https://github.com/vitessio/vitess/pull/4868, https://github.com/vitessio/vitess/pull/5010
 			// vSchemaFile = applyJsonInMemoryPatch(vSchemaFile,`[{"op": "add","path": "/tables/*", "value": {}}]`)
@@ -208,7 +233,7 @@ func main() {
 			}
 		}
 
-		writeVschemaFile(vSchemaFile, fmt.Sprintf("%s_vschema.json", keyspaceData.keyspace))
+		writeVschemaFile(vSchemaFile, keyspaceData.keyspace+"_vschema.json")
 	}
 
 	// Docker Compose File Patches
@@ -220,12 +245,14 @@ func main() {
 func applyJsonInMemoryPatch(vSchemaFile []byte, patchString string) []byte {
 	patch, err := jsonpatch.DecodePatch([]byte(patchString))
 	if err != nil {
-		log.Fatalf("decoding vschema patch failed: %s", err)
+		log.Error(fmt.Sprintf("decoding vschema patch failed: %s", err))
+		os.Exit(1)
 	}
 
 	modified, err := patch.Apply(vSchemaFile)
 	if err != nil {
-		log.Fatalf("applying vschema patch failed: %s", err)
+		log.Error(fmt.Sprintf("applying vschema patch failed: %s", err))
+		os.Exit(1)
 	}
 	return modified
 }
@@ -233,12 +260,14 @@ func applyJsonInMemoryPatch(vSchemaFile []byte, patchString string) []byte {
 func applyInMemoryPatch(dockerYaml []byte, patchString string) []byte {
 	patch, err := yamlpatch.DecodePatch([]byte(patchString))
 	if err != nil {
-		log.Fatalf("decoding patch failed: %s", err)
+		log.Error(fmt.Sprintf("decoding patch failed: %s", err))
+		os.Exit(1)
 	}
 
 	bs, err := patch.Apply(dockerYaml)
 	if err != nil {
-		log.Fatalf("applying patch failed: %s", err)
+		log.Error(fmt.Sprintf("applying patch failed: %s", err))
+		os.Exit(1)
 	}
 	return bs
 }
@@ -246,7 +275,8 @@ func applyInMemoryPatch(dockerYaml []byte, patchString string) []byte {
 func createFile(filePath string) *os.File {
 	f, err := os.Create(filePath)
 	if err != nil {
-		log.Fatalf("creating %s %s", filePath, err)
+		log.Error(fmt.Sprintf("creating %s %s", filePath, err))
+		os.Exit(1)
 	}
 	return f
 }
@@ -254,7 +284,8 @@ func createFile(filePath string) *os.File {
 func readFile(filePath string) []byte {
 	file, err := os.ReadFile(filePath)
 	if err != nil {
-		log.Fatalf("reading %s: %s", filePath, err)
+		log.Error(fmt.Sprintf("reading %s: %s", filePath, err))
+		os.Exit(1)
 	}
 
 	return file
@@ -263,13 +294,15 @@ func readFile(filePath string) []byte {
 func closeFile(file *os.File) {
 	err := file.Close()
 	if err != nil {
-		log.Fatalf("Closing schema_file.sql %s", err)
+		log.Error(fmt.Sprintf("Closing schema_file.sql %s", err))
+		os.Exit(1)
 	}
 }
 
 func handleError(err error) {
 	if err != nil {
-		log.Fatalf("Error: %s", err)
+		log.Error(fmt.Sprintf("Error: %s", err))
+		os.Exit(1)
 	}
 }
 
@@ -277,7 +310,8 @@ func appendToSqlFile(schemaFileNames []string, f *os.File) {
 	for _, file := range schemaFileNames {
 		data, err := os.ReadFile(tablesPath + file)
 		if err != nil {
-			log.Fatalf("reading %s: %s", tablesPath+file, err)
+			log.Error(fmt.Sprintf("reading %s: %s", tablesPath+file, err))
+			os.Exit(1)
 		}
 
 		_, err = f.Write(data)
@@ -294,7 +328,8 @@ func appendToSqlFile(schemaFileNames []string, f *os.File) {
 func getTableName(sqlFile string) string {
 	sqlFileData, err := os.ReadFile(sqlFile)
 	if err != nil {
-		log.Fatalf("reading sqlFile file %s: %s", sqlFile, err)
+		log.Error(fmt.Sprintf("reading sqlFile file %s: %s", sqlFile, err))
+		os.Exit(1)
 	}
 
 	r, _ := regexp.Compile("CREATE TABLE ([a-z_-]*) \\(")
@@ -306,7 +341,8 @@ func getTableName(sqlFile string) string {
 func getPrimaryKey(sqlFile string) string {
 	sqlFileData, err := os.ReadFile(sqlFile)
 	if err != nil {
-		log.Fatalf("reading sqlFile file %s: %s", sqlFile, err)
+		log.Error(fmt.Sprintf("reading sqlFile file %s: %s", sqlFile, err))
+		os.Exit(1)
 	}
 
 	r, _ := regexp.Compile("PRIMARY KEY \\((.*)\\).*")
@@ -318,7 +354,8 @@ func getPrimaryKey(sqlFile string) string {
 func getKeyColumns(sqlFile string) string {
 	sqlFileData, err := os.ReadFile(sqlFile)
 	if err != nil {
-		log.Fatalf("reading sqlFile file %s: %s", sqlFile, err)
+		log.Error(fmt.Sprintf("reading sqlFile file %s: %s", sqlFile, err))
+		os.Exit(1)
 	}
 
 	r, _ := regexp.Compile("[^PRIMARY] (KEY|UNIQUE KEY) .*\\((.*)\\).*")
@@ -385,7 +422,8 @@ func writeVschemaFile(file []byte, fileName string) {
 func writeFile(file []byte, fileName string) {
 	err := os.WriteFile(fileName, file, 0o644)
 	if err != nil {
-		log.Fatalf("writing %s %s", fileName, err)
+		log.Error(fmt.Sprintf("writing %s %s", fileName, err))
+		os.Exit(1)
 	}
 }
 
@@ -427,11 +465,12 @@ func applyKeyspaceDependentPatches(
 	} else {
 		// Determine shard range
 		for i := range keyspaceData.shards {
-			if i == 0 {
+			switch i {
+			case 0:
 				shard = fmt.Sprintf("-%x", interval)
-			} else if i == (keyspaceData.shards - 1) {
+			case keyspaceData.shards - 1:
 				shard = fmt.Sprintf("%x-", interval*i)
-			} else {
+			default:
 				shard = fmt.Sprintf("%x-%x", interval*(i), interval*(i+1))
 			}
 			tabAlias = tabAlias + 100
@@ -473,7 +512,7 @@ func applyDockerComposePatches(
 ) []byte {
 	// Vtctld, vtgate, vtwork patches.
 	dockerComposeFile = applyDefaultDockerPatches(dockerComposeFile, keyspaceInfoMap, externalDbInfoMap, vtOpts)
-	for _, keyspaceData := range keyspaceInfoMap {
+	for _, keyspaceData := range orderedKeyspaces(keyspaceInfoMap) {
 		dockerComposeFile = applyKeyspaceDependentPatches(dockerComposeFile, keyspaceData, externalDbInfoMap, vtOpts)
 	}
 
@@ -684,7 +723,7 @@ func generateVTOrc(dbInfo externalDbInfo, keyspaceInfoMap map[string]keyspaceInf
 	}
 
 	var depends []string
-	for _, keyspaceData := range keyspaceInfoMap {
+	for _, keyspaceData := range orderedKeyspacesDescending(keyspaceInfoMap) {
 		depends = append(depends, "set_keyspace_durability_policy_"+keyspaceData.keyspace)
 	}
 	depends = append(depends, "vtctld")
@@ -766,7 +805,7 @@ func generateSchemaload(
 	opts vtOptions,
 ) string {
 	targetTab := tabletAliases[0]
-	schemaFileName := fmt.Sprintf("%s_schema_file.sql", keyspace)
+	schemaFileName := keyspace + "_schema_file.sql"
 	externalDb := "0"
 
 	if dbInfo.dbName != "" {

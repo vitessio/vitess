@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"testing"
 	"time"
@@ -249,15 +250,9 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 			iqt.stats.requestsThrottled.ResetAll()
 
 			// Capture log output
-			logCapture := &testLogCapture{}
-			originalLogWarningf := log.Warningf
-			defer func() {
-				// Restore original logging function
-				log.Warningf = originalLogWarningf
-			}()
-
-			// Mock log.Warningf to capture output
-			log.Warningf = logCapture.captureLog
+			handler := log.NewCaptureHandler()
+			restoreLogger := log.SetLogger(slog.New(handler))
+			defer restoreLogger()
 
 			// Test the enforcement
 			err := iqt.Throttle(
@@ -279,11 +274,12 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 			}
 
 			// Verify log expectation
+			records := handler.Records()
 			if tt.expectDryRunLog {
-				require.Len(t, logCapture.logs, 1, "Expected exactly one log message")
-				require.Equal(t, tt.expectedLogMsg, logCapture.logs[0], "Log message should match expected")
+				require.Len(t, records, 1, "Expected exactly one log message")
+				require.Equal(t, tt.expectedLogMsg, records[0].Message, "Log message should match expected")
 			} else {
-				require.Empty(t, logCapture.logs, "Expected no log messages")
+				require.Empty(t, records, "Expected no log messages")
 			}
 
 			// Verify stats expectation

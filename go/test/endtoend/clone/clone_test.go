@@ -53,25 +53,25 @@ func TestMain(m *testing.M) {
 		// Check MySQL version first - skip entire test suite if not supported
 		versionStr, err := mysqlctl.GetVersionString()
 		if err != nil {
-			log.Infof("Skipping clone tests: unable to get MySQL version: %v", err)
+			log.Info(fmt.Sprintf("Skipping clone tests: unable to get MySQL version: %v", err))
 			return 0
 		}
-		log.Infof("Detected MySQL version: %s", versionStr)
+		log.Info("Detected MySQL version: " + versionStr)
 
 		flavor, version, err := mysqlctl.ParseVersionString(versionStr)
 		if err != nil {
-			log.Infof("Skipping clone tests: unable to parse MySQL version: %v", err)
+			log.Info(fmt.Sprintf("Skipping clone tests: unable to parse MySQL version: %v", err))
 			return 0
 		}
-		log.Infof("Parsed flavor: %v, version: %d.%d.%d", flavor, version.Major, version.Minor, version.Patch)
+		log.Info(fmt.Sprintf("Parsed flavor: %v, version: %d.%d.%d", flavor, version.Major, version.Minor, version.Patch))
 
 		// Clone is only supported on MySQL 8.0.17+
 		if flavor != mysqlctl.FlavorMySQL && flavor != mysqlctl.FlavorPercona {
-			log.Infof("Skipping clone tests: MySQL CLONE requires MySQL or Percona, got flavor: %v", flavor)
+			log.Info(fmt.Sprintf("Skipping clone tests: MySQL CLONE requires MySQL or Percona, got flavor: %v", flavor))
 			return 0
 		}
 		if version.Major < 8 || (version.Major == 8 && version.Minor == 0 && version.Patch < 17) {
-			log.Infof("Skipping clone tests: MySQL CLONE requires version 8.0.17+, got: %d.%d.%d", version.Major, version.Minor, version.Patch)
+			log.Info(fmt.Sprintf("Skipping clone tests: MySQL CLONE requires version 8.0.17+, got: %d.%d.%d", version.Major, version.Minor, version.Patch))
 			return 0
 		}
 
@@ -79,19 +79,19 @@ func TestMain(m *testing.M) {
 		cleanVersion := fmt.Sprintf("%d.%d.%d", version.Major, version.Minor, version.Patch)
 		capableOf := mysql.ServerVersionCapableOf(cleanVersion)
 		if capableOf == nil {
-			log.Infof("Skipping clone tests: unable to get capability checker for version %s", cleanVersion)
+			log.Info("Skipping clone tests: unable to get capability checker for version " + cleanVersion)
 			return 0
 		}
 		hasClone, err := capableOf(capabilities.MySQLClonePluginFlavorCapability)
 		if err != nil || !hasClone {
-			log.Infof("Skipping clone tests: MySQL version %s does not support CLONE plugin", cleanVersion)
+			log.Info(fmt.Sprintf("Skipping clone tests: MySQL version %s does not support CLONE plugin", cleanVersion))
 			return 0
 		}
-		log.Infof("MySQL version %s supports CLONE plugin, proceeding with tests", cleanVersion)
+		log.Info(fmt.Sprintf("MySQL version %s supports CLONE plugin, proceeding with tests", cleanVersion))
 
 		// Setup EXTRA_MY_CNF for clone plugin
 		if err := setupExtraMyCnf(); err != nil {
-			log.Errorf("Failed to setup extra MySQL config: %v", err)
+			log.Error(fmt.Sprintf("Failed to setup extra MySQL config: %v", err))
 			return 1
 		}
 
@@ -100,13 +100,13 @@ func TestMain(m *testing.M) {
 
 		// Start topo server
 		if err := clusterInstance.StartTopo(); err != nil {
-			log.Errorf("Failed to start topo: %v", err)
+			log.Error(fmt.Sprintf("Failed to start topo: %v", err))
 			return 1
 		}
 
 		// Initialize cluster with 2 tablets for clone testing
 		if err := initClusterForClone(); err != nil {
-			log.Errorf("Failed to init cluster: %v", err)
+			log.Error(fmt.Sprintf("Failed to init cluster: %v", err))
 			return 1
 		}
 
@@ -115,7 +115,7 @@ func TestMain(m *testing.M) {
 			for _, tablet := range []*cluster.Vttablet{donorTablet, recipientTablet} {
 				if tablet != nil {
 					if err := tablet.MysqlctlProcess.Stop(); err != nil {
-						log.Errorf("Failed to stop MySQL for tablet %d: %v", tablet.TabletUID, err)
+						log.Error(fmt.Sprintf("Failed to stop MySQL for tablet %d: %v", tablet.TabletUID, err))
 					}
 				}
 			}
@@ -146,7 +146,7 @@ func setupExtraMyCnf() error {
 		}
 	}
 
-	log.Infof("Set EXTRA_MY_CNF to include clone plugin: %s", os.Getenv("EXTRA_MY_CNF"))
+	log.Info("Set EXTRA_MY_CNF to include clone plugin: " + os.Getenv("EXTRA_MY_CNF"))
 	return nil
 }
 
@@ -157,7 +157,7 @@ func initClusterForClone() error {
 	if err != nil {
 		return fmt.Errorf("failed to create init DB file: %v", err)
 	}
-	log.Infof("Created combined init file at: %s", initDBWithClone)
+	log.Info("Created combined init file at: " + initDBWithClone)
 
 	var mysqlCtlProcessList []*exec.Cmd
 
@@ -208,7 +208,7 @@ func initClusterForClone() error {
 			return fmt.Errorf("MySQL process failed to start: %v", err)
 		}
 	}
-	log.Infof("MySQL processes started successfully")
+	log.Info("MySQL processes started successfully")
 
 	// Note: We intentionally do NOT register tablets with shards/keyspaces
 	// because we only start MySQL processes (not vttablets). The standard

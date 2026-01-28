@@ -17,6 +17,7 @@ limitations under the License.
 package servenv
 
 import (
+	"fmt"
 	"net"
 	"net/url"
 	"os"
@@ -46,12 +47,13 @@ func Run(bindAddress string, port int) {
 
 	l, err := net.Listen("tcp", net.JoinHostPort(bindAddress, strconv.Itoa(port)))
 	if err != nil {
-		log.Exit(err)
+		log.Error(fmt.Sprint(err))
+		os.Exit(1)
 	}
 	go func() {
 		err := HTTPServe(l)
 		if err != nil {
-			log.Errorf("http serve returned unexpected error: %v", err)
+			log.Error(fmt.Sprintf("http serve returned unexpected error: %v", err))
 		}
 	}()
 
@@ -61,13 +63,13 @@ func Run(bindAddress string, port int) {
 	<-ExitChan
 
 	startTime := time.Now()
-	log.Infof("Entering lameduck mode for at least %v", timeouts.LameduckPeriod)
-	log.Infof("Firing asynchronous OnTerm hooks")
+	log.Info(fmt.Sprintf("Entering lameduck mode for at least %v", timeouts.LameduckPeriod))
+	log.Info("Firing asynchronous OnTerm hooks")
 	go onTermHooks.Fire()
 
 	fireOnTermSyncHooks(timeouts.OnTermTimeout)
 	if remain := timeouts.LameduckPeriod - time.Since(startTime); remain > 0 {
-		log.Infof("Sleeping an extra %v after OnTermSync to finish lameduck period", remain)
+		log.Info(fmt.Sprintf("Sleeping an extra %v after OnTermSync to finish lameduck period", remain))
 		time.Sleep(remain)
 	}
 	l.Close()

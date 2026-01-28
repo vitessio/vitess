@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -1682,85 +1683,43 @@ func TestQueryAsString(t *testing.T) {
 }
 
 type testLogger struct {
-	logsMu sync.Mutex
-	logs   []string
-
-	savedInfof  func(format string, args ...any)
-	savedInfo   func(args ...any)
-	savedErrorf func(format string, args ...any)
-	savedError  func(args ...any)
+	handler *log.CaptureHandler
+	restore func()
 }
 
 func newTestLogger() *testLogger {
-	tl := &testLogger{
-		savedInfof:  log.Infof,
-		savedInfo:   log.Info,
-		savedErrorf: log.Errorf,
-		savedError:  log.Error,
+	handler := log.NewCaptureHandler()
+	restore := log.SetLogger(slog.New(handler))
+
+	return &testLogger{
+		handler: handler,
+		restore: restore,
 	}
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	log.Infof = tl.recordInfof
-	log.Info = tl.recordInfo
-	log.Errorf = tl.recordErrorf
-	log.Error = tl.recordError
-	return tl
 }
 
 func (tl *testLogger) Close() {
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	log.Infof = tl.savedInfof
-	log.Info = tl.savedInfo
-	log.Errorf = tl.savedErrorf
-	log.Error = tl.savedError
-}
-
-func (tl *testLogger) recordInfof(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	tl.logs = append(tl.logs, msg)
-	tl.savedInfof(msg)
-}
-
-func (tl *testLogger) recordInfo(args ...any) {
-	msg := fmt.Sprint(args...)
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	tl.logs = append(tl.logs, msg)
-	tl.savedInfo(msg)
-}
-
-func (tl *testLogger) recordErrorf(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	tl.logs = append(tl.logs, msg)
-	tl.savedErrorf(msg)
-}
-
-func (tl *testLogger) recordError(args ...any) {
-	msg := fmt.Sprint(args...)
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	tl.logs = append(tl.logs, msg)
-	tl.savedError(msg)
+	if tl.restore != nil {
+		tl.restore()
+	}
 }
 
 func (tl *testLogger) getLog(i int) string {
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	if i < len(tl.logs) {
-		return tl.logs[i]
+	logs := tl.getLogs()
+	if i < len(logs) {
+		return logs[i]
 	}
-	return fmt.Sprintf("ERROR: log %d/%d does not exist", i, len(tl.logs))
+
+	return fmt.Sprintf("ERROR: log %d/%d does not exist", i, len(logs))
 }
 
 func (tl *testLogger) getLogs() []string {
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	return tl.logs
+	records := tl.handler.Records()
+	logs := make([]string, 0, len(records))
+	for _, record := range records {
+		logs = append(logs, record.Message)
+	}
+
+	return logs
 }
 
 func TestHandleExecTabletError(t *testing.T) {
@@ -2056,7 +2015,7 @@ func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
 	}
 
 	// errors during failover aren't logged at all
-	require.Empty(t, tl.logs, "unexpected error log during failover")
+	require.Empty(t, tl.getLogs(), "unexpected error log during failover")
 }
 
 var aclJSON1 = `{

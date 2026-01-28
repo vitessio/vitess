@@ -212,7 +212,7 @@ func (tm *TabletManager) DeleteTableData(ctx context.Context, req *tabletmanager
 		rowsDeleted := uint64(0)
 		// Delete all of the matching rows from the table, in batches, until we've
 		// deleted them all.
-		log.Infof("Starting deletion of data from table %s using query %q", table, query)
+		log.Info(fmt.Sprintf("Starting deletion of data from table %s using query %q", table, query))
 		for {
 			// Back off if we're causing too much load on the database with these
 			// batch deletes.
@@ -238,8 +238,7 @@ func (tm *TabletManager) DeleteTableData(ctx context.Context, req *tabletmanager
 			// how much work we've done, how much is left, and how long it may take
 			// (considering throttling, system performance, etc).
 			if rowsDeleted%progressRows == 0 {
-				log.Infof("Successfully deleted %d rows of data from table %s so far, using query %q",
-					rowsDeleted, table, query)
+				log.Info(fmt.Sprintf("Successfully deleted %d rows of data from table %s so far, using query %q", rowsDeleted, table, query))
 			}
 			if res.RowsAffected == 0 { // We're done with this table
 				break
@@ -248,8 +247,7 @@ func (tm *TabletManager) DeleteTableData(ctx context.Context, req *tabletmanager
 				return nil, err
 			}
 		}
-		log.Infof("Completed deletion of data (%d rows) from table %s using query %q",
-			rowsDeleted, table, query)
+		log.Info(fmt.Sprintf("Completed deletion of data (%d rows) from table %s using query %q", rowsDeleted, table, query))
 	}
 
 	return &tabletmanagerdatapb.DeleteTableDataResponse{}, nil
@@ -817,7 +815,7 @@ func (tm *TabletManager) updateSequenceValue(ctx context.Context, seq *tabletman
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid table name %s specified for sequence backing table: %v",
 			seq.BackingTableName, err)
 	}
-	log.Infof("Updating sequence %s.%s to %d", seq.BackingTableDbName, seq.BackingTableName, nextVal)
+	log.Info(fmt.Sprintf("Updating sequence %s.%s to %d", seq.BackingTableDbName, seq.BackingTableName, nextVal))
 	initQuery := sqlparser.BuildParsedQuery(sqlInitSequenceTable,
 		backingTableDbNameEscaped,
 		backingTableNameEscaped,
@@ -891,7 +889,7 @@ func (tm *TabletManager) ValidateVReplicationPermissionsOld(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("Validating VReplication permissions on %s using query %s", tm.tabletAlias, query)
+	log.Info(fmt.Sprintf("Validating VReplication permissions on %s using query %s", tm.tabletAlias, query))
 	conn, err := tm.MysqlDaemon.GetAllPrivsConnection(ctx)
 	if err != nil {
 		return nil, err
@@ -914,7 +912,7 @@ func (tm *TabletManager) ValidateVReplicationPermissionsOld(ctx context.Context,
 	if !val {
 		errorString = fmt.Sprintf("user %s does not have the required set of permissions (select,insert,update,delete) on the %s.vreplication table on tablet %s",
 			tm.DBConfigs.Filtered.User, sidecar.GetName(), topoproto.TabletAliasString(tm.tabletAlias))
-		log.Errorf("validateVReplicationPermissions returning error: %s. Permission query run was %s", errorString, query)
+		log.Error(fmt.Sprintf("validateVReplicationPermissions returning error: %s. Permission query run was %s", errorString, query))
 	}
 	return &tabletmanagerdatapb.ValidateVReplicationPermissionsResponse{
 		User:  tm.DBConfigs.Filtered.User,
@@ -927,7 +925,7 @@ func (tm *TabletManager) ValidateVReplicationPermissionsOld(ctx context.Context,
 // the minimum permissions required on the sidecardb vreplication table
 // using a functional testing approach that doesn't require access to mysql.user table.
 func (tm *TabletManager) ValidateVReplicationPermissions(ctx context.Context, req *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (*tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, error) {
-	log.Infof("Validating VReplication permissions on sidecar db %s", tm.tabletAlias)
+	log.Info(fmt.Sprintf("Validating VReplication permissions on sidecar db %s", tm.tabletAlias))
 
 	conn, err := tm.MysqlDaemon.GetFilteredConnection(ctx)
 	if err != nil {
@@ -941,7 +939,7 @@ func (tm *TabletManager) ValidateVReplicationPermissions(ctx context.Context, re
 	defer func() {
 		_, err := conn.ExecuteFetch("ROLLBACK", 1, false)
 		if err != nil {
-			log.Warningf("failed to rollback transaction after permission testing: %v", err)
+			log.Warn(fmt.Sprintf("failed to rollback transaction after permission testing: %v", err))
 		}
 	}()
 
@@ -977,7 +975,7 @@ func (tm *TabletManager) ValidateVReplicationPermissions(ctx context.Context, re
 			return nil, vterrors.Wrapf(err, "failed to bind %s query for permission testing", test.permission)
 		}
 
-		log.Infof("Testing %s permission using query: %s", test.permission, query)
+		log.Info(fmt.Sprintf("Testing %s permission using query: %s", test.permission, query))
 		if _, err := conn.ExecuteFetch(query, 1, false); err != nil {
 			// Check if we got `ERTableAccessDenied` error code from MySQL
 			sqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
@@ -994,8 +992,7 @@ func (tm *TabletManager) ValidateVReplicationPermissions(ctx context.Context, re
 		}
 	}
 
-	log.Infof("VReplication sidecardb permission validation succeeded for user %s on tablet %s",
-		tm.DBConfigs.Filtered.User, tm.tabletAlias)
+	log.Info(fmt.Sprintf("VReplication sidecardb permission validation succeeded for user %s on tablet %s", tm.DBConfigs.Filtered.User, tm.tabletAlias))
 
 	return &tabletmanagerdatapb.ValidateVReplicationPermissionsResponse{
 		User:  tm.DBConfigs.Filtered.User,

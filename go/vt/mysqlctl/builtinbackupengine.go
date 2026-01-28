@@ -382,7 +382,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	if resp.FirstTimestampBinlog == "" || resp.LastTimestampBinlog == "" {
 		return BackupUnusable, vterrors.Errorf(vtrpcpb.Code_ABORTED, "empty binlog name in response. Request=%v, Response=%v", req, resp)
 	}
-	log.Infof("ReadBinlogFilesTimestampsResponse: %+v", resp)
+	log.Info(fmt.Sprintf("ReadBinlogFilesTimestampsResponse: %+v", resp))
 	incrDetails := &IncrementalBackupDetails{
 		FirstTimestamp:       FormatRFC3339(protoutil.TimeFromProto(resp.FirstTimestamp).UTC()),
 		FirstTimestampBinlog: filepath.Base(resp.FirstTimestampBinlog),
@@ -440,7 +440,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	if err != nil {
 		return BackupUnusable, vterrors.Wrap(err, "can't get super_read_only status")
 	}
-	log.Infof("Flag values during full backup, read_only: %v, super_read_only:%t", readOnly, superReadOnly)
+	log.Info(fmt.Sprintf("Flag values during full backup, read_only: %v, super_read_only:%t", readOnly, superReadOnly))
 
 	// get the replication position
 	if sourceIsPrimary {
@@ -700,7 +700,7 @@ func (be *BuiltinBackupEngine) backupFileEntries(ctx context.Context, fes []File
 			// unpredictability in my test cases, so in order to avoid that, I am adding this cancellation check.
 			select {
 			case <-ctxCancel.Done():
-				log.Errorf("Context canceled or timed out during %q backup", fe.Name)
+				log.Error(fmt.Sprintf("Context canceled or timed out during %q backup", fe.Name))
 				bh.RecordError(name, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context canceled"))
 				return nil
 			default:
@@ -1229,7 +1229,7 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 			// unpredictability in my test cases, so in order to avoid that, I am adding this cancellation check.
 			select {
 			case <-ctx.Done():
-				log.Errorf("Context canceled or timed out during %q restore", fe.Name)
+				log.Error(fmt.Sprintf("Context canceled or timed out during %q restore", fe.Name))
 				bh.RecordError(name, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context canceled"))
 				return nil
 			default:

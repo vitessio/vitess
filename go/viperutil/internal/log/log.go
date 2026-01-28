@@ -21,6 +21,9 @@ viper's jww log.
 package log
 
 import (
+	"fmt"
+	"os"
+
 	jww "github.com/spf13/jwalterweatherman"
 
 	"vitess.io/vitess/go/vt/log"
@@ -47,12 +50,36 @@ var (
 	// DEBUG logs to viper's DEBUG level, and nothing to vitess logs.
 	DEBUG = jwwlog(jww.DEBUG, nil)
 	// INFO logs to viper and vitess at INFO levels.
-	INFO = jwwlog(jww.INFO, log.Infof)
+	INFO = jwwlog(jww.INFO, infof)
 	// WARN logs to viper and vitess at WARN/WARNING levels.
-	WARN = jwwlog(jww.WARN, log.Warningf)
+	WARN = jwwlog(jww.WARN, warnf)
 	// ERROR logs to viper and vitess at ERROR levels.
-	ERROR = jwwlog(jww.ERROR, log.Errorf)
+	ERROR = jwwlog(jww.ERROR, errorf)
 	// CRITICAL logs to viper at CRITICAL level, and then fatally logs to
 	// vitess, exiting the process.
-	CRITICAL = jwwlog(jww.CRITICAL, log.Fatalf)
+	CRITICAL = jwwlog(jww.CRITICAL, criticalf)
 )
+
+// infof formats an info message and emits it through the structured logger.
+func infof(format string, args ...any) {
+	log.Info(fmt.Sprintf(format, args...))
+}
+
+// warnf formats a warning message and emits it through the structured logger.
+func warnf(format string, args ...any) {
+	log.Warn(fmt.Sprintf(format, args...))
+}
+
+// errorf formats an error message and emits it through the structured logger.
+func errorf(format string, args ...any) {
+	log.Error(fmt.Sprintf(format, args...))
+}
+
+// criticalf formats an error message and terminates the process.
+//
+// It mirrors the behavior of log.Fatalf, but uses ErrorS and os.Exit
+// explicitly so callers do not depend on the removed Fatalf wrapper.
+func criticalf(format string, args ...any) {
+	log.Error(fmt.Sprintf(format, args...))
+	os.Exit(1)
+}

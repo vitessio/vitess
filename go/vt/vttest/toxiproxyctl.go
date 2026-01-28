@@ -131,7 +131,7 @@ func (ctl *Toxiproxyctl) run() error {
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to start toxiproxy")
 	}
-	log.Infof("Toxiproxy starting on port: %d, logFile: %s", ctl.apiPort, ctl.logPath)
+	log.Info(fmt.Sprintf("Toxiproxy starting on port: %d, logFile: %s", ctl.apiPort, ctl.logPath))
 	ctl.cmd = cmd
 
 	attempt := 0
@@ -219,7 +219,7 @@ func (ctl *Toxiproxyctl) AddTimeoutToxic() error {
 
 // UpdateTimeoutToxicity updates the toxicity of the timeout toxic.
 func (ctl *Toxiproxyctl) UpdateTimeoutToxicity(toxicity float32) error {
-	log.Infof("Updating timeout toxicity to %f", toxicity)
+	log.Info(fmt.Sprintf("Updating timeout toxicity to %f", toxicity))
 	_, err := ctl.proxy.UpdateToxic("my-timeout", toxicity, toxiproxy.Attributes{
 		"timeout": 0,
 	})
