@@ -18,6 +18,7 @@ package vtcombo
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -1017,8 +1018,8 @@ func (itmc *internalTabletManagerClient) ReadReparentJournalInfo(ctx context.Con
 	return 0, fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) DemotePrimary(context.Context, *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
-	return nil, fmt.Errorf("not implemented in vtcombo")
+func (itmc *internalTabletManagerClient) DemotePrimary(context.Context, *topodatapb.Tablet, bool) (*replicationdatapb.PrimaryStatus, error) {
+	return nil, errors.New("not implemented in vtcombo")
 }
 
 func (itmc *internalTabletManagerClient) UndoDemotePrimary(context.Context, *topodatapb.Tablet, bool) error {
@@ -1103,6 +1104,7 @@ func (itmc *internalTabletManagerClient) ResetReplicationParameters(context.Cont
 func (itmc *internalTabletManagerClient) ReplicaWasRestarted(context.Context, *topodatapb.Tablet, *topodatapb.TabletAlias) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }
+
 func (itmc *internalTabletManagerClient) ResetSequences(ctx context.Context, tablet *topodatapb.Tablet, tables []string) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }

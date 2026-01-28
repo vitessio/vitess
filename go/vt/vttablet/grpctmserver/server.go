@@ -607,7 +607,7 @@ func (s *server) DemotePrimary(ctx context.Context, request *tabletmanagerdatapb
 	defer s.tm.HandleRPCPanic(ctx, "DemotePrimary", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.DemotePrimaryResponse{}
-	status, err := s.tm.DemotePrimary(ctx)
+	status, err := s.tm.DemotePrimary(ctx, request.Force)
 	if err == nil {
 		response.PrimaryStatus = status
 	}
