@@ -81,6 +81,7 @@ var (
 	transitionGracePeriod               time.Duration
 	enableReplicationReporter           bool
 	queryThrottlerConfigRefreshInterval time.Duration
+	tabletThrottlerCacheUpdateInterval  time.Duration
 )
 
 func init() {
@@ -220,6 +221,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&currentConfig.SkipUserMetrics, "skip-user-metrics", defaultConfig.SkipUserMetrics, "If true, user based stats are not recorded.")
 
 	fs.DurationVar(&queryThrottlerConfigRefreshInterval, "query-throttler-config-refresh-interval", time.Minute, "How frequently to refresh configuration for the query throttler")
+	fs.DurationVar(&tabletThrottlerCacheUpdateInterval, "tablet-throttler-cache-update-interval", 10*time.Second, "How frequently to refresh throttle check results for the tablet throttler strategy")
 
 	fs.BoolVar(&currentConfig.Unmanaged, "unmanaged", false, "Indicates an unmanaged tablet, i.e. using an external mysql-compatible database")
 }
@@ -285,6 +287,7 @@ func Init() {
 	currentConfig.SemiSyncMonitor.Interval = semiSyncMonitorInterval
 
 	currentConfig.QueryThrottlerConfigRefreshInterval = queryThrottlerConfigRefreshInterval
+	currentConfig.TabletThrottlerCacheUpdateInterval = tabletThrottlerCacheUpdateInterval
 
 	logFormat := streamlog.GetQueryLogConfig().Format
 	switch logFormat {
@@ -378,6 +381,7 @@ type TabletConfig struct {
 	EnablePerWorkloadTableMetrics       bool          `json:"-"`
 	SkipUserMetrics                     bool          `json:"-"`
 	QueryThrottlerConfigRefreshInterval time.Duration `json:"-"`
+	TabletThrottlerCacheUpdateInterval  time.Duration `json:"-"`
 }
 
 func (cfg *TabletConfig) MarshalJSON() ([]byte, error) {
