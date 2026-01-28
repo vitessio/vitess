@@ -137,7 +137,13 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 		res, _ := prototext.Marshal(info.PrimaryTabletInfo)
 		rowMap["primary_tablet_info"] = sqlutils.CellData{String: string(res), Valid: true}
 	}
-	rowMap["primary_timestamp"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.PrimaryTimestamp), Valid: true}
+
+	primaryTimestamp := fmt.Sprintf("%v", info.PrimaryTimestamp)
+	if info.PrimaryTimestamp != nil {
+		primaryTimestamp = info.PrimaryTimestamp.UTC().Format(sqlutils.DateTimeFormat)
+	}
+	rowMap["primary_timestamp"] = sqlutils.CellData{String: primaryTimestamp, Valid: true}
+
 	rowMap["read_only"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.ReadOnly), Valid: true}
 	rowMap["region"] = sqlutils.CellData{String: info.Region, Valid: true}
 	rowMap["replication_stopped"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.ReplicationStopped), Valid: true}
