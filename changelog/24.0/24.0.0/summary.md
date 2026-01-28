@@ -22,9 +22,10 @@
         - [New `in_order_completion_pending_count` field in OnlineDDL outputs](#vttablet-onlineddl-in-order-completion-count)
         - [Tablet Shutdown Tracking and Connection Validation](#vttablet-tablet-shutdown-validation)
     - **[VTOrc](#minor-changes-vtorc)**
-        - [Deprecated VTOrc Metric Removed](#vtorc-deprecated-metric-removed)
-        - [Improved VTOrc Discovery Logging](#vtorc-improved-discovery-logging)
         - [New `--cell` Flag](#vtorc-cell-flag)
+        - [Improved VTOrc Discovery Logging](#vtorc-improved-discovery-logging)
+        - [Deprecated VTOrc Metric Removed](#vtorc-deprecated-metric-removed)
+        - [Deprecation of Snapshot Topology feature](#vtorc-snapshot-topology-deprecation)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -153,20 +154,6 @@ Vitess now tracks when tablets cleanly shut down and validates tablet records be
 
 ### <a id="minor-changes-vtorc"/>VTOrc</a>
 
-#### <a id="vtorc-deprecated-metric-removed"/>Deprecated VTOrc Metric Removed</a>
-
-The `discoverInstanceTimings` metric has been removed from VTOrc in v24.0.0. This metric was deprecated in v23.
-
-**Migration**: Use `discoveryInstanceTimings` instead, which provides the same timing information for instance discovery actions (Backend, Instance, Other).
-
-**Impact**: Monitoring dashboards or alerting systems using `discoverInstanceTimings` must be updated to use `discoveryInstanceTimings`.
-
-#### <a id="vtorc-improved-discovery-logging"/>Improved VTOrc Discovery Logging</a>
-
-VTOrc's `DiscoverInstance` function now includes the tablet alias in all log messages and uses the correct log level when errors occur. Previously, error messages did not indicate which tablet failed discovery, and errors were logged at INFO level instead of ERROR level.
-
-This improvement makes it easier to identify and debug issues with specific tablets when discovery operations fail.
-
 #### <a id="vtorc-cell-flag"/>New `--cell` Flag</a>
 
 VTOrc now supports a `--cell` flag that specifies which Vitess cell the VTOrc process is running in. The flag is optional in v24 but will be required in v25+, similar to VTGate's `--cell` flag.
@@ -176,3 +163,28 @@ When provided, VTOrc validates that the cell exists in the topology service on s
 This enables future cross-cell problem validation, where VTOrc will be able to ask another cell to validate detected problems before taking recovery actions. The flag is currently validated but not yet used in VTOrc recovery logic.
 
 **Note**: If you're running VTOrc in a multi-cell deployment, start using the `--cell` flag now to prepare for the v25 requirement.
+
+#### <a id="vtorc-improved-discovery-logging"/>Improved VTOrc Discovery Logging</a>
+
+VTOrc's `DiscoverInstance` function now includes the tablet alias in all log messages and uses the correct log level when errors occur. Previously, error messages did not indicate which tablet failed discovery, and errors were logged at INFO level instead of ERROR level.
+
+This improvement makes it easier to identify and debug issues with specific tablets when discovery operations fail.
+
+#### <a id="vtorc-deprecated-metric-removed"/>Deprecated VTOrc Metric Removed</a>
+
+The `DiscoverInstanceTimings` metric has been removed from VTOrc in v24. This metric was deprecated in v23.
+
+**Migration**: Use `DiscoveryInstanceTimings` instead, which provides the same timing information for instance discovery actions (Backend, Instance, Other).
+
+**Impact**: Monitoring dashboards or alerting systems using `DiscoverInstanceTimings` must be updated to use `DiscoveryInstanceTimings`.
+
+#### <a id="vtorc-snapshot-topology-deprecation"/>Deprecation of Snapshot Topology feature</a>
+
+VTOrc's Snapshot Topology feature, which is enabled by setting `--snapshot-topology-interval` to a non-zero-value is deprecated as of v24 and the logic is planned for removal in v25.
+
+The lack of facilities to read the snapshots created by this feature coupled with the in-memory nature of VTOrc's backend means this logic has limited usefulness. This deprecation is explained and tracked in detail in https://github.com/vitessio/vitess/issues/18691.
+
+**Migration**: remove the VTOrc flag `--snapshot-topology-interval` before v25.
+
+**Impact**: VTOrc can no longer create snapshots of the topology in it's backend database.
+

@@ -53,6 +53,10 @@ const (
 	FixPrimaryRecoveryName                           string = "FixPrimary"
 	FixReplicaRecoveryName                           string = "FixReplica"
 	RecoverErrantGTIDDetectedName                    string = "RecoverErrantGTIDDetected"
+
+	// DemoteStaleTopoPrimaryRecoveryName is a recovery for tablets that have a stale type of PRIMARY
+	// in the topology but a newer primary has been elected.
+	DemoteStaleTopoPrimaryRecoveryName string = "DemoteStaleTopoPrimary"
 )
 
 // RecoverySkipCode represents the reason for a skipped recovery.
@@ -145,6 +149,10 @@ const (
 	fixPrimaryFunc
 	fixReplicaFunc
 	recoverErrantGTIDDetectedFunc
+
+	// demoteStaleTopoPrimaryFunc is the recovery function for when a tablet has a stale type of
+	// PRIMARY in the topology and should be demoted.
+	demoteStaleTopoPrimaryFunc
 )
 
 // TopologyRecovery represents an entry in the topology_recovery table
@@ -562,6 +570,8 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 		recoveryFunc = electNewPrimaryFunc
 	case inst.PrimaryIsReadOnly, inst.PrimarySemiSyncMustBeSet, inst.PrimarySemiSyncMustNotBeSet, inst.PrimaryCurrentTypeMismatch:
 		recoveryFunc = fixPrimaryFunc
+	case inst.StaleTopoPrimary:
+		recoveryFunc = demoteStaleTopoPrimaryFunc
 	// replica
 	case inst.NotConnectedToPrimary, inst.ConnectedToWrongPrimary, inst.ReplicationStopped, inst.ReplicaIsWritable,
 		inst.ReplicaSemiSyncMustBeSet, inst.ReplicaSemiSyncMustNotBeSet, inst.ReplicaMisconfigured:
@@ -617,6 +627,8 @@ func hasActionableRecovery(recoveryFunctionCode recoveryFunction) bool {
 		return true
 	case recoverErrantGTIDDetectedFunc:
 		return true
+	case demoteStaleTopoPrimaryFunc:
+		return true
 	default:
 		return false
 	}
@@ -651,6 +663,8 @@ func getCheckAndRecoverFunction(recoveryFunctionCode recoveryFunction) (
 		return fixReplica
 	case recoverErrantGTIDDetectedFunc:
 		return recoverErrantGTIDDetected
+	case demoteStaleTopoPrimaryFunc:
+		return demoteStaleTopoPrimary
 	default:
 		return nil
 	}
@@ -684,6 +698,8 @@ func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
 		return FixReplicaRecoveryName
 	case recoverErrantGTIDDetectedFunc:
 		return RecoverErrantGTIDDetectedName
+	case demoteStaleTopoPrimaryFunc:
+		return DemoteStaleTopoPrimaryRecoveryName
 	default:
 		return ""
 	}
@@ -1127,6 +1143,67 @@ func fixReplica(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logg
 	}
 
 	err = setReplicationSource(ctx, analyzedTablet, primaryTablet, policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet), float64(analysisEntry.ReplicaNetTimeout)/2)
+	return true, topologyRecovery, err
+}
+
+// demoteStaleTopoPrimary demotes a tablet that has a stale type of PRIMARY in the topology when a newer primary has
+// been elected. It demotes the tablet, updates its type to REPLICA in the topology, and sets its replication source
+// to the current primary.
+func demoteStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+	// Register the recovery before touching topology so multiple VTOrc instances do not race the demotion.
+	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
+	if topologyRecovery == nil {
+		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another demoteStaleTopoPrimary.", analysisEntry.AnalyzedInstanceAlias)
+		logger.Warning(message)
+		_ = AuditTopologyRecovery(topologyRecovery, message)
+		return false, nil, err
+	}
+
+	logger.Infof("Analysis: %v, will demote stale topo primary %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
+	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
+	// So that after the active period passes, we are able to run other recoveries.
+	defer func() {
+		_ = resolveRecovery(topologyRecovery, nil)
+	}()
+
+	analyzedTablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
+	if err != nil {
+		logger.Errorf("Failed to read instance %q, aborting recovery", analysisEntry.AnalyzedInstanceAlias)
+		return false, topologyRecovery, fmt.Errorf("failed to read instance: %w", err)
+	}
+
+	primaryTablet, err := shardPrimary(analyzedTablet.Keyspace, analyzedTablet.Shard)
+	if err != nil {
+		logger.Infof("Could not compute primary for %s/%s", analyzedTablet.Keyspace, analyzedTablet.Shard)
+		return false, topologyRecovery, fmt.Errorf("failed to find primary for shard: %w", err)
+	}
+
+	durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet.Keyspace)
+	if err != nil {
+		logger.Infof("Could not read the durability policy for %s/%s", analyzedTablet.Keyspace, analyzedTablet.Shard)
+		return false, topologyRecovery, fmt.Errorf("failed to read the durability policy for the keyspace: %w", err)
+	}
+
+	// Demote the tablet, forcing it to drop any pending transactions that are waiting for an ack.
+	_, err = tmc.DemotePrimary(ctx, analyzedTablet, true)
+	if err != nil {
+		return true, topologyRecovery, fmt.Errorf("failed to demote stale primary: %w", err)
+	}
+	logger.Info("Successfully demoted the stale primary " + analysisEntry.AnalyzedInstanceAlias)
+
+	// Set tablet to REPLICA in topology.
+	semiSync := policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet)
+	err = changeTabletType(ctx, analyzedTablet, topodatapb.TabletType_REPLICA, semiSync)
+	if err != nil {
+		return true, topologyRecovery, fmt.Errorf("failed to set tablet type to REPLICA in topology: %w", err)
+	}
+
+	// Set the instance's replication source to the current primary.
+	err = setReplicationSource(ctx, analyzedTablet, primaryTablet, semiSync, float64(analysisEntry.ReplicaNetTimeout)/2)
+	if err != nil {
+		return true, topologyRecovery, fmt.Errorf("failed to repoint replication to primary: %w", err)
+	}
+
 	return true, topologyRecovery, err
 }
 

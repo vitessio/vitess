@@ -191,6 +191,13 @@ func valueToVTTime(s string) (*vttime.Time, error) {
 		return nil, nil
 	}
 
+	// Handle MySQL's zero/NULL timestamp (0000-00-00 00:00:00)
+	// This is what MySQL returns for NULL datetime values when the connection
+	// is not configured to return SQL NULL values.
+	if strings.HasPrefix(s, "0000-00-00") {
+		return nil, nil
+	}
+
 	gotime, err := time.ParseInLocation(sqltypes.TimestampFormat, s, time.Local)
 	if err != nil {
 		return nil, err

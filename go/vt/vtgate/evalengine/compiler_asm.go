@@ -2308,6 +2308,15 @@ func (asm *assembler) Fn_JSON_KEYS(jp *json.Path) {
 			return 1
 		}, "FN JSON_KEYS (SP-1)")
 	} else {
+		if jp.ContainsWildcards() {
+			asm.emit(func(env *ExpressionEnv) int {
+				env.vm.err = errInvalidPathForTransform
+				return 1
+			}, "FN JSON_KEYS (SP-1), %q", jp.String())
+
+			return
+		}
+
 		asm.emit(func(env *ExpressionEnv) int {
 			doc := env.vm.stack[env.vm.sp-1]
 			if doc == nil {
