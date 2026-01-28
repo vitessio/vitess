@@ -26,15 +26,15 @@ Each test is of the form:
 ```javascript
 "vtgate": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate"],
+			"Packages": ["vitess.io/vitess/go/test/endtoend/vtgate"],
+			"Args": [],
 			"Command": [],
 			"Manual": false,
 			"Shard": 17,
-			"RetryMax": 0,
 			"Tags": []
 		},
 ```
-The important parameters here are Args which define the arguments to `go test` and the Shard which says 
+The important parameters here are Packages which define the Go packages to test, Args for any `go test` flags, and the Shard which says 
 which Test VM should run this test. All tests which have a common Shard value are run in the same test vm.
 
 ### Known Issue
