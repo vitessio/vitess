@@ -10,8 +10,6 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     chromium \
     curl \
     default-jdk \
-    etcd-client \
-    etcd-server \
     g++ \
     git \
     gnupg \
