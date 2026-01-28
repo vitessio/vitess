@@ -151,6 +151,11 @@ if [[ -n "$PACKAGES" ]]; then
   args="$args -e PACKAGES=$PACKAGES"
 fi
 
+# Pass through JUNIT_OUTPUT environment variable if it's set
+if [[ -n "$JUNIT_OUTPUT" ]]; then
+  args="$args -e JUNIT_OUTPUT=$JUNIT_OUTPUT"
+fi
+
 # Mount in host VTDATAROOT if one exists, since it might be a RAM disk or SSD.
 if [[ -n "$VTDATAROOT" ]]; then
   hostdir=`mktemp -d $VTDATAROOT/test-XXX`
