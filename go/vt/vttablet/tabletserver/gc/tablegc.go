@@ -19,6 +19,7 @@ package gc
 import (
 	"context"
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 	"sync"
@@ -30,6 +31,7 @@ import (
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/sqlerror"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
@@ -129,6 +131,11 @@ type TableGC struct {
 	lifecycleStates map[schema.TableGCState]bool
 }
 
+type fastDropConn interface {
+	ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error)
+	SupportsCapability(capabilities.FlavorCapability) (bool, error)
+}
+
 // Status published some status values from the collector
 type Status struct {
 	Keyspace string
@@ -202,16 +209,11 @@ func (collector *TableGC) Open() (err error) {
 		// go through the purging & evac cycle: once the table has been held for long enough, we can just
 		// move on to dropping it. Dropping a large table in 8.0.23 is expected to take several seconds, and
 		// should not block other queries or place any locks on the buffer pool.
-		// BUT!!! You can still encounter these problems if the Adaptive Hash Indexes are enabled: https://bugs.mysql.com/bug.php?id=113312
-		res, err := conn.ExecuteFetch("SELECT variable_value FROM performance_schema.global_variables WHERE variable_name = 'innodb_adaptive_hash_index'", 1, false)
-		if err != nil || len(res.Rows) == 0 || len(res.Rows[0]) == 0 {
-			return vterrors.Wrap(err, "failed to check innodb_adaptive_hash_index setting")
+		lifecycleStates, err := adjustLifecycleForFastDrops(conn, collector.lifecycleStates)
+		if err != nil {
+			return err
 		}
-		if strings.ToLower(res.Rows[0][0].ToString()) != "on" {
-			// Now we know that it's truly safe to skip the purge & evac phases.
-			delete(collector.lifecycleStates, schema.PurgeTableGCState)
-			delete(collector.lifecycleStates, schema.EvacTableGCState)
-		}
+		collector.lifecycleStates = lifecycleStates
 	}
 	log.Infof("TableGC: MySQL version=%v, serverSupportsFastDrops=%v, lifecycleStates=%v", conn.ServerVersion, serverSupportsFastDrops, collector.lifecycleStates)
 
@@ -220,6 +222,28 @@ func (collector *TableGC) Open() (err error) {
 	go collector.operate(ctx)
 
 	return nil
+}
+
+func adjustLifecycleForFastDrops(conn fastDropConn, lifecycleStates map[schema.TableGCState]bool) (map[schema.TableGCState]bool, error) {
+	if len(lifecycleStates) == 0 {
+		return lifecycleStates, nil
+	}
+
+	// Unfortunately you can still encounter problems if the Adaptive Hash Indexes are enabled: https://bugs.mysql.com/bug.php?id=113312
+	// So if AHI is enabled, we cannot safely skip PURGE and EVAC even on MySQL versions that support fast DROP TABLE.
+	res, err := conn.ExecuteFetch("SELECT variable_value FROM performance_schema.global_variables WHERE variable_name = 'innodb_adaptive_hash_index'", 1, false)
+	if err != nil || len(res.Rows) == 0 || len(res.Rows[0]) == 0 {
+		return nil, vterrors.Wrap(err, "failed to check innodb_adaptive_hash_index setting")
+	}
+	if strings.ToLower(res.Rows[0][0].ToString()) == "on" {
+		return lifecycleStates, nil
+	}
+
+	updated := make(map[schema.TableGCState]bool, len(lifecycleStates))
+	maps.Copy(updated, lifecycleStates)
+	delete(updated, schema.PurgeTableGCState)
+	delete(updated, schema.EvacTableGCState)
+	return updated, nil
 }
 
 // Close frees resources

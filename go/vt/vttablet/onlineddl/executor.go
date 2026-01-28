@@ -462,7 +462,8 @@ func (e *Executor) getCreateTableStatement(ctx context.Context, tableName string
 	return createTable, nil
 }
 
-// executeDirectly runs a DDL query directly on the backend MySQL server
+// executeDirectly runs a DDL query directly on the backend MySQL server.
+// This is primarily used for CREATE/DROP/RENAME TABLE statements.
 func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.OnlineDDL, acceptableMySQLErrorCodes ...sqlerror.ErrorCode) (acceptableErrorCodeFound bool, err error) {
 	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
 	if err != nil {
