@@ -77,6 +77,7 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
+<<<<<<< HEAD
 echo '# Flaky tests (3 attempts permitted)'
 
 # Run flaky tests sequentially. Retry when necessary.
@@ -92,3 +93,7 @@ for pkg in $flaky_tests; do
     fi
   done
 done
+=======
+# shellcheck disable=SC2086
+go tool gotestsum $GOTESTSUM_ARGS --packages="$packages_with_tests" -- $VT_GO_PARALLEL $RACE_FLAG -count=1
+>>>>>>> 762c494399 (Fix some linting issues (#19246))
