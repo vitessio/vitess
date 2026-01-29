@@ -27,7 +27,7 @@ jobs:
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+      uses: step-security/harden-runner@e3f713f2d8f53843e71c69a996d56f51aa9adfb9 # v2.14.1
       with:
         egress-policy: audit
 
@@ -145,8 +145,6 @@ jobs:
 
         go mod download
 
-        # install JUnit report formatter
-        go install github.com/vitessio/go-junit-report@{{.GoJunitReport.SHA}} # {{.GoJunitReport.Comment}}
 
     {{if .NeedsMinio }}
     - name: Install Minio
@@ -222,8 +220,7 @@ jobs:
 
         # Some of these tests require specific locales to be installed.
         # See https://github.com/cncf/automation/commit/49f2ad7a791a62ff7d038002bbb2b1f074eed5d5
-        # run the tests however you normally do, then produce a JUnit XML file
-        go run test.go -docker={{if .Docker}}true -flavor={{.Platform}}{{else}}false{{end}} -follow -shard {{.Shard}}{{if .PartialKeyspace}} -partial-keyspace=true {{end}}{{if .BuildTag}} -build-tag={{.BuildTag}} {{end}} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        go run test.go -docker={{if .Docker}}true -flavor={{.Platform}}{{else}}false{{end}} -follow -shard {{.Shard}}{{if .PartialKeyspace}} -partial-keyspace=true {{end}}{{if .BuildTag}} -build-tag={{.BuildTag}} {{end}}
 
     - name: Record test results in launchable if PR is not a draft
       if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main' && !cancelled()
@@ -231,15 +228,9 @@ jobs:
         # send recorded tests to launchable
         launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
 
-    - name: Print test output
-      if: steps.changes.outputs.end_to_end == 'true' && !cancelled()
-      run: |
-        # print test output
-        cat output.txt
-
     - name: Test Summary
       if: steps.changes.outputs.end_to_end == 'true' && !cancelled()
       uses: test-summary/action@31493c76ec9e7aa675f1585d3ed6f1da69269a86 # v2.4
       with:
-        paths: "report.xml"
+        paths: "_test/junit/*.xml"
         show: "fail"

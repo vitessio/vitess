@@ -20,7 +20,7 @@ jobs:
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+      uses: step-security/harden-runner@e3f713f2d8f53843e71c69a996d56f51aa9adfb9 # v2.14.1
       with:
         egress-policy: audit
 
@@ -84,3 +84,10 @@ jobs:
         export VTDATAROOT="/tmp/"
 
         go run test.go -docker=true --follow -shard {{.Shard}}
+
+    - name: Test Summary
+      if: steps.changes.outputs.end_to_end == 'true' && !cancelled()
+      uses: test-summary/action@31493c76ec9e7aa675f1585d3ed6f1da69269a86 # v2.4
+      with:
+        paths: "_test/junit/*.xml"
+        show: "fail"
