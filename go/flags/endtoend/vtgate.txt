@@ -31,6 +31,7 @@ Flags:
       --balancer-keyspaces strings                                       Comma-separated list of keyspaces for which to use the balancer (optional). If empty, applies to all keyspaces.
       --balancer-vtgate-cells strings                                    Comma-separated list of cells that contain vttablets. For 'prefer-cell' mode, this is required. For 'random' mode, this is optional and filters tablets to those cells.
       --bind-address string                                              Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
+      --binlog-dump-authorized-users string                              List of users authorized to execute binlog dump operations, or '%' to allow all users.
       --buffer-drain-concurrency int                                     Maximum number of requests retried simultaneously. More concurrency will increase the load on the PRIMARY vttablet when draining the buffer. (default 1)
       --buffer-keyspace-shards string                                    If not empty, limit buffering to these entries (comma separated). Entry format: keyspace or keyspace/shard. Requires --enable_buffer=true.
       --buffer-max-failover-duration duration                            Stop buffering completely if a failover takes longer than this duration. (default 20s)
@@ -57,6 +58,7 @@ Flags:
       --discovery-low-replication-lag duration                           Threshold below which replication lag is considered low enough to be healthy. (default 30s)
       --emit-stats                                                       If set, emit stats to push-based monitoring and stats backends
       --enable-balancer                                                  (DEPRECATED: use --vtgate-balancer-mode instead) Enable the tablet balancer to evenly spread query load for a given tablet type
+      --enable-binlog-dump                                               Allow users to perform binlog dump operations for CDC/replication
       --enable-buffer                                                    Enable buffering (stalling) of primary traffic during failovers.
       --enable-buffer-dry-run                                            Detect and log failover events, but do not actually buffer requests.
       --enable-direct-ddl                                                Allow users to submit direct DDL statements (default true)
