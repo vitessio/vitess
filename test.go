@@ -332,7 +332,17 @@ func main() {
 	if err := os.MkdirAll(outDir, os.FileMode(0755)); err != nil {
 		log.Fatalf("Can't create output directory: %v", err)
 	}
+<<<<<<< HEAD
 	logFile, err := os.OpenFile(path.Join(outDir, "test.log"), os.O_RDWR|os.O_CREATE, 0644)
+=======
+
+	junitDir := path.Join("_test", "junit")
+	if err := os.MkdirAll(junitDir, os.FileMode(0o755)); err != nil {
+		log.Fatalf("Can't create junit directory: %v", err)
+	}
+
+	logFile, err := os.OpenFile(path.Join(outDir, "test.log"), os.O_RDWR|os.O_CREATE, 0o0644)
+>>>>>>> 762c494399 (Fix some linting issues (#19246))
 	if err != nil {
 		log.Fatalf("Can't create log file: %v", err)
 	}
@@ -568,6 +578,48 @@ func main() {
 					mu.Unlock()
 					break
 				}
+<<<<<<< HEAD
+=======
+
+				// Run the test.
+				start := time.Now()
+				output, err := test.run(vtRoot, dataDir)
+				duration := time.Since(start)
+
+				// Save/print test output.
+				if err != nil || *logPass {
+					if *printLog && !*follow {
+						test.logf("%s\n", output)
+					}
+					outFile := fmt.Sprintf("%v.%v-%v.log", test.flavor, test.name, test.runIndex+1)
+					outFilePath := path.Join(outDir, outFile)
+					test.logf("saving test output to %v", outFilePath)
+					if fileErr := os.WriteFile(outFilePath, output, os.FileMode(0o644)); fileErr != nil {
+						test.logf("WriteFile error: %v", fileErr)
+					}
+				}
+
+				// Clean up the unique VTDATAROOT.
+				if !*keepData {
+					if err := os.RemoveAll(dataDir); err != nil {
+						test.logf("WARNING: can't remove temporary VTDATAROOT: %v", err)
+					}
+				}
+
+				if err != nil {
+					test.logf("FAILED in %v: %v", round(duration), err)
+					mu.Lock()
+					testFailed(test.name)
+					mu.Unlock()
+					continue
+				}
+
+				mu.Lock()
+				testPassed(test.name, duration)
+				test.logf("PASSED in %v", round(duration))
+				passed++
+				mu.Unlock()
+>>>>>>> 762c494399 (Fix some linting issues (#19246))
 			}
 		}()
 	}

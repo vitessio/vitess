@@ -122,7 +122,7 @@ if [[ -n "$existing_cache_image" ]]; then
 fi
 
 # Fix permissions before copying files, to avoid AUFS bug other must have read/access permissions
-chmod -R o=rx *;
+chmod -R o=rx -- *;
 
 # This is required by the vtctld_web_test.py test.
 # Otherwise, /usr/bin/chromium will crash with the error:
@@ -143,10 +143,10 @@ args="$args -v $PWD/test/bin:/tmp/bin"
 
 # Mount in host VTDATAROOT if one exists, since it might be a RAM disk or SSD.
 if [[ -n "$VTDATAROOT" ]]; then
-  hostdir=`mktemp -d $VTDATAROOT/test-XXX`
-  testid=`basename $hostdir`
+  hostdir=$(mktemp -d "$VTDATAROOT/test-XXX")
+  testid=$(basename "$hostdir")
 
-  chmod 777 $hostdir
+  chmod 777 "$hostdir"
 
   echo "Mounting host dir $hostdir as VTDATAROOT"
   args="$args -v $hostdir:/vt/vtdataroot --name=$testid -h $testid"
@@ -191,12 +191,14 @@ bashcmd=$(append_cmd "$bashcmd" "$cmd")
 if tty -s; then
   # interactive shell
   # See above why we turn on "extglob" (extended Glob).
-  docker run -ti $args $image bash -O extglob -c "$bashcmd"
+  # shellcheck disable=SC2086
+  docker run -ti $args "$image" bash -O extglob -c "$bashcmd"
   exitcode=$?
 else
   # non-interactive shell (kill child on signal)
   trap 'docker kill $testid &>/dev/null' SIGTERM SIGINT
-  docker run $args $image bash -O extglob -c "$bashcmd" &
+  # shellcheck disable=SC2086
+  docker run $args "$image" bash -O extglob -c "$bashcmd" &
   wait $!
   exitcode=$?
   trap - SIGTERM SIGINT
@@ -205,23 +207,21 @@ fi
 # Clean up host dir mounted VTDATAROOT
 if [[ -n "$hostdir" ]]; then
   # Use Docker user to clean up first, to avoid permission errors.
-  docker run --name=rm_$testid -v $hostdir:/vt/vtdataroot $image bash -c 'rm -rf /vt/vtdataroot/*'
-  docker rm -f rm_$testid &>/dev/null
-  rm -rf $hostdir
+  docker run --name="rm_$testid" -v "$hostdir":/vt/vtdataroot "$image" bash -c 'rm -rf /vt/vtdataroot/*'
+  docker rm -f "rm_$testid" &>/dev/null
+  rm -rf "$hostdir"
 fi
 
 # If requested, create the cache image.
 if [[ "$mode" == "create_cache" && $exitcode == 0 ]]; then
   msg="DO NOT PUSH: This is a temporary layer meant to persist e.g. the result of 'make build'. Never push this layer back to our official Docker Hub repository."
-  docker commit -m "$msg" $testid $cache_image
-
-  if [[  $? != 0 ]]; then
+  if ! docker commit -m "$msg" "$testid" "$cache_image"; then
     exitcode=$?
     echo "ERROR: Failed to create Docker cache. Used command: docker commit -m '$msg' $testid $image"
   fi
 fi
 
 # Delete the container
-docker rm -f $testid &>/dev/null
+docker rm -f "$testid" &>/dev/null
 
 exit $exitcode
