@@ -127,8 +127,8 @@ install_zookeeper() {
   local dist="$2"
   zk="zookeeper-$version"
   # This is how we'd download directly from source:
-  # wget "https://dlcdn.apache.org/zookeeper/$zk/apache-$zk.tar.gz"
-  "${VTROOT}/tools/wget-retry" -q "${VITESS_RESOURCES_DOWNLOAD_URL}/apache-${zk}.tar.gz"
+  wget "https://dlcdn.apache.org/zookeeper/$zk/apache-$zk.tar.gz"
+  # "${VTROOT}/tools/wget-retry" -q "${VITESS_RESOURCES_DOWNLOAD_URL}/apache-${zk}.tar.gz"
   tar -xzf "$dist/apache-$zk.tar.gz"
   mvn -q -f $dist/apache-$zk/zookeeper-contrib/zookeeper-contrib-fatjar/pom.xml clean install -P fatjar -DskipTests
   mkdir -p $dist/lib
