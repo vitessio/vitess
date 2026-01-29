@@ -22,6 +22,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 
@@ -75,7 +76,7 @@ func registerGRPCServerAuthSha1Flags(fs *pflag.FlagSet) {
 // sha1AuthPluginInitializer initializes the SHA1 authentication plugin.
 func sha1AuthPluginInitializer() (Authenticator, error) {
 	if grpcAuthSha1PasswordFile == "" {
-		return nil, fmt.Errorf("grpc-auth-sha1-password-file flag must be provided when using sha1 auth")
+		return nil, errors.New("grpc-auth-sha1-password-file flag must be provided when using sha1 auth")
 	}
 
 	data, err := os.ReadFile(grpcAuthSha1PasswordFile)
@@ -91,7 +92,7 @@ func sha1AuthPluginInitializer() (Authenticator, error) {
 	}
 
 	if len(entries) == 0 {
-		return nil, fmt.Errorf("sha1 auth plugin credentials file is empty")
+		return nil, errors.New("sha1 auth plugin credentials file is empty")
 	}
 
 	// Validate entries

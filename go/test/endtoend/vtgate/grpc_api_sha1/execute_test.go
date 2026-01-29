@@ -18,7 +18,6 @@ package grpc_api_sha1
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"testing"
 
@@ -35,22 +34,19 @@ import (
 // TestTransactionsWithGRPCAPI test the transaction queries through vtgate grpc apis with SHA1 authentication.
 // It is done through both streaming api and non-streaming api.
 func TestTransactionsWithGRPCAPI(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	vtgateConn, err := cluster.DialVTGate(ctx, t.Name(), vtgateGrpcAddress, "user_with_access", "test_password")
+	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "user_with_access", "test_password")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
 	vtSession := vtgateConn.Session(keyspaceName, nil)
 	workload := []string{"OLTP", "OLAP"}
-	for i := 0; i < 4; i++ { // running all switch combinations.
+	for i :=range 4 { // running all switch combinations.
 		index := i % len(workload)
-		_, session, err := exec(ctx, vtSession, fmt.Sprintf("set workload = %s", workload[index]), nil)
+		_, session, err := exec(t.Context(), vtSession, "set workload = "+workload[index], nil)
 		require.NoError(t, err)
 
 		require.Equal(t, workload[index], session.Options.Workload.String())
-		execTest(ctx, t, workload[index], vtSession)
+		execTest(t.Context(), t, workload[index], vtSession)
 	}
 }
 
