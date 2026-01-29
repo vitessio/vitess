@@ -120,22 +120,17 @@ install_protoc() {
   ln -snf "$dist/bin/protoc" "$VTROOT/bin/protoc"
 }
 
-
 # Install Zookeeper.
 install_zookeeper() {
   local version="$1"
   local dist="$2"
   zk="zookeeper-$version"
-  # This is how we'd download directly from source:
-  wget "https://dlcdn.apache.org/zookeeper/$zk/apache-$zk.tar.gz"
-  # "${VTROOT}/tools/wget-retry" -q "${VITESS_RESOURCES_DOWNLOAD_URL}/apache-${zk}.tar.gz"
-  tar -xzf "$dist/apache-$zk.tar.gz"
-  mvn -q -f $dist/apache-$zk/zookeeper-contrib/zookeeper-contrib-fatjar/pom.xml clean install -P fatjar -DskipTests
-  mkdir -p $dist/lib
-  cp "$dist/apache-$zk/zookeeper-contrib/zookeeper-contrib-fatjar/target/$zk-fatjar.jar" "$dist/lib/$zk-fatjar.jar"
-  rm -rf "$dist/apache-$zk"
+  "${VTROOT}/tools/wget-retry" -q "https://archive.apache.org/dist/zookeeper/${zk}/apache-${zk}-bin.tar.gz"
+  tar -xzf "$dist/apache-$zk-bin.tar.gz"
+  mkdir -p "$dist"/lib
+  cp "$dist/apache-$zk-bin/lib/"*.jar "$dist/lib/"
+  rm -rf "$dist/apache-$zk-bin"
 }
-
 
 # Download and install etcd, link etcd binary into our root.
 install_etcd() {
