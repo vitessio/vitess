@@ -865,6 +865,15 @@ func TestGracefulShutdown(t *testing.T) {
 }
 
 func TestComBinlogDumpGTID(t *testing.T) {
+	// Save and restore original flag values
+	originalBinlogDumpEnabled := enableBinlogDump.Get()
+	defer enableBinlogDump.Set(originalBinlogDumpEnabled)
+
+	// Enable binlog dump and authorize all users for this test
+	enableBinlogDump.Set(true)
+	binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers("%"))
+	defer binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers(""))
+
 	// Create executor environment with sandbox connections
 	executor, sbc1, _, _, _ := createExecutorEnv(t)
 
@@ -998,6 +1007,89 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, false)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
+	})
+}
+
+func TestBinlogDumpACL(t *testing.T) {
+	// Save and restore original flag values
+	originalBinlogDumpEnabled := enableBinlogDump.Get()
+	defer enableBinlogDump.Set(originalBinlogDumpEnabled)
+
+	originalAuthorizedUsers := binlogacl.AuthorizedBinlogUsers.Get()
+	defer binlogacl.AuthorizedBinlogUsers.Set(originalAuthorizedUsers)
+
+	// Create executor environment with sandbox connections
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+
+	// Create VTGate with the gateway
+	vtg := newVTGate(executor, executor.resolver, nil, nil, executor.scatterConn.gateway)
+
+	// Get the tablet alias from the sandbox connection
+	tabletAlias := sbc1.Tablet().Alias
+
+	// Create the vtgate handler
+	vh := newVtgateHandler(vtg)
+	th := &testHandler{}
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	// Create a connection with a specific user
+	mysqlConn := mysql.GetTestServerConn(listener)
+	mysqlConn.ConnectionID = 1
+	mysqlConn.UserData = &mysql.StaticUserData{Username: "cdcuser"}
+	mysqlConn.User = "cdcuser"
+	vh.connections[1] = mysqlConn
+
+	// Set up a valid target
+	targetString := "TestExecutor:-20@primary|" + topoproto.TabletAliasString(tabletAlias)
+	vh.session(mysqlConn).TargetString = targetString
+
+	// Set up empty responses for successful cases
+	sbc1.BinlogDumpError = nil
+	sbc1.BinlogDumpResponses = []*binlogdatapb.BinlogDumpResponse{}
+
+	t.Run("binlog dump disabled globally", func(t *testing.T) {
+		enableBinlogDump.Set(false)
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, false)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "binlog dump is disabled")
+	})
+
+	t.Run("binlog dump enabled but user not authorized", func(t *testing.T) {
+		enableBinlogDump.Set(true)
+		// Don't set any authorized users (empty = no one authorized)
+		binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers(""))
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, false)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not authorized to perform binlog dump")
+		assert.Contains(t, err.Error(), "cdcuser")
+	})
+
+	t.Run("binlog dump enabled and user authorized via explicit list", func(t *testing.T) {
+		enableBinlogDump.Set(true)
+		binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers("cdcuser,otheruser"))
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, false)
+		require.NoError(t, err)
+	})
+
+	t.Run("binlog dump enabled and all users authorized via wildcard", func(t *testing.T) {
+		enableBinlogDump.Set(true)
+		binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers("%"))
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, false)
+		require.NoError(t, err)
+	})
+
+	t.Run("ComBinlogDump also respects ACL", func(t *testing.T) {
+		enableBinlogDump.Set(false)
+
+		err := vh.ComBinlogDump(mysqlConn, "binlog.000001", 4)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "binlog dump is disabled")
 	})
 }
 

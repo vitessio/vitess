@@ -23,6 +23,10 @@ type DDL interface {
 	DirectEnabled() bool
 }
 
+type BinlogDump interface {
+	BinlogDumpEnabled() bool
+}
+
 type TxMode interface {
 	TransactionMode() vtgatepb.TransactionMode
 }

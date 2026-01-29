@@ -96,7 +96,7 @@ func RegisterBinlogACLFlags(fs *pflag.FlagSet) {
 }
 
 func init() {
-	for _, cmd := range []string{"vtcombo", "vtgate"} {
+	for _, cmd := range []string{"vtcombo", "vtgate", "vtgateclienttest"} {
 		servenv.OnParseFor(cmd, RegisterBinlogACLFlags)
 	}
 }

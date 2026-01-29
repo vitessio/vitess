@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
@@ -85,6 +86,16 @@ var (
 
 	mysqlServerFlushDelay = 100 * time.Millisecond
 	mysqlServerMultiQuery = false
+
+	// binlogDumpRequests tracks binlog dump request counts by status
+	binlogDumpRequests = stats.NewCountersWithSingleLabel(
+		"VtgateBinlogDumpRequests",
+		"Vtgate binlog dump request counts",
+		"status",
+		"authorized", // successfully authorized requests
+		"denied",     // denied due to user ACL
+		"disabled",   // denied because feature is disabled
+	)
 )
 
 func registerPluginFlags(fs *pflag.FlagSet) {
@@ -509,10 +520,19 @@ func (vh *vtgateHandler) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos 
 		"VTGate MySQL Connector" /* subcomponent: part of the client */)
 	ctx = callerid.NewContext(ctx, ef, im)
 
-	user := callerid.ImmediateCallerIDFromContext(ctx)
-	if !binlogacl.Authorized(user) {
-		return vterrors.NewErrorf(vtrpcpb.Code_PERMISSION_DENIED, vterrors.AccessDeniedError, "User '%s' is not authorized to perform binlog dump operations", user.GetUsername())
+	// Check if binlog dump is enabled globally
+	if !enableBinlogDump.Get() {
+		binlogDumpRequests.Add("disabled", 1)
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "binlog dump is disabled")
 	}
+
+	// Check user authorization for binlog dump
+	if !binlogacl.Authorized(im) {
+		binlogDumpRequests.Add("denied", 1)
+		return vterrors.NewErrorf(vtrpcpb.Code_PERMISSION_DENIED, vterrors.AccessDeniedError, "User '%s' is not authorized to perform binlog dump operations", im.GetUsername())
+	}
+
+	binlogDumpRequests.Add("authorized", 1)
 
 	// Get the target from the session (set by USE statement or parsed from username during handshake)
 	session := vh.session(c)
@@ -646,10 +666,19 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 		"VTGate MySQL Connector" /* subcomponent: part of the client */)
 	ctx = callerid.NewContext(ctx, ef, im)
 
-	user := callerid.ImmediateCallerIDFromContext(ctx)
-	if !binlogacl.Authorized(user) {
-		return vterrors.NewErrorf(vtrpcpb.Code_PERMISSION_DENIED, vterrors.AccessDeniedError, "User '%s' is not authorized to perform binlog dump operations", user.GetUsername())
+	// Check if binlog dump is enabled globally
+	if !enableBinlogDump.Get() {
+		binlogDumpRequests.Add("disabled", 1)
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "binlog dump is disabled")
 	}
+
+	// Check user authorization for binlog dump
+	if !binlogacl.Authorized(im) {
+		binlogDumpRequests.Add("denied", 1)
+		return vterrors.NewErrorf(vtrpcpb.Code_PERMISSION_DENIED, vterrors.AccessDeniedError, "User '%s' is not authorized to perform binlog dump operations", im.GetUsername())
+	}
+
+	binlogDumpRequests.Add("authorized", 1)
 
 	// Get the target from the session (set by USE statement or parsed from username during handshake)
 	session := vh.session(c)
