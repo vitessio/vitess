@@ -145,6 +145,12 @@ args="$args -v $PWD/test/bin:/tmp/bin"
 if [[ -n "$TOPO" ]]; then
   args="$args -e TOPO=$TOPO"
 fi
+
+# Pass through PACKAGES environment variable if it's set
+if [[ -n "$PACKAGES" ]]; then
+  args="$args -e PACKAGES=$PACKAGES"
+fi
+
 # Mount in host VTDATAROOT if one exists, since it might be a RAM disk or SSD.
 if [[ -n "$VTDATAROOT" ]]; then
   hostdir=`mktemp -d $VTDATAROOT/test-XXX`
