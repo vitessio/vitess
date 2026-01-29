@@ -75,9 +75,7 @@ func TestBinlogDumpGTID_Streaming(t *testing.T) {
 
 	// Start reading packets in a goroutine
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		defer close(packetCh)
 		for {
 			data, err := binlogConn.ReadPacket()
@@ -94,7 +92,7 @@ func TestBinlogDumpGTID_Streaming(t *testing.T) {
 				// Channel full, drop packet
 			}
 		}
-	}()
+	})
 
 	// Give the binlog dump a moment to start
 	time.Sleep(100 * time.Millisecond)
@@ -105,7 +103,7 @@ func TestBinlogDumpGTID_Streaming(t *testing.T) {
 	defer dataConn.Close()
 
 	t.Log("Inserting test data to generate binlog packets")
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		_, err := dataConn.ExecuteFetch(fmt.Sprintf("INSERT INTO binlog_test (msg) VALUES ('streaming_test_%d')", i), 1, false)
 		require.NoError(t, err)
 	}
@@ -209,9 +207,7 @@ func TestBinlogDumpGTID_LargeEvent(t *testing.T) {
 
 	// Start reading packets in a goroutine
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		defer close(packetCh)
 		for {
 			data, err := binlogConn.ReadPacket()
@@ -228,7 +224,7 @@ func TestBinlogDumpGTID_LargeEvent(t *testing.T) {
 				// Channel full, drop packet
 			}
 		}
-	}()
+	})
 
 	// Give the binlog dump a moment to start
 	time.Sleep(100 * time.Millisecond)
@@ -361,7 +357,7 @@ func TestBinlogDumpGTID_FromSpecificPosition(t *testing.T) {
 	defer dataConn.Close()
 
 	// Insert initial data (we should NOT see these events)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		_, err := dataConn.ExecuteFetch(
 			fmt.Sprintf("INSERT INTO binlog_test (msg) VALUES ('before_gtid_%d')", i), 1, false)
 		require.NoError(t, err)
@@ -372,7 +368,7 @@ func TestBinlogDumpGTID_FromSpecificPosition(t *testing.T) {
 	t.Logf("Starting GTID position: %s", startGTID)
 
 	// Insert more data (we SHOULD see these events)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		_, err := dataConn.ExecuteFetch(
 			fmt.Sprintf("INSERT INTO binlog_test (msg) VALUES ('after_gtid_%d')", i), 1, false)
 		require.NoError(t, err)
@@ -633,7 +629,7 @@ func TestBinlogDumpGTID_NonBlockWithPendingEvents(t *testing.T) {
 
 	// Insert several rows - these will be "pending" events when we start streaming
 	numInserts := 5
-	for i := 0; i < numInserts; i++ {
+	for i := range numInserts {
 		_, err := dataConn.ExecuteFetch(
 			fmt.Sprintf("INSERT INTO binlog_test (msg) VALUES ('nonblock_pending_%d')", i), 1, false)
 		require.NoError(t, err)
@@ -837,8 +833,8 @@ func TestBinlogDumpGTID_DirectGRPC(t *testing.T) {
 
 	// Extract just the GTID set (strip the "MySQL56/" prefix)
 	gtidSet := pos
-	if idx := strings.Index(pos, "/"); idx != -1 {
-		gtidSet = pos[idx+1:]
+	if _, after, found := strings.Cut(pos, "/"); found {
+		gtidSet = after
 	}
 	t.Logf("GTID set for BinlogDump: %s", gtidSet)
 
@@ -854,9 +850,7 @@ func TestBinlogDumpGTID_DirectGRPC(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Goroutine 1: Stream binlog packets via direct gRPC
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		err := conn.BinlogDumpGTID(grpcCtx, &binlogdatapb.BinlogDumpGTIDRequest{
 			Target: &querypb.Target{
 				Keyspace:   keyspaceName,
@@ -872,12 +866,10 @@ func TestBinlogDumpGTID_DirectGRPC(t *testing.T) {
 		if err != nil {
 			t.Logf("BinlogDumpGTID ended: %v", err)
 		}
-	}()
+	})
 
 	// Goroutine 2: Write data to generate binlog packets
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		dataConn, err := mysql.Connect(grpcCtx, &vtParams)
 		if err != nil {
 			t.Logf("Failed to connect for writes: %v", err)
@@ -900,7 +892,7 @@ func TestBinlogDumpGTID_DirectGRPC(t *testing.T) {
 				return
 			}
 		}
-	}()
+	})
 
 	wg.Wait()
 
@@ -1069,9 +1061,7 @@ func TestBinlogDump_DirectGRPC(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Goroutine 1: Stream binlog packets via direct gRPC using file/position
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		err := conn.BinlogDump(grpcCtx, &binlogdatapb.BinlogDumpRequest{
 			Target: &querypb.Target{
 				Keyspace:   keyspaceName,
@@ -1088,12 +1078,10 @@ func TestBinlogDump_DirectGRPC(t *testing.T) {
 		if err != nil {
 			t.Logf("BinlogDump (file/pos) ended: %v", err)
 		}
-	}()
+	})
 
 	// Goroutine 2: Write data to generate binlog packets
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		writeConn, err := mysql.Connect(grpcCtx, &vtParams)
 		if err != nil {
 			t.Logf("Failed to connect for writes: %v", err)
@@ -1116,7 +1104,7 @@ func TestBinlogDump_DirectGRPC(t *testing.T) {
 				return
 			}
 		}
-	}()
+	})
 
 	wg.Wait()
 
@@ -1192,9 +1180,7 @@ func TestBinlogDump_LargeEvent(t *testing.T) {
 
 	// Start reading packets in a goroutine
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		defer close(packetCh)
 		for {
 			data, err := binlogConn.ReadPacket()
@@ -1211,7 +1197,7 @@ func TestBinlogDump_LargeEvent(t *testing.T) {
 				// Channel full, drop packet
 			}
 		}
-	}()
+	})
 
 	// Give the binlog dump a moment to start
 	time.Sleep(100 * time.Millisecond)

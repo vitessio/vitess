@@ -382,7 +382,7 @@ func TestWritePacketDirectSequenceNumbers(t *testing.T) {
 
 		// Read packets - reader validates sequence numbers internally
 		// If sequence numbers are wrong, ReadPacket will return an error
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			_, err := sConn.ReadPacket()
 			require.NoError(t, err, "ReadPacket should succeed with correct sequence number %d", i)
 		}
@@ -429,7 +429,7 @@ func TestWritePacketDirectSequenceNumbers(t *testing.T) {
 
 	t.Run("Sequence wraps around at 256", func(t *testing.T) {
 		// Write 256 packets to test sequence wraparound
-		for i := 0; i < 256; i++ {
+		for i := range 256 {
 			err := cConn.WritePacketDirect([]byte{byte(i)})
 			require.NoError(t, err)
 		}
@@ -442,7 +442,7 @@ func TestWritePacketDirectSequenceNumbers(t *testing.T) {
 		assert.Equal(t, uint8(1), cConn.sequence, "Writer sequence should be 1 after wraparound")
 
 		// Read all 257 packets
-		for i := 0; i < 257; i++ {
+		for i := range 257 {
 			_, err := sConn.ReadPacket()
 			require.NoError(t, err, "ReadPacket %d should succeed after wraparound", i)
 		}
