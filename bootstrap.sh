@@ -196,32 +196,6 @@ install_consul() {
   ln -snf "$dist/consul" "$VTROOT/bin/consul"
 }
 
-
-# Download and install toxiproxy, link toxiproxy binary into our root.
-install_toxiproxy() {
-  local version="$1"
-  local dist="$2"
-
-  case $(uname) in
-    Linux)  local platform=linux;;
-    Darwin) local platform=darwin;;
-    *)   echo "WARNING: unsupported platform. Some tests that rely on toxiproxy will not function."; return;;
-  esac
-
-  case $(get_arch) in
-    aarch64)  local target=arm64;;
-    x86_64)  local target=amd64;;
-    arm64)  local target=arm64;;
-    *)   echo "WARNING: unsupported architecture. Some tests that rely on toxiproxy will not function."; return;;
-  esac
-
-  # This is how we'd download directly from source:
-  file="toxiproxy-server-${platform}-${target}"
-  "${VTROOT}/tools/wget-retry" -q "https://github.com/Shopify/toxiproxy/releases/download/$version/$file"
-  chmod +x "$dist/$file"
-  ln -snf "$dist/$file" "$VTROOT/bin/toxiproxy-server"
-}
-
 install_all() {
   echo "##local system details..."
   echo "##platform: $(uname) target:$(get_arch) OS: $OSTYPE"
@@ -240,9 +214,6 @@ install_all() {
   if [ "$BUILD_CONSUL" == 1 ] ; then
     install_dep "Consul" "$CONSUL_VER" "$VTROOT/dist/consul" install_consul
   fi
-
-  # toxiproxy
-  install_dep "toxiproxy" "$TOXIPROXY_VER" "$VTROOT/dist/toxiproxy" install_toxiproxy
 
   echo
   echo "bootstrap finished - run 'make build' to compile"
