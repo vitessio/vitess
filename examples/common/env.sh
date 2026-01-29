@@ -61,7 +61,7 @@ elif [ "${TOPO}" = "consul" ]; then
     CONSUL_SERVER=127.0.0.1
     CONSUL_HTTP_PORT=8500
     CONSUL_SERVER_PORT=8300
-    TOPOLOGY_FLAGS="--topo_implementation consul --topo_global_server_address ${CONSUL_SERVER}:${CONSUL_HTTP_PORT} --topo_global_root /vitess/global/"
+    TOPOLOGY_FLAGS="--topo_implementation consul --topo_global_server_address ${CONSUL_SERVER}:${CONSUL_HTTP_PORT} --topo_global_root vitess/global/"
     mkdir -p "${VTDATAROOT}/consul"
 else
     ETCD_SERVER="localhost:2379"
