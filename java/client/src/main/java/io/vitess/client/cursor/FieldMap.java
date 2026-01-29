@@ -30,7 +30,6 @@ import java.util.Map;
 
 import javax.annotation.Nullable;
 
-
 /**
  * A wrapper for {@code List<Field>} that also facilitates lookup by field name.
  *

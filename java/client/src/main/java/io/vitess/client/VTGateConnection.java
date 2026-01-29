@@ -118,8 +118,8 @@ public class VTGateConnection implements Closeable {
    *
    * @param ctx Context on user and execution deadline if any.
    * @param queryList List of sql queries to be executed.
-   * @param bindVarsList <p>For each sql query it will provide a list of parameters to bind with. If
-   * provided, should match the number of sql queries.</p>
+   * @param bindVarsList for each SQL query, provides a list of parameters to bind with.
+   *     If provided, it should match the number of SQL queries.
    * @param vtSession Session to be used with the call.
    * @return SQL Future with List of Cursors
    * @throws SQLException If anything fails on query execution.
@@ -195,7 +195,7 @@ public class VTGateConnection implements Closeable {
    * @throws SQLException If anything fails on query execution.
    */
   StreamIterator<VStreamResponse> getVStream(Context ctx, VStreamRequest vstreamRequest)
-    throws SQLException {
+      throws SQLException {
     VStreamRequest request = vstreamRequest;
 
     if (ctx.getCallerId() != null) {
