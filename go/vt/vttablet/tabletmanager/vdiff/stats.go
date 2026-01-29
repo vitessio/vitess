@@ -23,9 +23,7 @@ import (
 	"vitess.io/vitess/go/stats"
 )
 
-var (
-	globalStats = &vdiffStats{}
-)
+var globalStats = &vdiffStats{}
 
 func init() {
 	globalStats.register()

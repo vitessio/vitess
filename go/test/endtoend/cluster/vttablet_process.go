@@ -30,6 +30,7 @@ import (
 	"os/exec"
 	"path"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -100,7 +101,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	}
 	vttablet.proc = exec.Command(
 		vttablet.Binary,
-		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--topo_implementation", vttablet.TopoImplementation,
 		"--topo_global_server_address", vttablet.TopoGlobalAddress,
 		"--topo_global_root", vttablet.TopoGlobalRoot,
@@ -130,11 +131,11 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		vttablet.proc.Args = append(vttablet.proc.Args, "--pprof", "cpu,waitSig,path=vttablet_pprof_"+vttablet.Name)
 	}
 
-	//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+	// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 	if vttablet.SupportsBackup {
 		vttablet.proc.Args = append(vttablet.proc.Args, "--restore_from_backup")
 	}
-	//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+	// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 	if vttablet.DbFlavor != "" {
 		vttablet.proc.Args = append(vttablet.proc.Args, "--db_flavor="+vttablet.DbFlavor)
 	}
@@ -358,12 +359,7 @@ func (vttablet *VttabletProcess) WaitForTabletTypesForTimeout(expectedTypes []st
 }
 
 func contains(arr []string, str string) bool {
-	for _, a := range arr {
-		if a == str {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(arr, str)
 }
 
 // WaitForBinLogPlayerCount waits till binlog player count var matches
@@ -587,7 +583,7 @@ func executeQuery(dbConn *mysql.Conn, query string) (*sqltypes.Result, error) {
 	)
 	retries := 10
 	retryDelay := 1 * time.Second
-	for i := 0; i < retries; i++ {
+	for i := range retries {
 		if i > 0 {
 			// We only audit from 2nd attempt and onwards, otherwise this is just too verbose.
 			log.Infof("Executing query %s (attempt %d of %d)", query, (i + 1), retries)
@@ -607,7 +603,7 @@ func executeQuery(dbConn *mysql.Conn, query string) (*sqltypes.Result, error) {
 func executeMultiQuery(dbConn *mysql.Conn, query string) (err error) {
 	retries := 10
 	retryDelay := 1 * time.Second
-	for i := 0; i < retries; i++ {
+	for i := range retries {
 		if i > 0 {
 			// We only audit from 2nd attempt and onwards, otherwise this is just too verbose.
 			log.Infof("Executing query %s (attempt %d of %d)", query, (i + 1), retries)
@@ -746,7 +742,7 @@ func (vttablet *VttabletProcess) ConfirmDataDirHasNoGlobalPerms(t *testing.T) {
 		return
 	}
 
-	var allowedFiles = []string{
+	allowedFiles := []string{
 		// These are intentionally created with the world/other read bit set by mysqld itself
 		// during the --initialize[-insecure] step.
 		// See: https://dev.mysql.com/doc/mysql-security-excerpt/en/creating-ssl-rsa-files-using-mysql.html
@@ -780,7 +776,7 @@ func (vttablet *VttabletProcess) ConfirmDataDirHasNoGlobalPerms(t *testing.T) {
 		}
 
 		// check if any global bit is on the filemode
-		if info.Mode()&0007 != 0 {
+		if info.Mode()&0o007 != 0 {
 			matches = append(matches, fmt.Sprintf(
 				"%s (%s)",
 				path.Join(datadir, p),

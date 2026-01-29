@@ -97,8 +97,7 @@ func initResolver(t *testing.T, ctx context.Context) *Resolver {
 }
 
 func TestResolveDestinations(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	resolver := initResolver(t, ctx)
 
 	id1 := &querypb.Value{
@@ -123,7 +122,7 @@ func TestResolveDestinations(t *testing.T) {
 		End:   []byte{0x30},
 	}
 
-	var testCases = []struct {
+	testCases := []struct {
 		name           string
 		keyspace       string
 		ids            []*querypb.Value

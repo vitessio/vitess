@@ -188,7 +188,7 @@ func testCompilerCase(t *testing.T, query string, venv *vtenv.Environment, schem
 }
 
 func TestCompilerSingle(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		expression string
 		values     []sqltypes.Value
 		result     string
@@ -854,7 +854,7 @@ func TestCompilerSingle(t *testing.T) {
 			}
 
 			// re-run the same evaluation multiple times to ensure results are always consistent
-			for i := 0; i < 8; i++ {
+			for i := range 8 {
 				res, err := env.Evaluate(converted)
 				if err != nil {
 					t.Fatal(err)
@@ -872,7 +872,7 @@ func TestCompilerSingle(t *testing.T) {
 }
 
 func TestBindVarLiteral(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		expression string
 		bindType   func(expr sqlparser.Expr)
 		bindVar    *querypb.BindVariable
@@ -936,7 +936,7 @@ func TestBindVarLiteral(t *testing.T) {
 			}
 
 			// re-run the same evaluation multiple times to ensure results are always consistent
-			for i := 0; i < 8; i++ {
+			for i := range 8 {
 				res, err := env.EvaluateVM(converted.(*evalengine.CompiledExpr))
 				if err != nil {
 					t.Fatal(err)
@@ -978,7 +978,7 @@ func (t *testVcursor) SetLastInsertID(id uint64) {
 var _ evalengine.VCursor = (*testVcursor)(nil)
 
 func TestLastInsertID(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		expression string
 		result     uint64
 		missing    bool
@@ -1026,7 +1026,8 @@ func runTest(t *testing.T, expr sqlparser.Expr, cfg *evalengine.Config, tc struc
 	expression string
 	result     uint64
 	missing    bool
-}) {
+},
+) {
 	converted, err := evalengine.Translate(expr, cfg)
 	require.NoError(t, err)
 
@@ -1044,7 +1045,7 @@ func runTest(t *testing.T, expr sqlparser.Expr, cfg *evalengine.Config, tc struc
 }
 
 func TestCompilerNonConstant(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		expression string
 	}{
 		{
@@ -1076,7 +1077,7 @@ func TestCompilerNonConstant(t *testing.T) {
 
 			env := evalengine.EmptyExpressionEnv(venv)
 			var prev string
-			for i := 0; i < 1000; i++ {
+			for range 1000 {
 				expected, err := env.EvaluateAST(converted)
 				if err != nil {
 					t.Fatal(err)
@@ -1088,7 +1089,7 @@ func TestCompilerNonConstant(t *testing.T) {
 			}
 
 			// re-run the same evaluation multiple times to ensure results are always consistent
-			for i := 0; i < 1000; i++ {
+			for range 1000 {
 				res, err := env.EvaluateVM(converted.(*evalengine.CompiledExpr))
 				if err != nil {
 					t.Fatal(err)

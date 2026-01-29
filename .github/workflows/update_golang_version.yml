@@ -19,12 +19,12 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+        uses: step-security/harden-runner@e3f713f2d8f53843e71c69a996d56f51aa9adfb9 # v2.14.1
         with:
           egress-policy: audit
 
       - name: Check out code
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ matrix.branch }}
 
@@ -36,6 +36,7 @@ jobs:
       - name: Detect new version and update codebase
         env:
           GH_TOKEN: ${{ github.token }}
+          GOTOOLCHAIN: auto
         id: detect-and-update
         run: |
           old_go_version=$(go run ./go/tools/go-upgrade/go-upgrade.go get go-version)
@@ -58,7 +59,7 @@ jobs:
           echo "bootstrap-version=${bootstrap_version}" >> $GITHUB_OUTPUT
 
           # Check if the PR already exists, if it does then do not create new PR.
-          gh pr list -S "is:open [${{ matrix.branch }}] Upgrade the Golang version to go${go_version}" > out.txt 2>&1 | true
+          gh pr list -S 'is:open "[${{ matrix.branch }}] Upgrade the Golang version to go${go_version}"' > out.txt 2>&1 | true
           if [ -s out.txt ]; then
             rm -f out.txt
             exit 0
@@ -68,7 +69,7 @@ jobs:
 
       - name: Create Pull Request
         if: steps.detect-and-update.outputs.create-pr == 'true'
-        uses: peter-evans/create-pull-request@98357b18bf14b5342f975ff684046ec3b2a07725 # v8.0.0
+        uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0 # v8.1.0
         with:
           token: ${{ secrets.CREATE_PR_VITESS_BOT }}
           branch: "upgrade-go-to-${{steps.detect-and-update.outputs.go-version}}-on-${{ matrix.branch }}"

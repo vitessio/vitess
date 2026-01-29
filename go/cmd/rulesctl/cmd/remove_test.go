@@ -63,7 +63,7 @@ func TestRemove(t *testing.T) {
         "Name": "Name"
     }
 ]
-`), 0777)
+`), 0o777)
 	}()
 
 	tests := []struct {

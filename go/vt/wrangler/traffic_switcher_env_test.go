@@ -735,7 +735,7 @@ func (tme *testMigraterEnv) startTablets(t *testing.T) {
 	// Wait for the shard record primaries to be set.
 	for _, primary := range allPrimarys {
 		primaryFound := false
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			si, err := tme.wr.ts.GetShard(context.Background(), primary.Tablet.Keyspace, primary.Tablet.Shard)
 			if err != nil {
 				t.Fatal(err)

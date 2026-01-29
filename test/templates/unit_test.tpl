@@ -26,7 +26,7 @@ jobs:
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+      uses: step-security/harden-runner@e3f713f2d8f53843e71c69a996d56f51aa9adfb9 # v2.14.1
       with:
         egress-policy: audit
 
@@ -38,7 +38,7 @@ jobs:
         fi
 
     - name: Check out code
-      uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         persist-credentials: 'false'
 
@@ -76,7 +76,7 @@ jobs:
 
     - name: Set up python
       if: steps.changes.outputs.unit_tests == 'true'
-      uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
 
     - name: Tune the OS
       if: steps.changes.outputs.unit_tests == 'true'

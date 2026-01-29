@@ -135,7 +135,8 @@ END;`
 }
 `
 
-	createProcSQL = []string{`
+	createProcSQL = []string{
+		`
 CREATE PROCEDURE in_parameter(IN val int)
 BEGIN
 	insert into allDefaults(id) values(val);

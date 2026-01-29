@@ -1,5 +1,4 @@
 //go:build !codeanalysis
-// +build !codeanalysis
 
 /*
 Copyright 2019 The Vitess Authors.
@@ -102,7 +101,7 @@ Search for first existing file in cnfFiles and subsitute in the right values.
 */
 func MakeZooCfg(cnfFiles []string, cnf *ZkConfig, header string) (string, error) {
 	var myTemplateSource strings.Builder
-	for _, line := range strings.Split(header, "\n") {
+	for line := range strings.SplitSeq(header, "\n") {
 		fmt.Fprintf(&myTemplateSource, "## %v\n", strings.TrimSpace(line))
 	}
 
@@ -145,7 +144,7 @@ server_id's must be 1-255, global id's are 1001-1255 mod 1000.
 */
 func MakeZkConfigFromString(cmdLine string, myID uint32) *ZkConfig {
 	zkConfig := NewZkConfig()
-	for _, zki := range strings.Split(cmdLine, ",") {
+	for zki := range strings.SplitSeq(cmdLine, ",") {
 		zkiParts := strings.SplitN(zki, "@", 2)
 		if len(zkiParts) != 2 {
 			panic("bad command line format for zk config")

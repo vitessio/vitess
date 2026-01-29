@@ -316,20 +316,20 @@ type TabletConfig struct {
 
 	Unmanaged bool `json:"unmanaged,omitempty"`
 
-	OltpReadPool ConnPoolConfig `json:"oltpReadPool,omitempty"`
-	OlapReadPool ConnPoolConfig `json:"olapReadPool,omitempty"`
-	TxPool       ConnPoolConfig `json:"txPool,omitempty"`
+	OltpReadPool ConnPoolConfig `json:"oltpReadPool"`
+	OlapReadPool ConnPoolConfig `json:"olapReadPool"`
+	TxPool       ConnPoolConfig `json:"txPool"`
 
-	Olap             OlapConfig             `json:"olap,omitempty"`
-	Oltp             OltpConfig             `json:"oltp,omitempty"`
-	HotRowProtection HotRowProtectionConfig `json:"hotRowProtection,omitempty"`
+	Olap             OlapConfig             `json:"olap"`
+	Oltp             OltpConfig             `json:"oltp"`
+	HotRowProtection HotRowProtectionConfig `json:"hotRowProtection"`
 
-	Healthcheck  HealthcheckConfig  `json:"healthcheck,omitempty"`
-	GracePeriods GracePeriodsConfig `json:"gracePeriods,omitempty"`
+	Healthcheck  HealthcheckConfig  `json:"healthcheck"`
+	GracePeriods GracePeriodsConfig `json:"gracePeriods"`
 
-	SemiSyncMonitor SemiSyncMonitorConfig `json:"semiSyncMonitor,omitempty"`
+	SemiSyncMonitor SemiSyncMonitorConfig `json:"semiSyncMonitor"`
 
-	ReplicationTracker ReplicationTrackerConfig `json:"replicationTracker,omitempty"`
+	ReplicationTracker ReplicationTrackerConfig `json:"replicationTracker"`
 
 	// Consolidator can be enable, disable, or notOnPrimary. Default is enable.
 	Consolidator                string        `json:"consolidator,omitempty"`
@@ -374,7 +374,7 @@ type TabletConfig struct {
 	EnforceStrictTransTables bool `json:"-"`
 	EnableOnlineDDL          bool `json:"-"`
 
-	RowStreamer RowStreamerConfig `json:"rowStreamer,omitempty"`
+	RowStreamer RowStreamerConfig `json:"rowStreamer"`
 
 	EnableViews bool `json:"-"`
 

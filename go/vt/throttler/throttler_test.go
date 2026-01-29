@@ -112,7 +112,7 @@ func benchmarkThrottlerParallel(b *testing.B, qps int64) {
 	throttler, _ := NewThrottler("test", "queries", threadCount, qps, ReplicationLagModuleDisabled)
 	defer throttler.Close()
 	threadIDs := make(chan int, threadCount)
-	for id := 0; id < threadCount; id++ {
+	for id := range threadCount {
 		threadIDs <- id
 	}
 	close(threadIDs)
@@ -144,9 +144,8 @@ func benchmarkThrottlerParallel(b *testing.B, qps int64) {
 func BenchmarkThrottlerDisabled(b *testing.B) {
 	throttler, _ := NewThrottler("test", "queries", 1, MaxRateModuleDisabled, ReplicationLagModuleDisabled)
 	defer throttler.Close()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		backoff := throttler.Throttle(0)
 		if backoff != NotThrottled {
 			b.Fatalf("unthrottled throttler should never have throttled us: %v", backoff)
@@ -223,7 +222,7 @@ func TestThrottle_RateRemainderIsDistributedAcrossThreads(t *testing.T) {
 
 	fc.setNow(1000 * time.Millisecond)
 	// Out of 5 QPS, each thread gets 1 and two threads get 1 query extra.
-	for threadID := 0; threadID < 2; threadID++ {
+	for threadID := range 2 {
 		gotBackoff := throttler.Throttle(threadID)
 		require.Equalf(t, NotThrottled, gotBackoff, "throttler should not have throttled thread %d", threadID)
 	}
@@ -231,7 +230,7 @@ func TestThrottle_RateRemainderIsDistributedAcrossThreads(t *testing.T) {
 	fc.setNow(1500 * time.Millisecond)
 	// Find the thread which got one extra query.
 	threadsWithMoreThanOneQPS := 0
-	for threadID := 0; threadID < 2; threadID++ {
+	for threadID := range 2 {
 		if gotBackoff := throttler.Throttle(threadID); gotBackoff == NotThrottled {
 			threadsWithMoreThanOneQPS++
 		} else {
@@ -244,7 +243,7 @@ func TestThrottle_RateRemainderIsDistributedAcrossThreads(t *testing.T) {
 	}
 
 	// Now, all threads are throttled.
-	for threadID := 0; threadID < 2; threadID++ {
+	for threadID := range 2 {
 		wantBackoff := 500 * time.Millisecond
 		gotBackoff := throttler.Throttle(threadID)
 		require.Equalf(t, wantBackoff, gotBackoff, "throttler should have throttled thread %d", threadID)
@@ -259,13 +258,13 @@ func TestThreadFinished(t *testing.T) {
 
 	// [1000ms, 2000ms):  Each thread consumes their 1 QPS.
 	fc.setNow(1000 * time.Millisecond)
-	for threadID := 0; threadID < 2; threadID++ {
+	for threadID := range 2 {
 		gotBackoff := throttler.Throttle(threadID)
 		require.Equalf(t, NotThrottled, gotBackoff, "throttler should not have throttled thread %d", threadID)
 	}
 	// Now they would be throttled.
 	wantBackoff := 1000 * time.Millisecond
-	for threadID := 0; threadID < 2; threadID++ {
+	for threadID := range 2 {
 		gotBackoff := throttler.Throttle(threadID)
 		require.Equalf(t, wantBackoff, gotBackoff, "throttler should have throttled thread %d", threadID)
 	}
@@ -345,7 +344,7 @@ func TestThrottle_MaxRateDisabled(t *testing.T) {
 
 	fc.setNow(1000 * time.Millisecond)
 	// No QPS set. 10 requests in a row are fine.
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		gotBackoff := throttler.Throttle(0)
 		require.Equal(t, NotThrottled, gotBackoff, "throttler should not have throttled us")
 	}
@@ -363,12 +362,12 @@ func TestThrottle_MaxRateLowerThanThreadCount(t *testing.T) {
 	// 2 QPS instead of configured 1 QPS allowed since there are 2 threads which
 	// must not starve.
 	fc.setNow(1000 * time.Millisecond)
-	for threadID := 0; threadID < 1; threadID++ {
+	for threadID := range 1 {
 		gotBackoff := throttler.Throttle(threadID)
 		require.Equalf(t, NotThrottled, gotBackoff, "throttler should not have throttled thread %d", threadID)
 	}
 	wantBackoff := 1000 * time.Millisecond
-	for threadID := 0; threadID < 1; threadID++ {
+	for threadID := range 1 {
 		gotBackoff := throttler.Throttle(threadID)
 		require.Equalf(t, wantBackoff, gotBackoff, "throttler should have throttled thread %d", threadID)
 	}
@@ -432,9 +431,7 @@ func TestThrottlerMaxLag(t *testing.T) {
 
 	// run .add() and .MaxLag() concurrently to detect races
 	for _, tabletType := range testTabletTypes {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for {
 				select {
 				case <-ctx.Done():
@@ -443,11 +440,9 @@ func TestThrottlerMaxLag(t *testing.T) {
 					throttler.MaxLag(tabletType)
 				}
 			}
-		}()
+		})
 
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for {
 				select {
 				case <-ctx.Done():
@@ -473,7 +468,7 @@ func TestThrottlerMaxLag(t *testing.T) {
 					})
 				}
 			}
-		}()
+		})
 	}
 	time.Sleep(time.Second)
 	cancel()
