@@ -1492,6 +1492,17 @@
 			"Shard": "vtgate_general_heavy",
 			"Tags": []
 		},
+		"vtgate_grpc_api_sha1": {
+			"File": "unused.go",
+			"Packages": [
+				"vitess.io/vitess/go/test/endtoend/vtgate/grpc_api_sha1"
+			],
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_general_heavy",
+			"Tags": []
+		},
 		"topo_zk2": {
 			"File": "unused.go",
 			"Packages": [

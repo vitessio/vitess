@@ -46,6 +46,7 @@ Flags:
       --gateway-initial-tablet-timeout duration                          At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type (default 30s)
       --grpc-auth-mode string                                            Which auth plugin implementation to use (eg: static)
       --grpc-auth-mtls-allowed-substrings string                         List of substrings of at least one of the client certificate names (separated by colon).
+      --grpc-auth-sha1-password-file string                              JSON file containing username and SHA1 password hashes for gRPC sha1 auth
       --grpc-auth-static-client-creds string                             When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
       --grpc-auth-static-password-file string                            JSON File to read the users/passwords from.
       --grpc-bind-address string                                         Bind address for gRPC calls. If empty, listen on all addresses.
