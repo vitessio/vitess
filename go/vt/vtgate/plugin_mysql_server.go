@@ -52,6 +52,7 @@ import (
 	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/binlogacl"
 	"vitess.io/vitess/go/vt/vttls"
 )
 
@@ -508,6 +509,11 @@ func (vh *vtgateHandler) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos 
 		"VTGate MySQL Connector" /* subcomponent: part of the client */)
 	ctx = callerid.NewContext(ctx, ef, im)
 
+	user := callerid.ImmediateCallerIDFromContext(ctx)
+	if !binlogacl.Authorized(user) {
+		return vterrors.NewErrorf(vtrpcpb.Code_PERMISSION_DENIED, vterrors.AccessDeniedError, "User '%s' is not authorized to perform binlog dump operations", user.GetUsername())
+	}
+
 	// Get the target from the session (set by USE statement or parsed from username during handshake)
 	session := vh.session(c)
 	targetString := session.TargetString
@@ -639,6 +645,11 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 		c.RemoteAddr().String(), /* component: running client process */
 		"VTGate MySQL Connector" /* subcomponent: part of the client */)
 	ctx = callerid.NewContext(ctx, ef, im)
+
+	user := callerid.ImmediateCallerIDFromContext(ctx)
+	if !binlogacl.Authorized(user) {
+		return vterrors.NewErrorf(vtrpcpb.Code_PERMISSION_DENIED, vterrors.AccessDeniedError, "User '%s' is not authorized to perform binlog dump operations", user.GetUsername())
+	}
 
 	// Get the target from the session (set by USE statement or parsed from username during handshake)
 	session := vh.session(c)

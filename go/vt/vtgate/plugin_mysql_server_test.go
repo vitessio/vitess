@@ -43,6 +43,7 @@ import (
 	"vitess.io/vitess/go/vt/tlstest"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vtgate/binlogacl"
 )
 
 type testHandler struct {
@@ -883,13 +884,35 @@ func TestComBinlogDumpGTID(t *testing.T) {
 	// Create a connection
 	mysqlConn := mysql.GetTestServerConn(listener)
 	mysqlConn.ConnectionID = 1
-	mysqlConn.UserData = &mysql.StaticUserData{}
+	mysqlConn.User = "testuser"
+	mysqlConn.UserData = &mysql.StaticUserData{Username: "testuser"}
 	vh.connections[1] = mysqlConn
+
+	binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers("%"))
+	defer binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers(""))
+
+	t.Run("unauthorized user", func(t *testing.T) {
+		binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers("cdcUser"))
+		defer binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers("%"))
+
+		mysqlConn.User = "regularUser"
+		mysqlConn.UserData = &mysql.StaticUserData{Username: "regularUser"}
+		defer func() {
+			mysqlConn.User = "testuser"
+			mysqlConn.UserData = &mysql.StaticUserData{Username: "testuser"}
+		}()
+
+		targetString := "TestExecutor:-20@primary|" + topoproto.TabletAliasString(tabletAlias)
+		vh.session(mysqlConn).TargetString = targetString
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, false)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not authorized to perform binlog dump operations")
+	})
 
 	t.Run("no target specified", func(t *testing.T) {
 		// Clear any previous target
 		vh.session(mysqlConn).TargetString = ""
-		mysqlConn.User = "testuser"
 
 		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, false)
 		require.Error(t, err)
