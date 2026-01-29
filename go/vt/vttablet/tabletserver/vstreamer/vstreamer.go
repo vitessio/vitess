@@ -429,7 +429,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				return nil
 			default:
 				if err := vs.rebuildPlans(); err != nil {
-					return vterrors.Wrap(err, "failed to rebuild replication plans")
+					return vterrors.Wrap(err, "failed to rebuild replication plans after vschema change notification")
 				}
 			}
 		case err := <-errs:
@@ -593,7 +593,12 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 				})
 			}
 			if schema.MustReloadSchemaOnDDL(q.SQL, vs.cp.DBName(), vs.vse.env.Environment().Parser()) {
-				vs.se.ReloadAt(context.Background(), vs.pos)
+				if err := vs.se.ReloadAt(vs.ctx, vs.pos); err != nil {
+					return nil, vterrors.Wrap(err, "failed to reload schema after DDL encountered in stream")
+				}
+				if err := vs.rebuildPlans(); err != nil {
+					return nil, vterrors.Wrap(err, "failed to rebuild replication plans after DDL encountered in stream")
+				}
 			}
 		case sqlparser.StmtSavepoint:
 			// We currently completely skip `SAVEPOINT ...` statements.
