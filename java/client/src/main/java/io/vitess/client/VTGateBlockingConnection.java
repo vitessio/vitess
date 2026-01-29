@@ -18,13 +18,11 @@ package io.vitess.client;
 
 import io.vitess.client.cursor.Cursor;
 import io.vitess.client.cursor.CursorWithError;
-
 import java.io.Closeable;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
-
 import javax.annotation.Nullable;
 
 /**
