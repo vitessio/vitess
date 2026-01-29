@@ -344,7 +344,7 @@ func main() {
 	}
 
 	junitDir := path.Join("_test", "junit")
-	if err := os.MkdirAll(junitDir, os.FileMode(0755)); err != nil {
+	if err := os.MkdirAll(junitDir, os.FileMode(0o755)); err != nil {
 		log.Fatalf("Can't create junit directory: %v", err)
 	}
 
@@ -533,7 +533,7 @@ func main() {
 					outFile := fmt.Sprintf("%v.%v-%v.log", test.flavor, test.name, test.runIndex+1)
 					outFilePath := path.Join(outDir, outFile)
 					test.logf("saving test output to %v", outFilePath)
-					if fileErr := os.WriteFile(outFilePath, output, os.FileMode(0644)); fileErr != nil {
+					if fileErr := os.WriteFile(outFilePath, output, os.FileMode(0o644)); fileErr != nil {
 						test.logf("WriteFile error: %v", fileErr)
 					}
 				}
