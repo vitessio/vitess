@@ -62,8 +62,7 @@ func checkIfOptionIsSupported(t *testing.T, variable string) bool {
 // correct: that they don't contain the missing columns and that the
 // DataColumns bitmap is sent.
 func TestNoBlob(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	oldEngine := engine
 	engine = nil
 	oldEnv := env
@@ -116,15 +115,18 @@ func TestNoBlob(t *testing.T) {
 		{"insert into t1 values (1, 'blob1', 'aaa')", nil},
 		{"update t1 set val = 'bbb'", nil},
 		{"commit", nil},
-	}, {{"begin", nil},
+	}, {
+		{"begin", nil},
 		{"insert into t2 values (1, 'text1', 'aaa')", nil},
 		{"update t2 set val = 'bbb'", nil},
 		{"commit", nil},
-	}, {{"begin", nil},
+	}, {
+		{"begin", nil},
 		{"insert into t3 values (1, 'text1', 'aaa')", nil},
 		{"update t3 set val = 'bbb'", nil},
 		{"commit", nil},
-	}, {{"begin", nil},
+	}, {
+		{"begin", nil},
 		{"insert into t4 (id, blb, val) values (1, 'text1', 'aaa')", []TestRowEvent{
 			{event: insertGeneratedFE.String()},
 			{spec: &TestRowEventSpec{table: "t4", changes: []TestRowChange{{after: []string{"1", "aaatsty", "text1", "aaa"}}}}},
@@ -200,7 +202,8 @@ func TestCellValuePadding(t *testing.T) {
 		ddls: []string{
 			"create table t1(id int, val binary(4), primary key(val))",
 			"create table t2(id int, val char(4), primary key(val))",
-			"create table t3(id int, val char(4) collate utf8mb4_bin, primary key(val))"},
+			"create table t3(id int, val char(4) collate utf8mb4_bin, primary key(val))",
+		},
 	}
 	defer ts.Close()
 	ts.Init()
@@ -333,9 +336,11 @@ func TestStmtComment(t *testing.T) {
 		{"begin", nil},
 		{"insert into t1 values (1, 'aaa')", nil},
 		{"commit", nil},
-		{"/*!40000 ALTER TABLE `t1` DISABLE KEYS */", []TestRowEvent{
-			{restart: true, event: "gtid"},
-			{event: "other"}},
+		{
+			"/*!40000 ALTER TABLE `t1` DISABLE KEYS */", []TestRowEvent{
+				{restart: true, event: "gtid"},
+				{event: "other"},
+			},
 		},
 	}}
 	ts.Run()
@@ -384,9 +389,11 @@ func TestVersion(t *testing.T) {
 		// External table events don't get sent.
 		output: [][]string{{
 			`begin`,
-			`type:VERSION`}, {
+			`type:VERSION`,
+		}, {
 			`gtid`,
-			`commit`}},
+			`commit`,
+		}},
 	}}
 	runCases(t, nil, testcases, "", nil)
 	mt, err := env.SchemaEngine.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid)
@@ -651,8 +658,7 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 	ts.Init()
 	defer ts.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match: "/t2.*",
@@ -685,7 +691,7 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 		fe.enumSetStrings = true
 	}
 
-	var expectedEvents = []string{
+	expectedEvents := []string{
 		"begin",
 		t1FieldEvent.String(),
 		"gtid",
@@ -1473,8 +1479,7 @@ func TestDDLDropColumn(t *testing.T) {
 		"insert into ddl_test2 values(2, 'bbb')",
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ch := make(chan []*binlogdatapb.VEvent)
 	go func() {
@@ -1895,8 +1900,7 @@ func TestJournal(t *testing.T) {
 
 // TestMinimalMode confirms that we don't support minimal binlog_row_image mode.
 func TestMinimalMode(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	oldEngine := engine
 	engine = nil
 	oldEnv := env
@@ -1962,8 +1966,7 @@ func TestHeartbeat(t *testing.T) {
 }
 
 func TestFullyThrottledTimeout(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	origTimeout := fullyThrottledTimeout
 	origHeartbeatTime := HeartbeatTime
 	startingMetric := engine.errorCounts.Counts()[fullyThrottledMetricLabel]
@@ -2013,8 +2016,7 @@ func TestNoFutureGTID(t *testing.T) {
 	future := pos[:index+1] + strconv.Itoa(num+1)
 	t.Logf("future position: %v", future)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ch := make(chan []*binlogdatapb.VEvent)
 	go func() {

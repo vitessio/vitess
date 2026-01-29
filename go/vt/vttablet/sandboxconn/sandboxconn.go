@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -136,7 +137,7 @@ type SandboxConn struct {
 	EphemeralShardErr error
 
 	// if this is not nil, any calls will panic the tablet
-	panicThis interface{}
+	panicThis any
 
 	NotServing bool
 
@@ -280,9 +281,7 @@ func (sbc *SandboxConn) Execute(ctx context.Context, session queryservice.Sessio
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s: %v, want: %v", vterrors.WrongTablet, target.TabletType, sbc.tablet.Type)
 	}
 	bv := make(map[string]*querypb.BindVariable)
-	for k, v := range bindVars {
-		bv[k] = v
-	}
+	maps.Copy(bv, bindVars)
 	sbc.appendToQueries(&querypb.BoundQuery{
 		Sql:           query,
 		BindVariables: bv,
@@ -306,9 +305,7 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, session queryservice.
 	sbc.sExecMu.Lock()
 	sbc.ExecCount.Add(1)
 	bv := make(map[string]*querypb.BindVariable)
-	for k, v := range bindVars {
-		bv[k] = v
-	}
+	maps.Copy(bv, bindVars)
 	sbc.appendToQueries(&querypb.BoundQuery{
 		Sql:           query,
 		BindVariables: bv,
@@ -915,7 +912,7 @@ var StreamRowResult = &sqltypes.Result{
 	}},
 }
 
-func (sbc *SandboxConn) SetPanic(i interface{}) {
+func (sbc *SandboxConn) SetPanic(i any) {
 	sbc.panicThis = i
 }
 

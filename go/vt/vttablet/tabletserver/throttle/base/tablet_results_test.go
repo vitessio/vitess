@@ -41,6 +41,7 @@ func newMetricResultMap(val float64) MetricResultMap {
 		LoadAvgMetricName: NewSimpleMetricResult(3.14),
 	}
 }
+
 func noSuchMetricMap() MetricResultMap {
 	result := make(MetricResultMap)
 	for _, metricName := range KnownMetricNames {

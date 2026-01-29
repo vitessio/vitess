@@ -77,7 +77,7 @@ func TestMain(m *testing.M) {
 
 		// Now manually add tablets to cell2 to simulate multi-cell setup
 		shard := clusterInstance.Keyspaces[0].Shards[0]
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			tabletUID := clusterInstance.GetAndReserveTabletUID()
 			tablet := &cluster.Vttablet{
 				TabletUID: tabletUID,

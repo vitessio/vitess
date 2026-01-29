@@ -33,8 +33,10 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
-const getInitialSchemaVersions = "select id, pos, ddl, time_updated, schemax from %s.schema_version where time_updated > %d order by id asc"
-const getNextSchemaVersions = "select id, pos, ddl, time_updated, schemax from %s.schema_version where id > %d order by id asc"
+const (
+	getInitialSchemaVersions = "select id, pos, ddl, time_updated, schemax from %s.schema_version where time_updated > %d order by id asc"
+	getNextSchemaVersions    = "select id, pos, ddl, time_updated, schemax from %s.schema_version where id > %d order by id asc"
+)
 
 // vl defines the glog verbosity level for the package
 const vl = 10
@@ -288,9 +290,9 @@ func (h *historian) getTableFromHistoryForPos(tableName sqlparser.IdentifierCS, 
 		log.Infof("Schema not found in cache for %s with pos %s", tableName, pos)
 		return nil
 	}
-	if pos.Equal(h.schemas[idx].pos) { //exact match to a cache entry
+	if pos.Equal(h.schemas[idx].pos) { // exact match to a cache entry
 		return h.schemas[idx].schema[tableName.String()]
 	}
-	//not an exact match, so based on our sort algo idx is one less than found: from 40,44,48 : 43 < 44 but we want 40
+	// not an exact match, so based on our sort algo idx is one less than found: from 40,44,48 : 43 < 44 but we want 40
 	return h.schemas[idx-1].schema[tableName.String()]
 }

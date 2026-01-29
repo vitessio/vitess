@@ -39,14 +39,12 @@ import (
 	"vitess.io/vitess/go/vt/utils"
 )
 
-var (
-	vtInsertTest = `
+var vtInsertTest = `
 		create table if not exists vt_insert_test (
 		id bigint auto_increment,
 		msg varchar(64),
 		primary key (id)
 		) Engine=InnoDB;`
-)
 
 func TestFailingReplication(t *testing.T) {
 	prepareCluster(t)
@@ -436,7 +434,7 @@ func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket 
 
 			// MY-013600
 			// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_disabled
-			qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE error_code = 'MY-013600'", 1, false)
+			qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE data like '%InnoDB redo logging is disabled%'", 1, false)
 			require.NoError(t, err)
 			if len(qr.Rows) != 1 {
 				// Keep trying, possible we haven't disabled yet.
@@ -445,7 +443,7 @@ func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket 
 
 			// MY-013601
 			// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_enabled
-			qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE error_code = 'MY-013601'", 1, false)
+			qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE data like '%InnoDB redo logging is enabled%'", 1, false)
 			require.NoError(t, err)
 			if len(qr.Rows) != 1 {
 				// Keep trying, possible we haven't disabled yet.
@@ -478,7 +476,7 @@ func waitForReplicationToCatchup(tablets []cluster.Vttablet) bool {
 		case <-timeout:
 			return false
 		default:
-			var replicaCount = 0
+			replicaCount := 0
 			for _, tablet := range tablets {
 				status := tablet.VttabletProcess.GetStatusDetails()
 				json.Unmarshal([]byte(status), &statuslst)
