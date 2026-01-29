@@ -54,7 +54,7 @@ WORKDIR /vt/src/vitess.io/vitess
 
 USER vitess
 RUN --mount=type=cache,target=/home/vitess/.m2,uid=1000,gid=1000 \
-    ./bootstrap.sh
+    BUILD_CONSUL=0 ./bootstrap.sh
 
 # If the user doesn't specify a command, load a shell.
 CMD ["/bin/bash"]
