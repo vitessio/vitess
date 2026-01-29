@@ -25,11 +25,9 @@ import (
 	"vitess.io/vitess/go/vt/utils"
 )
 
-var (
-	// reusePort indicates that SO_REUSEPORT should be set when
-	// binding sockets.
-	reusePort = false
-)
+// reusePort indicates that SO_REUSEPORT should be set when
+// binding sockets.
+var reusePort = false
 
 // Listen is used to bind sockets. By default, it is the same as
 // net.Listen, however it can be used to configure socket options.
