@@ -192,7 +192,7 @@ func (vs *vstreamer) Stream() error {
 		vs.vse.vstreamerCount.Add(-1)
 	}()
 	vs.vse.vstreamersCreated.Add(1)
-	log.Infof("Starting Stream() with startPos %s", vs.startPos)
+	log.Info("Starting Stream() with startPos " + vs.startPos)
 	pos, err := replication.DecodePosition(vs.startPos)
 	if err != nil {
 		vs.vse.errorCounts.Add("StreamRows", 1)
@@ -643,7 +643,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 				return nil, nil
 			}
 			vs.plans[id] = nil
-			log.Infof("table map changed: id %d for %s has changed to %s", id, plan.Table.Name, tm.Name)
+			log.Info(fmt.Sprintf("table map changed: id %d for %s has changed to %s", id, plan.Table.Name, tm.Name))
 		}
 
 		// The database connector `vs.cp` points to the keyspace's database.
@@ -921,7 +921,7 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 	st, err := vs.se.GetTableForPos(vs.ctx, sqlparser.NewIdentifierCS(tm.Name), replication.EncodePosition(vs.pos))
 	if err != nil {
 		if vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
-			log.Infof("No schema found for table %s", tm.Name)
+			log.Info("No schema found for table " + tm.Name)
 			return nil, fmt.Errorf("unknown table %v in schema", tm.Name)
 		}
 		return fields, nil
@@ -929,7 +929,7 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 
 	if len(st.Fields) < len(tm.Types) {
 		if vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
-			log.Infof("Cannot determine columns for table %s", tm.Name)
+			log.Info("Cannot determine columns for table " + tm.Name)
 			return nil, fmt.Errorf("cannot determine table columns for %s: event has %v, schema has %v", tm.Name, tm.Types, st.Fields)
 		}
 		return fields, nil
@@ -1212,8 +1212,7 @@ func (vs *vstreamer) getValues(plan *streamerPlan, data []byte,
 		}
 		value, l, err := mysqlbinlog.CellValue(data, pos, plan.TableMap.Types[colNum], plan.TableMap.Metadata[colNum], plan.Table.Fields[colNum], partialJSON)
 		if err != nil {
-			log.Errorf("extractRowAndFilter: %s, table: %s, colNum: %d, fields: %+v, current values: %+v",
-				err, plan.Table.Name, colNum, plan.Table.Fields, values)
+			log.Error(fmt.Sprintf("extractRowAndFilter: %s, table: %s, colNum: %d, fields: %+v, current values: %+v", err, plan.Table.Name, colNum, plan.Table.Fields, values))
 			return nil, nil, false, vterrors.Wrapf(err, "failed to extract row's value for column %s from binlog event",
 				plan.Table.Fields[colNum].Name)
 		}
@@ -1362,9 +1361,9 @@ func wrapError(err error, stopPos replication.Position, vse *Engine) error {
 		vse.vstreamersEndedWithErrors.Add(1)
 		vse.errorCounts.Add("StreamEnded", 1)
 		err = fmt.Errorf("stream (at source tablet) error @ (including the GTID we failed to process) %v: %v", stopPos, err)
-		log.Error(err)
+		log.Error(fmt.Sprint(err))
 		return err
 	}
-	log.Infof("stream (at source tablet) ended @ (including the GTID we failed to process) %v", stopPos)
+	log.Info(fmt.Sprintf("stream (at source tablet) ended @ (including the GTID we failed to process) %v", stopPos))
 	return nil
 }

@@ -18,6 +18,7 @@ package tabletmanager
 
 import (
 	"context"
+	"fmt"
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -48,13 +49,13 @@ func (tm *TabletManager) ReloadSchema(ctx context.Context, waitPosition string) 
 		if err != nil {
 			return vterrors.Wrapf(err, "ReloadSchema: can't parse wait position (%q)", waitPosition)
 		}
-		log.Infof("ReloadSchema: waiting for replication position: %v", waitPosition)
+		log.Info(fmt.Sprintf("ReloadSchema: waiting for replication position: %v", waitPosition))
 		if err := tm.MysqlDaemon.WaitSourcePos(ctx, pos); err != nil {
 			return err
 		}
 	}
 
-	log.Infof("ReloadSchema requested via RPC")
+	log.Info("ReloadSchema requested via RPC")
 	return tm.QueryServiceControl.ReloadSchema(ctx)
 }
 

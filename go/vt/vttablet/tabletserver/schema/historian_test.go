@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
@@ -138,7 +139,7 @@ func TestHistorian(t *testing.T) {
 	}
 	tab, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid1)
 	require.NoError(t, err)
-	require.Equal(t, exp1, tab)
+	require.True(t, proto.Equal(exp1, tab))
 	gtid2 := gtidPrefix + "1-20"
 	_, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid2)
 	require.Equal(t, "table t1 not found in vttablet schema", err.Error())
@@ -165,7 +166,7 @@ func TestHistorian(t *testing.T) {
 	}
 	tab, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid2)
 	require.NoError(t, err)
-	require.Equal(t, exp2, tab)
+	require.True(t, proto.Equal(exp2, tab))
 	gtid3 := gtidPrefix + "1-30"
 	_, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid3)
 	require.Equal(t, "table t1 not found in vttablet schema", err.Error())
@@ -193,17 +194,17 @@ func TestHistorian(t *testing.T) {
 	}
 	tab, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid3)
 	require.NoError(t, err)
-	require.Equal(t, exp3, tab)
+	require.True(t, proto.Equal(exp3, tab))
 
 	tab, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid1)
 	require.NoError(t, err)
-	require.Equal(t, exp1, tab)
+	require.True(t, proto.Equal(exp1, tab))
 	tab, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid2)
 	require.NoError(t, err)
-	require.Equal(t, exp2, tab)
+	require.True(t, proto.Equal(exp2, tab))
 	tab, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid3)
 	require.NoError(t, err)
-	require.Equal(t, exp3, tab)
+	require.True(t, proto.Equal(exp3, tab))
 }
 
 func TestHistorianPurgeOldSchemas(t *testing.T) {
@@ -284,6 +285,6 @@ func TestHistorianPurgeOldSchemas(t *testing.T) {
 	}
 	tab, err := se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid2)
 	require.NoError(t, err)
-	require.Equal(t, exp2, tab)
+	require.True(t, proto.Equal(exp2, tab))
 	require.Equal(t, 1, len(se.historian.schemas))
 }

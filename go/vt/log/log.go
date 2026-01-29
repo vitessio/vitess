@@ -14,16 +14,23 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// You can modify this file to hook up a different logging library instead of glog.
-// If you adapt to a different logging framework, you may need to use that
-// framework's equivalent of *Depth() functions so the file and line number printed
-// point to the real caller instead of your adapter function.
-
+// Package log provides a thin adapter around slog, with a glog fallback when
+// structured logging is disabled.
+//
+// By default, it uses JSON output. The --log-format flag selects pretty console
+// output instead, rendered with the tint handler.
 package log
 
 import (
+	"context"
+	"fmt"
+	"log/slog"
+	"os"
+	"runtime"
 	"strconv"
+	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/golang/glog"
 	"github.com/spf13/pflag"
@@ -31,50 +38,19 @@ import (
 	"vitess.io/vitess/go/vt/utils"
 )
 
-// Level is used with V() to test log verbosity.
-type Level = glog.Level
-
 var (
-	// V quickly checks if the logging verbosity meets a threshold.
-	V = glog.V
-
 	// Flush ensures any pending I/O is written.
 	Flush = glog.Flush
 
-	// Info formats arguments like fmt.Print.
-	Info = glog.Info
-	// Infof formats arguments like fmt.Printf.
-	Infof = glog.Infof
-	// InfoDepth formats arguments like fmt.Print and uses depth to choose which call frame to log.
-	InfoDepth = glog.InfoDepth
+	// logStructured is whether structured logging is enabled or not.
+	logStructured bool
 
-	// Warning formats arguments like fmt.Print.
-	Warning = glog.Warning
-	// Warningf formats arguments like fmt.Printf.
-	Warningf = glog.Warningf
-	// WarningDepth formats arguments like fmt.Print and uses depth to choose which call frame to log.
-	WarningDepth = glog.WarningDepth
+	// logLevel is the configured log level.
+	logLevel string
 
-	// Error formats arguments like fmt.Print.
-	Error = glog.Error
-	// Errorf formats arguments like fmt.Printf.
-	Errorf = glog.Errorf
-	// ErrorDepth formats arguments like fmt.Print and uses depth to choose which call frame to log.
-	ErrorDepth = glog.ErrorDepth
-
-	// Exit formats arguments like fmt.Print.
-	Exit = glog.Exit
-	// Exitf formats arguments like fmt.Printf.
-	Exitf = glog.Exitf
-	// ExitDepth formats arguments like fmt.Print and uses depth to choose which call frame to log.
-	ExitDepth = glog.ExitDepth
-
-	// Fatal formats arguments like fmt.Print.
-	Fatal = glog.Fatal
-	// Fatalf formats arguments like fmt.Printf
-	Fatalf = glog.Fatalf
-	// FatalDepth formats arguments like fmt.Print and uses depth to choose which call frame to log.
-	FatalDepth = glog.FatalDepth
+	// structuredLoggingEnabled controls whether structured logging is enabled. If it's disabled,
+	// logging is performed through glog. If enabled, logging is instead through slog.
+	structuredLoggingEnabled atomic.Bool
 )
 
 // RegisterFlags installs log flags on the given FlagSet.
@@ -87,6 +63,151 @@ func RegisterFlags(fs *pflag.FlagSet) {
 		val: strconv.FormatUint(atomic.LoadUint64(&glog.MaxSize), 10),
 	}
 	utils.SetFlagVar(fs, &flagVal, "log-rotate-max-size", "size in bytes at which logs are rotated (glog.MaxSize)")
+
+	// Structured logging flags.
+	utils.SetFlagBoolVar(fs, &logStructured, "log-structured", false, "enable structured logging")
+	utils.SetFlagStringVar(fs, &logLevel, "log-level", "info", "minimum structured logging level: info, warn, debug, or error")
+}
+
+// Init configures logging based on the parsed flags.
+func Init() error {
+	if !logStructured {
+		return nil
+	}
+
+	level, err := slogLevel(logLevel)
+	if err != nil {
+		return err
+	}
+
+	opts := &slog.HandlerOptions{AddSource: true, Level: level}
+	handler := slog.NewJSONHandler(os.Stderr, opts)
+
+	logger := slog.New(handler)
+	structuredLoggingEnabled.Store(true)
+	slog.SetDefault(logger)
+
+	return nil
+}
+
+// slogLevel maps the log-level flag value to a slog.Level.
+func slogLevel(level string) (slog.Level, error) {
+	normalized := strings.ToLower(strings.TrimSpace(level))
+
+	switch normalized {
+	case "debug":
+		return slog.LevelDebug, nil
+	case "info":
+		return slog.LevelInfo, nil
+	case "warn":
+		return slog.LevelWarn, nil
+	case "error":
+		return slog.LevelError, nil
+	default:
+		return 0, fmt.Errorf("invalid --log-level %q: expected debug, info, warn, or error", level)
+	}
+}
+
+// log emits a structured log record when structured logging is enabled.
+// When structured logging is disabled, log forwards the call to glog
+// using the severity implied by level.
+func log(level slog.Level, depth int, msg string, args ...any) {
+	depth += 3
+
+	if !structuredLoggingEnabled.Load() {
+		logGlog(level, depth, msg, args...)
+		return
+	}
+
+	logger := slog.Default()
+
+	ctx := context.Background()
+	if !logger.Enabled(ctx, level) {
+		return
+	}
+
+	// Adjust the caller depth (+3) to bypass the helper functions.
+	var pcs [1]uintptr
+	runtime.Callers(depth, pcs[:])
+
+	// Rebuild the record with the proper source.
+	record := slog.NewRecord(time.Now(), level, msg, pcs[0])
+	record.Add(args...)
+
+	_ = logger.Handler().Handle(ctx, record)
+}
+
+// Enabled reports whether a log call at the provided level would be emitted.
+// When structured logging is enabled, Enabled consults the configured slog
+// logger. When structured logging is disabled, Enabled returns true for info
+// and above, and uses glog verbosity to gate debug logging.
+func Enabled(level slog.Level) bool {
+	if structuredLoggingEnabled.Load() {
+		return slog.Default().Enabled(context.Background(), level)
+	}
+
+	if level < slog.LevelInfo {
+		return bool(glog.V(glog.Level(1)))
+	}
+
+	return true
+}
+
+// logGlog formats a structured log call as a glog message.
+func logGlog(level slog.Level, depth int, msg string, args ...any) {
+	// Preserve the slog message as the first printed element.
+	args = append([]any{msg}, args...)
+
+	switch level {
+	case slog.LevelDebug, slog.LevelInfo:
+		glog.InfoDepth(depth, args...)
+	case slog.LevelWarn:
+		glog.WarningDepth(depth, args...)
+	case slog.LevelError:
+		glog.ErrorDepth(depth, args...)
+	default:
+		glog.InfoDepth(depth, args...)
+	}
+}
+
+// Info logs at the Info level.
+func Info(msg string, args ...any) {
+	log(slog.LevelInfo, 0, msg, args...)
+}
+
+// InfoDepth logs at the Info level with an adjusted caller depth.
+func InfoDepth(depth int, msg string, args ...any) {
+	log(slog.LevelInfo, depth, msg, args...)
+}
+
+// Warn logs at the Warn level.
+func Warn(msg string, args ...any) {
+	log(slog.LevelWarn, 0, msg, args...)
+}
+
+// WarnDepth logs at the Warn level with an adjusted caller depth.
+func WarnDepth(depth int, msg string, args ...any) {
+	log(slog.LevelWarn, depth, msg, args...)
+}
+
+// Debug logs at the Debug level.
+func Debug(msg string, args ...any) {
+	log(slog.LevelDebug, 0, msg, args...)
+}
+
+// DebugDepth logs at the Debug level with an adjusted caller depth.
+func DebugDepth(depth int, msg string, args ...any) {
+	log(slog.LevelDebug, depth, msg, args...)
+}
+
+// Error logs at the Error level.
+func Error(msg string, args ...any) {
+	log(slog.LevelError, 0, msg, args...)
+}
+
+// ErrorDepth logs at the Error level with an adjusted caller depth.
+func ErrorDepth(depth int, msg string, args ...any) {
+	log(slog.LevelError, depth, msg, args...)
 }
 
 // logRotateMaxSize implements pflag.Value and is used to
@@ -113,93 +234,21 @@ func (lrms *logRotateMaxSize) Type() string {
 	return "uint64"
 }
 
-type PrefixedLogger struct {
-	prefix string
-}
+// SetLogger replaces the structured logger used by the log package. The returned function restores
+// the previous logger. Used for testing.
+func SetLogger(logger *slog.Logger) func() {
+	if logger == nil {
+		return func() {}
+	}
 
-func NewPrefixedLogger(prefix string) *PrefixedLogger {
-	return &PrefixedLogger{prefix: prefix + ": "}
-}
+	previousEnabled := structuredLoggingEnabled.Load()
+	previousDefault := slog.Default()
 
-func (pl *PrefixedLogger) V(level glog.Level) glog.Verbose {
-	return V(level)
-}
+	slog.SetDefault(logger)
+	structuredLoggingEnabled.Store(true)
 
-func (pl *PrefixedLogger) Flush() {
-	Flush()
-}
-
-func (pl *PrefixedLogger) Info(args ...any) {
-	args = append([]any{pl.prefix}, args...)
-	Info(args...)
-}
-
-func (pl *PrefixedLogger) Infof(format string, args ...any) {
-	args = append([]any{pl.prefix}, args...)
-	Infof("%s"+format, args...)
-}
-
-func (pl *PrefixedLogger) InfoDepth(depth int, args ...any) {
-	args = append([]any{pl.prefix}, args...)
-	InfoDepth(depth, args...)
-}
-
-func (pl *PrefixedLogger) Warning(args ...any) {
-	args = append([]any{pl.prefix}, args...)
-	Warning(args...)
-}
-
-func (pl *PrefixedLogger) Warningf(format string, args ...any) {
-	args = append([]any{pl.prefix}, args...)
-	Warningf("%s"+format, args...)
-}
-
-func (pl *PrefixedLogger) WarningDepth(depth int, args ...any) {
-	args = append([]any{pl.prefix}, args...)
-	WarningDepth(depth, args...)
-}
-
-func (pl *PrefixedLogger) Error(args ...any) {
-	args = append([]any{pl.prefix}, args...)
-	Error(args...)
-}
-
-func (pl *PrefixedLogger) Errorf(format string, args ...any) {
-	args = append([]any{pl.prefix}, args...)
-	Errorf("%s"+format, args...)
-}
-
-func (pl *PrefixedLogger) ErrorDepth(depth int, args ...any) {
-	args = append([]any{pl.prefix}, args...)
-	ErrorDepth(depth, args...)
-}
-
-func (pl *PrefixedLogger) Exit(args ...any) {
-	args = append([]any{pl.prefix}, args...)
-	Exit(args...)
-}
-
-func (pl *PrefixedLogger) Exitf(format string, args ...any) {
-	args = append([]any{pl.prefix}, args...)
-	Exitf("%s"+format, args...)
-}
-
-func (pl *PrefixedLogger) ExitDepth(depth int, args ...any) {
-	args = append([]any{pl.prefix}, args...)
-	ExitDepth(depth, args...)
-}
-
-func (pl *PrefixedLogger) Fatal(args ...any) {
-	args = append([]any{pl.prefix}, args...)
-	Fatal(args...)
-}
-
-func (pl *PrefixedLogger) Fatalf(format string, args ...any) {
-	args = append([]any{pl.prefix}, args...)
-	Fatalf("%s"+format, args...)
-}
-
-func (pl *PrefixedLogger) FatalDepth(depth int, args ...any) {
-	args = append([]any{pl.prefix}, args...)
-	FatalDepth(depth, args...)
+	return func() {
+		slog.SetDefault(previousDefault)
+		structuredLoggingEnabled.Store(previousEnabled)
+	}
 }

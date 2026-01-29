@@ -673,7 +673,7 @@ func generateDelete(t *testing.T, conn *mysql.Conn) error {
 }
 
 func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, done *int64) {
-	log.Infof("Running single connection")
+	log.Info("Running single connection")
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -689,7 +689,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, 
 	defer periodicRest.Stop()
 	for {
 		if atomic.LoadInt64(done) == 1 {
-			log.Infof("Terminating single connection")
+			log.Info("Terminating single connection")
 			return
 		}
 		switch rand.Int32N(3) {
@@ -730,7 +730,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, 
 }
 
 func runMultipleConnections(ctx context.Context, t *testing.T, autoIncInsert bool) {
-	log.Infof("Running multiple connections")
+	log.Info("Running multiple connections")
 	var done int64
 	var wg sync.WaitGroup
 	for range maxConcurrency {
@@ -740,14 +740,14 @@ func runMultipleConnections(ctx context.Context, t *testing.T, autoIncInsert boo
 	}
 	<-ctx.Done()
 	atomic.StoreInt64(&done, 1)
-	log.Infof("Running multiple connections: done")
+	log.Info("Running multiple connections: done")
 	wg.Wait()
-	log.Infof("All connections cancelled")
+	log.Info("All connections cancelled")
 }
 
 func initTable(t *testing.T) {
-	log.Infof("initTable begin")
-	defer log.Infof("initTable complete")
+	log.Info("initTable begin")
+	defer log.Info("initTable complete")
 
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)

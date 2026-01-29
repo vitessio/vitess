@@ -255,7 +255,7 @@ func LockShard(ctx context.Context, keyspace, shard, lockAction string) (context
 
 // AuditTopologyRecovery audits a single step in a topology recovery process.
 func AuditTopologyRecovery(topologyRecovery *TopologyRecovery, message string) error {
-	log.Infof("topology_recovery: %s", message)
+	log.Info("topology_recovery: " + message)
 	if topologyRecovery == nil {
 		return nil
 	}
@@ -517,19 +517,19 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 func isERSEnabled(analysisEntry *inst.DetectionAnalysis) bool {
 	// If ERS is disabled globally we have no way of repairing the cluster.
 	if !config.ERSEnabled() {
-		log.Infof("VTOrc not configured to run ERS, skipping recovering %v", analysisEntry.Analysis)
+		log.Info(fmt.Sprintf("VTOrc not configured to run ERS, skipping recovering %v", analysisEntry.Analysis))
 		return false
 	}
 
 	// Return false if ERS is disabled on the keyspace.
 	if analysisEntry.AnalyzedKeyspaceEmergencyReparentDisabled {
-		log.Infof("ERS is disabled on keyspace %s, skipping recovering %v", analysisEntry.AnalyzedKeyspace, analysisEntry.Analysis)
+		log.Info(fmt.Sprintf("ERS is disabled on keyspace %s, skipping recovering %v", analysisEntry.AnalyzedKeyspace, analysisEntry.Analysis))
 		return false
 	}
 
 	// Return false if ERS is disabled on the shard.
 	if analysisEntry.AnalyzedShardEmergencyReparentDisabled {
-		log.Infof("ERS is disabled on keyspace/shard %s, skipping recovering %v", topoproto.KeyspaceShardString(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard), analysisEntry.Analysis)
+		log.Info(fmt.Sprintf("ERS is disabled on keyspace/shard %s, skipping recovering %v", topoproto.KeyspaceShardString(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard), analysisEntry.Analysis))
 		return false
 	}
 
@@ -545,20 +545,20 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas, inst.PrimaryDiskStalled, inst.PrimarySemiSyncBlocked:
 		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
 		if !isERSEnabled(analysisEntry) {
-			log.Infof("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode)
+			log.Info(fmt.Sprintf("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode))
 			recoverySkipCode = RecoverySkipERSDisabled
 		}
 		recoveryFunc = recoverDeadPrimaryFunc
 	case inst.PrimaryTabletDeleted:
 		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
 		if !isERSEnabled(analysisEntry) {
-			log.Infof("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode)
+			log.Info(fmt.Sprintf("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode))
 			recoverySkipCode = RecoverySkipERSDisabled
 		}
 		recoveryFunc = recoverPrimaryTabletDeletedFunc
 	case inst.ErrantGTIDDetected:
 		if !config.ConvertTabletWithErrantGTIDs() {
-			log.Infof("VTOrc not configured to do anything on detecting errant GTIDs, skipping recovering %v", analysisCode)
+			log.Info(fmt.Sprintf("VTOrc not configured to do anything on detecting errant GTIDs, skipping recovering %v", analysisCode))
 			recoverySkipCode = RecoverySkipNoRecoveryAction
 		}
 		recoveryFunc = recoverErrantGTIDDetectedFunc
@@ -924,7 +924,7 @@ func recheckPrimaryHealth(analysisEntry *inst.DetectionAnalysis, recoveryLabels 
 	// checking if the original analysis is valid even after the primary refresh.
 	recoveryRequired, err := checkIfAlreadyFixed(analysisEntry)
 	if err != nil {
-		log.Infof("recheckPrimaryHealth: Checking if recovery is required returned err: %v", err)
+		log.Info(fmt.Sprintf("recheckPrimaryHealth: Checking if recovery is required returned err: %v", err))
 		return err
 	}
 
@@ -932,7 +932,7 @@ func recheckPrimaryHealth(analysisEntry *inst.DetectionAnalysis, recoveryLabels 
 	// This could mean that either the original analysis has changed or some other Vtorc instance has already performing the mitigation.
 	// In either case, the original analysis is stale which can be safely aborted.
 	if recoveryRequired {
-		log.Infof("recheckPrimaryHealth: Primary recovery is required, Tablet alias: %v", primaryTabletAlias)
+		log.Info(fmt.Sprintf("recheckPrimaryHealth: Primary recovery is required, Tablet alias: %v", primaryTabletAlias))
 		recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipPrimaryRecovery.String()), 1)
 		// original analysis is stale, abort.
 		return fmt.Errorf("aborting %s, primary mitigation is required", originalAnalysisEntry)
@@ -965,7 +965,7 @@ func CheckAndRecover() {
 	// Allow the analysis to run even if we don't want to recover
 	detectionAnalysis, err := inst.GetDetectionAnalysis("", "", &inst.DetectionAnalysisHints{AuditAnalysis: true})
 	if err != nil {
-		log.Error(err)
+		log.Error(fmt.Sprint(err))
 		return
 	}
 
@@ -1001,7 +1001,7 @@ func CheckAndRecover() {
 
 		go func() {
 			if err := executeCheckAndRecoverFunction(analysisEntry); err != nil {
-				log.Error(err)
+				log.Error(fmt.Sprint(err))
 			}
 		}()
 	}

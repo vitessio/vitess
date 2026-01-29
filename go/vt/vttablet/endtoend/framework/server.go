@@ -18,6 +18,7 @@ package framework
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"time"
@@ -87,7 +88,7 @@ func StartCustomServer(ctx context.Context, connParams, connAppDebugParams mysql
 	go func() {
 		err := servenv.HTTPServe(ln)
 		if err != nil {
-			log.Errorf("HTTPServe failed: %v", err)
+			log.Error(fmt.Sprintf("HTTPServe failed: %v", err))
 		}
 	}()
 	for {
@@ -119,7 +120,7 @@ func StartServer(ctx context.Context, connParams, connAppDebugParams mysql.ConnP
 	config.QueryCacheDoorkeeper = false
 	config.SchemaReloadInterval = 5 * time.Second
 	gotBytes, _ := yaml2.Marshal(config)
-	log.Infof("Config:\n%s", gotBytes)
+	log.Info(fmt.Sprintf("Config:\n%s", gotBytes))
 	return StartCustomServer(ctx, connParams, connAppDebugParams, dbName, config)
 }
 
