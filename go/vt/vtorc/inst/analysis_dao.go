@@ -54,7 +54,12 @@ type clusterAnalysis struct {
 	hasShardWideAction bool
 	totalTablets       int
 	primaryAlias       string
-	durability         policy.Durabler
+
+	// primaryTimestamp is the most recent primary term start time observed for the shard.
+	primaryTimestamp time.Time
+
+	// durability is the shard's current durability policy.
+	durability policy.Durabler
 }
 
 // GetDetectionAnalysis will check for detected problems (dead primary; unreachable primary; etc)
@@ -381,6 +386,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			if a.TabletType == topodatapb.TabletType_PRIMARY {
 				a.IsClusterPrimary = true
 				clusters[keyspaceShard].primaryAlias = a.AnalyzedInstanceAlias
+				clusters[keyspaceShard].primaryTimestamp = a.PrimaryTimeStamp
 			}
 			durabilityPolicy := m.GetString("durability_policy")
 			if durabilityPolicy == "" {
@@ -458,6 +464,9 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		case a.IsClusterPrimary && a.CurrentTabletType != topodatapb.TabletType_UNKNOWN && a.CurrentTabletType != topodatapb.TabletType_PRIMARY:
 			a.Analysis = PrimaryCurrentTypeMismatch
 			a.Description = "Primary tablet's current type is not PRIMARY"
+		case isStaleTopoPrimary(a, ca):
+			a.Analysis = StaleTopoPrimary
+			a.Description = "Primary tablet is stale, older than current primary"
 		case topo.IsReplicaType(a.TabletType) && a.ErrantGTID != "":
 			a.Analysis = ErrantGTIDDetected
 			a.Description = "Tablet has errant GTIDs"
@@ -609,6 +618,16 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 	}
 	// TODO: result, err = getConcensusDetectionAnalysis(result)
 	return result, err
+}
+
+// isStaleTopoPrimary returns true when a tablet has type PRIMARY in the topology and has an older primary term
+// start time than the shard's current primary.
+func isStaleTopoPrimary(tablet *DetectionAnalysis, cluster *clusterAnalysis) bool {
+	if tablet.TabletType != topodatapb.TabletType_PRIMARY {
+		return false
+	}
+
+	return tablet.PrimaryTimeStamp.Before(cluster.primaryTimestamp)
 }
 
 // postProcessAnalyses is used to update different analyses based on the information gleaned from looking at all the analyses together instead of individual data.

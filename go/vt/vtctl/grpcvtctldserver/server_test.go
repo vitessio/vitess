@@ -106,8 +106,7 @@ func TestPanicHandler(t *testing.T) {
 func TestAddCellInfo(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	tests := []struct {
 		name      string
 		ts        *topo.Server
@@ -171,8 +170,7 @@ func TestAddCellInfo(t *testing.T) {
 func TestAddCellsAlias(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	tests := []struct {
 		name      string
 		ts        *topo.Server
@@ -244,8 +242,7 @@ func TestAddCellsAlias(t *testing.T) {
 func TestApplyRoutingRules(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	tests := []struct {
 		name          string
 		cells         []string
@@ -601,8 +598,7 @@ func TestApplyVSchema(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, "zone1")
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(vtenv.NewTestEnv(), ts)
@@ -694,8 +690,7 @@ func TestApplyVSchema(t *testing.T) {
 }
 
 func TestBackup(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	tests := []struct {
 		name      string
 		ts        *topo.Server
@@ -926,8 +921,7 @@ func TestBackup(t *testing.T) {
 }
 
 func TestBackupShard(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	tests := []struct {
 		name      string
 		ts        *topo.Server
@@ -1505,8 +1499,7 @@ func TestCancelSchemaMigration(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, "zone1")
 
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
@@ -1667,8 +1660,7 @@ func TestChangeTabletTags(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, tt.cells...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &testutil.TabletManagerClient{
 				TopoServer: ts,
@@ -1697,8 +1689,7 @@ func TestChangeTabletTags(t *testing.T) {
 	t.Run("tabletmanager failure", func(t *testing.T) {
 		t.Parallel()
 
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := t.Context()
 		ts := memorytopo.NewServer(ctx, "zone1")
 		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &testutil.TabletManagerClient{
 			TopoServer: nil,
@@ -1939,8 +1930,7 @@ func TestChangeTabletType(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, tt.cells...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &testutil.TabletManagerClient{
 				TopoServer: ts,
@@ -1987,8 +1977,7 @@ func TestChangeTabletType(t *testing.T) {
 	t.Run("tabletmanager failure", func(t *testing.T) {
 		t.Parallel()
 
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := t.Context()
 		ts := memorytopo.NewServer(ctx, "zone1")
 		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &testutil.TabletManagerClient{
 			TopoServer: nil,
@@ -2208,8 +2197,7 @@ func TestCleanupSchemaMigration(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, "zone1")
 
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
@@ -2412,8 +2400,7 @@ func TestForceCutOverSchemaMigration(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, "zone1")
 
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
@@ -2616,8 +2603,7 @@ func TestCompleteSchemaMigration(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, "zone1")
 
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
@@ -2894,8 +2880,7 @@ func TestCreateKeyspace(t *testing.T) {
 				t.Skip("test not yet implemented")
 			}
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, cells...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(vtenv.NewTestEnv(), ts)
@@ -3169,8 +3154,7 @@ func TestCreateShard(t *testing.T) {
 				t.Skip("focusing on other tests")
 			}
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts, topofactory := memorytopo.NewServerAndFactory(ctx, "zone1")
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(vtenv.NewTestEnv(), ts)
@@ -3201,8 +3185,7 @@ func TestCreateShard(t *testing.T) {
 func TestDeleteCellInfo(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	tests := []struct {
 		name      string
 		ts        *topo.Server
@@ -3246,8 +3229,7 @@ func TestDeleteCellInfo(t *testing.T) {
 func TestDeleteCellsAlias(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	tests := []struct {
 		name      string
 		ts        *topo.Server
@@ -3511,8 +3493,7 @@ func TestDeleteKeyspace(t *testing.T) {
 		},
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -4028,8 +4009,7 @@ func TestDeleteShards(t *testing.T) {
 
 			cells := []string{"zone1", "zone2", "zone3"}
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			ts, topofactory := memorytopo.NewServerAndFactory(ctx, cells...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
@@ -4165,8 +4145,7 @@ func TestDeleteSrvKeyspace(t *testing.T) {
 				finalVSchemas[cell] = vschema
 			}
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, cells...)
 			for cell, vschema := range tt.vschemas {
 				err := ts.UpdateSrvVSchema(ctx, cell, vschema)
@@ -4629,8 +4608,7 @@ func TestDeleteTablets(t *testing.T) {
 				t.Skip("focusing on other tests")
 			}
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts, topofactory := memorytopo.NewServerAndFactory(ctx, "zone1")
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(vtenv.NewTestEnv(), ts)
@@ -4695,8 +4673,7 @@ func TestDeleteTablets(t *testing.T) {
 func TestEmergencyReparentShard(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	tests := []struct {
 		name    string
@@ -5002,8 +4979,7 @@ func TestExecuteFetchAsApp(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, "zone1")
 			testutil.AddTablet(ctx, t, ts, tt.tablet, nil)
 
@@ -5128,8 +5104,7 @@ func TestExecuteFetchAsDBA(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, "zone1")
 			testutil.AddTablet(ctx, t, ts, tt.tablet, nil)
 
@@ -5257,8 +5232,7 @@ func TestExecuteMultiFetchAsDBA(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, "zone1")
 			testutil.AddTablet(ctx, t, ts, tt.tablet, nil)
 
@@ -5280,8 +5254,7 @@ func TestExecuteMultiFetchAsDBA(t *testing.T) {
 func TestExecuteHook(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	tests := []struct {
 		name      string
@@ -5495,7 +5468,8 @@ func TestGetUnresolvedTransactions(t *testing.T) {
 				{Dtid: "aa", Participants: []*querypb.Target{shard2Target, shard1Target}},
 				{Dtid: "bb", Participants: []*querypb.Target{shard1Target, shard2Target}},
 			},
-		}, {
+		},
+		{
 			name: "unresolved transaction on one shard",
 			tmc: &testutil.TabletManagerClient{
 				GetUnresolvedTransactionsResults: map[string][]*querypb.TransactionMetadata{
@@ -5531,8 +5505,7 @@ func TestGetUnresolvedTransactions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(vtenv.NewTestEnv(), ts)
@@ -5620,8 +5593,7 @@ func TestConcludeTransaction(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(vtenv.NewTestEnv(), ts)
@@ -5722,8 +5694,7 @@ func TestGetTransactionInfo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(vtenv.NewTestEnv(), ts)
@@ -5743,8 +5714,7 @@ func TestGetTransactionInfo(t *testing.T) {
 func TestFindAllShardsInKeyspace(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 		return NewVtctldServer(vtenv.NewTestEnv(), ts)
@@ -5785,8 +5755,7 @@ func TestFindAllShardsInKeyspace(t *testing.T) {
 }
 
 func TestGetBackups(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx)
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 		return NewVtctldServer(vtenv.NewTestEnv(), ts)
@@ -5893,8 +5862,7 @@ func TestGetBackups(t *testing.T) {
 func TestGetKeyspace(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 		return NewVtctldServer(vtenv.NewTestEnv(), ts)
@@ -5919,8 +5887,7 @@ func TestGetKeyspace(t *testing.T) {
 func TestGetCellInfoNames(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2", "cell3")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 		return NewVtctldServer(vtenv.NewTestEnv(), ts)
@@ -5952,8 +5919,7 @@ func TestGetCellInfoNames(t *testing.T) {
 func TestGetCellInfo(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx)
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 		return NewVtctldServer(vtenv.NewTestEnv(), ts)
@@ -5980,8 +5946,7 @@ func TestGetCellInfo(t *testing.T) {
 func TestGetCellsAliases(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "c11", "c12", "c13", "c21", "c22")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 		return NewVtctldServer(vtenv.NewTestEnv(), ts)
@@ -6081,8 +6046,7 @@ func TestGetFullStatus(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, tt.cells...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &testutil.TabletManagerClient{
 				TopoServer: ts,
@@ -6112,8 +6076,7 @@ func TestGetFullStatus(t *testing.T) {
 func TestGetKeyspaces(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts, topofactory := memorytopo.NewServerAndFactory(ctx, "cell1")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 		return NewVtctldServer(vtenv.NewTestEnv(), ts)
@@ -6154,7 +6117,7 @@ func TestGetKeyspaces(t *testing.T) {
 func TestGetPermissions(t *testing.T) {
 	t.Parallel()
 
-	var testGetPermissionsReply = &tabletmanagerdatapb.Permissions{
+	testGetPermissionsReply := &tabletmanagerdatapb.Permissions{
 		UserPermissions: []*tabletmanagerdatapb.UserPermission{
 			{
 				Host: "host1",
@@ -6276,8 +6239,7 @@ func TestGetPermissions(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			ts := memorytopo.NewServer(ctx, "zone1")
 			testutil.AddTablets(ctx, t, ts, nil, tt.tablets...)
@@ -6344,8 +6306,7 @@ func TestGetRoutingRules(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			ts, factory := memorytopo.NewServerAndFactory(ctx)
 			if tt.rrIn != nil {
@@ -6373,8 +6334,7 @@ func TestGetRoutingRules(t *testing.T) {
 }
 
 func TestGetSchema(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	tmc := testutil.TabletManagerClient{
 		GetSchemaResults: map[string]struct {
@@ -6742,8 +6702,7 @@ func TestGetSchemaMigrations(t *testing.T) {
 
 			cells := []string{"zone1", "zone2", "zone3"}
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts, factory := memorytopo.NewServerAndFactory(ctx, cells...)
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{AlsoSetShardPrimary: true}, test.tablets...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
@@ -6832,8 +6791,7 @@ func TestGetShard(t *testing.T) {
 
 			cells := []string{"zone1", "zone2", "zone3"}
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts, topofactory := memorytopo.NewServerAndFactory(ctx, cells...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(vtenv.NewTestEnv(), ts)
@@ -7026,8 +6984,7 @@ func TestGetShardReplication(t *testing.T) {
 				cells = append(cells, cell)
 			}
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts, factory := memorytopo.NewServerAndFactory(ctx, cells...)
 
 			for cell, shardReplication := range tt.shardReplicationByCell {
@@ -7160,8 +7117,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 				cells = append(cells, cell)
 			}
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts, factory := memorytopo.NewServerAndFactory(ctx, cells...)
 
 			for cell, srvKeyspaces := range tt.srvKeyspacesByCell {
@@ -7324,8 +7280,7 @@ func TestGetSrvKeyspaces(t *testing.T) {
 				t.SkipNow()
 			}
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			ts, topofactory := memorytopo.NewServerAndFactory(ctx, tt.cells...)
 
@@ -7354,8 +7309,7 @@ func TestGetSrvKeyspaces(t *testing.T) {
 func TestGetSrvVSchema(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts, topofactory := memorytopo.NewServerAndFactory(ctx, "zone1", "zone2")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 		return NewVtctldServer(vtenv.NewTestEnv(), ts)
@@ -7563,8 +7517,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts, topofactory := memorytopo.NewServerAndFactory(ctx, "zone1", "zone2", "zone3")
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(vtenv.NewTestEnv(), ts)
@@ -7623,8 +7576,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 func TestGetTablet(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 		return NewVtctldServer(vtenv.NewTestEnv(), ts)
@@ -8311,8 +8263,7 @@ func TestGetTablets(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, tt.cells...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(vtenv.NewTestEnv(), ts)
@@ -8355,8 +8306,7 @@ func TestGetTablets(t *testing.T) {
 func TestGetTopologyPath(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2", "cell3")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 		return NewVtctldServer(vtenv.NewTestEnv(), ts)
@@ -8494,8 +8444,7 @@ func TestGetTopologyPath(t *testing.T) {
 func TestGetVSchema(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 		return NewVtctldServer(vtenv.NewTestEnv(), ts)
@@ -8723,8 +8672,7 @@ func TestLaunchSchemaMigration(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, "zone1")
 
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
@@ -8750,8 +8698,7 @@ func TestLaunchSchemaMigration(t *testing.T) {
 func TestPingTablet(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
@@ -8838,8 +8785,7 @@ func TestPingTablet(t *testing.T) {
 func TestPlannedReparentShard(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	tests := []struct {
 		name    string
@@ -9116,8 +9062,7 @@ func TestRebuildKeyspaceGraph(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		t.Parallel()
 
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := t.Context()
 
 		ts := memorytopo.NewServer(ctx, "zone1")
 		testutil.AddKeyspace(ctx, t, ts, &vtctldatapb.Keyspace{
@@ -9136,8 +9081,7 @@ func TestRebuildKeyspaceGraph(t *testing.T) {
 	t.Run("no such keyspace", func(t *testing.T) {
 		t.Parallel()
 
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := t.Context()
 
 		ts := memorytopo.NewServer(ctx, "zone1")
 		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
@@ -9153,8 +9097,7 @@ func TestRebuildKeyspaceGraph(t *testing.T) {
 	t.Run("topo unavailable", func(t *testing.T) {
 		t.Parallel()
 
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := t.Context()
 
 		ts, factory := memorytopo.NewServerAndFactory(ctx, "zone1")
 		testutil.AddKeyspace(ctx, t, ts, &vtctldatapb.Keyspace{
@@ -9174,8 +9117,7 @@ func TestRebuildKeyspaceGraph(t *testing.T) {
 	t.Run("lock error", func(t *testing.T) {
 		t.Parallel()
 
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := t.Context()
 
 		ts := memorytopo.NewServer(ctx, "zone1")
 		testutil.AddKeyspace(ctx, t, ts, &vtctldatapb.Keyspace{
@@ -9221,8 +9163,7 @@ func TestRebuildVSchemaGraph(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			ts, factory := memorytopo.NewServerAndFactory(ctx, "zone1")
 			if tt.topoDown {
@@ -9246,8 +9187,7 @@ func TestRebuildVSchemaGraph(t *testing.T) {
 func TestRefreshState(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	tests := []struct {
 		name              string
@@ -9345,8 +9285,7 @@ func TestRefreshState(t *testing.T) {
 func TestRefreshStateByShard(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	tests := []struct {
 		name               string
 		ts                 *topo.Server
@@ -9610,8 +9549,7 @@ func TestReloadSchema(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			ts := memorytopo.NewServer(ctx, "zone1")
 			testutil.AddTablets(ctx, t, ts, nil, tt.tablets...)
@@ -9705,8 +9643,7 @@ func TestReloadSchemaKeyspace(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			ts := memorytopo.NewServer(ctx, "zone1", "zone2", "zone3")
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
@@ -9862,8 +9799,7 @@ func TestReloadSchemaShard(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			ts := memorytopo.NewServer(ctx, "zone1", "zone2", "zone3")
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
@@ -9886,8 +9822,7 @@ func TestReloadSchemaShard(t *testing.T) {
 }
 
 func TestRemoveBackup(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx)
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 		return NewVtctldServer(vtenv.NewTestEnv(), ts)
@@ -10075,8 +10010,7 @@ func TestRemoveKeyspaceCell(t *testing.T) {
 
 			cells := []string{"zone1", "zone2", "zone3"}
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts, topofactory := memorytopo.NewServerAndFactory(ctx, cells...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(vtenv.NewTestEnv(), ts)
@@ -10362,8 +10296,7 @@ func TestRemoveShardCell(t *testing.T) {
 
 			cells := []string{"zone1", "zone2", "zone3"}
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts, topofactory := memorytopo.NewServerAndFactory(ctx, cells...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(vtenv.NewTestEnv(), ts)
@@ -10969,8 +10902,7 @@ func TestReparentTablet(t *testing.T) {
 
 			cells := []string{"zone1", "zone2", "zone3"}
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts, topofactory := memorytopo.NewServerAndFactory(ctx, cells...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(vtenv.NewTestEnv(), ts)
@@ -10998,8 +10930,7 @@ func TestReparentTablet(t *testing.T) {
 }
 
 func TestRestoreFromBackup(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	tests := []struct {
 		name      string
@@ -11315,8 +11246,7 @@ func TestRetrySchemaMigration(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, "zone1")
 
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
@@ -11423,8 +11353,7 @@ func TestRunHealthCheck(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			ts := memorytopo.NewServer(ctx, "zone1")
 			testutil.AddTablets(ctx, t, ts, nil, tt.tablets...)
@@ -11502,8 +11431,7 @@ func TestSetKeyspaceDurabilityPolicy(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			ts := memorytopo.NewServer(ctx, "zone1")
 			testutil.AddKeyspaces(ctx, t, ts, tt.keyspaces...)
@@ -11526,8 +11454,7 @@ func TestSetKeyspaceDurabilityPolicy(t *testing.T) {
 func TestSetShardIsPrimaryServing(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	type testcase struct {
 		name      string
@@ -11623,8 +11550,7 @@ func TestSetShardIsPrimaryServing(t *testing.T) {
 func TestSetShardTabletControl(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	type testcase struct {
 		name      string
@@ -12051,8 +11977,7 @@ func TestSetWritable(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			ts := memorytopo.NewServer(ctx, tt.cells...)
 			defer ts.Close()
@@ -12076,8 +12001,7 @@ func TestSetWritable(t *testing.T) {
 func TestShardReplicationAdd(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 		return NewVtctldServer(vtenv.NewTestEnv(), ts)
@@ -12131,8 +12055,7 @@ func TestShardReplicationAdd(t *testing.T) {
 func TestShardReplicationPositions(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	tests := []struct {
 		name       string
@@ -12401,8 +12324,7 @@ func TestShardReplicationPositions(t *testing.T) {
 func TestShardReplicationRemove(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ts := memorytopo.NewServer(ctx, "zone1")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
@@ -12561,8 +12483,7 @@ func TestSourceShardAdd(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, "zone1")
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(vtenv.NewTestEnv(), ts)
@@ -12695,8 +12616,7 @@ func TestSourceShardDelete(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, "zone1")
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(vtenv.NewTestEnv(), ts)
@@ -12880,8 +12800,7 @@ func TestStartReplication(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			ts := memorytopo.NewServer(ctx, tt.cells...)
 			defer ts.Close()
@@ -13018,8 +12937,7 @@ func TestStopReplication(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			ts := memorytopo.NewServer(ctx, tt.cells...)
 			defer ts.Close()
@@ -13404,8 +13322,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 
 			cells := []string{"zone1", "zone2", "zone3"}
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts, topofactory := memorytopo.NewServerAndFactory(ctx, cells...)
 			tmc := testutil.TabletManagerClient{
 				TopoServer: ts,
@@ -13581,8 +13498,7 @@ func TestUpdateCellInfo(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			ts, factory := memorytopo.NewServerAndFactory(ctx)
 			for name, cell := range tt.cells {
@@ -13721,8 +13637,7 @@ func TestUpdateCellsAlias(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			ts := memorytopo.NewServer(ctx, tt.cells...)
 			for name, cells := range tt.aliases {
@@ -13761,8 +13676,7 @@ func TestUpdateCellsAlias(t *testing.T) {
 func TestValidate(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1", "zone2", "zone3")
 	tablets := []*topodatapb.Tablet{
 		{
@@ -13877,8 +13791,7 @@ func TestValidate(t *testing.T) {
 }
 
 func TestValidateSchemaKeyspace(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1", "zone2", "zone3")
 	tmc := testutil.TabletManagerClient{
 		GetSchemaResults: map[string]struct {
@@ -14102,8 +14015,7 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 }
 
 func TestValidateVersionKeyspace(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1", "zone2")
 	tmc := testutil.TabletManagerClient{
 		GetSchemaResults: map[string]struct {
@@ -14222,8 +14134,7 @@ func TestValidateVersionKeyspace(t *testing.T) {
 func TestValidateVersionShard(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1", "zone2")
 	tmc := testutil.TabletManagerClient{
 		GetSchemaResults: map[string]struct {
@@ -14333,8 +14244,7 @@ func TestValidateVersionShard(t *testing.T) {
 func TestValidateKeyspace(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	tmc := &testutil.TabletManagerClient{
 		GetReplicasResults: map[string]struct {
 			Replicas []string
@@ -14439,8 +14349,7 @@ func TestValidateKeyspace(t *testing.T) {
 
 // This test validates the bug described in https://github.com/vitessio/vitess/issues/18113.
 func TestValidateKeyspaceErrors(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	cell := "zone-1"
 	ks := "ks"
 	shard := "-"
@@ -14469,7 +14378,7 @@ func TestValidateKeyspaceErrors(t *testing.T) {
 	// file name and the tablet alias actually stored so that we see the error in Validate.
 	numTablets := 10
 	tablets := make([]*topodatapb.Tablet, numTablets)
-	for i := 0; i < numTablets; i++ {
+	for i := range numTablets {
 		typ := topodatapb.TabletType_REPLICA
 		if i == 0 {
 			typ = topodatapb.TabletType_PRIMARY
@@ -14561,8 +14470,7 @@ func TestValidateShard(t *testing.T) {
 		shouldErr bool
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	tests := []*testcase{
 		{
 			name: "ok",
@@ -15090,6 +14998,7 @@ func TestValidateShard(t *testing.T) {
 		})
 	}
 }
+
 func TestMain(m *testing.M) {
 	_flag.ParseFlagsForTest()
 	os.Exit(m.Run())

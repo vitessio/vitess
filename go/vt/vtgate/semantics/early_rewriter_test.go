@@ -760,7 +760,8 @@ func TestSemTableDependenciesAfterExpandStar(t *testing.T) {
 				Type: sqltypes.VarChar,
 			}},
 			ColumnListAuthoritative: true,
-		}}}
+		},
+	}}
 	tcases := []struct {
 		sql         string
 		expSQL      string

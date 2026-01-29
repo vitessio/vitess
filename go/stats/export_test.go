@@ -244,6 +244,7 @@ func TestSafeJoinLabels(t *testing.T) {
 		})
 	}
 }
+
 func BenchmarkSafeJoinLabels(b *testing.B) {
 	labels := [5]string{"foo:bar", "foo.bar", "c1a", "testing", "testing.a.b"}
 	combined := [5]bool{true, true, true, true, true}

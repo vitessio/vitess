@@ -28,6 +28,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 	"unsafe"
 
@@ -118,7 +119,8 @@ func TestPlanKey(t *testing.T) {
 		targetString: "ks1[deadbeef]",
 		resolvedShard: []*srvtopo.ResolvedShard{
 			{Target: &querypb.Target{Keyspace: "ks1", Shard: "-66"}},
-			{Target: &querypb.Target{Keyspace: "ks1", Shard: "66-"}}},
+			{Target: &querypb.Target{Keyspace: "ks1", Shard: "66-"}},
+		},
 		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: -66,66-, Query: SELECT 1, SetVarComment: , Collation: 255",
 	}}
 	cfg := econtext.VCursorConfig{
@@ -1578,17 +1580,19 @@ func TestExecutorUnrecognized(t *testing.T) {
 }
 
 func TestExecutorDeniedErrorNoBuffer(t *testing.T) {
-	executor, sbc1, _, _, ctx := createExecutorEnv(t)
-	sbc1.EphemeralShardErr = errors.New("enforce denied tables")
+	synctest.Test(t, func(t *testing.T) {
+		executor, sbc1, _, _, ctx := createExecutorEnv(t)
+		sbc1.EphemeralShardErr = errors.New("enforce denied tables")
 
-	vschemaWaitTimeout = 500 * time.Millisecond
+		vschemaWaitTimeout = 500 * time.Millisecond
 
-	session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: "@primary"})
-	startExec := time.Now()
-	_, err := executorExecSession(ctx, executor, session, "select * from user", nil)
-	require.NoError(t, err, "enforce denied tables not buffered")
-	endExec := time.Now()
-	require.GreaterOrEqual(t, endExec.Sub(startExec).Milliseconds(), int64(500))
+		session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: "@primary"})
+		startExec := time.Now()
+		_, err := executorExecSession(ctx, executor, session, "select * from user", nil)
+		require.NoError(t, err, "enforce denied tables not buffered")
+		endExec := time.Now()
+		require.GreaterOrEqual(t, endExec.Sub(startExec).Milliseconds(), int64(500))
+	})
 }
 
 // TestVSchemaStats makes sure the building and displaying of the
@@ -1920,7 +1924,7 @@ func TestParseEmptyTargetSingleKeyspace(t *testing.T) {
 	}
 	r.vschema = altVSchema
 
-	destKeyspace, destTabletType, _, _ := r.ParseDestinationTarget("")
+	destKeyspace, destTabletType, _, _, _ := r.ParseDestinationTarget("")
 	if destKeyspace != KsTestUnsharded || destTabletType != topodatapb.TabletType_PRIMARY {
 		t.Errorf(
 			"parseDestinationTarget(%s): got (%v, %v), want (%v, %v)",
@@ -1944,7 +1948,7 @@ func TestParseEmptyTargetMultiKeyspace(t *testing.T) {
 	}
 	r.vschema = altVSchema
 
-	destKeyspace, destTabletType, _, _ := r.ParseDestinationTarget("")
+	destKeyspace, destTabletType, _, _, _ := r.ParseDestinationTarget("")
 	if destKeyspace != "" || destTabletType != topodatapb.TabletType_PRIMARY {
 		t.Errorf(
 			"parseDestinationTarget(%s): got (%v, %v), want (%v, %v)",
@@ -1967,7 +1971,7 @@ func TestParseTargetSingleKeyspace(t *testing.T) {
 	}
 	r.vschema = altVSchema
 
-	destKeyspace, destTabletType, _, _ := r.ParseDestinationTarget("@replica")
+	destKeyspace, destTabletType, _, _, _ := r.ParseDestinationTarget("@replica")
 	if destKeyspace != KsTestUnsharded || destTabletType != topodatapb.TabletType_REPLICA {
 		t.Errorf(
 			"parseDestinationTarget(%s): got (%v, %v), want (%v, %v)",
@@ -2543,7 +2547,8 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 		{Sql: "savepoint a", BindVariables: emptyBV},
 		{Sql: "savepoint b", BindVariables: emptyBV},
 		{Sql: "release savepoint a", BindVariables: emptyBV},
-		{Sql: "select /*+ SET_VAR(sql_mode = ' ') */ id from `user` where id = 3", BindVariables: emptyBV}}
+		{Sql: "select /*+ SET_VAR(sql_mode = ' ') */ id from `user` where id = 3", BindVariables: emptyBV},
+	}
 
 	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "")
 	utils.MustMatch(t, sbc2WantQueries, sbc2.Queries, "")
@@ -3087,7 +3092,8 @@ func TestExecutorShowShards(t *testing.T) {
 				Fields: buildVarCharFields("Shards"),
 				Rows:   nil,
 			},
-		}, {
+		},
+		{
 			name: "No filtering",
 			srvTopoServer: &fakesrvtopo.FakeSrvTopo{
 				SrvKeyspaceNamesOutput: map[string][]string{
@@ -3179,7 +3185,8 @@ func TestExecutorShowShards(t *testing.T) {
 					buildVarCharRow("ks1/80-"),
 				},
 			},
-		}, {
+		},
+		{
 			name: "Shard filtering",
 			srvTopoServer: &fakesrvtopo.FakeSrvTopo{
 				SrvKeyspaceNamesOutput: map[string][]string{

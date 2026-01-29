@@ -71,8 +71,7 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 		db.ClearVTOrcDatabase()
 	}()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts = memorytopo.NewServer(ctx, "zone1")
 	keyspaceNames := []string{"ks1", "ks2", "ks3", "ks4"}
 	keyspaces := []*topodatapb.Keyspace{keyspaceDurabilityNone, keyspaceDurabilitySemiSync, keyspaceSnapshot, keyspaceDurabilityTest}
@@ -211,8 +210,7 @@ func TestRefreshKeyspace(t *testing.T) {
 				tt.keyspaceWanted = tt.keyspace
 			}
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			ts = memorytopo.NewServer(ctx, "zone1")
 			if tt.keyspace != nil {
@@ -292,8 +290,7 @@ func TestRefreshShard(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			ts = memorytopo.NewServer(ctx, "zone1")
 			if tt.shard != nil {

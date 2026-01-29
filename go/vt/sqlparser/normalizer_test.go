@@ -1172,7 +1172,7 @@ func BenchmarkNormalize(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := Normalize(ast, NewReservedVars("", reservedVars), map[string]*querypb.BindVariable{}, true, "ks", 0, "", map[string]string{}, nil, nil)
 		require.NoError(b, err)
 	}
@@ -1220,10 +1220,9 @@ func BenchmarkNormalizeVTGate(b *testing.B) {
 		queries = queries[:10000]
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, sql := range queries {
 			stmt, reservedVars, err := parser.Parse2(sql)
 			if err != nil {
@@ -1302,7 +1301,7 @@ func BenchmarkNormalizeTPCCInsert(b *testing.B) {
 	generateInsert := func(rows int) string {
 		var query strings.Builder
 		query.WriteString("INSERT IGNORE INTO customer0 (c_id, c_d_id, c_w_id, c_first, c_middle, c_last, c_street_1, c_street_2, c_city, c_state, c_zip, c_phone, c_since, c_credit, c_credit_lim, c_discount, c_balance, c_ytd_payment, c_payment_cnt, c_delivery_cnt, c_data) values ")
-		for i := 0; i < rows; i++ {
+		for i := range rows {
 			fmt.Fprintf(&query, "(%d, %d, %d, '%s','OE','%s','%s', '%s', '%s', '%s', '%s','%s',NOW(),'%s',50000,%f,-10,10,1,0,'%s' )",
 				rand.Int(), rand.Int(), rand.Int(),
 				"first-"+randString(rand.IntN(10)),
@@ -1323,7 +1322,7 @@ func BenchmarkNormalizeTPCCInsert(b *testing.B) {
 
 	var queries []string
 
-	for i := 0; i < 1024; i++ {
+	for range 1024 {
 		queries = append(queries, generateInsert(4))
 	}
 
@@ -1509,7 +1508,7 @@ WHERE no_w_id = %d AND no_d_id = %d`,
 	var queries []string
 
 	for _, tmpl := range templates {
-		for i := 0; i < 128; i++ {
+		for range 128 {
 			queries = append(queries, re.ReplaceAllStringFunc(tmpl, repl))
 		}
 	}

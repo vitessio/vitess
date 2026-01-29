@@ -19,6 +19,7 @@ package tabletserver
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -63,8 +64,10 @@ func (state servingState) String() string {
 }
 
 // transitionRetryInterval is for tests.
-var transitionRetryInterval = 1 * time.Second
-var logInitTime sync.Once
+var (
+	transitionRetryInterval = 1 * time.Second
+	logInitTime             sync.Once
+)
 
 var ErrNoTarget = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No target")
 
@@ -437,10 +440,8 @@ func (sm *stateManager) verifyTargetLocked(ctx context.Context, target *querypb.
 		case target.Shard != sm.target.Shard:
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid shard %v does not match expected %v", target.Shard, sm.target.Shard)
 		case target.TabletType != sm.target.TabletType:
-			for _, otherType := range sm.alsoAllow {
-				if target.TabletType == otherType {
-					return nil
-				}
+			if slices.Contains(sm.alsoAllow, target.TabletType) {
+				return nil
 			}
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s: %v, want: %v or %v", vterrors.WrongTablet, target.TabletType, sm.target.TabletType, sm.alsoAllow)
 		}

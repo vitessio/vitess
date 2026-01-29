@@ -121,6 +121,16 @@ func TestValueToVTTime(t *testing.T) {
 			expected: nil,
 		},
 		{
+			name:     "MySQL zero timestamp",
+			value:    "0000-00-00 00:00:00",
+			expected: nil,
+		},
+		{
+			name:     "MySQL zero timestamp with microseconds",
+			value:    "0000-00-00 00:00:00.000000",
+			expected: nil,
+		},
+		{
 			name:      "parse error",
 			value:     "2006/01/02",
 			shouldErr: true,

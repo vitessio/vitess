@@ -73,8 +73,7 @@ func createCredentials(t *testing.T) (*testCredentials, error) {
 }
 
 func TestOptionalTLS(t *testing.T) {
-	testCtx, testCancel := context.WithCancel(context.Background())
-	defer testCancel()
+	testCtx := t.Context()
 
 	tc, err := createCredentials(t)
 	if err != nil {
@@ -113,12 +112,12 @@ func TestOptionalTLS(t *testing.T) {
 	}
 
 	t.Run("Plain2TLS", func(t *testing.T) {
-		for i := 0; i < 5; i++ {
+		for range 5 {
 			testFunc(t, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		}
 	})
 	t.Run("TLS2TLS", func(t *testing.T) {
-		for i := 0; i < 5; i++ {
+		for range 5 {
 			testFunc(t, grpc.WithTransportCredentials(tc.client))
 		}
 	})

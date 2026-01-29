@@ -25,6 +25,7 @@ import (
 	"os/exec"
 	"path"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -142,7 +143,7 @@ func createVttablets(clusterInstance *cluster.LocalProcessCluster, cellInfos []*
 	if err != nil {
 		return err
 	}
-	//Start MySql
+	// Start MySql
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, tablet := range shard0.Vttablets {
 		log.Infof("Starting MySql for tablet %v", tablet.Alias)
@@ -242,7 +243,7 @@ func StartVTOrcs(t *testing.T, clusterInfo *VTOrcClusterInfo, orcExtraArgs []str
 
 	// Start vtorc
 	for cell, count := range countByCell {
-		for i := 0; i < count; i++ {
+		for range count {
 			vtorcProcess := clusterInfo.ClusterInstance.NewVTOrcProcess(config, cell)
 			vtorcProcess.ExtraArgs = orcExtraArgs
 			err := vtorcProcess.Setup()
@@ -605,7 +606,7 @@ func RunSQL(t *testing.T, sql string, tablet *cluster.Vttablet, db string) (*sql
 func RunSQLs(t *testing.T, sqls []string, tablet *cluster.Vttablet, db string) error {
 	// Get Connection
 	tabletParams := getMysqlConnParam(tablet, db)
-	var timeoutDuration = time.Duration(5 * len(sqls))
+	timeoutDuration := time.Duration(5 * len(sqls))
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutDuration*time.Second)
 	defer cancel()
 	conn, err := mysql.Connect(ctx, &tabletParams)
@@ -657,12 +658,7 @@ func StartVttablet(t *testing.T, clusterInfo *VTOrcClusterInfo, cell string, isR
 }
 
 func isVttabletInUse(clusterInfo *VTOrcClusterInfo, tablet *cluster.Vttablet) bool {
-	for _, vttablet := range clusterInfo.ClusterInstance.Keyspaces[0].Shards[0].Vttablets {
-		if tablet == vttablet {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(clusterInfo.ClusterInstance.Keyspaces[0].Shards[0].Vttablets, tablet)
 }
 
 // PermanentlyRemoveVttablet removes the tablet specified from the cluster. It makes it so that
@@ -813,7 +809,7 @@ func SetupNewClusterSemiSync(t *testing.T) *VTOrcClusterInfo {
 	err = clusterInstance.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+Cell1)
 	require.NoError(t, err, "Error managing topo: %v", err)
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		tablet := clusterInstance.NewVttabletInstance("replica", 100+i, Cell1)
 		tablets = append(tablets, tablet)
 	}
@@ -831,7 +827,7 @@ func SetupNewClusterSemiSync(t *testing.T) *VTOrcClusterInfo {
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
 	require.NoError(t, err, "Cannot launch cluster: %v", err)
 
-	//Start MySql
+	// Start MySql
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
@@ -885,7 +881,7 @@ func AddSemiSyncKeyspace(t *testing.T, clusterInfo *VTOrcClusterInfo) {
 	keyspaceSemiSyncName := "ks2"
 	keyspace := &cluster.Keyspace{Name: keyspaceSemiSyncName}
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		tablet := clusterInfo.ClusterInstance.NewVttabletInstance("replica", 300+i, Cell1)
 		tablets = append(tablets, tablet)
 	}
@@ -905,7 +901,7 @@ func AddSemiSyncKeyspace(t *testing.T, clusterInfo *VTOrcClusterInfo) {
 	err := clusterInfo.ClusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
 	require.NoError(t, err, "Cannot launch cluster: %v", err)
 
-	//Start MySql
+	// Start MySql
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInfo.ClusterInstance.Keyspaces[1].Shards {
 		for _, tablet := range shard.Vttablets {
@@ -1007,7 +1003,7 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 	mapKey := fmt.Sprintf("%s.%s.%s", recoveryName, keyspace, shard)
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		vars := vtorcInstance.GetVars()
-		successfulRecoveriesMap := vars["SuccessfulRecoveries"].(map[string]interface{})
+		successfulRecoveriesMap := vars["SuccessfulRecoveries"].(map[string]any)
 		successCount := GetIntFromValue(successfulRecoveriesMap[mapKey])
 		assert.EqualValues(c, countExpected, successCount)
 	}, timeout, time.Second, "timed out waiting for successful recovery count")
@@ -1020,7 +1016,7 @@ func WaitForSkippedRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcProce
 	mapKey := fmt.Sprintf("%s.%s.%s.%s", recoveryName, keyspace, shard, recoverySkipCode)
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		vars := vtorcInstance.GetVars()
-		skippedRecoveriesMap := vars["SkippedRecoveries"].(map[string]interface{})
+		skippedRecoveriesMap := vars["SkippedRecoveries"].(map[string]any)
 		skippedCount := GetIntFromValue(skippedRecoveriesMap[mapKey])
 		assert.GreaterOrEqual(c, skippedCount, countExpected)
 	}, timeout, time.Second, "timeout waiting for skipped recoveries")
@@ -1033,7 +1029,7 @@ func WaitForSuccessfulPRSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 	mapKey := fmt.Sprintf("%v.%v.success", keyspace, shard)
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		vars := vtorcInstance.GetVars()
-		prsCountsMap := vars["PlannedReparentCounts"].(map[string]interface{})
+		prsCountsMap := vars["PlannedReparentCounts"].(map[string]any)
 		successCount := GetIntFromValue(prsCountsMap[mapKey])
 		assert.EqualValues(c, countExpected, successCount)
 	}, timeout, time.Second, "timed out waiting for successful PRS count")
@@ -1046,7 +1042,7 @@ func WaitForSuccessfulERSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 	mapKey := fmt.Sprintf("%v.%v.success", keyspace, shard)
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		vars := vtorcInstance.GetVars()
-		ersCountsMap := vars["EmergencyReparentCounts"].(map[string]interface{})
+		ersCountsMap := vars["EmergencyReparentCounts"].(map[string]any)
 		successCount := GetIntFromValue(ersCountsMap[mapKey])
 		assert.EqualValues(c, countExpected, successCount)
 	}, timeout, time.Second, "timed out waiting for successful ERS count")
@@ -1063,7 +1059,7 @@ func WaitForShardERSDisabledState(t *testing.T, vtorcInstance *cluster.VTOrcProc
 	mapKey := fmt.Sprintf("%v.%v", keyspace, shard)
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		vars := vtorcInstance.GetVars()
-		ersDisabledMap := vars["EmergencyReparentShardDisabled"].(map[string]interface{})
+		ersDisabledMap := vars["EmergencyReparentShardDisabled"].(map[string]any)
 		disabledValue := GetIntFromValue(ersDisabledMap[mapKey])
 		assert.EqualValues(c, expectedValue, disabledValue)
 	}, timeout, time.Second, "timed out waiting for shard ERS-disabled state")
@@ -1105,7 +1101,7 @@ func WaitForDetectedProblems(t *testing.T, vtorcInstance *cluster.VTOrcProcess, 
 	timeout := 15 * time.Second
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		vars := vtorcInstance.GetVars()
-		problems := vars["DetectedProblems"].(map[string]interface{})
+		problems := vars["DetectedProblems"].(map[string]any)
 		actual, ok := problems[key]
 		actual = GetIntFromValue(actual)
 		assert.True(c, ok,

@@ -21,7 +21,7 @@ import (
 )
 
 var (
-	countersMap = map[string]interface{}{}
+	countersMap = map[string]any{}
 	countersMu  sync.RWMutex
 )
 

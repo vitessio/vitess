@@ -1,4 +1,4 @@
-//go:build !goexperiment.swissmap
+//go:build !goexperiment.swissmap && !go1.26
 
 /*
 Copyright (c) 2009 The Go Authors. All rights reserved.
@@ -32,7 +32,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // This is invalid Go code, and it will fail to compile if you disable
 // Swiss maps when building Vitess. Our runtime memory accounting system
-// expects the map implementation in Go 1.24 to be Swiss.
+// expects the map implementation in Go 1.24 and 1.25 to be Swiss.
+// In Go 1.26 and later, Swiss maps are always enabled.
 
 package hack
 

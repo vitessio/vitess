@@ -25,7 +25,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
-	"time"
+	"testing/synctest"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -298,35 +298,39 @@ func TestInitTLSConfigWithServerCA(t *testing.T) {
 }
 
 func testInitTLSConfig(t *testing.T, serverCA bool) {
-	// Create the certs.
-	ctx := utils.LeakCheckContext(t)
+	synctest.Test(t, func(t *testing.T) {
+		// Create the certs.
+		ctx := utils.LeakCheckContext(t)
 
-	root := t.TempDir()
-	tlstest.CreateCA(root)
-	tlstest.CreateCRL(root, tlstest.CA)
-	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
+		root := t.TempDir()
+		tlstest.CreateCA(root)
+		tlstest.CreateCRL(root, tlstest.CA)
+		tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 
-	serverCACert := ""
-	if serverCA {
-		serverCACert = path.Join(root, "ca-cert.pem")
-	}
+		serverCACert := ""
+		if serverCA {
+			serverCACert = path.Join(root, "ca-cert.pem")
+		}
 
-	srv := &mysqlServer{tcpListener: &mysql.Listener{}}
-	if err := initTLSConfig(ctx, srv, path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), path.Join(root, "ca-crl.pem"), serverCACert, true, tls.VersionTLS12); err != nil {
-		t.Fatalf("init tls config failure due to: +%v", err)
-	}
+		srv := &mysqlServer{tcpListener: &mysql.Listener{}}
+		if err := initTLSConfig(ctx, srv, path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), path.Join(root, "ca-crl.pem"), serverCACert, true, tls.VersionTLS12); err != nil {
+			t.Fatalf("init tls config failure due to: +%v", err)
+		}
 
-	serverConfig := srv.tcpListener.TLSConfig.Load()
-	if serverConfig == nil {
-		t.Fatalf("init tls config shouldn't create nil server config")
-	}
+		serverConfig := srv.tcpListener.TLSConfig.Load()
+		if serverConfig == nil {
+			t.Fatalf("init tls config shouldn't create nil server config")
+		}
 
-	srv.sigChan <- syscall.SIGHUP
-	time.Sleep(100 * time.Millisecond) // wait for signal handler
+		srv.sigChan <- syscall.SIGHUP
 
-	if srv.tcpListener.TLSConfig.Load() == serverConfig {
-		t.Fatalf("init tls config should have been recreated after SIGHUP")
-	}
+		// wait for signal handler
+		synctest.Wait()
+
+		if srv.tcpListener.TLSConfig.Load() == serverConfig {
+			t.Fatalf("init tls config should have been recreated after SIGHUP")
+		}
+	})
 }
 
 // TestKillMethods test the mysql plugin for kill method calls.

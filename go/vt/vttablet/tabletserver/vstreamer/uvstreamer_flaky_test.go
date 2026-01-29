@@ -78,10 +78,12 @@ type TestState struct {
 
 var testState = &TestState{}
 
-var positions map[string]string
-var allEvents []*binlogdatapb.VEvent
-var muAllEvents sync.Mutex
-var callbacks map[string]func()
+var (
+	positions   map[string]string
+	allEvents   []*binlogdatapb.VEvent
+	muAllEvents sync.Mutex
+	callbacks   map[string]func()
+)
 
 func TestVStreamCopyFilterValidations(t *testing.T) {
 	if testing.Short() {
@@ -103,7 +105,7 @@ func TestVStreamCopyFilterValidations(t *testing.T) {
 	})
 	engine.se.Reload(context.Background())
 
-	var getUVStreamer = func(filter *binlogdatapb.Filter, tablePKs []*binlogdatapb.TableLastPK) *uvstreamer {
+	getUVStreamer := func(filter *binlogdatapb.Filter, tablePKs []*binlogdatapb.TableLastPK) *uvstreamer {
 		uvs := &uvstreamer{
 			ctx:        ctx,
 			cancel:     cancel,
@@ -119,7 +121,7 @@ func TestVStreamCopyFilterValidations(t *testing.T) {
 		}
 		return uvs
 	}
-	var testFilter = func(rules []*binlogdatapb.Rule, tablePKs []*binlogdatapb.TableLastPK, expected []string, expectedError string) {
+	testFilter := func(rules []*binlogdatapb.Rule, tablePKs []*binlogdatapb.TableLastPK, expected []string, expectedError string) {
 		uvs := getUVStreamer(&binlogdatapb.Filter{Rules: rules}, tablePKs)
 		if expectedError == "" {
 			require.NoError(t, uvs.init())

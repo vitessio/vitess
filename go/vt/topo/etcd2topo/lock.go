@@ -35,9 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-var (
-	leaseTTL = 30 // This is the default used for all non-named locks
-)
+var leaseTTL = 30 // This is the default used for all non-named locks
 
 func init() {
 	for _, cmd := range topo.FlagBinaries {

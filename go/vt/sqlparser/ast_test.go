@@ -672,13 +672,15 @@ func TestColumns_FindColumn(t *testing.T) {
 	testcases := []struct {
 		in  string
 		out int
-	}{{
-		in:  "a",
-		out: 0,
-	}, {
-		in:  "b",
-		out: 2,
-	},
+	}{
+		{
+			in:  "a",
+			out: 0,
+		},
+		{
+			in:  "b",
+			out: 2,
+		},
 		{
 			in:  "0",
 			out: 3,
@@ -686,7 +688,8 @@ func TestColumns_FindColumn(t *testing.T) {
 		{
 			in:  "f",
 			out: -1,
-		}}
+		},
+	}
 
 	for _, tc := range testcases {
 		val := cols.FindColumn(NewIdentifierCI(tc.in))

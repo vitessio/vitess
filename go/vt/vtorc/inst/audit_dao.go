@@ -41,7 +41,7 @@ func AuditOperation(auditType string, tabletAlias string, message string) error 
 	if config.GetAuditFileLocation() != "" {
 		auditWrittenToFile = true
 		go func() {
-			f, err := os.OpenFile(config.GetAuditFileLocation(), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0640)
+			f, err := os.OpenFile(config.GetAuditFileLocation(), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0o640)
 			if err != nil {
 				log.Error(err)
 				return

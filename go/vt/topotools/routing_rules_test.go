@@ -19,6 +19,7 @@ package topotools
 import (
 	"context"
 	"errors"
+	"maps"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -29,8 +30,7 @@ import (
 )
 
 func TestRoutingRulesRoundTrip(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
 
@@ -49,8 +49,7 @@ func TestRoutingRulesRoundTrip(t *testing.T) {
 }
 
 func TestRoutingRulesErrors(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts, factory := memorytopo.NewServerAndFactory(ctx, "zone1")
 	defer ts.Close()
 	factory.SetError(errors.New("topo failure for testing"))
@@ -72,8 +71,7 @@ func TestRoutingRulesErrors(t *testing.T) {
 }
 
 func TestShardRoutingRulesRoundTrip(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
 
@@ -92,8 +90,7 @@ func TestShardRoutingRulesRoundTrip(t *testing.T) {
 }
 
 func TestKeyspaceRoutingRulesRoundTrip(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
 
@@ -103,9 +100,7 @@ func TestKeyspaceRoutingRulesRoundTrip(t *testing.T) {
 	}
 
 	err := UpdateKeyspaceRoutingRules(ctx, ts, "test", func(ctx context.Context, rules *map[string]string) error {
-		for k, v := range rulesMap {
-			(*rules)[k] = v
-		}
+		maps.Copy((*rules), rulesMap)
 		return nil
 	})
 	require.NoError(t, err, "could not save keyspace routing rules to topo %v", rulesMap)
@@ -118,8 +113,7 @@ func TestKeyspaceRoutingRulesRoundTrip(t *testing.T) {
 // TestSaveKeyspaceRoutingRulesLocked confirms that saveKeyspaceRoutingRulesLocked() can only be called
 // with a locked routing_rules lock.
 func TestSaveKeyspaceRoutingRulesLocked(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
 

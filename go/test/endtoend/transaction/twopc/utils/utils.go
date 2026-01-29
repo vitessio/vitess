@@ -91,7 +91,7 @@ func ClearOutTable(t testing.TB, vtParams mysql.ConnParams, tableName string) {
 func WriteTestCommunicationFile(t *testing.T, fileName string, content string) {
 	// Delete the file just to make sure it doesn't exist before we write to it.
 	DeleteFile(fileName)
-	err := os.WriteFile(path.Join(os.Getenv("VTDATAROOT"), fileName), []byte(content), 0644)
+	err := os.WriteFile(path.Join(os.Getenv("VTDATAROOT"), fileName), []byte(content), 0o644)
 	require.NoError(t, err)
 }
 
@@ -106,14 +106,12 @@ func RunMultiShardCommitWithDelay(t *testing.T, conn *mysql.Conn, commitDelayTim
 	WriteTestCommunicationFile(t, DebugDelayCommitTime, commitDelayTime)
 	// We will execute a commit in a go routine, because we know it will take some time to complete.
 	// While the commit is ongoing, we would like to run the disruption.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		_, err := utils.ExecAllowError(t, conn, "commit")
 		if err != nil {
 			log.Errorf("Error in commit - %v", err)
 		}
-	}()
+	})
 }
 
 // DeleteFile deletes the file specified.
@@ -130,7 +128,7 @@ func WaitForResults(t *testing.T, vtParams *mysql.ConnParams, query string, resu
 		case <-timeout:
 			t.Fatalf("didn't reach expected results for %s. Last results - %v", query, prevRes)
 		default:
-			ctx := context.Background()
+			ctx := t.Context()
 			conn, err := mysql.Connect(ctx, vtParams)
 			if err == nil {
 				res, _ := utils.ExecAllowError(t, conn, query)

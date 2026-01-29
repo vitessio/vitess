@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"fmt"
+	"strings"
 )
 
 var jsonSingleDoc = `
@@ -54,23 +55,27 @@ func repeatJSON(jsonDoc string, times int, typ largeDocCollectionType) string {
 	switch typ {
 	case largeJSONArrayCollection:
 		jsonDocs = "["
+		var jsonDocsSb57 strings.Builder
 		for times > 0 {
 			times--
-			jsonDocs += jsonSingleDoc
+			jsonDocsSb57.WriteString(jsonSingleDoc)
 			if times != 0 {
-				jsonDocs += ","
+				jsonDocsSb57.WriteString(",")
 			}
 		}
+		jsonDocs += jsonDocsSb57.String()
 		jsonDocs += "]"
 	case largeJSONObjectCollection:
 		jsonDocs = "{"
+		var jsonDocsSb67 strings.Builder
 		for times > 0 {
 			times--
-			jsonDocs += fmt.Sprintf("\"%d\": %s", times, jsonSingleDoc)
+			jsonDocsSb67.WriteString(fmt.Sprintf("\"%d\": %s", times, jsonSingleDoc))
 			if times != 0 {
-				jsonDocs += ","
+				jsonDocsSb67.WriteString(",")
 			}
 		}
+		jsonDocs += jsonDocsSb67.String()
 		jsonDocs += "}"
 	}
 	return jsonDocs

@@ -98,13 +98,15 @@ func insertMoreCustomers(t *testing.T, numCustomers int) {
 	// Now let's insert the records using the sequence
 	// values we reserved.
 	sql := "insert into customer (cid, name) values "
+	var sqlSb101 strings.Builder
 	for i := 1; i <= numCustomers; i++ {
-		sql += fmt.Sprintf("(%d, 'customer%d')", cid, i)
+		sqlSb101.WriteString(fmt.Sprintf("(%d, 'customer%d')", cid, i))
 		if i != numCustomers {
-			sql += ","
+			sqlSb101.WriteString(",")
 		}
 		cid++
 	}
+	sql += sqlSb101.String()
 	execVtgateQuery(t, vtgateConn, defaultTargetKs, sql)
 }
 
@@ -152,7 +154,7 @@ func insertIntoBlobTable(t *testing.T) {
 // insertLargeTransactionForChunkTesting inserts a transaction large enough to exceed the 1KB chunking threshold.
 func insertLargeTransactionForChunkTesting(t *testing.T, vtgateConn *mysql.Conn, keyspace string, startID int) {
 	execVtgateQuery(t, vtgateConn, keyspace, "BEGIN")
-	for i := 0; i < 15; i++ {
+	for i := range 15 {
 		largeData := strings.Repeat("x", 94) + fmt.Sprintf("_%05d", i)
 		query := fmt.Sprintf("INSERT INTO customer (cid, name) VALUES (%d, '%s')",
 			startID+i, largeData)

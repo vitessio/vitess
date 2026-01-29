@@ -17,11 +17,10 @@ limitations under the License.
 package topo
 
 import (
+	"context"
 	"path"
 	"strings"
 	"sync"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -180,7 +179,7 @@ func (ts *Server) ResolveWildcards(ctx context.Context, cell string, paths []str
 	}
 
 	result := make([]string, 0, 32)
-	for i := 0; i < len(paths); i++ {
+	for i := range paths {
 		subResult := results[i]
 		if subResult != nil {
 			result = append(result, subResult...)

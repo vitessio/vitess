@@ -54,7 +54,8 @@ func (state txEngineState) String() string {
 		"NotServing",
 		"Transitioning",
 		"AcceptReadWrite",
-		"AcceptingReadOnly"}
+		"AcceptingReadOnly",
+	}
 
 	if state < NotServing || state > AcceptingReadOnly {
 		return fmt.Sprintf("Unknown - %d", int(state))

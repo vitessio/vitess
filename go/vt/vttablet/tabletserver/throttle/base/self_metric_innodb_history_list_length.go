@@ -33,8 +33,7 @@ var (
 
 var _ SelfMetric = registerSelfMetric(&HistoryListLengthSelfMetric{})
 
-type HistoryListLengthSelfMetric struct {
-}
+type HistoryListLengthSelfMetric struct{}
 
 func (m *HistoryListLengthSelfMetric) Name() MetricName {
 	return HistoryListLengthMetricName

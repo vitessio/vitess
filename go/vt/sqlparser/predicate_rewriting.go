@@ -25,7 +25,7 @@ func RewritePredicate(ast SQLNode) SQLNode {
 
 	// Beware: converting to CNF in this loop might cause exponential formula growth.
 	// We bail out early to prevent going overboard.
-	for loop := 0; loop < 15; loop++ {
+	for range 15 {
 		exprChanged := false
 		stopOnChange := func(SQLNode, SQLNode) bool {
 			return !exprChanged

@@ -17,6 +17,7 @@ limitations under the License.
 package operators
 
 import (
+	"slices"
 	"strconv"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -429,11 +430,8 @@ func insertSelectPlan(
 	// Therefore, instead of streaming, this flag will ensure the records are first read and then inserted.
 	insertTbl := insOp.tableTarget()
 	selTables := TablesUsed(selOp)
-	for _, tbl := range selTables {
-		if insertTbl == tbl {
-			insertSelect.ForceNonStreaming = true
-			break
-		}
+	if slices.Contains(selTables, insertTbl) {
+		insertSelect.ForceNonStreaming = true
 	}
 
 	if len(insOp.ColVindexes) == 0 {

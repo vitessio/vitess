@@ -92,7 +92,7 @@ func (lkp *lookupInternal) Init(lookupQueryParams map[string]string, autocommit,
 	lkp.Table = lookupQueryParams[lookupInternalParamTable]
 	lkp.To = lookupQueryParams[lookupInternalParamTo]
 	var fromColumns []string
-	for _, from := range strings.Split(lookupQueryParams[lookupInternalParamFrom], ",") {
+	for from := range strings.SplitSeq(lookupQueryParams[lookupInternalParamFrom], ",") {
 		fromColumns = append(fromColumns, strings.TrimSpace(from))
 	}
 	lkp.FromColumns = fromColumns

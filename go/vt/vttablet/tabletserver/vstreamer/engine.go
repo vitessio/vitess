@@ -236,7 +236,8 @@ func (vse *Engine) validateBinlogRowImage(ctx context.Context, db dbconfigs.Conn
 // This streams events from the binary logs
 func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK,
 	filter *binlogdatapb.Filter, throttlerApp throttlerapp.Name,
-	send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions) error {
+	send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions,
+) error {
 	if err := vse.validateBinlogRowImage(ctx, vse.se.GetDBConnector()); err != nil {
 		return err
 	}
@@ -282,7 +283,8 @@ func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binl
 // StreamRows streams rows.
 // This streams the table data rows (so we can copy the table data snapshot)
 func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltypes.Value,
-	send func(*binlogdatapb.VStreamRowsResponse) error, options *binlogdatapb.VStreamOptions) error {
+	send func(*binlogdatapb.VStreamRowsResponse) error, options *binlogdatapb.VStreamOptions,
+) error {
 	// Ensure vschema is initialized and the watcher is started.
 	// Starting of the watcher has to be delayed till the first call to Stream
 	// because this overhead should be incurred only if someone uses this feature.
@@ -325,7 +327,8 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 
 // StreamTables streams all tables.
 func (vse *Engine) StreamTables(ctx context.Context,
-	send func(*binlogdatapb.VStreamTablesResponse) error, options *binlogdatapb.VStreamOptions) error {
+	send func(*binlogdatapb.VStreamTablesResponse) error, options *binlogdatapb.VStreamOptions,
+) error {
 	// Ensure vschema is initialized and the watcher is started.
 	// Starting of the watcher is delayed till the first call to StreamTables
 	// so that this overhead is incurred only if someone uses this feature.
@@ -367,7 +370,8 @@ func (vse *Engine) StreamTables(ctx context.Context,
 
 // StreamResults streams results of the query with the gtid.
 func (vse *Engine) StreamResults(ctx context.Context, query string,
-	send func(*binlogdatapb.VStreamResultsResponse) error) error {
+	send func(*binlogdatapb.VStreamResultsResponse) error,
+) error {
 	// Create stream and add it to the map.
 	resultStreamer, idx, err := func() (*resultStreamer, int, error) {
 		if atomic.LoadInt32(&vse.isOpen) == 0 {
@@ -533,11 +537,7 @@ func (vse *Engine) waitForMySQL(ctx context.Context, db dbconfigs.Connector, tab
 				// Exponential backoff with 1.5 as a factor
 				if backoff != backoffLimit {
 					nb := time.Duration(float64(backoff) * 1.5)
-					if nb > backoffLimit {
-						backoff = backoffLimit
-					} else {
-						backoff = nb
-					}
+					backoff = min(nb, backoffLimit)
 				}
 			}
 		}

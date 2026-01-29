@@ -187,7 +187,7 @@ func TestSchemaReload(t *testing.T) {
 	framework.Server.ReloadSchema(context.Background())
 	client := framework.NewClient()
 	waitTime := 50 * time.Millisecond
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		time.Sleep(waitTime)
 		waitTime += 50 * time.Millisecond
 		_, err = client.Execute("select * from vitess_temp", nil)

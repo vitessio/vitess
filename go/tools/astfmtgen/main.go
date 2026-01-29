@@ -179,7 +179,7 @@ func (r *Rewriter) rewriteAstPrintf(cursor *astutil.Cursor, expr *ast.CallExpr) 
 		if i > lasti {
 			var arg ast.Expr
 			var method string
-			var lit = format[lasti:i]
+			lit := format[lasti:i]
 
 			if len(lit) == 1 {
 				method = "WriteByte"

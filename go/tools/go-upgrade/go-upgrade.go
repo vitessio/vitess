@@ -18,6 +18,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -29,14 +30,23 @@ import (
 	"strings"
 	"time"
 
-	"encoding/json"
-
+	"github.com/google/go-containerregistry/pkg/crane"
+	gocr "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/hashicorp/go-version"
 	"github.com/spf13/cobra"
 )
 
 const (
 	goDevAPI = "https://go.dev/dl/?mode=json"
+
+	// dockerPlatformOS is the target OS for the Go base image.
+	dockerPlatformOS = "linux"
+
+	// dockerPlatformArch is the target architecture for the Go base image.
+	dockerPlatformArch = "amd64"
+
+	// dockerImageDistro is the distro suffix used in Go base image tags.
+	dockerImageDistro = "bookworm"
 
 	// regexpFindBootstrapVersion greps the current bootstrap version from the Makefile. The bootstrap
 	// version is composed of either one or two numbers, for instance: 18.1 or 18.
@@ -63,6 +73,15 @@ const (
 	// to match the entire flag name + the default value (being the current bootstrap version)
 	// Example input: "flag.String("bootstrap-version", "20", "the version identifier to use for the docker images")"
 	regexpReplaceTestGoBootstrapVersion = `\"bootstrap-version\",[[:space:]]*\"([0-9.]+)\"`
+)
+
+// regexpReplaceGolangDockerImage replaces the Go version and image digest in Dockerfiles.
+// Example input: "FROM --platform=linux/amd64 golang:1.25.3-bookworm@sha256:abc AS builder"
+var regexpReplaceGolangDockerImage = fmt.Sprintf(
+	`(?i)(FROM[[:space:]]+--platform=%s/%s[[:space:]]+golang:)([0-9.]+-%s)@sha256:[a-f0-9]{64}`,
+	dockerPlatformOS,
+	dockerPlatformArch,
+	dockerImageDistro,
 )
 
 type (
@@ -318,7 +337,7 @@ func getLatestStableGolangReleases() (version.Collection, error) {
 func chooseNewVersion(curVersion *version.Version, latestVersions version.Collection, allowMajorUpgrade bool) *version.Version {
 	selectedVersion := curVersion
 	for _, latestVersion := range latestVersions {
-		if !allowMajorUpgrade && !isSameVersion(latestVersion, selectedVersion) {
+		if !allowMajorUpgrade && !isSameMajorMinorVersion(latestVersion, selectedVersion) {
 			continue
 		}
 		if latestVersion.GreaterThan(selectedVersion) {
@@ -367,6 +386,22 @@ func replaceGoVersionInCodebase(old, new *version.Version) error {
 		}
 	}
 
+	dockerDigest, err := resolveGolangImageDigest(new)
+	if err != nil {
+		return err
+	}
+
+	for _, fileToChange := range filesToChange {
+		err = replaceInFile(
+			[]*regexp.Regexp{regexp.MustCompile(regexpReplaceGolangDockerImage)},
+			[]string{fmt.Sprintf("${1}%s@%s", golangDockerTag(new), dockerDigest)},
+			fileToChange,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
 	if !isSameVersion(old, new) {
 		goModFiles := []string{"./go.mod"}
 		for _, file := range goModFiles {
@@ -381,6 +416,21 @@ func replaceGoVersionInCodebase(old, new *version.Version) error {
 		}
 	}
 	return nil
+}
+
+func resolveGolangImageDigest(goVersion *version.Version) (string, error) {
+	ref := "golang:" + golangDockerTag(goVersion)
+
+	digest, err := crane.Digest(ref, crane.WithPlatform(&gocr.Platform{OS: dockerPlatformOS, Architecture: dockerPlatformArch}))
+	if err != nil {
+		return "", fmt.Errorf("resolve golang digest for %s: %w", ref, err)
+	}
+
+	return digest, nil
+}
+
+func golangDockerTag(goVersion *version.Version) string {
+	return goVersion.String() + "-" + dockerImageDistro
 }
 
 func updateBootstrapVersionInCodebase(old, new string, newGoVersion *version.Version) error {
@@ -430,7 +480,7 @@ func updateBootstrapVersionInCodebase(old, new string, newGoVersion *version.Ver
 }
 
 func updateBootstrapChangelog(new string, goVersion *version.Version) error {
-	file, err := os.OpenFile("./docker/bootstrap/CHANGELOG.md", os.O_RDWR, 0600)
+	file, err := os.OpenFile("./docker/bootstrap/CHANGELOG.md", os.O_RDWR, 0o600)
 	if err != nil {
 		return err
 	}
@@ -455,6 +505,10 @@ func updateBootstrapChangelog(new string, goVersion *version.Version) error {
 
 func isSameVersion(a, b *version.Version) bool {
 	return a.Segments()[0] == b.Segments()[0] && a.Segments()[1] == b.Segments()[1] && a.Segments()[2] == b.Segments()[2]
+}
+
+func isSameMajorMinorVersion(a, b *version.Version) bool {
+	return a.Segments()[0] == b.Segments()[0] && a.Segments()[1] == b.Segments()[1]
 }
 
 func getListOfFilesInPaths(pathsToExplore []string) ([]string, error) {
@@ -488,7 +542,7 @@ func replaceInFile(oldexps []*regexp.Regexp, new []string, fileToChange string) 
 		panic("old and new should be of the same length")
 	}
 
-	f, err := os.OpenFile(fileToChange, os.O_RDWR, 0600)
+	f, err := os.OpenFile(fileToChange, os.O_RDWR, 0o600)
 	if err != nil {
 		return err
 	}

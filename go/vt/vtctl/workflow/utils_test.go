@@ -31,8 +31,7 @@ import (
 // TestCreateDefaultShardRoutingRules confirms that the default shard routing rules are created correctly for sharded
 // and unsharded keyspaces.
 func TestCreateDefaultShardRoutingRules(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ks1 := &testKeyspace{
 		KeyspaceName: "sourceks",
@@ -101,8 +100,7 @@ func TestCreateDefaultShardRoutingRules(t *testing.T) {
 
 // TestUpdateKeyspaceRoutingRule confirms that the keyspace routing rules are updated correctly.
 func TestUpdateKeyspaceRoutingRule(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
 	routes := make(map[string]string)
@@ -157,7 +155,7 @@ func testConcurrentKeyspaceRoutingRulesUpdates(t *testing.T, ctx context.Context
 	shortCtx, cancel := context.WithTimeout(ctx, duration)
 	defer cancel()
 	log.Infof("Starting %d concurrent updates", concurrency)
-	for i := 0; i < concurrency; i++ {
+	for i := range concurrency {
 		go func(id int) {
 			defer wg.Done()
 			for {

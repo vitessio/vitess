@@ -160,9 +160,7 @@ func NewFakeTablet(t *testing.T, ts *topo.Server, cell string, uid uint32, table
 	}
 }
 
-var (
-	exporter = servenv.NewExporter("TestVtctldClientCommand", "")
-)
+var exporter = servenv.NewExporter("TestVtctldClientCommand", "")
 
 // StartActionLoop will start the action loop for a fake tablet,
 // using ft.FakeMysqlDaemon as the backing mysqld.

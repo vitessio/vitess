@@ -193,10 +193,7 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 }
 
 func (bh *S3BackupHandle) handleAddFile(ctx context.Context, filename string, partSizeBytes int64, reader io.Reader, closer func(error)) {
-	bh.waitGroup.Add(1)
-
-	go func() {
-		defer bh.waitGroup.Done()
+	bh.waitGroup.Go(func() {
 		uploader := manager.NewUploader(bh.client, func(u *manager.Uploader) {
 			u.PartSize = partSizeBytes
 		})
@@ -226,7 +223,7 @@ func (bh *S3BackupHandle) handleAddFile(ctx context.Context, filename string, pa
 			closer(err)
 			bh.RecordError(filename, err)
 		}
-	}()
+	})
 }
 
 // calculateUploadPartSize is a helper to calculate the part size, taking into consideration the minimum part size
@@ -313,8 +310,8 @@ type S3ServerSideEncryption struct {
 func (s3ServerSideEncryption *S3ServerSideEncryption) init() error {
 	s3ServerSideEncryption.reset()
 
-	if strings.HasPrefix(sse, sseCustomerPrefix) {
-		sseCustomerKeyFile := strings.TrimPrefix(sse, sseCustomerPrefix)
+	if after, ok := strings.CutPrefix(sse, sseCustomerPrefix); ok {
+		sseCustomerKeyFile := after
 		base64CodedKey, err := os.ReadFile(sseCustomerKeyFile)
 		if err != nil {
 			log.Errorf(err.Error())
@@ -471,7 +468,6 @@ func (bs *S3BackupStorage) RemoveBackup(ctx context.Context, dir, name string) e
 				Quiet:   &quiet,
 			},
 		})
-
 		if err != nil {
 			return err
 		}

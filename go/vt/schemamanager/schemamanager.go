@@ -17,11 +17,10 @@ limitations under the License.
 package schemamanager
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -39,9 +38,7 @@ const (
 // ControllerFactory takes a set params and construct a Controller instance.
 type ControllerFactory func(params map[string]string) (Controller, error)
 
-var (
-	controllerFactories = make(map[string]ControllerFactory)
-)
+var controllerFactories = make(map[string]ControllerFactory)
 
 // Controller is responsible for getting schema change for a
 // certain keyspace and also handling various events happened during schema

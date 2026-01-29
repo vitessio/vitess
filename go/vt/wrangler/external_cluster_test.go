@@ -1,7 +1,6 @@
 package wrangler
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -14,8 +13,7 @@ import (
 )
 
 func TestVitessCluster(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	tmc := newTestWranglerTMClient()
 	wr := New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmc)

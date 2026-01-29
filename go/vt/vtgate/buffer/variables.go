@@ -126,7 +126,7 @@ var evictReasons = []evictedReason{evictedContextDone, evictedBufferFull, evicte
 
 const (
 	evictedContextDone evictedReason = "ContextDone"
-	//lint: ignore SA9004 ok not to use explicit type here because implicit type string is correct
+	// lint: ignore SA9004 ok not to use explicit type here because implicit type string is correct
 	evictedBufferFull     = "BufferFull"
 	evictedWindowExceeded = "WindowExceeded"
 )

@@ -18,7 +18,8 @@ package replication
 
 import (
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -131,9 +132,7 @@ func (gtidSet MariadbGTIDSet) String() string {
 	for domain := range gtidSet {
 		domains = append(domains, domain)
 	}
-	sort.Slice(domains, func(i, j int) bool {
-		return domains[i] < domains[j]
-	})
+	slices.Sort(domains)
 
 	// Convert each domain's GTID to a string and join all with comma.
 	s := make([]string, len(gtidSet))
@@ -268,9 +267,7 @@ func (gtidSet MariadbGTIDSet) Last() string {
 	for domain := range gtidSet {
 		domains = append(domains, domain)
 	}
-	sort.Slice(domains, func(i, j int) bool {
-		return domains[i] < domains[j]
-	})
+	slices.Sort(domains)
 
 	lastGTID := domains[len(gtidSet)-1]
 	return gtidSet[lastGTID].String()
@@ -279,9 +276,7 @@ func (gtidSet MariadbGTIDSet) Last() string {
 // deepCopy returns a deep copy of the set.
 func (gtidSet MariadbGTIDSet) deepCopy() MariadbGTIDSet {
 	newSet := make(MariadbGTIDSet, len(gtidSet))
-	for domain, gtid := range gtidSet {
-		newSet[domain] = gtid
-	}
+	maps.Copy(newSet, gtidSet)
 	return newSet
 }
 

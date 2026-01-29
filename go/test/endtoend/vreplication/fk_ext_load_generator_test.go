@@ -255,7 +255,7 @@ func (lg *SimpleLoadGenerator) Load() error {
 	lg.state = LoadGeneratorStateLoading
 	defer func() { lg.state = LoadGeneratorStateStopped }()
 	log.Infof("Inserting initial FK data")
-	var queries = []string{
+	queries := []string{
 		"insert into parent values(1, 'parent1'), (2, 'parent2');",
 		"insert into child values(1, 1, 'child11'), (2, 1, 'child21'), (3, 2, 'child32');",
 	}
@@ -447,12 +447,12 @@ func (lg *SimpleLoadGenerator) delete() {
 // `go/test/endtoend/utils/utils.go`.
 // We will to refactor and then reuse the same functionality from vtgate tests, in the near future.
 
-func convertToMap(input interface{}) map[string]interface{} {
-	output := input.(map[string]interface{})
+func convertToMap(input any) map[string]any {
+	output := input.(map[string]any)
 	return output
 }
 
-func getTableT2Map(res *interface{}, ks, tbl string) map[string]interface{} {
+func getTableT2Map(res *any, ks, tbl string) map[string]any {
 	step1 := convertToMap(*res)["keyspaces"]
 	step2 := convertToMap(step1)[ks]
 	step3 := convertToMap(step2)["tables"]
@@ -485,12 +485,12 @@ func waitForColumn(t *testing.T, vtgateProcess *cluster.VtgateProcess, ks, tbl, 
 			if !exists {
 				break
 			}
-			colList, isSlice := colMap.([]interface{})
+			colList, isSlice := colMap.([]any)
 			if !isSlice {
 				break
 			}
 			for _, c := range colList {
-				colDef, isMap := c.(map[string]interface{})
+				colDef, isMap := c.(map[string]any)
 				if !isMap {
 					break
 				}

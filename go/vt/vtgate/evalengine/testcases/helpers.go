@@ -30,13 +30,15 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-type Query func(query string, row []sqltypes.Value, skipCollationCheck bool)
-type Runner func(yield Query)
-type TestCase struct {
-	Run     Runner
-	Schema  []*querypb.Field
-	Compare *Comparison
-}
+type (
+	Query    func(query string, row []sqltypes.Value, skipCollationCheck bool)
+	Runner   func(yield Query)
+	TestCase struct {
+		Run     Runner
+		Schema  []*querypb.Field
+		Compare *Comparison
+	}
+)
 
 func (tc TestCase) Name() string {
 	ptr := reflect.ValueOf(tc.Run).Pointer()
@@ -112,7 +114,7 @@ type bugs struct{}
 // like there's logic that changes the way the elements are compared with a type aggregation
 // but this is not documented anywhere.
 func (bugs) CanCompare(elems ...string) bool {
-	var invalid = map[string]string{
+	invalid := map[string]string{
 		"18446744073709551615": "-1",
 		`9223372036854775808`:  `-9223372036854775808`,
 	}
@@ -125,7 +127,7 @@ func (bugs) CanCompare(elems ...string) bool {
 			return false
 		}
 		if other, ok := invalid[e]; ok {
-			for j := 0; j < len(elems); j++ {
+			for j := range elems {
 				if i != j && elems[j] == other {
 					return false
 				}

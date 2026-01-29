@@ -803,7 +803,7 @@ func (db *LocalCluster) VTProcess() *VtProcess {
 
 // ReadVSchema reads the vschema from the vtgate endpoint for it and returns
 // a pointer to the interface. To read this vschema, the caller must convert it to a map
-func (vt *VtProcess) ReadVSchema() (*interface{}, error) {
+func (vt *VtProcess) ReadVSchema() (*any, error) {
 	httpClient := &http.Client{Timeout: 5 * time.Second}
 	resp, err := httpClient.Get("http://" + net.JoinHostPort(vt.BindAddress, strconv.Itoa(vt.Port)) + "/debug/vschema")
 	if err != nil {
@@ -814,7 +814,7 @@ func (vt *VtProcess) ReadVSchema() (*interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	var results interface{}
+	var results any
 	err = json.Unmarshal(res, &results)
 	if err != nil {
 		return nil, err

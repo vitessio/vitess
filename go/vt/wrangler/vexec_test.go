@@ -17,7 +17,6 @@ limitations under the License.
 package wrangler
 
 import (
-	"context"
 	_ "embed"
 	"errors"
 	"fmt"
@@ -51,14 +50,13 @@ var (
 )
 
 func TestVExec(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	workflow := "wrWorkflow"
 	keyspace := "target"
 	query := "update _vt.vreplication set state = 'Running'"
 	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, nil, time.Now().Unix())
 	defer env.close()
-	var logger = logutil.NewMemoryLogger()
+	logger := logutil.NewMemoryLogger()
 	wr := New(vtenv.NewTestEnv(), logger, env.topoServ, env.tmc)
 
 	vx := newVExec(ctx, workflow, keyspace, query, wr)
@@ -194,8 +192,7 @@ func TestWorkflowStatusUpdate(t *testing.T) {
 }
 
 func TestWorkflowListStreams(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	workflow := "wrWorkflow"
 	keyspace := "target"
 	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, nil, 1234)
@@ -212,7 +209,7 @@ func TestWorkflowListStreams(t *testing.T) {
 	_, err = wr.WorkflowAction(ctx, "badwf", keyspace, "show", false, nil, nil)
 	require.Errorf(t, err, "no streams found for workflow badwf in keyspace target")
 	logger.Clear()
-	var testCases = []struct {
+	testCases := []struct {
 		shards []string
 		want   string
 	}{
@@ -284,8 +281,7 @@ will be run on the following streams in keyspace target for workflow wrWorkflow:
 }
 
 func TestWorkflowListAll(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	keyspace := "target"
 	workflow := "wrWorkflow"
 	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, nil, 0)
@@ -304,8 +300,7 @@ func TestWorkflowListAll(t *testing.T) {
 }
 
 func TestVExecValidations(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	workflow := "wf"
 	keyspace := "ks"
 	query := ""
@@ -373,7 +368,8 @@ func TestVExecValidations(t *testing.T) {
 			name:          "other",
 			want:          "",
 			expectedError: errors.New("invalid action found: other"),
-		}}
+		},
+	}
 
 	for _, a := range actions {
 		t.Run(a.name, func(t *testing.T) {
@@ -391,8 +387,7 @@ func TestVExecValidations(t *testing.T) {
 // tabletmanager and the behavior is tested
 // there.
 func TestWorkflowUpdate(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	workflow := "wrWorkflow"
 	keyspace := "target"
 	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, nil, 1234)

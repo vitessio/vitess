@@ -22,6 +22,7 @@ import (
 	stderrors "errors"
 	"fmt"
 	"io"
+	"maps"
 	"strconv"
 	"time"
 
@@ -285,9 +286,7 @@ func (cfg Config) Merge(override Config) Config {
 }
 
 func mergeStringMap(base map[string]string, override map[string]string) {
-	for k, v := range override {
-		base[k] = v
-	}
+	maps.Copy(base, override)
 }
 
 func mergeCacheConfigs(base, override *cache.Config) *cache.Config {

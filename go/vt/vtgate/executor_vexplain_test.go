@@ -163,7 +163,7 @@ func TestVExplainKeys(t *testing.T) {
 		updatedTestsData, err := json.MarshalIndent(updatedTests, "", "\t")
 		require.NoError(t, err)
 
-		err = os.WriteFile(tempFilePath, updatedTestsData, 0644)
+		err = os.WriteFile(tempFilePath, updatedTestsData, 0o644)
 		require.NoError(t, err)
 
 		fmt.Println("Updated tests written to:", tempFilePath)

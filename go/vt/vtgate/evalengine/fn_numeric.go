@@ -947,13 +947,7 @@ func (call *builtinRound) eval(env *ExpressionEnv) (eval, error) {
 		}
 
 		round = clampRounding(round)
-		digit := int32(round)
-		if digit < 0 {
-			digit = 0
-		}
-		if digit > arg.length {
-			digit = arg.length
-		}
+		digit := min(max(int32(round), 0), arg.length)
 		rounded := arg.dec.Round(int32(round))
 		if rounded.IsZero() {
 			return newEvalDecimalWithPrec(decimal.Zero, 0), nil
@@ -1146,13 +1140,7 @@ func (call *builtinTruncate) eval(env *ExpressionEnv) (eval, error) {
 			return arg, nil
 		}
 		round = clampRounding(round)
-		digit := int32(round)
-		if digit < 0 {
-			digit = 0
-		}
-		if digit > arg.length {
-			digit = arg.length
-		}
+		digit := min(max(int32(round), 0), arg.length)
 
 		truncated := arg.dec.Truncate(int32(round))
 		if truncated.IsZero() {

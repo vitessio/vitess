@@ -395,7 +395,8 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 	origExtraVTGateArgs := extraVTGateArgs
 	extraVTGateArgs = append(extraVTGateArgs, []string{
 		"--enable-partial-keyspace-migration",
-		utils.GetFlagVariantForTests("--schema-change-signal") + "=false"}...)
+		utils.GetFlagVariantForTests("--schema-change-signal") + "=false",
+	}...)
 	defer func() {
 		extraVTGateArgs = origExtraVTGateArgs
 	}()
@@ -632,10 +633,12 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 	})
 }
 
-var customerCount int64
-var currentCustomerCount int64
-var newCustomerCount = int64(201)
-var lastCustomerId int64
+var (
+	customerCount        int64
+	currentCustomerCount int64
+	newCustomerCount     = int64(201)
+	lastCustomerId       int64
+)
 
 func getCustomerCount(t *testing.T, msg string) int64 {
 	vtgateConn, closeConn := getVTGateConn()

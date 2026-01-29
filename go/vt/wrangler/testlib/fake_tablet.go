@@ -161,9 +161,7 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 	}
 }
 
-var (
-	exporter = servenv.NewExporter("TestWranglerTestLib", "")
-)
+var exporter = servenv.NewExporter("TestWranglerTestLib", "")
 
 // StartActionLoop will start the action loop for a fake tablet,
 // using ft.FakeMysqlDaemon as the backing mysqld.

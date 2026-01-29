@@ -128,7 +128,7 @@ func TestPerl(t *testing.T) {
 		}
 
 		var result []byte
-		var perlExpr = fields[3]
+		perlExpr := fields[3]
 
 		for len(perlExpr) > 0 {
 			groupsMat.ResetString(perlExpr)

@@ -17,13 +17,12 @@ limitations under the License.
 package vtctld
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"path"
 	"sort"
 	"strings"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/topo"
 )

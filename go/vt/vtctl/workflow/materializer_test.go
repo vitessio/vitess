@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path"
 	"slices"
 	"strings"
 	"testing"
@@ -56,9 +57,7 @@ const (
 	getNonEmptyTable     = "select 1 from `t1` limit 1"
 )
 
-var (
-	defaultOnDDL = binlogdatapb.OnDDLAction_IGNORE.String()
-)
+var defaultOnDDL = binlogdatapb.OnDDLAction_IGNORE.String()
 
 func gtid(position string) string {
 	arr := strings.Split(position, "/")
@@ -296,8 +295,7 @@ func TestStripAutoIncrement(t *testing.T) {
 }
 
 func TestAddTablesToVSchema(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
 	srcks := "source"
@@ -510,8 +508,7 @@ func TestAddTablesToVSchema(t *testing.T) {
 }
 
 func TestMigrateVSchema(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "workflow",
 		Cell:           "cell",
@@ -544,7 +541,8 @@ func TestMigrateVSchema(t *testing.T) {
 	vschema, err := env.ws.ts.GetSrvVSchema(ctx, env.cell)
 	require.NoError(t, err)
 	got := fmt.Sprintf("%v", vschema)
-	want := []string{`keyspaces:{key:"sourceks" value:{}}`,
+	want := []string{
+		`keyspaces:{key:"sourceks" value:{}}`,
 		`keyspaces:{key:"sourceks" value:{}} keyspaces:{key:"targetks" value:{tables:{key:"t1" value:{}}}}`,
 		`rules:{from_table:"t1" to_tables:"sourceks.t1"}`,
 		`rules:{from_table:"targetks.t1" to_tables:"sourceks.t1"}`,
@@ -571,8 +569,7 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 
 	for onDDLAction := range binlogdatapb.OnDDLAction_value {
 		t.Run(fmt.Sprintf("OnDDL Flag:%v", onDDLAction), func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 			defer env.close()
 			// This is the default and go does not marshal defaults
@@ -909,8 +906,7 @@ func TestShardedAutoIncHandling(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			if tc.targetShards == nil {
 				tc.targetShards = []string{"0"}
 			}
@@ -976,8 +972,7 @@ func TestMoveTablesNoRoutingRules(t *testing.T) {
 		}},
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 	// This is the default and go does not marshal defaults
@@ -1033,14 +1028,215 @@ func TestMoveTablesNoRoutingRules(t *testing.T) {
 	require.Zerof(t, len(rr.Rules), "routing rules should be empty, found %+v", rr.Rules)
 }
 
+func TestMoveTablesCreateShardedVSchemaRollback(t *testing.T) {
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       "workflow",
+		SourceKeyspace: "sourceks",
+		TargetKeyspace: "targetks",
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+		}},
+	}
+
+	ctx := t.Context()
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"-"}, []string{"-"})
+	defer env.close()
+
+	targetVSchema := &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"hash": {
+				Type: "hash",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Name:   "hash",
+					Column: "id",
+				}},
+			},
+		},
+	}
+	err := env.ws.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name:     ms.TargetKeyspace,
+		Keyspace: targetVSchema,
+	})
+	require.NoError(t, err)
+
+	env.tmc.expectFetchAsAllPrivsQuery(startingTargetTabletUID, getNonEmptyTable, &sqltypes.Result{})
+
+	sourceDeleteQuery := fmt.Sprintf(sqlDeleteWorkflow, encodeString("vt_sourceks"), encodeString(ReverseWorkflowName(ms.Workflow)))
+	targetDeleteQuery := fmt.Sprintf(sqlDeleteWorkflow, encodeString("vt_targetks"), encodeString(ms.Workflow))
+	env.tmc.expectVRQuery(startingSourceTabletUID, sourceDeleteQuery, &sqltypes.Result{})
+	env.tmc.expectVRQuery(startingTargetTabletUID, targetDeleteQuery, &sqltypes.Result{})
+
+	readCalls := 0
+	env.tmc.readVReplicationWorkflow = func(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
+		readCalls++
+		if readCalls == 1 {
+			return &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+				Workflow:     request.Workflow,
+				WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
+				Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
+					{
+						Id: 1,
+						Bls: &binlogdatapb.BinlogSource{
+							Keyspace: ms.SourceKeyspace,
+							Shard:    "-",
+							Filter: &binlogdatapb.Filter{
+								Rules: []*binlogdatapb.Rule{{
+									Match:  "t1",
+									Filter: "select * from t1",
+								}},
+							},
+						},
+					},
+				},
+			}, nil
+		}
+		return nil, errors.New("read vreplication failed")
+	}
+
+	_, err = env.ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
+		Workflow:       ms.Workflow,
+		SourceKeyspace: ms.SourceKeyspace,
+		TargetKeyspace: ms.TargetKeyspace,
+		IncludeTables:  []string{"t1"},
+	})
+	require.ErrorContains(t, err, "read vreplication failed")
+
+	got, err := env.ws.ts.GetVSchema(ctx, ms.TargetKeyspace)
+	require.NoError(t, err)
+	require.True(t, proto.Equal(got.Keyspace, targetVSchema), "got: %v, want: %v", got.Keyspace, targetVSchema)
+}
+
+func TestMoveTablesCreateUnshardedVSchemaRollback(t *testing.T) {
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       "workflow",
+		SourceKeyspace: "sourceks",
+		TargetKeyspace: "targetks",
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+		}},
+	}
+
+	ctx := t.Context()
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"-"}, []string{"-"})
+	defer env.close()
+
+	originalVSchema := &vschemapb.Keyspace{
+		Tables: map[string]*vschemapb.Table{
+			"t0": {},
+		},
+	}
+	err := env.ws.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name:     ms.TargetKeyspace,
+		Keyspace: originalVSchema,
+	})
+	require.NoError(t, err)
+
+	env.tmc.expectFetchAsAllPrivsQuery(startingTargetTabletUID, getNonEmptyTable, &sqltypes.Result{})
+
+	sourceDeleteQuery := fmt.Sprintf(sqlDeleteWorkflow, encodeString("vt_sourceks"), encodeString(ReverseWorkflowName(ms.Workflow)))
+	targetDeleteQuery := fmt.Sprintf(sqlDeleteWorkflow, encodeString("vt_targetks"), encodeString(ms.Workflow))
+	env.tmc.expectVRQuery(startingSourceTabletUID, sourceDeleteQuery, &sqltypes.Result{})
+	env.tmc.expectVRQuery(startingTargetTabletUID, targetDeleteQuery, &sqltypes.Result{})
+
+	conn, err := env.ws.ts.ConnForCell(ctx, topo.GlobalCell)
+	require.NoError(t, err)
+	current, changes, err := conn.Watch(ctx, path.Join(topo.KeyspacesPath, ms.TargetKeyspace, topo.VSchemaFile))
+	require.NoError(t, err)
+	initialVersion := ""
+	if current != nil && current.Version != nil {
+		initialVersion = current.Version.String()
+	}
+
+	failCh := make(chan struct{})
+	readCalls := 0
+	env.tmc.readVReplicationWorkflow = func(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
+		readCalls++
+		if readCalls == 1 {
+			return &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+				Workflow:     request.Workflow,
+				WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
+				Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
+					{
+						Id: 1,
+						Bls: &binlogdatapb.BinlogSource{
+							Keyspace: ms.SourceKeyspace,
+							Shard:    "-",
+							Filter: &binlogdatapb.Filter{
+								Rules: []*binlogdatapb.Rule{{
+									Match:  "t1",
+									Filter: "select * from t1",
+								}},
+							},
+						},
+					},
+				},
+			}, nil
+		}
+		<-failCh
+		return nil, errors.New("read vreplication failed")
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := env.ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
+			Workflow:       ms.Workflow,
+			SourceKeyspace: ms.SourceKeyspace,
+			TargetKeyspace: ms.TargetKeyspace,
+			IncludeTables:  []string{"t1"},
+		})
+		errCh <- err
+	}()
+
+	updatedVersion := ""
+	assert.Eventually(t, func() bool {
+		select {
+		case wd := <-changes:
+			if wd == nil || wd.Err != nil || wd.Contents == nil {
+				return false
+			}
+			ks := &vschemapb.Keyspace{}
+			if err := ks.UnmarshalVT(wd.Contents); err != nil {
+				return false
+			}
+			if ks.Tables["t1"] == nil {
+				return false
+			}
+			if wd.Version != nil {
+				updatedVersion = wd.Version.String()
+			}
+			return true
+		default:
+			return false
+		}
+	}, 5*time.Second, 50*time.Millisecond)
+	require.NotEmpty(t, updatedVersion)
+	if initialVersion != "" {
+		require.NotEqual(t, initialVersion, updatedVersion)
+	}
+
+	close(failCh)
+	err = <-errCh
+	require.ErrorContains(t, err, "read vreplication failed")
+
+	got, err := env.ws.ts.GetVSchema(ctx, ms.TargetKeyspace)
+	require.NoError(t, err)
+	require.True(t, proto.Equal(got.Keyspace, originalVSchema), "got: %v, want: %v", got.Keyspace, originalVSchema)
+}
+
 func TestCreateLookupVindexFull(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "lookup",
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -1182,8 +1378,7 @@ func TestCreateLookupVindexMultipleCreate(t *testing.T) {
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -1378,8 +1573,7 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -1778,8 +1972,7 @@ func TestCreateLookupVindexSourceVSchema(t *testing.T) {
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -2024,8 +2217,7 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -2275,8 +2467,7 @@ func TestCreateLookupVindexSameKeyspace(t *testing.T) {
 		SourceKeyspace: "ks",
 		TargetKeyspace: "ks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -2392,8 +2583,7 @@ func TestCreateCustomizedVindex(t *testing.T) {
 		SourceKeyspace: "ks",
 		TargetKeyspace: "ks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -2522,8 +2712,7 @@ func TestCreateLookupVindexIgnoreNulls(t *testing.T) {
 		SourceKeyspace: "ks",
 		TargetKeyspace: "ks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -2647,8 +2836,7 @@ func TestStopAfterCopyFlag(t *testing.T) {
 		SourceKeyspace: "ks",
 		TargetKeyspace: "ks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -2745,8 +2933,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 			},
 		},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
@@ -3432,8 +3619,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 }
 
 func TestValidateEmptyTables(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
 

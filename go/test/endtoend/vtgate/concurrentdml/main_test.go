@@ -17,7 +17,6 @@ limitations under the License.
 package concurrentdml
 
 import (
-	"context"
 	_ "embed"
 	"flag"
 	"fmt"
@@ -26,13 +25,12 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 var (
@@ -108,7 +106,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestInsertIgnoreOnLookupUniqueVindex(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
 		Port: clusterInstance.VtgateMySQLPort,
@@ -136,7 +134,7 @@ func TestInsertIgnoreOnLookupUniqueVindex(t *testing.T) {
 
 func TestOpenTxBlocksInSerial(t *testing.T) {
 	t.Skip("Update and Insert in same transaction does not work with the unique consistent lookup having same value.")
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
 		Port: clusterInstance.VtgateMySQLPort,
@@ -167,7 +165,7 @@ func TestOpenTxBlocksInSerial(t *testing.T) {
 
 func TestOpenTxBlocksInConcurrent(t *testing.T) {
 	t.Skip("Update and Insert in same transaction does not work with the unique consistent lookup having same value.")
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
 		Port: clusterInstance.VtgateMySQLPort,
@@ -186,12 +184,10 @@ func TestOpenTxBlocksInConcurrent(t *testing.T) {
 	utils.Exec(t, conn1, `UPDATE t1 SET c3 = 400 WHERE c2 = 100`)
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		// This will wait for other transaction to complete before throwing the duplicate key error.
 		utils.AssertContainsError(t, conn2, `insert into t1(c1, c2, c3) values (400,100,400)`, `Duplicate entry '100' for key`)
-		wg.Done()
-	}()
+	})
 
 	time.Sleep(3 * time.Second)
 	qr := utils.Exec(t, conn1, `insert ignore into t1(c1, c2, c3) values (200,100,200)`)
@@ -204,7 +200,7 @@ func TestOpenTxBlocksInConcurrent(t *testing.T) {
 }
 
 func TestUpdateLookupUniqueVindex(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
 		Port: clusterInstance.VtgateMySQLPort,

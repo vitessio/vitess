@@ -114,8 +114,7 @@ var (
 // from a VtctldServer MoveTablesCreate request to ensure
 // that the VReplication stream(s) are created correctly.
 func TestCreateVReplicationWorkflow(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sourceKs := "sourceks"
 	sourceTabletUID := 200
 	targetKs := "targetks"
@@ -309,8 +308,7 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 // results returned. Followed by ensuring that SwitchTraffic
 // and ReverseTraffic also work as expected.
 func TestMoveTablesUnsharded(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sourceKs := "sourceks"
 	sourceTabletUID := 200
 	targetKs := "targetks"
@@ -576,8 +574,7 @@ func TestMoveTablesUnsharded(t *testing.T) {
 // results returned. Followed by ensuring that SwitchTraffic
 // and ReverseTraffic also work as expected.
 func TestMoveTablesSharded(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sourceKs := "sourceks"
 	sourceTabletUID := 200
 	targetKs := "targetks"
@@ -878,8 +875,7 @@ func TestGetOptionSetString(t *testing.T) {
 }
 
 func TestUpdateVReplicationWorkflow(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	cells := []string{"zone1"}
 	tabletTypes := []string{"replica"}
 	workflow := "testwf"
@@ -1114,8 +1110,7 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 }
 
 func TestUpdateVReplicationWorkflows(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	keyspace := "testks"
 	tabletUID := 100
 	// VREngine.Exec queries the records in the table and explicitly adds a where id in (...) clause.
@@ -1217,8 +1212,7 @@ func TestUpdateVReplicationWorkflows(t *testing.T) {
 // short-circuit the workflow after we've validated everything we wanted to in
 // the test.
 func TestSourceShardSelection(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	sourceKs := "sourceks"
 	sourceShard0 := "-55"
@@ -1461,8 +1455,7 @@ func TestSourceShardSelection(t *testing.T) {
 // fails -- specifically after the point where we have created
 // the workflow streams.
 func TestFailedMoveTablesCreateCleanup(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sourceKs := "sourceks"
 	sourceTabletUID := 200
 	shard := "0"
@@ -1594,8 +1587,7 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 // that it generates the expected query and results for each
 // request.
 func TestHasVReplicationWorkflows(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sourceKs := "sourceks"
 	sourceTabletUID := 200
 	targetKs := "targetks"
@@ -1691,8 +1683,7 @@ func TestHasVReplicationWorkflows(t *testing.T) {
 // TestReadVReplicationWorkflows tests the RPC requests are turned
 // into the expected proper SQL query.
 func TestReadVReplicationWorkflows(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	tabletUID := 300
 	ks := "targetks"
 	shard := "0"
@@ -1881,8 +1872,7 @@ func addMaterializeSettingsTablesToSchema(ms *vtctldatapb.MaterializeSettings, t
 }
 
 func TestExternalizeLookupVindex(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sourceKs := "sourceks"
 	sourceShard := "0"
 	sourceTabletUID := 200
@@ -2266,8 +2256,7 @@ func TestExternalizeLookupVindex(t *testing.T) {
 }
 
 func TestInternalizeLookupVindex(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sourceKs := "sourceks"
 	sourceShard := "0"
 	sourceTabletUID := 200
@@ -2589,8 +2578,7 @@ func TestInternalizeLookupVindex(t *testing.T) {
 }
 
 func TestCompleteLookupVindex(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sourceKs := "sourceks"
 	sourceShard := "0"
 	sourceTabletUID := 200
@@ -2915,8 +2903,7 @@ func TestCompleteLookupVindex(t *testing.T) {
 }
 
 func TestMaterializerOneToOne(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sourceKs := "sourceks"
 	sourceTabletUID := 200
 	targetKs := "targetks"
@@ -2983,8 +2970,7 @@ func TestMaterializerOneToOne(t *testing.T) {
 }
 
 func TestMaterializerManyToOne(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sourceKs := "sourceks"
 	sourceTabletUID := 200
 	sourceShards := make(map[string]*fakeTabletConn)
@@ -3073,8 +3059,7 @@ func TestMaterializerManyToOne(t *testing.T) {
 }
 
 func TestMaterializerOneToMany(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sourceKs := "sourceks"
 	sourceShard := "0"
 	sourceTabletUID := 200
@@ -3183,8 +3168,7 @@ func TestMaterializerOneToMany(t *testing.T) {
 }
 
 func TestMaterializerManyToMany(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sourceKs := "sourceks"
 	sourceShards := make(map[string]*fakeTabletConn)
 	sourceTabletUID := 200
@@ -3298,8 +3282,7 @@ func TestMaterializerManyToMany(t *testing.T) {
 }
 
 func TestMaterializerMulticolumnVindex(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sourceKs := "sourceks"
 	sourceShard := "0"
 	sourceTabletUID := 200
@@ -3411,8 +3394,7 @@ func TestMaterializerMulticolumnVindex(t *testing.T) {
 }
 
 func TestMaterializerDeploySchema(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sourceKs := "sourceks"
 	sourceTabletUID := 100
 	targetKs := "targetks"
@@ -3483,8 +3465,7 @@ func TestMaterializerDeploySchema(t *testing.T) {
 }
 
 func TestMaterializerCopySchema(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sourceKs := "sourceks"
 	sourceTabletUID := 100
 	targetKs := "targetks"
@@ -3555,8 +3536,7 @@ func TestMaterializerCopySchema(t *testing.T) {
 }
 
 func TestMaterializerExplicitColumns(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sourceKs := "sourceks"
 	sourceShard := "0"
 	sourceTabletUID := 200
@@ -3668,8 +3648,7 @@ func TestMaterializerExplicitColumns(t *testing.T) {
 }
 
 func TestMaterializerRenamedColumns(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sourceKs := "sourceks"
 	sourceShard := "0"
 	sourceTabletUID := 200
@@ -3781,8 +3760,7 @@ func TestMaterializerRenamedColumns(t *testing.T) {
 }
 
 func TestMaterializerStopAfterCopy(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sourceKs := "sourceks"
 	sourceTabletUID := 200
 	targetKs := "targetks"
@@ -3842,8 +3820,7 @@ func TestMaterializerStopAfterCopy(t *testing.T) {
 }
 
 func TestMaterializerNoTargetVSchema(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sourceKs := "sourceks"
 	sourceTabletUID := 100
 	targetKs := "targetks"
@@ -3898,8 +3875,7 @@ func TestMaterializerNoTargetVSchema(t *testing.T) {
 }
 
 func TestMaterializerNoDDL(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sourceKs := "sourceks"
 	sourceTabletUID := 100
 	targetKs := "targetks"
@@ -3947,8 +3923,7 @@ func TestMaterializerNoDDL(t *testing.T) {
 }
 
 func TestMaterializerNoSourcePrimary(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sourceKs := "sourceks"
 	sourceTabletUID := 100
 	targetKs := "targetks"
@@ -3995,8 +3970,7 @@ func TestMaterializerNoSourcePrimary(t *testing.T) {
 }
 
 func TestMaterializerTableMismatchNonCopy(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sourceKs := "sourceks"
 	sourceTabletUID := 100
 	targetKs := "targetks"
@@ -4044,8 +4018,7 @@ func TestMaterializerTableMismatchNonCopy(t *testing.T) {
 }
 
 func TestMaterializerTableMismatchCopy(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sourceKs := "sourceks"
 	sourceTabletUID := 100
 	targetKs := "targetks"
@@ -4093,8 +4066,7 @@ func TestMaterializerTableMismatchCopy(t *testing.T) {
 }
 
 func TestMaterializerNoSourceTable(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sourceKs := "sourceks"
 	sourceTabletUID := 100
 	targetKs := "targetks"
@@ -4138,8 +4110,7 @@ func TestMaterializerNoSourceTable(t *testing.T) {
 }
 
 func TestMaterializerSyntaxError(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sourceKs := "sourceks"
 	sourceTabletUID := 100
 	targetKs := "targetks"
@@ -4189,8 +4160,7 @@ func TestMaterializerSyntaxError(t *testing.T) {
 }
 
 func TestMaterializerNotASelect(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sourceKs := "sourceks"
 	sourceTabletUID := 100
 	targetKs := "targetks"
@@ -4240,8 +4210,7 @@ func TestMaterializerNotASelect(t *testing.T) {
 }
 
 func TestMaterializerNoGoodVindex(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sourceKs := "sourceks"
 	sourceShard := "0"
 	sourceTabletUID := 200
@@ -4326,8 +4295,7 @@ func TestMaterializerNoGoodVindex(t *testing.T) {
 }
 
 func TestMaterializerComplexVindexExpression(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sourceKs := "sourceks"
 	sourceShard := "0"
 	sourceTabletUID := 200
@@ -4407,8 +4375,7 @@ func TestMaterializerComplexVindexExpression(t *testing.T) {
 }
 
 func TestMaterializerNoVindexInExpression(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sourceKs := "sourceks"
 	sourceShard := "0"
 	sourceTabletUID := 200

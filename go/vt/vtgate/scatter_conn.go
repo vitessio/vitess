@@ -859,6 +859,13 @@ func requireNewQS(err error, target *querypb.Target) bool {
 // actionInfo looks at the current session, and returns information about what needs to be done for this tablet
 func actionInfo(ctx context.Context, target *querypb.Target, session *econtext.SafeSession, autocommit bool, txMode vtgatepb.TransactionMode) (*shardActionInfo, *vtgatepb.Session_ShardSession, error) {
 	if !session.InTransaction() && !session.InReservedConn() {
+		// Check for tablet-specific routing for non-transactional queries
+		if alias := session.GetTargetTabletAlias(); alias != nil {
+			return &shardActionInfo{
+				actionNeeded: nothing,
+				alias:        alias,
+			}, nil, nil
+		}
 		return &shardActionInfo{}, nil, nil
 	}
 	ignoreSession := ctx.Value(engine.IgnoreReserveTxn)
@@ -895,6 +902,16 @@ func actionInfo(ctx context.Context, target *querypb.Target, session *econtext.S
 		info.reservedID = shardSession.ReservedId
 		info.alias = shardSession.TabletAlias
 		info.rowsAffected = shardSession.RowsAffected
+	}
+	// Set tablet alias for routing if tablet-specific targeting is active
+	if targetAlias := session.GetTargetTabletAlias(); targetAlias != nil {
+		if info.alias == nil {
+			info.alias = targetAlias
+		} else if !proto.Equal(info.alias, targetAlias) {
+			return nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+				"cannot change tablet target mid-transaction: session has %s, target is %s",
+				topoproto.TabletAliasString(info.alias), topoproto.TabletAliasString(targetAlias))
+		}
 	}
 	return info, shardSession, nil
 }

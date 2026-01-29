@@ -161,7 +161,8 @@ func NewGaugeFunc(name string, help string, f func() int64) *GaugeFunc {
 		CounterFunc: CounterFunc{
 			F:    f,
 			help: help,
-		}}
+		},
+	}
 
 	if name != "" {
 		publish(name, i)

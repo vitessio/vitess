@@ -1,7 +1,6 @@
 package endtoend
 
 import (
-	"context"
 	"testing"
 
 	"vitess.io/vitess/go/test/utils"
@@ -27,8 +26,7 @@ import (
 )
 
 func TestGetSchema(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	topo := memorytopo.NewServer(ctx, "zone1", "zone2", "zone3")
 

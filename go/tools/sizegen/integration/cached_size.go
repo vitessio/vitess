@@ -33,6 +33,7 @@ func (cached *A) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Bimpl) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -43,6 +44,7 @@ func (cached *Bimpl) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *C) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -57,6 +59,7 @@ func (cached *C) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *D) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -124,6 +127,7 @@ func (cached *Map3) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Padded) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -134,6 +138,7 @@ func (cached *Padded) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Slice1) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -148,6 +153,7 @@ func (cached *Slice1) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Slice2) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -167,6 +173,7 @@ func (cached *Slice2) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Slice3) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -186,6 +193,7 @@ func (cached *Slice3) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *String1) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

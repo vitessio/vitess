@@ -19,6 +19,7 @@ package workflow
 import (
 	"context"
 	"fmt"
+	"maps"
 	"strconv"
 	"strings"
 	"testing"
@@ -32,8 +33,10 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vschema"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -449,4 +452,169 @@ func TestCancelMigration_SHARDS(t *testing.T) {
 	// Expect the queries to be cleared
 	assert.Empty(t, env.tmc.vrQueries[100])
 	assert.Empty(t, env.tmc.vrQueries[200])
+}
+
+func TestDeleteRoutingRulesPreservesUnrelated(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	workflowName := "wf1"
+	tableName := "t1"
+	sourceKeyspaceName := "sourceks"
+	targetKeyspaceName := "targetks"
+
+	sourceKeyspace := &testKeyspace{
+		KeyspaceName: sourceKeyspaceName,
+		ShardNames:   []string{"0"},
+	}
+	targetKeyspace := &testKeyspace{
+		KeyspaceName: targetKeyspaceName,
+		ShardNames:   []string{"0"},
+	}
+
+	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
+		tableName: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   tableName,
+					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+				},
+			},
+		},
+	}
+
+	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer env.close()
+	env.tmc.schema = schema
+
+	ts, _, err := env.ws.getWorkflowState(ctx, targetKeyspaceName, workflowName)
+	require.NoError(t, err)
+
+	rules := map[string][]string{
+		tableName:                            {fmt.Sprintf("%s.%s", sourceKeyspaceName, tableName)},
+		tableName + "@replica":               {fmt.Sprintf("%s.%s", sourceKeyspaceName, tableName)},
+		sourceKeyspaceName + "." + tableName: {fmt.Sprintf("%s.%s", sourceKeyspaceName, tableName)},
+		targetKeyspaceName + "." + tableName: {fmt.Sprintf("%s.%s", sourceKeyspaceName, tableName)},
+		"unrelated":                          {"otherks.unrelated"},
+	}
+	require.NoError(t, topotools.SaveRoutingRules(ctx, env.ts, rules))
+
+	err = ts.deleteRoutingRules(ctx)
+	require.NoError(t, err)
+
+	got, err := topotools.GetRoutingRules(ctx, env.ts)
+	require.NoError(t, err)
+	require.Equal(t, map[string][]string{
+		"unrelated": {"otherks.unrelated"},
+	}, got)
+}
+
+func TestDeleteShardRoutingRulesPreservesUnrelated(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	workflowName := "wf1"
+	tableName := "t1"
+	sourceKeyspaceName := "sourceks"
+	targetKeyspaceName := "targetks"
+
+	sourceKeyspace := &testKeyspace{
+		KeyspaceName: sourceKeyspaceName,
+		ShardNames:   []string{"0"},
+	}
+	targetKeyspace := &testKeyspace{
+		KeyspaceName: targetKeyspaceName,
+		ShardNames:   []string{"0"},
+	}
+
+	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
+		tableName: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   tableName,
+					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+				},
+			},
+		},
+	}
+
+	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer env.close()
+	env.tmc.schema = schema
+
+	ts, _, err := env.ws.getWorkflowState(ctx, targetKeyspaceName, workflowName)
+	require.NoError(t, err)
+	ts.isPartialMigration = true
+
+	require.NoError(t, topotools.SaveShardRoutingRules(ctx, env.ts, map[string]string{
+		fmt.Sprintf("%s.%s", targetKeyspaceName, "0"): sourceKeyspaceName,
+		"otherks.0": "otherks",
+	}))
+
+	err = ts.deleteShardRoutingRules(ctx)
+	require.NoError(t, err)
+
+	got, err := topotools.GetShardRoutingRules(ctx, env.ts)
+	require.NoError(t, err)
+	require.Equal(t, map[string]string{
+		"otherks.0": "otherks",
+	}, got)
+}
+
+func TestDeleteKeyspaceRoutingRulesPreservesUnrelated(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	workflowName := "wf1"
+	tableName := "t1"
+	sourceKeyspaceName := "sourceks"
+	targetKeyspaceName := "targetks"
+
+	sourceKeyspace := &testKeyspace{
+		KeyspaceName: sourceKeyspaceName,
+		ShardNames:   []string{"0"},
+	}
+	targetKeyspace := &testKeyspace{
+		KeyspaceName: targetKeyspaceName,
+		ShardNames:   []string{"0"},
+	}
+
+	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
+		tableName: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   tableName,
+					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+				},
+			},
+		},
+	}
+
+	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer env.close()
+	env.tmc.schema = schema
+
+	ts, _, err := env.ws.getWorkflowState(ctx, targetKeyspaceName, workflowName)
+	require.NoError(t, err)
+	ts.options = &vtctldatapb.WorkflowOptions{TenantId: "tenant"}
+
+	rules := map[string]string{
+		sourceKeyspaceName:              targetKeyspaceName,
+		sourceKeyspaceName + "@replica": targetKeyspaceName,
+		sourceKeyspaceName + "@rdonly":  targetKeyspaceName,
+		"otherks":                       "otherks",
+	}
+	require.NoError(t, topotools.UpdateKeyspaceRoutingRules(ctx, env.ts, "test", func(ctx context.Context, existing *map[string]string) error {
+		maps.Copy((*existing), rules)
+		return nil
+	}))
+
+	err = ts.deleteKeyspaceRoutingRules(ctx)
+	require.NoError(t, err)
+
+	got, err := topotools.GetKeyspaceRoutingRules(ctx, env.ts)
+	require.NoError(t, err)
+	require.Equal(t, map[string]string{
+		"otherks": "otherks",
+	}, got)
 }

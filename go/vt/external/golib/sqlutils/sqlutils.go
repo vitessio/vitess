@@ -135,12 +135,19 @@ func (rm *RowMap) GetTime(key string) time.Time {
 	if t, err := time.Parse(DateTimeFormat, rm.GetString(key)); err == nil {
 		return t
 	}
+
+	if t, err := time.Parse(time.RFC3339Nano, rm.GetString(key)); err == nil {
+		return t
+	}
+
 	return time.Time{}
 }
 
 // knownDBs is a DB cache by uri
-var knownDBs = make(map[string]*sql.DB)
-var knownDBsMutex = &sync.Mutex{}
+var (
+	knownDBs      = make(map[string]*sql.DB)
+	knownDBsMutex = &sync.Mutex{}
+)
 
 // GetSQLiteDB returns a SQLite DB instance based on DB file name.
 // bool result indicates whether the DB was returned from cache; err

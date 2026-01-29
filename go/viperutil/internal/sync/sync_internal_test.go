@@ -57,7 +57,7 @@ func TestPersistConfig(t *testing.T) {
 		data, err := json.Marshal(&cfg)
 		require.NoError(t, err)
 
-		err = afero.WriteFile(fs, "config.json", data, 0644)
+		err = afero.WriteFile(fs, "config.json", data, 0o644)
 		require.NoError(t, err)
 
 		static := viper.New()

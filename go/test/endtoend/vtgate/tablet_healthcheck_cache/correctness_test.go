@@ -17,7 +17,6 @@ limitations under the License.
 package tablethealthcheckcache
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -130,7 +129,7 @@ func TestMain(m *testing.M) {
 // after many rounds of adding and removing tablets in quick succession. This verifies that we don't have any race
 // conditions with these operations and their interactions with the cache.
 func TestHealthCheckCacheWithTabletChurn(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tries := 5
 	numShards := len(shards)
 	// 1 for primary,replica
@@ -149,7 +148,7 @@ func TestHealthCheckCacheWithTabletChurn(t *testing.T) {
 	qr, _ := vtgateConn.ExecuteFetch(query, 100, true)
 	assert.Equal(t, expectedTabletHCcacheEntries, len(qr.Rows), "wrong number of tablet records in healthcheck cache, expected %d but had %d. Results: %v", expectedTabletHCcacheEntries, len(qr.Rows), qr.Rows)
 
-	for i := 0; i < tries; i++ {
+	for range tries {
 		tablet := addTablet(t, churnTabletUID, churnTabletType)
 		expectedTabletHCcacheEntries++
 

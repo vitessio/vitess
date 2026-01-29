@@ -22,6 +22,7 @@ import (
 	"io"
 	"regexp"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 
@@ -102,7 +103,7 @@ func TestVStream(t *testing.T) {
 	// keyspace/shard, we should expect only a single event.
 	// The events could come in any order as the scatter insert runs in parallel.
 	emptyEventSkipped := false
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		events, err := reader.Recv()
 		if err != nil {
 			t.Fatal(err)
@@ -908,9 +909,11 @@ func printEvents(evs []*binlogdatapb.VEvent) {
 		return
 	}
 	s := "\n===START===" + "\n"
+	var sSb911 strings.Builder
 	for i, ev := range evs {
-		s += fmt.Sprintf("Event %d; %v\n", i, ev)
+		sSb911.WriteString(fmt.Sprintf("Event %d; %v\n", i, ev))
 	}
+	s += sSb911.String()
 	s += "===END===" + "\n"
 	log.Infof("%s", s)
 }
