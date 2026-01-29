@@ -2,6 +2,8 @@ module vitess.io/vitess
 
 go 1.25.6
 
+tool gotest.tools/gotestsum
+
 require (
 	cloud.google.com/go/storage v1.57.0
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20240806141605-e8a1dd7889d6
@@ -126,11 +128,13 @@ require (
 	github.com/DataDog/go-runtime-metrics-internal v0.0.4-0.20250721125240-fdf1ef85b633 // indirect
 	github.com/DataDog/opentelemetry-mapping-go/pkg/otlp/attributes v0.29.1 // indirect
 	github.com/Masterminds/semver/v3 v3.4.0 // indirect
+	github.com/bitfield/gotestdox v0.2.2 // indirect
 	github.com/cihub/seelog v0.0.0-20170130134532-f561c5e57575 // indirect
 	github.com/cilium/ebpf v0.19.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.2.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/containerd/stargz-snapshotter/estargz v0.18.0 // indirect
+	github.com/dnephin/pflag v1.0.7 // indirect
 	github.com/docker/cli v29.0.3+incompatible // indirect
 	github.com/docker/distribution v2.8.3+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.9.3 // indirect
@@ -158,6 +162,7 @@ require (
 	go.opentelemetry.io/otel/log v0.14.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
+	gotest.tools/gotestsum v1.13.0 // indirect
 	k8s.io/apimachinery v0.33.4 // indirect
 )
 
