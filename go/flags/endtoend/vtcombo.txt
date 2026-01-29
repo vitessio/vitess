@@ -21,6 +21,7 @@ Flags:
       --backup-storage-compress                                          if set, the backup files will be compressed. (default true)
       --backup-storage-number-blocks int                                 if backup-storage-compress is true, backup-storage-number-blocks sets the number of blocks that can be processed, in parallel, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
       --bind-address string                                              Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
+      --binlog-dump-authorized-users string                              List of users authorized to execute binlog dump operations, or '%' to allow all users.
       --binlog-in-memory-decompressor-max-size uint                      This value sets the uncompressed transaction payload size at which we switch from in-memory buffer based decompression to the slower streaming mode. (default 134217728)
       --binlog-player-protocol string                                    the protocol to download binlogs from a vttablet (default "grpc")
       --buffer-drain-concurrency int                                     Maximum number of requests retried simultaneously. More concurrency will increase the load on the PRIMARY vttablet when draining the buffer. (default 1)
@@ -111,6 +112,7 @@ Flags:
       --disk-write-interval duration                                     how often to write to the disk to check whether it is stalled (default 5s)
       --disk-write-timeout duration                                      if writes exceed this duration, the disk is considered stalled (default 30s)
       --emit-stats                                                       If set, emit stats to push-based monitoring and stats backends
+      --enable-binlog-dump                                               Allow users to perform binlog dump operations for CDC/replication
       --enable-buffer                                                    Enable buffering (stalling) of primary traffic during failovers.
       --enable-buffer-dry-run                                            Detect and log failover events, but do not actually buffer requests.
       --enable-consolidator                                              This option enables the query consolidator. (default true)

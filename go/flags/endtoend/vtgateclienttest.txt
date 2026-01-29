@@ -6,6 +6,7 @@ Usage:
 Flags:
       --alsologtostderr                                                  log to standard error as well as files
       --bind-address string                                              Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
+      --binlog-dump-authorized-users string                              List of users authorized to execute binlog dump operations, or '%' to allow all users.
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
       --config-file string                                               Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
       --config-file-not-found-handling ConfigFileNotFoundHandling        Behavior when a config file is not found. (Options: error, exit, ignore, warn) (default warn)
