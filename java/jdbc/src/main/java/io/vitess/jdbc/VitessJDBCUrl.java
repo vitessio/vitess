@@ -18,7 +18,6 @@ package io.vitess.jdbc;
 
 import io.vitess.util.Constants;
 import io.vitess.util.StringUtils;
-
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.sql.SQLException;
@@ -46,9 +45,10 @@ public class VitessJDBCUrl {
   private final List<HostInfo> hostInfos;
   private final Properties info;
 
-  /*
-   Assuming List of vtGate ips could be given in url, separated by ","
-  */
+  /**
+   * HostInfo represents a single VTGate host with its hostname and port.
+   * Multiple hosts can be specified in the JDBC URL, separated by commas.
+   */
   public static class HostInfo {
 
     private String hostname;
