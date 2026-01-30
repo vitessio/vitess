@@ -4436,6 +4436,27 @@ func (cached *ShowBasic) CachedSize(alloc bool) int64 {
 	return size
 }
 
+func (cached *ShowBinlogEvents) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field LogName string
+	size += hack.RuntimeAllocSize(int64(len(cached.LogName)))
+	// field Position vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Position.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Limit *vitess.io/vitess/go/vt/sqlparser.Limit
+	size += cached.Limit.CachedSize(true)
+	// field Channel string
+	size += hack.RuntimeAllocSize(int64(len(cached.Channel)))
+	return size
+}
+
 func (cached *ShowCreate) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4491,6 +4512,47 @@ func (cached *ShowOther) CachedSize(alloc bool) int64 {
 	}
 	// field Command string
 	size += hack.RuntimeAllocSize(int64(len(cached.Command)))
+	return size
+}
+
+func (cached *ShowReplicas) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field Style string
+	size += hack.RuntimeAllocSize(int64(len(cached.Style)))
+	return size
+}
+
+func (cached *ShowReplicationSourceStatus) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field Style string
+	size += hack.RuntimeAllocSize(int64(len(cached.Style)))
+	return size
+}
+
+func (cached *ShowReplicationStatus) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Style string
+	size += hack.RuntimeAllocSize(int64(len(cached.Style)))
+	// field Channel string
+	size += hack.RuntimeAllocSize(int64(len(cached.Channel)))
 	return size
 }
 
