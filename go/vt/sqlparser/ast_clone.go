@@ -481,6 +481,10 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfShow(in)
 	case *ShowBasic:
 		return CloneRefOfShowBasic(in)
+	case *ShowBinaryLogs:
+		return CloneRefOfShowBinaryLogs(in)
+	case *ShowBinlogEvents:
+		return CloneRefOfShowBinlogEvents(in)
 	case *ShowCreate:
 		return CloneRefOfShowCreate(in)
 	case *ShowFilter:
@@ -489,6 +493,12 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfShowMigrationLogs(in)
 	case *ShowOther:
 		return CloneRefOfShowOther(in)
+	case *ShowReplicas:
+		return CloneRefOfShowReplicas(in)
+	case *ShowReplicationSourceStatus:
+		return CloneRefOfShowReplicationSourceStatus(in)
+	case *ShowReplicationStatus:
+		return CloneRefOfShowReplicationStatus(in)
 	case *ShowThrottledApps:
 		return CloneRefOfShowThrottledApps(in)
 	case *ShowThrottlerStatus:
@@ -3060,6 +3070,26 @@ func CloneRefOfShowBasic(n *ShowBasic) *ShowBasic {
 	return &out
 }
 
+// CloneRefOfShowBinaryLogs creates a deep clone of the input.
+func CloneRefOfShowBinaryLogs(n *ShowBinaryLogs) *ShowBinaryLogs {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
+// CloneRefOfShowBinlogEvents creates a deep clone of the input.
+func CloneRefOfShowBinlogEvents(n *ShowBinlogEvents) *ShowBinlogEvents {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Position = CloneExpr(n.Position)
+	out.Limit = CloneRefOfLimit(n.Limit)
+	return &out
+}
+
 // CloneRefOfShowCreate creates a deep clone of the input.
 func CloneRefOfShowCreate(n *ShowCreate) *ShowCreate {
 	if n == nil {
@@ -3092,6 +3122,33 @@ func CloneRefOfShowMigrationLogs(n *ShowMigrationLogs) *ShowMigrationLogs {
 
 // CloneRefOfShowOther creates a deep clone of the input.
 func CloneRefOfShowOther(n *ShowOther) *ShowOther {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
+// CloneRefOfShowReplicas creates a deep clone of the input.
+func CloneRefOfShowReplicas(n *ShowReplicas) *ShowReplicas {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
+// CloneRefOfShowReplicationSourceStatus creates a deep clone of the input.
+func CloneRefOfShowReplicationSourceStatus(n *ShowReplicationSourceStatus) *ShowReplicationSourceStatus {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
+// CloneRefOfShowReplicationStatus creates a deep clone of the input.
+func CloneRefOfShowReplicationStatus(n *ShowReplicationStatus) *ShowReplicationStatus {
 	if n == nil {
 		return nil
 	}
@@ -4463,10 +4520,20 @@ func CloneShowInternal(in ShowInternal) ShowInternal {
 	switch in := in.(type) {
 	case *ShowBasic:
 		return CloneRefOfShowBasic(in)
+	case *ShowBinaryLogs:
+		return CloneRefOfShowBinaryLogs(in)
+	case *ShowBinlogEvents:
+		return CloneRefOfShowBinlogEvents(in)
 	case *ShowCreate:
 		return CloneRefOfShowCreate(in)
 	case *ShowOther:
 		return CloneRefOfShowOther(in)
+	case *ShowReplicas:
+		return CloneRefOfShowReplicas(in)
+	case *ShowReplicationSourceStatus:
+		return CloneRefOfShowReplicationSourceStatus(in)
+	case *ShowReplicationStatus:
+		return CloneRefOfShowReplicationStatus(in)
 	case *ShowTransactionStatus:
 		return CloneRefOfShowTransactionStatus(in)
 	default:
