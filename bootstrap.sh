@@ -41,44 +41,43 @@ VITESS_RESOURCES_DOWNLOAD_URL="${VITESS_RESOURCES_DOWNLOAD_BASE_URL}/${VITESS_RE
 # the $dist/.installed_version file. If the version has not changed, bootstrap
 # will skip future installations.
 install_dep() {
-  if [[ $# != 4 ]]; then
-    fail "install_dep function requires exactly 4 parameters (and not $#). Parameters: $*"
-  fi
-  local name="$1"
-  local version="$2"
-  local dist="$3"
-  local install_func="$4"
+	if [[ $# != 4 ]]; then
+		fail "install_dep function requires exactly 4 parameters (and not $#). Parameters: $*"
+	fi
+	local name="$1"
+	local version="$2"
+	local dist="$3"
+	local install_func="$4"
 
-  version_file="$dist/.installed_version"
-  if [[ -f "$version_file" && "$(cat "$version_file")" == "$version" ]]; then
-    echo "skipping $name install. remove $dist to force re-install."
-    return
-  fi
+	version_file="$dist/.installed_version"
+	if [[ -f "$version_file" && "$(cat "$version_file")" == "$version" ]]; then
+		echo "skipping $name install. remove $dist to force re-install."
+		return
+	fi
 
-  echo "<<< Installing $name $version >>>"
+	echo "<<< Installing $name $version >>>"
 
-  # shellcheck disable=SC2064
-  trap "fail '$name build failed'; exit 1" ERR
+	# shellcheck disable=SC2064
+	trap "fail '$name build failed'; exit 1" ERR
 
-  # Cleanup any existing data and re-create the directory.
-  rm -rf "$dist"
-  mkdir -p "$dist"
+	# Cleanup any existing data and re-create the directory.
+	rm -rf "$dist"
+	mkdir -p "$dist"
 
-  # Change $CWD to $dist before calling "install_func".
-  pushd "$dist" >/dev/null
-  # -E (same as "set -o errtrace") makes sure that "install_func" inherits the
-  # trap. If here's an error, the trap will be called which will exit this
-  # script.
-  set -E
-  $install_func "$version" "$dist"
-  set +E
-  popd >/dev/null
+	# Change $CWD to $dist before calling "install_func".
+	pushd "$dist" >/dev/null
+	# -E (same as "set -o errtrace") makes sure that "install_func" inherits the
+	# trap. If here's an error, the trap will be called which will exit this
+	# script.
+	set -E
+	$install_func "$version" "$dist"
+	set +E
+	popd >/dev/null
 
-  trap - ERR
+	trap - ERR
 
-  echo "$version" > "$version_file"
+	echo "$version" >"$version_file"
 }
-
 
 #
 # 1. Installation of dependencies.
@@ -88,130 +87,157 @@ install_dep() {
 # available on macOS or some linuxes:
 # https://www.gnu.org/software/coreutils/manual/html_node/arch-invocation.html
 get_arch() {
-  uname -m
+	uname -m
 }
 
 # Install protoc.
 install_protoc() {
-  local version="$1"
-  local dist="$2"
+	local version="$1"
+	local dist="$2"
 
-  case $(uname) in
-    Linux)  local platform=linux;;
-    Darwin) local platform=osx;;
-    *) echo "ERROR: unsupported platform for protoc"; exit 1;;
-  esac
+	case $(uname) in
+	Linux) local platform=linux ;;
+	Darwin) local platform=osx ;;
+	*)
+		echo "ERROR: unsupported platform for protoc"
+		exit 1
+		;;
+	esac
 
-  case $(get_arch) in
-      aarch64)  local target=aarch_64;;
-      x86_64)  local target=x86_64;;
-      arm64) case "$platform" in
-          osx) local target=aarch_64;;
-          *) echo "ERROR: unsupported architecture for protoc"; exit 1;;
-      esac;;
-      *)   echo "ERROR: unsupported architecture for protoc"; exit 1;;
-  esac
+	case $(get_arch) in
+	aarch64) local target=aarch_64 ;;
+	x86_64) local target=x86_64 ;;
+	arm64) case "$platform" in
+		osx) local target=aarch_64 ;;
+		*)
+			echo "ERROR: unsupported architecture for protoc"
+			exit 1
+			;;
+		esac ;;
+	*)
+		echo "ERROR: unsupported architecture for protoc"
+		exit 1
+		;;
+	esac
 
-  # This is how we'd download directly from source:
-  "${VTROOT}/tools/wget-retry" -q https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-$platform-${target}.zip
-  #"${VTROOT}/tools/wget-retry" "${VITESS_RESOURCES_DOWNLOAD_URL}/protoc-$version-$platform-${target}.zip"
-  unzip "protoc-$version-$platform-${target}.zip"
+	# This is how we'd download directly from source:
+	"${VTROOT}/tools/wget-retry" -q https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-$platform-${target}.zip
+	#"${VTROOT}/tools/wget-retry" "${VITESS_RESOURCES_DOWNLOAD_URL}/protoc-$version-$platform-${target}.zip"
+	unzip "protoc-$version-$platform-${target}.zip"
 
-  ln -snf "$dist/bin/protoc" "$VTROOT/bin/protoc"
+	ln -snf "$dist/bin/protoc" "$VTROOT/bin/protoc"
 }
 
 # Install Zookeeper.
 install_zookeeper() {
-  local version="$1"
-  local dist="$2"
-  zk="zookeeper-$version"
-  "${VTROOT}/tools/wget-retry" -q "https://archive.apache.org/dist/zookeeper/${zk}/apache-${zk}-bin.tar.gz"
-  tar -xzf "$dist/apache-$zk-bin.tar.gz"
-  mkdir -p "$dist"/lib
-  cp "$dist/apache-$zk-bin/lib/"*.jar "$dist/lib/"
-  rm -rf "$dist/apache-$zk-bin"
+	local version="$1"
+	local dist="$2"
+	zk="zookeeper-$version"
+	"${VTROOT}/tools/wget-retry" -q "https://archive.apache.org/dist/zookeeper/${zk}/apache-${zk}-bin.tar.gz"
+	tar -xzf "$dist/apache-$zk-bin.tar.gz"
+	mkdir -p "$dist"/lib
+	cp "$dist/apache-$zk-bin/lib/"*.jar "$dist/lib/"
+	rm -rf "$dist/apache-$zk-bin"
 }
 
 # Download and install etcd, link etcd binary into our root.
 install_etcd() {
-  local version="$1"
-  local dist="$2"
+	local version="$1"
+	local dist="$2"
 
-  case $(uname) in
-    Linux)  local platform=linux; local ext=tar.gz;;
-    Darwin) local platform=darwin; local ext=zip;;
-    *)   echo "ERROR: unsupported platform for etcd"; exit 1;;
-  esac
+	case $(uname) in
+	Linux)
+		local platform=linux
+		local ext=tar.gz
+		;;
+	Darwin)
+		local platform=darwin
+		local ext=zip
+		;;
+	*)
+		echo "ERROR: unsupported platform for etcd"
+		exit 1
+		;;
+	esac
 
-  case $(get_arch) in
-      aarch64)  local target=arm64;;
-      x86_64)  local target=amd64;;
-      arm64)  local target=arm64;;
-      *)   echo "ERROR: unsupported architecture for etcd"; exit 1;;
-  esac
+	case $(get_arch) in
+	aarch64) local target=arm64 ;;
+	x86_64) local target=amd64 ;;
+	arm64) local target=arm64 ;;
+	*)
+		echo "ERROR: unsupported architecture for etcd"
+		exit 1
+		;;
+	esac
 
-  file="etcd-${version}-${platform}-${target}.${ext}"
+	file="etcd-${version}-${platform}-${target}.${ext}"
 
-  # This is how we'd download directly from source:
-  "${VTROOT}/tools/wget-retry" -q "https://github.com/etcd-io/etcd/releases/download/$version/$file"
-  #"${VTROOT}/tools/wget-retry" "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
-  if [ "$ext" = "tar.gz" ]; then
-    tar xzf "$file"
-  else
-    unzip "$file"
-  fi
-  rm "$file"
-  ln -snf "$dist/etcd-${version}-${platform}-${target}/etcd" "$VTROOT/bin/etcd"
-  ln -snf "$dist/etcd-${version}-${platform}-${target}/etcdctl" "$VTROOT/bin/etcdctl"
+	# This is how we'd download directly from source:
+	"${VTROOT}/tools/wget-retry" -q "https://github.com/etcd-io/etcd/releases/download/$version/$file"
+	#"${VTROOT}/tools/wget-retry" "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
+	if [ "$ext" = "tar.gz" ]; then
+		tar xzf "$file"
+	else
+		unzip "$file"
+	fi
+	rm "$file"
+	ln -snf "$dist/etcd-${version}-${platform}-${target}/etcd" "$VTROOT/bin/etcd"
+	ln -snf "$dist/etcd-${version}-${platform}-${target}/etcdctl" "$VTROOT/bin/etcdctl"
 }
 
 # Download and install consul, link consul binary into our root.
 install_consul() {
-  local version="$1"
-  local dist="$2"
+	local version="$1"
+	local dist="$2"
 
-  case $(uname) in
-    Linux)  local platform=linux;;
-    Darwin) local platform=darwin;;
-    *)   echo "ERROR: unsupported platform for consul"; exit 1;;
-  esac
+	case $(uname) in
+	Linux) local platform=linux ;;
+	Darwin) local platform=darwin ;;
+	*)
+		echo "ERROR: unsupported platform for consul"
+		exit 1
+		;;
+	esac
 
-  case $(get_arch) in
-    aarch64)  local target=arm64;;
-    x86_64)  local target=amd64;;
-    arm64)  local target=arm64;;
-    *)   echo "ERROR: unsupported architecture for consul"; exit 1;;
-  esac
+	case $(get_arch) in
+	aarch64) local target=arm64 ;;
+	x86_64) local target=amd64 ;;
+	arm64) local target=arm64 ;;
+	*)
+		echo "ERROR: unsupported architecture for consul"
+		exit 1
+		;;
+	esac
 
-  # This is how we'd download directly from source:
-  # download_url=https://releases.hashicorp.com/consul
-  # wget "${download_url}/${version}/consul_${version}_${platform}_${target}.zip"
-  "${VTROOT}/tools/wget-retry" -q "${VITESS_RESOURCES_DOWNLOAD_URL}/consul_${version}_${platform}_${target}.zip"
-  unzip "consul_${version}_${platform}_${target}.zip"
-  ln -snf "$dist/consul" "$VTROOT/bin/consul"
+	# This is how we'd download directly from source:
+	# download_url=https://releases.hashicorp.com/consul
+	# wget "${download_url}/${version}/consul_${version}_${platform}_${target}.zip"
+	"${VTROOT}/tools/wget-retry" -q "${VITESS_RESOURCES_DOWNLOAD_URL}/consul_${version}_${platform}_${target}.zip"
+	unzip "consul_${version}_${platform}_${target}.zip"
+	ln -snf "$dist/consul" "$VTROOT/bin/consul"
 }
 
 install_all() {
-  echo "##local system details..."
-  echo "##platform: $(uname) target:$(get_arch) OS: $OSTYPE"
-  # protoc
-  install_dep "protoc" "$PROTOC_VER" "$VTROOT/dist/vt-protoc-$PROTOC_VER" install_protoc
+	echo "##local system details..."
+	echo "##platform: $(uname) target:$(get_arch) OS: $OSTYPE"
+	# protoc
+	install_dep "protoc" "$PROTOC_VER" "$VTROOT/dist/vt-protoc-$PROTOC_VER" install_protoc
 
-  # zk
-  if [ "$BUILD_JAVA" == 1 ] ; then
-    install_dep "Zookeeper" "$ZK_VER" "$VTROOT/dist/vt-zookeeper-$ZK_VER" install_zookeeper
-  fi
+	# zk
+	if [ "$BUILD_JAVA" == 1 ]; then
+		install_dep "Zookeeper" "$ZK_VER" "$VTROOT/dist/vt-zookeeper-$ZK_VER" install_zookeeper
+	fi
 
-  # etcd
-  install_dep "etcd" "$ETCD_VER" "$VTROOT/dist/etcd" install_etcd
+	# etcd
+	install_dep "etcd" "$ETCD_VER" "$VTROOT/dist/etcd" install_etcd
 
-  # consul
-  if [ "$BUILD_CONSUL" == 1 ] ; then
-    install_dep "Consul" "$CONSUL_VER" "$VTROOT/dist/consul" install_consul
-  fi
+	# consul
+	if [ "$BUILD_CONSUL" == 1 ]; then
+		install_dep "Consul" "$CONSUL_VER" "$VTROOT/dist/consul" install_consul
+	fi
 
-  echo
-  echo "bootstrap finished - run 'make build' to compile"
+	echo
+	echo "bootstrap finished - run 'make build' to compile"
 }
 
 install_all
