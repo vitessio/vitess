@@ -90,6 +90,42 @@ get_arch() {
 	uname -m
 }
 
+# verify_sha256 verifies the SHA256 checksum of a file.
+#
+# Usage: verify_sha256 <file> <expected_sha256>
+verify_sha256() {
+	local file="$1"
+	local expected="$2"
+
+	echo "Verifying SHA256 checksum for $file..."
+	if command -v sha256sum &>/dev/null; then
+		echo "$expected  $file" | sha256sum -c - || fail "SHA256 checksum verification failed for $file"
+	elif command -v shasum &>/dev/null; then
+		echo "$expected  $file" | shasum -a 256 -c - || fail "SHA256 checksum verification failed for $file"
+	else
+		fail "Neither sha256sum nor shasum found. Cannot verify checksum."
+	fi
+	echo "Checksum OK."
+}
+
+# verify_sha512 verifies the SHA512 checksum of a file.
+#
+# Usage: verify_sha512 <file> <expected_sha512>
+verify_sha512() {
+	local file="$1"
+	local expected="$2"
+
+	echo "Verifying SHA512 checksum for $file..."
+	if command -v sha512sum &>/dev/null; then
+		echo "$expected  $file" | sha512sum -c - || fail "SHA512 checksum verification failed for $file"
+	elif command -v shasum &>/dev/null; then
+		echo "$expected  $file" | shasum -a 512 -c - || fail "SHA512 checksum verification failed for $file"
+	else
+		fail "Neither sha512sum nor shasum found. Cannot verify checksum."
+	fi
+	echo "Checksum OK."
+}
+
 # Install protoc.
 install_protoc() {
 	local version="$1"
@@ -120,10 +156,26 @@ install_protoc() {
 		;;
 	esac
 
+	# SHA256 checksums for protoc v21.3 from official releases.
+	local sha256
+	case "${platform}-${target}" in
+	linux-x86_64) sha256="214b670884972d09a1ccf7b7b4c65a12bdd73d55ebea6b5207b5eb2333ae32ec" ;;
+	linux-aarch_64) sha256="e22ad6908e197ac326a02ddabc49046846b64d051f3bef16f5d3afd50ffdec18" ;;
+	osx-x86_64) sha256="b988e06fed5279865445978efd97ec92990ca24b0fe16c04aafe85d6cee71eeb" ;;
+	osx-aarch_64) sha256="3f1b2a59ba111e3227adf47e5513b3ea9133d9621dc5df70cd1ffed6dc756877" ;;
+	*)
+		echo "ERROR: no checksum for protoc $platform-$target"
+		exit 1
+		;;
+	esac
+
+	local file="protoc-${version}-${platform}-${target}.zip"
+
 	# This is how we'd download directly from source:
-	"${VTROOT}/tools/wget-retry" -q "https://github.com/protocolbuffers/protobuf/releases/download/v${version}/protoc-${version}-${platform}-${target}.zip"
-	#"${VTROOT}/tools/wget-retry" "${VITESS_RESOURCES_DOWNLOAD_URL}/protoc-${version}-${platform}-${target}.zip"
-	unzip "protoc-$version-$platform-${target}.zip"
+	"${VTROOT}/tools/wget-retry" -q "https://github.com/protocolbuffers/protobuf/releases/download/v${version}/${file}"
+	#"${VTROOT}/tools/wget-retry" "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
+	verify_sha256 "$file" "$sha256"
+	unzip "$file"
 
 	ln -snf "$dist/bin/protoc" "$VTROOT/bin/protoc"
 }
@@ -132,9 +184,15 @@ install_protoc() {
 install_zookeeper() {
 	local version="$1"
 	local dist="$2"
-	zk="zookeeper-$version"
-	"${VTROOT}/tools/wget-retry" -q "https://archive.apache.org/dist/zookeeper/${zk}/apache-${zk}-bin.tar.gz"
-	tar -xzf "$dist/apache-$zk-bin.tar.gz"
+	local zk="zookeeper-$version"
+	local file="apache-${zk}-bin.tar.gz"
+
+	# SHA512 checksum for Zookeeper 3.9.4 from Apache archives.
+	local sha512="36bffae6440ed0d71ed83a621b8c52c583860b414812197373237f0c148bd16e6b599977c90e5eb81c0fce6b82ef44aa782621535417cffc4c2a0a51a56f2cdf"
+
+	"${VTROOT}/tools/wget-retry" -q "https://archive.apache.org/dist/zookeeper/${zk}/${file}"
+	verify_sha512 "$dist/$file" "$sha512"
+	tar -xzf "$dist/$file"
 	mkdir -p "$dist"/lib
 	cp "$dist/apache-$zk-bin/lib/"*.jar "$dist/lib/"
 	rm -rf "$dist/apache-$zk-bin"
@@ -170,11 +228,25 @@ install_etcd() {
 		;;
 	esac
 
-	file="etcd-${version}-${platform}-${target}.${ext}"
+	# SHA256 checksums for etcd v3.6.7 from official releases.
+	local sha256
+	case "${platform}-${target}" in
+	linux-amd64) sha256="cf8af880c5a01ee5363cefa14a3e0cb7e5308dcf4ed17a6973099c9a7aee5a9a" ;;
+	linux-arm64) sha256="ef5fc443cf7cc5b82738f3c28363704896551900af90a6d622cae740b5644270" ;;
+	darwin-amd64) sha256="a9fe546f109b99733d1c797ff2598946b7ad155899e8458215da458f1d822ad5" ;;
+	darwin-arm64) sha256="7a2d708e4f8aab9ba800676d2cfd4455367f5b67f9a012fad167f4b2b94524d7" ;;
+	*)
+		echo "ERROR: no checksum for etcd $platform-$target"
+		exit 1
+		;;
+	esac
+
+	local file="etcd-${version}-${platform}-${target}.${ext}"
 
 	# This is how we'd download directly from source:
 	"${VTROOT}/tools/wget-retry" -q "https://github.com/etcd-io/etcd/releases/download/$version/$file"
 	#"${VTROOT}/tools/wget-retry" "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
+	verify_sha256 "$file" "$sha256"
 	if [ "$ext" = "tar.gz" ]; then
 		tar xzf "$file"
 	else
@@ -209,11 +281,28 @@ install_consul() {
 		;;
 	esac
 
+	# SHA256 checksums for consul 1.11.4 from Vitess resources mirror.
+	# Note: darwin checksums differ from official HashiCorp releases.
+	local sha256
+	case "${platform}_${target}" in
+	linux_amd64) sha256="5155f6a3b7ff14d3671b0516f6b7310530b509a2b882b95b4fdf25f4219342c8" ;;
+	linux_arm64) sha256="97dbf36500dcefbe463f070471602992d148cb2fe91db7e37319e1b9c809f1f0" ;;
+	darwin_amd64) sha256="f00f81897ec0c608019a37dec243837ce0fd471b67401ea05be9a8b105d247ce" ;;
+	darwin_arm64) sha256="22a87e88c9fd36f773ebd62b18f41dad5512e753769f5a385a7842a0b9364e0a" ;;
+	*)
+		echo "ERROR: no checksum for consul ${platform}_${target}"
+		exit 1
+		;;
+	esac
+
+	local file="consul_${version}_${platform}_${target}.zip"
+
 	# This is how we'd download directly from source:
 	# download_url=https://releases.hashicorp.com/consul
-	# wget "${download_url}/${version}/consul_${version}_${platform}_${target}.zip"
-	"${VTROOT}/tools/wget-retry" -q "${VITESS_RESOURCES_DOWNLOAD_URL}/consul_${version}_${platform}_${target}.zip"
-	unzip "consul_${version}_${platform}_${target}.zip"
+	# wget "${download_url}/${version}/${file}"
+	"${VTROOT}/tools/wget-retry" -q "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
+	verify_sha256 "$file" "$sha256"
+	unzip "$file"
 	ln -snf "$dist/consul" "$VTROOT/bin/consul"
 }
 
