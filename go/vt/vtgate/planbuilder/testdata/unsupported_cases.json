@@ -445,29 +445,9 @@
     "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
   },
   {
-    "comment": "show binlog events not supported through vtgate",
-    "query": "show binlog events",
-    "plan": "VT12001: unsupported: show binlog events"
-  },
-  {
-    "comment": "show relaylog events not supported through vtgate",
-    "query": "show relaylog events",
-    "plan": "VT12001: unsupported: show relaylog events"
-  },
-  {
-    "comment": "show binary logs not supported through vtgate",
-    "query": "show binary logs",
-    "plan": "VT12001: unsupported: show binary logs"
-  },
-  {
     "comment": "show binary log status not supported through vtgate",
     "query": "show binary log status",
     "plan": "VT12001: unsupported: show binary log status"
-  },
-  {
-    "comment": "show master status not supported through vtgate",
-    "query": "show master status",
-    "plan": "VT12001: unsupported: show master status"
   },
   {
     "comment": "show replica status not supported through vtgate",
@@ -475,18 +455,8 @@
     "plan": "VT12001: unsupported: show replica status"
   },
   {
-    "comment": "show slave status not supported through vtgate",
-    "query": "show slave status",
-    "plan": "VT12001: unsupported: show slave status"
-  },
-  {
     "comment": "show replicas not supported through vtgate",
     "query": "show replicas",
     "plan": "VT12001: unsupported: show replicas"
-  },
-  {
-    "comment": "show slave hosts not supported through vtgate",
-    "query": "show slave hosts",
-    "plan": "VT12001: unsupported: show slave hosts"
   }
 ]

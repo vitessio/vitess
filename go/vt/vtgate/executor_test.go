@@ -1891,17 +1891,23 @@ func TestPassthroughDDL(t *testing.T) {
 }
 
 func TestShowStatus(t *testing.T) {
-	executor, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	executor, sbc1, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	session := &vtgatepb.Session{
 		TargetString: "TestExecutor",
 	}
 
-	// These statements are intentionally unsupported through vtgate
-	// as they only make sense for direct tablet connections
+	// Legacy syntax (SLAVE) is supported for backwards compatibility
 	sql1 := "show slave status"
 	_, err := executorExec(ctx, executor, session, sql1, nil)
-	require.ErrorContains(t, err, "VT12001: unsupported")
+	require.NoError(t, err)
 
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           sql1,
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	assert.Equal(t, wantQueries, sbc1.Queries)
+
+	// Modern syntax (REPLICA) is not supported through vtgate
 	sql2 := "show replica status"
 	_, err = executorExec(ctx, executor, session, sql2, nil)
 	require.ErrorContains(t, err, "VT12001: unsupported")
