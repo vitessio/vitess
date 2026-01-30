@@ -97,15 +97,14 @@ verify_sha256() {
 	local file="$1"
 	local expected="$2"
 
-	echo "Verifying SHA256 checksum for $file..."
 	if command -v sha256sum &>/dev/null; then
-		echo "$expected  $file" | sha256sum -c - || fail "SHA256 checksum verification failed for $file"
+		echo "$expected  $file" | sha256sum -c - &>/dev/null || fail "SHA256 checksum verification failed for $file"
 	elif command -v shasum &>/dev/null; then
-		echo "$expected  $file" | shasum -a 256 -c - || fail "SHA256 checksum verification failed for $file"
+		echo "$expected  $file" | shasum -a 256 -c - &>/dev/null || fail "SHA256 checksum verification failed for $file"
 	else
 		fail "Neither sha256sum nor shasum found. Cannot verify checksum."
 	fi
-	echo "Checksum OK."
+	echo "OK: SHA256 checksum verified for $file"
 }
 
 # verify_sha512 verifies the SHA512 checksum of a file.
@@ -115,15 +114,14 @@ verify_sha512() {
 	local file="$1"
 	local expected="$2"
 
-	echo "Verifying SHA512 checksum for $file..."
 	if command -v sha512sum &>/dev/null; then
-		echo "$expected  $file" | sha512sum -c - || fail "SHA512 checksum verification failed for $file"
+		echo "$expected  $file" | sha512sum -c - &>/dev/null || fail "SHA512 checksum verification failed for $file"
 	elif command -v shasum &>/dev/null; then
-		echo "$expected  $file" | shasum -a 512 -c - || fail "SHA512 checksum verification failed for $file"
+		echo "$expected  $file" | shasum -a 512 -c - &>/dev/null || fail "SHA512 checksum verification failed for $file"
 	else
 		fail "Neither sha512sum nor shasum found. Cannot verify checksum."
 	fi
-	echo "Checksum OK."
+	echo "OK: SHA512 checksum verified for $file"
 }
 
 # Install protoc.
