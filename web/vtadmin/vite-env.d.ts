@@ -44,6 +44,20 @@ declare namespace Vite {
       // to also configure vtadmin-api for role-based access control (RBAC) if needed;
       // see https://github.com/vitessio/vitess/blob/main/go/vt/vtadmin/rbac/rbac.go
       VITE_READONLY_MODE?: string;
+
+      // Optional. Monitoring URL templates.
+      // Supports placeholders like {cluster}, {keyspace}, {shard}, {hostname}, {alias}, {cell}, {pool}
+      VITE_VITESS_MONITORING_CLUSTER_TEMPLATE?: string;
+      VITE_VITESS_MONITORING_VTTABLET_TEMPLATE?: string;
+      VITE_VITESS_MONITORING_VTGATE_TEMPLATE?: string;
+      
+      // Optional. MySQL Monitoring URL template (e.g. for vtgates or tablets)
+      VITE_MYSQL_MONITORING_TEMPLATE?: string;
+
+      // Optional. Column titles for monitoring dashboards.
+      // Defaults to "Vt Monitoring Dashboard" and "DB Monitoring Dashboard" respectively.
+      VITE_VITESS_MONITORING_DASHBOARD_TITLE?: string;
+      VITE_MYSQL_MONITORING_DASHBOARD_TITLE?: string;
   }
 }
 
