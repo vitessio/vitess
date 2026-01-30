@@ -33,7 +33,6 @@
     <dependency>
       <groupId>org.apache.logging.log4j</groupId>
       <artifactId>log4j-api</artifactId>
-      <scope>test</scope>
     </dependency>
 
     <!-- Dependencies with limited scope. -->
@@ -108,6 +107,16 @@
             </goals>
           </execution>
         </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <configuration>
+          <ignoredNonTestScopedDependencies>
+            <!-- log4j-api is used by downstream jdbc module at runtime -->
+            <dependency>org.apache.logging.log4j:log4j-api</dependency>
+          </ignoredNonTestScopedDependencies>
+        </configuration>
       </plugin>
     </plugins>
   </build>
