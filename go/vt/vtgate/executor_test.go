@@ -1891,27 +1891,20 @@ func TestPassthroughDDL(t *testing.T) {
 }
 
 func TestShowStatus(t *testing.T) {
-	executor, sbc1, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	executor, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	session := &vtgatepb.Session{
 		TargetString: "TestExecutor",
 	}
 
+	// These statements are intentionally unsupported through vtgate
+	// as they only make sense for direct tablet connections
 	sql1 := "show slave status"
 	_, err := executorExec(ctx, executor, session, sql1, nil)
-	require.NoError(t, err)
+	require.ErrorContains(t, err, "VT12001: unsupported")
 
 	sql2 := "show replica status"
 	_, err = executorExec(ctx, executor, session, sql2, nil)
-	require.NoError(t, err)
-
-	wantQueries := []*querypb.BoundQuery{{
-		Sql:           sql1,
-		BindVariables: map[string]*querypb.BindVariable{},
-	}, {
-		Sql:           sql2,
-		BindVariables: map[string]*querypb.BindVariable{},
-	}}
-	assert.Equal(t, wantQueries, sbc1.Queries)
+	require.ErrorContains(t, err, "VT12001: unsupported")
 }
 
 func TestParseEmptyTargetSingleKeyspace(t *testing.T) {
