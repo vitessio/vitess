@@ -199,3 +199,12 @@ List of changes between bootstrap image versions.
 ## [50] - 2026-01-19
 ### Changes
 - Update build to golang 1.25.6
+
+## [51] - 2026-01-30
+### Changes
+- Upgrade Zookeeper to v3.9.4 (using prebuilt binaries)
+- Upgrade etcd to v3.6.7
+- Remove toxiproxy
+- Remove consul from bootstrap build
+- Add SHA256 checksum verification for downloaded tools
+- Exclude Go module cache from image
