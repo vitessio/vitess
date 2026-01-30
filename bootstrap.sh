@@ -121,8 +121,8 @@ install_protoc() {
 	esac
 
 	# This is how we'd download directly from source:
-	"${VTROOT}/tools/wget-retry" -q https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-$platform-${target}.zip
-	#"${VTROOT}/tools/wget-retry" "${VITESS_RESOURCES_DOWNLOAD_URL}/protoc-$version-$platform-${target}.zip"
+	"${VTROOT}/tools/wget-retry" -q "https://github.com/protocolbuffers/protobuf/releases/download/v${version}/protoc-${version}-${platform}-${target}.zip"
+	#"${VTROOT}/tools/wget-retry" "${VITESS_RESOURCES_DOWNLOAD_URL}/protoc-${version}-${platform}-${target}.zip"
 	unzip "protoc-$version-$platform-${target}.zip"
 
 	ln -snf "$dist/bin/protoc" "$VTROOT/bin/protoc"
