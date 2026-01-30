@@ -7,16 +7,14 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y && apt-g
     # TODO(mberlin): Group these to make it easier to understand which library actually requires them.
     ant \
     ca-certificates \
-    chromium \
     curl \
-    default-jdk \
+    default-jdk-headless \
     g++ \
     git \
     gnupg \
     make \
     unzip \
     zip \
-    xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 # Set up Vitess environment (equivalent to '. dev.env')
