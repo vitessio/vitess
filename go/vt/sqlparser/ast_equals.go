@@ -1400,6 +1400,18 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfShowBasic(a, b)
+	case *ShowBinaryLogs:
+		b, ok := inB.(*ShowBinaryLogs)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfShowBinaryLogs(a, b)
+	case *ShowBinlogEvents:
+		b, ok := inB.(*ShowBinlogEvents)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfShowBinlogEvents(a, b)
 	case *ShowCreate:
 		b, ok := inB.(*ShowCreate)
 		if !ok {
@@ -1424,6 +1436,24 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfShowOther(a, b)
+	case *ShowReplicas:
+		b, ok := inB.(*ShowReplicas)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfShowReplicas(a, b)
+	case *ShowReplicationSourceStatus:
+		b, ok := inB.(*ShowReplicationSourceStatus)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfShowReplicationSourceStatus(a, b)
+	case *ShowReplicationStatus:
+		b, ok := inB.(*ShowReplicationStatus)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfShowReplicationStatus(a, b)
 	case *ShowThrottledApps:
 		b, ok := inB.(*ShowThrottledApps)
 		if !ok {
@@ -4619,6 +4649,32 @@ func (cmp *Comparator) RefOfShowBasic(a, b *ShowBasic) bool {
 		cmp.RefOfShowFilter(a.Filter, b.Filter)
 }
 
+// RefOfShowBinaryLogs does deep equals between the two objects.
+func (cmp *Comparator) RefOfShowBinaryLogs(a, b *ShowBinaryLogs) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return true
+}
+
+// RefOfShowBinlogEvents does deep equals between the two objects.
+func (cmp *Comparator) RefOfShowBinlogEvents(a, b *ShowBinlogEvents) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.IsRelaylog == b.IsRelaylog &&
+		a.LogName == b.LogName &&
+		a.Channel == b.Channel &&
+		cmp.Expr(a.Position, b.Position) &&
+		cmp.RefOfLimit(a.Limit, b.Limit)
+}
+
 // RefOfShowCreate does deep equals between the two objects.
 func (cmp *Comparator) RefOfShowCreate(a, b *ShowCreate) bool {
 	if a == b {
@@ -4664,6 +4720,40 @@ func (cmp *Comparator) RefOfShowOther(a, b *ShowOther) bool {
 		return false
 	}
 	return a.Command == b.Command
+}
+
+// RefOfShowReplicas does deep equals between the two objects.
+func (cmp *Comparator) RefOfShowReplicas(a, b *ShowReplicas) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Style == b.Style
+}
+
+// RefOfShowReplicationSourceStatus does deep equals between the two objects.
+func (cmp *Comparator) RefOfShowReplicationSourceStatus(a, b *ShowReplicationSourceStatus) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Style == b.Style
+}
+
+// RefOfShowReplicationStatus does deep equals between the two objects.
+func (cmp *Comparator) RefOfShowReplicationStatus(a, b *ShowReplicationStatus) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Style == b.Style &&
+		a.Channel == b.Channel
 }
 
 // RefOfShowThrottledApps does deep equals between the two objects.
@@ -7276,6 +7366,18 @@ func (cmp *Comparator) ShowInternal(inA, inB ShowInternal) bool {
 			return false
 		}
 		return cmp.RefOfShowBasic(a, b)
+	case *ShowBinaryLogs:
+		b, ok := inB.(*ShowBinaryLogs)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfShowBinaryLogs(a, b)
+	case *ShowBinlogEvents:
+		b, ok := inB.(*ShowBinlogEvents)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfShowBinlogEvents(a, b)
 	case *ShowCreate:
 		b, ok := inB.(*ShowCreate)
 		if !ok {
@@ -7288,6 +7390,24 @@ func (cmp *Comparator) ShowInternal(inA, inB ShowInternal) bool {
 			return false
 		}
 		return cmp.RefOfShowOther(a, b)
+	case *ShowReplicas:
+		b, ok := inB.(*ShowReplicas)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfShowReplicas(a, b)
+	case *ShowReplicationSourceStatus:
+		b, ok := inB.(*ShowReplicationSourceStatus)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfShowReplicationSourceStatus(a, b)
+	case *ShowReplicationStatus:
+		b, ok := inB.(*ShowReplicationStatus)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfShowReplicationStatus(a, b)
 	case *ShowTransactionStatus:
 		b, ok := inB.(*ShowTransactionStatus)
 		if !ok {

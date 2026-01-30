@@ -390,8 +390,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> PURGE BEFORE
 
 // SHOW tokens
-%token <str> CODE COLLATION COLUMNS DATABASES ENGINES EVENT EXTENDED FIELDS FULL FUNCTION GTID_EXECUTED
-%token <str> KEYSPACES OPEN PLUGINS PRIVILEGES PROCESSLIST SCHEMAS TABLES TRIGGERS USER
+%token <str> BINLOG CODE COLLATION COLUMNS DATABASES ENGINES EVENT EVENTS EXTENDED FIELDS FULL FUNCTION GTID_EXECUTED
+%token <str> KEYSPACES LOG MASTER OPEN PLUGINS PRIVILEGES PROCESSLIST RELAYLOG REPLICA REPLICAS SCHEMAS SLAVE TABLES TRIGGERS USER
 %token <str> VGTID_EXECUTED VITESS_KEYSPACES VITESS_METADATA VITESS_MIGRATIONS VITESS_REPLICATION_STATUS VITESS_SHARDS VITESS_TABLETS VITESS_TARGET VSCHEMA VITESS_THROTTLED_APPS
 
 // SET tokens
@@ -534,7 +534,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <subPartitionDefinitions> subpartition_definition_list subpartition_definition_list_with_brackets
 %type <subPartitionDefinitionOptions> subpartition_definition_attribute_list_opt
 %type <intervalType> interval timestampadd_interval
-%type <str> cache_opt separator_opt flush_option for_channel_opt maxvalue
+%type <str> cache_opt separator_opt flush_option for_channel_opt show_for_channel_opt binlog_in_opt maxvalue
+%type <expr> binlog_from_opt
 %type <matchExprOption> match_option
 %type <boolean> distinct_opt union_op replace local_opt
 %type <selectExprs> select_expression_list
@@ -4629,6 +4630,53 @@ show_statement:
   {
     $$ = &Show{&ShowBasic{Command: VitessTarget}}
   }
+| SHOW BINARY LOGS
+  {
+    $$ = &Show{&ShowBinaryLogs{}}
+  }
+| SHOW BINARY LOG STATUS
+  {
+    $$ = &Show{&ShowReplicationSourceStatus{Style: "BINARY LOG"}}
+  }
+| SHOW MASTER STATUS
+  {
+    $$ = &Show{&ShowReplicationSourceStatus{Style: "MASTER"}}
+  }
+| SHOW BINLOG EVENTS binlog_in_opt binlog_from_opt limit_opt
+  {
+    $$ = &Show{&ShowBinlogEvents{
+      IsRelaylog: false,
+      LogName:    $4,
+      Position:   $5,
+      Limit:      $6,
+    }}
+  }
+| SHOW RELAYLOG EVENTS binlog_in_opt binlog_from_opt limit_opt show_for_channel_opt
+  {
+    $$ = &Show{&ShowBinlogEvents{
+      IsRelaylog: true,
+      LogName:    $4,
+      Position:   $5,
+      Limit:      $6,
+      Channel:    $7,
+    }}
+  }
+| SHOW REPLICA STATUS show_for_channel_opt
+  {
+    $$ = &Show{&ShowReplicationStatus{Style: "REPLICA", Channel: $4}}
+  }
+| SHOW SLAVE STATUS show_for_channel_opt
+  {
+    $$ = &Show{&ShowReplicationStatus{Style: "SLAVE", Channel: $4}}
+  }
+| SHOW REPLICAS
+  {
+    $$ = &Show{&ShowReplicas{Style: "REPLICAS"}}
+  }
+| SHOW SLAVE HOSTS
+  {
+    $$ = &Show{&ShowReplicas{Style: "SLAVE HOSTS"}}
+  }
 /*
  * Catch-all for show statements without vitess keywords:
  */
@@ -4640,13 +4688,9 @@ show_statement:
   {
     $$ = &Show{&ShowOther{Command: string($2) + " " + string($3)}}
    }
-| SHOW BINARY ci_identifier ddl_skip_to_end /* SHOW BINARY ... */
+| SHOW EVENTS ddl_skip_to_end
   {
-    $$ = &Show{&ShowOther{Command: string($2) + " " + $3.String()}}
-  }
-| SHOW BINARY LOGS ddl_skip_to_end /* SHOW BINARY LOGS */
-  {
-    $$ = &Show{&ShowOther{Command: string($2) + " " + string($3)}}
+    $$ = &Show{&ShowOther{Command: string($2)}}
   }
 | SHOW ENGINE ddl_skip_to_end
   {
@@ -4685,6 +4729,40 @@ for_opt:
   {}
 | FOR
   {}
+
+binlog_in_opt:
+  /* empty */
+  {
+    $$ = ""
+  }
+| IN STRING
+  {
+    $$ = string($2)
+  }
+
+binlog_from_opt:
+  /* empty */
+  {
+    $$ = nil
+  }
+| FROM INTEGRAL
+  {
+    $$ = NewIntLiteral($2)
+  }
+
+show_for_channel_opt:
+  /* empty */
+  {
+    $$ = ""
+  }
+| FOR CHANNEL ci_identifier
+  {
+    $$ = $3.String()
+  }
+| FOR CHANNEL STRING
+  {
+    $$ = string($3)
+  }
 
 extended_opt:
   /* empty */
@@ -8829,6 +8907,7 @@ non_reserved_keyword:
 | BEGIN
 | BIGINT
 | BIT
+| BINLOG
 | BIT_AND %prec FUNCTION_CALL_NON_KEYWORD
 | BIT_OR %prec FUNCTION_CALL_NON_KEYWORD
 | BIT_XOR %prec FUNCTION_CALL_NON_KEYWORD
@@ -8905,6 +8984,7 @@ non_reserved_keyword:
 | ERROR
 | ESCAPED
 | EVENT
+| EVENTS
 | EXCHANGE
 | EXCLUDE
 | EXCLUSIVE
@@ -9005,12 +9085,14 @@ non_reserved_keyword:
 | LOCAL
 | LOCATE %prec FUNCTION_CALL_NON_KEYWORD
 | LOCKED
+| LOG
 | LOGS
 | LONGBLOB
 | LONGTEXT
 | LTRIM %prec FUNCTION_CALL_NON_KEYWORD
 | MANUAL
 | MANIFEST
+| MASTER
 | MASTER_COMPRESSION_ALGORITHMS
 | MASTER_PUBLIC_KEY_PATH
 | MASTER_TLS_CIPHERSUITES
@@ -9096,11 +9178,14 @@ non_reserved_keyword:
 | REGEXP_REPLACE %prec FUNCTION_CALL_NON_KEYWORD
 | REGEXP_SUBSTR %prec FUNCTION_CALL_NON_KEYWORD
 | RELAY
+| RELAYLOG
 | RELEASE_ALL_LOCKS %prec FUNCTION_CALL_NON_KEYWORD
 | RELEASE_LOCK %prec FUNCTION_CALL_NON_KEYWORD
 | REMOVE
 | REORGANIZE
 | REPAIR
+| REPLICA
+| REPLICAS
 | REPEATABLE
 | RESTRICT
 | REQUIRE_ROW_FORMAT
@@ -9132,6 +9217,7 @@ non_reserved_keyword:
 | SIGNED
 | SIMPLE
 | SKIP
+| SLAVE
 | SLOW
 | SMALLINT
 | SNAPSHOT

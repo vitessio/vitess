@@ -437,6 +437,8 @@ const (
 	RefOfShowBasicTbl
 	RefOfShowBasicDbName
 	RefOfShowBasicFilter
+	RefOfShowBinlogEventsPosition
+	RefOfShowBinlogEventsLimit
 	RefOfShowCreateOp
 	RefOfShowFilterFilter
 	RefOfShowMigrationLogsComments
@@ -1436,6 +1438,10 @@ func (s ASTStep) DebugString() string {
 		return "(*ShowBasic).DbName"
 	case RefOfShowBasicFilter:
 		return "(*ShowBasic).Filter"
+	case RefOfShowBinlogEventsPosition:
+		return "(*ShowBinlogEvents).Position"
+	case RefOfShowBinlogEventsLimit:
+		return "(*ShowBinlogEvents).Limit"
 	case RefOfShowCreateOp:
 		return "(*ShowCreate).Op"
 	case RefOfShowFilterFilter:
@@ -2697,6 +2703,10 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*ShowBasic).DbName
 		case RefOfShowBasicFilter:
 			node = node.(*ShowBasic).Filter
+		case RefOfShowBinlogEventsPosition:
+			node = node.(*ShowBinlogEvents).Position
+		case RefOfShowBinlogEventsLimit:
+			node = node.(*ShowBinlogEvents).Limit
 		case RefOfShowCreateOp:
 			node = node.(*ShowCreate).Op
 		case RefOfShowFilterFilter:

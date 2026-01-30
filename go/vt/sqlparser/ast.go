@@ -2030,12 +2030,45 @@ type (
 	ShowOther struct {
 		Command string
 	}
+
+	// ShowBinlogEvents represents SHOW BINLOG EVENTS / SHOW RELAYLOG EVENTS statements.
+	ShowBinlogEvents struct {
+		IsRelaylog bool
+		LogName    string
+		Position   Expr
+		Limit      *Limit
+		Channel    string // only for RELAYLOG
+	}
+
+	// ShowReplicationStatus represents SHOW REPLICA STATUS / SHOW SLAVE STATUS statements.
+	ShowReplicationStatus struct {
+		Style   string // "REPLICA" or "SLAVE"
+		Channel string
+	}
+
+	// ShowReplicationSourceStatus represents SHOW BINARY LOG STATUS / SHOW MASTER STATUS statements.
+	ShowReplicationSourceStatus struct {
+		Style string // "BINARY LOG" or "MASTER"
+	}
+
+	// ShowReplicas represents SHOW REPLICAS / SHOW SLAVE HOSTS statements.
+	ShowReplicas struct {
+		Style string // "REPLICAS" or "SLAVE HOSTS"
+	}
+
+	// ShowBinaryLogs represents SHOW BINARY LOGS statement.
+	ShowBinaryLogs struct{}
 )
 
-func (*ShowBasic) isShowInternal()             {}
-func (*ShowCreate) isShowInternal()            {}
-func (*ShowOther) isShowInternal()             {}
-func (*ShowTransactionStatus) isShowInternal() {}
+func (*ShowBasic) isShowInternal()                   {}
+func (*ShowCreate) isShowInternal()                  {}
+func (*ShowOther) isShowInternal()                   {}
+func (*ShowTransactionStatus) isShowInternal()       {}
+func (*ShowBinlogEvents) isShowInternal()            {}
+func (*ShowReplicationStatus) isShowInternal()       {}
+func (*ShowReplicationSourceStatus) isShowInternal() {}
+func (*ShowReplicas) isShowInternal()                {}
+func (*ShowBinaryLogs) isShowInternal()              {}
 
 // InsertRows represents the rows for an INSERT statement.
 type InsertRows interface {

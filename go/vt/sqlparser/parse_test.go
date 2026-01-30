@@ -2301,8 +2301,20 @@ var validSQL = []struct {
 }, {
 	input: "show binary logs",
 }, {
-	input:  "show binlog events",
-	output: "show binlog",
+	input: "show binlog events",
+}, {
+	input: "show binlog events in 'mysql-bin.000001'",
+}, {
+	input: "show binlog events from 4",
+}, {
+	input: "show binlog events in 'mysql-bin.000001' from 4",
+}, {
+	input: "show binlog events in 'mysql-bin.000001' from 4 limit 10",
+}, {
+	input: "show binlog events limit 10",
+}, {
+	input:  "show binlog events limit 5, 10",
+	output: "show binlog events limit 5, 10",
 }, {
 	input: "purge binary logs to 'x'",
 }, {
@@ -2388,8 +2400,7 @@ var validSQL = []struct {
 	input:  "show keys from t",
 	output: "show indexes from t",
 }, {
-	input:  "show master status",
-	output: "show master",
+	input: "show master status",
 }, {
 	input: "show open tables",
 }, {
@@ -2415,14 +2426,29 @@ var validSQL = []struct {
 	input:  "show profiles",
 	output: "show profiles",
 }, {
-	input:  "show relaylog events",
-	output: "show relaylog",
+	input: "show relaylog events",
 }, {
-	input:  "show slave hosts",
-	output: "show slave",
+	input: "show relaylog events in 'relay-bin.000001'",
 }, {
-	input:  "show slave status",
-	output: "show slave",
+	input: "show relaylog events from 4",
+}, {
+	input: "show relaylog events for channel 'channel_1'",
+}, {
+	input: "show relaylog events in 'relay-bin.000001' from 4 limit 10 for channel 'channel_1'",
+}, {
+	input: "show slave hosts",
+}, {
+	input: "show slave status",
+}, {
+	input: "show slave status for channel 'channel_1'",
+}, {
+	input: "show binary log status",
+}, {
+	input: "show replica status",
+}, {
+	input: "show replica status for channel 'channel_1'",
+}, {
+	input: "show replicas",
 }, {
 	input:  "show status",
 	output: "show status",

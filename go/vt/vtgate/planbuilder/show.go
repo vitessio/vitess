@@ -59,6 +59,12 @@ func buildShowPlan(sql string, stmt *sqlparser.Show, _ *sqlparser.ReservedVars, 
 		prim, err = buildShowCreatePlan(show, vschema)
 	case *sqlparser.ShowOther:
 		prim, err = buildShowOtherPlan(sql, vschema)
+	case *sqlparser.ShowBinlogEvents,
+		*sqlparser.ShowBinaryLogs,
+		*sqlparser.ShowReplicationStatus,
+		*sqlparser.ShowReplicationSourceStatus,
+		*sqlparser.ShowReplicas:
+		return nil, vterrors.VT12001(sqlparser.String(stmt))
 	default:
 		return nil, vterrors.VT13001(fmt.Sprintf("undefined SHOW type: %T", stmt.Internal))
 	}

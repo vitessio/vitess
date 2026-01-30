@@ -17,6 +17,8 @@ limitations under the License.
 package sqlparser
 
 import (
+	"strings"
+
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -2370,6 +2372,50 @@ func (node *ShowCreate) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *ShowOther) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "show %s", node.Command)
+}
+
+// Format formats the node.
+func (node *ShowBinlogEvents) Format(buf *TrackedBuffer) {
+	if node.IsRelaylog {
+		buf.literal("show relaylog events")
+	} else {
+		buf.literal("show binlog events")
+	}
+	if node.LogName != "" {
+		buf.astPrintf(node, " in %s", encodeSQLString(node.LogName))
+	}
+	if node.Position != nil {
+		buf.astPrintf(node, " from %v", node.Position)
+	}
+	if node.Limit != nil {
+		buf.astPrintf(node, "%v", node.Limit)
+	}
+	if node.Channel != "" {
+		buf.astPrintf(node, " for channel %s", encodeSQLString(node.Channel))
+	}
+}
+
+// Format formats the node.
+func (node *ShowReplicationStatus) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "show %s status", strings.ToLower(node.Style))
+	if node.Channel != "" {
+		buf.astPrintf(node, " for channel %s", encodeSQLString(node.Channel))
+	}
+}
+
+// Format formats the node.
+func (node *ShowReplicationSourceStatus) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "show %s status", strings.ToLower(node.Style))
+}
+
+// Format formats the node.
+func (node *ShowReplicas) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "show %s", strings.ToLower(node.Style))
+}
+
+// Format formats the node.
+func (node *ShowBinaryLogs) Format(buf *TrackedBuffer) {
+	buf.literal("show binary logs")
 }
 
 // Format formats the node.
