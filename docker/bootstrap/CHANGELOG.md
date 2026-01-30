@@ -206,5 +206,9 @@ List of changes between bootstrap image versions.
 - Upgrade etcd to v3.6.7
 - Remove toxiproxy
 - Remove consul from bootstrap build
+- Remove chromium and xvfb (no longer needed after vtctld2 web tests removal)
+- Remove percona-telemetry-agent from Percona images (CVE-2025-22871)
+- Use default-jdk-headless instead of default-jdk (removes ~50 CVEs from GUI libs)
 - Add SHA256 checksum verification for downloaded tools
 - Exclude Go module cache from image
+- Remove Maven from base image (CVE-2024-47554)
