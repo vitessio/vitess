@@ -353,6 +353,7 @@ const (
 	ForeignKeyTypeStr = "foreign key"
 	NormalKeyTypeStr  = "key"
 	CheckKeyTypeStr   = "check"
+	ConstraintTypeStr = "constraint"
 
 	// TrimType strings
 	BothTrimStr     = "both"
@@ -943,6 +944,7 @@ const (
 	ForeignKeyType
 	NormalKeyType
 	CheckKeyType
+	ConstraintType
 )
 
 // LockOptionType constants
