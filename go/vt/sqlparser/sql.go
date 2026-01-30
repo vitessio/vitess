@@ -17431,7 +17431,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4638
 		{
-			yyLOCAL = &Show{&ShowReplicationSourceStatus{Style: "BINARY LOG"}}
+			yyLOCAL = &Show{&ShowReplicationSourceStatus{}}
 		}
 		yyVAL.union = yyLOCAL
 	case 848:
@@ -17439,7 +17439,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4642
 		{
-			yyLOCAL = &Show{&ShowReplicationSourceStatus{Style: "MASTER"}}
+			yyLOCAL = &Show{&ShowReplicationSourceStatus{Legacy: true}}
 		}
 		yyVAL.union = yyLOCAL
 	case 849:
@@ -17474,7 +17474,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4665
 		{
-			yyLOCAL = &Show{&ShowReplicationStatus{Style: "REPLICA", Channel: yyDollar[4].str}}
+			yyLOCAL = &Show{&ShowReplicationStatus{Channel: yyDollar[4].str}}
 		}
 		yyVAL.union = yyLOCAL
 	case 852:
@@ -17482,7 +17482,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4669
 		{
-			yyLOCAL = &Show{&ShowReplicationStatus{Style: "SLAVE", Channel: yyDollar[4].str}}
+			yyLOCAL = &Show{&ShowReplicationStatus{Legacy: true, Channel: yyDollar[4].str}}
 		}
 		yyVAL.union = yyLOCAL
 	case 853:
@@ -17490,7 +17490,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4673
 		{
-			yyLOCAL = &Show{&ShowReplicas{Style: "REPLICAS"}}
+			yyLOCAL = &Show{&ShowReplicas{}}
 		}
 		yyVAL.union = yyLOCAL
 	case 854:
@@ -17498,7 +17498,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4677
 		{
-			yyLOCAL = &Show{&ShowReplicas{Style: "SLAVE HOSTS"}}
+			yyLOCAL = &Show{&ShowReplicas{Legacy: true}}
 		}
 		yyVAL.union = yyLOCAL
 	case 855:

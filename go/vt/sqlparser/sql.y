@@ -4636,11 +4636,11 @@ show_statement:
   }
 | SHOW BINARY LOG STATUS
   {
-    $$ = &Show{&ShowReplicationSourceStatus{Style: "BINARY LOG"}}
+    $$ = &Show{&ShowReplicationSourceStatus{}}
   }
 | SHOW MASTER STATUS
   {
-    $$ = &Show{&ShowReplicationSourceStatus{Style: "MASTER"}}
+    $$ = &Show{&ShowReplicationSourceStatus{Legacy: true}}
   }
 | SHOW BINLOG EVENTS binlog_in_opt binlog_from_opt limit_opt
   {
@@ -4663,19 +4663,19 @@ show_statement:
   }
 | SHOW REPLICA STATUS show_for_channel_opt
   {
-    $$ = &Show{&ShowReplicationStatus{Style: "REPLICA", Channel: $4}}
+    $$ = &Show{&ShowReplicationStatus{Channel: $4}}
   }
 | SHOW SLAVE STATUS show_for_channel_opt
   {
-    $$ = &Show{&ShowReplicationStatus{Style: "SLAVE", Channel: $4}}
+    $$ = &Show{&ShowReplicationStatus{Legacy: true, Channel: $4}}
   }
 | SHOW REPLICAS
   {
-    $$ = &Show{&ShowReplicas{Style: "REPLICAS"}}
+    $$ = &Show{&ShowReplicas{}}
   }
 | SHOW SLAVE HOSTS
   {
-    $$ = &Show{&ShowReplicas{Style: "SLAVE HOSTS"}}
+    $$ = &Show{&ShowReplicas{Legacy: true}}
   }
 /*
  * Catch-all for show statements without vitess keywords:

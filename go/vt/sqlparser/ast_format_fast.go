@@ -19,7 +19,6 @@ package sqlparser
 
 import (
 	"fmt"
-	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
 )
@@ -3130,9 +3129,11 @@ func (node *ShowBinlogEvents) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (node *ShowReplicationStatus) FormatFast(buf *TrackedBuffer) {
-	buf.WriteString("show ")
-	buf.WriteString(strings.ToLower(node.Style))
-	buf.WriteString(" status")
+	if node.Legacy {
+		buf.WriteString("show slave status")
+	} else {
+		buf.WriteString("show replica status")
+	}
 	if node.Channel != "" {
 		buf.WriteString(" for channel ")
 		buf.WriteString(encodeSQLString(node.Channel))
@@ -3141,15 +3142,20 @@ func (node *ShowReplicationStatus) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (node *ShowReplicationSourceStatus) FormatFast(buf *TrackedBuffer) {
-	buf.WriteString("show ")
-	buf.WriteString(strings.ToLower(node.Style))
-	buf.WriteString(" status")
+	if node.Legacy {
+		buf.WriteString("show master status")
+	} else {
+		buf.WriteString("show binary log status")
+	}
 }
 
 // FormatFast formats the node.
 func (node *ShowReplicas) FormatFast(buf *TrackedBuffer) {
-	buf.WriteString("show ")
-	buf.WriteString(strings.ToLower(node.Style))
+	if node.Legacy {
+		buf.WriteString("show slave hosts")
+	} else {
+		buf.WriteString("show replicas")
+	}
 }
 
 // FormatFast formats the node.

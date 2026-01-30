@@ -2042,18 +2042,18 @@ type (
 
 	// ShowReplicationStatus represents SHOW REPLICA STATUS / SHOW SLAVE STATUS statements.
 	ShowReplicationStatus struct {
-		Style   string // "REPLICA" or "SLAVE"
+		Legacy  bool // true for SLAVE (deprecated), false for REPLICA
 		Channel string
 	}
 
 	// ShowReplicationSourceStatus represents SHOW BINARY LOG STATUS / SHOW MASTER STATUS statements.
 	ShowReplicationSourceStatus struct {
-		Style string // "BINARY LOG" or "MASTER"
+		Legacy bool // true for MASTER (deprecated), false for BINARY LOG
 	}
 
 	// ShowReplicas represents SHOW REPLICAS / SHOW SLAVE HOSTS statements.
 	ShowReplicas struct {
-		Style string // "REPLICAS" or "SLAVE HOSTS"
+		Legacy bool // true for SLAVE HOSTS (deprecated), false for REPLICAS
 	}
 
 	// ShowBinaryLogs represents SHOW BINARY LOGS statement.

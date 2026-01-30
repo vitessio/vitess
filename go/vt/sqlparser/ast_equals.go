@@ -4730,7 +4730,7 @@ func (cmp *Comparator) RefOfShowReplicas(a, b *ShowReplicas) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Style == b.Style
+	return a.Legacy == b.Legacy
 }
 
 // RefOfShowReplicationSourceStatus does deep equals between the two objects.
@@ -4741,7 +4741,7 @@ func (cmp *Comparator) RefOfShowReplicationSourceStatus(a, b *ShowReplicationSou
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Style == b.Style
+	return a.Legacy == b.Legacy
 }
 
 // RefOfShowReplicationStatus does deep equals between the two objects.
@@ -4752,7 +4752,7 @@ func (cmp *Comparator) RefOfShowReplicationStatus(a, b *ShowReplicationStatus) b
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Style == b.Style &&
+	return a.Legacy == b.Legacy &&
 		a.Channel == b.Channel
 }
 

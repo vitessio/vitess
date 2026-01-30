@@ -17,8 +17,6 @@ limitations under the License.
 package sqlparser
 
 import (
-	"strings"
-
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -2397,7 +2395,11 @@ func (node *ShowBinlogEvents) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *ShowReplicationStatus) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "show %s status", strings.ToLower(node.Style))
+	if node.Legacy {
+		buf.literal("show slave status")
+	} else {
+		buf.literal("show replica status")
+	}
 	if node.Channel != "" {
 		buf.astPrintf(node, " for channel %s", encodeSQLString(node.Channel))
 	}
@@ -2405,12 +2407,20 @@ func (node *ShowReplicationStatus) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *ShowReplicationSourceStatus) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "show %s status", strings.ToLower(node.Style))
+	if node.Legacy {
+		buf.literal("show master status")
+	} else {
+		buf.literal("show binary log status")
+	}
 }
 
 // Format formats the node.
 func (node *ShowReplicas) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "show %s", strings.ToLower(node.Style))
+	if node.Legacy {
+		buf.literal("show slave hosts")
+	} else {
+		buf.literal("show replicas")
+	}
 }
 
 // Format formats the node.

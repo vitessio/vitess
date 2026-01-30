@@ -4521,10 +4521,8 @@ func (cached *ShowReplicas) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(8)
 	}
-	// field Style string
-	size += hack.RuntimeAllocSize(int64(len(cached.Style)))
 	return size
 }
 
@@ -4534,10 +4532,8 @@ func (cached *ShowReplicationSourceStatus) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(8)
 	}
-	// field Style string
-	size += hack.RuntimeAllocSize(int64(len(cached.Style)))
 	return size
 }
 
@@ -4547,10 +4543,8 @@ func (cached *ShowReplicationStatus) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(24)
 	}
-	// field Style string
-	size += hack.RuntimeAllocSize(int64(len(cached.Style)))
 	// field Channel string
 	size += hack.RuntimeAllocSize(int64(len(cached.Channel)))
 	return size
