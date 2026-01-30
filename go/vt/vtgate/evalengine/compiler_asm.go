@@ -47,7 +47,6 @@ import (
 	"vitess.io/vitess/go/mysql/hex"
 	"vitess.io/vitess/go/mysql/icuregex"
 	"vitess.io/vitess/go/mysql/json"
-	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -2215,40 +2214,89 @@ func (asm *assembler) Fn_JSON_CONTAINS_PATH(match jsonMatch, paths []*json.Path)
 	}
 }
 
-func (asm *assembler) Fn_JSON_EXTRACT0(jp []*json.Path) {
-	multi := len(jp) > 1 || slice.Any(jp, func(path *json.Path) bool { return path.ContainsWildcards() })
+type staticPath struct {
+	p   *json.Path
+	err error
+}
 
-	if multi {
-		asm.emit(func(env *ExpressionEnv) int {
+func (asm *assembler) Fn_JSON_EXTRACT(args int, staticPaths []staticPath) {
+	asm.adjustStack(-args)
+	asm.emit(func(env *ExpressionEnv) int {
+		paths := make([]*json.Path, 0, args)
+
+		multi := args > 1
+
+		doct := env.vm.stack[env.vm.sp-(args+1)].(*evalJSON)
+
+		for i := args; i > 0; i-- {
+			arg := env.vm.stack[env.vm.sp-i]
+
+			if arg == nil {
+				env.vm.sp -= args
+				env.vm.stack[env.vm.sp-1] = nil
+				return 1
+			}
+
+			staticPath := staticPaths[args-i]
+			if staticPath.err != nil {
+				env.vm.err = staticPath.err
+				return 1
+			}
+
+			var path *json.Path
+			if staticPath.p != nil {
+				path = staticPath.p
+			} else {
+				pathBytes, err := evalToVarchar(arg, collations.CollationUtf8mb4ID, true)
+				if err != nil {
+					env.vm.err = err
+					return 1
+				}
+
+				path, err = intoJSONPath(pathBytes)
+				if err != nil {
+					env.vm.err = err
+					return 1
+				}
+			}
+
+			if !multi {
+				multi = path.ContainsWildcards()
+			}
+
+			paths = append(paths, path)
+		}
+
+		env.vm.sp -= args
+
+		if multi {
 			matches := make([]*json.Value, 0, 4)
-			arg := env.vm.stack[env.vm.sp-1].(*evalJSON)
-			for _, jp := range jp {
-				jp.Match(arg, true, func(value *json.Value) {
+			for _, jp := range paths {
+				jp.Match(doct, true, func(value *json.Value) {
 					matches = append(matches, value)
 				})
 			}
+
 			if len(matches) == 0 {
 				env.vm.stack[env.vm.sp-1] = nil
 			} else {
 				env.vm.stack[env.vm.sp-1] = json.NewArray(matches)
 			}
-			return 1
-		}, "FN JSON_EXTRACT, SP-1, [static]")
-	} else {
-		asm.emit(func(env *ExpressionEnv) int {
+		} else {
 			var match *json.Value
-			arg := env.vm.stack[env.vm.sp-1].(*evalJSON)
-			jp[0].Match(arg, true, func(value *json.Value) {
+			paths[0].Match(doct, true, func(value *json.Value) {
 				match = value
 			})
+
 			if match == nil {
 				env.vm.stack[env.vm.sp-1] = nil
 			} else {
 				env.vm.stack[env.vm.sp-1] = match
 			}
-			return 1
-		}, "FN JSON_EXTRACT, SP-1, [static]")
-	}
+		}
+
+		return 1
+	}, "FN JSON_EXTRACT, SP-1, ..., SP-N")
 }
 
 func (asm *assembler) Fn_JSON_KEYS(jp *json.Path) {
