@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # Copyright 2019 The Vitess Authors.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -41,60 +41,60 @@
 #  d) Run the test using a cache image.
 #  $ docker/test/run.sh --use_docker_cache vitess/bootstrap:rm_mysql80_test_cache_do_NOT_push mysql80 "./test/keyrange_test.py -v"
 
-
 # Functions.
 # Helper to append additional commands via "&&".
 function append_cmd() {
-  local cmd="$1"
-  local append="$2"
-  if [[ -n "$cmd" ]]; then
-    cmd+=" && "
-  fi
-  cmd+="$append"
-  echo "$cmd"
+	local cmd="$1"
+	local append="$2"
+	if [[ -n "$cmd" ]]; then
+		cmd+=" && "
+	fi
+	cmd+="$append"
+	echo "$cmd"
 }
 
 # Variables.
 # Default to "run_test" mode unless the --create_docker_cache flag is found.
 mode="run_test"
 
-
 # Main.
 # Parse non-positional flags.
-while true ; do
-  case "$1" in
-    --create_docker_cache)
-      case "$2" in
-          "")
-            echo "ERROR: --create_docker_cache requires the name of the image as second parameter"
-            exit 1
-            ;;
-          *)
-            mode="create_cache"
-            cache_image=$2
-            shift 2
-            ;;
-      esac ;;
-    --use_docker_cache)
-        case "$2" in
-            "")
-              echo "ERROR: --use_docker_cache requires the name of the image as second parameter"
-              exit 1
-              ;;
-            *)
-              existing_cache_image=$2
-              shift 2
-              ;;
-        esac ;;
-    -*)
-      echo "ERROR: Unrecognized flag: $1"
-      exit 1
-      ;;
-    *)
-      # No more non-positional flags.
-      break
-      ;;
-  esac
+while true; do
+	case "$1" in
+	--create_docker_cache)
+		case "$2" in
+		"")
+			echo "ERROR: --create_docker_cache requires the name of the image as second parameter"
+			exit 1
+			;;
+		*)
+			mode="create_cache"
+			cache_image=$2
+			shift 2
+			;;
+		esac
+		;;
+	--use_docker_cache)
+		case "$2" in
+		"")
+			echo "ERROR: --use_docker_cache requires the name of the image as second parameter"
+			exit 1
+			;;
+		*)
+			existing_cache_image=$2
+			shift 2
+			;;
+		esac
+		;;
+	-*)
+		echo "ERROR: Unrecognized flag: $1"
+		exit 1
+		;;
+	*)
+		# No more non-positional flags.
+		break
+		;;
+	esac
 done
 # Positional flags.
 flavor=$1
@@ -103,26 +103,26 @@ cmd=$3
 args=
 
 if [[ -z "$flavor" ]]; then
-  echo "Flavor must be specified as first argument."
-  exit 1
+	echo "Flavor must be specified as first argument."
+	exit 1
 fi
 
 if [[ -z "$cmd" ]]; then
-  cmd=bash
+	cmd=bash
 fi
 
 if [[ ! -f bootstrap.sh ]]; then
-  echo "This script should be run from the root of the Vitess source tree - e.g. ~/src/vitess.io/vitess"
-  exit 1
+	echo "This script should be run from the root of the Vitess source tree - e.g. ~/src/vitess.io/vitess"
+	exit 1
 fi
 
 image=vitess/bootstrap:$version-$flavor
 if [[ -n "$existing_cache_image" ]]; then
-  image=$existing_cache_image
+	image=$existing_cache_image
 fi
 
 # Fix permissions before copying files, to avoid AUFS bug other must have read/access permissions
-chmod -R o=rx -- *;
+chmod -R o=rx -- *
 
 # This is required by the vtctld_web_test.py test.
 # Otherwise, /usr/bin/chromium will crash with the error:
@@ -143,39 +143,39 @@ args="$args -v $PWD/test/bin:/tmp/bin"
 
 # Pass through TOPO environment variable if it's set
 if [[ -n "$TOPO" ]]; then
-  args="$args -e TOPO=$TOPO"
+	args="$args -e TOPO=$TOPO"
 fi
 
 # Pass through PACKAGES environment variable if it's set
 if [[ -n "$PACKAGES" ]]; then
-  args="$args -e PACKAGES=$PACKAGES"
+	args="$args -e PACKAGES=$PACKAGES"
 fi
 
 # Mount in host VTDATAROOT if one exists, since it might be a RAM disk or SSD.
 if [[ -n "$VTDATAROOT" ]]; then
-  hostdir=$(mktemp -d "$VTDATAROOT/test-XXX")
-  testid=$(basename "$hostdir")
+	hostdir=$(mktemp -d "$VTDATAROOT/test-XXX")
+	testid=$(basename "$hostdir")
 
-  chmod 777 "$hostdir"
+	chmod 777 "$hostdir"
 
-  echo "Mounting host dir $hostdir as VTDATAROOT"
-  args="$args -v $hostdir:/vt/vtdataroot --name=$testid -h $testid"
+	echo "Mounting host dir $hostdir as VTDATAROOT"
+	args="$args -v $hostdir:/vt/vtdataroot --name=$testid -h $testid"
 else
-  testid=test-$$
-  args="$args --name=$testid -h $testid"
+	testid=test-$$
+	args="$args --name=$testid -h $testid"
 fi
 
 # Run tests
 case "$mode" in
-  "run_test") echo "Running tests in $image image..." ;;
-  "create_cache") echo "Creating cache image $cache_image ..." ;;
+"run_test") echo "Running tests in $image image..." ;;
+"create_cache") echo "Creating cache image $cache_image ..." ;;
 esac
 
 bashcmd=""
 
 if [[ -z "$existing_cache_image" ]]; then
-  # Construct "cp" command to copy the source code.
-  bashcmd=$(append_cmd "$bashcmd" "cp -R /tmp/src/!(vtdataroot|dist|bin|lib|vthook) . && cp -R /tmp/src/.git .")
+	# Construct "cp" command to copy the source code.
+	bashcmd=$(append_cmd "$bashcmd" "cp -R /tmp/src/!(vtdataroot|dist|bin|lib|vthook) . && cp -R /tmp/src/.git .")
 fi
 
 # Reset the environment if this was an old bootstrap. We can detect this from VTTOP presence.
@@ -189,8 +189,8 @@ bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/bin; ln -s /vt/src/vitess.io/vitess/
 bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/lib; ln -s /vt/src/vitess.io/vitess/lib /vt/lib")
 bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/vthook; ln -s /vt/src/vitess.io/vitess/vthook /vt/vthook")
 
-# Maven was setup in /vt/dist, may need to reinstall it.
-bashcmd=$(append_cmd "$bashcmd" "echo 'Checking if mvn needs installing...'; if [[ ! \$(command -v mvn) ]]; then echo 'install maven'; curl -sL --connect-timeout 10 --retry 3 http://www-us.apache.org/dist/maven/maven-3/3.3.9/binaries/apache-maven-3.3.9-bin.tar.gz | tar -xz && mv apache-maven-3.3.9 /vt/dist/maven; fi; echo 'mvn check done'")
+# Install Maven 3.9.12 on-demand (not in base image to avoid CVE-2024-47554)
+bashcmd=$(append_cmd "$bashcmd" "if [[ ! -x dist/maven/bin/mvn ]]; then echo 'Installing Maven 3.9.12...'; curl -fsSL --connect-timeout 10 --retry 3 https://archive.apache.org/dist/maven/maven-3/3.9.12/binaries/apache-maven-3.9.12-bin.tar.gz | tar -xz && mv apache-maven-3.9.12 dist/maven && echo 'Maven installed'; fi")
 
 # Run bootstrap every time now
 bashcmd=$(append_cmd "$bashcmd" "./bootstrap.sh")
@@ -199,36 +199,36 @@ bashcmd=$(append_cmd "$bashcmd" "./bootstrap.sh")
 bashcmd=$(append_cmd "$bashcmd" "$cmd")
 
 if tty -s; then
-  # interactive shell
-  # See above why we turn on "extglob" (extended Glob).
-  # shellcheck disable=SC2086
-  docker run -ti $args "$image" bash -O extglob -c "$bashcmd"
-  exitcode=$?
+	# interactive shell
+	# See above why we turn on "extglob" (extended Glob).
+	# shellcheck disable=SC2086
+	docker run -ti $args "$image" bash -O extglob -c "$bashcmd"
+	exitcode=$?
 else
-  # non-interactive shell (kill child on signal)
-  trap 'docker kill $testid &>/dev/null' SIGTERM SIGINT
-  # shellcheck disable=SC2086
-  docker run $args "$image" bash -O extglob -c "$bashcmd" &
-  wait $!
-  exitcode=$?
-  trap - SIGTERM SIGINT
+	# non-interactive shell (kill child on signal)
+	trap 'docker kill $testid &>/dev/null' SIGTERM SIGINT
+	# shellcheck disable=SC2086
+	docker run $args "$image" bash -O extglob -c "$bashcmd" &
+	wait $!
+	exitcode=$?
+	trap - SIGTERM SIGINT
 fi
 
 # Clean up host dir mounted VTDATAROOT
 if [[ -n "$hostdir" ]]; then
-  # Use Docker user to clean up first, to avoid permission errors.
-  docker run --name="rm_$testid" -v "$hostdir":/vt/vtdataroot "$image" bash -c 'rm -rf /vt/vtdataroot/*'
-  docker rm -f "rm_$testid" &>/dev/null
-  rm -rf "$hostdir"
+	# Use Docker user to clean up first, to avoid permission errors.
+	docker run --name="rm_$testid" -v "$hostdir":/vt/vtdataroot "$image" bash -c 'rm -rf /vt/vtdataroot/*'
+	docker rm -f "rm_$testid" &>/dev/null
+	rm -rf "$hostdir"
 fi
 
 # If requested, create the cache image.
 if [[ "$mode" == "create_cache" && $exitcode == 0 ]]; then
-  msg="DO NOT PUSH: This is a temporary layer meant to persist e.g. the result of 'make build'. Never push this layer back to our official Docker Hub repository."
-  if ! docker commit -m "$msg" "$testid" "$cache_image"; then
-    exitcode=$?
-    echo "ERROR: Failed to create Docker cache. Used command: docker commit -m '$msg' $testid $image"
-  fi
+	msg="DO NOT PUSH: This is a temporary layer meant to persist e.g. the result of 'make build'. Never push this layer back to our official Docker Hub repository."
+	if ! docker commit -m "$msg" "$testid" "$cache_image"; then
+		exitcode=$?
+		echo "ERROR: Failed to create Docker cache. Used command: docker commit -m '$msg' $testid $image"
+	fi
 fi
 
 # Delete the container
