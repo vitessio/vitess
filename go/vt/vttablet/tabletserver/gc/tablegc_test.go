@@ -437,7 +437,6 @@ func TestOpenSkipsPurgeEvacBasedOnAHI(t *testing.T) {
 		name            string
 		ahiSetting      string
 		expectPurgeEvac bool
-		expectDrop      bool
 	}
 	testCases := []testCase{
 		{
@@ -470,6 +469,7 @@ func TestOpenSkipsPurgeEvacBasedOnAHI(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tc.expectPurgeEvac, states[schema.PurgeTableGCState])
 			require.Equal(t, tc.expectPurgeEvac, states[schema.EvacTableGCState])
+			require.True(t, states[schema.DropTableGCState])
 		})
 	}
 }
