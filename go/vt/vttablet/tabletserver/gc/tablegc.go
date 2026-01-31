@@ -131,7 +131,7 @@ type TableGC struct {
 	lifecycleStates map[schema.TableGCState]bool
 }
 
-type fastDropConn interface {
+type capabilityConn interface {
 	ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error)
 	SupportsCapability(capabilities.FlavorCapability) (bool, error)
 }
@@ -218,7 +218,7 @@ func (collector *TableGC) Open() (err error) {
 // cycles: once the table has been held for long enough, we can just move on to dropping it. Dropping
 // a large table in 8.0.23 is expected to take several seconds, and should not block other queries
 // or place any locks on the buffer pool.
-func adjustLifecycleForFastDrops(conn fastDropConn, lifecycleStates map[schema.TableGCState]bool) (map[schema.TableGCState]bool, error) {
+func adjustLifecycleForFastDrops(conn capabilityConn, lifecycleStates map[schema.TableGCState]bool) (map[schema.TableGCState]bool, error) {
 	if len(lifecycleStates) == 0 {
 		return lifecycleStates, nil
 	}
