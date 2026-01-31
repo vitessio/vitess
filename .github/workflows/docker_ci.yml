@@ -15,13 +15,14 @@ env:
 
 jobs:
   build:
-    name: Docker Test (${{ matrix.shard }})
+    name: ${{ matrix.name}}
     runs-on: ubuntu-24.04
 
     strategy:
       fail-fast: false
       matrix:
         shard: [java, docker_cluster]
+        name: [Java Docker Test, Docker Test Cluster]
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
