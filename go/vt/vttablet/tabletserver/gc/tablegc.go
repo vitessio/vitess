@@ -18,6 +18,7 @@ package gc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"sort"
@@ -238,7 +239,7 @@ func adjustLifecycleForFastDrops(conn capabilityConn, lifecycleStates map[schema
 		return nil, vterrors.Wrap(err, "failed to check innodb_adaptive_hash_index setting")
 	}
 	if res == nil || len(res.Rows) == 0 || len(res.Rows[0]) == 0 {
-		return nil, fmt.Errorf("failed to check innodb_adaptive_hash_index setting: unexpected result")
+		return nil, errors.New("failed to check innodb_adaptive_hash_index setting: unexpected result")
 	}
 	if strings.ToLower(res.Rows[0][0].ToString()) == "on" {
 		return lifecycleStates, nil
