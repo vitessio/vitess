@@ -262,10 +262,33 @@ func (txc *TxConn) commitNormal(ctx context.Context, session *econtext.SafeSessi
 
 // commit2PC will not used the pinned tablets - to make sure we use the current source, we need to use the gateway's queryservice
 func (txc *TxConn) commit2PC(ctx context.Context, session *econtext.SafeSession) (txnType txType, err error) {
+	var modifiedShards []*vtgatepb.Session_ShardSession
+	var readOnlyShards []*vtgatepb.Session_ShardSession
+
+	for _, s := range session.ShardSessions {
+		if s.RowsAffected {
+			modifiedShards = append(modifiedShards, s)
+		} else {
+			readOnlyShards = append(readOnlyShards, s)
+		}
+	}
+
+	for _, s := range readOnlyShards {
+		_ = txc.commitShard(ctx, s, session.GetLogger())
+	}
+
 	// If the number of participants is one or less, then it's a normal commit.
-	if len(session.ShardSessions) <= 1 {
+	if len(modifiedShards) <= 1 {
+		originalShards := session.ShardSessions
+		session.ShardSessions = modifiedShards
+		defer func() { session.ShardSessions = originalShards }()
+
 		return txc.commitNormal(ctx, session)
 	}
+
+	originalShards := session.ShardSessions
+	session.ShardSessions = modifiedShards
+	defer func() { session.ShardSessions = originalShards }()
 
 	mmShard := session.ShardSessions[0]
 	rmShards := session.ShardSessions[1:]
