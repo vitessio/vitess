@@ -234,8 +234,11 @@ func adjustLifecycleForFastDrops(conn fastDropConn, lifecycleStates map[schema.T
 	// Unfortunately you can still encounter problems if the Adaptive Hash Indexes are enabled: https://bugs.mysql.com/bug.php?id=113312
 	// So if AHI is enabled, we cannot safely skip PURGE and EVAC even on MySQL versions that support fast DROP TABLE.
 	res, err := conn.ExecuteFetch("SELECT variable_value FROM performance_schema.global_variables WHERE variable_name = 'innodb_adaptive_hash_index'", 1, false)
-	if err != nil || len(res.Rows) == 0 || len(res.Rows[0]) == 0 {
+	if err != nil {
 		return nil, vterrors.Wrap(err, "failed to check innodb_adaptive_hash_index setting")
+	}
+	if res == nil || len(res.Rows) == 0 || len(res.Rows[0]) == 0 {
+		return nil, fmt.Errorf("failed to check innodb_adaptive_hash_index setting: unexpected result")
 	}
 	if strings.ToLower(res.Rows[0][0].ToString()) == "on" {
 		return lifecycleStates, nil
