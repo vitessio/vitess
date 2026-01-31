@@ -312,12 +312,13 @@ func TestExecuteDirectlySetsLockWaitTimeout(t *testing.T) {
 	})
 	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
 	ts := memorytopo.NewServer(ctx, "cell")
-	require.NoError(t, ts.CreateTablet(ctx, &topodatapb.Tablet{
+	err = ts.CreateTablet(ctx, &topodatapb.Tablet{
 		Alias:    alias,
 		Keyspace: "ks",
 		Shard:    "0",
 		Type:     topodatapb.TabletType_PRIMARY,
-	}))
+	})
+	require.NoError(t, err)
 	executor := &Executor{
 		env:         tabletenv.NewEnv(venv, cfg, "ExecutorTest"),
 		ts:          ts,

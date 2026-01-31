@@ -200,22 +200,11 @@ func (collector *TableGC) Open() (err error) {
 		return err
 	}
 	defer conn.Close()
-	serverSupportsFastDrops, err := conn.SupportsCapability(capabilities.FastDropTableFlavorCapability)
+	collector.lifecycleStates, err = adjustLifecycleForFastDrops(conn, collector.lifecycleStates)
 	if err != nil {
 		return err
 	}
-	if serverSupportsFastDrops {
-		// MySQL 8.0.23 and onwards supports fast DROP TABLE operations. This means we don't have to
-		// go through the purging & evac cycle: once the table has been held for long enough, we can just
-		// move on to dropping it. Dropping a large table in 8.0.23 is expected to take several seconds, and
-		// should not block other queries or place any locks on the buffer pool.
-		lifecycleStates, err := adjustLifecycleForFastDrops(conn, collector.lifecycleStates)
-		if err != nil {
-			return err
-		}
-		collector.lifecycleStates = lifecycleStates
-	}
-	log.Infof("TableGC: MySQL version=%v, serverSupportsFastDrops=%v, lifecycleStates=%v", conn.ServerVersion, serverSupportsFastDrops, collector.lifecycleStates)
+	log.Infof("TableGC: MySQL version=%v, lifecycleStates=%v", conn.ServerVersion, collector.lifecycleStates)
 
 	ctx := context.Background()
 	ctx, collector.cancelOperation = context.WithCancel(ctx)
@@ -224,8 +213,21 @@ func (collector *TableGC) Open() (err error) {
 	return nil
 }
 
+// adjustLifecycleForFastDrops adjusts the default lifecycle phases because MySQL 8.0.23 and onwards
+// supports fast DROP TABLE operations. This means we don't have to go through the purge & evac
+// cycles: once the table has been held for long enough, we can just move on to dropping it. Dropping
+// a large table in 8.0.23 is expected to take several seconds, and should not block other queries
+// or place any locks on the buffer pool.
 func adjustLifecycleForFastDrops(conn fastDropConn, lifecycleStates map[schema.TableGCState]bool) (map[schema.TableGCState]bool, error) {
 	if len(lifecycleStates) == 0 {
+		return lifecycleStates, nil
+	}
+
+	serverSupportsFastDrops, err := conn.SupportsCapability(capabilities.FastDropTableFlavorCapability)
+	if err != nil {
+		return lifecycleStates, err
+	}
+	if !serverSupportsFastDrops {
 		return lifecycleStates, nil
 	}
 
