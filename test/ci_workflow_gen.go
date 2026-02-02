@@ -39,13 +39,7 @@ const (
 	mysql57 mysqlVersion = "mysql57"
 	mysql80 mysqlVersion = "mysql80"
 	mysql84 mysqlVersion = "mysql84"
-
-	defaultMySQLVersion = mysql84
 )
-
-type mysqlVersions []mysqlVersion
-
-var defaultMySQLVersions = []mysqlVersion{defaultMySQLVersion}
 
 var unitTestDatabases = []mysqlVersion{mysql57, mysql80, mysql84}
 
@@ -53,7 +47,6 @@ var gitTimeout = time.Second * 10
 
 const (
 	oracleCloudRunner = "oracle-vm-16cpu-64gb-x86-64"
-	githubRunner      = "gh-hosted-runners-16cores-1-24.04"
 	cores16RunnerName = oracleCloudRunner
 	defaultRunnerName = "ubuntu-24.04"
 	goimportsTag      = "v0.39.0"
@@ -70,118 +63,12 @@ const (
 
 	unitTestTemplate = "templates/unit_test.tpl"
 
-	// An empty string will cause the default non platform specific template
-	// to be used.
-	clusterTestTemplate = "templates/cluster_endtoend_test%s.tpl"
-
 	clusterVitessTesterTemplate = "templates/cluster_vitess_tester.tpl"
-
-	clusterTestDockerTemplate = "templates/cluster_endtoend_test_docker.tpl"
 )
 
-var (
-	// Clusters 10, 25 are executed on docker, using the docker_test_cluster 10, 25 workflows.
-	// Hence, they are not listed in the list below.
-	clusterList = []string{
-		"vtctlbackup_sharded_clustertest_heavy",
-		"12",
-		"13",
-		"ers_prs_newfeatures_heavy",
-		"15",
-		"vtgate_general_heavy",
-		"vtbackup",
-		"18",
-		"xb_backup",
-		"backup_pitr",
-		"backup_pitr_xtrabackup",
-		"backup_pitr_mysqlshell",
-		"21",
-		"mysql_server_vault",
-		"vstream",
-		"onlineddl_vrepl",
-		"onlineddl_vrepl_stress",
-		"onlineddl_vrepl_stress_suite",
-		"onlineddl_vrepl_suite",
-		"onlineddl_revert",
-		"onlineddl_scheduler",
-		"tabletmanager_throttler_topo",
-		"tabletmanager_tablegc",
-		"tabletmanager_consul",
-		"vtgate_concurrentdml",
-		"vtgate_godriver",
-		"vtgate_gen4",
-		"vtgate_readafterwrite",
-		"vtgate_reservedconn",
-		"vtgate_schema",
-		"vtgate_tablet_healthcheck_cache",
-		"vtgate_topo",
-		"vtgate_topo_consul",
-		"vtgate_topo_etcd",
-		"vtgate_transaction",
-		"vtgate_unsharded",
-		"vtgate_vindex_heavy",
-		"vtgate_vschema",
-		"vtgate_queries",
-		"vtgate_plantests",
-		"vtgate_schema_tracker",
-		"vtgate_foreignkey_stress",
-		"vtorc",
-		"xb_recovery",
-		"mysql84",
-		"vreplication_across_db_versions",
-		"vreplication_mariadb_to_mysql",
-		"vreplication_basic",
-		"vreplication_cellalias",
-		"vreplication_copy_parallel",
-		"vreplication_v2",
-		"vreplication_partial_movetables_and_materialize",
-		"vreplication_foreign_key_stress",
-		"vreplication_migrate",
-		"vreplication_vtctldclient_movetables_tz",
-		"vreplication_vdiff2",
-		"vreplication_multi_tenant",
-		"schemadiff_vrepl",
-		"topo_connection_cache",
-		"vtgate_partial_keyspace",
-		"vttablet_prscomplex",
-	}
-
-	buildTag = map[string]string{
-		"vtgate_transaction": "debug2PC",
-	}
-
-	vitessTesterMap = map[string]string{
-		"vtgate": "./go/test/endtoend/vtgate/vitess_tester",
-	}
-
-	clusterDockerList           = []string{}
-	clustersRequiringXtraBackup = []string{
-		"xb_backup",
-		"xb_recovery",
-		"backup_pitr_xtrabackup",
-	}
-	clustersRequiringMakeTools = []string{
-		"18",
-		"mysql_server_vault",
-		"vtgate_topo_consul",
-		"tabletmanager_consul",
-	}
-	clustersRequiringMemoryCheck = []string{
-		"vtorc",
-	}
-	clusterRequiring16CoresMachines = []string{
-		"onlineddl_vrepl",
-		"onlineddl_vrepl_stress",
-		"onlineddl_vrepl_stress_suite",
-		"onlineddl_vrepl_suite",
-		"vreplication_basic",
-		"vreplication_migrate",
-		"vreplication_vtctldclient_vdiff2_movetables_tz",
-	}
-	clusterRequiringMinio = []string{
-		"21",
-	}
-)
+var vitessTesterMap = map[string]string{
+	"vtgate": "./go/test/endtoend/vtgate/vitess_tester",
+}
 
 type GitMeta struct {
 	SHA     string
@@ -197,23 +84,6 @@ type unitTest struct {
 	*GitMetas
 	Name, RunsOn, Platform, FileName, GoPrivate, Evalengine string
 	Race                                                    bool
-}
-
-type clusterTest struct {
-	*GitMetas
-	Name, Shard, Platform              string
-	FileName                           string
-	BuildTag                           string
-	RunsOn                             string
-	GoPrivate                          string
-	MemoryCheck                        bool
-	MakeTools, InstallXtraBackup       bool
-	Docker                             bool
-	LimitResourceUsage                 bool
-	EnableBinlogTransactionCompression bool
-	EnablePartialJSON                  bool
-	PartialKeyspace                    bool
-	NeedsMinio                         bool
 }
 
 type vitessTesterTest struct {
@@ -295,20 +165,6 @@ func getGitMetas(ctx context.Context) (*GitMetas, error) {
 	return &metas, eg.Wait()
 }
 
-// clusterMySQLVersions return list of mysql versions (one or more) that this cluster needs to test against
-func clusterMySQLVersions() mysqlVersions {
-	switch {
-	// Add any specific clusters, or groups of clusters, here,
-	// that require allMySQLVersions to be tested against.
-	// At this time this list is clean because Vitess stopped
-	// supporting MySQL 5.7. At some point, we will need to
-	// support post 8.0 versions of MySQL, and this list will
-	// inevitably grow.
-	default:
-		return defaultMySQLVersions
-	}
-}
-
 func mergeBlankLines(buf *bytes.Buffer) string {
 	var out []string
 	in := strings.Split(buf.String(), "\n")
@@ -339,18 +195,6 @@ func main() {
 
 	generateUnitTestWorkflows(gitMetas)
 	generateVitessTesterWorkflows(vitessTesterMap, clusterVitessTesterTemplate, gitMetas)
-	generateClusterWorkflows(clusterList, clusterTestTemplate, gitMetas)
-	generateClusterWorkflows(clusterDockerList, clusterTestDockerTemplate, gitMetas)
-}
-
-func canonnizeList(list []string) []string {
-	var output []string
-	for _, item := range list {
-		if item := strings.TrimSpace(item); item != "" {
-			output = append(output, item)
-		}
-	}
-	return output
 }
 
 func generateVitessTesterWorkflows(mp map[string]string, tpl string, gitMetas *GitMetas) {
@@ -369,88 +213,6 @@ func generateVitessTesterWorkflows(mp map[string]string, tpl string, gitMetas *G
 		err := writeFileFromTemplate(templateFileName, workflowPath, tt)
 		if err != nil {
 			log.Print(err)
-		}
-	}
-}
-
-func generateClusterWorkflows(list []string, tpl string, gitMetas *GitMetas) {
-	clusters := canonnizeList(list)
-	for _, cluster := range clusters {
-		for _, mysqlVersion := range clusterMySQLVersions() {
-			test := &clusterTest{
-				Name:      fmt.Sprintf("Cluster (%s)", cluster),
-				Shard:     cluster,
-				BuildTag:  buildTag[cluster],
-				RunsOn:    defaultRunnerName,
-				GoPrivate: goPrivate,
-				GitMetas:  gitMetas,
-			}
-			cores16Clusters := canonnizeList(clusterRequiring16CoresMachines)
-			for _, cores16Cluster := range cores16Clusters {
-				if cores16Cluster == cluster {
-					test.RunsOn = cores16RunnerName
-					break
-				}
-			}
-			makeToolClusters := canonnizeList(clustersRequiringMakeTools)
-			for _, makeToolCluster := range makeToolClusters {
-				if makeToolCluster == cluster {
-					test.MakeTools = true
-					break
-				}
-			}
-			memoryCheckClusters := canonnizeList(clustersRequiringMemoryCheck)
-			for _, memCheckCluster := range memoryCheckClusters {
-				if memCheckCluster == cluster {
-					test.MemoryCheck = true
-					break
-				}
-			}
-			xtraBackupClusters := canonnizeList(clustersRequiringXtraBackup)
-			for _, xtraBackupCluster := range xtraBackupClusters {
-				if xtraBackupCluster == cluster {
-					test.InstallXtraBackup = true
-					break
-				}
-			}
-			minioClusters := canonnizeList(clusterRequiringMinio)
-			for _, minioCluster := range minioClusters {
-				if minioCluster == cluster {
-					test.NeedsMinio = true
-					break
-				}
-			}
-			if mysqlVersion == mysql57 {
-				test.Platform = string(mysql57)
-			}
-			if strings.HasPrefix(cluster, "vreplication") || strings.HasSuffix(cluster, "heavy") {
-				test.LimitResourceUsage = true
-			}
-			if strings.Contains(cluster, "vrepl") {
-				test.EnableBinlogTransactionCompression = true
-				test.EnablePartialJSON = true
-			}
-			mysqlVersionIndicator := ""
-			if mysqlVersion != defaultMySQLVersion && len(clusterMySQLVersions()) > 1 {
-				mysqlVersionIndicator = "_" + string(mysqlVersion)
-				test.Name = test.Name + " " + string(mysqlVersion)
-			}
-			if strings.Contains(test.Shard, "partial_keyspace") {
-				test.PartialKeyspace = true
-			}
-
-			workflowPath := fmt.Sprintf("%s/cluster_endtoend_%s%s.yml", workflowConfigDir, cluster, mysqlVersionIndicator)
-			templateFileName := tpl
-			if test.Platform != "" {
-				templateFileName = fmt.Sprintf(tpl, "_"+test.Platform)
-			} else if strings.Contains(templateFileName, "%s") {
-				templateFileName = fmt.Sprintf(tpl, "")
-			}
-			test.FileName = fmt.Sprintf("cluster_endtoend_%s%s.yml", cluster, mysqlVersionIndicator)
-			err := writeFileFromTemplate(templateFileName, workflowPath, test)
-			if err != nil {
-				log.Print(err)
-			}
 		}
 	}
 }
@@ -498,13 +260,6 @@ func generateUnitTestWorkflows(gitMetas *GitMetas) {
 func evalengineToString(evalengine string) string {
 	if evalengine == "1" {
 		return "evalengine_"
-	}
-	return ""
-}
-
-func evalengineToNameSuffix(evalengine string) string {
-	if evalengine == "1" {
-		return " evalengine"
 	}
 	return ""
 }
