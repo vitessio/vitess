@@ -5,9 +5,9 @@ on:
     branches:
       - "main"
       - "release-[0-9]+.[0-9]"
-    tags: '**'
+    tags: "**"
   pull_request:
-    branches: '**'
+    branches: "**"
 
 concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Cluster End-to-End Tests')
@@ -29,7 +29,7 @@ jobs:
       - name: Check out code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          persist-credentials: 'false'
+          persist-credentials: "false"
 
       - name: Generate shard matrix
         id: set-matrix
@@ -49,9 +49,9 @@ jobs:
             "onlineddl_flow"
           ]'
 
-          # Build matrix: group tests by shard, aggregate their Needs, and extract BuildTag
-          matrix=$(jq -c --argjson exclude "$EXCLUDE_SHARDS" '
-            .Tests | to_entries
+          # Build matrix
+          matrix=$(jq -c -s --argjson exclude "$EXCLUDE_SHARDS" '
+            map(.Tests) | add | to_entries
             | group_by(.value.Shard)
             | map(select(.[0].value.Shard as $s | ($s != null) and ($exclude | index($s) | not)))
             | map({
@@ -59,7 +59,7 @@ jobs:
                 needs: ([.[].value.Needs // []] | add | unique // []),
                 buildTag: ([.[].value.BuildTag // null] | map(select(. != null)) | first // "")
               })
-          ' test/config.json)
+          ' test/config.json test/config_partial_keyspace.json)
 
           echo "matrix={\"include\":$matrix}" >> $GITHUB_OUTPUT
 
@@ -100,16 +100,17 @@ jobs:
       - name: Check out code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          persist-credentials: 'false'
+          persist-credentials: "false"
 
       - name: Check for changes in relevant files
         uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
         id: changes
         with:
-          token: ''
+          token: ""
           filters: |
             end_to_end:
               - 'test/config.json'
+              - 'test/config_partial_keyspace.json'
               - 'go/**/*.go'
               - 'go/vt/sidecardb/**/*.sql'
               - 'go/test/endtoend/onlineddl/vrepl_suite/**'
@@ -234,6 +235,9 @@ jobs:
           EXTRA_FLAGS=""
           if [[ "${{ matrix.buildTag }}" != "" ]]; then
             EXTRA_FLAGS="$EXTRA_FLAGS -build-tag=${{ matrix.buildTag }}"
+          fi
+          if [[ "${{ matrix.shard }}" == *"partial_keyspace"* ]]; then
+            EXTRA_FLAGS="$EXTRA_FLAGS -partial-keyspace=true"
           fi
 
           go run test.go -docker=false -follow -shard "${{ matrix.shard }}" $EXTRA_FLAGS
