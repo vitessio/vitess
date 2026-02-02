@@ -20,13 +20,11 @@ import io.vitess.client.StreamIterator;
 import io.vitess.proto.Query;
 import io.vitess.proto.Query.Field;
 import io.vitess.proto.Query.QueryResult;
-
 import java.sql.SQLDataException;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.util.Iterator;
 import java.util.List;
-
 import javax.annotation.concurrent.NotThreadSafe;
 
 /**

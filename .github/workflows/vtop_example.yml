@@ -7,9 +7,9 @@ on:
     branches:
       - "main"
       - "release-[0-9]+.[0-9]"
-    tags: '**'
+    tags: "**"
   pull_request:
-    branches: '**'
+    branches: "**"
 concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'vtop_example')
   cancel-in-progress: true
@@ -35,13 +35,13 @@ jobs:
       - name: Check out code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          persist-credentials: 'false'
+          persist-credentials: "false"
 
       - name: Check for changes in relevant files
         uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
         id: changes
         with:
-          token: ''
+          token: ""
           filters: |
             end_to_end:
               - 'go/**/*.go'
@@ -97,4 +97,4 @@ jobs:
         timeout-minutes: 60
         run: |
           source build.env
-          go run test.go -docker=false -skip-build -print-log -follow -retry=1 -timeout=60m vtop_example
+          go run test.go -docker=false -skip-build -print-log -follow -timeout=60m vtop_example
