@@ -108,7 +108,7 @@ func TestEngineOpenRetry(t *testing.T) {
 
 	assert.True(t, isRetrying())
 	func() {
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			time.Sleep(10 * time.Millisecond)
 			if !isRetrying() {
 				return

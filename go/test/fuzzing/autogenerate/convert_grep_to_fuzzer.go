@@ -32,6 +32,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 )
 
@@ -82,12 +83,7 @@ var pathToImportPath = map[string]string{
 
 // contains checks if a string is present in a string slice
 func contains(s []string, e string) bool {
-	for _, a := range s {
-		if a == e {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(s, e)
 }
 
 /*
@@ -194,7 +190,7 @@ func createMainFuzzer(functionList, harnesses []string) {
 	mainFuzzer.WriteString(fmt.Sprintf("\tfuncOp := int(data[0])%%%d\n", maxOps))
 	mainFuzzer.WriteString("\tdata2 := data[1:]\n")
 	mainFuzzer.WriteString("\tswitch funcOp {\n")
-	for i := 0; i < len(functionList); i++ {
+	for i := range functionList {
 		mainFuzzer.WriteString(fmt.Sprintf("\tcase %d:\n", i))
 		mainFuzzer.WriteString(fmt.Sprintf("\t%s\n", functionList[i]))
 	}
@@ -203,7 +199,7 @@ func createMainFuzzer(functionList, harnesses []string) {
 	mainFuzzer.WriteString("}")
 
 	// add all the internal harnesses
-	for i := 0; i < len(harnesses); i++ {
+	for i := range harnesses {
 		mainFuzzer.WriteString(harnesses[i])
 	}
 
@@ -249,7 +245,7 @@ func getGrepData() ([]string, []string) {
 			// get import path and short name
 			importPath := pathToImportPath[thePath]
 			shortName := importPathShort[importPath]
-			//fmt.Println(createHarness(shortName, structName))
+			// fmt.Println(createHarness(shortName, structName))
 
 			// create harness
 			harness := createHarness(shortName, structName)

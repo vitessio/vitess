@@ -85,7 +85,7 @@ func (config *VTGateConfiguration) ToJSONString() string {
 }
 
 func (vtgate *VtgateProcess) RewriteConfiguration() error {
-	return os.WriteFile(vtgate.ConfigFile, []byte(vtgate.Config.ToJSONString()), 0644)
+	return os.WriteFile(vtgate.ConfigFile, []byte(vtgate.Config.ToJSONString()), 0o644)
 }
 
 // WaitForConfig waits for the expectedConfig to be present in the vtgate configuration.
@@ -150,7 +150,7 @@ const defaultVtGatePlannerVersion = planbuilder.Gen4
 // Setup starts Vtgate process with required arguements
 func (vtgate *VtgateProcess) Setup() (err error) {
 	args := []string{
-		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--topo_implementation", vtgate.TopoImplementation,
 		"--topo_global_server_address", vtgate.TopoGlobalAddress,
 		"--topo_global_root", vtgate.TopoGlobalRoot,
@@ -428,7 +428,7 @@ func (vtgate *VtgateProcess) GetVars() map[string]any {
 
 // ReadVSchema reads the vschema from the vtgate endpoint for it and returns
 // a pointer to the interface. To read this vschema, the caller must convert it to a map
-func (vtgate *VtgateProcess) ReadVSchema() (*interface{}, error) {
+func (vtgate *VtgateProcess) ReadVSchema() (*any, error) {
 	httpClient := &http.Client{Timeout: 5 * time.Second}
 	resp, err := httpClient.Get(vtgate.VSchemaURL)
 	if err != nil {
@@ -439,7 +439,7 @@ func (vtgate *VtgateProcess) ReadVSchema() (*interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	var results interface{}
+	var results any
 	err = json.Unmarshal(res, &results)
 	if err != nil {
 		return nil, err

@@ -56,9 +56,11 @@ var (
 	sidecarDBIdentifier   = sqlparser.String(sqlparser.NewIdentifierCS(sidecarDBName))
 	mainClusterConfig     *ClusterConfig
 	externalClusterConfig *ClusterConfig
-	extraVTGateArgs       = []string{utils.GetFlagVariantForTests("--tablet-refresh-interval"), "10ms", "--enable_buffer", utils.GetFlagVariantForTests("--buffer-window"), loadTestBufferingWindowDuration.String(),
+	extraVTGateArgs       = []string{
+		utils.GetFlagVariantForTests("--tablet-refresh-interval"), "10ms", "--enable_buffer", utils.GetFlagVariantForTests("--buffer-window"), loadTestBufferingWindowDuration.String(),
 		utils.GetFlagVariantForTests("--buffer-size"), "250000", utils.GetFlagVariantForTests("--buffer-min-time-between-failovers"), "1s", utils.GetFlagVariantForTests("--buffer-max-failover-duration"), loadTestBufferingWindowDuration.String(),
-		utils.GetFlagVariantForTests("--buffer-drain-concurrency"), "10"}
+		utils.GetFlagVariantForTests("--buffer-drain-concurrency"), "10",
+	}
 	extraVtctldArgs = []string{utils.GetFlagVariantForTests("--remote-operation-timeout"), "600s", "--topo-etcd-lease-ttl", "120"}
 	// This variable can be used within specific tests to alter vttablet behavior.
 	extraVTTabletArgs = []string{}
@@ -153,7 +155,7 @@ func setTempVtDataRoot() string {
 		vtdataroot = path.Join(originalVtdataroot, fmt.Sprintf("vreple2e_%d", dirSuffix))
 	}
 	if _, err := os.Stat(vtdataroot); os.IsNotExist(err) {
-		os.Mkdir(vtdataroot, 0700)
+		os.Mkdir(vtdataroot, 0o700)
 	}
 	_ = os.Setenv("VTDATAROOT", vtdataroot)
 	fmt.Printf("VTDATAROOT is %s\n", vtdataroot)
@@ -161,7 +163,7 @@ func setTempVtDataRoot() string {
 }
 
 // StartVTOrc starts a VTOrc instance
-func (vc *VitessCluster) StartVTOrc() error {
+func (vc *VitessCluster) StartVTOrc(cell string) error {
 	// Start vtorc if not already running
 	if vc.VTOrcProcess != nil {
 		return nil
@@ -169,6 +171,7 @@ func (vc *VitessCluster) StartVTOrc() error {
 	base := cluster.VtProcessInstance("vtorc", "vtorc", vc.ClusterConfig.topoPort, vc.ClusterConfig.hostname)
 	vtorcProcess := &cluster.VTOrcProcess{
 		VtProcess: base,
+		Cell:      cell,
 		LogDir:    vc.ClusterConfig.tmpDir,
 		Config:    cluster.VTOrcConfiguration{},
 		Port:      vc.ClusterConfig.vtorcPort,
@@ -188,7 +191,7 @@ func (vc *VitessCluster) StartVTOrc() error {
 // ./bin, ./sbin, and ./libexec subdirectories of VT_MYSQL_ROOT.
 func setVtMySQLRoot(mysqlRoot string) error {
 	if _, err := os.Stat(mysqlRoot); os.IsNotExist(err) {
-		os.Mkdir(mysqlRoot, 0700)
+		os.Mkdir(mysqlRoot, 0o700)
 	}
 	err := os.Setenv("VT_MYSQL_ROOT", mysqlRoot)
 	if err != nil {
@@ -280,7 +283,7 @@ func downloadDBTypeVersion(dbType string, majorVersion string, path string) erro
 	}
 	retries := 5
 	var dlerr error
-	for i := 0; i < retries; i++ {
+	for range retries {
 		if dlerr = downloadFile(); dlerr == nil {
 			break
 		}
@@ -311,7 +314,7 @@ func getClusterConfig(idx int, dataRootDir string) *ClusterConfig {
 	basePort += (idx * 10000) + offset
 	etcdPort += (idx * 10000) + offset
 	if _, err := os.Stat(dataRootDir); os.IsNotExist(err) {
-		os.Mkdir(dataRootDir, 0700)
+		os.Mkdir(dataRootDir, 0o700)
 	}
 
 	return &ClusterConfig{
@@ -437,7 +440,7 @@ func (vc *VitessCluster) CleanupDataroot(t *testing.T, recreate bool) {
 	}
 	require.NoError(t, err)
 	if recreate {
-		err = os.Mkdir(dir, 0700)
+		err = os.Mkdir(dir, 0o700)
 		require.NoError(t, err)
 	}
 }
@@ -460,13 +463,15 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 	require.NoError(t, err, res)
 
 	cellsToWatch := ""
+	var cellsToWatchSb466 strings.Builder
 	for i, cell := range cells {
 		if i > 0 {
-			cellsToWatch = cellsToWatch + ","
+			cellsToWatchSb466.WriteString(",")
 		}
 		cell.Keyspaces[ksName] = keyspace
-		cellsToWatch = cellsToWatch + cell.Name
+		cellsToWatchSb466.WriteString(cell.Name)
 	}
+	cellsToWatch += cellsToWatchSb466.String()
 	for _, cell := range cells {
 		if len(cell.Vtgates) == 0 {
 			log.Infof("Starting vtgate")
@@ -548,7 +553,8 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 // AddShards creates shards given list of comma-separated keys with specified tablets in each shard
 func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspace, names string, numReplicas int, numRdonly int, tabletIDBase int, opts map[string]string) error {
 	// Add a VTOrc instance if one is not already running
-	if err := vc.StartVTOrc(); err != nil {
+	vtorcCell := cells[0]
+	if err := vc.StartVTOrc(vtorcCell.Name); err != nil {
 		return err
 	}
 	// Disable global recoveries until the shard has been added.
@@ -596,7 +602,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 				primary.Vttablet.IsPrimary = true
 			}
 
-			for i := 0; i < numReplicas; i++ {
+			for range numReplicas {
 				log.Infof("Adding Replica tablet")
 				tablet, proc, err := vc.AddTablet(t, cell, keyspace, shard, "replica", tabletID+tabletIndex)
 				require.NoError(t, err)
@@ -607,7 +613,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 			}
 			// Only create RDONLY tablets in the default cell
 			if cell.Name == cluster.DefaultCell {
-				for i := 0; i < numRdonly; i++ {
+				for range numRdonly {
 					log.Infof("Adding RdOnly tablet")
 					tablet, proc, err := vc.AddTablet(t, cell, keyspace, shard, "rdonly", tabletID+tabletIndex)
 					require.NoError(t, err)

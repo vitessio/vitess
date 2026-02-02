@@ -116,7 +116,6 @@ func newJagerTracerFromEnv(serviceName string) (tracingService, io.Closer, error
 	}
 
 	tracer, closer, err := cfg.NewTracer(opts...)
-
 	if err != nil {
 		return nil, &nilCloser{}, err
 	}

@@ -19,6 +19,7 @@ package mysql
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 
@@ -189,7 +190,7 @@ func TestComStmtPrepareUpdStmt(t *testing.T) {
 	require.NoError(t, err, "cConn.ReadPacket failed")
 	require.EqualValues(t, prepare.StatementID, resp[1], "Received incorrect Statement ID")
 
-	for i := uint16(0); i < paramsCount; i++ {
+	for range paramsCount {
 		resp, err := cConn.ReadPacket()
 		require.NoError(t, err, "cConn.ReadPacket failed")
 		require.EqualValues(t, 0xfd, resp[17], "Received incorrect Statement ID")
@@ -259,7 +260,8 @@ func TestComStmtExecuteUpdStmt(t *testing.T) {
 			ParamsCount: 29,
 			ParamsType:  make([]int32, 29),
 			BindVars:    map[string]*querypb.BindVariable{},
-		}}
+		},
+	}
 
 	// This is simulated packets for update query
 	data := []byte{
@@ -281,7 +283,8 @@ func TestComStmtExecuteUpdStmt(t *testing.T) {
 		0x34, 0x35, 0x36, 0x37, 0x38, 0x08, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x0c, 0xe9,
 		0x9f, 0xa9, 0xe5, 0x86, 0xac, 0xe7, 0x9c, 0x9f, 0xe8, 0xb5, 0x9e, 0x08, 0x31, 0x32, 0x33, 0x34,
 		0x35, 0x36, 0x37, 0x38, 0x0c, 0xe9, 0x9f, 0xa9, 0xe5, 0x86, 0xac, 0xe7, 0x9c, 0x9f, 0xe8, 0xb5,
-		0x9e, 0x03, 0x66, 0x6f, 0x6f, 0x07, 0x66, 0x6f, 0x6f, 0x2c, 0x62, 0x61, 0x72}
+		0x9e, 0x03, 0x66, 0x6f, 0x6f, 0x07, 0x66, 0x6f, 0x6f, 0x2c, 0x62, 0x61, 0x72,
+	}
 
 	stmtID, _, err := sConn.parseComStmtExecute(prepareDataMap, data[4:]) // first 4 are header
 	require.NoError(t, err)
@@ -644,10 +647,7 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 	var fatalError string
 	// Use a go routine to run ExecuteFetch.
 	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
+	wg.Go(func() {
 		maxrows := 10000
 		if !allRows {
 			// Asking for just one row max. The results that have more will fail.
@@ -734,7 +734,7 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 			}
 			t.Errorf("\nExecuteStreamFetch(%v) returned:\n%+v\nBut was expecting:\n%+v\n", query, got, &expected)
 		}
-	}()
+	})
 
 	// The other side gets the request, and sends the result.
 	// Twice, once for ExecuteFetch, once for ExecuteStreamFetch.
@@ -762,8 +762,10 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 func RowString(row []sqltypes.Value) string {
 	l := len(row)
 	result := fmt.Sprintf("%v values:", l)
+	var resultSb767 strings.Builder
 	for _, val := range row {
-		result += fmt.Sprintf(" %v", val)
+		resultSb767.WriteString(fmt.Sprintf(" %v", val))
 	}
+	result += resultSb767.String()
 	return result
 }

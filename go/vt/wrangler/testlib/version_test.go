@@ -17,7 +17,6 @@ limitations under the License.
 package testlib
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -68,8 +67,7 @@ func TestVersion(t *testing.T) {
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
 	// Initialize our environment
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(ctx, t, ts)

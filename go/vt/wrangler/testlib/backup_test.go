@@ -338,8 +338,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
 	// Initialize our environment
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
@@ -734,8 +733,7 @@ func TestDisableActiveReparents(t *testing.T) {
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
 	// Initialize our environment
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")

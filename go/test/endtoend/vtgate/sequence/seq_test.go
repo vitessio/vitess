@@ -17,22 +17,19 @@ limitations under the License.
 package sequence
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 var (
@@ -186,12 +183,13 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start keyspace
+		cell := clusterInstance.Cell
 		uKeyspace := &cluster.Keyspace{
 			Name:      unshardedKs,
 			SchemaSQL: unshardedSQLSchema,
 			VSchema:   unshardedVSchema,
 		}
-		if err := clusterInstance.StartUnshardedKeyspace(*uKeyspace, 0, false); err != nil {
+		if err := clusterInstance.StartUnshardedKeyspace(*uKeyspace, 0, false, cell); err != nil {
 			return 1
 		}
 
@@ -200,7 +198,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: shardedSQLSchema,
 			VSchema:   shardedVSchema,
 		}
-		if err := clusterInstance.StartKeyspace(*sKeyspace, []string{"-80", "80-"}, 0, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*sKeyspace, []string{"-80", "80-"}, 0, false, cell); err != nil {
 			return 1
 		}
 
@@ -215,7 +213,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestSeq(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
 		Port: clusterInstance.VtgateMySQLPort,
@@ -233,7 +231,7 @@ func TestSeq(t *testing.T) {
 		utils.Exec(t, conn, "insert into sequence_test_seq(id, next_id, cache) values(0,1,10)")
 	}
 
-	//Insert 4 values in the main table
+	// Insert 4 values in the main table
 	utils.Exec(t, conn, "insert into sequence_test(val) values('a'), ('b') ,('c'), ('d')")
 
 	// Test select calls to main table and verify expected id.
@@ -278,7 +276,7 @@ func TestSeq(t *testing.T) {
 }
 
 func TestDotTableSeq(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := mysql.ConnParams{
 		Host:   "localhost",
 		Port:   clusterInstance.VtgateMySQLPort,
@@ -300,7 +298,7 @@ func TestDotTableSeq(t *testing.T) {
 }
 
 func TestInsertAllDefaults(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := mysql.ConnParams{
 		Host:   "localhost",
 		Port:   clusterInstance.VtgateMySQLPort,
@@ -324,7 +322,7 @@ func TestInsertAllDefaults(t *testing.T) {
 // sequence-generated value after an INSERT in both sharded and unsharded keyspaces.
 // This is a regression test for https://github.com/vitessio/vitess/issues/18946
 func TestLastInsertIDWithSequence(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	t.Run("unsharded keyspace", func(t *testing.T) {
 		vtParams := mysql.ConnParams{

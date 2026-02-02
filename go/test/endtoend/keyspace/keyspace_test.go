@@ -68,16 +68,20 @@ var (
       }
 	}`
 	shardKIdMap = map[string][]uint64{
-		"-80": {527875958493693904, 626750931627689502,
+		"-80": {
+			527875958493693904, 626750931627689502,
 			345387386794260318, 332484755310826578,
 			1842642426274125671, 1326307661227634652,
 			1761124146422844620, 1661669973250483744,
-			3361397649937244239, 2444880764308344533},
-		"80-": {9767889778372766922, 9742070682920810358,
+			3361397649937244239, 2444880764308344533,
+		},
+		"80-": {
+			9767889778372766922, 9742070682920810358,
 			10296850775085416642, 9537430901666854108,
 			10440455099304929791, 11454183276974683945,
 			11185910247776122031, 10460396697869122981,
-			13379616110062597001, 12826553979133932576},
+			13379616110062597001, 12826553979133932576,
+		},
 	}
 )
 
@@ -102,12 +106,13 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start sharded keyspace
+		cell := clusterForKSTest.Cell
 		keyspaceSharded := &cluster.Keyspace{
 			Name:      keyspaceShardedName,
 			SchemaSQL: sqlSchema,
 			VSchema:   vSchema,
 		}
-		if err := clusterForKSTest.StartKeyspace(*keyspaceSharded, []string{"-80", "80-"}, 1, false); err != nil {
+		if err := clusterForKSTest.StartKeyspace(*keyspaceSharded, []string{"-80", "80-"}, 1, false, cell); err != nil {
 			return 1
 		}
 		if err := clusterForKSTest.VtctldClientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceShardedName); err != nil {
@@ -119,7 +124,7 @@ func TestMain(m *testing.M) {
 			Name:      keyspaceUnshardedName,
 			SchemaSQL: sqlSchema,
 		}
-		if err := clusterForKSTest.StartKeyspace(*keyspaceUnsharded, []string{keyspaceUnshardedName}, 1, false); err != nil {
+		if err := clusterForKSTest.StartKeyspace(*keyspaceUnsharded, []string{keyspaceUnshardedName}, 1, false, cell); err != nil {
 			return 1
 		}
 		if err := clusterForKSTest.VtctldClientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceUnshardedName); err != nil {
@@ -170,7 +175,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 	data, err := clusterForKSTest.VtctldClientProcess.ExecuteCommandWithOutput("GetSrvKeyspaceNames", cell)
 	require.Nil(t, err)
 
-	var namesByCell = map[string]*vtctldatapb.GetSrvKeyspaceNamesResponse_NameList{}
+	namesByCell := map[string]*vtctldatapb.GetSrvKeyspaceNamesResponse_NameList{}
 	err = json2.Unmarshal([]byte(data), &namesByCell)
 	require.NoError(t, err)
 

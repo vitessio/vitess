@@ -45,13 +45,9 @@ const (
 
 type mysqlVersions []mysqlVersion
 
-var (
-	defaultMySQLVersions = []mysqlVersion{defaultMySQLVersion}
-)
+var defaultMySQLVersions = []mysqlVersion{defaultMySQLVersion}
 
-var (
-	unitTestDatabases = []mysqlVersion{mysql57, mysql80, mysql84}
-)
+var unitTestDatabases = []mysqlVersion{mysql57, mysql80, mysql84}
 
 var gitTimeout = time.Second * 10
 
@@ -200,6 +196,7 @@ type GitMetas struct {
 type unitTest struct {
 	*GitMetas
 	Name, RunsOn, Platform, FileName, GoPrivate, Evalengine string
+	Race                                                    bool
 }
 
 type clusterTest struct {
@@ -477,11 +474,51 @@ func generateUnitTestWorkflows(gitMetas *GitMetas) {
 			}
 		}
 	}
+
+	// Generate unit tests with race detection
+	for _, evalengine := range []string{"1", "0"} {
+		raceTest := &unitTest{
+			Name:       fmt.Sprintf("Unit Test (%sRace)", evalengineToRaceNamePrefix(evalengine)),
+			RunsOn:     cores16RunnerName,
+			Platform:   string(mysql80),
+			GoPrivate:  goPrivate,
+			Evalengine: evalengine,
+			Race:       true,
+			GitMetas:   gitMetas,
+		}
+		raceTest.FileName = fmt.Sprintf("unit_race%s.yml", evalengineToFileSuffix(evalengine))
+		path := fmt.Sprintf("%s/%s", workflowConfigDir, raceTest.FileName)
+		err := writeFileFromTemplate(unitTestTemplate, path, raceTest)
+		if err != nil {
+			log.Print(err)
+		}
+	}
 }
 
 func evalengineToString(evalengine string) string {
 	if evalengine == "1" {
 		return "evalengine_"
+	}
+	return ""
+}
+
+func evalengineToNameSuffix(evalengine string) string {
+	if evalengine == "1" {
+		return " evalengine"
+	}
+	return ""
+}
+
+func evalengineToRaceNamePrefix(evalengine string) string {
+	if evalengine == "1" {
+		return "Evalengine_"
+	}
+	return ""
+}
+
+func evalengineToFileSuffix(evalengine string) string {
+	if evalengine == "1" {
+		return "_evalengine"
 	}
 	return ""
 }
