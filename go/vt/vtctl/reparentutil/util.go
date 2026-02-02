@@ -334,7 +334,8 @@ func isGTIDBasedShard(tabletMap map[string]*topo.TabletInfo, candidateInfoMap ma
 
 // restrictValidCandidates is used to restrict some candidates from being considered eligible for becoming the intermediate source or the final promotion candidate
 func restrictValidCandidates(validCandidates map[string]*RelayLogPositions, tabletMap map[string]*topo.TabletInfo, candidateInfoMap map[string]*CandidateInfo,
-	logger logutil.Logger) (map[string]*RelayLogPositions, error) {
+	logger logutil.Logger,
+) (map[string]*RelayLogPositions, error) {
 	isGTIDBasedShard := isGTIDBasedShard(tabletMap, candidateInfoMap)
 	restrictedValidCandidates := make(map[string]*RelayLogPositions)
 	for candidate, position := range validCandidates {

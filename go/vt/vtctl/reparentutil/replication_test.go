@@ -104,7 +104,8 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 				"p1": {IsGTIDBased: true},
 			},
 			shouldErr: false,
-		}, {
+		},
+		{
 			name: "success for single tablet",
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
