@@ -19,7 +19,6 @@ RUN for i in $(seq 1 10); do apt-key adv --no-tty --keyserver keyserver.ubuntu.c
     && apt-get update \
     && apt-get install -y --no-install-recommends \
         libperconaserverclient22 \
-        percona-telemetry-agent \
         percona-server-rocksdb \
         percona-server-server \
         percona-xtrabackup-84 \
@@ -36,6 +35,8 @@ RUN for i in $(seq 1 10); do apt-key adv --no-tty --keyserver keyserver.ubuntu.c
 #    } | debconf-set-selections \
     && apt-get update -y \
     && apt-get install -y --no-install-recommends percona-xtrabackup-84 \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    # Remove percona-telemetry-agent binary (CVE-2025-22871 in net/http)
+    && rm -f /usr/bin/percona-telemetry-agent
 
 USER vitess
