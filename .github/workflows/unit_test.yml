@@ -52,7 +52,7 @@ jobs:
             race: true
             flavor: mysql-8.0
 
-    name: "Unit Test (${{ matrix.evalengine == '1' && 'evalengine_' || '' }}${{ matrix.race && 'Race' || matrix.platform }})"
+    name: "Unit Test (${{ matrix.race && (matrix.evalengine == '1' && 'Evalengine_' || '') || (matrix.evalengine == '1' && 'evalengine_' || '') }}${{ matrix.race && 'Race' || matrix.platform }})"
     runs-on: ${{ matrix.race && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
 
     steps:
