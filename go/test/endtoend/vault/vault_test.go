@@ -63,7 +63,8 @@ var (
 		// Frequently reload schema, generating some tablet traffic,
 		//   so we can speed up token refresh
 		"--queryserver-config-schema-reload-time", "5s",
-		vtutils.GetFlagVariantForTests("--serving-state-grace-period"), "1s"}
+		vtutils.GetFlagVariantForTests("--serving-state-grace-period"), "1s",
+	}
 	vaultTabletArg = []string{
 		"--db-credentials-server", "vault",
 		"--db-credentials-vault-timeout", "3s",
@@ -77,7 +78,8 @@ var (
 		// Contents of this file provided by our env VAULT_SECRETID
 		//"--db-credentials-vault-secretidfile", "/path/to/file/containing/secret_id",
 		// Make this small, so we can get a renewal
-		"--db-credentials-vault-ttl", "21s"}
+		"--db-credentials-vault-ttl", "21s",
+	}
 	vaultVTGateArg = []string{
 		vtutils.GetFlagVariantForTests("--mysql-auth-server-impl"), "vault",
 		"--mysql-auth-vault-timeout", "3s",
@@ -91,9 +93,11 @@ var (
 		// Contents of this file provided by our env VAULT_SECRETID
 		//"--mysql-auth-vault-role-secretidfile", "/path/to/file/containing/secret_id",
 		// Make this small, so we can get a renewal
-		"--mysql-auth-vault-ttl", "21s"}
+		"--mysql-auth-vault-ttl", "21s",
+	}
 	mysqlctlArg = []string{
-		vtutils.GetFlagVariantForTests("--db-dba-password"), mysqlPassword}
+		vtutils.GetFlagVariantForTests("--db-dba-password"), mysqlPassword,
+	}
 	vttabletLogFileName = "vttablet.INFO"
 	tokenRenewalString  = "Vault client status: token renewed"
 )
@@ -108,7 +112,7 @@ func TestVaultAuth(t *testing.T) {
 	defer vs.stop()
 
 	// Wait for Vault server to come up
-	for i := 0; i < 60; i++ {
+	for range 60 {
 		time.Sleep(250 * time.Millisecond)
 		ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", hostname, vs.port1))
 		if err != nil {
@@ -252,7 +256,7 @@ func initializeClusterLate(t *testing.T) {
 	sql, err = utils.GetInitDBSQL(sql, cluster.GetPasswordUpdateSQL(clusterInstance), "")
 	require.NoError(t, err, "expected to load init_db file")
 	newInitDBFile := path.Join(clusterInstance.TmpDirectory, "init_db_with_passwords.sql")
-	err = os.WriteFile(newInitDBFile, []byte(sql), 0660)
+	err = os.WriteFile(newInitDBFile, []byte(sql), 0o660)
 	require.NoError(t, err, "expected to load init_db file")
 
 	// Start MySQL

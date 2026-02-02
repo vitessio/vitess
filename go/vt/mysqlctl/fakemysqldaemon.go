@@ -74,7 +74,7 @@ type FakeMysqlDaemon struct {
 	// Replicating is updated when calling StartReplication /
 	// StopReplication (it is not used at all when calling
 	// ReplicationStatus, it is the test owner responsibility
-	//to have these two match)
+	// to have these two match)
 	Replicating bool
 
 	// IOThreadRunning is always true except in one testcase where
@@ -84,6 +84,9 @@ type FakeMysqlDaemon struct {
 	// CurrentPrimaryPosition is returned by PrimaryPosition
 	// and ReplicationStatus.
 	CurrentPrimaryPosition replication.Position
+
+	// PrimaryPositionError is used by PrimaryPosition.
+	PrimaryPositionError error
 
 	// CurrentRelayLogPosition is returned by ReplicationStatus.
 	CurrentRelayLogPosition replication.Position
@@ -415,6 +418,9 @@ func (fmd *FakeMysqlDaemon) GetPreviousGTIDs(ctx context.Context, binlog string)
 
 // PrimaryPosition is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) PrimaryPosition(ctx context.Context) (replication.Position, error) {
+	if fmd.PrimaryPositionError != nil {
+		return replication.Position{}, fmd.PrimaryPositionError
+	}
 	return fmd.GetPrimaryPositionLocked(), nil
 }
 
@@ -713,7 +719,8 @@ func (fmd *FakeMysqlDaemon) ApplySchemaChange(ctx context.Context, dbName string
 
 	return &tabletmanagerdatapb.SchemaChangeResult{
 		BeforeSchema: beforeSchema,
-		AfterSchema:  afterSchema}, nil
+		AfterSchema:  afterSchema,
+	}, nil
 }
 
 // GetAppConnection is part of the MysqlDaemon interface.

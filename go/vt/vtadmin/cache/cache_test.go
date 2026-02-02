@@ -123,7 +123,7 @@ func TestBackfillQueueSize(t *testing.T) {
 			}, cache.Config{
 				BackfillQueueSize: tt.configuredBackfillQueueSize,
 			})
-			var config = c.Debug()["config"].(cache.Config)
+			config := c.Debug()["config"].(cache.Config)
 			assert.Equal(t, tt.expectedBackfillQueueSize, config.BackfillQueueSize)
 		})
 	}
@@ -208,7 +208,7 @@ func TestEnqueueBackfillTimeout(t *testing.T) {
 		BackfillEnqueueWaitTime: time.Millisecond * 10,
 	})
 
-	var enqueues = []struct {
+	enqueues := []struct {
 		shouldFail bool
 		msg        string
 	}{
@@ -237,7 +237,7 @@ func TestUpsertCacheKey(t *testing.T) {
 		BackfillEnqueueWaitTime: time.Millisecond * 10,
 	})
 
-	var inserts = []struct {
+	inserts := []struct {
 		shouldFail  bool
 		msg         string
 		key         intkey

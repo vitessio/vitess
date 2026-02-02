@@ -32,8 +32,7 @@ import (
 )
 
 func TestActivePoolClientRowsFound(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("begin", &sqltypes.Result{})
@@ -61,8 +60,7 @@ func TestActivePoolClientRowsFound(t *testing.T) {
 }
 
 func TestActivePoolForAllTxProps(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	pool := newActivePool()
@@ -90,8 +88,7 @@ func TestActivePoolForAllTxProps(t *testing.T) {
 }
 
 func TestStatefulPoolShutdownNonTx(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	pool := newActivePool()
@@ -132,8 +129,7 @@ func TestStatefulPoolShutdownNonTx(t *testing.T) {
 }
 
 func TestStatefulPoolShutdownAll(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	pool := newActivePool()
@@ -185,8 +181,7 @@ func TestExecWithAbortedCtx(t *testing.T) {
 }
 
 func TestExecWithDbconnClosed(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	pool := newActivePool()
@@ -201,8 +196,7 @@ func TestExecWithDbconnClosed(t *testing.T) {
 }
 
 func TestExecWithDbconnClosedHavingTx(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	pool := newActivePool()
@@ -218,8 +212,7 @@ func TestExecWithDbconnClosedHavingTx(t *testing.T) {
 }
 
 func TestFailOnConnectionRegistering(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	pool := newActivePool()

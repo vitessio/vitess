@@ -105,7 +105,7 @@ func (ev binlogEvent) TableMap(f BinlogFormat) (*TableMap, error) {
 	// Allocate and parse / copy Metadata.
 	result.Metadata = make([]uint16, columnCount)
 	expectedEnd := pos + int(metaLen)
-	for c := uint64(0); c < columnCount; c++ {
+	for c := range columnCount {
 		var err error
 		result.Metadata[c], pos, err = metadataRead(data, pos, result.Types[c])
 		if err != nil {

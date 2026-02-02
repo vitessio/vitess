@@ -19,10 +19,12 @@ package operators
 import (
 	"fmt"
 	"slices"
+	"strings"
 
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
@@ -100,14 +102,10 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 		if !ok {
 			panic(vterrors.VT12001("pushing predicates on UNION where the first SELECT contains * or NEXT"))
 		}
-		offsets[ae.ColumnName()] = i
+		offsets[strings.ToLower(ae.ColumnName())] = i
 	}
 
-	needsFilter, exprPerSource := u.predicatePerSource(expr, offsets)
-	if needsFilter {
-		return newFilter(u, expr)
-	}
-
+	exprPerSource := u.predicatePerSource(ctx, expr, offsets)
 	for i, src := range u.Sources {
 		u.Sources[i] = src.AddPredicate(ctx, exprPerSource[i])
 	}
@@ -115,11 +113,20 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	return u
 }
 
-func (u *Union) predicatePerSource(expr sqlparser.Expr, offsets map[string]int) (bool, []sqlparser.Expr) {
-	needsFilter := false
+func (u *Union) predicatePerSource(ctx *plancontext.PlanningContext, expr sqlparser.Expr, offsets map[string]int) []sqlparser.Expr {
 	exprPerSource := make([]sqlparser.Expr, len(u.Sources))
+
 	for i := range u.Sources {
-		predicate := sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+		predicate := expr
+
+		if jp, ok := predicate.(*predicates.JoinPredicate); ok {
+			// Create a new JoinPredicate for each source to keep tracking working
+			// We can't use `*JoinPredicate.Clone` here as that would update the tracker and overwrite
+			// the expression for the original predicate
+			predicate = ctx.PredTracker.NewJoinPredicate(jp.Current())
+		}
+
+		predicate = sqlparser.CopyOnRewrite(predicate, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 			col, ok := cursor.Node().(*sqlparser.ColName)
 			if !ok {
 				return
@@ -127,9 +134,7 @@ func (u *Union) predicatePerSource(expr sqlparser.Expr, offsets map[string]int) 
 
 			idx, ok := offsets[col.Name.Lowered()]
 			if !ok {
-				needsFilter = true
-				cursor.StopTreeWalk()
-				return
+				panic(vterrors.VT13001(fmt.Sprintf("could not find the column '%s' on the UNION", sqlparser.String(col))))
 			}
 
 			sel := u.GetSelectFor(i)
@@ -137,12 +142,14 @@ func (u *Union) predicatePerSource(expr sqlparser.Expr, offsets map[string]int) 
 			if !ok {
 				panic(vterrors.VT09015())
 			}
+
 			cursor.Replace(ae.Expr)
 		}, nil).(sqlparser.Expr)
 
 		exprPerSource[i] = predicate
 	}
-	return needsFilter, exprPerSource
+
+	return exprPerSource
 }
 
 func (u *Union) GetSelectFor(source int) *sqlparser.Select {

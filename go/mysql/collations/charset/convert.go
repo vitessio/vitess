@@ -61,7 +61,7 @@ func convertFastFromUTF8(dst []byte, dstCharset Charset, src []byte) ([]byte, er
 
 func convertSlow(dst []byte, dstCharset Charset, src []byte, srcCharset Charset) ([]byte, error) {
 	var failed, nDst int
-	var original = src
+	original := src
 
 	if dst == nil {
 		dst = make([]byte, len(src)*3)

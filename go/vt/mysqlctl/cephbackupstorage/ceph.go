@@ -40,10 +40,8 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 )
 
-var (
-	// configFilePath is where the configs/credentials for backups will be stored.
-	configFilePath string
-)
+// configFilePath is where the configs/credentials for backups will be stored.
+var configFilePath string
 
 func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &configFilePath, "ceph-backup-storage-config", "ceph_backup_config.json",
@@ -91,10 +89,7 @@ func (bh *CephBackupHandle) AddFile(ctx context.Context, filename string, filesi
 		return nil, errors.New("AddFile cannot be called on read-only backup")
 	}
 	reader, writer := io.Pipe()
-	bh.waitGroup.Add(1)
-	go func() {
-		defer bh.waitGroup.Done()
-
+	bh.waitGroup.Go(func() {
 		// ceph bucket name is where the backups will go
 		// backup handle dir field contains keyspace/shard value
 		bucket := alterBucketName(bh.dir)
@@ -109,7 +104,7 @@ func (bh *CephBackupHandle) AddFile(ctx context.Context, filename string, filesi
 			// In case the error happened after the writer finished, we need to remember it.
 			bh.RecordError(filename, err)
 		}
-	}()
+	})
 	// Give our caller the write end of the pipe.
 	return writer, nil
 }
@@ -205,7 +200,6 @@ func (bs *CephBackupStorage) StartBackup(ctx context.Context, dir, name string) 
 	bucket := alterBucketName(dir)
 
 	found, err := c.BucketExists(bucket)
-
 	if err != nil {
 		log.Info("Error from BucketExists: %v, quitting", bucket)
 		return nil, errors.New("Error checking whether bucket exists: " + bucket)

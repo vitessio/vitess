@@ -86,8 +86,7 @@ func TestUpdateVSchema(t *testing.T) {
 	defer env.SetVSchema("{}")
 
 	// We have to start at least one stream to start the vschema watcher.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match: "/.*/",
@@ -155,7 +154,7 @@ func TestUpdateVSchema(t *testing.T) {
 }
 
 func expectUpdateCount(t *testing.T, wantCount int64) int64 {
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		gotCount := engine.vschemaUpdates.Get()
 		if gotCount >= wantCount {
 			return gotCount

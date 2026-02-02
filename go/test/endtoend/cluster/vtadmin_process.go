@@ -56,7 +56,7 @@ type VtAdminProcess struct {
 func (vp *VtAdminProcess) Setup() (err error) {
 	// create the configuration file
 	timeNow := time.Now().UnixNano()
-	err = os.MkdirAll(vp.LogDir, 0755)
+	err = os.MkdirAll(vp.LogDir, 0o755)
 	if err != nil {
 		log.Errorf("cannot create log directory for vtadmin: %v", err)
 		return err

@@ -12,6 +12,7 @@ import (
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	io "io"
 	math "math"
+	querythrottler "vitess.io/vitess/go/vt/proto/querythrottler"
 	vtorcdata "vitess.io/vitess/go/vt/proto/vtorcdata"
 	vttime "vitess.io/vitess/go/vt/proto/vttime"
 )
@@ -210,6 +211,7 @@ func (m *Keyspace) CloneVT() *Keyspace {
 	r.ThrottlerConfig = m.ThrottlerConfig.CloneVT()
 	r.SidecarDbName = m.SidecarDbName
 	r.VtorcState = m.VtorcState.CloneVT()
+	r.QueryThrottlerConfig = m.QueryThrottlerConfig.CloneVT()
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -435,6 +437,7 @@ func (m *SrvKeyspace) CloneVT() *SrvKeyspace {
 	}
 	r := new(SrvKeyspace)
 	r.ThrottlerConfig = m.ThrottlerConfig.CloneVT()
+	r.QueryThrottlerConfig = m.QueryThrottlerConfig.CloneVT()
 	if rhs := m.Partitions; rhs != nil {
 		tmpContainer := make([]*SrvKeyspace_KeyspacePartition, len(rhs))
 		for k, v := range rhs {
@@ -1092,6 +1095,16 @@ func (m *Keyspace) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.QueryThrottlerConfig != nil {
+		size, err := m.QueryThrottlerConfig.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x62
+	}
 	if m.VtorcState != nil {
 		size, err := m.VtorcState.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
@@ -1725,6 +1738,16 @@ func (m *SrvKeyspace) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.QueryThrottlerConfig != nil {
+		size, err := m.QueryThrottlerConfig.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x3a
+	}
 	if m.ThrottlerConfig != nil {
 		size, err := m.ThrottlerConfig.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
@@ -2224,6 +2247,10 @@ func (m *Keyspace) SizeVT() (n int) {
 		l = m.VtorcState.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
+	if m.QueryThrottlerConfig != nil {
+		l = m.QueryThrottlerConfig.SizeVT()
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -2450,6 +2477,10 @@ func (m *SrvKeyspace) SizeVT() (n int) {
 	}
 	if m.ThrottlerConfig != nil {
 		l = m.ThrottlerConfig.SizeVT()
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.QueryThrottlerConfig != nil {
+		l = m.QueryThrottlerConfig.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -4342,6 +4373,42 @@ func (m *Keyspace) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 12:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field QueryThrottlerConfig", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.QueryThrottlerConfig == nil {
+				m.QueryThrottlerConfig = &querythrottler.Config{}
+			}
+			if err := m.QueryThrottlerConfig.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -5865,6 +5932,42 @@ func (m *SrvKeyspace) UnmarshalVT(dAtA []byte) error {
 				m.ThrottlerConfig = &ThrottlerConfig{}
 			}
 			if err := m.ThrottlerConfig.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field QueryThrottlerConfig", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.QueryThrottlerConfig == nil {
+				m.QueryThrottlerConfig = &querythrottler.Config{}
+			}
+			if err := m.QueryThrottlerConfig.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

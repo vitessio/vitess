@@ -17,13 +17,12 @@ limitations under the License.
 package schemamanager
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path"
 	"strings"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/log"
 )

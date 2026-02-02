@@ -92,13 +92,13 @@ type DBConfigs struct {
 	DBName                     string        `json:"dbName,omitempty"`
 	EnableQueryInfo            bool          `json:"enableQueryInfo,omitempty"`
 
-	App          UserConfig `json:"app,omitempty"`
-	Dba          UserConfig `json:"dba,omitempty"`
-	Filtered     UserConfig `json:"filtered,omitempty"`
-	Repl         UserConfig `json:"repl,omitempty"`
-	Appdebug     UserConfig `json:"appdebug,omitempty"`
-	Allprivs     UserConfig `json:"allprivs,omitempty"`
-	CloneUser    UserConfig `json:"clone,omitempty"`
+	App          UserConfig `json:"app"`
+	Dba          UserConfig `json:"dba"`
+	Filtered     UserConfig `json:"filtered"`
+	Repl         UserConfig `json:"repl"`
+	Appdebug     UserConfig `json:"appdebug"`
+	Allprivs     UserConfig `json:"allprivs"`
+	CloneUser    UserConfig `json:"clone"`
 	externalRepl UserConfig
 
 	appParams          mysql.ConnParams

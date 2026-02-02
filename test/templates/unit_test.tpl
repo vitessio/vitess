@@ -25,6 +25,11 @@ jobs:
     runs-on: {{.RunsOn}}
 
     steps:
+    - name: Harden the runner (Audit all outbound calls)
+      uses: step-security/harden-runner@e3f713f2d8f53843e71c69a996d56f51aa9adfb9 # v2.14.1
+      with:
+        egress-policy: audit
+
     - name: Skip CI
       run: |
         if [[ "{{"${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}"}}" == "true" ]]; then
@@ -33,12 +38,12 @@ jobs:
         fi
 
     - name: Check out code
-      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         persist-credentials: 'false'
 
     - name: Check for changes in relevant files
-      uses: dorny/paths-filter@ebc4d7e9ebcb0b1eb21480bb8f43113e996ac77a # v3.0.1
+      uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
       id: changes
       with:
         token: ''
@@ -59,7 +64,7 @@ jobs:
 
     - name: Set up Go
       if: steps.changes.outputs.unit_tests == 'true'
-      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
       with:
         go-version-file: go.mod
 
@@ -71,7 +76,7 @@ jobs:
 
     - name: Set up python
       if: steps.changes.outputs.unit_tests == 'true'
-      uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
 
     - name: Tune the OS
       if: steps.changes.outputs.unit_tests == 'true'
@@ -103,9 +108,6 @@ jobs:
 
         go mod download
         go install golang.org/x/tools/cmd/goimports@{{.Goimports.SHA}} # {{.Goimports.Comment}}
-
-        # install JUnit report formatter
-        go install github.com/vitessio/go-junit-report@{{.GoJunitReport.SHA}} # {{.GoJunitReport.Comment}}
 
     - name: Run make tools
       if: steps.changes.outputs.unit_tests == 'true'
@@ -140,7 +142,7 @@ jobs:
         # testing, e.g. MySQL 5.7 vs 8.0.
         export CI_DB_PLATFORM="{{.Platform}}"
 
-        make {{if .Race}}unit_test_race{{else}}unit_test{{end}} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        JUNIT_OUTPUT=report.xml JSON_OUTPUT=report.json make {{if .Race}}unit_test_race{{else}}unit_test{{end}}
 
     - name: Record test results in launchable if PR is not a draft
       if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.unit_tests == 'true' && github.base_ref == 'main' && !cancelled()
@@ -148,15 +150,17 @@ jobs:
         # send recorded tests to launchable
         launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
 
-    - name: Print test output
-      if: steps.changes.outputs.unit_tests == 'true' && !cancelled()
-      run: |
-        # print test output
-        cat output.txt
-
     - name: Test Summary
       if: steps.changes.outputs.unit_tests == 'true' && !cancelled()
       uses: test-summary/action@31493c76ec9e7aa675f1585d3ed6f1da69269a86 # v2.4
       with:
         paths: "report.xml"
         show: "fail"
+
+    - name: Slowest Tests
+      if: steps.changes.outputs.unit_tests == 'true' && !cancelled()
+      run: |
+        echo '## Slowest Tests' >> "$GITHUB_STEP_SUMMARY"
+        echo '```' >> "$GITHUB_STEP_SUMMARY"
+        go tool gotestsum tool slowest --num 20 --jsonfile report.json | tee -a "$GITHUB_STEP_SUMMARY"
+        echo '```' >> "$GITHUB_STEP_SUMMARY"

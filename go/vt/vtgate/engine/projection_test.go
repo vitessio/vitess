@@ -180,7 +180,7 @@ func TestHexAndBinaryArgument(t *testing.T) {
 }
 
 func TestFields(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		name      string
 		bindVar   *querypb.BindVariable
 		typ       querypb.Type
@@ -230,7 +230,7 @@ func TestFields(t *testing.T) {
 }
 
 func TestFieldConversion(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		name      string
 		expr      string
 		typ       querypb.Type

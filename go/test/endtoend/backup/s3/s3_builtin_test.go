@@ -19,6 +19,7 @@ package s3
 import (
 	"context"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path"
@@ -26,8 +27,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"log"
 
 	"github.com/minio/minio-go"
 	"github.com/stretchr/testify/assert"
@@ -67,7 +66,7 @@ func TestMain(m *testing.M) {
 		if err != nil {
 			log.Fatalf("could not create temporary directory: %v", err)
 		}
-		err = os.MkdirAll(dataDir, 0755)
+		err = os.MkdirAll(dataDir, 0o755)
 		if err != nil {
 			log.Fatalf("failed to create MinIO data directory: %v", err)
 		}
@@ -116,7 +115,7 @@ func TestMain(m *testing.M) {
 }
 
 func waitForMinio(client *minio.Client) {
-	for i := 0; i < 60; i++ {
+	for range 60 {
 		_, err := client.ListBuckets()
 		if err == nil {
 			return
