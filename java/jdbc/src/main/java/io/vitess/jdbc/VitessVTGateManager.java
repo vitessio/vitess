@@ -26,9 +26,6 @@ import io.vitess.client.grpc.GrpcClientFactory;
 import io.vitess.client.grpc.RetryingInterceptorConfig;
 import io.vitess.client.grpc.tls.TlsOptions;
 import io.vitess.util.Constants.Property;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
 import java.io.IOException;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -39,6 +36,8 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Created by naveen.nahata on 24/02/16.

@@ -934,6 +934,7 @@ public class StringUtils {
     return splitTokens;
   }
 
+  /** SearchMode defines modes for string search operations. */
   public enum SearchMode {
     ALLOW_BACKSLASH_ESCAPE, SKIP_BETWEEN_MARKERS, SKIP_BLOCK_COMMENTS, SKIP_LINE_COMMENTS,
     SKIP_WHITE_SPACE;

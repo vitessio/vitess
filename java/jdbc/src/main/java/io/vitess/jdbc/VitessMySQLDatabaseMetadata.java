@@ -17,13 +17,9 @@
 package io.vitess.jdbc;
 
 import com.google.common.annotations.VisibleForTesting;
-
 import io.vitess.proto.Query;
 import io.vitess.util.Constants;
 import io.vitess.util.MysqlDefs;
-
-import org.apache.commons.lang3.StringUtils;
-
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
@@ -41,6 +37,7 @@ import java.util.Map;
 import java.util.SortedMap;
 import java.util.StringTokenizer;
 import java.util.TreeMap;
+import org.apache.commons.lang3.StringUtils;
 
 /**
  * Created by ashudeep.sharma on 15/02/16.
@@ -613,8 +610,8 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData implemen
             row.add(12,
                 resultSet.getString("Default") == null ? null : resultSet.getString("Default"));
 
-            row.add(13, Integer.toString(0));// SQL_DATA_TYPE
-            row.add(14, Integer.toString(0));// SQL_DATE_TIME_SUB
+            row.add(13, Integer.toString(0)); // SQL_DATA_TYPE
+            row.add(14, Integer.toString(0)); // SQL_DATE_TIME_SUB
 
             if (StringUtils.indexOfIgnoreCase(typeDesc.typeName, "CHAR") != -1
                 || StringUtils.indexOfIgnoreCase(typeDesc.typeName, "BLOB") != -1
