@@ -59,6 +59,7 @@ type SandboxConn struct {
 	MustFailStartCommitUncertain int
 	MustFailSetRollback          int
 	MustFailConcludeTransaction  int
+	MustFailCommit               int
 	// MustFailExecute is keyed by the statement type and stores the number
 	// of times to fail when it sees that statement type.
 	// Once, exhausted it will start returning non-error response.
@@ -364,6 +365,10 @@ func (sbc *SandboxConn) begin(ctx context.Context, session queryservice.Session,
 func (sbc *SandboxConn) Commit(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error) {
 	sbc.panicIfNeeded()
 	sbc.CommitCount.Add(1)
+	if sbc.MustFailCommit > 0 {
+		sbc.MustFailCommit--
+		return 0, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "error: commit failed")
+	}
 	reservedID := sbc.getTxReservedID(transactionID)
 	if reservedID != 0 {
 		reservedID = sbc.ReserveID.Add(1)

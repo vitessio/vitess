@@ -1198,6 +1198,118 @@ func TestTxConnCommit2PCWithReadOnlyShardAndTwoModifiedShards(t *testing.T) {
 	assert.EqualValues(t, 1, sbcs[0].ConcludeTransactionCount.Load(), "sbcs[0].ConcludeTransactionCount")
 }
 
+func TestTxConnCommit2PCReadOnlyShardCommitFail(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, ctx, "TestTxConnCommit2PCReadOnlyShardCommitFail")
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false, nullResultsObserver{}, false)
+	sc.ExecuteMultiShard(ctx, nil, rss1, queries, session, false, false, nullResultsObserver{}, false)
+
+	// sbc0 is modified, sbc1 is read-only but will fail to commit
+	session.ShardSessions[0].RowsAffected = true
+	session.ShardSessions[1].RowsAffected = false
+	sbc1.MustFailCommit = 1
+
+	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
+
+	// Should succeed (best-effort on read-only)
+	require.NoError(t, sc.txConn.Commit(ctx, session))
+
+	// Modified shard committed normally
+	assert.EqualValues(t, 1, sbc0.CommitCount.Load(), "sbc0.CommitCount")
+	// Read-only shard commit was attempted
+	assert.EqualValues(t, 1, sbc1.CommitCount.Load(), "sbc1.CommitCount")
+	// No 2PC since only 1 modified shard
+	assert.EqualValues(t, 0, sbc0.CreateTransactionCount.Load(), "sbc0.CreateTransactionCount")
+
+	// Warning should be recorded
+	require.Len(t, session.Warnings, 1)
+	assert.Contains(t, session.Warnings[0].Message, "read-only shard")
+	assert.Contains(t, session.Warnings[0].Message, "commit failed")
+}
+
+func TestTxConnCommit2PCCreateTransactionFailRollbacksOnlyModifiedShards(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbcs, rssm, _ := newTestTxConnEnvNShards(t, ctx, "TestTxConnCommit2PCCreateTransactionFailRollbacksOnlyModifiedShards", 3)
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	sc.ExecuteMultiShard(ctx, nil, rssm[0], queries, session, false, false, nullResultsObserver{}, false)
+	sc.ExecuteMultiShard(ctx, nil, rssm[1], queries, session, false, false, nullResultsObserver{}, false)
+	sc.ExecuteMultiShard(ctx, nil, rssm[2], queries, session, false, false, nullResultsObserver{}, false)
+
+	// sbcs[0] and sbcs[2] are modified, sbcs[1] is read-only
+	session.ShardSessions[0].RowsAffected = true
+	session.ShardSessions[1].RowsAffected = false
+	session.ShardSessions[2].RowsAffected = true
+
+	// Fail CreateTransaction
+	sbcs[0].MustFailCreateTransaction = 1
+
+	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
+	require.Error(t, sc.txConn.Commit(ctx, session))
+
+	// Read-only shard was committed (best-effort)
+	assert.EqualValues(t, 1, sbcs[1].CommitCount.Load(), "sbcs[1].CommitCount")
+
+	// Modified shards should be rolled back
+	assert.EqualValues(t, 1, sbcs[0].RollbackCount.Load(), "sbcs[0].RollbackCount")
+	assert.EqualValues(t, 1, sbcs[2].RollbackCount.Load(), "sbcs[2].RollbackCount")
+
+	// Read-only shard should NOT be rolled back (it was already committed)
+	assert.EqualValues(t, 0, sbcs[1].RollbackCount.Load(), "sbcs[1].RollbackCount")
+}
+
+func TestTxConnCommit2PCReadOnlyCommitFailAndCreateTransactionFail(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbcs, rssm, _ := newTestTxConnEnvNShards(t, ctx, "TestTxConnCommit2PCReadOnlyCommitFailAndCreateTransactionFail", 3)
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	sc.ExecuteMultiShard(ctx, nil, rssm[0], queries, session, false, false, nullResultsObserver{}, false)
+	sc.ExecuteMultiShard(ctx, nil, rssm[1], queries, session, false, false, nullResultsObserver{}, false)
+	sc.ExecuteMultiShard(ctx, nil, rssm[2], queries, session, false, false, nullResultsObserver{}, false)
+
+	// sbcs[0] and sbcs[2] are modified, sbcs[1] is read-only
+	session.ShardSessions[0].RowsAffected = true
+	session.ShardSessions[1].RowsAffected = false
+	session.ShardSessions[2].RowsAffected = true
+
+	// Read-only shard commit fails
+	sbcs[1].MustFailCommit = 1
+	// CreateTransaction also fails
+	sbcs[0].MustFailCreateTransaction = 1
+
+	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
+	err := sc.txConn.Commit(ctx, session)
+
+	// Should fail due to CreateTransaction failure
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "error")
+
+	// Read-only shard commit was attempted (and failed)
+	assert.EqualValues(t, 1, sbcs[1].CommitCount.Load(), "sbcs[1].CommitCount")
+
+	// Modified shards should be rolled back
+	assert.EqualValues(t, 1, sbcs[0].RollbackCount.Load(), "sbcs[0].RollbackCount")
+	assert.EqualValues(t, 1, sbcs[2].RollbackCount.Load(), "sbcs[2].RollbackCount")
+
+	// Read-only shard should NOT be rolled back
+	assert.EqualValues(t, 0, sbcs[1].RollbackCount.Load(), "sbcs[1].RollbackCount")
+
+	// Warning should be recorded for the read-only commit failure
+	var foundReadOnlyWarning bool
+	for _, w := range session.Warnings {
+		if strings.Contains(w.Message, "read-only shard") && strings.Contains(w.Message, "commit failed") {
+			foundReadOnlyWarning = true
+			break
+		}
+	}
+	assert.True(t, foundReadOnlyWarning, "expected warning for read-only shard commit failure")
+}
+
 func TestTxConnRollback(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 

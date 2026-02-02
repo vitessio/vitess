@@ -273,34 +273,39 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *econtext.SafeSession)
 		}
 	}
 
+	// Best-effort commit of read-only shards with warning on failure.
 	for _, s := range readOnlyShards {
-		_ = txc.commitShard(ctx, s, session.GetLogger())
+		if err := txc.commitShard(ctx, s, session.GetLogger()); err != nil {
+			session.RecordWarning(&querypb.QueryWarning{
+				Message: fmt.Sprintf("read-only shard %s/%s commit failed: %v", s.Target.Keyspace, s.Target.Shard, err),
+			})
+		}
 	}
 
-	// If the number of participants is one or less, then it's a normal commit.
-	if len(modifiedShards) <= 1 {
-		originalShards := session.ShardSessions
-		session.ShardSessions = modifiedShards
-		defer func() { session.ShardSessions = originalShards }()
-
-		return txc.commitNormal(ctx, session)
-	}
-
-	originalShards := session.ShardSessions
-	session.ShardSessions = modifiedShards
-	defer func() { session.ShardSessions = originalShards }()
-
-	mmShard := session.ShardSessions[0]
-	rmShards := session.ShardSessions[1:]
-	dtid := dtids.New(mmShard)
-	if mmShard.RowsAffected {
-		txnType = TXReadWrite
-	}
-	participants := make([]*querypb.Target, len(rmShards))
-	for i, s := range rmShards {
+	// Determine transaction type based on modified shards.
+	txnType = TXReadOnly
+	for _, s := range modifiedShards {
 		if s.RowsAffected {
 			txnType = TXReadWrite
+			break
 		}
+	}
+
+	// If 0 or 1 modified shards, no 2PC needed.
+	if len(modifiedShards) == 0 {
+		return txnType, nil
+	}
+	if len(modifiedShards) == 1 {
+		return txnType, txc.commitShard(ctx, modifiedShards[0], session.GetLogger())
+	}
+
+	// 2PC path for 2+ modified shards.
+	mmShard := modifiedShards[0]
+	rmShards := modifiedShards[1:]
+	dtid := dtids.New(mmShard)
+
+	participants := make([]*querypb.Target, len(rmShards))
+	for i, s := range rmShards {
 		participants[i] = s.Target
 	}
 
@@ -310,7 +315,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *econtext.SafeSession)
 		if err == nil {
 			return
 		}
-		txc.errActionAndLogWarn(ctx, session, txPhase, startCommitState, dtid, mmShard, rmShards)
+		txc.errActionAndLogWarn(ctx, session, txPhase, startCommitState, dtid, mmShard, rmShards, modifiedShards)
 	}()
 
 	txPhase = Commit2pcCreateTransaction
@@ -384,12 +389,29 @@ func (txc *TxConn) errActionAndLogWarn(
 	dtid string,
 	mmShard *vtgatepb.Session_ShardSession,
 	rmShards []*vtgatepb.Session_ShardSession,
+	modifiedShards []*vtgatepb.Session_ShardSession,
 ) {
 	var rollbackErr error
 	switch txPhase {
 	case Commit2pcCreateTransaction:
-		// Normal rollback is safe because nothing was prepared yet.
-		rollbackErr = txc.Rollback(ctx, session)
+		// Rollback only modified shards - read-only shards were already committed (best-effort).
+		rollbackErr = txc.runSessions(ctx, modifiedShards, session.GetLogger(), func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *econtext.ExecuteLogger) error {
+			if s.TransactionId == 0 {
+				return nil
+			}
+			qs, err := txc.queryService(ctx, s.TabletAlias)
+			if err != nil {
+				return err
+			}
+			reservedID, err := qs.Rollback(ctx, s.Target, s.TransactionId)
+			if err != nil {
+				return err
+			}
+			s.TransactionId = 0
+			s.ReservedId = reservedID
+			logging.Log(nil, s.Target, nil, "rollback", false, nil)
+			return nil
+		})
 	case Commit2pcPrepare:
 		// Rollback the prepared and unprepared transactions.
 		rollbackErr = txc.rollbackTx(ctx, dtid, mmShard, rmShards, session.GetLogger())
