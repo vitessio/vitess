@@ -17,7 +17,6 @@
 package io.vitess.mysql;
 
 import com.google.common.math.IntMath;
-
 import java.sql.Date;
 import java.sql.Time;
 import java.sql.Timestamp;
