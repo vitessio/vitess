@@ -26,31 +26,44 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Base matrix
-        platform: [mysql57, mysql80, mysql84]
-        evalengine: ["0", "1"]
-
         include:
-          # Flavor mappings, merged into matching platform combinations
+          # mysql57 tests
           - platform: mysql57
+            evalengine: "0"
             flavor: mysql-5.7
 
-          - platform: mysql80
-            flavor: mysql-8.0
+          - platform: mysql57
+            evalengine: "1"
+            flavor: mysql-5.7
 
-          - platform: mysql84
-            flavor: mysql-8.4
-
-          # Race tests, mysql80 only
+          # mysql80 tests
           - platform: mysql80
             evalengine: "0"
-            race: true
             flavor: mysql-8.0
 
           - platform: mysql80
             evalengine: "1"
-            race: true
             flavor: mysql-8.0
+
+          # mysql84 tests
+          - platform: mysql84
+            evalengine: "0"
+            flavor: mysql-8.4
+
+          - platform: mysql84
+            evalengine: "1"
+            flavor: mysql-8.4
+
+          # Race tests (mysql80 only)
+          - platform: mysql80
+            evalengine: "0"
+            flavor: mysql-8.0
+            race: true
+
+          - platform: mysql80
+            evalengine: "1"
+            flavor: mysql-8.0
+            race: true
 
     name: "Unit Test (${{ matrix.race && (matrix.evalengine == '1' && 'Evalengine_' || '') || (matrix.evalengine == '1' && 'evalengine_' || '') }}${{ matrix.race && 'Race' || matrix.platform }})"
     runs-on: ${{ matrix.race && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
