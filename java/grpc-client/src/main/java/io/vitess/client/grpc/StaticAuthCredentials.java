@@ -21,7 +21,6 @@ import io.grpc.CallCredentials;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
-
 import java.util.Objects;
 import java.util.concurrent.Executor;
 
