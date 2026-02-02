@@ -249,7 +249,7 @@ jobs:
           launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
 
       - name: Test Summary
-        if: steps.changes.outputs.end_to_end == 'true' && !cancelled()
+        if: steps.changes.outputs.end_to_end == 'true' && failure()
         uses: test-summary/action@31493c76ec9e7aa675f1585d3ed6f1da69269a86 # v2.4
         with:
           paths: "_test/junit/*.xml"
