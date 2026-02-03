@@ -11,7 +11,7 @@ permissions: read-all
 
 env:
   BOOTSTRAP_VERSION: "ci"
-  BOOTSTRAP_FLAVOR: "mysql80"
+  BOOTSTRAP_FLAVOR: "mysql84"
 
 jobs:
   build:
