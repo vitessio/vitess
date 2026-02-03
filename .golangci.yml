@@ -133,6 +133,9 @@ linters:
           - whitespace
         path: ^go/cmd/(vtcombo|vtgateclienttest|vtorc)/
       - linters:
+          - prealloc
+        path: ^go/vt/vtorc/(inst|logic)/.*_test.go
+      - linters:
           - errcheck
         path: ^go/mysql/
       - linters:
@@ -157,6 +160,9 @@ linters:
       - linters:
           - errcheck
         path: ^go/vt/mysqlctl/
+      - linters:
+          - prealloc
+        path: ^go/vt/mysqlctl/.*_test.go
       - linters:
           - errcheck
         path: ^go/vt/schemamanager/
@@ -218,8 +224,17 @@ linters:
           - errcheck
         path: ^go/vt/wrangler
       - linters:
+          - prealloc
+        path: ^go/vt/wrangler/.*_test.go
+      - linters:
           - errcheck
         path: ^go/vt/zkctl
+      - linters:
+          - prealloc
+        path: ^go/vt/vtgate/evalengine/testcases
+      - linters:
+          - prealloc # TODO: enable prealloc on go/tools/*
+        path: ^go/tools
     paths:
       - examples$
 formatters:

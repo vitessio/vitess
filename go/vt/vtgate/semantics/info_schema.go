@@ -71,18 +71,18 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	if err != nil {
 		panic(err)
 	}
-	infSchema := map[string][]vindexes.Column{}
-	var cols []vindexes.Column
+	infSchema := make(map[string][]vindexes.Column, 0)
+	cols := make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "CHARACTER_SET_NAME", 6165, "utf8mb3_general_ci", "", 32, 0, true, ""))
 	cols = append(cols, createCol(parser, "DEFAULT_COLLATE_NAME", 6165, "utf8mb3_general_ci", "", 32, 0, true, ""))
 	cols = append(cols, createCol(parser, "DESCRIPTION", 6165, "utf8mb3_general_ci", "", 60, 0, true, ""))
 	cols = append(cols, createCol(parser, "MAXLEN", 265, "utf8mb3_general_ci", "0", 3, 0, true, ""))
 	infSchema["CHARACTER_SETS"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "COLLATION_NAME", 6165, "utf8mb3_general_ci", "", 32, 0, true, ""))
 	cols = append(cols, createCol(parser, "CHARACTER_SET_NAME", 6165, "utf8mb3_general_ci", "", 32, 0, true, ""))
 	infSchema["COLLATION_CHARACTER_SET_APPLICABILITY"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "COLLATION_NAME", 6165, "utf8mb3_general_ci", "", 32, 0, true, ""))
 	cols = append(cols, createCol(parser, "CHARACTER_SET_NAME", 6165, "utf8mb3_general_ci", "", 32, 0, true, ""))
 	cols = append(cols, createCol(parser, "ID", 265, "utf8mb3_general_ci", "0", 11, 0, true, ""))
@@ -90,7 +90,7 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "IS_COMPILED", 6165, "utf8mb3_general_ci", "", 3, 0, true, ""))
 	cols = append(cols, createCol(parser, "SORTLEN", 265, "utf8mb3_general_ci", "0", 3, 0, true, ""))
 	infSchema["COLLATIONS"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "GRANTEE", 6165, "utf8mb3_general_ci", "", 81, 0, true, ""))
 	cols = append(cols, createCol(parser, "TABLE_CATALOG", 6165, "utf8mb3_general_ci", "", 512, 0, true, ""))
 	cols = append(cols, createCol(parser, "TABLE_SCHEMA", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
@@ -99,7 +99,7 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "PRIVILEGE_TYPE", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
 	cols = append(cols, createCol(parser, "IS_GRANTABLE", 6165, "utf8mb3_general_ci", "", 3, 0, true, ""))
 	infSchema["COLUMN_PRIVILEGES"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "TABLE_CATALOG", 6165, "utf8mb3_general_ci", "", 512, 0, true, ""))
 	cols = append(cols, createCol(parser, "TABLE_SCHEMA", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
 	cols = append(cols, createCol(parser, "TABLE_NAME", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
@@ -122,7 +122,7 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "COLUMN_COMMENT", 6165, "utf8mb3_general_ci", "", 1024, 0, true, ""))
 	cols = append(cols, createCol(parser, "GENERATION_EXPRESSION", 6163, "utf8mb3_general_ci", "", 0, 0, true, ""))
 	infSchema["COLUMNS"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "ENGINE", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
 	cols = append(cols, createCol(parser, "SUPPORT", 6165, "utf8mb3_general_ci", "", 8, 0, true, ""))
 	cols = append(cols, createCol(parser, "COMMENT", 6165, "utf8mb3_general_ci", "", 80, 0, true, ""))
@@ -130,7 +130,7 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "XA", 6165, "utf8mb3_general_ci", "", 3, 0, false, ""))
 	cols = append(cols, createCol(parser, "SAVEPOINTS", 6165, "utf8mb3_general_ci", "", 3, 0, false, ""))
 	infSchema["ENGINES"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "EVENT_CATALOG", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
 	cols = append(cols, createCol(parser, "EVENT_SCHEMA", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
 	cols = append(cols, createCol(parser, "EVENT_NAME", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
@@ -156,7 +156,7 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "COLLATION_CONNECTION", 6165, "utf8mb3_general_ci", "", 32, 0, true, ""))
 	cols = append(cols, createCol(parser, "DATABASE_COLLATION", 6165, "utf8mb3_general_ci", "", 32, 0, true, ""))
 	infSchema["EVENTS"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "FILE_ID", 265, "utf8mb3_general_ci", "0", 4, 0, true, ""))
 	cols = append(cols, createCol(parser, "FILE_NAME", 6165, "utf8mb3_general_ci", "", 4000, 0, false, ""))
 	cols = append(cols, createCol(parser, "FILE_TYPE", 6165, "utf8mb3_general_ci", "", 20, 0, true, ""))
@@ -196,15 +196,15 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "STATUS", 6165, "utf8mb3_general_ci", "", 20, 0, true, ""))
 	cols = append(cols, createCol(parser, "EXTRA", 6165, "utf8mb3_general_ci", "", 255, 0, false, ""))
 	infSchema["FILES"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "VARIABLE_NAME", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
 	cols = append(cols, createCol(parser, "VARIABLE_VALUE", 6165, "utf8mb3_general_ci", "", 1024, 0, false, ""))
 	infSchema["GLOBAL_STATUS"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "VARIABLE_NAME", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
 	cols = append(cols, createCol(parser, "VARIABLE_VALUE", 6165, "utf8mb3_general_ci", "", 1024, 0, false, ""))
 	infSchema["GLOBAL_VARIABLES"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "POOL_ID", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))
 	cols = append(cols, createCol(parser, "BLOCK_ID", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))
 	cols = append(cols, createCol(parser, "SPACE", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))
@@ -226,7 +226,7 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "IS_OLD", 6165, "utf8mb3_general_ci", "", 3, 0, false, ""))
 	cols = append(cols, createCol(parser, "FREE_PAGE_CLOCK", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))
 	infSchema["INNODB_BUFFER_PAGE"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "POOL_ID", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))
 	cols = append(cols, createCol(parser, "LRU_POSITION", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))
 	cols = append(cols, createCol(parser, "SPACE", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))
@@ -248,7 +248,7 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "IS_OLD", 6165, "utf8mb3_general_ci", "", 3, 0, false, ""))
 	cols = append(cols, createCol(parser, "FREE_PAGE_CLOCK", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))
 	infSchema["INNODB_BUFFER_PAGE_LRU"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "POOL_ID", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))
 	cols = append(cols, createCol(parser, "POOL_SIZE", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))
 	cols = append(cols, createCol(parser, "FREE_BUFFERS", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))
@@ -282,7 +282,7 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "UNCOMPRESS_TOTAL", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))
 	cols = append(cols, createCol(parser, "UNCOMPRESS_CURRENT", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))
 	infSchema["INNODB_BUFFER_POOL_STATS"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "page_size", 263, "utf8mb3_general_ci", "0", 5, 0, true, ""))
 	cols = append(cols, createCol(parser, "compress_ops", 263, "utf8mb3_general_ci", "0", 11, 0, true, ""))
 	cols = append(cols, createCol(parser, "compress_ops_ok", 263, "utf8mb3_general_ci", "0", 11, 0, true, ""))
@@ -290,7 +290,7 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "uncompress_ops", 263, "utf8mb3_general_ci", "0", 11, 0, true, ""))
 	cols = append(cols, createCol(parser, "uncompress_time", 263, "utf8mb3_general_ci", "0", 11, 0, true, ""))
 	infSchema["INNODB_CMP"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "database_name", 6165, "utf8mb3_general_ci", "", 192, 0, true, ""))
 	cols = append(cols, createCol(parser, "table_name", 6165, "utf8mb3_general_ci", "", 192, 0, true, ""))
 	cols = append(cols, createCol(parser, "index_name", 6165, "utf8mb3_general_ci", "", 192, 0, true, ""))
@@ -300,7 +300,7 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "uncompress_ops", 263, "utf8mb3_general_ci", "0", 11, 0, true, ""))
 	cols = append(cols, createCol(parser, "uncompress_time", 263, "utf8mb3_general_ci", "0", 11, 0, true, ""))
 	infSchema["INNODB_CMP_PER_INDEX"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "database_name", 6165, "utf8mb3_general_ci", "", 192, 0, true, ""))
 	cols = append(cols, createCol(parser, "table_name", 6165, "utf8mb3_general_ci", "", 192, 0, true, ""))
 	cols = append(cols, createCol(parser, "index_name", 6165, "utf8mb3_general_ci", "", 192, 0, true, ""))
@@ -310,7 +310,7 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "uncompress_ops", 263, "utf8mb3_general_ci", "0", 11, 0, true, ""))
 	cols = append(cols, createCol(parser, "uncompress_time", 263, "utf8mb3_general_ci", "0", 11, 0, true, ""))
 	infSchema["INNODB_CMP_PER_INDEX_RESET"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "page_size", 263, "utf8mb3_general_ci", "0", 5, 0, true, ""))
 	cols = append(cols, createCol(parser, "compress_ops", 263, "utf8mb3_general_ci", "0", 11, 0, true, ""))
 	cols = append(cols, createCol(parser, "compress_ops_ok", 263, "utf8mb3_general_ci", "0", 11, 0, true, ""))
@@ -318,7 +318,7 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "uncompress_ops", 263, "utf8mb3_general_ci", "0", 11, 0, true, ""))
 	cols = append(cols, createCol(parser, "uncompress_time", 263, "utf8mb3_general_ci", "0", 11, 0, true, ""))
 	infSchema["INNODB_CMP_RESET"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "page_size", 263, "utf8mb3_general_ci", "0", 5, 0, true, ""))
 	cols = append(cols, createCol(parser, "buffer_pool_instance", 263, "utf8mb3_general_ci", "0", 11, 0, true, ""))
 	cols = append(cols, createCol(parser, "pages_used", 263, "utf8mb3_general_ci", "0", 11, 0, true, ""))
@@ -326,7 +326,7 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "relocation_ops", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))
 	cols = append(cols, createCol(parser, "relocation_time", 263, "utf8mb3_general_ci", "0", 11, 0, true, ""))
 	infSchema["INNODB_CMPMEM"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "page_size", 263, "utf8mb3_general_ci", "0", 5, 0, true, ""))
 	cols = append(cols, createCol(parser, "buffer_pool_instance", 263, "utf8mb3_general_ci", "0", 11, 0, true, ""))
 	cols = append(cols, createCol(parser, "pages_used", 263, "utf8mb3_general_ci", "0", 11, 0, true, ""))
@@ -334,20 +334,19 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "relocation_ops", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))
 	cols = append(cols, createCol(parser, "relocation_time", 263, "utf8mb3_general_ci", "0", 11, 0, true, ""))
 	infSchema["INNODB_CMPMEM_RESET"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "DOC_ID", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))
 	infSchema["INNODB_FT_BEING_DELETED"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "KEY", 6165, "utf8mb3_general_ci", "", 193, 0, true, ""))
 	cols = append(cols, createCol(parser, "VALUE", 6165, "utf8mb3_general_ci", "", 193, 0, true, ""))
 	infSchema["INNODB_FT_CONFIG"] = cols
-	cols = []vindexes.Column{}
 	cols = append(cols, createCol(parser, "value", 6165, "utf8mb3_general_ci", "", 18, 0, true, ""))
 	infSchema["INNODB_FT_DEFAULT_STOPWORD"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "DOC_ID", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))
 	infSchema["INNODB_FT_DELETED"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "WORD", 6165, "utf8mb3_general_ci", "", 337, 0, true, ""))
 	cols = append(cols, createCol(parser, "FIRST_DOC_ID", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))
 	cols = append(cols, createCol(parser, "LAST_DOC_ID", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))
@@ -355,7 +354,7 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "DOC_ID", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))
 	cols = append(cols, createCol(parser, "POSITION", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))
 	infSchema["INNODB_FT_INDEX_CACHE"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "WORD", 6165, "utf8mb3_general_ci", "", 337, 0, true, ""))
 	cols = append(cols, createCol(parser, "FIRST_DOC_ID", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))
 	cols = append(cols, createCol(parser, "LAST_DOC_ID", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))
@@ -363,7 +362,7 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "DOC_ID", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))
 	cols = append(cols, createCol(parser, "POSITION", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))
 	infSchema["INNODB_FT_INDEX_TABLE"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "NAME", 6165, "utf8mb3_general_ci", "", 193, 0, true, ""))
 	cols = append(cols, createCol(parser, "SUBSYSTEM", 6165, "utf8mb3_general_ci", "", 193, 0, true, ""))
 	cols = append(cols, createCol(parser, "COUNT", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))
@@ -382,7 +381,7 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "TYPE", 6165, "utf8mb3_general_ci", "", 193, 0, true, ""))
 	cols = append(cols, createCol(parser, "COMMENT", 6165, "utf8mb3_general_ci", "", 193, 0, true, ""))
 	infSchema["INNODB_METRICS"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "TABLE_ID", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))
 	cols = append(cols, createCol(parser, "NAME", 6165, "utf8mb3_general_ci", "", 202, 0, false, ""))
 	cols = append(cols, createCol(parser, "N_COLS", 263, "utf8mb3_general_ci", "0", 11, 0, true, ""))
@@ -390,7 +389,7 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "PER_TABLE_TABLESPACE", 6165, "utf8mb3_general_ci", "", 64, 0, false, ""))
 	cols = append(cols, createCol(parser, "IS_COMPRESSED", 6165, "utf8mb3_general_ci", "", 64, 0, false, ""))
 	infSchema["INNODB_TEMP_TABLE_INFO"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "trx_id", 6165, "utf8mb3_general_ci", "", 18, 0, true, ""))
 	cols = append(cols, createCol(parser, "trx_state", 6165, "utf8mb3_general_ci", "", 13, 0, true, ""))
 	cols = append(cols, createCol(parser, "trx_started", 2064, "utf8mb3_general_ci", "", 0, 0, true, ""))
@@ -416,7 +415,7 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "trx_is_read_only", 263, "utf8mb3_general_ci", "0", 1, 0, true, ""))
 	cols = append(cols, createCol(parser, "trx_autocommit_non_locking", 263, "utf8mb3_general_ci", "0", 1, 0, true, ""))
 	infSchema["INNODB_TRX"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "CONSTRAINT_CATALOG", 6165, "utf8mb3_general_ci", "", 512, 0, true, ""))
 	cols = append(cols, createCol(parser, "CONSTRAINT_SCHEMA", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
 	cols = append(cols, createCol(parser, "CONSTRAINT_NAME", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
@@ -430,13 +429,13 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "REFERENCED_TABLE_NAME", 6165, "utf8mb3_general_ci", "", 64, 0, false, ""))
 	cols = append(cols, createCol(parser, "REFERENCED_COLUMN_NAME", 6165, "utf8mb3_general_ci", "", 64, 0, false, ""))
 	infSchema["KEY_COLUMN_USAGE"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "QUERY", 6163, "utf8mb3_general_ci", "", 0, 0, true, ""))
 	cols = append(cols, createCol(parser, "TRACE", 6163, "utf8mb3_general_ci", "", 0, 0, true, ""))
 	cols = append(cols, createCol(parser, "MISSING_BYTES_BEYOND_MAX_MEM_SIZE", 263, "utf8mb3_general_ci", "0", 20, 0, true, ""))
 	cols = append(cols, createCol(parser, "INSUFFICIENT_PRIVILEGES", 257, "utf8mb3_general_ci", "0", 1, 0, true, ""))
 	infSchema["OPTIMIZER_TRACE"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "SPECIFIC_CATALOG", 6165, "utf8mb3_general_ci", "", 512, 0, true, ""))
 	cols = append(cols, createCol(parser, "SPECIFIC_SCHEMA", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
 	cols = append(cols, createCol(parser, "SPECIFIC_NAME", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
@@ -454,7 +453,7 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "DTD_IDENTIFIER", 6163, "utf8mb3_general_ci", "", 0, 0, true, ""))
 	cols = append(cols, createCol(parser, "ROUTINE_TYPE", 6165, "utf8mb3_general_ci", "", 9, 0, true, ""))
 	infSchema["PARAMETERS"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "TABLE_CATALOG", 6165, "utf8mb3_general_ci", "", 512, 0, true, ""))
 	cols = append(cols, createCol(parser, "TABLE_SCHEMA", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
 	cols = append(cols, createCol(parser, "TABLE_NAME", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
@@ -481,7 +480,7 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "NODEGROUP", 6165, "utf8mb3_general_ci", "", 12, 0, true, ""))
 	cols = append(cols, createCol(parser, "TABLESPACE_NAME", 6165, "utf8mb3_general_ci", "", 64, 0, false, ""))
 	infSchema["PARTITIONS"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "PLUGIN_NAME", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
 	cols = append(cols, createCol(parser, "PLUGIN_VERSION", 6165, "utf8mb3_general_ci", "", 20, 0, true, ""))
 	cols = append(cols, createCol(parser, "PLUGIN_STATUS", 6165, "utf8mb3_general_ci", "", 10, 0, true, ""))
@@ -494,7 +493,7 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "PLUGIN_LICENSE", 6165, "utf8mb3_general_ci", "", 80, 0, false, ""))
 	cols = append(cols, createCol(parser, "LOAD_OPTION", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
 	infSchema["PLUGINS"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "ID", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))
 	cols = append(cols, createCol(parser, "USER", 6165, "utf8mb3_general_ci", "", 32, 0, true, ""))
 	cols = append(cols, createCol(parser, "HOST", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
@@ -504,7 +503,7 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "STATE", 6165, "utf8mb3_general_ci", "", 64, 0, false, ""))
 	cols = append(cols, createCol(parser, "INFO", 6163, "utf8mb3_general_ci", "", 0, 0, false, ""))
 	infSchema["PROCESSLIST"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "QUERY_ID", 263, "utf8mb3_general_ci", "0", 20, 0, true, ""))
 	cols = append(cols, createCol(parser, "SEQ", 263, "utf8mb3_general_ci", "0", 20, 0, true, ""))
 	cols = append(cols, createCol(parser, "STATE", 6165, "utf8mb3_general_ci", "", 30, 0, true, ""))
@@ -524,7 +523,7 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "SOURCE_FILE", 6165, "utf8mb3_general_ci", "", 20, 0, false, ""))
 	cols = append(cols, createCol(parser, "SOURCE_LINE", 263, "utf8mb3_general_ci", "", 20, 0, false, ""))
 	infSchema["PROFILING"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "CONSTRAINT_CATALOG", 6165, "utf8mb3_general_ci", "", 512, 0, true, ""))
 	cols = append(cols, createCol(parser, "CONSTRAINT_SCHEMA", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
 	cols = append(cols, createCol(parser, "CONSTRAINT_NAME", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
@@ -537,7 +536,7 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "TABLE_NAME", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
 	cols = append(cols, createCol(parser, "REFERENCED_TABLE_NAME", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
 	infSchema["REFERENTIAL_CONSTRAINTS"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "SPECIFIC_NAME", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
 	cols = append(cols, createCol(parser, "ROUTINE_CATALOG", 6165, "utf8mb3_general_ci", "", 512, 0, true, ""))
 	cols = append(cols, createCol(parser, "ROUTINE_SCHEMA", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
@@ -570,21 +569,21 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "COLLATION_CONNECTION", 6165, "utf8mb3_general_ci", "", 32, 0, true, ""))
 	cols = append(cols, createCol(parser, "DATABASE_COLLATION", 6165, "utf8mb3_general_ci", "", 32, 0, true, ""))
 	infSchema["ROUTINES"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "GRANTEE", 6165, "utf8mb3_general_ci", "", 81, 0, true, ""))
 	cols = append(cols, createCol(parser, "TABLE_CATALOG", 6165, "utf8mb3_general_ci", "", 512, 0, true, ""))
 	cols = append(cols, createCol(parser, "TABLE_SCHEMA", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
 	cols = append(cols, createCol(parser, "PRIVILEGE_TYPE", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
 	cols = append(cols, createCol(parser, "IS_GRANTABLE", 6165, "utf8mb3_general_ci", "", 3, 0, true, ""))
 	infSchema["SCHEMA_PRIVILEGES"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "CATALOG_NAME", 6165, "utf8mb3_general_ci", "", 512, 0, true, ""))
 	cols = append(cols, createCol(parser, "SCHEMA_NAME", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
 	cols = append(cols, createCol(parser, "DEFAULT_CHARACTER_SET_NAME", 6165, "utf8mb3_general_ci", "", 32, 0, true, ""))
 	cols = append(cols, createCol(parser, "DEFAULT_COLLATION_NAME", 6165, "utf8mb3_general_ci", "", 32, 0, true, ""))
 	cols = append(cols, createCol(parser, "SQL_PATH", 6165, "utf8mb3_general_ci", "", 512, 0, false, ""))
 	infSchema["SCHEMATA"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "TABLE_CATALOG", 6165, "utf8mb3_general_ci", "", 512, 0, true, ""))
 	cols = append(cols, createCol(parser, "TABLE_SCHEMA", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
 	cols = append(cols, createCol(parser, "TABLE_NAME", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
@@ -602,7 +601,7 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "COMMENT", 6165, "utf8mb3_general_ci", "", 16, 0, false, ""))
 	cols = append(cols, createCol(parser, "INDEX_COMMENT", 6165, "utf8mb3_general_ci", "", 1024, 0, true, ""))
 	infSchema["STATISTICS"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "CONSTRAINT_CATALOG", 6165, "utf8mb3_general_ci", "", 512, 0, true, ""))
 	cols = append(cols, createCol(parser, "CONSTRAINT_SCHEMA", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
 	cols = append(cols, createCol(parser, "CONSTRAINT_NAME", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
@@ -610,7 +609,7 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "TABLE_NAME", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
 	cols = append(cols, createCol(parser, "CONSTRAINT_TYPE", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
 	infSchema["TABLE_CONSTRAINTS"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "GRANTEE", 6165, "utf8mb3_general_ci", "", 81, 0, true, ""))
 	cols = append(cols, createCol(parser, "TABLE_CATALOG", 6165, "utf8mb3_general_ci", "", 512, 0, true, ""))
 	cols = append(cols, createCol(parser, "TABLE_SCHEMA", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
@@ -618,7 +617,7 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "PRIVILEGE_TYPE", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
 	cols = append(cols, createCol(parser, "IS_GRANTABLE", 6165, "utf8mb3_general_ci", "", 3, 0, true, ""))
 	infSchema["TABLE_PRIVILEGES"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "TABLE_CATALOG", 6165, "utf8mb3_general_ci", "", 512, 0, true, ""))
 	cols = append(cols, createCol(parser, "TABLE_SCHEMA", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
 	cols = append(cols, createCol(parser, "TABLE_NAME", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
@@ -641,7 +640,7 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "CREATE_OPTIONS", 6165, "utf8mb3_general_ci", "", 255, 0, false, ""))
 	cols = append(cols, createCol(parser, "TABLE_COMMENT", 6165, "utf8mb3_general_ci", "", 2048, 0, true, ""))
 	infSchema["TABLES"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "TABLESPACE_NAME", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
 	cols = append(cols, createCol(parser, "ENGINE", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
 	cols = append(cols, createCol(parser, "TABLESPACE_TYPE", 6165, "utf8mb3_general_ci", "", 64, 0, false, ""))
@@ -652,7 +651,7 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "NODEGROUP_ID", 265, "utf8mb3_general_ci", "", 21, 0, false, ""))
 	cols = append(cols, createCol(parser, "TABLESPACE_COMMENT", 6165, "utf8mb3_general_ci", "", 2048, 0, false, ""))
 	infSchema["TABLESPACES"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "TRIGGER_CATALOG", 6165, "utf8mb3_general_ci", "", 512, 0, true, ""))
 	cols = append(cols, createCol(parser, "TRIGGER_SCHEMA", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
 	cols = append(cols, createCol(parser, "TRIGGER_NAME", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
@@ -676,13 +675,13 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "COLLATION_CONNECTION", 6165, "utf8mb3_general_ci", "", 32, 0, true, ""))
 	cols = append(cols, createCol(parser, "DATABASE_COLLATION", 6165, "utf8mb3_general_ci", "", 32, 0, true, ""))
 	infSchema["TRIGGERS"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "GRANTEE", 6165, "utf8mb3_general_ci", "", 81, 0, true, ""))
 	cols = append(cols, createCol(parser, "TABLE_CATALOG", 6165, "utf8mb3_general_ci", "", 512, 0, true, ""))
 	cols = append(cols, createCol(parser, "PRIVILEGE_TYPE", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
 	cols = append(cols, createCol(parser, "IS_GRANTABLE", 6165, "utf8mb3_general_ci", "", 3, 0, true, ""))
 	infSchema["USER_PRIVILEGES"] = cols
-	cols = []vindexes.Column{}
+	cols = make([]vindexes.Column, 0)
 	cols = append(cols, createCol(parser, "TABLE_CATALOG", 6165, "utf8mb3_general_ci", "", 512, 0, true, ""))
 	cols = append(cols, createCol(parser, "TABLE_SCHEMA", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
 	cols = append(cols, createCol(parser, "TABLE_NAME", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
