@@ -283,6 +283,15 @@
 			"Shard": "12",
 			"Tags": []
 		},
+		"vstreamclient": {
+			"File": "vstreamclient_test.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vstreamclient"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "12",
+			"RetryMax": 3,
+			"Tags": []
+		},
 		"clustertest": {
 			"File": "unused.go",
 			"Packages": [
