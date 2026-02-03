@@ -26,7 +26,6 @@ function fail() {
 }
 
 BUILD_JAVA=${BUILD_JAVA:-1}
-BUILD_CONSUL=${BUILD_CONSUL:-1}
 UNAME=$(uname)
 ARCH=$(uname -m)
 
@@ -90,19 +89,6 @@ uninstall_etcd() {
 	fi
 }
 
-uninstall_consul() {
-	echo "Removing consul..."
-	local dist="$1"
-
-	if [ -f "$dist/consul" ]; then
-		unlink "$dist/consul"
-		rm -f "$VTROOT/bin/consul"
-	fi
-	if [[ "${dist##*/}" == "consul" ]]; then
-		rm -rf "$dist"
-	fi
-}
-
 uninstall_all() {
 	echo "## local system details..."
 	echo "## platform: $UNAME target:$ARCH OS: $OSTYPE"
@@ -118,10 +104,6 @@ uninstall_all() {
 	# etcd
 	uninstall_etcd "$ETCD_VER" "$VTROOT/dist/etcd"
 
-	# consul
-	if [ "$BUILD_CONSUL" == 1 ]; then
-		uninstall_consul "$VTROOT/dist/consul"
-	fi
 }
 
 uninstall_all

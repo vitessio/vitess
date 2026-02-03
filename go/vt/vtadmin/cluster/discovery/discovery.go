@@ -40,7 +40,7 @@ var (
 )
 
 // Discovery defines the interface that service discovery plugins must
-// implement. See ConsulDiscovery for an example implementation.
+// implement. See StaticFileDiscovery for an example implementation.
 type Discovery interface {
 	// DiscoverVTGate returns a vtgate found in the discovery service.
 	// Tags can optionally be used to filter the set of potential gates further.
@@ -125,7 +125,6 @@ func New(impl string, cluster *vtadminpb.Cluster, args []string) (Discovery, err
 }
 
 func init() {
-	Register("consul", NewConsul)
 	Register("staticfile", NewStaticFile)
 	Register("dynamic", NewDynamic)
 }

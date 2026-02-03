@@ -38,12 +38,12 @@ func TestMergeConfig(t *testing.T) {
 				Name: "cluster1",
 			},
 			override: Config{
-				DiscoveryImpl: "consul",
+				DiscoveryImpl: "staticfile",
 			},
 			expected: Config{
 				ID:                   "c1",
 				Name:                 "cluster1",
-				DiscoveryImpl:        "consul",
+				DiscoveryImpl:        "staticfile",
 				DiscoveryFlagsByImpl: FlagsByImpl{},
 				VtSQLFlags:           map[string]string{},
 				VtctldFlags:          map[string]string{},
@@ -55,7 +55,7 @@ func TestMergeConfig(t *testing.T) {
 				ID:   "c1",
 				Name: "cluster1",
 				DiscoveryFlagsByImpl: map[string]map[string]string{
-					"consul": {
+					"staticfile": {
 						"key1": "val1",
 					},
 					"zk": {
@@ -75,7 +75,7 @@ func TestMergeConfig(t *testing.T) {
 				ID:   "c1",
 				Name: "cluster1",
 				DiscoveryFlagsByImpl: map[string]map[string]string{
-					"consul": {
+					"staticfile": {
 						"key1": "val1",
 					},
 					"zk": {

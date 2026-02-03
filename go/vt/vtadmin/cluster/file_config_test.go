@@ -36,27 +36,27 @@ func TestFileConfigFromViper(t *testing.T) {
 		{
 			name: "clusters.yaml",
 			data: `defaults:
-    discovery: consul
-    discovery-consul-vtctld-datacenter-tmpl: "dev-{{ .Cluster.Name }}"
-    discovery-consul-vtctld-service-name: vtctld-svc
-    discovery-consul-vtctld-addr-tmpl: "{{ .Hostname }}.example.com:15000"
-    discovery-consul-vtgate-datacenter-tmpl: "dev-{{ .Cluster.Name }}"
-    discovery-consul-vtgate-service-name: vtgate-svc
-    discovery-consul-vtgate-pool-tag: type
-    discovery-consul-vtgate-cell-tag: zone
-    discovery-consul-vtgate-addr-tmpl: "{{ .Hostname }}.example.com:15999"
+    discovery: staticfile
+    discovery-staticfile-vtctld-datacenter-tmpl: "dev-{{ .Cluster.Name }}"
+    discovery-staticfile-vtctld-service-name: vtctld-svc
+    discovery-staticfile-vtctld-addr-tmpl: "{{ .Hostname }}.example.com:15000"
+    discovery-staticfile-vtgate-datacenter-tmpl: "dev-{{ .Cluster.Name }}"
+    discovery-staticfile-vtgate-service-name: vtgate-svc
+    discovery-staticfile-vtgate-pool-tag: type
+    discovery-staticfile-vtgate-cell-tag: zone
+    discovery-staticfile-vtgate-addr-tmpl: "{{ .Hostname }}.example.com:15999"
 
 clusters:
     c1:
         name: testcluster1
-        discovery-consul-vtgate-datacenter-tmpl: "dev-{{ .Cluster.Name }}-test"
+        discovery-staticfile-vtgate-datacenter-tmpl: "dev-{{ .Cluster.Name }}-test"
     c2:
         name: devcluster`,
 			config: FileConfig{
 				Defaults: Config{
-					DiscoveryImpl: "consul",
+					DiscoveryImpl: "staticfile",
 					DiscoveryFlagsByImpl: map[string]map[string]string{
-						"consul": {
+						"staticfile": {
 							"vtctld-datacenter-tmpl": "dev-{{ .Cluster.Name }}",
 							"vtctld-service-name":    "vtctld-svc",
 							"vtctld-addr-tmpl":       "{{ .Hostname }}.example.com:15000",
@@ -73,7 +73,7 @@ clusters:
 						ID:   "c1",
 						Name: "testcluster1",
 						DiscoveryFlagsByImpl: map[string]map[string]string{
-							"consul": {
+							"staticfile": {
 								"vtgate-datacenter-tmpl": "dev-{{ .Cluster.Name }}-test",
 							},
 						},
@@ -95,20 +95,20 @@ clusters:
 			name: "clusters.json",
 			data: `{
 	"defaults": {
-		"discovery": "consul",
-		"discovery-consul-vtctld-datacenter-tmpl": "dev-{{ .Cluster.Name }}",
-		"discovery-consul-vtctld-service-name": "vtctld-svc",
-		"discovery-consul-vtctld-addr-tmpl": "{{ .Hostname }}.example.com:15000",
-		"discovery-consul-vtgate-datacenter-tmpl": "dev-{{ .Cluster.Name }}",
-		"discovery-consul-vtgate-service-name": "vtgate-svc",
-		"discovery-consul-vtgate-pool-tag": "type",
-		"discovery-consul-vtgate-cell-tag": "zone",
-		"discovery-consul-vtgate-addr-tmpl": "{{ .Hostname }}.example.com:15999"
+		"discovery": "staticfile",
+		"discovery-staticfile-vtctld-datacenter-tmpl": "dev-{{ .Cluster.Name }}",
+		"discovery-staticfile-vtctld-service-name": "vtctld-svc",
+		"discovery-staticfile-vtctld-addr-tmpl": "{{ .Hostname }}.example.com:15000",
+		"discovery-staticfile-vtgate-datacenter-tmpl": "dev-{{ .Cluster.Name }}",
+		"discovery-staticfile-vtgate-service-name": "vtgate-svc",
+		"discovery-staticfile-vtgate-pool-tag": "type",
+		"discovery-staticfile-vtgate-cell-tag": "zone",
+		"discovery-staticfile-vtgate-addr-tmpl": "{{ .Hostname }}.example.com:15999"
 	},
 	"clusters": {
 		"c1": {
 			"name": "testcluster1",
-			"discovery-consul-vtgate-datacenter-tmpl": "dev-{{ .Cluster.Name }}-test"
+			"discovery-staticfile-vtgate-datacenter-tmpl": "dev-{{ .Cluster.Name }}-test"
 		},
 		"c2": {
 			"name": "devcluster"
@@ -117,9 +117,9 @@ clusters:
 }`,
 			config: FileConfig{
 				Defaults: Config{
-					DiscoveryImpl: "consul",
+					DiscoveryImpl: "staticfile",
 					DiscoveryFlagsByImpl: map[string]map[string]string{
-						"consul": {
+						"staticfile": {
 							"vtctld-datacenter-tmpl": "dev-{{ .Cluster.Name }}",
 							"vtctld-service-name":    "vtctld-svc",
 							"vtctld-addr-tmpl":       "{{ .Hostname }}.example.com:15000",
@@ -136,7 +136,7 @@ clusters:
 						ID:   "c1",
 						Name: "testcluster1",
 						DiscoveryFlagsByImpl: map[string]map[string]string{
-							"consul": {
+							"staticfile": {
 								"vtgate-datacenter-tmpl": "dev-{{ .Cluster.Name }}-test",
 							},
 						},
@@ -157,27 +157,27 @@ clusters:
 		{
 			name: "clusters.toml",
 			data: `[defaults]
-discovery="consul"
-discovery-consul-vtctld-datacenter-tmpl="dev-{{ .Cluster.Name }}"
-discovery-consul-vtctld-service-name="vtctld-svc"
-discovery-consul-vtctld-addr-tmpl="{{ .Hostname }}.example.com:15000"
-discovery-consul-vtgate-datacenter-tmpl="dev-{{ .Cluster.Name }}"
-discovery-consul-vtgate-service-name="vtgate-svc"
-discovery-consul-vtgate-pool-tag="type"
-discovery-consul-vtgate-cell-tag="zone"
-discovery-consul-vtgate-addr-tmpl="{{ .Hostname }}.example.com:15999"
+discovery="staticfile"
+discovery-staticfile-vtctld-datacenter-tmpl="dev-{{ .Cluster.Name }}"
+discovery-staticfile-vtctld-service-name="vtctld-svc"
+discovery-staticfile-vtctld-addr-tmpl="{{ .Hostname }}.example.com:15000"
+discovery-staticfile-vtgate-datacenter-tmpl="dev-{{ .Cluster.Name }}"
+discovery-staticfile-vtgate-service-name="vtgate-svc"
+discovery-staticfile-vtgate-pool-tag="type"
+discovery-staticfile-vtgate-cell-tag="zone"
+discovery-staticfile-vtgate-addr-tmpl="{{ .Hostname }}.example.com:15999"
 
 [clusters]
 [clusters.c1]
 name="testcluster1"
-discovery-consul-vtgate-datacenter-tmpl="dev-{{ .Cluster.Name }}-test"
+discovery-staticfile-vtgate-datacenter-tmpl="dev-{{ .Cluster.Name }}-test"
 [clusters.c2]
 name="devcluster"`,
 			config: FileConfig{
 				Defaults: Config{
-					DiscoveryImpl: "consul",
+					DiscoveryImpl: "staticfile",
 					DiscoveryFlagsByImpl: map[string]map[string]string{
-						"consul": {
+						"staticfile": {
 							"vtctld-datacenter-tmpl": "dev-{{ .Cluster.Name }}",
 							"vtctld-service-name":    "vtctld-svc",
 							"vtctld-addr-tmpl":       "{{ .Hostname }}.example.com:15000",
@@ -194,7 +194,7 @@ name="devcluster"`,
 						ID:   "c1",
 						Name: "testcluster1",
 						DiscoveryFlagsByImpl: map[string]map[string]string{
-							"consul": {
+							"staticfile": {
 								"vtgate-datacenter-tmpl": "dev-{{ .Cluster.Name }}-test",
 							},
 						},
@@ -249,9 +249,9 @@ func TestCombine(t *testing.T) {
 			name: "default overrides file",
 			fc: FileConfig{
 				Defaults: Config{
-					DiscoveryImpl: "consul",
+					DiscoveryImpl: "staticfile",
 					DiscoveryFlagsByImpl: map[string]map[string]string{
-						"consul": {
+						"staticfile": {
 							"vtgate-datacenter-tmpl": "dev-{{ .Cluster }}",
 						},
 					},
@@ -270,7 +270,7 @@ func TestCombine(t *testing.T) {
 					ID:   "2",
 					Name: "two",
 					DiscoveryFlagsByImpl: map[string]map[string]string{
-						"consul": {
+						"staticfile": {
 							"vtgate-datacenter-tmpl": "dev-{{ .Cluster }}-test",
 						},
 					},
@@ -282,7 +282,7 @@ func TestCombine(t *testing.T) {
 					Name:          "one",
 					DiscoveryImpl: "zk",
 					DiscoveryFlagsByImpl: map[string]map[string]string{
-						"consul": {
+						"staticfile": {
 							"vtgate-datacenter-tmpl": "dev-{{ .Cluster }}",
 						},
 					},
@@ -294,7 +294,7 @@ func TestCombine(t *testing.T) {
 					Name:          "two",
 					DiscoveryImpl: "zk",
 					DiscoveryFlagsByImpl: map[string]map[string]string{
-						"consul": {
+						"staticfile": {
 							"vtgate-datacenter-tmpl": "dev-{{ .Cluster }}-test",
 						},
 					},
@@ -307,7 +307,7 @@ func TestCombine(t *testing.T) {
 			name: "mixed",
 			fc: FileConfig{
 				Defaults: Config{
-					DiscoveryImpl: "consul",
+					DiscoveryImpl: "staticfile",
 				},
 				Clusters: map[string]Config{
 					"c1": {
@@ -341,7 +341,7 @@ func TestCombine(t *testing.T) {
 				{
 					ID:            "c1",
 					Name:          "cluster1",
-					DiscoveryImpl: "consul",
+					DiscoveryImpl: "staticfile",
 					DiscoveryFlagsByImpl: map[string]map[string]string{
 						"zk": {
 							"flag": "val",
@@ -353,7 +353,7 @@ func TestCombine(t *testing.T) {
 				{
 					ID:            "c2",
 					Name:          "cluster2",
-					DiscoveryImpl: "consul",
+					DiscoveryImpl: "staticfile",
 					DiscoveryFlagsByImpl: map[string]map[string]string{
 						"zk": {
 							"flag": "val",
@@ -365,7 +365,7 @@ func TestCombine(t *testing.T) {
 				{
 					ID:            "c3",
 					Name:          "cluster3",
-					DiscoveryImpl: "consul",
+					DiscoveryImpl: "staticfile",
 					DiscoveryFlagsByImpl: map[string]map[string]string{
 						"zk": {
 							"flag": "val",

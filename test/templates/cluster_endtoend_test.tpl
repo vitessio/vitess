@@ -156,7 +156,7 @@ jobs:
 
     {{if .MakeTools}}
 
-    - name: Installing zookeeper and consul
+    - name: Installing zookeeper
       if: steps.changes.outputs.end_to_end == 'true'
       run: |
           make tools

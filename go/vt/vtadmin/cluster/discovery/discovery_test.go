@@ -32,18 +32,21 @@ func TestNew(t *testing.T) {
 	tests := []struct {
 		name string
 		impl string
+		args []string
 		err  error
 		typ  Discovery
 	}{
 		{
 			name: "success",
-			impl: "consul",
+			impl: "dynamic",
+			args: []string{"--discovery", `{"vtgates": []}`},
 			err:  nil,
-			typ:  &ConsulDiscovery{},
+			typ:  &DynamicDiscovery{},
 		},
 		{
 			name: "unregistered",
 			impl: "unregistered",
+			args: nil,
 			err:  ErrImplementationNotRegistered,
 			typ:  nil,
 		},
@@ -53,7 +56,7 @@ func TestNew(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			disco, err := New(tt.impl, &vtadminpb.Cluster{Id: "testid", Name: "testcluster"}, []string{})
+			disco, err := New(tt.impl, &vtadminpb.Cluster{Id: "testid", Name: "testcluster"}, tt.args)
 			if tt.err != nil {
 				assert.Error(t, err, tt.err.Error())
 				return

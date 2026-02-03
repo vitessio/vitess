@@ -45,7 +45,6 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/logic"
 
 	// Register topo implementations.
-	_ "vitess.io/vitess/go/vt/topo/consultopo"
 	_ "vitess.io/vitess/go/vt/topo/etcd2topo"
 	_ "vitess.io/vitess/go/vt/topo/zk2topo"
 )

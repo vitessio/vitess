@@ -43,10 +43,6 @@ func VtProcessInstance(name, binary string, topoPort int, hostname string) VtPro
 	switch *topoFlavor {
 	case "zk2":
 		topoImplementation = "zk2"
-	case "consul":
-		topoImplementation = "consul"
-		// For consul we do not need "/" in the path
-		topoRootPath = ""
 	}
 
 	vt := VtProcess{

@@ -21,8 +21,8 @@ possibly another one to a read-only version of the global topo service),
 and one to each cell topo service.
 
 It contains the plug-in interfaces Conn, Factory and Version that topo
-implementations will use. We support Zookeeper, etcd, consul as real
-topo servers, and in-memory, tee as test and utility topo servers.
+implementations will use. We support Zookeeper and etcd as real topo
+servers, and in-memory, tee as test and utility topo servers.
 Implementations are in sub-directories here.
 
 In tests, we do not mock this package. Instead, we just use a memorytopo.
@@ -122,7 +122,7 @@ type Factory interface {
 // Server is the main topo.Server object. We support two ways of creating one:
 //  1. From an implementation, server address, and root path.
 //     This uses a plugin mechanism, and we have implementations for
-//     etcd, zookeeper and consul.
+//     etcd and zookeeper.
 //  2. Specific implementations may have higher level creation methods
 //     (in which case they may provide a more complex Factory).
 //     We support memorytopo (for tests and processes that only need an

@@ -24,7 +24,6 @@ source ./dev.env
 # 1. Installation of dependencies.
 
 BUILD_JAVA=${BUILD_JAVA:-1}
-BUILD_CONSUL=${BUILD_CONSUL:-1}
 
 VITESS_RESOURCES_DOWNLOAD_BASE_URL="https://github.com/vitessio/vitess-resources/releases/download"
 VITESS_RESOURCES_RELEASE="v4.0"
@@ -255,55 +254,6 @@ install_etcd() {
 	ln -snf "$dist/etcd-${version}-${platform}-${target}/etcdctl" "$VTROOT/bin/etcdctl"
 }
 
-# Download and install consul, link consul binary into our root.
-install_consul() {
-	local version="$1"
-	local dist="$2"
-
-	case $(uname) in
-	Linux) local platform=linux ;;
-	Darwin) local platform=darwin ;;
-	*)
-		echo "ERROR: unsupported platform for consul"
-		exit 1
-		;;
-	esac
-
-	case $(get_arch) in
-	aarch64) local target=arm64 ;;
-	x86_64) local target=amd64 ;;
-	arm64) local target=arm64 ;;
-	*)
-		echo "ERROR: unsupported architecture for consul"
-		exit 1
-		;;
-	esac
-
-	# SHA256 checksums for consul 1.11.4 from Vitess resources mirror.
-	# Note: darwin checksums differ from official HashiCorp releases.
-	local sha256
-	case "${platform}_${target}" in
-	linux_amd64) sha256="5155f6a3b7ff14d3671b0516f6b7310530b509a2b882b95b4fdf25f4219342c8" ;;
-	linux_arm64) sha256="97dbf36500dcefbe463f070471602992d148cb2fe91db7e37319e1b9c809f1f0" ;;
-	darwin_amd64) sha256="f00f81897ec0c608019a37dec243837ce0fd471b67401ea05be9a8b105d247ce" ;;
-	darwin_arm64) sha256="22a87e88c9fd36f773ebd62b18f41dad5512e753769f5a385a7842a0b9364e0a" ;;
-	*)
-		echo "ERROR: no checksum for consul ${platform}_${target}"
-		exit 1
-		;;
-	esac
-
-	local file="consul_${version}_${platform}_${target}.zip"
-
-	# This is how we'd download directly from source:
-	# download_url=https://releases.hashicorp.com/consul
-	# wget "${download_url}/${version}/${file}"
-	"${VTROOT}/tools/wget-retry" -q "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
-	verify_sha256 "$file" "$sha256"
-	unzip "$file"
-	ln -snf "$dist/consul" "$VTROOT/bin/consul"
-}
-
 install_all() {
 	echo "##local system details..."
 	echo "##platform: $(uname) target:$(get_arch) OS: $OSTYPE"
@@ -317,11 +267,6 @@ install_all() {
 
 	# etcd
 	install_dep "etcd" "$ETCD_VER" "$VTROOT/dist/etcd" install_etcd
-
-	# consul
-	if [ "$BUILD_CONSUL" == 1 ]; then
-		install_dep "Consul" "$CONSUL_VER" "$VTROOT/dist/consul" install_consul
-	fi
 
 	echo
 	echo "bootstrap finished - run 'make build' to compile"

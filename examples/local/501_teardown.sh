@@ -33,15 +33,15 @@ for tablet in 100 200 300 400; do
 			printf -v alias '%s-%010d' 'zone1' $uid
 			echo "Shutting down tablet $alias"
 			CELL=zone1 TABLET_UID=$uid ../common/scripts/vttablet-down.sh
-   			# because MySQL takes time to stop, we do this in parallel
+			# because MySQL takes time to stop, we do this in parallel
 			CELL=zone1 TABLET_UID=$uid ../common/scripts/mysqlctl-down.sh &
 		done
 
-  		# without a sleep below, we can have the echo happen before the echo of mysqlctl-down.sh
-                sleep 2
-                echo "Waiting mysqlctl to stop..."
-                wait
-                echo "mysqlctls are stopped!"
+		# without a sleep below, we can have the echo happen before the echo of mysqlctl-down.sh
+		sleep 2
+		echo "Waiting mysqlctl to stop..."
+		wait
+		echo "mysqlctls are stopped!"
 	fi
 done
 
@@ -49,8 +49,6 @@ done
 
 if [ "${TOPO}" = "zk2" ]; then
 	CELL=zone1 ../common/scripts/zk-down.sh
-elif [ "${TOPO}" = "consul" ]; then
-	CELL=zone1 ../common/scripts/consul-down.sh
 else
 	CELL=zone1 ../common/scripts/etcd-down.sh
 fi

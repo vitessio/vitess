@@ -123,7 +123,7 @@ type Conn interface {
 
 	// LockWithTTL is similar to `Lock` but the difference is that it allows
 	// you to override the global default TTL that is configured for the
-	// implementation (--topo-etcd-lease-ttl and --topo-consul-lock-session-ttl).
+	// implementation (--topo-etcd-lease-ttl).
 	// Note: this is no different than `Lock` for ZooKeeper as it does not
 	// support lock TTLs and they exist until released or the session ends.
 	LockWithTTL(ctx context.Context, dirPath, contents string, ttl time.Duration) (LockDescriptor, error)

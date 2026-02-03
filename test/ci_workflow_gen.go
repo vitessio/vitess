@@ -106,7 +106,6 @@ var (
 		"onlineddl_scheduler",
 		"tabletmanager_throttler_topo",
 		"tabletmanager_tablegc",
-		"tabletmanager_consul",
 		"vtgate_concurrentdml",
 		"vtgate_godriver",
 		"vtgate_gen4",
@@ -115,7 +114,6 @@ var (
 		"vtgate_schema",
 		"vtgate_tablet_healthcheck_cache",
 		"vtgate_topo",
-		"vtgate_topo_consul",
 		"vtgate_topo_etcd",
 		"vtgate_transaction",
 		"vtgate_unsharded",
@@ -163,8 +161,6 @@ var (
 	clustersRequiringMakeTools = []string{
 		"18",
 		"mysql_server_vault",
-		"vtgate_topo_consul",
-		"tabletmanager_consul",
 	}
 	clustersRequiringMemoryCheck = []string{
 		"vtorc",

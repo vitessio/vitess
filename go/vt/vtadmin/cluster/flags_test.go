@@ -49,12 +49,12 @@ func TestMergeFlagsByImpl(t *testing.T) {
 			name: "all overrides",
 			base: nil,
 			in: map[string]map[string]string{
-				"consul": {
+				"staticfile": {
 					"flag1": "value1",
 				},
 			},
 			expected: map[string]map[string]string{
-				"consul": {
+				"staticfile": {
 					"flag1": "value1",
 				},
 			},
@@ -62,13 +62,13 @@ func TestMergeFlagsByImpl(t *testing.T) {
 		{
 			name: "all defaults",
 			base: map[string]map[string]string{
-				"consul": {
+				"staticfile": {
 					"flag1": "value1",
 				},
 			},
 			in: nil,
 			expected: map[string]map[string]string{
-				"consul": {
+				"staticfile": {
 					"flag1": "value1",
 				},
 			},
@@ -76,19 +76,19 @@ func TestMergeFlagsByImpl(t *testing.T) {
 		{
 			name: "mixed",
 			base: map[string]map[string]string{
-				"consul": {
+				"staticfile": {
 					"flag1": "value1",
 					"flag2": "value2",
 				},
 				"other": {},
 			},
 			in: map[string]map[string]string{
-				"consul": {
+				"staticfile": {
 					"flag1": "othervalue",
 				},
 			},
 			expected: map[string]map[string]string{
-				"consul": {
+				"staticfile": {
 					"flag1": "othervalue",
 					"flag2": "value2",
 				},
