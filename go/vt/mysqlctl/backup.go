@@ -316,7 +316,8 @@ func removeExistingFiles(cnf *Mycnf) error {
 // ShouldRestore checks whether a database with tables already exists
 // and returns whether a restore action should be performed
 func ShouldRestore(ctx context.Context, logger logutil.Logger, cnf *Mycnf, mysqld MysqlDaemon,
-	dbName string, deleteBeforeRestore bool) (bool, error) {
+	dbName string, deleteBeforeRestore bool,
+) (bool, error) {
 	if deleteBeforeRestore || RestoreWasInterrupted(cnf) {
 		return true, nil
 	}

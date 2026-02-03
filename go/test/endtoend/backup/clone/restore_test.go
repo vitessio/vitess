@@ -166,7 +166,7 @@ func waitReplicationTopology(t *testing.T, tablet *cluster.Vttablet) {
 		}
 
 		// Find column indices.
-		var ioRunningIdx, sqlRunningIdx = -1, -1
+		ioRunningIdx, sqlRunningIdx := -1, -1
 		for i, field := range qr.Fields {
 			switch field.Name {
 			case "Replica_IO_Running":
