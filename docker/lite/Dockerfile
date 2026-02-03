@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # Build the Vitess Go binaries
-FROM --platform=linux/amd64 golang:1.25.6-bookworm@sha256:2f768d462dbffbb0f0b3a5171009f162945b086f326e0b2a8fd5d29c3219ff14 AS go-builder
+FROM --platform=linux/amd64 golang:1.25.6-bookworm@sha256:fdd8e8344873d406d3aa2edf975e5f8f36a85201dd0d745bd76c446fe39ffcfd AS go-builder
 
 # Allows docker builds to set the BUILD_NUMBER
 ARG BUILD_NUMBER
@@ -44,7 +44,7 @@ COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
 RUN make install PREFIX=/vt/install NOVTADMINBUILD=1
 
 # Build vtadmin separately.
-FROM --platform=linux/amd64 node:22-bookworm-slim@sha256:f86be15afa9a8277608e141ce2a8aa55d3d9c40845921b8511f4fb7897be2554 AS vtadmin-builder
+FROM --platform=linux/amd64 node:25-bookworm-slim@sha256:21d66e1cd4023c9608740b365e621c0a5f2d7a514b88ab88df5c12847b15320e AS vtadmin-builder
 
 WORKDIR /vt/web/vtadmin
 
@@ -59,7 +59,7 @@ RUN VITE_VTADMIN_API_ADDRESS="http://localhost:14200" \
     npm run build
 
 # Build the final image with the minimum Go binaries + static files.
-FROM --platform=linux/amd64 debian:bookworm-slim@sha256:56ff6d36d4eb3db13a741b342ec466f121480b5edded42e4b7ee850ce7a418ee
+FROM --platform=linux/amd64 debian:bookworm-slim@sha256:98f4b71de414932439ac6ac690d7060df1f27161073c5036a7553723881bffbe
 
 # Install locale required for mysqlsh
 RUN apt-get update && apt-get install -y locales tar \
