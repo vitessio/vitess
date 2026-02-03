@@ -18,7 +18,6 @@ package io.vitess.example;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.primitives.UnsignedLong;
-
 import io.vitess.client.Context;
 import io.vitess.client.RpcClient;
 import io.vitess.client.VTGateBlockingConnection;
@@ -27,12 +26,10 @@ import io.vitess.client.cursor.Cursor;
 import io.vitess.client.cursor.Row;
 import io.vitess.client.grpc.GrpcClientFactory;
 import io.vitess.proto.Query.ExecuteOptions;
-
-import org.joda.time.Duration;
-import org.joda.time.Instant;
-
 import java.util.Map;
 import java.util.Random;
+import org.joda.time.Duration;
+import org.joda.time.Instant;
 
 /**
  * VitessClientExample.java is a sample for using the Vitess low-level Java Client.
@@ -49,9 +46,8 @@ public class VitessClientExample {
     }
 
     Context ctx = Context.getDefault().withDeadlineAfter(Duration.millis(5 * 1000));
-    try (RpcClient client = new GrpcClientFactory()
-        .create(ctx, args[0]); VTGateBlockingConnection conn = new VTGateBlockingConnection(
-        client)) {
+    try (RpcClient client = new GrpcClientFactory().create(ctx, args[0]);
+        VTGateBlockingConnection conn = new VTGateBlockingConnection(client)) {
       VTSession session = new VTSession("@primary", ExecuteOptions.getDefaultInstance());
       // Insert some messages on random pages.
       System.out.println("Inserting into primary...");

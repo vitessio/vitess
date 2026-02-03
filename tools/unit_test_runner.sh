@@ -68,4 +68,5 @@ if [[ -n "${JSON_OUTPUT:-}" ]]; then
 	GOTESTSUM_ARGS="$GOTESTSUM_ARGS --jsonfile $JSON_OUTPUT"
 fi
 
+# shellcheck disable=SC2086
 go tool gotestsum $GOTESTSUM_ARGS --packages="$packages_with_tests" -- $VT_GO_PARALLEL $RACE_FLAG -count=1

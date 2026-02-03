@@ -17,11 +17,9 @@
 package io.vitess.client;
 
 import io.vitess.proto.Vtrpc.CallerID;
-
+import javax.annotation.Nullable;
 import org.joda.time.Duration;
 import org.joda.time.Instant;
-
-import javax.annotation.Nullable;
 
 /**
  * Context is an immutable object that carries per-request info.
