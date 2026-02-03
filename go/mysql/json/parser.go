@@ -336,17 +336,23 @@ func escapeString(dst []byte, s string) []byte {
 		switch ch {
 		case '"', '\\':
 			dst = append(dst, '\\', ch)
-		case '\b':
+		case '\b': // 0x08, backspace
 			dst = append(dst, '\\', 'b')
-		case '\f':
+		case '\f': // 0x0C, form feed
 			dst = append(dst, '\\', 'f')
-		case '\n':
+		case '\n': // 0x0A, line feed
 			dst = append(dst, '\\', 'n')
-		case '\r':
+		case '\r': // 0x0D, carriage return
 			dst = append(dst, '\\', 'r')
-		case '\t':
+		case '\t': // 0x09, horizontal tab
 			dst = append(dst, '\\', 't')
 		default:
+			// Other control characters (0x00-0x1F) use \u00XX escapes.
+			// We hardcode 00 since we only handle single byte control
+			// characters, then split the byte into two 4-bit halves;
+			// ch>>4 extracts the upper bits, and ch&0x0f extracts the lower
+			// bits. Each then indexes into hexDigits to produce the final
+			// two hex characters.
 			if ch < 0x20 {
 				dst = append(dst, '\\', 'u', '0', '0', hexDigits[ch>>4], hexDigits[ch&0x0f])
 				continue
