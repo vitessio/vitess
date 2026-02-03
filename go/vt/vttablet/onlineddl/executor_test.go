@@ -30,6 +30,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/schema"
@@ -326,6 +327,7 @@ func TestExecuteDirectlySetsLockWaitTimeout(t *testing.T) {
 		execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
 			return &sqltypes.Result{}, nil
 		},
+		ticks: timer.NewTimer(migrationCheckInterval),
 	}
 
 	onlineDDL := &schema.OnlineDDL{SQL: "create table test_lock_wait(id int)", CutOverThreshold: 5 * time.Second, UUID: "uuid"}
