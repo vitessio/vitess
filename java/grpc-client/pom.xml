@@ -84,7 +84,7 @@
     <dependency>
       <groupId>io.opentracing.contrib</groupId>
       <artifactId>opentracing-grpc</artifactId>
-      <version>0.0.12</version>
+      <version>0.2.3</version>
     </dependency>
 
     <!-- Dependencies with limited scope. -->
