@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/schema"
 
 	"github.com/stretchr/testify/assert"
@@ -405,4 +407,69 @@ func TestCheckTables(t *testing.T) {
 	}
 	assert.ElementsMatch(t, expectDropTables, foundDropTables)
 	assert.ElementsMatch(t, expectTransitionRequests, foundTransitionRequests)
+}
+
+type fakeGCConn struct {
+	query  string
+	result *sqltypes.Result
+	err    error
+}
+
+func (c *fakeGCConn) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+	c.query = query
+	if c.err != nil {
+		return nil, c.err
+	}
+	if c.result != nil {
+		return c.result, nil
+	}
+	return &sqltypes.Result{}, nil
+}
+
+func (c *fakeGCConn) SupportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+	return true, nil
+}
+
+func (c *fakeGCConn) Close() {}
+
+func TestOpenSkipsPurgeEvacBasedOnAHI(t *testing.T) {
+	type testCase struct {
+		name            string
+		ahiSetting      string
+		expectPurgeEvac bool
+	}
+	testCases := []testCase{
+		{
+			name:            "AHI OFF",
+			ahiSetting:      "OFF",
+			expectPurgeEvac: false,
+		},
+		{
+			name:            "AHI ON",
+			ahiSetting:      "ON",
+			expectPurgeEvac: true,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			collector := &TableGC{}
+			collector.lifecycleStates = map[schema.TableGCState]bool{
+				schema.HoldTableGCState:  true,
+				schema.PurgeTableGCState: true,
+				schema.EvacTableGCState:  true,
+				schema.DropTableGCState:  true,
+			}
+			conn := &fakeGCConn{
+				result: sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("variable_value", "varchar"),
+					tc.ahiSetting,
+				),
+			}
+			states, err := adjustLifecycleForFastDrops(conn, collector.lifecycleStates)
+			require.NoError(t, err)
+			require.Equal(t, tc.expectPurgeEvac, states[schema.PurgeTableGCState])
+			require.Equal(t, tc.expectPurgeEvac, states[schema.EvacTableGCState])
+			require.True(t, states[schema.DropTableGCState])
+		})
+	}
 }
