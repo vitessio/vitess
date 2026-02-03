@@ -15,7 +15,7 @@ variable "BOOTSTRAP_VERSION" {
 }
 
 variable "BOOTSTRAP_FLAVOR" {
-  default = "mysql80"
+  default = "mysql84"
 }
 
 group "default" {
