@@ -17,6 +17,7 @@ limitations under the License.
 package semantics
 
 import (
+	"maps"
 	"reflect"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -49,6 +50,7 @@ type (
 		joinUsing    map[string]TableSet
 		stmtScope    bool
 		ctes         map[string]*sqlparser.CommonTableExpr
+		windows      map[string]*sqlparser.WindowDefinition
 		inGroupBy    bool
 		inHaving     bool
 		inHavingAggr bool
@@ -193,6 +195,12 @@ func (s *scoper) pushSelectScope(node *sqlparser.Select) {
 	// Needed for order by with Literal to find the Expression.
 	currScope.stmt = node
 
+	for _, namedWindow := range node.Windows {
+		for _, windowDef := range namedWindow.Windows {
+			currScope.windows[windowDef.Name.Lowered()] = windowDef
+		}
+	}
+
 	s.rScope[node] = currScope
 	s.wScope[node] = newScope(nil)
 }
@@ -260,9 +268,7 @@ func (s *scoper) up(cursor *sqlparser.Cursor) error {
 		}
 		if isParentDeleteOrUpdate(cursor) {
 			usingMap := s.currentScope().prepareUsingMap()
-			for ts, m := range usingMap {
-				s.binder.usingJoinInfo[ts] = m
-			}
+			maps.Copy(s.binder.usingJoinInfo, usingMap)
 		}
 	case *sqlparser.CommonTableExpr:
 		s.commonTableExprScopes = s.commonTableExprScopes[:len(s.commonTableExprScopes)-1]
@@ -335,9 +341,7 @@ func (s *scoper) push(sc *scope) {
 
 func (s *scoper) popScope() {
 	usingMap := s.currentScope().prepareUsingMap()
-	for ts, m := range usingMap {
-		s.binder.usingJoinInfo[ts] = m
-	}
+	maps.Copy(s.binder.usingJoinInfo, usingMap)
 	l := len(s.scopes) - 1
 	s.scopes = s.scopes[:l]
 }
@@ -347,6 +351,7 @@ func newScope(parent *scope) *scope {
 		parent:    parent,
 		joinUsing: map[string]TableSet{},
 		ctes:      map[string]*sqlparser.CommonTableExpr{},
+		windows:   map[string]*sqlparser.WindowDefinition{},
 	}
 }
 
@@ -434,4 +439,17 @@ func (s *scope) findCTE(name string) *sqlparser.CommonTableExpr {
 		return cte
 	}
 	return s.parent.findCTE(name)
+}
+
+// findWindow will search in this scope, and then recursively search the parents
+// until it hits a statement boundary. Window definitions are not visible in subqueries.
+func (s *scope) findWindow(name string) *sqlparser.WindowDefinition {
+	window, found := s.windows[name]
+	if found {
+		return window
+	}
+	if s.stmtScope || s.parent == nil {
+		return nil
+	}
+	return s.parent.findWindow(name)
 }

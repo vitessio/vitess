@@ -144,6 +144,7 @@ func commandUpdateState(cmd *cobra.Command, args []string) error {
 			Cells:       textutil.SimulatedNullStringSlice,
 			TabletTypes: textutil.SimulatedNullTabletTypeSlice,
 			State:       &state,
+			Shards:      StartStopOptions.Shards,
 		},
 	}
 

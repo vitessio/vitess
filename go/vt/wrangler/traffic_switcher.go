@@ -20,7 +20,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	maps0 "maps"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -331,7 +333,8 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 
 // SwitchReads is a generic way of switching read traffic for a resharding workflow.
 func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflowName string, servedTypes []topodatapb.TabletType,
-	cells []string, direction workflow.TrafficSwitchDirection, dryRun bool) (*[]string, error) {
+	cells []string, direction workflow.TrafficSwitchDirection, dryRun bool,
+) (*[]string, error) {
 	// Consistently handle errors by logging and returning them.
 	handleError := func(message string, err error) (*[]string, error) {
 		werr := vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s: %v", message, err)
@@ -474,7 +477,8 @@ func (wr *Wrangler) areTabletsAvailableToStreamFrom(ctx context.Context, ts *tra
 
 // SwitchWrites is a generic way of migrating write traffic for a resharding workflow.
 func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowName string, timeout time.Duration,
-	cancel, reverse, reverseReplication bool, dryRun, initializeTargetSequences bool) (journalID int64, dryRunResults *[]string, err error) {
+	cancel, reverse, reverseReplication bool, dryRun, initializeTargetSequences bool,
+) (journalID int64, dryRunResults *[]string, err error) {
 	// Consistently handle errors by logging and returning them.
 	handleError := func(message string, err error) (int64, *[]string, error) {
 		werr := vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s: %v", message, err)
@@ -754,7 +758,8 @@ func (wr *Wrangler) dropArtifacts(ctx context.Context, keepRoutingRules bool, sw
 // finalizeMigrateWorkflow deletes the streams for the Migrate workflow.
 // We only cleanup the target for external sources.
 func (wr *Wrangler) finalizeMigrateWorkflow(ctx context.Context, targetKeyspace, workflow, tableSpecs string,
-	cancel, keepData, keepRoutingRules, dryRun bool) (*[]string, error) {
+	cancel, keepData, keepRoutingRules, dryRun bool,
+) (*[]string, error) {
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
 	if err != nil {
 		wr.Logger().Errorf("buildTrafficSwitcher failed: %v", err)
@@ -1978,9 +1983,7 @@ func (ts *trafficSwitcher) addParticipatingTablesToKeyspace(ctx context.Context,
 		if err := json2.UnmarshalPB([]byte(wrap), ks); err != nil {
 			return err
 		}
-		for table, vtab := range ks.Tables {
-			vschema.Tables[table] = vtab
-		}
+		maps0.Copy(vschema.Tables, ks.Tables)
 	} else {
 		if vschema.Sharded {
 			return errors.New("no sharded vschema was provided, so you will need to update the vschema of the target manually for the moved tables")
@@ -2224,9 +2227,7 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 				ts.targetKeyspace, sequenceMetadata.usingTableName)
 		}
 		// Sort the values to find the max value across all shards.
-		sort.Slice(shardResults, func(i, j int) bool {
-			return shardResults[i] < shardResults[j]
-		})
+		slices.Sort(shardResults)
 		nextVal := shardResults[len(shardResults)-1] + 1
 		// Now we need to update the sequence table, if needed, in order to
 		// ensure that that the next value it provides is > the current max.

@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -1259,7 +1260,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 		if si == nil || len(si.TabletControls) == 0 {
 			return false
 		}
-		for _, tc := range si.Shard.TabletControls {
+		for _, tc := range si.TabletControls {
 			return slices.Equal(tc.DeniedTables, []string{tableName})
 		}
 		return false
@@ -1819,6 +1820,7 @@ func TestMirrorTraffic(t *testing.T) {
 	sourceShards := []string{"-"}
 	targetKs := "target"
 	targetShards := []string{"-80", "80-"}
+	otherKs := "otherks"
 	table1 := "table1"
 	table2 := "table2"
 	workflow := "src2target"
@@ -2062,6 +2064,30 @@ func TestMirrorTraffic(t *testing.T) {
 				},
 				fmt.Sprintf("%s.%s@rdonly", sourceKs, table2): {
 					fmt.Sprintf("%s.%s", targetKs, table2): 50.0,
+				},
+			},
+		},
+		{
+			name: "percent zero preserves other mirror targets",
+			mirrorRules: map[string]map[string]float32{
+				fmt.Sprintf("%s.%s", sourceKs, table1): {
+					fmt.Sprintf("%s.%s", targetKs, table1): 50.0,
+					fmt.Sprintf("%s.%s", otherKs, table1):  25.0,
+				},
+				fmt.Sprintf("%s.%s", sourceKs, table2): {
+					fmt.Sprintf("%s.%s", targetKs, table2): 50.0,
+				},
+			},
+			req: &vtctldatapb.WorkflowMirrorTrafficRequest{
+				Keyspace:    targetKs,
+				Workflow:    workflow,
+				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+				Percent:     0.0,
+			},
+			routingRules: initialRoutingRules,
+			wantMirrorRules: map[string]map[string]float32{
+				fmt.Sprintf("%s.%s", sourceKs, table1): {
+					fmt.Sprintf("%s.%s", otherKs, table1): 25.0,
 				},
 			},
 		},
@@ -2886,4 +2912,34 @@ func TestMaterializeAddTables(t *testing.T) {
 			assert.Empty(t, te.tmc.updateVReplicationWorklowRequests[210])
 		})
 	}
+}
+
+func TestMoveTablesPreventsSourceEqualsTarget(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	ts := memorytopo.NewServer(ctx, "cell1")
+
+	_, err := NewServer(vtenv.NewTestEnv(), ts, nil).MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
+		SourceKeyspace: "ks1",
+		TargetKeyspace: "ks1",
+		Workflow:       "wf1",
+	})
+
+	require.ErrorContains(t, err, "source and target keyspace must be different for MoveTables workflows")
+}
+
+func TestMigrateAllowsSourceEqualsTarget(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	ts := memorytopo.NewServer(ctx, "cell1")
+
+	_, err := NewServer(vtenv.NewTestEnv(), ts, nil).MigrateCreate(ctx, &vtctldatapb.MigrateCreateRequest{
+		SourceKeyspace: "ks1",
+		TargetKeyspace: "ks1",
+		Workflow:       "wf1",
+		MountName:      "ext1",
+	})
+	require.NotContains(t, err.Error(), "source and target keyspace must be different for MoveTables workflows")
 }

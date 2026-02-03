@@ -20,8 +20,10 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
+	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -43,6 +45,12 @@ func insertInitialData(t *testing.T) {
 			`[[VARCHAR("Monoprice") VARCHAR("eléctronics")] [VARCHAR("newegg") VARCHAR("elec†ronics")]]`)
 
 		insertJSONValues(t)
+
+		insertLargeTransactionForChunkTesting(t, vtgateConn, defaultSourceKs+":0", 50000)
+		log.Infof("Inserted large transaction for chunking tests")
+
+		execVtgateQuery(t, vtgateConn, defaultSourceKs, "delete from customer where cid >= 50000 and cid < 50100")
+		log.Infof("Cleaned up chunk testing rows from source keyspace")
 	})
 }
 
@@ -90,13 +98,15 @@ func insertMoreCustomers(t *testing.T, numCustomers int) {
 	// Now let's insert the records using the sequence
 	// values we reserved.
 	sql := "insert into customer (cid, name) values "
+	var sqlSb101 strings.Builder
 	for i := 1; i <= numCustomers; i++ {
-		sql += fmt.Sprintf("(%d, 'customer%d')", cid, i)
+		sqlSb101.WriteString(fmt.Sprintf("(%d, 'customer%d')", cid, i))
 		if i != numCustomers {
-			sql += ","
+			sqlSb101.WriteString(",")
 		}
 		cid++
 	}
+	sql += sqlSb101.String()
 	execVtgateQuery(t, vtgateConn, defaultTargetKs, sql)
 }
 
@@ -139,4 +149,16 @@ func insertIntoBlobTable(t *testing.T) {
 	for _, query := range blobTableQueries {
 		execVtgateQuery(t, vtgateConn, defaultSourceKs+":0", query)
 	}
+}
+
+// insertLargeTransactionForChunkTesting inserts a transaction large enough to exceed the 1KB chunking threshold.
+func insertLargeTransactionForChunkTesting(t *testing.T, vtgateConn *mysql.Conn, keyspace string, startID int) {
+	execVtgateQuery(t, vtgateConn, keyspace, "BEGIN")
+	for i := range 15 {
+		largeData := strings.Repeat("x", 94) + fmt.Sprintf("_%05d", i)
+		query := fmt.Sprintf("INSERT INTO customer (cid, name) VALUES (%d, '%s')",
+			startID+i, largeData)
+		execVtgateQuery(t, vtgateConn, keyspace, query)
+	}
+	execVtgateQuery(t, vtgateConn, keyspace, "COMMIT")
 }

@@ -1097,7 +1097,8 @@ func TestScopingWithWITH(t *testing.T) {
 			query:     "select 1 from user uu where exists (select 1 from user where exists (select 1 from (select 1 from t1) uu where uu.user_id = uu.id))",
 			direct:    NoTables,
 			recursive: NoTables,
-		}}
+		},
+	}
 	for _, query := range queries {
 		t.Run(query.query, func(t *testing.T) {
 			parse, err := sqlparser.NewTestParser().Parse(query.query)
@@ -1224,7 +1225,7 @@ func BenchmarkAnalyzeMultipleDifferentQueries(b *testing.B) {
 		"select id from (select foo as id from (select x as foo from user) as c) as t",
 	}
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, query := range queries {
 			parse, err := sqlparser.NewTestParser().Parse(query)
 			require.NoError(b, err)
@@ -1248,7 +1249,7 @@ func BenchmarkAnalyzeUnionQueries(b *testing.B) {
 		"select a.id from t1 as a union (select uid from t2, t union (select name from t) order by 1) order by 1",
 	}
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, query := range queries {
 			parse, err := sqlparser.NewTestParser().Parse(query)
 			require.NoError(b, err)
@@ -1274,7 +1275,7 @@ func BenchmarkAnalyzeSubQueries(b *testing.B) {
 		"select t.col1, (select id from t) from x as t",
 	}
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, query := range queries {
 			parse, err := sqlparser.NewTestParser().Parse(query)
 			require.NoError(b, err)
@@ -1300,7 +1301,7 @@ func BenchmarkAnalyzeHavingQueries(b *testing.B) {
 		"select u2.a, u1.a from u1, u2 having u2.a = 2",
 	}
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, query := range queries {
 			parse, err := sqlparser.NewTestParser().Parse(query)
 			require.NoError(b, err)
@@ -1329,7 +1330,7 @@ func BenchmarkAnalyzeGroupByQueries(b *testing.B) {
 		"select a.id from t, t1 as a group by id",
 	}
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, query := range queries {
 			parse, err := sqlparser.NewTestParser().Parse(query)
 			require.NoError(b, err)
@@ -1352,7 +1353,7 @@ func BenchmarkAnalyzeOrderByQueries(b *testing.B) {
 		"select name, name from t1, t2 order by name",
 	}
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, query := range queries {
 			parse, err := sqlparser.NewTestParser().Parse(query)
 			require.NoError(b, err)
@@ -1466,10 +1467,12 @@ var unsharded = &vindexes.Keyspace{
 	Name:    "unsharded",
 	Sharded: false,
 }
+
 var ks2 = &vindexes.Keyspace{
 	Name:    "ks2",
 	Sharded: true,
 }
+
 var ks3 = &vindexes.Keyspace{
 	Name:    "ks3",
 	Sharded: true,
@@ -1496,6 +1499,7 @@ func tableT() *vindexes.BaseTable {
 		Keyspace: unsharded,
 	}
 }
+
 func tableT1() *vindexes.BaseTable {
 	return &vindexes.BaseTable{
 		Name: sqlparser.NewIdentifierCS("t1"),
@@ -1510,6 +1514,7 @@ func tableT1() *vindexes.BaseTable {
 		Keyspace: ks2,
 	}
 }
+
 func tableT2() *vindexes.BaseTable {
 	return &vindexes.BaseTable{
 		Name: sqlparser.NewIdentifierCS("t2"),
@@ -1552,5 +1557,54 @@ func tableT3() *vindexes.BaseTable {
 		}},
 		ColumnListAuthoritative: true,
 		Keyspace:                ks3,
+	}
+}
+
+// TestQuerySignatureWindowFunc verifies that the analyzer correctly identifies
+// window functions and aggregates in the query signature.
+// It specifically checks that aggregates with an OVER clause are treated as window functions.
+func TestQuerySignatureWindowFunc(t *testing.T) {
+	queries := []struct {
+		query       string
+		isWindow    bool
+		isAggregate bool
+	}{
+		{
+			query:       "select sum(id) from t1",
+			isWindow:    false,
+			isAggregate: true,
+		},
+		{
+			query:       "select sum(id) over () from t1",
+			isWindow:    true,
+			isAggregate: false,
+		},
+		{
+			query:       "select rank() over () from t1",
+			isWindow:    true,
+			isAggregate: false,
+		},
+		{
+			query:       "select sum(id), rank() over () from t1",
+			isWindow:    true,
+			isAggregate: true,
+		},
+		{
+			query:       "select sum(id) over (), count(*) from t1",
+			isWindow:    true,
+			isAggregate: true,
+		},
+	}
+
+	for _, tc := range queries {
+		t.Run(tc.query, func(t *testing.T) {
+			ast, err := sqlparser.NewTestParser().Parse(tc.query)
+			require.NoError(t, err)
+
+			st, err := AnalyzeStrict(ast, "dbName", fakeSchemaInfo())
+			require.NoError(t, err)
+			require.Equal(t, tc.isWindow, st.QuerySignature.WindowFunc, "WindowFunc mismatch")
+			require.Equal(t, tc.isAggregate, st.QuerySignature.Aggregation, "Aggregation mismatch")
+		})
 	}
 }

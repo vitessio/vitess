@@ -38,10 +38,12 @@ import (
 // discoveryQueue is a channel of deduplicated tablets that were
 // requested for discovery. It can be continuously updated
 // as discovery process progresses.
-var discoveryQueue *DiscoveryQueue
-var snapshotDiscoveryKeys chan string
-var snapshotDiscoveryKeysMutex sync.Mutex
-var hasReceivedSIGTERM int32
+var (
+	discoveryQueue             *DiscoveryQueue
+	snapshotDiscoveryKeys      chan string
+	snapshotDiscoveryKeysMutex sync.Mutex
+	hasReceivedSIGTERM         int32
+)
 
 var (
 	discoveriesCounter                 = stats.NewCounter("DiscoveriesAttempt", "Number of discoveries attempted")
@@ -54,8 +56,6 @@ var (
 
 	discoveryInstanceTimingsActions = []string{"Backend", "Instance", "Other"}
 	discoveryInstanceTimings        = stats.NewTimings("DiscoveryInstanceTimings", "Timings for instance discovery actions", "Action", discoveryInstanceTimingsActions...)
-	// TODO: deprecate in v24
-	discoverInstanceTimings = stats.NewTimings("DiscoverInstanceTimings", "Timings for instance discovery actions", "Action", discoveryInstanceTimingsActions...)
 )
 
 var recentDiscoveryOperationKeys *cache.Cache
@@ -143,7 +143,8 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 	_ = latency.AddMany([]string{
 		"backend",
 		"instance",
-		"total"})
+		"total",
+	})
 	latency.Start("total") // start the total stopwatch (not changed anywhere else)
 	defer func() {
 		latency.Stop("total")
@@ -185,23 +186,20 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 	instanceLatency := latency.Elapsed("instance")
 	otherLatency := totalLatency - (backendLatency + instanceLatency)
 
-	// TODO: deprecate in v24
-	discoverInstanceTimings.Add("Backend", backendLatency)
-	discoverInstanceTimings.Add("Instance", instanceLatency)
-	discoverInstanceTimings.Add("Other", otherLatency)
-
 	discoveryInstanceTimings.Add("Backend", backendLatency)
 	discoveryInstanceTimings.Add("Instance", instanceLatency)
 	discoveryInstanceTimings.Add("Other", otherLatency)
 
-	if forceDiscovery {
-		log.Infof("Force discovered - %+v, err - %v", instance, err)
+	if err != nil {
+		log.Errorf("Failed to discover %s (force: %t), err: %v", tabletAlias, forceDiscovery, err)
+	} else {
+		log.Infof("Discovered %s (force: %t): %+v", tabletAlias, forceDiscovery, instance)
 	}
 
 	if instance == nil {
 		failedDiscoveriesCounter.Add(1)
 		if util.ClearToLog("discoverInstance", tabletAlias) {
-			log.Warningf(" DiscoverInstance(%+v) instance is nil in %.3fs (Backend: %.3fs, Instance: %.3fs), error=%+v",
+			log.Warningf("DiscoverInstance(%+v) instance is nil in %.3fs (Backend: %.3fs, Instance: %.3fs), error=%+v",
 				tabletAlias,
 				totalLatency.Seconds(),
 				backendLatency.Seconds(),
@@ -226,7 +224,7 @@ func onHealthTick() {
 		defer snapshotDiscoveryKeysMutex.Unlock()
 
 		countSnapshotKeys := len(snapshotDiscoveryKeys)
-		for i := 0; i < countSnapshotKeys; i++ {
+		for range countSnapshotKeys {
 			tabletAliases = append(tabletAliases, <-snapshotDiscoveryKeys)
 		}
 	}()
@@ -264,6 +262,7 @@ func ContinuousDiscovery() {
 	var recoveryEntrance int64
 	var snapshotTopologiesTick <-chan time.Time
 	if config.GetSnapshotTopologyInterval() > 0 {
+		log.Warning("--snapshot-topology-interval is deprecated and will be removed in v25+")
 		snapshotTopologiesTick = time.Tick(config.GetSnapshotTopologyInterval())
 	}
 

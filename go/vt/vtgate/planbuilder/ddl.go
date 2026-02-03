@@ -109,6 +109,8 @@ func buildDDLPlans(ctx context.Context, sql string, ddlStatement sqlparser.DDLSt
 		if err != nil {
 			return nil, nil, err
 		}
+		// Remove keyspace qualifiers from all table references (including foreign key references).
+		sqlparser.RemoveSpecificKeyspace(ddlStatement, keyspace.Name)
 		err = checkFKError(vschema, ddlStatement, keyspace)
 	case *sqlparser.CreateView:
 		destination, keyspace, err = buildCreateViewCommon(ctx, vschema, reservedVars, cfg, ddl.Select, ddl)
@@ -368,7 +370,6 @@ func buildDropTable(vschema plancontext.VSchema, ddlStatement sqlparser.DDLState
 		var table *vindexes.BaseTable
 		var err error
 		table, _, _, _, destinationTab, err = vschema.FindTableOrVindex(tab)
-
 		if err != nil {
 			var notFoundError vindexes.NotFoundError
 			isNotFound := errors.As(err, &notFoundError)
@@ -412,7 +413,6 @@ func buildRenameTable(vschema plancontext.VSchema, renameTable *sqlparser.Rename
 		var table *vindexes.BaseTable
 		var err error
 		table, _, _, _, destinationFrom, err = vschema.FindTableOrVindex(tabPair.FromTable)
-
 		if err != nil {
 			var notFoundError vindexes.NotFoundError
 			isNotFound := errors.As(err, &notFoundError)

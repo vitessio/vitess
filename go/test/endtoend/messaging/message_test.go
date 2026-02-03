@@ -42,8 +42,10 @@ import (
 	cmp "vitess.io/vitess/go/test/utils"
 )
 
-var testMessage = "{\"message\": \"hello world\"}"
-var testShardedMessagef = "{\"message\": \"hello world\", \"id\": %d}"
+var (
+	testMessage         = "{\"message\": \"hello world\"}"
+	testShardedMessagef = "{\"message\": \"hello world\", \"id\": %d}"
+)
 
 var createMessage = `
 create table vitess_message(
@@ -69,7 +71,7 @@ create table vitess_message(
 `
 
 func TestMessage(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
@@ -207,7 +209,7 @@ create table vitess_message3(
 `
 
 func TestThreeColMessage(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
@@ -300,7 +302,7 @@ var createSpecificStreamingColsMessage = `create table vitess_message4(
 ) comment 'vitess_message,vt_message_cols=id|msg1,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'`
 
 func TestSpecificStreamingColsMessage(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
@@ -378,7 +380,7 @@ func TestUnsharded(t *testing.T) {
 func TestReparenting(t *testing.T) {
 	name := "sharded_message"
 
-	ctx := context.Background()
+	ctx := t.Context()
 	// start grpc connection with vtgate and validate client
 	// connection counts in tablets
 	stream, err := VtgateGrpcConn(ctx, clusterInstance)
@@ -445,7 +447,7 @@ func TestConnection(t *testing.T) {
 	assertClientCount(t, 0, shard0Primary)
 	assertClientCount(t, 0, shard1Primary)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	// first connection with vtgate
 	stream, err := VtgateGrpcConn(ctx, clusterInstance)
 	require.Nil(t, err)
@@ -492,7 +494,7 @@ func TestConnection(t *testing.T) {
 }
 
 func testMessaging(t *testing.T, name, ks string) {
-	ctx := context.Background()
+	ctx := t.Context()
 	stream, err := VtgateGrpcConn(ctx, clusterInstance)
 	require.Nil(t, err)
 	defer stream.Close()
@@ -639,7 +641,7 @@ func assertClientCount(t *testing.T, expected int, vttablet *cluster.Vttablet) {
 	}
 }
 
-func parseDebugVars(t *testing.T, output interface{}, vttablet *cluster.Vttablet) {
+func parseDebugVars(t *testing.T, output any, vttablet *cluster.Vttablet) {
 	debugVarURL := fmt.Sprintf("http://%s:%d/debug/vars", vttablet.VttabletProcess.TabletHostname, vttablet.HTTPPort)
 	resp, err := http.Get(debugVarURL)
 	if err != nil {

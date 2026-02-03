@@ -28,7 +28,7 @@ Flags:
       --buffer-max-failover-duration duration                            Stop buffering completely if a failover takes longer than this duration. (default 20s)
       --buffer-min-time-between-failovers duration                       Minimum time between the end of a failover and the start of the next one (tracked per shard). Faster consecutive failovers will not trigger buffering. (default 1m0s)
       --buffer-size int                                                  Maximum number of buffered requests in flight (across all ongoing failovers). (default 1000)
-      --buffer-window duration                                           Duration for how long a request should be buffered at most. (default 10s)
+      --buffer-window duration                                           Duration for how long a request should be buffered at most (should not be larger than --buffer-max-failover-duration). (default 10s)
       --builtinbackup-file-read-buffer-size uint                         read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.
       --builtinbackup-file-write-buffer-size uint                        write files using an IO buffer of this many bytes. Golang defaults are used when set to 0. (default 2097152)
       --builtinbackup-incremental-restore-path string                    the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.
@@ -61,6 +61,9 @@ Flags:
       --db-appdebug-use-ssl                                              Set this flag to false to make the appdebug connection to not use ssl (default true)
       --db-appdebug-user string                                          db appdebug user userKey (default "vt_appdebug")
       --db-charset string                                                Character set/collation used for this tablet. Make sure to configure this to a charset/collation supported by the lowest MySQL version in your environment. (default "utf8mb4")
+      --db-clone-password string                                         db clone password
+      --db-clone-use-ssl                                                 Set this flag to false to make the clone connection to not use ssl (default true)
+      --db-clone-user string                                             db clone user userKey (default "vt_clone")
       --db-conn-query-info                                               enable parsing and processing of QUERY_OK info fields
       --db-connect-timeout-ms int                                        connection timeout to mysqld in milliseconds (0 for no timeout)
       --db-credentials-file string                                       db credentials file; send SIGHUP to reload this file
@@ -132,6 +135,7 @@ Flags:
       --external-topo-server                                             Should vtcombo use an external topology server instead of starting its own in-memory topology server. If true, vtcombo will use the flags defined in topo/server.go to open topo server
       --foreign-key-mode string                                          This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow (default "allow")
       --gate-query-cache-memory int                                      gate server query cache size in bytes, maximum amount of memory to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache. (default 33554432)
+      --gateway-initial-tablet-timeout duration                          At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type (default 30s)
       --gc-check-interval duration                                       Interval between garbage collection checks (default 1h0m0s)
       --gc-purge-check-interval duration                                 Interval between purge discovery checks (default 1m0s)
       --grpc-auth-mode string                                            Which auth plugin implementation to use (eg: static)
@@ -173,7 +177,8 @@ Flags:
       --init-db-name-override string                                     (init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>
       --init-keyspace string                                             (init parameter) keyspace to use for this tablet
       --init-shard string                                                (init parameter) shard to use for this tablet
-      --init-tablet-type string                                          (init parameter) tablet type to use for this tablet. Valid values are: PRIMARY, REPLICA, SPARE, and RDONLY. The default is REPLICA.
+      --init-tablet-type string                                          (init parameter) tablet type to use for this tablet. Valid values are: REPLICA, RDONLY, and SPARE. The default is REPLICA.
+      --init-tablet-type-lookup                                          (Experimental, init parameter) if enabled, uses tablet alias to look up the tablet type from the existing topology record on restart and use that instead of init-tablet-type. This allows tablets to maintain their changed roles (e.g., RDONLY/DRAINED) across restarts. If disabled or if no topology record exists, init-tablet-type will be used.
       --init-tags StringMap                                              (init parameter) comma separated list of key:value pairs used to tag the tablet
       --init-timeout duration                                            (init parameter) timeout to use for the init phase. (default 1m0s)
       --jaeger-agent-host string                                         host and port to send spans to. if empty, no tracing will be done
@@ -218,6 +223,7 @@ Flags:
       --mycnf-tmp-dir string                                             mysql tmp directory
       --mysql-allow-clear-text-without-tls                               If set, the server will allow the use of a clear text password over non-SSL connections.
       --mysql-auth-server-impl string                                    Which auth server implementation to use. Options: none, ldap, clientcert, static, vault. (default "static")
+      --mysql-clone-enabled                                              Enable MySQL CLONE plugin and user for backup/replica provisioning (requires MySQL 8.0.17+)
       --mysql-default-workload string                                    Default session workload (OLTP, OLAP, DBA) (default "OLTP")
       --mysql-port int                                                   mysql port (default 3306)
       --mysql-server-bind-address string                                 Binds on this address when listening to MySQL binary protocol. Useful to restrict listening to 'localhost' only for instance.

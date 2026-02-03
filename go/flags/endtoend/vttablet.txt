@@ -95,6 +95,9 @@ Flags:
       --db-appdebug-use-ssl                                              Set this flag to false to make the appdebug connection to not use ssl (default true)
       --db-appdebug-user string                                          db appdebug user userKey (default "vt_appdebug")
       --db-charset string                                                Character set/collation used for this tablet. Make sure to configure this to a charset/collation supported by the lowest MySQL version in your environment. (default "utf8mb4")
+      --db-clone-password string                                         db clone password
+      --db-clone-use-ssl                                                 Set this flag to false to make the clone connection to not use ssl (default true)
+      --db-clone-user string                                             db clone user userKey (default "vt_clone")
       --db-conn-query-info                                               enable parsing and processing of QUERY_OK info fields
       --db-connect-timeout-ms int                                        connection timeout to mysqld in milliseconds (0 for no timeout)
       --db-credentials-file string                                       db credentials file; send SIGHUP to reload this file
@@ -201,7 +204,8 @@ Flags:
       --init-db-name-override string                                     (init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>
       --init-keyspace string                                             (init parameter) keyspace to use for this tablet
       --init-shard string                                                (init parameter) shard to use for this tablet
-      --init-tablet-type string                                          (init parameter) tablet type to use for this tablet. Valid values are: PRIMARY, REPLICA, SPARE, and RDONLY. The default is REPLICA.
+      --init-tablet-type string                                          (init parameter) tablet type to use for this tablet. Valid values are: REPLICA, RDONLY, and SPARE. The default is REPLICA.
+      --init-tablet-type-lookup                                          (Experimental, init parameter) if enabled, uses tablet alias to look up the tablet type from the existing topology record on restart and use that instead of init-tablet-type. This allows tablets to maintain their changed roles (e.g., RDONLY/DRAINED) across restarts. If disabled or if no topology record exists, init-tablet-type will be used.
       --init-tags StringMap                                              (init parameter) comma separated list of key:value pairs used to tag the tablet
       --init-timeout duration                                            (init parameter) timeout to use for the init phase. (default 1m0s)
       --jaeger-agent-host string                                         host and port to send spans to. if empty, no tracing will be done
@@ -239,6 +243,7 @@ Flags:
       --mycnf-slow-log-path string                                       mysql slow query log path
       --mycnf-socket-file string                                         mysql socket file
       --mycnf-tmp-dir string                                             mysql tmp directory
+      --mysql-clone-enabled                                              Enable MySQL CLONE plugin and user for backup/replica provisioning (requires MySQL 8.0.17+)
       --mysql-server-version string                                      MySQL server version to advertise. (default "8.4.6-Vitess")
       --mysql-shell-backup-location string                               location where the backup will be stored
       --mysql-shell-dump-flags string                                    flags to pass to mysql shell dump utility. This should be a JSON string and will be saved in the MANIFEST (default "{\"threads\": 4}")

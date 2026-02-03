@@ -1054,8 +1054,7 @@ func buildChangedVindexesValues(
 		vindexValueMap := make(map[string]evalengine.Expr)
 		var compExprs []sqlparser.Expr
 		for _, vcol := range vindex.Columns {
-			subQueriesArgOnChangedVindex, compExprs =
-				createAssignmentExpressions(ctx, assignments, vcol, subQueriesArgOnChangedVindex, vindexValueMap, compExprs)
+			subQueriesArgOnChangedVindex, compExprs = createAssignmentExpressions(ctx, assignments, vcol, subQueriesArgOnChangedVindex, vindexValueMap, compExprs)
 		}
 		if len(vindexValueMap) == 0 {
 			// Vindex not changing, continue

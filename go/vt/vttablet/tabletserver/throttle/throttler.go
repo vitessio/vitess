@@ -77,7 +77,6 @@ import (
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -102,9 +101,7 @@ const (
 	throttlerConfigPrefix = "config/"
 )
 
-var (
-	throttleTabletTypes = "replica"
-)
+var throttleTabletTypes = "replica"
 
 var (
 	statsThrottlerHeartbeatRequests    = stats.NewCounter("ThrottlerHeartbeatRequests", "heartbeat requests")
@@ -120,9 +117,7 @@ func registerThrottlerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &throttleTabletTypes, "throttle-tablet-types", throttleTabletTypes, "Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' always implicitly included")
 }
 
-var (
-	ErrThrottlerNotOpen = errors.New("throttler not open")
-)
+var ErrThrottlerNotOpen = errors.New("throttler not open")
 
 // throttlerTopoService represents the functionality we expect from a TopoServer, abstracted so that
 // it can be mocked in unit tests
@@ -257,10 +252,7 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.throttledAppsSnapshotInterval = throttledAppsSnapshotInterval
 	throttler.dormantPeriod = dormantPeriod
 	throttler.recentCheckDormantDiff = int64(throttler.dormantPeriod / recentCheckRateLimiterInterval)
-	throttler.recentCheckDiff = int64(1 * time.Second / recentCheckRateLimiterInterval)
-	if throttler.recentCheckDiff < 1 {
-		throttler.recentCheckDiff = 1
-	}
+	throttler.recentCheckDiff = max(int64(1*time.Second/recentCheckRateLimiterInterval), 1)
 
 	throttler.StoreMetricsThreshold(base.RegisteredSelfMetrics[base.LagMetricName].DefaultThreshold())
 	throttler.readSelfThrottleMetrics = func(ctx context.Context, tmClient tmclient.TabletManagerClient) base.ThrottleMetrics {
@@ -332,7 +324,7 @@ func (throttler *Throttler) initConfig() {
 
 	throttler.configSettings = &config.ConfigurationSettings{
 		MySQLStore: config.MySQLConfigurationSettings{
-			IgnoreDialTCPErrors: true,
+			IgnoreTabletRPCErrors: true,
 		},
 	}
 }
@@ -750,10 +742,7 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 	primaryStimulatorRateLimiter := timer.NewRateLimiter(throttler.dormantPeriod)
 	throttler.recentCheckRateLimiter = timer.NewRateLimiter(recentCheckRateLimiterInterval)
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done() // Called last, once all tickers are stopped.
-
+	wg.Go(func() {
 		defer func() {
 			throttler.recentCheckRateLimiter.Stop()
 			primaryStimulatorRateLimiter.Stop()
@@ -871,7 +860,7 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 				f()
 			}
 		}
-	}()
+	})
 }
 
 func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, probe *base.Probe) (probeFunc func(context.Context, tmclient.TabletManagerClient) base.ThrottleMetrics) {
@@ -904,15 +893,10 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, probe 
 		metrics := make(base.ThrottleMetrics)
 
 		req := &tabletmanagerdatapb.CheckThrottlerRequest{} // We leave AppName empty; it will default to VitessName anyway, and we can save some proto space
-		resp, gRPCErr := tmClient.CheckThrottler(ctx, probe.Tablet, req)
-		if gRPCErr != nil {
-			if vtErrCode := vterrors.Code(gRPCErr); vtErrCode != vtrpcpb.Code_UNKNOWN {
-				gRPCErr = vterrors.Errorf(vtErrCode, "gRPC error accessing tablet %v. Err=%s", probe.Alias, gRPCErr.Error())
-			} else {
-				// TODO: remove after v24+ when all errors are vterrors/vtrpc-based
-				gRPCErr = fmt.Errorf("gRPC error accessing tablet %v. Err=%w", probe.Alias, gRPCErr)
-			}
-			return metricsWithError(gRPCErr)
+		resp, err := tmClient.CheckThrottler(ctx, probe.Tablet, req)
+		if err != nil {
+			err = vterrors.Wrapf(err, "gRPC error accessing tablet %v. Err=%s", probe.Alias, err.Error())
+			return metricsWithError(err)
 		}
 		throttleMetric.Value = resp.Value
 		if resp.ResponseCode == tabletmanagerdatapb.CheckThrottlerResponseCode_INTERNAL_ERROR {
@@ -1089,7 +1073,7 @@ func (throttler *Throttler) refreshInventory(ctx context.Context) error {
 	}
 	throttler.convergeMetricThresholds()
 
-	var clusterSettingsCopy = throttler.configSettings.MySQLStore
+	clusterSettingsCopy := throttler.configSettings.MySQLStore
 	// config may dynamically change, but internal structure (config.Settings().MySQLStore.Clusters in our case)
 	// is immutable and can only be _replaced_. Hence, it's safe to read in a goroutine:
 	collect := func() error {
@@ -1173,9 +1157,9 @@ func (throttler *Throttler) aggregateMetrics() error {
 	aggregateTabletsMetrics := func(scope base.Scope, metricName base.MetricName, tabletResultsMap base.TabletResultMap) {
 		ignoreHostsCount := throttler.inventory.IgnoreHostsCount
 		ignoreHostsThreshold := throttler.inventory.IgnoreHostsThreshold
-		ignoreDialTCPErrors := throttler.configSettings.MySQLStore.IgnoreDialTCPErrors
+		ignoreTabletRPCErrors := (throttler.configSettings.MySQLStore.IgnoreTabletRPCErrors || throttler.configSettings.MySQLStore.IgnoreDialTCPErrors)
 
-		aggregatedMetric := base.AggregateTabletMetricResults(metricName, tabletResultsMap, ignoreHostsCount, ignoreDialTCPErrors, ignoreHostsThreshold)
+		aggregatedMetric := base.AggregateTabletMetricResults(metricName, tabletResultsMap, ignoreHostsCount, ignoreTabletRPCErrors, ignoreHostsThreshold)
 		aggregatedMetricName := metricName.AggregatedName(scope)
 		throttler.aggregatedMetrics.Set(aggregatedMetricName, aggregatedMetric, cache.DefaultExpiration)
 		if metricName == metricNameUsedAsDefault {

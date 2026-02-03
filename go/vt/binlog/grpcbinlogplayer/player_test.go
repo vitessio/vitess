@@ -17,7 +17,6 @@ limitations under the License.
 package grpcbinlogplayer
 
 import (
-	"context"
 	"net"
 	"testing"
 
@@ -49,8 +48,7 @@ func TestGRPCBinlogStreamer(t *testing.T) {
 
 	// Create a GRPC client to talk to the fake tablet
 	c := &client{}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	// and send it to the test suite
 	binlogplayertest.Run(ctx, t, c, &topodatapb.Tablet{

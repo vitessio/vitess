@@ -107,7 +107,8 @@ func tstWorkflowAction(t *testing.T, action, tabletTypes, cells string) error {
 // vtctldclient.
 // tstWorkflowExecVtctl instead.
 func tstWorkflowExec(t *testing.T, cells, workflow, defaultSourceKs, defaultTargetKs, tables, action, tabletTypes,
-	sourceShards, targetShards string, options *workflowExecOptions) error {
+	sourceShards, targetShards string, options *workflowExecOptions,
+) error {
 	var args []string
 	if currentWorkflowType == binlogdatapb.VReplicationWorkflowType_MoveTables {
 		args = append(args, "MoveTables")
@@ -414,7 +415,7 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 
 	// ensure sequence is available to vtgate
 	num := 5
-	for i := 0; i < num; i++ {
+	for range num {
 		execVtgateQuery(t, vtgateConn, defaultTargetKs, "insert into customer2(name) values('a')")
 	}
 	waitForRowCount(t, vtgateConn, defaultTargetKs, "customer2", 3+num)
@@ -446,7 +447,7 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 	assert.Contains(t, output, "\"sequence\": \"customer_seq2\"", "customer2 still found in keyspace product")
 
 	// ensure sequence is available to vtgate
-	for i := 0; i < num; i++ {
+	for range num {
 		execVtgateQuery(t, vtgateConn, defaultSourceKs, "insert into customer2(name) values('a')")
 	}
 	waitForRowCount(t, vtgateConn, defaultSourceKs, "customer2", 3+num+num)
@@ -494,9 +495,7 @@ func testReshardV2Workflow(t *testing.T) {
 	dataGenConn, dataGenCloseConn := getVTGateConn()
 	defer dataGenCloseConn()
 	dataGenWg := sync.WaitGroup{}
-	dataGenWg.Add(1)
-	go func() {
-		defer dataGenWg.Done()
+	dataGenWg.Go(func() {
 		id := 1000
 		for {
 			select {
@@ -510,7 +509,7 @@ func testReshardV2Workflow(t *testing.T) {
 			time.Sleep(1 * time.Millisecond)
 			id++
 		}
-	}()
+	})
 
 	// create internal tables on the original customer shards that should be
 	// ignored and not show up on the new shards
@@ -575,12 +574,7 @@ func testMoveTablesV2Workflow(t *testing.T) {
 		workflows := []string{}
 		err := json.Unmarshal([]byte(output), &workflows)
 		require.NoError(t, err)
-		for _, w := range workflows {
-			if w == workflow {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(workflows, workflow)
 	}
 	listOutputIsEmpty := func(output string) bool {
 		workflows := []string{}
@@ -596,7 +590,7 @@ func testMoveTablesV2Workflow(t *testing.T) {
 
 	// The purge table should get skipped/ignored
 	// If it's not then we'll get an error as the table doesn't exist in the vschema
-	createMoveTablesWorkflow(t, "customer,loadtest,vdiff_order,reftable,_vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431")
+	createMoveTablesWorkflow(t, "customer,loadtest,vdiff_order,reftable,_vt_prg_4f9194b43b2011eb8a0104ed332e05c2_20221210194431_")
 	waitForWorkflowState(t, vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 	validateReadsRouteToSource(t, "replica,rdonly")
 	validateWritesRouteToSource(t)
@@ -895,14 +889,14 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 	setupTargetKeyspace(t)
 	workflowType := "MoveTables"
 
-	var moveTablesAndWait = func() {
+	moveTablesAndWait := func() {
 		moveTablesAction(t, "Create", sourceCellOrAlias, workflow, defaultSourceKs, defaultTargetKs, tables)
 		catchup(t, targetTab1, workflow, workflowType)
 		catchup(t, targetTab2, workflow, workflowType)
 		doVDiff(t, ksWorkflow, "")
 	}
 	allCellNames := getCellNames(cells)
-	var switchReadsFollowedBySwitchWrites = func() {
+	switchReadsFollowedBySwitchWrites := func() {
 		moveTablesAndWait()
 
 		validateReadsRouteToSource(t, "replica")
@@ -915,7 +909,7 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 
 		revert(t, workflowType)
 	}
-	var switchWritesFollowedBySwitchReads = func() {
+	switchWritesFollowedBySwitchReads := func() {
 		moveTablesAndWait()
 
 		validateWritesRouteToSource(t)
@@ -929,7 +923,7 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 		revert(t, workflowType)
 	}
 
-	var switchReadsReverseSwitchWritesSwitchReads = func() {
+	switchReadsReverseSwitchWritesSwitchReads := func() {
 		moveTablesAndWait()
 
 		validateReadsRouteToSource(t, "replica")
@@ -952,7 +946,7 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 		revert(t, workflowType)
 	}
 
-	var switchWritesReverseSwitchReadsSwitchWrites = func() {
+	switchWritesReverseSwitchReadsSwitchWrites := func() {
 		moveTablesAndWait()
 
 		validateWritesRouteToSource(t)

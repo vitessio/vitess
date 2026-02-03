@@ -32,16 +32,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/utils"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
-	"vitess.io/vitess/go/vt/vttablet/tabletconn"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/utils"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 )
 
 var (
@@ -111,7 +110,7 @@ func SetupShardedReparentCluster(t *testing.T, durability string, extraVttabletF
 		VSchema:          `{"sharded": true, "vindexes": {"hash_index": {"type": "hash"}}, "tables": {"vt_insert_test": {"column_vindexes": [{"column": "id", "name": "hash_index"}]}}}`,
 		DurabilityPolicy: durability,
 	}
-	err = clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false)
+	err = clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false, clusterInstance.Cell)
 	require.NoError(t, err)
 
 	// Start Vtgate
@@ -189,7 +188,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	shard.Vttablets = tablets
 
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--lock_tables_timeout", "5s",
 		"--track_schema_versions=true",
 		// disabling online-ddl for reparent tests. This is done to reduce flakiness.
@@ -284,7 +283,7 @@ func StartNewVTTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 		clusterInstance.Hostname,
 		clusterInstance.TmpDirectory,
 		[]string{
-			//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+			// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 			"--lock_tables_timeout", "5s",
 			"--track_schema_versions=true",
 			"--queryserver_enable_online_ddl" + "=false",
@@ -369,7 +368,8 @@ func PrsAvoid(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *c
 func PrsWithTimeout(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet, avoid bool, actionTimeout, waitTimeout string, extraArgs ...string) (string, error) {
 	args := []string{
 		"PlannedReparentShard",
-		fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
+		fmt.Sprintf("%s/%s", KeyspaceName, ShardName),
+	}
 	if actionTimeout != "" {
 		args = append(args, "--action_timeout", actionTimeout)
 	}
@@ -446,7 +446,7 @@ func ValidateTopology(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 
 // ConfirmReplication confirms that the replication is working properly
 func ConfirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*cluster.Vttablet) int {
-	ctx := context.Background()
+	ctx := t.Context()
 	insertVal++
 	n := insertVal // unique value ...
 	// insert data into the new primary, check the connected replica work
@@ -843,6 +843,7 @@ func CheckReplicationStatus(ctx context.Context, t *testing.T, tablet *cluster.V
 	}
 }
 
+// WaitForTabletToBeServing waits for a tablet to reach a serving state.
 func WaitForTabletToBeServing(ctx context.Context, t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet, timeout time.Duration) {
 	vTablet, err := clusterInstance.VtctldClientProcess.GetTablet(tablet.Alias)
 	require.NoError(t, err)
@@ -862,4 +863,23 @@ func WaitForTabletToBeServing(ctx context.Context, t *testing.T, clusterInstance
 	if err != nil && !strings.Contains(err.Error(), "context canceled") {
 		t.Fatal(err.Error())
 	}
+}
+
+// WaitForQueryWithStateInProcesslist waits for a query to be present in the processlist with a specific state.
+func WaitForQueryWithStateInProcesslist(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, sql, state string, timeout time.Duration) {
+	require.Eventually(t, func() bool {
+		qr := RunSQL(ctx, t, "select Command, State, Info from information_schema.processlist", tablet)
+		for _, row := range qr.Rows {
+			if len(row) != 3 {
+				continue
+			}
+			if strings.EqualFold(row[0].ToString(), "Query") {
+				continue
+			}
+			if strings.EqualFold(row[1].ToString(), state) && strings.EqualFold(row[2].ToString(), sql) {
+				return true
+			}
+		}
+		return false
+	}, timeout, time.Second, "query with state not in processlist")
 }

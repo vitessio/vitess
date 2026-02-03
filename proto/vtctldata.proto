@@ -175,6 +175,7 @@ message SchemaMigration {
   vttime.Time reviewed_at = 52;
   vttime.Time ready_to_complete_at = 53;
   string removed_foreign_key_names = 54;
+  uint64 in_order_completion_pending_count = 55;
 
   enum Strategy {
     option allow_alias = true;
@@ -471,6 +472,10 @@ message BackupRequest {
   // starting the backup. This is available so we can override this for upgrade safe
   // backups which might take longer to shut down.
   vttime.Duration mysql_shutdown_timeout = 7;
+
+  // Optional queries to run on the mysqld instance prior to the backup and fields
+  // to control the related behavior.
+  tabletmanagerdata.BackupRequest.InitSQL init_sql = 8;
 }
 
 message BackupResponse {
@@ -500,6 +505,10 @@ message BackupShardRequest {
   // starting the backup. This is available so we can override this for upgrade safe
   // backups which might take longer to shut down.
   vttime.Duration mysql_shutdown_timeout = 7;
+
+  // Optional queries to run on the mysqld instance prior to the backup and fields
+  // to control the related behavior.
+  tabletmanagerdata.BackupRequest.InitSQL init_sql = 8;
 }
 
 message CancelSchemaMigrationRequest {

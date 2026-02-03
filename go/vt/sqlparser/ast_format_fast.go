@@ -86,7 +86,6 @@ func (node *Select) FormatFast(buf *TrackedBuffer) {
 	node.Limit.FormatFast(buf)
 	buf.WriteString(node.Lock.ToString())
 	node.Into.FormatFast(buf)
-
 }
 
 // FormatFast formats the node.
@@ -138,7 +137,6 @@ func (node *VStream) FormatFast(buf *TrackedBuffer) {
 	node.SelectExpr.FormatFast(buf)
 	buf.WriteString(" from ")
 	node.Table.FormatFast(buf)
-
 }
 
 // FormatFast formats the node.
@@ -162,7 +160,6 @@ func (node *ValuesStatement) FormatFast(buf *TrackedBuffer) {
 
 	node.Order.FormatFast(buf)
 	node.Limit.FormatFast(buf)
-
 }
 
 // FormatFast formats the node.
@@ -172,7 +169,6 @@ func (node *Stream) FormatFast(buf *TrackedBuffer) {
 	node.SelectExpr.FormatFast(buf)
 	buf.WriteString(" from ")
 	node.Table.FormatFast(buf)
-
 }
 
 // FormatFast formats the node.
@@ -2492,25 +2488,46 @@ func (node *OverClause) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node
 func (node *WindowSpecification) FormatFast(buf *TrackedBuffer) {
+	hasContent := false
 	if node.Name.NotEmpty() {
-		buf.WriteByte(' ')
 		node.Name.FormatFast(buf)
+		hasContent = true
 	}
 	if node.PartitionClause != nil {
-		buf.WriteString(" partition by ")
-		buf.formatExprs(node.PartitionClause)
+		if hasContent {
+			buf.WriteString(" partition by ")
+			buf.formatExprs(node.PartitionClause)
+		} else {
+			buf.WriteString("partition by ")
+			buf.formatExprs(node.PartitionClause)
+		}
+		hasContent = true
 	}
 	if node.OrderClause != nil {
-		node.OrderClause.FormatFast(buf)
+		if hasContent {
+			node.OrderClause.FormatFast(buf)
+		} else {
+			prefix := "order by "
+			for _, n := range node.OrderClause {
+				buf.WriteString(prefix)
+				n.FormatFast(buf)
+				prefix = ", "
+			}
+		}
+		hasContent = true
 	}
 	if node.FrameClause != nil {
-		node.FrameClause.FormatFast(buf)
+		if hasContent {
+			buf.WriteByte(' ')
+			node.FrameClause.FormatFast(buf)
+		} else {
+			node.FrameClause.FormatFast(buf)
+		}
 	}
 }
 
 // FormatFast formats the node
 func (node *FrameClause) FormatFast(buf *TrackedBuffer) {
-	buf.WriteByte(' ')
 	buf.WriteString(node.Unit.ToString())
 	if node.End != nil {
 		buf.WriteString(" between")

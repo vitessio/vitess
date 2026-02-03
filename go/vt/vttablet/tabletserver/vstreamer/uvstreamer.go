@@ -101,7 +101,8 @@ type uvstreamerConfig struct {
 
 func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se *schema.Engine, startPos string,
 	tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, vschema *localVSchema,
-	throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions) *uvstreamer {
+	throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions,
+) *uvstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	config := &uvstreamerConfig{
 		MaxReplicationLag: 1 * time.Nanosecond,
@@ -415,10 +416,10 @@ func (uvs *uvstreamer) currentPosition() (replication.Position, error) {
 // 3. TablePKs not nil, startPos empty => table copy (for pks > lastPK)
 // 4. TablePKs not nil, startPos set => run catchup from startPos, then table copy  (for pks > lastPK)
 //
-// If TablesToCopy option is not nil, copy only the tables listed in TablesToCopy.
-// For other tables not in TablesToCopy, if startPos is set, perform catchup starting from startPos.
+// If table copy phase should run based on one of the previous states, then only copy the tables in
+// TablesToCopy list.
 func (uvs *uvstreamer) init() error {
-	if uvs.startPos == "" /* full copy */ || len(uvs.inTablePKs) > 0 /* resume copy */ || len(uvs.options.GetTablesToCopy()) > 0 /* copy specific tables */ {
+	if uvs.startPos == "" /* full copy */ || len(uvs.inTablePKs) > 0 /* resume copy */ {
 		if err := uvs.buildTablePlan(); err != nil {
 			return err
 		}

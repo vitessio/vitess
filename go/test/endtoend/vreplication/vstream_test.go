@@ -52,7 +52,7 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 	vc.AddKeyspace(t, []*Cell{defaultCell}, defaultSourceKs, "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
 	verifyClusterHealth(t, vc)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
 	if err != nil {
 		log.Fatal(err)
@@ -63,7 +63,8 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 			Keyspace: defaultSourceKs,
 			Shard:    "0",
 			Gtid:     "",
-		}}}
+		}},
+	}
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{
@@ -80,7 +81,8 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 		},
 	}
 	flags := &vtgatepb.VStreamFlags{
-		TablesToCopy: []string{"product", "customer"},
+		TablesToCopy:         []string{"product", "customer"},
+		TransactionChunkSize: 1024, // 1KB - test chunking for all transactions
 	}
 	id := 0
 	vtgateConn := vc.GetVTGateConn(t)
@@ -94,6 +96,8 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 		execVtgateQuery(t, vtgateConn, defaultSourceKs, fmt.Sprintf("insert into product (pid, description) values (%d, 'description%d')", id+100, id))
 		execVtgateQuery(t, vtgateConn, defaultSourceKs, fmt.Sprintf("insert into merchant (mname, category) values ('mname%d', 'category%d')", id+100, id))
 	}
+
+	insertLargeTransactionForChunkTesting(t, vtgateConn, defaultSourceKs, 10000)
 
 	// Stream events from the VStream API
 	reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
@@ -151,6 +155,7 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 	stopInserting.Store(false)
 	var insertMu sync.Mutex
 	go func() {
+		insertCount := 0
 		for {
 			if stopInserting.Load() {
 				return
@@ -160,6 +165,10 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 			execVtgateQuery(t, vtgateConn, defaultSourceKs, fmt.Sprintf("insert into customer (cid, name) values (%d, 'customer%d')", id+100, id))
 			execVtgateQuery(t, vtgateConn, defaultSourceKs, fmt.Sprintf("insert into product (pid, description) values (%d, 'description%d')", id+100, id))
 			execVtgateQuery(t, vtgateConn, defaultSourceKs, fmt.Sprintf("insert into merchant (mname, category) values ('mname%d', 'category%d')", id+100, id))
+			insertCount++
+			if insertCount%5 == 0 {
+				insertLargeTransactionForChunkTesting(t, vtgateConn, defaultSourceKs, 20000+insertCount*10)
+			}
 			insertMu.Unlock()
 		}
 	}()
@@ -220,7 +229,7 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 	t.Run("VStreamFrom", func(t *testing.T) {
 		testVStreamFrom(t, vtgate, "product", 2)
 	})
-	ctx := context.Background()
+	ctx := t.Context()
 	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
 	if err != nil {
 		log.Fatal(err)
@@ -231,7 +240,8 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 			Keyspace: defaultSourceKs,
 			Shard:    "0",
 			Gtid:     "",
-		}}}
+		}},
+	}
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -239,7 +249,10 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 			Filter: "select * from customer",
 		}},
 	}
-	flags := &vtgatepb.VStreamFlags{HeartbeatInterval: 3600}
+	flags := &vtgatepb.VStreamFlags{
+		HeartbeatInterval:    3600,
+		TransactionChunkSize: 1024, // 1KB - test chunking for all transactions
+	}
 	done := atomic.Bool{}
 	done.Store(false)
 
@@ -254,6 +267,7 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 
 	// first goroutine that keeps inserting rows into table being streamed until some time elapses after second PRS
 	go func() {
+		insertCount := 0
 		for {
 			if stopInserting.Load() {
 				return
@@ -261,6 +275,10 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 			insertMu.Lock()
 			id++
 			execVtgateQuery(t, vtgateConn, defaultSourceKs, fmt.Sprintf("insert into customer (cid, name) values (%d, 'customer%d')", id+100, id))
+			insertCount++
+			if insertCount%3 == 0 {
+				insertLargeTransactionForChunkTesting(t, vtgateConn, defaultSourceKs, 40000+insertCount*10)
+			}
 			insertMu.Unlock()
 		}
 	}()
@@ -341,6 +359,7 @@ const schemaUnsharded = `
 create table customer_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
 insert into customer_seq(id, next_id, cache) values(0, 1, 3);
 `
+
 const vschemaUnsharded = `
 {
   "tables": {
@@ -350,9 +369,11 @@ const vschemaUnsharded = `
   }
 }
 `
+
 const schemaSharded = `
 create table customer(cid int, name varbinary(128), primary key(cid)) TABLESPACE innodb_system CHARSET=utf8mb4;
 `
+
 const vschemaSharded = `
 {
   "sharded": true,
@@ -417,13 +438,13 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 	verifyClusterHealth(t, vc)
 
 	// some initial data
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		insertRow("sharded", "customer", i)
 	}
 
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "sharded", "-80,80-", vschemaSharded, schemaSharded, defaultReplicas, defaultRdonly, baseTabletID+200, nil)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
 	if err != nil {
 		log.Fatal(err)
@@ -433,7 +454,8 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: "sharded",
 			Gtid:     "current",
-		}}}
+		}},
+	}
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -441,7 +463,11 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 			Filter: "select * from customer",
 		}},
 	}
-	flags := &vtgatepb.VStreamFlags{HeartbeatInterval: 3600, StopOnReshard: stopOnReshard}
+	flags := &vtgatepb.VStreamFlags{
+		HeartbeatInterval:    3600,
+		StopOnReshard:        stopOnReshard,
+		TransactionChunkSize: 1024, // 1KB - test chunking for all transactions
+	}
 	done := false
 
 	id := 1000
@@ -562,7 +588,7 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEven
 	_, err = vc.AddKeyspace(t, []*Cell{defaultCell}, "sharded", "-80,80-", vschemaSharded, schemaSharded, defaultReplicas, defaultRdonly, baseTabletID+200, nil)
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
 	if err != nil {
 		log.Fatal(err)
@@ -571,7 +597,8 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEven
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: "/.*",
-		}}}
+		}},
+	}
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -581,7 +608,9 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEven
 			Match: "/customer.*/",
 		}},
 	}
-	flags := &vtgatepb.VStreamFlags{}
+	flags := &vtgatepb.VStreamFlags{
+		TransactionChunkSize: 1024, // 1KB - test chunking for all transactions
+	}
 	done := false
 
 	id := 1000
@@ -684,7 +713,7 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEven
 // old shards -- which are in the VGTID from the previous stream -- and that
 // we miss no row events during the process.
 func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ks := "testks"
 	wf := "multiVStreamsKeyspaceReshard"
 	baseTabletID := 100
@@ -755,7 +784,8 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: "/.*", // Match all keyspaces just to be more realistic.
-		}}}
+		}},
+	}
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -765,6 +795,7 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 	}
 	flags := &vtgatepb.VStreamFlags{
 		IncludeReshardJournalEvents: true,
+		TransactionChunkSize:        1024, // 1KB - test chunking for all transactions
 	}
 	journalEvents := 0
 
@@ -880,7 +911,7 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 // TestMultiVStreamsKeyspaceStopOnReshard confirms that journal events are received
 // when resuming a VStream after a reshard.
 func TestMultiVStreamsKeyspaceStopOnReshard(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ks := "testks"
 	wf := "multiVStreamsKeyspaceReshard"
 	baseTabletID := 100
@@ -953,7 +984,8 @@ func TestMultiVStreamsKeyspaceStopOnReshard(t *testing.T) {
 			// Only stream the keyspace that we're resharding. Otherwise the client stream
 			// will continue to run with only the tablet stream from the global keyspace.
 			Keyspace: ks,
-		}}}
+		}},
+	}
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -962,7 +994,8 @@ func TestMultiVStreamsKeyspaceStopOnReshard(t *testing.T) {
 		}},
 	}
 	flags := &vtgatepb.VStreamFlags{
-		StopOnReshard: true,
+		StopOnReshard:        true,
+		TransactionChunkSize: 1024, // 1KB - test chunking for all transactions
 	}
 
 	// Stream events but stop once we have a VGTID with positions for the old/original shards.
@@ -1145,7 +1178,8 @@ func doVStream(t *testing.T, vc *VitessCluster, flags *vtgatepb.VStreamFlags) (n
 			Keyspace: defaultSourceKs,
 			Shard:    "0",
 			Gtid:     "",
-		}}}
+		}},
+	}
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -1233,6 +1267,7 @@ func TestVStreamHeartbeats(t *testing.T) {
 			name: "With Keyspace Heartbeats On",
 			flags: &vtgatepb.VStreamFlags{
 				StreamKeyspaceHeartbeats: true,
+				TransactionChunkSize:     1024, // 1KB - test chunking for all transactions
 			},
 			expectedHeartbeats: numExpectedHeartbeats,
 		},
@@ -1331,7 +1366,8 @@ func TestVStreamPushdownFilters(t *testing.T) {
 			Keyspace: ks,
 			Shard:    shard,
 			Gtid:     "",
-		}}}
+		}},
+	}
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -1360,10 +1396,13 @@ func TestVStreamPushdownFilters(t *testing.T) {
 // runVStreamAndGetNumOfRowEvents runs VStream with the specified filter and
 // returns number of copy phase and running phase row events.
 func runVStreamAndGetNumOfRowEvents(t *testing.T, ctx context.Context, vstreamConn *vtgateconn.VTGateConn,
-	vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, done chan struct{}) (copyPhaseRowEvents int, runningPhaseRowEvents int) {
+	vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, done chan struct{},
+) (copyPhaseRowEvents int, runningPhaseRowEvents int) {
 	copyPhase := true
 	func() {
-		reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, &vtgatepb.VStreamFlags{})
+		reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, &vtgatepb.VStreamFlags{
+			TransactionChunkSize: 1024, // 1KB - test chunking for all transactions
+		})
 		require.NoError(t, err)
 		for {
 			evs, err := reader.Recv()

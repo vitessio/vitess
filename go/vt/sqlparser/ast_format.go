@@ -1895,23 +1895,43 @@ func (node *OverClause) Format(buf *TrackedBuffer) {
 
 // Format formats the node
 func (node *WindowSpecification) Format(buf *TrackedBuffer) {
+	hasContent := false
 	if node.Name.NotEmpty() {
-		buf.astPrintf(node, " %v", node.Name)
+		buf.astPrintf(node, "%v", node.Name)
+		hasContent = true
 	}
 	if node.PartitionClause != nil {
-		buf.astPrintf(node, " partition by %n", node.PartitionClause)
+		if hasContent {
+			buf.astPrintf(node, " partition by %n", node.PartitionClause)
+		} else {
+			buf.astPrintf(node, "partition by %n", node.PartitionClause)
+		}
+		hasContent = true
 	}
 	if node.OrderClause != nil {
-		buf.astPrintf(node, "%v", node.OrderClause)
+		if hasContent {
+			buf.astPrintf(node, "%v", node.OrderClause)
+		} else {
+			prefix := "order by "
+			for _, n := range node.OrderClause {
+				buf.astPrintf(node, "%s%v", prefix, n)
+				prefix = ", "
+			}
+		}
+		hasContent = true
 	}
 	if node.FrameClause != nil {
-		buf.astPrintf(node, "%v", node.FrameClause)
+		if hasContent {
+			buf.astPrintf(node, " %v", node.FrameClause)
+		} else {
+			buf.astPrintf(node, "%v", node.FrameClause)
+		}
 	}
 }
 
 // Format formats the node
 func (node *FrameClause) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, " %s", node.Unit.ToString())
+	buf.astPrintf(node, "%s", node.Unit.ToString())
 	if node.End != nil {
 		buf.astPrintf(node, " between%v and%v", node.Start, node.End)
 	} else {

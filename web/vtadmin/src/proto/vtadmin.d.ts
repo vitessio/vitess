@@ -18420,6 +18420,12 @@ export namespace topodata {
 
         /** Tablet default_conn_collation */
         default_conn_collation?: (number|null);
+
+        /** Tablet tablet_start_time */
+        tablet_start_time?: (vttime.ITime|null);
+
+        /** Tablet tablet_shutdown_time */
+        tablet_shutdown_time?: (vttime.ITime|null);
     }
 
     /** Represents a Tablet. */
@@ -18469,6 +18475,12 @@ export namespace topodata {
 
         /** Tablet default_conn_collation. */
         public default_conn_collation: number;
+
+        /** Tablet tablet_start_time. */
+        public tablet_start_time?: (vttime.ITime|null);
+
+        /** Tablet tablet_shutdown_time. */
+        public tablet_shutdown_time?: (vttime.ITime|null);
 
         /**
          * Creates a new Tablet instance using the specified properties.
@@ -18943,6 +18955,9 @@ export namespace topodata {
 
         /** Keyspace vtorc_state */
         vtorc_state?: (vtorcdata.IKeyspace|null);
+
+        /** Keyspace query_throttler_config */
+        query_throttler_config?: (querythrottler.IConfig|null);
     }
 
     /** Represents a Keyspace. */
@@ -18974,6 +18989,9 @@ export namespace topodata {
 
         /** Keyspace vtorc_state. */
         public vtorc_state?: (vtorcdata.IKeyspace|null);
+
+        /** Keyspace query_throttler_config. */
+        public query_throttler_config?: (querythrottler.IConfig|null);
 
         /**
          * Creates a new Keyspace instance using the specified properties.
@@ -19931,6 +19949,9 @@ export namespace topodata {
 
         /** SrvKeyspace throttler_config */
         throttler_config?: (topodata.IThrottlerConfig|null);
+
+        /** SrvKeyspace query_throttler_config */
+        query_throttler_config?: (querythrottler.IConfig|null);
     }
 
     /** Represents a SrvKeyspace. */
@@ -19947,6 +19968,9 @@ export namespace topodata {
 
         /** SrvKeyspace throttler_config. */
         public throttler_config?: (topodata.IThrottlerConfig|null);
+
+        /** SrvKeyspace query_throttler_config. */
+        public query_throttler_config?: (querythrottler.IConfig|null);
 
         /**
          * Creates a new SrvKeyspace instance using the specified properties.
@@ -20833,6 +20857,622 @@ export namespace vtorcdata {
 
         /**
          * Gets the default type url for Shard
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+}
+
+/** Namespace querythrottler. */
+export namespace querythrottler {
+
+    /** ThrottlingStrategy enum. */
+    enum ThrottlingStrategy {
+        UNKNOWN = 0,
+        TABLET_THROTTLER = 1
+    }
+
+    /** Properties of a Config. */
+    interface IConfig {
+
+        /** Config enabled */
+        enabled?: (boolean|null);
+
+        /** Config strategy */
+        strategy?: (querythrottler.ThrottlingStrategy|null);
+
+        /** Config tablet_strategy_config */
+        tablet_strategy_config?: (querythrottler.ITabletStrategyConfig|null);
+
+        /** Config dry_run */
+        dry_run?: (boolean|null);
+    }
+
+    /** Represents a Config. */
+    class Config implements IConfig {
+
+        /**
+         * Constructs a new Config.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: querythrottler.IConfig);
+
+        /** Config enabled. */
+        public enabled: boolean;
+
+        /** Config strategy. */
+        public strategy: querythrottler.ThrottlingStrategy;
+
+        /** Config tablet_strategy_config. */
+        public tablet_strategy_config?: (querythrottler.ITabletStrategyConfig|null);
+
+        /** Config dry_run. */
+        public dry_run: boolean;
+
+        /**
+         * Creates a new Config instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Config instance
+         */
+        public static create(properties?: querythrottler.IConfig): querythrottler.Config;
+
+        /**
+         * Encodes the specified Config message. Does not implicitly {@link querythrottler.Config.verify|verify} messages.
+         * @param message Config message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: querythrottler.IConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Config message, length delimited. Does not implicitly {@link querythrottler.Config.verify|verify} messages.
+         * @param message Config message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: querythrottler.IConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a Config message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Config
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): querythrottler.Config;
+
+        /**
+         * Decodes a Config message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Config
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): querythrottler.Config;
+
+        /**
+         * Verifies a Config message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a Config message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Config
+         */
+        public static fromObject(object: { [k: string]: any }): querythrottler.Config;
+
+        /**
+         * Creates a plain object from a Config message. Also converts values to other types if specified.
+         * @param message Config
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: querythrottler.Config, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Config to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Config
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a TabletStrategyConfig. */
+    interface ITabletStrategyConfig {
+
+        /** TabletStrategyConfig tablet_rules */
+        tablet_rules?: ({ [k: string]: querythrottler.IStatementRuleSet }|null);
+    }
+
+    /** Represents a TabletStrategyConfig. */
+    class TabletStrategyConfig implements ITabletStrategyConfig {
+
+        /**
+         * Constructs a new TabletStrategyConfig.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: querythrottler.ITabletStrategyConfig);
+
+        /** TabletStrategyConfig tablet_rules. */
+        public tablet_rules: { [k: string]: querythrottler.IStatementRuleSet };
+
+        /**
+         * Creates a new TabletStrategyConfig instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns TabletStrategyConfig instance
+         */
+        public static create(properties?: querythrottler.ITabletStrategyConfig): querythrottler.TabletStrategyConfig;
+
+        /**
+         * Encodes the specified TabletStrategyConfig message. Does not implicitly {@link querythrottler.TabletStrategyConfig.verify|verify} messages.
+         * @param message TabletStrategyConfig message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: querythrottler.ITabletStrategyConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified TabletStrategyConfig message, length delimited. Does not implicitly {@link querythrottler.TabletStrategyConfig.verify|verify} messages.
+         * @param message TabletStrategyConfig message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: querythrottler.ITabletStrategyConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a TabletStrategyConfig message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns TabletStrategyConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): querythrottler.TabletStrategyConfig;
+
+        /**
+         * Decodes a TabletStrategyConfig message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns TabletStrategyConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): querythrottler.TabletStrategyConfig;
+
+        /**
+         * Verifies a TabletStrategyConfig message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a TabletStrategyConfig message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns TabletStrategyConfig
+         */
+        public static fromObject(object: { [k: string]: any }): querythrottler.TabletStrategyConfig;
+
+        /**
+         * Creates a plain object from a TabletStrategyConfig message. Also converts values to other types if specified.
+         * @param message TabletStrategyConfig
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: querythrottler.TabletStrategyConfig, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this TabletStrategyConfig to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for TabletStrategyConfig
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a StatementRuleSet. */
+    interface IStatementRuleSet {
+
+        /** StatementRuleSet statement_rules */
+        statement_rules?: ({ [k: string]: querythrottler.IMetricRuleSet }|null);
+    }
+
+    /** Represents a StatementRuleSet. */
+    class StatementRuleSet implements IStatementRuleSet {
+
+        /**
+         * Constructs a new StatementRuleSet.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: querythrottler.IStatementRuleSet);
+
+        /** StatementRuleSet statement_rules. */
+        public statement_rules: { [k: string]: querythrottler.IMetricRuleSet };
+
+        /**
+         * Creates a new StatementRuleSet instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns StatementRuleSet instance
+         */
+        public static create(properties?: querythrottler.IStatementRuleSet): querythrottler.StatementRuleSet;
+
+        /**
+         * Encodes the specified StatementRuleSet message. Does not implicitly {@link querythrottler.StatementRuleSet.verify|verify} messages.
+         * @param message StatementRuleSet message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: querythrottler.IStatementRuleSet, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified StatementRuleSet message, length delimited. Does not implicitly {@link querythrottler.StatementRuleSet.verify|verify} messages.
+         * @param message StatementRuleSet message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: querythrottler.IStatementRuleSet, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a StatementRuleSet message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns StatementRuleSet
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): querythrottler.StatementRuleSet;
+
+        /**
+         * Decodes a StatementRuleSet message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns StatementRuleSet
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): querythrottler.StatementRuleSet;
+
+        /**
+         * Verifies a StatementRuleSet message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a StatementRuleSet message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns StatementRuleSet
+         */
+        public static fromObject(object: { [k: string]: any }): querythrottler.StatementRuleSet;
+
+        /**
+         * Creates a plain object from a StatementRuleSet message. Also converts values to other types if specified.
+         * @param message StatementRuleSet
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: querythrottler.StatementRuleSet, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this StatementRuleSet to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StatementRuleSet
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a MetricRuleSet. */
+    interface IMetricRuleSet {
+
+        /** MetricRuleSet metric_rules */
+        metric_rules?: ({ [k: string]: querythrottler.IMetricRule }|null);
+    }
+
+    /** Represents a MetricRuleSet. */
+    class MetricRuleSet implements IMetricRuleSet {
+
+        /**
+         * Constructs a new MetricRuleSet.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: querythrottler.IMetricRuleSet);
+
+        /** MetricRuleSet metric_rules. */
+        public metric_rules: { [k: string]: querythrottler.IMetricRule };
+
+        /**
+         * Creates a new MetricRuleSet instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MetricRuleSet instance
+         */
+        public static create(properties?: querythrottler.IMetricRuleSet): querythrottler.MetricRuleSet;
+
+        /**
+         * Encodes the specified MetricRuleSet message. Does not implicitly {@link querythrottler.MetricRuleSet.verify|verify} messages.
+         * @param message MetricRuleSet message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: querythrottler.IMetricRuleSet, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MetricRuleSet message, length delimited. Does not implicitly {@link querythrottler.MetricRuleSet.verify|verify} messages.
+         * @param message MetricRuleSet message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: querythrottler.IMetricRuleSet, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MetricRuleSet message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MetricRuleSet
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): querythrottler.MetricRuleSet;
+
+        /**
+         * Decodes a MetricRuleSet message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MetricRuleSet
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): querythrottler.MetricRuleSet;
+
+        /**
+         * Verifies a MetricRuleSet message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MetricRuleSet message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MetricRuleSet
+         */
+        public static fromObject(object: { [k: string]: any }): querythrottler.MetricRuleSet;
+
+        /**
+         * Creates a plain object from a MetricRuleSet message. Also converts values to other types if specified.
+         * @param message MetricRuleSet
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: querythrottler.MetricRuleSet, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MetricRuleSet to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MetricRuleSet
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a MetricRule. */
+    interface IMetricRule {
+
+        /** MetricRule thresholds */
+        thresholds?: (querythrottler.IThrottleThreshold[]|null);
+    }
+
+    /** Represents a MetricRule. */
+    class MetricRule implements IMetricRule {
+
+        /**
+         * Constructs a new MetricRule.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: querythrottler.IMetricRule);
+
+        /** MetricRule thresholds. */
+        public thresholds: querythrottler.IThrottleThreshold[];
+
+        /**
+         * Creates a new MetricRule instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MetricRule instance
+         */
+        public static create(properties?: querythrottler.IMetricRule): querythrottler.MetricRule;
+
+        /**
+         * Encodes the specified MetricRule message. Does not implicitly {@link querythrottler.MetricRule.verify|verify} messages.
+         * @param message MetricRule message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: querythrottler.IMetricRule, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MetricRule message, length delimited. Does not implicitly {@link querythrottler.MetricRule.verify|verify} messages.
+         * @param message MetricRule message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: querythrottler.IMetricRule, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MetricRule message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MetricRule
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): querythrottler.MetricRule;
+
+        /**
+         * Decodes a MetricRule message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MetricRule
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): querythrottler.MetricRule;
+
+        /**
+         * Verifies a MetricRule message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MetricRule message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MetricRule
+         */
+        public static fromObject(object: { [k: string]: any }): querythrottler.MetricRule;
+
+        /**
+         * Creates a plain object from a MetricRule message. Also converts values to other types if specified.
+         * @param message MetricRule
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: querythrottler.MetricRule, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MetricRule to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MetricRule
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ThrottleThreshold. */
+    interface IThrottleThreshold {
+
+        /** ThrottleThreshold above */
+        above?: (number|null);
+
+        /** ThrottleThreshold throttle */
+        throttle?: (number|null);
+    }
+
+    /** Represents a ThrottleThreshold. */
+    class ThrottleThreshold implements IThrottleThreshold {
+
+        /**
+         * Constructs a new ThrottleThreshold.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: querythrottler.IThrottleThreshold);
+
+        /** ThrottleThreshold above. */
+        public above: number;
+
+        /** ThrottleThreshold throttle. */
+        public throttle: number;
+
+        /**
+         * Creates a new ThrottleThreshold instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ThrottleThreshold instance
+         */
+        public static create(properties?: querythrottler.IThrottleThreshold): querythrottler.ThrottleThreshold;
+
+        /**
+         * Encodes the specified ThrottleThreshold message. Does not implicitly {@link querythrottler.ThrottleThreshold.verify|verify} messages.
+         * @param message ThrottleThreshold message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: querythrottler.IThrottleThreshold, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ThrottleThreshold message, length delimited. Does not implicitly {@link querythrottler.ThrottleThreshold.verify|verify} messages.
+         * @param message ThrottleThreshold message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: querythrottler.IThrottleThreshold, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ThrottleThreshold message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ThrottleThreshold
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): querythrottler.ThrottleThreshold;
+
+        /**
+         * Decodes a ThrottleThreshold message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ThrottleThreshold
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): querythrottler.ThrottleThreshold;
+
+        /**
+         * Verifies a ThrottleThreshold message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ThrottleThreshold message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ThrottleThreshold
+         */
+        public static fromObject(object: { [k: string]: any }): querythrottler.ThrottleThreshold;
+
+        /**
+         * Creates a plain object from a ThrottleThreshold message. Also converts values to other types if specified.
+         * @param message ThrottleThreshold
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: querythrottler.ThrottleThreshold, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ThrottleThreshold to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ThrottleThreshold
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -30189,6 +30829,9 @@ export namespace tabletmanagerdata {
 
     /** Properties of a DemotePrimaryRequest. */
     interface IDemotePrimaryRequest {
+
+        /** DemotePrimaryRequest force */
+        force?: (boolean|null);
     }
 
     /** Represents a DemotePrimaryRequest. */
@@ -30199,6 +30842,9 @@ export namespace tabletmanagerdata {
          * @param [properties] Properties to set
          */
         constructor(properties?: tabletmanagerdata.IDemotePrimaryRequest);
+
+        /** DemotePrimaryRequest force. */
+        public force: boolean;
 
         /**
          * Creates a new DemotePrimaryRequest instance using the specified properties.
@@ -31929,6 +32575,9 @@ export namespace tabletmanagerdata {
 
         /** BackupRequest mysql_shutdown_timeout */
         mysql_shutdown_timeout?: (vttime.IDuration|null);
+
+        /** BackupRequest init_sql */
+        init_sql?: (tabletmanagerdata.BackupRequest.IInitSQL|null);
     }
 
     /** Represents a BackupRequest. */
@@ -31957,6 +32606,9 @@ export namespace tabletmanagerdata {
 
         /** BackupRequest mysql_shutdown_timeout. */
         public mysql_shutdown_timeout?: (vttime.IDuration|null);
+
+        /** BackupRequest init_sql. */
+        public init_sql?: (tabletmanagerdata.BackupRequest.IInitSQL|null);
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -32034,6 +32686,124 @@ export namespace tabletmanagerdata {
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace BackupRequest {
+
+        /** Properties of an InitSQL. */
+        interface IInitSQL {
+
+            /** InitSQL queries */
+            queries?: (string[]|null);
+
+            /** InitSQL tablet_types */
+            tablet_types?: (topodata.TabletType[]|null);
+
+            /** InitSQL timeout */
+            timeout?: (vttime.IDuration|null);
+
+            /** InitSQL fail_on_error */
+            fail_on_error?: (boolean|null);
+        }
+
+        /** Represents an InitSQL. */
+        class InitSQL implements IInitSQL {
+
+            /**
+             * Constructs a new InitSQL.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: tabletmanagerdata.BackupRequest.IInitSQL);
+
+            /** InitSQL queries. */
+            public queries: string[];
+
+            /** InitSQL tablet_types. */
+            public tablet_types: topodata.TabletType[];
+
+            /** InitSQL timeout. */
+            public timeout?: (vttime.IDuration|null);
+
+            /** InitSQL fail_on_error. */
+            public fail_on_error: boolean;
+
+            /**
+             * Creates a new InitSQL instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns InitSQL instance
+             */
+            public static create(properties?: tabletmanagerdata.BackupRequest.IInitSQL): tabletmanagerdata.BackupRequest.InitSQL;
+
+            /**
+             * Encodes the specified InitSQL message. Does not implicitly {@link tabletmanagerdata.BackupRequest.InitSQL.verify|verify} messages.
+             * @param message InitSQL message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: tabletmanagerdata.BackupRequest.IInitSQL, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified InitSQL message, length delimited. Does not implicitly {@link tabletmanagerdata.BackupRequest.InitSQL.verify|verify} messages.
+             * @param message InitSQL message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: tabletmanagerdata.BackupRequest.IInitSQL, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes an InitSQL message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns InitSQL
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.BackupRequest.InitSQL;
+
+            /**
+             * Decodes an InitSQL message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns InitSQL
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.BackupRequest.InitSQL;
+
+            /**
+             * Verifies an InitSQL message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates an InitSQL message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns InitSQL
+             */
+            public static fromObject(object: { [k: string]: any }): tabletmanagerdata.BackupRequest.InitSQL;
+
+            /**
+             * Creates a plain object from an InitSQL message. Also converts values to other types if specified.
+             * @param message InitSQL
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: tabletmanagerdata.BackupRequest.InitSQL, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this InitSQL to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for InitSQL
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
     }
 
     /** Properties of a BackupResponse. */
@@ -40057,6 +40827,9 @@ export namespace binlogdata {
 
         /** VStreamOptions tables_to_copy */
         tables_to_copy?: (string[]|null);
+
+        /** VStreamOptions no_timeouts */
+        no_timeouts?: (boolean|null);
     }
 
     /** Represents a VStreamOptions. */
@@ -40076,6 +40849,9 @@ export namespace binlogdata {
 
         /** VStreamOptions tables_to_copy. */
         public tables_to_copy: string[];
+
+        /** VStreamOptions no_timeouts. */
+        public no_timeouts: boolean;
 
         /**
          * Creates a new VStreamOptions instance using the specified properties.
@@ -49316,6 +50092,18 @@ export namespace replicationdata {
 
         /** Status backup_running */
         backup_running?: (boolean|null);
+
+        /** Status semi_sync_primary_enabled */
+        semi_sync_primary_enabled?: (boolean|null);
+
+        /** Status semi_sync_replica_enabled */
+        semi_sync_replica_enabled?: (boolean|null);
+
+        /** Status semi_sync_primary_status */
+        semi_sync_primary_status?: (boolean|null);
+
+        /** Status semi_sync_replica_status */
+        semi_sync_replica_status?: (boolean|null);
     }
 
     /** Represents a Status. */
@@ -49395,6 +50183,18 @@ export namespace replicationdata {
 
         /** Status backup_running. */
         public backup_running: boolean;
+
+        /** Status semi_sync_primary_enabled. */
+        public semi_sync_primary_enabled: boolean;
+
+        /** Status semi_sync_replica_enabled. */
+        public semi_sync_replica_enabled: boolean;
+
+        /** Status semi_sync_primary_status. */
+        public semi_sync_primary_status: boolean;
+
+        /** Status semi_sync_replica_status. */
+        public semi_sync_replica_status: boolean;
 
         /**
          * Creates a new Status instance using the specified properties.
@@ -52607,6 +53407,9 @@ export namespace vtctldata {
 
         /** SchemaMigration removed_foreign_key_names */
         removed_foreign_key_names?: (string|null);
+
+        /** SchemaMigration in_order_completion_pending_count */
+        in_order_completion_pending_count?: (number|Long|null);
     }
 
     /** Represents a SchemaMigration. */
@@ -52779,6 +53582,9 @@ export namespace vtctldata {
 
         /** SchemaMigration removed_foreign_key_names. */
         public removed_foreign_key_names: string;
+
+        /** SchemaMigration in_order_completion_pending_count. */
+        public in_order_completion_pending_count: (number|Long);
 
         /**
          * Creates a new SchemaMigration instance using the specified properties.
@@ -55650,6 +56456,9 @@ export namespace vtctldata {
 
         /** BackupRequest mysql_shutdown_timeout */
         mysql_shutdown_timeout?: (vttime.IDuration|null);
+
+        /** BackupRequest init_sql */
+        init_sql?: (tabletmanagerdata.BackupRequest.IInitSQL|null);
     }
 
     /** Represents a BackupRequest. */
@@ -55681,6 +56490,9 @@ export namespace vtctldata {
 
         /** BackupRequest mysql_shutdown_timeout. */
         public mysql_shutdown_timeout?: (vttime.IDuration|null);
+
+        /** BackupRequest init_sql. */
+        public init_sql?: (tabletmanagerdata.BackupRequest.IInitSQL|null);
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -55898,6 +56710,9 @@ export namespace vtctldata {
 
         /** BackupShardRequest mysql_shutdown_timeout */
         mysql_shutdown_timeout?: (vttime.IDuration|null);
+
+        /** BackupShardRequest init_sql */
+        init_sql?: (tabletmanagerdata.BackupRequest.IInitSQL|null);
     }
 
     /** Represents a BackupShardRequest. */
@@ -55929,6 +56744,9 @@ export namespace vtctldata {
 
         /** BackupShardRequest mysql_shutdown_timeout. */
         public mysql_shutdown_timeout?: (vttime.IDuration|null);
+
+        /** BackupShardRequest init_sql. */
+        public init_sql?: (tabletmanagerdata.BackupRequest.IInitSQL|null);
 
         /**
          * Creates a new BackupShardRequest instance using the specified properties.

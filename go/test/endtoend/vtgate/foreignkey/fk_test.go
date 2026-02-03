@@ -30,9 +30,10 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
 // TestInsertWithFK tests that insertions work as expected when foreign key management is enabled in Vitess.
@@ -260,7 +261,8 @@ func runVStream(t *testing.T, ctx context.Context, ch chan *binlogdatapb.VEvent,
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{
 			{Keyspace: unshardedKs, Shard: "0", Gtid: "current"},
-		}}
+		},
+	}
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match: "/u.*",
@@ -288,7 +290,7 @@ func runVStream(t *testing.T, ctx context.Context, ch chan *binlogdatapb.VEvent,
 
 func drainEvents(t *testing.T, ch chan *binlogdatapb.VEvent, count int) []string {
 	var rowEvents []string
-	for i := 0; i < count; i++ {
+	for i := range count {
 		select {
 		case re := <-ch:
 			rowEvents = append(rowEvents, re.RowEvent.String())
@@ -1015,14 +1017,16 @@ func TestFkQueries(t *testing.T) {
 				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
 				"update fk_t10 set col = id + 3",
 			},
-		}, {
+		},
+		{
 			name: "Non-literal update with order by",
 			queries: []string{
 				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
 				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
 				"update fk_t10 set col = id + 3 order by id desc",
 			},
-		}, {
+		},
+		{
 			name: "Non-literal update with order by that require parent and child foreign keys verification - success",
 			queries: []string{
 				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8)",
@@ -1031,7 +1035,8 @@ func TestFkQueries(t *testing.T) {
 				"insert into fk_t13 (id, col) values (1,1),(2,2)",
 				"update fk_t11 set col = id + 3 where id >= 3",
 			},
-		}, {
+		},
+		{
 			name: "Non-literal update with order by that require parent and child foreign keys verification - parent fails",
 			queries: []string{
 				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
@@ -1039,7 +1044,8 @@ func TestFkQueries(t *testing.T) {
 				"insert into fk_t12 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
 				"update fk_t11 set col = id + 3",
 			},
-		}, {
+		},
+		{
 			name: "Non-literal update with order by that require parent and child foreign keys verification - child fails",
 			queries: []string{
 				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8)",
@@ -1048,21 +1054,24 @@ func TestFkQueries(t *testing.T) {
 				"insert into fk_t13 (id, col) values (1,1),(2,2)",
 				"update fk_t11 set col = id + 3",
 			},
-		}, {
+		},
+		{
 			name: "Single column update in a multi-col table - success",
 			queries: []string{
 				"insert into fk_multicol_t1 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
 				"insert into fk_multicol_t2 (id, cola, colb) values (1, 1, 1)",
 				"update fk_multicol_t1 set colb = 4 + (colb) where id = 2",
 			},
-		}, {
+		},
+		{
 			name: "Single column update in a multi-col table - restrict failure",
 			queries: []string{
 				"insert into fk_multicol_t1 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
 				"insert into fk_multicol_t2 (id, cola, colb) values (1, 1, 1)",
 				"update fk_multicol_t1 set colb = 4 + (colb) where id = 1",
 			},
-		}, {
+		},
+		{
 			name: "Single column update in multi-col table - cascade and set null",
 			queries: []string{
 				"insert into fk_multicol_t15 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
@@ -1070,7 +1079,8 @@ func TestFkQueries(t *testing.T) {
 				"insert into fk_multicol_t17 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
 				"update fk_multicol_t15 set colb = 4 + (colb) where id = 1",
 			},
-		}, {
+		},
+		{
 			name: "Non literal update that evaluates to NULL - restricted",
 			queries: []string{
 				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
@@ -1078,7 +1088,8 @@ func TestFkQueries(t *testing.T) {
 				"insert into fk_t13 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
 				"update fk_t10 set col = id + null where id = 1",
 			},
-		}, {
+		},
+		{
 			name: "Non literal update that evaluates to NULL - success",
 			queries: []string{
 				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
@@ -1086,14 +1097,16 @@ func TestFkQueries(t *testing.T) {
 				"insert into fk_t12 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
 				"update fk_t10 set col = id + null where id = 1",
 			},
-		}, {
+		},
+		{
 			name: "Multi column foreign key update with one literal and one non-literal update",
 			queries: []string{
 				"insert into fk_multicol_t15 (id, cola, colb) values (1,1,1),(2,2,2)",
 				"insert into fk_multicol_t16 (id, cola, colb) values (1,1,1),(2,2,2)",
 				"update fk_multicol_t15 set cola = 3, colb = (id * 2) - 2",
 			},
-		}, {
+		},
+		{
 			name: "Update that sets to 0 and -0 values",
 			queries: []string{
 				"insert into fk_t15 (id, col) values (1,'-0'), (2, '0'), (3, '5'), (4, '-5')",
@@ -1503,6 +1516,45 @@ create table temp2(id bigint auto_increment primary key, col varchar(20) not nul
 	mcmp.Exec(`insert into temp2(col) values('a'), ('b'), ('c') `)
 	mcmp.Exec(`insert into temp1(col) values('a') `)
 	mcmp.ExecAllowAndCompareError(`insert into temp1(col) values('d') `, utils.CompareOptions{})
+}
+
+// TestForeignKeyWithKeyspaceQualifier tests that CREATE TABLE with foreign key references
+// that include keyspace qualifiers work correctly. This addresses bug #18889 where keyspace
+// names were not being stripped before being sent to MySQL, causing failures because MySQL
+// expects database names (vt_<keyspace>) not keyspace names.
+func TestForeignKeyWithKeyspaceQualifier(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, mcmp.VtConn, `use uks`)
+
+	// Create the parent table.
+	utils.Exec(t, mcmp.VtConn, `create table fk_parent(id bigint primary key)`)
+
+	// Create the child table with keyspace-qualified foreign key reference.
+	utils.Exec(t, mcmp.VtConn, `create table fk_child(id bigint primary key, parent_id bigint, foreign key (parent_id) references uks.fk_parent(id))`)
+
+	// Verify that the foreign key constraint works.
+	utils.Exec(t, mcmp.VtConn, `insert into fk_parent(id) values (1), (2)`)
+	utils.Exec(t, mcmp.VtConn, `insert into fk_child(id, parent_id) values (100, 1)`)
+
+	// This should fail due to FK constraint.
+	_, err := utils.ExecAllowError(t, mcmp.VtConn, `insert into fk_child(id, parent_id) values (101, 999)`)
+	assert.ErrorContains(t, err, "Cannot add or update a child row: a foreign key constraint fails")
+
+	// Test ALTER TABLE with keyspace-qualified foreign key.
+	utils.Exec(t, mcmp.VtConn, `create table fk_child2(id bigint primary key, parent_id bigint)`)
+	utils.Exec(t, mcmp.VtConn, `alter table fk_child2 add foreign key (parent_id) references uks.fk_parent(id)`)
+
+	// Verify the constraint works for the altered table.
+	utils.Exec(t, mcmp.VtConn, `insert into fk_child2(id, parent_id) values (200, 2)`)
+	_, err = utils.ExecAllowError(t, mcmp.VtConn, `insert into fk_child2(id, parent_id) values (201, 888)`)
+	assert.ErrorContains(t, err, "Cannot add or update a child row: a foreign key constraint fails")
+
+	// Clean up.
+	utils.Exec(t, mcmp.VtConn, `drop table fk_child`)
+	utils.Exec(t, mcmp.VtConn, `drop table fk_child2`)
+	utils.Exec(t, mcmp.VtConn, `drop table fk_parent`)
 }
 
 // TestRestrictFkOnNonStandardKey verifies that restrict_fk_on_non_standard_key is set to off

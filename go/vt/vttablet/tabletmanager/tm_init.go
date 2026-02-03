@@ -38,6 +38,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
 	"math/rand/v2"
 	"regexp"
 	"strings"
@@ -89,13 +90,14 @@ const (
 
 var (
 	// The following flags initialize the tablet record.
-	tabletHostname     string
-	initKeyspace       string
-	initShard          string
-	initTabletType     string
-	initDbNameOverride string
-	skipBuildInfoTags  = "/.*/"
-	initTags           flagutil.StringMapValue
+	tabletHostname       string
+	initKeyspace         string
+	initShard            string
+	initTabletType       string
+	initTabletTypeLookup bool
+	initDbNameOverride   string
+	skipBuildInfoTags    = "/.*/"
+	initTags             flagutil.StringMapValue
 
 	initTimeout          = 1 * time.Minute
 	mysqlShutdownTimeout = mysqlctl.DefaultShutdownTimeout
@@ -105,7 +107,8 @@ func registerInitFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &tabletHostname, "tablet-hostname", tabletHostname, "if not empty, this hostname will be assumed instead of trying to resolve it")
 	utils.SetFlagStringVar(fs, &initKeyspace, "init-keyspace", initKeyspace, "(init parameter) keyspace to use for this tablet")
 	utils.SetFlagStringVar(fs, &initShard, "init-shard", initShard, "(init parameter) shard to use for this tablet")
-	utils.SetFlagStringVar(fs, &initTabletType, "init-tablet-type", initTabletType, "(init parameter) tablet type to use for this tablet. Valid values are: PRIMARY, REPLICA, SPARE, and RDONLY. The default is REPLICA.")
+	utils.SetFlagStringVar(fs, &initTabletType, "init-tablet-type", initTabletType, "(init parameter) tablet type to use for this tablet. Valid values are: REPLICA, RDONLY, and SPARE. The default is REPLICA.")
+	fs.BoolVar(&initTabletTypeLookup, "init-tablet-type-lookup", initTabletTypeLookup, "(Experimental, init parameter) if enabled, uses tablet alias to look up the tablet type from the existing topology record on restart and use that instead of init-tablet-type. This allows tablets to maintain their changed roles (e.g., RDONLY/DRAINED) across restarts. If disabled or if no topology record exists, init-tablet-type will be used.")
 	utils.SetFlagStringVar(fs, &initDbNameOverride, "init-db-name-override", initDbNameOverride, "(init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>")
 	utils.SetFlagStringVar(fs, &skipBuildInfoTags, "vttablet-skip-buildinfo-tags", skipBuildInfoTags, "comma-separated list of buildinfo tags to skip from merging with --init-tags. each tag is either an exact match or a regular expression of the form '/regexp/'.")
 	utils.SetFlagVar(fs, &initTags, "init-tags", "(init parameter) comma separated list of key:value pairs used to tag the tablet")
@@ -287,6 +290,8 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 		DbNameOverride:       initDbNameOverride,
 		Tags:                 mergeTags(buildTags, initTags),
 		DefaultConnCollation: uint32(charset),
+		TabletStartTime:      protoutil.TimeToProto(time.Now()),
+		TabletShutdownTime:   nil,
 	}, nil
 }
 
@@ -345,13 +350,9 @@ func mergeTags(a, b map[string]string) map[string]string {
 	}
 
 	result := make(map[string]string, maxCap)
-	for k, v := range a {
-		result[k] = v
-	}
+	maps.Copy(result, a)
 
-	for k, v := range b {
-		result[k] = v
-	}
+	maps.Copy(result, b)
 
 	return result
 }
@@ -372,6 +373,42 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	tm.DBConfigs.DBName = topoproto.TabletDbName(tablet)
 	tm.tabletAlias = tablet.Alias
 	tm.tmc = tmclient.NewTabletManagerClient()
+
+	// Check if there's an existing tablet record in topology and use it if flag is enabled
+	if initTabletTypeLookup {
+		ctx, cancel := context.WithTimeout(tm.BatchCtx, initTimeout)
+		defer cancel()
+		existingTablet, err := tm.TopoServer.GetTablet(ctx, tablet.Alias)
+		if err != nil && !topo.IsErrType(err, topo.NoNode) {
+			// Error other than "node doesn't exist" - return it
+			return vterrors.Wrap(err, "--init-tablet-type-lookup is enabled but failed to get existing tablet record from topology, unable to determine tablet type during startup")
+		}
+
+		// If we found an existing tablet record, determine which type to use
+		switch {
+		case err != nil:
+			// No existing tablet record found, use init-tablet-type
+			log.Infof("No existing tablet record found, using init-tablet-type: %v", tablet.Type)
+		case existingTablet.Type == topodatapb.TabletType_PRIMARY:
+			// Don't set to PRIMARY yet - let checkPrimaryShip() validate and decide
+			// checkPrimaryShip() has the logic to verify shard records and determine if this tablet should really be PRIMARY
+			log.Infof("Found existing tablet record with PRIMARY type, setting to REPLICA and allowing checkPrimaryShip() to validate")
+			tablet.Type = topodatapb.TabletType_REPLICA
+		case existingTablet.Type == topodatapb.TabletType_BACKUP || existingTablet.Type == topodatapb.TabletType_RESTORE:
+			// Skip transient operational types (BACKUP, RESTORE)
+			// These are temporary states that should not be preserved across restarts
+			log.Infof("Found existing tablet record with transient type %v, using init-tablet-type %v instead",
+				existingTablet.Type, tablet.Type)
+		default:
+			// Safe to restore the type for non-PRIMARY, non-transient types
+			log.Infof("Found existing tablet record with --init-tablet-type-lookup enabled, using tablet type %v from topology instead of init-tablet-type %v",
+				existingTablet.Type, tablet.Type)
+			tablet.Type = existingTablet.Type
+		}
+	} else {
+		log.Infof("Using init-tablet-type %v", tablet.Type)
+	}
+
 	tm.tmState = newTMState(tm, tablet)
 	tm.actionSema = semaphore.NewWeighted(1)
 	tm._waitForGrantsComplete = make(chan struct{})
@@ -470,6 +507,8 @@ func (tm *TabletManager) Close() {
 		tablet.Hostname = ""
 		tablet.MysqlHostname = ""
 		tablet.PortMap = nil
+		tablet.TabletStartTime = nil
+		tablet.TabletShutdownTime = protoutil.TimeToProto(time.Now())
 		return nil
 	}
 
@@ -1032,7 +1071,7 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 	}
 
 	// Set primary and start replication.
-	if currentPrimary.Tablet.MysqlHostname == "" {
+	if currentPrimary.MysqlHostname == "" {
 		log.Warningf("primary tablet in the shard record does not have mysql hostname specified, possibly because that tablet has been shut down.")
 		return "", nil
 	}
@@ -1067,7 +1106,7 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 		return "", vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("Errant GTID detected - %s; Primary GTID - %s, Replica GTID - %s", errantGtid, primaryPosition, replicaPos.String()))
 	}
 
-	if err := tm.MysqlDaemon.SetReplicationSource(ctx, currentPrimary.Tablet.MysqlHostname, currentPrimary.Tablet.MysqlPort, 0, true, true); err != nil {
+	if err := tm.MysqlDaemon.SetReplicationSource(ctx, currentPrimary.MysqlHostname, currentPrimary.MysqlPort, 0, true, true); err != nil {
 		return "", vterrors.Wrap(err, "MysqlDaemon.SetReplicationSource failed")
 	}
 

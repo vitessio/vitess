@@ -39,6 +39,7 @@ func (cached *BindVarCond) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Rule) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -81,6 +82,7 @@ func (cached *Rule) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Rules) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -98,6 +100,7 @@ func (cached *Rules) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *bvcre) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -113,6 +116,7 @@ func (cached *bvcre) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *namedRegexp) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

@@ -95,6 +95,7 @@ var (
 
 	mycnfTemplateFile string
 	socketFile        string
+	mysqlCloneEnabled bool
 
 	replicationConnectRetry = 10 * time.Second
 
@@ -144,6 +145,17 @@ func registerMySQLDFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &mycnfTemplateFile, "mysqlctl-mycnf-template", mycnfTemplateFile, "template file to use for generating the my.cnf file during server init")
 	utils.SetFlagStringVar(fs, &socketFile, "mysqlctl-socket", socketFile, "socket file to use for remote mysqlctl actions (empty for local actions)")
 	utils.SetFlagDurationVar(fs, &replicationConnectRetry, "replication-connect-retry", replicationConnectRetry, "how long to wait in between replica reconnect attempts. Only precise to the second.")
+	utils.SetFlagBoolVar(fs, &mysqlCloneEnabled, "mysql-clone-enabled", mysqlCloneEnabled, "Enable MySQL CLONE plugin and user for backup/replica provisioning (requires MySQL 8.0.17+)")
+}
+
+// MySQLCloneEnabled returns whether MySQL CLONE support is enabled.
+func MySQLCloneEnabled() bool {
+	return mysqlCloneEnabled
+}
+
+// SetMySQLCloneEnabled sets the MySQL CLONE enabled flag. This is intended for testing.
+func SetMySQLCloneEnabled(enabled bool) {
+	mysqlCloneEnabled = enabled
 }
 
 func registerReparentFlags(fs *pflag.FlagSet) {
@@ -796,6 +808,12 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 		if err := mysqld.executeMysqlScript(ctx, params, config.DefaultInitDB); err != nil {
 			return fmt.Errorf("failed to initialize mysqld: %v", err)
 		}
+		// Execute clone-specific init SQL if enabled
+		if mysqlCloneEnabled {
+			if err := mysqld.executeMysqlScript(ctx, params, config.InitClone); err != nil {
+				return fmt.Errorf("failed to initialize clone support: %v", err)
+			}
+		}
 		return nil
 	}
 
@@ -970,9 +988,21 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 
 	myTemplateSource.WriteString(versionConfig)
 
+	// Conditionally include clone plugin config
+	if mysqlCloneEnabled && f == FlavorMySQL {
+		v := mysqld.capabilities.version
+		if v.Major < 8 || (v.Major == 8 && v.Minor == 0 && v.Patch < 17) {
+			log.Warningf("--mysql-clone-enabled is set but MySQL version %d.%d.%d does not support CLONE (requires 8.0.17+); flag will be ignored",
+				v.Major, v.Minor, v.Patch)
+		} else {
+			myTemplateSource.WriteString("\n## Clone plugin (--mysql-clone-enabled)\n")
+			myTemplateSource.WriteString(config.MycnfClone)
+		}
+	}
+
 	if extraCnf := os.Getenv("EXTRA_MY_CNF"); extraCnf != "" {
-		parts := strings.Split(extraCnf, ":")
-		for _, path := range parts {
+		parts := strings.SplitSeq(extraCnf, ":")
+		for path := range parts {
 			data, dataErr := os.ReadFile(path)
 			if dataErr != nil {
 				log.Infof("could not open config file for mycnf: %v", path)

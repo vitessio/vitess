@@ -1,10 +1,7 @@
-_test
-java/*/target
-java/*/bin
-releases
+/_test
 /dist/
-/vthook/
 /bin/
 /vtdataroot/
+/vthook/
 /web/vtadmin/node_modules
 /web/vtadmin/build

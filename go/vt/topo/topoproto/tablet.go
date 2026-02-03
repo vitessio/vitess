@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -180,12 +181,11 @@ func ParseTabletType(param string) (topodatapb.TabletType, error) {
 
 // ParseTabletTypes parses a comma separated list of tablet types and returns a slice with the respective enums.
 func ParseTabletTypes(param string) ([]topodatapb.TabletType, error) {
+	var tabletTypes []topodatapb.TabletType
 	if param == "" {
 		return nil, nil
 	}
-	params := strings.Split(param, ",")
-	tabletTypes := make([]topodatapb.TabletType, 0, len(params))
-	for _, typeStr := range params {
+	for typeStr := range strings.SplitSeq(param, ",") {
 		t, err := ParseTabletType(typeStr)
 		if err != nil {
 			return nil, err
@@ -208,12 +208,7 @@ func TabletTypeLString(tabletType topodatapb.TabletType) string {
 // IsTypeInList returns true if the given type is in the list.
 // Use it with AllTabletTypes for instance.
 func IsTypeInList(tabletType topodatapb.TabletType, types []topodatapb.TabletType) bool {
-	for _, t := range types {
-		if tabletType == t {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(types, tabletType)
 }
 
 // MakeStringTypeList returns a list of strings that match the input list.

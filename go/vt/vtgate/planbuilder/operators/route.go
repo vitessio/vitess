@@ -18,6 +18,8 @@ package operators
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/key"
@@ -159,11 +161,8 @@ func UpdateRoutingLogic(ctx *plancontext.PlanningContext, in sqlparser.Expr, r R
 
 	switch cmp.Operator {
 	case sqlparser.NotInOp:
-		for _, n := range tuples {
-			// If any of the values in the tuple is a literal null, we know that this comparison will always return NULL
-			if sqlparser.IsNull(n) {
-				return nr
-			}
+		if slices.ContainsFunc(tuples, sqlparser.IsNull) {
+			return nr
 		}
 	case sqlparser.InOp:
 		// WHERE col IN (null)
@@ -215,9 +214,7 @@ func copyOption(orig *VindexOption) *VindexOption {
 	copy(values, orig.Values)
 	copy(valueExprs, orig.ValueExprs)
 	copy(predicates, orig.Predicates)
-	for k, v := range orig.ColsSeen {
-		colsSeen[k] = v
-	}
+	maps.Copy(colsSeen, orig.ColsSeen)
 	vo := &VindexOption{
 		Values:      values,
 		ColsSeen:    colsSeen,
@@ -379,7 +376,7 @@ func findVSchemaTableAndCreateRoute(
 	//
 	// Exclude dual tables, which do not get a mirror rule, and are not known to
 	// the VSchema.
-	if ctx.IsMirrored() && !(vschemaTable.Type == vindexes.TypeReference && vschemaTable.Name.String() == "dual") {
+	if ctx.IsMirrored() && (vschemaTable.Type != vindexes.TypeReference || vschemaTable.Name.String() != "dual") {
 		vschemaTable, _, tabletType, target, err = ctx.VSchema.FindTable(tableName)
 	}
 

@@ -74,8 +74,10 @@ const (
 	Right
 )
 
-var _ Operator = (*HashJoin)(nil)
-var _ JoinOp = (*HashJoin)(nil)
+var (
+	_ Operator = (*HashJoin)(nil)
+	_ JoinOp   = (*HashJoin)(nil)
+)
 
 func NewHashJoin(lhs, rhs Operator, outerJoin bool) *HashJoin {
 	hj := &HashJoin{

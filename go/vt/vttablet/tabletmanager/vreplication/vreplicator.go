@@ -142,7 +142,8 @@ type vreplicator struct {
 //	More advanced constructs can be used. Please see the table plan builder
 //	documentation for more info.
 func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats,
-	dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, vre *Engine, workflowConfig *vttablet.VReplicationConfig) *vreplicator {
+	dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, vre *Engine, workflowConfig *vttablet.VReplicationConfig,
+) *vreplicator {
 	if workflowConfig == nil {
 		workflowConfig = vttablet.DefaultVReplicationConfig
 	}
@@ -366,7 +367,6 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 	req := &tabletmanagerdatapb.GetSchemaRequest{
 		Tables: []string{"/.*/"},
 		ExcludeTables: []string{
-			"/" + schema.OldGCTableNameExpression + "/",
 			"/" + schema.GCTableNameExpression + "/",
 		},
 	}

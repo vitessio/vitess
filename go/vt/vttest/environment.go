@@ -17,17 +17,29 @@ limitations under the License.
 package vttest
 
 import (
+	"errors"
 	"math/rand/v2"
 	"net"
 	"os"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"vitess.io/vitess/go/vt/proto/vttest"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	// we use gRPC everywhere, so import the vtgate client.
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
+)
+
+var (
+	// randomPortsMu provides synchronization for randomPorts().
+	randomPortsMu sync.Mutex
+
+	// usedRandomPorts stores ports that have been used by remotePort().
+	usedRandomPorts []int
 )
 
 // Environment is the interface that customizes the global settings for
@@ -97,12 +109,11 @@ type Environment interface {
 // LocalTestEnv is an Environment implementation for local testing
 // See: NewLocalTestEnv()
 type LocalTestEnv struct {
-	BasePort        int
-	TmpPath         string
-	DefaultMyCnf    []string
-	InitDBFile      string
-	Env             []string
-	EnableToxiproxy bool
+	BasePort     int
+	TmpPath      string
+	DefaultMyCnf []string
+	InitDBFile   string
+	Env          []string
 }
 
 // DefaultMySQLFlavor is the MySQL flavor used by vttest when no explicit
@@ -133,7 +144,7 @@ func (env *LocalTestEnv) BinaryPath(binary string) string {
 
 // MySQLManager implements MySQLManager for LocalTestEnv
 func (env *LocalTestEnv) MySQLManager(mycnf []string, snapshot string) (MySQLManager, error) {
-	mysqlctl := &Mysqlctl{
+	return &Mysqlctl{
 		Binary:    env.BinaryPath("mysqlctl"),
 		InitFile:  env.InitDBFile,
 		Directory: env.TmpPath,
@@ -141,18 +152,7 @@ func (env *LocalTestEnv) MySQLManager(mycnf []string, snapshot string) (MySQLMan
 		MyCnf:     append(env.DefaultMyCnf, mycnf...),
 		Env:       env.EnvVars(),
 		UID:       1,
-	}
-	if !env.EnableToxiproxy {
-		return mysqlctl, nil
-	}
-
-	return NewToxiproxyctl(
-		env.BinaryPath("toxiproxy-server"),
-		env.PortForProtocol("toxiproxy", ""),
-		env.PortForProtocol("mysql_behind_toxiproxy", ""),
-		mysqlctl,
-		path.Join(env.LogDirectory(), "toxiproxy.log"),
-	)
+	}, nil
 }
 
 // TopoManager implements TopoManager for LocalTestEnv
@@ -185,12 +185,6 @@ func (env *LocalTestEnv) PortForProtocol(name, proto string) int {
 
 	case "vtcombo_mysql_port":
 		return env.BasePort + 3
-
-	case "toxiproxy":
-		return env.BasePort + 4
-
-	case "mysql_behind_toxiproxy":
-		return env.BasePort + 5
 
 	default:
 		panic("unknown service name: " + name)
@@ -235,21 +229,31 @@ func tmpdir(dataroot string) (dir string, err error) {
 // randomPort gets a random port that is available for a TCP connection.
 // After we generate a random port, we try to establish tcp connections on it and the next 5 values.
 // If any of them fail, then we try a different port.
-func randomPort() int {
+func randomPort() (port int) {
+	randomPortsMu.Lock()
+	defer randomPortsMu.Unlock()
 	for {
-		port := int(rand.Int32N(20000) + 10000)
+		portBase := int(rand.Int32N(20000) + 10000)
 		portInUse := false
-		for i := 0; i < 6; i++ {
-			ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port+i)))
+		portRange := make([]int, 0, 6)
+		for i := range 6 {
+			port = portBase + i
+			if slices.Contains(usedRandomPorts, port) {
+				portInUse = true
+				break
+			}
+			ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
 			if err != nil {
 				portInUse = true
 				break
 			}
+			portRange = append(portRange, port)
 			ln.Close()
 		}
 		if portInUse {
 			continue
 		}
+		usedRandomPorts = append(usedRandomPorts, portRange...)
 		return port
 	}
 }
@@ -281,7 +285,7 @@ func NewLocalTestEnv(basePort int) (*LocalTestEnv, error) {
 // environment with a directory explicitly specified.
 func NewLocalTestEnvWithDirectory(basePort int, directory string) (*LocalTestEnv, error) {
 	if _, err := os.Stat(path.Join(directory, "logs")); os.IsNotExist(err) {
-		err := os.Mkdir(path.Join(directory, "logs"), 0700)
+		err := os.Mkdir(path.Join(directory, "logs"), 0o700)
 		if err != nil {
 			return nil, err
 		}
@@ -317,3 +321,32 @@ func defaultEnvFactory() (Environment, error) {
 // This callback is only used in cases where the user hasn't explicitly set
 // the Env variable when initializing a LocalCluster
 var NewDefaultEnv = defaultEnvFactory
+
+// WriteInitDBFile is a helper function that writes a modified init_db.sql file with custom SQL statements.
+func WriteInitDBFile(initFile, customSQL, newInitFile string) error {
+	initDb, _ := os.ReadFile(initFile)
+	sql, err := getInitDBSQL(string(initDb), customSQL)
+	if err != nil {
+		return vterrors.Wrap(err, "failed to get a modified init db sql")
+	}
+	err = os.WriteFile(newInitFile, []byte(sql), 0o600)
+	if err != nil {
+		return vterrors.Wrap(err, "failed to write a modified init db file")
+	}
+	return nil
+}
+
+// getInitDBSQL is a helper function that retrieves the modified contents of the init_db.sql file with custom SQL statements.
+// We avoid using vitess.io/vitess/go/test/endtoend/utils.GetInitDBSQL as importing this package adds unnecessary flags to vttestserver.
+func getInitDBSQL(initDBSQL string, customSQL string) (string, error) {
+	splitString := strings.Split(initDBSQL, "# {{custom_sql}}")
+	if len(splitString) != 2 {
+		return "", errors.New("missing `# {{custom_sql}}` in init_db.sql file")
+	}
+	var builder strings.Builder
+	builder.WriteString(splitString[0])
+	builder.WriteString(customSQL)
+	builder.WriteString(splitString[1])
+
+	return builder.String(), nil
+}

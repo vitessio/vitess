@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -506,11 +507,8 @@ func (mz *materializer) buildMaterializer() error {
 		isPartial = true
 		var sourceShards2 []*topo.ShardInfo
 		for _, shard := range sourceShards {
-			for _, shard2 := range ms.SourceShards {
-				if shard.ShardName() == shard2 {
-					sourceShards2 = append(sourceShards2, shard)
-					break
-				}
+			if slices.Contains(ms.SourceShards, shard.ShardName()) {
+				sourceShards2 = append(sourceShards2, shard)
 			}
 		}
 		sourceShards = sourceShards2
@@ -538,11 +536,8 @@ func (mz *materializer) buildMaterializer() error {
 	if len(specifiedTargetShards) > 0 {
 		var targetShards2 []*topo.ShardInfo
 		for _, shard := range targetShards {
-			for _, shard2 := range specifiedTargetShards {
-				if shard.ShardName() == shard2 {
-					targetShards2 = append(targetShards2, shard)
-					break
-				}
+			if slices.Contains(specifiedTargetShards, shard.ShardName()) {
+				targetShards2 = append(targetShards2, shard)
 			}
 		}
 		targetShards = targetShards2

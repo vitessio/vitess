@@ -58,8 +58,10 @@ type CollationMetadata struct {
 	UpperCaseFirst bool
 }
 
-var Mysqldata = pflag.String("mysqldata", "testdata/mysqldata", "")
-var Embed = pflag.Bool("embed", false, "")
+var (
+	Mysqldata = pflag.String("mysqldata", "testdata/mysqldata", "")
+	Embed     = pflag.Bool("embed", false, "")
+)
 
 func loadMysqlMetadata() (all AllMetadata) {
 	mysqdata, err := filepath.Glob(path.Join(*Mysqldata, "*.json"))
@@ -106,8 +108,10 @@ func (all AllMetadata) get(name string) *CollationMetadata {
 	return nil
 }
 
-const PkgCollationsData codegen.Package = "vitess.io/vitess/go/mysql/collations/colldata"
-const PkgCharset codegen.Package = "vitess.io/vitess/go/mysql/collations/charset"
+const (
+	PkgCollationsData codegen.Package = "vitess.io/vitess/go/mysql/collations/colldata"
+	PkgCharset        codegen.Package = "vitess.io/vitess/go/mysql/collations/charset"
+)
 
 func main() {
 	pflag.Parse()

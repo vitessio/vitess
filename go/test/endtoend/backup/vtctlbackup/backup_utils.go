@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -132,7 +133,7 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 		return 1, err
 	}
 	newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
-	err = os.WriteFile(newInitDBFile, []byte(sql), 0666)
+	err = os.WriteFile(newInitDBFile, []byte(sql), 0o666)
 	if err != nil {
 		return 1, err
 	}
@@ -231,7 +232,7 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 		shard.Vttablets = append(shard.Vttablets, tablet)
 		return nil
 	}
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		tabletType := tabletTypes[i]
 		if err := createTablet(tabletType); err != nil {
 			return 1, err
@@ -280,7 +281,7 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 		return 1, err
 	}
 
-	if err := localCluster.StartVTOrc(keyspaceName); err != nil {
+	if err := localCluster.StartVTOrc(cell, keyspaceName); err != nil {
 		return 1, err
 	}
 
@@ -443,12 +444,7 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDe
 }
 
 func isRegistered(name string, runlist []string) bool {
-	for _, f := range runlist {
-		if f == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(runlist, name)
 }
 
 type restoreMethod func(t *testing.T, tablet *cluster.Vttablet)
@@ -505,13 +501,30 @@ func primaryBackup(t *testing.T) {
 	// And only 1 record after we restore using the first backup timestamp
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
-	err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", "--allow-primary", primary.Alias)
+	sqlInitTestTable := "init_test"
+	err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", "--allow-primary",
+		// Test init SQL.
+		"--init-backup-sql-queries", fmt.Sprintf("create table `%s`.%s (id int),optimize table `%s`.%s,insert into `%s`.%s (id) values (1)",
+			primary.VttabletProcess.DbName, sqlInitTestTable, primary.VttabletProcess.DbName, sqlInitTestTable, primary.VttabletProcess.DbName, sqlInitTestTable),
+		"--init-backup-sql-timeout=10m",
+		"--init-backup-tablet-types=primary",
+		"--init-backup-sql-fail-on-error",
+		primary.Alias,
+	)
 	require.NoError(t, err)
 
 	backups = localCluster.VerifyBackupCount(t, shardKsName, 2)
 	assert.Contains(t, backups[1], primary.Alias)
 
 	verifyTabletBackupStats(t, primary.VttabletProcess.GetVars())
+
+	// Confirm that the init SQL quereies were run: the table was created and we inserted a row.
+	res, err := primary.VttabletProcess.QueryTablet("SELECT * FROM "+sqlInitTestTable, keyspaceName, true)
+	require.NoError(t, err)
+	require.Len(t, res.Rows, 1)
+	// Now get rid of the init_test table as its purpose has ended.
+	_, err = primary.VttabletProcess.QueryTablet("DROP TABLE "+sqlInitTestTable, keyspaceName, true)
+	require.NoError(t, err)
 
 	// Perform PRS to demote the primary tablet (primary) so that we can do a restore there and verify we don't have the
 	// data from after the older/first backup
@@ -544,10 +557,10 @@ func primaryBackup(t *testing.T) {
 
 	_, err = primary.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
 	require.NoError(t, err)
+
+	restartPrimaryAndReplica(t)
 }
 
-// Test a primary and replica from the same backup.
-//
 // Check that a replica and primary both restored from the same backup
 // can replicate successfully.
 func primaryReplicaSameBackup(t *testing.T) {
@@ -862,7 +875,7 @@ func terminatedRestore(t *testing.T) {
 func checkTabletType(t *testing.T, alias string, tabletType topodata.TabletType) {
 	t.Helper()
 	// for loop for 15 seconds to check if tablet type is correct
-	for i := 0; i < 15; i++ {
+	for range 15 {
 		output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("GetTablet", alias)
 		require.NoError(t, err)
 		var tabletPB topodata.Tablet
@@ -1214,7 +1227,7 @@ func ReadRowsFromReplica(t *testing.T, replicaIndex int) (msgs []string) {
 func FlushBinaryLogsOnReplica(t *testing.T, replicaIndex int, count int) {
 	replica := getReplica(t, replicaIndex)
 	query := "flush binary logs"
-	for i := 0; i < count; i++ {
+	for range count {
 		_, err := replica.VttabletProcess.QueryTablet(query, keyspaceName, true)
 		require.NoError(t, err)
 	}

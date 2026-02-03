@@ -82,7 +82,7 @@ func testReplicationBase(t *testing.T, isClientCertPassed bool) {
 		require.Error(t, err)
 	}
 
-	err = clusterInstance.StartVTOrc(keyspace)
+	err = clusterInstance.StartVTOrc(clusterInstance.Cell, keyspace)
 	require.NoError(t, err)
 }
 
@@ -98,7 +98,7 @@ func initializeCluster(t *testing.T) (int, error) {
 	// create certs directory
 	log.Info("Creating certificates")
 	certDirectory = path.Join(clusterInstance.TmpDirectory, "certs")
-	_ = encryption.CreateDirectory(certDirectory, 0700)
+	_ = encryption.CreateDirectory(certDirectory, 0o700)
 
 	err := encryption.ExecuteVttlstestCommand("CreateCA", "--root", certDirectory)
 	require.NoError(t, err)
@@ -138,7 +138,7 @@ func initializeCluster(t *testing.T) (int, error) {
 		shard := &cluster.Shard{
 			Name: shardName,
 		}
-		for i := 0; i < 2; i++ {
+		for range 2 {
 			// instantiate vttablet object with reserved ports
 			tabletUID := clusterInstance.GetAndReserveTabletUID()
 			tablet := clusterInstance.NewVttabletInstance("replica", tabletUID, cell)

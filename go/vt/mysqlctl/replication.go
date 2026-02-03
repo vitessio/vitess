@@ -52,7 +52,7 @@ type ResetSuperReadOnlyFunc func() error
 // This validates the current primary is correct and can be connected to.
 func WaitForReplicationStart(ctx context.Context, mysqld MysqlDaemon, replicaStartDeadline int) (err error) {
 	var replicaStatus replication.ReplicationStatus
-	for replicaWait := 0; replicaWait < replicaStartDeadline; replicaWait++ {
+	for range replicaStartDeadline {
 		replicaStatus, err = mysqld.ReplicationStatus(ctx)
 		if err != nil {
 			return err
@@ -316,14 +316,14 @@ func (mysqld *Mysqld) SetReadOnly(ctx context.Context, on bool) error {
 func (mysqld *Mysqld) SetSuperReadOnly(ctx context.Context, on bool) (ResetSuperReadOnlyFunc, error) {
 	//  return function for switching `OFF` super_read_only
 	var resetFunc ResetSuperReadOnlyFunc
-	var disableFunc = func() error {
+	disableFunc := func() error {
 		query := "SET GLOBAL super_read_only = 'OFF'"
 		err := mysqld.ExecuteSuperQuery(context.Background(), query)
 		return err
 	}
 
 	//  return function for switching `ON` super_read_only.
-	var enableFunc = func() error {
+	enableFunc := func() error {
 		query := "SET GLOBAL super_read_only = 'ON'"
 		err := mysqld.ExecuteSuperQuery(context.Background(), query)
 		return err
@@ -818,4 +818,31 @@ func (mysqld *Mysqld) SemiSyncExtensionLoaded(ctx context.Context) (mysql.SemiSy
 	defer conn.Recycle()
 
 	return conn.Conn.SemiSyncExtensionLoaded()
+}
+
+func (mysqld *Mysqld) IsSemiSyncBlocked(ctx context.Context) (bool, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return false, err
+	}
+	defer conn.Recycle()
+
+	// Execute the query to check if the primary is blocked on semi-sync.
+	semiSyncWaitSessionsRead := "select variable_value from performance_schema.global_status where regexp_like(variable_name, 'Rpl_semi_sync_(source|master)_wait_sessions')"
+	res, err := conn.Conn.ExecuteFetch(semiSyncWaitSessionsRead, 1, false)
+	if err != nil {
+		return false, err
+	}
+	// If we have no rows, then the primary doesn't have semi-sync enabled.
+	// It then follows, that the primary isn't blocked :)
+	if len(res.Rows) == 0 {
+		return false, nil
+	}
+
+	// Read the status value and check if it is non-zero.
+	if len(res.Rows) != 1 || len(res.Rows[0]) != 1 {
+		return false, fmt.Errorf("unexpected number of rows received - %v", res.Rows)
+	}
+	value, err := res.Rows[0][0].ToCastInt64()
+	return value != 0, err
 }

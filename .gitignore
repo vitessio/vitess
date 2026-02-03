@@ -50,9 +50,6 @@ __debug_bin
 
 report*.xml
 
-# vitess.io preview site
-/preview-vitess.io/
-
 # vitess.io generated site files
 /docs/
 
@@ -60,19 +57,13 @@ report*.xml
 _test/
 /test/stats.json
 
-# Go vendored libs
-/vendor/*/
-
-# release folder
-/releases/
-
 # Local examples
 /examples/local/vtdataroot
 
 /dist/
-/vthook/
 /bin/
 /vtdataroot/
+/vthook/
 venv
 
 .scannerwork

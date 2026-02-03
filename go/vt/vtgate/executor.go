@@ -55,6 +55,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/sysvars"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -155,12 +156,16 @@ type (
 
 var executorOnce sync.Once
 
-const pathQueryPlans = "/debug/query_plans"
-const pathScatterStats = "/debug/scatter_stats"
-const pathVSchema = "/debug/vschema"
+const (
+	pathQueryPlans   = "/debug/query_plans"
+	pathScatterStats = "/debug/scatter_stats"
+	pathVSchema      = "/debug/vschema"
+)
 
-type PlanCacheKey = theine.HashKey256
-type PlanCache = theine.Store[PlanCacheKey, *engine.Plan]
+type (
+	PlanCacheKey = theine.HashKey256
+	PlanCache    = theine.Store[PlanCacheKey, *engine.Plan]
+)
 
 func DefaultPlanCache() *PlanCache {
 	// when being endtoend tested, disable the doorkeeper to ensure reproducible results
@@ -365,7 +370,6 @@ func (e *Executor) StreamExecute(
 		err := vc.StreamExecutePrimitive(ctx, plan.Instructions, bindVars, true, func(qr *sqltypes.Result) error {
 			return srr.storeResultStats(plan.QueryType, qr)
 		})
-
 		// Check if there was partial DML execution. If so, rollback the effect of the partially executed query.
 		if err != nil {
 			if safeSession.InTransaction() && e.rollbackOnFatalTxError(ctx, safeSession, err) {
@@ -857,9 +861,16 @@ func (e *Executor) ShowShards(ctx context.Context, filter *sqlparser.ShowFilter,
 		}
 
 		_, _, shards, err := e.resolver.resolver.GetKeyspaceShards(ctx, keyspace, destTabletType)
-		if err != nil && vterrors.Code(err) != vtrpcpb.Code_INVALID_ARGUMENT {
-			// We only ignore invalid argument errors, as they mean the keyspace
+		if err != nil {
+			// Ignore invalid argument errors, as they mean the keyspace
 			// doesn't have any shards for the given tablet type.
+			if vterrors.Code(err) == vtrpcpb.Code_INVALID_ARGUMENT {
+				continue
+			}
+			// Keyspace does not exist, no shards and skip.
+			if topo.IsErrType(vterrors.UnwrapAll(err), topo.NoNode) {
+				continue
+			}
 			return nil, err
 		}
 
@@ -1009,7 +1020,7 @@ func (e *Executor) ShowVitessReplicationStatus(ctx context.Context, filter *sqlp
 				replicaSQLRunningField = "Slave_SQL_Running"
 				secondsBehindSourceField = "Seconds_Behind_Master"
 			}
-			results, err := e.txConn.tabletGateway.Execute(ctx, ts.Target, sql, nil, 0, 0, nil)
+			results, err := e.txConn.tabletGateway.Execute(ctx, nil, ts.Target, sql, nil, 0, 0, nil)
 			if err != nil || results == nil {
 				log.Warningf("Could not get replication status from %s: %v", tabletHostPort, err)
 			} else if row := results.Named().Row(); row != nil {
@@ -1105,7 +1116,7 @@ func (e *Executor) SaveVSchema(vschema *vindexes.VSchema, stats *VSchemaStats) {
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
-func (e *Executor) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.ShardDestination, error) {
+func (e *Executor) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.ShardDestination, *topodatapb.TabletAlias, error) {
 	return econtext.ParseDestinationTarget(targetString, defaultTabletType, e.VSchema())
 }
 
@@ -1119,7 +1130,8 @@ func (e *Executor) fetchOrCreatePlan(
 	logStats *logstats.LogStats,
 	isExecutePath bool, // this means we are trying to execute the query - this is not a PREPARE call
 ) (
-	plan *engine.Plan, vcursor *econtext.VCursorImpl, stmt sqlparser.Statement, err error) {
+	plan *engine.Plan, vcursor *econtext.VCursorImpl, stmt sqlparser.Statement, err error,
+) {
 	if e.VSchema() == nil {
 		return nil, nil, nil, vterrors.VT13001("vschema not initialized")
 	}
@@ -1332,7 +1344,7 @@ func getDestinations(ctx context.Context, vcursor *econtext.VCursorImpl) []strin
 	}
 
 	shards := make([]string, len(resolved))
-	for i := 0; i < len(shards); i++ {
+	for i := range shards {
 		shards[i] = resolved[i].Target.GetShard()
 	}
 	sort.Strings(shards)
@@ -1483,7 +1495,7 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econ
 	// The mysql plugin runs an implicit rollback whenever a connection closes.
 	// To avoid spamming the log with no-op rollback records, ignore it if
 	// it was a no-op record (i.e. didn't issue any queries)
-	if !(logStats.StmtType == "ROLLBACK" && logStats.ShardQueries == 0) {
+	if logStats.StmtType != "ROLLBACK" || logStats.ShardQueries != 0 {
 		logStats.SaveEndTime()
 		e.queryLogger.Send(logStats)
 	}

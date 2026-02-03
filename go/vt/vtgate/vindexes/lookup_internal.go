@@ -91,9 +91,8 @@ type lookupInternal struct {
 func (lkp *lookupInternal) Init(lookupQueryParams map[string]string, autocommit, upsert, multiShardAutocommit bool) error {
 	lkp.Table = lookupQueryParams[lookupInternalParamTable]
 	lkp.To = lookupQueryParams[lookupInternalParamTo]
-	splitParams := strings.Split(lookupQueryParams[lookupInternalParamFrom], ",")
-	fromColumns := make([]string, 0, len(splitParams))
-	for _, from := range splitParams {
+	var fromColumns []string
+	for from := range strings.SplitSeq(lookupQueryParams[lookupInternalParamFrom], ",") {
 		fromColumns = append(fromColumns, strings.TrimSpace(from))
 	}
 	lkp.FromColumns = fromColumns

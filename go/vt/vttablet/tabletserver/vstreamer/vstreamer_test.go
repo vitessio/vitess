@@ -62,8 +62,7 @@ func checkIfOptionIsSupported(t *testing.T, variable string) bool {
 // correct: that they don't contain the missing columns and that the
 // DataColumns bitmap is sent.
 func TestNoBlob(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	oldEngine := engine
 	engine = nil
 	oldEnv := env
@@ -116,15 +115,18 @@ func TestNoBlob(t *testing.T) {
 		{"insert into t1 values (1, 'blob1', 'aaa')", nil},
 		{"update t1 set val = 'bbb'", nil},
 		{"commit", nil},
-	}, {{"begin", nil},
+	}, {
+		{"begin", nil},
 		{"insert into t2 values (1, 'text1', 'aaa')", nil},
 		{"update t2 set val = 'bbb'", nil},
 		{"commit", nil},
-	}, {{"begin", nil},
+	}, {
+		{"begin", nil},
 		{"insert into t3 values (1, 'text1', 'aaa')", nil},
 		{"update t3 set val = 'bbb'", nil},
 		{"commit", nil},
-	}, {{"begin", nil},
+	}, {
+		{"begin", nil},
 		{"insert into t4 (id, blb, val) values (1, 'text1', 'aaa')", []TestRowEvent{
 			{event: insertGeneratedFE.String()},
 			{spec: &TestRowEventSpec{table: "t4", changes: []TestRowChange{{after: []string{"1", "aaatsty", "text1", "aaa"}}}}},
@@ -200,7 +202,8 @@ func TestCellValuePadding(t *testing.T) {
 		ddls: []string{
 			"create table t1(id int, val binary(4), primary key(val))",
 			"create table t2(id int, val char(4), primary key(val))",
-			"create table t3(id int, val char(4) collate utf8mb4_bin, primary key(val))"},
+			"create table t3(id int, val char(4) collate utf8mb4_bin, primary key(val))",
+		},
 	}
 	defer ts.Close()
 	ts.Init()
@@ -333,9 +336,11 @@ func TestStmtComment(t *testing.T) {
 		{"begin", nil},
 		{"insert into t1 values (1, 'aaa')", nil},
 		{"commit", nil},
-		{"/*!40000 ALTER TABLE `t1` DISABLE KEYS */", []TestRowEvent{
-			{restart: true, event: "gtid"},
-			{event: "other"}},
+		{
+			"/*!40000 ALTER TABLE `t1` DISABLE KEYS */", []TestRowEvent{
+				{restart: true, event: "gtid"},
+				{event: "other"},
+			},
 		},
 	}}
 	ts.Run()
@@ -359,7 +364,7 @@ func TestVersion(t *testing.T) {
 
 	execStatements(t, []string{
 		"create database if not exists _vt",
-		"create table if not exists _vt.schema_version(id int, pos varbinary(10000), time_updated bigint(20), ddl varchar(10000), schemax blob, primary key(id))",
+		"create table if not exists _vt.schema_version(id int, pos longblob, time_updated bigint(20), ddl varchar(10000), schemax blob, primary key(id))",
 	})
 	defer execStatements(t, []string{
 		"drop table _vt.schema_version",
@@ -384,9 +389,11 @@ func TestVersion(t *testing.T) {
 		// External table events don't get sent.
 		output: [][]string{{
 			`begin`,
-			`type:VERSION`}, {
+			`type:VERSION`,
+		}, {
 			`gtid`,
-			`commit`}},
+			`commit`,
+		}},
 	}}
 	runCases(t, nil, testcases, "", nil)
 	mt, err := env.SchemaEngine.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid)
@@ -651,8 +658,7 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 	ts.Init()
 	defer ts.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match: "/t2.*",
@@ -685,7 +691,7 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 		fe.enumSetStrings = true
 	}
 
-	var expectedEvents = []string{
+	expectedEvents := []string{
 		"begin",
 		t1FieldEvent.String(),
 		"gtid",
@@ -1473,8 +1479,7 @@ func TestDDLDropColumn(t *testing.T) {
 		"insert into ddl_test2 values(2, 'bbb')",
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ch := make(chan []*binlogdatapb.VEvent)
 	go func() {
@@ -1650,21 +1655,21 @@ func TestOnlineDDLTables(t *testing.T) {
 	execStatements(t, []string{
 		"create table vitess_test(id int, val varbinary(128), primary key(id))",
 		"create table _1e275eef_3b20_11eb_a38f_04ed332e05c2_20201210204529_gho(id int, val varbinary(128), primary key(id))",
-		"create table _vt_PURGE_1f9194b43b2011eb8a0104ed332e05c2_20201210194431(id int, val varbinary(128), primary key(id))",
+		"create table _vt_prg_1f9194b43b2011eb8a0104ed332e05c2_20201210194431_(id int, val varbinary(128), primary key(id))",
 		"create table _product_old(id int, val varbinary(128), primary key(id))",
 	})
 	position := primaryPosition(t)
 	execStatements(t, []string{
 		"insert into vitess_test values(1, 'abc')",
 		"insert into _1e275eef_3b20_11eb_a38f_04ed332e05c2_20201210204529_gho values(1, 'abc')",
-		"insert into _vt_PURGE_1f9194b43b2011eb8a0104ed332e05c2_20201210194431 values(1, 'abc')",
+		"insert into _vt_prg_1f9194b43b2011eb8a0104ed332e05c2_20201210194431_ values(1, 'abc')",
 		"insert into _product_old values(1, 'abc')",
 	})
 
 	defer execStatements(t, []string{
 		"drop table vitess_test",
 		"drop table _1e275eef_3b20_11eb_a38f_04ed332e05c2_20201210204529_gho",
-		"drop table _vt_PURGE_1f9194b43b2011eb8a0104ed332e05c2_20201210194431",
+		"drop table _vt_prg_1f9194b43b2011eb8a0104ed332e05c2_20201210194431_",
 		"drop table _product_old",
 	})
 	testcases := []testcase{{
@@ -1895,8 +1900,7 @@ func TestJournal(t *testing.T) {
 
 // TestMinimalMode confirms that we don't support minimal binlog_row_image mode.
 func TestMinimalMode(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	oldEngine := engine
 	engine = nil
 	oldEnv := env
@@ -1962,8 +1966,7 @@ func TestHeartbeat(t *testing.T) {
 }
 
 func TestFullyThrottledTimeout(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	origTimeout := fullyThrottledTimeout
 	origHeartbeatTime := HeartbeatTime
 	startingMetric := engine.errorCounts.Counts()[fullyThrottledMetricLabel]
@@ -2013,8 +2016,7 @@ func TestNoFutureGTID(t *testing.T) {
 	future := pos[:index+1] + strconv.Itoa(num+1)
 	t.Logf("future position: %v", future)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ch := make(chan []*binlogdatapb.VEvent)
 	go func() {
@@ -2380,4 +2382,31 @@ func TestFilteredIsNullOperator(t *testing.T) {
 			ts.Run()
 		})
 	}
+}
+
+func TestUVStreamerNoCopyWithGTID(t *testing.T) {
+	execStatements(t, []string{
+		"create table t1(id int, val varchar(128), primary key(id))",
+		"insert into t1 values (1, 'val1')",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	ctx := context.Background()
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1",
+		}},
+	}
+	pos := primaryPosition(t)
+	options := &binlogdatapb.VStreamOptions{
+		TablesToCopy: []string{"t1"},
+	}
+	uvs := newUVStreamer(ctx, engine, env.Dbcfgs.DbaWithDB(), env.SchemaEngine, pos,
+		nil, filter, testLocalVSchema, throttlerapp.VStreamerName,
+		func([]*binlogdatapb.VEvent) error { return nil }, options)
+	err := uvs.init()
+	require.NoError(t, err)
+	require.Empty(t, uvs.plans, "Should not build table plans when startPos is set")
 }

@@ -251,7 +251,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	}
 	protoTopo, _ := prototext.Marshal(args.Topology)
 	vt.ExtraArgs = append(vt.ExtraArgs, []string{
-		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--db-charset", charset,
 		"--db-app-user", user,
 		"--db-app-password", pass,
@@ -279,10 +279,18 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		vt.ExtraArgs = append(vt.ExtraArgs, fmt.Sprintf("--tablet-refresh-interval=%v", args.VtgateTabletRefreshInterval))
 	}
 
+	// If gateway initial tablet timeout is not defined then we will give it value of 30s (vtcombo default).
+	// Setting it to a lower value will reduce the time VTGate waits for tablets at startup.
+	if args.VtgateGatewayInitialTabletTimeout <= 0 {
+		vt.ExtraArgs = append(vt.ExtraArgs, fmt.Sprintf("--gateway-initial-tablet-timeout=%v", 30*time.Second))
+	} else {
+		vt.ExtraArgs = append(vt.ExtraArgs, fmt.Sprintf("--gateway-initial-tablet-timeout=%v", args.VtgateGatewayInitialTabletTimeout))
+	}
+
 	vt.ExtraArgs = append(vt.ExtraArgs, QueryServerArgs...)
 	vt.ExtraArgs = append(vt.ExtraArgs, environment.VtcomboArguments()...)
 
-	//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+	// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 	if args.SchemaDir != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--schema-dir", args.SchemaDir}...)
 	}

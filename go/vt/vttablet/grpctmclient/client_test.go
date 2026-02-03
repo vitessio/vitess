@@ -26,6 +26,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 
 	"vitess.io/vitess/go/netutil"
+	"vitess.io/vitess/go/protoutil"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -65,11 +66,12 @@ func TestDialDedicatedPool(t *testing.T) {
 		assert.NotEmpty(t, rpcClient.rpcDialPoolMap[dialPoolGroupThrottler])
 		assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupVTOrc])
 
-		c := rpcClient.rpcDialPoolMap[dialPoolGroupThrottler][addr]
-		assert.NotNil(t, c)
-		assert.Contains(t, []connectivity.State{connectivity.Connecting, connectivity.TransientFailure}, c.cc.GetState())
+		entry := rpcClient.rpcDialPoolMap[dialPoolGroupThrottler][addr]
+		assert.NotNil(t, entry)
+		assert.NotNil(t, entry.tmc)
+		assert.Contains(t, []connectivity.State{connectivity.Connecting, connectivity.TransientFailure}, entry.tmc.cc.GetState())
 
-		cachedTmc = c
+		cachedTmc = entry.tmc
 	})
 
 	t.Run("CheckThrottler", func(t *testing.T) {
@@ -145,22 +147,31 @@ func TestDialPool(t *testing.T) {
 		_, err := client.CheckThrottler(ctx, tablet, req)
 		assert.Error(t, err)
 	})
+
 	t.Run("post throttler maps", func(t *testing.T) {
 		rpcClient, ok := client.dialer.(*grpcClient)
 		require.True(t, ok)
 
-		rpcClient.mu.Lock()
-		defer rpcClient.mu.Unlock()
+		func() {
+			rpcClient.rpcDialPoolMapMu.Lock()
+			defer rpcClient.rpcDialPoolMapMu.Unlock()
 
-		assert.NotEmpty(t, rpcClient.rpcDialPoolMap)
-		assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupThrottler])
-		assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupVTOrc])
+			assert.NotEmpty(t, rpcClient.rpcDialPoolMap)
+			assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupThrottler])
+			assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupVTOrc])
+		}()
 
-		assert.NotEmpty(t, rpcClient.rpcClientMap)
-		assert.NotEmpty(t, rpcClient.rpcClientMap[addr])
+		func() {
+			rpcClient.rpcClientMapMu.Lock()
+			defer rpcClient.rpcClientMapMu.Unlock()
+
+			assert.NotEmpty(t, rpcClient.rpcClientMap)
+			assert.NotEmpty(t, rpcClient.rpcClientMap[addr])
+		}()
 
 		assert.Contains(t, []connectivity.State{connectivity.Connecting, connectivity.TransientFailure}, cachedTmc.cc.GetState())
 	})
+
 	t.Run("ExecuteFetchAsDba", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
@@ -174,18 +185,82 @@ func TestDialPool(t *testing.T) {
 		rpcClient, ok := client.dialer.(*grpcClient)
 		require.True(t, ok)
 
-		rpcClient.mu.Lock()
-		defer rpcClient.mu.Unlock()
+		func() {
+			rpcClient.rpcDialPoolMapMu.Lock()
+			defer rpcClient.rpcDialPoolMapMu.Unlock()
 
-		assert.NotEmpty(t, rpcClient.rpcDialPoolMap)
-		assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupThrottler])
-		assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupVTOrc])
+			assert.NotEmpty(t, rpcClient.rpcDialPoolMap)
+			assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupThrottler])
+			assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupVTOrc])
+		}()
 
-		// The default pools are unaffected. Invalidator does not run, connections are not closed.
-		assert.NotEmpty(t, rpcClient.rpcClientMap)
-		assert.NotEmpty(t, rpcClient.rpcClientMap[addr])
+		func() {
+			rpcClient.rpcClientMapMu.Lock()
+			defer rpcClient.rpcClientMapMu.Unlock()
+			// The default pools are unaffected. Invalidator does not run, connections are not closed.
+			assert.NotEmpty(t, rpcClient.rpcClientMap)
+			assert.NotEmpty(t, rpcClient.rpcClientMap[addr])
+		}()
 
 		assert.NotNil(t, cachedTmc)
 		assert.Contains(t, []connectivity.State{connectivity.Connecting, connectivity.TransientFailure}, cachedTmc.cc.GetState())
+	})
+}
+
+func TestValidateTablet(t *testing.T) {
+	t.Parallel()
+
+	t.Run("valid", func(t *testing.T) {
+		tablet := &topodatapb.Tablet{
+			Hostname: t.Name(),
+			PortMap: map[string]int32{
+				"grpc": 12345,
+			},
+		}
+		require.NoError(t, validateTablet(tablet))
+	})
+
+	t.Run("is shutdown", func(t *testing.T) {
+		tablet := &topodatapb.Tablet{
+			TabletShutdownTime: protoutil.TimeToProto(time.Now()),
+		}
+		require.ErrorContains(t, validateTablet(tablet), "tablet is shutdown")
+	})
+
+	// TODO: remove in v25
+	t.Run("is shutdown pre-v24", func(t *testing.T) {
+		tablet := &topodatapb.Tablet{
+			Type:               topodatapb.TabletType_REPLICA,
+			Hostname:           "",
+			MysqlHostname:      "",
+			PortMap:            nil,
+			TabletShutdownTime: nil,
+		}
+		require.ErrorContains(t, validateTablet(tablet), "tablet is shutdown")
+	})
+
+	t.Run("invalid - empty Hostname", func(t *testing.T) {
+		tablet := &topodatapb.Tablet{
+			Hostname: "",
+		}
+		require.ErrorContains(t, validateTablet(tablet), "empty tablet hostname")
+	})
+
+	t.Run("invalid - nil PortMap", func(t *testing.T) {
+		tablet := &topodatapb.Tablet{
+			Hostname: t.Name(),
+			PortMap:  nil,
+		}
+		require.ErrorContains(t, validateTablet(tablet), "no tablet port map")
+	})
+
+	t.Run("invalid - bad port", func(t *testing.T) {
+		tablet := &topodatapb.Tablet{
+			Hostname: t.Name(),
+			PortMap: map[string]int32{
+				"grpc": 0,
+			},
+		}
+		require.Error(t, validateTablet(tablet), "invalid tablet grpc port")
 	})
 }
