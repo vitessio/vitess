@@ -312,6 +312,12 @@ func parseObject(s string, c *cache, depth int) (*Value, string, error) {
 	}
 }
 
+const hexDigits = "0123456789abcdef"
+
+// escapeString appends s as a JSON string to dst and returns the result.
+//
+// The output uses JSON compliant escapes for control bytes and only uses the
+// short escape sequences for \b, \f, \n, \r, and \t.
 func escapeString(dst []byte, s string) []byte {
 	if !hasSpecialChars(s) {
 		// Fast path - nothing to escape.
@@ -321,8 +327,37 @@ func escapeString(dst []byte, s string) []byte {
 		return dst
 	}
 
-	// Slow path.
-	return strconv.AppendQuote(dst, s)
+	dst = append(dst, '"')
+
+	// Escape control bytes, quotes, and backslashes.
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+
+		switch ch {
+		case '"', '\\':
+			dst = append(dst, '\\', ch)
+		case '\b':
+			dst = append(dst, '\\', 'b')
+		case '\f':
+			dst = append(dst, '\\', 'f')
+		case '\n':
+			dst = append(dst, '\\', 'n')
+		case '\r':
+			dst = append(dst, '\\', 'r')
+		case '\t':
+			dst = append(dst, '\\', 't')
+		default:
+			if ch < 0x20 {
+				dst = append(dst, '\\', 'u', '0', '0', hexDigits[ch>>4], hexDigits[ch&0x0f])
+				continue
+			}
+
+			dst = append(dst, ch)
+		}
+	}
+
+	dst = append(dst, '"')
+	return dst
 }
 
 func hasSpecialChars(s string) bool {
