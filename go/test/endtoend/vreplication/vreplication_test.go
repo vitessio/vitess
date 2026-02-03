@@ -282,6 +282,84 @@ func TestVreplicationCopyParallel(t *testing.T) {
 	testBasicVreplicationWorkflow(t, "")
 }
 
+// TestVReplicationJSONControlByte verifies that vreplication preserves control
+// bytes inside JSON STRING values.
+//
+// The test inserts a JSON STRING that contains ASCII SUB (0x1A) on the source.
+// It then waits for vreplication to apply the row on the target and compares
+// the target byte sequence against the original source bytes.
+func TestVReplicationJSONControlByte(t *testing.T) {
+	savedReplicas := defaultReplicas
+	savedRdonly := defaultRdonly
+
+	vc = NewVitessCluster(t, nil)
+	defer vc.TearDown()
+
+	defaultReplicas = 0
+	defaultRdonly = 0
+
+	defer func() {
+		defaultReplicas = savedReplicas
+		defaultRdonly = savedRdonly
+	}()
+
+	defaultCell := vc.Cells[defaultCellName]
+
+	_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, defaultSourceKs, "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, defaultSourceKsOpts)
+	require.NoError(t, err)
+
+	_, err = vc.AddKeyspace(t, []*Cell{defaultCell}, defaultTargetKs, "0", "", "", defaultReplicas, defaultRdonly, 200, defaultTargetKsOpts)
+	require.NoError(t, err)
+
+	verifyClusterHealth(t, vc)
+
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	defer vtgateConn.Close()
+
+	workflow := "json_control_byte"
+	table := "json_tbl"
+	rowID := 200
+
+	// Create a MoveTables workflow for the json table.
+	moveTablesAction(t, "Create", defaultCellName, workflow, defaultSourceKs, defaultTargetKs, table)
+
+	targetTab := vc.getPrimaryTablet(t, defaultTargetKs, "0")
+
+	// Wait for the copy phase to complete so that the subsequent insert is
+	// applied through the streaming replication path.
+	catchup(t, targetTab, workflow, "MoveTables")
+
+	// Coercing to utf8mb4 ensures that JSON_OBJECT stores a JSON STRING scalar
+	// rather than an opaque or binary JSON value.
+	execVtgateQuery(t, vtgateConn, defaultSourceKs,
+		"set @control_value = concat('Foo Bar', convert(0x1A using utf8mb4), 'a')",
+	)
+	execVtgateQuery(t, vtgateConn, defaultSourceKs,
+		fmt.Sprintf("insert into json_tbl(id, j3) values(%d, JSON_OBJECT('payload', JSON_OBJECT('control_value', @control_value)))", rowID),
+	)
+
+	result := execVtgateQuery(t, vtgateConn, defaultSourceKs, "select JSON_QUOTE(@control_value)")
+	require.Len(t, result.Rows, 1)
+
+	expectedQuoted := result.Rows[0][0].ToString()
+
+	// Wait for vreplication to apply the write before querying the target.
+	waitForNoWorkflowLag(t, vc, defaultTargetKs, workflow)
+
+	targetConn, err := targetTab.TabletConn(defaultTargetKs, true)
+	require.NoError(t, err)
+	defer targetConn.Close()
+
+	query := fmt.Sprintf("select JSON_QUOTE(JSON_UNQUOTE(JSON_EXTRACT(j3, '$.payload.control_value'))) from json_tbl where id = %d", rowID)
+
+	result = execQuery(t, targetConn, query)
+	require.Len(t, result.Rows, 1)
+
+	gotQuoted := result.Rows[0][0].ToString()
+
+	require.Equal(t, expectedQuoted, gotQuoted)
+}
+
 func testBasicVreplicationWorkflow(t *testing.T, binlogRowImage string) {
 	testVreplicationWorkflows(t, false, binlogRowImage)
 }
