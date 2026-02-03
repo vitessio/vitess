@@ -108,8 +108,7 @@ func TestInitShardPrimary(t *testing.T) {
 }
 
 func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tmc := tmclient.NewTabletManagerClient()
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmc)

@@ -50,8 +50,7 @@ func TestUDFs(t *testing.T) {
 	copySOFile(t, client)
 
 	ch := make(chan any)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	go func() {
 		err := client.StreamHealthWithContext(ctx, func(shr *querypb.StreamHealthResponse) error {
 			if shr.RealtimeStats.UdfsChanged {

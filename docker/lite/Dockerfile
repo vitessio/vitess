@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM --platform=linux/amd64 golang:1.25.3-bookworm AS builder
+# Build the Vitess Go binaries
+FROM --platform=linux/amd64 golang:1.25.6-bookworm@sha256:2f768d462dbffbb0f0b3a5171009f162945b086f326e0b2a8fd5d29c3219ff14 AS go-builder
 
 # Allows docker builds to set the BUILD_NUMBER
 ARG BUILD_NUMBER
@@ -34,16 +35,34 @@ RUN mkdir -p /vt/vtdataroot /home/vitess
 RUN chown -R vitess:vitess /vt /home/vitess
 USER vitess
 
-# Re-copy sources from working tree.
+# Copy go.mod/go.sum and install dependencies separately.
+COPY --chown=vitess:vitess go.mod go.sum /vt/src/vitess.io/vitess/
+RUN go mod download
+
+# Copy the rest of the source and build the binaries.
 COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
+RUN make install PREFIX=/vt/install NOVTADMINBUILD=1
 
-RUN make install PREFIX=/vt/install
+# Build vtadmin separately.
+FROM --platform=linux/amd64 node:22-bookworm-slim@sha256:f86be15afa9a8277608e141ce2a8aa55d3d9c40845921b8511f4fb7897be2554 AS vtadmin-builder
 
-# Start over and build the final image.
-FROM --platform=linux/amd64 debian:bookworm-slim
+WORKDIR /vt/web/vtadmin
+
+# Copy package.json/package-lock.json and install dependencies separately.
+COPY web/vtadmin/package.json web/vtadmin/package-lock.json /vt/web/vtadmin/
+RUN npm ci
+
+# Copy the rest of the source and build the static files.
+COPY web/vtadmin/ /vt/web/vtadmin/
+RUN VITE_VTADMIN_API_ADDRESS="http://localhost:14200" \
+    VITE_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS="true" \
+    npm run build
+
+# Build the final image with the minimum Go binaries + static files.
+FROM --platform=linux/amd64 debian:bookworm-slim@sha256:56ff6d36d4eb3db13a741b342ec466f121480b5edded42e4b7ee850ce7a418ee
 
 # Install locale required for mysqlsh
-RUN apt-get update && apt-get install -y locales \
+RUN apt-get update && apt-get install -y locales tar \
     && echo "en_US.UTF-8 UTF-8" > /etc/locale.gen \
     && locale-gen en_US.UTF-8
 
@@ -60,12 +79,13 @@ ENV VTROOT /vt
 ENV VTDATAROOT /vt/vtdataroot
 ENV PATH $VTROOT/bin:$PATH
 
-# Copy artifacts from builder layer.
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-COPY --from=builder --chown=vitess:vitess /vt/install /vt
-COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/web/vtadmin /vt/web/vtadmin
-COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/config/init_db.sql /vt/config/
-COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/config/mycnf /vt/config/
+# Copy artifacts from builder layers.
+COPY --from=go-builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=go-builder --chown=vitess:vitess /vt/install /vt
+COPY --from=go-builder --chown=vitess:vitess /vt/src/vitess.io/vitess/web/vtadmin /vt/web/vtadmin
+COPY --from=vtadmin-builder --chown=vitess:vitess /vt/web/vtadmin/build /vt/web/vtadmin/build
+COPY --from=go-builder --chown=vitess:vitess /vt/src/vitess.io/vitess/config/init_db.sql /vt/config/
+COPY --from=go-builder --chown=vitess:vitess /vt/src/vitess.io/vitess/config/mycnf /vt/config/
 
 # Create mount point for actual data (e.g. MySQL data dir)
 VOLUME /vt/vtdataroot

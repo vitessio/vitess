@@ -33,8 +33,7 @@ func TestLogErrorsWhenClosing(t *testing.T) {
 	require.Contains(t, string(got), "test error")
 }
 
-type fakeCloser struct {
-}
+type fakeCloser struct{}
 
 func (fc *fakeCloser) Close() error {
 	return errors.New("test error")

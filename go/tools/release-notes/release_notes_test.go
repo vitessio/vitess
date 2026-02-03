@@ -35,19 +35,24 @@ func Test_groupPRs(t *testing.T) {
 			name:    "Single PR info with no labels",
 			prInfos: []pullRequestInformation{{Title: "pr 1", Number: 1}},
 			want:    map[string]map[string][]pullRequestInformation{"Other": {"Other": []pullRequestInformation{{Title: "pr 1", Number: 1}}}},
-		}, {
+		},
+		{
 			name:    "Single PR info with type label",
 			prInfos: []pullRequestInformation{{Title: "pr 1", Number: 1, Labels: []label{{Name: prefixType + "Bug"}}}},
-			want:    map[string]map[string][]pullRequestInformation{"Bug fixes": {"Other": []pullRequestInformation{{Title: "pr 1", Number: 1, Labels: []label{{Name: prefixType + "Bug"}}}}}}},
+			want:    map[string]map[string][]pullRequestInformation{"Bug fixes": {"Other": []pullRequestInformation{{Title: "pr 1", Number: 1, Labels: []label{{Name: prefixType + "Bug"}}}}}},
+		},
 		{
 			name:    "Single PR info with type and component labels",
 			prInfos: []pullRequestInformation{{Title: "pr 1", Number: 1, Labels: []label{{Name: prefixType + "Bug"}, {Name: prefixComponent + "VTGate"}}}},
-			want:    map[string]map[string][]pullRequestInformation{"Bug fixes": {"VTGate": []pullRequestInformation{{Title: "pr 1", Number: 1, Labels: []label{{Name: prefixType + "Bug"}, {Name: prefixComponent + "VTGate"}}}}}}},
+			want:    map[string]map[string][]pullRequestInformation{"Bug fixes": {"VTGate": []pullRequestInformation{{Title: "pr 1", Number: 1, Labels: []label{{Name: prefixType + "Bug"}, {Name: prefixComponent + "VTGate"}}}}}},
+		},
 		{
 			name: "Multiple PR infos with type and component labels", prInfos: []pullRequestInformation{
 				{Title: "pr 1", Number: 1, Labels: []label{{Name: prefixType + "Bug"}, {Name: prefixComponent + "VTGate"}}},
-				{Title: "pr 2", Number: 2, Labels: []label{{Name: prefixType + "Feature"}, {Name: prefixComponent + "VTTablet"}}}},
-			want: map[string]map[string][]pullRequestInformation{"Bug fixes": {"VTGate": []pullRequestInformation{{Title: "pr 1", Number: 1, Labels: []label{{Name: prefixType + "Bug"}, {Name: prefixComponent + "VTGate"}}}}}, "Feature": {"VTTablet": []pullRequestInformation{{Title: "pr 2", Number: 2, Labels: []label{{Name: prefixType + "Feature"}, {Name: prefixComponent + "VTTablet"}}}}}}},
+				{Title: "pr 2", Number: 2, Labels: []label{{Name: prefixType + "Feature"}, {Name: prefixComponent + "VTTablet"}}},
+			},
+			want: map[string]map[string][]pullRequestInformation{"Bug fixes": {"VTGate": []pullRequestInformation{{Title: "pr 1", Number: 1, Labels: []label{{Name: prefixType + "Bug"}, {Name: prefixComponent + "VTGate"}}}}}, "Feature": {"VTTablet": []pullRequestInformation{{Title: "pr 2", Number: 2, Labels: []label{{Name: prefixType + "Feature"}, {Name: prefixComponent + "VTTablet"}}}}}},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -66,7 +71,7 @@ func TestLoadSummaryReadme(t *testing.T) {
 - Bunch of features
 `
 
-	err = os.WriteFile(readmeFile.Name(), []byte(readmeContent), 0644)
+	err = os.WriteFile(readmeFile.Name(), []byte(readmeContent), 0o644)
 	require.NoError(t, err)
 
 	str, err := releaseSummary(readmeFile.Name())

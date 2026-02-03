@@ -44,7 +44,7 @@ func looksLikeTLS(bytes []byte) bool {
 // No matter if error happens or what flag value is
 // returned bytes should be checked
 func DetectTLS(r io.Reader) (bool, []byte, error) {
-	var bytes = make([]byte, TLSPeekedBytes)
+	bytes := make([]byte, TLSPeekedBytes)
 	if n, err := io.ReadFull(r, bytes); err != nil {
 		return false, bytes[:n], err
 	}

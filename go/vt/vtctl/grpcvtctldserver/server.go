@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"path/filepath"
 	"runtime/debug"
@@ -88,6 +87,10 @@ const (
 
 	// DefaultWaitReplicasTimeout is the default value for waitReplicasTimeout, which is used when calling method ApplySchema.
 	DefaultWaitReplicasTimeout = 10 * time.Second
+
+	// maxBackupLimit is a safety cap on the number of backups that can be requested
+	// at once, to avoid excessive memory allocation from untrusted input.
+	maxBackupLimit = 10000
 )
 
 // VtctldServer implements the Vtctld RPC service protocol.
@@ -1530,18 +1533,22 @@ func (s *VtctldServer) GetBackups(ctx context.Context, req *vtctldatapb.GetBacku
 
 	totalBackups := len(bhs)
 	if req.Limit > 0 {
-		if int(req.Limit) < 0 {
-			return nil, fmt.Errorf("limit %v exceeds maximum allowed value %v", req.DetailedLimit, math.MaxInt)
+		if req.Limit > maxBackupLimit {
+			return nil, fmt.Errorf("limit %v exceeds maximum allowed value %v", req.Limit, maxBackupLimit)
 		}
-		totalBackups = int(req.Limit)
+		if int(req.Limit) < totalBackups {
+			totalBackups = int(req.Limit)
+		}
 	}
 
 	totalDetailedBackups := len(bhs)
 	if req.DetailedLimit > 0 {
-		if int(req.DetailedLimit) < 0 {
-			return nil, fmt.Errorf("detailed_limit %v exceeds maximum allowed value %v", req.DetailedLimit, math.MaxInt)
+		if req.DetailedLimit > maxBackupLimit {
+			return nil, fmt.Errorf("detailed_limit %v exceeds maximum allowed value %v", req.DetailedLimit, maxBackupLimit)
 		}
-		totalDetailedBackups = int(req.DetailedLimit)
+		if int(req.DetailedLimit) < totalDetailedBackups {
+			totalDetailedBackups = int(req.DetailedLimit)
+		}
 	}
 
 	backups := make([]*mysqlctlpb.BackupInfo, 0, totalBackups)
@@ -4686,9 +4693,7 @@ func (s *VtctldServer) Validate(ctx context.Context, req *vtctldatapb.ValidateRe
 		wg sync.WaitGroup
 	)
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		validateAllTablets := func(ctx context.Context, keyspaces []string) {
 			span, ctx := trace.NewSpan(ctx, "VtctldServer.validateAllTablets")
 			defer span.Finish()
@@ -4765,7 +4770,7 @@ func (s *VtctldServer) Validate(ctx context.Context, req *vtctldatapb.ValidateRe
 		}
 
 		validateAllTablets(ctx, keyspaces)
-	}()
+	})
 
 	resp.ResultsByKeyspace = make(map[string]*vtctldatapb.ValidateKeyspaceResponse, len(keyspaces))
 

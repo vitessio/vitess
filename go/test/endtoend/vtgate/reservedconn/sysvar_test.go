@@ -276,7 +276,7 @@ func BenchmarkReservedConnFieldQuery(b *testing.B) {
 	utils.Exec(b, conn, "set sql_mode = ''")
 	utils.AssertMatches(b, conn, "select 	@@sql_mode", `[[VARCHAR("")]]`)
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		utils.Exec(b, conn, "select id, val1 from test")
 	}
 }

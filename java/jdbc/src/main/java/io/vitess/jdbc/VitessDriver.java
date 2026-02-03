@@ -17,7 +17,6 @@
 package io.vitess.jdbc;
 
 import io.vitess.util.Constants;
-
 import java.sql.Connection;
 import java.sql.Driver;
 import java.sql.DriverManager;

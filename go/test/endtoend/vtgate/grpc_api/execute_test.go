@@ -34,8 +34,7 @@ import (
 // TestTransactionsWithGRPCAPI test the transaction queries through vtgate grpc apis.
 // It is done through both streaming api and non-streaming api.
 func TestTransactionsWithGRPCAPI(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	vtgateConn, err := cluster.DialVTGate(ctx, t.Name(), vtgateGrpcAddress, "user_with_access", "test_password")
 	require.NoError(t, err)
@@ -43,7 +42,7 @@ func TestTransactionsWithGRPCAPI(t *testing.T) {
 
 	vtSession := vtgateConn.Session(keyspaceName, nil)
 	workload := []string{"OLTP", "OLAP"}
-	for i := 0; i < 4; i++ { // running all switch combinations.
+	for i := range 4 { // running all switch combinations.
 		index := i % len(workload)
 		_, session, err := exec(ctx, vtSession, "set workload = "+workload[index], nil)
 		require.NoError(t, err)

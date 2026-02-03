@@ -186,7 +186,7 @@ func newThrottlerFromConfig(manager *managerImpl, name, unit string, threadCount
 
 	runningThreads := make(map[int]bool, threadCount)
 	threadThrottlers := make([]*threadThrottler, threadCount)
-	for i := 0; i < threadCount; i++ {
+	for i := range threadCount {
 		threadThrottlers[i] = newThreadThrottler(i, actualRateHistory)
 		runningThreads[i] = true
 	}

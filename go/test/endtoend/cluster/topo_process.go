@@ -57,7 +57,7 @@ type TopoProcess struct {
 	VerifyURL          string
 	PeerURL            string
 	ZKPorts            string
-	Client             interface{}
+	Client             any
 	Server             *vtopo.Server
 
 	proc *exec.Cmd
@@ -100,7 +100,7 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 		"--initial-cluster", fmt.Sprintf("%s=%s", topo.Name, topo.PeerURL),
 	)
 
-	err = createDirectory(topo.DataDirectory, 0700)
+	err = createDirectory(topo.DataDirectory, 0o700)
 	if err != nil && !os.IsExist(err) {
 		return err
 	}
@@ -175,7 +175,7 @@ func (topo *TopoProcess) SetupZookeeper(cluster *LocalProcessCluster) error {
 		"init",
 	)
 
-	err = os.MkdirAll(topo.LogDirectory, 0755)
+	err = os.MkdirAll(topo.LogDirectory, 0o755)
 	if err != nil {
 		log.Errorf("Failed to create log directory for zookeeper: %v", err)
 		return err
@@ -251,7 +251,7 @@ func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 		return
 	}
 
-	err = os.WriteFile(configFile, config, 0666)
+	err = os.WriteFile(configFile, config, 0o666)
 	if err != nil {
 		return
 	}

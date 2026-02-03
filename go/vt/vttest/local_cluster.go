@@ -317,45 +317,15 @@ func (db *LocalCluster) MySQLAppDebugConnParams() mysql.ConnParams {
 }
 
 // MySQLCleanConnParams returns connection params that can be used to connect
-// directly to MySQL, even if there's a toxyproxy instance on the way.
+// directly to MySQL.
 func (db *LocalCluster) MySQLCleanConnParams() mysql.ConnParams {
-	mysqlctl := db.mysql
-	if toxiproxy, ok := mysqlctl.(*Toxiproxyctl); ok {
-		mysqlctl = toxiproxy.mysqlctl
-	}
-	connParams := mysqlctl.Params(db.DbName())
+	connParams := db.mysql.Params(db.DbName())
 	ch, err := collations.MySQL8().ParseConnectionCharset(db.Charset)
 	if err != nil {
 		panic(err)
 	}
 	connParams.Charset = ch
 	return connParams
-}
-
-// SimulateMySQLHang simulates a scenario where the backend MySQL stops all data from flowing through.
-// Please ensure to `defer db.StopSimulateMySQLHang()` after calling this method.
-func (db *LocalCluster) SimulateMySQLHang() error {
-	if toxiproxy, ok := db.mysql.(*Toxiproxyctl); ok {
-		return toxiproxy.AddTimeoutToxic()
-	}
-	return fmt.Errorf("cannot simulate MySQL hang on non-Toxiproxyctl MySQLManager %v", db.mysql)
-}
-
-// PauseSimulateMySQLHang pauses the MySQL hang simulation to allow queries to go through.
-// This is useful when you want to allow new queries to go through, but keep the existing ones hanging.
-func (db *LocalCluster) PauseSimulateMySQLHang() error {
-	if toxiproxy, ok := db.mysql.(*Toxiproxyctl); ok {
-		return toxiproxy.UpdateTimeoutToxicity(0)
-	}
-	return fmt.Errorf("cannot simulate MySQL hang on non-Toxiproxyctl MySQLManager %v", db.mysql)
-}
-
-// StopSimulateMySQLHang stops the MySQL hang simulation to allow queries to go through.
-func (db *LocalCluster) StopSimulateMySQLHang() error {
-	if toxiproxy, ok := db.mysql.(*Toxiproxyctl); ok {
-		return toxiproxy.RemoveTimeoutToxic()
-	}
-	return fmt.Errorf("cannot simulate MySQL hang on non-Toxiproxyctl MySQLManager %v", db.mysql)
 }
 
 // Setup brings up the self-contained Vitess cluster by spinning up
@@ -803,7 +773,7 @@ func (db *LocalCluster) VTProcess() *VtProcess {
 
 // ReadVSchema reads the vschema from the vtgate endpoint for it and returns
 // a pointer to the interface. To read this vschema, the caller must convert it to a map
-func (vt *VtProcess) ReadVSchema() (*interface{}, error) {
+func (vt *VtProcess) ReadVSchema() (*any, error) {
 	httpClient := &http.Client{Timeout: 5 * time.Second}
 	resp, err := httpClient.Get("http://" + net.JoinHostPort(vt.BindAddress, strconv.Itoa(vt.Port)) + "/debug/vschema")
 	if err != nil {
@@ -814,7 +784,7 @@ func (vt *VtProcess) ReadVSchema() (*interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	var results interface{}
+	var results any
 	err = json.Unmarshal(res, &results)
 	if err != nil {
 		return nil, err

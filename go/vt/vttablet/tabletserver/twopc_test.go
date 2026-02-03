@@ -17,7 +17,6 @@ limitations under the License.
 package tabletserver
 
 import (
-	"context"
 	"encoding/json"
 	"reflect"
 	"testing"
@@ -33,8 +32,7 @@ import (
 )
 
 func TestReadAllRedo(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	// Reuse code from tx_executor_test.
 	_, tsv, db, closer := newTestTxExecutor(t, ctx)
 	defer closer()
@@ -253,8 +251,7 @@ func TestReadAllRedo(t *testing.T) {
 }
 
 func TestReadAllTransactions(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	_, tsv, db, closer := newTestTxExecutor(t, ctx)
 	defer closer()
 
@@ -416,8 +413,7 @@ func jsonStr(v any) string {
 // TestUnresolvedTransactions tests the retrieval of unresolved transactions from the database and
 // providing the output in proto format.
 func TestUnresolvedTransactions(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	_, tsv, db, closer := newTestTxExecutor(t, ctx)
 	defer closer()
 
@@ -446,7 +442,8 @@ func TestUnresolvedTransactions(t *testing.T) {
 			Participants: []*querypb.Target{
 				{Keyspace: "ks01", Shard: "shard01", TabletType: topodatapb.TabletType_PRIMARY},
 				{Keyspace: "ks01", Shard: "shard02", TabletType: topodatapb.TabletType_PRIMARY},
-			}}},
+			},
+		}},
 	}, {
 		name: "two unresolved transaction",
 		unresolvedTx: sqltypes.MakeTestResult(
@@ -456,21 +453,24 @@ func TestUnresolvedTransactions(t *testing.T) {
 			"dtid0|3|1|ks01|shard02",
 			"dtid1|2|2|ks02|shard03",
 			"dtid1|2|2|ks01|shard02"),
-		expectedTx: []*querypb.TransactionMetadata{{
-			Dtid:        "dtid0",
-			State:       querypb.TransactionState_COMMIT,
-			TimeCreated: 1,
-			Participants: []*querypb.Target{
-				{Keyspace: "ks01", Shard: "shard01", TabletType: topodatapb.TabletType_PRIMARY},
-				{Keyspace: "ks01", Shard: "shard02", TabletType: topodatapb.TabletType_PRIMARY},
-			}}, {
-			Dtid:        "dtid1",
-			TimeCreated: 2,
-			State:       querypb.TransactionState_ROLLBACK,
-			Participants: []*querypb.Target{
-				{Keyspace: "ks02", Shard: "shard03", TabletType: topodatapb.TabletType_PRIMARY},
-				{Keyspace: "ks01", Shard: "shard02", TabletType: topodatapb.TabletType_PRIMARY},
-			}},
+		expectedTx: []*querypb.TransactionMetadata{
+			{
+				Dtid:        "dtid0",
+				State:       querypb.TransactionState_COMMIT,
+				TimeCreated: 1,
+				Participants: []*querypb.Target{
+					{Keyspace: "ks01", Shard: "shard01", TabletType: topodatapb.TabletType_PRIMARY},
+					{Keyspace: "ks01", Shard: "shard02", TabletType: topodatapb.TabletType_PRIMARY},
+				},
+			}, {
+				Dtid:        "dtid1",
+				TimeCreated: 2,
+				State:       querypb.TransactionState_ROLLBACK,
+				Participants: []*querypb.Target{
+					{Keyspace: "ks02", Shard: "shard03", TabletType: topodatapb.TabletType_PRIMARY},
+					{Keyspace: "ks01", Shard: "shard02", TabletType: topodatapb.TabletType_PRIMARY},
+				},
+			},
 		},
 	}}
 

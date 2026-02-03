@@ -70,6 +70,7 @@ func getPartition(t *testing.T, shards []string) *topodatapb.SrvKeyspace_Keyspac
 	}
 	return partition
 }
+
 func initTopo(t *testing.T, topo *topo.Server, keyspace string, sources, targets, cells []string) {
 	ctx := context.Background()
 	srvKeyspace := &topodatapb.SrvKeyspace{

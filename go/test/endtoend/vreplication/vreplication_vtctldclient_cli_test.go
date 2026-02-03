@@ -160,7 +160,8 @@ func TestVtctldclientCLI(t *testing.T) {
 			"vreplication-net-read-timeout":                     "6000",
 			utils.GetFlagVariantForTests("relay-log-max-items"): "10000",
 		}
-		createFlags := []string{"--auto-start=false", "--defer-secondary-keys=false",
+		createFlags := []string{
+			"--auto-start=false", "--defer-secondary-keys=false",
 			"--on-ddl", "STOP", "--tablet-types", "primary,rdonly", "--tablet-types-in-preference-order=true",
 			"--all-cells", "--format=json",
 			"--config-overrides", mapToCSV(overrides),
@@ -228,7 +229,8 @@ func testMoveTablesFlags1(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 		utils.GetFlagVariantForTests("relay-log-max-items"): "10000",
 		"vreplication-parallel-insert-workers":              "10",
 	}
-	createFlags := []string{"--auto-start=false", "--defer-secondary-keys=false", "--stop-after-copy",
+	createFlags := []string{
+		"--auto-start=false", "--defer-secondary-keys=false", "--stop-after-copy",
 		"--no-routing-rules", "--on-ddl", "STOP", "--exclude-tables", "customer2",
 		"--tablet-types", "primary,rdonly", "--tablet-types-in-preference-order=true",
 		"--all-cells", "--config-overrides", mapToCSV(overrides),
@@ -282,6 +284,28 @@ func testMoveTablesFlags2(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String())
 	(*mt).Start()
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+
+	t.Run("Test --shards flag in MoveTables start/stop", func(t *testing.T) {
+		// This subtest expects workflow to be running at the start and restarts it at the end.
+		type tCase struct {
+			shards   string
+			action   string
+			expected int
+		}
+		testCases := []tCase{
+			{"-80", "stop", 1},
+			{"80-", "stop", 1},
+			{"-80,80-", "start", 2},
+		}
+		for _, tc := range testCases {
+			output, err := vc.VtctldClient.ExecuteCommandWithOutput("MoveTables", "--target-keyspace", targetKeyspace, "--workflow", defaultWorkflowName, tc.action, "--shards", tc.shards)
+			require.NoError(t, err, "failed to %s workflow on shards %s: %v", tc.action, tc.shards, err)
+			cnt := gjson.Get(output, "details.#").Int()
+			require.EqualValuesf(t, tc.expected, cnt, "expected %d shards, got %d for action %s, shards %s", tc.expected, cnt, tc.action, tc.shards)
+		}
+	})
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+
 	for _, tab := range targetTabs {
 		catchup(t, tab, defaultWorkflowName, "MoveTables")
 	}
@@ -416,7 +440,8 @@ func testMoveTablesFlags3(t *testing.T, sourceKeyspace, targetKeyspace string, t
 
 // Create two workflows in order to confirm that listing all workflows works.
 func testWorkflowList(t *testing.T, sourceKeyspace, targetKeyspace string) {
-	createFlags := []string{"--auto-start=false", "--tablet-types",
+	createFlags := []string{
+		"--auto-start=false", "--tablet-types",
 		"primary,rdonly", "--tablet-types-in-preference-order=true", "--all-cells",
 	}
 	wfNames := []string{"list1", "list2"}
@@ -526,7 +551,8 @@ func testWorkflowUpdateConfig(t *testing.T, mt *iMoveTables, targetTabs map[stri
 }
 
 func createMoveTables(t *testing.T, sourceKeyspace, targetKeyspace, defaultWorkflowName, tables string,
-	createFlags, completeFlags, switchFlags []string) iMoveTables {
+	createFlags, completeFlags, switchFlags []string,
+) iMoveTables {
 	mt := newMoveTables(vc, &moveTablesWorkflow{
 		workflowInfo: &workflowInfo{
 			vc:             vc,
@@ -553,7 +579,8 @@ func splitShard(t *testing.T, keyspace, defaultWorkflowName, sourceShards, targe
 		"vreplication-net-read-timeout":                     "6000",
 		utils.GetFlagVariantForTests("relay-log-max-items"): "10000",
 	}
-	createFlags := []string{"--auto-start=false", "--defer-secondary-keys=false", "--stop-after-copy",
+	createFlags := []string{
+		"--auto-start=false", "--defer-secondary-keys=false", "--stop-after-copy",
 		"--on-ddl", "STOP", "--tablet-types", "primary,rdonly", "--tablet-types-in-preference-order=true",
 		"--all-cells", "--format=json",
 		"--config-overrides", mapToCSV(overrides),
@@ -609,6 +636,27 @@ func splitShard(t *testing.T, keyspace, defaultWorkflowName, sourceShards, targe
 		for _, tc := range testCases {
 			output, err := vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", keyspace, tc.action, "--workflow", defaultWorkflowName, "--shards", tc.shards)
 			require.NoError(t, err, "failed to %s workflow: %v", tc.action, err)
+			cnt := gjson.Get(output, "details.#").Int()
+			require.EqualValuesf(t, tc.expected, cnt, "expected %d shards, got %d for action %s, shards %s", tc.expected, cnt, tc.action, tc.shards)
+		}
+	})
+	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", keyspace, defaultWorkflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+
+	t.Run("Test --shards flag in Reshard start/stop", func(t *testing.T) {
+		// This subtest expects workflow to be running at the start and restarts it at the end.
+		type tCase struct {
+			shards   string
+			action   string
+			expected int
+		}
+		testCases := []tCase{
+			{"-40", "stop", 1},
+			{"40-80", "stop", 1},
+			{"-40,40-80", "start", 2},
+		}
+		for _, tc := range testCases {
+			output, err := vc.VtctldClient.ExecuteCommandWithOutput("Reshard", "--target-keyspace", keyspace, "--workflow", defaultWorkflowName, tc.action, "--shards", tc.shards)
+			require.NoError(t, err, "failed to %s Reshard workflow on shards %s: %v", tc.action, tc.shards, err)
 			cnt := gjson.Get(output, "details.#").Int()
 			require.EqualValuesf(t, tc.expected, cnt, "expected %d shards, got %d for action %s, shards %s", tc.expected, cnt, tc.action, tc.shards)
 		}
@@ -832,13 +880,7 @@ func checkTablesExist(t *testing.T, tabletAlias string, tables []string) bool {
 	require.NoError(t, err)
 	tablesFound := strings.Split(tablesResponse, "\n")
 	for _, table := range tables {
-		found := false
-		for _, tableFound := range tablesFound {
-			if tableFound == table {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(tablesFound, table)
 		if !found {
 			return false
 		}
@@ -964,9 +1006,9 @@ func testRoutingRulesApplyCommands(t *testing.T) {
 			rulesBytes, err = json2.MarshalPB(rr)
 			require.NoError(t, err)
 			validateRules = func(want, got string) {
-				var wantRules = &vschemapb.RoutingRules{}
+				wantRules := &vschemapb.RoutingRules{}
 				require.NoError(t, json2.UnmarshalPB([]byte(want), wantRules))
-				var gotRules = &vschemapb.RoutingRules{}
+				gotRules := &vschemapb.RoutingRules{}
 				require.NoError(t, json2.UnmarshalPB([]byte(got), gotRules))
 				require.EqualValues(t, wantRules, gotRules)
 			}
@@ -983,9 +1025,9 @@ func testRoutingRulesApplyCommands(t *testing.T) {
 			rulesBytes, err = json2.MarshalPB(srr)
 			require.NoError(t, err)
 			validateRules = func(want, got string) {
-				var wantRules = &vschemapb.ShardRoutingRules{}
+				wantRules := &vschemapb.ShardRoutingRules{}
 				require.NoError(t, json2.UnmarshalPB([]byte(want), wantRules))
-				var gotRules = &vschemapb.ShardRoutingRules{}
+				gotRules := &vschemapb.ShardRoutingRules{}
 				require.NoError(t, json2.UnmarshalPB([]byte(got), gotRules))
 				require.EqualValues(t, wantRules, gotRules)
 			}
@@ -1001,9 +1043,9 @@ func testRoutingRulesApplyCommands(t *testing.T) {
 			rulesBytes, err = json2.MarshalPB(krr)
 			require.NoError(t, err)
 			validateRules = func(want, got string) {
-				var wantRules = &vschemapb.KeyspaceRoutingRules{}
+				wantRules := &vschemapb.KeyspaceRoutingRules{}
 				require.NoError(t, json2.UnmarshalPB([]byte(want), wantRules))
-				var gotRules = &vschemapb.KeyspaceRoutingRules{}
+				gotRules := &vschemapb.KeyspaceRoutingRules{}
 				require.NoError(t, json2.UnmarshalPB([]byte(got), gotRules))
 				require.EqualValues(t, wantRules, gotRules)
 			}

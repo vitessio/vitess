@@ -586,7 +586,7 @@ func TestAction(t *testing.T) {
 }
 
 func TestImport(t *testing.T) {
-	var qrs = New()
+	qrs := New()
 	jsondata := `[{
 		"Description": "desc1",
 		"Name": "name1",
