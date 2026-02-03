@@ -303,7 +303,8 @@ func (tm *TabletManager) restoreFromClone(ctx context.Context, logger logutil.Lo
 func (tm *TabletManager) restoreFromCloneLocked(
 	ctx context.Context,
 	logger logutil.Logger,
-	deleteBeforeRestore bool) error {
+	deleteBeforeRestore bool,
+) error {
 	rsm := tm.newRestoreStateManager(logger, deleteBeforeRestore)
 
 	if ok, err := rsm.start(ctx); !ok || err != nil {
