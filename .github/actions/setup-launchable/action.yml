@@ -1,8 +1,0 @@
-name: 'Setup launchable'
-description: 'Set up launchable for use in GitHub Actions workflows'
-runs:
-  using: "composite"
-  steps:
-    - name: Setup launchable
-      shell: bash
-      run: |
