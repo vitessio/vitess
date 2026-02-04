@@ -1,0 +1,47 @@
+name: 'Get Vitess release'
+description: 'Get release assets from a specific Vitess release, for use in GitHub Actions workflows'
+inputs:
+  path:
+    description: 'The path to store the directory of release files'
+    required: true
+  ref:
+    description: 'The git ref of the release'
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Setup and check cache
+      id: cache-release-build
+      uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+      with:
+        path: ${{ inputs.path }}
+        key: vitess-release-{{ inputs.ref }}
+
+    - name: Check out release code (${{ inputs.ref }})
+      if: steps.cache-release-build.outputs.cache-hit != 'true'
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        ref: ${{ inputs.ref }}
+        persist-credentials: 'false'
+
+    - name: Set up Go
+      if: steps.cache-release-build.outputs.cache-hit != 'true'
+      uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+      with:
+        go-version-file: go.mod
+        cache: false
+
+    - name: Get dependencies
+      if: steps.cache-release-build.outputs.cache-hit != 'true'
+      run: |
+        go mod download
+
+    - name: Building release binaries
+      if: steps.cache-release-build.outputs.cache-hit != 'true'
+      timeout-minutes: 10
+      run: |
+        source build.env
+        NOVTADMINBUILD=1 make build
+        [[ ! -d "${{ inputs.path }}" ]] && mkdir -p ${{ inputs.path }}
+        cp -R bin ${{ inputs.path }}/
+        rm -Rf bin/*
