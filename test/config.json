@@ -10,7 +10,8 @@
 			],
 			"Manual": false,
 			"Shard": "java",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"client_test": {
 			"File": "",
@@ -21,7 +22,8 @@
 			],
 			"Manual": false,
 			"Shard": "java",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"e2e": {
 			"File": "",
@@ -32,7 +34,8 @@
 			],
 			"Manual": false,
 			"Shard": "",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"e2e_race": {
 			"File": "",
@@ -44,7 +47,8 @@
 			],
 			"Manual": false,
 			"Shard": "",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"unit": {
 			"File": "",
@@ -55,7 +59,8 @@
 			],
 			"Manual": false,
 			"Shard": "",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"unit_race": {
 			"File": "",
@@ -67,7 +72,8 @@
 			],
 			"Manual": false,
 			"Shard": "5",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"local_example": {
 			"File": "",
@@ -78,7 +84,8 @@
 			],
 			"Manual": false,
 			"Shard": "",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"region_example": {
 			"File": "",
@@ -89,7 +96,8 @@
 			],
 			"Manual": false,
 			"Shard": "",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"backup_pitr": {
 			"File": "unused.go",
@@ -103,7 +111,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "backup_pitr",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"backup_pitr_xtrabackup": {
 			"File": "unused.go",
@@ -117,7 +126,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "backup_pitr_xtrabackup",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"xtrabackup"
+			]
 		},
 		"backup_pitr_mysqlshell": {
 			"File": "unused.go",
@@ -131,7 +143,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "backup_pitr_mysqlshell",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"backup": {
 			"File": "unused.go",
@@ -145,7 +158,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtctlbackup_sharded_clustertest_heavy",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources"
+			]
 		},
 		"backup_mysqlctld": {
 			"File": "unused.go",
@@ -159,7 +175,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "21",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"minio"
+			]
 		},
 		"backup_s3": {
 			"File": "unused.go",
@@ -173,7 +192,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "21",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"minio"
+			]
 		},
 		"backup_only": {
 			"File": "unused.go",
@@ -189,7 +211,8 @@
 			"Shard": "vtbackup",
 			"Tags": [
 				"upgrade_downgrade_backups"
-			]
+			],
+			"Needs": []
 		},
 		"backup_xtrabackup": {
 			"File": "unused.go",
@@ -203,7 +226,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "xb_backup",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"xtrabackup"
+			]
 		},
 		"backup_xtrabackup_xbstream": {
 			"File": "unused.go",
@@ -219,7 +245,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "xb_backup",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"xtrabackup"
+			]
 		},
 		"backup_xtrabackup_xbstream_lz4": {
 			"File": "unused.go",
@@ -235,7 +264,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "xb_backup",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"xtrabackup"
+			]
 		},
 		"cellalias": {
 			"File": "unused.go",
@@ -246,7 +278,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "13",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"prepare_statement": {
 			"File": "unused.go",
@@ -259,7 +292,8 @@
 			"Shard": "12",
 			"Tags": [
 				"upgrade_downgrade_query_serving_queries"
-			]
+			],
+			"Needs": []
 		},
 		"mysql_server": {
 			"File": "unused.go",
@@ -270,7 +304,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "mysql_server_vault",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"consul"
+			]
 		},
 		"messaging": {
 			"File": "messaging_test.go",
@@ -281,7 +318,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "12",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"clustertest": {
 			"File": "unused.go",
@@ -292,7 +330,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtctlbackup_sharded_clustertest_heavy",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources"
+			]
 		},
 		"encrypted_replication": {
 			"File": "unused.go",
@@ -303,7 +344,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "12",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"encrypted_transport": {
 			"File": "unused.go",
@@ -314,7 +356,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "12",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"keyspace": {
 			"File": "unused.go",
@@ -327,7 +370,8 @@
 			"Shard": "12",
 			"Tags": [
 				"site_test"
-			]
+			],
+			"Needs": []
 		},
 		"mysqlctl": {
 			"File": "unused.go",
@@ -340,7 +384,8 @@
 			"Shard": "12",
 			"Tags": [
 				"site_test"
-			]
+			],
+			"Needs": []
 		},
 		"mysqlctld": {
 			"File": "unused.go",
@@ -353,7 +398,8 @@
 			"Shard": "12",
 			"Tags": [
 				"site_test"
-			]
+			],
+			"Needs": []
 		},
 		"onlineddl_vrepl": {
 			"File": "unused.go",
@@ -367,7 +413,11 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_vrepl",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"larger-runner",
+				"binlog-compression"
+			]
 		},
 		"onlineddl_vrepl_stress": {
 			"File": "unused.go",
@@ -381,7 +431,11 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_vrepl_stress",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"larger-runner",
+				"binlog-compression"
+			]
 		},
 		"onlineddl_vrepl_suite": {
 			"File": "unused.go",
@@ -395,7 +449,11 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_vrepl_suite",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"larger-runner",
+				"binlog-compression"
+			]
 		},
 		"onlineddl_vrepl_stress_suite": {
 			"File": "unused.go",
@@ -409,7 +467,11 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_vrepl_stress_suite",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"larger-runner",
+				"binlog-compression"
+			]
 		},
 		"onlineddl_revert": {
 			"File": "unused.go",
@@ -423,7 +485,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_revert",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"onlineddl_scheduler": {
 			"File": "unused.go",
@@ -437,7 +500,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_scheduler",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"onlineddl_flow": {
 			"File": "unused.go",
@@ -453,7 +517,8 @@
 			"Shard": "onlineddl_flow",
 			"Tags": [
 				"upgrade_downgrade_onlineddl_flow"
-			]
+			],
+			"Needs": []
 		},
 		"schemadiff_vrepl": {
 			"File": "unused.go",
@@ -467,7 +532,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "schemadiff_vrepl",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"binlog-compression"
+			]
 		},
 		"recovery": {
 			"File": "unused.go",
@@ -478,7 +546,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtctlbackup_sharded_clustertest_heavy",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources"
+			]
 		},
 		"emergencyreparent": {
 			"File": "unused.go",
@@ -494,6 +565,9 @@
 			"Shard": "ers_prs_newfeatures_heavy",
 			"Tags": [
 				"upgrade_downgrade_reparent"
+			],
+			"Needs": [
+				"limit-resources"
 			]
 		},
 		"plannedreparent": {
@@ -510,6 +584,9 @@
 			"Shard": "ers_prs_newfeatures_heavy",
 			"Tags": [
 				"upgrade_downgrade_reparent"
+			],
+			"Needs": [
+				"limit-resources"
 			]
 		},
 		"newfeatures": {
@@ -523,6 +600,9 @@
 			"Shard": "ers_prs_newfeatures_heavy",
 			"Tags": [
 				""
+			],
+			"Needs": [
+				"limit-resources"
 			]
 		},
 		"sharded": {
@@ -537,7 +617,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtctlbackup_sharded_clustertest_heavy",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources"
+			]
 		},
 		"tabletgateway_buffer_reparent": {
 			"File": "unused.go",
@@ -548,7 +631,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "13",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"tabletgateway_buffer_reshard": {
 			"File": "unused.go",
@@ -559,7 +643,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "13",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"tabletgateway": {
 			"File": "unused.go",
@@ -570,7 +655,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "15",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"tabletmanager": {
 			"File": "unused.go",
@@ -583,6 +669,9 @@
 			"Shard": "18",
 			"Tags": [
 				"site_test"
+			],
+			"Needs": [
+				"consul"
 			]
 		},
 		"tabletmanager_replication_manager": {
@@ -594,7 +683,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "18",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"consul"
+			]
 		},
 		"tabletmanager_consul": {
 			"File": "unused.go",
@@ -609,6 +701,9 @@
 			"Shard": "tabletmanager_consul",
 			"Tags": [
 				"site_test"
+			],
+			"Needs": [
+				"consul"
 			]
 		},
 		"tabletmanager_throttler_topo": {
@@ -622,7 +717,8 @@
 			"Shard": "tabletmanager_throttler_topo",
 			"Tags": [
 				"site_test"
-			]
+			],
+			"Needs": []
 		},
 		"tabletmanager_tablegc": {
 			"File": "unused.go",
@@ -635,7 +731,8 @@
 			"Shard": "tabletmanager_tablegc",
 			"Tags": [
 				"site_test"
-			]
+			],
+			"Needs": []
 		},
 		"tabletmanager_zk2": {
 			"File": "unused.go",
@@ -650,7 +747,8 @@
 			"Shard": "docker_cluster",
 			"Tags": [
 				"site_test"
-			]
+			],
+			"Needs": []
 		},
 		"upgrade": {
 			"File": "unused.go",
@@ -669,7 +767,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "28",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"vtgate": {
 			"File": "unused.go",
@@ -680,7 +779,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_general_heavy",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources"
+			]
 		},
 		"vtgate_connectiondrain": {
 			"File": "unused.go",
@@ -691,7 +793,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_general_heavy",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources"
+			]
 		},
 		"vtgate_queries_derived": {
 			"File": "unused.go",
@@ -704,7 +809,8 @@
 			"Shard": "vtgate_queries",
 			"Tags": [
 				"upgrade_downgrade_query_serving_queries"
-			]
+			],
+			"Needs": []
 		},
 		"vtgate_queries_aggregation": {
 			"File": "unused.go",
@@ -717,7 +823,8 @@
 			"Shard": "vtgate_queries",
 			"Tags": [
 				"upgrade_downgrade_query_serving_queries"
-			]
+			],
+			"Needs": []
 		},
 		"vtgate_queries_foundrows": {
 			"File": "unused.go",
@@ -730,7 +837,8 @@
 			"Shard": "vtgate_queries",
 			"Tags": [
 				"upgrade_downgrade_query_serving_queries"
-			]
+			],
+			"Needs": []
 		},
 		"vtgate_queries_informationschema": {
 			"File": "unused.go",
@@ -743,7 +851,8 @@
 			"Shard": "vtgate_queries",
 			"Tags": [
 				"upgrade_downgrade_query_serving_queries"
-			]
+			],
+			"Needs": []
 		},
 		"vtgate_queries_misc": {
 			"File": "unused.go",
@@ -756,7 +865,8 @@
 			"Shard": "vtgate_queries",
 			"Tags": [
 				"upgrade_downgrade_query_serving_queries"
-			]
+			],
+			"Needs": []
 		},
 		"vtgate_queries_multi_query": {
 			"File": "unused.go",
@@ -769,7 +879,8 @@
 			"Shard": "vtgate_queries",
 			"Tags": [
 				"upgrade_downgrade_query_serving_queries"
-			]
+			],
+			"Needs": []
 		},
 		"vtgate_queries_timeout": {
 			"File": "unused.go",
@@ -782,7 +893,8 @@
 			"Shard": "vtgate_queries",
 			"Tags": [
 				"upgrade_downgrade_query_serving_queries"
-			]
+			],
+			"Needs": []
 		},
 		"vtgate_queries_normalize": {
 			"File": "unused.go",
@@ -795,7 +907,8 @@
 			"Shard": "vtgate_queries",
 			"Tags": [
 				"upgrade_downgrade_query_serving_queries"
-			]
+			],
+			"Needs": []
 		},
 		"vtgate_queries_no_scatter": {
 			"File": "unused.go",
@@ -808,7 +921,8 @@
 			"Shard": "vtgate_queries",
 			"Tags": [
 				"upgrade_downgrade_query_serving_queries"
-			]
+			],
+			"Needs": []
 		},
 		"vtgate_queries_orderby": {
 			"File": "unused.go",
@@ -824,7 +938,8 @@
 			"Shard": "vtgate_queries",
 			"Tags": [
 				"upgrade_downgrade_query_serving_queries"
-			]
+			],
+			"Needs": []
 		},
 		"vtgate_queries_tpch": {
 			"File": "unused.go",
@@ -840,7 +955,8 @@
 			"Shard": "vtgate_queries",
 			"Tags": [
 				"upgrade_downgrade_query_serving_queries_2"
-			]
+			],
+			"Needs": []
 		},
 		"vtgate_queries_subquery": {
 			"File": "unused.go",
@@ -856,7 +972,8 @@
 			"Shard": "vtgate_queries",
 			"Tags": [
 				"upgrade_downgrade_query_serving_queries_2"
-			]
+			],
+			"Needs": []
 		},
 		"vtgate_queries_union": {
 			"File": "unused.go",
@@ -872,7 +989,8 @@
 			"Shard": "vtgate_queries",
 			"Tags": [
 				"upgrade_downgrade_query_serving_queries_2"
-			]
+			],
+			"Needs": []
 		},
 		"vtgate_queries_insert": {
 			"File": "unused.go",
@@ -885,7 +1003,8 @@
 			"Shard": "vtgate_queries",
 			"Tags": [
 				"upgrade_downgrade_query_serving_queries_2"
-			]
+			],
+			"Needs": []
 		},
 		"vtgate_queries_vexplain": {
 			"File": "unused.go",
@@ -898,7 +1017,8 @@
 			"Shard": "vtgate_queries",
 			"Tags": [
 				"upgrade_downgrade_query_serving_queries_2"
-			]
+			],
+			"Needs": []
 		},
 		"vtgate_queries_reference": {
 			"File": "unused.go",
@@ -911,7 +1031,8 @@
 			"Shard": "vtgate_queries",
 			"Tags": [
 				"upgrade_downgrade_query_serving_queries_2"
-			]
+			],
+			"Needs": []
 		},
 		"vtgate_queries_random": {
 			"File": "unused.go",
@@ -924,7 +1045,8 @@
 			"Shard": "vtgate_queries",
 			"Tags": [
 				"upgrade_downgrade_query_serving_queries_2"
-			]
+			],
+			"Needs": []
 		},
 		"vtgate_kill": {
 			"File": "unused.go",
@@ -937,7 +1059,8 @@
 			"Shard": "vtgate_queries",
 			"Tags": [
 				"upgrade_downgrade_query_serving_queries_2"
-			]
+			],
+			"Needs": []
 		},
 		"vtgate_concurrentdml": {
 			"File": "unused.go",
@@ -948,7 +1071,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_concurrentdml",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"vtgate_schema": {
 			"File": "unused.go",
@@ -964,7 +1088,8 @@
 			"Shard": "vtgate_schema",
 			"Tags": [
 				"upgrade_downgrade_query_serving_schema"
-			]
+			],
+			"Needs": []
 		},
 		"vtgate_schematracker_loadkeyspace": {
 			"File": "unused.go",
@@ -975,7 +1100,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_schema_tracker",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"vtgate_schematracker_restarttablet": {
 			"File": "unused.go",
@@ -986,7 +1112,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_schema_tracker",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"vtgate_schematracker_sharded": {
 			"File": "unused.go",
@@ -1002,7 +1129,8 @@
 			"Shard": "vtgate_schema_tracker",
 			"Tags": [
 				"upgrade_downgrade_query_serving_schema"
-			]
+			],
+			"Needs": []
 		},
 		"vtgate_schematracker_sharded_prs": {
 			"File": "unused.go",
@@ -1018,7 +1146,8 @@
 			"Shard": "vtgate_schema_tracker",
 			"Tags": [
 				"upgrade_downgrade_query_serving_schema"
-			]
+			],
+			"Needs": []
 		},
 		"vtgate_schematracker_unsharded": {
 			"File": "unused.go",
@@ -1034,7 +1163,8 @@
 			"Shard": "vtgate_schema_tracker",
 			"Tags": [
 				"upgrade_downgrade_query_serving_schema"
-			]
+			],
+			"Needs": []
 		},
 		"vtgate_schematracker_viewsdisabled": {
 			"File": "unused.go",
@@ -1050,7 +1180,8 @@
 			"Shard": "vtgate_schema_tracker",
 			"Tags": [
 				"upgrade_downgrade_query_serving_schema"
-			]
+			],
+			"Needs": []
 		},
 		"vtgate_mysql84": {
 			"File": "unused.go",
@@ -1061,7 +1192,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "mysql84",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"vtgate_sequence": {
 			"File": "unused.go",
@@ -1072,7 +1204,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_general_heavy",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources"
+			]
 		},
 		"vtgate_setstatement": {
 			"File": "unused.go",
@@ -1083,7 +1218,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_reservedconn",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"vtgate_reserved_conn1": {
 			"File": "unused.go",
@@ -1094,7 +1230,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_reservedconn",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"vtgate_reserved_conn2": {
 			"File": "unused.go",
@@ -1105,7 +1242,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_reservedconn",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"vtgate_reserved_conn3": {
 			"File": "unused.go",
@@ -1116,7 +1254,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_reservedconn",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"vtgate_reserved_conn4": {
 			"File": "unused.go",
@@ -1127,7 +1266,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_reservedconn",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"vtgate_tablet_healthcheck_cache": {
 			"File": "unused.go",
@@ -1141,7 +1281,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_tablet_healthcheck_cache",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"vtgate_transaction": {
 			"File": "unused.go",
@@ -1152,7 +1293,9 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_transaction",
-			"Tags": []
+			"Tags": [],
+			"Needs": [],
+			"BuildTag": "debug2PC"
 		},
 		"vtgate_transaction_restart": {
 			"File": "unused.go",
@@ -1163,7 +1306,9 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_transaction",
-			"Tags": []
+			"Tags": [],
+			"Needs": [],
+			"BuildTag": "debug2PC"
 		},
 		"vtgate_transaction_rollback": {
 			"File": "unused.go",
@@ -1174,7 +1319,9 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_transaction",
-			"Tags": []
+			"Tags": [],
+			"Needs": [],
+			"BuildTag": "debug2PC"
 		},
 		"vtgate_transaction_single": {
 			"File": "unused.go",
@@ -1185,7 +1332,9 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_transaction",
-			"Tags": []
+			"Tags": [],
+			"Needs": [],
+			"BuildTag": "debug2PC"
 		},
 		"vtgate_transaction_twopc": {
 			"File": "unused.go",
@@ -1196,7 +1345,9 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_transaction",
-			"Tags": []
+			"Tags": [],
+			"Needs": [],
+			"BuildTag": "debug2PC"
 		},
 		"vtgate_transaction_twopc_metric": {
 			"File": "unused.go",
@@ -1207,7 +1358,9 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_transaction",
-			"Tags": []
+			"Tags": [],
+			"Needs": [],
+			"BuildTag": "debug2PC"
 		},
 		"vtgate_transaction_twopc_stress": {
 			"File": "unused.go",
@@ -1218,7 +1371,9 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_transaction",
-			"Tags": []
+			"Tags": [],
+			"Needs": [],
+			"BuildTag": "debug2PC"
 		},
 		"vtgate_transaction_twopc_fuzz": {
 			"File": "unused.go",
@@ -1229,7 +1384,9 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_transaction",
-			"Tags": []
+			"Tags": [],
+			"Needs": [],
+			"BuildTag": "debug2PC"
 		},
 		"vtgate_transaction_partial_exec": {
 			"File": "unused.go",
@@ -1240,7 +1397,9 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_transaction",
-			"Tags": []
+			"Tags": [],
+			"Needs": [],
+			"BuildTag": "debug2PC"
 		},
 		"vtgate_plantests": {
 			"File": "unused.go",
@@ -1251,7 +1410,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_plantests",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"vtgate_unsharded": {
 			"File": "unused.go",
@@ -1262,7 +1422,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_unsharded",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"vtgate_vschema": {
 			"File": "unused.go",
@@ -1278,7 +1439,8 @@
 			"Shard": "vtgate_vschema",
 			"Tags": [
 				"upgrade_downgrade_query_serving_schema"
-			]
+			],
+			"Needs": []
 		},
 		"vtgate_readafterwrite": {
 			"File": "unused.go",
@@ -1289,7 +1451,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_readafterwrite",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"vtgate_dbddlplugin": {
 			"File": "unused.go",
@@ -1300,7 +1463,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_general_heavy",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources"
+			]
 		},
 		"vtgate_foreignkey": {
 			"File": "unused.go",
@@ -1311,7 +1477,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_foreignkey_stress",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"vtgate_foreignkey_routing": {
 			"File": "unused.go",
@@ -1322,7 +1489,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_foreignkey_stress",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"vtgate_foreignkey_stress": {
 			"File": "unused.go",
@@ -1336,7 +1504,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_foreignkey_stress",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"vtgate_gen4": {
 			"File": "unused.go",
@@ -1347,7 +1516,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_gen4",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"vtgate_godriver": {
 			"File": "unused.go",
@@ -1358,7 +1528,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_godriver",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"vtgate_watchkeyspace": {
 			"File": "unused.go",
@@ -1369,7 +1540,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_topo",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"vtgate_grpc_api": {
 			"File": "unused.go",
@@ -1380,7 +1552,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_general_heavy",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources"
+			]
 		},
 		"topo_zk2": {
 			"File": "unused.go",
@@ -1393,7 +1568,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "docker_cluster",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"topo_consul": {
 			"File": "unused.go",
@@ -1406,7 +1582,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_topo_consul",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"consul"
+			]
 		},
 		"topo_etcd2": {
 			"File": "unused.go",
@@ -1417,7 +1596,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_topo_etcd",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"errs_as_warns": {
 			"File": "unused.go",
@@ -1428,7 +1608,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_general_heavy",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources"
+			]
 		},
 		"consolidator": {
 			"File": "unused.go",
@@ -1439,7 +1622,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_general_heavy",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources"
+			]
 		},
 		"prefixfanout": {
 			"File": "unused.go",
@@ -1450,7 +1636,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_vindex_heavy",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources"
+			]
 		},
 		"vindex_bindvars": {
 			"File": "unused.go",
@@ -1461,7 +1650,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_vindex_heavy",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources"
+			]
 		},
 		"vindex_secondary": {
 			"File": "unused.go",
@@ -1472,7 +1664,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_vindex_heavy",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources"
+			]
 		},
 		"vttest_sample": {
 			"File": "unused.go",
@@ -1483,7 +1678,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "docker_cluster",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"xb_recovery": {
 			"File": "recovery_test.go",
@@ -1494,7 +1690,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "xb_recovery",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"xtrabackup"
+			]
 		},
 		"vreplication_materialize": {
 			"File": "unused.go",
@@ -1508,7 +1707,11 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_partial_movetables_and_materialize",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources",
+				"binlog-compression"
+			]
 		},
 		"vreplication_vtctldclient_materialize": {
 			"File": "unused.go",
@@ -1522,7 +1725,11 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_partial_movetables_and_materialize",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources",
+				"binlog-compression"
+			]
 		},
 		"vreplication_cellalias": {
 			"File": "unused.go",
@@ -1536,7 +1743,11 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_cellalias",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources",
+				"binlog-compression"
+			]
 		},
 		"vreplication_movetables_ignore_source_keyspace": {
 			"File": "unused.go",
@@ -1550,7 +1761,11 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_cellalias",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources",
+				"binlog-compression"
+			]
 		},
 		"vreplication_multi_tenant": {
 			"File": "unused.go",
@@ -1564,7 +1779,11 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_multi_tenant",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources",
+				"binlog-compression"
+			]
 		},
 		"vreplication_partial_movetables_basic": {
 			"File": "unused.go",
@@ -1578,7 +1797,11 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_partial_movetables_and_materialize",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources",
+				"binlog-compression"
+			]
 		},
 		"vdiff_multiple_movetables_test.go": {
 			"File": "unused.go",
@@ -1592,7 +1815,11 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_partial_movetables_and_materialize",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources",
+				"binlog-compression"
+			]
 		},
 		"vreplication_movetables_buffering": {
 			"File": "unused.go",
@@ -1606,7 +1833,11 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_cellalias",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources",
+				"binlog-compression"
+			]
 		},
 		"vreplication_onlineddl_vdiff": {
 			"File": "unused.go",
@@ -1620,7 +1851,11 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_cellalias",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources",
+				"binlog-compression"
+			]
 		},
 		"vreplication_vschema_load": {
 			"File": "unused.go",
@@ -1634,7 +1869,11 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_cellalias",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources",
+				"binlog-compression"
+			]
 		},
 		"sidecardb": {
 			"File": "unused.go",
@@ -1648,7 +1887,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "schemadiff_vrepl",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"binlog-compression"
+			]
 		},
 		"vreplication_basic": {
 			"File": "unused.go",
@@ -1664,7 +1906,12 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_basic",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"larger-runner",
+				"limit-resources",
+				"binlog-compression"
+			]
 		},
 		"vreplication_copy_parallel": {
 			"File": "unused.go",
@@ -1680,7 +1927,11 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_copy_parallel",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources",
+				"binlog-compression"
+			]
 		},
 		"vreplication_partial_movetables_sequences": {
 			"File": "unused.go",
@@ -1694,7 +1945,11 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_partial_movetables_and_materialize",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources",
+				"binlog-compression"
+			]
 		},
 		"vreplication_sequence_reset_on_switch_traffic": {
 			"File": "unused.go",
@@ -1708,7 +1963,11 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_partial_movetables_and_materialize",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources",
+				"binlog-compression"
+			]
 		},
 		"vstream_flush_binlog": {
 			"File": "unused.go",
@@ -1722,7 +1981,12 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_basic",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"larger-runner",
+				"limit-resources",
+				"binlog-compression"
+			]
 		},
 		"multi_vstreams_keyspace_reshard": {
 			"File": "unused.go",
@@ -1738,7 +2002,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vstream",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"vstream_failover": {
 			"File": "unused.go",
@@ -1752,7 +2017,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vstream",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"vstream_stoponreshard_true": {
 			"File": "unused.go",
@@ -1766,7 +2032,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vstream",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"vstream_stoponreshard_false": {
 			"File": "unused.go",
@@ -1780,7 +2047,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vstream",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"vstream_with_keyspaces_to_watch": {
 			"File": "unused.go",
@@ -1794,7 +2062,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vstream",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"vtop_example": {
 			"File": "",
@@ -1805,7 +2074,8 @@
 			],
 			"Manual": false,
 			"Shard": "",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"vtorc_primary_failure": {
 			"File": "unused.go",
@@ -1816,7 +2086,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtorc",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"memory-check"
+			]
 		},
 		"vtorc_api": {
 			"File": "unused.go",
@@ -1827,7 +2100,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtorc",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"memory-check"
+			]
 		},
 		"vtorc_general": {
 			"File": "unused.go",
@@ -1838,7 +2114,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtorc",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"memory-check"
+			]
 		},
 		"vtorc_readtopologyinstance": {
 			"File": "unused.go",
@@ -1849,7 +2128,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtorc",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"memory-check"
+			]
 		},
 		"vault": {
 			"File": "unused.go",
@@ -1860,7 +2142,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "mysql_server_vault",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"consul"
+			]
 		},
 		"vreplication_v2": {
 			"File": "unused.go",
@@ -1876,7 +2161,11 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_v2",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources",
+				"binlog-compression"
+			]
 		},
 		"global_routing": {
 			"File": "unused.go",
@@ -1892,7 +2181,11 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_v2",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources",
+				"binlog-compression"
+			]
 		},
 		"vreplication_fk": {
 			"File": "unused.go",
@@ -1906,7 +2199,11 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_cellalias",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources",
+				"binlog-compression"
+			]
 		},
 		"vreplication_foreign_key_stress": {
 			"File": "unused.go",
@@ -1920,7 +2217,11 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_foreign_key_stress",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources",
+				"binlog-compression"
+			]
 		},
 		"vreplication_across_db_versions": {
 			"File": "unused.go",
@@ -1936,7 +2237,11 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_across_db_versions",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources",
+				"binlog-compression"
+			]
 		},
 		"vreplication_mariadb_to_mysql": {
 			"File": "unused.go",
@@ -1952,7 +2257,11 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_mariadb_to_mysql",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources",
+				"binlog-compression"
+			]
 		},
 		"vreplication_migrate": {
 			"File": "unused.go",
@@ -1968,7 +2277,12 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_migrate",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"larger-runner",
+				"limit-resources",
+				"binlog-compression"
+			]
 		},
 		"vdiff2": {
 			"File": "unused.go",
@@ -1984,7 +2298,11 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_vdiff2",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources",
+				"binlog-compression"
+			]
 		},
 		"vreplication_vtctldclient_cli": {
 			"File": "unused.go",
@@ -2000,7 +2318,11 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_vtctldclient_movetables_tz",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources",
+				"binlog-compression"
+			]
 		},
 		"vreplication_movetables_tz": {
 			"File": "unused.go",
@@ -2014,7 +2336,11 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_vtctldclient_movetables_tz",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources",
+				"binlog-compression"
+			]
 		},
 		"loopkup_index": {
 			"File": "unused.go",
@@ -2028,7 +2354,11 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_vtctldclient_movetables_tz",
-			"Tags": []
+			"Tags": [],
+			"Needs": [
+				"limit-resources",
+				"binlog-compression"
+			]
 		},
 		"vtadmin": {
 			"File": "unused.go",
@@ -2039,7 +2369,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "15",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"topo_connection_cache": {
 			"File": "unused.go",
@@ -2053,7 +2384,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "topo_connection_cache",
-			"Tags": []
+			"Tags": [],
+			"Needs": []
 		},
 		"prscomplex": {
 			"File": "unused.go",
@@ -2066,7 +2398,8 @@
 			"Shard": "vttablet_prscomplex",
 			"Tags": [
 				""
-			]
+			],
+			"Needs": []
 		},
 		"prssettingspool": {
 			"File": "unused.go",
@@ -2079,7 +2412,8 @@
 			"Shard": "vttablet_prscomplex",
 			"Tags": [
 				""
-			]
+			],
+			"Needs": []
 		}
 	}
 }
