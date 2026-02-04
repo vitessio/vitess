@@ -27,6 +27,7 @@ import (
 	"strings"
 	"time"
 	"unicode/utf16"
+	"unicode/utf8"
 
 	"vitess.io/vitess/go/mysql/fastparse"
 
@@ -319,6 +320,11 @@ const hexDigits = "0123456789abcdef"
 // The output uses JSON compliant escapes for control bytes and only uses the
 // short escape sequences for \b, \f, \n, \r, and \t.
 func escapeString(dst []byte, s string) []byte {
+	// If we have invalid UTF-8, normalize it so JSON output stays valid.
+	if !utf8.ValidString(s) {
+		s = string([]rune(s))
+	}
+
 	if !hasSpecialChars(s) {
 		// Fast path - nothing to escape.
 		dst = append(dst, '"')
