@@ -3,21 +3,21 @@ description: 'Set up Minio for use in GitHub Actions workflows'
 runs:
   using: "composite"
   steps:
-    - name: Cache minio binary
+    - name: Cache minio package
       id: cache-minio
       uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
       with:
-        path: minio.linux-amd64
-        key: minio.linux-amd64
+        path: minio_20260202234011.0.0_amd64.deb
+        key: minio_20260202234011.0.0_amd64.deb
 
     - name: Get Minio (on cache miss)
       if: steps.cache-minio.outputs.cache-hit != 'true'
       shell: bash
       run: |
         curl -sLo minio.linux-amd64 https://dl.min.io/server/minio/release/linux-amd64/minio
+        curl -sLo minio_20260202234011.0.0_amd64.deb https://dl.min.io/aistor/minio/release/linux-amd64/minio_20260202234011.0.0_amd64.deb
 
     - name: Install Minio
       shell: bash
       run: |
-        sudo cp minio.linux-amd64 /usr/local/bin/minio
-        sudo chmod +x /usr/local/bin/minio
+        sudo dpkg -i minio_20260202234011.0.0_amd64.deb
