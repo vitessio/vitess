@@ -15,7 +15,7 @@ runs:
       uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
       with:
         path: ${{ inputs.path }}
-        key: vitess-release-${{ inputs.ref }}
+        key: vitess-release.${{ inputs.ref }}
 
     - name: Check out release code (${{ inputs.ref }})
       if: steps.cache-release-build.outputs.cache-hit != 'true'
