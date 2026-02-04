@@ -175,10 +175,7 @@ jobs:
 
       - name: Install Minio
         if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'minio')
-        run: |
-          wget https://dl.min.io/server/minio/release/linux-amd64/minio
-          chmod +x minio
-          sudo mv minio /usr/local/bin
+        uses: ./.github/actions/setup-minio
 
       - name: Install Consul and ZooKeeper
         if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'consul')
