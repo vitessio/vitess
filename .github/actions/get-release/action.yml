@@ -39,7 +39,6 @@ runs:
 
     - name: Build release binaries
       if: steps.cache-release-build.outputs.cache-hit != 'true'
-      timeout-minutes: 10
       shell: bash
       run: |
         source build.env
