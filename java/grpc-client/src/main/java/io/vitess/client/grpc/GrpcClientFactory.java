@@ -27,6 +27,8 @@ import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
+import io.opentracing.Tracer;
+import io.opentracing.noop.NoopTracerFactory;
 import io.opentracing.contrib.grpc.TracingClientInterceptor;
 import io.vitess.client.Context;
 import io.vitess.client.RpcClient;
