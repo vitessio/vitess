@@ -24,3 +24,5 @@ runs:
       shell: bash
       run: |
         sudo dpkg -i minio_20260202234011.0.0_amd64.deb
+        sudo systemctl disable minio
+        sudo systemctl stop minio
