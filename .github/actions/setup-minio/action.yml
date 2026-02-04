@@ -7,22 +7,22 @@ runs:
       id: cache-minio
       uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
       with:
-        path: minio_20260202234011.0.0_amd64.deb
-        key: minio_20260202234011.0.0_amd64.deb
+        path: minio_20250907161309.0.0_amd64.deb
+        key: minio_20250907161309.0.0_amd64.deb
 
     - name: Get Minio (on cache miss)
       if: steps.cache-minio.outputs.cache-hit != 'true'
       shell: bash
       run: |
-        curl -sLo minio_20260202234011.0.0_amd64.deb.tmp https://dl.min.io/aistor/minio/release/linux-amd64/minio_20260202234011.0.0_amd64.deb
+        curl -sLo minio_20250907161309.0.0_amd64.deb.tmp https://dl.min.io/community/server/minio/release/linux-amd64/minio_20250907161309.0.0_amd64.deb
 
-        # checksum - sha256sum source: https://dl.min.io/aistor/minio/release/linux-amd64/minio_20260202234011.0.0_amd64.deb.sha256sum
-        sha256sum minio_20260202234011.0.0_amd64.deb.tmp | grep -q ^170ecb72f1a470c37e8bf9d839bde050bb919efdd0990c5d0a58c09b4667cc54
-        [[ "$?" -eq 0 ]] && mv minio_20260202234011.0.0_amd64.deb.tmp minio_20260202234011.0.0_amd64.deb
+        # checksum - sha256sum source: https://dl.min.io/aistor/minio/release/linux-amd64/minio_20250907161309.0.0_amd64.deb.sha256sum
+        sha256sum minio_20250907161309.0.0_amd64.deb.tmp | grep -q ^eeda08f699f6592d1b868ac8bda864ae2cacdb5ee1b888663366e8c8ff566249
+        [[ "$?" -eq 0 ]] && mv minio_20250907161309.0.0_amd64.deb.tmp minio_20250907161309.0.0_amd64.deb
 
     - name: Install Minio package
       shell: bash
       run: |
-        sudo dpkg -i minio_20260202234011.0.0_amd64.deb
+        sudo dpkg -i minio_20250907161309.0.0_amd64.deb
         sudo systemctl disable minio
         sudo systemctl stop minio
