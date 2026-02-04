@@ -44,7 +44,7 @@ COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
 RUN make install PREFIX=/vt/install NOVTADMINBUILD=1
 
 # Build vtadmin separately.
-FROM --platform=linux/amd64 node:25-bookworm-slim@sha256:21d66e1cd4023c9608740b365e621c0a5f2d7a514b88ab88df5c12847b15320e AS vtadmin-builder
+FROM --platform=linux/amd64 node:22-bookworm-slim@sha256:f86be15afa9a8277608e141ce2a8aa55d3d9c40845921b8511f4fb7897be2554 AS vtadmin-builder
 
 WORKDIR /vt/web/vtadmin
 
