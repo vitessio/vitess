@@ -115,7 +115,10 @@ public class GrpcClientFactory implements RpcClientFactory {
     RetryingInterceptor retryingInterceptor = new RetryingInterceptor(config);
     ClientInterceptor[] interceptors;
     if (useTracing) {
-      TracingClientInterceptor tracingInterceptor = new TracingClientInterceptor();
+      Tracer tracer = NoopTracerFactory.create();
+      TracingClientInterceptor tracingInterceptor = new TracingClientInterceptor.newBuilder()
+          .withTracer(tracer)
+          .build();
       interceptors = new ClientInterceptor[]{retryingInterceptor, tracingInterceptor};
     } else {
       interceptors = new ClientInterceptor[]{retryingInterceptor};
