@@ -114,6 +114,7 @@ jobs:
 
     - name: Get previous vitess release
       if: steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 10
       uses: ./.github/actions/get-release
       with:
         path: /tmp/vitess-build-other
