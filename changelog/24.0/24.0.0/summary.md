@@ -13,6 +13,7 @@
     - **[VTGate](#minor-changes-vtgate)**
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
         - [New "session" mode for `--vtgate-balancer-mode` flag](#vtgate-session-balancer-mode)
+        - [New SHA1 gRPC authentication plugin](#vtgate-sha1-grpc-auth)
     - **[Query Serving](#minor-changes-query-serving)**
         - [JSON_EXTRACT now supports dynamic path arguments](#query-serving-json-extract-dynamic-args)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -94,6 +95,38 @@ To enable session mode, set the flag when starting VTGate:
 ```
 --vtgate-balancer-mode=session
 ```
+
+#### <a id="vtgate-sha1-grpc-auth"/>New SHA1 gRPC Authentication Plugin</a>
+
+VTGate now supports a `sha1` gRPC authentication plugin that accepts SHA1-hashed passwords instead of plaintext. The plugin supports hybrid configurations where some credentials use SHA1 hashes while others use plaintext passwords in the same file. SHA1 provides faster password encoding during RPC requests compared to SHA256.
+
+**New flags:**
+
+- `--grpc-auth-sha1-password-file`: Path to JSON file containing credentials
+- `--grpc-use-sha1-authentication-callerid`: When set, uses the authenticated username as the immediate caller ID
+
+**Example configuration file:**
+
+```json
+[
+  {
+    "Username": "user_sha1",
+    "SHA1HashedPassword": "5baa61e4c9b93f3f0682250b6cf8331b7ee68fd8"
+  },
+  {
+    "Username": "user_plaintext",
+    "Password": "my_password"
+  }
+]
+```
+
+To enable, start VTGate with:
+
+```bash
+vtgate --grpc-auth-mode=sha1 --grpc-auth-sha1-password-file=/path/to/credentials.json
+```
+
+Each entry in the credentials file must have a `Username` and either a `Password` (plaintext) or `SHA1HashedPassword` (40-character hex-encoded SHA1 hash). If both are provided, `Password` takes precedence.
 
 ### <a id="minor-changes-query-serving"/>Query Serving</a>
 
