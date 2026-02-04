@@ -248,16 +248,4 @@ jobs:
           echo ""
           exit 1
 
-      - name: Check make generate_ci_workflows
-        run: |
-          set -e
-          make generate_ci_workflows
-          output=$(git status -s)
-          if [ -z "${output}" ]; then
-            exit 0
-          fi
-          echo 'Please run `make generate_ci_workflows`, commit and push again.'
-          echo 'Running `make generate_ci_workflows` on CI yields the following changes:'
-          echo "$output"
-          echo ""
-          exit 1
+

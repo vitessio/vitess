@@ -4,17 +4,23 @@ This document has a short outline of how tests are run in CI, how to add new tes
 
 ### Adding a new test
 
-Unit tests are run by the unit test runner, one per platform, currently mysql57, mysql80.
+Unit tests are run by the unit test runner, one per platform, currently mysql57, mysql80, and mysql84.
 The workflow first installs the required database server before calling `make unit_test`.
 
 To add a new end-to-end (e2e) test (also called _cluster end to end_ tests):
-* Add a new object to test/config.json
-* If you are creating a new test _shard_:
-  * update `clusterList` in `ci_workflow_gen.go`
-  * `make generate_ci_workflows`
-* If you are adding a new database platform, update the `templates\unit_test.tpl` to add 
-  the platform specific packages and update `unitTestDatabases`
 
+* Add a new object to test/config.json with the appropriate `Shard` value
+* Add any required dependencies to the test's `Needs` array in config.json
+* The cluster_endtoend.yml workflow will automatically pick up the new shard
+
+Available `Needs` values:
+* `xtrabackup` - Install Percona Server and XtraBackup
+* `minio` - Install Minio S3 server  
+* `consul` - Run `make tools` for Consul/ZooKeeper
+* `larger-runner` - Use 16-core runner
+* `memory-check` - Verify 15GB+ RAM
+* `limit-resources` - Apply MySQL resource limits
+* `binlog-compression` - Enable binlog transaction compression
 
 ### Vitess test runner
 The `.github/workflows` directory contains one yaml file per workflow. e2e tests are run using the `test.go` script 
@@ -30,15 +36,15 @@ Each test is of the form:
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 17,
+			"Shard": "vtgate_queries",
+			"Needs": ["larger-runner"],
 			"Tags": []
 		},
 ```
-The important parameters here are Packages which define the Go packages to test, Args for any `go test` flags, and the Shard which says 
-which Test VM should run this test. All tests which have a common Shard value are run in the same test vm.
+The important parameters here are Packages which define the Go packages to test, Args for any `go test` flags, the Shard which says 
+which group of tests to run together, and Needs which specifies CI dependencies.
 
 ### Known Issue
 
 * Each VM does not seem to be able to create a lot of vttablets. For this reason we have had to split a few VReplication 
 e2e tests across Shards. We need to identify and if possible fix this limitation so that we can reduce the number of test Shards
-  
