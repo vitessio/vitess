@@ -452,6 +452,76 @@ func TestSysVarTxIsolation(t *testing.T) {
 	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `SERIALIZABLE`)
 }
 
+// TestSetTxIsolationWithTabletAlias tests that SET TRANSACTION ISOLATION LEVEL
+// works correctly when using tablet alias targeting mode.
+// This is a regression test for an issue where setting the transaction isolation level
+// while targeting a specific tablet would fail with MySQL error 1568:
+// "Transaction characteristics can't be changed while a transaction is in progress"
+func TestSetTxIsolationWithTabletAlias(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// Find a primary tablet alias for the -80 shard
+	var primaryAlias string
+	for _, ks := range clusterInstance.Keyspaces {
+		if ks.Name != keyspaceName {
+			continue
+		}
+		for _, shard := range ks.Shards {
+			if shard.Name == "-80" {
+				for _, tablet := range shard.Vttablets {
+					if tablet.Type == "primary" {
+						primaryAlias = tablet.Alias
+						break
+					}
+				}
+			}
+		}
+	}
+	require.NotEmpty(t, primaryAlias, "no PRIMARY tablet found for -80 shard")
+
+	// Target the specific tablet using tablet alias
+	useStmt := fmt.Sprintf("USE `%s:-80@primary|%s`", keyspaceName, primaryAlias)
+	utils.Exec(t, conn, useStmt)
+
+	// Set autocommit=0 which puts the session in "transaction" mode
+	// This is the key condition that triggers the bug: with autocommit=0,
+	// Vitess incorrectly uses ReserveBeginExecute which sends BEGIN before
+	// the SET statement, causing MySQL error 1568.
+	utils.Exec(t, conn, "SET @@autocommit = 0")
+
+	// Check initial state and connection ID
+	qr := utils.Exec(t, conn, "SELECT @@transaction_isolation, @@autocommit, connection_id()")
+	t.Logf("Initial state: %v", qr.Rows)
+
+	// Test 1: Setting isolation level with autocommit=0 should work
+	// This was failing with error 1568 because Vitess was incorrectly starting
+	// a transaction before sending the SET statement to MySQL
+	utils.Exec(t, conn, "SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED")
+
+	// Verify the isolation level was set
+	qr = utils.Exec(t, conn, "SELECT @@transaction_isolation, connection_id()")
+	t.Logf("After SET READ COMMITTED: %v", qr.Rows)
+	utils.AssertMatches(t, conn, "SELECT @@transaction_isolation", `[[VARCHAR("READ-COMMITTED")]]`)
+
+	// Test 2: Change isolation level again
+	utils.Exec(t, conn, "SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE")
+	qr = utils.Exec(t, conn, "SELECT @@transaction_isolation, connection_id()")
+	t.Logf("After SET SERIALIZABLE: %v", qr.Rows)
+	utils.AssertMatches(t, conn, "SELECT @@transaction_isolation", `[[VARCHAR("SERIALIZABLE")]]`)
+
+	// Test 3: Use alternative syntax
+	utils.Exec(t, conn, "SET @@transaction_isolation = 'READ-UNCOMMITTED'")
+	qr = utils.Exec(t, conn, "SELECT @@transaction_isolation, connection_id()")
+	t.Logf("After SET READ-UNCOMMITTED: %v", qr.Rows)
+	utils.AssertMatches(t, conn, "SELECT @@transaction_isolation", `[[VARCHAR("READ-UNCOMMITTED")]]`)
+
+	// Reset autocommit
+	utils.Exec(t, conn, "SET @@autocommit = 1")
+}
+
 // TestSysVarInnodbWaitTimeout tests the innodb_lock_wait_timeout system variable
 func TestSysVarInnodbWaitTimeout(t *testing.T) {
 	conn, err := mysql.Connect(context.Background(), &vtParams)
@@ -482,4 +552,285 @@ func TestSysVarInnodbWaitTimeout(t *testing.T) {
 	utils.AssertContains(t, conn, "select @@innodb_lock_wait_timeout, connection_id()", `INT64(240)`)
 	// second run, to ensuring the setting is applied on the session and not just on next query after settings.
 	utils.AssertContains(t, conn, "select @@innodb_lock_wait_timeout, connection_id()", `INT64(240)`)
+}
+
+// TestMultipleSetsWithAutocommitOff tests that multiple SET statements work correctly
+// in sequence when autocommit=0 with tablet alias targeting.
+func TestMultipleSetsWithAutocommitOff(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// Find a primary tablet alias for the -80 shard
+	var primaryAlias string
+	for _, ks := range clusterInstance.Keyspaces {
+		if ks.Name != keyspaceName {
+			continue
+		}
+		for _, shard := range ks.Shards {
+			if shard.Name == "-80" {
+				for _, tablet := range shard.Vttablets {
+					if tablet.Type == "primary" {
+						primaryAlias = tablet.Alias
+						break
+					}
+				}
+			}
+		}
+	}
+	require.NotEmpty(t, primaryAlias, "no PRIMARY tablet found for -80 shard")
+
+	// Target the specific tablet using tablet alias
+	useStmt := fmt.Sprintf("USE `%s:-80@primary|%s`", keyspaceName, primaryAlias)
+	utils.Exec(t, conn, useStmt)
+
+	// Set autocommit=0
+	utils.Exec(t, conn, "SET @@autocommit = 0")
+
+	// Get initial connection ID
+	qr := utils.Exec(t, conn, "SELECT connection_id()")
+	initialConnID := qr.Rows[0][0].ToString()
+	t.Logf("Initial connection ID: %s", initialConnID)
+
+	// Multiple SET statements should work without error
+	utils.Exec(t, conn, "SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED")
+	utils.Exec(t, conn, "SET @@sql_mode = ''")
+	utils.Exec(t, conn, "SET @@wait_timeout = 28800")
+
+	// Verify all settings are applied correctly
+	utils.AssertMatches(t, conn, "SELECT @@transaction_isolation", `[[VARCHAR("READ-COMMITTED")]]`)
+	utils.AssertMatches(t, conn, "SELECT @@sql_mode", `[[VARCHAR("")]]`)
+	utils.AssertMatches(t, conn, "SELECT @@wait_timeout", `[[INT64(28800)]]`)
+
+	// Verify connection ID is consistent (same reserved connection)
+	qr = utils.Exec(t, conn, "SELECT connection_id()")
+	finalConnID := qr.Rows[0][0].ToString()
+	assert.Equal(t, initialConnID, finalConnID, "connection ID should remain consistent")
+
+	// Reset autocommit
+	utils.Exec(t, conn, "SET @@autocommit = 1")
+}
+
+// TestShowStatementsWithAutocommitOff tests that SHOW statements work correctly
+// when autocommit=0 with tablet alias targeting.
+func TestShowStatementsWithAutocommitOff(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// Find a primary tablet alias for the -80 shard
+	var primaryAlias string
+	for _, ks := range clusterInstance.Keyspaces {
+		if ks.Name != keyspaceName {
+			continue
+		}
+		for _, shard := range ks.Shards {
+			if shard.Name == "-80" {
+				for _, tablet := range shard.Vttablets {
+					if tablet.Type == "primary" {
+						primaryAlias = tablet.Alias
+						break
+					}
+				}
+			}
+		}
+	}
+	require.NotEmpty(t, primaryAlias, "no PRIMARY tablet found for -80 shard")
+
+	// Target the specific tablet using tablet alias
+	useStmt := fmt.Sprintf("USE `%s:-80@primary|%s`", keyspaceName, primaryAlias)
+	utils.Exec(t, conn, useStmt)
+
+	// Set autocommit=0
+	utils.Exec(t, conn, "SET @@autocommit = 0")
+
+	// SHOW statements should work without transaction errors
+	utils.Exec(t, conn, "SHOW TABLES")
+	utils.Exec(t, conn, "SHOW VARIABLES LIKE 'tx%'")
+	utils.Exec(t, conn, "SHOW STATUS LIKE 'Threads%'")
+
+	// Reset autocommit
+	utils.Exec(t, conn, "SET @@autocommit = 1")
+}
+
+// TestUseStatementWithAutocommitOff tests that USE statements work correctly
+// when autocommit=0.
+func TestUseStatementWithAutocommitOff(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// Set autocommit=0 first
+	utils.Exec(t, conn, "SET @@autocommit = 0")
+
+	// USE statements should work without transaction errors
+	utils.Exec(t, conn, fmt.Sprintf("USE `%s`", keyspaceName))
+	utils.Exec(t, conn, fmt.Sprintf("USE `%s:-80`", keyspaceName))
+	utils.Exec(t, conn, fmt.Sprintf("USE `%s:-80@primary`", keyspaceName))
+
+	// Find a primary tablet alias for testing tablet alias targeting
+	var primaryAlias string
+	for _, ks := range clusterInstance.Keyspaces {
+		if ks.Name != keyspaceName {
+			continue
+		}
+		for _, shard := range ks.Shards {
+			if shard.Name == "-80" {
+				for _, tablet := range shard.Vttablets {
+					if tablet.Type == "primary" {
+						primaryAlias = tablet.Alias
+						break
+					}
+				}
+			}
+		}
+	}
+	require.NotEmpty(t, primaryAlias, "no PRIMARY tablet found for -80 shard")
+
+	// USE with tablet alias should also work
+	useStmt := fmt.Sprintf("USE `%s:-80@primary|%s`", keyspaceName, primaryAlias)
+	utils.Exec(t, conn, useStmt)
+
+	// Reset autocommit
+	utils.Exec(t, conn, "SET @@autocommit = 1")
+}
+
+// TestMixedSetSelectWithAutocommitOff tests the interaction between SET and SELECT
+// statements when autocommit=0 with tablet alias targeting.
+func TestMixedSetSelectWithAutocommitOff(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// Find a primary tablet alias for the -80 shard
+	var primaryAlias string
+	for _, ks := range clusterInstance.Keyspaces {
+		if ks.Name != keyspaceName {
+			continue
+		}
+		for _, shard := range ks.Shards {
+			if shard.Name == "-80" {
+				for _, tablet := range shard.Vttablets {
+					if tablet.Type == "primary" {
+						primaryAlias = tablet.Alias
+						break
+					}
+				}
+			}
+		}
+	}
+	require.NotEmpty(t, primaryAlias, "no PRIMARY tablet found for -80 shard")
+
+	// Target the specific tablet using tablet alias
+	useStmt := fmt.Sprintf("USE `%s:-80@primary|%s`", keyspaceName, primaryAlias)
+	utils.Exec(t, conn, useStmt)
+
+	// Set autocommit=0
+	utils.Exec(t, conn, "SET @@autocommit = 0")
+
+	// Get initial connection ID
+	qr := utils.Exec(t, conn, "SELECT connection_id()")
+	initialConnID := qr.Rows[0][0].ToString()
+	t.Logf("Initial connection ID: %s", initialConnID)
+
+	// 1. SET statement (no tx started yet)
+	utils.Exec(t, conn, "SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED")
+
+	// 2. SELECT should start implicit transaction
+	qr = utils.Exec(t, conn, "SELECT id FROM test WHERE id = 80")
+	t.Logf("SELECT result: %v", qr.Rows)
+
+	// 3. Another SET should work (tx exists now)
+	utils.Exec(t, conn, "SET @@wait_timeout = 28800")
+
+	// 4. Another SELECT should use same tx
+	utils.Exec(t, conn, "SELECT id FROM test WHERE id = 80")
+
+	// Verify connection ID is consistent
+	qr = utils.Exec(t, conn, "SELECT connection_id()")
+	finalConnID := qr.Rows[0][0].ToString()
+	assert.Equal(t, initialConnID, finalConnID, "connection ID should remain consistent")
+
+	// Verify isolation level is applied
+	utils.AssertMatches(t, conn, "SELECT @@transaction_isolation", `[[VARCHAR("READ-COMMITTED")]]`)
+
+	// 5. COMMIT
+	utils.Exec(t, conn, "COMMIT")
+
+	// Reset autocommit
+	utils.Exec(t, conn, "SET @@autocommit = 1")
+}
+
+// TestTransactionBoundariesWithAutocommitOff tests that transaction boundaries
+// are correct with mixed statement types when autocommit=0.
+func TestTransactionBoundariesWithAutocommitOff(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// Find a primary tablet alias for the -80 shard
+	var primaryAlias string
+	for _, ks := range clusterInstance.Keyspaces {
+		if ks.Name != keyspaceName {
+			continue
+		}
+		for _, shard := range ks.Shards {
+			if shard.Name == "-80" {
+				for _, tablet := range shard.Vttablets {
+					if tablet.Type == "primary" {
+						primaryAlias = tablet.Alias
+						break
+					}
+				}
+			}
+		}
+	}
+	require.NotEmpty(t, primaryAlias, "no PRIMARY tablet found for -80 shard")
+
+	// Target the specific tablet using tablet alias
+	useStmt := fmt.Sprintf("USE `%s:-80@primary|%s`", keyspaceName, primaryAlias)
+	utils.Exec(t, conn, useStmt)
+
+	// Set autocommit=0
+	utils.Exec(t, conn, "SET @@autocommit = 0")
+
+	// 1. SET (no tx started)
+	utils.Exec(t, conn, "SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED")
+
+	// 2. SHOW (no tx started)
+	utils.Exec(t, conn, "SHOW TABLES")
+
+	// 3. SELECT (implicit tx starts)
+	qr := utils.Exec(t, conn, "SELECT id FROM test WHERE id = 80")
+	t.Logf("First SELECT: %v", qr.Rows)
+
+	// 4. ROLLBACK (tx ends)
+	utils.Exec(t, conn, "ROLLBACK")
+
+	// 5. SET (no tx started again)
+	utils.Exec(t, conn, "SET @@wait_timeout = 28800")
+
+	// 6. INSERT (implicit tx starts) - use a unique ID to avoid conflicts
+	utils.Exec(t, conn, "INSERT INTO test (id, val1) VALUES (9999, 'test_boundary')")
+
+	// 7. Verify the insert is visible in same transaction
+	utils.AssertMatches(t, conn, "SELECT val1 FROM test WHERE id = 9999", `[[VARCHAR("test_boundary")]]`)
+
+	// 8. COMMIT (tx ends)
+	utils.Exec(t, conn, "COMMIT")
+
+	// Verify data was committed
+	utils.AssertMatches(t, conn, "SELECT val1 FROM test WHERE id = 9999", `[[VARCHAR("test_boundary")]]`)
+
+	// Clean up test data
+	utils.Exec(t, conn, "DELETE FROM test WHERE id = 9999")
+	utils.Exec(t, conn, "COMMIT")
+
+	// Reset autocommit
+	utils.Exec(t, conn, "SET @@autocommit = 1")
 }
