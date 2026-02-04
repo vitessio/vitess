@@ -69,11 +69,11 @@ jobs:
 
       - name: Set up Docker Buildx
         if: steps.changes.outputs.end_to_end == 'true'
-        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       - name: Build bootstrap images
         if: steps.changes.outputs.end_to_end == 'true'
-        uses: docker/bake-action@4ba453fbc2db7735392b93edf935aaf9b1e8f747 # v6.5.0
+        uses: docker/bake-action@5be5f02ff8819ecd3092ea6b2e6261c31774f2b4 # v6.10.0
         with:
           files: docker/bootstrap/docker-bake.hcl
           load: true
