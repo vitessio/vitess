@@ -69,3 +69,17 @@ func TestMarshalSQLValuePreservesControlByte(t *testing.T) {
 	expected := "CAST(JSON_QUOTE(_utf8mb4" + sqltypes.EncodeStringSQL(raw) + ") as JSON)"
 	require.Equal(t, expected, string(got.Raw()))
 }
+
+// TestMarshalSQLValueNormalizesInvalidUTF8 verifies that JSON string
+// marshaling normalizes invalid UTF-8 before producing SQL.
+func TestMarshalSQLValueNormalizesInvalidUTF8(t *testing.T) {
+	raw := string([]byte{0xff, 0xfe, 'A'})
+	val := NewString(raw)
+
+	got, err := MarshalSQLValue(val.MarshalTo(nil))
+	require.NoError(t, err)
+
+	normalized := string([]rune(raw))
+	expected := "CAST(JSON_QUOTE(_utf8mb4" + sqltypes.EncodeStringSQL(normalized) + ") as JSON)"
+	require.Equal(t, expected, string(got.Raw()))
+}
