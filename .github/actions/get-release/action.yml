@@ -1,11 +1,11 @@
 name: 'Get Vitess release'
-description: 'Get release assets from a specific Vitess release, for use in GitHub Actions workflows'
+description: 'Get binaries from a specific Vitess release, for use in GitHub Actions workflows'
 inputs:
   path:
-    description: 'The path to store the directory of release files'
+    description: 'path to store the release files'
     required: true
   ref:
-    description: 'The git ref of the release'
+    description: 'git ref of the release'
     required: true
 runs:
   using: "composite"
