@@ -221,10 +221,13 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 	// Put everything in a unique dir, so we can copy and/or safely delete it.
 	// Also try to make them use different port ranges
 	// to mitigate failures due to zombie processes.
+	binDir := filepath.Join(dir, "bin")
+	envPath := os.Getenv("PATH")
 	cmd.Env = updateEnv(os.Environ(), map[string]string{
 		// Disable gRPC server GOAWAY/"too_many_pings" errors. Context:
 		// https://github.com/grpc/grpc/blob/master/doc/keepalive.md
 		"GRPC_ARG_HTTP2_MAX_PINGS_WITHOUT_DATA": "0",
+		"PATH":                                  binDir + ":" + envPath,
 		"JUNIT_OUTPUT":                          junitOutput,
 		"PACKAGES":                              strings.Join(t.Packages, " "),
 		"VTROOT":                                "/vt/src/vitess.io/vitess",
