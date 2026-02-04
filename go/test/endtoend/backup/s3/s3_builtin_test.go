@@ -72,11 +72,13 @@ func getRandomListenPorts() (int, int) {
 			addr1 := ln1.Addr().(*net.TCPAddr)
 
 			ln2, err := net.Listen("tcp", ":"+strconv.Itoa(addr1.Port+1))
-			if err == nil {
+			if err != nil {
 				ln1.Close()
-				ln2.Close()
-				return addr1.Port, addr1.Port + 1
+				continue
 			}
+			ln1.Close()
+			ln2.Close()
+			return addr1.Port, addr1.Port + 1
 		}
 	}
 }
