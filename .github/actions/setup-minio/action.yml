@@ -5,7 +5,7 @@ runs:
   steps:
     - name: Cache minio binary
       id: cache-minio
-      uses: actions/cache@v5
+      uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
       with:
         path: minio.linux-amd64
         key: minio.linux-amd64
