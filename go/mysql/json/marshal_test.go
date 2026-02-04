@@ -58,6 +58,8 @@ func TestMarshalSQLTo(t *testing.T) {
 	}
 }
 
+// TestMarshalSQLValuePreservesControlByte verifies that JSON control bytes
+// are preserved when marshaled into SQL.
 func TestMarshalSQLValuePreservesControlByte(t *testing.T) {
 	raw := "Foo Bar" + string([]byte{26}) + "a"
 
