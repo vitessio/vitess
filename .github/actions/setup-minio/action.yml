@@ -3,12 +3,16 @@ description: 'Set up Minio for use in GitHub Actions workflows'
 runs:
   using: "composite"
   steps:
+    - name: Build weekly cache key
+      shell: bash
+      run: echo "MINIO_CACHE_WEEK=$(date +%G-%V)" >> "$GITHUB_ENV"
+
     - name: Cache minio package
       id: cache-minio
       uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
       with:
         path: minio_20260202234011.0.0_amd64.deb
-        key: minio_20260202234011.0.0_amd64.deb
+        key: minio_20260202234011.0.0_amd64.deb.${{ env.MINIO_CACHE_WEEK }}
 
     - name: Get Minio (on cache miss)
       if: steps.cache-minio.outputs.cache-hit != 'true'
