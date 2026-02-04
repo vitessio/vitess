@@ -20,4 +20,4 @@ runs:
       shell: bash
       run: |
         sudo cp minio.linux-amd64 /usr/local/bin/minio
-        chmod +x /usr/local/bin/minio
+        sudo chmod +x /usr/local/bin/minio
