@@ -118,7 +118,7 @@ public class GrpcClientFactory implements RpcClientFactory {
     ClientInterceptor[] interceptors;
     if (useTracing) {
       Tracer tracer = NoopTracerFactory.create();
-      TracingClientInterceptor tracingInterceptor = new TracingClientInterceptor.newBuilder()
+      TracingClientInterceptor tracingInterceptor = TracingClientInterceptor.newBuilder()
           .withTracer(tracer)
           .build();
       interceptors = new ClientInterceptor[]{retryingInterceptor, tracingInterceptor};
