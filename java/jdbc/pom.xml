@@ -5,7 +5,7 @@
   <parent>
     <groupId>io.vitess</groupId>
     <artifactId>vitess-parent</artifactId>
-    <version>22.0.3</version>
+    <version>22.0.4-SNAPSHOT</version>
   </parent>
   <artifactId>vitess-jdbc</artifactId>
   <name>Vitess JDBC Driver</name>
