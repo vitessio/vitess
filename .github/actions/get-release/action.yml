@@ -31,14 +31,16 @@ runs:
         go-version-file: go.mod
         cache: false
 
-    - name: Get dependencies
+    - name: Get dependencies for release
       if: steps.cache-release-build.outputs.cache-hit != 'true'
+      shell: bash
       run: |
         go mod download
 
-    - name: Building release binaries
+    - name: Build release binaries
       if: steps.cache-release-build.outputs.cache-hit != 'true'
       timeout-minutes: 10
+      shell: bash
       run: |
         source build.env
         NOVTADMINBUILD=1 make build
