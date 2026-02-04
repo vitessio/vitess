@@ -12,9 +12,12 @@ runs:
 
     - name: Get Minio (on cache miss)
       if: steps.cache-minio.outputs.cache-hit != 'true'
+      shell: bash
       run: |
         curl -sLo minio.linux-amd64 https://dl.min.io/server/minio/release/linux-amd64/minio
 
     - name: Install Minio
+      shell: bash
+      run: |
         sudo cp minio.linux-amd64 /usr/local/bin/minio
         chmod +x /usr/local/bin/minio
