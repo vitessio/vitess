@@ -27,6 +27,8 @@ import { ContentContainer } from '../layout/ContentContainer';
 import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
 import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder';
+import { formatDashboardUrl } from '../../util/dashboards';
+import { getVitessMonitoringDashboardTitle, getVTGateMonitoringTemplate } from '../../util/env';
 
 export const Gates = () => {
     useDocumentTitle('Gates');
@@ -38,6 +40,7 @@ export const Gates = () => {
         const mapped = (gatesQuery.data || []).map((g) => ({
             cell: g.cell,
             cluster: g.cluster?.name,
+            cluster_id: g.cluster?.id,
             hostname: g.hostname,
             keyspaces: g.keyspaces,
             pool: g.pool,
@@ -67,8 +70,33 @@ export const Gates = () => {
                 </DataCell>
                 <DataCell className="whitespace-nowrap">{gate.cell}</DataCell>
                 <DataCell>{(gate.keyspaces || []).join(', ')}</DataCell>
+                {getVTGateMonitoringTemplate() && (
+                    <DataCell>
+                        <a
+                            href={
+                                formatDashboardUrl(getVTGateMonitoringTemplate(), {
+                                    cluster: gate.cluster,
+                                    cluster_id: gate.cluster_id,
+                                    cell: gate.cell,
+                                    hostname: gate.hostname,
+                                    pool: gate.pool,
+                                }) || '#'
+                            }
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-secondary btn-sm"
+                        >
+                            {gate.hostname as string}-metrics
+                        </a>
+                    </DataCell>
+                )}
             </tr>
         ));
+
+    const columns = ['Pool', 'Hostname', 'Cell', 'Keyspaces'];
+    if (getVTGateMonitoringTemplate()) {
+        columns.push(getVitessMonitoringDashboardTitle());
+    }
 
     return (
         <div>
@@ -83,7 +111,7 @@ export const Gates = () => {
                     placeholder="Filter gates"
                     value={filter || ''}
                 />
-                <DataTable columns={['Pool', 'Hostname', 'Cell', 'Keyspaces']} data={rows} renderRows={renderRows} />
+                <DataTable columns={columns} data={rows} renderRows={renderRows} />
                 <QueryLoadingPlaceholder query={gatesQuery} />
             </ContentContainer>
         </div>
