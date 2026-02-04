@@ -7,6 +7,8 @@
     - **[New Support](#new-support)**
         - [Window function pushdown for sharded keyspaces](#window-function-pushdown)
         - [Tablet targeting via USE statement](#tablet-targeting)
+    - **[Removed Support](#removed-support)**
+        - [Consul topology and discovery support removed](#consul-removed)
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
         - [`--shards` flag for MoveTables/Reshard start and stop](#vreplication-shards-flag-start-stop)
@@ -56,6 +58,12 @@ USE commerce:-80@replica|zone1-0000000100;
 Once set, all subsequent queries in the session route to the specified tablet until cleared with a standard `USE keyspace` or `USE keyspace@tablet_type` statement. This is useful for debugging, per-tablet monitoring, cache warming, and other operational tasks where targeting a specific tablet is required.
 
 Note: A shard must be specified when using tablet targeting. Like shard targeting, this bypasses vindex-based routing, so use with care.
+
+### <a id="removed-support"/>Removed Support</a>
+
+#### <a id="consul-removed"/>Consul topology and discovery support removed</a>
+
+Consul support for topology servers and VTAdmin discovery has been removed in v24. Use etcd2 or zk2 for topology storage, and use the staticfile or dynamic discovery implementations for VTAdmin.
 
 ## <a id="minor-changes"/>Minor Changes</a>
 
@@ -187,4 +195,3 @@ The lack of facilities to read the snapshots created by this feature coupled wit
 **Migration**: remove the VTOrc flag `--snapshot-topology-interval` before v25.
 
 **Impact**: VTOrc can no longer create snapshots of the topology in it's backend database.
-

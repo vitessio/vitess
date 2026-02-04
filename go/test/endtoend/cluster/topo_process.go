@@ -18,7 +18,6 @@ package cluster
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -37,7 +36,6 @@ import (
 	vtopo "vitess.io/vitess/go/vt/topo"
 
 	// Register topo server implementations
-	_ "vitess.io/vitess/go/vt/topo/consultopo"
 	_ "vitess.io/vitess/go/vt/topo/etcd2topo"
 	_ "vitess.io/vitess/go/vt/topo/zk2topo"
 )
@@ -69,8 +67,6 @@ func (topo *TopoProcess) Setup(topoFlavor string, cluster *LocalProcessCluster) 
 	switch topoFlavor {
 	case "zk2":
 		err = topo.SetupZookeeper(cluster)
-	case "consul":
-		err = topo.SetupConsul(cluster)
 	default:
 		// Override any inherited ETCDCTL_API env value to
 		// ensure that we use the v3 API and storage.
@@ -190,116 +186,6 @@ func (topo *TopoProcess) SetupZookeeper(cluster *LocalProcessCluster) error {
 
 	log.Infof("Starting zookeeper with args %v", strings.Join(topo.proc.Args, " "))
 	return topo.proc.Run()
-}
-
-// ConsulConfigs are the configurations that are added the config files which are used by consul
-type ConsulConfigs struct {
-	Ports   PortsInfo `json:"ports"`
-	DataDir string    `json:"data_dir"`
-	LogFile string    `json:"log_file"`
-}
-
-// PortsInfo is the different ports used by consul
-type PortsInfo struct {
-	DNS     int `json:"dns"`
-	HTTP    int `json:"http"`
-	SerfLan int `json:"serf_lan"`
-	SerfWan int `json:"serf_wan"`
-	Server  int `json:"server"`
-}
-
-// SetupConsul spawns a new consul service and initializes it with the defaults.
-// The service is kept running in the background until TearDown() is called.
-func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
-	topo.VerifyURL = fmt.Sprintf("http://%s:%d/v1/kv/?keys", topo.Host, topo.Port)
-
-	err = os.MkdirAll(topo.LogDirectory, os.ModePerm)
-	if err != nil {
-		log.Errorf("Failed to create directory for consul logs: %v", err)
-		return
-	}
-	err = os.MkdirAll(topo.DataDirectory, os.ModePerm)
-	if err != nil {
-		log.Errorf("Failed to create directory for consul data: %v", err)
-		return
-	}
-
-	configFile := path.Join(os.Getenv("VTDATAROOT"), "consul.json")
-
-	logFile := path.Join(topo.LogDirectory, "/consul.log")
-	_, err = os.Create(logFile)
-	if err != nil {
-		log.Errorf("Failed to create file for consul logs: %v", err)
-		return
-	}
-
-	var config []byte
-	configs := ConsulConfigs{
-		Ports: PortsInfo{
-			DNS:     cluster.GetAndReservePort(),
-			HTTP:    topo.Port,
-			SerfLan: cluster.GetAndReservePort(),
-			SerfWan: cluster.GetAndReservePort(),
-			Server:  cluster.GetAndReservePort(),
-		},
-		DataDir: topo.DataDirectory,
-		LogFile: logFile,
-	}
-	config, err = json.Marshal(configs)
-	if err != nil {
-		log.Error(err.Error())
-		return
-	}
-
-	err = os.WriteFile(configFile, config, 0o666)
-	if err != nil {
-		return
-	}
-
-	topo.proc = exec.Command(
-		topo.Binary, "agent",
-		"-server",
-		"-ui",
-		"-bootstrap-expect", "1",
-		"-bind", "127.0.0.1",
-		"-config-file", configFile,
-	)
-
-	errFile, err := os.Create(path.Join(topo.LogDirectory, "topo-stderr.txt"))
-	if err != nil {
-		log.Errorf("Failed to create file for consul stderr: %v", err)
-		return
-	}
-	topo.proc.Stderr = errFile
-
-	topo.proc.Env = append(topo.proc.Env, os.Environ()...)
-
-	log.Errorf("Starting consul with args %v", strings.Join(topo.proc.Args, " "))
-	err = topo.proc.Start()
-	if err != nil {
-		return
-	}
-
-	topo.exit = make(chan error)
-	go func() {
-		topo.exit <- topo.proc.Wait()
-		close(topo.exit)
-	}()
-
-	timeout := time.Now().Add(60 * time.Second)
-	for time.Now().Before(timeout) {
-		if topo.IsHealthy() {
-			return
-		}
-		select {
-		case err := <-topo.exit:
-			return fmt.Errorf("process '%s' exited prematurely (err: %s)", topo.Binary, err)
-		default:
-			time.Sleep(300 * time.Millisecond)
-		}
-	}
-
-	return fmt.Errorf("process '%s' timed out after 60s (err: %s)", topo.Binary, <-topo.exit)
 }
 
 // TearDown shutdowns the running topo service.
@@ -439,9 +325,6 @@ func TopoProcessInstance(port int, peerPort int, hostname string, flavor string,
 	if flavor == "zk2" {
 		binary = "zkctl"
 	}
-	if flavor == "consul" {
-		binary = "consul"
-	}
 
 	topo := &TopoProcess{
 		Name:   name,
@@ -461,10 +344,5 @@ func TopoProcessInstance(port int, peerPort int, hostname string, flavor string,
 
 // TopoGlobalRoot returns the global root for the given topo flavor.
 func TopoGlobalRoot(flavor string) string {
-	switch flavor {
-	case "consul":
-		return "global"
-	default:
-		return "/vitess/global"
-	}
+	return "/vitess/global"
 }

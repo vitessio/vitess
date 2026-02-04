@@ -57,7 +57,7 @@ var (
 	serverCaPath   string
 )
 
-// Factory is the consul topo.Factory implementation.
+// Factory is the etcd topo.Factory implementation.
 type Factory struct{}
 
 // HasGlobalReadOnlyCell is part of the topo.Factory interface.

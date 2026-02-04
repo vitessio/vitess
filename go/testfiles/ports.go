@@ -40,10 +40,6 @@ var (
 	// GoVtTopoZk2topoPort is used by the go/vt/topo/zk2topo package.
 	// Takes three ports.
 	GoVtTopoZk2topoPort = GoVtTopoEtcd2topoPort + 2
-
-	// GoVtTopoConsultopoPort is used by the go/vt/topo/consultopo package.
-	// Takes four ports.
-	GoVtTopoConsultopoPort = GoVtTopoZk2topoPort + 3
 )
 
 // Zookeeper server ID definitions. Unit tests may run at the

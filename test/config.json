@@ -629,21 +629,6 @@
 			"Shard": "18",
 			"Tags": []
 		},
-		"tabletmanager_consul": {
-			"File": "unused.go",
-			"Packages": [
-				"vitess.io/vitess/go/test/endtoend/tabletmanager"
-			],
-			"Args": [
-				"--topo-flavor=consul"
-			],
-			"Command": [],
-			"Manual": false,
-			"Shard": "tabletmanager_consul",
-			"Tags": [
-				"site_test"
-			]
-		},
 		"tabletmanager_throttler_topo": {
 			"File": "unused.go",
 			"Packages": [
@@ -1503,19 +1488,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "docker_cluster",
-			"Tags": []
-		},
-		"topo_consul": {
-			"File": "unused.go",
-			"Packages": [
-				"vitess.io/vitess/go/test/endtoend/topotest/consul"
-			],
-			"Args": [
-				"--topo-flavor=consul"
-			],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vtgate_topo_consul",
 			"Tags": []
 		},
 		"topo_etcd2": {

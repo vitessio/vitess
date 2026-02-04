@@ -325,8 +325,7 @@ func newFuncLockOption(f func(*lockOptions)) *funcLockOption {
 // WithTTL allows you to specify how long the underlying topo server
 // implementation should hold the lock before releasing it — even if the caller
 // has not explicitly released it. This provides a way to override the global
-// ttl values that are set via --topo-consul-lock-session-ttl and
-// --topo-etcd-lease-ttl.
+// ttl values that are set via --topo-etcd-lease-ttl.
 // Note: This option is ignored by the ZooKeeper implementation as it does not
 // support TTLs.
 func WithTTL(ttl time.Duration) LockOption {

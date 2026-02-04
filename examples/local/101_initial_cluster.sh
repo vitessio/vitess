@@ -31,8 +31,6 @@ SIDECAR_DB_NAME=${SIDECAR_DB_NAME:-"_vt"}
 # start topo server
 if [ "${TOPO}" = "zk2" ]; then
 	CELL=zone1 ../common/scripts/zk-up.sh
-elif [ "${TOPO}" = "consul" ]; then
-	CELL=zone1 ../common/scripts/consul-up.sh
 else
 	CELL=zone1 ../common/scripts/etcd-up.sh
 fi
@@ -40,7 +38,7 @@ fi
 # start vtctld
 CELL=zone1 ../common/scripts/vtctld-up.sh
 
-if vtctldclient GetKeyspace commerce > /dev/null 2>&1 ; then
+if vtctldclient GetKeyspace commerce >/dev/null 2>&1; then
 	# Keyspace already exists: we could be running this 101 example on an non-empty VTDATAROOT
 	vtctldclient SetKeyspaceDurabilityPolicy --durability-policy=semi_sync commerce || fail "Failed to set keyspace durability policy on the commerce keyspace"
 else
@@ -90,4 +88,3 @@ if [[ -n ${SKIP_VTADMIN} ]]; then
 else
 	../common/scripts/vtadmin-up.sh
 fi
-

@@ -21,14 +21,11 @@ import (
 	"fmt"
 	"io"
 	"math/rand/v2"
-	"os/exec"
 	"path"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/hashicorp/consul/api"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -36,7 +33,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/tlstest"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
@@ -269,33 +265,6 @@ func TestGatewayInitialTabletTimeout(t *testing.T) {
 	assertGetKeyspaces(ctx, t, cluster)
 }
 
-func TestExternalTopoServerConsul(t *testing.T) {
-	conf := config
-	defer resetConfig(conf)
-
-	// Start a single consul in the background.
-	cmd, serverAddr := startConsul(t)
-	defer func() {
-		// Alerts command did not run successful
-		if err := cmd.Process.Kill(); err != nil {
-			log.Errorf("cmd process kill has an error: %v", err)
-		}
-		// Alerts command did not run successful
-		if err := cmd.Wait(); err != nil {
-			log.Errorf("cmd process wait has an error: %v", err)
-		}
-	}()
-
-	cluster, err := startCluster("--external-topo-implementation=consul",
-		"--external-topo-global-server-address="+serverAddr, "--external-topo-global-root=consul_test/global")
-	require.NoError(t, err)
-	defer cluster.TearDown()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	assertGetKeyspaces(ctx, t, cluster)
-}
-
 func TestMtlsAuth(t *testing.T) {
 	conf := config
 	defer resetConfig(conf)
@@ -503,45 +472,4 @@ func consumeEventStream(stream logutil.EventStream) (string, error) {
 			return "", err
 		}
 	}
-}
-
-// startConsul starts a consul subprocess, and waits for it to be ready.
-// Returns the exec.Cmd forked, and the server address to RPC-connect to.
-func startConsul(t *testing.T) (*exec.Cmd, string) {
-	// pick a random port to make sure things work with non-default port
-	port := randomPort()
-
-	cmd := exec.Command("consul",
-		"agent",
-		"-dev",
-		"-http-port", strconv.Itoa(port))
-	err := cmd.Start()
-	if err != nil {
-		t.Fatalf("failed to start consul: %v", err)
-	}
-
-	// Create a client to connect to the created consul.
-	serverAddr := fmt.Sprintf("localhost:%v", port)
-	cfg := api.DefaultConfig()
-	cfg.Address = serverAddr
-	c, err := api.NewClient(cfg)
-	if err != nil {
-		t.Fatalf("api.NewClient(%v) failed: %v", serverAddr, err)
-	}
-
-	// Wait until we can list "/", or timeout.
-	start := time.Now()
-	kv := c.KV()
-	for {
-		_, _, err := kv.List("/", nil)
-		if err == nil {
-			break
-		}
-		if time.Since(start) > 10*time.Second {
-			t.Fatalf("Failed to start consul daemon in time. Consul is returning error: %v", err)
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	return cmd, serverAddr
 }

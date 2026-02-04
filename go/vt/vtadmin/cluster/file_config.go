@@ -37,7 +37,7 @@ import (
 //			discovery-k8s-some-flag: some-val
 //		clusterID2:
 //			name: clusterName2
-//			discovery: consul
+//			discovery: staticfile
 type FileConfig struct {
 	Defaults Config
 	Clusters map[string]Config

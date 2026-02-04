@@ -488,7 +488,7 @@ var commands = []commandGroup{
 			{
 				name:   "Mount",
 				method: commandMount,
-				params: "[--topo_type=etcd2|consul|zookeeper] [--topo_server=topo_url] [--topo_root=root_topo_node> [--unmount] [--list] [--show]  [<cluster_name>]",
+				params: "[--topo_type=etcd2|zookeeper] [--topo_server=topo_url] [--topo_root=root_topo_node> [--unmount] [--list] [--show]  [<cluster_name>]",
 				help:   "Add/Remove/Display/List external cluster(s) to this vitess cluster",
 			},
 		},
