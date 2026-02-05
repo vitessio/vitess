@@ -263,6 +263,7 @@ func (svs *SysVarReservedConn) Execute(ctx context.Context, vcursor VCursor, env
 			return err
 		}
 		vcursor.Session().NeedsReservedConn()
+		vcursor.Session().SetSysVar(svs.Name, svs.Expr)
 		return svs.execSetStatement(ctx, vcursor, rss, env)
 	}
 	needReservedConn, err := svs.checkAndUpdateSysVar(ctx, vcursor, env)
@@ -281,7 +282,7 @@ func (svs *SysVarReservedConn) Execute(ctx context.Context, vcursor VCursor, env
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i := range rss {
 		queries[i] = &querypb.BoundQuery{
-			Sql:           fmt.Sprintf("set %s = %s", svs.Name, svs.Expr),
+			Sql:           fmt.Sprintf("set %s = %s", setVarPrefix(svs.Name), svs.Expr),
 			BindVariables: env.BindVars,
 		}
 	}
@@ -293,12 +294,24 @@ func (svs *SysVarReservedConn) execSetStatement(ctx context.Context, vcursor VCu
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i := range rss {
 		queries[i] = &querypb.BoundQuery{
-			Sql:           fmt.Sprintf("set @@%s = %s", svs.Name, svs.Expr),
+			Sql:           fmt.Sprintf("set %s = %s", setVarPrefix(svs.Name), svs.Expr),
 			BindVariables: env.BindVars,
 		}
 	}
 	_, errs := vcursor.ExecuteMultiShard(ctx, nil /*primitive*/, rss, queries, false /*rollbackOnError*/, false /*canAutocommit*/, false /*fetchLastInsertID*/)
 	return vterrors.Aggregate(errs)
+}
+
+// setVarPrefix returns the variable reference to use in a SET statement.
+// Most variables work fine with just the variable name, but transaction_isolation
+// and transaction_read_only (and their aliases) require the explicit @@session.
+// prefix because MySQL treats SET transaction_isolation as next-transaction-only scope.
+func setVarPrefix(name string) string {
+	switch name {
+	case "transaction_isolation", "tx_isolation", "transaction_read_only", "tx_read_only":
+		return "@@session." + name
+	}
+	return name
 }
 
 func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor VCursor, res *evalengine.ExpressionEnv) (bool, error) {
