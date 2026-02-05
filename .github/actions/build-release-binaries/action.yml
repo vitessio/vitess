@@ -21,7 +21,7 @@ runs:
       id: cache-release-build
       uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
       with:
-        path: ${{ inputs.path }}
+        path: ${{ inputs.path }}/bin
         key: vitess-release.${{ inputs.branch}}@${{ inputs.sha }}
 
     - name: Set up Go
@@ -43,6 +43,3 @@ runs:
       run: |
         source build.env
         NOVTADMINBUILD=1 make build
-        [[ ! -d "${{ inputs.path }}" ]] && mkdir -p ${{ inputs.path }}
-        cp -R bin ${{ inputs.path }}/
-        rm -Rf bin/*
