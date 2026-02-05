@@ -31,8 +31,15 @@ if [ "$base_release_branch" != "" ]; then
   target_major_release=$((major_release-1))
   target_release="release-$target_major_release.0"
 else
-  target_major_release=$(git show-ref | grep -E 'refs/remotes/origin/release-[0-9]*\.0$' | sed 's/[a-z0-9]* refs\/remotes\/origin\/release-//' | sed 's/\.0//' | sort -nr | head -n1)
-  target_release="release-$target_major_release.0"
+  # return the latest release tag that is not a draft or pre-release
+  target_release="$(gh release list \
+	--json tagName \
+	--template '{{range .}}{{.tagName}}{{end}}' \
+	--limit 1 \
+	--order desc \
+	--exclude-drafts \
+	--exclude-pre-releases
+  )"
 fi
 
 echo "$target_release"
