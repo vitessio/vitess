@@ -6,11 +6,19 @@
     - .github/dependabot.yml
     - .github/labeler.yml
     - .golangci.yml
+    - Makefile
+    - bootstrap.sh
+    - build.env
+    - dev.env
+    - test.go
+    - tools/**
 
 'Component: Docker':
 - changed-files:
   - any-glob-to-any-file:
+    - .dockerignore
     - docker/**
+    - Dockerfile
 
 'Component: Documentation':
 - changed-files:
@@ -80,6 +88,7 @@
 'Component: VTAdmin':
 - changed-files:
   - any-glob-to-any-file:
+    - go/cmd/vtadmin/**
     - go/vt/proto/vtadmin/**
     - go/vt/vtadmin/**
     - proto/vtadmin.proto
@@ -88,6 +97,7 @@
 'Component: VTOrc':
 - changed-files:
   - any-glob-to-any-file:
+    - go/cmd/vtorc/**
     - go/vt/proto/vtorcdata/**
     - go/vt/vtorc/**
     - proto/vtorcdata.proto
@@ -95,21 +105,23 @@
 'Component: VTGate':
 - changed-files:
   - any-glob-to-any-file:
+    - go/cmd/vtgate/**
     - go/vt/vtgate/**
 
 'Component: VTTablet':
 - changed-files:
   - any-glob-to-any-file:
+    - go/cmd/vttablet/**
     - go/vt/vttablet/**
 
 'Component: vtctldclient':
 - changed-files:
   - any-glob-to-any-file:
+    - go/cmd/vtctldclient/**
+    - go/test/endtoend/vtctldclient/**
     - go/vt/vtctl/grpcvtctldclient/**
     - go/vt/vtctl/vtctldclient/**
     - go/vt/vtctl/localvtctldclient/**
-    - go/cmd/vtctldclient/**
-    - go/test/endtoend/vtctldclient/**
 
 'Component: vtexplain':
 - changed-files:
