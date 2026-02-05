@@ -4,8 +4,11 @@ inputs:
   path:
     description: 'path to store the release files'
     required: true
-  ref:
-    description: 'git ref of the release'
+  branch:
+    description: 'git branch of the release'
+    required: true
+  sha:
+    description: 'git sha hash of the release'
     required: true
 runs:
   using: "composite"
@@ -15,13 +18,13 @@ runs:
       uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
       with:
         path: ${{ inputs.path }}
-        key: vitess-release.${{ inputs.ref }}
+        key: vitess-release.${{ inputs.branch}}@${{ inputs.sha }}
 
     - name: Check out release code (${{ inputs.ref }})
       if: steps.cache-release-build.outputs.cache-hit != 'true'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
-        ref: ${{ inputs.ref }}
+        ref: ${{ inputs.sha }}
         persist-credentials: 'false'
 
     - name: Set up Go

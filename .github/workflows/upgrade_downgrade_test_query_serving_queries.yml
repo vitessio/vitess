@@ -47,8 +47,11 @@ jobs:
       id: output-previous-release-ref
       run: |
         previous_release_ref=$(./tools/get_previous_release.sh ${{github.base_ref}} ${{github.ref}})
+        previous_release_sha=$(git show -s --format="%H" ${{github.ref}})
         echo $previous_release_ref
+        echo $previous_release_sha
         echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
+        echo "previous_release_sha=${previous_release_sha}" >> $GITHUB_OUTPUT
 
     - name: Check for changes in relevant files
       uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
@@ -112,13 +115,14 @@ jobs:
         cp -R bin /tmp/vitess-build-current/
         rm -Rf bin/*
 
-    - name: Get previous vitess release
+    - name: Get previous vitess release (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
       if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       uses: ./.github/actions/get-release
       with:
         path: /tmp/vitess-build-other
-        ref: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
+        branch: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
+        sha: ${{ steps.output-previous-release-ref.outputs.previous_release_sha }}
 
     - name: Convert ErrorContains checks to Error checks
       if: steps.changes.outputs.end_to_end == 'true'
