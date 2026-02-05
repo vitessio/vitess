@@ -1,0 +1,194 @@
+name: Unit Test
+
+on:
+  push:
+    branches:
+      - "main"
+      - "release-[0-9]+.[0-9]"
+    tags: "**"
+  pull_request:
+    branches: "**"
+
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Unit Test')
+  cancel-in-progress: true
+
+permissions: read-all
+
+env:
+  LAUNCHABLE_ORGANIZATION: "vitess"
+  LAUNCHABLE_WORKSPACE: "vitess-app"
+  GITHUB_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
+
+jobs:
+  test:
+    timeout-minutes: ${{ matrix.race && 45 || 30 }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # mysql57 tests
+          - platform: mysql57
+            evalengine: "0"
+            flavor: mysql-5.7
+
+          - platform: mysql57
+            evalengine: "1"
+            flavor: mysql-5.7
+
+          # mysql80 tests
+          - platform: mysql80
+            evalengine: "0"
+            flavor: mysql-8.0
+
+          - platform: mysql80
+            evalengine: "1"
+            flavor: mysql-8.0
+
+          # mysql84 tests
+          - platform: mysql84
+            evalengine: "0"
+            flavor: mysql-8.4
+
+          - platform: mysql84
+            evalengine: "1"
+            flavor: mysql-8.4
+
+          # Race tests (mysql80 only)
+          - platform: mysql80
+            evalengine: "0"
+            flavor: mysql-8.0
+            race: true
+
+          - platform: mysql80
+            evalengine: "1"
+            flavor: mysql-8.0
+            race: true
+
+    name: "Unit Test (${{ matrix.race && (matrix.evalengine == '1' && 'Evalengine_' || '') || (matrix.evalengine == '1' && 'evalengine_' || '') }}${{ matrix.race && 'Race' || matrix.platform }})"
+    runs-on: ${{ matrix.race && 'gh-hosted-runners-16cores-1-24.04' || 'ubuntu-24.04' }}
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@e3f713f2d8f53843e71c69a996d56f51aa9adfb9 # v2.14.1
+        with:
+          egress-policy: audit
+
+      - name: Skip CI
+        run: |
+          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'Skip CI') }}" == "true" ]]; then
+            echo "skipping CI due to the 'Skip CI' label"
+            exit 1
+          fi
+
+      - name: Check out code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: "false"
+
+      - name: Check for changes in relevant files
+        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: changes
+        with:
+          token: ""
+          filters: |
+            unit_tests:
+              - 'test/config.json'
+              - 'go/**'
+              - 'test.go'
+              - 'Makefile'
+              - 'build.env'
+              - 'go.sum'
+              - 'go.mod'
+              - 'proto/*.proto'
+              - 'tools/**'
+              - 'config/**'
+              - 'bootstrap.sh'
+              - '.github/workflows/unit_test.yml'
+
+      - name: Set up Go
+        if: steps.changes.outputs.unit_tests == 'true'
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        with:
+          go-version-file: go.mod
+
+      - name: Set up python
+        if: steps.changes.outputs.unit_tests == 'true'
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+
+      - name: Tune the OS
+        if: steps.changes.outputs.unit_tests == 'true'
+        uses: ./.github/actions/tune-os
+
+      - name: Setup MySQL
+        if: steps.changes.outputs.unit_tests == 'true'
+        uses: ./.github/actions/setup-mysql
+        with:
+          flavor: ${{ matrix.flavor }}
+
+      - name: Get dependencies
+        if: steps.changes.outputs.unit_tests == 'true'
+        run: |
+          export DEBIAN_FRONTEND="noninteractive"
+          sudo apt-get install -y make unzip g++ curl git wget ant openjdk-11-jdk
+
+          mkdir -p dist bin
+          curl --max-time 10 --retry 3 --retry-max-time 45 -s -L https://github.com/coreos/etcd/releases/download/v3.5.25/etcd-v3.5.25-linux-amd64.tar.gz | tar -zxC dist
+          mv dist/etcd-v3.5.25-linux-amd64/{etcd,etcdctl} bin/
+
+          go mod download
+          go install golang.org/x/tools/cmd/goimports@v0.39.0
+
+      - name: Run make tools
+        if: steps.changes.outputs.unit_tests == 'true'
+        run: |
+          make tools
+
+      - name: Setup launchable dependencies
+        if: |
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.draft == false &&
+          steps.changes.outputs.unit_tests == 'true' &&
+          github.base_ref == 'main'
+        run: |
+          pip3 install --user launchable~=1.0 > /dev/null
+          launchable verify || true
+          launchable record build --name "$GITHUB_RUN_ID" --no-commit-collection --source .
+
+      - name: Run test
+        if: steps.changes.outputs.unit_tests == 'true'
+        run: |
+          set -exo pipefail
+
+          export VTDATAROOT="/tmp/"
+          export NOVTADMINBUILD=1
+          export VT_GO_PARALLEL_VALUE=$(nproc)
+          export VTEVALENGINETEST="${{ matrix.evalengine }}"
+          export CI_DB_PLATFORM="${{ matrix.platform }}"
+
+          JUNIT_OUTPUT=report.xml JSON_OUTPUT=report.json make ${{ matrix.race && 'unit_test_race' || 'unit_test' }}
+
+      - name: Record test results in launchable
+        if: |
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.draft == false &&
+          steps.changes.outputs.unit_tests == 'true' &&
+          github.base_ref == 'main' &&
+          !cancelled()
+        run: |
+          launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
+
+      - name: Test Summary
+        if: steps.changes.outputs.unit_tests == 'true' && failure()
+        uses: test-summary/action@31493c76ec9e7aa675f1585d3ed6f1da69269a86 # v2.4
+        with:
+          paths: "report.xml"
+          show: "fail"
+
+      - name: Slowest Tests
+        if: steps.changes.outputs.unit_tests == 'true' && !cancelled()
+        run: |
+          echo '## Slowest Tests' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          go tool gotestsum tool slowest --num 20 --jsonfile report.json | tee -a "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"

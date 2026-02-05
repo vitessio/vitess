@@ -1,0 +1,260 @@
+name: Cluster End-to-End Tests
+
+on:
+  push:
+    branches:
+      - "main"
+      - "release-[0-9]+.[0-9]"
+    tags: "**"
+  pull_request:
+    branches: "**"
+
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster End-to-End Tests')
+  cancel-in-progress: true
+
+permissions: read-all
+
+env:
+  LAUNCHABLE_ORGANIZATION: "vitess"
+  LAUNCHABLE_WORKSPACE: "vitess-app"
+  GITHUB_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
+
+jobs:
+  generate-matrix:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: "false"
+
+      - name: Generate shard matrix
+        id: set-matrix
+        run: |
+          # Shards to exclude from this workflow.
+          # Modify this list to add or remove shards from the cluster end-to-end tests.
+          # These are either:
+          #   - Run in other dedicated workflows
+          #   - Not cluster tests (unit tests, examples, etc.)
+          #   - Special upgrade/downgrade tests
+          EXCLUDE_SHARDS='[
+            "",
+            "java",
+            "docker_cluster",
+            "5",
+            "28",
+            "onlineddl_flow"
+          ]'
+
+          # Build matrix
+          matrix=$(jq -c -s --argjson exclude "$EXCLUDE_SHARDS" '
+            map(.Tests) | add | to_entries
+            | group_by(.value.Shard)
+            | map(select(.[0].value.Shard as $s | ($s != null) and ($exclude | index($s) | not)))
+            | map({
+                shard: .[0].value.Shard,
+                needs: ([.[].value.Needs // []] | add | unique // []),
+                buildTag: ([.[].value.BuildTag // null] | map(select(. != null)) | first // "")
+              })
+          ' test/config.json test/config_partial_keyspace.json)
+
+          echo "matrix={\"include\":$matrix}" >> $GITHUB_OUTPUT
+
+  test:
+    needs: generate-matrix
+    if: needs.generate-matrix.outputs.matrix != ''
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+
+    name: Run endtoend tests on Cluster (${{ matrix.shard }})
+    runs-on: ${{ contains(matrix.needs, 'larger-runner') && 'gh-hosted-runners-16cores-1-24.04' || 'ubuntu-24.04' }}
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@e3f713f2d8f53843e71c69a996d56f51aa9adfb9 # v2.14.1
+        with:
+          egress-policy: audit
+
+      - name: Skip CI
+        run: |
+          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'Skip CI') }}" == "true" ]]; then
+            echo "skipping CI due to the 'Skip CI' label"
+            exit 1
+          fi
+
+      - name: Check Memory
+        if: contains(matrix.needs, 'memory-check')
+        run: |
+          totalMem=$(free -g | awk 'NR==2 {print $2}')
+          echo "total memory $totalMem GB"
+          if [[ "$totalMem" -lt 15 ]]; then
+            echo "Less memory than required"
+            exit 1
+          fi
+
+      - name: Check out code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: "false"
+
+      - name: Check for changes in relevant files
+        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: changes
+        with:
+          token: ""
+          filters: |
+            end_to_end:
+              - 'test/config.json'
+              - 'test/config_partial_keyspace.json'
+              - 'go/**/*.go'
+              - 'go/vt/sidecardb/**/*.sql'
+              - 'go/test/endtoend/onlineddl/vrepl_suite/**'
+              - 'test.go'
+              - 'Makefile'
+              - 'build.env'
+              - 'go.sum'
+              - 'go.mod'
+              - 'proto/*.proto'
+              - 'tools/**'
+              - 'config/**'
+              - 'bootstrap.sh'
+              - '.github/workflows/cluster_endtoend.yml'
+
+      - name: Set up Go
+        if: steps.changes.outputs.end_to_end == 'true'
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        with:
+          go-version-file: go.mod
+
+      - name: Set up python
+        if: steps.changes.outputs.end_to_end == 'true'
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+
+      - name: Tune the OS
+        if: steps.changes.outputs.end_to_end == 'true'
+        uses: ./.github/actions/tune-os
+
+      - name: Setup MySQL
+        if: steps.changes.outputs.end_to_end == 'true' && !contains(matrix.needs, 'xtrabackup')
+        uses: ./.github/actions/setup-mysql
+        with:
+          flavor: mysql-8.0
+
+      - name: Setup Percona Server and XtraBackup
+        if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'xtrabackup')
+        run: |
+          sudo apt-get -qq update
+          sudo apt-get -qq install -y lsb-release gnupg2
+          wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
+          sudo DEBIAN_FRONTEND="noninteractive" dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+          sudo percona-release setup pdps8.0
+          sudo apt-get -qq update
+          sudo apt-get -qq install -y percona-server-server percona-server-client
+          sudo service mysql stop
+          sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+          sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+          sudo apt-get -qq install -y percona-xtrabackup-80 lz4
+
+      - name: Get dependencies
+        if: steps.changes.outputs.end_to_end == 'true'
+        timeout-minutes: 10
+        run: |
+          # Install mysql-shell for non-XtraBackup shards
+          if [[ "${{ contains(matrix.needs, 'xtrabackup') }}" != "true" ]]; then
+            sudo apt-get -qq install -y mysql-shell
+          fi
+
+          sudo apt-get -qq install -y make unzip g++ etcd-client etcd-server curl git wget xz-utils libncurses6
+          sudo service etcd stop
+          go mod download
+
+      - name: Install Minio
+        if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'minio')
+        run: |
+          wget https://dl.min.io/server/minio/release/linux-amd64/minio
+          chmod +x minio
+          sudo mv minio /usr/local/bin
+
+      - name: Install Consul and ZooKeeper
+        if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'consul')
+        run: make tools
+
+      - name: Setup launchable dependencies
+        if: |
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.draft == false &&
+          steps.changes.outputs.end_to_end == 'true' &&
+          github.base_ref == 'main'
+        run: |
+          pip3 install --user launchable~=1.0 > /dev/null
+          launchable verify || true
+          launchable record build --name "$GITHUB_RUN_ID" --no-commit-collection --source .
+
+      - name: Run cluster endtoend test
+        if: steps.changes.outputs.end_to_end == 'true'
+        timeout-minutes: 45
+        run: |
+          export VTDATAROOT="/tmp/"
+          source build.env
+          set -exo pipefail
+
+          # Apply resource limits for heavy shards
+          if [[ "${{ contains(matrix.needs, 'limit-resources') }}" == "true" ]]; then
+            ulimit -n 65536
+            cat <<-EOF>>./config/mycnf/mysql84.cnf
+          innodb_buffer_pool_dump_at_shutdown=OFF
+          innodb_buffer_pool_in_core_file=OFF
+          innodb_buffer_pool_load_at_startup=OFF
+          innodb_buffer_pool_size=64M
+          innodb_doublewrite=OFF
+          innodb_flush_log_at_trx_commit=0
+          innodb_flush_method=O_DIRECT
+          innodb_numa_interleave=ON
+          innodb_adaptive_hash_index=OFF
+          sync_binlog=0
+          sync_relay_log=0
+          performance_schema=OFF
+          slow-query-log=OFF
+          EOF
+          fi
+
+          # Enable binlog compression for vreplication shards
+          if [[ "${{ contains(matrix.needs, 'binlog-compression') }}" == "true" ]]; then
+            cat <<-EOF>>./config/mycnf/mysql84.cnf
+          binlog-transaction-compression=ON
+          binlog-row-value-options=PARTIAL_JSON
+          EOF
+          fi
+
+          # Build test command with optional flags
+          EXTRA_FLAGS=""
+          if [[ "${{ matrix.buildTag }}" != "" ]]; then
+            EXTRA_FLAGS="$EXTRA_FLAGS -build-tag=${{ matrix.buildTag }}"
+          fi
+          if [[ "${{ matrix.shard }}" == *"partial_keyspace"* ]]; then
+            EXTRA_FLAGS="$EXTRA_FLAGS -partial-keyspace=true"
+          fi
+
+          go run test.go -docker=false -follow -shard "${{ matrix.shard }}" $EXTRA_FLAGS
+
+      - name: Record test results in launchable
+        if: |
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.draft == false &&
+          steps.changes.outputs.end_to_end == 'true' &&
+          github.base_ref == 'main' &&
+          !cancelled()
+        run: |
+          launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
+
+      - name: Test Summary
+        if: steps.changes.outputs.end_to_end == 'true' && failure()
+        uses: test-summary/action@31493c76ec9e7aa675f1585d3ed6f1da69269a86 # v2.4
+        with:
+          paths: "_test/junit/*.xml"
+          show: "fail"
