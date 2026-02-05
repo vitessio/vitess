@@ -91,4 +91,7 @@ jobs:
       pull-requests: write
     runs-on: ubuntu-24.04
     steps:
+    - name: Wait for 30 seconds
+      shell: bash
+      run: sleep 30
     - uses: actions/labeler@634933edcd8ababfe52f92936142cc22ac488b1b # v6.0.1
