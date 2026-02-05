@@ -122,7 +122,7 @@ jobs:
     - name: Get previous release git sha
       id: output-previous-release-sha
       run: |
-        echo "sha=${GITHUB_SHA}" >> $GITUB_OUTPUT
+        echo "sha=${GITHUB_SHA}" >> $GITHUB_OUTPUT
 
     - name: Build previous vitess release (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
       if: steps.changes.outputs.end_to_end == 'true'
