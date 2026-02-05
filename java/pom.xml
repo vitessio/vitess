@@ -66,13 +66,13 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <!-- Define versions which are also used by grpc-client/pom.xml. -->
-    <grpc.version>1.78.0</grpc.version>
+    <grpc.version>1.79.0</grpc.version>
     <!-- NOTE Netty handler and boring SSL must be kept compatible with grpc
       https://github.com/grpc/grpc-java/blob/master/SECURITY.md#netty -->
     <netty.handler.version>4.2.9.Final</netty.handler.version>
     <tcnative.boring.ssl.version>2.0.74.Final</tcnative.boring.ssl.version>
 
-    <protobuf.java.version>4.33.4</protobuf.java.version>
+    <protobuf.java.version>4.33.5</protobuf.java.version>
     <protobuf.protoc.version>3.25.5</protobuf.protoc.version>
     <checkstyle.plugin.version>3.6.0</checkstyle.plugin.version>
     <log4j2.version>2.25.3</log4j2.version>
@@ -232,7 +232,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.14.1</version>
+        <version>3.15.0</version>
         <configuration>
           <source>1.8</source>
           <target>1.8</target>

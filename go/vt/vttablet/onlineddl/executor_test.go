@@ -21,13 +21,26 @@ Functionality of this Executor is tested in go/test/endtoend/onlineddl/...
 package onlineddl
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/timer"
+	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
+	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 func TestShouldCutOverAccordingToBackoff(t *testing.T) {
@@ -248,4 +261,91 @@ func TestGetInOrderCompletionPendingCount(t *testing.T) {
 		pendingMigrationsUUIDs := []string{"a", "b", "c", t.Name(), "x"}
 		require.Equal(t, uint64(3), getInOrderCompletionPendingCount(onlineDDL, pendingMigrationsUUIDs))
 	}
+}
+
+func TestInitDBConnectionLockWaitTimeout(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	params := db.ConnParams()
+	connector := dbconfigs.NewTestDBConfigs(*params, *params, params.DbName).DbaWithDB()
+	conn, err := dbconnpool.NewDBConnection(context.Background(), connector)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	db.AddQuery("set @lock_wait_timeout=@@session.lock_wait_timeout", &sqltypes.Result{})
+	db.AddQuery("set @@session.lock_wait_timeout=5", &sqltypes.Result{})
+	db.AddQuery("set @@session.lock_wait_timeout=@lock_wait_timeout", &sqltypes.Result{})
+
+	executor := &Executor{}
+	deferFunc, err := executor.initDBConnectionLockWaitTimeout(conn, 5*time.Second)
+	require.NoError(t, err)
+	queryLog := db.QueryLog()
+	assert.Contains(t, queryLog, "set @lock_wait_timeout=@@session.lock_wait_timeout")
+	assert.Contains(t, queryLog, "set @@session.lock_wait_timeout=5")
+
+	deferFunc()
+	assert.Contains(t, db.QueryLog(), "set @@session.lock_wait_timeout=@lock_wait_timeout")
+}
+
+func TestExecuteDirectlySetsLockWaitTimeout(t *testing.T) {
+	ctx := t.Context()
+	db := fakesqldb.New(t)
+	defer db.Close()
+	params := db.ConnParams()
+	connector := dbconfigs.NewTestDBConfigs(*params, *params, params.DbName).DbaWithDB()
+	conn, err := dbconnpool.NewDBConnection(ctx, connector)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	db.AddQuery("set @lock_wait_timeout=@@session.lock_wait_timeout", &sqltypes.Result{})
+	db.AddQuery("set @@session.lock_wait_timeout=5", &sqltypes.Result{})
+	db.AddQuery("set @@session.lock_wait_timeout=@lock_wait_timeout", &sqltypes.Result{})
+	db.AddQuery("create table test_lock_wait(id int)", &sqltypes.Result{})
+
+	venv := vtenv.NewTestEnv()
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = dbconfigs.NewTestDBConfigs(*params, *params, params.DbName)
+	protocolName := t.Name()
+	resetProtocol := tmclienttest.SetProtocol(t.Name(), protocolName)
+	defer resetProtocol()
+	tmclient.RegisterTabletManagerClientFactory(protocolName, func() tmclient.TabletManagerClient {
+		return &fakeTabletManagerClient{}
+	})
+	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
+	ts := memorytopo.NewServer(ctx, "cell")
+	err = ts.CreateTablet(ctx, &topodatapb.Tablet{
+		Alias:    alias,
+		Keyspace: "ks",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_PRIMARY,
+	})
+	require.NoError(t, err)
+	executor := &Executor{
+		env:         tabletenv.NewEnv(venv, cfg, "ExecutorTest"),
+		ts:          ts,
+		tabletAlias: alias,
+		execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
+			return &sqltypes.Result{}, nil
+		},
+		ticks: timer.NewTimer(migrationCheckInterval),
+	}
+
+	onlineDDL := &schema.OnlineDDL{SQL: "create table test_lock_wait(id int)", CutOverThreshold: 5 * time.Second, UUID: "uuid"}
+	_, err = executor.executeDirectly(ctx, onlineDDL)
+	require.NoError(t, err)
+
+	queryLog := db.QueryLog()
+	assert.Contains(t, queryLog, "set @lock_wait_timeout=@@session.lock_wait_timeout")
+	assert.Contains(t, queryLog, "set @@session.lock_wait_timeout=5")
+	assert.Contains(t, queryLog, "set @@session.lock_wait_timeout=@lock_wait_timeout")
+}
+
+type fakeTabletManagerClient struct {
+	tmclient.TabletManagerClient
+}
+
+func (fakeTabletManagerClient) Close() {}
+
+func (fakeTabletManagerClient) ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet, waitPosition string) error {
+	return nil
 }
