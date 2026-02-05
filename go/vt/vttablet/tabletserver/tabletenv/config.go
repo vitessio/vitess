@@ -873,14 +873,7 @@ func (c *TabletConfig) Clone() *TabletConfig {
 
 // SetTxTimeoutForWorkload updates workload transaction timeouts. Used in tests only.
 func (c *TabletConfig) SetTxTimeoutForWorkload(val time.Duration, workload querypb.ExecuteOptions_Workload) {
-	switch workload {
-	case querypb.ExecuteOptions_OLAP:
-		c.Olap.TxTimeout = val
-	case querypb.ExecuteOptions_OLTP:
-		c.Oltp.TxTimeout = val
-	default:
-		panic(fmt.Sprintf("unsupported workload type: %v", workload))
-	}
+	c.Olap.TxTimeout = val
 }
 
 // TxTimeoutForWorkload returns the transaction timeout for the given workload
@@ -889,10 +882,8 @@ func (c *TabletConfig) TxTimeoutForWorkload(workload querypb.ExecuteOptions_Work
 	switch workload {
 	case querypb.ExecuteOptions_DBA:
 		return 0
-	case querypb.ExecuteOptions_OLAP:
-		return c.Olap.TxTimeout
 	default:
-		return c.Oltp.TxTimeout
+		return c.Olap.TxTimeout
 	}
 }
 
