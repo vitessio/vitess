@@ -33,6 +33,12 @@ if [[ "$RACE" == "1" ]]; then
 	RACE_FLAG="-race"
 fi
 
+# Enable race detector if RACE=1
+RACE_FLAG=""
+if [[ "$RACE" == "1" ]]; then
+  RACE_FLAG="-race"
+fi
+
 # Mac makes long temp directories for os.TempDir(). MySQL can't connect to
 # sockets in those directories. Tell Golang to use /tmp/vttest_XXXXXX instead.
 kernel="$(uname -s)"
