@@ -254,12 +254,21 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 		}
 	}()
 
-	session, err = vh.vtg.StreamExecute(ctx, vh, session, query, make(map[string]*querypb.BindVariable), callback)
-	if err != nil {
-		return sqlerror.NewSQLErrorFromError(err)
+	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
+		session, err := vh.vtg.StreamExecute(ctx, vh, session, query, make(map[string]*querypb.BindVariable), callback)
+		if err != nil {
+			return sqlerror.NewSQLErrorFromError(err)
+		}
+		fillInTxStatusFlags(c, session)
+		return nil
+	}
+	session, result, err := vh.vtg.Execute(ctx, vh, session, query, make(map[string]*querypb.BindVariable), false)
+
+	if err := sqlerror.NewSQLErrorFromError(err); err != nil {
+		return err
 	}
 	fillInTxStatusFlags(c, session)
-	return nil
+	return callback(result)
 }
 
 // ComQueryMulti is a newer version of ComQuery that supports running multiple queries in a single call.
@@ -302,21 +311,46 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 		}
 	}()
 
+	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
+		if c.Capabilities&mysql.CapabilityClientMultiStatements != 0 {
+			session, err = vh.vtg.StreamExecuteMulti(ctx, vh, session, sql, callback)
+		} else {
+			firstPacket := true
+			session, err = vh.vtg.StreamExecute(ctx, vh, session, sql, make(map[string]*querypb.BindVariable), func(result *sqltypes.Result) error {
+				defer func() {
+					firstPacket = false
+				}()
+				return callback(sqltypes.QueryResponse{QueryResult: result}, false, firstPacket)
+			})
+		}
+		if err != nil {
+			return sqlerror.NewSQLErrorFromError(err)
+		}
+		fillInTxStatusFlags(c, session)
+		return nil
+	}
+	var results []*sqltypes.Result
+	var result *sqltypes.Result
+	var queryResults []sqltypes.QueryResponse
 	if c.Capabilities&mysql.CapabilityClientMultiStatements != 0 {
-		session, err = vh.vtg.StreamExecuteMulti(ctx, vh, session, sql, callback)
+		session, results, err = vh.vtg.ExecuteMulti(ctx, vh, session, sql)
+		for _, res := range results {
+			queryResults = append(queryResults, sqltypes.QueryResponse{QueryResult: res})
+		}
+		if err != nil {
+			queryResults = append(queryResults, sqltypes.QueryResponse{QueryError: sqlerror.NewSQLErrorFromError(err)})
+		}
 	} else {
-		firstPacket := true
-		session, err = vh.vtg.StreamExecute(ctx, vh, session, sql, make(map[string]*querypb.BindVariable), func(result *sqltypes.Result) error {
-			defer func() {
-				firstPacket = false
-			}()
-			return callback(sqltypes.QueryResponse{QueryResult: result}, false, firstPacket)
-		})
+		session, result, err = vh.vtg.Execute(ctx, vh, session, sql, make(map[string]*querypb.BindVariable), false)
+		queryResults = append(queryResults, sqltypes.QueryResponse{QueryResult: result, QueryError: sqlerror.NewSQLErrorFromError(err)})
 	}
-	if err != nil {
-		return sqlerror.NewSQLErrorFromError(err)
-	}
+
 	fillInTxStatusFlags(c, session)
+	for idx, res := range queryResults {
+		if callbackErr := callback(res, idx < len(queryResults)-1, true); callbackErr != nil {
+			return callbackErr
+		}
+	}
 	return nil
 }
 
@@ -409,12 +443,21 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 		}
 	}()
 
-	_, err := vh.vtg.StreamExecute(ctx, vh, session, prepare.PrepareStmt, prepare.BindVars, callback)
+	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
+		_, err := vh.vtg.StreamExecute(ctx, vh, session, prepare.PrepareStmt, prepare.BindVars, callback)
+		if err != nil {
+			return sqlerror.NewSQLErrorFromError(err)
+		}
+		fillInTxStatusFlags(c, session)
+		return nil
+	}
+	_, qr, err := vh.vtg.Execute(ctx, vh, session, prepare.PrepareStmt, prepare.BindVars, true)
 	if err != nil {
 		return sqlerror.NewSQLErrorFromError(err)
 	}
 	fillInTxStatusFlags(c, session)
-	return nil
+
+	return callback(qr)
 }
 
 func (vh *vtgateHandler) WarningCount(c *mysql.Conn) uint16 {
