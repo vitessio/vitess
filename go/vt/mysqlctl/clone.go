@@ -54,8 +54,7 @@ var (
 )
 
 func init() {
-	// TODO: enable these flags for vttablet and vtbackup.
-	for _, cmd := range []string{ /*"vttablet", "vtbackup"*/ } {
+	for _, cmd := range []string{"vtcombo", "vttablet", "vtbackup", "vttestserver"} {
 		servenv.OnParseFor(cmd, registerCloneFlags)
 	}
 }
