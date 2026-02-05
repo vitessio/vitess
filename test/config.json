@@ -99,6 +99,21 @@
       "Tags": [],
       "Needs": []
     },
+    "backup_clone": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/backup/clone"
+      ],
+      "Args": [
+        "-timeout",
+        "30m"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "21",
+      "RetryMax": 1,
+      "Tags": []
+    },
     "backup_pitr": {
       "File": "unused.go",
       "Packages": [
