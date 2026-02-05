@@ -36,6 +36,12 @@ if [[ -z $VT_GO_PARALLEL && -n $VT_GO_PARALLEL_VALUE ]]; then
   VT_GO_PARALLEL="-p $VT_GO_PARALLEL_VALUE"
 fi
 
+# Enable race detector if RACE=1
+RACE_FLAG=""
+if [[ "$RACE" == "1" ]]; then
+  RACE_FLAG="-race"
+fi
+
 # Mac makes long temp directories for os.TempDir(). MySQL can't connect to
 # sockets in those directories. Tell Golang to use /tmp/vttest_XXXXXX instead.
 kernel="$(uname -s)"
@@ -67,7 +73,7 @@ fi
 all_except_flaky_tests=$(echo "$packages_with_tests" | grep -vE ".+ .+_flaky_test\.go" | cut -d" " -f1 | grep -v "endtoend")
 flaky_tests=$(echo "$packages_with_tests" | grep -E ".+ .+_flaky_test\.go" | cut -d" " -f1)
 
-go test $VT_GO_PARALLEL -v -count=1 $all_except_flaky_tests
+go test $VT_GO_PARALLEL $RACE_FLAG -v -count=1 $all_except_flaky_tests
 if [ $? -ne 0 ]; then
   echo "ERROR: Go unit tests failed. See above for errors."
   echo
@@ -83,7 +89,7 @@ for pkg in $flaky_tests; do
   max_attempts=3
   attempt=1
   # Set a timeout because some tests may deadlock when they flake.
-  until go test -timeout 5m $VT_GO_PARALLEL $pkg -v -count=1; do
+  until go test -timeout 5m $VT_GO_PARALLEL $RACE_FLAG $pkg -v -count=1; do
     echo "FAILED (try $attempt/$max_attempts) in $pkg (return code $?). See above for errors."
     if [ $((++attempt)) -gt $max_attempts ]; then
       echo "ERROR: Flaky Go unit tests in package $pkg failed too often (after $max_attempts retries). Please reduce the flakiness."
