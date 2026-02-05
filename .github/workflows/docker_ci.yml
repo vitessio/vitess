@@ -67,19 +67,9 @@ jobs:
               - 'java/**'
               - '.github/workflows/docker_ci.yml'
 
-<<<<<<< HEAD
-      - name: Set up Docker Buildx
-        if: steps.changes.outputs.end_to_end == 'true'
-        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
-
-      - name: Build bootstrap images
-        if: steps.changes.outputs.end_to_end == 'true'
-        uses: docker/bake-action@4ba453fbc2db7735392b93edf935aaf9b1e8f747 # v6.5.0
-=======
       - name: Build bootstrap images
         if: steps.changes.outputs.end_to_end == 'true'
         uses: ./.github/actions/build-bootstrap
->>>>>>> a9aab30c95 (Build boostrap image for local/region example CI (#19310))
         with:
           bootstrap-version: ${{ env.BOOTSTRAP_VERSION }}
           bootstrap-flavor: ${{ env.BOOTSTRAP_FLAVOR }}
