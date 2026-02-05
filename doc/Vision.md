@@ -71,3 +71,5 @@ data is stored only once, and fetched only if needed.
 The following diagram illustrates where vitess fits in the spectrum of storage solutions:
 
 ![Spectrum](https://raw.github.com/vitessio/vitess/main/doc/VitessSpectrum.png)
+
+test
