@@ -59,17 +59,12 @@
 'Component: Throttler':
 - changed-files:
   - any-glob-to-any-file:
-    - go/vt/vttablet/tabletserver/throttle/**
-    - go/vt/vttablet/tabletserver/txthrottler/**
-    - go/vt/vttablet/tabletserver/querythrottler/**
-    - go/vt/proto/querythrottler/**
-    - go/vt/proto/throttlerservice/**
+    - go/vt/vttablet/tabletserver/*throttle*/**
+    - go/vt/proto/*throttler*/**
     - go/vt/throttler/**
     - go/test/endtoend/throttler/**
-    - go/test/endtoend/tabletmanager/throttler_topo/**
-    - proto/querythrottler.proto
-    - proto/throttlerdata.proto
-    - proto/throttlerservice.proto
+    - go/test/endtoend/tabletmanager/throttler*/**
+    - proto/*throttler*.proto
 
 'Component: Topology':
 - changed-files:
