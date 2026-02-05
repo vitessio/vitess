@@ -20,6 +20,7 @@ import (
 	"context"
 	"io"
 	"log"
+	"net"
 	"os"
 	"os/exec"
 	"path"
@@ -55,6 +56,33 @@ import (
 	hence the rename to 'endtoend'.
 */
 
+// getRandomListenPorts() returns two consequtive, random tcp ports
+// that are hypothetically not in use.
+func getRandomListenPorts() (int, int) {
+	timeout := time.After(time.Minute)
+	for {
+		select {
+		case <-timeout:
+			panic("getRandomListenPorts() timed out")
+		default:
+			ln1, err := net.Listen("tcp", ":0")
+			if err != nil {
+				continue
+			}
+			addr1 := ln1.Addr().(*net.TCPAddr)
+
+			ln2, err := net.Listen("tcp", ":"+strconv.Itoa(addr1.Port+1))
+			if err != nil {
+				ln1.Close()
+				continue
+			}
+			ln1.Close()
+			ln2.Close()
+			return addr1.Port, addr1.Port + 1
+		}
+	}
+}
+
 func TestMain(m *testing.M) {
 	f := func() int {
 		minioPath, err := exec.LookPath("minio")
@@ -71,7 +99,14 @@ func TestMain(m *testing.M) {
 			log.Fatalf("failed to create MinIO data directory: %v", err)
 		}
 
-		cmd := exec.Command(minioPath, "server", dataDir, "--console-address", ":9001")
+		apiPort, consolePort := getRandomListenPorts()
+		minioAddress := net.JoinHostPort("localhost", strconv.Itoa(apiPort))
+		minioConsoleAddress := net.JoinHostPort("localhost", strconv.Itoa(consolePort))
+
+		cmd := exec.Command(minioPath, "server", dataDir,
+			"--address", minioAddress,
+			"--console-address", minioConsoleAddress,
+		)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 
@@ -86,11 +121,11 @@ func TestMain(m *testing.M) {
 		// Local MinIO credentials
 		accessKey := "minioadmin"
 		secretKey := "minioadmin"
-		minioEndpoint := "http://localhost:9000"
+		minioEndpoint := "http://" + minioAddress
 		bucketName := "test-bucket"
 		region := "us-east-1"
 
-		client, err := minio.New("localhost:9000", accessKey, secretKey, false)
+		client, err := minio.New(minioAddress, accessKey, secretKey, false)
 		if err != nil {
 			log.Fatalf("failed to create MinIO client: %v", err)
 		}
