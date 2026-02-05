@@ -18,6 +18,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -28,8 +29,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"encoding/json"
 
 	"github.com/google/go-containerregistry/pkg/crane"
 	gocr "github.com/google/go-containerregistry/pkg/v1"
@@ -363,6 +362,7 @@ func replaceGoVersionInCodebase(old, new *version.Version) error {
 		"./build.env",
 		"./docker/bootstrap/Dockerfile.common",
 		"./docker/lite/Dockerfile",
+		"./docker/lite/Dockerfile.mysql80",
 		"./docker/lite/Dockerfile.mysql84",
 		"./docker/lite/Dockerfile.percona80",
 		"./docker/vttestserver/Dockerfile.mysql80",
@@ -479,7 +479,7 @@ func updateBootstrapVersionInCodebase(old, new string, newGoVersion *version.Ver
 }
 
 func updateBootstrapChangelog(new string, goVersion *version.Version) error {
-	file, err := os.OpenFile("./docker/bootstrap/CHANGELOG.md", os.O_RDWR, 0600)
+	file, err := os.OpenFile("./docker/bootstrap/CHANGELOG.md", os.O_RDWR, 0o600)
 	if err != nil {
 		return err
 	}
@@ -541,7 +541,7 @@ func replaceInFile(oldexps []*regexp.Regexp, new []string, fileToChange string) 
 		panic("old and new should be of the same length")
 	}
 
-	f, err := os.OpenFile(fileToChange, os.O_RDWR, 0600)
+	f, err := os.OpenFile(fileToChange, os.O_RDWR, 0o600)
 	if err != nil {
 		return err
 	}
