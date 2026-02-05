@@ -73,12 +73,8 @@ fi
 all_except_flaky_tests=$(echo "$packages_with_tests" | grep -vE ".+ .+_flaky_test\.go" | cut -d" " -f1 | grep -v "endtoend")
 flaky_tests=$(echo "$packages_with_tests" | grep -E ".+ .+_flaky_test\.go" | cut -d" " -f1)
 
-<<<<<<< HEAD
 # Run non-flaky tests.
-echo "$all_except_flaky_tests" | xargs go test $VT_GO_PARALLEL -v -count=1
-=======
 go test $VT_GO_PARALLEL $RACE_FLAG -v -count=1 $all_except_flaky_tests
->>>>>>> 815f550356 (Generate race unit tests (#19078))
 if [ $? -ne 0 ]; then
   echo "ERROR: Go unit tests failed. See above for errors."
   echo
