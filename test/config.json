@@ -101,7 +101,13 @@
     },
     "backup_clone": {
       "File": "unused.go",
-      "Args": ["vitess.io/vitess/go/test/endtoend/backup/clone", "-timeout", "30m"],
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/backup/clone"
+      ],
+      "Args": [
+        "-timeout",
+        "30m"
+      ],
       "Command": [],
       "Manual": false,
       "Shard": "21",
