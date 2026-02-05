@@ -359,7 +359,6 @@ func replaceGoVersionInCodebase(old, new *version.Version) error {
 		return nil
 	}
 	explore := []string{
-		"./test/templates",
 		"./build.env",
 		"./docker/bootstrap/Dockerfile.common",
 		"./docker/lite/Dockerfile",
@@ -438,7 +437,6 @@ func updateBootstrapVersionInCodebase(old, new string, newGoVersion *version.Ver
 	}
 	files, err := getListOfFilesInPaths([]string{
 		"./Makefile",
-		"./test/templates",
 	})
 	if err != nil {
 		return err
