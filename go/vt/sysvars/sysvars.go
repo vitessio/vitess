@@ -95,8 +95,6 @@ var (
 		Autocommit,
 		ClientFoundRows,
 		SkipQueryPlanCache,
-		TxReadOnly,
-		TransactionReadOnly,
 		SQLSelectLimit,
 		TransactionMode,
 		DDLStrategy,
@@ -189,6 +187,8 @@ var (
 		{Name: "transaction_write_set_extraction"},
 	}
 	UseReservedConn = []SystemVariable{
+		TransactionReadOnly,
+		TxReadOnly,
 		{Name: "default_week_format"},
 		{Name: "end_markers_in_json", IsBoolean: true, SupportSetVar: true},
 		{Name: "eq_range_index_dive_limit", SupportSetVar: true},

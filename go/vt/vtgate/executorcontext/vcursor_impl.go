@@ -1197,6 +1197,11 @@ func (vc *VCursorImpl) SetTransactionMode(mode vtgatepb.TransactionMode) {
 	vc.SafeSession.TransactionMode = mode
 }
 
+// SetNextTxAccessMode implements the SessionActions interface
+func (vc *VCursorImpl) SetNextTxAccessMode(mode querypb.ExecuteOptions_TransactionAccessMode) {
+	vc.SafeSession.SetNextTxAccessMode(mode)
+}
+
 // SetWorkload implements the SessionActions interface
 func (vc *VCursorImpl) SetWorkload(workload querypb.ExecuteOptions_Workload) {
 	vc.SafeSession.GetOrCreateOptions().Workload = workload

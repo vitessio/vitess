@@ -176,6 +176,14 @@ func (e *Executor) newExecute(
 				})
 		} else {
 			err = execPlan(ctx, plan, vcursor, bindVars, execStart)
+			// If this was a non-DML query that touched real tables in autocommit mode,
+			// it constituted an implicit transaction and consumes next-tx settings.
+			// This matches MySQL where any statement that accesses tables consumes
+			// SET TRANSACTION flags. Queries against "dual" (e.g. SELECT 1) do not
+			// count as real table access.
+			if hasNonDualTables(plan.TablesUsed) {
+				safeSession.ClearNextTxAccessMode()
+			}
 		}
 
 		if err == nil || safeSession.InTransaction() {
@@ -269,6 +277,21 @@ func (e *Executor) handleTransactions(
 	return nil, nil
 }
 
+// hasNonDualTables returns true if tablesUsed contains any table that isn't
+// the virtual "dual" table. Table names are in "keyspace.table" format.
+func hasNonDualTables(tablesUsed []string) bool {
+	for _, table := range tablesUsed {
+		if _, name, found := strings.Cut(table, "."); found {
+			if name != "dual" {
+				return true
+			}
+		} else if table != "dual" {
+			return true
+		}
+	}
+	return false
+}
+
 func (e *Executor) startTxIfNecessary(ctx context.Context, safeSession *econtext.SafeSession) error {
 	if !safeSession.Autocommit && !safeSession.InTransaction() {
 		if err := e.txConn.Begin(ctx, safeSession, nil); err != nil {
@@ -298,7 +321,12 @@ func (e *Executor) insideTransaction(ctx context.Context, safeSession *econtext.
 	// do is likely not final.
 	// The control flow is such that autocommitable can only be turned on
 	// at the beginning, but never after.
-	safeSession.SetAutocommittable(mustCommit)
+	// When TransactionAccessMode is set (e.g. from SET TRANSACTION READ ONLY),
+	// we must disable autocommit optimization so that the shard uses
+	// BeginExecute (which sends START TRANSACTION READ ONLY to MySQL)
+	// instead of Execute (which would ignore the access mode).
+	canAutocommit := mustCommit && (safeSession.Options == nil || len(safeSession.Options.TransactionAccessMode) == 0)
+	safeSession.SetAutocommittable(canAutocommit)
 
 	// If we want to instantly commit the query, then there is no need to add savepoints.
 	// Any partial failure of the query will be taken care by rollback.

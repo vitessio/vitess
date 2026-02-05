@@ -323,6 +323,8 @@ func (t *noopVCursor) SetQueryTimeout(maxExecutionTime int64) {
 
 func (t *noopVCursor) SetTransactionTimeout(timeout int64) {}
 
+func (t *noopVCursor) SetNextTxAccessMode(querypb.ExecuteOptions_TransactionAccessMode) {}
+
 func (t *noopVCursor) SetSkipQueryPlanCache(context.Context, bool) error {
 	panic("implement me")
 }

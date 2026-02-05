@@ -1164,3 +1164,22 @@ func (session *SafeSession) GetTargetTabletAlias() *topodatapb.TabletAlias {
 	defer session.mu.Unlock()
 	return session.targetTabletAlias
 }
+
+// SetNextTxAccessMode stores a "next transaction only" access mode by setting
+// Options.TransactionAccessMode. This persists in the protobuf Session across
+// SQL statements and is cleared by resetCommonLocked() after commit/rollback.
+func (session *SafeSession) SetNextTxAccessMode(mode querypb.ExecuteOptions_TransactionAccessMode) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	options := session.GetOrCreateOptions()
+	options.TransactionAccessMode = []querypb.ExecuteOptions_TransactionAccessMode{mode}
+}
+
+// ClearNextTxAccessMode clears a pending next-tx access mode from Options.
+func (session *SafeSession) ClearNextTxAccessMode() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.Options != nil {
+		session.Options.TransactionAccessMode = nil
+	}
+}

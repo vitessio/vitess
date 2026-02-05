@@ -455,42 +455,200 @@ func TestSysVarNextTxIsolation(t *testing.T) {
 }
 
 func TestSysVarSessionTxIsolation(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
+	t.Run("setting session transaction isolation level", func(t *testing.T) {
+		conn1, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(t, err)
+		defer conn1.Close()
 
-	// will run every check twice to see that the isolation level is set for all the queries in the session and
+		utils.Exec(t, conn1, "delete from test")
+		utils.Exec(t, conn1, "delete from test_vdx")
 
-	// default from mysql
-	utils.AssertMatches(t, conn, "select @@session.transaction_isolation", `[[VARCHAR("REPEATABLE-READ")]]`)
-	// ensuring it goes to mysql
-	utils.AssertContains(t, conn, "select @@session.transaction_isolation, connection_id()", `REPEATABLE-READ`)
-	// second run, ensuring it has the same value.
-	utils.AssertContains(t, conn, "select @@session.transaction_isolation, connection_id()", `REPEATABLE-READ`)
+		conn2, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(t, err)
+		defer conn2.Close()
 
-	// setting to different value.
-	utils.Exec(t, conn, "set @@session.transaction_isolation = 'read-committed'")
-	utils.AssertMatches(t, conn, "select @@session.transaction_isolation", `[[VARCHAR("READ-COMMITTED")]]`)
-	// ensuring it goes to mysql
-	utils.AssertContains(t, conn, "select @@session.transaction_isolation, connection_id()", `READ-COMMITTED`)
-	// second run, to ensuring the setting is applied on the session and not just on next query after settings.
-	utils.AssertContains(t, conn, "select @@session.transaction_isolation, connection_id()", `READ-COMMITTED`)
+		utils.Exec(t, conn1, "set session transaction isolation level read uncommitted")
+		utils.AssertMatches(t, conn1, "select @@session.transaction_isolation", `[[VARCHAR("READ-UNCOMMITTED")]]`)
 
-	// changing setting to different value.
-	utils.Exec(t, conn, "set session transaction isolation level read uncommitted")
-	utils.AssertMatches(t, conn, "select @@session.transaction_isolation", `[[VARCHAR("READ-UNCOMMITTED")]]`)
-	// ensuring it goes to mysql
-	utils.AssertContains(t, conn, "select @@session.transaction_isolation, connection_id()", `READ-UNCOMMITTED`)
-	// second run, to ensuring the setting is applied on the session and not just on next query after settings.
-	utils.AssertContains(t, conn, "select @@session.transaction_isolation, connection_id()", `READ-UNCOMMITTED`)
+		utils.Exec(t, conn2, "begin")
+		utils.Exec(t, conn2, "insert into test (id, val1) values (1, 'test1')")
 
-	// changing setting to different value.
-	utils.Exec(t, conn, "set session transaction isolation level serializable")
-	utils.AssertMatches(t, conn, "select @@session.transaction_isolation", `[[VARCHAR("SERIALIZABLE")]]`)
-	// ensuring it goes to mysql
-	utils.AssertContains(t, conn, "select @@session.transaction_isolation, connection_id()", `SERIALIZABLE`)
-	// second run, to ensuring the setting is applied on the session and not just on next query after settings.
-	utils.AssertContains(t, conn, "select @@session.transaction_isolation, connection_id()", `SERIALIZABLE`)
+		// conn1 should be able to see uncommitted data from conn2 because of the isolation level setting
+		utils.AssertMatches(t, conn1, "select id, val1 from test where id = 1", `[[INT64(1) VARCHAR("test1")]]`)
+	})
+
+	t.Run("setting session transaction isolation level on shard targetted connection", func(t *testing.T) {
+		conn1, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(t, err)
+		defer conn1.Close()
+
+		utils.Exec(t, conn1, "delete from test")
+		utils.Exec(t, conn1, "delete from test_vdx")
+
+		conn2, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(t, err)
+		defer conn2.Close()
+
+		// Switch to target one of the shards
+		utils.Exec(t, conn1, "USE `"+keyspaceName+":-80`")
+		utils.Exec(t, conn2, "USE `"+keyspaceName+":-80`")
+
+		utils.Exec(t, conn1, "set session transaction isolation level read uncommitted")
+		utils.AssertMatches(t, conn1, "select @@session.transaction_isolation", `[[VARCHAR("READ-UNCOMMITTED")]]`)
+
+		utils.Exec(t, conn2, "begin")
+		utils.Exec(t, conn2, "insert into test (id, val1) values (1, 'test1')")
+
+		// conn1 should be able to see uncommitted data from conn2 because of the isolation level setting
+		utils.AssertMatches(t, conn1, "select id, val1 from test where id = 1", `[[INT64(1) VARCHAR("test1")]]`)
+	})
+}
+
+func TestSysVarNextTxReadOnly(t *testing.T) {
+	t.Run("changes characteristics of next transaction", func(t *testing.T) {
+		conn, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(t, err)
+		defer conn.Close()
+		utils.Exec(t, conn, `delete from test`)
+
+		utils.Exec(t, conn, "set transaction read only")
+		_, err = utils.ExecAllowError(t, conn, "insert into test (id, val1) values (1, 'test1')")
+		require.ErrorContains(t, err, "Cannot execute statement in a READ ONLY transaction.")
+
+		// Next transaction should work again
+		utils.Exec(t, conn, "insert into test (id, val1) values (1, 'test1')")
+	})
+
+	t.Run("does not affect session variable value", func(t *testing.T) {
+		conn, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(t, err)
+		defer conn.Close()
+		utils.Exec(t, conn, `delete from test`)
+		utils.Exec(t, conn, `delete from test_vdx`)
+
+		utils.AssertMatches(t, conn, "select @@transaction_read_only", `[[INT64(0)]]`)
+		utils.Exec(t, conn, "set transaction read only")
+		utils.AssertMatches(t, conn, "select @@transaction_read_only", `[[INT64(0)]]`)
+	})
+
+	// SELECT queries that do not access actual tables (e.g. SELECT 1, SELECT @@var)
+	// should not reset the next-tx read-only setting, but SELECT queries that access tables should reset it.
+	t.Run("does not reset on select dual queries", func(t *testing.T) {
+		conn, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(t, err)
+		defer conn.Close()
+		utils.Exec(t, conn, `delete from test`)
+		utils.Exec(t, conn, `delete from test_vdx`)
+
+		utils.Exec(t, conn, "set transaction read only")
+		utils.Exec(t, conn, "select 1")                                                           // should not reset the read-only setting
+		_, err = utils.ExecAllowError(t, conn, "insert into test (id, val1) values (1, 'test1')") // should fail with read-only error
+		require.ErrorContains(t, err, "Cannot execute statement in a READ ONLY transaction.")
+	})
+
+	// Non-DML (and non-DDL) queries like `SHOW` don't reset the next-tx read-only setting.
+	t.Run("does not reset on show queries", func(t *testing.T) {
+		conn, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(t, err)
+		defer conn.Close()
+		utils.Exec(t, conn, `delete from test`)
+		utils.Exec(t, conn, `delete from test_vdx`)
+
+		utils.Exec(t, conn, "set transaction read only")
+		utils.Exec(t, conn, "show variables like 'version'")                                      // should not reset the read-only setting
+		_, err = utils.ExecAllowError(t, conn, "insert into test (id, val1) values (1, 'test1')") // should fail with read-only error
+		require.ErrorContains(t, err, "Cannot execute statement in a READ ONLY transaction.")
+	})
+
+	t.Run("does reset on select from actual table queries", func(t *testing.T) {
+		conn, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(t, err)
+		defer conn.Close()
+		utils.Exec(t, conn, `delete from test`)
+		utils.Exec(t, conn, `delete from test_vdx`)
+
+		utils.Exec(t, conn, "set transaction read only")
+		utils.Exec(t, conn, "select * from test")                              // should reset the read-only setting
+		utils.Exec(t, conn, "insert into test (id, val1) values (1, 'test1')") // should work because the previous select resets the next-tx read-only setting
+	})
+
+	t.Run("can be reset by set transaction read write", func(t *testing.T) {
+		conn, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(t, err)
+		defer conn.Close()
+		utils.Exec(t, conn, `delete from test`)
+		utils.Exec(t, conn, `delete from test_vdx`)
+
+		utils.Exec(t, conn, "set transaction read only")
+		utils.Exec(t, conn, "set transaction read write")                      // should reset the read-only setting
+		utils.Exec(t, conn, "insert into test (id, val1) values (1, 'test1')") // should work because the read-only setting was reset
+	})
+
+	t.Run("works with explicit transactions", func(t *testing.T) {
+		conn, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(t, err)
+		defer conn.Close()
+		utils.Exec(t, conn, `delete from test`)
+		utils.Exec(t, conn, `delete from test_vdx`)
+
+		utils.Exec(t, conn, "set transaction read only")
+		utils.Exec(t, conn, "begin")
+		_, err = utils.ExecAllowError(t, conn, "insert into test (id, val1) values (1, 'test1')") // should fail with read-only error
+		require.ErrorContains(t, err, "Cannot execute statement in a READ ONLY transaction.")
+		utils.Exec(t, conn, "rollback")
+
+		utils.Exec(t, conn, "begin")
+		utils.Exec(t, conn, "insert into test (id, val1) values (2, 'test2')") // should work because the read-only setting only applies to the next transaction
+		utils.Exec(t, conn, "commit")
+	})
+
+	t.Run("can be used to overwrite session setting", func(t *testing.T) {
+		conn, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(t, err)
+		defer conn.Close()
+		utils.Exec(t, conn, `delete from test`)
+		utils.Exec(t, conn, `delete from test_vdx`)
+
+		utils.Exec(t, conn, "set session transaction_read_only = 1")
+		utils.AssertMatches(t, conn, "select @@transaction_read_only", `[[INT64(1)]]`)
+
+		utils.Exec(t, conn, "set transaction read write")
+		utils.Exec(t, conn, "insert into test (id, val1) values (1, 'test1')") // should work because the next-tx setting overwrites the session setting
+
+		_, err = utils.ExecAllowError(t, conn, "insert into test (id, val1) values (2, 'test2')") // should fail with read-only error because the session setting is still read-only
+		require.ErrorContains(t, err, "Cannot execute statement in a READ ONLY transaction.")
+
+		utils.AssertMatches(t, conn, "select @@transaction_read_only", `[[INT64(1)]]`)
+	})
+
+	t.Run("can not be changed to an invalid value", func(t *testing.T) {
+		conn, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(t, err)
+		defer conn.Close()
+		utils.Exec(t, conn, `delete from test`)
+		utils.Exec(t, conn, `delete from test_vdx`)
+
+		_, err = utils.ExecAllowError(t, conn, "SET @@transaction_read_only = 'invalid value'")
+		require.ErrorContains(t, err, "Variable 'transaction_read_only' can't be set to the value of 'invalid_value'")
+	})
+
+	t.Run("works with targetted keyspace/shard", func(t *testing.T) {
+		conn, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(t, err)
+		defer conn.Close()
+		utils.Exec(t, conn, `delete from test`)
+		utils.Exec(t, conn, `delete from test_vdx`)
+
+		// switch to targetted keyspace/shard
+		utils.Exec(t, conn, "use `"+keyspaceName+":-80`")
+
+		utils.Exec(t, conn, "set transaction read only")
+		_, err = utils.ExecAllowError(t, conn, "insert into test (id, val1) values (1, 'test1')")
+		require.ErrorContains(t, err, "Cannot execute statement in a READ ONLY transaction.")
+
+		// Next transaction should work again
+		utils.Exec(t, conn, "insert into test (id, val1) values (1, 'test1')")
+	})
 }
 
 func TestSysVarSessionTxIsolationWithTargetting(t *testing.T) {

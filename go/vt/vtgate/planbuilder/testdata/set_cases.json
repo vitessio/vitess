@@ -553,17 +553,46 @@
     "plan": "VT03010: variable 'socket' is a read only variable"
   },
   {
-    "comment": "set transaction read only",
+    "comment": "set session transaction read only - goes through reserved conn",
     "query": "set session transaction read only",
     "plan": {
-      "Type": "Local",
+      "Type": "MultiShard",
       "QueryType": "SET",
       "Original": "set session transaction read only",
       "Instructions": {
         "OperatorType": "Set",
         "Ops": [
           {
-            "Type": "SysVarAware",
+            "Type": "SysVarSet",
+            "Name": "transaction_read_only",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "Expr": "1",
+            "SupportSetVar": false
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "set transaction read only - uses next-tx access mode op",
+    "query": "set transaction read only",
+    "plan": {
+      "Type": "Local",
+      "QueryType": "SET",
+      "Original": "set transaction read only",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarNextTxAccessMode",
             "Name": "transaction_read_only",
             "Expr": "1"
           }

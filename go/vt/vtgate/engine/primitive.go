@@ -231,6 +231,9 @@ type (
 		// SetQueryTimeout sets the query timeout
 		SetQueryTimeout(queryTimeout int64)
 
+		// SetNextTxAccessMode sets a "next transaction only" access mode
+		SetNextTxAccessMode(mode querypb.ExecuteOptions_TransactionAccessMode)
+
 		// SetTransactionTimeout sets the transaction timeout.
 		SetTransactionTimeout(transactionTimeout int64)
 

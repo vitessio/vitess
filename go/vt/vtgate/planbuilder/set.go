@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/vt/key"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -79,6 +80,16 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 			}
 			setOps = append(setOps, setOp)
 		case sqlparser.NextTxScope, sqlparser.SessionScope:
+			varName := expr.Var.Name.Lowered()
+			if expr.Var.Scope == sqlparser.NextTxScope &&
+				(varName == sysvars.TransactionReadOnly.Name || varName == sysvars.TxReadOnly.Name) {
+				setOp, err := buildNextTxAccessModeOp(expr, ec)
+				if err != nil {
+					return nil, err
+				}
+				setOps = append(setOps, setOp)
+				break
+			}
 			planFunc, err := sysvarPlanningFuncs.Get(vschema.Environment(), expr)
 			if err != nil {
 				return nil, err
@@ -234,6 +245,17 @@ func buildSetOpVitessAware(s setting) planFunc {
 	}
 }
 
+func buildNextTxAccessModeOp(expr *sqlparser.SetExpr, ec *expressionConverter) (engine.SetOp, error) {
+	runtimeExpr, err := ec.convert(expr.Expr, true /* boolean */, false /* identifierAsString */)
+	if err != nil {
+		return nil, err
+	}
+	return &engine.SysVarNextTxAccessMode{
+		Name: expr.Var.Name.Lowered(),
+		Expr: runtimeExpr,
+	}, nil
+}
+
 func resolveDestination(vschema plancontext.VSchema) (*vindexes.Keyspace, key.ShardDestination, error) {
 	keyspace, err := vschema.AnyKeyspace()
 	if err != nil {
@@ -256,6 +278,8 @@ func extractValue(expr *sqlparser.SetExpr, boolean bool) (string, error) {
 				return "1", nil
 			case "off":
 				return "0", nil
+			default:
+				return "", vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "Variable '%s' can't be set to the value of '%s'", expr.Var.Name, strings.ReplaceAll(node.Val, " ", "_"))
 			}
 		}
 	case *sqlparser.ColName:

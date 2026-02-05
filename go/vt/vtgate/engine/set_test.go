@@ -242,7 +242,7 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 			`Needs Reserved Conn`,
-			`ExecuteMultiShard ks.-20: set @@x = dummy_expr {} false false`,
+			`ExecuteMultiShard ks.-20: set @@session.x = dummy_expr {} false false`,
 		},
 	}, {
 		testName: "sysvar set not modifying setting",
@@ -608,7 +608,7 @@ func TestSysVarSetErr(t *testing.T) {
 	expectedQueryLog := []string{
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		"Needs Reserved Conn",
-		`ExecuteMultiShard ks.-20: set @@x = dummy_expr {} false false`,
+		`ExecuteMultiShard ks.-20: set @@session.x = dummy_expr {} false false`,
 	}
 
 	set := &Set{

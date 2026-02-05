@@ -206,12 +206,6 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set skip_query_plan_cache = 0",
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
-		in:  "set tx_read_only = 2",
-		err: "variable 'tx_read_only' can't be set to the value: 2 is not a boolean",
-	}, {
-		in:  "set transaction_read_only = 2",
-		err: "variable 'transaction_read_only' can't be set to the value: 2 is not a boolean",
-	}, {
 		in:  "set session transaction isolation level repeatable read",
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
@@ -231,10 +225,10 @@ func TestExecutorSet(t *testing.T) {
 		},
 	}, {
 		in:  "set transaction read only",
-		out: &vtgatepb.Session{Autocommit: true, Warnings: []*querypb.QueryWarning{{Code: uint32(sqlerror.ERNotSupportedYet), Message: "converted 'next transaction' scope to 'session' scope"}}},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{TransactionAccessMode: []querypb.ExecuteOptions_TransactionAccessMode{querypb.ExecuteOptions_READ_ONLY}}},
 	}, {
 		in:  "set transaction read write",
-		out: &vtgatepb.Session{Autocommit: true, Warnings: []*querypb.QueryWarning{{Code: uint32(sqlerror.ERNotSupportedYet), Message: "converted 'next transaction' scope to 'session' scope"}}},
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{TransactionAccessMode: []querypb.ExecuteOptions_TransactionAccessMode{querypb.ExecuteOptions_READ_WRITE}}},
 	}, {
 		in:  "set session transaction read write",
 		out: &vtgatepb.Session{Autocommit: true},

@@ -90,6 +90,13 @@ type (
 		Expr evalengine.Expr
 	}
 
+	// SysVarNextTxAccessMode implements the SetOp interface to set a "next transaction only"
+	// read-only or read-write access mode, matching MySQL's SET TRANSACTION READ ONLY/WRITE semantics.
+	SysVarNextTxAccessMode struct {
+		Name string
+		Expr evalengine.Expr
+	}
+
 	// VitessMetadata implements the SetOp interface and will write the changes variable into the topo server
 	VitessMetadata struct {
 		Name, Value string
@@ -293,7 +300,7 @@ func (svs *SysVarReservedConn) execSetStatement(ctx context.Context, vcursor VCu
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i := range rss {
 		queries[i] = &querypb.BoundQuery{
-			Sql:           fmt.Sprintf("set @@%s = %s", svs.Name, svs.Expr),
+			Sql:           fmt.Sprintf("set @@session.%s = %s", svs.Name, svs.Expr),
 			BindVariables: env.BindVars,
 		}
 	}
@@ -419,11 +426,6 @@ func (svss *SysVarSetAware) Execute(ctx context.Context, vcursor VCursor, env *e
 		err = svss.setBoolSysVar(ctx, env, vcursor.Session().SetClientFoundRows)
 	case sysvars.SkipQueryPlanCache.Name:
 		err = svss.setBoolSysVar(ctx, env, vcursor.Session().SetSkipQueryPlanCache)
-	case sysvars.TxReadOnly.Name,
-		sysvars.TransactionReadOnly.Name:
-		// TODO (4127): This is a dangerous NOP.
-		noop := func(context.Context, bool) error { return nil }
-		err = svss.setBoolSysVar(ctx, env, noop)
 	case sysvars.SQLSelectLimit.Name:
 		intValue, err := svss.evalAsInt64(env, vcursor)
 		if err != nil {
@@ -585,6 +587,44 @@ func (svss *SysVarSetAware) setBoolSysVar(ctx context.Context, env *evalengine.E
 // VariableName implements the SetOp interface method
 func (svss *SysVarSetAware) VariableName() string {
 	return svss.Name
+}
+
+var _ SetOp = (*SysVarNextTxAccessMode)(nil)
+
+// MarshalJSON provides the type to SetOp for plan json
+func (svnt *SysVarNextTxAccessMode) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Type string
+		Name string
+		Expr string
+	}{
+		Type: "SysVarNextTxAccessMode",
+		Name: svnt.Name,
+		Expr: sqlparser.String(svnt.Expr),
+	})
+}
+
+// VariableName implements the SetOp interface method
+func (svnt *SysVarNextTxAccessMode) VariableName() string {
+	return svnt.Name
+}
+
+// Execute implements the SetOp interface method
+func (svnt *SysVarNextTxAccessMode) Execute(_ context.Context, vcursor VCursor, env *evalengine.ExpressionEnv) error {
+	value, err := env.Evaluate(svnt.Expr)
+	if err != nil {
+		return err
+	}
+	boolValue, err := value.ToBooleanStrict()
+	if err != nil {
+		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "Variable '%s' can't be set to the value of '%s'", svnt.Name, strings.ReplaceAll(value.Value(vcursor.ConnCollation()).ToString(), " ", "_"))
+	}
+	if boolValue {
+		vcursor.Session().SetNextTxAccessMode(querypb.ExecuteOptions_READ_ONLY)
+	} else {
+		vcursor.Session().SetNextTxAccessMode(querypb.ExecuteOptions_READ_WRITE)
+	}
+	return nil
 }
 
 var _ SetOp = (*VitessMetadata)(nil)

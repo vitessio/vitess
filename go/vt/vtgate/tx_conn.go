@@ -121,6 +121,7 @@ func (txc *TxConn) Begin(ctx context.Context, session *econtext.SafeSession, txA
 			options.TransactionAccessMode = append(options.TransactionAccessMode, accessMode)
 		}
 	}
+
 	session.Session.InTransaction = true
 	return nil
 }
