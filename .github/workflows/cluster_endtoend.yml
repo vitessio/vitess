@@ -72,7 +72,7 @@ jobs:
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
 
     name: Run endtoend tests on Cluster (${{ matrix.shard }})
-    runs-on: ${{ contains(matrix.needs, 'larger-runner') && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
+    runs-on: ${{ contains(matrix.needs, 'larger-runner') && 'gh-hosted-runners-16cores-1-24.04' || 'ubuntu-24.04' }}
 
     steps:
       - name: Harden the runner (Audit all outbound calls)

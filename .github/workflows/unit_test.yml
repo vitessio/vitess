@@ -66,7 +66,7 @@ jobs:
             race: true
 
     name: "Unit Test (${{ matrix.race && (matrix.evalengine == '1' && 'Evalengine_' || '') || (matrix.evalengine == '1' && 'evalengine_' || '') }}${{ matrix.race && 'Race' || matrix.platform }})"
-    runs-on: ${{ matrix.race && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
+    runs-on: ${{ matrix.race && 'gh-hosted-runners-16cores-1-24.04' || 'ubuntu-24.04' }}
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
