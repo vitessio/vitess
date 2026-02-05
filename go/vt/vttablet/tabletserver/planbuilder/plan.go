@@ -278,11 +278,9 @@ func BuildStreaming(statement sqlparser.Statement, tables map[string]*schema.Tab
 			plan.NeedsReservedConn = true
 		}
 		plan.Table = lookupTables(stmt.From, tables)
-	case *sqlparser.Show, *sqlparser.Union, *sqlparser.CallProc, sqlparser.Explain:
 	case *sqlparser.Analyze:
 		plan.PlanID = PlanOtherRead
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s not allowed for streaming", sqlparser.ASTToStatementType(statement))
 	}
 	plan.AllTables = lookupAllTables(statement, tables)
 	return plan, nil
