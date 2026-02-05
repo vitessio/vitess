@@ -481,6 +481,10 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfShow(parent, node, replacer)
 	case *ShowBasic:
 		return a.rewriteRefOfShowBasic(parent, node, replacer)
+	case *ShowBinaryLogs:
+		return a.rewriteRefOfShowBinaryLogs(parent, node, replacer)
+	case *ShowBinlogEvents:
+		return a.rewriteRefOfShowBinlogEvents(parent, node, replacer)
 	case *ShowCreate:
 		return a.rewriteRefOfShowCreate(parent, node, replacer)
 	case *ShowFilter:
@@ -489,6 +493,12 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfShowMigrationLogs(parent, node, replacer)
 	case *ShowOther:
 		return a.rewriteRefOfShowOther(parent, node, replacer)
+	case *ShowReplicas:
+		return a.rewriteRefOfShowReplicas(parent, node, replacer)
+	case *ShowReplicationSourceStatus:
+		return a.rewriteRefOfShowReplicationSourceStatus(parent, node, replacer)
+	case *ShowReplicationStatus:
+		return a.rewriteRefOfShowReplicationStatus(parent, node, replacer)
 	case *ShowThrottledApps:
 		return a.rewriteRefOfShowThrottledApps(parent, node, replacer)
 	case *ShowThrottlerStatus:
@@ -11726,6 +11736,86 @@ func (a *application) rewriteRefOfShowBasic(parent SQLNode, node *ShowBasic, rep
 }
 
 // Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfShowBinaryLogs(parent SQLNode, node *ShowBinaryLogs, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfShowBinlogEvents(parent SQLNode, node *ShowBinlogEvents, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfShowBinlogEventsPosition))
+	}
+	if !a.rewriteExpr(node, node.Position, func(newNode, parent SQLNode) {
+		parent.(*ShowBinlogEvents).Position = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfShowBinlogEventsLimit))
+	}
+	if !a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
+		parent.(*ShowBinlogEvents).Limit = newNode.(*Limit)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfShowCreate(parent SQLNode, node *ShowCreate, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11847,6 +11937,99 @@ func (a *application) rewriteRefOfShowMigrationLogs(parent SQLNode, node *ShowMi
 
 // Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfShowOther(parent SQLNode, node *ShowOther, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfShowReplicas(parent SQLNode, node *ShowReplicas, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfShowReplicationSourceStatus(parent SQLNode, node *ShowReplicationSourceStatus, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfShowReplicationStatus(parent SQLNode, node *ShowReplicationStatus, replacer replacerFunc) bool {
 	if node == nil {
 		return true
 	}
@@ -15503,10 +15686,20 @@ func (a *application) rewriteShowInternal(parent SQLNode, node ShowInternal, rep
 	switch node := node.(type) {
 	case *ShowBasic:
 		return a.rewriteRefOfShowBasic(parent, node, replacer)
+	case *ShowBinaryLogs:
+		return a.rewriteRefOfShowBinaryLogs(parent, node, replacer)
+	case *ShowBinlogEvents:
+		return a.rewriteRefOfShowBinlogEvents(parent, node, replacer)
 	case *ShowCreate:
 		return a.rewriteRefOfShowCreate(parent, node, replacer)
 	case *ShowOther:
 		return a.rewriteRefOfShowOther(parent, node, replacer)
+	case *ShowReplicas:
+		return a.rewriteRefOfShowReplicas(parent, node, replacer)
+	case *ShowReplicationSourceStatus:
+		return a.rewriteRefOfShowReplicationSourceStatus(parent, node, replacer)
+	case *ShowReplicationStatus:
+		return a.rewriteRefOfShowReplicationStatus(parent, node, replacer)
 	case *ShowTransactionStatus:
 		return a.rewriteRefOfShowTransactionStatus(parent, node, replacer)
 	case Visitable:

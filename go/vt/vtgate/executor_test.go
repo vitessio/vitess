@@ -1896,22 +1896,21 @@ func TestShowStatus(t *testing.T) {
 		TargetString: "TestExecutor",
 	}
 
+	// Legacy syntax (SLAVE) is supported for backwards compatibility
 	sql1 := "show slave status"
 	_, err := executorExec(ctx, executor, session, sql1, nil)
-	require.NoError(t, err)
-
-	sql2 := "show replica status"
-	_, err = executorExec(ctx, executor, session, sql2, nil)
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           sql1,
 		BindVariables: map[string]*querypb.BindVariable{},
-	}, {
-		Sql:           sql2,
-		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	assert.Equal(t, wantQueries, sbc1.Queries)
+
+	// Modern syntax (REPLICA) is not supported through vtgate
+	sql2 := "show replica status"
+	_, err = executorExec(ctx, executor, session, sql2, nil)
+	require.ErrorContains(t, err, "VT12001: unsupported")
 }
 
 func TestParseEmptyTargetSingleKeyspace(t *testing.T) {
