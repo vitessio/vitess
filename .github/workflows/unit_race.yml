@@ -89,7 +89,7 @@ jobs:
         mv dist/etcd-v3.5.25-linux-amd64/{etcd,etcdctl} bin/
 
         go mod download
-        go install golang.org/x/tools/cmd/goimports@034e59c473362f8f2be47694d98fd3f12a1ad497 # v0.39.0
+        go install golang.org/x/tools/cmd/goimports@latest
 
     - name: Run make tools
       if: steps.changes.outputs.unit_tests == 'true'
