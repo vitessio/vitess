@@ -75,7 +75,6 @@ jobs:
               exit 1
             fi
           fi
-          
 
       - name: Do Not Merge label
         run: |
@@ -83,3 +82,13 @@ jobs:
             echo "This PR should not be merged. The 'Do Not Merge' label is set. Please unset it if you wish to merge this PR."
             exit 1
           fi
+
+  labeler:
+    if: github.repository == 'vitessio/vitess'
+    needs: check_pull_request_labels
+    permissions:
+      contents: read
+      pull-requests: write
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/labeler@634933edcd8ababfe52f92936142cc22ac488b1b # v6.0.1
