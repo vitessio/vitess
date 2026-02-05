@@ -392,3 +392,5 @@ generate-flag-testdata:
 
 install_kubectl_kind:
 	./tools/get_kubectl_kind.sh
+
+include Makefile.dw.mk
