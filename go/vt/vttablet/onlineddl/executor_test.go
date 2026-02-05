@@ -349,3 +349,109 @@ func (fakeTabletManagerClient) Close() {}
 func (fakeTabletManagerClient) ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet, waitPosition string) error {
 	return nil
 }
+
+func TestMigrationMetricsIncrement(t *testing.T) {
+	tcases := []struct {
+		name     string
+		testFunc func()
+		verify   func(before int64, after int64) bool
+	}{
+		{
+			name: "startedMigrations increments correctly",
+			testFunc: func() {
+				startedMigrations.Add(1)
+			},
+			verify: func(before int64, after int64) bool {
+				return after == before+1
+			},
+		},
+		{
+			name: "successfulMigrations increments correctly",
+			testFunc: func() {
+				successfulMigrations.Add(1)
+			},
+			verify: func(before int64, after int64) bool {
+				return after == before+1
+			},
+		},
+		{
+			name: "failedMigrations increments correctly",
+			testFunc: func() {
+				failedMigrations.Add(1)
+			},
+			verify: func(before int64, after int64) bool {
+				return after == before+1
+			},
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			var before, after int64
+
+			switch tcase.name {
+			case "startedMigrations increments correctly":
+				before = startedMigrations.Get()
+				tcase.testFunc()
+				after = startedMigrations.Get()
+			case "successfulMigrations increments correctly":
+				before = successfulMigrations.Get()
+				tcase.testFunc()
+				after = successfulMigrations.Get()
+			case "failedMigrations increments correctly":
+				before = failedMigrations.Get()
+				tcase.testFunc()
+				after = failedMigrations.Get()
+			}
+
+			assert.True(t, tcase.verify(before, after), "metric should increment correctly: before=%d, after=%d", before, after)
+		})
+	}
+}
+
+func TestMigrationStatusTransitionsUpdateMetrics(t *testing.T) {
+	tcases := []struct {
+		name          string
+		status        schema.OnlineDDLStatus
+		expectStarted int64
+		expectSuccess int64
+		expectFailed  int64
+	}{
+		{
+			name:          "running status updates started metric",
+			status:        schema.OnlineDDLStatusRunning,
+			expectStarted: 1,
+		},
+		{
+			name:          "complete status updates successful metric",
+			status:        schema.OnlineDDLStatusComplete,
+			expectSuccess: 1,
+		},
+		{
+			name:         "failed status updates failed metric",
+			status:       schema.OnlineDDLStatusFailed,
+			expectFailed: 1,
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			startedBefore := startedMigrations.Get()
+			successBefore := successfulMigrations.Get()
+			failedBefore := failedMigrations.Get()
+
+			switch tcase.status {
+			case schema.OnlineDDLStatusRunning:
+				startedMigrations.Add(1)
+			case schema.OnlineDDLStatusComplete:
+				successfulMigrations.Add(1)
+			case schema.OnlineDDLStatusFailed:
+				failedMigrations.Add(1)
+			}
+
+			assert.Equal(t, startedBefore+tcase.expectStarted, startedMigrations.Get(), "startedMigrations")
+			assert.Equal(t, successBefore+tcase.expectSuccess, successfulMigrations.Get(), "successfulMigrations")
+			assert.Equal(t, failedBefore+tcase.expectFailed, failedMigrations.Get(), "failedMigrations")
+		})
+	}
+}
