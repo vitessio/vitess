@@ -102,3 +102,16 @@ jobs:
           gh pr edit ${{ github.event.pull_request.number }} \
             --repo ${{ github.repository }} \
             --add-label "NeedsWebsiteDocsUpdate,NeedsDescriptionUpdate,NeedsIssue,NeedsBackportReason"
+
+   labeler:
+     if: github.repository == 'vitessio/vitess'
+     needs: add_initial_labels
+     permissions:
+       contents: read
+       pull-requests: write
+     runs-on: ubuntu-latest
+     steps:
+     - name: Wait for 30 seconds
+       shell: bash
+       run: sleep 30
+     - uses: actions/labeler@634933edcd8ababfe52f92936142cc22ac488b1b # v6.0.1                                                                                     
