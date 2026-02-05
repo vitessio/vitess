@@ -83,6 +83,10 @@ jobs:
       with:
         flavor: mysql-8.4
 
+    - name: Setup Percona Apt repository
+      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
+      uses: ./.github/actions/setup-percona-repo
+
     - name: Get base dependencies
       timeout-minutes: 10
       if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
@@ -94,9 +98,6 @@ jobs:
 
         sudo service etcd stop
 
-        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo apt-get install -y gnupg2
-        sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
         sudo percona-release enable-only tools
         sudo apt-get update
         sudo apt-get install -y percona-xtrabackup-80

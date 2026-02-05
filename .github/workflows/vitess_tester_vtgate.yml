@@ -1,5 +1,3 @@
-# DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
-
 name: Vitess Tester (vtgate)
 on:
   push:
