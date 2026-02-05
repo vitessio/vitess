@@ -38,13 +38,9 @@ const (
 
 type mysqlVersions []mysqlVersion
 
-var (
-	defaultMySQLVersions = []mysqlVersion{defaultMySQLVersion}
-)
+var defaultMySQLVersions = []mysqlVersion{defaultMySQLVersion}
 
-var (
-	unitTestDatabases = []mysqlVersion{mysql57, mysql80, mysql84}
-)
+var unitTestDatabases = []mysqlVersion{mysql57, mysql80, mysql84}
 
 const (
 	oracleCloudRunner = "oracle-16cpu-64gb-x86-64"
@@ -385,7 +381,6 @@ func generateUnitTestWorkflows() {
 			GoPrivate:  goPrivate,
 			Evalengine: evalengine,
 			Race:       true,
-			GitMetas:   gitMetas,
 		}
 		raceTest.FileName = fmt.Sprintf("unit_race%s.yml", evalengineToFileSuffix(evalengine))
 		path := fmt.Sprintf("%s/%s", workflowConfigDir, raceTest.FileName)

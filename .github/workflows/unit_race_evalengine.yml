@@ -89,8 +89,7 @@ jobs:
         mv dist/etcd-v3.5.25-linux-amd64/{etcd,etcdctl} bin/
 
         go mod download
-
-        go install golang.org/x/tools/cmd/goimports@034e59c473362f8f2be47694d98fd3f12a1ad497 # v0.39.0
+        go install golang.org/x/tools/cmd/goimports@latest
 
         # install JUnit report formatter
         go install github.com/vitessio/go-junit-report@HEAD
@@ -122,7 +121,6 @@ jobs:
         export VTDATAROOT="/tmp/"
 
         export NOVTADMINBUILD=1
-        export VT_GO_PARALLEL_VALUE=$(nproc)
         export VTEVALENGINETEST="1"
         # We sometimes need to alter the behavior based on the platform we're
         # testing, e.g. MySQL 5.7 vs 8.0.
