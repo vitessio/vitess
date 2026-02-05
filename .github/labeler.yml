@@ -4,6 +4,7 @@
     - .github/actions/**
     - .github/workflows/**
     - .github/dependabot.yml
+    - .github/labeler.yml
     - .golangci.yml
 
 'Component: Docker':
@@ -17,15 +18,114 @@
     - doc/**
     - changelog/**
 
+'Component: Examples':
+- changed-files:
+  - any-glob-to-any-file:
+    - examples/**
+
+'Component: Evalengine':
+- changed-files:
+  - any-glob-to-any-file:
+    - go/vt/vtgate/evalengine/**
+
 'Component: Java':
 - changed-files:
   - any-glob-to-any-file:
     - java/**
 
+'Component: Online DDL':
+- changed-files:
+  - any-glob-to-any-file:
+    - go/vt/vttablet/onlineddl/**
+    - go/vt/sidecardb/schema/onlineddl/**
+    - go/vt/schemadiff/onlineddl*.go
+    - go/test/endtoend/onlineddl/**
+
+'Component: Messaging':
+- changed-files:
+  - any-glob-to-any-file:
+    - go/vt/vttablet/tabletserver/messager/**
+    - go/test/endtoend/messaging/**
+
+'Component: TabletManager':
+- changed-files:
+  - any-glob-to-any-file:
+    - go/vt/vttablet/tabletmanager/**
+    - go/vt/proto/tabletmanagerservice/**
+    - go/vt/proto/tabletmanagerdata/**
+    - go/test/endtoend/tabletmanager/**
+    - proto/tabletmanager*.proto
+
+'Component: Throttler':
+- changed-files:
+  - any-glob-to-any-file:
+    - go/vt/vttablet/tabletserver/throttle/**
+    - go/vt/vttablet/tabletserver/txthrottler/**
+    - go/vt/vttablet/tabletserver/querythrottler/**
+    - go/vt/proto/querythrottler/**
+    - go/vt/proto/throttlerservice/**
+    - go/vt/throttler/**
+    - go/test/endtoend/throttler/**
+    - go/test/endtoend/tabletmanager/throttler_topo/**
+    - proto/querythrottler.proto
+    - proto/throttlerdata.proto
+    - proto/throttlerservice.proto
+
+'Component: Topology':
+- changed-files:
+  - any-glob-to-any-file:
+    - go/vt/topo/**
+
+'Component: VDiff':
+- changed-files:
+  - any-glob-to-any-file:
+    - go/vt/vttablet/tabletmanager/vdiff/**
+    - go/vt/sidecardb/schema/vdiff/**
+
 'Component: VTAdmin':
 - changed-files:
   - any-glob-to-any-file:
+    - go/vt/proto/vtadmin/**
+    - go/vt/vtadmin/**
+    - proto/vtadmin.proto
     - web/vtadmin/**
+
+'Component: VTOrc':
+- changed-files:
+  - any-glob-to-any-file:
+    - go/vt/proto/vtorcdata/**
+    - go/vt/vtorc/**
+    - proto/vtorcdata.proto
+
+'Component: VTGate':
+- changed-files:
+  - any-glob-to-any-file:
+    - go/vt/vtgate/**
+
+'Component: VTTablet':
+- changed-files:
+  - any-glob-to-any-file:
+    - go/vt/vttablet/**
+
+'Component: vtctldclient':
+- changed-files:
+  - any-glob-to-any-file:
+    - go/vt/vtctl/grpcvtctldclient/**
+    - go/vt/vtctl/vtctldclient/**
+    - go/vt/vtctl/localvtctldclient/**
+    - go/cmd/vtctldclient/**
+    - go/test/endtoend/vtctldclient/**
+
+'Component: vtexplain':
+- changed-files:
+  - any-glob-to-any-file:
+    - go/cmd/vtexplain/**
+    - go/vt/vtexplain/**
+
+'Component: vtexplain':
+- changed-files:
+  - any-glob-to-any-file:
+    - go/cmd/vttestserver/**
 
 'Type: Dependencies':
 - changed-files:
