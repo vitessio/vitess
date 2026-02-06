@@ -15524,7 +15524,27 @@ yydefault:
 	case 631:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL AlterOption
+<<<<<<< HEAD
 //line sql.y:3485
+=======
+//line sql.y:3502
+		{
+			yyLOCAL = &DropKey{Type: ConstraintType, Name: yyDollar[3].identifierCI}
+		}
+		yyVAL.union = yyLOCAL
+	case 632:
+		yyDollar = yyS[yypt-1 : yypt+1]
+		var yyLOCAL AlterOption
+//line sql.y:3506
+		{
+			yyLOCAL = &Force{}
+		}
+		yyVAL.union = yyLOCAL
+	case 633:
+		yyDollar = yyS[yypt-3 : yypt+1]
+		var yyLOCAL AlterOption
+//line sql.y:3510
+>>>>>>> 1fadea998c (Fix `DROP CONSTRAINT` to work the same way as MySQL (#19183))
 		{
 			yyLOCAL = &RenameTableName{Table: yyDollar[3].tableName}
 		}
