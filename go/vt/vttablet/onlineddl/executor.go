@@ -4770,17 +4770,20 @@ func (e *Executor) onSchemaMigrationStatus(ctx context.Context,
 		{
 			_ = e.updateMigrationStartedTimestamp(ctx, uuid)
 			err = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
+			startedMigrations.Add(1)
 		}
 	case schema.OnlineDDLStatusComplete:
 		{
 			progressPct = progressPctFull
 			_ = e.updateMigrationStartedTimestamp(ctx, uuid)
 			err = e.updateMigrationTimestamp(ctx, "completed_timestamp", uuid)
+			successfulMigrations.Add(1)
 		}
 	case schema.OnlineDDLStatusFailed:
 		{
 			_ = e.updateMigrationStartedTimestamp(ctx, uuid)
 			err = e.updateMigrationTimestamp(ctx, "completed_timestamp", uuid)
+			failedMigrations.Add(1)
 		}
 	}
 	if err != nil {
