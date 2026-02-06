@@ -613,9 +613,12 @@ func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 	srv := &mysqlServer{}
 	srv.vtgateHandle = newVtgateHandler(vtgate)
 	if mysqlServerPort >= 0 {
-		srv.tcpListener, err = mysql.NewListener(
-			mysqlTCPVersion,
-			net.JoinHostPort(mysqlServerBindAddress, strconv.Itoa(mysqlServerPort)),
+		listener, err := servenv.Listen(mysqlTCPVersion, net.JoinHostPort(mysqlServerBindAddress, strconv.Itoa(mysqlServerPort)))
+		if err != nil {
+			log.Exitf("servenv.Listen failed: %v", err)
+		}
+		srv.tcpListener, err = mysql.NewFromListener(
+			listener,
 			authServer,
 			srv.vtgateHandle,
 			mysqlConnReadTimeout,
@@ -627,12 +630,12 @@ func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 			mysqlServerMultiQuery,
 		)
 		if err != nil {
-			log.Exitf("mysql.NewListener failed: %v", err)
+			log.Exitf("mysql.NewFromListener failed: %v", err)
 		}
 		if mysqlSslCert != "" && mysqlSslKey != "" {
 			tlsVersion, err := vttls.TLSVersionToNumber(mysqlTLSMinVersion)
 			if err != nil {
-				log.Exitf("mysql.NewListener failed: %v", err)
+				log.Exitf("mysql.NewFromListener failed: %v", err)
 			}
 
 			_ = initTLSConfig(context.Background(), srv, mysqlSslCert, mysqlSslKey, mysqlSslCa, mysqlSslCrl, mysqlSslServerCA, mysqlServerRequireSecureTransport, tlsVersion)
