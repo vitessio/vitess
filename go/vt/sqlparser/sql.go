@@ -15417,7 +15417,7 @@ yydefault:
 		var yyLOCAL AlterOption
 //line sql.y:3502
 		{
-			yyLOCAL = &DropKey{Type: CheckKeyType, Name: yyDollar[3].identifierCI}
+			yyLOCAL = &DropKey{Type: ConstraintType, Name: yyDollar[3].identifierCI}
 		}
 		yyVAL.union = yyLOCAL
 	case 632:
