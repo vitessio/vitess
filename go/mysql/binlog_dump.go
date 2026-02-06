@@ -18,7 +18,6 @@ package mysql
 
 import (
 	"encoding/binary"
-	"io"
 
 	"vitess.io/vitess/go/mysql/replication"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -52,7 +51,7 @@ func (c *Conn) parseComBinlogDump(data []byte) (logFile string, binlogPos uint32
 	return logFile, binlogPos, nil
 }
 
-func (c *Conn) parseComBinlogDumpGTID(data []byte) (logFile string, logPos uint64, position replication.Position, err error) {
+func (c *Conn) parseComBinlogDumpGTID(data []byte) (logFile string, logPos uint64, position replication.Position, nonBlock bool, err error) {
 	// see https://dev.mysql.com/doc/internals/en/com-binlog-dump-gtid.html
 	pos := 1
 
@@ -62,31 +61,36 @@ func (c *Conn) parseComBinlogDumpGTID(data []byte) (logFile string, logPos uint6
 
 	fileNameLen, pos, ok := readUint32(data, pos)
 	if !ok {
-		return logFile, logPos, position, readPacketErr
+		return logFile, logPos, position, nonBlock, readPacketErr
+	}
+	if pos+int(fileNameLen) > len(data) {
+		return logFile, logPos, position, nonBlock, readPacketErr
 	}
 	logFile = string(data[pos : pos+int(fileNameLen)])
 	pos += int(fileNameLen)
 
 	logPos, pos, ok = readUint64(data, pos)
 	if !ok {
-		return logFile, logPos, position, readPacketErr
+		return logFile, logPos, position, nonBlock, readPacketErr
 	}
 
 	dataSize, pos, ok := readUint32(data, pos)
 	if !ok {
-		return logFile, logPos, position, readPacketErr
+		return logFile, logPos, position, nonBlock, readPacketErr
+	}
+	if pos+int(dataSize) > len(data) {
+		return logFile, logPos, position, nonBlock, readPacketErr
 	}
 	if gtidBytes := data[pos : pos+int(dataSize)]; len(gtidBytes) != 0 {
 		gtid, err := replication.NewMysql56GTIDSetFromSIDBlock(gtidBytes)
 		if err != nil {
-			return logFile, logPos, position, vterrors.Wrapf(err, "error parsing GTID from BinlogDumpGTID packet")
+			return logFile, logPos, position, nonBlock, vterrors.Wrapf(err, "error parsing GTID from BinlogDumpGTID packet")
 		}
 		// ComBinlogDumpGTID is a MySQL specific protocol. The GTID flavor is necessarily MySQL 56
 		position = replication.Position{GTIDSet: gtid}
 	}
-	if flags2&BinlogDumpNonBlock != 0 {
-		return logFile, logPos, position, io.EOF
-	}
 
-	return logFile, logPos, position, nil
+	nonBlock = flags2&BinlogDumpNonBlock != 0
+
+	return logFile, logPos, position, nonBlock, nil
 }
