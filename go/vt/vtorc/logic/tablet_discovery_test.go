@@ -108,13 +108,16 @@ var (
 
 func TestShouldWatchTablet(t *testing.T) {
 	oldClustersToWatch := clustersToWatch
+	oldCellsToWatch := cellsToWatch
 	defer func() {
 		clustersToWatch = oldClustersToWatch
+		cellsToWatch = oldCellsToWatch
 		shardsToWatch = nil
 	}()
 
 	testCases := []struct {
 		in                  []string
+		cells               []string
 		tablet              *topodatapb.Tablet
 		expectedShouldWatch bool
 	}{
@@ -214,11 +217,59 @@ func TestShouldWatchTablet(t *testing.T) {
 			},
 			expectedShouldWatch: false,
 		},
+		{
+			cells: nil,
+			tablet: &topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone-1"},
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			expectedShouldWatch: true,
+		},
+		{
+			cells: []string{"zone-1"},
+			tablet: &topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone-1"},
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			expectedShouldWatch: true,
+		},
+		{
+			cells: []string{"zone-2"},
+			tablet: &topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone-1"},
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			expectedShouldWatch: false,
+		},
+		{
+			in:    []string{keyspace},
+			cells: []string{"zone-1"},
+			tablet: &topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone-1"},
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			expectedShouldWatch: true,
+		},
+		{
+			in:    []string{keyspace},
+			cells: []string{"zone-2"},
+			tablet: &topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone-1"},
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			expectedShouldWatch: false,
+		},
 	}
 
 	for _, tt := range testCases {
-		t.Run(fmt.Sprintf("%v-Tablet-%v-%v", strings.Join(tt.in, ","), tt.tablet.GetKeyspace(), tt.tablet.GetShard()), func(t *testing.T) {
+		t.Run(fmt.Sprintf("clusters=%v,cells=%v,Tablet-%v-%v-%v", strings.Join(tt.in, ","), strings.Join(tt.cells, ","), tt.tablet.GetAlias().GetCell(), tt.tablet.GetKeyspace(), tt.tablet.GetShard()), func(t *testing.T) {
 			clustersToWatch = tt.in
+			cellsToWatch = tt.cells
 			err := initializeShardsToWatch()
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedShouldWatch, shouldWatchTablet(tt.tablet))
@@ -898,4 +949,149 @@ func TestGetAllTablets(t *testing.T) {
 			require.Equal(t, t.Name(), tablet.GetHostname())
 		}
 	}
+}
+
+func TestRefreshTabletsUsingCellsToWatch(t *testing.T) {
+	oldTs := ts
+	oldCellsToWatch := cellsToWatch
+	oldClustersToWatch := clustersToWatch
+	oldShardsToWatch := shardsToWatch
+	defer func() {
+		ts = oldTs
+		cellsToWatch = oldCellsToWatch
+		clustersToWatch = oldClustersToWatch
+		shardsToWatch = oldShardsToWatch
+		db.ClearVTOrcDatabase()
+	}()
+
+	cell2 := "zone-2"
+
+	tabCell1 := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: cell1,
+			Uid:  200,
+		},
+		Hostname:      hostname,
+		Keyspace:      keyspace,
+		Shard:         shard,
+		Type:          topodatapb.TabletType_REPLICA,
+		MysqlHostname: hostname,
+		MysqlPort:     200,
+	}
+	tabCell2 := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: cell2,
+			Uid:  201,
+		},
+		Hostname:      hostname,
+		Keyspace:      keyspace,
+		Shard:         shard,
+		Type:          topodatapb.TabletType_REPLICA,
+		MysqlHostname: hostname,
+		MysqlPort:     201,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ts = memorytopo.NewServer(ctx, cell1, cell2)
+	_, err := ts.GetOrCreateShard(context.Background(), keyspace, shard)
+	require.NoError(t, err)
+
+	err = ts.CreateTablet(context.Background(), tabCell1)
+	require.NoError(t, err)
+	err = ts.CreateTablet(context.Background(), tabCell2)
+	require.NoError(t, err)
+
+	clustersToWatch = nil
+	shardsToWatch = make(map[string][]*topodatapb.KeyRange)
+	cellsToWatch = []string{cell1}
+
+	var discoveredAliases []string
+	err = refreshTabletsUsing(ctx, func(tabletAlias string) {
+		discoveredAliases = append(discoveredAliases, tabletAlias)
+	}, true)
+	require.NoError(t, err)
+
+	assert.Contains(t, discoveredAliases, topoproto.TabletAliasString(tabCell1.Alias))
+	assert.NotContains(t, discoveredAliases, topoproto.TabletAliasString(tabCell2.Alias))
+
+	tabletFromDB, err := inst.ReadTablet(topoproto.TabletAliasString(tabCell1.Alias))
+	assert.NoError(t, err)
+	assert.NotNil(t, tabletFromDB)
+
+	_, err = inst.ReadTablet(topoproto.TabletAliasString(tabCell2.Alias))
+	assert.Error(t, err)
+}
+
+func TestRefreshTabletsInKeyspaceShardCellsToWatch(t *testing.T) {
+	oldTs := ts
+	oldCellsToWatch := cellsToWatch
+	oldClustersToWatch := clustersToWatch
+	oldShardsToWatch := shardsToWatch
+	defer func() {
+		ts = oldTs
+		cellsToWatch = oldCellsToWatch
+		clustersToWatch = oldClustersToWatch
+		shardsToWatch = oldShardsToWatch
+		db.ClearVTOrcDatabase()
+	}()
+
+	cell2 := "zone-2"
+
+	tabCell1 := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: cell1,
+			Uid:  200,
+		},
+		Hostname:      hostname,
+		Keyspace:      keyspace,
+		Shard:         shard,
+		Type:          topodatapb.TabletType_REPLICA,
+		MysqlHostname: hostname,
+		MysqlPort:     200,
+	}
+	tabCell2 := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: cell2,
+			Uid:  201,
+		},
+		Hostname:      hostname,
+		Keyspace:      keyspace,
+		Shard:         shard,
+		Type:          topodatapb.TabletType_REPLICA,
+		MysqlHostname: hostname,
+		MysqlPort:     201,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ts = memorytopo.NewServer(ctx, cell1, cell2)
+	_, err := ts.GetOrCreateShard(context.Background(), keyspace, shard)
+	require.NoError(t, err)
+
+	err = ts.CreateTablet(context.Background(), tabCell1)
+	require.NoError(t, err)
+	err = ts.CreateTablet(context.Background(), tabCell2)
+	require.NoError(t, err)
+
+	clustersToWatch = nil
+	shardsToWatch = make(map[string][]*topodatapb.KeyRange)
+	cellsToWatch = []string{cell1}
+
+	var discoveredAliases []string
+	refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(tabletAlias string) {
+		discoveredAliases = append(discoveredAliases, tabletAlias)
+	}, true, nil)
+
+	assert.Contains(t, discoveredAliases, topoproto.TabletAliasString(tabCell1.Alias))
+	assert.NotContains(t, discoveredAliases, topoproto.TabletAliasString(tabCell2.Alias))
+
+	tabletFromDB, err := inst.ReadTablet(topoproto.TabletAliasString(tabCell1.Alias))
+	assert.NoError(t, err)
+	assert.NotNil(t, tabletFromDB)
+
+	_, err = inst.ReadTablet(topoproto.TabletAliasString(tabCell2.Alias))
+	assert.Error(t, err)
 }
