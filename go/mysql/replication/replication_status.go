@@ -97,6 +97,11 @@ func (s *ReplicationStatus) SQLHealthy() bool {
 	return s.SQLState == ReplicationStateRunning
 }
 
+// IsSemiSyncAcker returns true on tablets that are actively semi-sync replicas.
+func (s *ReplicationStatus) IsSemiSyncAcker() bool {
+	return s.SemiSyncReplicaEnabled && s.SemiSyncReplicaStatus
+}
+
 // ReplicationStatusToProto translates a Status to proto3.
 func ReplicationStatusToProto(s ReplicationStatus) *replicationdatapb.Status {
 	replstatuspb := &replicationdatapb.Status{
