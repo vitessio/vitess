@@ -72,12 +72,6 @@ func (e *Executor) newExecute(
 	execPlan planExec, // used when there is a plan to execute
 	recResult txResult, // used when it's something simple like begin/commit/rollback/savepoint
 ) (err error) {
-	// Start an implicit transaction if necessary.
-	err = e.startTxIfNecessary(ctx, safeSession)
-	if err != nil {
-		return err
-	}
-
 	if bindVars == nil {
 		bindVars = make(map[string]*querypb.BindVariable)
 	}
@@ -148,6 +142,17 @@ func (e *Executor) newExecute(
 		// If we have previously issued a VT15001 error, we block any new queries on this session until we receive a ROLLBACK or "show warnings".
 		if shouldBlockQueries(plan, safeSession) {
 			return vterrors.VT09032()
+		}
+
+		// Start an implicit transaction if necessary.
+		// We do this after planning so we know the statement type - some statements
+		// like SET, SHOW, and USE should not start implicit transactions.
+		// This must happen BEFORE handleTransactions() because savepoints need
+		// to be in a transaction context and are handled there.
+		if needsImplicitTransaction(plan.QueryType) {
+			if err = e.startTxIfNecessary(ctx, safeSession); err != nil {
+				return err
+			}
 		}
 
 		result, err = e.handleTransactions(ctx, mysqlCtx, safeSession, plan, logStats, vcursor, stmt)
@@ -276,6 +281,29 @@ func (e *Executor) startTxIfNecessary(ctx context.Context, safeSession *econtext
 		}
 	}
 	return nil
+}
+
+// needsImplicitTransaction returns true if the given statement type should
+// trigger an implicit transaction when autocommit=0. Statements like SET,
+// SHOW, and USE are session management commands that should not start
+// transactions - they can be executed outside of transaction context.
+func needsImplicitTransaction(stmtType sqlparser.StatementType) bool {
+	switch stmtType {
+	case sqlparser.StmtSet,
+		sqlparser.StmtShow,
+		sqlparser.StmtUse,
+		sqlparser.StmtComment,
+		sqlparser.StmtCommentOnly,
+		sqlparser.StmtOther,
+		sqlparser.StmtExplain:
+		// These statements are session management or metadata operations
+		// that don't require transaction context.
+		return false
+	default:
+		// All other statements (SELECT, INSERT, UPDATE, DELETE, etc.)
+		// should be wrapped in an implicit transaction when autocommit=0.
+		return true
+	}
 }
 
 func (e *Executor) insideTransaction(ctx context.Context, safeSession *econtext.SafeSession, logStats *logstats.LogStats, execPlan func() error) error {
