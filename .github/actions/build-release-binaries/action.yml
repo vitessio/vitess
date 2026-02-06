@@ -1,0 +1,45 @@
+name: 'Build Vitess release binaries'
+description: 'Build binaries for a specific Vitess release, for use in GitHub Actions workflows. Requires checkout of Vitess'
+inputs:
+  path:
+    description: 'path to store the release binaries'
+    required: true
+  branch:
+    description: 'git branch of the release'
+    required: true
+  sha:
+    description: 'git sha hash of the release'
+    required: true
+  cache:
+    description: 'enables cache when set to "true"'
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Setup and check cache
+      if: inputs.cache == 'true'
+      id: cache-release-build
+      uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+      with:
+        path: ${{ inputs.path }}/bin
+        key: vitess-release.${{ inputs.branch}}@${{ inputs.sha }}
+
+    - name: Set up Go
+      if: inputs.cache != 'true' || steps.cache-release-build.outputs.cache-hit != 'true'
+      uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+      with:
+        go-version-file: go.mod
+        cache: false
+
+    - name: Get dependencies for release
+      if: inputs.cache != 'true' || steps.cache-release-build.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        go mod download
+
+    - name: Build release binaries
+      if: inputs.cache != 'true' || steps.cache-release-build.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        source build.env
+        NOVTADMINBUILD=1 make build
