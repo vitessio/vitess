@@ -754,25 +754,13 @@ func (session *SafeSession) SetPreQueries() []string {
 	first := true
 	for _, k := range keys {
 		if first {
-			preQuery.WriteString(fmt.Sprintf("set %s = %s", setVarPrefix(k), sysVars[k]))
+			preQuery.WriteString(fmt.Sprintf("set %s = %s", k, sysVars[k]))
 			first = false
 		} else {
-			preQuery.WriteString(fmt.Sprintf(", %s = %s", setVarPrefix(k), sysVars[k]))
+			preQuery.WriteString(fmt.Sprintf(", %s = %s", k, sysVars[k]))
 		}
 	}
 	return []string{preQuery.String()}
-}
-
-// setVarPrefix returns the variable reference to use in a SET statement.
-// Most variables work fine with just the variable name, but transaction_isolation
-// and transaction_read_only (and their aliases) require the explicit @@session.
-// prefix because MySQL treats SET transaction_isolation as next-transaction-only scope.
-func setVarPrefix(name string) string {
-	switch name {
-	case "transaction_isolation", "tx_isolation", "transaction_read_only", "tx_read_only":
-		return "@@session." + name
-	}
-	return name
 }
 
 // SetLockSession sets the lock session.
