@@ -56,6 +56,10 @@ jobs:
             - 'examples/**'
             - '.github/workflows/region_example.yml'
 
+    - name: Build bootstrap images
+      if: steps.changes.outputs.examples == 'true'
+      uses: ./.github/actions/build-bootstrap
+
     - name: Set up Go
       if: steps.changes.outputs.examples == 'true'
       uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
