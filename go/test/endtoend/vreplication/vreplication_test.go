@@ -282,6 +282,57 @@ func TestVreplicationCopyParallel(t *testing.T) {
 	testBasicVreplicationWorkflow(t, "")
 }
 
+// TestAtomicCopyErrorSurfacing tests that errors during atomic copy are properly
+// surfaced in the workflow status. Uses parallel insert workers to exercise the
+// error aggregation code path.
+func TestAtomicCopyErrorSurfacing(t *testing.T) {
+	vc = NewVitessCluster(t, nil)
+	defer vc.TearDown()
+	defaultReplicas = 0
+	defaultRdonly = 0
+	defer func() { defaultReplicas = 1 }()
+
+	extraVTTabletArgs = []string{parallelInsertWorkers}
+	defer func() { extraVTTabletArgs = []string{} }()
+
+	defaultCell := vc.Cells[defaultCellName]
+	sourceSchema := "create table test_table(id int primary key, val varchar(100))"
+	sourceVSchema := `{"tables": {"test_table": {}}}`
+	vc.AddKeyspace(t, []*Cell{defaultCell}, defaultSourceKs, "0", sourceVSchema, sourceSchema, 0, 0, 100, nil)
+
+	targetSchema := "create table test_table(id int primary key, val varchar(100), required_col varchar(50) not null)"
+	targetVSchema := `{"tables": {"test_table": {}}}`
+	vc.AddKeyspace(t, []*Cell{defaultCell}, defaultTargetKs, "0", targetVSchema, targetSchema, 0, 0, 200, nil)
+
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	defer vtgateConn.Close()
+	verifyClusterHealth(t, vc)
+
+	execVtgateQuery(t, vtgateConn, defaultSourceKs, "insert into test_table(id, val) values (1, 'a'), (2, 'b'), (3, 'c')")
+
+	workflow := "atomic_copy_error_test"
+	ksWorkflow := fmt.Sprintf("%s.%s", defaultTargetKs, workflow)
+
+	_, err := vc.VtctldClient.ExecuteCommandWithOutput(
+		"MoveTables", "--target-keyspace", defaultTargetKs, "--workflow", workflow,
+		"--source-keyspace", defaultSourceKs, "--tables", "test_table", "--atomic-copy",
+		"Create",
+	)
+	require.NoError(t, err)
+
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Error.String())
+
+	message := getWorkflowMessage(t, vc, ksWorkflow)
+	require.NotEmpty(t, message, "workflow error message should not be empty")
+	require.NotContains(t, message, "UNKNOWN", "workflow error message should not be UNKNOWN")
+	t.Logf("Workflow error message: %s", message)
+
+	_, err = vc.VtctldClient.ExecuteCommandWithOutput(
+		"MoveTables", "--target-keyspace", defaultTargetKs, "--workflow", workflow, "Cancel",
+	)
+	require.NoError(t, err)
+}
+
 func testBasicVreplicationWorkflow(t *testing.T, binlogRowImage string) {
 	testVreplicationWorkflows(t, false, binlogRowImage)
 }
