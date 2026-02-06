@@ -1,0 +1,84 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+syntax = "proto3";
+option go_package = "vitess.io/vitess/go/vt/proto/gossip";
+
+package gossip;
+
+// Member is a gossip participant descriptor.
+message Member {
+  // Required. id is the unique node identifier.
+  string id = 1;
+  // Required. addr is the network address for gossip RPCs.
+  string addr = 2;
+  // meta is a freeform set of key/value tags.
+  map<string,string> meta = 3;
+}
+
+// Status is the liveness status for a member.
+enum Status {
+  STATUS_UNKNOWN = 0;
+  STATUS_ALIVE = 1;
+  STATUS_SUSPECT = 2;
+  STATUS_DOWN = 3;
+}
+
+// GossipState is a member's liveness snapshot.
+message GossipState {
+  // Required. node_id is the member identifier.
+  string node_id = 1;
+  // status is the liveness status.
+  Status status = 2;
+  // phi is the phi-accrual suspicion value.
+  double phi = 3;
+  // last_update_unix is the Unix timestamp in nanoseconds for the latest update.
+  int64 last_update_unix = 4;
+}
+
+// GossipMessage is the push/pull payload for gossip exchanges.
+message GossipMessage {
+  // members are membership entries known to the sender.
+  repeated Member members = 1;
+  // states are liveness snapshots known to the sender.
+  repeated GossipState states = 2;
+  // epoch is a monotonic counter for change detection.
+  uint64 epoch = 3;
+}
+
+// GossipJoinRequest is the payload to Join.
+message GossipJoinRequest {
+  // Required. member is the joining node.
+  Member member = 1;
+  // seeds is the list of seed nodes supplied by vtorc.
+  repeated Member seeds = 2;
+}
+
+// GossipJoinResponse is the response for Join.
+message GossipJoinResponse {
+  // members are the cluster membership entries.
+  repeated Member members = 1;
+  // initial is the initial gossip state snapshot.
+  GossipMessage initial = 2;
+}
+
+// Gossip is the service definition for gossip RPCs.
+service Gossip {
+  // Join registers a node and returns the initial gossip snapshot.
+  rpc Join(GossipJoinRequest) returns (GossipJoinResponse);
+  // PushPull exchanges gossip state with a peer.
+  rpc PushPull(GossipMessage) returns (GossipMessage);
+}
