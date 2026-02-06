@@ -15,6 +15,7 @@ linters:
     - nolintlint
     - nosprintfhostport
     - perfsprint
+    - prealloc
     - sqlclosecheck
     - staticcheck
     - whitespace
@@ -132,10 +133,14 @@ linters:
           - whitespace
         path: ^go/cmd/(vtcombo|vtgateclienttest|vtorc)/
       - linters:
+          - prealloc
+        path: ^go/vt/vtorc/(inst|logic)/.*_test.go
+      - linters:
           - errcheck
         path: ^go/mysql/
       - linters:
           - errcheck
+          - prealloc
         path: ^go/pools/.*_test.go
       - linters:
           - errcheck
@@ -149,11 +154,15 @@ linters:
       - linters:
           - errcheck
           - nosprintfhostport
+          - prealloc
           - sqlclosecheck
         path: ^go/test/
       - linters:
           - errcheck
         path: ^go/vt/mysqlctl/
+      - linters:
+          - prealloc
+        path: ^go/vt/mysqlctl/.*_test.go
       - linters:
           - errcheck
         path: ^go/vt/schemamanager/
@@ -168,9 +177,11 @@ linters:
         path: ^go/vt/sqlparser/goyacc
       - linters:
           - errcheck
+          - prealloc
         path: ^go/vt/throttler/.*_test.go
       - linters:
           - errcheck
+          - prealloc
         path: ^go/vt/topo/.*/*._test.go
       - linters:
           - errcheck
@@ -186,12 +197,14 @@ linters:
         path: ^go/vt/vtctl/grpcvtctlserver/
       - linters:
           - errcheck
+          - prealloc
         path: ^go/vt/vtctld/(schema|.*_test).go
       - linters:
           - errcheck
         path: ^go/vt/vtexplain/
       - linters:
           - errcheck
+          - prealloc
         path: ^go/vt/vtgate/.*_test.go
       - linters:
           - errcheck
@@ -201,16 +214,27 @@ linters:
         path: ^go/vt/vttablet/tabletmanager/vreplication
       - linters:
           - errcheck
+          - prealloc
         path: ^go/vt/vttablet/(.*endtoend.*|.*_test.go)
       - linters:
           - errcheck
+          - prealloc
         path: ^go/vt/vttest
       - linters:
           - errcheck
         path: ^go/vt/wrangler
       - linters:
+          - prealloc
+        path: ^go/vt/wrangler/.*_test.go
+      - linters:
           - errcheck
         path: ^go/vt/zkctl
+      - linters:
+          - prealloc
+        path: ^go/vt/vtgate/evalengine/testcases
+      - linters:
+          - prealloc # TODO: enable prealloc on go/tools/*
+        path: ^go/tools
     paths:
       - examples$
 formatters:

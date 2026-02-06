@@ -76,7 +76,7 @@ func TestWeightStringsComprehensive(t *testing.T) {
 		c4cs.remotes = append(c4cs.remotes, remote.NewCollation(conn, coll.Name()))
 	}
 
-	var allCharsets []*collationsForCharset
+	allCharsets := make([]*collationsForCharset, 0, len(charsetMap))
 	for _, c4cs := range charsetMap {
 		allCharsets = append(allCharsets, c4cs)
 	}

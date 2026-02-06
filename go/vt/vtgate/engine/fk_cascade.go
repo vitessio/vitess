@@ -185,8 +185,8 @@ func (fkc *FkCascade) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 
 // Inputs implements the Primitive interface.
 func (fkc *FkCascade) Inputs() ([]Primitive, []map[string]any) {
-	var inputs []Primitive
-	var inputsMap []map[string]any
+	inputs := make([]Primitive, 0, len(fkc.Children)+2)
+	inputsMap := make([]map[string]any, 0, len(fkc.Children)+2)
 	inputs = append(inputs, fkc.Selection)
 	inputsMap = append(inputsMap, map[string]any{
 		inputName: "Selection",

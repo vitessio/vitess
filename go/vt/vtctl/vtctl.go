@@ -3422,7 +3422,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 	}
 
 	// Log unknown Vindex params as warnings.
-	var vdxNames []string
+	vdxNames := make([]string, 0, len(ksVs.Vindexes))
 	for name := range ksVs.Vindexes {
 		vdxNames = append(vdxNames, name)
 	}

@@ -486,7 +486,7 @@ func (tr *ShardedRouting) processMultiColumnVindex(
 		return newVindexFound
 	}
 
-	var newOption []*VindexOption
+	newOption := make([]*VindexOption, 0, len(v.Options))
 	for _, op := range v.Options {
 		if op.Ready {
 			continue

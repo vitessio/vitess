@@ -213,8 +213,8 @@ func simplifyAnd(expr *AndExpr) (Expr, bool) {
 // And rewrite that to WHERE (a, b) IN ((1,11), (2,12), (3,13))
 func ExtractINFromOR(expr *OrExpr) []Expr {
 	var varNames []*ColName
-	var values [][]Expr
 	orSlice := orToSlice(expr)
+	values := make([][]Expr, 0, len(orSlice))
 	for _, expr := range orSlice {
 		andSlice := andToSlice(expr)
 		if len(andSlice) == 0 {

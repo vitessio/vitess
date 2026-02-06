@@ -124,7 +124,6 @@ func (tc *testComparison) Test(t *testing.T, remote *RemoteCoercionResult, local
 
 func TestComparisonSemantics(t *testing.T) {
 	const BaseString = "abcdABCD01234"
-	var testInputs []*TextWithCollation
 
 	conn := mysqlconn(t)
 	defer conn.Close()
@@ -133,7 +132,9 @@ func TestComparisonSemantics(t *testing.T) {
 		t.Skipf("The behavior of Coercion Semantics is not correct before 8.0.31")
 	}
 
-	for _, coll := range colldata.All(collations.MySQL8()) {
+	allCollations := colldata.All(collations.MySQL8())
+	testInputs := make([]*TextWithCollation, 0, len(allCollations))
+	for _, coll := range allCollations {
 		text := verifyTranscoding(t, coll, remote.NewCollation(conn, coll.Name()), []byte(BaseString))
 		testInputs = append(testInputs, &TextWithCollation{Text: text, Collation: coll.ID()})
 	}

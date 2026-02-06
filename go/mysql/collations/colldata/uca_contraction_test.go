@@ -194,7 +194,7 @@ func (s *strgen) withText(in string) *strgen {
 }
 
 func (s *strgen) generate(length int, freq float64) (out []byte) {
-	var flat []rune
+	flat := make([]rune, 0, len(s.repertoire))
 	for r := range s.repertoire {
 		flat = append(flat, r)
 	}
