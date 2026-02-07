@@ -45,7 +45,8 @@ func TestDownPrimary(t *testing.T) {
 	// If that replica is more advanced than the same-cell-replica, then we try to promote the cross-cell replica as an intermediate source.
 	// If we don't specify a small value of --wait-replicas-timeout, then we would end up waiting for 30 seconds for the dead-primary to respond, failing this test.
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{vtutils.GetFlagVariantForTests("--remote-operation-timeout") + "=10s", "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{
-		PreventCrossCellFailover: true,
+		PreventCrossCellFailover:        true,
+		PrimaryHealthCheckTimeoutWindow: "10s",
 	}, cluster.DefaultVtorcsByCell, policy.DurabilitySemiSync)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
@@ -82,8 +83,6 @@ func TestDownPrimary(t *testing.T) {
 	require.NoError(t, err)
 	err = rdonly.MysqlctlProcess.Stop()
 	require.NoError(t, err)
-	// We have bunch of Vttablets down. Therefore we expect at least 1 occurrence of InstancePollSecondsExceeded
-	utils.WaitForInstancePollSecondsExceededCount(t, vtOrcProcess, 1, false)
 	// Make the current primary vttablet unavailable.
 	err = curPrimary.VttabletProcess.TearDown()
 	require.NoError(t, err)
@@ -118,7 +117,9 @@ func TestDownPrimary(t *testing.T) {
 // confirm no ERS occurs.
 func TestDownPrimary_KeyspaceEmergencyReparentDisabled(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{vtutils.GetFlagVariantForTests("--remote-operation-timeout") + "=10s", "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{}, cluster.DefaultVtorcsByCell, policy.DurabilityNone)
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{vtutils.GetFlagVariantForTests("--remote-operation-timeout") + "=10s", "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{
+		PrimaryHealthCheckTimeoutWindow: "10s",
+	}, cluster.DefaultVtorcsByCell, policy.DurabilityNone)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo

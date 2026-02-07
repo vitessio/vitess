@@ -198,8 +198,10 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 
 	fs, err = fullStatus(tablet)
 	if err != nil {
+		RecordPrimaryHealthCheck(tabletAlias, false)
 		goto Cleanup
 	}
+	RecordPrimaryHealthCheck(tabletAlias, true)
 	if config.GetStalledDiskPrimaryRecovery() && fs.DiskStalled {
 		stalledDisk = true
 		goto Cleanup

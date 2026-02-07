@@ -111,6 +111,7 @@ type DetectionAnalysis struct {
 	IsPrimary                                 bool
 	IsClusterPrimary                          bool
 	LastCheckValid                            bool
+	PrimaryHealthUnhealthy                    bool
 	LastCheckPartialSuccess                   bool
 	CountReplicas                             uint
 	CountValidReplicas                        uint

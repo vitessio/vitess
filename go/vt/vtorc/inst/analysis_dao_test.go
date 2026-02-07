@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/test"
 )
@@ -49,6 +50,10 @@ var initialSQL = []string{
 // run by it. It only checks the analysis part after the rows have been read. This tests fakes the db and explicitly returns the
 // rows that are specified in the test.
 func TestGetDetectionAnalysisDecision(t *testing.T) {
+	oldWindow := config.GetPrimaryHealthCheckTimeoutWindow()
+	config.SetPrimaryHealthCheckTimeoutWindow(30 * time.Second)
+	defer config.SetPrimaryHealthCheckTimeoutWindow(oldWindow)
+	resetPrimaryHealthState()
 	tests := []struct {
 		name           string
 		info           []*test.InfoForRecoveryAnalysis
@@ -197,6 +202,30 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 				LastCheckValid:                0,
 				CountReplicas:                 4,
 				CountValidReplicas:            4,
+				CountValidReplicatingReplicas: 0,
+				IsPrimary:                     1,
+				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
+			}},
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     DeadPrimary,
+		},
+		{
+			name: "DeadPrimaryHealthWindow",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				DurabilityPolicy:              policy.DurabilityNone,
+				LastCheckValid:                1,
+				CountReplicas:                 2,
+				CountValidReplicas:            2,
 				CountValidReplicatingReplicas: 0,
 				IsPrimary:                     1,
 				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
@@ -989,6 +1018,12 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			resetPrimaryHealthState()
+			if tt.name == "DeadPrimaryHealthWindow" {
+				RecordPrimaryHealthCheck("zon1-0000000100", true)
+				RecordPrimaryHealthCheck("zon1-0000000100", false)
+				RecordPrimaryHealthCheck("zon1-0000000100", false)
+			}
 			oldDB := db.Db
 			defer func() {
 				db.Db = oldDB
@@ -1022,6 +1057,9 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 // TestStalePrimary tests that an old primary that remains writable and is of tablet type PRIMARY
 // in the topo is demoted to a read-only replica by VTOrc.
 func TestStalePrimary(t *testing.T) {
+	oldWindow := config.GetPrimaryHealthCheckTimeoutWindow()
+	config.SetPrimaryHealthCheckTimeoutWindow(30 * time.Second)
+	defer config.SetPrimaryHealthCheckTimeoutWindow(oldWindow)
 	oldDB := db.Db
 	defer func() {
 		db.Db = oldDB
@@ -1124,6 +1162,9 @@ func TestStalePrimary(t *testing.T) {
 // This test is somewhere between a unit test, and an end-to-end test. It is specifically useful for testing situations which are hard to come by in end-to-end test, but require
 // real-world data to test specifically.
 func TestGetDetectionAnalysis(t *testing.T) {
+	oldWindow := config.GetPrimaryHealthCheckTimeoutWindow()
+	config.SetPrimaryHealthCheckTimeoutWindow(30 * time.Second)
+	defer config.SetPrimaryHealthCheckTimeoutWindow(oldWindow)
 	// The test is intended to be used as follows. The initial data is stored into the database. Following this, some specific queries are run that each individual test specifies to get the desired state.
 	tests := []struct {
 		name           string

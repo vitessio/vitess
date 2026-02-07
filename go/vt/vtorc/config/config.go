@@ -70,6 +70,15 @@ var (
 		},
 	)
 
+	primaryHealthCheckTimeoutWindow = viperutil.Configure(
+		"primary-healthcheck-timeout-window",
+		viperutil.Options[time.Duration]{
+			FlagName: "primary-healthcheck-timeout-window",
+			Default:  30 * time.Second,
+			Dynamic:  true,
+		},
+	)
+
 	discoveryWorkers = viperutil.Configure(
 		"discovery-workers",
 		viperutil.Options[int]{
@@ -256,6 +265,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.Duration("tolerable-replication-lag", tolerableReplicationLag.Default(), "Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary in PRS")
 	fs.Duration("topo-information-refresh-duration", topoInformationRefreshDuration.Default(), "Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topology server")
 	fs.Duration("recovery-poll-duration", recoveryPollDuration.Default(), "Timer duration on which VTOrc polls its database to run a recovery")
+	fs.Duration("primary-healthcheck-timeout-window", primaryHealthCheckTimeoutWindow.Default(), "Time window to consider repeated healthcheck timeouts as primary unhealthy")
 	fs.Bool("allow-emergency-reparent", ersEnabled.Default(), "Whether VTOrc should be allowed to run emergency reparent operation when it detects a dead primary")
 	fs.Bool("allow-recovery", allowRecovery.Default(), "Whether VTOrc should be allowed to run recovery actions")
 	fs.Bool("change-tablets-with-errant-gtid-to-drained", convertTabletsWithErrantGTIDs.Default(), "Whether VTOrc should be changing the type of tablets with errant GTIDs to DRAINED")
@@ -279,6 +289,7 @@ func registerFlags(fs *pflag.FlagSet) {
 		tolerableReplicationLag,
 		topoInformationRefreshDuration,
 		recoveryPollDuration,
+		primaryHealthCheckTimeoutWindow,
 		ersEnabled,
 		allowRecovery,
 		convertTabletsWithErrantGTIDs,
@@ -399,6 +410,16 @@ func GetTopoInformationRefreshDuration() time.Duration {
 // GetRecoveryPollDuration is a getter function.
 func GetRecoveryPollDuration() time.Duration {
 	return recoveryPollDuration.Get()
+}
+
+// GetPrimaryHealthCheckTimeoutWindow returns the time window used to detect unhealthy primaries.
+func GetPrimaryHealthCheckTimeoutWindow() time.Duration {
+	return primaryHealthCheckTimeoutWindow.Get()
+}
+
+// SetPrimaryHealthCheckTimeoutWindow sets the timeout window. This should only be used from tests.
+func SetPrimaryHealthCheckTimeoutWindow(v time.Duration) {
+	primaryHealthCheckTimeoutWindow.Set(v)
 }
 
 // ERSEnabled reports whether VTOrc is allowed to run ERS or not.
