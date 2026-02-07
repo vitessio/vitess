@@ -29,7 +29,8 @@ import (
 var (
 	jwwlog = func(printer interface {
 		Printf(format string, args ...any)
-	}, vtlogger func(format string, args ...any)) func(format string, args ...any) {
+	}, vtlogger func(format string, args ...any),
+	) func(format string, args ...any) {
 		switch vtlogger {
 		case nil:
 			return printer.Printf

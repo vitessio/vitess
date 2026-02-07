@@ -134,17 +134,19 @@ func (f *fakeTracer) GetOpenTracingTracer() opentracing.Tracer {
 	return opentracing.GlobalTracer()
 }
 
-func (f *fakeTracer) NewFromString(parent, label string) (Span, error) {
+func (f *fakeTracer) NewFromString(ctx context.Context, parent, label string) (Span, context.Context, error) {
 	if parent == "" {
-		return &mockSpan{tracer: f}, errors.New("parent is empty")
+		return nil, nil, errors.New("parent is empty")
 	}
-	return &mockSpan{tracer: f}, nil
+	span := &mockSpan{tracer: f}
+	return span, f.NewContext(ctx, span), nil
 }
 
-func (f *fakeTracer) New(parent Span, label string) Span {
+func (f *fakeTracer) New(ctx context.Context, label string) (Span, context.Context) {
 	f.log = append(f.log, "span started")
 
-	return &mockSpan{tracer: f}
+	span := &mockSpan{tracer: f}
+	return span, f.NewContext(ctx, span)
 }
 
 func (f *fakeTracer) FromContext(ctx context.Context) (Span, bool) {

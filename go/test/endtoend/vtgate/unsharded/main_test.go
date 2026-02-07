@@ -135,7 +135,8 @@ END;`
 }
 `
 
-	createProcSQL = []string{`
+	createProcSQL = []string{
+		`
 CREATE PROCEDURE in_parameter(IN val int)
 BEGIN
 	insert into allDefaults(id) values(val);
@@ -177,7 +178,7 @@ func TestMain(m *testing.M) {
 			VSchema:   VSchema,
 		}
 		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-transaction-timeout", "3s", "--queryserver-config-max-result-size", "30"}
-		if err := clusterInstance.StartUnshardedKeyspace(*Keyspace, 0, false); err != nil {
+		if err := clusterInstance.StartUnshardedKeyspace(*Keyspace, 0, false, clusterInstance.Cell); err != nil {
 			log.Fatal(err.Error())
 			return 1
 		}
@@ -225,7 +226,7 @@ func runCreateProcedures(conn *mysql.Conn) error {
 func TestSelectIntoAndLoadFrom(t *testing.T) {
 	// Test is skipped because it requires secure-file-priv variable to be set to not NULL or empty.
 	t.Skip()
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -255,7 +256,7 @@ func TestSelectIntoAndLoadFrom(t *testing.T) {
 }
 
 func TestEmptyStatement(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -267,7 +268,7 @@ func TestEmptyStatement(t *testing.T) {
 }
 
 func TestTopoDownServingQuery(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -282,7 +283,7 @@ func TestTopoDownServingQuery(t *testing.T) {
 }
 
 func TestInsertAllDefaults(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -292,7 +293,7 @@ func TestInsertAllDefaults(t *testing.T) {
 }
 
 func TestDDLUnsharded(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -308,7 +309,7 @@ func TestDDLUnsharded(t *testing.T) {
 }
 
 func TestCallProcedure(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := mysql.ConnParams{
 		Host:   "localhost",
 		Port:   clusterInstance.VtgateMySQLPort,
@@ -354,7 +355,7 @@ func TestCallProcedure(t *testing.T) {
 }
 
 func TestTempTable(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn1, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn1.Close()
@@ -374,7 +375,7 @@ func TestTempTable(t *testing.T) {
 }
 
 func TestReservedConnDML(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -392,7 +393,7 @@ func TestReservedConnDML(t *testing.T) {
 }
 
 func TestNumericPrecisionScale(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -462,7 +463,7 @@ func execMulti(t *testing.T, conn *mysql.Conn, query string) []*sqltypes.Result 
 
 // TestMetricForExplain verifies that query metrics are correctly published for explain queries.
 func TestMetricForExplain(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

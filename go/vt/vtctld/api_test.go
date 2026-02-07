@@ -147,8 +147,7 @@ func compareTabletWithURLSliceResponse(t *testing.T, actualJSON []byte, expected
 }
 
 func TestAPI(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	cells := []string{"cell1", "cell2"}
 	ts := memorytopo.NewServer(ctx, cells...)
 	defer ts.Close()

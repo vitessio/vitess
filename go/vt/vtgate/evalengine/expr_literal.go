@@ -28,8 +28,10 @@ type (
 	}
 )
 
-var _ IR = (*Literal)(nil)
-var _ Expr = (*Literal)(nil)
+var (
+	_ IR   = (*Literal)(nil)
+	_ Expr = (*Literal)(nil)
+)
 
 func (l *Literal) IR() IR {
 	return l

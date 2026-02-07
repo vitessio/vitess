@@ -19,6 +19,9 @@ Flags:
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
       --cells strings                                                    Comma separated list of cells (default [test])
       --charset string                                                   MySQL charset (default "utf8mb4")
+      --clone-from-primary                                               Clone data from the primary tablet in the shard using MySQL CLONE REMOTE instead of restoring from backup. Requires MySQL 8.0.17+. Mutually exclusive with --clone-from-tablet.
+      --clone-from-tablet string                                         Clone data from this tablet using MySQL CLONE REMOTE instead of restoring from backup (tablet alias, e.g., zone1-123). Requires MySQL 8.0.17+. Mutually exclusive with --clone-from-primary.
+      --clone-restart-wait-timeout duration                              Timeout for waiting for MySQL to restart after CLONE REMOTE. (default 5m0s)
       --compression-engine-name string                                   compressor engine used for compression. (default "pargzip")
       --compression-level int                                            what level to pass to the compressor. (default 1)
       --config-file string                                               Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
@@ -91,6 +94,7 @@ Flags:
       --max-table-shard-size int                                         The maximum number of initial rows in a table shard. Ignored if--initialize-with-random-data is false. The actual number is chosen randomly (default 10000)
       --min-table-shard-size int                                         The minimum number of initial rows in a table shard. Ignored if--initialize-with-random-data is false. The actual number is chosen randomly. (default 1000)
       --mysql-bind-host string                                           which host to bind vtgate mysql listener to (default "localhost")
+      --mysql-clone-enabled                                              Enable MySQL CLONE plugin and user for backup/replica provisioning (requires MySQL 8.0.17+)
       --mysql-only                                                       If this flag is set only mysql is initialized. The rest of the vitess components are not started. Also, the output specifies the mysql unix socket instead of the vtgate port.
       --mysql-server-version string                                      MySQL server version to advertise. (default "8.4.6-Vitess")
       --mysql-shell-backup-location string                               location where the backup will be stored

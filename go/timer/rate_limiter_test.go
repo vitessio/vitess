@@ -31,7 +31,7 @@ func TestRateLimiterLong(t *testing.T) {
 	defer r.Stop()
 	val := 0
 	incr := func() error { val++; return nil }
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		err := r.Do(incr)
 		assert.NoError(t, err)
 	}
@@ -44,7 +44,7 @@ func TestRateLimiterShort(t *testing.T) {
 	defer r.Stop()
 	val := 0
 	incr := func() error { val++; return nil }
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		time.Sleep(time.Millisecond * 100)
 		err := r.Do(incr)
 		assert.NoError(t, err)
@@ -77,7 +77,7 @@ func TestRateLimiterStop(t *testing.T) {
 	defer r.Stop()
 	val := 0
 	incr := func() error { val++; return nil }
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		time.Sleep(time.Millisecond * 10)
 		err := r.Do(incr)
 		assert.NoError(t, err)
@@ -86,7 +86,7 @@ func TestRateLimiterStop(t *testing.T) {
 	assert.Greater(t, val, 2)
 	valSnapshot := val
 	r.Stop()
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		time.Sleep(time.Millisecond * 10)
 		err := r.Do(incr)
 		assert.NoError(t, err)

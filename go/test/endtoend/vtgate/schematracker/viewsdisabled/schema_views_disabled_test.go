@@ -17,7 +17,6 @@ limitations under the License.
 package viewsdisabled
 
 import (
-	"context"
 	_ "embed"
 	"encoding/json"
 	"flag"
@@ -70,7 +69,7 @@ func TestMain(m *testing.M) {
 			VSchema:   vschemaJSON,
 		}
 
-		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false)
+		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}
@@ -144,7 +143,7 @@ func TestVSchemaDoesNotIncludeViews(t *testing.T) {
 // doesn't perform problematic query rewriting since it cannot load view definitions.
 func TestViewOperationsWithViewsDisabled(t *testing.T) {
 	utils.SkipIfBinaryIsBelowVersion(t, 23, "vttablet")
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -199,7 +198,7 @@ func TestViewOperationsWithViewsDisabled(t *testing.T) {
 // that DDL operations on views don't cause issues.
 func TestSchemaTrackingWithViewsDisabled(t *testing.T) {
 	utils.SkipIfBinaryIsBelowVersion(t, 23, "vttablet")
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -243,7 +242,7 @@ func TestSchemaTrackingWithViewsDisabled(t *testing.T) {
 // TestTableOperationsStillWork verifies that regular table operations
 // continue to work normally when views are disabled.
 func TestTableOperationsStillWork(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

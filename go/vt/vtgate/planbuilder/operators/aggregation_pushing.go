@@ -578,7 +578,7 @@ func coalesceFunc(e sqlparser.Expr) sqlparser.Expr {
 
 func initColReUse(size int) []int {
 	cols := make([]int, size)
-	for i := 0; i < size; i++ {
+	for i := range size {
 		cols[i] = -1
 	}
 	return cols

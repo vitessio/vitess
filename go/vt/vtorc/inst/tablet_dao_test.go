@@ -98,7 +98,7 @@ func TestReadTabletCountsByCell(t *testing.T) {
 		db.ClearVTOrcDatabase()
 	}()
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		require.NoError(t, SaveTablet(&topodatapb.Tablet{
 			Alias: &topodatapb.TabletAlias{
 				Cell: "cell1",

@@ -48,7 +48,7 @@ func encodeSJIS(dst []byte, r rune, table *[65536]uint16) int {
 		return -1
 	}
 
-	var sj = uint16(r)
+	sj := uint16(r)
 	if sj < utf8.RuneSelf {
 		if sj == 0x5c && table == &table_sjisEncode {
 			// COMPAT: this appears to be a difference between SJIS and CP32,

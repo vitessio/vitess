@@ -40,7 +40,8 @@ func newMetricFuncCollector(v stats.Variable, name string, vt prometheus.ValueTy
 			v.Help(),
 			nil,
 			nil),
-		vt: vt}
+		vt: vt,
+	}
 
 	// Will panic if it fails
 	prometheus.MustRegister(collector)
@@ -76,7 +77,8 @@ func newCountersWithSingleLabelCollector(c *stats.CountersWithSingleLabel, name 
 			c.Help(),
 			[]string{normalizeMetric(labelName)},
 			nil),
-		vt: vt}
+		vt: vt,
+	}
 
 	prometheus.MustRegister(collector)
 }
@@ -113,7 +115,8 @@ func newGaugesWithSingleLabelCollector(g *stats.GaugesWithSingleLabel, name stri
 			g.Help(),
 			[]string{normalizeMetric(labelName)},
 			nil),
-		vt: vt}
+		vt: vt,
+	}
 
 	prometheus.MustRegister(collector)
 }
@@ -298,7 +301,7 @@ func makeCumulativeBuckets(cutoffs []float64, buckets []int64) map[float64]uint6
 	output := make(map[float64]uint64)
 	last := uint64(0)
 	for i, key := range cutoffs {
-		//TODO(zmagg): int64 => uint64 conversion. error if it overflows?
+		// TODO(zmagg): int64 => uint64 conversion. error if it overflows?
 		output[key] = uint64(buckets[i]) + last
 		last = output[key]
 	}

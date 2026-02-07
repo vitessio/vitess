@@ -29,8 +29,8 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
-	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -94,9 +94,7 @@ func TestGRPCErrorCode_UNAVAILABLE(t *testing.T) {
 	// because this will try and fail to connect to mysql
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
-	tmClient := tmc.NewClient()
-	vttablet := getTablet(tablet.GrpcPort)
-	_, err = tmClient.FullStatus(ctx, vttablet)
+	_, err = tmcFullStatus(ctx, tablet.GrpcPort)
 	assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
 }
 
@@ -137,7 +135,7 @@ func TestResetReplicationParameters(t *testing.T) {
 
 // TestGetGlobalStatusVars tests the GetGlobalStatusVars RPC
 func TestGetGlobalStatusVars(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	statusValues, err := tmcGetGlobalStatusVars(ctx, replicaTablet.GrpcPort, []string{"Innodb_buffer_pool_pages_data", "unknown_value"})
 	require.NoError(t, err)
 	require.Len(t, statusValues, 1)
@@ -155,6 +153,50 @@ func TestGetGlobalStatusVars(t *testing.T) {
 	checkValueGreaterZero(t, statusValues, "Innodb_buffer_pool_pages_data")
 	checkValueGreaterZero(t, statusValues, "Innodb_buffer_pool_pages_free")
 	checkValueGreaterZero(t, statusValues, "Uptime")
+}
+
+// TestStopReplicationAndGetStatus tests the StopReplicationAndGetStatus RPC.
+func TestStopReplicationAndGetStatus(t *testing.T) {
+	// Create new tablet
+	tablet := clusterInstance.NewVttabletInstance("replica", 0, "")
+	defer killTablets(tablet)
+	mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
+	require.NoError(t, err)
+
+	tablet.MysqlctlProcess = *mysqlctlProcess
+	err = tablet.MysqlctlProcess.Start()
+	require.NoError(t, err)
+
+	// Start vttablet process as replica.
+	err = clusterInstance.StartVttablet(tablet, false, "SERVING", false, cell, keyspaceName, hostname, "0")
+	require.NoError(t, err)
+	log.Info(fmt.Sprintf("Started vttablet %v", tablet))
+
+	// Setup semi-sync on keyspace and wait for tablet to enable semi-sync.
+	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+	require.NoError(t, err)
+	defer func() {
+		tmcStartReplication(t.Context(), tablet.GrpcPort)
+		clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=none")
+	}()
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
+		defer cancel()
+		resp, err := tmcFullStatus(ctx, tablet.GrpcPort)
+		require.NoError(c, err)
+		require.True(c, resp.SemiSyncReplicaEnabled)
+		require.True(c, resp.SemiSyncReplicaStatus)
+	}, time.Second*45, time.Second)
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
+	defer cancel()
+	resp, err := tmcStopReplicationAndGetStatus(ctx, tablet.GrpcPort, replicationdatapb.StopReplicationMode_IOTHREADONLY)
+	require.NoError(t, err)
+	require.NotNil(t, resp.Before)
+	require.True(t, resp.Before.SemiSyncReplicaEnabled)
+	require.True(t, resp.Before.SemiSyncReplicaStatus)
+	require.False(t, resp.Before.SemiSyncPrimaryEnabled)
+	require.False(t, resp.Before.SemiSyncPrimaryStatus)
 }
 
 func checkValueGreaterZero(t *testing.T, statusValues map[string]string, val string) {

@@ -46,7 +46,7 @@ func TestIsGCTableName(t *testing.T) {
 	tm := time.Now()
 	states := []TableGCState{HoldTableGCState, PurgeTableGCState, EvacTableGCState, DropTableGCState}
 	for _, state := range states {
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			tableName, err := generateGCTableName(state, "6ace8bcef73211ea87e9f875a4d24e90", tm)
 			assert.NoError(t, err)
 			assert.Truef(t, IsGCTableName(tableName), "table name: %s", tableName)
@@ -261,7 +261,7 @@ func TestGenerateRenameStatementWithUUID(t *testing.T) {
 	tableName := "mytbl"
 	countIterations := 5
 	toTableNames := map[string]bool{}
-	for i := 0; i < countIterations; i++ {
+	for i := range countIterations {
 		_, toTableName, err := GenerateRenameStatementWithUUID(tableName, PurgeTableGCState, OnlineDDLToGCUUID(uuid), time.Now().Add(time.Duration(i)*time.Second).UTC())
 		require.NoError(t, err)
 		toTableNames[toTableName] = true

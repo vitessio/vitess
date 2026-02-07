@@ -245,11 +245,8 @@ func compareJSONValue(lj, rj *json.Value) (int, error) {
 	case json.TypeArray:
 		la, _ := lj.Array()
 		ra, _ := rj.Array()
-		until := len(la)
-		if len(la) > len(ra) {
-			until = len(ra)
-		}
-		for i := 0; i < until; i++ {
+		until := min(len(la), len(ra))
+		for i := range until {
 			cmp, err := compareJSONValue(la[i], ra[i])
 			if err != nil {
 				return 0, err
@@ -273,7 +270,7 @@ func compareJSONValue(lj, rj *json.Value) (int, error) {
 		rks := ro.Keys()
 		lks := lo.Keys()
 
-		for i := 0; i < len(lks); i++ {
+		for i := range lks {
 			if lks[i] < rks[i] {
 				return -1, nil
 			}
@@ -282,7 +279,7 @@ func compareJSONValue(lj, rj *json.Value) (int, error) {
 			}
 		}
 
-		for i := 0; i < len(lks); i++ {
+		for i := range lks {
 			cmp, err := compareJSONValue(lo.Get(lks[i]), ro.Get(rks[i]))
 			if err != nil {
 				return 0, err

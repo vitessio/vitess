@@ -50,7 +50,7 @@ func TestVSchemaChangesUnderLoad(t *testing.T) {
 	// ch is used to signal that there is significant data inserted into the tables and when a lot of vschema changes have been applied
 	ch := make(chan bool, 1)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	initialDataInserted := false
 	startCid := 100
 	warmupRowCount := startCid + 2000
@@ -85,7 +85,8 @@ func TestVSchemaChangesUnderLoad(t *testing.T) {
 				Keyspace: "product",
 				Shard:    "0",
 				Gtid:     "",
-			}}}
+			}},
+		}
 
 		filter := &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{

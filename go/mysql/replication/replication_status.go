@@ -49,24 +49,28 @@ type ReplicationStatus struct {
 	// upto which the IO thread has read and added to the relay log
 	RelayLogSourceBinlogEquivalentPosition Position
 	// RelayLogFilePosition stores the position in the relay log file
-	RelayLogFilePosition  Position
-	SourceServerID        uint32
-	IOState               ReplicationState
-	LastIOError           string
-	SQLState              ReplicationState
-	LastSQLError          string
-	ReplicationLagSeconds uint32
-	ReplicationLagUnknown bool
-	SourceHost            string
-	SourcePort            int32
-	SourceUser            string
-	ConnectRetry          int32
-	SourceUUID            SID
-	SQLDelay              uint32
-	AutoPosition          bool
-	UsingGTID             bool
-	HasReplicationFilters bool
-	SSLAllowed            bool
+	RelayLogFilePosition   Position
+	SourceServerID         uint32
+	IOState                ReplicationState
+	LastIOError            string
+	SQLState               ReplicationState
+	LastSQLError           string
+	ReplicationLagSeconds  uint32
+	ReplicationLagUnknown  bool
+	SourceHost             string
+	SourcePort             int32
+	SourceUser             string
+	ConnectRetry           int32
+	SourceUUID             SID
+	SQLDelay               uint32
+	AutoPosition           bool
+	UsingGTID              bool
+	HasReplicationFilters  bool
+	SSLAllowed             bool
+	SemiSyncPrimaryEnabled bool
+	SemiSyncReplicaEnabled bool
+	SemiSyncPrimaryStatus  bool
+	SemiSyncReplicaStatus  bool
 }
 
 // Running returns true if both the IO and SQL threads are running.
@@ -118,6 +122,10 @@ func ReplicationStatusToProto(s ReplicationStatus) *replicationdatapb.Status {
 		HasReplicationFilters:                  s.HasReplicationFilters,
 		AutoPosition:                           s.AutoPosition,
 		UsingGtid:                              s.UsingGTID,
+		SemiSyncPrimaryEnabled:                 s.SemiSyncPrimaryEnabled,
+		SemiSyncReplicaEnabled:                 s.SemiSyncReplicaEnabled,
+		SemiSyncPrimaryStatus:                  s.SemiSyncPrimaryStatus,
+		SemiSyncReplicaStatus:                  s.SemiSyncReplicaStatus,
 	}
 	return replstatuspb
 }
@@ -174,6 +182,10 @@ func ProtoToReplicationStatus(s *replicationdatapb.Status) ReplicationStatus {
 		HasReplicationFilters:                  s.HasReplicationFilters,
 		AutoPosition:                           s.AutoPosition,
 		UsingGTID:                              s.UsingGtid,
+		SemiSyncPrimaryEnabled:                 s.SemiSyncPrimaryEnabled,
+		SemiSyncReplicaEnabled:                 s.SemiSyncReplicaEnabled,
+		SemiSyncPrimaryStatus:                  s.SemiSyncPrimaryStatus,
+		SemiSyncReplicaStatus:                  s.SemiSyncReplicaStatus,
 	}
 	return replstatus
 }

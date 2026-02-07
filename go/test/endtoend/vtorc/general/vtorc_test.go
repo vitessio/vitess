@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtutils "vitess.io/vitess/go/vt/utils"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/logic"
 )
@@ -45,7 +46,7 @@ func TestPrimaryElection(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
-	}, 2, "")
+	}, map[string]int{cluster.DefaultCell: 2}, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -68,7 +69,7 @@ func TestPrimaryElection(t *testing.T) {
 // if it has an errant GTID.
 func TestErrantGTIDOnPreviousPrimary(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 3, 0, []string{"--change-tablets-with-errant-gtid-to-drained"}, cluster.VTOrcConfiguration{}, 1, "")
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 3, 0, []string{"--change-tablets-with-errant-gtid-to-drained"}, cluster.VTOrcConfiguration{}, cluster.DefaultVtorcsByCell, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -129,7 +130,7 @@ func TestSingleKeyspace(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 1, 1, []string{"--clusters_to_watch", "ks"}, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
-	}, 1, "")
+	}, cluster.DefaultVtorcsByCell, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -147,7 +148,7 @@ func TestKeyspaceShard(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 1, 1, []string{"--clusters_to_watch", "ks/0"}, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
-	}, 1, "")
+	}, cluster.DefaultVtorcsByCell, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -168,7 +169,7 @@ func TestVTOrcRepairs(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 3, 0, []string{"--change-tablets-with-errant-gtid-to-drained"}, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
-	}, 1, "")
+	}, cluster.DefaultVtorcsByCell, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -374,7 +375,7 @@ func TestRepairAfterTER(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 0, nil, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
-	}, 1, "")
+	}, cluster.DefaultVtorcsByCell, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -402,6 +403,76 @@ func TestRepairAfterTER(t *testing.T) {
 	utils.CheckReplication(t, clusterInfo, newPrimary, []*cluster.Vttablet{curPrimary}, 15*time.Second)
 }
 
+// TestStalePrimary tests that an old primary that remains writable and of tablet type PRIMARY in the topo
+// is properly demoted to a read-only replica by VTOrc.
+func TestStalePrimary(t *testing.T) {
+	ctx := t.Context()
+
+	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 4, 0, []string{"--topo-information-refresh-duration", "1s"}, cluster.VTOrcConfiguration{
+		PreventCrossCellFailover: true,
+	}, cluster.DefaultVtorcsByCell, policy.DurabilitySemiSync)
+	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+
+	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	assert.NotNil(t, curPrimary, "should have elected a primary")
+	utils.CheckPrimaryTablet(t, clusterInfo, curPrimary, true)
+
+	var badPrimary, healthyReplica *cluster.Vttablet
+	for _, tablet := range shard0.Vttablets {
+		if tablet.Alias == curPrimary.Alias {
+			continue
+		}
+
+		if badPrimary == nil {
+			badPrimary = tablet
+			continue
+		}
+
+		healthyReplica = tablet
+	}
+
+	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{badPrimary, healthyReplica}, 15*time.Second)
+
+	curPrimaryTopo, err := clusterInfo.Ts.GetTablet(ctx, curPrimary.GetAlias())
+	require.NoError(t, err, "expected to read current primary topo record")
+
+	curPrimaryTermStart := protoutil.TimeFromProto(curPrimaryTopo.PrimaryTermStartTime)
+	require.False(t, curPrimaryTermStart.IsZero(), "expected current primary term start time to be set")
+
+	err = utils.RunSQLs(t, []string{"SET GLOBAL read_only = OFF"}, badPrimary, "")
+	require.NoError(t, err)
+	require.True(t, utils.WaitForReadOnlyValue(t, badPrimary, 0))
+
+	// We set the tablet's type in the topology to PRIMARY. This mimics the situation where during a demotion
+	// in a hypothetical ERS, the old primary starts running as a replica, but fails before updating the topology
+	// accordingly.
+	_, err = clusterInfo.Ts.UpdateTabletFields(ctx, badPrimary.GetAlias(), func(tablet *topodatapb.Tablet) error {
+		tablet.Type = topodatapb.TabletType_PRIMARY
+		tablet.PrimaryTermStartTime = protoutil.TimeToProto(curPrimaryTermStart.Add(-1 * time.Minute))
+		return nil
+	})
+	require.NoError(t, err)
+
+	// Expect VTOrc to demote the stale primary to a read-only replica.
+	require.Eventuallyf(t, func() bool {
+		topoTablet, topoErr := clusterInfo.Ts.GetTablet(ctx, badPrimary.GetAlias())
+		if topoErr != nil {
+			t.Logf("stale primary probe: topo error=%v", topoErr)
+			return false
+		}
+
+		readOnly, readErr := badPrimary.VttabletProcess.GetDBVar("read_only", "")
+		if readErr != nil {
+			t.Logf("stale primary probe: alias=%s topo=%v read_only error=%v", badPrimary.Alias, topoTablet.Type, readErr)
+			return false
+		}
+
+		return topoTablet.Type == topodatapb.TabletType_REPLICA && readOnly == "ON"
+	}, 30*time.Second, time.Second, "expected demotion to REPLICA with read_only=ON")
+}
+
 // TestSemiSync tests that semi-sync is setup correctly by vtorc if it is incorrectly set
 func TestSemiSync(t *testing.T) {
 	// stop any vtorc instance running due to a previous test.
@@ -410,7 +481,7 @@ func TestSemiSync(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, newCluster.ClusterInstance)
 	utils.StartVTOrcs(t, newCluster, nil, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
-	}, 1)
+	}, cluster.DefaultVtorcsByCell)
 	defer func() {
 		utils.StopVTOrcs(t, newCluster)
 		newCluster.ClusterInstance.Teardown()
@@ -507,7 +578,7 @@ func TestVTOrcWithPrs(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 4, 0, nil, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
-	}, 1, "")
+	}, cluster.DefaultVtorcsByCell, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -555,7 +626,7 @@ func TestVTOrcWithPrs(t *testing.T) {
 func TestMultipleDurabilities(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	// Setup a normal cluster and start vtorc
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 1, 1, nil, cluster.VTOrcConfiguration{}, 1, "")
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 1, 1, nil, cluster.VTOrcConfiguration{}, cluster.DefaultVtorcsByCell, "")
 	// Setup a semi-sync cluster
 	utils.AddSemiSyncKeyspace(t, clusterInfo)
 
@@ -576,7 +647,7 @@ func TestDrainedTablet(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 
 	// Setup a normal cluster and start vtorc
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 0, nil, cluster.VTOrcConfiguration{}, 1, "")
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 0, nil, cluster.VTOrcConfiguration{}, cluster.DefaultVtorcsByCell, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -639,7 +710,7 @@ func TestDurabilityPolicySetLater(t *testing.T) {
 	// Now start the vtorc instances
 	utils.StartVTOrcs(t, newCluster, nil, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
-	}, 1)
+	}, cluster.DefaultVtorcsByCell)
 	defer func() {
 		utils.StopVTOrcs(t, newCluster)
 		newCluster.ClusterInstance.Teardown()
@@ -665,7 +736,7 @@ func TestFullStatusConnectionPooling(t *testing.T) {
 		vtutils.GetFlagVariantForTests("--tablet-manager-grpc-concurrency") + "=1",
 	}, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
-	}, 1, "")
+	}, cluster.DefaultVtorcsByCell, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	vtorc := clusterInfo.ClusterInstance.VTOrcProcesses[0]

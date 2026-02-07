@@ -69,7 +69,7 @@ func waitForLowLag(t *testing.T, clusterInstance *cluster.LocalProcessCluster, k
 
 func reshard02(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keyspaceName string, reads, writes buffer.QueryEngine) {
 	keyspace := &cluster.Keyspace{Name: keyspaceName}
-	err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false)
+	err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false, clusterInstance.Cell)
 	require.NoError(t, err)
 	workflowName := "buf2buf"
 

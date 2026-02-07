@@ -17,7 +17,6 @@ limitations under the License.
 package topotools
 
 import (
-	"context"
 	"math/rand/v2"
 	"strconv"
 	"sync"
@@ -29,8 +28,7 @@ import (
 
 // TestCreateShard tests a few cases for topo.CreateShard
 func TestCreateShard(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "test_cell")
 	defer ts.Close()
 
@@ -58,8 +56,7 @@ func TestCreateShard(t *testing.T) {
 // TODO(sougou): we should eventually disallow multiple shards
 // for unsharded keyspaces.
 func TestCreateShardMultiUnsharded(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "test_cell")
 	defer ts.Close()
 
@@ -100,20 +97,19 @@ func TestCreateShardMultiUnsharded(t *testing.T) {
 // for a long time in parallel, making sure the locking and everything
 // works correctly.
 func TestGetOrCreateShard(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "test_cell")
 	defer ts.Close()
 
 	// and do massive parallel GetOrCreateShard
 	keyspace := "test_keyspace"
 	wg := sync.WaitGroup{}
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
 
-			for j := 0; j < 100; j++ {
+			for range 100 {
 				index := rand.IntN(10)
 				shard := strconv.Itoa(index)
 				si, err := ts.GetOrCreateShard(ctx, keyspace, shard)

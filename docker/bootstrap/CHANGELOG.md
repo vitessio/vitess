@@ -195,3 +195,20 @@ List of changes between bootstrap image versions.
 ## [49] - 2025-10-14
 ### Changes
 - Update build to golang 1.25.3
+
+## [50] - 2026-01-19
+### Changes
+- Update build to golang 1.25.6
+
+## [51] - 2026-01-30
+### Changes
+- Upgrade Zookeeper to v3.9.4 (using prebuilt binaries)
+- Upgrade etcd to v3.6.7
+- Remove toxiproxy
+- Remove consul from bootstrap build
+- Remove chromium and xvfb (no longer needed after vtctld2 web tests removal)
+- Remove percona-telemetry-agent from Percona images (CVE-2025-22871)
+- Use default-jdk-headless instead of default-jdk (removes ~50 CVEs from GUI libs)
+- Add SHA256 checksum verification for downloaded tools
+- Exclude Go module cache from image
+- Remove Maven from base image (CVE-2024-47554)

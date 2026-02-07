@@ -392,34 +392,44 @@ Cleanup:
 func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error) {
 	// If the tablet is not replicating from anyone, then it could be the previous primary.
 	// We should check for errant GTIDs by finding the difference with the shard's current primary.
-	if instance.primaryExecutedGtidSet == "" && instance.SourceHost == "" {
-		var primaryInstance *Instance
-		primaryAlias, _, _ := ReadShardPrimaryInformation(tablet.Keyspace, tablet.Shard)
-		if primaryAlias != "" {
-			// Check if the current tablet is the primary.
-			// If it is, then we don't need to run errant gtid detection on it.
-			if primaryAlias == instance.InstanceAlias {
-				return nil
-			}
-			primaryInstance, _, _ = ReadInstance(primaryAlias)
-		}
-		// Only run errant GTID detection, if we are sure that the data read of the current primary
-		// is up-to-date enough to reflect that it has been promoted. This is needed to prevent
-		// flagging incorrect errant GTIDs. If we were to use old data, we could have some GTIDs
-		// accepted by the old primary (this tablet) that don't show in the new primary's set.
-		if primaryInstance != nil {
-			if primaryInstance.SourceHost == "" {
-				instance.primaryExecutedGtidSet = primaryInstance.ExecutedGtidSet
-			}
+	primaryAlias, _, err := ReadShardPrimaryInformation(tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		return fmt.Errorf("failed to read shard primary for %s/%s: %w", tablet.Keyspace, tablet.Shard, err)
+	}
+
+	// Check if the current tablet is the primary. If it is, then we don't need to
+	// run errant GTID detection on it.
+	if primaryAlias == instance.InstanceAlias {
+		return nil
+	}
+
+	var primaryInstance *Instance
+	if primaryAlias != "" {
+		primaryInstance, _, err = ReadInstance(primaryAlias)
+		if err != nil {
+			return fmt.Errorf("failed to read primary instance %q: %w", primaryAlias, err)
 		}
 	}
+
+	// Only run errant GTID detection if we are sure that the data read of the current primary
+	// is up-to-date enough to reflect that it has been promoted. This is needed to prevent
+	// flagging incorrect errant GTIDs. If we were to use old data, we could have some GTIDs
+	// accepted by the old primary (this tablet) that don't show in the new primary's set.
+	if primaryInstance != nil && primaryInstance.SourceHost == "" {
+		// If the instance has no replication source and no primary GTID set yet, or if the instance's replication
+		// source is not the primary, use the shard primary's executed GTID set for comparison.
+		if (instance.SourceHost == "" && instance.primaryExecutedGtidSet == "") || !sourceIsPrimary(instance, primaryInstance) {
+			instance.primaryExecutedGtidSet = primaryInstance.ExecutedGtidSet
+		}
+	}
+
 	if instance.ExecutedGtidSet != "" && instance.primaryExecutedGtidSet != "" {
 		// Compare primary & replica GTID sets, but ignore the sets that present the primary's UUID.
 		// This is because vtorc may pool primary and replica at an inconvenient timing,
 		// such that the replica may _seems_ to have more entries than the primary, when in fact
 		// it's just that the primary's probing is stale.
 		redactedExecutedGtidSet, _ := replication.ParseMysql56GTIDSet(instance.ExecutedGtidSet)
-		for _, uuid := range strings.Split(instance.AncestryUUID, ",") {
+		for uuid := range strings.SplitSeq(instance.AncestryUUID, ",") {
 			uuidSID, err := replication.ParseSID(uuid)
 			if err != nil {
 				continue
@@ -448,6 +458,19 @@ func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error
 		}
 	}
 	return err
+}
+
+// sourceIsPrimary returns true if the instance's replication source is the given primary.
+func sourceIsPrimary(instance *Instance, primaryInstance *Instance) bool {
+	if instance.SourceHost == "" {
+		return false
+	}
+
+	if instance.SourceUUID != "" && primaryInstance.ServerUUID != "" {
+		return instance.SourceUUID == primaryInstance.ServerUUID
+	}
+
+	return instance.SourceHost == primaryInstance.Hostname && instance.SourcePort == primaryInstance.Port
 }
 
 // getKeyspaceShardName returns a single string having both the keyspace and shard
@@ -1172,10 +1195,7 @@ func SnapshotTopologies() error {
 }
 
 func ExpireStaleInstanceBinlogCoordinates() error {
-	expireSeconds := config.GetReasonableReplicationLagSeconds() * 2
-	if expireSeconds < config.StaleInstanceCoordinatesExpireSeconds {
-		expireSeconds = config.StaleInstanceCoordinatesExpireSeconds
-	}
+	expireSeconds := max(config.GetReasonableReplicationLagSeconds()*2, config.StaleInstanceCoordinatesExpireSeconds)
 	writeFunc := func() error {
 		_, err := db.ExecVTOrc(`DELETE
 			FROM database_instance_stale_binlog_coordinates

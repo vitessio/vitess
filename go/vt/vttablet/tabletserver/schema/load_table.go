@@ -74,8 +74,8 @@ func loadMessageInfo(ta *Table, comment string, collationEnv *collations.Environ
 	ta.MessageInfo = &MessageInfo{}
 	// Extract keyvalues.
 	keyvals := make(map[string]string)
-	inputs := strings.Split(comment, ",")
-	for _, input := range inputs {
+	inputs := strings.SplitSeq(comment, ",")
+	for input := range inputs {
 		kv := strings.Split(input, "=")
 		if len(kv) != 2 {
 			continue

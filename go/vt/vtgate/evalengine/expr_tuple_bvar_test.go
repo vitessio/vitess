@@ -71,7 +71,8 @@ func TestTupleBindVarEval(t *testing.T) {
 		expEval: []eval{
 			newEvalText([]byte("a"), collation),
 			newEvalText([]byte("b"), collation),
-			newEvalText([]byte("c"), collation)},
+			newEvalText([]byte("c"), collation),
+		},
 	}}
 
 	for _, tcase := range tcases {

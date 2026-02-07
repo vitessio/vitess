@@ -23,9 +23,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -978,4 +981,122 @@ func TestHasNonLiteralForeignKeyUpdate(t *testing.T) {
 			require.EqualValues(t, tt.hasNonLiteral, got)
 		})
 	}
+}
+
+func TestCopySemanticInfoNonColName(t *testing.T) {
+	t.Run("copies no semantic information when the source has no semantic information", func(t *testing.T) {
+		parser := sqlparser.NewTestParser()
+
+		col, err := parser.ParseExpr("id")
+		require.NoError(t, err)
+
+		from, err := parser.ParseExpr("lower(id)")
+		require.NoError(t, err)
+
+		to, err := parser.ParseExpr("upper(id)")
+		require.NoError(t, err)
+
+		semTable := EmptySemTable()
+		tableSet := SingleTableSet(0)
+
+		semTable.Recursive[col] = tableSet
+		semTable.Direct[col] = tableSet
+		semTable.ExprTypes[col] = evalengine.NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)
+
+		semTable.CopySemanticInfo(from, to)
+
+		require.NotContains(t, semTable.ExprTypes, to)
+		require.NotContains(t, semTable.Recursive, to)
+		require.NotContains(t, semTable.Direct, to)
+	})
+
+	t.Run("copies only the expression type when the source has semantic information", func(t *testing.T) {
+		parser := sqlparser.NewTestParser()
+
+		col, err := parser.ParseExpr("id")
+		require.NoError(t, err)
+
+		from, err := parser.ParseExpr("lower(id)")
+		require.NoError(t, err)
+
+		to, err := parser.ParseExpr("upper(id)")
+		require.NoError(t, err)
+
+		semTable := EmptySemTable()
+		tableSet := SingleTableSet(0)
+
+		semTable.Recursive[col] = tableSet
+		semTable.Direct[col] = tableSet
+		semTable.ExprTypes[col] = evalengine.NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)
+
+		semTable.Recursive[from] = tableSet
+		semTable.Direct[from] = tableSet
+		semTable.ExprTypes[from] = evalengine.NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)
+
+		semTable.CopySemanticInfo(from, to)
+
+		require.Contains(t, semTable.ExprTypes, to)
+		require.Equal(t, semTable.ExprTypes[from], semTable.ExprTypes[to])
+		require.NotContains(t, semTable.Recursive, to)
+		require.NotContains(t, semTable.Direct, to)
+	})
+}
+
+func TestCopySemanticInfoIntoColName(t *testing.T) {
+	t.Run("copies all semantic information when the source has semantic information", func(t *testing.T) {
+		parser := sqlparser.NewTestParser()
+
+		col, err := parser.ParseExpr("id")
+		require.NoError(t, err)
+
+		from, err := parser.ParseExpr("lower(id)")
+		require.NoError(t, err)
+
+		to, err := parser.ParseExpr("derived.id")
+		require.NoError(t, err)
+
+		semTable := EmptySemTable()
+		tableSet := SingleTableSet(0)
+
+		semTable.Recursive[col] = tableSet
+		semTable.Direct[col] = tableSet
+		semTable.ExprTypes[col] = evalengine.NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)
+
+		semTable.Recursive[from] = tableSet
+		semTable.Direct[from] = tableSet
+		semTable.ExprTypes[from] = evalengine.NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)
+
+		semTable.CopySemanticInfo(from, to)
+
+		require.Contains(t, semTable.ExprTypes, to)
+		require.Contains(t, semTable.Recursive, to)
+		require.Contains(t, semTable.Direct, to)
+	})
+
+	t.Run("does not copy semantic information when the source has no semantic information", func(t *testing.T) {
+		parser := sqlparser.NewTestParser()
+
+		col, err := parser.ParseExpr("id")
+		require.NoError(t, err)
+
+		from, err := parser.ParseExpr("lower(id)")
+		require.NoError(t, err)
+
+		to, err := parser.ParseExpr("derived.id")
+		require.NoError(t, err)
+
+		semTable := EmptySemTable()
+
+		tableSet := SingleTableSet(0)
+
+		semTable.Recursive[col] = tableSet
+		semTable.Direct[col] = tableSet
+		semTable.ExprTypes[col] = evalengine.NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)
+
+		semTable.CopySemanticInfo(from, to)
+
+		require.NotContains(t, semTable.ExprTypes, to)
+		require.NotContains(t, semTable.Recursive, to)
+		require.NotContains(t, semTable.Direct, to)
+	})
 }

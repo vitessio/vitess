@@ -655,7 +655,8 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 				return vschema
 			},
 			errWanted: "",
-		}, {
+		},
+		{
 			name: "Self-referencing foreign key with delete cascade",
 			getVschema: func() *vindexes.VSchema {
 				vschema := &vindexes.VSchema{
@@ -683,7 +684,8 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 				return vschema
 			},
 			errWanted: "VT09019: keyspace 'ks' has cyclic foreign keys. Cycle exists between [ks.t1.id ks.t1.id]",
-		}, {
+		},
+		{
 			name: "Self-referencing foreign key without delete cascade",
 			getVschema: func() *vindexes.VSchema {
 				vschema := &vindexes.VSchema{
@@ -711,7 +713,8 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 				return vschema
 			},
 			errWanted: "",
-		}, {
+		},
+		{
 			name: "Has an indirect cycle because of cascades",
 			getVschema: func() *vindexes.VSchema {
 				vschema := &vindexes.VSchema{
@@ -758,7 +761,8 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 				return vschema
 			},
 			errWanted: "VT09019: keyspace 'ks' has cyclic foreign keys",
-		}, {
+		},
+		{
 			name: "Cycle part of a multi-column foreign key",
 			getVschema: func() *vindexes.VSchema {
 				vschema := &vindexes.VSchema{

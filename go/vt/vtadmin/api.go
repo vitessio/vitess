@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"math"
 	"net/http"
 	"net/http/pprof"
@@ -1381,16 +1382,13 @@ func (api *API) GetSrvKeyspaces(ctx context.Context, req *vtadminpb.GetSrvKeyspa
 			defer span.Finish()
 
 			sk, err := c.GetSrvKeyspaces(ctx, req.Cells)
-
 			if err != nil {
 				er.RecordError(err)
 				return
 			}
 
 			m.Lock()
-			for key, value := range sk {
-				sks[key] = value
-			}
+			maps.Copy(sks, sk)
 			m.Unlock()
 		}(c)
 	}
@@ -1451,7 +1449,6 @@ func (api *API) GetSrvVSchemas(ctx context.Context, req *vtadminpb.GetSrvVSchema
 			defer wg.Done()
 
 			s, err := c.GetSrvVSchemas(ctx, req.Cells)
-
 			if err != nil {
 				er.RecordError(err)
 				return
@@ -2129,7 +2126,6 @@ func (api *API) PingTablet(ctx context.Context, req *vtadminpb.PingTabletRequest
 	_, err = c.Vtctld.PingTablet(ctx, &vtctldatapb.PingTabletRequest{
 		TabletAlias: tablet.Tablet.Alias,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -2176,7 +2172,6 @@ func (api *API) RebuildKeyspaceGraph(ctx context.Context, req *vtadminpb.Rebuild
 		AllowPartial: req.AllowPartial,
 		Cells:        req.Cells,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -2285,7 +2280,6 @@ func (api *API) RemoveKeyspaceCell(ctx context.Context, req *vtadminpb.RemoveKey
 		Force:     req.Force,
 		Recursive: req.Recursive,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -2301,7 +2295,6 @@ func (api *API) ReloadSchemaShard(ctx context.Context, req *vtadminpb.ReloadSche
 	defer span.Finish()
 
 	c, err := api.getClusterForRequest(req.ClusterId)
-
 	if err != nil {
 		return nil, err
 	}
@@ -2311,7 +2304,6 @@ func (api *API) ReloadSchemaShard(ctx context.Context, req *vtadminpb.ReloadSche
 		IncludePrimary: req.IncludePrimary,
 		Concurrency:    req.Concurrency,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -2355,7 +2347,6 @@ func (api *API) RunHealthCheck(ctx context.Context, req *vtadminpb.RunHealthChec
 	_, err = c.Vtctld.RunHealthCheck(ctx, &vtctldatapb.RunHealthCheckRequest{
 		TabletAlias: tablet.Tablet.Alias,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -2480,7 +2471,6 @@ func (api *API) Validate(ctx context.Context, req *vtadminpb.ValidateRequest) (*
 	res, err := c.Vtctld.Validate(ctx, &vtctldatapb.ValidateRequest{
 		PingTablets: req.PingTablets,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -2506,7 +2496,6 @@ func (api *API) ValidateKeyspace(ctx context.Context, req *vtadminpb.ValidateKey
 		Keyspace:    req.Keyspace,
 		PingTablets: req.PingTablets,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -2531,7 +2520,6 @@ func (api *API) ValidateSchemaKeyspace(ctx context.Context, req *vtadminpb.Valid
 	res, err := c.Vtctld.ValidateSchemaKeyspace(ctx, &vtctldatapb.ValidateSchemaKeyspaceRequest{
 		Keyspace: req.Keyspace,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -2558,7 +2546,6 @@ func (api *API) ValidateShard(ctx context.Context, req *vtadminpb.ValidateShardR
 		Shard:       req.Shard,
 		PingTablets: req.PingTablets,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -2583,7 +2570,6 @@ func (api *API) ValidateVersionKeyspace(ctx context.Context, req *vtadminpb.Vali
 	res, err := c.Vtctld.ValidateVersionKeyspace(ctx, &vtctldatapb.ValidateVersionKeyspaceRequest{
 		Keyspace: req.Keyspace,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -2609,7 +2595,6 @@ func (api *API) ValidateVersionShard(ctx context.Context, req *vtadminpb.Validat
 		Keyspace: req.Keyspace,
 		Shard:    req.Shard,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -2665,7 +2650,6 @@ func (api *API) VExplain(ctx context.Context, req *vtadminpb.VExplainRequest) (*
 	// Canonicalize the SQL using the AST, to prevent use of raw user input.
 	canonicalQuery := sqlparser.String(vexplainStmt)
 	response, err := c.DB.VExplain(ctx, canonicalQuery, vexplainStmt)
-
 	if err != nil {
 		return nil, err
 	}
@@ -2771,7 +2755,6 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 		res, err := c.Vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{
 			Cell: tablet.Tablet.Alias.Cell,
 		})
-
 		if err != nil {
 			er.RecordError(fmt.Errorf("GetSrvVSchema(%s): %w", tablet.Tablet.Alias.Cell, err))
 			return

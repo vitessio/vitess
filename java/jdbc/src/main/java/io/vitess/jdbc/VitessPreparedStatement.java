@@ -23,7 +23,6 @@ import io.vitess.client.cursor.CursorWithError;
 import io.vitess.mysql.DateTime;
 import io.vitess.util.Constants;
 import io.vitess.util.StringUtils;
-
 import java.io.InputStream;
 import java.io.Reader;
 import java.math.BigDecimal;

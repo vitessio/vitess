@@ -48,7 +48,7 @@ func TestOnlineDDLVDiff(t *testing.T) {
 	var output string
 
 	t.Run("OnlineDDL VDiff", func(t *testing.T) {
-		var done = make(chan bool)
+		done := make(chan bool)
 		go populate(ctx, t, done, insertTemplate, updateTemplate)
 
 		waitForAdditionalRows(t, keyspace, "temp", 100)

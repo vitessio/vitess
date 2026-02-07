@@ -94,7 +94,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestDropAndRecreateWithSameShards(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := vtgateconn.Dial(ctx, grpcAddress)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -139,8 +139,8 @@ func assertTabletsPresent(t *testing.T) {
 	require.Nil(t, err)
 
 	numPrimary, numReplica, numRdonly, numDash80, num80Dash := 0, 0, 0, 0, 0
-	lines := strings.Split(string(output), "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(string(output), "\n")
+	for line := range lines {
 		if !strings.HasPrefix(line, "test-") {
 			continue
 		}

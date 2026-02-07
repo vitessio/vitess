@@ -18,7 +18,6 @@ package io.vitess.util;
 
 import io.vitess.client.Context;
 import io.vitess.proto.Vtrpc;
-
 import org.joda.time.Duration;
 
 /**

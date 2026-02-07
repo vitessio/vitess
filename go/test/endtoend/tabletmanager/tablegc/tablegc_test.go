@@ -115,7 +115,7 @@ func TestMain(m *testing.M) {
 			VSchema:   vSchema,
 		}
 
-		if err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {
+		if err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false, clusterInstance.Cell); err != nil {
 			return 1
 		}
 
@@ -155,7 +155,7 @@ func populateTable(t *testing.T) {
 	require.NoError(t, err)
 	_, err = primaryTablet.VttabletProcess.QueryTablet("insert into t1 (id, value) values (null, md5(rand()))", keyspaceName, true)
 	require.NoError(t, err)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		_, err = primaryTablet.VttabletProcess.QueryTablet("insert into t1 (id, value) select null, md5(rand()) from t1", keyspaceName, true)
 		require.NoError(t, err)
 	}
@@ -276,7 +276,6 @@ func validateAnyState(t *testing.T, expectNumRows int64, states ...schema.TableG
 					// Now that the table is validated, we can drop it (test cleanup)
 					dropTable(t, tableName)
 				}
-				t.Logf("=== exists: %v, tableName: %v, rows: %v", exists, tableName, foundRows)
 				if exists == expectTableToExist {
 					// expectNumRows < 0 means "don't care"
 					if expectNumRows < 0 || (expectNumRows == foundRows) {

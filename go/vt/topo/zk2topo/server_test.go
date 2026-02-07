@@ -40,8 +40,7 @@ func TestZk2Topo(t *testing.T) {
 
 	// Run the test suite.
 	testIndex := 0
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	test.TopoServerTestSuite(t, ctx, func() *topo.Server {
 		// Each test will use its own sub-directories.
 		// The directories will be created when used the first time.

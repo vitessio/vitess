@@ -62,10 +62,8 @@ func TestMycnf(t *testing.T) {
 	// and ends up succeeding in reading the my.cnf file.
 	waitTime := 1 * time.Second
 	wg := sync.WaitGroup{}
-	wg.Add(1)
 
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		startTime := time.Now()
 		var readErr error
 		mycnf, readErr = ReadMycnf(mycnf, 1*time.Minute)
@@ -73,10 +71,10 @@ func TestMycnf(t *testing.T) {
 		t.Logf("socket file %v", mycnf.SocketFile)
 		totalTimeSpent := time.Since(startTime)
 		require.GreaterOrEqual(t, totalTimeSpent, waitTime)
-	}()
+	})
 
 	time.Sleep(waitTime)
-	err = os.WriteFile(MycnfPath, []byte(data), 0666)
+	err = os.WriteFile(MycnfPath, []byte(data), 0o666)
 	require.NoError(t, err, "failed creating my.cnf")
 	_, err = os.ReadFile(MycnfPath)
 	require.NoError(t, err, "failed reading")

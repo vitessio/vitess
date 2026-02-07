@@ -18,7 +18,7 @@ package main
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 
 	"vitess.io/vitess/go/mysql/collations/internal/uca"
 	"vitess.io/vitess/go/mysql/collations/tools/makecolldata/codegen"
@@ -28,9 +28,7 @@ func sortContractionTrie(trie map[rune][]uca.Contraction) (sorted []rune) {
 	for cp := range trie {
 		sorted = append(sorted, cp)
 	}
-	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i] < sorted[j]
-	})
+	slices.Sort(sorted)
 	return
 }
 
@@ -105,7 +103,7 @@ func (g *TableGenerator) printFastContractionsCtx(name string, allContractions [
 	g.P("return nil, nil, 0")
 	g.P("}")
 
-	var mapping = make(map[uint32][]uint16)
+	mapping := make(map[uint32][]uint16)
 	var cp0min, cp1min rune = 0xFFFF, 0xFFFF
 	for _, cp1 := range sortContractionTrie(trie) {
 		for _, cnt := range trie[cp1] {
@@ -163,7 +161,7 @@ func (g *TableGenerator) printContractionsFast(name string, allContractions []uc
 		return
 	}
 
-	var wa = &weightarray{name: name + "_weights"}
+	wa := &weightarray{name: name + "_weights"}
 
 	g.P("func (", name, ") Find(cs ", PkgCharset, ".Charset, cp0 rune, b0 []byte) ([]uint16, []byte, int) {")
 	printContraction1(g.Generator, wa, allContractions, 0)

@@ -33,9 +33,7 @@ type PromBackend struct {
 	namespace string
 }
 
-var (
-	be PromBackend
-)
+var be PromBackend
 
 // Init initializes the Prometheus be with the given namespace.
 func Init(namespace string) {

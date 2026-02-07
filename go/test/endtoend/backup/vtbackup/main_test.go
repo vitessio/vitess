@@ -49,7 +49,8 @@ var (
 		vtutils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
 		vtutils.GetFlagVariantForTests("--watch-replication-stream"),
 		vtutils.GetFlagVariantForTests("--enable-replication-reporter"),
-		vtutils.GetFlagVariantForTests("--serving-state-grace-period"), "1s"}
+		vtutils.GetFlagVariantForTests("--serving-state-grace-period"), "1s",
+	}
 )
 
 func TestMain(m *testing.M) {
@@ -95,7 +96,7 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
-		err = os.WriteFile(newInitDBFile, []byte(sql), 0666)
+		err = os.WriteFile(newInitDBFile, []byte(sql), 0o666)
 		if err != nil {
 			return 1, err
 		}
@@ -140,7 +141,7 @@ func TestMain(m *testing.M) {
 			// Running VTOrc and replication manager sometimes creates the situation where VTOrc has set up semi-sync on the primary,
 			// but the replication manager starts replication on the replica without setting semi-sync. This hangs the primary.
 			// Even if VTOrc fixes it, since there is no ongoing traffic, the state remains blocked.
-			if err := localCluster.StartVTOrc(keyspaceName); err != nil {
+			if err := localCluster.StartVTOrc(cell, keyspaceName); err != nil {
 				return 1, err
 			}
 		}

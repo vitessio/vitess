@@ -387,7 +387,8 @@ func (txc *TxConn) errActionAndLogWarn(
 
 	session.RecordWarning(&querypb.QueryWarning{
 		Code:    uint32(sqlerror.ERInAtomicRecovery),
-		Message: createWarningMessage(dtid, txPhase)})
+		Message: createWarningMessage(dtid, txPhase),
+	})
 }
 
 func createWarningMessage(dtid string, txPhase commitPhase) string {

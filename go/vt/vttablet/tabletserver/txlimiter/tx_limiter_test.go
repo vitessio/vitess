@@ -50,7 +50,7 @@ func TestTxLimiter_DisabledAllowsAll(t *testing.T) {
 	cfg.TransactionLimitBySubcomponent = false
 	limiter := New(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"))
 	im, ef := createCallers("", "", "", "")
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if got, want := limiter.Get(im, ef), true; got != want {
 			t.Errorf("Transaction number %d, Get(): got %v, want %v", i, got, want)
 		}
@@ -79,7 +79,7 @@ func TestTxLimiter_LimitsOnlyOffendingUser(t *testing.T) {
 	im2, ef2 := createCallers("user2", "", "", "")
 
 	// user1 uses 3 slots
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if got, want := limiter.Get(im1, ef1), true; got != want {
 			t.Errorf("Transaction number %d, Get(im1, ef1): got %v, want %v", i, got, want)
 		}
@@ -96,7 +96,7 @@ func TestTxLimiter_LimitsOnlyOffendingUser(t *testing.T) {
 	}
 
 	// user2 uses 3 slots
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if got, want := limiter.Get(im2, ef2), true; got != want {
 			t.Errorf("Transaction number %d, Get(im2, ef2): got %v, want %v", i, got, want)
 		}
@@ -145,7 +145,7 @@ func TestTxLimiterDryRun(t *testing.T) {
 	key := limiter.extractKey(im, ef)
 
 	// uses 3 slots
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if got, want := limiter.Get(im, ef), true; got != want {
 			t.Errorf("Transaction number %d, Get(im, ef): got %v, want %v", i, got, want)
 		}

@@ -30,7 +30,7 @@ func TestRemoteWildcardMatches(t *testing.T) {
 	conn := mysqlconn(t)
 	defer conn.Close()
 
-	var cases = []struct {
+	cases := []struct {
 		in, pat string
 	}{
 		{"abc", "abc"},
@@ -81,9 +81,9 @@ func TestRemoteWildcardMatches(t *testing.T) {
 
 	for _, local := range colldata.All(collations.MySQL8()) {
 		t.Run(local.Name(), func(t *testing.T) {
-			var remote = remote.NewCollation(conn, local.Name())
+			remote := remote.NewCollation(conn, local.Name())
 			var err error
-			var chEscape = '\\'
+			chEscape := '\\'
 
 			if !charset.IsBackslashSafe(local.Charset()) {
 				chEscape = '/'

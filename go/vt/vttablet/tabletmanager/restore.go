@@ -18,7 +18,6 @@ package tabletmanager
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -52,9 +51,10 @@ var (
 	restoreFromBackupTsStr          string
 	restoreConcurrency              = 4
 	waitForBackupInterval           time.Duration
+	restoreWithClone                bool
 
-	statsRestoreBackupTime     *stats.String
-	statsRestoreBackupPosition *stats.String
+	statsRestoreBackupTime *stats.String
+	statsRestoreBackup     *stats.String
 )
 
 func registerRestoreFlags(fs *pflag.FlagSet) {
@@ -63,6 +63,7 @@ func registerRestoreFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &restoreFromBackupTsStr, "restore-from-backup-ts", restoreFromBackupTsStr, "(init restore parameter) if set, restore the latest backup taken at or before this timestamp. Example: '2021-04-29.133050'")
 	utils.SetFlagIntVar(fs, &restoreConcurrency, "restore-concurrency", restoreConcurrency, "(init restore parameter) how many concurrent files to restore at once")
 	utils.SetFlagDurationVar(fs, &waitForBackupInterval, "wait-for-backup-interval", waitForBackupInterval, "(init restore parameter) if this is greater than 0, instead of starting up empty when no backups are found, keep checking at this interval for a backup to appear")
+	utils.SetFlagBoolVar(fs, &restoreWithClone, "restore-with-clone", restoreWithClone, "(init restore parameter) will restore from a clone, requires either --clone-from-primary or --clone-from-tablet, mutually exclusive with --restore-from-backup")
 }
 
 var (
@@ -84,14 +85,13 @@ func init() {
 	servenv.OnParseFor("vttablet", registerIncrementalRestoreFlags)
 
 	statsRestoreBackupTime = stats.NewString("RestoredBackupTime")
-	statsRestoreBackupPosition = stats.NewString("RestorePosition")
+	statsRestoreBackup = stats.NewString("RestorePosition")
 }
 
-// RestoreData is the main entry point for backup restore.
-// It will either work, fail gracefully, or return
-// an error in case of a non-recoverable error.
+// RestoreBackup is the main entry point for backup restore. It will either
+// work, fail gracefully, or return an error in case of a non-recoverable error.
 // It takes the action lock so no RPC interferes.
-func (tm *TabletManager) RestoreData(
+func (tm *TabletManager) RestoreBackup(
 	ctx context.Context,
 	logger logutil.Logger,
 	waitForBackupInterval time.Duration,
@@ -100,14 +100,12 @@ func (tm *TabletManager) RestoreData(
 	restoreToTimetamp time.Time,
 	restoreToPos string,
 	allowedBackupEngines []string,
-	mysqlShutdownTimeout time.Duration) error {
+	mysqlShutdownTimeout time.Duration,
+) error {
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
 	defer tm.unlock()
-	if tm.Cnf == nil {
-		return errors.New("cannot perform restore without my.cnf, please restart vttablet with a my.cnf file specified")
-	}
 
 	var (
 		err       error
@@ -115,31 +113,7 @@ func (tm *TabletManager) RestoreData(
 	)
 
 	defer func() {
-		stopTime := time.Now()
-
-		h := hook.NewSimpleHook("vttablet_restore_done")
-		h.ExtraEnv = tm.hookExtraEnv()
-		h.ExtraEnv["TM_RESTORE_DATA_START_TS"] = startTime.UTC().Format(time.RFC3339)
-		h.ExtraEnv["TM_RESTORE_DATA_STOP_TS"] = stopTime.UTC().Format(time.RFC3339)
-		h.ExtraEnv["TM_RESTORE_DATA_DURATION"] = stopTime.Sub(startTime).String()
-
-		if err != nil {
-			h.ExtraEnv["TM_RESTORE_DATA_ERROR"] = err.Error()
-		}
-
-		// vttablet_restore_done is best-effort (for now?).
-		go func() {
-			// Package vthook already logs the stdout/stderr of hooks when they
-			// are run, so we don't duplicate that here.
-			hr := h.Execute()
-			switch hr.ExitStatus {
-			case hook.HOOK_SUCCESS:
-			case hook.HOOK_DOES_NOT_EXIST:
-				log.Info("No vttablet_restore_done hook.")
-			default:
-				log.Warning("vttablet_restore_done hook failed")
-			}
-		}()
+		tm.invokeRestoreDoneHook(startTime, err)
 	}()
 
 	startTime = time.Now()
@@ -150,16 +124,16 @@ func (tm *TabletManager) RestoreData(
 		RestoreToTimestamp:   protoutil.TimeToProto(restoreToTimetamp),
 		AllowedBackupEngines: allowedBackupEngines,
 	}
-	err = tm.restoreDataLocked(ctx, logger, waitForBackupInterval, deleteBeforeRestore, req, mysqlShutdownTimeout)
+	err = tm.restoreBackupLocked(ctx, logger, waitForBackupInterval, deleteBeforeRestore, req, mysqlShutdownTimeout)
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
-func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool, request *tabletmanagerdatapb.RestoreFromBackupRequest, mysqlShutdownTimeout time.Duration) error {
+func (tm *TabletManager) restoreBackupLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool, request *tabletmanagerdatapb.RestoreFromBackupRequest, mysqlShutdownTimeout time.Duration) error {
 	tablet := tm.Tablet()
-	originalType := tablet.Type
 	// Try to restore. Depending on the reason for failure, we may be ok.
 	// If we're not ok, return an error and the tm will log.Fatalf,
 	// causing the process to be restarted and the restore retried.
@@ -177,7 +151,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 			return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, fmt.Sprintf("snapshot keyspace %v has no base_keyspace set", tablet.Keyspace))
 		}
 		keyspace = keyspaceInfo.BaseKeyspace
-		log.Infof("Using base_keyspace %v to restore keyspace %v using a backup time of %v", keyspace, tablet.Keyspace, protoutil.TimeFromProto(request.BackupTime).UTC())
+		logger.Infof("Using base_keyspace %v to restore keyspace %v using a backup time of %v", keyspace, tablet.Keyspace, protoutil.TimeFromProto(request.BackupTime).UTC())
 	}
 
 	startTime := protoutil.TimeFromProto(request.BackupTime).UTC()
@@ -216,35 +190,27 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		// Restore to given timestamp
 		params.RestoreToTimestamp = restoreToTimestamp
 	}
-	params.Logger.Infof("Restore: original tablet type=%v", originalType)
 
-	// Check whether we're going to restore before changing to RESTORE type,
-	// so we keep our PrimaryTermStartTime (if any) if we aren't actually restoring.
-	ok, err := mysqlctl.ShouldRestore(ctx, params)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		params.Logger.Infof("Attempting to restore, but mysqld already contains data. Assuming vttablet was just restarted.")
+	rsm := tm.newRestoreStateManager(logger, deleteBeforeRestore)
+
+	if ok, err := rsm.start(ctx); !ok || err != nil {
+		if err != nil {
+			return vterrors.Wrap(err, "failed to start restore")
+		}
+		// Restore cannot be started for a benign reason, e.g. mysqld already
+		// has data.
 		return nil
 	}
-	// We should not become primary after restore, because that would incorrectly
-	// start a new primary term, and it's likely our data dir will be out of date.
-	if originalType == topodatapb.TabletType_PRIMARY {
-		originalType = tm.baseTabletType
-	}
-	if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_RESTORE, DBActionNone); err != nil {
-		return err
-	}
+
 	// Loop until a backup exists, unless we were told to give up immediately.
 	var backupManifest *mysqlctl.BackupManifest
 	for {
 		backupManifest, err = mysqlctl.Restore(ctx, params)
 		if backupManifest != nil {
-			statsRestoreBackupPosition.Set(replication.EncodePosition(backupManifest.Position))
+			statsRestoreBackup.Set(replication.EncodePosition(backupManifest.Position))
 			statsRestoreBackupTime.Set(backupManifest.BackupTime)
 		}
-		params.Logger.Infof("Restore: got a restore manifest: %v, err=%v, waitForBackupInterval=%v", backupManifest, err, waitForBackupInterval)
+		logger.Infof("Restore: got a restore manifest: %v, err=%v, waitForBackupInterval=%v", backupManifest, err, waitForBackupInterval)
 		if waitForBackupInterval == 0 {
 			break
 		}
@@ -264,8 +230,10 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	var pos replication.Position
 	if backupManifest != nil {
 		pos = backupManifest.Position
-		params.Logger.Infof("Restore: pos=%v", replication.EncodePosition(pos))
+		logger.Infof("Restore: pos=%v", replication.EncodePosition(pos))
 	}
+
+	var replCmd replicationCommand
 	switch {
 	case err == nil && backupManifest != nil:
 		// Starting from here we won't be able to recover if we get stopped by a cancelled
@@ -274,53 +242,97 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 			// The whole point of point-in-time recovery is that we want to restore up to a given position,
 			// and to NOT proceed from that position. We want to disable replication and NOT let the replica catch
 			// up with the primary.
-			params.Logger.Infof("Restore: disabling replication")
-			if err := tm.disableReplication(context.Background()); err != nil {
-				return err
-			}
+			replCmd.action = replicationActionDisable
 		} else if keyspaceInfo.KeyspaceType == topodatapb.KeyspaceType_NORMAL {
 			// Reconnect to primary only for "NORMAL" keyspaces
-			params.Logger.Infof("Restore: starting replication at position %v", pos)
-			if err := tm.startReplication(ctx, pos, originalType); err != nil {
-				return err
-			}
+			replCmd.action = replicationActionStart
+			replCmd.position = &pos
 		}
 	case err == mysqlctl.ErrNoBackup:
 		// Starting with empty database.
 		// We just need to initialize replication
-		_, err := tm.initializeReplication(ctx, originalType)
-		if err != nil {
-			return err
-		}
+		replCmd.action = replicationActionInitialize
 	case err == nil && params.DryRun:
 		// Do nothing here, let the rest of code run
-		params.Logger.Infof("Dry run. No changes made")
+		logger.Infof("Dry run. No changes made")
 	default:
-		bgCtx := context.Background()
-		// If anything failed, we should reset the original tablet type
-		if err := tm.tmState.ChangeTabletType(bgCtx, originalType, DBActionNone); err != nil {
-			log.Errorf("Could not change back to original tablet type %v: %v", originalType, err)
+		if err := rsm.abort(); err != nil {
+			logger.Errorf("Failed to abort restore: %v", err)
 		}
-		return vterrors.Wrap(err, "Can't restore backup")
+		return vterrors.Wrap(err, "can't restore backup")
 	}
 
-	// If we had type BACKUP or RESTORE it's better to set our type to the init-tablet-type to make result of the restore
-	// similar to completely clean start from scratch.
-	if (originalType == topodatapb.TabletType_BACKUP || originalType == topodatapb.TabletType_RESTORE) && initTabletType != "" {
-		initType, err := topoproto.ParseTabletType(initTabletType)
-		if err == nil {
-			originalType = initType
-		}
-	}
 	if params.IsIncrementalRecovery() && !params.DryRun {
 		// override
-		params.Logger.Infof("Restore: will set tablet type to DRAINED as this is a point in time recovery")
-		originalType = topodatapb.TabletType_DRAINED
+		logger.Infof("Restore: will set tablet type to DRAINED as this is a point in time recovery")
+		rsm.setNextTabletType(topodatapb.TabletType_DRAINED)
 	}
-	params.Logger.Infof("Restore: changing tablet type to %v for %s", originalType, tm.tabletAlias.String())
-	// Change type back to original type if we're ok to serve.
-	bgCtx := context.Background()
-	return tm.tmState.ChangeTabletType(bgCtx, originalType, DBActionNone)
+
+	if err := rsm.finish(ctx, replCmd); err != nil {
+		return vterrors.Wrap(err, "failed to finish restore")
+	}
+
+	return nil
+}
+
+func (tm *TabletManager) restoreFromClone(ctx context.Context, logger logutil.Logger, deleteBeforeRestore bool) error {
+	if err := tm.lock(ctx); err != nil {
+		return err
+	}
+	defer tm.unlock()
+
+	var (
+		err       error
+		startTime time.Time
+	)
+
+	defer func() {
+		tm.invokeRestoreDoneHook(startTime, err)
+	}()
+
+	startTime = time.Now()
+
+	err = tm.restoreFromCloneLocked(ctx, logger, deleteBeforeRestore)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (tm *TabletManager) restoreFromCloneLocked(
+	ctx context.Context,
+	logger logutil.Logger,
+	deleteBeforeRestore bool,
+) error {
+	rsm := tm.newRestoreStateManager(logger, deleteBeforeRestore)
+
+	if ok, err := rsm.start(ctx); !ok || err != nil {
+		if err != nil {
+			return vterrors.Wrap(err, "failed to start restore")
+		}
+		// Restore cannot be started for a benign reason, e.g. mysqld already
+		// has data.
+		return nil
+	}
+
+	tablet := tm.Tablet()
+	pos, err := mysqlctl.CloneFromDonor(ctx, tm.TopoServer, tm.MysqlDaemon, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		err = vterrors.Wrap(err, "failed to clone from donor")
+		if err := rsm.abort(); err != nil {
+			logger.Errorf("Failed to abort restore: %v", err)
+		}
+		return err
+	}
+
+	statsRestoreBackup.Set(replication.EncodePosition(pos))
+
+	if err := rsm.finish(ctx, replicationCommand{action: replicationActionStart, position: &pos}); err != nil {
+		return vterrors.Wrap(err, "failed to finish restore")
+	}
+
+	return nil
 }
 
 // disableReplication stops and resets replication on the mysql server. It moreover sets impossible replication
@@ -386,4 +398,212 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos replication.P
 	}
 
 	return nil
+}
+
+func (tm *TabletManager) invokeRestoreDoneHook(startTime time.Time, err error) {
+	stopTime := time.Now()
+
+	h := hook.NewSimpleHook("vttablet_restore_done")
+	h.ExtraEnv = tm.hookExtraEnv()
+	h.ExtraEnv["TM_RESTORE_DATA_START_TS"] = startTime.UTC().Format(time.RFC3339)
+	h.ExtraEnv["TM_RESTORE_DATA_STOP_TS"] = stopTime.UTC().Format(time.RFC3339)
+	h.ExtraEnv["TM_RESTORE_DATA_DURATION"] = stopTime.Sub(startTime).String()
+
+	if err != nil {
+		h.ExtraEnv["TM_RESTORE_DATA_ERROR"] = err.Error()
+	}
+
+	// vttablet_restore_done is best-effort (for now?).
+	go func() {
+		// Package vthook already logs the stdout/stderr of hooks when they
+		// are run, so we don't duplicate that here.
+		hr := h.Execute()
+		switch hr.ExitStatus {
+		case hook.HOOK_SUCCESS:
+		case hook.HOOK_DOES_NOT_EXIST:
+			log.Info("No vttablet_restore_done hook.")
+		default:
+			log.Warning("vttablet_restore_done hook failed")
+		}
+	}()
+}
+
+type replicationAction int
+
+const (
+	replicationActionNone replicationAction = iota
+	replicationActionDisable
+	replicationActionInitialize
+	replicationActionStart
+)
+
+// newRestoreStateManager returns a new restoreStateManager, used to perform
+// restore functionality that is common across restore methods.
+func (tm *TabletManager) newRestoreStateManager(logger logutil.Logger, deleteBeforeRestore bool) *restoreStateManager {
+	return &restoreStateManager{
+		deleteBeforeRestore: deleteBeforeRestore,
+		logger:              logger,
+		tm:                  tm,
+	}
+}
+
+// replicationCommand contains instructions for initializing, starting, or
+// disabling replication.
+type replicationCommand struct {
+	// action is the replication action to take.
+	action replicationAction
+	// position is used by the replicationActionStart action.
+	position *replication.Position
+}
+
+// restoreState represents the state of a restoreStateManager.
+type restoreState int
+
+const (
+	// restoreNotStarted is the initial state of a restore.
+	restoreNotStarted restoreState = iota
+	// restoreStarted is used to indicate a restore has started.
+	restoreStarted
+	// restoreDone is used to indicate a restore is either
+	// finished or aborted.
+	restoreDone
+)
+
+// restoreStateManager is used by restore methods (RestoreBackup, restoreClone)
+// to perform common routines, such as transitioning the tablet type to and from
+// RESTORE, and setting up replication.
+type restoreStateManager struct {
+	deleteBeforeRestore bool
+	logger              logutil.Logger
+	tm                  *TabletManager
+
+	state restoreState
+
+	prevTabletType topodatapb.TabletType
+	nextTabletType topodatapb.TabletType
+}
+
+// abort reverts the tablet type to its previous state.
+func (rt *restoreStateManager) abort() error {
+	if rt.state != restoreStarted {
+		return vterrors.New(vtrpcpb.Code_INTERNAL, "restore cannot be aborted in current state")
+	}
+
+	// Transition to previous tablet type.
+	if err := rt.tm.tmState.ChangeTabletType(context.Background(), rt.prevTabletType, DBActionNone); err != nil {
+		return vterrors.Wrapf(err, "failed to change tablet type to %q", topoproto.TabletTypeLString(rt.prevTabletType))
+	}
+
+	// Mark the state as done.
+	rt.state = restoreDone
+
+	return nil
+}
+
+// finish completes the restore by reverting the tablet type to its next state
+// (either previous state or a different state requested by setNextTabletType),
+// and performs the supplied replication command.
+func (rt *restoreStateManager) finish(ctx context.Context, replCmd replicationCommand) error {
+	if rt.state != restoreStarted {
+		return vterrors.New(vtrpcpb.Code_INTERNAL, "restore cannot be finished in current state")
+	}
+
+	// Perform replication command.
+	switch replCmd.action {
+	case replicationActionDisable:
+		rt.logger.Infof("Restore: disabling replication")
+		if err := rt.tm.disableReplication(context.Background()); err != nil {
+			return vterrors.Wrap(err, "failed to disable replication")
+		}
+	case replicationActionInitialize:
+		if _, err := rt.tm.initializeReplication(ctx, rt.prevTabletType); err != nil {
+			return vterrors.Wrap(err, "failed to initialize replication")
+		}
+	case replicationActionStart:
+		if replCmd.position == nil {
+			return vterrors.New(vtrpcpb.Code_INTERNAL, "cannot start replication with nil position")
+		}
+		rt.logger.Infof("Restore: starting replication at position %v", *replCmd.position)
+		if err := rt.tm.startReplication(ctx, *replCmd.position, rt.prevTabletType); err != nil {
+			return vterrors.Wrapf(err, "failed to start replication with position %q", replCmd.position.String())
+		}
+	}
+
+	// Transition to next tablet type.
+	if err := rt.tm.tmState.ChangeTabletType(context.Background(), rt.nextTabletType, DBActionNone); err != nil {
+		return vterrors.Wrapf(err, "failed to change tablet type to %q", topoproto.TabletTypeLString(rt.nextTabletType))
+	}
+
+	// Mark the state as done.
+	rt.state = restoreDone
+
+	return nil
+}
+
+// start the restore by changing the tablet type to RESTORE.
+//
+// Returns true with nil error if the tablet type is successfully changed to
+// RESTORE.
+//
+// Returns false with nil error if the restore cannot be restarted for a benign
+// reason, such as data already exists.
+//
+// Returns false with error if the restore cannot be started at this time (e.g.
+// failed to check if data already exists) or the tablet type could not be
+// changed to restore.
+func (rt *restoreStateManager) start(ctx context.Context) (bool, error) {
+	if rt.state != restoreNotStarted {
+		return false, vterrors.New(vtrpcpb.Code_INTERNAL, "restore cannot be started in current state")
+	}
+
+	if rt.tm.Cnf == nil {
+		return false, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "cannot perform restore without my.cnf, please restart vttablet with a my.cnf file specified")
+	}
+
+	// Check whether we're going to restore before changing to RESTORE type,
+	// so we keep our PrimaryTermStartTime (if any) if we aren't actually restoring.
+	ok, err := mysqlctl.ShouldRestore(ctx, rt.logger, rt.tm.Cnf, rt.tm.MysqlDaemon,
+		topoproto.TabletDbName(rt.tm.Tablet()), rt.deleteBeforeRestore)
+	if err != nil {
+		return false, vterrors.Wrap(err, "failed to check if should restore")
+	}
+	if !ok {
+		rt.logger.Infof("Attempting to restore, but mysqld already contains data. Assuming vttablet was just restarted.")
+		return false, nil
+	}
+
+	// Store previous tablet type so we can revert back to it later.
+	prevTabletType := rt.tm.Tablet().Type
+	// We should not become primary after restore, because that would incorrectly
+	// start a new primary term, and it's likely our data dir will be out of date.
+	if prevTabletType == topodatapb.TabletType_PRIMARY {
+		prevTabletType = rt.tm.baseTabletType
+	}
+	rt.prevTabletType = prevTabletType
+
+	// Prepare next tablet type to transition to from RESTORE state.
+	nextTabletType := prevTabletType
+	// If we had type BACKUP or RESTORE it's better to set our type to the init-tablet-type to make result of the restore
+	// similar to completely clean start from scratch.
+	if (prevTabletType == topodatapb.TabletType_BACKUP || prevTabletType == topodatapb.TabletType_RESTORE) && initTabletType != "" {
+		initType, err := topoproto.ParseTabletType(initTabletType)
+		if err == nil {
+			nextTabletType = initType
+		}
+	}
+	rt.nextTabletType = nextTabletType
+
+	// Transition to RESTORE state.
+	if err := rt.tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_RESTORE, DBActionNone); err != nil {
+		return false, err
+	}
+
+	// Mark the state as started.
+	rt.state = restoreStarted
+
+	return true, nil
+}
+
+func (rt *restoreStateManager) setNextTabletType(nextTabletType topodatapb.TabletType) {
+	rt.nextTabletType = nextTabletType
 }

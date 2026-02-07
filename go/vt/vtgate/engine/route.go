@@ -41,12 +41,10 @@ import (
 
 var _ Primitive = (*Route)(nil)
 
-var (
-	replicaWarmingReadsMirrored = stats.NewCountersWithMultiLabels(
-		"ReplicaWarmingReadsMirrored",
-		"Number of reads mirrored to replicas to warm their bufferpools",
-		[]string{"Keyspace"})
-)
+var replicaWarmingReadsMirrored = stats.NewCountersWithMultiLabels(
+	"ReplicaWarmingReadsMirrored",
+	"Number of reads mirrored to replicas to warm their bufferpools",
+	[]string{"Keyspace"})
 
 // Route represents the instructions to route a read query to
 // one or many vttablets.
@@ -106,9 +104,7 @@ func NewRoute(opcode Opcode, keyspace *vindexes.Keyspace, query, fieldQuery stri
 	}
 }
 
-var (
-	partialSuccessScatterQueries = stats.NewCounter("PartialSuccessScatterQueries", "Count of partially successful scatter queries")
-)
+var partialSuccessScatterQueries = stats.NewCounter("PartialSuccessScatterQueries", "Count of partially successful scatter queries")
 
 // TryExecute performs a non-streaming exec.
 func (route *Route) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
@@ -382,12 +378,14 @@ func (route *Route) description() PrimitiveDescription {
 	}
 	if len(route.SysTableTableSchema) != 0 {
 		sysTabSchema := "["
+		var sysTabSchemaSb378 strings.Builder
 		for idx, tableSchema := range route.SysTableTableSchema {
 			if idx != 0 {
-				sysTabSchema += ", "
+				sysTabSchemaSb378.WriteString(", ")
 			}
-			sysTabSchema += sqlparser.String(tableSchema)
+			sysTabSchemaSb378.WriteString(sqlparser.String(tableSchema))
 		}
+		sysTabSchema += sysTabSchemaSb378.String()
 		sysTabSchema += "]"
 		other["SysTableTableSchema"] = sysTabSchema
 	}

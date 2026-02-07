@@ -18,7 +18,7 @@ package io.vitess.jdbc;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
-import static org.mockito.Matchers.nullable;
+import static org.mockito.ArgumentMatchers.nullable;
 
 import com.google.common.collect.ImmutableMap;
 
@@ -54,7 +54,7 @@ import javax.sql.rowset.serial.SerialClob;
 
 import org.junit.Assert;
 import org.junit.Test;
-import org.mockito.Matchers;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 
 
@@ -673,8 +673,8 @@ public class VitessPreparedStatementTest {
     Mockito.when(mockConn.getAutoCommit()).thenReturn(true);
 
     SQLFuture mockSqlFutureCursor = Mockito.mock(SQLFuture.class);
-    Mockito.when(mockVtGateConn.executeBatch(nullable(Context.class), Matchers.anyList(), Matchers.anyList(),
-        nullable(VTSession.class))).thenReturn(mockSqlFutureCursor);
+    Mockito.when(mockVtGateConn.executeBatch(nullable(Context.class), ArgumentMatchers.anyList(),
+        ArgumentMatchers.anyList(), nullable(VTSession.class))).thenReturn(mockSqlFutureCursor);
 
     List<CursorWithError> mockCursorWithErrorList = new ArrayList<>();
     Mockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursorWithErrorList);

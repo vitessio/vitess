@@ -72,9 +72,11 @@ func TestQueryzHandler(t *testing.T) {
 	qe.plans.Set("", (*TabletPlan)(nil), 0, 0)
 
 	hugeInsert := "insert into test_table values 0"
+	var hugeInsertSb75 strings.Builder
 	for i := 1; i < 1000; i++ {
-		hugeInsert = hugeInsert + fmt.Sprintf(", %d", i)
+		hugeInsertSb75.WriteString(fmt.Sprintf(", %d", i))
 	}
+	hugeInsert += hugeInsertSb75.String()
 	plan4 := &TabletPlan{
 		Original: hugeInsert,
 		Plan: &planbuilder.Plan{

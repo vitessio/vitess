@@ -57,7 +57,7 @@ func setupCluster(t *testing.T) (*cluster.LocalProcessCluster, mysql.ConnParams)
 		Name:      keyspaceName,
 		SchemaSQL: schemaSQL,
 	}
-	err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false)
+	err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false, clusterInstance.Cell)
 	require.NoError(t, err)
 
 	// Start vtgate

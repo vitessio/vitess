@@ -346,8 +346,7 @@ func TestServerGetTabletsByCell(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			ts, factory := memorytopo.NewServerAndFactory(ctx, cell)
 			defer ts.Close()
@@ -417,8 +416,7 @@ func TestServerGetTabletsByCellPartialResults(t *testing.T) {
 	const keyspace = "keyspace"
 	const shard = "shard"
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ts, factory := memorytopo.NewServerAndFactory(ctx, cell)
 	defer ts.Close()
@@ -430,7 +428,7 @@ func TestServerGetTabletsByCellPartialResults(t *testing.T) {
 
 	tablets := make([]*topo.TabletInfo, 3)
 
-	for i := 0; i < len(tablets); i++ {
+	for i := range tablets {
 		tablet := &topodatapb.Tablet{
 			Alias: &topodatapb.TabletAlias{
 				Cell: cell,

@@ -30,14 +30,16 @@ import (
 	"vitess.io/vitess/go/mysql/icuregex/internal/utrie"
 )
 
-var ubidiOnce sync.Once
-var ubidi struct {
-	indexes []int32
-	trie    *utrie.UTrie2
-	mirrors []uint32
-	jg      []uint8
-	jg2     []uint8
-}
+var (
+	ubidiOnce sync.Once
+	ubidi     struct {
+		indexes []int32
+		trie    *utrie.UTrie2
+		mirrors []uint32
+		jg      []uint8
+		jg2     []uint8
+	}
+)
 
 func indexes() []int32 {
 	loadUBidi()

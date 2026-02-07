@@ -35,7 +35,7 @@ import (
 func TestAPIEndpoints(t *testing.T) {
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
-	}, 1, "")
+	}, cluster.DefaultVtorcsByCell, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	vtorc := clusterInfo.ClusterInstance.VTOrcProcesses[0]
@@ -322,7 +322,7 @@ func waitForErrantGTIDTabletCount(t *testing.T, vtorc *cluster.VTOrcProcess, err
 
 func verifyErrantGTIDCount(t *testing.T, vtorc *cluster.VTOrcProcess, tabletAlias string, countWanted int) {
 	vars := vtorc.GetVars()
-	errantGTIDCounts := vars["CurrentErrantGTIDCount"].(map[string]interface{})
+	errantGTIDCounts := vars["CurrentErrantGTIDCount"].(map[string]any)
 	gtidCountVal, isPresent := errantGTIDCounts[tabletAlias]
 	require.True(t, isPresent, "Tablet %s not found in errant GTID counts", tabletAlias)
 	gtidCount := utils.GetIntFromValue(gtidCountVal)

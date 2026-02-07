@@ -42,8 +42,10 @@ type (
 	}
 )
 
-var _ IR = (*builtinBitCount)(nil)
-var _ IR = (*builtinMultiComparison)(nil)
+var (
+	_ IR = (*builtinBitCount)(nil)
+	_ IR = (*builtinMultiComparison)(nil)
+)
 
 func (b *builtinCoalesce) eval(env *ExpressionEnv) (eval, error) {
 	args, err := b.args(env)
@@ -405,7 +407,7 @@ func compareAllDecimal(_ *ExpressionEnv, args []eval, cmp, _ int) (eval, error) 
 }
 
 func compareAllText(env *ExpressionEnv, args []eval, cmp, _ int) (eval, error) {
-	var charsets = make([]charset.Charset, 0, len(args))
+	charsets := make([]charset.Charset, 0, len(args))
 	var ca collationAggregation
 	for _, arg := range args {
 		col := evalCollation(arg)
