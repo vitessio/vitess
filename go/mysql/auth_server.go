@@ -23,7 +23,9 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
+	"fmt"
 	"net"
+	"os"
 	"sync"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -577,18 +579,20 @@ func RegisterAuthServer(name string, authServer AuthServer) {
 	mu.Lock()
 	defer mu.Unlock()
 	if _, ok := authServers[name]; ok {
-		log.Fatalf("AuthServer named %v already exists", name)
+		log.Error(fmt.Sprintf("AuthServer named %v already exists", name))
+		os.Exit(1)
 	}
 	authServers[name] = authServer
 }
 
-// GetAuthServer returns an AuthServer by name, or log.Exitf.
+// GetAuthServer returns an AuthServer by name, or exits the process.
 func GetAuthServer(name string) AuthServer {
 	mu.Lock()
 	defer mu.Unlock()
 	authServer, ok := authServers[name]
 	if !ok {
-		log.Exitf("no AuthServer name %v registered", name)
+		log.Error(fmt.Sprintf("no AuthServer name %v registered", name))
+		os.Exit(1)
 	}
 	return authServer
 }

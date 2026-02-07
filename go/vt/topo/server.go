@@ -45,6 +45,7 @@ package topo
 import (
 	"context"
 	"fmt"
+	"os"
 	"path"
 	"slices"
 	"sync"
@@ -205,11 +206,12 @@ func registerTopoFlags(fs *pflag.FlagSet) {
 }
 
 // RegisterFactory registers a Factory for an implementation for a Server.
-// If an implementation with that name already exists, it log.Fatals out.
+// If an implementation with that name already exists, it exits the process.
 // Call this in the 'init' function in your topology implementation module.
 func RegisterFactory(name string, factory Factory) {
 	if factories[name] != nil {
-		log.Fatalf("Duplicate topo.Factory registration for %v", name)
+		log.Error(fmt.Sprintf("Duplicate topo.Factory registration for %v", name))
+		os.Exit(1)
 	}
 	factories[name] = factory
 }
@@ -254,17 +256,20 @@ func OpenServer(implementation, serverAddress, root string) (*Server, error) {
 }
 
 // Open returns a Server using the command line parameter flags
-// for implementation, address and root. It log.Exits out if an error occurs.
+// for implementation, address and root. It exits the process if an error occurs.
 func Open() *Server {
 	if topoGlobalServerAddress == "" {
-		log.Exitf("topo-global-server-address must be configured")
+		log.Error("topo-global-server-address must be configured")
+		os.Exit(1)
 	}
 	if topoGlobalRoot == "" {
-		log.Exit("topo-global-root must be non-empty")
+		log.Error("topo-global-root must be non-empty")
+		os.Exit(1)
 	}
 	ts, err := OpenServer(topoImplementation, topoGlobalServerAddress, topoGlobalRoot)
 	if err != nil {
-		log.Exitf("Failed to open topo server (%v,%v,%v): %v", topoImplementation, topoGlobalServerAddress, topoGlobalRoot, err)
+		log.Error(fmt.Sprintf("Failed to open topo server (%v,%v,%v): %v", topoImplementation, topoGlobalServerAddress, topoGlobalRoot, err))
+		os.Exit(1)
 	}
 	return ts
 }

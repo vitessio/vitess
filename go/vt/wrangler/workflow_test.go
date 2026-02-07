@@ -218,7 +218,7 @@ func TestCopyProgress(t *testing.T) {
 	var cp *CopyProgress
 	cp, err = wf.GetCopyProgress()
 	require.NoError(t, err)
-	log.Infof("CopyProgress is %+v,%+v", (*cp)["t1"], (*cp)["t2"])
+	log.Info(fmt.Sprintf("CopyProgress is %+v,%+v", (*cp)["t1"], (*cp)["t2"]))
 
 	require.Equal(t, int64(800), (*cp)["t1"].SourceRowCount)
 	require.Equal(t, int64(200), (*cp)["t1"].TargetRowCount)

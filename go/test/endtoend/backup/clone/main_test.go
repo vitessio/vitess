@@ -73,7 +73,7 @@ func TestMain(m *testing.M) {
 
 		// Setup EXTRA_MY_CNF for clone plugin
 		if err := setupExtraMyCnf(); err != nil {
-			log.Errorf("Failed to setup extra MySQL config: %v", err)
+			log.Error(fmt.Sprintf("Failed to setup extra MySQL config: %v", err))
 			return 1, err
 		}
 
@@ -106,7 +106,7 @@ func TestMain(m *testing.M) {
 		initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 		initClone, err := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_clone.sql"))
 		if err != nil {
-			log.Warningf("init_clone.sql not found, clone tests may fail: %v", err)
+			log.Warn(fmt.Sprintf("init_clone.sql not found, clone tests may fail: %v", err))
 			initClone = []byte("")
 		}
 
@@ -200,7 +200,7 @@ func setupExtraMyCnf() error {
 		}
 	}
 
-	log.Infof("Set EXTRA_MY_CNF to include clone plugin: %s", os.Getenv("EXTRA_MY_CNF"))
+	log.Info("Set EXTRA_MY_CNF to include clone plugin: " + os.Getenv("EXTRA_MY_CNF"))
 	return nil
 }
 

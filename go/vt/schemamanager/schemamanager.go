@@ -93,13 +93,13 @@ type ShardResult struct {
 // Run applies schema changes on Vitess through VtGate.
 func Run(ctx context.Context, controller Controller, executor Executor) (execResult *ExecuteResult, err error) {
 	if err := controller.Open(ctx); err != nil {
-		log.Errorf("failed to open data sourcer: %v", err)
+		log.Error(fmt.Sprintf("failed to open data sourcer: %v", err))
 		return execResult, err
 	}
 	defer controller.Close()
 	sqls, err := controller.Read(ctx)
 	if err != nil {
-		log.Errorf("failed to read data from data sourcer: %v", err)
+		log.Error(fmt.Sprintf("failed to read data from data sourcer: %v", err))
 		controller.OnReadFail(ctx, err)
 		return execResult, err
 	}
@@ -109,12 +109,12 @@ func Run(ctx context.Context, controller Controller, executor Executor) (execRes
 	}
 	keyspace := controller.Keyspace()
 	if err := executor.Open(ctx, keyspace); err != nil {
-		log.Errorf("failed to open executor: %v", err)
+		log.Error(fmt.Sprintf("failed to open executor: %v", err))
 		return execResult, err
 	}
 	defer executor.Close()
 	if err := executor.Validate(ctx, sqls); err != nil {
-		log.Errorf("validation fail: %v", err)
+		log.Error(fmt.Sprintf("validation fail: %v", err))
 		controller.OnValidationFail(ctx, err)
 		return execResult, err
 	}

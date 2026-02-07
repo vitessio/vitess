@@ -51,7 +51,7 @@ type dbResult struct {
 
 func (dbrs *dbResults) next(query string) (*sqltypes.Result, error) {
 	if dbrs.exhausted() {
-		log.Infof(fmt.Sprintf("Unexpected query >%s<", query))
+		log.Info(fmt.Sprintf("Unexpected query >%s<", query))
 		return nil, fmt.Errorf("code executed this query, but the test did not expect it: %s", query)
 	}
 	i := dbrs.index
@@ -204,7 +204,7 @@ func (dc *fakeDBClient) executeFetch(query string, maxrows int) (*sqltypes.Resul
 		}
 	}
 
-	log.Infof("Missing query: >>>>>>>>>>>>>>>>>>%s<<<<<<<<<<<<<<<", query)
+	log.Info(fmt.Sprintf("Missing query: >>>>>>>>>>>>>>>>>>%s<<<<<<<<<<<<<<<", query))
 	return nil, fmt.Errorf("unexpected query: %s", query)
 }
 

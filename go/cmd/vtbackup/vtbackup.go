@@ -17,6 +17,8 @@ limitations under the License.
 package main
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/cmd/vtbackup/cli"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
@@ -28,7 +30,7 @@ func main() {
 
 	cli.Main.SetGlobalNormalizationFunc(utils.NormalizeUnderscoresToDashes)
 	if err := cli.Main.Execute(); err != nil {
-		log.Error(err)
+		log.Error(fmt.Sprint(err))
 		exit.Return(1)
 	}
 }

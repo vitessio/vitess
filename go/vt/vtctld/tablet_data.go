@@ -18,6 +18,7 @@ package vtctld
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -164,9 +165,9 @@ func (thc *tabletHealthCache) Get(ctx context.Context, tabletAlias *topodatapb.T
 		thc.tabletMap[tabletAliasStr] = th
 
 		go func() {
-			log.Infof("starting health stream for tablet %v", tabletAlias)
+			log.Info(fmt.Sprintf("starting health stream for tablet %v", tabletAlias))
 			err := th.stream(context.Background(), thc.ts, tabletAlias)
-			log.Infof("tablet %v health stream ended, error: %v", tabletAlias, err)
+			log.Info(fmt.Sprintf("tablet %v health stream ended, error: %v", tabletAlias, err))
 			thc.delete(tabletAliasStr)
 		}()
 	}

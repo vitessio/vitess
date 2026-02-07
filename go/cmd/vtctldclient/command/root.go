@@ -29,6 +29,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
@@ -105,6 +106,10 @@ connect directly to the topo server(s).`, useInternalVtctld),
 		// We use PersistentPreRun to set up the tracer, grpc client, and
 		// command context for every command.
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
+			if err := log.Init(); err != nil {
+				return err
+			}
+
 			env, err = vtenv.New(vtenv.Options{
 				MySQLServerVersion: servenv.MySQLServerVersion(),
 				TruncateUILen:      servenv.TruncateUILen,

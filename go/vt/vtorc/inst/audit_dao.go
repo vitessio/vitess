@@ -43,14 +43,14 @@ func AuditOperation(auditType string, tabletAlias string, message string) error 
 		go func() {
 			f, err := os.OpenFile(config.GetAuditFileLocation(), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0o640)
 			if err != nil {
-				log.Error(err)
+				log.Error(err.Error())
 				return
 			}
 
 			defer f.Close()
 			text := fmt.Sprintf("%s\t%s\t%s\t[%s:%s]\t%s\t\n", time.Now().Format("2006-01-02 15:04:05"), auditType, tabletAlias, keyspace, shard, message)
 			if _, err = f.WriteString(text); err != nil {
-				log.Error(err)
+				log.Error(err.Error())
 			}
 		}()
 	}
@@ -78,7 +78,7 @@ func AuditOperation(auditType string, tabletAlias string, message string) error 
 			message,
 		)
 		if err != nil {
-			log.Error(err)
+			log.Error(err.Error())
 			return err
 		}
 	}
@@ -87,7 +87,7 @@ func AuditOperation(auditType string, tabletAlias string, message string) error 
 		auditWrittenToFile = true
 	}
 	if !auditWrittenToFile {
-		log.Infof(logMessage)
+		log.Info(logMessage)
 	}
 	auditOperationCounter.Add(1)
 

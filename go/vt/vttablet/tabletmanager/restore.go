@@ -135,8 +135,8 @@ func (tm *TabletManager) RestoreBackup(
 func (tm *TabletManager) restoreBackupLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool, request *tabletmanagerdatapb.RestoreFromBackupRequest, mysqlShutdownTimeout time.Duration) error {
 	tablet := tm.Tablet()
 	// Try to restore. Depending on the reason for failure, we may be ok.
-	// If we're not ok, return an error and the tm will log.Fatalf,
-	// causing the process to be restarted and the restore retried.
+	// If we're not ok, return an error and the tm will exit the process,
+	// causing it to be restarted and the restore retried.
 
 	keyspace := tablet.Keyspace
 	keyspaceInfo, err := tm.TopoServer.GetKeyspace(ctx, keyspace)
@@ -219,7 +219,7 @@ func (tm *TabletManager) restoreBackupLocked(ctx context.Context, logger logutil
 			break
 		}
 
-		log.Infof("No backup found. Waiting %v (from -wait-for-backup-interval flag) to check again.", waitForBackupInterval)
+		log.Info(fmt.Sprintf("No backup found. Waiting %v (from -wait-for-backup-interval flag) to check again.", waitForBackupInterval))
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -423,7 +423,7 @@ func (tm *TabletManager) invokeRestoreDoneHook(startTime time.Time, err error) {
 		case hook.HOOK_DOES_NOT_EXIST:
 			log.Info("No vttablet_restore_done hook.")
 		default:
-			log.Warning("vttablet_restore_done hook failed")
+			log.Warn("vttablet_restore_done hook failed")
 		}
 	}()
 }

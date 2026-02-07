@@ -550,9 +550,9 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 	}
 	ts.Init()
 	defer ts.Close()
-	log.Infof("Pos before bulk insert: %s", primaryPosition(t))
+	log.Info("Pos before bulk insert: " + primaryPosition(t))
 	insertSomeRows(t, 10)
-	log.Infof("Pos after bulk insert: %s", primaryPosition(t))
+	log.Info("Pos after bulk insert: " + primaryPosition(t))
 
 	ctx := context.Background()
 	qr, err := env.Mysqld.FetchSuperQuery(ctx, "SELECT count(*) as cnt from t1, t2 where t1.id11 = t2.id21")
@@ -643,7 +643,7 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 	}
 
 	runCases(t, filter, testcases, "vscopy", tablePKs)
-	log.Infof("Pos at end of test: %s", primaryPosition(t))
+	log.Info("Pos at end of test: " + primaryPosition(t))
 }
 
 func TestVStreamCopyWithDifferentFilters(t *testing.T) {
@@ -740,7 +740,7 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 				allEvents = append(allEvents, ev)
 			}
 			if len(allEvents) == len(expectedEvents) {
-				log.Infof("Got %d events as expected", len(allEvents))
+				log.Info(fmt.Sprintf("Got %d events as expected", len(allEvents)))
 				for i, ev := range allEvents {
 					ev.Timestamp = 0
 					switch ev.Type {

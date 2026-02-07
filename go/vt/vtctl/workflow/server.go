@@ -3387,7 +3387,7 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, maxAllowedR
 				msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s %s shard (%v):\n  %v\n",
 					si.Keyspace(), si.ShardName(), stype, err, partialDetails)
 				if partial && ts.force {
-					log.Warning(msg)
+					log.Warn(msg)
 				} else {
 					m.Lock()
 					refreshErrors.WriteString(msg)

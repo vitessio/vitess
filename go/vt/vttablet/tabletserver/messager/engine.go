@@ -18,6 +18,7 @@ package messager
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"golang.org/x/sync/semaphore"
@@ -94,18 +95,18 @@ func (me *Engine) Open() {
 
 // Close closes the Engine service.
 func (me *Engine) Close() {
-	log.Infof("messager Engine - started execution of Close. Acquiring mu lock")
+	log.Info("messager Engine - started execution of Close. Acquiring mu lock")
 	me.mu.Lock()
-	log.Infof("messager Engine - acquired mu lock")
+	log.Info("messager Engine - acquired mu lock")
 	defer me.mu.Unlock()
 	if !me.isOpen {
-		log.Infof("messager Engine is not open")
+		log.Info("messager Engine is not open")
 		return
 	}
 	me.isOpen = false
-	log.Infof("messager Engine - unregistering notifiers")
+	log.Info("messager Engine - unregistering notifiers")
 	me.se.UnregisterNotifier("messages")
-	log.Infof("messager Engine - closing all managers")
+	log.Info("messager Engine - closing all managers")
 	me.managersMu.Lock()
 	defer me.managersMu.Unlock()
 	for _, mm := range me.managers {
@@ -156,7 +157,7 @@ func (me *Engine) schemaChanged(tables map[string]*schema.Table, created, altere
 		if mm == nil {
 			continue
 		}
-		log.Infof("Stopping messager for dropped/updated table: %v", name)
+		log.Info(fmt.Sprintf("Stopping messager for dropped/updated table: %v", name))
 		mm.Close()
 		delete(me.managers, name)
 	}
@@ -168,12 +169,12 @@ func (me *Engine) schemaChanged(tables map[string]*schema.Table, created, altere
 		}
 		if me.managers[name] != nil {
 			me.tsv.Stats().InternalErrors.Add("Messages", 1)
-			log.Errorf("Newly created table already exists in messages: %s", name)
+			log.Error("Newly created table already exists in messages: " + name)
 			continue
 		}
 		mm := newMessageManager(me.tsv, me.vs, t, me.postponeSema)
 		me.managers[name] = mm
-		log.Infof("Starting messager for table: %v", name)
+		log.Info(fmt.Sprintf("Starting messager for table: %v", name))
 		mm.Open()
 	}
 }

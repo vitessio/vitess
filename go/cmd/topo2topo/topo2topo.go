@@ -17,6 +17,9 @@ limitations under the License.
 package main
 
 import (
+	"fmt"
+	"os"
+
 	"vitess.io/vitess/go/cmd/topo2topo/cli"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
@@ -28,6 +31,7 @@ func main() {
 
 	cli.Main.SetGlobalNormalizationFunc(utils.NormalizeUnderscoresToDashes)
 	if err := cli.Main.Execute(); err != nil {
-		log.Exitf("%s", err)
+		log.Error(fmt.Sprintf("%s", err))
+		os.Exit(1)
 	}
 }

@@ -191,7 +191,7 @@ func (s *VtctldServer) ApplyRoutingRules(ctx context.Context, req *vtctldatapb.A
 	resp = &vtctldatapb.ApplyRoutingRulesResponse{}
 
 	if req.SkipRebuild {
-		log.Warningf("Skipping rebuild of SrvVSchema, will need to run RebuildVSchemaGraph for changes to take effect")
+		log.Warn("Skipping rebuild of SrvVSchema, will need to run RebuildVSchemaGraph for changes to take effect")
 		return resp, nil
 	}
 
@@ -218,7 +218,7 @@ func (s *VtctldServer) ApplyShardRoutingRules(ctx context.Context, req *vtctldat
 	resp := &vtctldatapb.ApplyShardRoutingRulesResponse{}
 
 	if req.SkipRebuild {
-		log.Warningf("Skipping rebuild of SrvVSchema as requested, you will need to run RebuildVSchemaGraph for changes to take effect")
+		log.Warn("Skipping rebuild of SrvVSchema as requested, you will need to run RebuildVSchemaGraph for changes to take effect")
 		return resp, nil
 	}
 
@@ -231,7 +231,7 @@ func (s *VtctldServer) ApplyShardRoutingRules(ctx context.Context, req *vtctldat
 
 // ApplySchema is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySchemaRequest) (resp *vtctldatapb.ApplySchemaResponse, err error) {
-	log.Infof("VtctldServer.ApplySchema: keyspace=%s, migrationContext=%v, ddlStrategy=%v, batchSize=%v", req.Keyspace, req.MigrationContext, req.DdlStrategy, req.BatchSize)
+	log.Info(fmt.Sprintf("VtctldServer.ApplySchema: keyspace=%s, migrationContext=%v, ddlStrategy=%v, batchSize=%v", req.Keyspace, req.MigrationContext, req.DdlStrategy, req.BatchSize))
 
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ApplySchema")
 	defer span.Finish()
@@ -686,7 +686,7 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("Getting a new durability policy for %v", durabilityName)
+	log.Info(fmt.Sprintf("Getting a new durability policy for %v", durabilityName))
 	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return nil, err
@@ -726,7 +726,7 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 
 	changedTabletInfo, err := s.ts.GetTablet(ctx, req.TabletAlias)
 	if err != nil {
-		log.Warningf("error while reading the tablet we just changed back out of the topo: %v", err)
+		log.Warn(fmt.Sprintf("error while reading the tablet we just changed back out of the topo: %v", err))
 	} else {
 		changedTablet = changedTabletInfo.Tablet
 	}
@@ -842,7 +842,7 @@ func (s *VtctldServer) ForceCutOverSchemaMigration(ctx context.Context, req *vtc
 		return nil, err
 	}
 
-	log.Infof("Calling ApplySchema to force cut-over migration %s", req.Uuid)
+	log.Info("Calling ApplySchema to force cut-over migration " + req.Uuid)
 	qr, err := s.ApplySchema(ctx, &vtctldatapb.ApplySchemaRequest{
 		Keyspace:            req.Keyspace,
 		Sql:                 []string{query},
@@ -955,7 +955,7 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 
 	err = s.ts.CreateKeyspace(ctx, req.Name, ki)
 	if req.Force && topo.IsErrType(err, topo.NodeExists) {
-		log.Infof("keyspace %v already exists (ignoring error with Force=true)", req.Name)
+		log.Info(fmt.Sprintf("keyspace %v already exists (ignoring error with Force=true)", req.Name))
 		err = nil
 
 		// Get the actual keyspace out of the topo; it may differ in structure,
@@ -979,9 +979,9 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 	if req.Type == topodatapb.KeyspaceType_SNAPSHOT {
 		bksvs, err := s.ts.GetVSchema(ctx, req.BaseKeyspace)
 		if err != nil {
-			log.Infof("error from GetVSchema(%v) = %v", req.BaseKeyspace, err)
+			log.Info(fmt.Sprintf("error from GetVSchema(%v) = %v", req.BaseKeyspace, err))
 			if topo.IsErrType(err, topo.NoNode) {
-				log.Infof("base keyspace %v does not exist; continuing with bare, unsharded vschema", req.BaseKeyspace)
+				log.Info(fmt.Sprintf("base keyspace %v does not exist; continuing with bare, unsharded vschema", req.BaseKeyspace))
 				bksvs = &topo.KeyspaceVSchemaInfo{
 					Name: req.Name,
 					Keyspace: &vschemapb.Keyspace{
@@ -1038,10 +1038,10 @@ func (s *VtctldServer) CreateShard(ctx context.Context, req *vtctldatapb.CreateS
 	span.Annotate("include_parent", req.IncludeParent)
 
 	if req.IncludeParent {
-		log.Infof("Creating empty keyspace for %s", req.Keyspace)
+		log.Info("Creating empty keyspace for " + req.Keyspace)
 		if err2 := s.ts.CreateKeyspace(ctx, req.Keyspace, &topodatapb.Keyspace{}); err2 != nil {
 			if req.Force && topo.IsErrType(err2, topo.NodeExists) {
-				log.Infof("keyspace %v already exists; ignoring error because Force = true", req.Keyspace)
+				log.Info(fmt.Sprintf("keyspace %v already exists; ignoring error because Force = true", req.Keyspace))
 			} else {
 				err = err2
 				return nil, err
@@ -1053,7 +1053,7 @@ func (s *VtctldServer) CreateShard(ctx context.Context, req *vtctldatapb.CreateS
 
 	if err = s.ts.CreateShard(ctx, req.Keyspace, req.ShardName); err != nil {
 		if req.Force && topo.IsErrType(err, topo.NodeExists) {
-			log.Infof("shard %v/%v already exists; ignoring error because Force = true", req.Keyspace, req.ShardName)
+			log.Info(fmt.Sprintf("shard %v/%v already exists; ignoring error because Force = true", req.Keyspace, req.ShardName))
 			shardExists = true
 			err = nil
 		} else {
@@ -1146,7 +1146,7 @@ func (s *VtctldServer) DeleteKeyspace(ctx context.Context, req *vtctldatapb.Dele
 		err = fmt.Errorf("failed to lock %s; if you really want to delete this keyspace, re-run with Force=true: %w", req.Keyspace, lerr)
 		return nil, err
 	default:
-		log.Warningf("%s: failed to lock keyspace %s for deletion, but force=true, proceeding anyway ...", lerr, req.Keyspace)
+		log.Warn(fmt.Sprintf("%s: failed to lock keyspace %s for deletion, but force=true, proceeding anyway ...", lerr, req.Keyspace))
 	}
 
 	if unlock != nil {
@@ -1176,13 +1176,13 @@ func (s *VtctldServer) DeleteKeyspace(ctx context.Context, req *vtctldatapb.Dele
 			return nil, err
 		}
 
-		log.Infof("Deleting all %d shards (and their tablets) in keyspace %v", len(shards), req.Keyspace)
+		log.Info(fmt.Sprintf("Deleting all %d shards (and their tablets) in keyspace %v", len(shards), req.Keyspace))
 		recursive := true
 		evenIfServing := true
 		force := req.Force
 
 		for _, shard := range shards {
-			log.Infof("Recursively deleting shard %v/%v", req.Keyspace, shard)
+			log.Info(fmt.Sprintf("Recursively deleting shard %v/%v", req.Keyspace, shard))
 			err = deleteShard(ctx, s.ts, req.Keyspace, shard, recursive, evenIfServing, force)
 			if err != nil {
 				err = fmt.Errorf("cannot delete shard %v/%v: %w", req.Keyspace, shard, err)
@@ -1198,11 +1198,11 @@ func (s *VtctldServer) DeleteKeyspace(ctx context.Context, req *vtctldatapb.Dele
 
 	for _, cell := range cells {
 		if err := s.ts.DeleteKeyspaceReplication(ctx, cell, req.Keyspace); err != nil && !topo.IsErrType(err, topo.NoNode) {
-			log.Warningf("Cannot delete KeyspaceReplication in cell %v for %v: %v", cell, req.Keyspace, err)
+			log.Warn(fmt.Sprintf("Cannot delete KeyspaceReplication in cell %v for %v: %v", cell, req.Keyspace, err))
 		}
 
 		if err := s.ts.DeleteSrvKeyspace(ctx, cell, req.Keyspace); err != nil && !topo.IsErrType(err, topo.NoNode) {
-			log.Warningf("Cannot delete SrvKeyspace in cell %v for %v: %v", cell, req.Keyspace, err)
+			log.Warn(fmt.Sprintf("Cannot delete SrvKeyspace in cell %v for %v: %v", cell, req.Keyspace, err))
 		}
 	}
 
@@ -2061,7 +2061,7 @@ func (s *VtctldServer) GetSrvKeyspaces(ctx context.Context, req *vtctldatapb.Get
 				return nil, err
 			}
 
-			log.Warningf("no srvkeyspace for keyspace %s in cell %s", req.Keyspace, cell)
+			log.Warn(fmt.Sprintf("no srvkeyspace for keyspace %s in cell %s", req.Keyspace, cell))
 
 			srvKeyspace = nil
 		}
@@ -2235,7 +2235,7 @@ func (s *VtctldServer) GetSrvVSchemas(ctx context.Context, req *vtctldatapb.GetS
 				return nil, err
 			}
 
-			log.Warningf("no SrvVSchema for cell %s", cell)
+			log.Warn("no SrvVSchema for cell " + cell)
 			sv = nil
 		}
 
@@ -2327,7 +2327,7 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 			if req.Strict {
 				return nil, err
 			}
-			log.Warningf("GetTablets encountered non-fatal error %s; continuing because Strict=false", err)
+			log.Warn(fmt.Sprintf("GetTablets encountered non-fatal error %s; continuing because Strict=false", err))
 		default:
 			return nil, err
 		}
@@ -2387,7 +2387,7 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 			tablets, err := s.ts.GetTabletsByCell(ctx, cell, nil)
 			if err != nil {
 				if req.Strict {
-					log.Infof("GetTablets got an error from cell %s: %s. Running in strict mode, so canceling other cell RPCs", cell, err)
+					log.Info(fmt.Sprintf("GetTablets got an error from cell %s: %s. Running in strict mode, so canceling other cell RPCs", cell, err))
 					cancel()
 				}
 				rec.RecordError(fmt.Errorf("GetTabletsByCell(%s) failed: %w", cell, err))
@@ -2703,7 +2703,7 @@ func (s *VtctldServer) GetVersion(ctx context.Context, req *vtctldatapb.GetVersi
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("Tablet %v is running version '%v'", topoproto.TabletAliasString(tabletAlias), version)
+	log.Info(fmt.Sprintf("Tablet %v is running version '%v'", topoproto.TabletAliasString(tabletAlias), version))
 	return &vtctldatapb.GetVersionResponse{Version: version}, err
 }
 
@@ -2835,7 +2835,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	if err != nil {
 		return err
 	}
-	log.Infof("Getting a new durability policy for %v", durabilityName)
+	log.Info(fmt.Sprintf("Getting a new durability policy for %v", durabilityName))
 	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return err
@@ -3013,7 +3013,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	}
 	// Refresh the state to force the tabletserver to reconnect after db has been created.
 	if err := tmc.RefreshState(ctx, primaryElectTabletInfo.Tablet); err != nil {
-		log.Warningf("RefreshState failed: %v", err)
+		log.Warn(fmt.Sprintf("RefreshState failed: %v", err))
 	}
 
 	return nil
@@ -3442,11 +3442,11 @@ func (s *VtctldServer) RefreshStateByShard(ctx context.Context, req *vtctldatapb
 	isPartial, partialDetails, err := topotools.RefreshTabletsByShard(ctx, s.ts, s.tmc, si, req.Cells, logutil.NewCallbackLogger(func(e *logutilpb.Event) {
 		switch e.Level {
 		case logutilpb.Level_WARNING:
-			log.Warningf(e.Value)
+			log.Warn(e.Value)
 		case logutilpb.Level_ERROR:
-			log.Errorf(e.Value)
+			log.Error(e.Value)
 		default:
-			log.Infof(e.Value)
+			log.Info(e.Value)
 		}
 	}))
 	if err != nil {
@@ -3612,7 +3612,7 @@ func (s *VtctldServer) RemoveKeyspaceCell(ctx context.Context, req *vtctldatapb.
 
 	// Remove all the shards, serially. Stop immediately if any fail.
 	for _, shard := range shards {
-		log.Infof("Removing cell %v from shard %v/%v", req.Cell, req.Keyspace, shard)
+		log.Info(fmt.Sprintf("Removing cell %v from shard %v/%v", req.Cell, req.Keyspace, shard))
 		if err2 := removeShardCell(ctx, s.ts, req.Cell, req.Keyspace, shard, req.Recursive, req.Force); err2 != nil {
 			err = fmt.Errorf("cannot remove cell %v from shard %v/%v: %w", req.Cell, req.Keyspace, shard, err2)
 			return nil, err
@@ -3620,7 +3620,7 @@ func (s *VtctldServer) RemoveKeyspaceCell(ctx context.Context, req *vtctldatapb.
 	}
 
 	// Last, remove the SrvKeyspace object.
-	log.Infof("Removing cell %v keyspace %v SrvKeyspace object", req.Cell, req.Keyspace)
+	log.Info(fmt.Sprintf("Removing cell %v keyspace %v SrvKeyspace object", req.Cell, req.Keyspace))
 	if err = s.ts.DeleteSrvKeyspace(ctx, req.Cell, req.Keyspace); err != nil {
 		err = fmt.Errorf("cannot delete SrvKeyspace from cell %v for keyspace %v: %w", req.Cell, req.Keyspace, err)
 		return nil, err
@@ -3703,7 +3703,7 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("Getting a new durability policy for %v", durabilityName)
+	log.Info(fmt.Sprintf("Getting a new durability policy for %v", durabilityName))
 	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return nil, err
@@ -4070,7 +4070,7 @@ func (s *VtctldServer) SetWritable(ctx context.Context, req *vtctldatapb.SetWrit
 
 	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
 	if err != nil {
-		log.Errorf("SetWritable: failed to read tablet record for %v: %v", alias, err)
+		log.Error(fmt.Sprintf("SetWritable: failed to read tablet record for %v: %v", alias, err))
 		return nil, err
 	}
 
@@ -4083,7 +4083,7 @@ func (s *VtctldServer) SetWritable(ctx context.Context, req *vtctldatapb.SetWrit
 	}
 
 	if err = f(ctx, tablet.Tablet); err != nil {
-		log.Errorf("SetWritable: failed to set writable=%v on %v: %v", req.Writable, alias, err)
+		log.Error(fmt.Sprintf("SetWritable: failed to set writable=%v on %v: %v", req.Writable, alias, err))
 		return nil, err
 	}
 
@@ -4150,7 +4150,7 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 		return nil, err
 	}
 
-	log.Infof("Gathering tablet replication status for: %v", tabletInfoMap)
+	log.Info(fmt.Sprintf("Gathering tablet replication status for: %v", tabletInfoMap))
 
 	var (
 		m         sync.Mutex
@@ -4190,9 +4190,9 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 				if err != nil {
 					switch ctx.Err() {
 					case context.Canceled:
-						log.Warningf("context canceled before obtaining primary position from %s: %s", alias, err)
+						log.Warn(fmt.Sprintf("context canceled before obtaining primary position from %s: %s", alias, err))
 					case context.DeadlineExceeded:
-						log.Warningf("context deadline exceeded before obtaining primary position from %s: %s", alias, err)
+						log.Warn(fmt.Sprintf("context deadline exceeded before obtaining primary position from %s: %s", alias, err))
 					default:
 						// The RPC was not timed out or canceled. We treat this
 						// as a fatal error for the overall request.
@@ -4230,9 +4230,9 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 				if err != nil {
 					switch ctx.Err() {
 					case context.Canceled:
-						log.Warningf("context canceled before obtaining replication position from %s: %s", alias, err)
+						log.Warn(fmt.Sprintf("context canceled before obtaining replication position from %s: %s", alias, err))
 					case context.DeadlineExceeded:
-						log.Warningf("context deadline exceeded before obtaining replication position from %s: %s", alias, err)
+						log.Warn(fmt.Sprintf("context deadline exceeded before obtaining replication position from %s: %s", alias, err))
 					default:
 						// The RPC was not timed out or canceled. We treat this
 						// as a fatal error for the overall request.
@@ -4438,7 +4438,7 @@ func (s *VtctldServer) StartReplication(ctx context.Context, req *vtctldatapb.St
 
 	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
 	if err != nil {
-		log.Errorf("StartReplication: failed to read tablet record for %v: %v", alias, err)
+		log.Error(fmt.Sprintf("StartReplication: failed to read tablet record for %v: %v", alias, err))
 		return nil, err
 	}
 
@@ -4472,14 +4472,14 @@ func (s *VtctldServer) StartReplication(ctx context.Context, req *vtctldatapb.St
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("Getting a new durability policy for %v", durabilityName)
+	log.Info(fmt.Sprintf("Getting a new durability policy for %v", durabilityName))
 	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return nil, err
 	}
 
 	if err = s.tmc.StartReplication(ctx, tablet.Tablet, policy.IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet.Tablet)); err != nil {
-		log.Errorf("StartReplication: failed to start replication on %v: %v", alias, err)
+		log.Error(fmt.Sprintf("StartReplication: failed to start replication on %v: %v", alias, err))
 		return nil, err
 	}
 
@@ -4503,12 +4503,12 @@ func (s *VtctldServer) StopReplication(ctx context.Context, req *vtctldatapb.Sto
 
 	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
 	if err != nil {
-		log.Errorf("StopReplication: failed to read tablet record for %v: %v", alias, err)
+		log.Error(fmt.Sprintf("StopReplication: failed to read tablet record for %v: %v", alias, err))
 		return nil, err
 	}
 
 	if err := s.tmc.StopReplication(ctx, tablet.Tablet); err != nil {
-		log.Errorf("StopReplication: failed to stop replication on %v: %v", alias, err)
+		log.Error(fmt.Sprintf("StopReplication: failed to stop replication on %v: %v", alias, err))
 		return nil, err
 	}
 
@@ -4531,13 +4531,13 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 
 	tablet, err := s.ts.GetTablet(ctx, req.Tablet)
 	if err != nil {
-		log.Warningf("TabletExternallyReparented: failed to read tablet record for %v: %v", topoproto.TabletAliasString(req.Tablet), err)
+		log.Warn(fmt.Sprintf("TabletExternallyReparented: failed to read tablet record for %v: %v", topoproto.TabletAliasString(req.Tablet), err))
 		return nil, err
 	}
 
 	shard, err := s.ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
-		log.Warningf("TabletExternallyReparented: failed to read global shard record for %v/%v: %v", tablet.Keyspace, tablet.Shard, err)
+		log.Warn(fmt.Sprintf("TabletExternallyReparented: failed to read global shard record for %v/%v: %v", tablet.Keyspace, tablet.Shard, err))
 		return nil, err
 	}
 
@@ -4554,7 +4554,7 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 		return resp, nil
 	}
 
-	log.Infof("TabletExternallyReparented: executing tablet type change %v -> PRIMARY on %v", tablet.Type, topoproto.TabletAliasString(req.Tablet))
+	log.Info(fmt.Sprintf("TabletExternallyReparented: executing tablet type change %v -> PRIMARY on %v", tablet.Type, topoproto.TabletAliasString(req.Tablet)))
 	ev := &events.Reparent{
 		ShardInfo:  *shard,
 		NewPrimary: tablet.CloneVT(),
@@ -4577,14 +4577,14 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("Getting a new durability policy for %v", durabilityName)
+	log.Info(fmt.Sprintf("Getting a new durability policy for %v", durabilityName))
 	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return nil, err
 	}
 
 	if err = s.tmc.ChangeType(ctx, tablet.Tablet, topodatapb.TabletType_PRIMARY, policy.SemiSyncAckers(durability, tablet.Tablet) > 0); err != nil {
-		log.Warningf("ChangeType(%v, PRIMARY): %v", topoproto.TabletAliasString(req.Tablet), err)
+		log.Warn(fmt.Sprintf("ChangeType(%v, PRIMARY): %v", topoproto.TabletAliasString(req.Tablet), err))
 		return nil, err
 	}
 
@@ -4763,7 +4763,7 @@ func (s *VtctldServer) Validate(ctx context.Context, req *vtctldatapb.ValidateRe
 							return
 						}
 
-						log.Infof("tablet %v is valid", key)
+						log.Info(fmt.Sprintf("tablet %v is valid", key))
 					}(alias)
 				}
 			}
@@ -4898,7 +4898,7 @@ func (s *VtctldServer) ValidatePermissionsKeyspace(ctx context.Context, req *vtc
 		return nil, fmt.Errorf("no primary tablet in shard %s/%s", req.Keyspace, shards[0])
 	}
 	referenceAlias := si.PrimaryAlias
-	log.Infof("Gathering permissions for reference primary %s", topoproto.TabletAliasString(referenceAlias))
+	log.Info("Gathering permissions for reference primary " + topoproto.TabletAliasString(referenceAlias))
 	pres, err := s.GetPermissions(ctx, &vtctldatapb.GetPermissionsRequest{
 		TabletAlias: si.PrimaryAlias,
 	})
@@ -4919,7 +4919,7 @@ func (s *VtctldServer) ValidatePermissionsKeyspace(ctx context.Context, req *vtc
 				if topoproto.TabletAliasEqual(alias, si.PrimaryAlias) {
 					continue
 				}
-				log.Infof("Gathering permissions for %s", topoproto.TabletAliasString(alias))
+				log.Info("Gathering permissions for " + topoproto.TabletAliasString(alias))
 				presp, err := s.GetPermissions(ctx, &vtctldatapb.GetPermissionsRequest{
 					TabletAlias: alias,
 				})
@@ -4927,8 +4927,8 @@ func (s *VtctldServer) ValidatePermissionsKeyspace(ctx context.Context, req *vtc
 					return err
 				}
 
-				log.Infof("Diffing permissions between %s and %s", topoproto.TabletAliasString(referenceAlias),
-					topoproto.TabletAliasString(alias))
+				log.Info(fmt.Sprintf("Diffing permissions between %s and %s", topoproto.TabletAliasString(referenceAlias),
+					topoproto.TabletAliasString(alias)))
 				er := &concurrency.AllErrorRecorder{}
 				tmutils.DiffPermissions(topoproto.TabletAliasString(referenceAlias), referencePermissions,
 					topoproto.TabletAliasString(alias), presp.Permissions, er)
@@ -5183,7 +5183,7 @@ func (s *VtctldServer) ValidateShard(ctx context.Context, req *vtctldatapb.Valid
 				return
 			}
 
-			log.Infof("tablet %v is valid", topoproto.TabletAliasString(alias))
+			log.Info(fmt.Sprintf("tablet %v is valid", topoproto.TabletAliasString(alias)))
 		}(alias)
 	}
 
@@ -5401,7 +5401,7 @@ func (s *VtctldServer) ValidateVersionShard(ctx context.Context, req *vtctldatap
 		return nil, err
 	}
 
-	log.Infof("Gathering version for primary %v", topoproto.TabletAliasString(shard.PrimaryAlias))
+	log.Info(fmt.Sprintf("Gathering version for primary %v", topoproto.TabletAliasString(shard.PrimaryAlias)))
 	primaryVersion, err := s.GetVersion(ctx, &vtctldatapb.GetVersionRequest{
 		TabletAlias: shard.PrimaryAlias,
 	})
@@ -5817,7 +5817,7 @@ func GetVersionFunc() func(string) (string, error) {
 // helper method to asynchronously get and diff a version
 func (s *VtctldServer) diffVersion(ctx context.Context, primaryVersion string, primaryAlias *topodatapb.TabletAlias, alias *topodatapb.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
-	log.Infof("Gathering version for %v", topoproto.TabletAliasString(alias))
+	log.Info(fmt.Sprintf("Gathering version for %v", topoproto.TabletAliasString(alias)))
 	replicaVersion, err := s.GetVersion(ctx, &vtctldatapb.GetVersionRequest{
 		TabletAlias: alias,
 	})

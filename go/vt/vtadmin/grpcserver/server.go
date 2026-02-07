@@ -122,7 +122,7 @@ func New(name string, opts Options) *Server {
 	streamInterceptors = append(streamInterceptors, func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		err := handler(srv, ss)
 		if err != nil {
-			log.Errorf("%s error: %s", info.FullMethod, err)
+			log.Error(fmt.Sprintf("%s error: %s", info.FullMethod, err))
 		}
 
 		return err
@@ -130,7 +130,7 @@ func New(name string, opts Options) *Server {
 	unaryInterceptors = append(unaryInterceptors, func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
 		resp, err = handler(ctx, req)
 		if err != nil {
-			log.Errorf("%s error: %s", info.FullMethod, err)
+			log.Error(fmt.Sprintf("%s error: %s", info.FullMethod, err))
 		}
 
 		return resp, err
@@ -220,7 +220,7 @@ func (s *Server) ListenAndServe() error {
 	go func() {
 		sig := <-signals
 		err := fmt.Errorf("received signal: %v", sig)
-		log.Warning(err)
+		log.Warn(fmt.Sprint(err))
 		shutdown <- err
 	}()
 
@@ -237,14 +237,14 @@ func (s *Server) ListenAndServe() error {
 	go func() {
 		err := s.gRPCServer.Serve(grpcLis)
 		err = fmt.Errorf("grpc server stopped: %w", err)
-		log.Warning(err)
+		log.Warn(fmt.Sprint(err))
 		shutdown <- err
 	}()
 
 	go func() {
 		err := http.Serve(anyLis, s.router)
 		err = fmt.Errorf("http server stopped: %w", err)
-		log.Warning(err)
+		log.Warn(fmt.Sprint(err))
 		shutdown <- err
 	}()
 
@@ -252,7 +252,7 @@ func (s *Server) ListenAndServe() error {
 	go func() {
 		err := lmux.Serve()
 		err = fmt.Errorf("listener closed: %w", err)
-		log.Warning(err)
+		log.Warn(fmt.Sprint(err))
 		shutdown <- err
 	}()
 
@@ -261,17 +261,17 @@ func (s *Server) ListenAndServe() error {
 	}
 
 	s.setServing(true)
-	log.Infof("server %s listening on %s", s.name, s.opts.Addr)
+	log.Info(fmt.Sprintf("server %s listening on %s", s.name, s.opts.Addr))
 
 	reason := <-shutdown
-	log.Warningf("graceful shutdown triggered by: %v", reason)
+	log.Warn(fmt.Sprintf("graceful shutdown triggered by: %v", reason))
 
 	if s.opts.LameDuckDuration > 0 {
-		log.Infof("entering lame duck period for %v", s.opts.LameDuckDuration)
+		log.Info(fmt.Sprintf("entering lame duck period for %v", s.opts.LameDuckDuration))
 		s.healthServer.Shutdown()
 		time.Sleep(s.opts.LameDuckDuration)
 	} else {
-		log.Infof("lame duck disabled")
+		log.Info("lame duck disabled")
 	}
 
 	log.Info("beginning graceful shutdown")
