@@ -964,6 +964,8 @@ func TestTxConnCommit2PC(t *testing.T) {
 	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false, nullResultsObserver{}, false)
 	sc.ExecuteMultiShard(ctx, nil, rss01, twoQueries, session, false, false, nullResultsObserver{}, false)
+	session.ShardSessions[0].RowsAffected = true
+	session.ShardSessions[1].RowsAffected = true
 	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
 	require.NoError(t,
 		sc.txConn.Commit(ctx, session))
@@ -994,6 +996,8 @@ func TestTxConnCommit2PCCreateTransactionFail(t *testing.T) {
 	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false, nullResultsObserver{}, false)
 	sc.ExecuteMultiShard(ctx, nil, rss1, queries, session, false, false, nullResultsObserver{}, false)
+	session.ShardSessions[0].RowsAffected = true
+	session.ShardSessions[1].RowsAffected = true
 
 	sbc0.MustFailCreateTransaction = 1
 	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
@@ -1016,6 +1020,8 @@ func TestTxConnCommit2PCPrepareFail(t *testing.T) {
 	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false, nullResultsObserver{}, false)
 	sc.ExecuteMultiShard(ctx, nil, rss01, twoQueries, session, false, false, nullResultsObserver{}, false)
+	session.ShardSessions[0].RowsAffected = true
+	session.ShardSessions[1].RowsAffected = true
 
 	sbc1.MustFailPrepare = 1
 	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
@@ -1042,6 +1048,8 @@ func TestTxConnCommit2PCStartCommitFail(t *testing.T) {
 	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false, nullResultsObserver{}, false)
 	sc.ExecuteMultiShard(ctx, nil, rss01, twoQueries, session, false, false, nullResultsObserver{}, false)
+	session.ShardSessions[0].RowsAffected = true
+	session.ShardSessions[1].RowsAffected = true
 
 	sbc0.MustFailStartCommit = 1
 	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
@@ -1061,6 +1069,8 @@ func TestTxConnCommit2PCStartCommitFail(t *testing.T) {
 	session = econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false, nullResultsObserver{}, false)
 	sc.ExecuteMultiShard(ctx, nil, rss01, twoQueries, session, false, false, nullResultsObserver{}, false)
+	session.ShardSessions[0].RowsAffected = true
+	session.ShardSessions[1].RowsAffected = true
 
 	// Here the StartCommit failure is in uncertain state so rollback is not called and neither conclude.
 	sbc0.MustFailStartCommitUncertain = 1
@@ -1084,6 +1094,8 @@ func TestTxConnCommit2PCCommitPreparedFail(t *testing.T) {
 	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false, nullResultsObserver{}, false)
 	sc.ExecuteMultiShard(ctx, nil, rss01, twoQueries, session, false, false, nullResultsObserver{}, false)
+	session.ShardSessions[0].RowsAffected = true
+	session.ShardSessions[1].RowsAffected = true
 
 	sbc1.MustFailCommitPrepared = 1
 	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
@@ -1104,6 +1116,8 @@ func TestTxConnCommit2PCConcludeTransactionFail(t *testing.T) {
 	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false, nullResultsObserver{}, false)
 	sc.ExecuteMultiShard(ctx, nil, rss01, twoQueries, session, false, false, nullResultsObserver{}, false)
+	session.ShardSessions[0].RowsAffected = true
+	session.ShardSessions[1].RowsAffected = true
 
 	sbc0.MustFailConcludeTransaction = 1
 	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
@@ -1114,6 +1128,74 @@ func TestTxConnCommit2PCConcludeTransactionFail(t *testing.T) {
 	assert.EqualValues(t, 1, sbc0.StartCommitCount.Load(), "sbc0.StartCommitCount")
 	assert.EqualValues(t, 1, sbc1.CommitPreparedCount.Load(), "sbc1.CommitPreparedCount")
 	assert.EqualValues(t, 1, sbc0.ConcludeTransactionCount.Load(), "sbc0.ConcludeTransactionCount")
+}
+
+func TestTxConnCommit2PCReadOnlyShardsExcluded(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, ctx, "TestTxConnCommit2PCReadOnlyShardsExcluded")
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false, nullResultsObserver{}, false)
+	sc.ExecuteMultiShard(ctx, nil, rss1, queries, session, false, false, nullResultsObserver{}, false)
+
+	session.ShardSessions[0].RowsAffected = true
+	session.ShardSessions[1].RowsAffected = false
+
+	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
+	require.NoError(t, sc.txConn.Commit(ctx, session))
+
+	assert.EqualValues(t, 1, sbc0.CommitCount.Load(), "sbc0.CommitCount")
+	assert.EqualValues(t, 1, sbc1.CommitCount.Load(), "sbc1.CommitCount")
+	assert.EqualValues(t, 0, sbc0.CreateTransactionCount.Load(), "sbc0.CreateTransactionCount")
+	assert.EqualValues(t, 0, sbc1.PrepareCount.Load(), "sbc1.PrepareCount")
+}
+
+func TestTxConnCommit2PCAllShardsReadOnly(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, ctx, "TestTxConnCommit2PCAllShardsReadOnly")
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false, nullResultsObserver{}, false)
+	sc.ExecuteMultiShard(ctx, nil, rss1, queries, session, false, false, nullResultsObserver{}, false)
+
+	session.ShardSessions[0].RowsAffected = false
+	session.ShardSessions[1].RowsAffected = false
+
+	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
+	require.NoError(t, sc.txConn.Commit(ctx, session))
+
+	assert.EqualValues(t, 1, sbc0.CommitCount.Load(), "sbc0.CommitCount")
+	assert.EqualValues(t, 1, sbc1.CommitCount.Load(), "sbc1.CommitCount")
+	assert.EqualValues(t, 0, sbc0.CreateTransactionCount.Load(), "sbc0.CreateTransactionCount")
+	assert.EqualValues(t, 0, sbc1.PrepareCount.Load(), "sbc1.PrepareCount")
+}
+
+func TestTxConnCommit2PCWithReadOnlyShardAndTwoModifiedShards(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbcs, rssm, _ := newTestTxConnEnvNShards(t, ctx, "TestTxConnCommit2PCWithReadOnlyShardAndTwoModifiedShards", 3)
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	sc.ExecuteMultiShard(ctx, nil, rssm[0], queries, session, false, false, nullResultsObserver{}, false)
+	sc.ExecuteMultiShard(ctx, nil, rssm[1], queries, session, false, false, nullResultsObserver{}, false)
+	sc.ExecuteMultiShard(ctx, nil, rssm[2], queries, session, false, false, nullResultsObserver{}, false)
+
+	session.ShardSessions[0].RowsAffected = true
+	session.ShardSessions[1].RowsAffected = false
+	session.ShardSessions[2].RowsAffected = true
+
+	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
+	require.NoError(t, sc.txConn.Commit(ctx, session))
+
+	assert.EqualValues(t, 1, sbcs[1].CommitCount.Load(), "sbcs[1].CommitCount")
+
+	assert.EqualValues(t, 1, sbcs[0].CreateTransactionCount.Load(), "sbcs[0].CreateTransactionCount")
+	assert.EqualValues(t, 1, sbcs[2].PrepareCount.Load(), "sbcs[2].PrepareCount")
+	assert.EqualValues(t, 1, sbcs[0].StartCommitCount.Load(), "sbcs[0].StartCommitCount")
+	assert.EqualValues(t, 1, sbcs[2].CommitPreparedCount.Load(), "sbcs[2].CommitPreparedCount")
+	assert.EqualValues(t, 1, sbcs[0].ConcludeTransactionCount.Load(), "sbcs[0].ConcludeTransactionCount")
 }
 
 func TestTxConnRollback(t *testing.T) {
