@@ -18,6 +18,7 @@ package logic
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -76,14 +77,14 @@ func init() {
 
 // closeVTOrc runs all the operations required to cleanly shutdown VTOrc
 func closeVTOrc() {
-	log.Infof("Starting VTOrc shutdown")
+	log.Info("Starting VTOrc shutdown")
 	atomic.StoreInt32(&hasReceivedSIGTERM, 1)
 	// Poke other go routines to stop cleanly here ...
 	_ = inst.AuditOperation("shutdown", "", "Triggered via SIGTERM")
 	// wait for the locks to be released
 	waitForLocksRelease()
 	ts.Close()
-	log.Infof("VTOrc closed")
+	log.Info("VTOrc closed")
 }
 
 // waitForLocksRelease is used to wait for release of locks
@@ -96,7 +97,7 @@ func waitForLocksRelease() {
 		}
 		select {
 		case <-timeout:
-			log.Infof("wait for lock release timed out. Some locks might not have been released.")
+			log.Info("wait for lock release timed out. Some locks might not have been released.")
 		default:
 			time.Sleep(50 * time.Millisecond)
 			continue
@@ -134,7 +135,7 @@ func handleDiscoveryRequests() {
 // replicas (if any) are also checked.
 func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 	if inst.InstanceIsForgotten(tabletAlias) {
-		log.Infof("discoverInstance: skipping discovery of %+v because it is set to be forgotten", tabletAlias)
+		log.Info(fmt.Sprintf("discoverInstance: skipping discovery of %+v because it is set to be forgotten", tabletAlias))
 		return
 	}
 
@@ -151,7 +152,7 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 		discoveryTime := latency.Elapsed("total")
 		if discoveryTime > config.GetInstancePollTime() {
 			instancePollSecondsExceededCounter.Add(1)
-			log.Warningf("discoverInstance exceeded InstancePollSeconds for %+v, took %.4fs", tabletAlias, discoveryTime.Seconds())
+			log.Warn(fmt.Sprintf("discoverInstance exceeded InstancePollSeconds for %+v, took %.4fs", tabletAlias, discoveryTime.Seconds()))
 		}
 	}()
 
@@ -191,20 +192,20 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 	discoveryInstanceTimings.Add("Other", otherLatency)
 
 	if err != nil {
-		log.Errorf("Failed to discover %s (force: %t), err: %v", tabletAlias, forceDiscovery, err)
+		log.Error(fmt.Sprintf("Failed to discover %s (force: %t), err: %v", tabletAlias, forceDiscovery, err))
 	} else {
-		log.Infof("Discovered %s (force: %t): %+v", tabletAlias, forceDiscovery, instance)
+		log.Info(fmt.Sprintf("Discovered %s (force: %t): %+v", tabletAlias, forceDiscovery, instance))
 	}
 
 	if instance == nil {
 		failedDiscoveriesCounter.Add(1)
 		if util.ClearToLog("discoverInstance", tabletAlias) {
-			log.Warningf("DiscoverInstance(%+v) instance is nil in %.3fs (Backend: %.3fs, Instance: %.3fs), error=%+v",
+			log.Warn(fmt.Sprintf("DiscoverInstance(%+v) instance is nil in %.3fs (Backend: %.3fs, Instance: %.3fs), error=%+v",
 				tabletAlias,
 				totalLatency.Seconds(),
 				backendLatency.Seconds(),
 				instanceLatency.Seconds(),
-				err)
+				err))
 		}
 		return
 	}
@@ -214,7 +215,7 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 func onHealthTick() {
 	tabletAliases, err := inst.ReadOutdatedInstanceKeys()
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 	}
 
 	func() {
@@ -242,13 +243,13 @@ func onHealthTick() {
 // periodically investigated and their status captured, and long since unseen instances are
 // purged and forgotten.
 func ContinuousDiscovery() {
-	log.Infof("continuous discovery: setting up")
+	log.Info("continuous discovery: setting up")
 	recentDiscoveryOperationKeys = cache.New(config.GetInstancePollTime(), time.Second)
 
 	if !config.GetAllowRecovery() {
 		log.Info("--allow-recovery is set to 'false', disabling recovery actions")
 		if err := DisableRecovery(); err != nil {
-			log.Errorf("failed to disable recoveries: %+v", err)
+			log.Error(fmt.Sprintf("failed to disable recoveries: %+v", err))
 			return
 		}
 	}
@@ -262,7 +263,7 @@ func ContinuousDiscovery() {
 	var recoveryEntrance int64
 	var snapshotTopologiesTick <-chan time.Time
 	if config.GetSnapshotTopologyInterval() > 0 {
-		log.Warning("--snapshot-topology-interval is deprecated and will be removed in v25+")
+		log.Warn("--snapshot-topology-interval is deprecated and will be removed in v25+")
 		snapshotTopologiesTick = time.Tick(config.GetSnapshotTopologyInterval())
 	}
 
@@ -272,7 +273,7 @@ func ContinuousDiscovery() {
 	// On termination of the server, we should close VTOrc cleanly
 	servenv.OnTermSync(closeVTOrc)
 
-	log.Infof("continuous discovery: starting")
+	log.Info("continuous discovery: starting")
 	for {
 		select {
 		case <-healthTick:
@@ -309,7 +310,7 @@ func ContinuousDiscovery() {
 		case <-tabletTopoTick:
 			ctx, cancel := context.WithTimeout(context.Background(), config.GetTopoInformationRefreshDuration())
 			if err := refreshAllInformation(ctx); err != nil {
-				log.Errorf("failed to refresh topo information: %+v", err)
+				log.Error(fmt.Sprintf("failed to refresh topo information: %+v", err))
 			}
 			cancel()
 		}

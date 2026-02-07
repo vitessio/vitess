@@ -404,7 +404,7 @@ func TestMoveTablesUnsharded(t *testing.T) {
 
 	tenv.tmc.setVReplicationExecResults(sourceTablet.tablet, checkForJournal, &sqltypes.Result{})
 	for _, ftc := range targetShards {
-		log.Infof("Testing target shard %s", ftc.tablet.Alias)
+		log.Info(fmt.Sprintf("Testing target shard %s", ftc.tablet.Alias))
 		addInvariants(ftc.vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
 		getCopyStateQuery := fmt.Sprintf(sqlGetVReplicationCopyStatus, sidecar.GetIdentifier(), vreplID)
 		ftc.vrdbClient.AddInvariant(getCopyStateQuery, &sqltypes.Result{})
@@ -672,7 +672,7 @@ func TestMoveTablesSharded(t *testing.T) {
 
 	tenv.tmc.setVReplicationExecResults(sourceTablet.tablet, checkForJournal, &sqltypes.Result{})
 	for _, ftc := range targetShards {
-		log.Infof("Testing target shard %s", ftc.tablet.Alias)
+		log.Info(fmt.Sprintf("Testing target shard %s", ftc.tablet.Alias))
 		addInvariants(ftc.vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
 		getCopyStateQuery := fmt.Sprintf(sqlGetVReplicationCopyStatus, sidecar.GetIdentifier(), vreplID)
 		ftc.vrdbClient.AddInvariant(getCopyStateQuery, &sqltypes.Result{})
@@ -1072,7 +1072,7 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			// which doesn't play well with subtests.
 			defer func() {
 				if err := recover(); err != nil {
-					log.Infof("Got panic in test: %v", err)
+					log.Info(fmt.Sprintf("Got panic in test: %v", err))
 					log.Flush()
 					t.Errorf("Recovered from panic: %v, stack: %s", err, debug.Stack())
 				}

@@ -18,7 +18,7 @@ package querythrottler
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 
 	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -65,6 +65,6 @@ type testLogCapture struct {
 	logs []string
 }
 
-func (lc *testLogCapture) captureLog(msg string, args ...any) {
-	lc.logs = append(lc.logs, fmt.Sprintf(msg, args...))
+func (lc *testLogCapture) captureLog(msg string, _ ...slog.Attr) {
+	lc.logs = append(lc.logs, msg)
 }

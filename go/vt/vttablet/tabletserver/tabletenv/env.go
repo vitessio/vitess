@@ -19,6 +19,8 @@ limitations under the License.
 package tabletenv
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
@@ -63,7 +65,7 @@ func (te *testEnv) Environment() *vtenv.Environment { return te.env }
 
 func (te *testEnv) LogError() {
 	if x := recover(); x != nil {
-		log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
+		log.Error(fmt.Sprintf("Uncaught panic:\n%v\n%s", x, tb.Stack(4)))
 		te.Stats().InternalErrors.Add("Panic", 1)
 	}
 }

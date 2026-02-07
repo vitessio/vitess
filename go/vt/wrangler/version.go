@@ -32,7 +32,7 @@ func (wr *Wrangler) GetVersion(ctx context.Context, tabletAlias *topodatapb.Tabl
 	resp, err := wr.VtctldServer().GetVersion(ctx, &vtctldatapb.GetVersionRequest{
 		TabletAlias: tabletAlias,
 	})
-	log.Infof("Tablet %v is running version '%v'", topoproto.TabletAliasString(tabletAlias), resp.Version)
+	log.Info(fmt.Sprintf("Tablet %v is running version '%v'", topoproto.TabletAliasString(tabletAlias), resp.Version))
 	return resp.Version, err
 }
 

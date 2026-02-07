@@ -183,7 +183,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 	}
 	configFile, err := os.Create(vtgate.ConfigFile)
 	if err != nil {
-		log.Errorf("cannot create config file for vtgate: %v", err)
+		log.Error(fmt.Sprintf("cannot create config file for vtgate: %v", err))
 		return err
 	}
 	_, err = configFile.WriteString(vtgate.Config.ToJSONString())
@@ -225,7 +225,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 
 	errFile, err := os.Create(path.Join(vtgate.LogDir, "vtgate-stderr.txt"))
 	if err != nil {
-		log.Errorf("cannot create error log file for vtgate: %v", err)
+		log.Error(fmt.Sprintf("cannot create error log file for vtgate: %v", err))
 		return err
 	}
 	vtgate.proc.Stderr = errFile
@@ -234,7 +234,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 	vtgate.proc.Env = append(vtgate.proc.Env, os.Environ()...)
 	vtgate.proc.Env = append(vtgate.proc.Env, DefaultVttestEnv)
 
-	log.Infof("Running vtgate with command: %v", strings.Join(vtgate.proc.Args, " "))
+	log.Info(fmt.Sprintf("Running vtgate with command: %v", strings.Join(vtgate.proc.Args, " ")))
 
 	err = vtgate.proc.Start()
 	if err != nil {
@@ -257,9 +257,9 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		case err := <-vtgate.exit:
 			errBytes, ferr := os.ReadFile(vtgate.ErrorLog)
 			if ferr == nil {
-				log.Errorf("vtgate error log contents:\n%s", string(errBytes))
+				log.Error("vtgate error log contents:\n" + string(errBytes))
 			} else {
-				log.Errorf("Failed to read the vtgate error log file %q: %v", vtgate.ErrorLog, ferr)
+				log.Error(fmt.Sprintf("Failed to read the vtgate error log file %q: %v", vtgate.ErrorLog, ferr))
 			}
 			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vtgate.Name, err)
 		default:
@@ -314,8 +314,7 @@ func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string, endPointsCou
 // WaitForStatusOfTabletInShard function waits till status of a tablet in shard is 1
 // endPointsCount: how many endpoints to wait for
 func (vtgate *VtgateProcess) WaitForStatusOfTabletInShard(name string, endPointsCount int, timeout time.Duration) error {
-	log.Infof("Waiting for healthy status of %d %s tablets in cell %s",
-		endPointsCount, name, vtgate.Cell)
+	log.Info(fmt.Sprintf("Waiting for healthy status of %d %s tablets in cell %s", endPointsCount, name, vtgate.Cell))
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		if vtgate.GetStatusForTabletOfShard(name, endPointsCount) {

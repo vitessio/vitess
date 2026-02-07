@@ -18,7 +18,9 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"io"
+	"os"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -75,10 +77,11 @@ var (
 )
 
 // fatal ensures the tracer is closed and final spans are sent before issuing
-// a log.Fatal call with the given args.
+// a log.Error call followed by os.Exit(1) with the given args.
 func fatal(args ...any) {
 	trace.LogErrorsWhenClosing(traceCloser)
-	log.Fatal(args...)
+	log.Error(fmt.Sprint(args...))
+	os.Exit(1)
 }
 
 // startTracing checks the value of --tracer and then starts tracing, populating
@@ -86,12 +89,12 @@ func fatal(args ...any) {
 func startTracing(cmd *cobra.Command) {
 	tracer, err := cmd.Flags().GetString("tracer")
 	if err != nil {
-		log.Warningf("not starting tracer; err: %s", err)
+		log.Warn(fmt.Sprintf("not starting tracer; err: %s", err))
 		return
 	}
 
 	if tracer == "" || tracer == "noop" {
-		log.Warningf("starting tracing with noop tracer")
+		log.Warn("starting tracing with noop tracer")
 	}
 
 	traceCloser = trace.StartTracing("vtadmin")
@@ -136,7 +139,7 @@ func run(cmd *cobra.Command, args []string) {
 	}
 
 	if cacheRefreshKey == "" {
-		log.Warningf("no cache-refresh-key set; forcing cache refreshes will not be possible")
+		log.Warn("no cache-refresh-key set; forcing cache refreshes will not be possible")
 	}
 	cache.SetCacheRefreshKey(cacheRefreshKey)
 
@@ -228,7 +231,8 @@ func main() {
 
 	rootCmd.SetGlobalNormalizationFunc(utils.NormalizeUnderscoresToDashes)
 	if err := rootCmd.Execute(); err != nil {
-		log.Fatal(err)
+		log.Error(fmt.Sprint(err))
+		os.Exit(1)
 	}
 }
 

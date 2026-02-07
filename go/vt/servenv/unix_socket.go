@@ -17,6 +17,7 @@ limitations under the License.
 package servenv
 
 import (
+	"fmt"
 	"net"
 	"os"
 
@@ -33,7 +34,7 @@ var socketFile string
 // serveSocketFile listen to the named socket and serves RPCs on it.
 func serveSocketFile() {
 	if socketFile == "" {
-		log.Infof("Not listening on socket file")
+		log.Info("Not listening on socket file")
 		return
 	}
 	name := socketFile
@@ -42,15 +43,17 @@ func serveSocketFile() {
 	if _, err := os.Stat(name); err == nil {
 		err = os.Remove(name)
 		if err != nil {
-			log.Exitf("Cannot remove socket file %v: %v", name, err)
+			log.Error(fmt.Sprintf("Cannot remove socket file %v: %v", name, err))
+			os.Exit(1)
 		}
 	}
 
 	l, err := net.Listen("unix", name)
 	if err != nil {
-		log.Exitf("Error listening on socket file %v: %v", name, err)
+		log.Error(fmt.Sprintf("Error listening on socket file %v: %v", name, err))
+		os.Exit(1)
 	}
-	log.Infof("Listening on socket file %v for gRPC", name)
+	log.Info(fmt.Sprintf("Listening on socket file %v for gRPC", name))
 	go GRPCServer.Serve(l)
 }
 

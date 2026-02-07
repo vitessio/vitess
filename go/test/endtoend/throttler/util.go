@@ -355,14 +355,14 @@ func WaitForThrottlerStatusEnabled(t *testing.T, vtctldProcess *cluster.VtctldCl
 		class := strings.ToLower(gjson.Get(tabletBody, "0.Class").String())
 		value := strings.ToLower(gjson.Get(tabletBody, "0.Value").String())
 		if class == "unhappy" && strings.Contains(value, "not serving") {
-			log.Infof("tablet %s is Not Serving, so ignoring throttler status as the throttler will not be Opened", tablet.Alias)
+			log.Info(fmt.Sprintf("tablet %s is Not Serving, so ignoring throttler status as the throttler will not be Opened", tablet.Alias))
 			return
 		}
 
 		status, err := GetThrottlerStatus(vtctldProcess, tablet)
 		good := func() bool {
 			if err != nil {
-				log.Errorf("GetThrottlerStatus failed: %v", err)
+				log.Error(fmt.Sprintf("GetThrottlerStatus failed: %v", err))
 				return false
 			}
 			if status.IsEnabled != enabled {
@@ -425,7 +425,7 @@ func WaitForThrottledApp(t *testing.T, vtctldProcess *cluster.VtctldClientProces
 		class := strings.ToLower(gjson.Get(tabletBody, "0.Class").String())
 		value := strings.ToLower(gjson.Get(tabletBody, "0.Value").String())
 		if class == "unhappy" && strings.Contains(value, "not serving") {
-			log.Infof("tablet %s is Not Serving, so ignoring throttler status as the throttler will not be Opened", tablet.Alias)
+			log.Info(fmt.Sprintf("tablet %s is Not Serving, so ignoring throttler status as the throttler will not be Opened", tablet.Alias))
 			return
 		}
 		select {
@@ -478,12 +478,12 @@ func WaitForCheckThrottlerResult(t *testing.T, vtctldProcess *cluster.VtctldClie
 func getHTTPBody(url string) string {
 	resp, err := http.Get(url)
 	if err != nil {
-		log.Infof("http Get returns %+v", err)
+		log.Info(fmt.Sprintf("http Get returns %+v", err))
 		return ""
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		log.Infof("http Get returns status %d", resp.StatusCode)
+		log.Info(fmt.Sprintf("http Get returns status %d", resp.StatusCode))
 		return ""
 	}
 	respByte, _ := io.ReadAll(resp.Body)

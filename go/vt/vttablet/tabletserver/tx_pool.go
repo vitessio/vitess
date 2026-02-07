@@ -18,6 +18,7 @@ package tabletserver
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -129,7 +130,7 @@ func (tp *TxPool) Shutdown(ctx context.Context) {
 func (tp *TxPool) transactionKiller() {
 	defer tp.env.LogError()
 	for _, conn := range tp.scp.GetElapsedTimeout(vterrors.TxKillerRollback) {
-		log.Warningf("killing transaction (exceeded timeout: %v): %s", conn.timeout, conn.String(tp.env.Config().SanitizeLogMessages, tp.env.Environment().Parser()))
+		log.Warn(fmt.Sprintf("killing transaction (exceeded timeout: %v): %s", conn.timeout, conn.String(tp.env.Config().SanitizeLogMessages, tp.env.Environment().Parser())))
 		switch {
 		case conn.IsTainted():
 			conn.Close()
@@ -202,7 +203,7 @@ func (tp *TxPool) RollbackAndRelease(ctx context.Context, txConn *StatefulConnec
 	defer txConn.Release(tx.TxRollback)
 	rollbackError := tp.Rollback(ctx, txConn)
 	if rollbackError != nil {
-		log.Errorf("tried to rollback, but failed with: %v", rollbackError.Error())
+		log.Error(fmt.Sprintf("tried to rollback, but failed with: %v", rollbackError.Error()))
 	}
 }
 

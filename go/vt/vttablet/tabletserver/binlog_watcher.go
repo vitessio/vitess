@@ -18,6 +18,7 @@ package tabletserver
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -96,7 +97,7 @@ func (blw *BinlogWatcher) process(ctx context.Context) {
 		err := blw.vs.Stream(ctx, "current", nil, filter, throttlerapp.BinlogWatcherName, func(events []*binlogdatapb.VEvent) error {
 			return nil
 		}, nil)
-		log.Infof("ReplicationWatcher VStream ended: %v, retrying in 5 seconds", err)
+		log.Info(fmt.Sprintf("ReplicationWatcher VStream ended: %v, retrying in 5 seconds", err))
 		select {
 		case <-ctx.Done():
 			return

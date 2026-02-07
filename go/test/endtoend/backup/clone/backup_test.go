@@ -17,6 +17,7 @@ limitations under the License.
 package clone
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -88,7 +89,7 @@ func TestCloneBackup(t *testing.T) {
 	)
 
 	// Take a backup using clone from primary.
-	log.Infof("Starting vtbackup with --clone-from-primary")
+	log.Info("Starting vtbackup with --clone-from-primary")
 	err = vtbackupWithClone(t)
 	require.NoError(t, err)
 
@@ -103,7 +104,7 @@ func TestCloneBackup(t *testing.T) {
 
 	// Now bring up replica2 and restore from the backup we just created.
 	// This verifies the clone-based backup actually contains the data.
-	log.Infof("Restoring replica2 from backup to verify clone worked")
+	log.Info("Restoring replica2 from backup to verify clone worked")
 	err = localCluster.InitTablet(replica2, keyspaceName, shardName)
 	require.NoError(t, err)
 	restore(t, replica2, "replica", "SERVING")
@@ -118,7 +119,7 @@ func TestCloneBackup(t *testing.T) {
 		30*time.Second,
 		100*time.Millisecond,
 	)
-	log.Infof("Clone backup verification successful: replica2 has all data")
+	log.Info("Clone backup verification successful: replica2 has all data")
 }
 
 func vtbackupWithClone(t *testing.T) error {
@@ -141,7 +142,7 @@ func vtbackupWithClone(t *testing.T) error {
 		"--db-clone-use-ssl=false",
 	}
 
-	log.Infof("Starting vtbackup with clone args: %v", extraArgs)
+	log.Info(fmt.Sprintf("Starting vtbackup with clone args: %v", extraArgs))
 	return localCluster.StartVtbackup(newInitDBFile, false, keyspaceName, shardName, cell, extraArgs...)
 }
 
@@ -161,7 +162,7 @@ func verifyBackupCount(t *testing.T, shardKsName string, expected int) []string 
 
 func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForState string) {
 	// Start tablet with restore enabled. MySQL is already running from TestMain.
-	log.Infof("restoring tablet %s", time.Now())
+	log.Info(fmt.Sprintf("restoring tablet %s", time.Now()))
 	tablet.VttabletProcess.ExtraArgs = vttabletExtraArgs
 	tablet.VttabletProcess.TabletType = tabletType
 	tablet.VttabletProcess.ServingStatus = waitForState

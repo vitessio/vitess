@@ -53,10 +53,10 @@ func waitForLowLag(t *testing.T, clusterInstance *cluster.LocalProcessCluster, k
 
 		require.NoError(t, err, output)
 		if lagSeconds <= acceptableLagSeconds {
-			log.Infof("waitForLowLag acceptable for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds)
+			log.Info(fmt.Sprintf("waitForLowLag acceptable for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds))
 			break
 		} else {
-			log.Infof("waitForLowLag too high for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds)
+			log.Info(fmt.Sprintf("waitForLowLag too high for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds))
 		}
 		time.Sleep(waitDuration)
 		duration -= waitDuration

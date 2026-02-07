@@ -370,17 +370,17 @@ func (r *resolver) watch() {
 		case nil:
 			switch len(state.Addresses) {
 			case 0:
-				log.Warningf("%s: found no %ss (cluster %s); updating grpc clientconn state anyway", logPrefix, r.component, r.cluster)
+				log.Warn(fmt.Sprintf("%s: found no %ss (cluster %s); updating grpc clientconn state anyway", logPrefix, r.component, r.cluster))
 			default:
-				log.Infof("%s: found %d %ss (cluster %s)", logPrefix, len(state.Addresses), r.component, r.cluster)
+				log.Info(fmt.Sprintf("%s: found %d %ss (cluster %s)", logPrefix, len(state.Addresses), r.component, r.cluster))
 			}
 
 			if updateErr := r.cc.UpdateState(*state); updateErr != nil {
-				log.Errorf("%s: failed to update %ss addresses for %s (cluster %s): %s", logPrefix, r.component, r.cluster, updateErr)
+				log.Error(fmt.Sprintf("%s: failed to update %ss addresses (cluster %s): %s", logPrefix, r.component, r.cluster, updateErr))
 				err = updateErr
 			}
 		default:
-			log.Errorf("%s: failed to resolve new addresses for %s (cluster %s): %s", logPrefix, r.component, r.cluster, err)
+			log.Error(fmt.Sprintf("%s: failed to resolve new addresses for %s (cluster %s): %s", logPrefix, r.component, r.cluster, err))
 			r.cc.ReportError(err)
 		}
 
@@ -425,7 +425,7 @@ func (r *resolver) resolve() (*grpcresolver.State, error) {
 	span.Annotate("cluster_id", r.cluster)
 	span.Annotate("component", r.component)
 
-	log.Infof("%s: resolving %ss (cluster %s)", logPrefix, r.component, r.cluster)
+	log.Info(fmt.Sprintf("%s: resolving %ss (cluster %s)", logPrefix, r.component, r.cluster))
 
 	ctx, cancel := context.WithTimeout(ctx, r.opts.DiscoveryTimeout)
 	defer cancel()

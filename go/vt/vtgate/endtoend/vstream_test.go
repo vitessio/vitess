@@ -250,10 +250,10 @@ func TestVStreamCopyBasic(t *testing.T) {
 				t.Fatalf("len(events)=%v are not expected\n", len(evs))
 			}
 		case io.EOF:
-			log.Infof("stream ended\n")
+			log.Info("stream ended\n")
 			cancel()
 		default:
-			log.Errorf("Returned err %v", err)
+			log.Error(fmt.Sprintf("Returned err %v", err))
 			t.Fatalf("remote error: %v\n", err)
 		}
 	}
@@ -373,10 +373,10 @@ func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
 						require.FailNow(t, fmt.Sprintf("len(events)=%d are not expected\n", len(evs)))
 					}
 				case io.EOF:
-					log.Infof("stream ended\n")
+					log.Info("stream ended\n")
 					cancel()
 				default:
-					log.Errorf("Returned err %v", err)
+					log.Error(fmt.Sprintf("Returned err %v", err))
 					require.FailNow(t, "remote error: %v\n", err)
 				}
 			}
@@ -605,10 +605,10 @@ func TestVStreamCopyResume(t *testing.T) {
 				return
 			}
 		case io.EOF:
-			log.Infof("stream ended\n")
+			log.Info("stream ended\n")
 			cancel()
 		default:
-			log.Errorf("Returned err %v", err)
+			log.Error(fmt.Sprintf("Returned err %v", err))
 			t.Fatalf("remote error: %v\n", err)
 		}
 	}
@@ -659,10 +659,10 @@ func TestVStreamCurrent(t *testing.T) {
 				return
 			}
 		case io.EOF:
-			log.Infof("stream ended\n")
+			log.Info("stream ended\n")
 			cancel()
 		default:
-			log.Errorf("Returned err %v", err)
+			log.Error(fmt.Sprintf("Returned err %v", err))
 			t.Fatalf("remote error: %v\n", err)
 		}
 	}
@@ -761,10 +761,10 @@ func TestVStreamSharded(t *testing.T) {
 				return
 			}
 		case io.EOF:
-			log.Infof("stream ended\n")
+			log.Info("stream ended\n")
 			cancel()
 		default:
-			log.Errorf("Returned err %v", err)
+			log.Error(fmt.Sprintf("Returned err %v", err))
 			t.Fatalf("remote error: %v\n", err)
 		}
 	}
@@ -915,7 +915,7 @@ func printEvents(evs []*binlogdatapb.VEvent) {
 	}
 	s += sSb911.String()
 	s += "===END===" + "\n"
-	log.Infof("%s", s)
+	log.Info(s)
 }
 
 // Sort the VEvents by the first row change's after value bytes primarily, with

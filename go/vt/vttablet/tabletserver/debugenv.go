@@ -232,7 +232,7 @@ func respondWithHTML(w http.ResponseWriter, vars []envValue, msg string) {
 	w.Write(debugEnvHeader)
 	for _, v := range vars {
 		if err := debugEnvRow.Execute(w, v); err != nil {
-			log.Errorf("debugenv: couldn't execute template: %v", err)
+			log.Error(fmt.Sprintf("debugenv: couldn't execute template: %v", err))
 		}
 	}
 	w.Write(endTable)
