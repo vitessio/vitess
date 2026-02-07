@@ -2342,8 +2342,8 @@ func testDeclarative(t *testing.T) {
 	}
 
 	initTable := func(t *testing.T) {
-		log.Infof("initTable begin")
-		defer log.Infof("initTable complete")
+		log.Info("initTable begin")
+		defer log.Info("initTable complete")
 
 		ctx := t.Context()
 		conn, err := mysql.Connect(ctx, &vtParams)
@@ -2369,7 +2369,7 @@ func testDeclarative(t *testing.T) {
 		writeMetrics.mu.Lock()
 		defer writeMetrics.mu.Unlock()
 
-		log.Infof("%s", writeMetrics.String())
+		log.Info(writeMetrics.String())
 
 		ctx := t.Context()
 		conn, err := mysql.Connect(ctx, &vtParams)
@@ -2381,7 +2381,7 @@ func testDeclarative(t *testing.T) {
 
 		row := rs.Named().Row()
 		require.NotNil(t, row)
-		log.Infof("testSelectTableMetrics, row: %v", row)
+		log.Info(fmt.Sprintf("testSelectTableMetrics, row: %v", row))
 		numRows := row.AsInt64("num_rows", 0)
 		sumUpdates := row.AsInt64("sum_updates", 0)
 

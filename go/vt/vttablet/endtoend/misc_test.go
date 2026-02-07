@@ -525,36 +525,34 @@ func TestDBAStatements(t *testing.T) {
 }
 
 type testLogger struct {
-	logs        []string
-	savedInfof  func(format string, args ...any)
-	savedErrorf func(format string, args ...any)
+	logs       []string
+	savedInfo  func(msg string, args ...any)
+	savedError func(msg string, args ...any)
 }
 
 func newTestLogger() *testLogger {
 	tl := &testLogger{
-		savedInfof:  log.Infof,
-		savedErrorf: log.Errorf,
+		savedInfo:  log.Info,
+		savedError: log.Error,
 	}
-	log.Infof = tl.recordInfof
-	log.Errorf = tl.recordErrorf
+	log.Info = tl.recordInfo
+	log.Error = tl.recordError
 	return tl
 }
 
 func (tl *testLogger) Close() {
-	log.Infof = tl.savedInfof
-	log.Errorf = tl.savedErrorf
+	log.Info = tl.savedInfo
+	log.Error = tl.savedError
 }
 
-func (tl *testLogger) recordInfof(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
+func (tl *testLogger) recordInfo(msg string, args ...any) {
 	tl.logs = append(tl.logs, msg)
-	tl.savedInfof(msg)
+	tl.savedInfo(msg, args...)
 }
 
-func (tl *testLogger) recordErrorf(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
+func (tl *testLogger) recordError(msg string, args ...any) {
 	tl.logs = append(tl.logs, msg)
-	tl.savedErrorf(msg)
+	tl.savedError(msg, args...)
 }
 
 func (tl *testLogger) getLog(i int) string {

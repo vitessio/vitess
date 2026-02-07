@@ -151,7 +151,7 @@ func TeardownCluster(clusterInstance *cluster.LocalProcessCluster) {
 	// We're running in the CI, so free up disk space for any
 	// subsequent tests.
 	if err := os.RemoveAll(usedRoot); err != nil {
-		log.Errorf("Failed to remove previously used VTDATAROOT (%s): %v", usedRoot, err)
+		log.Error(fmt.Sprintf("Failed to remove previously used VTDATAROOT (%s): %v", usedRoot, err))
 	}
 }
 
@@ -207,7 +207,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
-			log.Infof("Starting MySql for tablet %v", tablet.Alias)
+			log.Info(fmt.Sprintf("Starting MySql for tablet %v", tablet.Alias))
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			require.NoError(t, err, "Error starting start mysql")
 			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
@@ -291,7 +291,7 @@ func StartNewVTTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 		clusterInstance.DefaultCharset)
 	tablet.VttabletProcess.SupportsBackup = supportsBackup
 
-	log.Infof("Starting MySql for tablet %v", tablet.Alias)
+	log.Info(fmt.Sprintf("Starting MySql for tablet %v", tablet.Alias))
 	proc, err := tablet.MysqlctlProcess.StartProcess()
 	require.NoError(t, err, "Error starting start mysql")
 	if err := proc.Wait(); err != nil {
@@ -644,9 +644,9 @@ func GetShardReplicationPositions(t *testing.T, clusterInstance *cluster.LocalPr
 		strArray = strArray[:len(strArray)-1] // Truncate slice, remove empty line
 	}
 	if doPrint {
-		log.Infof("Positions:")
+		log.Info("Positions:")
 		for _, pos := range strArray {
-			log.Infof("\t%s", pos)
+			log.Info("\t" + pos)
 		}
 	}
 	return strArray

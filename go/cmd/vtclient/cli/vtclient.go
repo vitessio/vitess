@@ -195,7 +195,7 @@ func _run(cmd *cobra.Command, args []string) (*results, error) {
 		return nil, fmt.Errorf("client error: %w", err)
 	}
 
-	log.Infof("Sending the query...")
+	log.Info("Sending the query...")
 
 	ctx, cancel := context.WithTimeout(cmd.Context(), timeout)
 	defer cancel()

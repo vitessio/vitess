@@ -36,7 +36,7 @@ func init() {
 
 		file, err := os.OpenFile(pidFile, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o666)
 		if err != nil {
-			log.Errorf("Unable to create pid file '%s': %v", pidFile, err)
+			log.Error(fmt.Sprintf("Unable to create pid file '%s': %v", pidFile, err))
 			return
 		}
 		pidFileCreated = true
@@ -54,7 +54,7 @@ func init() {
 		}
 
 		if err := os.Remove(pidFile); err != nil {
-			log.Errorf("Unable to remove pid file '%s': %v", pidFile, err)
+			log.Error(fmt.Sprintf("Unable to remove pid file '%s': %v", pidFile, err))
 		}
 	})
 }

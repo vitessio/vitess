@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math"
 	"net/http"
 	"os"
@@ -363,7 +364,7 @@ func (tsv *TabletServer) Environment() *vtenv.Environment {
 // LogError satisfies tabletenv.Env.
 func (tsv *TabletServer) LogError() {
 	if x := recover(); x != nil {
-		log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
+		log.Error(fmt.Sprintf("Uncaught panic:\n%v\n%s", x, tb.Stack(4)))
 		tsv.stats.InternalErrors.Add("Panic", 1)
 	}
 }
@@ -410,9 +411,9 @@ func (tsv *TabletServer) InitACL(tableACLConfigFile string, reloadACLConfigFileI
 		for range sigChan {
 			err := tsv.initACL(tableACLConfigFile)
 			if err != nil {
-				log.Errorf("Error reloading ACL config file %s in SIGHUP handler: %v", tableACLConfigFile, err)
+				log.Error(fmt.Sprintf("Error reloading ACL config file %s in SIGHUP handler: %v", tableACLConfigFile, err))
 			} else {
-				log.Infof("Successfully reloaded ACL file %s in SIGHUP handler", tableACLConfigFile)
+				log.Info(fmt.Sprintf("Successfully reloaded ACL file %s in SIGHUP handler", tableACLConfigFile))
 			}
 		}
 	}()
@@ -638,10 +639,8 @@ func (tsv *TabletServer) getPriorityFromOptions(options *querypb.ExecuteOptions)
 	// This should never error out, as the value for Priority has been validated in the vtgate already.
 	// Still, handle it just to make sure.
 	if err != nil {
-		log.Errorf(
-			"The value of the %s query directive could not be converted to integer, using the "+
-				"default value. Error was: %s",
-			sqlparser.DirectivePriority, priority, err)
+		log.Error(fmt.Sprintf("The value of the %s query directive could not be converted to integer, using the "+
+			"default value %d. Error was: %s", sqlparser.DirectivePriority, priority, err))
 
 		return priority
 	}
@@ -1662,17 +1661,17 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		callerID = fmt.Sprintf(" (CallerID: %s)", cid.Username)
 	}
 
-	logMethod := log.Errorf
+	logMethod := log.Error
 	// Suppress or demote some errors in logs.
 	switch errCode {
 	case vtrpcpb.Code_FAILED_PRECONDITION, vtrpcpb.Code_ALREADY_EXISTS:
 		logMethod = nil
 	case vtrpcpb.Code_RESOURCE_EXHAUSTED:
-		logMethod = logPoolFull.Errorf
+		logMethod = func(msg string, _ ...slog.Attr) { logPoolFull.Errorf("%s", msg) }
 	case vtrpcpb.Code_ABORTED:
-		logMethod = log.Warningf
+		logMethod = log.Warn
 	case vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_DEADLINE_EXCEEDED:
-		logMethod = log.Infof
+		logMethod = log.Info
 	}
 
 	// If TerseErrors is on, strip the error message returned by MySQL and only

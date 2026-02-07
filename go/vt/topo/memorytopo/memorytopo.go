@@ -22,7 +22,9 @@ package memorytopo
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/rand/v2"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -270,8 +272,8 @@ func (n *node) PropagateWatchError(err error) {
 }
 
 // NewServerAndFactory returns a new MemoryTopo and the backing factory for all
-// the cells. It will create one cell for each parameter passed in.  It will log.Exit out
-// in case of a problem.
+// the cells. It will create one cell for each parameter passed in. It will exit
+// the process in case of a problem.
 func NewServerAndFactory(ctx context.Context, cells ...string) (*topo.Server, *Factory) {
 	f := &Factory{
 		cells:           make(map[string]*node),
@@ -283,12 +285,14 @@ func NewServerAndFactory(ctx context.Context, cells ...string) (*topo.Server, *F
 
 	ts, err := topo.NewWithFactory(f, "" /*serverAddress*/, "" /*root*/)
 	if err != nil {
-		log.Exitf("topo.NewWithFactory() failed: %v", err)
+		log.Error(fmt.Sprintf("topo.NewWithFactory() failed: %v", err))
+		os.Exit(1)
 	}
 	for _, cell := range cells {
 		f.cells[cell] = f.newDirectory(cell, nil)
 		if err := ts.CreateCellInfo(ctx, cell, &topodatapb.CellInfo{}); err != nil {
-			log.Exitf("ts.CreateCellInfo(%v) failed: %v", cell, err)
+			log.Error(fmt.Sprintf("ts.CreateCellInfo(%v) failed: %v", cell, err))
+			os.Exit(1)
 		}
 	}
 	return ts, f

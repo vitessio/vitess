@@ -17,7 +17,6 @@ limitations under the License.
 package vtgate
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/aws/smithy-go/ptr"
@@ -274,14 +273,14 @@ func TestExecutePanic(t *testing.T) {
 		Autocommit: false,
 	}
 
-	original := log.Errorf
+	original := log.Error
 	defer func() {
-		log.Errorf = original
+		log.Error = original
 	}()
 
 	var logMessage string
-	log.Errorf = func(format string, args ...any) {
-		logMessage = fmt.Sprintf(format, args...)
+	log.Error = func(msg string, args ...any) {
+		logMessage = msg
 	}
 
 	assert.Panics(t, func() {

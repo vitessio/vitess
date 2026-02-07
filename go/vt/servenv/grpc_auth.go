@@ -18,6 +18,8 @@ package servenv
 
 import (
 	"context"
+	"fmt"
+	"os"
 
 	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
@@ -63,16 +65,18 @@ var authPlugins = make(map[string]func() (Authenticator, error))
 // RegisterAuthPlugin registers an implementation of AuthServer.
 func RegisterAuthPlugin(name string, authPlugin func() (Authenticator, error)) {
 	if _, ok := authPlugins[name]; ok {
-		log.Fatalf("AuthPlugin named %v already exists", name)
+		log.Error(fmt.Sprintf("AuthPlugin named %v already exists", name))
+		os.Exit(1)
 	}
 	authPlugins[name] = authPlugin
 }
 
-// GetAuthenticator returns an AuthPlugin by name, or log.Fatalf.
+// GetAuthenticator returns an AuthPlugin by name, or exits the process.
 func GetAuthenticator(name string) func() (Authenticator, error) {
 	authPlugin, ok := authPlugins[name]
 	if !ok {
-		log.Fatalf("no AuthPlugin name %v registered", name)
+		log.Error(fmt.Sprintf("no AuthPlugin name %v registered", name))
+		os.Exit(1)
 	}
 	return authPlugin
 }

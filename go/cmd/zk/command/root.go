@@ -43,13 +43,19 @@ or the file specified in the ZK_CLIENT_CONFIG environment variable.
 
 The local cell may be overridden with the ZK_CLIENT_LOCAL_CELL environment
 variable.`,
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			if err := log.Init(); err != nil {
+				return err
+			}
+
 			logutil.PurgeLogs()
 
 			// Connect to the server.
 			fs = &zkfs.FS{
 				Conn: zk2topo.Connect(server),
 			}
+
+			return nil
 		},
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
 			logutil.Flush()
