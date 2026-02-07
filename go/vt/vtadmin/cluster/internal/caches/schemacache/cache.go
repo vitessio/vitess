@@ -60,11 +60,11 @@ type schemaCache = cache.Cache[Key, []*vtadminpb.Schema] // define a type alias 
 func AddOrBackfill(c *schemaCache, schemas []*vtadminpb.Schema, key Key, d time.Duration, opts LoadOptions) {
 	if opts.isFullPayload() {
 		if err := c.Add(key, schemas, d); err != nil {
-			log.Warningf("failed to add schema to cache for %+v: %s", key, err)
+			log.Warn(fmt.Sprintf("failed to add schema to cache for %+v: %s", key, err))
 		}
 	} else {
 		if !c.EnqueueBackfill(key) {
-			log.Warningf("failed to enqueue backfill for schema cache %+v", key)
+			log.Warn(fmt.Sprintf("failed to enqueue backfill for schema cache %+v", key))
 		}
 	}
 }
@@ -168,7 +168,7 @@ func LoadOne(c *schemaCache, key Key, opts LoadOptions) (schema *vtadminpb.Schem
 
 	if len(schemas) != 1 {
 		err = vterrors.Errorf(vtrpc.Code_INTERNAL, "impossible: cache should have exactly 1 schema for request %+v (have %d)", key, len(schemas))
-		log.Errorf(err.Error())
+		log.Error(err.Error())
 		return nil, found, err
 	}
 

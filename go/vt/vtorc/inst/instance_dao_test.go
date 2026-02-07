@@ -593,7 +593,7 @@ last_attempted_check <= last_checked as use1,
 last_checked < DATETIME('now', '-1500 second') as is_outdated1,
 last_checked < DATETIME('now', '-3000 second') as is_outdated2
 from database_instance`, func(rowMap sqlutils.RowMap) error {
-				log.Errorf("Row in database_instance - %+v", rowMap)
+				log.Error(fmt.Sprintf("Row in database_instance - %+v", rowMap))
 				return nil
 			})
 			require.NoError(t, errInDataCollection)

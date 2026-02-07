@@ -88,7 +88,7 @@ func (controller *LocalController) Open(ctx context.Context) error {
 		dirpath := path.Join(controller.schemaChangeDir, fileinfo.Name())
 		schemaChanges, err := os.ReadDir(path.Join(dirpath, "input"))
 		if err != nil {
-			log.Warningf("there is no input dir in %s", dirpath)
+			log.Warn("there is no input dir in " + dirpath)
 			continue
 		}
 		// found a schema change
@@ -148,7 +148,7 @@ func (controller *LocalController) OnReadSuccess(ctx context.Context) error {
 
 // OnReadFail is no-op
 func (controller *LocalController) OnReadFail(ctx context.Context, err error) error {
-	log.Errorf("failed to read file: %s, error: %v", controller.sqlPath, err)
+	log.Error(fmt.Sprintf("failed to read file: %s, error: %v", controller.sqlPath, err))
 	return nil
 }
 

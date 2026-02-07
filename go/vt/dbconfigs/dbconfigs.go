@@ -23,6 +23,8 @@ package dbconfigs
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"os"
 
 	"github.com/spf13/pflag"
 
@@ -354,7 +356,7 @@ func (dbcfgs *DBConfigs) InitWithSocket(defaultSocketFile string, collationEnv *
 		if dbcfgs.Charset != "" && cp.Charset == collations.Unknown {
 			ch, err := collationEnv.ParseConnectionCharset(dbcfgs.Charset)
 			if err != nil {
-				log.Warningf("Error parsing charset %s: %v", dbcfgs.Charset, err)
+				log.Warn(fmt.Sprintf("Error parsing charset %s: %v", dbcfgs.Charset, err))
 				ch = collationEnv.DefaultConnectionCharset()
 			}
 			cp.Charset = ch
@@ -382,7 +384,7 @@ func (dbcfgs *DBConfigs) InitWithSocket(defaultSocketFile string, collationEnv *
 		}
 	}
 
-	log.Infof("DBConfigs: %v\n", dbcfgs.String())
+	log.Info(fmt.Sprintf("DBConfigs: %v\n", dbcfgs.String()))
 }
 
 func (dbcfgs *DBConfigs) getParams(userKey string) (*UserConfig, *mysql.ConnParams) {
@@ -414,7 +416,8 @@ func (dbcfgs *DBConfigs) getParams(userKey string) (*UserConfig, *mysql.ConnPara
 		uc = &dbcfgs.CloneUser
 		cp = &dbcfgs.cloneParams
 	default:
-		log.Exitf("Invalid db user key requested: %s", userKey)
+		log.Error("Invalid db user key requested: " + userKey)
+		os.Exit(1)
 	}
 	return uc, cp
 }

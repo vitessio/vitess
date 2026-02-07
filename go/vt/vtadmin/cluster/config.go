@@ -135,7 +135,7 @@ var ErrNoConfigID = stderrors.New("loaded config has no id")
 func LoadConfig(r io.Reader, configType string) (cfg *Config, id string, err error) {
 	v := viper.New()
 	if configType == "" {
-		log.Warning("no configType specified, defaulting to 'json'")
+		log.Warn("no configType specified, defaulting to 'json'")
 		configType = "json"
 	}
 

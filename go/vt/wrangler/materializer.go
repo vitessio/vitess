@@ -142,7 +142,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 			return err
 		}
 		wr.sourceTs = externalTopo
-		log.Infof("Successfully opened external topo: %+v", externalTopo)
+		log.Info(fmt.Sprintf("Successfully opened external topo: %+v", externalTopo))
 	}
 
 	var (
@@ -208,7 +208,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		if len(tables) == 0 {
 			return errors.New("no tables to move")
 		}
-		log.Infof("Found tables to move: %s", strings.Join(tables, ","))
+		log.Info("Found tables to move: " + strings.Join(tables, ","))
 
 		if !vschema.Sharded {
 			// Save the original in case we need to restore it for a late failure
@@ -289,7 +289,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 	// routing rules in place.
 	if externalTopo == nil {
 		if noRoutingRules {
-			log.Warningf("Found --no-routing-rules flag, not creating routing rules for workflow %s.%s", targetKeyspace, workflow)
+			log.Warn(fmt.Sprintf("Found --no-routing-rules flag, not creating routing rules for workflow %s.%s", targetKeyspace, workflow))
 		} else {
 			// Save routing rules before vschema. If we save vschema first, and routing rules
 			// fails to save, we may generate duplicate table errors.
@@ -407,7 +407,7 @@ func (wr *Wrangler) getKeyspaceTables(ctx context.Context, ks string, ts *topo.S
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("got table schemas from source primary %v.", primary)
+	log.Info(fmt.Sprintf("got table schemas from source primary %v.", primary))
 
 	var sourceTables []string
 	for _, td := range schema.TableDefinitions {
@@ -1196,7 +1196,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 			}
 			mu.Unlock()
 			if err != nil {
-				log.Errorf("Error getting DDLs of source tables: %s", err.Error())
+				log.Error("Error getting DDLs of source tables: " + err.Error())
 				return err
 			}
 
@@ -1251,12 +1251,12 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 				// reading the source schema.
 				env := schemadiff.NewEnv(mz.wr.env, mz.wr.env.CollationEnv().DefaultConnectionCharset())
 				schema, err := schemadiff.NewSchemaFromQueries(env, applyDDLs)
-				log.Infof("AtomicCopy schema:\n %v", applyDDLs)
+				log.Info(fmt.Sprintf("AtomicCopy schema:\n %v", applyDDLs))
 				if err != nil {
-					log.Error(vterrors.Wrapf(err, "AtomicCopy: failed to normalize schema via schemadiff"))
+					log.Error(fmt.Sprint(vterrors.Wrapf(err, "AtomicCopy: failed to normalize schema via schemadiff")))
 				} else {
 					applyDDLs = schema.ToQueries()
-					log.Infof("AtomicCopy used, and schema was normalized via schemadiff. %v queries normalized", len(applyDDLs))
+					log.Info(fmt.Sprintf("AtomicCopy used, and schema was normalized via schemadiff. %v queries normalized", len(applyDDLs)))
 				}
 			}
 

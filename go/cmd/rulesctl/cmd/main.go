@@ -4,6 +4,7 @@ import (
 	"github.com/spf13/cobra"
 
 	_flag "vitess.io/vitess/go/internal/flag"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 )
 
@@ -13,9 +14,16 @@ func Main() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:  "rulesctl",
 		Args: cobra.NoArgs,
-		PreRun: func(cmd *cobra.Command, args []string) {
+		PreRunE: func(cmd *cobra.Command, args []string) error {
 			_flag.TrickGlog()
+
+			if err := log.Init(); err != nil {
+				return err
+			}
+
 			logutil.PurgeLogs()
+
+			return nil
 		},
 		Run: func(cmd *cobra.Command, _ []string) { cmd.Help() },
 	}

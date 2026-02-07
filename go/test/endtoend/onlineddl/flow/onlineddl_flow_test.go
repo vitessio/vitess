@@ -519,7 +519,7 @@ func generateDelete(t *testing.T, conn *mysql.Conn) error {
 }
 
 func runSingleConnection(ctx context.Context, t *testing.T, sleepInterval time.Duration) {
-	log.Infof("Running single connection")
+	log.Info("Running single connection")
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -545,7 +545,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, sleepInterval time.D
 		}
 		select {
 		case <-ctx.Done():
-			log.Infof("Terminating single connection")
+			log.Info("Terminating single connection")
 			return
 		case <-ticker.C:
 		}
@@ -565,7 +565,7 @@ func runMultipleConnections(ctx context.Context, t *testing.T) {
 	singleConnectionSleepIntervalNanoseconds := float64(baseSleepInterval.Nanoseconds()) * sleepModifier
 	sleepInterval := time.Duration(int64(singleConnectionSleepIntervalNanoseconds))
 
-	log.Infof("Running multiple connections: maxConcurrency=%v, sleep interval=%v", maxConcurrency, sleepInterval)
+	log.Info(fmt.Sprintf("Running multiple connections: maxConcurrency=%v, sleep interval=%v", maxConcurrency, sleepInterval))
 	var wg sync.WaitGroup
 	for range maxConcurrency {
 		wg.Go(func() {
@@ -573,12 +573,12 @@ func runMultipleConnections(ctx context.Context, t *testing.T) {
 		})
 	}
 	wg.Wait()
-	log.Infof("Running multiple connections: done")
+	log.Info("Running multiple connections: done")
 }
 
 func initTable(t *testing.T) {
-	log.Infof("initTable begin")
-	defer log.Infof("initTable complete")
+	log.Info("initTable begin")
+	defer log.Info("initTable complete")
 
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)

@@ -57,7 +57,7 @@ func (v *vttestserver) teardown() {
 	cmd := exec.Command("docker", "rm", "--force", "vttestserver-end2end-test")
 	err := cmd.Run()
 	if err != nil {
-		log.Errorf("docker teardown failed :- %s", err.Error())
+		log.Error("docker teardown failed :- " + err.Error())
 	}
 }
 

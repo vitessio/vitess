@@ -179,14 +179,16 @@ func TestMain(m *testing.M) {
 		}
 		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-transaction-timeout", "3s", "--queryserver-config-max-result-size", "30"}
 		if err := clusterInstance.StartUnshardedKeyspace(*Keyspace, 0, false, clusterInstance.Cell); err != nil {
-			log.Fatal(err.Error())
+			log.Error(err.Error())
+			os.Exit(1)
 			return 1
 		}
 
 		// Start vtgate
 		clusterInstance.VtGateExtraArgs = []string{vtutils.GetFlagVariantForTests("--warn-sharded-only") + "=true"}
 		if err := clusterInstance.StartVtgate(); err != nil {
-			log.Fatal(err.Error())
+			log.Error(err.Error())
+			os.Exit(1)
 			return 1
 		}
 
@@ -197,14 +199,16 @@ func TestMain(m *testing.M) {
 		}
 		conn, err := mysql.Connect(context.Background(), &vtParams)
 		if err != nil {
-			log.Fatal(err.Error())
+			log.Error(err.Error())
+			os.Exit(1)
 			return 1
 		}
 		defer conn.Close()
 
 		err = runCreateProcedures(conn)
 		if err != nil {
-			log.Fatal(err.Error())
+			log.Error(err.Error())
+			os.Exit(1)
 			return 1
 		}
 

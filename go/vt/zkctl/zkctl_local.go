@@ -18,13 +18,14 @@ package zkctl
 
 import (
 	"fmt"
+	"os"
 
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/log"
 )
 
-// StartLocalZk is a helper method to create a local ZK process.  Used
-// in tests, mostly. It will log.Fatal out if there is an error.  Each
+// StartLocalZk is a helper method to create a local ZK process. Used
+// in tests, mostly. It will exit the process if there is an error. Each
 // call should use different serverID / ports, so tests don't
 // interfere with eachother. Use the testfiles package to achieve this.
 func StartLocalZk(id, port int) (*Zkd, string) {
@@ -36,7 +37,8 @@ func StartLocalZk(id, port int) (*Zkd, string) {
 
 	// Init & start zk.
 	if err := zkd.Init(); err != nil {
-		log.Exitf("zkd.Init(%d, %d) failed: %v", id, port, err)
+		log.Error(fmt.Sprintf("zkd.Init(%d, %d) failed: %v", id, port, err))
+		os.Exit(1)
 	}
 
 	return zkd, fmt.Sprintf("%v:%v", hostname, port+2)

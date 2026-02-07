@@ -139,7 +139,8 @@ func populateListeningURL(port int32) {
 	if err != nil {
 		host, err = os.Hostname()
 		if err != nil {
-			log.Exitf("os.Hostname() failed: %v", err)
+			log.Error(fmt.Sprintf("os.Hostname() failed: %v", err))
+			os.Exit(1)
 		}
 	}
 	ListeningURL = url.URL{
@@ -193,7 +194,7 @@ func fireOnCloseHooks(timeout time.Duration) bool {
 // fireHooksWithTimeout returns true iff all the hooks finish before the timeout.
 func fireHooksWithTimeout(timeout time.Duration, name string, hookFn func()) bool {
 	defer log.Flush()
-	log.Infof("Firing %s hooks and waiting up to %v for them", name, timeout)
+	log.Info(fmt.Sprintf("Firing %s hooks and waiting up to %v for them", name, timeout))
 
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
@@ -206,10 +207,10 @@ func fireHooksWithTimeout(timeout time.Duration, name string, hookFn func()) boo
 
 	select {
 	case <-done:
-		log.Infof("%s hooks finished", name)
+		log.Info(name + " hooks finished")
 		return true
 	case <-timer.C:
-		log.Infof("%s hooks timed out", name)
+		log.Info(name + " hooks timed out")
 		return false
 	}
 }
@@ -306,6 +307,11 @@ func ParseFlags(cmd string) {
 
 	_flag.Parse(fs)
 
+	if err := log.Init(); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+
 	if version {
 		AppVersion.Print()
 		os.Exit(0)
@@ -314,7 +320,8 @@ func ParseFlags(cmd string) {
 	args := fs.Args()
 	if len(args) > 0 {
 		_flag.Usage()
-		log.Exitf("%s doesn't take any positional arguments, got '%s'", cmd, strings.Join(args, " "))
+		log.Error(fmt.Sprintf("%s doesn't take any positional arguments, got '%s'", cmd, strings.Join(args, " ")))
+		os.Exit(1)
 	}
 
 	loadViper(cmd)
@@ -371,12 +378,17 @@ func moveFlags(name string, fs *pflag.FlagSet) {
 // functions.
 func CobraPreRunE(cmd *cobra.Command, args []string) error {
 	_flag.TrickGlog()
+
+	if err := log.Init(); err != nil {
+		return err
+	}
+
 	// Register logging on config file change.
 	ch := make(chan struct{})
 	viperutil.NotifyConfigReload(ch)
 	go func() {
 		for range ch {
-			log.Infof("Change in configuration - %v", viperdebug.AllSettings())
+			log.Info(fmt.Sprintf("Change in configuration - %v", viperdebug.AllSettings()))
 		}
 	}()
 
@@ -416,6 +428,11 @@ func ParseFlagsWithArgs(cmd string) []string {
 
 	_flag.Parse(fs)
 
+	if err := log.Init(); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+
 	if version {
 		AppVersion.Print()
 		os.Exit(0)
@@ -423,7 +440,8 @@ func ParseFlagsWithArgs(cmd string) []string {
 
 	args := fs.Args()
 	if len(args) == 0 {
-		log.Exitf("%s expected at least one positional argument", cmd)
+		log.Error(cmd + " expected at least one positional argument")
+		os.Exit(1)
 	}
 
 	loadViper(cmd)
@@ -436,7 +454,8 @@ func ParseFlagsWithArgs(cmd string) []string {
 func loadViper(cmd string) {
 	watchCancel, err := viperutil.LoadConfig()
 	if err != nil {
-		log.Exitf("%s: failed to read in config: %s", cmd, err.Error())
+		log.Error(fmt.Sprintf("%s: failed to read in config: %s", cmd, err.Error()))
+		os.Exit(1)
 	}
 	OnTerm(watchCancel)
 	debugConfigRegisterOnce.Do(func() {
