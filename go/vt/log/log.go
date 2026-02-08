@@ -75,7 +75,7 @@ func log(level slog.Level, depth int, msg string, attrs ...slog.Attr) {
 }
 
 // logGlog is a helper that logs with glog. If structured attributes are passed, they
-// are appended with the message in the format "key=value".
+// are appended to the message in the format "key=value".
 func logGlog(level slog.Level, depth int, msg string, attrs ...slog.Attr) {
 	depth++
 
