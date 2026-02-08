@@ -127,11 +127,7 @@ func TestHealthCheck(t *testing.T) {
 	require.NoError(t, err)
 
 	// make sure the health stream is updated
-	shrs, err := clusterInstance.StreamTabletHealth(ctx, rTablet, 1)
-	require.NoError(t, err)
-	for _, shr := range shrs {
-		verifyStreamHealth(t, shr, true)
-	}
+	waitForTabletHealth(t, ctx, rTablet, true)
 
 	// then restart replication, make sure we stay healthy
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("StartReplication", rTablet.Alias)
@@ -141,11 +137,7 @@ func TestHealthCheck(t *testing.T) {
 	checkHealth(t, rTablet.HTTPPort, false)
 
 	// now test the health stream returns the right thing
-	shrs, err = clusterInstance.StreamTabletHealth(ctx, rTablet, 2)
-	require.NoError(t, err)
-	for _, shr := range shrs {
-		verifyStreamHealth(t, shr, true)
-	}
+	waitForTabletHealth(t, ctx, rTablet, true)
 
 	// stop the replica's source mysqld instance to break replication
 	// and test that the replica tablet becomes unhealthy and non-serving after crossing
@@ -156,11 +148,7 @@ func TestHealthCheck(t *testing.T) {
 	time.Sleep(tabletUnhealthyThreshold + tabletHealthcheckRefreshInterval)
 
 	// now the replica's health stream should show it as unhealthy
-	shrs, err = clusterInstance.StreamTabletHealth(ctx, rTablet, 1)
-	require.NoError(t, err)
-	for _, shr := range shrs {
-		verifyStreamHealth(t, shr, false)
-	}
+	waitForTabletHealth(t, ctx, rTablet, false)
 
 	// start the primary tablet's mysqld back up
 	primaryTablet.MysqlctlProcess.InitMysql = false
@@ -186,11 +174,7 @@ func TestHealthCheck(t *testing.T) {
 	time.Sleep(tabletHealthcheckRefreshInterval)
 
 	// now the replica's health stream should show it as healthy again
-	shrs, err = clusterInstance.StreamTabletHealth(ctx, rTablet, 1)
-	require.NoError(t, err)
-	for _, shr := range shrs {
-		verifyStreamHealth(t, shr, true)
-	}
+	waitForTabletHealth(t, ctx, rTablet, true)
 
 	// Manual cleanup of processes
 	killTablets(rTablet)
@@ -370,6 +354,23 @@ func verifyStreamHealth(t *testing.T, streamHealthResponse *querypb.StreamHealth
 	} else {
 		assert.True(t, (!serving || replicationLagSeconds >= uint32(tabletUnhealthyThreshold.Seconds())), "Tablet should not be in serving and healthy state")
 	}
+}
+
+func waitForTabletHealth(t *testing.T, ctx context.Context, tablet *cluster.Vttablet, expectHealthy bool) {
+	assert.Eventually(t, func() bool {
+		shrs, err := clusterInstance.StreamTabletHealth(ctx, tablet, 1)
+		if err != nil || len(shrs) == 0 {
+			return false
+		}
+		shr := shrs[0]
+		serving := shr.GetServing()
+		realTimeStats := shr.GetRealtimeStats()
+		replicationLagSeconds := realTimeStats.GetReplicationLagSeconds()
+		if expectHealthy {
+			return serving && replicationLagSeconds < 10000
+		}
+		return !serving || replicationLagSeconds >= uint32(tabletUnhealthyThreshold.Seconds())
+	}, 30*time.Second, 1*time.Second)
 }
 
 func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {

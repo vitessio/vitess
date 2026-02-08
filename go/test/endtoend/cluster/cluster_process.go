@@ -1030,6 +1030,7 @@ func (cluster *LocalProcessCluster) StreamTabletHealthUntil(ctx context.Context,
 	if err != nil {
 		return err
 	}
+	defer conn.Close(ctx)
 
 	var conditionSuccess atomic.Bool
 	var timeoutExceeded atomic.Bool

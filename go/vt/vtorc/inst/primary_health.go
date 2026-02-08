@@ -60,6 +60,10 @@ func IsPrimaryHealthCheckUnhealthy(tabletAlias string) bool {
 		return false
 	}
 	updatePrimaryHealthWindowLocked(state, time.Now(), window)
+	if shouldEvictPrimaryHealthWindow(state) {
+		delete(primaryHealthByAlias, tabletAlias)
+		return false
+	}
 	return state.unhealthy
 }
 
@@ -79,6 +83,9 @@ func recordPrimaryHealthCheckAt(tabletAlias string, success bool, now time.Time)
 	}
 	state.events = append(state.events, primaryHealthEvent{at: now, success: success})
 	updatePrimaryHealthWindowLocked(state, now, window)
+	if shouldEvictPrimaryHealthWindow(state) {
+		delete(primaryHealthByAlias, tabletAlias)
+	}
 }
 
 func updatePrimaryHealthWindowLocked(state *primaryHealthWindow, now time.Time, window time.Duration) {
@@ -101,6 +108,10 @@ func updatePrimaryHealthWindowLocked(state *primaryHealthWindow, now time.Time, 
 		}
 	}
 	state.events = pruned
+	if len(state.events) == 0 {
+		state.events = nil
+		state.unhealthy = false
+	}
 
 	if state.unhealthy {
 		if failureCount == 0 && successCount > 0 {
@@ -112,4 +123,8 @@ func updatePrimaryHealthWindowLocked(state *primaryHealthWindow, now time.Time, 
 	if failureCount >= minPrimaryHealthCheckFailures && failureCount > successCount {
 		state.unhealthy = true
 	}
+}
+
+func shouldEvictPrimaryHealthWindow(state *primaryHealthWindow) bool {
+	return state != nil && !state.unhealthy && len(state.events) == 0
 }

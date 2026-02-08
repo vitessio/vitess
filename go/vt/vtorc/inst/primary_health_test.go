@@ -51,4 +51,12 @@ func TestPrimaryHealthWindow(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		return !IsPrimaryHealthCheckUnhealthy(alias)
 	}, 200*time.Millisecond, 10*time.Millisecond)
+
+	assert.Eventually(t, func() bool {
+		IsPrimaryHealthCheckUnhealthy(alias)
+		primaryHealthMu.Lock()
+		defer primaryHealthMu.Unlock()
+		_, ok := primaryHealthByAlias[alias]
+		return !ok
+	}, 200*time.Millisecond, 10*time.Millisecond)
 }

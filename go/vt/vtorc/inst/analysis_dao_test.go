@@ -211,7 +211,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			codeWanted:     DeadPrimary,
 		},
 		{
-			name: "DeadPrimaryHealthWindow",
+			name: "IncapacitatedPrimaryHealthWindow",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
 					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
@@ -226,13 +226,13 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 				LastCheckValid:                1,
 				CountReplicas:                 2,
 				CountValidReplicas:            2,
-				CountValidReplicatingReplicas: 0,
+				CountValidReplicatingReplicas: 2,
 				IsPrimary:                     1,
 				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 			}},
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
-			codeWanted:     DeadPrimary,
+			codeWanted:     IncapacitatedPrimary,
 		},
 		{
 			name: "DeadPrimaryWithoutReplicas",
@@ -1019,7 +1019,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			resetPrimaryHealthState()
-			if tt.name == "DeadPrimaryHealthWindow" {
+			if tt.name == "IncapacitatedPrimaryHealthWindow" {
 				RecordPrimaryHealthCheck("zon1-0000000100", true)
 				RecordPrimaryHealthCheck("zon1-0000000100", false)
 				RecordPrimaryHealthCheck("zon1-0000000100", false)

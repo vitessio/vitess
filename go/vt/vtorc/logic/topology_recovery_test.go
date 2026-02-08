@@ -245,6 +245,16 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
 			wantRecoverySkipCode: RecoverySkipERSDisabled,
 		}, {
+			name:       "DeadPrimary health window",
+			ersEnabled: true,
+			analysisEntry: &inst.DetectionAnalysis{
+				Analysis:               inst.DeadPrimary,
+				AnalyzedKeyspace:       keyspace,
+				AnalyzedShard:          shard,
+				PrimaryHealthUnhealthy: true,
+			},
+			wantRecoveryFunction: recoverIncapacitatedPrimaryFunc,
+		}, {
 			name:       "StalledDiskPrimary with ERS enabled",
 			ersEnabled: true,
 			analysisEntry: &inst.DetectionAnalysis{

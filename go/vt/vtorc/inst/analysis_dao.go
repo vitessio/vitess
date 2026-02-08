@@ -335,7 +335,11 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		a.GTIDMode = m.GetString("gtid_mode")
 		a.LastCheckValid = m.GetBool("is_last_check_valid")
 		a.LastCheckPartialSuccess = m.GetBool("last_check_partial_success")
-		a.PrimaryHealthUnhealthy = IsPrimaryHealthCheckUnhealthy(a.AnalyzedInstanceAlias)
+		if a.IsPrimary {
+			a.PrimaryHealthUnhealthy = IsPrimaryHealthCheckUnhealthy(a.AnalyzedInstanceAlias)
+		} else {
+			a.PrimaryHealthUnhealthy = false
+		}
 		a.CountReplicas = m.GetUint("count_replicas")
 		a.CountValidReplicas = m.GetUint("count_valid_replicas")
 		a.CountValidReplicatingReplicas = m.GetUint("count_valid_replicating_replicas")
@@ -374,8 +378,8 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		a.IsDiskStalled = m.GetBool("is_disk_stalled")
 
 		if !a.LastCheckValid || a.PrimaryHealthUnhealthy {
-			analysisMessage := fmt.Sprintf("analysis: Alias: %+v, Keyspace: %+v, Shard: %+v, IsPrimary: %+v, LastCheckValid: %+v, LastCheckPartialSuccess: %+v, CountReplicas: %+v, CountValidReplicas: %+v, CountValidReplicatingReplicas: %+v, CountLaggingReplicas: %+v, CountDelayedReplicas: %+v",
-				a.AnalyzedInstanceAlias, a.AnalyzedKeyspace, a.AnalyzedShard, a.IsPrimary, a.LastCheckValid, a.LastCheckPartialSuccess, a.CountReplicas, a.CountValidReplicas, a.CountValidReplicatingReplicas, a.CountLaggingReplicas, a.CountDelayedReplicas,
+			analysisMessage := fmt.Sprintf("analysis: Alias: %+v, Keyspace: %+v, Shard: %+v, IsPrimary: %+v, PrimaryHealthUnhealthy: %+v, LastCheckValid: %+v, LastCheckPartialSuccess: %+v, CountReplicas: %+v, CountValidReplicas: %+v, CountValidReplicatingReplicas: %+v, CountLaggingReplicas: %+v, CountDelayedReplicas: %+v",
+				a.AnalyzedInstanceAlias, a.AnalyzedKeyspace, a.AnalyzedShard, a.IsPrimary, a.PrimaryHealthUnhealthy, a.LastCheckValid, a.LastCheckPartialSuccess, a.CountReplicas, a.CountValidReplicas, a.CountValidReplicatingReplicas, a.CountLaggingReplicas, a.CountDelayedReplicas,
 			)
 			if util.ClearToLog("analysis_dao", analysisMessage) {
 				log.Infof(analysisMessage)
@@ -446,8 +450,8 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			ca.hasShardWideAction = true
 			//
 		case a.IsClusterPrimary && a.PrimaryHealthUnhealthy:
-			a.Analysis = DeadPrimary
-			a.Description = "Primary is consistently timing out on health checks"
+			a.Analysis = IncapacitatedPrimary
+			a.Description = "Primary is consistently timing out on health checks and is incapacitated"
 			ca.hasShardWideAction = true
 			//
 		case a.IsClusterPrimary && !a.IsPrimary:

@@ -46,6 +46,7 @@ const (
 	RestartArbitraryDirectReplicaRecoveryName        string = "RestartArbitraryDirectReplica"
 	RestartAllDirectReplicasRecoveryName             string = "RestartAllDirectReplicas"
 	RecoverDeadPrimaryRecoveryName                   string = "RecoverDeadPrimary"
+	RecoverIncapacitatedPrimaryRecoveryName          string = "RecoverIncapacitatedPrimary"
 	RecoverPrimaryTabletDeletedRecoveryName          string = "RecoverPrimaryTabletDeleted"
 	RecoverPrimaryHasPrimaryRecoveryName             string = "RecoverPrimaryHasPrimary"
 	CheckAndRecoverLockedSemiSyncPrimaryRecoveryName string = "CheckAndRecoverLockedSemiSyncPrimary"
@@ -142,6 +143,7 @@ const (
 	restartArbitraryDirectReplicaFunc
 	restartAllDirectReplicasFunc
 	recoverDeadPrimaryFunc
+	recoverIncapacitatedPrimaryFunc
 	recoverPrimaryTabletDeletedFunc
 	recoverPrimaryHasPrimaryFunc
 	recoverLockedSemiSyncPrimaryFunc
@@ -362,6 +364,19 @@ func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.DetectionAn
 // recoverDeadPrimary checks a given analysis, decides whether to take action, and possibly takes action
 // Returns true when action was taken.
 func recoverDeadPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+	return runEmergencyReparentOp(ctx, analysisEntry, "RecoverDeadPrimary", false, logger)
+}
+
+// recoverIncapacitatedPrimary checks a given analysis, decides whether to take action, and possibly takes action.
+// Returns true when action was taken.
+// The primary is not dead, but it's incapacitated in a way that it is not able to perform its duties at an acceptable
+// level and is struggling to respond to requests in a timely manner.  This is different from recoverDeadPrimary
+// because the primary is still alive and reachable, so we want to try to do a planned reparent if possible, and only
+// do an emergency reparent if the planned one fails.
+func recoverIncapacitatedPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+	if !analysisEntry.LastCheckValid {
+		return runEmergencyReparentOp(ctx, analysisEntry, "RecoverIncapacitatedPrimary", false, logger)
+	}
 	recoveryAttempted, topologyRecovery, err = runPlannedReparentOp(ctx, analysisEntry, logger)
 	if err == nil {
 		return recoveryAttempted, topologyRecovery, nil
@@ -370,7 +385,7 @@ func recoverDeadPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalys
 		return recoveryAttempted, nil, err
 	}
 	logger.Warningf("PlannedReparentShard failed for %s/%s: %v", analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, err)
-	return runEmergencyReparentOp(ctx, analysisEntry, "RecoverDeadPrimary", false, logger)
+	return runEmergencyReparentOp(ctx, analysisEntry, "RecoverIncapacitatedPrimary", false, logger)
 }
 
 // recoverPrimaryTabletDeleted tries to run a recovery for the case where the primary tablet has been deleted.
@@ -556,7 +571,17 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 			log.Infof("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode)
 			recoverySkipCode = RecoverySkipERSDisabled
 		}
-		recoveryFunc = recoverDeadPrimaryFunc
+		if analysisEntry.PrimaryHealthUnhealthy {
+			recoveryFunc = recoverIncapacitatedPrimaryFunc
+		} else {
+			recoveryFunc = recoverDeadPrimaryFunc
+		}
+	case inst.IncapacitatedPrimary:
+		if !isERSEnabled(analysisEntry) {
+			log.Infof("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode)
+			recoverySkipCode = RecoverySkipERSDisabled
+		}
+		recoveryFunc = recoverIncapacitatedPrimaryFunc
 	case inst.PrimaryTabletDeleted:
 		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
 		if !isERSEnabled(analysisEntry) {
@@ -621,6 +646,8 @@ func hasActionableRecovery(recoveryFunctionCode recoveryFunction) bool {
 		return true
 	case recoverDeadPrimaryFunc:
 		return true
+	case recoverIncapacitatedPrimaryFunc:
+		return true
 	case recoverPrimaryTabletDeletedFunc:
 		return true
 	case recoverPrimaryHasPrimaryFunc:
@@ -657,6 +684,8 @@ func getCheckAndRecoverFunction(recoveryFunctionCode recoveryFunction) (
 		return restartAllDirectReplicas
 	case recoverDeadPrimaryFunc:
 		return recoverDeadPrimary
+	case recoverIncapacitatedPrimaryFunc:
+		return recoverIncapacitatedPrimary
 	case recoverPrimaryTabletDeletedFunc:
 		return recoverPrimaryTabletDeleted
 	case recoverPrimaryHasPrimaryFunc:
@@ -692,6 +721,8 @@ func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
 		return RestartAllDirectReplicasRecoveryName
 	case recoverDeadPrimaryFunc:
 		return RecoverDeadPrimaryRecoveryName
+	case recoverIncapacitatedPrimaryFunc:
+		return RecoverIncapacitatedPrimaryRecoveryName
 	case recoverPrimaryTabletDeletedFunc:
 		return RecoverPrimaryTabletDeletedRecoveryName
 	case recoverPrimaryHasPrimaryFunc:
@@ -716,7 +747,7 @@ func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
 // isShardWideRecovery returns whether the given recovery is a recovery that affects all tablets in a shard
 func isShardWideRecovery(recoveryFunctionCode recoveryFunction) bool {
 	switch recoveryFunctionCode {
-	case recoverDeadPrimaryFunc, electNewPrimaryFunc, recoverPrimaryTabletDeletedFunc:
+	case recoverDeadPrimaryFunc, recoverIncapacitatedPrimaryFunc, electNewPrimaryFunc, recoverPrimaryTabletDeletedFunc:
 		return true
 	default:
 		return false
