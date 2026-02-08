@@ -377,7 +377,7 @@ func recoverIncapacitatedPrimary(ctx context.Context, analysisEntry *inst.Detect
 	if !analysisEntry.LastCheckValid {
 		return runEmergencyReparentOp(ctx, analysisEntry, "RecoverIncapacitatedPrimary", false, logger)
 	}
-	recoveryAttempted, topologyRecovery, err = runPlannedReparentOp(ctx, analysisEntry, logger)
+	recoveryAttempted, topologyRecovery, err = runPlannedReparentOp(ctx, analysisEntry, RecoverIncapacitatedPrimaryRecoveryName, logger)
 	if err == nil {
 		return recoveryAttempted, topologyRecovery, nil
 	}
@@ -1055,17 +1055,19 @@ func postPrsCompletion(topologyRecovery *TopologyRecovery, analysisEntry *inst.D
 	}
 }
 
-func runPlannedReparentOp(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+func runPlannedReparentOp(ctx context.Context, analysisEntry *inst.DetectionAnalysis, operationName string, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil || err != nil {
-		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another electNewPrimary.", analysisEntry.AnalyzedInstanceAlias)
+		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another %s.", analysisEntry.AnalyzedInstanceAlias, operationName)
 		logger.Warning(message)
 		_ = AuditTopologyRecovery(topologyRecovery, message)
 		return false, nil, err
 	}
-	logger.Infof("Analysis: %v, will elect a new primary for %v:%v", analysisEntry.Analysis, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+	logger.Infof("Analysis: %v, will run %s for %v:%v", analysisEntry.Analysis, operationName, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 
 	var promotedReplica *inst.Instance
+	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
+	// So that after the active period passes, we are able to run other recoveries.
 	defer func() {
 		_ = resolveRecovery(topologyRecovery, promotedReplica)
 	}()
@@ -1075,11 +1077,12 @@ func runPlannedReparentOp(ctx context.Context, analysisEntry *inst.DetectionAnal
 		logger.Errorf("Failed to read instance %s, aborting recovery", analysisEntry.AnalyzedInstanceAlias)
 		return false, topologyRecovery, err
 	}
-	_ = AuditTopologyRecovery(topologyRecovery, "starting PlannedReparentShard for electing new primary.")
+	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("starting PlannedReparentShard for %s.", operationName))
 
 	ev, err := reparentutil.NewPlannedReparenter(ts, tmc, logutil.NewCallbackLogger(func(event *logutilpb.Event) {
 		level := event.GetLevel()
 		value := event.GetValue()
+		// we only log the warnings and errors explicitly, everything gets logged as an information message anyways in auditing topology recovery
 		switch level {
 		case logutilpb.Level_WARNING:
 			logger.Warningf("PRS - %s", value)
@@ -1105,7 +1108,7 @@ func runPlannedReparentOp(ctx context.Context, analysisEntry *inst.DetectionAnal
 
 // electNewPrimary elects a new primary while none were present before.
 func electNewPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	return runPlannedReparentOp(ctx, analysisEntry, logger)
+	return runPlannedReparentOp(ctx, analysisEntry, ElectNewPrimaryRecoveryName, logger)
 }
 
 // fixPrimary sets the primary as read-write.
