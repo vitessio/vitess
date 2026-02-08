@@ -85,6 +85,8 @@ func ensureNoGoroutines() error {
 		goleak.IgnoreTopFunction("vitess.io/vitess/go/vt/vttablet/tabletserver/throttle.NewBackgroundClient.initThrottleTicker.func1.1"),
 		goleak.IgnoreTopFunction("vitess.io/vitess/go/stats.(*Rates).track"),
 		goleak.IgnoreTopFunction("testing.tRunner.func1"),
+		goleak.IgnoreTopFunction("google.golang.org/grpc/internal/grpcsync.(*CallbackSerializer).run"),
+		goleak.IgnoreTopFunction("google.golang.org/grpc.(*addrConn).resetTransportAndUnlock"),
 	}
 
 	var err error
