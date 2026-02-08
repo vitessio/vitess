@@ -79,7 +79,7 @@ For example:
 // Flags
 var (
 	flavor           = flag.String("flavor", "mysql80", "comma-separated bootstrap flavor(s) to run against (when using Docker mode). Available flavors: all,"+flavors)
-	bootstrapVersion = flag.String("bootstrap-version", "51", "the version identifier to use for the docker images")
+	bootstrapVersion = flag.String("bootstrap-version", "52", "the version identifier to use for the docker images")
 	runCount         = flag.Int("runs", 1, "run each test this many times")
 	logPass          = flag.Bool("log-pass", false, "log test output even if it passes")
 	timeout          = flag.Duration("timeout", 30*time.Minute, "timeout for each test")
