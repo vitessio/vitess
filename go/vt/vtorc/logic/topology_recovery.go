@@ -370,14 +370,18 @@ func recoverDeadPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalys
 // recoverIncapacitatedPrimary checks a given analysis, decides whether to take action, and possibly takes action.
 // Returns true when action was taken.
 // The primary is not dead, but it's incapacitated in a way that it is not able to perform its duties at an acceptable
-// level and is struggling to respond to requests in a timely manner.  This is different from recoverDeadPrimary
+// level and is struggling to respond to requests in a timely manner. This is different from recoverDeadPrimary
 // because the primary is still alive and reachable, so we want to try to do a planned reparent if possible, and only
 // do an emergency reparent if the planned one fails.
 func recoverIncapacitatedPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	if !analysisEntry.LastCheckValid {
-		return runEmergencyReparentOp(ctx, analysisEntry, "RecoverIncapacitatedPrimary", false, logger)
+	recoveryName := RecoverIncapacitatedPrimaryRecoveryName
+	if analysisEntry.Analysis == inst.DeadPrimary {
+		recoveryName = RecoverDeadPrimaryRecoveryName
 	}
-	recoveryAttempted, topologyRecovery, err = runPlannedReparentOp(ctx, analysisEntry, RecoverIncapacitatedPrimaryRecoveryName, logger)
+	if !analysisEntry.LastCheckValid {
+		return runEmergencyReparentOp(ctx, analysisEntry, recoveryName, false, logger)
+	}
+	recoveryAttempted, topologyRecovery, err = runPlannedReparentOp(ctx, analysisEntry, recoveryName, logger)
 	if err == nil {
 		return recoveryAttempted, topologyRecovery, nil
 	}
@@ -385,7 +389,7 @@ func recoverIncapacitatedPrimary(ctx context.Context, analysisEntry *inst.Detect
 		return recoveryAttempted, nil, err
 	}
 	logger.Warningf("PlannedReparentShard failed for %s/%s: %v", analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, err)
-	return runEmergencyReparentOp(ctx, analysisEntry, "RecoverIncapacitatedPrimary", false, logger)
+	return runEmergencyReparentOp(ctx, analysisEntry, recoveryName, false, logger)
 }
 
 // recoverPrimaryTabletDeleted tries to run a recovery for the case where the primary tablet has been deleted.
@@ -565,7 +569,7 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 	analysisCode := analysisEntry.Analysis
 	switch analysisCode {
 	// primary
-	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas, inst.PrimaryDiskStalled, inst.PrimarySemiSyncBlocked:
+	case inst.DeadPrimary:
 		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
 		if !isERSEnabled(analysisEntry) {
 			log.Infof("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode)
@@ -576,6 +580,13 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 		} else {
 			recoveryFunc = recoverDeadPrimaryFunc
 		}
+	case inst.DeadPrimaryAndSomeReplicas, inst.PrimaryDiskStalled, inst.PrimarySemiSyncBlocked:
+		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
+		if !isERSEnabled(analysisEntry) {
+			log.Infof("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode)
+			recoverySkipCode = RecoverySkipERSDisabled
+		}
+		recoveryFunc = recoverDeadPrimaryFunc
 	case inst.IncapacitatedPrimary:
 		if !isERSEnabled(analysisEntry) {
 			log.Infof("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode)
@@ -709,7 +720,7 @@ func getCheckAndRecoverFunction(recoveryFunctionCode recoveryFunction) (
 
 // getRecoverFunctionName gets the recovery function name for the given code.
 // This name is used for metrics
-func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
+func getRecoverFunctionName(recoveryFunctionCode recoveryFunction, analysisCode inst.AnalysisCode) string {
 	switch recoveryFunctionCode {
 	case noRecoveryFunc:
 		return ""
@@ -722,6 +733,9 @@ func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
 	case recoverDeadPrimaryFunc:
 		return RecoverDeadPrimaryRecoveryName
 	case recoverIncapacitatedPrimaryFunc:
+		if analysisCode == inst.DeadPrimary {
+			return RecoverDeadPrimaryRecoveryName
+		}
 		return RecoverIncapacitatedPrimaryRecoveryName
 	case recoverPrimaryTabletDeletedFunc:
 		return RecoverPrimaryTabletDeletedRecoveryName
@@ -755,10 +769,14 @@ func isShardWideRecovery(recoveryFunctionCode recoveryFunction) bool {
 }
 
 // analysisEntriesHaveSameRecovery tells whether the two analysis entries have the same recovery function or not
+
 func analysisEntriesHaveSameRecovery(prevAnalysis, newAnalysis *inst.DetectionAnalysis) bool {
 	prevRecoveryFunctionCode, prevSkipRecovery := getCheckAndRecoverFunctionCode(prevAnalysis)
 	newRecoveryFunctionCode, newSkipRecovery := getCheckAndRecoverFunctionCode(newAnalysis)
-	return (prevRecoveryFunctionCode == newRecoveryFunctionCode) && (prevSkipRecovery == newSkipRecovery)
+	if (prevRecoveryFunctionCode == newRecoveryFunctionCode) && (prevSkipRecovery == newSkipRecovery) {
+		return true
+	}
+	return prevAnalysis.Analysis == inst.DeadPrimary && newAnalysis.Analysis == inst.IncapacitatedPrimary && prevSkipRecovery == newSkipRecovery
 }
 
 // executeCheckAndRecoverFunction will choose the correct check & recovery function based on analysis.
@@ -771,7 +789,10 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 	logger.Info("Starting checkAndRecover")
 
 	checkAndRecoverFunctionCode, recoverySkipCode := getCheckAndRecoverFunctionCode(analysisEntry)
-	recoveryName := getRecoverFunctionName(checkAndRecoverFunctionCode)
+	recoveryName := getRecoverFunctionName(checkAndRecoverFunctionCode, analysisEntry.Analysis)
+	if analysisEntry.Analysis == inst.DeadPrimary {
+		recoveryName = RecoverDeadPrimaryRecoveryName
+	}
 	recoveryLabels := []string{recoveryName, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard}
 	isActionableRecovery := hasActionableRecovery(checkAndRecoverFunctionCode)
 	analysisEntry.IsActionableRecovery = isActionableRecovery
@@ -909,6 +930,9 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 	// Actually attempt recovery:
 	if isActionableRecovery || util.ClearToLog("executeCheckAndRecoverFunction: recovery", analysisEntry.AnalyzedInstanceAlias) {
 		logger.Infof("executeCheckAndRecoverFunction: proceeding with recovery on %+v; isRecoverable?: %+v", analysisEntry.AnalyzedInstanceAlias, isActionableRecovery)
+		if recoveryName != "" {
+			logger.Infof("Analysis: %v, %v %+v", analysisEntry.Analysis, recoveryName, analysisEntry.AnalyzedInstanceAlias)
+		}
 	}
 	recoveryAttempted, topologyRecovery, err := getCheckAndRecoverFunction(checkAndRecoverFunctionCode)(ctx, analysisEntry, logger)
 	if !recoveryAttempted {

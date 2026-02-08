@@ -245,13 +245,14 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
 			wantRecoverySkipCode: RecoverySkipERSDisabled,
 		}, {
-			name:       "DeadPrimary health window",
+			name:       "IncapacitatedPrimary",
 			ersEnabled: true,
 			analysisEntry: &inst.DetectionAnalysis{
-				Analysis:               inst.DeadPrimary,
+				Analysis:               inst.IncapacitatedPrimary,
 				AnalyzedKeyspace:       keyspace,
 				AnalyzedShard:          shard,
 				PrimaryHealthUnhealthy: true,
+				LastCheckValid:         true,
 			},
 			wantRecoveryFunction: recoverIncapacitatedPrimaryFunc,
 		}, {

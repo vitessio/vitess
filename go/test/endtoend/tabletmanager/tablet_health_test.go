@@ -308,7 +308,10 @@ func runDDLAndWaitForSchemaChangeSignal(t *testing.T, vtgateConn *mysql.Conn, pr
 				return errors.New("health stream closed before ready")
 			}
 			return err
-		case <-respCh:
+		case shr, ok := <-respCh:
+			if !ok || shr == nil {
+				return errors.New("health stream closed before ready")
+			}
 			goto ready
 		case <-readyTimer.C:
 			return errors.New("timed out waiting for health stream ready")
@@ -326,6 +329,9 @@ ready:
 	for {
 		select {
 		case err := <-streamErrCh:
+			if err == nil {
+				return errors.New("health stream closed before schema change was observed")
+			}
 			if err == context.Canceled || err == io.EOF {
 				return errors.New("health stream closed before schema change was observed")
 			}

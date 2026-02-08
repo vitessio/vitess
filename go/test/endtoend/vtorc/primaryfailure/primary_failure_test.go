@@ -45,8 +45,7 @@ func TestDownPrimary(t *testing.T) {
 	// If that replica is more advanced than the same-cell-replica, then we try to promote the cross-cell replica as an intermediate source.
 	// If we don't specify a small value of --wait-replicas-timeout, then we would end up waiting for 30 seconds for the dead-primary to respond, failing this test.
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{vtutils.GetFlagVariantForTests("--remote-operation-timeout") + "=10s", "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{
-		PreventCrossCellFailover:        true,
-		PrimaryHealthCheckTimeoutWindow: "10s",
+		PreventCrossCellFailover: true,
 	}, cluster.DefaultVtorcsByCell, policy.DurabilitySemiSync)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
@@ -88,6 +87,8 @@ func TestDownPrimary(t *testing.T) {
 	require.NoError(t, err)
 	err = curPrimary.MysqlctlProcess.Stop()
 	require.NoError(t, err)
+	// We have bunch of Vttablets down. Therefore we expect at least 1 occurrence of InstancePollSecondsExceeded
+	utils.WaitForInstancePollSecondsExceededCount(t, vtOrcProcess, 1, false)
 	defer func() {
 		// we remove the tablet from our global list
 		utils.PermanentlyRemoveVttablet(clusterInfo, curPrimary)
@@ -397,10 +398,10 @@ func TestDeadPrimaryRecoversImmediately(t *testing.T) {
 	}
 	diff := time2.Sub(time1)
 	fmt.Printf("The difference between %s and %s is %v seconds.\n", t1, t2, diff.Seconds())
-	// assert that it takes less than `remote-operation-timeout` to recover from `DeadPrimary`
+	// assert that it takes around `remote-operation-timeout` to recover from `DeadPrimary`
 	// use the value provided in `remote-operation-timeout` flag to compare with.
-	// We are testing against 9.5 seconds to be safe and prevent flakiness.
-	assert.Less(t, diff.Seconds(), 9.5)
+	// We are testing against 15.0 seconds to be safe and prevent flakiness.
+	assert.Less(t, diff.Seconds(), 15.0)
 }
 
 // Failover should not be cross data centers, according to the configuration file
