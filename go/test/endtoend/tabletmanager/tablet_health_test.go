@@ -19,12 +19,13 @@ package tabletmanager
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"slices"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -34,9 +35,11 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/grpcclient"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtutils "vitess.io/vitess/go/vt/utils"
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 )
 
 // TabletReshuffle test if a vttablet can be pointed at an existing mysql
@@ -193,6 +196,9 @@ func TestHealthCheckSchemaChangeSignal(t *testing.T) {
 	// Make sure the primary is the primary when the test starts.
 	// This state should be ensured before we actually test anything.
 	checkTabletType(t, primaryTablet.Alias, "PRIMARY")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("SetWritable", primaryTablet.Alias, "true")
+	require.NoError(t, err)
+	require.NoError(t, primaryTablet.VttabletProcess.WaitForTabletStatus("SERVING"))
 
 	// Run a bunch of DDL queries and verify that the tables/views changed show up in the health stream.
 	// These tests are for the part where `--queryserver-enable-views` flag is not set.
@@ -216,6 +222,9 @@ func TestHealthCheckSchemaChangeSignal(t *testing.T) {
 		// Restore the primary tablet back to the original.
 		err = clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shardName, primaryTablet.Alias)
 		require.NoError(t, err)
+		err = clusterInstance.VtctldClientProcess.ExecuteCommand("SetWritable", primaryTablet.Alias, "true")
+		require.NoError(t, err)
+		waitForTabletHealth(t, ctx, &primaryTablet, true)
 		// Manual cleanup of processes
 		killTablets(tempTablet)
 	}()
@@ -223,6 +232,9 @@ func TestHealthCheckSchemaChangeSignal(t *testing.T) {
 	// Now we reparent the cluster to the new tablet we have.
 	err = clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shardName, tempTablet.Alias)
 	require.NoError(t, err)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("SetWritable", tempTablet.Alias, "true")
+	require.NoError(t, err)
+	require.NoError(t, tempTablet.VttabletProcess.WaitForTabletStatus("SERVING"))
 
 	checkTabletType(t, tempTablet.Alias, "PRIMARY")
 	// Run a bunch of DDL queries and verify that the tables/views changed show up in the health stream.
@@ -231,87 +243,102 @@ func TestHealthCheckSchemaChangeSignal(t *testing.T) {
 }
 
 func verifyHealthStreamSchemaChangeSignals(t *testing.T, vtgateConn *mysql.Conn, primaryTablet *cluster.Vttablet, viewsEnabled bool) {
-	var streamErr error
-	var wg sync.WaitGroup
-	var ranOnce atomic.Bool
-	var finished atomic.Bool
+	verifyTableDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "CREATE TABLE `area` (`id` int NOT NULL, `country` varchar(30), PRIMARY KEY (`id`))", "area")
+	verifyTableDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "CREATE TABLE `area2` (`id` int NOT NULL, PRIMARY KEY (`id`))", "area2")
+	verifyViewDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "CREATE VIEW v2 as select * from t1", viewsEnabled)
+	verifyTableDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "ALTER TABLE `area` ADD COLUMN name varchar(30) NOT NULL", "area")
+	verifyTableDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "DROP TABLE `area2`", "area2")
+	verifyViewDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "ALTER VIEW v2 as select id from t1", viewsEnabled)
+	verifyViewDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "DROP VIEW v2", viewsEnabled)
+	verifyTableDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "DROP TABLE `area`", "area")
+}
 
-	wg.Add(1)
-	ch := make(chan *querypb.StreamHealthResponse)
-
-	go func() {
-		defer wg.Done()
-		streamErr = clusterInstance.StreamTabletHealthUntil(context.Background(), primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
-			ranOnce.Store(true)
-			// If we are finished, then close the channel and end the stream.
-			if finished.Load() {
-				close(ch)
-				return true
-			}
-			// Put the response in the channel.
-			ch <- shr
-			return false
-		})
-	}()
-	// The test becomes flaky if we run the DDL immediately after starting the above go routine because the client for the Stream
-	// sometimes isn't registered by the time DDL runs, and it misses the update we get. To prevent this situation, we wait for one Stream packet
-	// to have returned. Once we know we received a Stream packet, then we know that we are registered for the health stream and can execute the DDL.
-	for i := 0; i < 30 && !ranOnce.Load(); i++ {
-		time.Sleep(1 * time.Second)
-	}
-
-	if !ranOnce.Load() {
-		t.Fatalf("HealthCheck did not ran?")
-	}
-
-	verifyTableDDLSchemaChangeSignal(t, vtgateConn, ch, "CREATE TABLE `area` (`id` int NOT NULL, `country` varchar(30), PRIMARY KEY (`id`))", "area")
-	verifyTableDDLSchemaChangeSignal(t, vtgateConn, ch, "CREATE TABLE `area2` (`id` int NOT NULL, PRIMARY KEY (`id`))", "area2")
-	verifyViewDDLSchemaChangeSignal(t, vtgateConn, ch, "CREATE VIEW v2 as select * from t1", viewsEnabled)
-	verifyTableDDLSchemaChangeSignal(t, vtgateConn, ch, "ALTER TABLE `area` ADD COLUMN name varchar(30) NOT NULL", "area")
-	verifyTableDDLSchemaChangeSignal(t, vtgateConn, ch, "DROP TABLE `area2`", "area2")
-	verifyViewDDLSchemaChangeSignal(t, vtgateConn, ch, "ALTER VIEW v2 as select id from t1", viewsEnabled)
-	verifyViewDDLSchemaChangeSignal(t, vtgateConn, ch, "DROP VIEW v2", viewsEnabled)
-	verifyTableDDLSchemaChangeSignal(t, vtgateConn, ch, "DROP TABLE `area`", "area")
-
-	finished.Store(true)
-	wg.Wait()
+func verifyTableDDLSchemaChangeSignal(t *testing.T, vtgateConn *mysql.Conn, primaryTablet *cluster.Vttablet, query string, table string) {
+	streamErr := runDDLAndWaitForSchemaChangeSignal(t, vtgateConn, primaryTablet, query, func(shr *querypb.StreamHealthResponse) bool {
+		return shr != nil && shr.RealtimeStats != nil && slices.Contains(shr.RealtimeStats.TableSchemaChanged, table)
+	})
 	require.NoError(t, streamErr)
 }
 
-func verifyTableDDLSchemaChangeSignal(t *testing.T, vtgateConn *mysql.Conn, ch chan *querypb.StreamHealthResponse, query string, table string) {
-	_, err := vtgateConn.ExecuteFetch(query, 10000, false)
-	require.NoError(t, err)
-
-	timeout := time.After(15 * time.Second)
-	for {
-		select {
-		case shr := <-ch:
-			if shr != nil && shr.RealtimeStats != nil && slices.Contains(shr.RealtimeStats.TableSchemaChanged, table) {
-				return
-			}
-		case <-timeout:
-			t.Errorf("didn't get the correct tables changed in stream response until timeout")
+func verifyViewDDLSchemaChangeSignal(t *testing.T, vtgateConn *mysql.Conn, primaryTablet *cluster.Vttablet, query string, viewsEnabled bool) {
+	streamErr := runDDLAndWaitForSchemaChangeSignal(t, vtgateConn, primaryTablet, query, func(shr *querypb.StreamHealthResponse) bool {
+		if shr == nil || shr.RealtimeStats == nil {
+			return false
 		}
-	}
+		listToUse := shr.RealtimeStats.TableSchemaChanged
+		if viewsEnabled {
+			listToUse = shr.RealtimeStats.ViewSchemaChanged
+		}
+		return slices.Contains(listToUse, "v2")
+	})
+	require.NoError(t, streamErr)
 }
 
-func verifyViewDDLSchemaChangeSignal(t *testing.T, vtgateConn *mysql.Conn, ch chan *querypb.StreamHealthResponse, query string, viewsEnabled bool) {
-	_, err := vtgateConn.ExecuteFetch(query, 10000, false)
-	require.NoError(t, err)
+func runDDLAndWaitForSchemaChangeSignal(t *testing.T, vtgateConn *mysql.Conn, primaryTablet *cluster.Vttablet, query string, condition func(shr *querypb.StreamHealthResponse) bool) error {
+	ctx := t.Context()
+	streamCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
-	timeout := time.After(15 * time.Second)
+	tablet, err := clusterInstance.VtctldClientProcess.GetTablet(primaryTablet.Alias)
+	if err != nil {
+		return err
+	}
+	conn, err := tabletconn.GetDialer()(streamCtx, tablet, grpcclient.FailFast(false))
+	if err != nil {
+		return err
+	}
+	defer conn.Close(streamCtx)
+
+	respCh := make(chan *querypb.StreamHealthResponse, 16)
+	streamErrCh := make(chan error, 1)
+	go func() {
+		streamErrCh <- conn.StreamHealth(streamCtx, func(shr *querypb.StreamHealthResponse) error {
+			respCh <- shr
+			return nil
+		})
+		close(respCh)
+	}()
+
+	readyTimer := time.NewTimer(30 * time.Second)
+	defer readyTimer.Stop()
 	for {
 		select {
-		case shr := <-ch:
-			listToUse := shr.RealtimeStats.TableSchemaChanged
-			if viewsEnabled {
-				listToUse = shr.RealtimeStats.ViewSchemaChanged
+		case err := <-streamErrCh:
+			if err == context.Canceled || err == io.EOF {
+				return errors.New("health stream closed before ready")
 			}
-			if shr != nil && shr.RealtimeStats != nil && slices.Contains(listToUse, "v2") {
-				return
+			return err
+		case <-respCh:
+			goto ready
+		case <-readyTimer.C:
+			return errors.New("timed out waiting for health stream ready")
+		}
+	}
+
+ready:
+	_, err = vtgateConn.ExecuteFetch(query, 10000, false)
+	if err != nil {
+		return err
+	}
+
+	matchTimer := time.NewTimer(60 * time.Second)
+	defer matchTimer.Stop()
+	for {
+		select {
+		case err := <-streamErrCh:
+			if err == context.Canceled || err == io.EOF {
+				return errors.New("health stream closed before schema change was observed")
 			}
-		case <-timeout:
-			t.Errorf("didn't get the correct views changed in stream response until timeout")
+			return err
+		case shr, ok := <-respCh:
+			if !ok {
+				return errors.New("health stream closed before schema change was observed")
+			}
+			if condition(shr) {
+				return nil
+			}
+		case <-matchTimer.C:
+			return errors.New("timed out waiting for schema change signal")
 		}
 	}
 }
