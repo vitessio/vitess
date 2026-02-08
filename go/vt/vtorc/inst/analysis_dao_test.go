@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
-	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/test"
 )
@@ -50,9 +49,6 @@ var initialSQL = []string{
 // run by it. It only checks the analysis part after the rows have been read. This tests fakes the db and explicitly returns the
 // rows that are specified in the test.
 func TestGetDetectionAnalysisDecision(t *testing.T) {
-	oldWindow := config.GetPrimaryHealthCheckTimeoutWindow()
-	config.SetPrimaryHealthCheckTimeoutWindow(30 * time.Second)
-	defer config.SetPrimaryHealthCheckTimeoutWindow(oldWindow)
 	resetPrimaryHealthState()
 	tests := []struct {
 		name           string
@@ -1057,9 +1053,6 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 // TestStalePrimary tests that an old primary that remains writable and is of tablet type PRIMARY
 // in the topo is demoted to a read-only replica by VTOrc.
 func TestStalePrimary(t *testing.T) {
-	oldWindow := config.GetPrimaryHealthCheckTimeoutWindow()
-	config.SetPrimaryHealthCheckTimeoutWindow(30 * time.Second)
-	defer config.SetPrimaryHealthCheckTimeoutWindow(oldWindow)
 	oldDB := db.Db
 	defer func() {
 		db.Db = oldDB
@@ -1162,9 +1155,6 @@ func TestStalePrimary(t *testing.T) {
 // This test is somewhere between a unit test, and an end-to-end test. It is specifically useful for testing situations which are hard to come by in end-to-end test, but require
 // real-world data to test specifically.
 func TestGetDetectionAnalysis(t *testing.T) {
-	oldWindow := config.GetPrimaryHealthCheckTimeoutWindow()
-	config.SetPrimaryHealthCheckTimeoutWindow(30 * time.Second)
-	defer config.SetPrimaryHealthCheckTimeoutWindow(oldWindow)
 	// The test is intended to be used as follows. The initial data is stored into the database. Following this, some specific queries are run that each individual test specifies to get the desired state.
 	tests := []struct {
 		name           string

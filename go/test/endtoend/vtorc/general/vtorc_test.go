@@ -19,6 +19,7 @@ package general
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -735,7 +736,8 @@ func TestFullStatusConnectionPooling(t *testing.T) {
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 4, 0, []string{
 		vtutils.GetFlagVariantForTests("--tablet-manager-grpc-concurrency") + "=1",
 	}, cluster.VTOrcConfiguration{
-		PreventCrossCellFailover: true,
+		PreventCrossCellFailover:        true,
+		PrimaryHealthCheckTimeoutWindow: "10s",
 	}, cluster.DefaultVtorcsByCell, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
@@ -751,14 +753,11 @@ func TestFullStatusConnectionPooling(t *testing.T) {
 	// Kill the current primary.
 	_ = curPrimary.VttabletProcess.Kill()
 
-	// Wait until VTOrc notices some problems
-	status, resp := utils.MakeAPICallRetry(t, vtorc, "/api/replication-analysis", func(_ int, response string) bool {
-		return response == "null"
-	})
-	assert.Equal(t, 200, status)
-	assert.Contains(t, resp, "UnreachablePrimary")
-
-	time.Sleep(1 * time.Minute)
+	// Wait until VTOrc notices the failure.
+	require.Eventually(t, func() bool {
+		status, resp, err := utils.MakeAPICall(t, vtorc, "/api/replication-analysis")
+		return err == nil && status == 200 && strings.Contains(resp, "UnreachablePrimary")
+	}, 90*time.Second, time.Second, "timed out waiting for UnreachablePrimary analysis")
 
 	// Change the primaries ports and restart it.
 	curPrimary.VttabletProcess.Port = clusterInfo.ClusterInstance.GetAndReservePort()
@@ -767,25 +766,20 @@ func TestFullStatusConnectionPooling(t *testing.T) {
 	require.NoError(t, err)
 
 	// See that VTOrc eventually reports no errors.
-	// Wait until there are no problems and the api endpoint returns null
-	status, resp = utils.MakeAPICallRetry(t, vtorc, "/api/replication-analysis", func(_ int, response string) bool {
-		return response != "null"
-	})
-	assert.Equal(t, 200, status)
-	assert.Equal(t, "null", resp)
+	require.Eventually(t, func() bool {
+		status, resp, err := utils.MakeAPICall(t, vtorc, "/api/replication-analysis")
+		return err == nil && status == 200 && strings.TrimSpace(resp) == "null"
+	}, 90*time.Second, time.Second, "timed out waiting for replication analysis to clear")
 
 	// REPEATED
 	// Kill the current primary.
 	_ = curPrimary.VttabletProcess.Kill()
 
-	// Wait until VTOrc notices some problems
-	status, resp = utils.MakeAPICallRetry(t, vtorc, "/api/replication-analysis", func(_ int, response string) bool {
-		return response == "null"
-	})
-	assert.Equal(t, 200, status)
-	assert.Contains(t, resp, "UnreachablePrimary")
-
-	time.Sleep(1 * time.Minute)
+	// Wait until VTOrc notices the failure.
+	require.Eventually(t, func() bool {
+		status, resp, err := utils.MakeAPICall(t, vtorc, "/api/replication-analysis")
+		return err == nil && status == 200 && strings.Contains(resp, "UnreachablePrimary")
+	}, 90*time.Second, time.Second, "timed out waiting for UnreachablePrimary analysis")
 
 	// Change the primaries ports back to original and restart it.
 	curPrimary.VttabletProcess.Port = curPrimary.HTTPPort
@@ -794,10 +788,8 @@ func TestFullStatusConnectionPooling(t *testing.T) {
 	require.NoError(t, err)
 
 	// See that VTOrc eventually reports no errors.
-	// Wait until there are no problems and the api endpoint returns null
-	status, resp = utils.MakeAPICallRetry(t, vtorc, "/api/replication-analysis", func(_ int, response string) bool {
-		return response != "null"
-	})
-	assert.Equal(t, 200, status)
-	assert.Equal(t, "null", resp)
+	require.Eventually(t, func() bool {
+		status, resp, err := utils.MakeAPICall(t, vtorc, "/api/replication-analysis")
+		return err == nil && status == 200 && strings.TrimSpace(resp) == "null"
+	}, 90*time.Second, time.Second, "timed out waiting for replication analysis to clear")
 }

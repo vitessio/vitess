@@ -335,11 +335,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		a.GTIDMode = m.GetString("gtid_mode")
 		a.LastCheckValid = m.GetBool("is_last_check_valid")
 		a.LastCheckPartialSuccess = m.GetBool("last_check_partial_success")
-		if a.IsPrimary {
-			a.PrimaryHealthUnhealthy = IsPrimaryHealthCheckUnhealthy(a.AnalyzedInstanceAlias)
-		} else {
-			a.PrimaryHealthUnhealthy = false
-		}
+		a.PrimaryHealthUnhealthy = IsPrimaryHealthCheckUnhealthy(a.AnalyzedInstanceAlias)
 		a.CountReplicas = m.GetUint("count_replicas")
 		a.CountValidReplicas = m.GetUint("count_valid_replicas")
 		a.CountValidReplicatingReplicas = m.GetUint("count_valid_replicating_replicas")
@@ -449,7 +445,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			a.Description = "Primary cannot be reached by vtorc; some of its replicas are unreachable and none of its reachable replicas is replicating"
 			ca.hasShardWideAction = true
 			//
-		case a.IsClusterPrimary && a.PrimaryHealthUnhealthy:
+		case a.IsClusterPrimary && a.LastCheckValid && a.PrimaryHealthUnhealthy:
 			a.Analysis = IncapacitatedPrimary
 			a.Description = "Primary is consistently timing out on health checks and is incapacitated"
 			ca.hasShardWideAction = true
@@ -491,6 +487,10 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			a.Analysis = PrimaryTabletDeleted
 			a.Description = "Primary tablet has been deleted"
 			ca.hasShardWideAction = true
+		case topo.IsReplicaType(a.TabletType) && a.IsPrimary:
+			a.Analysis = NotConnectedToPrimary
+			a.Description = "Not connected to the primary"
+			//
 		case a.IsPrimary && a.SemiSyncBlocked && a.CountSemiSyncReplicasEnabled >= a.SemiSyncPrimaryWaitForReplicaCount:
 			// The primary is reporting that semi-sync monitor is blocked on writes.
 			// There are enough replicas configured to send semi-sync ACKs such that the primary shouldn't be blocked.
@@ -501,10 +501,6 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		case topo.IsReplicaType(a.TabletType) && !a.IsReadOnly:
 			a.Analysis = ReplicaIsWritable
 			a.Description = "Replica is writable"
-			//
-		case topo.IsReplicaType(a.TabletType) && a.IsPrimary:
-			a.Analysis = NotConnectedToPrimary
-			a.Description = "Not connected to the primary"
 			//
 		case topo.IsReplicaType(a.TabletType) && !a.IsPrimary && math.Round(a.HeartbeatInterval*2) != float64(a.ReplicaNetTimeout):
 			a.Analysis = ReplicaMisconfigured
@@ -634,6 +630,9 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 // start time than the shard's current primary.
 func isStaleTopoPrimary(tablet *DetectionAnalysis, cluster *clusterAnalysis) bool {
 	if tablet.TabletType != topodatapb.TabletType_PRIMARY {
+		return false
+	}
+	if cluster == nil || cluster.primaryTimestamp.IsZero() {
 		return false
 	}
 
