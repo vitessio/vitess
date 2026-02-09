@@ -179,7 +179,7 @@ jobs:
 
       - name: Install Consul and ZooKeeper
         if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'consul')
-        run: make tools
+        run: make BUILD_PROTOC=0 tools
 
       - name: Setup launchable dependencies
         if: |
