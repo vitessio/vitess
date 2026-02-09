@@ -209,7 +209,7 @@ func TestSetSystemVariableWithAutocommitDisabled(t *testing.T) {
 	utils.Exec(t, conn1, "delete from test")
 	utils.Exec(t, conn1, "delete from test_vdx")
 
-	utils.Exec(t, conn1, "set autocommit = 1")
+	utils.Exec(t, conn1, "set autocommit = 0")
 
 	utils.Exec(t, conn1, "set session transaction isolation level read uncommitted")
 	utils.AssertMatches(t, conn1, "select @@transaction_isolation", `[[VARCHAR("READ-UNCOMMITTED")]]`)
