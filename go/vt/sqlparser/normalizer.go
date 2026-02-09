@@ -622,7 +622,7 @@ func (nz *normalizer) rewriteAliasedTable(cursor *Cursor, node *AliasedTableExpr
 	nz.rewriteView(aliasTableName, node)
 }
 
-// rewriteView looks up aliasTableName in the view definitions and, if found, replaces the table
+// rewriteView looks up viewName in the view definitions and, if found, replaces the table
 // reference with a derived table containing the view's SELECT. If a view routing rule matched
 // but the target view definition is missing, the table name is rewritten to the routed target
 // so that error messages reference the intended destination rather than the original source name.
