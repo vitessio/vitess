@@ -42,9 +42,7 @@ import (
 )
 
 func TestStateOpenClose(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
 
@@ -66,8 +64,7 @@ func TestStateOpenClose(t *testing.T) {
 }
 
 func TestStateRefreshFromTopo(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
 	defer tm.Stop()
@@ -77,8 +74,7 @@ func TestStateRefreshFromTopo(t *testing.T) {
 }
 
 func TestStateResharding(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
 	defer tm.Stop()
