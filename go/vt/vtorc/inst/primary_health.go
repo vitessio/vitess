@@ -20,7 +20,7 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtorc/config"
+	"vitess.io/vitess/go/vt/topo"
 )
 
 const minPrimaryHealthCheckFailures = 2
@@ -30,14 +30,14 @@ type primaryHealthEvent struct {
 	success bool
 }
 
-type primaryHealthWindow struct {
+type primaryHealthState struct {
 	events    []primaryHealthEvent
 	unhealthy bool
 }
 
 var (
 	primaryHealthMu      sync.Mutex
-	primaryHealthByAlias = make(map[string]*primaryHealthWindow)
+	primaryHealthByAlias = make(map[string]*primaryHealthState)
 )
 
 // RecordPrimaryHealthCheck records the outcome of a primary health check.
@@ -47,7 +47,7 @@ func RecordPrimaryHealthCheck(tabletAlias string, success bool) {
 
 // IsPrimaryHealthCheckUnhealthy reports whether the primary health checks are unhealthy.
 func IsPrimaryHealthCheckUnhealthy(tabletAlias string) bool {
-	window := config.GetPrimaryHealthCheckTimeoutWindow()
+	window := primaryHealthWindow()
 	if window <= 0 || tabletAlias == "" {
 		return false
 	}
@@ -68,7 +68,7 @@ func IsPrimaryHealthCheckUnhealthy(tabletAlias string) bool {
 }
 
 func recordPrimaryHealthCheckAt(tabletAlias string, success bool, now time.Time) {
-	window := config.GetPrimaryHealthCheckTimeoutWindow()
+	window := primaryHealthWindow()
 	if window <= 0 || tabletAlias == "" {
 		return
 	}
@@ -78,7 +78,7 @@ func recordPrimaryHealthCheckAt(tabletAlias string, success bool, now time.Time)
 
 	state := primaryHealthByAlias[tabletAlias]
 	if state == nil {
-		state = &primaryHealthWindow{}
+		state = &primaryHealthState{}
 		primaryHealthByAlias[tabletAlias] = state
 	}
 	state.events = append(state.events, primaryHealthEvent{at: now, success: success})
@@ -88,7 +88,7 @@ func recordPrimaryHealthCheckAt(tabletAlias string, success bool, now time.Time)
 	}
 }
 
-func updatePrimaryHealthWindowLocked(state *primaryHealthWindow, now time.Time, window time.Duration) {
+func updatePrimaryHealthWindowLocked(state *primaryHealthState, now time.Time, window time.Duration) {
 	if state == nil {
 		return
 	}
@@ -125,6 +125,10 @@ func updatePrimaryHealthWindowLocked(state *primaryHealthWindow, now time.Time, 
 	}
 }
 
-func shouldEvictPrimaryHealthWindow(state *primaryHealthWindow) bool {
+func shouldEvictPrimaryHealthWindow(state *primaryHealthState) bool {
 	return state != nil && !state.unhealthy && len(state.events) == 0
+}
+
+func primaryHealthWindow() time.Duration {
+	return topo.RemoteOperationTimeout * 3
 }

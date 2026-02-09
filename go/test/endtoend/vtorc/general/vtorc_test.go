@@ -736,8 +736,7 @@ func TestFullStatusConnectionPooling(t *testing.T) {
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 4, 0, []string{
 		vtutils.GetFlagVariantForTests("--tablet-manager-grpc-concurrency") + "=1",
 	}, cluster.VTOrcConfiguration{
-		PreventCrossCellFailover:        true,
-		PrimaryHealthCheckTimeoutWindow: "10s",
+		PreventCrossCellFailover: true,
 	}, cluster.DefaultVtorcsByCell, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]

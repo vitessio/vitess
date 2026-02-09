@@ -20,43 +20,50 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/vt/vtorc/config"
 )
 
 func resetPrimaryHealthState() {
 	primaryHealthMu.Lock()
 	defer primaryHealthMu.Unlock()
-	primaryHealthByAlias = make(map[string]*primaryHealthWindow)
+	primaryHealthByAlias = make(map[string]*primaryHealthState)
 }
 
 func TestPrimaryHealthWindow(t *testing.T) {
 	resetPrimaryHealthState()
-	oldWindow := config.GetPrimaryHealthCheckTimeoutWindow()
-	config.SetPrimaryHealthCheckTimeoutWindow(50 * time.Millisecond)
-	defer config.SetPrimaryHealthCheckTimeoutWindow(oldWindow)
-
 	alias := "zone1-0000000100"
-	RecordPrimaryHealthCheck(alias, false)
-	require.False(t, IsPrimaryHealthCheckUnhealthy(alias))
+	start := time.Now()
 
-	RecordPrimaryHealthCheck(alias, false)
-	require.True(t, IsPrimaryHealthCheckUnhealthy(alias))
+	recordPrimaryHealthCheckAt(alias, false, start)
+	recordPrimaryHealthCheckAt(alias, false, start.Add(100*time.Millisecond))
 
-	time.Sleep(60 * time.Millisecond)
-	RecordPrimaryHealthCheck(alias, true)
+	window := primaryHealthWindow()
+	primaryHealthMu.Lock()
+	state := primaryHealthByAlias[alias]
+	updatePrimaryHealthWindowLocked(state, start.Add(100*time.Millisecond), window)
+	require.True(t, state.unhealthy)
+	primaryHealthMu.Unlock()
 
-	assert.Eventually(t, func() bool {
-		return !IsPrimaryHealthCheckUnhealthy(alias)
-	}, 200*time.Millisecond, 10*time.Millisecond)
+	recordPrimaryHealthCheckAt(alias, true, start.Add(window+time.Millisecond))
+	primaryHealthMu.Lock()
+	state = primaryHealthByAlias[alias]
+	updatePrimaryHealthWindowLocked(state, start.Add(window+time.Millisecond), window)
+	require.True(t, state.unhealthy)
+	primaryHealthMu.Unlock()
 
-	assert.Eventually(t, func() bool {
-		IsPrimaryHealthCheckUnhealthy(alias)
-		primaryHealthMu.Lock()
-		defer primaryHealthMu.Unlock()
-		_, ok := primaryHealthByAlias[alias]
-		return !ok
-	}, 200*time.Millisecond, 10*time.Millisecond)
+	recordPrimaryHealthCheckAt(alias, true, start.Add(2*window+10*time.Millisecond))
+	primaryHealthMu.Lock()
+	state = primaryHealthByAlias[alias]
+	updatePrimaryHealthWindowLocked(state, start.Add(2*window+10*time.Millisecond), window)
+	require.False(t, state.unhealthy)
+	primaryHealthMu.Unlock()
+
+	primaryHealthMu.Lock()
+	updatePrimaryHealthWindowLocked(state, start.Add(4*window+10*time.Millisecond), window)
+	if shouldEvictPrimaryHealthWindow(state) {
+		delete(primaryHealthByAlias, alias)
+	}
+	_, ok := primaryHealthByAlias[alias]
+	primaryHealthMu.Unlock()
+	require.False(t, ok)
 }

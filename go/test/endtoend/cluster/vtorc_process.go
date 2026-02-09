@@ -64,7 +64,6 @@ type VTOrcConfiguration struct {
 	TolerableReplicationLag              string `json:"tolerable-replication-lag,omitempty"`
 	TopoInformationRefreshDuration       string `json:"topo-information-refresh-duration,omitempty"`
 	RecoveryPollDuration                 string `json:"recovery-poll-duration,omitempty"`
-	PrimaryHealthCheckTimeoutWindow      string `json:"primary-healthcheck-timeout-window,omitempty"`
 	AllowEmergencyReparent               string `json:"allow-emergency-reparent,omitempty"`
 	ChangeTabletsWithErrantGtidToDrained bool   `json:"change-tablets-with-errant-gtid-to-drained,omitempty"`
 	LockShardTimeoutSeconds              int    `json:",omitempty"`

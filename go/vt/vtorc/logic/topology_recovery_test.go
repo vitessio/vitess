@@ -534,3 +534,86 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 		})
 	}
 }
+
+func TestRecoverIncapacitatedPrimary(t *testing.T) {
+	tests := []struct {
+		name        string
+		analysis    *inst.DetectionAnalysis
+		probeOK     bool
+		wantAttempt bool
+		setupDB     bool
+		rows        int
+	}{
+		{
+			name: "reachable healthz",
+			analysis: &inst.DetectionAnalysis{
+				Analysis:              inst.IncapacitatedPrimary,
+				AnalyzedInstanceAlias: "zon1-0000000100",
+				AnalyzedKeyspace:      "ks",
+				AnalyzedShard:         "0",
+				LastCheckValid:        true,
+			},
+			probeOK:     true,
+			wantAttempt: false,
+			setupDB:     true,
+			rows:        3,
+		},
+		{
+			name: "unreachable healthz",
+			analysis: &inst.DetectionAnalysis{
+				Analysis:              inst.IncapacitatedPrimary,
+				AnalyzedInstanceAlias: "zon1-0000000100",
+			},
+			probeOK:     false,
+			wantAttempt: false,
+			setupDB:     true,
+			rows:        3,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			oldProbe := healthzProbe
+			healthzProbe = func(_ *topodatapb.Tablet) (bool, error) {
+				return tt.probeOK, nil
+			}
+			defer func() {
+				healthzProbe = oldProbe
+			}()
+
+			if tt.setupDB {
+				oldDB := db.Db
+				defer func() {
+					db.Db = oldDB
+				}()
+
+				analysisInfo := &test.InfoForRecoveryAnalysis{
+					TabletInfo: &topodatapb.Tablet{
+						Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+						Hostname:      "localhost",
+						Keyspace:      "ks",
+						Shard:         "0",
+						Type:          topodatapb.TabletType_PRIMARY,
+						MysqlHostname: "localhost",
+						MysqlPort:     6709,
+						PortMap: map[string]int32{
+							"vt": 15000,
+						},
+					},
+				}
+				analysisInfo.SetValuesFromTabletInfo()
+				row := analysisInfo.ConvertToRowMap()
+				rowMaps := make([]sqlutils.RowMap, 0, tt.rows)
+				for i := 0; i < tt.rows; i++ {
+					rowMaps = append(rowMaps, row)
+				}
+				db.Db = test.NewTestDB([][]sqlutils.RowMap{rowMaps})
+			}
+
+			attempted, topologyRecovery, err := recoverIncapacitatedPrimary(context.Background(), tt.analysis, log.NewPrefixedLogger("test"))
+			require.NoError(t, err)
+			require.Equal(t, tt.wantAttempt, attempted)
+			require.Nil(t, topologyRecovery)
+		})
+	}
+}

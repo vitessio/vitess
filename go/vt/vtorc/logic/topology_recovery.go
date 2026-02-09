@@ -22,6 +22,9 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"net"
+	"net/http"
+	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -375,6 +378,15 @@ func recoverDeadPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalys
 // do an emergency reparent if the planned one fails.
 func recoverIncapacitatedPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	recoveryName := RecoverIncapacitatedPrimaryRecoveryName
+	reachable, reachErr := isPrimaryHealthzReachable(analysisEntry)
+	if reachErr != nil {
+		logger.Infof("healthz probe failed for %s: %v", analysisEntry.AnalyzedInstanceAlias, reachErr)
+	}
+	if !reachable {
+		logger.Infof("Skipping IncapacitatedPrimary recovery; primary is not reachable via healthz: %s. There is likely a network partition between vtorc and the primary or the primary is down. In the latter case, RecoverDeadPrimary should trigger.",
+			analysisEntry.AnalyzedInstanceAlias)
+		return false, nil, nil
+	}
 	if !analysisEntry.LastCheckValid {
 		return runEmergencyReparentOp(ctx, analysisEntry, recoveryName, false, logger)
 	}
@@ -387,6 +399,35 @@ func recoverIncapacitatedPrimary(ctx context.Context, analysisEntry *inst.Detect
 	}
 	logger.Warningf("PlannedReparentShard failed for %s/%s: %v", analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, err)
 	return runEmergencyReparentOp(ctx, analysisEntry, recoveryName, false, logger)
+}
+
+var healthzProbe = probeTabletHealthz
+
+func isPrimaryHealthzReachable(analysisEntry *inst.DetectionAnalysis) (bool, error) {
+	if analysisEntry == nil || analysisEntry.AnalyzedInstanceAlias == "" {
+		return false, nil
+	}
+	tablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
+	if err != nil || tablet == nil || tablet.Hostname == "" || tablet.PortMap == nil {
+		return false, err
+	}
+	return healthzProbe(tablet)
+}
+
+func probeTabletHealthz(tablet *topodatapb.Tablet) (bool, error) {
+	vtPort, ok := tablet.PortMap["vt"]
+	if !ok || vtPort == 0 {
+		return false, nil
+	}
+	addr := net.JoinHostPort(tablet.Hostname, strconv.Itoa(int(vtPort)))
+	url := fmt.Sprintf("http://%s/healthz", addr)
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode == http.StatusOK, nil
 }
 
 // recoverPrimaryTabletDeleted tries to run a recovery for the case where the primary tablet has been deleted.
