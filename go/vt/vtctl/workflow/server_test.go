@@ -2117,6 +2117,28 @@ func TestMirrorTraffic(t *testing.T) {
 			wantWritesMirrored:             false,
 		},
 		{
+			name: "ok @rdonly tablet type",
+			req: &vtctldatapb.WorkflowMirrorTrafficRequest{
+				Keyspace:    targetKs,
+				Workflow:    workflow,
+				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY},
+				Percent:     50.0,
+			},
+			routingRules: initialRoutingRules,
+			wantMirrorRules: map[string]map[string]float32{
+				fmt.Sprintf("%s.%s@rdonly", sourceKs, table1): {
+					fmt.Sprintf("%s.%s", targetKs, table1): 50.0,
+				},
+				fmt.Sprintf("%s.%s@rdonly", sourceKs, table2): {
+					fmt.Sprintf("%s.%s", targetKs, table2): 50.0,
+				},
+			},
+			wantDeniedTables:               []string{table1, table2},
+			wantAllowReadsFromDeniedTables: true,
+			wantReadsMirrored:              true,
+			wantWritesMirrored:             false,
+		},
+		{
 			name: "percent zero preserves other mirror targets",
 			mirrorRules: map[string]map[string]float32{
 				fmt.Sprintf("%s.%s", sourceKs, table1): {

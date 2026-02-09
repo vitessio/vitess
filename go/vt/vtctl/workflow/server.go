@@ -526,8 +526,8 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 			// any table and points to the target keyspace, then read traffic is
 			// mirrored.
 			for _, tabletType := range []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY} {
-				fromTable = fmt.Sprintf("%s@%s", fromTable, topoproto.TabletTypeLString(tabletType))
-				if mr, ok := mirrorRules[fromTable]; ok {
+				fromTableByType := fmt.Sprintf("%s@%s", fromTable, topoproto.TabletTypeLString(tabletType))
+				if mr, ok := mirrorRules[fromTableByType]; ok {
 					if _, ok := mr[toTable]; ok {
 						state.ReadsMirrored = true
 					}
