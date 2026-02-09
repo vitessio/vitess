@@ -1367,7 +1367,11 @@ func setupInitialDeniedTables(ctx context.Context, ts *trafficSwitcher) error {
 	}
 	return ts.ForAllTargets(func(target *MigrationTarget) error {
 		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.TargetKeyspaceName(), target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, true /* allow create denied table records */, false /* remove */, ts.Tables(), false)
+			return si.UpdateDeniedTables(ctx, topo.UpdateDeniedTablesOpts{
+				AllowCreate: true,
+				Tables:      ts.Tables(),
+				TabletType:  topodatapb.TabletType_PRIMARY,
+			})
 		}); err != nil {
 			return err
 		}

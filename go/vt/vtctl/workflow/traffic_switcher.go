@@ -469,7 +469,11 @@ func (ts *trafficSwitcher) deleteKeyspaceRoutingRules(ctx context.Context) error
 func (ts *trafficSwitcher) dropSourceDeniedTables(ctx context.Context) error {
 	return ts.ForAllSources(func(source *MigrationSource) error {
 		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.SourceKeyspaceName(), source.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, true /* allow create denied table records */, true /* remove */, ts.Tables(), false)
+			return si.UpdateDeniedTables(ctx, topo.UpdateDeniedTablesOpts{
+				Remove:     true,
+				Tables:     ts.Tables(),
+				TabletType: topodatapb.TabletType_PRIMARY,
+			})
 		}); err != nil {
 			return err
 		}
@@ -493,7 +497,11 @@ func (ts *trafficSwitcher) dropSourceDeniedTables(ctx context.Context) error {
 func (ts *trafficSwitcher) dropTargetDeniedTables(ctx context.Context) error {
 	return ts.ForAllTargets(func(target *MigrationTarget) error {
 		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.TargetKeyspaceName(), target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, true /* allow create denied table records */, true /* remove */, ts.Tables(), false)
+			return si.UpdateDeniedTables(ctx, topo.UpdateDeniedTablesOpts{
+				Remove:     true,
+				Tables:     ts.Tables(),
+				TabletType: topodatapb.TabletType_PRIMARY,
+			})
 		}); err != nil {
 			return err
 		}
@@ -1088,7 +1096,12 @@ func (ts *trafficSwitcher) switchDeniedTables(ctx context.Context, backward bool
 	egrp.Go(func() error {
 		return ts.ForAllSources(func(source *MigrationSource) error {
 			if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.SourceKeyspaceName(), source.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-				return si.UpdateDeniedTables(ectx, topodatapb.TabletType_PRIMARY, nil, true /* allow create denied table records */, rmsource /* remove */, ts.Tables(), false)
+				return si.UpdateDeniedTables(ectx, topo.UpdateDeniedTablesOpts{
+					AllowCreate: true,
+					Remove:      rmsource,
+					Tables:      ts.Tables(),
+					TabletType:  topodatapb.TabletType_PRIMARY,
+				})
 			}); err != nil {
 				return err
 			}
@@ -1109,7 +1122,10 @@ func (ts *trafficSwitcher) switchDeniedTables(ctx context.Context, backward bool
 		})
 	})
 	egrp.Go(func() error {
-		return ts.setTargetDeniedTables(ectx, true /* allow create denied table records */, rmtarget /* remove */, false /*allowReads*/)
+		return ts.setTargetDeniedTables(ectx, setTargetDeniedTablesOpts{
+			allowCreate: true,
+			remove:      rmtarget,
+		})
 	})
 	if err := egrp.Wait(); err != nil {
 		ts.Logger().Warningf("Error in switchDeniedTables: %s", err)
@@ -1568,18 +1584,31 @@ func (ts *trafficSwitcher) mirrorTableTraffic(ctx context.Context, types []topod
 	// Update allowReads on existing denied tables based on whether mirroring
 	// is enabled for this workflow. Don't create new denied table records -
 	// they should already exist from the MoveTables workflow setup.
-	allowReads := percent > 0
-	if err := ts.setTargetDeniedTables(ctx, false /* don't create denied table records */, false /*remove*/, allowReads); err != nil {
+	if err := ts.setTargetDeniedTables(ctx, setTargetDeniedTablesOpts{
+		allowReads: percent > 0,
+	}); err != nil {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to update target denied tables: %v", err)
 	}
 
 	return ts.TopoServer().RebuildSrvVSchema(ctx, nil)
 }
 
-func (ts *trafficSwitcher) setTargetDeniedTables(ctx context.Context, create, remove, allowReads bool) error {
+type setTargetDeniedTablesOpts struct {
+	allowCreate bool
+	allowReads  bool
+	remove      bool
+}
+
+func (ts *trafficSwitcher) setTargetDeniedTables(ctx context.Context, opts setTargetDeniedTablesOpts) error {
 	return ts.ForAllTargets(func(target *MigrationTarget) error {
 		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.TargetKeyspaceName(), target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, create, remove, ts.Tables(), allowReads)
+			return si.UpdateDeniedTables(ctx, topo.UpdateDeniedTablesOpts{
+				AllowCreate: opts.allowCreate,
+				AllowReads:  opts.allowReads,
+				Remove:      opts.remove,
+				Tables:      ts.Tables(),
+				TabletType:  topodatapb.TabletType_PRIMARY,
+			})
 		}); err != nil {
 			return err
 		}

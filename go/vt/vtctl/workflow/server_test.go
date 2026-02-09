@@ -1043,8 +1043,11 @@ func TestWorkflowDelete(t *testing.T) {
 					_, err := env.ts.UpdateShardFields(lockCtx, targetKeyspaceName, shard, func(si *topo.ShardInfo) error {
 						// So t1_2 and t1_3 do not exist in the denied table list when we go
 						// to remove t1, t1_2, and t1_3.
-						err := si.UpdateDeniedTables(lockCtx, topodatapb.TabletType_PRIMARY, nil, true /* allow create denied table records */, false /* remove */, []string{table1Name, "t2", "t3"}, false)
-						return err
+						return si.UpdateDeniedTables(lockCtx, topo.UpdateDeniedTablesOpts{
+							AllowCreate: true,
+							Tables:      []string{table1Name, "t2", "t3"},
+							TabletType:  topodatapb.TabletType_PRIMARY,
+						})
 					})
 					require.NoError(t, err)
 				}
@@ -2347,7 +2350,11 @@ func setupDeniedTables(t *testing.T, ctx context.Context, te *testMaterializerEn
 	}()
 	for _, shard := range te.targets {
 		_, err := te.topoServ.UpdateShardFields(lockCtx, targetKs, shard, func(si *topo.ShardInfo) error {
-			return si.UpdateDeniedTables(lockCtx, topodatapb.TabletType_PRIMARY, nil, true /* allow create denied table records */, false /* remove */, tables, false /* allowReads */)
+			return si.UpdateDeniedTables(lockCtx, topo.UpdateDeniedTablesOpts{
+				AllowCreate: true,
+				Tables:      tables,
+				TabletType:  topodatapb.TabletType_PRIMARY,
+			})
 		})
 		require.NoError(t, err)
 	}

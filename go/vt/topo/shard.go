@@ -109,6 +109,30 @@ func ValidateShardName(shard string) (string, *topodatapb.KeyRange, error) {
 	return strings.ToLower(shard), keyRange, nil
 }
 
+// UpdateDeniedTablesOpts specifies options for UpdateDeniedTables.
+type UpdateDeniedTablesOpts struct {
+	// AllowCreate specifies whether to create a new TabletControl record if one
+	// doesn't exist. If false and no record exists, the update is a no-op.
+	AllowCreate bool
+
+	// AllowReads specifies whether to allow read queries to the denied tables.
+	// This is used for traffic mirroring scenarios.
+	AllowReads bool
+
+	// Cells specifies which cells to update. If nil, updates all cells.
+	Cells []string
+
+	// Remove specifies whether to remove the tables from the deny list.
+	// If false, tables are added to the deny list.
+	Remove bool
+
+	// Tables specifies the tables to add or remove from the deny list.
+	Tables []string
+
+	// TabletType specifies which tablet type's control record to update.
+	TabletType topodatapb.TabletType
+}
+
 // ShardInfo is a meta struct that contains metadata to give the data
 // more context and convenience. This is the main way we interact with a shard.
 type ShardInfo struct {
@@ -401,53 +425,53 @@ func (si *ShardInfo) GetTabletControl(tabletType topodatapb.TabletType) *topodat
 //     because it's not used in the same context (vertical vs horizontal sharding)
 //
 // This function should be called while holding the keyspace lock.
-func (si *ShardInfo) UpdateDeniedTables(ctx context.Context, tabletType topodatapb.TabletType, cells []string, create bool, remove bool, tables []string, allowReads bool) error {
+func (si *ShardInfo) UpdateDeniedTables(ctx context.Context, opts UpdateDeniedTablesOpts) error {
 	if err := CheckKeyspaceLocked(ctx, si.keyspace); err != nil {
 		return err
 	}
-	if tabletType == topodatapb.TabletType_PRIMARY && len(cells) > 0 {
+	if opts.TabletType == topodatapb.TabletType_PRIMARY && len(opts.Cells) > 0 {
 		return errors.New(dlNoCellsForPrimary)
 	}
-	tc := si.GetTabletControl(tabletType)
+	tc := si.GetTabletControl(opts.TabletType)
 	if tc == nil {
 		// Handle the case where the TabletControl object is new.
-		if remove {
+		if opts.Remove {
 			// We tried to remove something that doesn't exist, log a warning.
 			// But we know that our work is done.
-			log.Warningf("Trying to remove TabletControl.DeniedTables for missing type %v in shard %v/%v", tabletType, si.keyspace, si.shardName)
+			log.Warningf("Trying to remove TabletControl.DeniedTables for missing type %v in shard %v/%v", opts.TabletType, si.keyspace, si.shardName)
 			return nil
 		}
 
-		if !create {
+		if !opts.AllowCreate {
 			// We're not creating and there's nothing to update.
 			return nil
 		}
 
 		// Add constraints to the new record.
 		si.TabletControls = append(si.TabletControls, &topodatapb.Shard_TabletControl{
-			TabletType:   tabletType,
-			Cells:        cells,
-			DeniedTables: tables,
-			AllowReads:   allowReads,
+			TabletType:   opts.TabletType,
+			Cells:        opts.Cells,
+			DeniedTables: opts.Tables,
+			AllowReads:   opts.AllowReads,
 		})
 		return nil
 	}
 
-	if tabletType == topodatapb.TabletType_PRIMARY {
-		if err := si.updatePrimaryTabletControl(tc, remove, tables, allowReads); err != nil {
+	if opts.TabletType == topodatapb.TabletType_PRIMARY {
+		if err := si.updatePrimaryTabletControl(tc, opts.Remove, opts.Tables, opts.AllowReads); err != nil {
 			return err
 		}
 		return nil
 	}
 
 	// We have an existing record, update the table lists.
-	if remove {
-		si.removeCellsFromTabletControl(tc, tabletType, cells)
+	if opts.Remove {
+		si.removeCellsFromTabletControl(tc, opts.TabletType, opts.Cells)
 	} else {
-		if !slices.Equal(tc.DeniedTables, tables) {
-			return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "trying to use two different sets of denied tables for shard %v/%v: %v and %v", si.keyspace, si.shardName, tc.DeniedTables, tables)
+		if !slices.Equal(tc.DeniedTables, opts.Tables) {
+			return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "trying to use two different sets of denied tables for shard %v/%v: %v and %v", si.keyspace, si.shardName, tc.DeniedTables, opts.Tables)
 		}
-		tc.Cells = addCells(tc.Cells, cells)
+		tc.Cells = addCells(tc.Cells, opts.Cells)
 	}
 
 	return nil
