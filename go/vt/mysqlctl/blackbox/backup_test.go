@@ -20,6 +20,7 @@ package blackbox
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -925,4 +926,63 @@ func TestExecuteRestoreFailToReadEachFileTwice(t *testing.T) {
 	require.Equal(t, 5, ss.SourceCloseStats)
 	require.Equal(t, 5, ss.SourceOpenStats)
 	require.Equal(t, 5, ss.SourceReadStats)
+}
+
+func TestBackupRetryPropagatesHashToManifest(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	backupRoot, keyspace, shard, ts := SetupCluster(ctx, t, 2, 2)
+
+	bufferPerFiles := make(map[string]*rwCloseFailFirstCall)
+	be := &mysqlctl.BuiltinBackupEngine{}
+	bh := &mysqlctl.FakeBackupHandle{}
+	bh.AddFileReturnF = func(filename string) mysqlctl.FakeBackupHandleAddFileReturn {
+		_, isRetry := bufferPerFiles[filename]
+		newBuffer := newWriteCloseFailFirstWrite(isRetry)
+		bufferPerFiles[filename] = newBuffer
+		return mysqlctl.FakeBackupHandleAddFileReturn{WriteCloser: newBuffer}
+	}
+
+	fakedb := fakesqldb.New(t)
+	defer fakedb.Close()
+	mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
+	defer mysqld.Close()
+	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+
+	ctx, cancel := context.WithCancel(ctx)
+	backupResult, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
+		Logger: logutil.NewMemoryLogger(),
+		Mysqld: mysqld,
+		Cnf: &mysqlctl.Mycnf{
+			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
+			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
+			DataDir:               path.Join(backupRoot, "datadir"),
+		},
+		Stats:                backupstats.NewFakeStats(),
+		Concurrency:          1,
+		HookExtraEnv:         map[string]string{},
+		TopoServer:           ts,
+		Keyspace:             keyspace,
+		Shard:                shard,
+		MysqlShutdownTimeout: MysqlShutdownTimeout,
+	}, bh)
+	cancel()
+
+	time.Sleep(2 * time.Second)
+
+	require.NoError(t, err)
+	require.Equal(t, mysqlctl.BackupUsable, backupResult)
+
+	// Parse the MANIFEST and verify all file entries have non-empty hashes.
+	manifestBuf, ok := bufferPerFiles["MANIFEST"]
+	require.True(t, ok, "MANIFEST should have been written")
+
+	var manifest struct {
+		FileEntries []mysqlctl.FileEntry
+	}
+	require.NoError(t, json.Unmarshal(manifestBuf.Bytes(), &manifest))
+
+	require.NotEmpty(t, manifest.FileEntries, "manifest should contain file entries")
+	for _, fe := range manifest.FileEntries {
+		assert.NotEmptyf(t, fe.Hash, "file %s should have a non-empty hash in the manifest", fe.Name)
+	}
 }
