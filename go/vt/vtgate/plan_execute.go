@@ -19,6 +19,7 @@ package vtgate
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -290,12 +291,9 @@ func planStartsImplicitTx(plan *engine.Plan, stmt sqlparser.Statement) bool {
 	switch plan.QueryType {
 	case sqlparser.StmtSelect, sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
 		// Only start an implicit tx if the plan accesses real tables, not just dual.
-		for _, table := range plan.TablesUsed {
-			if !strings.HasSuffix(table, ".dual") {
-				return true
-			}
-		}
-		return false
+		return slices.ContainsFunc(plan.TablesUsed, func(table string) bool {
+			return !strings.HasSuffix(table, ".dual")
+		})
 	case sqlparser.StmtShow:
 		// Not all SHOW commands start implicit transactions - only the ones that access data inside
 		// of information_schema or other data dictionaries that are stored inside of InnoDB.
