@@ -27,7 +27,9 @@ import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
-import io.opentracing.contrib.grpc.ClientTracingInterceptor;
+import io.opentracing.Tracer;
+import io.opentracing.contrib.grpc.TracingClientInterceptor;
+import io.opentracing.noop.NoopTracerFactory;
 import io.vitess.client.Context;
 import io.vitess.client.RpcClient;
 import io.vitess.client.RpcClientFactory;
@@ -115,7 +117,10 @@ public class GrpcClientFactory implements RpcClientFactory {
     RetryingInterceptor retryingInterceptor = new RetryingInterceptor(config);
     ClientInterceptor[] interceptors;
     if (useTracing) {
-      ClientTracingInterceptor tracingInterceptor = new ClientTracingInterceptor();
+      Tracer tracer = NoopTracerFactory.create();
+      TracingClientInterceptor tracingInterceptor = TracingClientInterceptor.newBuilder()
+          .withTracer(tracer)
+          .build();
       interceptors = new ClientInterceptor[]{retryingInterceptor, tracingInterceptor};
     } else {
       interceptors = new ClientInterceptor[]{retryingInterceptor};

@@ -1,0 +1,28 @@
+name: 'Setup Percona Apt Repo'
+description: 'Set up Percona Apt Repo for use in GitHub Actions workflows'
+runs:
+  using: "composite"
+  steps:
+    - name: Build weekly cache key
+      shell: bash
+      run: echo "PERCONA_RELEASE_CACHE_WEEK=$(date +%G-%V)" >> "$GITHUB_ENV"
+
+    - name: Cache percona-release package
+      id: cache-percona-release
+      uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+      with:
+        path: percona-release_latest.deb
+        key: percona-release_latest.deb.${{ env.PERCONA_RELEASE_CACHE_WEEK }}
+
+    - name: Get Percona Apt Repo package (on cache miss)
+      if: steps.cache-percona-release.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        curl -sLo percona-release_latest.deb https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
+
+    - name: Install Percona Apt Repo package
+      shell: bash
+      run: |
+        sudo apt-get -qq install -y gnupg2 lsb-release
+        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i percona-release_latest.deb
+        sudo apt-get update

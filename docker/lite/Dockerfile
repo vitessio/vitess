@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # Build the Vitess Go binaries
-FROM --platform=linux/amd64 golang:1.25.6-bookworm@sha256:2f768d462dbffbb0f0b3a5171009f162945b086f326e0b2a8fd5d29c3219ff14 AS go-builder
+FROM --platform=linux/amd64 golang:1.25.7-bookworm@sha256:db60aab8dc5b066b5018f1bcad7e70b688f31e2fa3427c1623585b680557f975 AS go-builder
 
 # Allows docker builds to set the BUILD_NUMBER
 ARG BUILD_NUMBER
@@ -59,7 +59,7 @@ RUN VITE_VTADMIN_API_ADDRESS="http://localhost:14200" \
     npm run build
 
 # Build the final image with the minimum Go binaries + static files.
-FROM --platform=linux/amd64 debian:bookworm-slim@sha256:56ff6d36d4eb3db13a741b342ec466f121480b5edded42e4b7ee850ce7a418ee
+FROM --platform=linux/amd64 debian:bookworm-slim@sha256:98f4b71de414932439ac6ac690d7060df1f27161073c5036a7553723881bffbe
 
 # Install locale required for mysqlsh
 RUN apt-get update && apt-get install -y locales tar \
