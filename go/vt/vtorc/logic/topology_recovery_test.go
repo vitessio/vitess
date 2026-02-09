@@ -17,24 +17,43 @@ limitations under the License.
 package logic
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"strconv"
+	"sync"
+	"syscall"
 	"testing"
-
-	"vitess.io/vitess/go/vt/log"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/test"
 	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"
+
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
 )
+
+type writerFunc func([]byte) (int, error)
+
+func (wf writerFunc) Write(p []byte) (int, error) {
+	return wf(p)
+}
 
 func TestAnalysisEntriesHaveSameRecovery(t *testing.T) {
 	tests := []struct {
@@ -543,9 +562,10 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 		wantAttempt bool
 		setupDB     bool
 		rows        int
+		prsFails    bool
 	}{
 		{
-			name: "reachable healthz",
+			name: "reachable healthz (prs failure)",
 			analysis: &inst.DetectionAnalysis{
 				Analysis:              inst.IncapacitatedPrimary,
 				AnalyzedInstanceAlias: "zon1-0000000100",
@@ -554,7 +574,37 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 				LastCheckValid:        true,
 			},
 			probeOK:     true,
-			wantAttempt: false,
+			wantAttempt: true,
+			setupDB:     true,
+			rows:        3,
+			prsFails:    true,
+		},
+		{
+			name: "reachable healthz (ers fallback)",
+			analysis: &inst.DetectionAnalysis{
+				Analysis:              inst.IncapacitatedPrimary,
+				AnalyzedInstanceAlias: "zon1-0000000100",
+				AnalyzedKeyspace:      "ks",
+				AnalyzedShard:         "0",
+				LastCheckValid:        false,
+			},
+			probeOK:     true,
+			wantAttempt: true,
+			setupDB:     true,
+			rows:        3,
+			prsFails:    true,
+		},
+		{
+			name: "reachable healthz (prs ok)",
+			analysis: &inst.DetectionAnalysis{
+				Analysis:              inst.IncapacitatedPrimary,
+				AnalyzedInstanceAlias: "zon1-0000000100",
+				AnalyzedKeyspace:      "ks",
+				AnalyzedShard:         "0",
+				LastCheckValid:        true,
+			},
+			probeOK:     true,
+			wantAttempt: true,
 			setupDB:     true,
 			rows:        3,
 		},
@@ -571,8 +621,20 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
+	for idx, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			prevERS := config.ERSEnabled()
+			config.SetERSEnabled(true)
+			defer config.SetERSEnabled(prevERS)
+
+			logger := log.NewPrefixedLogger("test")
+
+			keyspace := fmt.Sprintf("ks_incap_%d", idx)
+			shard := strconv.Itoa(idx)
+			analysis := *tt.analysis
+			analysis.AnalyzedKeyspace = keyspace
+			analysis.AnalyzedShard = shard
+
 			oldProbe := healthzProbe
 			healthzProbe = func(_ *topodatapb.Tablet) (bool, error) {
 				return tt.probeOK, nil
@@ -581,39 +643,203 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 				healthzProbe = oldProbe
 			}()
 
-			if tt.setupDB {
-				oldDB := db.Db
-				defer func() {
-					db.Db = oldDB
-				}()
+			oldTs := ts
+			oldTmc := tmc
+			defer func() {
+				ts = oldTs
+				tmc = oldTmc
+			}()
 
-				analysisInfo := &test.InfoForRecoveryAnalysis{
-					TabletInfo: &topodatapb.Tablet{
-						Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
-						Hostname:      "localhost",
-						Keyspace:      "ks",
-						Shard:         "0",
-						Type:          topodatapb.TabletType_PRIMARY,
-						MysqlHostname: "localhost",
-						MysqlPort:     6709,
-						PortMap: map[string]int32{
-							"vt": 15000,
-						},
-					},
-				}
-				analysisInfo.SetValuesFromTabletInfo()
-				row := analysisInfo.ConvertToRowMap()
-				rowMaps := make([]sqlutils.RowMap, 0, tt.rows)
-				for i := 0; i < tt.rows; i++ {
-					rowMaps = append(rowMaps, row)
-				}
-				db.Db = test.NewTestDB([][]sqlutils.RowMap{rowMaps})
+			type stderrCapture struct {
+				mu  sync.Mutex
+				buf bytes.Buffer
+			}
+			capture := &stderrCapture{}
+			captureWrite := func(p []byte) (int, error) {
+				capture.mu.Lock()
+				defer capture.mu.Unlock()
+				return capture.buf.Write(p)
 			}
 
-			attempted, topologyRecovery, err := recoverIncapacitatedPrimary(context.Background(), tt.analysis, log.NewPrefixedLogger("test"))
+			var restoreStderr func()
+			if tt.prsFails {
+				oldStderr := os.Stderr
+				r, w, err := os.Pipe()
+				require.NoError(t, err)
+				oldFD, err := syscall.Dup(int(os.Stderr.Fd()))
+				require.NoError(t, err)
+				require.NoError(t, syscall.Dup2(int(w.Fd()), int(os.Stderr.Fd())))
+				os.Stderr = w
+				done := make(chan struct{})
+				go func() {
+					_, _ = io.Copy(writerFunc(captureWrite), r)
+					_ = r.Close()
+					close(done)
+				}()
+				restoreStderr = func() {
+					log.Flush()
+					_ = w.Close()
+					os.Stderr = oldStderr
+					_ = syscall.Dup2(oldFD, int(os.Stderr.Fd()))
+					_ = syscall.Close(oldFD)
+					<-done
+				}
+			}
+
+			if tt.setupDB {
+				orcDb, err := db.OpenVTOrc()
+				require.NoError(t, err)
+				_, err = orcDb.Exec("delete from topology_recovery_steps")
+				require.NoError(t, err)
+				_, err = orcDb.Exec("delete from topology_recovery")
+				require.NoError(t, err)
+				_, err = orcDb.Exec("delete from recovery_detection")
+				require.NoError(t, err)
+				_, err = orcDb.Exec("delete from vitess_tablet")
+				require.NoError(t, err)
+
+				primaryTablet := &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Hostname:      "localhost",
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+					Keyspace:      keyspace,
+					Shard:         shard,
+					Type:          topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttimepb.Time{
+						Seconds: 1,
+					},
+					PortMap: map[string]int32{
+						"vt": 15000,
+					},
+				}
+				require.NoError(t, inst.SaveTablet(primaryTablet))
+				require.NoError(t, inst.SaveTablet(&topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Hostname:      "localhost",
+					MysqlHostname: "localhost",
+					MysqlPort:     6710,
+					Keyspace:      keyspace,
+					Shard:         shard,
+					Type:          topodatapb.TabletType_REPLICA,
+					PrimaryTermStartTime: &vttimepb.Time{
+						Seconds: 1,
+					},
+					PortMap: map[string]int32{
+						"vt": 15001,
+					},
+				}))
+
+				ctx := t.Context()
+				ts = memorytopo.NewServer(ctx, "zon1")
+				err = ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityNone})
+				require.NoError(t, err)
+				err = ts.CreateShard(ctx, keyspace, shard)
+				require.NoError(t, err)
+				err = ts.CreateTablet(ctx, primaryTablet)
+				require.NoError(t, err)
+				err = ts.CreateTablet(ctx, &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Hostname:      "localhost",
+					MysqlHostname: "localhost",
+					MysqlPort:     6710,
+					Keyspace:      keyspace,
+					Shard:         shard,
+					Type:          topodatapb.TabletType_REPLICA,
+					PortMap: map[string]int32{
+						"vt": 15001,
+					},
+				})
+				require.NoError(t, err)
+
+				tmc = &testutil.TabletManagerClient{}
+				fullStatusPosition := replication.EncodePosition(replication.MustParsePosition("MySQL56", "16b1039f-22b6-11ed-b765-0a43f95f28a3:1"))
+				tmc.(*testutil.TabletManagerClient).FullStatusResult = &replicationdatapb.FullStatus{
+					PrimaryStatus: &replicationdatapb.PrimaryStatus{Position: fullStatusPosition},
+					ReplicationStatus: &replicationdatapb.Status{
+						Position: fullStatusPosition,
+					},
+				}
+				pos := replication.EncodePosition(replication.MustParsePosition("MySQL56", "16b1039f-22b6-11ed-b765-0a43f95f28a3:1"))
+				tmc.(*testutil.TabletManagerClient).StopReplicationAndGetStatusResults = map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zon1-0000000100": {StopStatus: &replicationdatapb.StopReplicationStatus{Before: &replicationdatapb.Status{Position: pos, RelayLogPosition: pos}, After: &replicationdatapb.Status{Position: pos, RelayLogPosition: pos}}, Error: nil},
+					"zon1-0000000101": {StopStatus: &replicationdatapb.StopReplicationStatus{Before: &replicationdatapb.Status{Position: pos, RelayLogPosition: pos}, After: &replicationdatapb.Status{Position: pos, RelayLogPosition: pos}}, Error: nil},
+				}
+				tmc.(*testutil.TabletManagerClient).WaitForPositionResults = map[string]map[string]error{
+					"zon1-0000000100": {pos: nil},
+					"zon1-0000000101": {pos: nil},
+				}
+				tmc.(*testutil.TabletManagerClient).PrimaryPositionResults = map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zon1-0000000100": {Position: "pos", Error: nil},
+				}
+				if tt.prsFails {
+					tmc.(*testutil.TabletManagerClient).DemotePrimaryResults = map[string]struct {
+						Status *replicationdatapb.PrimaryStatus
+						Error  error
+					}{
+						"zon1-0000000100": {Status: nil, Error: errors.New("prs failed")},
+					}
+				} else {
+					tmc.(*testutil.TabletManagerClient).DemotePrimaryResults = map[string]struct {
+						Status *replicationdatapb.PrimaryStatus
+						Error  error
+					}{
+						"zon1-0000000100": {Status: &replicationdatapb.PrimaryStatus{Position: "pos"}, Error: nil},
+					}
+				}
+				tmc.(*testutil.TabletManagerClient).InitPrimaryResults = map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zon1-0000000100": {Result: "pos", Error: nil},
+					"zon1-0000000101": {Result: "pos", Error: nil},
+				}
+				tmc.(*testutil.TabletManagerClient).SetReplicationSourceResults = map[string]error{
+					"zon1-0000000100": nil,
+				}
+				tmc.(*testutil.TabletManagerClient).PopulateReparentJournalResults = map[string]error{
+					"zon1-0000000100": nil,
+					"zon1-0000000101": nil,
+				}
+				tmc.(*testutil.TabletManagerClient).ReadReparentJournalInfoResults = map[string]int32{
+					"zon1-0000000100": 1,
+					"zon1-0000000101": 1,
+				}
+				tmc.(*testutil.TabletManagerClient).PromoteReplicaResults = map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zon1-0000000100": {Result: "pos", Error: nil},
+					"zon1-0000000101": {Result: "pos", Error: nil},
+				}
+			}
+
+			attempted, topologyRecovery, err := recoverIncapacitatedPrimary(context.Background(), &analysis, logger)
+			if restoreStderr != nil {
+				log.Flush()
+				require.Eventually(t, func() bool {
+					err := db.QueryVTOrc("select message from topology_recovery_steps where message like 'ERS - %'", nil, func(_ sqlutils.RowMap) error {
+						return nil
+					})
+					return err == nil
+				}, 2*time.Second, 10*time.Millisecond)
+			}
 			require.NoError(t, err)
 			require.Equal(t, tt.wantAttempt, attempted)
-			require.Nil(t, topologyRecovery)
+			if tt.wantAttempt {
+				require.NotNil(t, topologyRecovery)
+			} else {
+				require.Nil(t, topologyRecovery)
+			}
+			if restoreStderr != nil {
+				restoreStderr()
+			}
 		})
 	}
 }

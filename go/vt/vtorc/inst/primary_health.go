@@ -130,5 +130,5 @@ func shouldEvictPrimaryHealthWindow(state *primaryHealthState) bool {
 }
 
 func primaryHealthWindow() time.Duration {
-	return topo.RemoteOperationTimeout * 3
+	return topo.RemoteOperationTimeout * 4
 }

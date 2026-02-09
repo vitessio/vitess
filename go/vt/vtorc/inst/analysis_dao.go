@@ -421,26 +421,26 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		case isInvalid:
 			a.Analysis = InvalidReplica
 			a.Description = "VTOrc hasn't been able to reach the replica even once since restart/shutdown"
-		case a.IsClusterPrimary && (!a.LastCheckValid || a.PrimaryHealthUnhealthy) && a.IsDiskStalled:
+		case a.IsClusterPrimary && !a.LastCheckValid && a.IsDiskStalled:
 			a.Analysis = PrimaryDiskStalled
 			a.Description = "Primary has a stalled disk"
 			ca.hasShardWideAction = true
-		case a.IsClusterPrimary && (!a.LastCheckValid || a.PrimaryHealthUnhealthy) && a.CountReplicas == 0:
+		case a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas == 0:
 			a.Analysis = DeadPrimaryWithoutReplicas
 			a.Description = "Primary cannot be reached by vtorc and has no replica"
 			ca.hasShardWideAction = true
 			//
-		case a.IsClusterPrimary && (!a.LastCheckValid || a.PrimaryHealthUnhealthy) && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0:
+		case a.IsClusterPrimary && !a.LastCheckValid && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0:
 			a.Analysis = DeadPrimary
 			a.Description = "Primary cannot be reached by vtorc and none of its replicas is replicating"
 			ca.hasShardWideAction = true
 			//
-		case a.IsClusterPrimary && (!a.LastCheckValid || a.PrimaryHealthUnhealthy) && a.CountReplicas > 0 && a.CountValidReplicas == 0 && a.CountValidReplicatingReplicas == 0:
+		case a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicas == 0 && a.CountValidReplicatingReplicas == 0:
 			a.Analysis = DeadPrimaryAndReplicas
 			a.Description = "Primary cannot be reached by vtorc and none of its replicas is replicating"
 			ca.hasShardWideAction = true
 			//
-		case a.IsClusterPrimary && (!a.LastCheckValid || a.PrimaryHealthUnhealthy) && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicatingReplicas == 0:
+		case a.IsClusterPrimary && !a.LastCheckValid && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicatingReplicas == 0:
 			a.Analysis = DeadPrimaryAndSomeReplicas
 			a.Description = "Primary cannot be reached by vtorc; some of its replicas are unreachable and none of its reachable replicas is replicating"
 			ca.hasShardWideAction = true

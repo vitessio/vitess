@@ -298,6 +298,9 @@ func runDDLAndWaitForSchemaChangeSignal(t *testing.T, vtgateConn *mysql.Conn, pr
 	for {
 		select {
 		case err := <-streamErrCh:
+			if err == nil {
+				return errors.New("health stream closed before ready")
+			}
 			if err == context.Canceled || err == io.EOF {
 				return errors.New("health stream closed before ready")
 			}

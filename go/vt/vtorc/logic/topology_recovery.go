@@ -377,6 +377,7 @@ func recoverDeadPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalys
 // because the primary is still alive and reachable, so we want to try to do a planned reparent if possible, and only
 // do an emergency reparent if the planned one fails.
 func recoverIncapacitatedPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+	ersEnabled := isERSEnabled(analysisEntry)
 	recoveryName := RecoverIncapacitatedPrimaryRecoveryName
 	reachable, reachErr := isPrimaryHealthzReachable(analysisEntry)
 	if reachErr != nil {
@@ -387,7 +388,7 @@ func recoverIncapacitatedPrimary(ctx context.Context, analysisEntry *inst.Detect
 			analysisEntry.AnalyzedInstanceAlias)
 		return false, nil, nil
 	}
-	if !analysisEntry.LastCheckValid {
+	if ersEnabled && !analysisEntry.LastCheckValid {
 		return runEmergencyReparentOp(ctx, analysisEntry, recoveryName, false, logger)
 	}
 	recoveryAttempted, topologyRecovery, err = runPlannedReparentOp(ctx, analysisEntry, recoveryName, logger)
@@ -398,6 +399,10 @@ func recoverIncapacitatedPrimary(ctx context.Context, analysisEntry *inst.Detect
 		return recoveryAttempted, nil, err
 	}
 	logger.Warningf("PlannedReparentShard failed for %s/%s: %v", analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, err)
+	if !isERSEnabled(analysisEntry) {
+		log.Warningf("VTOrc not configured to run EmergencyReparentShard, skipping recovering %s", recoveryName)
+		return recoveryAttempted, topologyRecovery, nil
+	}
 	return runEmergencyReparentOp(ctx, analysisEntry, recoveryName, false, logger)
 }
 
@@ -615,10 +620,6 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 		}
 		recoveryFunc = recoverDeadPrimaryFunc
 	case inst.IncapacitatedPrimary:
-		if !isERSEnabled(analysisEntry) {
-			log.Infof("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode)
-			recoverySkipCode = RecoverySkipERSDisabled
-		}
 		recoveryFunc = recoverIncapacitatedPrimaryFunc
 	case inst.PrimaryTabletDeleted:
 		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.

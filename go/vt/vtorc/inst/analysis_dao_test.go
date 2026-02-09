@@ -237,6 +237,35 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			codeWanted: IncapacitatedPrimary,
 		},
 		{
+			name: "DeadPrimaryHealthUnhealthyIgnored",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				DurabilityPolicy:              policy.DurabilityNone,
+				LastCheckValid:                1,
+				CountReplicas:                 4,
+				CountValidReplicas:            4,
+				CountValidReplicatingReplicas: 0,
+				IsPrimary:                     1,
+				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
+			}},
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			preFunc: func() {
+				RecordPrimaryHealthCheck("zon1-0000000100", true)
+				RecordPrimaryHealthCheck("zon1-0000000100", false)
+				RecordPrimaryHealthCheck("zon1-0000000100", false)
+			},
+			codeWanted: IncapacitatedPrimary,
+		},
+		{
 			name: "DeadPrimaryWithoutReplicas",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
