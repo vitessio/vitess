@@ -1043,7 +1043,7 @@ func TestWorkflowDelete(t *testing.T) {
 					_, err := env.ts.UpdateShardFields(lockCtx, targetKeyspaceName, shard, func(si *topo.ShardInfo) error {
 						// So t1_2 and t1_3 do not exist in the denied table list when we go
 						// to remove t1, t1_2, and t1_3.
-						err := si.UpdateDeniedTables(lockCtx, topodatapb.TabletType_PRIMARY, nil, false, []string{table1Name, "t2", "t3"}, false)
+						err := si.UpdateDeniedTables(lockCtx, topodatapb.TabletType_PRIMARY, nil, true /* allow create denied table records */, false /* remove */, []string{table1Name, "t2", "t3"}, false)
 						return err
 					})
 					require.NoError(t, err)
@@ -2046,6 +2046,9 @@ func TestMirrorTraffic(t *testing.T) {
 				TabletTypes: tabletTypes,
 				Percent:     50.0,
 			},
+			setup: func(t *testing.T, ctx context.Context, te *testMaterializerEnv) {
+				setupDeniedTables(t, ctx, te, []string{table1, table2})
+			},
 			routingRules: initialRoutingRules,
 			wantMirrorRules: map[string]map[string]float32{
 				fmt.Sprintf("%s.%s", sourceKs, table1): {
@@ -2080,6 +2083,9 @@ func TestMirrorTraffic(t *testing.T) {
 				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
 				Percent:     50.0,
 			},
+			setup: func(t *testing.T, ctx context.Context, te *testMaterializerEnv) {
+				setupDeniedTables(t, ctx, te, []string{table1, table2})
+			},
 			routingRules: initialRoutingRules,
 			wantMirrorRules: map[string]map[string]float32{
 				fmt.Sprintf("%s.%s", sourceKs, table1): {
@@ -2102,6 +2108,9 @@ func TestMirrorTraffic(t *testing.T) {
 				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_REPLICA},
 				Percent:     50.0,
 			},
+			setup: func(t *testing.T, ctx context.Context, te *testMaterializerEnv) {
+				setupDeniedTables(t, ctx, te, []string{table1, table2})
+			},
 			routingRules: initialRoutingRules,
 			wantMirrorRules: map[string]map[string]float32{
 				fmt.Sprintf("%s.%s@replica", sourceKs, table1): {
@@ -2123,6 +2132,9 @@ func TestMirrorTraffic(t *testing.T) {
 				Workflow:    workflow,
 				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY},
 				Percent:     50.0,
+			},
+			setup: func(t *testing.T, ctx context.Context, te *testMaterializerEnv) {
+				setupDeniedTables(t, ctx, te, []string{table1, table2})
 			},
 			routingRules: initialRoutingRules,
 			wantMirrorRules: map[string]map[string]float32{
@@ -2174,6 +2186,9 @@ func TestMirrorTraffic(t *testing.T) {
 				Workflow:    workflow,
 				TabletTypes: tabletTypes,
 				Percent:     50.0,
+			},
+			setup: func(t *testing.T, ctx context.Context, te *testMaterializerEnv) {
+				setupDeniedTables(t, ctx, te, []string{table1, table2})
 			},
 			routingRules: initialRoutingRules,
 			wantMirrorRules: map[string]map[string]float32{
@@ -2315,6 +2330,26 @@ func TestMirrorTraffic(t *testing.T) {
 				require.Equal(t, tt.wantWritesMirrored, ws.WritesMirrored)
 			}
 		})
+	}
+}
+
+// setupDeniedTables creates denied table records on the target shards.
+// This simulates the state that would exist after MoveTables creates the workflow.
+func setupDeniedTables(t *testing.T, ctx context.Context, te *testMaterializerEnv, tables []string) {
+	t.Helper()
+	targetKs := te.ms.TargetKeyspace
+	lockCtx, unlock, lockErr := te.topoServ.LockKeyspace(ctx, targetKs, "test")
+	require.NoError(t, lockErr)
+	var unlockErr error
+	defer func() {
+		unlock(&unlockErr)
+		require.NoError(t, unlockErr)
+	}()
+	for _, shard := range te.targets {
+		_, err := te.topoServ.UpdateShardFields(lockCtx, targetKs, shard, func(si *topo.ShardInfo) error {
+			return si.UpdateDeniedTables(lockCtx, topodatapb.TabletType_PRIMARY, nil, true /* allow create denied table records */, false /* remove */, tables, false /* allowReads */)
+		})
+		require.NoError(t, err)
 	}
 }
 

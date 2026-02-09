@@ -106,14 +106,14 @@ func lockedKeyspaceContext(keyspace string) context.Context {
 }
 
 func addToDenyList(ctx context.Context, si *ShardInfo, tabletType topodatapb.TabletType, cells, tables []string) error {
-	if err := si.UpdateDeniedTables(ctx, tabletType, cells, false, tables, false); err != nil {
+	if err := si.UpdateDeniedTables(ctx, tabletType, cells, true /* allow create denied table records */, false /* remove */, tables, false); err != nil {
 		return err
 	}
 	return nil
 }
 
 func removeFromDenyList(ctx context.Context, si *ShardInfo, tabletType topodatapb.TabletType, cells, tables []string) error {
-	if err := si.UpdateDeniedTables(ctx, tabletType, cells, true, tables, false); err != nil {
+	if err := si.UpdateDeniedTables(ctx, tabletType, cells, true /* allow create denied table records */, true /* remove */, tables, false); err != nil {
 		return err
 	}
 	return nil
@@ -285,7 +285,7 @@ func TestUpdateSourceDeniedTables(t *testing.T) {
 			}
 			var err error
 			if tcase.tables != nil || tcase.cells != nil {
-				err = si.UpdateDeniedTables(tcase.ctx, tcase.tabletType, tcase.cells, tcase.remove, tcase.tables, false)
+				err = si.UpdateDeniedTables(tcase.ctx, tcase.tabletType, tcase.cells, true /* allow create denied table records */, tcase.remove, tcase.tables, false)
 			}
 			if tcase.wantError != "" {
 				require.Error(t, err)
