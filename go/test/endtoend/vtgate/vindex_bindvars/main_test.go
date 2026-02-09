@@ -17,19 +17,17 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
 	"testing"
-
-	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 var (
@@ -283,7 +281,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: SchemaSQL,
 			VSchema:   VSchema,
 		}
-		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false)
+		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}
@@ -303,7 +301,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestVindexHexTypes(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -315,16 +313,15 @@ func TestVindexHexTypes(t *testing.T) {
 		"(x'c26caa1a5eb94096d29a1bec',4)")
 	result := utils.Exec(t, conn, "select id, field from thex order by id")
 
-	expected :=
-		"[[VARBINARY(\"\\x01\") INT64(1)] " +
-			"[VARBINARY(\"Hello Gopher!\") INT64(3)] " +
-			"[VARBINARY(\"\\xa5\") INT64(2)] " +
-			"[VARBINARY(\"\\xc2l\\xaa\\x1a^\\xb9@\\x96Қ\\x1b\\xec\") INT64(4)]]"
+	expected := "[[VARBINARY(\"\\x01\") INT64(1)] " +
+		"[VARBINARY(\"Hello Gopher!\") INT64(3)] " +
+		"[VARBINARY(\"\\xa5\") INT64(2)] " +
+		"[VARBINARY(\"\\xc2l\\xaa\\x1a^\\xb9@\\x96Қ\\x1b\\xec\") INT64(4)]]"
 	assert.Equal(t, expected, fmt.Sprintf("%v", result.Rows))
 }
 
 func TestVindexBindVarOverlap(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -353,27 +350,26 @@ func TestVindexBindVarOverlap(t *testing.T) {
 		"(20,21,22,23,24,25,26)")
 	result := utils.Exec(t, conn, "select id, field, field2, field3, field4, field5, field6 from t1 order by id")
 
-	expected :=
-		"[[INT64(0) INT64(1) INT64(2) INT64(3) INT64(4) INT64(5) INT64(6)] " +
-			"[INT64(1) INT64(2) INT64(3) INT64(4) INT64(5) INT64(6) INT64(7)] " +
-			"[INT64(2) INT64(3) INT64(4) INT64(5) INT64(6) INT64(7) INT64(8)] " +
-			"[INT64(3) INT64(4) INT64(5) INT64(6) INT64(7) INT64(8) INT64(9)] " +
-			"[INT64(4) INT64(5) INT64(6) INT64(7) INT64(8) INT64(9) INT64(10)] " +
-			"[INT64(5) INT64(6) INT64(7) INT64(8) INT64(9) INT64(10) INT64(11)] " +
-			"[INT64(6) INT64(7) INT64(8) INT64(9) INT64(10) INT64(11) INT64(12)] " +
-			"[INT64(7) INT64(8) INT64(9) INT64(10) INT64(11) INT64(12) INT64(13)] " +
-			"[INT64(8) INT64(9) INT64(10) INT64(11) INT64(12) INT64(13) INT64(14)] " +
-			"[INT64(9) INT64(10) INT64(11) INT64(12) INT64(13) INT64(14) INT64(15)] " +
-			"[INT64(10) INT64(11) INT64(12) INT64(13) INT64(14) INT64(15) INT64(16)] " +
-			"[INT64(11) INT64(12) INT64(13) INT64(14) INT64(15) INT64(16) INT64(17)] " +
-			"[INT64(12) INT64(13) INT64(14) INT64(15) INT64(16) INT64(17) INT64(18)] " +
-			"[INT64(13) INT64(14) INT64(15) INT64(16) INT64(17) INT64(18) INT64(19)] " +
-			"[INT64(14) INT64(15) INT64(16) INT64(17) INT64(18) INT64(19) INT64(20)] " +
-			"[INT64(15) INT64(16) INT64(17) INT64(18) INT64(19) INT64(20) INT64(21)] " +
-			"[INT64(16) INT64(17) INT64(18) INT64(19) INT64(20) INT64(21) INT64(22)] " +
-			"[INT64(17) INT64(18) INT64(19) INT64(20) INT64(21) INT64(22) INT64(23)] " +
-			"[INT64(18) INT64(19) INT64(20) INT64(21) INT64(22) INT64(23) INT64(24)] " +
-			"[INT64(19) INT64(20) INT64(21) INT64(22) INT64(23) INT64(24) INT64(25)] " +
-			"[INT64(20) INT64(21) INT64(22) INT64(23) INT64(24) INT64(25) INT64(26)]]"
+	expected := "[[INT64(0) INT64(1) INT64(2) INT64(3) INT64(4) INT64(5) INT64(6)] " +
+		"[INT64(1) INT64(2) INT64(3) INT64(4) INT64(5) INT64(6) INT64(7)] " +
+		"[INT64(2) INT64(3) INT64(4) INT64(5) INT64(6) INT64(7) INT64(8)] " +
+		"[INT64(3) INT64(4) INT64(5) INT64(6) INT64(7) INT64(8) INT64(9)] " +
+		"[INT64(4) INT64(5) INT64(6) INT64(7) INT64(8) INT64(9) INT64(10)] " +
+		"[INT64(5) INT64(6) INT64(7) INT64(8) INT64(9) INT64(10) INT64(11)] " +
+		"[INT64(6) INT64(7) INT64(8) INT64(9) INT64(10) INT64(11) INT64(12)] " +
+		"[INT64(7) INT64(8) INT64(9) INT64(10) INT64(11) INT64(12) INT64(13)] " +
+		"[INT64(8) INT64(9) INT64(10) INT64(11) INT64(12) INT64(13) INT64(14)] " +
+		"[INT64(9) INT64(10) INT64(11) INT64(12) INT64(13) INT64(14) INT64(15)] " +
+		"[INT64(10) INT64(11) INT64(12) INT64(13) INT64(14) INT64(15) INT64(16)] " +
+		"[INT64(11) INT64(12) INT64(13) INT64(14) INT64(15) INT64(16) INT64(17)] " +
+		"[INT64(12) INT64(13) INT64(14) INT64(15) INT64(16) INT64(17) INT64(18)] " +
+		"[INT64(13) INT64(14) INT64(15) INT64(16) INT64(17) INT64(18) INT64(19)] " +
+		"[INT64(14) INT64(15) INT64(16) INT64(17) INT64(18) INT64(19) INT64(20)] " +
+		"[INT64(15) INT64(16) INT64(17) INT64(18) INT64(19) INT64(20) INT64(21)] " +
+		"[INT64(16) INT64(17) INT64(18) INT64(19) INT64(20) INT64(21) INT64(22)] " +
+		"[INT64(17) INT64(18) INT64(19) INT64(20) INT64(21) INT64(22) INT64(23)] " +
+		"[INT64(18) INT64(19) INT64(20) INT64(21) INT64(22) INT64(23) INT64(24)] " +
+		"[INT64(19) INT64(20) INT64(21) INT64(22) INT64(23) INT64(24) INT64(25)] " +
+		"[INT64(20) INT64(21) INT64(22) INT64(23) INT64(24) INT64(25) INT64(26)]]"
 	assert.Equal(t, expected, fmt.Sprintf("%v", result.Rows))
 }

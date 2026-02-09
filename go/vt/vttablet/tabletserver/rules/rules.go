@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"time"
 
@@ -526,12 +527,7 @@ func planMatch(plans []planbuilder.PlanType, plan planbuilder.PlanType) bool {
 	if plans == nil {
 		return true
 	}
-	for _, p := range plans {
-		if p == plan {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(plans, plan)
 }
 
 func tableMatch(tableNames []string, otherNames []string) bool {

@@ -438,7 +438,7 @@ func (be *MySQLShellBackupEngine) restorePreCheck(ctx context.Context, params Re
 		return shouldDeleteUsers, fmt.Errorf("%w: at least the --js flag is required in the value of the flag --mysql-shell-flags", ErrMySQLShellPreCheck)
 	}
 
-	loadFlags := map[string]interface{}{}
+	loadFlags := map[string]any{}
 	err = json.Unmarshal([]byte(mysqlShellLoadFlags), &loadFlags)
 	if err != nil {
 		return false, fmt.Errorf("%w: unable to parse JSON of load flags", ErrMySQLShellPreCheck)

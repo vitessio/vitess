@@ -102,7 +102,7 @@ func CopyShards(ctx context.Context, fromTS, toTS *topo.Server) error {
 				}
 			}
 			if _, err := toTS.UpdateShardFields(ctx, keyspace, shard, func(toSI *topo.ShardInfo) error {
-				toSI.Shard = si.Shard.CloneVT()
+				toSI.Shard = si.CloneVT()
 				return nil
 			}); err != nil {
 				return fmt.Errorf("UpdateShardFields(%v, %v): %w", keyspace, shard, err)
@@ -193,7 +193,7 @@ func CopyShardReplications(ctx context.Context, fromTS, toTS *topo.Server) error
 						nodes = append(nodes, oldNode)
 					}
 
-					nodes = append(nodes, sri.ShardReplication.Nodes...)
+					nodes = append(nodes, sri.Nodes...)
 					// Even though ShardReplication currently only has the .Nodes field,
 					// keeping the proto.Merge call here prevents this copy from
 					// unintentionally breaking if we add new fields.

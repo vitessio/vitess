@@ -64,19 +64,19 @@ func (ri *rows) Next(dest []driver.Value) error {
 }
 
 var (
-	typeInt8     = reflect.TypeOf(int8(0))
-	typeUint8    = reflect.TypeOf(uint8(0))
-	typeInt16    = reflect.TypeOf(int16(0))
-	typeUint16   = reflect.TypeOf(uint16(0))
-	typeInt32    = reflect.TypeOf(int32(0))
-	typeUint32   = reflect.TypeOf(uint32(0))
-	typeInt64    = reflect.TypeOf(int64(0))
-	typeUint64   = reflect.TypeOf(uint64(0))
-	typeFloat32  = reflect.TypeOf(float32(0))
-	typeFloat64  = reflect.TypeOf(float64(0))
-	typeRawBytes = reflect.TypeOf(sql.RawBytes{})
-	typeTime     = reflect.TypeOf(time.Time{})
-	typeUnknown  = reflect.TypeOf(new(interface{}))
+	typeInt8     = reflect.TypeFor[int8]()
+	typeUint8    = reflect.TypeFor[uint8]()
+	typeInt16    = reflect.TypeFor[int16]()
+	typeUint16   = reflect.TypeFor[uint16]()
+	typeInt32    = reflect.TypeFor[int32]()
+	typeUint32   = reflect.TypeFor[uint32]()
+	typeInt64    = reflect.TypeFor[int64]()
+	typeUint64   = reflect.TypeFor[uint64]()
+	typeFloat32  = reflect.TypeFor[float32]()
+	typeFloat64  = reflect.TypeFor[float64]()
+	typeRawBytes = reflect.TypeFor[sql.RawBytes]()
+	typeTime     = reflect.TypeFor[time.Time]()
+	typeUnknown  = reflect.TypeFor[*any]()
 )
 
 // Implements the RowsColumnTypeScanType interface

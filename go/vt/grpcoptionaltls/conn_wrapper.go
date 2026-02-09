@@ -28,7 +28,7 @@ type WrappedConn struct {
 }
 
 func NewWrappedConn(conn net.Conn, peeked []byte) net.Conn {
-	var rd = io.MultiReader(bytes.NewReader(peeked), conn)
+	rd := io.MultiReader(bytes.NewReader(peeked), conn)
 	return &WrappedConn{
 		Conn: conn,
 		rd:   rd,

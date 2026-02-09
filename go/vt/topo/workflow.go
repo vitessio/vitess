@@ -17,9 +17,8 @@ limitations under the License.
 package topo
 
 import (
-	"path"
-
 	"context"
+	"path"
 
 	workflowpb "vitess.io/vitess/go/vt/proto/workflow"
 )
@@ -102,7 +101,7 @@ func (ts *Server) GetWorkflow(ctx context.Context, uuid string) (*WorkflowInfo, 
 // good any more, ErrBadVersion is returned.
 func (ts *Server) SaveWorkflow(ctx context.Context, wi *WorkflowInfo) error {
 	// Pack the content.
-	contents, err := wi.Workflow.MarshalVT()
+	contents, err := wi.MarshalVT()
 	if err != nil {
 		return err
 	}

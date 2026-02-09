@@ -53,6 +53,7 @@ import (
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -93,6 +94,7 @@ var (
 	initShard          string
 	concurrency        = 4
 	incrementalFromPos string
+	restoreWithClone   bool
 
 	// mysqlctld-like flags
 	mysqlPort            = 3306
@@ -157,7 +159,7 @@ When run periodically for each shard, vtbackup can ensure these configurable pol
  * Old backups for the shard are removed.
 
 Whatever system launches vtbackup is responsible for the following:
- - Running vtbackup with similar flags that would be used for a vttablet and 
+ - Running vtbackup with similar flags that would be used for a vttablet and
    mysqlctld in the target shard to be backed up.
 
  - Provisioning as much disk space for vtbackup as would be given to vttablet.
@@ -226,6 +228,7 @@ func init() {
 	utils.SetFlagStringVar(Main.Flags(), &initShard, "init-shard", initShard, "(init parameter) shard to use for this tablet")
 	Main.Flags().IntVar(&concurrency, "concurrency", concurrency, "(init restore parameter) how many concurrent files to restore at once")
 	utils.SetFlagStringVar(Main.Flags(), &incrementalFromPos, "incremental-from-pos", incrementalFromPos, "Position, or name of backup from which to create an incremental backup. Default: empty. If given, then this backup becomes an incremental backup from given position or given backup. If value is 'auto', this backup will be taken from the last successful backup position.")
+	Main.Flags().BoolVar(&restoreWithClone, "restore-with-clone", restoreWithClone, "(init parameter) will perform the restore phase with MySQL CLONE, requires either --clone-from-primary or --clone-from-tablet")
 
 	// mysqlctld-like flags
 	utils.SetFlagIntVar(Main.Flags(), &mysqlPort, "mysql-port", mysqlPort, "MySQL port")
@@ -457,42 +460,49 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 		return nil
 	}
 
-	phase.Set(phaseNameRestoreLastBackup, int64(1))
-	defer phase.Set(phaseNameRestoreLastBackup, int64(0))
-	backupDir := mysqlctl.GetBackupDir(initKeyspace, initShard)
-	log.Infof("Restoring latest backup from directory %v", backupDir)
-	restoreAt := time.Now()
-	params := mysqlctl.RestoreParams{
-		Cnf:                  mycnf,
-		Mysqld:               mysqld,
-		Logger:               logutil.NewConsoleLogger(),
-		Concurrency:          concurrency,
-		HookExtraEnv:         extraEnv,
-		DeleteBeforeRestore:  true,
-		DbName:               dbName,
-		Keyspace:             initKeyspace,
-		Shard:                initShard,
-		Stats:                backupstats.RestoreStats(),
-		MysqlShutdownTimeout: mysqlShutdownTimeout,
-	}
-	backupManifest, err := mysqlctl.Restore(ctx, params)
 	var restorePos replication.Position
-	switch err {
-	case nil:
-		// if err is nil, we expect backupManifest to be non-nil
-		restorePos = backupManifest.Position
-		log.Infof("Successfully restored from backup at replication position %v", restorePos)
-	case mysqlctl.ErrNoBackup:
-		// There is no backup found, but we may be taking the initial backup of a shard
-		if !allowFirstBackup {
-			return errors.New("no backup found; not starting up empty since --initial_backup flag was not enabled")
+	if restoreWithClone {
+		restorePos, err = mysqlctl.CloneFromDonor(ctx, topoServer, mysqld, initKeyspace, initShard)
+		if err != nil {
+			return vterrors.Wrap(err, "restore with clone failed")
 		}
-		restorePos = replication.Position{}
-	default:
-		return fmt.Errorf("can't restore from backup: %v", err)
+	} else {
+		phase.Set(phaseNameRestoreLastBackup, int64(1))
+		defer phase.Set(phaseNameRestoreLastBackup, int64(0))
+		backupDir := mysqlctl.GetBackupDir(initKeyspace, initShard)
+		log.Infof("Restoring latest backup from directory %v", backupDir)
+		restoreAt := time.Now()
+		params := mysqlctl.RestoreParams{
+			Cnf:                  mycnf,
+			Mysqld:               mysqld,
+			Logger:               logutil.NewConsoleLogger(),
+			Concurrency:          concurrency,
+			HookExtraEnv:         extraEnv,
+			DeleteBeforeRestore:  true,
+			DbName:               dbName,
+			Keyspace:             initKeyspace,
+			Shard:                initShard,
+			Stats:                backupstats.RestoreStats(),
+			MysqlShutdownTimeout: mysqlShutdownTimeout,
+		}
+		backupManifest, err := mysqlctl.Restore(ctx, params)
+		switch err {
+		case nil:
+			// if err is nil, we expect backupManifest to be non-nil
+			restorePos = backupManifest.Position
+			log.Infof("Successfully restored from backup at replication position %v", restorePos)
+		case mysqlctl.ErrNoBackup:
+			// There is no backup found, but we may be taking the initial backup of a shard
+			if !allowFirstBackup {
+				return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "no backup found; not starting up empty since --initial_backup flag was not enabled")
+			}
+			restorePos = replication.Position{}
+		default:
+			return vterrors.Wrap(err, "can't restore from backup")
+		}
+		deprecatedDurationByPhase.Set("RestoreLastBackup", int64(time.Since(restoreAt).Seconds()))
+		phase.Set(phaseNameRestoreLastBackup, int64(0))
 	}
-	deprecatedDurationByPhase.Set("RestoreLastBackup", int64(time.Since(restoreAt).Seconds()))
-	phase.Set(phaseNameRestoreLastBackup, int64(0))
 
 	// As of MySQL 8.0.21, you can disable redo logging using the ALTER INSTANCE
 	// DISABLE INNODB REDO_LOG statement. This functionality is intended for
@@ -715,7 +725,7 @@ func startReplication(ctx context.Context, mysqld mysqlctl.MysqlDaemon, topoServ
 	}
 
 	// Stop replication (in case we're restarting), set replication source, and start replication.
-	if err := mysqld.SetReplicationSource(ctx, ti.Tablet.MysqlHostname, ti.Tablet.MysqlPort, 0, true, true); err != nil {
+	if err := mysqld.SetReplicationSource(ctx, ti.MysqlHostname, ti.MysqlPort, 0, true, true); err != nil {
 		return vterrors.Wrap(err, "MysqlDaemon.SetReplicationSource failed")
 	}
 	return nil

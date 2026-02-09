@@ -192,7 +192,7 @@ func tryMergeApplyJoin(in *ApplyJoin, ctx *plancontext.PlanningContext) (_ Opera
 	// Special case: If LHS is a DualRouting AND the join isn't INNER or targeting a single shard,
 	// we cannot safely perform this rewrite.
 	if _, isDual := rb.Routing.(*DualRouting); isDual &&
-		!(jm.joinType.IsInner() || r.Routing.OpCode().IsSingleShard()) {
+		(!jm.joinType.IsInner() && !r.Routing.OpCode().IsSingleShard()) {
 		// to check the resulting opcode, we've used the original predicates.
 		// Since we are not using them, we need to restore the argument versions of the predicates
 		debugNoRewrite("apply join merge blocked: dual routing with non-inner join and multi-shard target")
@@ -472,10 +472,7 @@ func mergeLimitExpressions(l1, l2, off2 sqlparser.Expr) (expr sqlparser.Expr, fa
 		// Calculate the remaining limit after the offset.
 		off2int, _ := strconv.Atoi(off2.Val)
 		l1int, _ := strconv.Atoi(lim1str.Val)
-		lim := l1int - off2int
-		if lim < 0 {
-			lim = 0
-		}
+		lim := max(l1int-off2int, 0)
 		return sqlparser.NewIntLiteral(strconv.Itoa(lim)), false
 
 	default:
@@ -506,11 +503,9 @@ func mergeLimitExpressions(l1, l2, off2 sqlparser.Expr) (expr sqlparser.Expr, fa
 
 		v1, _ := strconv.Atoi(v1str.Val)
 		v2, _ := strconv.Atoi(v2str.Val)
-		lim := min(v2, v1-off2int)
-		if lim < 0 {
+		lim := max(min(v2, v1-off2int),
 			// If the combined limit is negative, set it to zero.
-			lim = 0
-		}
+			0)
 		return sqlparser.NewIntLiteral(strconv.Itoa(lim)), false
 	}
 }

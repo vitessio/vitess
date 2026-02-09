@@ -95,7 +95,7 @@ func (tablet *Vttablet) ValidateTabletRestart(t *testing.T) {
 
 // GetPrimaryPosition gets the executed replication position of given vttablet
 func GetPrimaryPosition(t *testing.T, vttablet Vttablet, hostname string) (string, string) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtablet := getTablet(vttablet.GrpcPort, hostname)
 	pos, err := tmClient.PrimaryPosition(ctx, vtablet)
 	require.Nil(t, err)
@@ -105,7 +105,7 @@ func GetPrimaryPosition(t *testing.T, vttablet Vttablet, hostname string) (strin
 
 // FullStatus gets the full status from the given tablet.
 func FullStatus(t *testing.T, vttablet *Vttablet, hostname string) *replicationdatapb.FullStatus {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtablet := getTablet(vttablet.GrpcPort, hostname)
 	status, err := tmClient.FullStatus(ctx, vtablet)
 	require.NoError(t, err)
@@ -188,6 +188,7 @@ func getTablet(tabletGrpcPort int, hostname string) *topodatapb.Tablet {
 func filterResultForWarning(input string) string {
 	lines := strings.Split(input, "\n")
 	var result string
+	var resultSb191 strings.Builder
 	for i, line := range lines {
 		if strings.Contains(line, "WARNING: vtctl should only be used for VDiff v1 workflows. Please use VDiff v2 and consider using vtctldclient for all other commands.") {
 			continue
@@ -197,12 +198,13 @@ func filterResultForWarning(input string) string {
 			continue
 		}
 
-		result += line
+		resultSb191.WriteString(line)
 
 		if i < len(lines)-1 {
-			result += "\n"
+			resultSb191.WriteString("\n")
 		}
 	}
+	result += resultSb191.String()
 
 	return result
 }
@@ -320,7 +322,7 @@ func WriteDbCredentialToTmp(tmpDir string) string {
         "vt_filtered": ["VtFilteredPass"]
 	}`)
 	dbCredentialFile = path.Join(tmpDir, "db_credentials.json")
-	os.WriteFile(dbCredentialFile, data, 0666)
+	os.WriteFile(dbCredentialFile, data, 0o666)
 	return dbCredentialFile
 }
 

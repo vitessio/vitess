@@ -124,7 +124,7 @@ func TestChangeTypeWithoutSemiSync(t *testing.T) {
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	primary, replica := tablets[0], tablets[1]
 
@@ -278,7 +278,7 @@ func TestSemiSyncBlockDueToDisruption(t *testing.T) {
 	runCommandWithSudo(t, "sh", "-c", fmt.Sprintf("echo 'block in proto tcp from any to any port %d' | sudo tee -a /etc/pf.conf > /dev/null", tablets[0].MySQLPort))
 
 	// This following command is only required if pfctl is not already enabled
-	//runCommandWithSudo(t, "pfctl", "-e")
+	// runCommandWithSudo(t, "pfctl", "-e")
 	runCommandWithSudo(t, "pfctl", "-f", "/etc/pf.conf")
 	rules := runCommandWithSudo(t, "pfctl", "-s", "rules")
 	log.Errorf("Rules enforced - %v", rules)
@@ -294,7 +294,7 @@ func TestSemiSyncBlockDueToDisruption(t *testing.T) {
 
 	// Starting VTOrc later now, because we don't want it to fix the heartbeat interval
 	// on the replica's before the disruption has been introduced.
-	err := clusterInstance.StartVTOrc(clusterInstance.Keyspaces[0].Name)
+	err := clusterInstance.StartVTOrc(clusterInstance.Cell, clusterInstance.Keyspaces[0].Name)
 	require.NoError(t, err)
 	go func() {
 		for {

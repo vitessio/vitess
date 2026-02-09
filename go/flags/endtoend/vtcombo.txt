@@ -28,7 +28,7 @@ Flags:
       --buffer-max-failover-duration duration                            Stop buffering completely if a failover takes longer than this duration. (default 20s)
       --buffer-min-time-between-failovers duration                       Minimum time between the end of a failover and the start of the next one (tracked per shard). Faster consecutive failovers will not trigger buffering. (default 1m0s)
       --buffer-size int                                                  Maximum number of buffered requests in flight (across all ongoing failovers). (default 1000)
-      --buffer-window duration                                           Duration for how long a request should be buffered at most. (default 10s)
+      --buffer-window duration                                           Duration for how long a request should be buffered at most (should not be larger than --buffer-max-failover-duration). (default 10s)
       --builtinbackup-file-read-buffer-size uint                         read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.
       --builtinbackup-file-write-buffer-size uint                        write files using an IO buffer of this many bytes. Golang defaults are used when set to 0. (default 2097152)
       --builtinbackup-incremental-restore-path string                    the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.
@@ -36,6 +36,9 @@ Flags:
       --builtinbackup-progress duration                                  how often to send progress updates when backing up large files. (default 5s)
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
       --cell string                                                      cell to use
+      --clone-from-primary                                               Clone data from the primary tablet in the shard using MySQL CLONE REMOTE instead of restoring from backup. Requires MySQL 8.0.17+. Mutually exclusive with --clone-from-tablet.
+      --clone-from-tablet string                                         Clone data from this tablet using MySQL CLONE REMOTE instead of restoring from backup (tablet alias, e.g., zone1-123). Requires MySQL 8.0.17+. Mutually exclusive with --clone-from-primary.
+      --clone-restart-wait-timeout duration                              Timeout for waiting for MySQL to restart after CLONE REMOTE. (default 5m0s)
       --compression-engine-name string                                   compressor engine used for compression. (default "pargzip")
       --compression-level int                                            what level to pass to the compressor. (default 1)
       --config-file string                                               Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
@@ -61,6 +64,9 @@ Flags:
       --db-appdebug-use-ssl                                              Set this flag to false to make the appdebug connection to not use ssl (default true)
       --db-appdebug-user string                                          db appdebug user userKey (default "vt_appdebug")
       --db-charset string                                                Character set/collation used for this tablet. Make sure to configure this to a charset/collation supported by the lowest MySQL version in your environment. (default "utf8mb4")
+      --db-clone-password string                                         db clone password
+      --db-clone-use-ssl                                                 Set this flag to false to make the clone connection to not use ssl (default true)
+      --db-clone-user string                                             db clone user userKey (default "vt_clone")
       --db-conn-query-info                                               enable parsing and processing of QUERY_OK info fields
       --db-connect-timeout-ms int                                        connection timeout to mysqld in milliseconds (0 for no timeout)
       --db-credentials-file string                                       db credentials file; send SIGHUP to reload this file
@@ -220,6 +226,7 @@ Flags:
       --mycnf-tmp-dir string                                             mysql tmp directory
       --mysql-allow-clear-text-without-tls                               If set, the server will allow the use of a clear text password over non-SSL connections.
       --mysql-auth-server-impl string                                    Which auth server implementation to use. Options: none, ldap, clientcert, static, vault. (default "static")
+      --mysql-clone-enabled                                              Enable MySQL CLONE plugin and user for backup/replica provisioning (requires MySQL 8.0.17+)
       --mysql-default-workload string                                    Default session workload (OLTP, OLAP, DBA) (default "OLTP")
       --mysql-port int                                                   mysql port (default 3306)
       --mysql-server-bind-address string                                 Binds on this address when listening to MySQL binary protocol. Useful to restrict listening to 'localhost' only for instance.
@@ -319,6 +326,7 @@ Flags:
       --restore-from-backup-ts string                                    (init restore parameter) if set, restore the latest backup taken at or before this timestamp. Example: '2021-04-29.133050'
       --restore-to-pos string                                            (init incremental restore parameter) if set, run a point in time recovery that ends with the given position. This will attempt to use one full backup followed by zero or more incremental backups
       --restore-to-timestamp string                                      (init incremental restore parameter) if set, run a point in time recovery that restores up to the given timestamp, if possible. Given timestamp in RFC3339 format. Example: '2006-01-02T15:04:05Z07:00'
+      --restore-with-clone                                               (init restore parameter) will restore from a clone, requires either --clone-from-primary or --clone-from-tablet, mutually exclusive with --restore-from-backup
       --retain-online-ddl-tables duration                                How long should vttablet keep an old migrated table before purging it (default 24h0m0s)
       --sanitize-log-messages                                            Remove potentially sensitive information in tablet INFO, WARNING, and ERROR log messages such as query parameters.
       --schema-change-reload-timeout duration                            query server schema change reload timeout, this is how long to wait for the signaled schema reload operation to complete before giving up (default 30s)

@@ -101,7 +101,7 @@ func TestMain(m *testing.M) {
 			Name:      keyspaceName,
 			SchemaSQL: sqlSchema,
 		}
-		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false); err != nil {
+		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false, clusterInstance.Cell); err != nil {
 			return 1, err
 		}
 
@@ -133,7 +133,7 @@ func writeConfig(path string, cfg map[string]string) error {
 }
 
 func TestVSchema(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -212,7 +212,7 @@ func TestVSchemaSQLAPIConcurrency(t *testing.T) {
 	baseTableName := "t"
 	numTables := 1000
 	mysqlConns := make([]*mysql.Conn, numTables)
-	for i := 0; i < numTables; i++ {
+	for i := range numTables {
 		c, err := mysql.Connect(ctx, &vtParams)
 		require.NoError(t, err)
 		mysqlConns[i] = c
@@ -226,10 +226,8 @@ func TestVSchemaSQLAPIConcurrency(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	preventedLostWrites := atomic.Bool{}
-	for i := 0; i < numTables; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for i := range numTables {
+		wg.Go(func() {
 			time.Sleep(time.Duration(rand.IntN(100) * int(time.Nanosecond)))
 			tableName := fmt.Sprintf("%s%d", baseTableName, i)
 			_, err = mysqlConns[i].ExecuteFetch("ALTER VSCHEMA ADD TABLE "+tableName, -1, false)
@@ -245,14 +243,14 @@ func TestVSchemaSQLAPIConcurrency(t *testing.T) {
 					require.NoError(t, err)
 				}
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	require.True(t, preventedLostWrites.Load())
 
 	// Cleanup any tables that were not dropped because the DROP query
 	// failed due to a bad node version.
-	for i := 0; i < numTables; i++ {
+	for i := range numTables {
 		tableName := fmt.Sprintf("%s%d", baseTableName, i)
 		_, _ = mysqlConns[i].ExecuteFetch("ALTER VSCHEMA DROP TABLE "+tableName, -1, false)
 	}

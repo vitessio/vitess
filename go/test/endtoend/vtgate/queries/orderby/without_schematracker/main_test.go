@@ -64,7 +64,7 @@ func TestMain(m *testing.M) {
 			VSchema:   vschema,
 		}
 		clusterInstance.VtGateExtraArgs = []string{vtutils.GetFlagVariantForTests("--schema-change-signal") + "=false"}
-		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, true)
+		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, true, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}

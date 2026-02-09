@@ -146,10 +146,10 @@ func TestStateDenyList(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, "cell1")
 			tm := newTestTM(t, ts, 1, "ks", "0", nil)
+			defer tm.Stop()
 
 			fmd := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
 			fmd.Schema = &tabletmanagerdatapb.SchemaDefinition{

@@ -1414,7 +1414,7 @@ func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchema
 		Keyspace:                keyspace,
 		IncludeNonServingShards: opts.TableSizeOptions.IncludeNonServingShards,
 	}
-	if !(opts.isBackfill || cache.ShouldRefreshFromIncomingContext(ctx)) {
+	if !opts.isBackfill && !cache.ShouldRefreshFromIncomingContext(ctx) {
 		schema, ok, err := schemacache.LoadOne(c.schemaCache, key, schemacache.LoadOptions{
 			BaseRequest:    opts.BaseRequest,
 			AggregateSizes: opts.TableSizeOptions.AggregateSizes,
@@ -1483,7 +1483,7 @@ func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vta
 		Keyspace:                "",
 		IncludeNonServingShards: opts.TableSizeOptions.IncludeNonServingShards,
 	}
-	if !(opts.isBackfill || cache.ShouldRefreshFromIncomingContext(ctx)) {
+	if !opts.isBackfill && !cache.ShouldRefreshFromIncomingContext(ctx) {
 		schemas, ok, err := schemacache.LoadAll(c.schemaCache, key, schemacache.LoadOptions{
 			BaseRequest:    opts.BaseRequest,
 			AggregateSizes: opts.TableSizeOptions.AggregateSizes,
@@ -1510,22 +1510,16 @@ func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vta
 	)
 
 	// Start by collecting the tablets and keyspace names concurrently.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
+	wg.Go(func() {
 		var err error
 		tablets, err = c.GetTablets(ctx)
 		if err != nil {
 			rec.RecordError(err)
 			return
 		}
-	}()
+	})
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
+	wg.Go(func() {
 		// TODO: (ajm188) we can't use c.GetKeyspaces because it also makes a
 		// FindAllShardsInKeyspace call for each keyspace, which we may or may
 		// not need. Refactor that method so we can get better code reuse.
@@ -1552,7 +1546,7 @@ func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vta
 				Keyspace: ks,
 			}
 		}
-	}()
+	})
 
 	wg.Wait()
 	if rec.HasErrors() {
@@ -1909,7 +1903,6 @@ func (c *Cluster) GetSrvVSchema(ctx context.Context, cell string) (*vtadminpb.Sr
 	sv, err := c.Vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{
 		Cell: cell,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -1972,7 +1965,6 @@ func (c *Cluster) GetVSchema(ctx context.Context, keyspace string) (*vtadminpb.V
 	vschema, err := c.Vtctld.GetVSchema(ctx, &vtctldatapb.GetVSchemaRequest{
 		Keyspace: keyspace,
 	})
-
 	if err != nil {
 		return nil, err
 	}

@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
@@ -1968,9 +1969,9 @@ func TestSelectScatterOrderBy(t *testing.T) {
 		},
 		InsertID: 0,
 	}
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		// There should be a duplicate for each row returned.
-		for j := 0; j < 2; j++ {
+		for range 2 {
 			row := []sqltypes.Value{
 				sqltypes.NewInt32(1),
 				sqltypes.NewInt32(int32(3 - i)),
@@ -2041,9 +2042,9 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 		},
 		InsertID: 0,
 	}
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		// There should be a duplicate for each row returned.
-		for j := 0; j < 2; j++ {
+		for range 2 {
 			row := []sqltypes.Value{
 				sqltypes.NewInt32(1),
 				sqltypes.NewVarChar(strconv.Itoa(3 - i)),
@@ -2106,7 +2107,7 @@ func TestStreamSelectScatterOrderBy(t *testing.T) {
 			{Name: "col", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 		},
 	}
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		row := []sqltypes.Value{
 			sqltypes.NewInt32(1),
 			sqltypes.NewInt32(int32(3 - i)),
@@ -2168,7 +2169,7 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 			{Name: "textcol", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 		},
 	}
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		row := []sqltypes.Value{
 			sqltypes.NewInt32(1),
 			sqltypes.NewVarChar(strconv.Itoa(3 - i)),
@@ -2235,7 +2236,7 @@ func TestSelectScatterAggregate(t *testing.T) {
 		},
 		InsertID: 0,
 	}
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		row := []sqltypes.Value{
 			sqltypes.NewInt32(int32(i)),
 			sqltypes.NewDecimal(strconv.Itoa(i*2 + 4)),
@@ -2297,7 +2298,7 @@ func TestStreamSelectScatterAggregate(t *testing.T) {
 			{Name: "sum(foo)", Type: sqltypes.Decimal, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 		},
 	}
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		row := []sqltypes.Value{
 			sqltypes.NewInt32(int32(i)),
 			sqltypes.NewDecimal(strconv.Itoa(i*2 + 4)),
@@ -3413,7 +3414,7 @@ func TestSelectLock(t *testing.T) {
 
 	_, err := exec(executor, session, "select get_lock('lock name', 10) from dual")
 	require.NoError(t, err)
-	wantSession.LastLockHeartbeat = session.Session.LastLockHeartbeat // copying as this is current timestamp value.
+	wantSession.LastLockHeartbeat = session.LastLockHeartbeat // copying as this is current timestamp value.
 	utils.MustMatch(t, wantSession, session.Session, "")
 	utils.MustMatch(t, wantQueries, sbc1.Queries, "")
 
@@ -3426,7 +3427,7 @@ func TestSelectLock(t *testing.T) {
 
 	_, err = exec(executor, session, "select release_lock('lock name') from dual")
 	require.NoError(t, err)
-	wantSession.LastLockHeartbeat = session.Session.LastLockHeartbeat // copying as this is current timestamp value.
+	wantSession.LastLockHeartbeat = session.LastLockHeartbeat // copying as this is current timestamp value.
 	utils.MustMatch(t, wantQueries, sbc1.Queries, "")
 	utils.MustMatch(t, wantSession, session.Session, "")
 }
@@ -3484,46 +3485,50 @@ func TestSelectFromInformationSchema(t *testing.T) {
 }
 
 func TestStreamOrderByWithMultipleResults(t *testing.T) {
-	ctx := utils.LeakCheckContext(t)
+	synctest.Test(t, func(t *testing.T) {
+		ctx := utils.LeakCheckContext(t)
 
-	// Special setup: Don't use createExecutorEnv.
-	cell := "aa"
-	hc := discovery.NewFakeHealthCheck(nil)
-	u := createSandbox(KsTestUnsharded)
-	s := createSandbox(KsTestSharded)
-	s.VSchema = executorVSchema
-	u.VSchema = unshardedVSchema
-	serv := newSandboxForCells(ctx, []string{cell})
-	resolver := newTestResolver(ctx, hc, serv, cell)
-	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
-	count := 1
-	for _, shard := range shards {
-		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
-		sbc.SetResults([]*sqltypes.Result{
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col|weight_string(id)", "int32|int32|varchar"), fmt.Sprintf("%d|%d|NULL", count, count)),
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col|weight_string(id)", "int32|int32|varchar"), fmt.Sprintf("%d|%d|NULL", count+10, count)),
-		})
-		count++
-	}
-	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
-	plans := DefaultPlanCache()
-	executor := NewExecutor(ctx, vtenv.NewTestEnv(), serv, cell, resolver, createExecutorConfigWithNormalizer(), false, plans, nil, querypb.ExecuteOptions_Gen4, NewDynamicViperConfig())
-	executor.SetQueryLogger(queryLogger)
-	defer executor.Close()
-	// some sleep for all goroutines to start
-	time.Sleep(100 * time.Millisecond)
-	before := runtime.NumGoroutine()
+		// Special setup: Don't use createExecutorEnv.
+		cell := "aa"
+		hc := discovery.NewFakeHealthCheck(nil)
+		u := createSandbox(KsTestUnsharded)
+		s := createSandbox(KsTestSharded)
+		s.VSchema = executorVSchema
+		u.VSchema = unshardedVSchema
+		serv := newSandboxForCells(ctx, []string{cell})
+		resolver := newTestResolver(ctx, hc, serv, cell)
+		shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+		count := 1
+		for _, shard := range shards {
+			sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
+			sbc.SetResults([]*sqltypes.Result{
+				sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col|weight_string(id)", "int32|int32|varchar"), fmt.Sprintf("%d|%d|NULL", count, count)),
+				sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col|weight_string(id)", "int32|int32|varchar"), fmt.Sprintf("%d|%d|NULL", count+10, count)),
+			})
+			count++
+		}
+		queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
+		plans := DefaultPlanCache()
+		executor := NewExecutor(ctx, vtenv.NewTestEnv(), serv, cell, resolver, createExecutorConfigWithNormalizer(), false, plans, nil, querypb.ExecuteOptions_Gen4, NewDynamicViperConfig())
+		executor.SetQueryLogger(queryLogger)
+		defer executor.Close()
 
-	query := "select id, col from user order by id"
-	gotResult, err := executorStream(ctx, executor, query)
-	require.NoError(t, err)
+		// some sleep for all goroutines to start
+		synctest.Wait()
+		before := runtime.NumGoroutine()
 
-	wantResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col", "int32|int32"),
-		"1|1", "2|2", "3|3", "4|4", "5|5", "6|6", "7|7", "8|8", "11|1", "12|2", "13|3", "14|4", "15|5", "16|6", "17|7", "18|8")
-	assert.Equal(t, fmt.Sprintf("%v", wantResult.Rows), fmt.Sprintf("%v", gotResult.Rows))
-	// some sleep to close all goroutines.
-	time.Sleep(100 * time.Millisecond)
-	assert.GreaterOrEqual(t, before, runtime.NumGoroutine(), "left open goroutines lingering")
+		query := "select id, col from user order by id"
+		gotResult, err := executorStream(ctx, executor, query)
+		require.NoError(t, err)
+
+		wantResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col", "int32|int32"),
+			"1|1", "2|2", "3|3", "4|4", "5|5", "6|6", "7|7", "8|8", "11|1", "12|2", "13|3", "14|4", "15|5", "16|6", "17|7", "18|8")
+		assert.Equal(t, fmt.Sprintf("%v", wantResult.Rows), fmt.Sprintf("%v", gotResult.Rows))
+
+		// some sleep to close all goroutines.
+		synctest.Wait()
+		assert.GreaterOrEqual(t, before, runtime.NumGoroutine(), "left open goroutines lingering")
+	})
 }
 
 func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
@@ -4609,11 +4614,11 @@ func TestStreamJoinQuery(t *testing.T) {
 		Fields: append(sandboxconn.SingleRowResult.Fields, sandboxconn.SingleRowResult.Fields...),
 	}
 	wantRow := append(sandboxconn.StreamRowResult.Rows[0], sandboxconn.StreamRowResult.Rows[0]...)
-	for i := 0; i < 64; i++ {
+	for range 64 {
 		wantResult.Rows = append(wantResult.Rows, wantRow)
 	}
 	require.Equal(t, len(wantResult.Rows), len(result.Rows))
-	for idx := 0; idx < 64; idx++ {
+	for idx := range 64 {
 		utils.MustMatch(t, wantResult.Rows[idx], result.Rows[idx], "mismatched on: ", strconv.Itoa(idx))
 	}
 }

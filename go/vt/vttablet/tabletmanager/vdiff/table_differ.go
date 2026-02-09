@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"slices"
 	"strings"
 	"sync"
@@ -69,8 +70,10 @@ const (
 // how long to wait for background operations to complete
 var BackgroundOperationTimeout = topo.RemoteOperationTimeout * 4
 
-var ErrMaxDiffDurationExceeded = vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "table diff was stopped due to exceeding the max-diff-duration time")
-var ErrVDiffStoppedByUser = vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped by user")
+var (
+	ErrMaxDiffDurationExceeded = vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "table diff was stopped due to exceeding the max-diff-duration time")
+	ErrVDiffStoppedByUser      = vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped by user")
+)
 
 // compareColInfo contains the metadata for a column of the table being diffed
 type compareColInfo struct {
@@ -121,11 +124,39 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 
 	targetKeyspace := td.wd.ct.vde.thisTablet.Keyspace
 	lockName := fmt.Sprintf("%s/%s", targetKeyspace, td.wd.ct.workflow)
-	log.Infof("Locking workflow %s for vdiff %s", lockName, td.wd.ct.uuid)
-	ctx, unlock, lockErr := td.wd.ct.ts.LockName(ctx, lockName, "vdiff")
-	if lockErr != nil {
-		log.Errorf("Locking workfkow %s for vdiff %s failed: %v", lockName, td.wd.ct.uuid, lockErr)
-		return lockErr
+	log.Infof("Locking workflow %s for VDiff %s", lockName, td.wd.ct.uuid)
+	// We attempt to get the lock until we can, using an exponential backoff.
+	var (
+		vctx          context.Context
+		unlock        func(*error)
+		lockErr       error
+		retryDelay    = 100 * time.Millisecond
+		maxRetryDelay = topo.LockTimeout
+		backoffFactor = 1.5
+	)
+	for {
+		vctx, unlock, lockErr = td.wd.ct.ts.LockName(ctx, lockName, "vdiff")
+		if lockErr == nil {
+			break
+		}
+		log.Warningf("Locking workflow %s for VDiff %s initialization (stream ID: %d) failed, will wait %v before retrying: %v",
+			lockName, td.wd.ct.uuid, td.wd.ct.id, retryDelay, lockErr)
+		select {
+		case <-ctx.Done():
+			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "engine is shutting down")
+		case <-td.wd.ct.done:
+			return ErrVDiffStoppedByUser
+		case <-time.After(retryDelay):
+			if retryDelay < maxRetryDelay {
+				retryDelay = min(time.Duration(float64(retryDelay)*backoffFactor), maxRetryDelay)
+			}
+			// Add jitter to prevent thundering herds: ±25% of original retryDelay.
+			// This means that we may wait up to maxRetryDelay * 1.25, but it prevents all of
+			// the waiters from eventually waiting for the fixed maxRetryDelay period.
+			jitter := time.Duration(rand.IntN(int(retryDelay) / 2))
+			retryDelay = retryDelay - (retryDelay / 4) + jitter
+			continue
+		}
 	}
 
 	var err error
@@ -136,7 +167,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 		}
 	}()
 
-	if err := td.stopTargetVReplicationStreams(ctx, dbClient); err != nil {
+	if err := td.stopTargetVReplicationStreams(vctx, dbClient); err != nil {
 		return err
 	}
 	defer func() {
@@ -151,18 +182,18 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 		}
 	}()
 
-	td.shardStreamsCtx, td.shardStreamsCancel = context.WithCancel(ctx)
+	td.shardStreamsCtx, td.shardStreamsCancel = context.WithCancel(vctx)
 
-	if err := td.selectTablets(ctx); err != nil {
+	if err := td.selectTablets(vctx); err != nil {
 		return err
 	}
-	if err := td.syncSourceStreams(ctx); err != nil {
+	if err := td.syncSourceStreams(vctx); err != nil {
 		return err
 	}
 	if err := td.startSourceDataStreams(td.shardStreamsCtx); err != nil {
 		return err
 	}
-	if err := td.syncTargetStreams(ctx); err != nil {
+	if err := td.syncTargetStreams(vctx); err != nil {
 		return err
 	}
 	if err := td.startTargetDataStream(td.shardStreamsCtx); err != nil {
@@ -247,9 +278,7 @@ func (td *tableDiffer) selectTablets(ctx context.Context) error {
 		return vterrors.Wrap(err, "failed to get source topo server")
 	}
 	tabletPickerOptions := discovery.TabletPickerOptions{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		sourceErr = td.forEachSource(func(source *migrationSource) error {
 			sourceTablet, err := td.pickTablet(ctx, sourceTopoServer, sourceCells, td.wd.ct.sourceKeyspace,
 				source.shard, td.wd.opts.PickerOptions.TabletTypes, tabletPickerOptions)
@@ -259,11 +288,9 @@ func (td *tableDiffer) selectTablets(ctx context.Context) error {
 			source.tablet = sourceTablet
 			return nil
 		})
-	}()
+	})
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		if td.wd.ct.workflowType == binlogdatapb.VReplicationWorkflowType_Reshard {
 			// For resharding, the target shards could be non-serving if traffic has already been switched once.
 			// When shards are created their IsPrimaryServing attribute is set to true. However, when the traffic is switched
@@ -280,7 +307,7 @@ func (td *tableDiffer) selectTablets(ctx context.Context) error {
 			tablet: targetTablet,
 			shard:  targetTablet.Shard,
 		}
-	}()
+	})
 
 	wg.Wait()
 	if sourceErr != nil {
@@ -290,7 +317,8 @@ func (td *tableDiffer) selectTablets(ctx context.Context) error {
 }
 
 func (td *tableDiffer) pickTablet(ctx context.Context, ts *topo.Server, cells []string, keyspace,
-	shard, tabletTypes string, options discovery.TabletPickerOptions) (*topodatapb.Tablet, error) {
+	shard, tabletTypes string, options discovery.TabletPickerOptions,
+) (*topodatapb.Tablet, error) {
 	tp, err := discovery.NewTabletPicker(ctx, ts, cells, td.wd.ct.vde.thisTablet.Alias.Cell, keyspace,
 		shard, tabletTypes, options)
 	if err != nil {
@@ -425,7 +453,11 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 			TabletType: participant.tablet.Type,
 		}
 		var fields []*querypb.Field
-		req := &binlogdatapb.VStreamRowsRequest{Target: target, Query: query, Lastpk: lastPK}
+		req := &binlogdatapb.VStreamRowsRequest{
+			// We pass the NoTimeouts options as otherwise the row streamer will add a MAX_EXECUTION_TIME
+			// query hint with a value based on the --vreplication-copy-phase-duration flag.
+			Target: target, Query: query, Lastpk: lastPK, Options: &binlogdatapb.VStreamOptions{NoTimeouts: true},
+		}
 		return conn.VStreamRows(ctx, req, func(vsrRaw *binlogdatapb.VStreamRowsResponse) error {
 			// We clone (deep copy) the VStreamRowsResponse -- which contains a vstream packet with N rows and
 			// their corresponding GTID position/snapshot along with the LastPK in the row set -- so that we
@@ -945,13 +977,13 @@ func (td *tableDiffer) getSourcePKCols() error {
 	})
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to get the schema for table %s from source tablet %s",
-			td.table.Name, topoproto.TabletAliasString(sourceTablet.Tablet.Alias))
+			td.table.Name, topoproto.TabletAliasString(sourceTablet.Alias))
 	}
 	if len(sourceSchema.TableDefinitions) == 0 {
 		// The table no longer exists on the source. Any rows that exist on the target will be
 		// reported as extra rows.
 		log.Warningf("The %s table was not found on source tablet %s during VDiff for the %s workflow; any rows on the target will be reported as extra",
-			td.table.Name, topoproto.TabletAliasString(sourceTablet.Tablet.Alias), td.wd.ct.workflow)
+			td.table.Name, topoproto.TabletAliasString(sourceTablet.Alias), td.wd.ct.workflow)
 		return nil
 	}
 	sourceTable := sourceSchema.TableDefinitions[0]
@@ -964,14 +996,14 @@ func (td *tableDiffer) getSourcePKCols() error {
 			})
 			if err != nil {
 				return nil, vterrors.Wrapf(err, "failed to query the %s source tablet in order to get a primary key equivalent for the %s table",
-					topoproto.TabletAliasString(sourceTablet.Tablet.Alias), td.table.Name)
+					topoproto.TabletAliasString(sourceTablet.Alias), td.table.Name)
 			}
 			return sqltypes.Proto3ToResult(res), nil
 		}
 		pkeCols, _, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, executeFetch, sourceTablet.DbName(), td.table.Name)
 		if err != nil {
 			return vterrors.Wrapf(err, "failed to get a primary key equivalent for the %s table from source tablet %s",
-				td.table.Name, topoproto.TabletAliasString(sourceTablet.Tablet.Alias))
+				td.table.Name, topoproto.TabletAliasString(sourceTablet.Alias))
 		}
 		if len(pkeCols) > 0 {
 			log.Infof("Using primary key equivalent columns %+v for table %s in vdiff %s", pkeCols, td.table.Name, td.wd.ct.uuid)

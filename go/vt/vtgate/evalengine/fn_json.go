@@ -30,6 +30,10 @@ type (
 		CallExpr
 	}
 
+	builtinJSONRemove struct {
+		CallExpr
+	}
+
 	builtinJSONUnquote struct {
 		CallExpr
 	}
@@ -59,14 +63,17 @@ type (
 	}
 )
 
-var _ IR = (*builtinJSONExtract)(nil)
-var _ IR = (*builtinJSONUnquote)(nil)
-var _ IR = (*builtinJSONObject)(nil)
-var _ IR = (*builtinJSONArray)(nil)
-var _ IR = (*builtinJSONDepth)(nil)
-var _ IR = (*builtinJSONLength)(nil)
-var _ IR = (*builtinJSONContainsPath)(nil)
-var _ IR = (*builtinJSONKeys)(nil)
+var (
+	_ IR = (*builtinJSONExtract)(nil)
+	_ IR = (*builtinJSONRemove)(nil)
+	_ IR = (*builtinJSONUnquote)(nil)
+	_ IR = (*builtinJSONObject)(nil)
+	_ IR = (*builtinJSONArray)(nil)
+	_ IR = (*builtinJSONDepth)(nil)
+	_ IR = (*builtinJSONLength)(nil)
+	_ IR = (*builtinJSONContainsPath)(nil)
+	_ IR = (*builtinJSONKeys)(nil)
+)
 
 var errInvalidPathForTransform = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "In this situation, path expressions may not contain the * and ** tokens or an array range.")
 
@@ -89,7 +96,7 @@ func (call *builtinJSONExtract) eval(env *ExpressionEnv) (eval, error) {
 }
 
 func builtin_JSON_EXTRACT(doc *json.Value, paths []eval) (eval, error) {
-	matches := make([]*json.Value, 0, 4)
+	matches := make([]*json.Value, 0, len(paths))
 	multi := len(paths) > 1
 
 	for _, p := range paths {
@@ -125,27 +132,140 @@ func (call *builtinJSONExtract) compile(c *compiler) (ctype, error) {
 		return ctype{}, err
 	}
 
-	if slice.All(call.Arguments[1:], func(expr IR) bool { return expr.constant() }) {
-		paths := make([]*json.Path, 0, len(call.Arguments[1:]))
+	// Handle `NULL` arguments
+	nullable := doct.nullable()
+	skip := c.compileNullCheck1(doct)
 
-		for _, arg := range call.Arguments[1:] {
-			jp, err := c.jsonExtractPath(arg)
-			if err != nil {
-				return ctype{}, err
-			}
-			paths = append(paths, jp)
-		}
+	jt, err := c.compileParseJSON("JSON_EXTRACT", doct, 1)
+	if err != nil {
+		return ctype{}, err
+	}
 
-		jt, err := c.compileParseJSON("JSON_EXTRACT", doct, 1)
+	staticPaths := make([]staticPath, 0, len(call.Arguments[1:]))
+
+	for _, arg := range call.Arguments[1:] {
+		argType, err := arg.compile(c)
 		if err != nil {
 			return ctype{}, err
 		}
 
-		c.asm.Fn_JSON_EXTRACT0(paths)
-		return jt, nil
+		if !nullable {
+			nullable = argType.nullable()
+		}
+
+		if arg.constant() {
+			staticEnv := EmptyExpressionEnv(c.env)
+			arg, err = simplifyExpr(staticEnv, arg)
+			if err != nil {
+				return ctype{}, err
+			}
+
+			p, err := c.jsonExtractPath(arg)
+			staticPaths = append(staticPaths, staticPath{p, err})
+		} else {
+			staticPaths = append(staticPaths, staticPath{nil, nil})
+		}
 	}
 
-	return ctype{}, c.unsupported(call)
+	c.asm.Fn_JSON_EXTRACT(len(call.Arguments[1:]), staticPaths)
+	c.asm.jumpDestination(skip)
+
+	if nullable {
+		// If any argument is nullable, the result is nullable too
+		jt.Flag |= flagNullable
+	}
+
+	return jt, nil
+}
+
+func (call *builtinJSONRemove) eval(env *ExpressionEnv) (eval, error) {
+	args, err := call.args(env)
+	if err != nil {
+		return nil, err
+	}
+
+	if args[0] == nil {
+		return nil, nil
+	}
+
+	doc, err := intoJSON(call.Method, args[0])
+	if err != nil {
+		return nil, err
+	}
+
+	paths := make([]*json.Path, 0, len(args[1:]))
+	for _, p := range args[1:] {
+		if p == nil {
+			return nil, nil
+		}
+
+		path, err := intoJSONPath(p)
+		if err != nil {
+			return nil, err
+		}
+
+		if path.ContainsWildcards() {
+			return nil, errInvalidPathForTransform
+		}
+
+		paths = append(paths, path)
+	}
+
+	if err := json.ApplyTransform(json.Remove, doc, paths, nil); err != nil {
+		return nil, err
+	}
+
+	return doc, nil
+}
+
+func (call *builtinJSONRemove) compile(c *compiler) (ctype, error) {
+	doct, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	nullable := doct.nullable()
+	skip := c.compileNullCheck1(doct)
+
+	jt, err := c.compileParseJSON("JSON_REMOVE", doct, 1)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	staticPaths := make([]staticPath, 0, len(call.Arguments[1:]))
+	for _, arg := range call.Arguments[1:] {
+		argType, err := arg.compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+
+		if !nullable {
+			nullable = argType.nullable()
+		}
+
+		if arg.constant() {
+			staticEnv := EmptyExpressionEnv(c.env)
+			arg, err = simplifyExpr(staticEnv, arg)
+			if err != nil {
+				return ctype{}, err
+			}
+
+			p, err := c.jsonExtractPath(arg)
+			staticPaths = append(staticPaths, staticPath{p, err})
+		} else {
+			staticPaths = append(staticPaths, staticPath{nil, nil})
+		}
+	}
+
+	c.asm.Fn_JSON_REMOVE(len(call.Arguments[1:]), staticPaths)
+	c.asm.jumpDestination(skip)
+
+	if nullable {
+		// If any argument is nullable, the result is nullable too
+		jt.Flag |= flagNullable
+	}
+
+	return jt, nil
 }
 
 func (call *builtinJSONUnquote) eval(env *ExpressionEnv) (eval, error) {
@@ -381,6 +501,13 @@ func (call *builtinJSONContainsPath) compile(c *compiler) (ctype, error) {
 		return ctype{}, c.unsupported(call)
 	}
 
+	skip := c.compileNullCheck1(doct)
+
+	_, err = c.compileParseJSON("JSON_CONTAINS_PATH", doct, 1)
+	if err != nil {
+		return ctype{}, err
+	}
+
 	match, err := c.jsonExtractOneOrAll("JSON_CONTAINS_PATH", call.Arguments[1])
 	if err != nil {
 		return ctype{}, err
@@ -396,12 +523,10 @@ func (call *builtinJSONContainsPath) compile(c *compiler) (ctype, error) {
 		paths = append(paths, jp)
 	}
 
-	_, err = c.compileParseJSON("JSON_CONTAINS_PATH", doct, 1)
-	if err != nil {
-		return ctype{}, err
-	}
-
 	c.asm.Fn_JSON_CONTAINS_PATH(match, paths)
+
+	c.asm.jumpDestination(skip)
+
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean | flagNullable}, nil
 }
 
@@ -492,6 +617,8 @@ func (call *builtinJSONKeys) compile(c *compiler) (ctype, error) {
 		return ctype{}, err
 	}
 
+	skip := c.compileNullCheck1(doc)
+
 	_, err = c.compileParseJSON("JSON_KEYS", doc, 1)
 	if err != nil {
 		return ctype{}, err
@@ -503,11 +630,11 @@ func (call *builtinJSONKeys) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		if jp.ContainsWildcards() {
-			return ctype{}, errInvalidPathForTransform
-		}
 	}
 
 	c.asm.Fn_JSON_KEYS(jp)
+
+	c.asm.jumpDestination(skip)
+
 	return ctype{Type: sqltypes.TypeJSON, Flag: flagNullable, Col: collationJSON}, nil
 }

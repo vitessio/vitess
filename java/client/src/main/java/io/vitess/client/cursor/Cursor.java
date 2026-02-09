@@ -20,12 +20,10 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import io.vitess.proto.Query.Field;
 import io.vitess.proto.Query.QueryResult;
-
 import java.sql.SQLDataException;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.util.List;
-
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
 

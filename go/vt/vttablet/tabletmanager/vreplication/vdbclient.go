@@ -95,7 +95,7 @@ func (vc *vdbClient) Commit() error {
 func (vc *vdbClient) CommitTrxQueryBatch() error {
 	vc.queries = append(vc.queries, "commit")
 	queries := strings.Join(vc.queries[vc.queriesPos:], ";")
-	for _, err := vc.DBClient.ExecuteFetchMulti(queries, -1); err != nil; {
+	for _, err := vc.ExecuteFetchMulti(queries, -1); err != nil; {
 		return err
 	}
 	vc.InTransaction = false
@@ -156,7 +156,7 @@ func (vc *vdbClient) AddQueryToTrxBatch(query string) error {
 func (vc *vdbClient) ExecuteTrxQueryBatch() ([]*sqltypes.Result, error) {
 	defer vc.stats.Timings.Record(binlogplayer.BlplMultiQuery, time.Now())
 
-	qrs, err := vc.DBClient.ExecuteFetchMulti(strings.Join(vc.queries[vc.queriesPos:], ";"), -1)
+	qrs, err := vc.ExecuteFetchMulti(strings.Join(vc.queries[vc.queriesPos:], ";"), -1)
 	if err != nil {
 		return nil, err
 	}

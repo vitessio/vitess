@@ -150,6 +150,7 @@ func rowToSchemaMigration(row sqltypes.RowNamedValues) (sm *vtctldatapb.SchemaMi
 	sm.VitessLivenessIndicator = row.AsInt64("vitess_liveness_indicator", 0)
 	sm.UserThrottleRatio = float32(row.AsFloat64("user_throttle_ratio", 0))
 	sm.SpecialPlan = row.AsString("special_plan", "")
+	sm.InOrderCompletionPendingCount = row.AsUint64("in_order_completion_pending_count", 0)
 
 	sm.LastThrottledAt, err = valueToVTTime(row.AsString("last_throttled_timestamp", ""))
 	if err != nil {
@@ -190,6 +191,13 @@ func valueToVTTime(s string) (*vttime.Time, error) {
 		return nil, nil
 	}
 
+	// Handle MySQL's zero/NULL timestamp (0000-00-00 00:00:00)
+	// This is what MySQL returns for NULL datetime values when the connection
+	// is not configured to return SQL NULL values.
+	if strings.HasPrefix(s, "0000-00-00") {
+		return nil, nil
+	}
+
 	gotime, err := time.ParseInLocation(sqltypes.TimestampFormat, s, time.Local)
 	if err != nil {
 		return nil, err
@@ -220,7 +228,7 @@ func valueToVTDuration(s string, defaultUnit string) (*vttime.Duration, error) {
 
 // queryResultForTabletResults aggregates given results into a combined result set
 func queryResultForTabletResults(results map[string]*sqltypes.Result) *sqltypes.Result {
-	var qr = &sqltypes.Result{}
+	qr := &sqltypes.Result{}
 	defaultFields := []*querypb.Field{{
 		Name:    "Tablet",
 		Type:    sqltypes.VarBinary,

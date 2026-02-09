@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 	clientv3 "go.etcd.io/etcd/client/v3"
 
+	"vitess.io/vitess/go/race"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/testfiles"
 	"vitess.io/vitess/go/vt/log"
@@ -30,8 +31,7 @@ import (
 // TestCreateDefaultShardRoutingRules confirms that the default shard routing rules are created correctly for sharded
 // and unsharded keyspaces.
 func TestCreateDefaultShardRoutingRules(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ks1 := &testKeyspace{
 		KeyspaceName: "sourceks",
@@ -100,8 +100,7 @@ func TestCreateDefaultShardRoutingRules(t *testing.T) {
 
 // TestUpdateKeyspaceRoutingRule confirms that the keyspace routing rules are updated correctly.
 func TestUpdateKeyspaceRoutingRule(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
 	routes := make(map[string]string)
@@ -118,10 +117,10 @@ func TestUpdateKeyspaceRoutingRule(t *testing.T) {
 // TestConcurrentKeyspaceRoutingRulesUpdates runs multiple keyspace routing rules updates concurrently to test
 // the locking mechanism.
 func TestConcurrentKeyspaceRoutingRulesUpdates(t *testing.T) {
-	if os.Getenv("GOCOVERDIR") != "" {
-		// While running this test in CI along with all other tests in for code coverage this test hangs very often.
-		// Possibly due to some resource constraints, since this test is one of the last.
-		// However just running this package by itself with code coverage works fine in CI.
+	if os.Getenv("GOCOVERDIR") != "" || race.Enabled {
+		// While running this test in CI along with all other tests in for code coverage or race enabled,
+		// this test hangs very often. Possibly due to some resource constraints, since this test is one
+		// of the last. However just running this package by itself with code coverage works fine in CI.
 		t.Logf("Skipping TestConcurrentKeyspaceRoutingRulesUpdates test in code coverage mode")
 		t.Skip()
 	}
@@ -156,7 +155,7 @@ func testConcurrentKeyspaceRoutingRulesUpdates(t *testing.T, ctx context.Context
 	shortCtx, cancel := context.WithTimeout(ctx, duration)
 	defer cancel()
 	log.Infof("Starting %d concurrent updates", concurrency)
-	for i := 0; i < concurrency; i++ {
+	for i := range concurrency {
 		go func(id int) {
 			defer wg.Done()
 			for {

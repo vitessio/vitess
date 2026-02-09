@@ -19,6 +19,8 @@ package vreplication
 import (
 	"fmt"
 	"math"
+	"os/exec"
+	"path"
 	"runtime"
 	"strconv"
 	"strings"
@@ -353,6 +355,14 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 	testNoOrphanedData(t, tc.targetKs, tc.workflow, arrTargetShards)
 	tc.vdiffCount = 0 // All vdiffs are deleted, so reset the count and check
 	checkVDiffCountStat(t, statsTablet, tc.vdiffCount)
+
+	// Confirm that VDiff queries did not use MAX_EXECUTION_TIME query hints using the logs.
+	grepCmd := fmt.Sprintf("grep 'Streaming rows for query:' %s | grep -c -v MAX_EXECUTION_TIME", path.Join(vc.ClusterConfig.tmpDir, "vttablet*INFO*"))
+	out, err := exec.Command("bash", "-c", grepCmd).Output()
+	require.NoError(t, err)
+	logcnt, err := strconv.Atoi(strings.TrimSpace(string(out)))
+	require.NoError(t, err)
+	require.Greater(t, logcnt, 0)
 }
 
 func testCLIErrors(t *testing.T, ksWorkflow, cells string) {
@@ -591,7 +601,7 @@ func testAutoRetryError(t *testing.T, tc *testCase, cells string) {
 		expectedRows := rowsCompared + expectedNewRows
 
 		// Update the VDiff to simulate an ephemeral error having occurred.
-		for _, shard := range strings.Split(tc.targetShards, ",") {
+		for shard := range strings.SplitSeq(tc.targetShards, ",") {
 			tab := vc.getPrimaryTablet(t, tc.targetKs, shard)
 			res, err := tab.QueryTabletWithDB(sqlparser.BuildParsedQuery(sqlSimulateError, sidecarDBIdentifier, sidecarDBIdentifier, encodeString(uuid)).Query, "vt_"+tc.targetKs)
 			require.NoError(t, err)

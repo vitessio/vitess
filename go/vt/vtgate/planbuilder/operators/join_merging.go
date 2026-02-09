@@ -48,7 +48,7 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 			}
 		}
 
-		if !(jm.joinType.IsInner() || newRouting.OpCode().IsSingleShard()) {
+		if !jm.joinType.IsInner() && !newRouting.OpCode().IsSingleShard() {
 			debugNoRewrite("apply join merge blocked: dual routing with non-inner join type %s and multi-shard routing %s", jm.joinType.ToString(), newRouting.OpCode().String())
 			return nil
 		}

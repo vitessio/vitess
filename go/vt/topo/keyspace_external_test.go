@@ -77,8 +77,7 @@ func TestServerFindAllShardsInKeyspace(t *testing.T) {
 			tt.keyspace = defaultKeyspace
 		}
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			ts := memorytopo.NewServer(ctx)
 			defer ts.Close()
@@ -152,8 +151,7 @@ func TestServerGetServingShards(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("%d shards with fallback = %t", tt.shards, tt.fallback), func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			ts, factory := memorytopo.NewServerAndFactory(ctx)
 			defer ts.Close()
 			stats := factory.GetCallStats()
@@ -194,7 +192,7 @@ func TestServerGetServingShards(t *testing.T) {
 			require.Len(t, shardInfos, tt.shards)
 			for _, shardName := range shardNames {
 				f := func(si *topo.ShardInfo) bool {
-					return key.KeyRangeString(si.Shard.KeyRange) == shardName
+					return key.KeyRangeString(si.KeyRange) == shardName
 				}
 				require.True(t, slices.ContainsFunc(shardInfos, f), "shard %q was not found in the results",
 					shardName)

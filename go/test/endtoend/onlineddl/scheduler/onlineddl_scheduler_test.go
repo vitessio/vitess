@@ -242,7 +242,7 @@ func TestMain(m *testing.M) {
 		defer clusterInstance.Teardown()
 
 		if _, err := os.Stat(schemaChangeDirectory); os.IsNotExist(err) {
-			_ = os.Mkdir(schemaChangeDirectory, 0700)
+			_ = os.Mkdir(schemaChangeDirectory, 0o700)
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
@@ -269,7 +269,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// No need for replicas in this stress test
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 0, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 0, false, clusterInstance.Cell); err != nil {
 			return 1, err
 		}
 
@@ -483,7 +483,7 @@ func testScheduler(t *testing.T) {
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			postponeLaunch := row.AsInt64("postpone_launch", 0)
-			assert.Equal(t, int64(1), postponeLaunch)
+			assert.EqualValues(t, 1, postponeLaunch)
 		}
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusQueued)
 
@@ -1818,6 +1818,16 @@ func testScheduler(t *testing.T) {
 			for _, uuid := range vuuids {
 				waitForReadyToComplete(t, uuid, true)
 			}
+			assert.EventuallyWithT(t, func(c *assert.CollectT) {
+				for i, uuid := range vuuids {
+					rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+					require.NotNil(t, rs)
+					for _, row := range rs.Named().Rows {
+						inOrderCompletionPendingCount := row.AsUint64("in_order_completion_pending_count", 0)
+						assert.EqualValues(c, i, inOrderCompletionPendingCount)
+					}
+				}
+			}, time.Minute, time.Second, "in_order_completion_pending_count not as expected")
 			t.Run("cancel 1st migration", func(t *testing.T) {
 				onlineddl.CheckCancelMigration(t, &vtParams, shards, vuuids[0], true)
 				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, vuuids[0], normalWaitTime, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
@@ -2139,6 +2149,7 @@ DROP TABLE IF EXISTS stress_test
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, revertUUID, schema.OnlineDDLStatusCancelled)
 	})
 }
+
 func testDeclarative(t *testing.T) {
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
@@ -2334,7 +2345,7 @@ func testDeclarative(t *testing.T) {
 		log.Infof("initTable begin")
 		defer log.Infof("initTable complete")
 
-		ctx := context.Background()
+		ctx := t.Context()
 		conn, err := mysql.Connect(ctx, &vtParams)
 		require.Nil(t, err)
 		defer conn.Close()
@@ -2360,7 +2371,7 @@ func testDeclarative(t *testing.T) {
 
 		log.Infof("%s", writeMetrics.String())
 
-		ctx := context.Background()
+		ctx := t.Context()
 		conn, err := mysql.Connect(ctx, &vtParams)
 		require.Nil(t, err)
 		defer conn.Close()
@@ -2746,6 +2757,16 @@ func testDeclarative(t *testing.T) {
 		checkTable(t, tableName, true)
 		testSelectTableMetrics(t)
 	})
+	t.Run("vtctldclient GetSchemaMigrations with zero date succeeds", func(t *testing.T) {
+		uuid := testOnlineDDL(t, createStatementZeroDate, "online -declarative --allow-zero-in-date", "vtgate", "", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+
+		output, err := clusterInstance.VtctldClientProcess.OnlineDDLShow(keyspaceName, uuid)
+		require.NoError(t, err, "vtctldclient OnlineDDL show failed")
+		require.NotEmpty(t, output, "expected output from OnlineDDL show")
+		require.Contains(t, output, uuid, "output should contain the migration UUID")
+	})
 	t.Run("CREATE TABLE with zero date and --allow-zero-in-date is successful", func(t *testing.T) {
 		uuid := testOnlineDDL(t, createStatementZeroDate, "online -declarative --allow-zero-in-date", "vtgate", "", "")
 		uuids = append(uuids, uuid)
@@ -2859,7 +2880,7 @@ func testForeignKeys(t *testing.T) {
 		expectCountUUIDs          int
 		onlyIfFKOnlineDDLPossible bool
 	}
-	var testCases = []testCase{
+	testCases := []testCase{
 		{
 			name:             "modify parent, not allowed",
 			sql:              "alter table parent_table engine=innodb",

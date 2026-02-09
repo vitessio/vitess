@@ -241,7 +241,7 @@ func (c *ZkConn) withRetry(ctx context.Context, action func(conn *zk.Conn) error
 	}
 	defer c.sem.Release(1)
 
-	for i := 0; i < maxAttempts; i++ {
+	for i := range maxAttempts {
 		if i > 0 {
 			// Add a bit of backoff time before retrying:
 			// 1 second base + up to 5 seconds.

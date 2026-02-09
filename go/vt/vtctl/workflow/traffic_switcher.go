@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 	"sync"
@@ -258,6 +259,7 @@ func (ts *trafficSwitcher) Logger() logutil.Logger {
 	}
 	return ts.logger
 }
+
 func (ts *trafficSwitcher) VReplicationExec(ctx context.Context, alias *topodatapb.TabletAlias, query string) (*querypb.QueryResult, error) {
 	return ts.ws.VReplicationExec(ctx, alias, query)
 }
@@ -394,9 +396,7 @@ func (ts *trafficSwitcher) addParticipatingTablesToKeyspace(ctx context.Context,
 		if err := json2.UnmarshalPB([]byte(wrap), ks); err != nil {
 			return err
 		}
-		for table, vtab := range ks.Tables {
-			vschema.Tables[table] = vtab
-		}
+		maps.Copy(vschema.Tables, ks.Tables)
 	} else {
 		if vschema.Sharded {
 			return errors.New("no sharded vschema was provided, so you will need to update the vschema of the target manually for the moved tables")
@@ -1365,7 +1365,6 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 
 			return nil
 		})
-
 		if err != nil {
 			return err
 		}
@@ -1547,7 +1546,10 @@ func (ts *trafficSwitcher) mirrorTableTraffic(ctx context.Context, types []topod
 			if percent == 0 {
 				// When percent is 0, remove mirror rule if it exists.
 				if _, ok := mrs[fromTable][toTable]; ok {
-					delete(mrs, fromTable)
+					delete(mrs[fromTable], toTable)
+					if len(mrs[fromTable]) == 0 {
+						delete(mrs, fromTable)
+					}
 				}
 			} else {
 				mrs[fromTable][toTable] = percent

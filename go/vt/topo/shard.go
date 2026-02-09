@@ -147,7 +147,7 @@ func (si *ShardInfo) Version() Version {
 
 // HasPrimary returns true if the Shard has an assigned primary.
 func (si *ShardInfo) HasPrimary() bool {
-	return !topoproto.TabletAliasIsZero(si.Shard.PrimaryAlias)
+	return !topoproto.TabletAliasIsZero(si.PrimaryAlias)
 }
 
 // GetPrimaryTermStartTime returns the shard's primary term start time as a Time value.
@@ -157,7 +157,7 @@ func (si *ShardInfo) GetPrimaryTermStartTime() time.Time {
 
 // SetPrimaryTermStartTime sets the shard's primary term start time as a Time value.
 func (si *ShardInfo) SetPrimaryTermStartTime(t time.Time) {
-	si.Shard.PrimaryTermStartTime = protoutil.TimeToProto(t)
+	si.PrimaryTermStartTime = protoutil.TimeToProto(t)
 }
 
 // GetShard is a high level function to read shard data.
@@ -183,7 +183,6 @@ func (ts *Server) GetShard(ctx context.Context, keyspace, shard string) (*ShardI
 	shardPath := shardFilePath(keyspace, shard)
 
 	data, version, err := ts.globalCell.Get(ctx, shardPath)
-
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +206,7 @@ func (ts *Server) updateShard(ctx context.Context, si *ShardInfo) error {
 		return err
 	}
 
-	data, err := si.Shard.MarshalVT()
+	data, err := si.MarshalVT()
 	if err != nil {
 		return err
 	}
@@ -454,13 +453,7 @@ func (si *ShardInfo) updatePrimaryTabletControl(tc *topodatapb.Shard_TabletContr
 
 	var newTables []string
 	for _, table := range tables {
-		exists := false
-		for _, blt := range tc.DeniedTables {
-			if blt == table {
-				exists = true
-				break
-			}
-		}
+		exists := slices.Contains(tc.DeniedTables, table)
 		if !exists {
 			newTables = append(newTables, table)
 		}
@@ -473,13 +466,7 @@ func (si *ShardInfo) updatePrimaryTabletControl(tc *topodatapb.Shard_TabletContr
 		var newDenyList []string
 		if len(tables) != 0 { // legacy uses
 			for _, blt := range tc.DeniedTables {
-				mustDelete := false
-				for _, table := range tables {
-					if blt == table {
-						mustDelete = true
-						break
-					}
-				}
+				mustDelete := slices.Contains(tables, blt)
 				if !mustDelete {
 					newDenyList = append(newDenyList, blt)
 				}
@@ -537,12 +524,7 @@ func InCellList(cell string, cells []string) bool {
 	if len(cells) == 0 {
 		return true
 	}
-	for _, c := range cells {
-		if c == cell {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(cells, cell)
 }
 
 // FindAllTabletAliasesInShard uses the replication graph to find all the

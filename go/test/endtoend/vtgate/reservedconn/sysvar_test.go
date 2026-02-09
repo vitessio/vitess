@@ -32,7 +32,7 @@ import (
 )
 
 func TestSetSysVarSingle(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	type queriesWithExpectations struct {
 		name, expr string
 		expected   []string
@@ -276,7 +276,7 @@ func BenchmarkReservedConnFieldQuery(b *testing.B) {
 	utils.Exec(b, conn, "set sql_mode = ''")
 	utils.AssertMatches(b, conn, "select 	@@sql_mode", `[[VARCHAR("")]]`)
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		utils.Exec(b, conn, "select id, val1 from test")
 	}
 }
@@ -414,42 +414,65 @@ func checkOltpAndOlapInterchangingTx(t *testing.T, conn *mysql.Conn) {
 }
 
 func TestSysVarTxIsolation(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
+	t.Run("returns the default isolation level if unchanged", func(t *testing.T) {
+		conn, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(t, err)
+		defer conn.Close()
 
-	// will run every check twice to see that the isolation level is set for all the queries in the session and
+		// default from mysql
+		utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("REPEATABLE-READ")]]`)
+		// ensuring it goes to mysql
+		utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `REPEATABLE-READ`)
+		// second run, ensuring it has the same value.
+		utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `REPEATABLE-READ`)
 
-	// default from mysql
-	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("REPEATABLE-READ")]]`)
-	// ensuring it goes to mysql
-	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `REPEATABLE-READ`)
-	// second run, ensuring it has the same value.
-	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `REPEATABLE-READ`)
+		// Switch to shard targeting
+		utils.Exec(t, conn, "use `"+keyspaceName+":-80`")
 
-	// setting to different value.
-	utils.Exec(t, conn, "set @@transaction_isolation = 'read-committed'")
-	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-COMMITTED")]]`)
-	// ensuring it goes to mysql
-	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `READ-COMMITTED`)
-	// second run, to ensuring the setting is applied on the session and not just on next query after settings.
-	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `READ-COMMITTED`)
+		utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("REPEATABLE-READ")]]`)
+		utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `REPEATABLE-READ`)
+		utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `REPEATABLE-READ`)
+	})
 
-	// changing setting to different value.
-	utils.Exec(t, conn, "set session transaction isolation level read uncommitted")
-	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-UNCOMMITTED")]]`)
-	// ensuring it goes to mysql
-	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `READ-UNCOMMITTED`)
-	// second run, to ensuring the setting is applied on the session and not just on next query after settings.
-	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `READ-UNCOMMITTED`)
+	t.Run("allows changing the isolation level via special syntax", func(t *testing.T) {
+		conn, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(t, err)
+		defer conn.Close()
 
-	// changing setting to different value.
-	utils.Exec(t, conn, "set transaction isolation level serializable")
-	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("SERIALIZABLE")]]`)
-	// ensuring it goes to mysql
-	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `SERIALIZABLE`)
-	// second run, to ensuring the setting is applied on the session and not just on next query after settings.
-	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `SERIALIZABLE`)
+		// setting to different value.
+		utils.Exec(t, conn, "set session transaction isolation level read committed")
+
+		utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-COMMITTED")]]`)
+		utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `READ-COMMITTED`)
+		utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `READ-COMMITTED`)
+
+		// Switch to shard targeting
+		utils.Exec(t, conn, "use `"+keyspaceName+":-80`")
+		utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-COMMITTED")]]`)
+
+		utils.Exec(t, conn, "set session transaction isolation level read uncommitted")
+		utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-UNCOMMITTED")]]`)
+	})
+
+	t.Run("allows changing the isolation level via session variable", func(t *testing.T) {
+		conn, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(t, err)
+		defer conn.Close()
+
+		// setting to different value.
+		utils.Exec(t, conn, "set @@session.transaction_isolation = 'read-committed'")
+
+		utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-COMMITTED")]]`)
+		utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `READ-COMMITTED`)
+		utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `READ-COMMITTED`)
+
+		// Switch to shard targeting
+		utils.Exec(t, conn, "use `"+keyspaceName+":-80`")
+		utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-COMMITTED")]]`)
+
+		utils.Exec(t, conn, "set @@session.transaction_isolation = 'read-uncommitted'")
+		utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-UNCOMMITTED")]]`)
+	})
 }
 
 // TestSysVarInnodbWaitTimeout tests the innodb_lock_wait_timeout system variable

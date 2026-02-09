@@ -1260,7 +1260,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 		if si == nil || len(si.TabletControls) == 0 {
 			return false
 		}
-		for _, tc := range si.Shard.TabletControls {
+		for _, tc := range si.TabletControls {
 			return slices.Equal(tc.DeniedTables, []string{tableName})
 		}
 		return false
@@ -1815,6 +1815,7 @@ func TestMirrorTraffic(t *testing.T) {
 	sourceShards := []string{"-"}
 	targetKs := "target"
 	targetShards := []string{"-80", "80-"}
+	otherKs := "otherks"
 	table1 := "table1"
 	table2 := "table2"
 	workflow := "src2target"
@@ -2114,6 +2115,30 @@ func TestMirrorTraffic(t *testing.T) {
 			wantAllowReadsFromDeniedTables: true,
 			wantReadsMirrored:              true,
 			wantWritesMirrored:             false,
+		},
+		{
+			name: "percent zero preserves other mirror targets",
+			mirrorRules: map[string]map[string]float32{
+				fmt.Sprintf("%s.%s", sourceKs, table1): {
+					fmt.Sprintf("%s.%s", targetKs, table1): 50.0,
+					fmt.Sprintf("%s.%s", otherKs, table1):  25.0,
+				},
+				fmt.Sprintf("%s.%s", sourceKs, table2): {
+					fmt.Sprintf("%s.%s", targetKs, table2): 50.0,
+				},
+			},
+			req: &vtctldatapb.WorkflowMirrorTrafficRequest{
+				Keyspace:    targetKs,
+				Workflow:    workflow,
+				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+				Percent:     0.0,
+			},
+			routingRules: initialRoutingRules,
+			wantMirrorRules: map[string]map[string]float32{
+				fmt.Sprintf("%s.%s", sourceKs, table1): {
+					fmt.Sprintf("%s.%s", otherKs, table1): 25.0,
+				},
+			},
 		},
 		{
 			name: "does not overwrite unrelated mirror rules",

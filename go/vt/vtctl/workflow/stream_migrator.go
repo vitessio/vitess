@@ -172,7 +172,6 @@ func StreamMigratorFinalize(ctx context.Context, ts ITrafficSwitcher, workflows 
 		_, err := ts.VReplicationExec(ctx, source.GetPrimary().Alias, query)
 		return err
 	})
-
 	if err != nil {
 		return err
 	}
@@ -486,7 +485,6 @@ func (sm *StreamMigrator) legacyReadSourceStreams(ctx context.Context, cancelMig
 		streams[source.GetShard().ShardName()] = tabletStreams
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -525,7 +523,6 @@ func (sm *StreamMigrator) legacyReadSourceStreams(ctx context.Context, cancelMig
 
 				return fmt.Errorf("streams are mismatched across source shards: %s vs %s", refshard, shard)
 			}()
-
 			if err != nil {
 				return nil, err
 			}
@@ -593,7 +590,6 @@ func (sm *StreamMigrator) readSourceStreams(ctx context.Context, cancelMigrate b
 		streams[source.GetShard().ShardName()] = tabletStreams
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -632,7 +628,6 @@ func (sm *StreamMigrator) readSourceStreams(ctx context.Context, cancelMigrate b
 
 				return fmt.Errorf("streams are mismatched across source shards: %s vs %s", refshard, shard)
 			}()
-
 			if err != nil {
 				return nil, err
 			}
@@ -678,7 +673,6 @@ func (sm *StreamMigrator) legacyStopSourceStreams(ctx context.Context) error {
 
 		return nil
 	})
-
 	if err != nil {
 		return err
 	}
@@ -712,7 +706,7 @@ func (sm *StreamMigrator) stopSourceStreams(ctx context.Context) error {
 					return fmt.Errorf("no binlog source is defined for materialization workflow %s", vrs.Workflow)
 				}
 				eg.Go(func() error {
-					sourceTablet := source.primary.Tablet.CloneVT()
+					sourceTablet := source.primary.CloneVT()
 					if sourceTablet.Shard != vrs.BinlogSource.Shard {
 						si, err := sm.ts.TopoServer().GetTabletMapForShard(egCtx, vrs.BinlogSource.GetKeyspace(), vrs.BinlogSource.GetShard())
 						if err != nil {
@@ -734,7 +728,7 @@ func (sm *StreamMigrator) stopSourceStreams(ctx context.Context) error {
 						return err
 					}
 					sm.ts.Logger().Infof("Waiting for intra-keyspace materialization workflow %s on %v/%v to reach position %v for stream source from %s/%s, starting from position %s on tablet %s",
-						vrs.Workflow, source.primary.Keyspace, source.primary.Shard, pos, vrs.BinlogSource.Keyspace, vrs.BinlogSource.Shard, vrs.Position, topoproto.TabletAliasString(source.primary.Tablet.Alias))
+						vrs.Workflow, source.primary.Keyspace, source.primary.Shard, pos, vrs.BinlogSource.Keyspace, vrs.BinlogSource.Shard, vrs.Position, topoproto.TabletAliasString(source.primary.Alias))
 					if err := sm.ts.TabletManagerClient().VReplicationWaitForPos(egCtx, source.primary.Tablet, vrs.ID, pos); err != nil {
 						return err
 					}
@@ -768,7 +762,6 @@ func (sm *StreamMigrator) stopSourceStreams(ctx context.Context) error {
 
 		return nil
 	})
-
 	if err != nil {
 		return err
 	}
@@ -881,7 +874,6 @@ func (sm *StreamMigrator) legacyVerifyStreamPositions(ctx context.Context, stopP
 
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -944,7 +936,6 @@ func (sm *StreamMigrator) verifyStreamPositions(ctx context.Context, stopPositio
 
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -1039,7 +1030,7 @@ func (sm *StreamMigrator) createTargetStreams(ctx context.Context, tmpl []*VRepl
 						return err
 					}
 					sm.ts.Logger().Infof("Setting position for intra-keyspace materialization workflow %s on %v/%v to %v on tablet %s",
-						stream.Workflow, st.primary.Keyspace, st.primary.Shard, pos, topoproto.TabletAliasString(st.primary.Tablet.Alias))
+						stream.Workflow, st.primary.Keyspace, st.primary.Shard, pos, topoproto.TabletAliasString(st.primary.Alias))
 					stream.Position, err = binlogplayer.DecodePosition(pos)
 					if err != nil {
 						return err
@@ -1072,7 +1063,6 @@ func (sm *StreamMigrator) deleteTargetStreams(ctx context.Context) error {
 		_, err := sm.ts.VReplicationExec(ctx, target.GetPrimary().Alias, query)
 		return err
 	})
-
 	if err != nil {
 		sm.logger.Warningf("Could not delete migrated streams: %v", err)
 	}

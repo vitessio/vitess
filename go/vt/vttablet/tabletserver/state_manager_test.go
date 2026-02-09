@@ -292,13 +292,10 @@ func (te *testWatcher) Open() {
 }
 
 func (te *testWatcher) Close() {
-	te.wg.Add(1)
-	go func() {
-		defer te.wg.Done()
-
+	te.wg.Go(func() {
 		err := te.sm.SetServingType(topodatapb.TabletType_RDONLY, testNow, StateNotServing, "")
 		assert.NoError(te.t, err)
-	}()
+	})
 }
 
 func TestStateManagerSetServingTypeRace(t *testing.T) {
@@ -402,8 +399,7 @@ func TestStateManagerNotConnectedType(t *testing.T) {
 	assert.Equal(t, StateNotConnected, sm.state)
 }
 
-type delayedTxEngine struct {
-}
+type delayedTxEngine struct{}
 
 func (te *delayedTxEngine) AcceptReadWrite() {
 }
@@ -557,8 +553,7 @@ func TestStateManagerCheckMySQL(t *testing.T) {
 }
 
 func TestStateManagerValidations(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sm := newTestStateManager()
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	sm.target = target.CloneVT()
@@ -620,8 +615,7 @@ func TestStateManagerValidations(t *testing.T) {
 }
 
 func TestStateManagerWaitForRequests(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sm := newTestStateManager()
 	defer sm.StopService()
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
@@ -672,15 +666,13 @@ func TestStateManagerNotify(t *testing.T) {
 
 	ch := make(chan *querypb.StreamHealthResponse, 5)
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		err := sm.hs.Stream(context.Background(), func(shr *querypb.StreamHealthResponse) error {
 			ch <- shr
 			return nil
 		})
 		assert.Contains(t, err.Error(), "tabletserver is shutdown")
-	}()
+	})
 	defer wg.Wait()
 
 	sm.Broadcast()
@@ -710,15 +702,13 @@ func TestDemotePrimaryStalled(t *testing.T) {
 
 	ch := make(chan *querypb.StreamHealthResponse, 5)
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		err := sm.hs.Stream(context.Background(), func(shr *querypb.StreamHealthResponse) error {
 			ch <- shr
 			return nil
 		})
 		assert.Contains(t, err.Error(), "tabletserver is shutdown")
-	}()
+	})
 	defer wg.Wait()
 
 	// Send a broadcast message and check we have no error there.

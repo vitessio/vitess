@@ -263,7 +263,7 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 		RelayLogInfoPath:      path.Join(root, "relay-log.info"),
 	}
 
-	err = destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* backupTime */, time.Time{} /* restoreToTimestamp */, "" /* restoreToPos */, []string{} /* ignoreBackupEngines */, mysqlShutdownTimeout)
+	err = destTablet.TM.RestoreBackup(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* backupTime */, time.Time{} /* restoreToTimestamp */, "" /* restoreToPos */, []string{} /* ignoreBackupEngines */, mysqlShutdownTimeout)
 	if err != nil {
 		return err
 	}
@@ -303,7 +303,7 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	primary.FakeMysqlDaemon.SetReplicationPositionPos = primary.FakeMysqlDaemon.GetPrimaryPositionLocked()
 
 	// restore primary from latest backup
-	require.NoError(t, primary.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* restoreFromBackupTs */, time.Time{} /* restoreToTimestamp */, "" /* restoreToPos */, []string{} /* ignoreBackupEngines */, mysqlShutdownTimeout),
+	require.NoError(t, primary.TM.RestoreBackup(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* restoreFromBackupTs */, time.Time{} /* restoreToTimestamp */, "" /* restoreToPos */, []string{} /* ignoreBackupEngines */, mysqlShutdownTimeout),
 		"RestoreData failed")
 	// tablet was created as PRIMARY, so it's baseTabletType is PRIMARY
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, primary.Tablet.Type)
@@ -319,7 +319,7 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	}
 
 	// Test restore with the backup timestamp
-	require.NoError(t, primary.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, backupTime, time.Time{} /* restoreToTimestamp */, "" /* restoreToPos */, []string{} /* ignoreBackupEngines */, mysqlShutdownTimeout),
+	require.NoError(t, primary.TM.RestoreBackup(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, backupTime, time.Time{} /* restoreToTimestamp */, "" /* restoreToPos */, []string{} /* ignoreBackupEngines */, mysqlShutdownTimeout),
 		"RestoreData with backup timestamp failed")
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, primary.Tablet.Type)
 	assert.False(t, primary.FakeMysqlDaemon.Replicating)
@@ -338,8 +338,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
 	// Initialize our environment
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
@@ -521,7 +520,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 
 	errCh = make(chan error, 1)
 	go func(ctx context.Context, tablet *FakeTablet) {
-		errCh <- tablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* restoreFromBackupTs */, time.Time{} /* restoreToTimestamp */, "" /* restoreToPos */, []string{} /* ignoreBackupEngines */, mysqlShutdownTimeout)
+		errCh <- tablet.TM.RestoreBackup(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* restoreFromBackupTs */, time.Time{} /* restoreToTimestamp */, "" /* restoreToPos */, []string{} /* ignoreBackupEngines */, mysqlShutdownTimeout)
 	}(ctx, destTablet)
 
 	timer = time.NewTicker(1 * time.Second)
@@ -715,7 +714,7 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	defer cancel()
 	// Restore will return an error while trying to contact the primary for its position, but otherwise will succeed.
 	// The replication won't be running however, since we can't run errant GTID detection without the primary being online.
-	err = destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* restoreFromBackupTs */, time.Time{} /* restoreToTimestamp */, "" /* restoreToPos */, []string{} /* ignoreBackupEngines */, mysqlShutdownTimeout)
+	err = destTablet.TM.RestoreBackup(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* restoreFromBackupTs */, time.Time{} /* restoreToTimestamp */, "" /* restoreToPos */, []string{} /* ignoreBackupEngines */, mysqlShutdownTimeout)
 	require.ErrorContains(t, err, "DeadlineExceeded")
 	// verify the full status
 	require.NoError(t, destTablet.FakeMysqlDaemon.CheckSuperQueryList(), "destTablet.FakeMysqlDaemon.CheckSuperQueryList failed")
@@ -734,8 +733,7 @@ func TestDisableActiveReparents(t *testing.T) {
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
 	// Initialize our environment
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
@@ -871,7 +869,7 @@ func TestDisableActiveReparents(t *testing.T) {
 		RelayLogInfoPath:      path.Join(root, "relay-log.info"),
 	}
 
-	require.NoError(t, destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* restoreFromBackupTs */, time.Time{} /* restoreToTimestamp */, "" /* restoreToPos */, []string{} /* ignoreBackupEngines */, mysqlShutdownTimeout))
+	require.NoError(t, destTablet.TM.RestoreBackup(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* restoreFromBackupTs */, time.Time{} /* restoreToTimestamp */, "" /* restoreToPos */, []string{} /* ignoreBackupEngines */, mysqlShutdownTimeout))
 	// verify the full status
 	require.NoError(t, destTablet.FakeMysqlDaemon.CheckSuperQueryList(), "destTablet.FakeMysqlDaemon.CheckSuperQueryList failed")
 	assert.False(t, destTablet.FakeMysqlDaemon.Replicating)

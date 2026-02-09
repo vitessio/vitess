@@ -38,6 +38,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
 	"math/rand/v2"
 	"regexp"
 	"strings"
@@ -290,6 +291,7 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 		Tags:                 mergeTags(buildTags, initTags),
 		DefaultConnCollation: uint32(charset),
 		TabletStartTime:      protoutil.TimeToProto(time.Now()),
+		TabletShutdownTime:   nil,
 	}, nil
 }
 
@@ -348,13 +350,9 @@ func mergeTags(a, b map[string]string) map[string]string {
 	}
 
 	result := make(map[string]string, maxCap)
-	for k, v := range a {
-		result[k] = v
-	}
+	maps.Copy(result, a)
 
-	for k, v := range b {
-		result[k] = v
-	}
+	maps.Copy(result, b)
 
 	return result
 }
@@ -509,6 +507,8 @@ func (tm *TabletManager) Close() {
 		tablet.Hostname = ""
 		tablet.MysqlHostname = ""
 		tablet.PortMap = nil
+		tablet.TabletStartTime = nil
+		tablet.TabletShutdownTime = protoutil.TimeToProto(time.Now())
 		return nil
 	}
 
@@ -878,16 +878,38 @@ func (tm *TabletManager) initTablet(ctx context.Context) error {
 
 func (tm *TabletManager) handleRestore(ctx context.Context, config *tabletenv.TabletConfig) (bool, error) {
 	// Sanity check for inconsistent flags
-	if tm.Cnf == nil && restoreFromBackup {
-		return false, errors.New("you cannot enable --restore-from-backup without a my.cnf file")
+	if tm.Cnf == nil && (restoreFromBackup || restoreWithClone) {
+		return false, errors.New("you cannot enable --restore-from-backup or --restore-with-clone without a my.cnf file")
+	}
+	if restoreFromBackup && restoreWithClone {
+		return false, errors.New("--restore-from-backup and --restore-with-clone are mutually exclusive")
+	}
+	if len(restoreFromBackupAllowedEngines) > 0 && restoreWithClone {
+		return false, errors.New("--restore-from-backup-allowed-engines and --restore-with-clone are mutually exclusive")
+	}
+	if restoreFromBackupTsStr != "" && restoreWithClone {
+		return false, errors.New("--restore-from-backup-ts and --restore-with-clone are mutually exclusive")
+	}
+	if restoreToPos != "" && restoreWithClone {
+		return false, errors.New("--restore-to-pos and --restore-with-clone are mutually exclusive")
+	}
+	if restoreToTimestampStr != "" && restoreWithClone {
+		return false, errors.New("--restore-to-timestamp and --restore-with-clone are mutually exclusive")
 	}
 	if restoreToTimestampStr != "" && restoreToPos != "" {
 		return false, errors.New("--restore-to-timestamp and --restore-to-pos are mutually exclusive")
 	}
 
+	if !restoreFromBackup && !restoreWithClone {
+		return false, nil
+	}
+
 	// Restore in the background
-	if restoreFromBackup {
-		go func() {
+	go func() {
+		logger := logutil.NewConsoleLogger()
+
+		switch {
+		case restoreFromBackup:
 			// Zero date will cause us to use the latest, which is the default
 			backupTime := time.Time{}
 			// Or if a backup timestamp was specified then we use the last backup taken at or before that time
@@ -910,23 +932,26 @@ func (tm *TabletManager) handleRestore(ctx context.Context, config *tabletenv.Ta
 
 			// restoreFromBackup will just be a regular action
 			// (same as if it was triggered remotely)
-			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), waitForBackupInterval, false /* deleteBeforeRestore */, backupTime, restoreToTimestamp, restoreToPos, restoreFromBackupAllowedEngines, mysqlShutdownTimeout); err != nil {
+			if err := tm.RestoreBackup(ctx, logger, waitForBackupInterval, false /* deleteBeforeRestore */, backupTime, restoreToTimestamp, restoreToPos, restoreFromBackupAllowedEngines, mysqlShutdownTimeout); err != nil {
 				log.Exitf("RestoreFromBackup failed: %v", err)
 			}
-
-			// Make sure we have the correct privileges for the DBA user before we start the state manager.
-			err := tm.waitForDBAGrants(config, mysqlctl.DbaGrantWaitTime)
-			if err != nil {
-				log.Exitf("Failed waiting for DBA grants: %v", err)
+		case restoreWithClone:
+			if err := tm.restoreFromClone(ctx, logger, false /*deleteBeforeRestore*/); err != nil {
+				log.Exitf("restoreFromClone failed: %v", err)
 			}
+		}
 
-			// Open the state manager after restore is done.
-			tm.tmState.Open()
-		}()
-		return true, nil
-	}
+		// Make sure we have the correct privileges for the DBA user before we start the state manager.
+		err := tm.waitForDBAGrants(config, mysqlctl.DbaGrantWaitTime)
+		if err != nil {
+			log.Exitf("Failed waiting for DBA grants: %v", err)
+		}
 
-	return false, nil
+		// Open the state manager after restore is done.
+		tm.tmState.Open()
+	}()
+
+	return true, nil
 }
 
 // waitForDBAGrants waits for DBA user to have the required privileges to function properly.
@@ -1071,7 +1096,7 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 	}
 
 	// Set primary and start replication.
-	if currentPrimary.Tablet.MysqlHostname == "" {
+	if currentPrimary.MysqlHostname == "" {
 		log.Warningf("primary tablet in the shard record does not have mysql hostname specified, possibly because that tablet has been shut down.")
 		return "", nil
 	}
@@ -1106,7 +1131,7 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 		return "", vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("Errant GTID detected - %s; Primary GTID - %s, Replica GTID - %s", errantGtid, primaryPosition, replicaPos.String()))
 	}
 
-	if err := tm.MysqlDaemon.SetReplicationSource(ctx, currentPrimary.Tablet.MysqlHostname, currentPrimary.Tablet.MysqlPort, 0, true, true); err != nil {
+	if err := tm.MysqlDaemon.SetReplicationSource(ctx, currentPrimary.MysqlHostname, currentPrimary.MysqlPort, 0, true, true); err != nil {
 		return "", vterrors.Wrap(err, "MysqlDaemon.SetReplicationSource failed")
 	}
 

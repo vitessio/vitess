@@ -119,7 +119,7 @@ func New(name string, opts Options) *Server {
 		unaryInterceptors = append(unaryInterceptors, otgrpc.UnaryServerInterceptor(otgrpc.WithTracer(tracer)))
 	}
 
-	streamInterceptors = append(streamInterceptors, func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	streamInterceptors = append(streamInterceptors, func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		err := handler(srv, ss)
 		if err != nil {
 			log.Errorf("%s error: %s", info.FullMethod, err)
@@ -127,7 +127,7 @@ func New(name string, opts Options) *Server {
 
 		return err
 	})
-	unaryInterceptors = append(unaryInterceptors, func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+	unaryInterceptors = append(unaryInterceptors, func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
 		resp, err = handler(ctx, req)
 		if err != nil {
 			log.Errorf("%s error: %s", info.FullMethod, err)
