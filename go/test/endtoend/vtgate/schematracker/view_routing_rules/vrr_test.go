@@ -17,7 +17,6 @@ limitations under the License.
 package viewroutingrules
 
 import (
-	"context"
 	_ "embed"
 	"flag"
 	"fmt"
@@ -113,8 +112,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestViewRoutingRules(t *testing.T) {
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -141,7 +139,7 @@ func TestViewRoutingRules(t *testing.T) {
 	// Unqualified query should fail with ambiguous table error since view1 exists in both keyspaces.
 	_, err = utils.ExecAllowError(t, conn, "select * from view1")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "ambiguous")
+	require.ErrorContains(t, err, "ambiguous")
 
 	// Apply routing rules to route to target
 	routingRules := `{"rules": [
