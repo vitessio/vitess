@@ -191,6 +191,35 @@ func TestSetSystemVariableAndThenSuccessfulAutocommitDML(t *testing.T) {
 	utils.AssertMatches(t, conn, `select @@sql_safe_updates`, `[[INT64(1)]]`)
 }
 
+// This test ensures that when autocommit is disabled, `SET` commands do not
+// cause an implicit transaction to be started.
+//
+// We test this via `set session transaction isolation level` because
+// changing the session transaction isolation level affects only the next
+// transaction that's started.
+func TestSetSystemVariableWithAutocommitDisabled(t *testing.T) {
+	conn1, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn1.Close()
+
+	conn2, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn2.Close()
+
+	utils.Exec(t, conn1, "delete from test")
+	utils.Exec(t, conn1, "delete from test_vdx")
+
+	utils.Exec(t, conn1, "set autocommit = 1")
+
+	utils.Exec(t, conn1, "set session transaction isolation level read uncommitted")
+	utils.AssertMatches(t, conn1, "select @@transaction_isolation", `[[VARCHAR("READ-UNCOMMITTED")]]`)
+
+	utils.Exec(t, conn2, "begin")
+	utils.Exec(t, conn2, "insert into test (id, val1) values (80, null)")
+
+	utils.AssertMatches(t, conn1, "select id from test where id = 80", `[[INT64(80)]]`)
+}
+
 func TestStartTxAndSetSystemVariableAndThenSuccessfulCommit(t *testing.T) {
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
@@ -419,6 +448,9 @@ func TestSysVarTxIsolation(t *testing.T) {
 		require.NoError(t, err)
 		defer conn.Close()
 
+		utils.Exec(t, conn, "delete from test")
+		utils.Exec(t, conn, "delete from test_vdx")
+
 		// default from mysql
 		utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("REPEATABLE-READ")]]`)
 		// ensuring it goes to mysql
@@ -439,6 +471,9 @@ func TestSysVarTxIsolation(t *testing.T) {
 		require.NoError(t, err)
 		defer conn.Close()
 
+		utils.Exec(t, conn, "delete from test")
+		utils.Exec(t, conn, "delete from test_vdx")
+
 		// setting to different value.
 		utils.Exec(t, conn, "set session transaction isolation level read committed")
 
@@ -458,6 +493,9 @@ func TestSysVarTxIsolation(t *testing.T) {
 		conn, err := mysql.Connect(context.Background(), &vtParams)
 		require.NoError(t, err)
 		defer conn.Close()
+
+		utils.Exec(t, conn, "delete from test")
+		utils.Exec(t, conn, "delete from test_vdx")
 
 		// setting to different value.
 		utils.Exec(t, conn, "set @@session.transaction_isolation = 'read-committed'")

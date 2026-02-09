@@ -72,12 +72,6 @@ func (e *Executor) newExecute(
 	execPlan planExec, // used when there is a plan to execute
 	recResult txResult, // used when it's something simple like begin/commit/rollback/savepoint
 ) (err error) {
-	// Start an implicit transaction if necessary.
-	err = e.startTxIfNecessary(ctx, safeSession)
-	if err != nil {
-		return err
-	}
-
 	if bindVars == nil {
 		bindVars = make(map[string]*querypb.BindVariable)
 	}
@@ -130,6 +124,16 @@ func (e *Executor) newExecute(
 		if err != nil {
 			safeSession.ClearWarnings()
 			return err
+		}
+
+		// Start an implicit transaction if necessary. This is done after plan
+		// creation so we can check whether the plan actually accesses real table
+		// data, matching MySQL's behavior where only data-accessing statements
+		// start implicit transactions when autocommit=0.
+		if planStartsImplicitTx(plan, stmt) {
+			if err = e.startTxIfNecessary(ctx, safeSession); err != nil {
+				return err
+			}
 		}
 
 		if plan.QueryType != sqlparser.StmtShow {
@@ -276,6 +280,50 @@ func (e *Executor) startTxIfNecessary(ctx context.Context, safeSession *econtext
 		}
 	}
 	return nil
+}
+
+// planStartsImplicitTx returns true if the given plan should start an implicit
+// transaction when autocommit is disabled. This matches MySQL's behavior where
+// only statements that access real table data start implicit transactions.
+// SET, SHOW, USE, SELECT from dual, and other non-data statements do not.
+func planStartsImplicitTx(plan *engine.Plan, stmt sqlparser.Statement) bool {
+	switch plan.QueryType {
+	case sqlparser.StmtSelect, sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
+		// Only start an implicit tx if the plan accesses real tables, not just dual.
+		for _, table := range plan.TablesUsed {
+			if !strings.HasSuffix(table, ".dual") {
+				return true
+			}
+		}
+		return false
+	case sqlparser.StmtShow:
+		// Not all SHOW commands start implicit transactions - only the ones that access data inside
+		// of information_schema or other data dictionaries that are stored inside of InnoDB.
+		//
+		// Show commands that only read server state (variables, status, warnings, engines, plugins, privileges) do not start transactions.
+		show, ok := stmt.(*sqlparser.Show)
+		if !ok {
+			return false
+		}
+		basic, ok := show.Internal.(*sqlparser.ShowBasic)
+		if !ok {
+			return false
+		}
+		switch basic.Command {
+		case sqlparser.Table, sqlparser.Database, sqlparser.Column, sqlparser.Index,
+			sqlparser.Trigger, sqlparser.TableStatus,
+			sqlparser.Charset, sqlparser.Collation,
+			sqlparser.Function, sqlparser.Procedure:
+			return true
+		default:
+			return false
+		}
+	case sqlparser.StmtSavepoint:
+		// Creating a savepoint starts a transaction in MySQL when autocommit=0.
+		return true
+	default:
+		return false
+	}
 }
 
 func (e *Executor) insideTransaction(ctx context.Context, safeSession *econtext.SafeSession, logStats *logstats.LogStats, execPlan func() error) error {
