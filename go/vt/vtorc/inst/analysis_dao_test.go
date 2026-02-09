@@ -56,6 +56,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 		codeWanted     AnalysisCode
 		shardWanted    string
 		keyspaceWanted string
+		preFunc        func()
 		wantErr        string
 	}{
 		{
@@ -228,7 +229,12 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			}},
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
-			codeWanted:     IncapacitatedPrimary,
+			preFunc: func() {
+				RecordPrimaryHealthCheck("zon1-0000000100", true)
+				RecordPrimaryHealthCheck("zon1-0000000100", false)
+				RecordPrimaryHealthCheck("zon1-0000000100", false)
+			},
+			codeWanted: IncapacitatedPrimary,
 		},
 		{
 			name: "DeadPrimaryWithoutReplicas",
@@ -1015,10 +1021,8 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			resetPrimaryHealthState()
-			if tt.name == "IncapacitatedPrimaryHealthWindow" {
-				RecordPrimaryHealthCheck("zon1-0000000100", true)
-				RecordPrimaryHealthCheck("zon1-0000000100", false)
-				RecordPrimaryHealthCheck("zon1-0000000100", false)
+			if tt.preFunc != nil {
+				tt.preFunc()
 			}
 			oldDB := db.Db
 			defer func() {

@@ -375,9 +375,6 @@ func recoverDeadPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalys
 // do an emergency reparent if the planned one fails.
 func recoverIncapacitatedPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	recoveryName := RecoverIncapacitatedPrimaryRecoveryName
-	if analysisEntry.Analysis == inst.DeadPrimary {
-		recoveryName = RecoverDeadPrimaryRecoveryName
-	}
 	if !analysisEntry.LastCheckValid {
 		return runEmergencyReparentOp(ctx, analysisEntry, recoveryName, false, logger)
 	}
@@ -569,18 +566,7 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 	analysisCode := analysisEntry.Analysis
 	switch analysisCode {
 	// primary
-	case inst.DeadPrimary:
-		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
-		if !isERSEnabled(analysisEntry) {
-			log.Infof("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode)
-			recoverySkipCode = RecoverySkipERSDisabled
-		}
-		if analysisEntry.PrimaryHealthUnhealthy {
-			recoveryFunc = recoverIncapacitatedPrimaryFunc
-		} else {
-			recoveryFunc = recoverDeadPrimaryFunc
-		}
-	case inst.DeadPrimaryAndSomeReplicas, inst.PrimaryDiskStalled, inst.PrimarySemiSyncBlocked:
+	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas, inst.PrimaryDiskStalled, inst.PrimarySemiSyncBlocked:
 		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
 		if !isERSEnabled(analysisEntry) {
 			log.Infof("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode)
@@ -720,7 +706,7 @@ func getCheckAndRecoverFunction(recoveryFunctionCode recoveryFunction) (
 
 // getRecoverFunctionName gets the recovery function name for the given code.
 // This name is used for metrics
-func getRecoverFunctionName(recoveryFunctionCode recoveryFunction, analysisCode inst.AnalysisCode) string {
+func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
 	switch recoveryFunctionCode {
 	case noRecoveryFunc:
 		return ""
@@ -733,9 +719,6 @@ func getRecoverFunctionName(recoveryFunctionCode recoveryFunction, analysisCode 
 	case recoverDeadPrimaryFunc:
 		return RecoverDeadPrimaryRecoveryName
 	case recoverIncapacitatedPrimaryFunc:
-		if analysisCode == inst.DeadPrimary {
-			return RecoverDeadPrimaryRecoveryName
-		}
 		return RecoverIncapacitatedPrimaryRecoveryName
 	case recoverPrimaryTabletDeletedFunc:
 		return RecoverPrimaryTabletDeletedRecoveryName
@@ -768,15 +751,11 @@ func isShardWideRecovery(recoveryFunctionCode recoveryFunction) bool {
 	}
 }
 
-// analysisEntriesHaveSameRecovery tells whether the two analysis entries have the same recovery function or not
-
+// analysisEntriesHaveSameRecovery tells whether the two analysis entries have the same recovery function or not.
 func analysisEntriesHaveSameRecovery(prevAnalysis, newAnalysis *inst.DetectionAnalysis) bool {
 	prevRecoveryFunctionCode, prevSkipRecovery := getCheckAndRecoverFunctionCode(prevAnalysis)
 	newRecoveryFunctionCode, newSkipRecovery := getCheckAndRecoverFunctionCode(newAnalysis)
-	if (prevRecoveryFunctionCode == newRecoveryFunctionCode) && (prevSkipRecovery == newSkipRecovery) {
-		return true
-	}
-	return prevAnalysis.Analysis == inst.DeadPrimary && newAnalysis.Analysis == inst.IncapacitatedPrimary && prevSkipRecovery == newSkipRecovery
+	return (prevRecoveryFunctionCode == newRecoveryFunctionCode) && (prevSkipRecovery == newSkipRecovery)
 }
 
 // executeCheckAndRecoverFunction will choose the correct check & recovery function based on analysis.
@@ -789,10 +768,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 	logger.Info("Starting checkAndRecover")
 
 	checkAndRecoverFunctionCode, recoverySkipCode := getCheckAndRecoverFunctionCode(analysisEntry)
-	recoveryName := getRecoverFunctionName(checkAndRecoverFunctionCode, analysisEntry.Analysis)
-	if analysisEntry.Analysis == inst.DeadPrimary {
-		recoveryName = RecoverDeadPrimaryRecoveryName
-	}
+	recoveryName := getRecoverFunctionName(checkAndRecoverFunctionCode)
 	recoveryLabels := []string{recoveryName, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard}
 	isActionableRecovery := hasActionableRecovery(checkAndRecoverFunctionCode)
 	analysisEntry.IsActionableRecovery = isActionableRecovery

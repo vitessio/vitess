@@ -196,8 +196,6 @@ func TestHealthCheckSchemaChangeSignal(t *testing.T) {
 	// Make sure the primary is the primary when the test starts.
 	// This state should be ensured before we actually test anything.
 	checkTabletType(t, primaryTablet.Alias, "PRIMARY")
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("SetWritable", primaryTablet.Alias, "true")
-	require.NoError(t, err)
 	require.NoError(t, primaryTablet.VttabletProcess.WaitForTabletStatus("SERVING"))
 
 	// Run a bunch of DDL queries and verify that the tables/views changed show up in the health stream.
@@ -222,8 +220,6 @@ func TestHealthCheckSchemaChangeSignal(t *testing.T) {
 		// Restore the primary tablet back to the original.
 		err = clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shardName, primaryTablet.Alias)
 		require.NoError(t, err)
-		err = clusterInstance.VtctldClientProcess.ExecuteCommand("SetWritable", primaryTablet.Alias, "true")
-		require.NoError(t, err)
 		waitForTabletHealth(t, ctx, &primaryTablet, true)
 		// Manual cleanup of processes
 		killTablets(tempTablet)
@@ -231,8 +227,6 @@ func TestHealthCheckSchemaChangeSignal(t *testing.T) {
 
 	// Now we reparent the cluster to the new tablet we have.
 	err = clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shardName, tempTablet.Alias)
-	require.NoError(t, err)
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("SetWritable", tempTablet.Alias, "true")
 	require.NoError(t, err)
 	require.NoError(t, tempTablet.VttabletProcess.WaitForTabletStatus("SERVING"))
 
