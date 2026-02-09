@@ -967,8 +967,6 @@ func TestBackupRetryPropagatesHashToManifest(t *testing.T) {
 	}, bh)
 	cancel()
 
-	time.Sleep(2 * time.Second)
-
 	require.NoError(t, err)
 	require.Equal(t, mysqlctl.BackupUsable, backupResult)
 
