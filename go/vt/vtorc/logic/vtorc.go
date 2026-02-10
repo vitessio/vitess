@@ -152,6 +152,11 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 		if discoveryTime > config.GetInstancePollTime() {
 			instancePollSecondsExceededCounter.Add(1)
 			log.Warningf("discoverInstance exceeded InstancePollSeconds for %+v, took %.4fs", tabletAlias, discoveryTime.Seconds())
+			// Consider this a type of healthcheck failure.
+			inst.RecordPrimaryHealthCheck(tabletAlias, false)
+		} else {
+			// Consider this a type of healthcheck success.
+			inst.RecordPrimaryHealthCheck(tabletAlias, true)
 		}
 	}()
 
