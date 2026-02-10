@@ -19,6 +19,7 @@ package vtgate
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -70,12 +71,6 @@ func (e *Executor) newExecute(
 	execPlan planExec, // used when there is a plan to execute
 	recResult txResult, // used when it's something simple like begin/commit/rollback/savepoint
 ) (err error) {
-	// Start an implicit transaction if necessary.
-	err = e.startTxIfNecessary(ctx, safeSession)
-	if err != nil {
-		return err
-	}
-
 	if bindVars == nil {
 		bindVars = make(map[string]*querypb.BindVariable)
 	}
@@ -127,6 +122,14 @@ func (e *Executor) newExecute(
 
 		if err != nil {
 			safeSession.ClearWarnings()
+			return err
+		}
+
+		// Start an implicit transaction if necessary. This is done after plan
+		// creation so we can check whether the plan actually accesses real table
+		// data, matching MySQL's behavior where only data-accessing statements
+		// start implicit transactions when autocommit=0.
+		if err = e.startTxIfNecessary(ctx, plan, stmt, safeSession); err != nil {
 			return err
 		}
 
@@ -267,13 +270,82 @@ func (e *Executor) handleTransactions(
 	return nil, nil
 }
 
-func (e *Executor) startTxIfNecessary(ctx context.Context, safeSession *econtext.SafeSession) error {
-	if !safeSession.Autocommit && !safeSession.InTransaction() {
+func (e *Executor) startTxIfNecessary(ctx context.Context, plan *engine.Plan, stmt sqlparser.Statement, safeSession *econtext.SafeSession) error {
+	if !safeSession.Autocommit && !safeSession.InTransaction() && planStartsImplicitTx(plan, stmt) {
 		if err := e.txConn.Begin(ctx, safeSession, nil); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// planStartsImplicitTx returns true if the given plan should start an implicit
+// transaction when autocommit is disabled. This matches MySQL's behavior where
+// only statements that access real table data start implicit transactions.
+//
+// The default is to start a transaction (matching the previous behavior),
+// and we opt out for specific statement types we've verified against MySQL
+// that don't start implicit transactions.
+func planStartsImplicitTx(plan *engine.Plan, stmt sqlparser.Statement) bool {
+	switch plan.QueryType {
+	case sqlparser.StmtSelect:
+		// Only start an implicit tx if the plan accesses real tables, not just dual.
+		return slices.ContainsFunc(plan.TablesUsed, func(table string) bool {
+			return !strings.HasSuffix(table, ".dual")
+		})
+	case sqlparser.StmtSet, sqlparser.StmtUse:
+		return false
+	case sqlparser.StmtShow:
+		return showStartsImplicitTx(stmt)
+	case sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback, sqlparser.StmtSRollback, sqlparser.StmtRelease:
+		// Transaction control statements are handled by handleTransactions and should not
+		// trigger an implicit transaction start.
+		return false
+	default:
+		return true
+	}
+}
+
+// showStartsImplicitTx returns true for SHOW commands that start implicit
+// transactions in MySQL when autocommit=0. Verified experimentally against
+// MySQL 8.0. Commands that only read server state (variables, status,
+// warnings, engines, plugins, privileges) do not start transactions.
+//
+// The default is true (start a transaction) for safety — we only return
+// false for commands we've explicitly verified against MySQL.
+func showStartsImplicitTx(stmt sqlparser.Statement) bool {
+	show, ok := stmt.(*sqlparser.Show)
+	if !ok {
+		return true
+	}
+	switch internal := show.Internal.(type) {
+	case *sqlparser.ShowCreate:
+		// SHOW CREATE TABLE/DATABASE/etc. do not start implicit transactions in MySQL.
+		return false
+	case *sqlparser.ShowOther:
+		// ShowOther covers SHOW PROCESSLIST, SHOW ENGINE STATUS, SHOW BINARY LOGS,
+		// SHOW GRANTS, SHOW REPLICA STATUS, etc. These are server-state commands
+		// that don't start implicit transactions in MySQL.
+		return false
+	case *sqlparser.ShowBasic:
+		// Some SHOW commands do not start implicit transactions in MySQL, but we need to look at the command to determine which ones.
+		switch internal.Command {
+		case sqlparser.VariableSession, sqlparser.VariableGlobal,
+			sqlparser.StatusSession, sqlparser.StatusGlobal,
+			sqlparser.Warnings, sqlparser.Engines, sqlparser.Plugins, sqlparser.Privilege,
+			sqlparser.OpenTable,
+			// Vitess-specific SHOW commands are handled internally by vtgate and don't access InnoDB data.
+			sqlparser.GtidExecGlobal, sqlparser.VGtidExecGlobal,
+			sqlparser.VitessMigrations, sqlparser.VitessReplicationStatus,
+			sqlparser.VitessShards, sqlparser.VitessTablets, sqlparser.VitessTarget, sqlparser.VitessVariables,
+			sqlparser.VschemaTables, sqlparser.VschemaKeyspaces, sqlparser.VschemaVindexes, sqlparser.Keyspace:
+			return false
+		default:
+			return true
+		}
+	default:
+		return true
+	}
 }
 
 func (e *Executor) insideTransaction(ctx context.Context, safeSession *econtext.SafeSession, logStats *logstats.LogStats, execPlan func() error) error {
