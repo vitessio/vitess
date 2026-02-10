@@ -22,6 +22,9 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/external/golib/sqlutils"
+	"vitess.io/vitess/go/vt/vtorc/db"
 )
 
 func resetPrimaryHealthState() {
@@ -71,6 +74,7 @@ func TestPrimaryHealthWindow(t *testing.T) {
 
 func TestPrimaryHealthStateEviction(t *testing.T) {
 	resetPrimaryHealthState()
+	db.ClearVTOrcDatabase()
 	window := primaryHealthWindow()
 	start := time.Now().Add(-2 * window)
 	aliasCount := 500
@@ -92,4 +96,13 @@ func TestPrimaryHealthStateEviction(t *testing.T) {
 	primaryHealthMu.Lock()
 	require.Equal(t, 0, len(primaryHealthByAlias))
 	primaryHealthMu.Unlock()
+
+	require.Eventually(t, func() bool {
+		count := 0
+		err := db.QueryVTOrc("select alias from primary_health", nil, func(_ sqlutils.RowMap) error {
+			count++
+			return nil
+		})
+		return err == nil && count == 0
+	}, time.Second, 10*time.Millisecond)
 }

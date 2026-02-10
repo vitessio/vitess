@@ -1188,6 +1188,7 @@ func TestStalePrimary(t *testing.T) {
 // This test is somewhere between a unit test, and an end-to-end test. It is specifically useful for testing situations which are hard to come by in end-to-end test, but require
 // real-world data to test specifically.
 func TestGetDetectionAnalysis(t *testing.T) {
+	defer resetPrimaryHealthState()
 	// The test is intended to be used as follows. The initial data is stored into the database. Following this, some specific queries are run that each individual test specifies to get the desired state.
 	tests := []struct {
 		name           string
