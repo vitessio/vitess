@@ -17,6 +17,7 @@
 package inst
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -66,4 +67,29 @@ func TestPrimaryHealthWindow(t *testing.T) {
 	_, ok := primaryHealthByAlias[alias]
 	primaryHealthMu.Unlock()
 	require.False(t, ok)
+}
+
+func TestPrimaryHealthStateEviction(t *testing.T) {
+	resetPrimaryHealthState()
+	window := primaryHealthWindow()
+	start := time.Now().Add(-2 * window)
+	aliasCount := 500
+
+	for i := range aliasCount {
+		alias := fmt.Sprintf("zone1-%010d", i)
+		recordPrimaryHealthCheckAt(alias, false, start)
+	}
+
+	primaryHealthMu.Lock()
+	require.Equal(t, aliasCount, len(primaryHealthByAlias))
+	primaryHealthMu.Unlock()
+
+	for i := range aliasCount {
+		alias := fmt.Sprintf("zone1-%010d", i)
+		_ = IsPrimaryHealthCheckUnhealthy(alias)
+	}
+
+	primaryHealthMu.Lock()
+	require.Equal(t, 0, len(primaryHealthByAlias))
+	primaryHealthMu.Unlock()
 }
