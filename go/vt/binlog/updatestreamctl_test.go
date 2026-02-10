@@ -266,8 +266,7 @@ func TestUpdateStreamImpl_StreamKeyRange_NotEnabled(t *testing.T) {
 		return nil
 	})
 
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "update stream service is not enabled")
+	assert.ErrorContains(t, err, "update stream service is not enabled")
 }
 
 func TestUpdateStreamImpl_StreamTables_NotEnabled(t *testing.T) {
@@ -289,8 +288,7 @@ func TestUpdateStreamImpl_StreamTables_NotEnabled(t *testing.T) {
 		return nil
 	})
 
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "update stream service is not enabled")
+	assert.ErrorContains(t, err, "update stream service is not enabled")
 }
 
 func TestUpdateStreamImpl_StreamKeyRange_InvalidPosition(t *testing.T) {
@@ -382,8 +380,7 @@ func TestUpdateStreamImpl_HandlePanic_WithError(t *testing.T) {
 		defer us.HandlePanic(&err)
 		panic(errors.New("test error panic"))
 	}()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "test error panic")
+	assert.ErrorContains(t, err, "test error panic")
 }
 
 func TestUpdateStreamImpl_RegisterService(t *testing.T) {
