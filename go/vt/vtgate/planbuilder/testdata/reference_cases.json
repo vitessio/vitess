@@ -950,7 +950,8 @@
           "Sharded": true
         },
         "FieldQuery": "select col from (select col from ref where 1 != 1) as sub where 1 != 1",
-        "Query": "select col from (select distinct col from ref where col = 1 limit 10) as sub"
+        "Query": "select col from (select distinct col from ref where col = 1 limit 10) as sub",
+        "Table": "ref"
       },
       "TablesUsed": [
         "user.ref"
