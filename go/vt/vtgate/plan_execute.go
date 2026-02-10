@@ -131,10 +131,8 @@ func (e *Executor) newExecute(
 		// creation so we can check whether the plan actually accesses real table
 		// data, matching MySQL's behavior where only data-accessing statements
 		// start implicit transactions when autocommit=0.
-		if planStartsImplicitTx(plan, stmt) {
-			if err = e.startTxIfNecessary(ctx, safeSession); err != nil {
-				return err
-			}
+		if err = e.startTxIfNecessary(ctx, plan, stmt, safeSession); err != nil {
+			return err
 		}
 
 		if plan.QueryType != sqlparser.StmtShow {
@@ -274,8 +272,8 @@ func (e *Executor) handleTransactions(
 	return nil, nil
 }
 
-func (e *Executor) startTxIfNecessary(ctx context.Context, safeSession *econtext.SafeSession) error {
-	if !safeSession.Autocommit && !safeSession.InTransaction() {
+func (e *Executor) startTxIfNecessary(ctx context.Context, plan *engine.Plan, stmt sqlparser.Statement, safeSession *econtext.SafeSession) error {
+	if !safeSession.Autocommit && !safeSession.InTransaction() && planStartsImplicitTx(plan, stmt) {
 		if err := e.txConn.Begin(ctx, safeSession, nil); err != nil {
 			return err
 		}
