@@ -653,6 +653,13 @@ func (be *BuiltinBackupEngine) backupFiles(
 		if err != nil {
 			return err
 		}
+		// Propagate retry results back to the original entries so the
+		// manifest records correct hashes and metadata.
+		for i, fe := range newFEs {
+			if fe.Name != "" {
+				fes[i] = fe
+			}
+		}
 	}
 
 	// Backup the MANIFEST file and apply retry logic.
