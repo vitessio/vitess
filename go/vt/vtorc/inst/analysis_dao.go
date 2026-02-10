@@ -445,7 +445,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			a.Description = "Primary cannot be reached by vtorc; some of its replicas are unreachable and none of its reachable replicas is replicating"
 			ca.hasShardWideAction = true
 			//
-		case a.IsClusterPrimary && a.LastCheckValid && a.PrimaryHealthUnhealthy:
+		case a.IsClusterPrimary && !a.LastCheckValid && a.PrimaryHealthUnhealthy:
 			a.Analysis = IncapacitatedPrimary
 			a.Description = "Primary is consistently timing out on health checks and is incapacitated"
 			ca.hasShardWideAction = true

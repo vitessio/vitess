@@ -220,7 +220,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 					MysqlPort:     6709,
 				},
 				DurabilityPolicy:              policy.DurabilityNone,
-				LastCheckValid:                1,
+				LastCheckValid:                0,
 				CountReplicas:                 2,
 				CountValidReplicas:            2,
 				CountValidReplicatingReplicas: 2,
@@ -249,7 +249,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 					MysqlPort:     6709,
 				},
 				DurabilityPolicy:              policy.DurabilityNone,
-				LastCheckValid:                1,
+				LastCheckValid:                0,
 				CountReplicas:                 4,
 				CountValidReplicas:            4,
 				CountValidReplicatingReplicas: 0,
@@ -263,7 +263,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 				RecordPrimaryHealthCheck("zon1-0000000100", false)
 				RecordPrimaryHealthCheck("zon1-0000000100", false)
 			},
-			codeWanted: IncapacitatedPrimary,
+			codeWanted: DeadPrimary,
 		},
 		{
 			name: "DeadPrimaryWithoutReplicas",
