@@ -544,3 +544,96 @@ func TestSysVarInnodbWaitTimeout(t *testing.T) {
 	// second run, to ensuring the setting is applied on the session and not just on next query after settings.
 	utils.AssertContains(t, conn, "select @@innodb_lock_wait_timeout, connection_id()", `INT64(240)`)
 }
+
+// TestImplicitTxOnAutocommitOff verifies that vtgate only starts implicit
+// transactions for statements that access real table data when autocommit=0,
+// matching MySQL's behavior.
+func TestImplicitTxOnAutocommitOff(t *testing.T) {
+	tests := []struct {
+		name     string
+		query    string
+		startsTx bool
+		setup    string // optional setup query run before disabling autocommit
+	}{
+		{
+			name:     "SELECT from real table starts tx",
+			query:    "select id from test where id = 1",
+			startsTx: true,
+			setup:    "insert into test (id, val1) values (1, null)",
+		},
+		{
+			name:     "SELECT @@variable does not start tx",
+			query:    "select @@autocommit",
+			startsTx: false,
+		},
+		{
+			name:     "SELECT 1 does not start tx",
+			query:    "select 1",
+			startsTx: false,
+		},
+		{
+			name:     "SELECT from dual does not start tx",
+			query:    "select 1 from dual",
+			startsTx: false,
+		},
+		{
+			name:     "INSERT starts tx",
+			query:    "insert into test (id, val1) values (999, null)",
+			startsTx: true,
+		},
+		{
+			name:     "SET variable does not start tx",
+			query:    "set sql_safe_updates = 1",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW TABLES starts tx",
+			query:    "show tables",
+			startsTx: true,
+		},
+		{
+			name:     "SHOW COLUMNS starts tx",
+			query:    "show columns from test",
+			startsTx: true,
+		},
+		{
+			name:     "SHOW VARIABLES does not start tx",
+			query:    "show variables like 'version'",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW WARNINGS does not start tx",
+			query:    "show warnings",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW STATUS does not start tx",
+			query:    "show status like 'Uptime'",
+			startsTx: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			conn, err := mysql.Connect(context.Background(), &vtParams)
+			require.NoError(t, err)
+			defer conn.Close()
+
+			utils.Exec(t, conn, "delete from test")
+			if tc.setup != "" {
+				utils.Exec(t, conn, tc.setup)
+			}
+
+			utils.Exec(t, conn, "set autocommit = 0")
+
+			result := utils.Exec(t, conn, tc.query)
+
+			inTx := result.StatusFlags&mysql.ServerStatusInTrans != 0
+			if tc.startsTx {
+				assert.True(t, inTx, "expected %q to start an implicit transaction", tc.query)
+			} else {
+				assert.False(t, inTx, "expected %q to NOT start an implicit transaction", tc.query)
+			}
+		})
+	}
+}
