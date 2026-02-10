@@ -29,6 +29,7 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/history"
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -388,6 +389,30 @@ func (si *schemaInit) getCurrentSchema(tableName string) (string, error) {
 	return currentTableSchema, nil
 }
 
+// alterTableAlgorithmStrategy returns the algorithm strategy to use for
+// sidecar table ALTER statements. On MySQL < 8.0.32 we force ALGORITHM=COPY
+// to work around a MySQL bug in the INSTANT DDL redo log format (8.0.29-8.0.31)
+// that could cause data corruption during crash recovery. On MySQL >= 8.0.32
+// the bug is fixed and we omit the clause, letting MySQL choose the most
+// efficient algorithm.
+func (si *schemaInit) alterTableAlgorithmStrategy() int {
+	capableOf := capabilities.MySQLVersionCapableOf(si.env.MySQLVersion())
+	if capableOf == nil {
+		return schemadiff.AlterTableAlgorithmStrategyCopy
+	}
+
+	capable, err := capableOf(capabilities.InstantDDLXtrabackupCapability)
+	if err != nil {
+		return schemadiff.AlterTableAlgorithmStrategyCopy
+	}
+
+	if capable {
+		return schemadiff.AlterTableAlgorithmStrategyNone
+	}
+
+	return schemadiff.AlterTableAlgorithmStrategyCopy
+}
+
 // findTableSchemaDiff gets the diff which needs to be applied
 // to the current table schema in order to reach the desired one.
 // The result will be an empty string if they match.
@@ -396,7 +421,7 @@ func (si *schemaInit) getCurrentSchema(tableName string) (string, error) {
 func (si *schemaInit) findTableSchemaDiff(tableName, current, desired string) (string, error) {
 	hints := &schemadiff.DiffHints{
 		TableCharsetCollateStrategy: schemadiff.TableCharsetCollateIgnoreEmpty,
-		AlterTableAlgorithmStrategy: schemadiff.AlterTableAlgorithmStrategyCopy,
+		AlterTableAlgorithmStrategy: si.alterTableAlgorithmStrategy(),
 	}
 	env := schemadiff.NewEnv(si.env, si.coll)
 	diff, err := schemadiff.DiffCreateTablesQueries(env, current, desired, hints)
