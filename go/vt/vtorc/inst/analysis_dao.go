@@ -632,7 +632,7 @@ func isStaleTopoPrimary(tablet *DetectionAnalysis, cluster *clusterAnalysis) boo
 	if tablet.TabletType != topodatapb.TabletType_PRIMARY {
 		return false
 	}
-	if cluster == nil || cluster.primaryTimestamp.IsZero() {
+	if cluster == nil {
 		return false
 	}
 

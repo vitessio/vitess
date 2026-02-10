@@ -53,7 +53,9 @@ func RecordPrimaryHealthCheck(tabletAlias string, success bool) {
 	recordPrimaryHealthCheckAt(tabletAlias, success, time.Now())
 }
 
-// IsPrimaryHealthCheckUnhealthy reports whether the primary health checks are unhealthy.
+// IsPrimaryHealthCheckUnhealthy reports whether the primary has an unhealthy healthcheck window.
+// If the alias is missing from memory, this schedules a best-effort load from the persisted
+// state and returns false so callers do not block on storage reads.
 func IsPrimaryHealthCheckUnhealthy(tabletAlias string) bool {
 	window := primaryHealthWindow()
 	if window <= 0 || tabletAlias == "" {
@@ -126,6 +128,8 @@ func IsPrimaryHealthCheckUnhealthy(tabletAlias string) bool {
 	return unhealthy
 }
 
+// recordPrimaryHealthCheckAt records a healthcheck outcome at a specific time. It updates the
+// in-memory window and persists or evicts state outside the mutex to avoid blocking readers.
 func recordPrimaryHealthCheckAt(tabletAlias string, success bool, now time.Time) {
 	window := primaryHealthWindow()
 	if window <= 0 || tabletAlias == "" {
@@ -160,6 +164,15 @@ func recordPrimaryHealthCheckAt(tabletAlias string, success bool, now time.Time)
 	}
 }
 
+// updatePrimaryHealthWindowLocked updates the current state of the primary's health. A primary is marked as
+// unhealthy when:
+//
+//   - At least minPrimaryHealthCheckFailures (2) failures exist in the window.
+//   - Failures outnumber successes.
+//
+// A primary is marked as healthy when there are no failures in the window and there is at least one success.
+// Requiring no failures in the window helps prevent flappiness and requires the primary to show it is
+// consistently successful to be considered healthy.
 func updatePrimaryHealthWindowLocked(state *primaryHealthState, now time.Time, window time.Duration) {
 	if state == nil {
 		return
@@ -197,10 +210,15 @@ func updatePrimaryHealthWindowLocked(state *primaryHealthState, now time.Time, w
 	}
 }
 
+// shouldEvictPrimaryHealthWindow reports whether a health window can be removed entirely.
+// We evict only when the primary is healthy and the window has no remaining events.
 func shouldEvictPrimaryHealthWindow(state *primaryHealthState) bool {
 	return state != nil && !state.unhealthy && len(state.events) == 0
 }
 
+// clonePrimaryHealthStateLocked creates a deep copy of the in-memory health state.
+// It must be called with primaryHealthMu held so callers can safely use the copy
+// after releasing the lock without racing on the underlying slice.
 func clonePrimaryHealthStateLocked(state *primaryHealthState) *primaryHealthState {
 	if state == nil {
 		return nil
@@ -215,10 +233,16 @@ func clonePrimaryHealthStateLocked(state *primaryHealthState) *primaryHealthStat
 	return cloned
 }
 
+// primaryHealthWindow returns the time window used for primary health analysis.
+// It is derived from the topo remote operation timeout to track transient flaps
+// without immediately triggering recovery.
 func primaryHealthWindow() time.Duration {
 	return topo.RemoteOperationTimeout * 4
 }
 
+// readPrimaryHealthState loads the persisted health window for a tablet alias.
+// It returns nil when no row exists, and wraps any unmarshaling errors with
+// context to help identify corrupt or incompatible state.
 func readPrimaryHealthState(tabletAlias string) (*primaryHealthState, error) {
 	query := "select health_state from primary_health where alias = ?"
 	var state *primaryHealthState
@@ -240,6 +264,9 @@ func readPrimaryHealthState(tabletAlias string) (*primaryHealthState, error) {
 	return state, nil
 }
 
+// writePrimaryHealthState persists the current health window for a tablet alias.
+// It is a no-op for empty aliases or nil state, and it deletes the row if the
+// state is already evictable.
 func writePrimaryHealthState(tabletAlias string, state *primaryHealthState) error {
 	if tabletAlias == "" || state == nil {
 		return nil
@@ -257,6 +284,8 @@ func writePrimaryHealthState(tabletAlias string, state *primaryHealthState) erro
 	return err
 }
 
+// deletePrimaryHealthState removes the persisted health window for a tablet alias.
+// It is safe to call repeatedly or with an empty alias.
 func deletePrimaryHealthState(tabletAlias string) error {
 	if tabletAlias == "" {
 		return nil
@@ -265,6 +294,8 @@ func deletePrimaryHealthState(tabletAlias string) error {
 	return err
 }
 
+// toProtoPrimaryHealthState converts the in-memory health window to its protobuf form.
+// Timestamps are stored as Unix nanoseconds so ordering remains stable across reloads.
 func toProtoPrimaryHealthState(state *primaryHealthState) *vtorcdata.PrimaryHealthState {
 	if state == nil {
 		return &vtorcdata.PrimaryHealthState{}
@@ -282,6 +313,8 @@ func toProtoPrimaryHealthState(state *primaryHealthState) *vtorcdata.PrimaryHeal
 	}
 }
 
+// fromProtoPrimaryHealthState converts the persisted protobuf health window into the
+// in-memory representation used by the primary health checks.
 func fromProtoPrimaryHealthState(pb *vtorcdata.PrimaryHealthState) *primaryHealthState {
 	if pb == nil {
 		return nil

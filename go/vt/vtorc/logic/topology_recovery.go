@@ -406,8 +406,14 @@ func recoverIncapacitatedPrimary(ctx context.Context, analysisEntry *inst.Detect
 	return runEmergencyReparentOp(ctx, analysisEntry, recoveryName, false, logger)
 }
 
+// healthzProbe is a swappable function to check a tablet's /healthz endpoint.
+// Tests can replace it to avoid network calls and control the reachability result.
 var healthzProbe = probeTabletHealthz
 
+// isPrimaryHealthzReachable loads the analyzed primary tablet from the vtorc DB
+// and checks whether its /healthz endpoint is reachable within a short timeout.
+// It returns false with a nil error when the tablet is missing or incomplete so
+// the caller can decide whether to skip recovery without failing outright.
 func isPrimaryHealthzReachable(analysisEntry *inst.DetectionAnalysis) (bool, error) {
 	if analysisEntry == nil || analysisEntry.AnalyzedInstanceAlias == "" {
 		return false, nil
