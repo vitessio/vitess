@@ -286,41 +286,69 @@ func (e *Executor) startTxIfNecessary(ctx context.Context, safeSession *econtext
 // planStartsImplicitTx returns true if the given plan should start an implicit
 // transaction when autocommit is disabled. This matches MySQL's behavior where
 // only statements that access real table data start implicit transactions.
-// SET, SHOW, USE, SELECT from dual, and other non-data statements do not.
+//
+// The default is to start a transaction (matching the previous behavior),
+// and we opt out for specific statement types we've verified against MySQL
+// that don't start implicit transactions.
 func planStartsImplicitTx(plan *engine.Plan, stmt sqlparser.Statement) bool {
 	switch plan.QueryType {
-	case sqlparser.StmtSelect, sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
+	case sqlparser.StmtSelect:
 		// Only start an implicit tx if the plan accesses real tables, not just dual.
 		return slices.ContainsFunc(plan.TablesUsed, func(table string) bool {
 			return !strings.HasSuffix(table, ".dual")
 		})
-	case sqlparser.StmtShow:
-		// Not all SHOW commands start implicit transactions - only the ones that access data inside
-		// of information_schema or other data dictionaries that are stored inside of InnoDB.
-		//
-		// Show commands that only read server state (variables, status, warnings, engines, plugins, privileges) do not start transactions.
-		show, ok := stmt.(*sqlparser.Show)
-		if !ok {
-			return false
-		}
-		basic, ok := show.Internal.(*sqlparser.ShowBasic)
-		if !ok {
-			return false
-		}
-		switch basic.Command {
-		case sqlparser.Table, sqlparser.Database, sqlparser.Column, sqlparser.Index,
-			sqlparser.Trigger, sqlparser.TableStatus,
-			sqlparser.Charset, sqlparser.Collation,
-			sqlparser.Function, sqlparser.Procedure:
-			return true
-		default:
-			return false
-		}
-	case sqlparser.StmtSavepoint:
-		// Creating a savepoint starts a transaction in MySQL when autocommit=0.
-		return true
-	default:
+	case sqlparser.StmtSet, sqlparser.StmtUse:
 		return false
+	case sqlparser.StmtShow:
+		return showStartsImplicitTx(stmt)
+	case sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback, sqlparser.StmtSRollback, sqlparser.StmtRelease:
+		// Transaction control statements are handled by handleTransactions and should not
+		// trigger an implicit transaction start.
+		return false
+	default:
+		return true
+	}
+}
+
+// showStartsImplicitTx returns true for SHOW commands that start implicit
+// transactions in MySQL when autocommit=0. Verified experimentally against
+// MySQL 8.0. Commands that only read server state (variables, status,
+// warnings, engines, plugins, privileges) do not start transactions.
+//
+// The default is true (start a transaction) for safety — we only return
+// false for commands we've explicitly verified against MySQL.
+func showStartsImplicitTx(stmt sqlparser.Statement) bool {
+	show, ok := stmt.(*sqlparser.Show)
+	if !ok {
+		return true
+	}
+	switch internal := show.Internal.(type) {
+	case *sqlparser.ShowCreate:
+		// SHOW CREATE TABLE/DATABASE/etc. do not start implicit transactions in MySQL.
+		return false
+	case *sqlparser.ShowOther:
+		// ShowOther covers SHOW PROCESSLIST, SHOW ENGINE STATUS, SHOW BINARY LOGS,
+		// SHOW GRANTS, SHOW REPLICA STATUS, etc. These are server-state commands
+		// that don't start implicit transactions in MySQL.
+		return false
+	case *sqlparser.ShowBasic:
+		// Some SHOW commands do not start implicit transactions in MySQL, but we need to look at the command to determine which ones.
+		switch internal.Command {
+		case sqlparser.VariableSession, sqlparser.VariableGlobal,
+			sqlparser.StatusSession, sqlparser.StatusGlobal,
+			sqlparser.Warnings, sqlparser.Engines, sqlparser.Plugins, sqlparser.Privilege,
+			sqlparser.OpenTable,
+			// Vitess-specific SHOW commands are handled internally by vtgate and don't access InnoDB data.
+			sqlparser.GtidExecGlobal, sqlparser.VGtidExecGlobal,
+			sqlparser.VitessMigrations, sqlparser.VitessReplicationStatus,
+			sqlparser.VitessShards, sqlparser.VitessTablets, sqlparser.VitessTarget, sqlparser.VitessVariables,
+			sqlparser.VschemaTables, sqlparser.VschemaKeyspaces, sqlparser.VschemaVindexes, sqlparser.Keyspace:
+			return false
+		default:
+			return true
+		}
+	default:
+		return true
 	}
 }
 

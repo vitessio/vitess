@@ -553,13 +553,11 @@ func TestImplicitTxOnAutocommitOff(t *testing.T) {
 		name     string
 		query    string
 		startsTx bool
-		setup    string // optional setup query run before disabling autocommit
 	}{
 		{
 			name:     "SELECT from real table starts tx",
 			query:    "select id from test where id = 1",
 			startsTx: true,
-			setup:    "insert into test (id, val1) values (1, null)",
 		},
 		{
 			name:     "SELECT @@variable does not start tx",
@@ -582,13 +580,39 @@ func TestImplicitTxOnAutocommitOff(t *testing.T) {
 			startsTx: true,
 		},
 		{
+			name:     "UPDATE starts tx",
+			query:    "update test set val1 = 'x' where id = 999",
+			startsTx: true,
+		},
+		{
+			name:     "DELETE starts tx",
+			query:    "delete from test where id = 999",
+			startsTx: true,
+		},
+		{
 			name:     "SET variable does not start tx",
 			query:    "set sql_safe_updates = 1",
 			startsTx: false,
 		},
 		{
+			name:     "COMMIT does not start tx",
+			query:    "commit",
+			startsTx: false,
+		},
+		{
+			name:     "ROLLBACK does not start tx",
+			query:    "rollback",
+			startsTx: false,
+		},
+		// SHOW commands that start implicit transactions (access information_schema / data dictionaries):
+		{
 			name:     "SHOW TABLES starts tx",
 			query:    "show tables",
+			startsTx: true,
+		},
+		{
+			name:     "SHOW DATABASES starts tx",
+			query:    "show databases",
 			startsTx: true,
 		},
 		{
@@ -597,8 +621,64 @@ func TestImplicitTxOnAutocommitOff(t *testing.T) {
 			startsTx: true,
 		},
 		{
+			name:     "SHOW INDEX starts tx",
+			query:    "show index from test",
+			startsTx: true,
+		},
+		{
+			name:     "SHOW TABLE STATUS starts tx",
+			query:    "show table status",
+			startsTx: true,
+		},
+		{
+			name:     "SHOW TRIGGERS starts tx",
+			query:    "show triggers",
+			startsTx: true,
+		},
+		{
+			name:     "SHOW CHARSET starts tx",
+			query:    "show charset",
+			startsTx: true,
+		},
+		{
+			name:     "SHOW COLLATION starts tx",
+			query:    "show collation",
+			startsTx: true,
+		},
+		{
+			name:     "SHOW FUNCTION STATUS starts tx",
+			query:    "show function status",
+			startsTx: true,
+		},
+		{
+			name:     "SHOW PROCEDURE STATUS starts tx",
+			query:    "show procedure status",
+			startsTx: true,
+		},
+		// SHOW commands that do NOT start implicit transactions (read server state only):
+		{
 			name:     "SHOW VARIABLES does not start tx",
 			query:    "show variables like 'version'",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW SESSION VARIABLES does not start tx",
+			query:    "show session variables like 'version'",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW GLOBAL VARIABLES does not start tx",
+			query:    "show global variables like 'version'",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW STATUS does not start tx",
+			query:    "show status like 'Uptime'",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW GLOBAL STATUS does not start tx",
+			query:    "show global status like 'Uptime'",
 			startsTx: false,
 		},
 		{
@@ -607,8 +687,132 @@ func TestImplicitTxOnAutocommitOff(t *testing.T) {
 			startsTx: false,
 		},
 		{
-			name:     "SHOW STATUS does not start tx",
-			query:    "show status like 'Uptime'",
+			name:     "SHOW ENGINES does not start tx",
+			query:    "show engines",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW PLUGINS does not start tx",
+			query:    "show plugins",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW PRIVILEGES does not start tx",
+			query:    "show privileges",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW OPEN TABLES does not start tx",
+			query:    "show open tables",
+			startsTx: false,
+		},
+		// ShowCreate commands do not start implicit transactions.
+		{
+			name:     "SHOW CREATE TABLE does not start tx",
+			query:    "show create table test",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW CREATE DATABASE does not start tx",
+			query:    "show create database " + keyspaceName,
+			startsTx: false,
+		},
+		// ShowOther commands are sent to MySQL as-is and do not start implicit transactions.
+		{
+			name:     "SHOW PROCESSLIST does not start tx",
+			query:    "show processlist",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW BINARY LOGS does not start tx",
+			query:    "show binary logs",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW GRANTS does not start tx",
+			query:    "show grants",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW ERRORS does not start tx",
+			query:    "show errors",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW EVENTS does not start tx",
+			query:    "show events",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW PROFILES does not start tx",
+			query:    "show profiles",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW REPLICA STATUS does not start tx",
+			query:    "show replica status",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW ENGINE INNODB STATUS does not start tx",
+			query:    "show engine innodb status",
+			startsTx: false,
+		},
+		// Vitess-specific SHOW commands are handled internally by vtgate
+		// and should not start implicit transactions.
+		{
+			name:     "SHOW VITESS_TABLETS does not start tx",
+			query:    "show vitess_tablets",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW VITESS_SHARDS does not start tx",
+			query:    "show vitess_shards",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW VITESS_TARGET does not start tx",
+			query:    "show vitess_target",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW VSCHEMA TABLES does not start tx",
+			query:    "show vschema tables",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW VSCHEMA KEYSPACES does not start tx",
+			query:    "show vschema keyspaces",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW VSCHEMA VINDEXES does not start tx",
+			query:    "show vschema vindexes",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW KEYSPACES does not start tx",
+			query:    "show keyspaces",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW VITESS_MIGRATIONS does not start tx",
+			query:    "show vitess_migrations",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW VITESS_REPLICATION_STATUS does not start tx",
+			query:    "show vitess_replication_status",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW GLOBAL GTID_EXECUTED does not start tx",
+			query:    "show global gtid_executed",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW GLOBAL VGTID_EXECUTED does not start tx",
+			query:    "show global vgtid_executed",
 			startsTx: false,
 		},
 	}
@@ -620,9 +824,7 @@ func TestImplicitTxOnAutocommitOff(t *testing.T) {
 			defer conn.Close()
 
 			utils.Exec(t, conn, "delete from test")
-			if tc.setup != "" {
-				utils.Exec(t, conn, tc.setup)
-			}
+			utils.Exec(t, conn, "delete from test_vdx")
 
 			utils.Exec(t, conn, "set autocommit = 0")
 
@@ -636,4 +838,44 @@ func TestImplicitTxOnAutocommitOff(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("ROLLBACK TO SAVEPOINT returns an error when no transaction has been started", func(t *testing.T) {
+		conn, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(t, err)
+		defer conn.Close()
+
+		utils.Exec(t, conn, "set autocommit = 0")
+
+		_, err = utils.ExecAllowError(t, conn, "ROLLBACK TO SAVEPOINT sp1")
+		require.Error(t, err)
+		sqlErr, ok := err.(*sqlerror.SQLError)
+		require.True(t, ok, "not a mysql error: %T", err)
+		assert.Equal(t, sqlerror.ERSPDoesNotExist, sqlErr.Number())
+		assert.Equal(t, sqlerror.SSClientError, sqlErr.SQLState())
+		assert.Contains(t, sqlErr.Error(), "SAVEPOINT does not exist: ROLLBACK TO SAVEPOINT sp1 (errno 1305) (sqlstate 42000)")
+
+		result := utils.Exec(t, conn, "select 1")
+		inTx := result.StatusFlags&mysql.ServerStatusInTrans != 0
+		assert.False(t, inTx, "expected ROLLBACK TO SAVEPOINT to not start a transaction")
+	})
+
+	t.Run("RELEASE SAVEPOINT returns an error when no transaction has been started", func(t *testing.T) {
+		conn, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(t, err)
+		defer conn.Close()
+
+		utils.Exec(t, conn, "set autocommit = 0")
+
+		_, err = utils.ExecAllowError(t, conn, "RELEASE SAVEPOINT sp1")
+		require.Error(t, err)
+		sqlErr, ok := err.(*sqlerror.SQLError)
+		require.True(t, ok, "not a mysql error: %T", err)
+		assert.Equal(t, sqlerror.ERSPDoesNotExist, sqlErr.Number())
+		assert.Equal(t, sqlerror.SSClientError, sqlErr.SQLState())
+		assert.Contains(t, sqlErr.Error(), "SAVEPOINT does not exist: RELEASE SAVEPOINT sp1 (errno 1305) (sqlstate 42000)")
+
+		result := utils.Exec(t, conn, "select 1")
+		inTx := result.StatusFlags&mysql.ServerStatusInTrans != 0
+		assert.False(t, inTx, "expected RELEASE SAVEPOINT to not start a transaction")
+	})
 }
