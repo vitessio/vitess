@@ -1,0 +1,36 @@
+'Component: Build/CI':
+- changed-files:
+  - any-glob-to-any-file:
+    - .github/actions/**
+    - .github/workflows/**
+    - .github/dependabot.yml
+    - .golangci.yml
+
+'Component: Docker':
+- changed-files:
+  - any-glob-to-any-file:
+    - docker/**
+
+'Component: Documentation':
+- changed-files:
+  - any-glob-to-any-file:
+    - doc/**
+    - changelog/**
+
+'Component: Java':
+- changed-files:
+  - any-glob-to-any-file:
+    - java/**
+
+'Component: VTAdmin':
+- changed-files:
+  - any-glob-to-any-file:
+    - web/vtadmin/**
+
+'Type: Dependencies':
+- changed-files:
+  - any-glob-to-any-file:
+    - go.mod
+    - go.sum
+    - java/pom.xml
+    - web/vtadmin/package*.json

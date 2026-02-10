@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM --platform=linux/amd64 golang:1.25.6-bookworm@sha256:2f768d462dbffbb0f0b3a5171009f162945b086f326e0b2a8fd5d29c3219ff14 AS builder
+FROM --platform=linux/amd64 golang:1.25.7-bookworm@sha256:db60aab8dc5b066b5018f1bcad7e70b688f31e2fa3427c1623585b680557f975 AS go-builder
 
 # Allows docker builds to set the BUILD_NUMBER
 ARG BUILD_NUMBER
@@ -35,12 +35,30 @@ RUN chown -R vitess:vitess /vt /home/vitess
 USER vitess
 
 # Re-copy sources from working tree.
+COPY --chown=vitess:vitess go.mod go.sum /vt/src/vitess.io/vitess/
+
+RUN go mod download
+
 COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
 
-RUN make install PREFIX=/vt/install
+RUN make install PREFIX=/vt/install NOVTADMINBUILD=1
+
+FROM --platform=linux/amd64 node:25-bookworm-slim@sha256:21d66e1cd4023c9608740b365e621c0a5f2d7a514b88ab88df5c12847b15320e AS vtadmin-builder
+
+WORKDIR /vt/web/vtadmin
+
+COPY web/vtadmin/package.json web/vtadmin/package-lock.json /vt/web/vtadmin/
+
+RUN npm ci
+
+COPY web/vtadmin/ /vt/web/vtadmin/
+
+RUN VITE_VTADMIN_API_ADDRESS="http://localhost:14200" \
+    VITE_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS="true" \
+    npm run build
 
 # Start over and build the final image.
-FROM --platform=linux/amd64 debian:bookworm-slim@sha256:56ff6d36d4eb3db13a741b342ec466f121480b5edded42e4b7ee850ce7a418ee
+FROM --platform=linux/amd64 debian:bookworm-slim@sha256:98f4b71de414932439ac6ac690d7060df1f27161073c5036a7553723881bffbe
 
 # Install dependencies
 COPY docker/utils/install_dependencies.sh /vt/dist/install_dependencies.sh
@@ -56,8 +74,9 @@ ENV VTDATAROOT /vt/vtdataroot
 ENV PATH $VTROOT/bin:$PATH
 
 # Copy artifacts from builder layer.
-COPY --from=builder --chown=vitess:vitess /vt/install /vt
-COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/web/vtadmin /vt/web/vtadmin
+COPY --from=go-builder --chown=vitess:vitess /vt/install /vt
+COPY --from=go-builder --chown=vitess:vitess /vt/src/vitess.io/vitess/web/vtadmin /vt/web/vtadmin
+COPY --from=vtadmin-builder --chown=vitess:vitess /vt/web/vtadmin/build /vt/web/vtadmin/build
 
 # Create mount point for actual data (e.g. MySQL data dir)
 VOLUME /vt/vtdataroot

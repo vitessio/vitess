@@ -138,6 +138,9 @@ func init() {
 	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtcombo", "vttablet", "vttestserver"} {
 		servenv.OnParseFor(cmd, registerPoolFlags)
 	}
+	for _, cmd := range []string{"vtcombo", "vttablet", "vtbackup", "vttestserver"} {
+		servenv.OnParseFor(cmd, registerMySQLDCloneFlags)
+	}
 }
 
 func registerMySQLDFlags(fs *pflag.FlagSet) {
@@ -145,7 +148,6 @@ func registerMySQLDFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &mycnfTemplateFile, "mysqlctl-mycnf-template", mycnfTemplateFile, "template file to use for generating the my.cnf file during server init")
 	utils.SetFlagStringVar(fs, &socketFile, "mysqlctl-socket", socketFile, "socket file to use for remote mysqlctl actions (empty for local actions)")
 	utils.SetFlagDurationVar(fs, &replicationConnectRetry, "replication-connect-retry", replicationConnectRetry, "how long to wait in between replica reconnect attempts. Only precise to the second.")
-	utils.SetFlagBoolVar(fs, &mysqlCloneEnabled, "mysql-clone-enabled", mysqlCloneEnabled, "Enable MySQL CLONE plugin and user for backup/replica provisioning (requires MySQL 8.0.17+)")
 }
 
 // MySQLCloneEnabled returns whether MySQL CLONE support is enabled.
@@ -156,6 +158,10 @@ func MySQLCloneEnabled() bool {
 // SetMySQLCloneEnabled sets the MySQL CLONE enabled flag. This is intended for testing.
 func SetMySQLCloneEnabled(enabled bool) {
 	mysqlCloneEnabled = enabled
+}
+
+func registerMySQLDCloneFlags(fs *pflag.FlagSet) {
+	utils.SetFlagBoolVar(fs, &mysqlCloneEnabled, "mysql-clone-enabled", mysqlCloneEnabled, "Enable MySQL CLONE plugin and user for backup/replica provisioning (requires MySQL 8.0.17+)")
 }
 
 func registerReparentFlags(fs *pflag.FlagSet) {
