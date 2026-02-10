@@ -257,9 +257,10 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			// But at this time the tests will fail as this event is unexpected. This is a TODO for the earliest
 			// opportunity to work on this.
 		case binlogdatapb.VEventType_GTID, binlogdatapb.VEventType_BEGIN, binlogdatapb.VEventType_FIELD,
-			binlogdatapb.VEventType_JOURNAL:
+			binlogdatapb.VEventType_JOURNAL, binlogdatapb.VEventType_ROWS_QUERY:
 			// We never have to send GTID, BEGIN, FIELD events on their own.
 			// A JOURNAL event is always preceded by a BEGIN and followed by a COMMIT.
+			// A ROWS_QUERY event always precedes the ROW events it describes.
 			// So, we don't have to send it right away.
 			bufferedEvents = append(bufferedEvents, vevent)
 		case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER,
@@ -619,6 +620,15 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		default:
 			return nil, fmt.Errorf("unexpected statement type %s in row-based replication: %q", cat, q.SQL)
 		}
+	case ev.IsRowsQuery():
+		query, err := ev.RowsQuery(vs.format)
+		if err != nil {
+			return nil, fmt.Errorf("can't parse ROWS_QUERY_LOG_EVENT: %v", err)
+		}
+		vevents = append(vevents, &binlogdatapb.VEvent{
+			Type:      binlogdatapb.VEventType_ROWS_QUERY,
+			Statement: query,
+		})
 	case ev.IsTableMap():
 		// This is very frequent. It precedes every row event.
 		// If it's the first time for a table, we generate a FIELD

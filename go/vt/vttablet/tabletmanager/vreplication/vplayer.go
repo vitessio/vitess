@@ -809,6 +809,8 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 				return io.EOF
 			}
 		}
+	case binlogdatapb.VEventType_ROWS_QUERY:
+		// The original SQL query is informational only; VReplication applies row changes directly.
 	case binlogdatapb.VEventType_JOURNAL:
 		if vp.vr.dbClient.InTransaction {
 			// Unreachable

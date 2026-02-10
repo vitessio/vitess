@@ -306,6 +306,9 @@ const (
 	VEventType_COPY_COMPLETED VEventType = 20
 	// Indicates rotation into a new binary log
 	VEventType_PREVIOUS_GTIDS VEventType = 21
+	// ROWS_QUERY contains the original SQL query that produced the subsequent
+	// ROW events. Only present when MySQL's binlog_rows_query_log_events is ON.
+	VEventType_ROWS_QUERY VEventType = 22
 )
 
 // Enum value maps for VEventType.
@@ -333,6 +336,7 @@ var (
 		19: "SAVEPOINT",
 		20: "COPY_COMPLETED",
 		21: "PREVIOUS_GTIDS",
+		22: "ROWS_QUERY",
 	}
 	VEventType_value = map[string]int32{
 		"UNKNOWN":        0,
@@ -357,6 +361,7 @@ var (
 		"SAVEPOINT":      19,
 		"COPY_COMPLETED": 20,
 		"PREVIOUS_GTIDS": 21,
+		"ROWS_QUERY":     22,
 	}
 )
 
@@ -3347,7 +3352,7 @@ const file_binlogdata_proto_rawDesc = "" +
 	"\aCopying\x10\x03\x12\v\n" +
 	"\aRunning\x10\x04\x12\t\n" +
 	"\x05Error\x10\x05\x12\v\n" +
-	"\aLagging\x10\x06*\xa1\x02\n" +
+	"\aLagging\x10\x06*\xb1\x02\n" +
 	"\n" +
 	"VEventType\x12\v\n" +
 	"\aUNKNOWN\x10\x00\x12\b\n" +
@@ -3377,7 +3382,9 @@ const file_binlogdata_proto_rawDesc = "" +
 	"\x06LASTPK\x10\x12\x12\r\n" +
 	"\tSAVEPOINT\x10\x13\x12\x12\n" +
 	"\x0eCOPY_COMPLETED\x10\x14\x12\x12\n" +
-	"\x0ePREVIOUS_GTIDS\x10\x15*'\n" +
+	"\x0ePREVIOUS_GTIDS\x10\x15\x12\x0e\n" +
+	"\n" +
+	"ROWS_QUERY\x10\x16*'\n" +
 	"\rMigrationType\x12\n" +
 	"\n" +
 	"\x06TABLES\x10\x00\x12\n" +

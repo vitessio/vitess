@@ -384,6 +384,20 @@ func NewTableMapEvent(f BinlogFormat, s *FakeBinlogStream, tableID uint64, tm *T
 	return NewMariadbBinlogEvent(ev)
 }
 
+// NewRowsQueryEvent returns a ROWS_QUERY_LOG_EVENT containing the given SQL query.
+func NewRowsQueryEvent(f BinlogFormat, s *FakeBinlogStream, query string) BinlogEvent {
+	length := 1 + // post-header (always 1)
+		len(query) + // SQL query
+		1 // NUL terminator
+	data := make([]byte, length)
+	data[0] = 1 // post-header length byte
+	copy(data[1:], query)
+	// data[length-1] is already 0 (NUL terminator)
+
+	ev := s.Packetize(f, eRowsQueryEvent, 0, data)
+	return NewMysql56BinlogEvent(ev)
+}
+
 // NewWriteRowsEvent returns a WriteRows event. Uses v2.
 func NewWriteRowsEvent(f BinlogFormat, s *FakeBinlogStream, tableID uint64, rows Rows) BinlogEvent {
 	return newRowsEvent(f, s, eWriteRowsEventV2, tableID, rows)

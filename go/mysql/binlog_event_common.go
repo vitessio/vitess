@@ -200,6 +200,24 @@ func (ev binlogEvent) IsDeleteRows() bool {
 		ev.Type() == eDeleteRowsEventV2
 }
 
+// IsRowsQuery implements BinlogEvent.IsRowsQuery().
+func (ev binlogEvent) IsRowsQuery() bool {
+	return ev.Type() == eRowsQueryEvent
+}
+
+// RowsQuery implements BinlogEvent.RowsQuery().
+//
+// Expected format (after common header):
+//
+//	# bytes   field
+//	1         post-header length (always 1)
+//	rest      NUL-terminated SQL query string
+func (ev binlogEvent) RowsQuery(f BinlogFormat) (string, error) {
+	data := ev.Bytes()[f.HeaderLength:]
+	// Skip 1-byte post-header, trim trailing NUL.
+	return string(bytes.TrimRight(data[1:], "\x00")), nil
+}
+
 // IsPseudo is always false for a native binlogEvent.
 func (ev binlogEvent) IsPseudo() bool {
 	return false

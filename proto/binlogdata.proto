@@ -321,6 +321,9 @@ enum VEventType {
   COPY_COMPLETED = 20;
   // Indicates rotation into a new binary log
   PREVIOUS_GTIDS = 21;
+  // ROWS_QUERY contains the original SQL query that produced the subsequent
+  // ROW events. Only present when MySQL's binlog_rows_query_log_events is ON.
+  ROWS_QUERY = 22;
 }
 
 

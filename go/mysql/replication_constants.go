@@ -96,8 +96,7 @@ const (
 	eHeartbeatEvent = 27
 	// Unused
 	// eIgnorableEvent         = 28
-	// Unused
-	// eRowsQueryEvent         = 29
+	eRowsQueryEvent     = 29
 	eWriteRowsEventV2   = 30
 	eUpdateRowsEventV2  = 31
 	eDeleteRowsEventV2  = 32
