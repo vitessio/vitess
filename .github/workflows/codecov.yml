@@ -76,7 +76,7 @@ jobs:
     - name: Run make tools
       if: steps.changes.outputs.changed_files == 'true'
       run: |
-        make BUILD_PROTOC=0 tools
+        make BUILD_JAVA=0 BUILD_PROTOC=0 tools
 
     - name: Run unit tests and generate code coverage reports
       if: steps.changes.outputs.changed_files == 'true'
