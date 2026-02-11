@@ -33,7 +33,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/constants/sidecar"
-	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
@@ -1024,7 +1023,7 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			name: "update message",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow: workflow,
-				Message:  ptr.Of("test message"),
+				Message:  new("test message"),
 			},
 			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:"%s" shard:"%s" filter:{rules:{match:"corder" filter:"select * from corder"} rules:{match:"customer" filter:"select * from customer"}}', cell = '', tablet_types = '', message = '%s' where id in (%d)`,
 				keyspace, shard, "test message", vreplID),
@@ -1033,7 +1032,7 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			name: "update message, initially non-empty message",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow: workflow,
-				Message:  ptr.Of("test message"),
+				Message:  new("test message"),
 			},
 			initiallyNonEmptyMessage: true,
 			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:"%s" shard:"%s" filter:{rules:{match:"corder" filter:"select * from corder"} rules:{match:"customer" filter:"select * from customer"}}', cell = '', tablet_types = '', message = '%s' where id in (%d)`,
@@ -1148,7 +1147,7 @@ func TestUpdateVReplicationWorkflows(t *testing.T) {
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest{
 				AllWorkflows: true,
 				State:        &running,
-				Message:      ptr.Of("hi"),
+				Message:      new("hi"),
 				StopPosition: &position,
 			},
 			query: fmt.Sprintf(`update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state = 'Running', message = 'hi', stop_pos = '%s' where id in (%s)`, position, strings.Join(vreplIDs, ", ")),

@@ -45,6 +45,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -52,6 +53,7 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -79,7 +81,7 @@ For example:
 // Flags
 var (
 	flavor           = flag.String("flavor", "mysql80", "comma-separated bootstrap flavor(s) to run against (when using Docker mode). Available flavors: all,"+flavors)
-	bootstrapVersion = flag.String("bootstrap-version", "52", "the version identifier to use for the docker images")
+	bootstrapVersion = flag.String("bootstrap-version", "53", "the version identifier to use for the docker images")
 	runCount         = flag.Int("runs", 1, "run each test this many times")
 	logPass          = flag.Bool("log-pass", false, "log test output even if it passes")
 	timeout          = flag.Duration("timeout", 30*time.Minute, "timeout for each test")
@@ -146,21 +148,11 @@ type Test struct {
 }
 
 func (t *Test) hasTag(want string) bool {
-	for _, got := range t.Tags {
-		if got == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(t.Tags, want)
 }
 
 func (t *Test) hasAnyTag(want []string) bool {
-	for _, tag := range want {
-		if t.hasTag(tag) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(want, t.hasTag)
 }
 
 // run executes a single try.
@@ -181,7 +173,7 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 
 	testCmd := t.Command
 	if len(testCmd) == 0 {
-		if strings.Contains(fmt.Sprintf("%v", t.File), ".go") {
+		if strings.Contains(t.File, ".go") {
 			testCmd = []string{"tools/e2e_go_test.sh"}
 			testCmd = append(testCmd, t.Args...)
 			if *keepData {
@@ -260,7 +252,7 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 		}
 	case <-timer.C:
 		t.logf("timeout exceeded")
-		cmd.Process.Signal(syscall.SIGINT)
+		_ = cmd.Process.Signal(syscall.SIGINT)
 		t.fail++
 		runErr = <-done
 	}
@@ -301,9 +293,7 @@ func loadConfig() (*Config, error) {
 		if config2 == nil {
 			log.Fatalf("could not load config file: %s", configFile)
 		}
-		for key, val := range config2.Tests {
-			config.Tests[key] = val
-		}
+		maps.Copy(config.Tests, config2.Tests)
 	}
 	return config, nil
 }
@@ -451,7 +441,7 @@ func main() {
 			command.Env = append(os.Environ(), "NOVTADMINBUILD=1")
 		}
 		if *buildTag != "" {
-			command.Env = append(command.Env, fmt.Sprintf(`EXTRA_BUILD_TAGS=%s`, *buildTag))
+			command.Env = append(command.Env, "EXTRA_BUILD_TAGS="+*buildTag)
 		}
 		if out, err := command.CombinedOutput(); err != nil {
 			log.Fatalf("make build failed; exit code: %d, error: %v\n%s",
@@ -496,10 +486,7 @@ func main() {
 
 	// Start the requested number of parallel runners.
 	for i := 0; i < *parallel; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			for test := range next {
 				select {
 				case <-stop:
@@ -559,7 +546,7 @@ func main() {
 				passed++
 				mu.Unlock()
 			}
-		}()
+		})
 	}
 
 	// Close the done channel when all the runners stop.

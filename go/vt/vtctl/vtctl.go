@@ -99,7 +99,6 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
@@ -3823,7 +3822,7 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 				TabletSelectionPreference: &tsp,
 			}
 			if onddl != int32(textutil.SimulatedNullInt) {
-				rpcReq.(*tabletmanagerdatapb.UpdateVReplicationWorkflowRequest).OnDdl = ptr.Of(binlogdatapb.OnDDLAction(onddl))
+				rpcReq.(*tabletmanagerdatapb.UpdateVReplicationWorkflowRequest).OnDdl = new(binlogdatapb.OnDDLAction(onddl))
 			}
 		}
 		results, err = wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun, rpcReq, *shards) // Only update currently uses the new RPC path
