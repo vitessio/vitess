@@ -35,11 +35,6 @@ func Init() {
 	mu.Lock()
 	defer mu.Unlock()
 
-	if err := log.Init(); err != nil {
-		fmt.Fprintf(os.Stderr, "log.Init: %v\n", err)
-		os.Exit(1)
-	}
-
 	initStartTime = time.Now()
 
 	// Uptime metric

@@ -18,16 +18,4 @@ limitations under the License.
 
 package servenv
 
-import (
-	"fmt"
-	"os"
-
-	"vitess.io/vitess/go/vt/log"
-)
-
-func Init() {
-	if err := log.Init(); err != nil {
-		fmt.Fprintf(os.Stderr, "log.Init: %v\n", err)
-		os.Exit(1)
-	}
-}
+func Init() {}

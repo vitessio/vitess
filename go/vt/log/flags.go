@@ -44,10 +44,12 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&logLevel, "log-level", "info", "minimum log level when structured logging is enabled (debug, info, warn, error)")
 }
 
-// Init configures the logging backend. When --log-structured is set, a slog.JSONHandler is
-// configured. Otherwise, glog is used.
+// Init configures the logging backend. By default, a slog.JSONHandler is
+// configured. If --log-structured=false is set, the deprecated glog backend
+// is used instead.
 func Init() error {
 	if !logStructured {
+		fmt.Fprintln(os.Stderr, "WARNING: glog is deprecated and will be removed in v25")
 		return nil
 	}
 

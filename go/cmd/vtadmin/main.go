@@ -220,12 +220,22 @@ func registerFlags() {
 		"Note: any whitespace characters are replaced with hyphens."
 	rootCmd.Flags().StringVar(&cacheRefreshKey, "cache-refresh-key", "vt-cache-refresh", cacheRefreshHelp)
 
+	// Structured logging flags.
+	log.RegisterFlags(rootCmd.Flags())
+
 	// glog flags, no better way to do this
 	rootCmd.Flags().AddGoFlag(flag.Lookup("v"))
 	rootCmd.Flags().AddGoFlag(flag.Lookup("logtostderr"))
 	rootCmd.Flags().AddGoFlag(flag.Lookup("alsologtostderr"))
 	rootCmd.Flags().AddGoFlag(flag.Lookup("stderrthreshold"))
 	rootCmd.Flags().AddGoFlag(flag.Lookup("log_dir"))
+
+	const deprecationMsg = "glog and its flags have been deprecated, use the default structured logging instead (\"--log-structured\")"
+	rootCmd.Flags().MarkDeprecated("v", deprecationMsg)
+	rootCmd.Flags().MarkDeprecated("logtostderr", deprecationMsg)
+	rootCmd.Flags().MarkDeprecated("alsologtostderr", deprecationMsg)
+	rootCmd.Flags().MarkDeprecated("stderrthreshold", deprecationMsg)
+	rootCmd.Flags().MarkDeprecated("log_dir", deprecationMsg)
 
 	servenv.RegisterMySQLServerFlags(rootCmd.Flags())
 

@@ -370,6 +370,17 @@ func moveFlags(name string, fs *pflag.FlagSet) {
 	fs.AddGoFlag(flag.Lookup("log_dir"))
 	fs.AddGoFlag(flag.Lookup("vmodule"))
 
+	// glog is deprecated in favor of structured logging (--log-structured).
+	// These flags will be removed in v25.
+	const deprecationMsg = "glog and its flags have been deprecated, use the default structured logging instead (\"--log-structured\")"
+	_ = fs.MarkDeprecated("logtostderr", deprecationMsg)
+	_ = fs.MarkDeprecated("log_backtrace_at", deprecationMsg)
+	_ = fs.MarkDeprecated("alsologtostderr", deprecationMsg)
+	_ = fs.MarkDeprecated("stderrthreshold", deprecationMsg)
+	_ = fs.MarkDeprecated("log_dir", deprecationMsg)
+	_ = fs.MarkDeprecated("vmodule", deprecationMsg)
+	_ = fs.MarkDeprecated("v", deprecationMsg)
+
 	pflag.CommandLine = fs
 }
 
