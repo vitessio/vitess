@@ -65,7 +65,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: sqlSchema,
 			VSchema:   vSchema,
 		}
-		err = clusterInstance.StartUnshardedKeyspace(*customerKeyspace, 1, true)
+		err = clusterInstance.StartUnshardedKeyspace(*customerKeyspace, 1, true, cell)
 		if err != nil {
 			return 1, err
 		}
@@ -75,7 +75,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: "",
 			VSchema:   "",
 		}
-		err = clusterInstance.StartUnshardedKeyspace(*commerceKeyspace, 1, true)
+		err = clusterInstance.StartUnshardedKeyspace(*commerceKeyspace, 1, true, cell)
 		if err != nil {
 			return 1, err
 		}
