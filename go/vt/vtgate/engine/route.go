@@ -565,9 +565,12 @@ func removeForUpdateLocks(stmt sqlparser.Statement) (string, bool) {
 		return "", false
 	}
 
+	// Clone the statement before modifying it, since the plan is shared across executions
+	clonedSel := sqlparser.CloneRefOfSelect(sel)
+
 	// Remove the lock clause
-	sel.Lock = sqlparser.NoLock
+	clonedSel.Lock = sqlparser.NoLock
 
 	// Convert back to SQL string
-	return sqlparser.String(sel), true
+	return sqlparser.String(clonedSel), true
 }
