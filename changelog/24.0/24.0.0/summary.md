@@ -65,9 +65,9 @@ Note: A shard must be specified when using tablet targeting. Like shard targetin
 
 #### <a id="structured-logging"/>Structured logging</a>
 
-Vitess now supports structured JSON logging. To enable it, pass `--log-structured` and optionally `--log-level` (one of `debug`, `info`, `warn`, `error`; default `info`). When enabled, all log output is emitted as JSON to stderr.
+Vitess now uses structured JSON logging by default. Log output is emitted as JSON to stderr. To configure the minimum log level, pass `--log-level` (one of `debug`, `info`, `warn`, `error`; default `info`). To revert to the previous `glog` backend, pass `--log-structured=false`.
 
-`glog` remains the default logging backend in v24. In v25, the default will change to `--log-structured=true` and `glog` will be deprecated. `glog` will be removed in v26.
+`glog` is deprecated as of v24 and will be removed in v25.
 
 ### <a id="minor-changes-vreplication"/>VReplication</a>
 
