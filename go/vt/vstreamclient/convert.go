@@ -15,7 +15,7 @@ type VStreamScanner interface {
 	VStreamScan(fields []*querypb.Field, row []sqltypes.Value, rowEvent *binlogdatapb.RowEvent, rowChange *binlogdatapb.RowChange) error
 }
 
-// copyRowToStruct builds a customer from a row event
+// copyRowToStruct builds a struct from a row event
 // TODO: this is very rudimentary mapping that only works for top-level fields
 func copyRowToStruct(shard shardConfig, row []sqltypes.Value, vPtr reflect.Value) error {
 	for fieldName, m := range shard.fieldMap {

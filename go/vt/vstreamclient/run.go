@@ -287,7 +287,7 @@ func (v *VStreamClient) flush(ctx context.Context) error {
 		table.resetBatch()
 	}
 
-	// always store the latest vgtid, even if there are no customers to store
+	// always store the latest vgtid, even if there are no rows to store
 	err := updateLatestVGtid(ctx, v.session, v.name, v.vgtidStateKeyspace, v.vgtidStateTable, v.latestVgtid)
 	if err != nil {
 		return err
