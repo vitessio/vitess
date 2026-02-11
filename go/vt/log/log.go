@@ -79,14 +79,31 @@ func log(level slog.Level, depth int, msg string, attrs ...slog.Attr) {
 func logGlog(level slog.Level, depth int, msg string, attrs ...slog.Attr) {
 	depth++
 
-	args := make([]any, 0, len(attrs)+2)
-	args = append(args, msg)
-	for i, attr := range attrs {
-		// Add a space to separate the message from the start of the attributes.
-		if i == 0 {
-			args = append(args, " ")
+	if len(attrs) == 0 {
+		switch {
+		case level >= slog.LevelError:
+			glog.ErrorDepth(depth, msg)
+		case level >= slog.LevelWarn:
+			glog.WarningDepth(depth, msg)
+		default:
+			glog.InfoDepth(depth, msg)
 		}
 
+		return
+	}
+
+	args := make([]any, 0, len(attrs)+2)
+
+	// Append the message, and add a space to separate the message from the start of the attributes. glog
+	// follows fmt.Print semantics, which concatenates two entries if either one is a string, and only
+	// separates with a space if both are non-strings.
+	args = append(args, msg, " ")
+
+	if len(args) > 0 {
+		args = append(args, " ")
+	}
+
+	for _, attr := range attrs {
 		args = append(args, attr)
 	}
 
