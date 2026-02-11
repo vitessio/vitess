@@ -1,7 +1,7 @@
 ARG bootstrap_version
 ARG image="vitess/bootstrap:${bootstrap_version}-common"
 
-FROM --platform=${BUILDPLATFORM} "${image}"
+FROM --platform="${TARGET_BUILD_PLATFORM:-linux/amd64}" "${image}"
 
 USER root
 
