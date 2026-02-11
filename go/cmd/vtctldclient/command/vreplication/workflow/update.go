@@ -118,6 +118,7 @@ func commandUpdate(cmd *cobra.Command, args []string) error {
 	// We've already validated any provided value, if one WAS provided.
 	// Now we need to do the mapping from the string representation to
 	// the enum value.
+	//nolint:staticcheck // false positive as `val` IS used within the block
 	if val, ok := binlogdatapb.OnDDLAction_value[strings.ToUpper(updateOptions.OnDDL)]; ok {
 		req.TabletRequest.OnDdl = new(binlogdatapb.OnDDLAction(val))
 	}

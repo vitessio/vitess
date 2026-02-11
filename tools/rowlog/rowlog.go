@@ -247,11 +247,11 @@ func outputHeader(plan *TablePlan) {
 
 func getHeader(plan *TablePlan) string {
 	s := ""
-	var sSb250 strings.Builder
+	var sb strings.Builder
 	for _, field := range plan.fields {
-		sSb250.WriteString(field.Name + "\t")
+		sb.WriteString(field.Name + "\t")
 	}
-	s += sSb250.String()
+	s += sb.String()
 	s += "op\ttimestamp\tgtid"
 	return s
 }
@@ -259,11 +259,11 @@ func getHeader(plan *TablePlan) string {
 func outputRows(plan *TablePlan, rows []*RowLog) {
 	for _, row := range rows {
 		s := ""
-		var sSb260 strings.Builder
+		var sb strings.Builder
 		for _, val := range row.values {
-			sSb260.WriteString(val + "\t")
+			sb.WriteString(val + "\t")
 		}
-		s += sSb260.String()
+		s += sb.String()
 		s += fmt.Sprintf("%s\t%s\t%s", row.op, row.when, row.gtid)
 		output(plan.keyspace, s)
 	}
