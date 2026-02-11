@@ -40,11 +40,12 @@ func TestPrimaryHealthWindow(t *testing.T) {
 
 	recordPrimaryHealthCheckAt(alias, false, start)
 	recordPrimaryHealthCheckAt(alias, false, start.Add(100*time.Millisecond))
+	recordPrimaryHealthCheckAt(alias, false, start.Add(200*time.Millisecond))
 
 	window := primaryHealthWindow()
 	primaryHealthMu.Lock()
 	state := primaryHealthByAlias[alias]
-	updatePrimaryHealthWindowLocked(state, start.Add(100*time.Millisecond), window)
+	updatePrimaryHealthWindowLocked(state, start.Add(200*time.Millisecond), window)
 	require.True(t, state.unhealthy)
 	primaryHealthMu.Unlock()
 

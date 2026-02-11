@@ -162,6 +162,9 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 				// Consider this a type of healthcheck failure.
 				inst.RecordPrimaryHealthCheck(tabletAlias, false)
 			}
+		} else {
+			// Consider this a type of healthcheck pass.
+			inst.RecordPrimaryHealthCheck(tabletAlias, true)
 		}
 	}()
 

@@ -30,7 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/db"
 )
 
-const minPrimaryHealthCheckFailures = 2
+const minPrimaryHealthCheckFailures = 3
 
 type primaryHealthEvent struct {
 	at      time.Time
@@ -38,21 +38,14 @@ type primaryHealthEvent struct {
 }
 
 type primaryHealthState struct {
-	events                 []primaryHealthEvent
-	unhealthy              bool
-	lastPersistedAt        time.Time
-	lastPersistedUnhealthy bool
-	lastPersistedCount     int
+	events    []primaryHealthEvent
+	unhealthy bool
 }
 
 var (
 	primaryHealthMu      sync.Mutex
 	primaryHealthByAlias = make(map[string]*primaryHealthState)
-	primaryHealthLoadMu  sync.Mutex
-	primaryHealthLoads   = make(map[string]struct{})
 )
-
-const primaryHealthPersistInterval = 5 * time.Second
 
 // RecordPrimaryHealthCheck records the outcome of a primary health check.
 func RecordPrimaryHealthCheck(tabletAlias string, success bool) {
@@ -60,7 +53,7 @@ func RecordPrimaryHealthCheck(tabletAlias string, success bool) {
 }
 
 // IsPrimaryHealthCheckUnhealthy reports whether the primary has an unhealthy healthcheck window.
-// If the alias is missing from memory, this triggers a best-effort load from persisted
+// If the alias is missing from memory, this schedules a best-effort load from the persisted
 // state and returns false so callers do not block on storage reads.
 func IsPrimaryHealthCheckUnhealthy(tabletAlias string) bool {
 	window := primaryHealthWindow()
@@ -75,7 +68,29 @@ func IsPrimaryHealthCheckUnhealthy(tabletAlias string) bool {
 	}()
 
 	if state == nil {
-		return loadPrimaryHealthState(tabletAlias)
+		go func() {
+			persisted, err := readPrimaryHealthState(tabletAlias)
+			if err != nil {
+				log.Warningf("failed to read primary health state for %s: %v", tabletAlias, err)
+				return
+			}
+			if persisted == nil {
+				return
+			}
+			_ = func() *primaryHealthState {
+				primaryHealthMu.Lock()
+				defer primaryHealthMu.Unlock()
+				if primaryHealthByAlias[tabletAlias] == nil {
+					primaryHealthByAlias[tabletAlias] = persisted
+				}
+				return primaryHealthByAlias[tabletAlias]
+			}()
+		}()
+		return false
+	}
+
+	if state == nil {
+		return false
 	}
 
 	evict, unhealthy := func() (bool, bool) {
@@ -97,9 +112,11 @@ func IsPrimaryHealthCheckUnhealthy(tabletAlias string) bool {
 	}
 
 	if evict {
-		if err := deletePrimaryHealthState(tabletAlias); err != nil {
-			log.Warningf("failed to delete primary health state for %s: %v", tabletAlias, err)
-		}
+		go func() {
+			if err := deletePrimaryHealthState(tabletAlias); err != nil {
+				log.Warningf("failed to delete primary health state for %s: %v", tabletAlias, err)
+			}
+		}()
 		return false
 	}
 	return unhealthy
@@ -136,7 +153,7 @@ func recordPrimaryHealthCheckAt(tabletAlias string, success bool, now time.Time)
 		}
 		return
 	}
-	if err := maybeWritePrimaryHealthState(tabletAlias, stateCopy); err != nil {
+	if err := writePrimaryHealthState(tabletAlias, stateCopy); err != nil {
 		log.Warningf("failed to write primary health state for %s: %v", tabletAlias, err)
 	}
 }
@@ -144,7 +161,7 @@ func recordPrimaryHealthCheckAt(tabletAlias string, success bool, now time.Time)
 // updatePrimaryHealthWindowLocked updates the current state of the primary's health. A primary is marked as
 // unhealthy when:
 //
-//   - At least minPrimaryHealthCheckFailures (2) failures exist in the window.
+//   - At least minPrimaryHealthCheckFailures failures exist in the window.
 //   - Failures outnumber successes.
 //
 // A primary is marked as healthy when there are no failures in the window and there is at least one success.
@@ -201,10 +218,7 @@ func clonePrimaryHealthStateLocked(state *primaryHealthState) *primaryHealthStat
 		return nil
 	}
 	cloned := &primaryHealthState{
-		unhealthy:              state.unhealthy,
-		lastPersistedAt:        state.lastPersistedAt,
-		lastPersistedUnhealthy: state.lastPersistedUnhealthy,
-		lastPersistedCount:     state.lastPersistedCount,
+		unhealthy: state.unhealthy,
 	}
 	if len(state.events) > 0 {
 		cloned.events = make([]primaryHealthEvent, len(state.events))
@@ -213,84 +227,11 @@ func clonePrimaryHealthStateLocked(state *primaryHealthState) *primaryHealthStat
 	return cloned
 }
 
-// loadPrimaryHealthState schedules a background load of the persisted state and
-// returns false immediately to avoid blocking on storage during analysis queries.
-// It coalesces concurrent loads so only one read happens per alias at a time.
-func loadPrimaryHealthState(tabletAlias string) bool {
-	if tabletAlias == "" {
-		return false
-	}
-	shouldLoad := func() bool {
-		primaryHealthLoadMu.Lock()
-		defer primaryHealthLoadMu.Unlock()
-		if _, ok := primaryHealthLoads[tabletAlias]; ok {
-			return false
-		}
-		primaryHealthLoads[tabletAlias] = struct{}{}
-		return true
-	}()
-	if !shouldLoad {
-		return false
-	}
-
-	go func() {
-		defer func() {
-			primaryHealthLoadMu.Lock()
-			defer primaryHealthLoadMu.Unlock()
-			delete(primaryHealthLoads, tabletAlias)
-		}()
-
-		persisted, err := readPrimaryHealthState(tabletAlias)
-		if err != nil {
-			log.Warningf("failed to read primary health state for %s: %v", tabletAlias, err)
-			return
-		}
-		if persisted == nil {
-			return
-		}
-		primaryHealthMu.Lock()
-		defer primaryHealthMu.Unlock()
-		if primaryHealthByAlias[tabletAlias] == nil {
-			primaryHealthByAlias[tabletAlias] = persisted
-		}
-	}()
-
-	return false
-}
-
 // primaryHealthWindow returns the time window used for primary health analysis.
 // It is derived from the topo remote operation timeout to track transient flaps
 // without immediately triggering recovery.
 func primaryHealthWindow() time.Duration {
-	return topo.RemoteOperationTimeout * 4
-}
-
-// maybeWritePrimaryHealthState persists the health window only when it changes
-// or when enough time has elapsed since the last write.
-func maybeWritePrimaryHealthState(tabletAlias string, state *primaryHealthState) error {
-	if tabletAlias == "" || state == nil {
-		return nil
-	}
-	if shouldEvictPrimaryHealthWindow(state) {
-		return deletePrimaryHealthState(tabletAlias)
-	}
-	now := time.Now()
-	if now.Sub(state.lastPersistedAt) < primaryHealthPersistInterval &&
-		state.unhealthy == state.lastPersistedUnhealthy &&
-		len(state.events) == state.lastPersistedCount {
-		return nil
-	}
-	if err := writePrimaryHealthState(tabletAlias, state); err != nil {
-		return err
-	}
-	primaryHealthMu.Lock()
-	defer primaryHealthMu.Unlock()
-	if current := primaryHealthByAlias[tabletAlias]; current != nil {
-		current.lastPersistedAt = now
-		current.lastPersistedUnhealthy = current.unhealthy
-		current.lastPersistedCount = len(current.events)
-	}
-	return nil
+	return topo.RemoteOperationTimeout * 5
 }
 
 // readPrimaryHealthState loads the persisted health window for a tablet alias.

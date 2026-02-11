@@ -233,6 +233,9 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 				RecordPrimaryHealthCheck("zon1-0000000100", true)
 				RecordPrimaryHealthCheck("zon1-0000000100", false)
 				RecordPrimaryHealthCheck("zon1-0000000100", false)
+				RecordPrimaryHealthCheck("zon1-0000000100", true)
+				RecordPrimaryHealthCheck("zon1-0000000100", false)
+				RecordPrimaryHealthCheck("zon1-0000000100", false)
 			},
 			codeWanted: IncapacitatedPrimary,
 		},
