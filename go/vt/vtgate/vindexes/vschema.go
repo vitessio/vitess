@@ -1046,7 +1046,14 @@ outer:
 			continue
 		}
 		for _, toTable := range rule.ToTables {
-			if _, ok := vschema.RoutingRules[rule.FromTable]; ok {
+			// Check both routing rules and view routing rules for duplicates,
+			// since a prior rule may have been stored in either map.
+			_, inRouting := vschema.RoutingRules[rule.FromTable]
+			_, inViewRouting := vschema.ViewRoutingRules[rule.FromTable]
+
+			// If the rule already exists in either map, record a duplicate error
+			// in RoutingRules and clean up any view routing entry.
+			if inRouting || inViewRouting {
 				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
 					Error: vterrors.Errorf(
 						vtrpcpb.Code_ALREADY_EXISTS,
@@ -1054,6 +1061,7 @@ outer:
 						rule.FromTable,
 					),
 				}
+				delete(vschema.ViewRoutingRules, rule.FromTable)
 				continue outer
 			}
 
@@ -1573,21 +1581,21 @@ func (vschema *VSchema) FindView(keyspace, name string) sqlparser.TableStatement
 	}, nil).(sqlparser.TableStatement)
 }
 
-// FindRoutedView finds a view, checking the view routing rules first. Returns the view's definition if found,
-// along with the target view name if a routing rule matched.
+// FindRoutedView finds a view, checking the view routing rules first. Returns the view's definition
+// if found, along with the target view name if a routing rule matched.
 func (vschema *VSchema) FindRoutedView(keyspace, viewName string, tabletType topodatapb.TabletType) (sqlparser.TableStatement, *sqlparser.TableName) {
-	// Apply keyspace routing rules first
+	// Apply keyspace routing rules first.
 	keyspace = vschema.findRoutedKeyspace(keyspace, tabletType)
 
-	// Build lookup keys
+	// Build lookup keys.
 	qualified := viewName
 	if keyspace != "" {
 		qualified = keyspace + "." + viewName
 	}
 	fqvn := qualified + TabletTypeSuffix[tabletType]
 
-	// Check view routing rules
-	for _, name := range []string{fqvn, qualified, viewName + TabletTypeSuffix[tabletType], viewName} {
+	// Check view routing rules.
+	for _, name := range []string{fqvn, qualified} {
 		if rr, ok := vschema.ViewRoutingRules[name]; ok {
 			routedView := vschema.FindView(rr.TargetKeyspace, rr.TargetViewName)
 			routedViewName := sqlparser.NewTableNameWithQualifier(rr.TargetViewName, rr.TargetKeyspace)
