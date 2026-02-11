@@ -120,7 +120,7 @@ func (v *VStreamClient) Run(ctx context.Context) error {
 				var table *TableConfig
 				table, ok = v.tables[ev.RowEvent.TableName]
 				if !ok {
-					return errors.New("vstreamclient: unexpected table name: " + ev.FieldEvent.TableName)
+					return errors.New("vstreamclient: unexpected table name: " + ev.RowEvent.TableName)
 				}
 
 				err = table.handleRowEvent(ev.RowEvent, &v.stats)
