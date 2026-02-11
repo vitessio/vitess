@@ -377,7 +377,6 @@ func recoverDeadPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalys
 // because the primary is still alive and reachable, so we want to try to do a planned reparent if possible, and only
 // do an emergency reparent if the planned one fails.
 func recoverIncapacitatedPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	ersEnabled := isERSEnabled(analysisEntry)
 	recoveryName := RecoverIncapacitatedPrimaryRecoveryName
 	reachable, reachErr := isPrimaryHealthzReachable(analysisEntry)
 	if reachErr != nil {
@@ -387,9 +386,6 @@ func recoverIncapacitatedPrimary(ctx context.Context, analysisEntry *inst.Detect
 		logger.Infof("Skipping IncapacitatedPrimary recovery; primary is not reachable via healthz: %s. There is likely a network partition between vtorc and the primary or the primary is down. In the latter case, RecoverDeadPrimary should trigger.",
 			analysisEntry.AnalyzedInstanceAlias)
 		return false, nil, nil
-	}
-	if ersEnabled && !analysisEntry.LastCheckValid {
-		return runEmergencyReparentOp(ctx, analysisEntry, recoveryName, false, logger)
 	}
 	recoveryAttempted, topologyRecovery, err = runPlannedReparentOp(ctx, analysisEntry, recoveryName, logger)
 	if err == nil {

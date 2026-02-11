@@ -55,6 +55,11 @@ func (wf writerFunc) Write(p []byte) (int, error) {
 	return wf(p)
 }
 
+func seedTestAnalysisRow(row sqlutils.RowMap) error {
+	_ = row
+	return nil
+}
+
 func TestAnalysisEntriesHaveSameRecovery(t *testing.T) {
 	tests := []struct {
 		prevAnalysisCode inst.AnalysisCode
@@ -520,7 +525,6 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// reset vtorc db after every test
 			oldDB := db.Db
 			defer func() {
 				db.Db = oldDB
@@ -531,8 +535,6 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 				analysis.SetValuesFromTabletInfo()
 				rowMaps = append(rowMaps, analysis.ConvertToRowMap())
 			}
-
-			// set replication analysis in Vtorc DB.
 			db.Db = test.NewTestDB([][]sqlutils.RowMap{rowMaps})
 
 			err := recheckPrimaryHealth(&inst.DetectionAnalysis{

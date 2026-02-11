@@ -287,8 +287,12 @@ func runDDLAndWaitForSchemaChangeSignal(t *testing.T, vtgateConn *mysql.Conn, pr
 	streamErrCh := make(chan error, 1)
 	go func() {
 		streamErrCh <- conn.StreamHealth(streamCtx, func(shr *querypb.StreamHealthResponse) error {
-			respCh <- shr
-			return nil
+			select {
+			case respCh <- shr:
+				return nil
+			case <-streamCtx.Done():
+				return streamCtx.Err()
+			}
 		})
 		close(respCh)
 	}()

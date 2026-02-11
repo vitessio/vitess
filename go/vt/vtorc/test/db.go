@@ -56,6 +56,11 @@ func (t *DB) QueryVTOrc(query string, argsArray []any, onRow func(sqlutils.RowMa
 	return nil
 }
 
+// IsTestDB marks this DB as a test double.
+func (t *DB) IsTestDB() bool {
+	return true
+}
+
 func (t *DB) getRowMapsForQuery() ([]sqlutils.RowMap, error) {
 	if len(t.rowMaps) == 0 {
 		return nil, errors.New("no rows left to return. We received more queries than expected")
