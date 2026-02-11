@@ -1269,5 +1269,25 @@
         "Query": "select c.`column_name` from (select `table_name` from information_schema.`tables` where table_schema != 'information_schema' limit 1) as `tables`, information_schema.`columns` as c where `tables`.`table_name` = c.`table_name`"
       }
     }
+  },
+  {
+    "comment": "equality predicate on table_schema with LIMIT inside derived table",
+    "query": "SELECT c.column_name, c.data_type, c.table_name, c.table_schema, c.is_nullable FROM information_schema.columns c JOIN ( SELECT table_name FROM information_schema.tables WHERE table_schema = 'ks' LIMIT 1000 ) tables ON tables.table_name = c.table_name ORDER BY c.table_name",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "SELECT c.column_name, c.data_type, c.table_name, c.table_schema, c.is_nullable FROM information_schema.columns c JOIN ( SELECT table_name FROM information_schema.tables WHERE table_schema = 'ks' LIMIT 1000 ) tables ON tables.table_name = c.table_name ORDER BY c.table_name",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select c.`column_name`, c.data_type, c.`table_name`, c.table_schema, c.is_nullable from (select `table_name` from information_schema.`tables` where 1 != 1) as `tables`, information_schema.`columns` as c where 1 != 1",
+        "Query": "select c.`column_name`, c.data_type, c.`table_name`, c.table_schema, c.is_nullable from (select `table_name` from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */ limit 1000) as `tables`, information_schema.`columns` as c where `tables`.`table_name` = c.`table_name` order by c.`table_name` asc",
+        "SysTableTableSchema": "['ks']"
+      }
+    }
   }
 ]

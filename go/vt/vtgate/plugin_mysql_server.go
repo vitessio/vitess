@@ -617,9 +617,12 @@ func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 	srv := &mysqlServer{}
 	srv.vtgateHandle = newVtgateHandler(vtgate)
 	if mysqlServerPort >= 0 {
-		srv.tcpListener, err = mysql.NewListener(
-			mysqlTCPVersion,
-			net.JoinHostPort(mysqlServerBindAddress, strconv.Itoa(mysqlServerPort)),
+		listener, err := servenv.Listen(mysqlTCPVersion, net.JoinHostPort(mysqlServerBindAddress, strconv.Itoa(mysqlServerPort)))
+		if err != nil {
+			log.Exitf("servenv.Listen failed: %v", err)
+		}
+		srv.tcpListener, err = mysql.NewFromListener(
+			listener,
 			authServer,
 			srv.vtgateHandle,
 			mysqlConnReadTimeout,
@@ -631,13 +634,13 @@ func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 			mysqlServerMultiQuery,
 		)
 		if err != nil {
-			log.Error(fmt.Sprintf("mysql.NewListener failed: %v", err))
+			log.Error(fmt.Sprintf("mysql.NewFromListener failed: %v", err))
 			os.Exit(1)
 		}
 		if mysqlSslCert != "" && mysqlSslKey != "" {
 			tlsVersion, err := vttls.TLSVersionToNumber(mysqlTLSMinVersion)
 			if err != nil {
-				log.Error(fmt.Sprintf("mysql.NewListener failed: %v", err))
+				log.Error(fmt.Sprintf("mysql.NewFromListener failed: %v", err))
 				os.Exit(1)
 			}
 

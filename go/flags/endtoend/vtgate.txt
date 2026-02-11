@@ -189,6 +189,7 @@ Flags:
       --redact-debug-ui-queries                                          redact full queries and bind variables from debug UI
       --remote-operation-timeout duration                                time to wait for a remote operation (default 15s)
       --retry-count int                                                  retry count (default 2)
+      --reuse-port                                                       Enable SO_REUSEPORT when binding sockets; available on Linux 3.9+ (default false)
       --schema-change-signal                                             Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work (default true)
       --security-policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --service-map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice

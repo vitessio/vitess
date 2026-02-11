@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # Build the Vitess Go binaries
-FROM --platform=linux/amd64 golang:1.25.6-bookworm@sha256:fdd8e8344873d406d3aa2edf975e5f8f36a85201dd0d745bd76c446fe39ffcfd AS go-builder
+FROM --platform=linux/amd64 golang:1.26.0-bookworm@sha256:bfab16ae1c7f13e06060055b73a71773199c65060f9417fcd0e55197d07fc53b AS go-builder
 
 # Allows docker builds to set the BUILD_NUMBER
 ARG BUILD_NUMBER

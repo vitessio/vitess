@@ -45,7 +45,7 @@ func Run(bindAddress string, port int) {
 	serveGRPC()
 	serveSocketFile()
 
-	l, err := net.Listen("tcp", net.JoinHostPort(bindAddress, strconv.Itoa(port)))
+	l, err := Listen("tcp", net.JoinHostPort(bindAddress, strconv.Itoa(port)))
 	if err != nil {
 		log.Error(fmt.Sprint(err))
 		os.Exit(1)

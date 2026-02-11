@@ -1,5 +1,7 @@
+//go:build windows
+
 /*
-Copyright 2024 The Vitess Authors.
+Copyright 2026 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,20 +16,19 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package ptr
+package netutil
 
-// Of returns a pointer to the given value
+import (
+	"fmt"
+	"net"
+	"runtime"
+)
+
+// ListenReusePort binds a host:port and sets SO_REUSEPORT on the listener.
+// SO_REUSEPORT allows multiple processes to bind to the same port, enabling
+// kernel-level load balancing of incoming connections.
 //
-//go:fix inline
-func Of[T any](x T) *T {
-	return new(x)
-}
-
-// Unwrap dereferences the given pointer if it's not nil.
-// Otherwise, it returns default_
-func Unwrap[T any](x *T, default_ T) T {
-	if x != nil {
-		return *x
-	}
-	return default_
+// Requires Linux 3.9+ or equivalent kernel support.
+func ListenReusePort(network, address string) (net.Listener, error) {
+	return nil, fmt.Errorf("SO_REUSEPORT: not supported on OS: %s", runtime.GOOS)
 }

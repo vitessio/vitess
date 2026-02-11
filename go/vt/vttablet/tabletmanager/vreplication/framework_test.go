@@ -580,7 +580,7 @@ func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan *V
 			}
 
 			if !match {
-				t.Errorf("log:\n%q, does not match log %d:\n%q", got, i, log)
+				t.Errorf("log:\n%v, does not match log %d:\n%q", got, i, log)
 			}
 		case <-time.After(5 * time.Second):
 			t.Errorf("no logs received, expecting %s", log)
