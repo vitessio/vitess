@@ -195,9 +195,27 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 	return v, nil
 }
 
-// Close closes the VStreamClient, which stops the stream and cleans up resources.
+// Close flushes any pending buffered data and cleans up resources. Note that the VStream
+// itself is stopped by cancelling the context passed to Run(), not by calling Close().
+// Close should be called after Run() returns to ensure all buffered data is flushed.
 func (v *VStreamClient) Close(ctx context.Context) error {
-	return nil
+	// Flush any remaining buffered data that hasn't been flushed yet
+	hasData := false
+	for _, table := range v.tables {
+		if len(table.currentBatch) > 0 {
+			hasData = true
+			break
+		}
+	}
+
+	if !hasData {
+		return nil
+	}
+
+	// Temporarily set lastFlushedAt to zero to force flush regardless of minFlushDuration
+	v.stats.LastFlushedAt = time.Time{}
+
+	return v.flush(ctx)
 }
 
 func getShardsByKeyspace(ctx context.Context, session *vtgateconn.VTGateSession) (map[string][]string, error) {
