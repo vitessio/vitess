@@ -166,9 +166,6 @@ func initializeShardsToWatch() error {
 
 // shouldWatchTablet checks if the given tablet is part of the watch list.
 func shouldWatchTablet(tablet *topodatapb.Tablet) bool {
-	if len(cellsToWatch) > 0 && !slices.Contains(cellsToWatch, tablet.GetAlias().GetCell()) {
-		return false
-	}
 	// If we are watching all keyspaces, then we want to watch this tablet too.
 	if len(shardsToWatch) == 0 {
 		return true
@@ -292,6 +289,7 @@ func refreshTabletsUsing(ctx context.Context, loader func(tabletAlias string), f
 				}
 			}
 		}()
+
 		// Refresh the filtered tablets and forget stale tablets.
 		query := "select alias from vitess_tablet where cell = ?"
 		args := sqlutils.Args(cell)
@@ -323,20 +321,14 @@ func refreshTabletInfoOfShard(ctx context.Context, keyspace, shard string) {
 }
 
 func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, loader func(tabletAlias string), forceRefresh bool, tabletsToIgnore []string) {
-	tablets, err := ts.GetTabletsByShard(ctx, keyspace, shard)
+	tablets, err := ts.GetTabletsByShardCell(ctx, keyspace, shard, cellsToWatch)
 	if err != nil {
 		log.Error(fmt.Sprintf("Error fetching tablets for keyspace/shard %v/%v: %v", keyspace, shard, err))
 		return
 	}
-	matchedTablets := make([]*topo.TabletInfo, 0, len(tablets))
-	for _, t := range tablets {
-		if shouldWatchTablet(t.Tablet) {
-			matchedTablets = append(matchedTablets, t)
-		}
-	}
 	query := "select alias from vitess_tablet where keyspace = ? and shard = ?"
 	args := sqlutils.Args(keyspace, shard)
-	refreshTablets(matchedTablets, query, args, loader, forceRefresh, tabletsToIgnore)
+	refreshTablets(tablets, query, args, loader, forceRefresh, tabletsToIgnore)
 }
 
 func refreshTablets(tablets []*topo.TabletInfo, query string, args []any, loader func(tabletAlias string), forceRefresh bool, tabletsToIgnore []string) {
