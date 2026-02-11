@@ -1,6 +1,7 @@
 package vstreamclient
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -86,7 +87,7 @@ func WithFlags(flags *vtgatepb.VStreamFlags) Option {
 func WithEventFunc(fn EventFunc, eventTypes ...binlogdatapb.VEventType) Option {
 	return func(v *VStreamClient) error {
 		if len(eventTypes) == 0 {
-			return fmt.Errorf("vstreamclient: no event types provided")
+			return errors.New("vstreamclient: no event types provided")
 		}
 
 		if v.eventFuncs == nil {

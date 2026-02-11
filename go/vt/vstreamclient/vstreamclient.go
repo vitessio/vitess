@@ -87,7 +87,7 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 	}
 
 	if conn == nil {
-		return nil, fmt.Errorf("vstreamclient: conn is required")
+		return nil, errors.New("vstreamclient: conn is required")
 	}
 
 	// initialize the VStreamClient, with options and settings to be set later
@@ -124,7 +124,7 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 	// validate required options and set defaults where possible
 
 	if len(v.tables) == 0 {
-		return nil, fmt.Errorf("vstreamclient: no tables configured")
+		return nil, errors.New("vstreamclient: no tables configured")
 	}
 
 	// convert the tables into filter + rules

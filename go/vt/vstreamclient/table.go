@@ -1,6 +1,7 @@
 package vstreamclient
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"reflect"
@@ -106,7 +107,7 @@ func (v *VStreamClient) initTables(tables []TableConfig) error {
 	}
 
 	if len(tables) == 0 {
-		return fmt.Errorf("vstreamclient: no tables provided")
+		return errors.New("vstreamclient: no tables provided")
 	}
 
 	for _, table := range tables {
@@ -177,7 +178,7 @@ func validateTableConfig(providedTables, dbTables map[string]*TableConfig) error
 
 	if !maps.Equal(providedTablesMap, dbTablesMap) {
 		// TODO: this could be more user-friendly and show the differences
-		return fmt.Errorf("vstreamclient: provided tables do not match stored tables")
+		return errors.New("vstreamclient: provided tables do not match stored tables")
 	}
 
 	return nil
