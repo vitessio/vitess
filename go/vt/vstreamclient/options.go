@@ -13,7 +13,7 @@ import (
 var (
 	// DefaultMinFlushDuration is the default minimum duration between flushes, used if not explicitly
 	// set using WithMinFlushDuration. This can be safely modified if needed before calling New.
-	DefaultMinFlushDuration = 5 * time.Second
+	DefaultMinFlushDuration = 30 * time.Second
 
 	// DefaultMaxRowsPerFlush is the default number of rows to buffer per table, used if not explicitly
 	// set in the table configuration. This same number is also used to chunk rows when calling flush.
