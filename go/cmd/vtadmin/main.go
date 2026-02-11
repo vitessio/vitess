@@ -60,13 +60,20 @@ var (
 
 	rootCmd = &cobra.Command{
 		Use: "vtadmin",
-		PreRun: func(cmd *cobra.Command, args []string) {
+		PreRunE: func(cmd *cobra.Command, args []string) error {
 			_flag.TrickGlog()
+
+			if err := log.Init(); err != nil {
+				return err
+			}
+
 			logutil.PurgeLogs()
 
 			if opts.EnableTracing || httpOpts.EnableTracing {
 				startTracing(cmd)
 			}
+
+			return nil
 		},
 		Run: run,
 		PostRun: func(cmd *cobra.Command, args []string) {
