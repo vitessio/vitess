@@ -233,6 +233,10 @@ func (v *VStreamClient) monitorHeartbeat(ctx context.Context, cancel context.Can
 // we might consider exporting Flush, but we'd need to have a mutex or something to block the stream from
 // processing, and technically we'd need to let it run until a commit event happens.
 func (v *VStreamClient) flush(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("vstreamclient: context error before flush: %w", err)
+	}
+
 	// if the lastFlushedVgtid is the same as the latestVgtid, we don't need to do anything
 	if proto.Equal(v.lastFlushedVgtid, v.latestVgtid) {
 		return nil
@@ -262,6 +266,10 @@ func (v *VStreamClient) flush(ctx context.Context) error {
 	for _, table := range v.tables {
 		// flush the rows to the database, chunked using the max batch size
 		for chunk := range slices.Chunk(table.currentBatch, table.MaxRowsPerFlush) {
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("vstreamclient: context error during flush: %w", err)
+			}
+
 			err := table.FlushFn(ctx, chunk, FlushMeta{
 				Keyspace: table.Keyspace,
 				Table:    table.Table,
