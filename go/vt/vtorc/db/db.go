@@ -40,7 +40,12 @@ func (m *vtorcDB) QueryVTOrc(query string, argsArray []any, onRow func(sqlutils.
 
 // OpenTopology returns the DB instance for the vtorc backed database
 func OpenVTOrc() (db *sql.DB, err error) {
-	var fromCache bool
+	db, _, err = OpenVTOrcWithCache()
+	return db, err
+}
+
+// OpenVTOrcWithCache returns the DB instance and whether it came from cache.
+func OpenVTOrcWithCache() (db *sql.DB, fromCache bool, err error) {
 	db, fromCache, err = sqlutils.GetSQLiteDB(config.GetSQLiteDataFile())
 	if err == nil && !fromCache {
 		log.Infof("Connected to vtorc backend: sqlite on %v", config.GetSQLiteDataFile())
@@ -52,7 +57,7 @@ func OpenVTOrc() (db *sql.DB, err error) {
 		db.SetMaxOpenConns(1)
 		db.SetMaxIdleConns(1)
 	}
-	return db, err
+	return db, fromCache, err
 }
 
 // registerVTOrcDeployment updates the vtorc_db_deployments table upon successful deployment

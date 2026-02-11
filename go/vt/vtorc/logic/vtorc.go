@@ -149,6 +149,7 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 	var (
 		instance *inst.Instance
 		found    bool
+		err      error
 	)
 	latency.Start("total") // start the total stopwatch (not changed anywhere else)
 	defer func() {
@@ -160,11 +161,6 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 			if instance != nil && instance.TabletType == topodatapb.TabletType_PRIMARY {
 				// Consider this a type of healthcheck failure.
 				inst.RecordPrimaryHealthCheck(tabletAlias, false)
-			}
-		} else {
-			if instance != nil && instance.TabletType == topodatapb.TabletType_PRIMARY {
-				// Consider this a type of healthcheck success.
-				inst.RecordPrimaryHealthCheck(tabletAlias, true)
 			}
 		}
 	}()
@@ -192,7 +188,7 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 	discoveriesCounter.Add(1)
 
 	// First we've ever heard of this instance. Continue investigation:
-	instance, err := inst.ReadTopologyInstanceBufferable(tabletAlias, latency)
+	instance, err = inst.ReadTopologyInstanceBufferable(tabletAlias, latency)
 	// panic can occur (IO stuff). Therefore it may happen
 	// that instance is nil. Check it, but first get the timing metrics.
 	totalLatency := latency.Elapsed("total")

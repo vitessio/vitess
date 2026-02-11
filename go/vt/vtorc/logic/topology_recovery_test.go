@@ -139,8 +139,13 @@ func TestAnalysisEntriesHaveSameRecovery(t *testing.T) {
 }
 
 func TestElectNewPrimaryPanic(t *testing.T) {
-	orcDb, err := db.OpenVTOrc()
+	orcDb, fromCache, err := db.OpenVTOrcWithCache()
 	require.NoError(t, err)
+	defer func() {
+		if !fromCache {
+			require.NoError(t, orcDb.Close())
+		}
+	}()
 	oldTs := ts
 	defer func() {
 		ts = oldTs
@@ -174,8 +179,13 @@ func TestElectNewPrimaryPanic(t *testing.T) {
 }
 
 func TestRecoveryRegistration(t *testing.T) {
-	orcDb, err := db.OpenVTOrc()
+	orcDb, fromCache, err := db.OpenVTOrcWithCache()
 	require.NoError(t, err)
+	defer func() {
+		if !fromCache {
+			require.NoError(t, orcDb.Close())
+		}
+	}()
 	oldTs := ts
 	defer func() {
 		ts = oldTs
@@ -689,8 +699,13 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 			}
 
 			if tt.setupDB {
-				orcDb, err := db.OpenVTOrc()
+				orcDb, fromCache, err := db.OpenVTOrcWithCache()
 				require.NoError(t, err)
+				defer func() {
+					if !fromCache {
+						require.NoError(t, orcDb.Close())
+					}
+				}()
 				_, err = orcDb.Exec("delete from topology_recovery_steps")
 				require.NoError(t, err)
 				_, err = orcDb.Exec("delete from topology_recovery")

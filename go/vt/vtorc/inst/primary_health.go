@@ -78,10 +78,6 @@ func IsPrimaryHealthCheckUnhealthy(tabletAlias string) bool {
 		return loadPrimaryHealthState(tabletAlias)
 	}
 
-	if state == nil {
-		return false
-	}
-
 	evict, unhealthy := func() (bool, bool) {
 		primaryHealthMu.Lock()
 		defer primaryHealthMu.Unlock()
@@ -253,10 +249,10 @@ func loadPrimaryHealthState(tabletAlias string) bool {
 			return
 		}
 		primaryHealthMu.Lock()
+		defer primaryHealthMu.Unlock()
 		if primaryHealthByAlias[tabletAlias] == nil {
 			primaryHealthByAlias[tabletAlias] = persisted
 		}
-		primaryHealthMu.Unlock()
 	}()
 
 	return false
@@ -288,12 +284,12 @@ func maybeWritePrimaryHealthState(tabletAlias string, state *primaryHealthState)
 		return err
 	}
 	primaryHealthMu.Lock()
+	defer primaryHealthMu.Unlock()
 	if current := primaryHealthByAlias[tabletAlias]; current != nil {
 		current.lastPersistedAt = now
 		current.lastPersistedUnhealthy = current.unhealthy
 		current.lastPersistedCount = len(current.events)
 	}
-	primaryHealthMu.Unlock()
 	return nil
 }
 
