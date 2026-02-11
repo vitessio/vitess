@@ -65,7 +65,7 @@ func usage() {
 		s := "rowlog --ids <id list csv> --table <table_name> --pk <primary_key_only_ints> --source <source_keyspace> --target <target_keyspace> "
 		s += "--vtctld <vtctl url> --vtgate <vtgate url> --cells <cell names csv> --topo-implementation <topo type, eg: etcd2> "
 		s += "--topo-global-server-address <top url> --topo-global-root <topo root dir>\n"
-		logger.Printf(s)
+		logger.Printf("%s", s)
 	}
 }
 
@@ -247,9 +247,11 @@ func outputHeader(plan *TablePlan) {
 
 func getHeader(plan *TablePlan) string {
 	s := ""
+	var sSb250 strings.Builder
 	for _, field := range plan.fields {
-		s += field.Name + "\t"
+		sSb250.WriteString(field.Name + "\t")
 	}
+	s += sSb250.String()
 	s += "op\ttimestamp\tgtid"
 	return s
 }
@@ -257,9 +259,11 @@ func getHeader(plan *TablePlan) string {
 func outputRows(plan *TablePlan, rows []*RowLog) {
 	for _, row := range rows {
 		s := ""
+		var sSb260 strings.Builder
 		for _, val := range row.values {
-			s += val + "\t"
+			sSb260.WriteString(val + "\t")
 		}
+		s += sSb260.String()
 		s += fmt.Sprintf("%s\t%s\t%s", row.op, row.when, row.gtid)
 		output(plan.keyspace, s)
 	}

@@ -23,7 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -786,17 +785,17 @@ func TestGetTransactionTimeout(t *testing.T) {
 	require.Equal(t, 5*time.Millisecond, timeout)
 
 	// Options with larger timeout should use smaller workload timeout
-	options.TransactionTimeout = ptr.Of(int64(10)) // ms
+	options.TransactionTimeout = new(int64(10)) // ms
 	timeout = getTransactionTimeout(options, txPool.env.Config(), options.Workload)
 	require.Equal(t, 5*time.Millisecond, timeout)
 
 	// Options with smaller timeout should use smaller session timeout
-	options.TransactionTimeout = ptr.Of(int64(3)) // ms
+	options.TransactionTimeout = new(int64(3)) // ms
 	timeout = getTransactionTimeout(options, txPool.env.Config(), options.Workload)
 	require.Equal(t, 3*time.Millisecond, timeout)
 
 	// Options with explicit zero timeout should use larger workload timeout
-	options.TransactionTimeout = ptr.Of(int64(0))
+	options.TransactionTimeout = new(int64(0))
 	timeout = getTransactionTimeout(options, txPool.env.Config(), options.Workload)
 	require.Equal(t, 5*time.Millisecond, timeout)
 }
