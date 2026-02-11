@@ -65,8 +65,6 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 		"--topo-implementation":        vtbackup.TopoImplementation,
 		"--topo-global-server-address": vtbackup.TopoGlobalAddress,
 		"--topo-global-root":           vtbackup.TopoGlobalRoot,
-		"--log_dir":                    vtbackup.LogDir,
-
 		// initDBfile is required to run vtbackup
 		"--mysql-port":       strconv.Itoa(vtbackup.MysqlPort),
 		"--init-db-sql-file": vtbackup.initDBfile,

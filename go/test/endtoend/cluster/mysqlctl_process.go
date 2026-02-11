@@ -54,7 +54,6 @@ type MysqlctlProcess struct {
 // InitDb executes mysqlctl command to add cell info
 func (mysqlctl *MysqlctlProcess) InitDb() (err error) {
 	args := []string{
-		"--log_dir", mysqlctl.LogDirectory,
 		// todo: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--tablet_uid", strconv.Itoa(mysqlctl.TabletUID),
 		"--mysql_port", strconv.Itoa(mysqlctl.MySQLPort),
@@ -102,7 +101,6 @@ func (mysqlctl *MysqlctlProcess) startProcess(init bool) (*exec.Cmd, error) {
 	tmpProcess := exec.Command(
 		mysqlctl.Binary,
 		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--log_dir", mysqlctl.LogDirectory,
 		"--tablet_uid", strconv.Itoa(mysqlctl.TabletUID),
 		"--mysql_port", strconv.Itoa(mysqlctl.MySQLPort),
 	)
@@ -232,7 +230,6 @@ func (mysqlctl *MysqlctlProcess) StopProcess() (*exec.Cmd, error) {
 	tmpProcess := exec.Command(
 		mysqlctl.Binary,
 		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--log_dir", mysqlctl.LogDirectory,
 		"--tablet_uid", strconv.Itoa(mysqlctl.TabletUID),
 	)
 	if *isCoverage {

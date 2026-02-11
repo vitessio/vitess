@@ -396,8 +396,7 @@ func startCluster(flags ...string) (cluster vttest.LocalCluster, err error) {
 	keyspaceArg := "--keyspaces=" + strings.Join(clusterKeyspaces, ",")
 	numShardsArg := "--num-shards=2,2"
 	vschemaDDLAuthorizedUsers := "--vschema-ddl-authorized-users=%"
-	alsoLogToStderr := "--alsologtostderr" // better debugging
-	args = append(args, []string{schemaDirArg, keyspaceArg, numShardsArg, tabletHostname, vschemaDDLAuthorizedUsers, alsoLogToStderr}...)
+	args = append(args, []string{schemaDirArg, keyspaceArg, numShardsArg, tabletHostname, vschemaDDLAuthorizedUsers}...)
 	args = append(args, flags...)
 
 	if err = New().ParseFlags(args); err != nil {

@@ -68,7 +68,6 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 		"--service_map", vtctld.ServiceMap,
 		"--backup_storage_implementation", vtctld.BackupStorageImplementation,
 		vtutils.GetFlagVariantForTestsByVersion("--file-backup-storage-root", vtctldVer), vtctld.FileBackupStorageRoot,
-		"--log_dir", vtctld.LogDir,
 		"--port", strconv.Itoa(vtctld.Port),
 		"--grpc_port", strconv.Itoa(vtctld.GrpcPort),
 		"--bind-address", "127.0.0.1",

@@ -122,7 +122,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 
 	/* minimal command line arguments:
 	$ vtorc --topo-implementation etcd2 --topo-global-server-address localhost:2379 --topo-global-root /vitess/global
-	--config config/vtorc/default.json --alsologtostderr
+	--config config/vtorc/default.json
 	*/
 	flags := map[string]string{
 		"--cell":                       orc.Cell,
@@ -157,7 +157,6 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	}
 
 	orc.proc.Args = append(orc.proc.Args, orc.ExtraArgs...)
-	orc.proc.Args = append(orc.proc.Args, "--alsologtostderr")
 
 	if orc.LogFileName == "" {
 		orc.LogFileName = fmt.Sprintf("vtorc-stderr-%d.txt", timeNow)

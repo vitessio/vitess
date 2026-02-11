@@ -151,8 +151,6 @@ func (vtp *VtProcess) WaitStart() (err error) {
 		vtp.Binary,
 		"--port", strconv.Itoa(vtp.Port),
 		"--bind-address", vtp.BindAddress,
-		"--log_dir", vtp.LogDirectory,
-		"--alsologtostderr",
 	)
 
 	if vtp.PortGrpc != 0 {

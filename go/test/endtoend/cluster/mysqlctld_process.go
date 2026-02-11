@@ -54,7 +54,6 @@ type MysqlctldProcess struct {
 func (mysqlctld *MysqlctldProcess) InitDb() (err error) {
 	args := []string{
 		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--log_dir", mysqlctld.LogDirectory,
 		"--tablet_uid", strconv.Itoa(mysqlctld.TabletUID),
 		"--mysql_port", strconv.Itoa(mysqlctld.MySQLPort),
 		"--init_db_sql_file", mysqlctld.InitDBFile,
@@ -77,7 +76,6 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 	_ = createDirectory(mysqlctld.LogDirectory, 0o700)
 	args := []string{
 		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--log_dir", mysqlctld.LogDirectory,
 		"--tablet_uid", strconv.Itoa(mysqlctld.TabletUID),
 		"--mysql_port", strconv.Itoa(mysqlctld.MySQLPort),
 	}

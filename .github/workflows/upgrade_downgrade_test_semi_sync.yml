@@ -175,4 +175,4 @@ jobs:
           mkdir -p /tmp/vtdataroot
           set -x
           source build.env
-          go test -v -count=1 -run="" ./go/test/endtoend/reparent/semisync -alsologtostderr
+          go test -v -count=1 -run="" ./go/test/endtoend/reparent/semisync

@@ -107,8 +107,6 @@ func (vp *VtAdminProcess) Setup() (err error) {
 		"--tracer", `"opentracing-jaeger"`,
 		"--grpc-tracing",
 		"--http-tracing",
-		"--logtostderr",
-		"--alsologtostderr",
 		"--rbac",
 		"--rbac-config", rbacFile,
 		"--cluster", fmt.Sprintf(`id=%s,name=%s,discovery=staticfile,discovery-staticfile-path=%s,tablet-fqdn-tmpl=http://{{ .Tablet.Hostname }}:15{{ .Tablet.Alias.Uid }},schema-cache-default-expiration=1m`,
@@ -122,7 +120,6 @@ func (vp *VtAdminProcess) Setup() (err error) {
 	}
 
 	vp.proc.Args = append(vp.proc.Args, vp.ExtraArgs...)
-	vp.proc.Args = append(vp.proc.Args, "--alsologtostderr")
 
 	logFile := fmt.Sprintf("vtadmin-stderr-%d.txt", timeNow)
 	errFile, err := os.Create(path.Join(vp.LogDir, logFile))

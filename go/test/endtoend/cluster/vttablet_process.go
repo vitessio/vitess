@@ -110,7 +110,6 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"--port", strconv.Itoa(vttablet.Port),
 		"--grpc_port", strconv.Itoa(vttablet.GrpcPort),
 		"--init_shard", vttablet.Shard,
-		"--log_dir", vttablet.LogDir,
 		"--tablet_hostname", vttablet.TabletHostname,
 		"--init_keyspace", vttablet.Keyspace,
 		"--init_tablet_type", vttablet.TabletType,

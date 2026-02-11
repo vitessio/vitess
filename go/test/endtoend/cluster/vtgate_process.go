@@ -155,7 +155,6 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"--topo_global_server_address", vtgate.TopoGlobalAddress,
 		"--topo_global_root", vtgate.TopoGlobalRoot,
 		"--config-file", vtgate.ConfigFile,
-		"--log_dir", vtgate.LogDir,
 		"--log_queries_to_file", vtgate.FileToLogQueries,
 		"--port", strconv.Itoa(vtgate.Port),
 		"--grpc_port", strconv.Itoa(vtgate.GrpcPort),
