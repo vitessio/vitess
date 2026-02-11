@@ -43,8 +43,6 @@ func initStateTable(ctx context.Context, session *vtgateconn.VTGateSession, keys
   PRIMARY KEY (name)
 )`, keyspaceName, tableName)
 
-	fmt.Println("query: ", query)
-
 	_, err := session.Execute(ctx, query, nil, false)
 	if err != nil {
 		return fmt.Errorf("vstreamclient: failed to create state table: %w", err)

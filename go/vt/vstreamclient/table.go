@@ -123,7 +123,6 @@ func (v *VStreamClient) initTables(tables []TableConfig) error {
 			return fmt.Errorf("vstreamclient: table %v has no table name", table)
 		}
 
-		fmt.Println("shardsByKeyspace", v.shardsByKeyspace)
 		// make sure the keyspace exists in the cluster
 		_, ok := v.shardsByKeyspace[table.Keyspace]
 		if !ok {

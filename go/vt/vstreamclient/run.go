@@ -73,7 +73,6 @@ func (v *VStreamClient) Run(ctx context.Context) error {
 		case err == nil: // no error, continue processing below
 
 		case errors.Is(err, io.EOF):
-			fmt.Println("vstreamclient: stream ended")
 			return nil
 
 		default:
