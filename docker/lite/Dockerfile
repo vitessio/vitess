@@ -75,9 +75,9 @@ RUN groupadd -r vitess && useradd -r -g vitess vitess
 RUN mkdir -p /vt/vtdataroot /home/vitess && chown -R vitess:vitess /vt /home/vitess
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
-ENV VTROOT /vt
-ENV VTDATAROOT /vt/vtdataroot
-ENV PATH $VTROOT/bin:$PATH
+ENV VTROOT=/vt
+ENV VTDATAROOT=/vt/vtdataroot
+ENV PATH=$VTROOT/bin:$PATH
 
 # Copy artifacts from builder layers.
 COPY --from=go-builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
