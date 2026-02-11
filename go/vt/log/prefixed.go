@@ -26,9 +26,11 @@ func NewPrefixedLogger(prefix string) *PrefixedLogger {
 	return &PrefixedLogger{prefix: prefix + ": "}
 }
 
-func (pl *PrefixedLogger) Info(msg string, attrs ...slog.Attr)  { Info(pl.prefix+msg, attrs...) }
-func (pl *PrefixedLogger) Warn(msg string, attrs ...slog.Attr)  { Warn(pl.prefix+msg, attrs...) }
-func (pl *PrefixedLogger) Error(msg string, attrs ...slog.Attr) { Error(pl.prefix+msg, attrs...) }
+func (pl *PrefixedLogger) Info(msg string, attrs ...slog.Attr) { InfoDepth(1, pl.prefix+msg, attrs...) }
+func (pl *PrefixedLogger) Warn(msg string, attrs ...slog.Attr) { WarnDepth(1, pl.prefix+msg, attrs...) }
+func (pl *PrefixedLogger) Error(msg string, attrs ...slog.Attr) {
+	ErrorDepth(1, pl.prefix+msg, attrs...)
+}
 
 func (pl *PrefixedLogger) InfoDepth(depth int, msg string, attrs ...slog.Attr) {
 	InfoDepth(depth+1, pl.prefix+msg, attrs...)
