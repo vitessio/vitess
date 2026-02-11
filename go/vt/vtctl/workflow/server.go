@@ -693,7 +693,7 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 				_, err = s.tmc.UpdateVReplicationWorkflow(ctx, tabletInfo.Tablet, &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 					Workflow: req.Name,
 					State:    ptr.Of(binlogdatapb.VReplicationWorkflowState_Stopped),
-					Message:  ptr.Of(Frozen),
+					Message:  new(Frozen),
 				})
 				if err != nil {
 					return vterrors.Wrapf(err, "failed to stop workflow %s on shard %s/%s", req.Name, tabletInfo.Keyspace, tabletInfo.Shard)

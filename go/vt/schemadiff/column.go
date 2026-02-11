@@ -21,7 +21,6 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/colldata"
-	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -115,7 +114,7 @@ func (c *ColumnDefinitionEntity) Clone() *ColumnDefinitionEntity {
 func (c *ColumnDefinitionEntity) SetExplicitDefaultAndNull() {
 	if c.inPK {
 		// Any column in the primary key is implicitly NOT NULL.
-		c.ColumnDefinition.Type.Options.Null = ptr.Of(false)
+		c.ColumnDefinition.Type.Options.Null = new(false)
 	}
 	if c.ColumnDefinition.Type.Options.Null == nil || *c.ColumnDefinition.Type.Options.Null {
 		// Nullable column, let'se see if there's already a DEFAULT.

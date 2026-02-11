@@ -35,7 +35,6 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -593,7 +592,7 @@ func getColumnCollations(venv *vtenv.Environment, table *tabletmanagerdatapb.Tab
 		if len(column.Type.EnumValues) == 0 {
 			continue
 		}
-		columnValues[column.Name.Lowered()] = ptr.Of(evalengine.EnumSetValues(column.Type.EnumValues))
+		columnValues[column.Name.Lowered()] = new(evalengine.EnumSetValues(column.Type.EnumValues))
 	}
 	return columnCollations, columnValues, nil
 }
