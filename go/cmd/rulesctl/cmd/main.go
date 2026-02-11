@@ -17,7 +17,7 @@ func Main() *cobra.Command {
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			_flag.TrickGlog()
 
-			if err := log.Init(); err != nil {
+			if err := log.Init(cmd.Flags()); err != nil {
 				return err
 			}
 

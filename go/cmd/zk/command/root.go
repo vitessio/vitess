@@ -44,7 +44,7 @@ or the file specified in the ZK_CLIENT_CONFIG environment variable.
 The local cell may be overridden with the ZK_CLIENT_LOCAL_CELL environment
 variable.`,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			if err := log.Init(); err != nil {
+			if err := log.Init(cmd.Flags()); err != nil {
 				return err
 			}
 

@@ -47,10 +47,18 @@ func RegisterFlags(fs *pflag.FlagSet) {
 // Init configures the logging backend. By default, a slog.JSONHandler is
 // configured. If --log-structured=false is set, the deprecated glog backend
 // is used instead.
-func Init() error {
+func Init(fs *pflag.FlagSet) error {
 	if !logStructured {
 		fmt.Fprintln(os.Stderr, "WARNING: glog is deprecated and will be removed in v25")
 		return nil
+	}
+
+	// Fail if any glog flags were explicitly set while structured logging is active,
+	// since they have no effect.
+	for _, name := range []string{"logtostderr", "alsologtostderr", "stderrthreshold", "log_dir", "log_backtrace_at", "vmodule", "v"} {
+		if fs.Changed(name) {
+			return fmt.Errorf("--%s has no effect when structured logging is enabled, pass --log-structured=false to use glog flags", name)
+		}
 	}
 
 	// Parse the level flag into an [slog.Level].

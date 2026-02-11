@@ -106,7 +106,7 @@ connect directly to the topo server(s).`, useInternalVtctld),
 		// We use PersistentPreRun to set up the tracer, grpc client, and
 		// command context for every command.
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
-			if err := log.Init(); err != nil {
+			if err := log.Init(cmd.Flags()); err != nil {
 				return err
 			}
 

@@ -307,7 +307,7 @@ func ParseFlags(cmd string) {
 
 	_flag.Parse(fs)
 
-	if err := log.Init(); err != nil {
+	if err := log.Init(fs); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
@@ -390,7 +390,7 @@ func moveFlags(name string, fs *pflag.FlagSet) {
 func CobraPreRunE(cmd *cobra.Command, args []string) error {
 	_flag.TrickGlog()
 
-	if err := log.Init(); err != nil {
+	if err := log.Init(cmd.Flags()); err != nil {
 		return err
 	}
 
@@ -439,7 +439,7 @@ func ParseFlagsWithArgs(cmd string) []string {
 
 	_flag.Parse(fs)
 
-	if err := log.Init(); err != nil {
+	if err := log.Init(fs); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
