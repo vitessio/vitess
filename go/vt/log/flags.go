@@ -53,11 +53,11 @@ func Init(fs *pflag.FlagSet) error {
 		return nil
 	}
 
-	// Fail if any glog flags were explicitly set while structured logging is active,
+	// Warn if any glog flags were explicitly set while structured logging is active,
 	// since they have no effect.
 	for _, name := range []string{"logtostderr", "alsologtostderr", "stderrthreshold", "log_dir", "log_backtrace_at", "vmodule", "v"} {
 		if fs.Changed(name) {
-			return fmt.Errorf("--%s has no effect when structured logging is enabled, pass --log-structured=false to use glog flags", name)
+			fmt.Fprintf(os.Stderr, "WARNING: --%s has no effect when structured logging is enabled, pass --log-structured=false to use glog flags\n", name)
 		}
 	}
 
