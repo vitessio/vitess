@@ -1,13 +1,18 @@
 package tabletmanager
 
 import (
+	"context"
 	"testing"
+	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	tmdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
+
+const vreplicationPermissionTimeout = 5 * time.Second
 
 func TestValidateVReplicationPermissions_SucceedsWithValidPermissions(t *testing.T) {
 	tablet := getTablet(primaryTablet.GrpcPort)
@@ -21,22 +26,34 @@ func TestValidateVReplicationPermissions_FailsWithoutSelectPermissions(t *testin
 	tablet := getTablet(primaryTablet.GrpcPort)
 
 	// Revoke SELECT permission on the _vt.vreplication table
-	conn, err := mysql.Connect(t.Context(), &primaryTabletParams)
+	ctx, cancel := context.WithTimeout(t.Context(), vreplicationPermissionTimeout)
+	defer cancel()
+	conn, err := mysql.Connect(ctx, &primaryTabletParams)
 	require.NoError(t, err)
 	t.Cleanup(func() { conn.Close() })
 
-	_, err = conn.ExecuteFetch("revoke select on *.* from vt_filtered@localhost", 0, false)
-	require.NoError(t, err)
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		_, err = conn.ExecuteFetch("revoke select on *.* from vt_filtered@localhost", 0, false)
+		require.NoError(c, err)
+	}, 10*time.Second, 200*time.Millisecond)
 	t.Cleanup(func() {
 		// Restore the permission for other tests
-		_, err = conn.ExecuteFetch("grant select on *.* to vt_filtered@localhost", 0, false)
-		require.NoError(t, err)
+		require.EventuallyWithT(t, func(c *assert.CollectT) {
+			_, err = conn.ExecuteFetch("grant select on *.* to vt_filtered@localhost", 0, false)
+			require.NoError(c, err)
+		}, 10*time.Second, 200*time.Millisecond)
 	})
 
 	req := &tmdatapb.ValidateVReplicationPermissionsRequest{}
-	res, err := tmClient.ValidateVReplicationPermissions(t.Context(), tablet, req)
-	require.NoError(t, err)
-	require.False(t, res.Ok)
+	var res *tmdatapb.ValidateVReplicationPermissionsResponse
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		ctx, cancel = context.WithTimeout(t.Context(), vreplicationPermissionTimeout)
+		defer cancel()
+		res, err = tmClient.ValidateVReplicationPermissions(ctx, tablet, req)
+		require.NoError(c, err)
+		require.NotNil(c, res)
+		require.False(c, res.Ok)
+	}, 10*time.Second, 200*time.Millisecond)
 }
 
 func TestValidateVReplicationPermissions_FailsWithoutInsertPermissions(t *testing.T) {

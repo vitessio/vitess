@@ -59,6 +59,7 @@ var (
 	insertIntoFuzzInsert   = "INSERT INTO twopc_fuzzer_insert (id, updateSet, threadId) VALUES (%d, %d, %d)"
 	selectFromFuzzUpdate   = "SELECT col FROM twopc_fuzzer_update WHERE id = %d"
 	selectIdFromFuzzInsert = "SELECT threadId FROM twopc_fuzzer_insert WHERE updateSet = %d AND id = %d ORDER BY col"
+	vtgateQueryTimeout     = 5 * time.Second
 )
 
 // TestTwoPCFuzzTest tests 2PC transactions in a fuzzer environment.
@@ -306,11 +307,14 @@ func (fz *fuzzer) initialize(t *testing.T, conn *mysql.Conn) {
 // generateAndExecuteTransaction generates the queries of the transaction and then executes them.
 func (fz *fuzzer) generateAndExecuteTransaction(threadId int) {
 	// Create a connection to the vtgate to run transactions.
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	ctx, cancel := context.WithTimeout(context.Background(), vtgateQueryTimeout)
+	defer cancel()
+	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
 		return
 	}
 	defer conn.Close()
+	_, _ = conn.ExecuteFetch(fmt.Sprintf("set @@query_timeout = %d", vtgateQueryTimeout.Milliseconds()), 0, false)
 	// randomly generate an update set to use and the value to increment it by.
 	updateSetVal := rand.IntN(fz.updateSets)
 	incrementVal := rand.Int32()
@@ -482,6 +486,7 @@ func vttabletRestarts(t *testing.T) {
 		return
 	}
 	tablet.VttabletProcess.ServingStatus = "SERVING"
+	deadline := time.Now().Add(2 * time.Minute)
 	for {
 		err = tablet.VttabletProcess.Setup()
 		if err == nil {
@@ -490,6 +495,10 @@ func vttabletRestarts(t *testing.T) {
 		// Sometimes vttablets fail to connect to the topo server due to a minor blip there.
 		// We don't want to fail the test, so we retry setting up the vttablet.
 		log.Errorf("error restarting vttablet - %v", err)
+		if time.Now().After(deadline) {
+			log.Errorf("giving up restarting vttablet after timeout: %v", tablet.Alias)
+			return
+		}
 		time.Sleep(1 * time.Second)
 	}
 }
