@@ -619,7 +619,8 @@ func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 	if mysqlServerPort >= 0 {
 		listener, err := servenv.Listen(mysqlTCPVersion, net.JoinHostPort(mysqlServerBindAddress, strconv.Itoa(mysqlServerPort)))
 		if err != nil {
-			log.Exitf("servenv.Listen failed: %v", err)
+			log.Error(fmt.Sprintf("servenv.Listen failed: %v", err))
+			os.Exit(1)
 		}
 		srv.tcpListener, err = mysql.NewFromListener(
 			listener,

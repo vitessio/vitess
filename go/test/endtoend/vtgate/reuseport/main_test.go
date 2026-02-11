@@ -22,6 +22,7 @@ import (
 	"context"
 	_ "embed"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
 
@@ -118,7 +119,7 @@ func TestReusePort(t *testing.T) {
 	require.NoError(t, err)
 	defer func() {
 		if err := duplicateVtGate.TearDown(); err != nil {
-			log.Errorf("Error in vtgate teardown: %v", err)
+			log.Error(fmt.Sprintf("Error in vtgate teardown: %v", err))
 		}
 	}()
 
