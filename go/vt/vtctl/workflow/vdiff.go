@@ -319,6 +319,8 @@ func BuildSummary(keyspace, workflow, uuid string, resp *vtctldatapb.VDiffShowRe
 	summary.Reports = reports
 	if !summary.HasMismatch && !verbose {
 		summary.Reports = nil
+		summary.TableSummaryMap = nil
+		summary.ShardSummaries = nil
 	}
 	// If we haven't completed the global VDiff then be sure to reflect that with no
 	// CompletedAt value.
