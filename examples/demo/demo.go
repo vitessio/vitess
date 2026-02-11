@@ -52,7 +52,9 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("/", http.FileServer(http.Dir("./")))
 	mux.HandleFunc("/exec", exec)
-	go http.ListenAndServe(":8000", mux)
+	go func() {
+		_ = http.ListenAndServe(":8000", mux)
+	}()
 
 	wait()
 	cluster.TearDown()
@@ -114,7 +116,7 @@ func exec(w http.ResponseWriter, req *http.Request) {
 		response := map[string]string{
 			"error": err.Error(),
 		}
-		enc.Encode(response)
+		_ = enc.Encode(response)
 		return
 	}
 	defer conn.Close()
@@ -156,7 +158,7 @@ func exec(w http.ResponseWriter, req *http.Request) {
 	execQuery(conn, "product", "select * from product", "product", "0", response)
 	execQuery(conn, "customer_seq", "select * from customer_seq", "product", "0", response)
 	execQuery(conn, "corder_keyspace_idx", "select * from corder_keyspace_idx", "product", "0", response)
-	enc.Encode(response)
+	_ = enc.Encode(response)
 }
 
 func execQuery(conn *mysql.Conn, key, query, keyspace, shard string, response map[string]any) {
@@ -233,6 +235,7 @@ func streamQuerylog(port int) (<-chan string, error) {
 		log.Errorf("Error reading stream: %v: %v", request, err)
 		return nil, err
 	}
+	defer resp.Body.Close()
 	ch := make(chan string, 100)
 	go func() {
 		buffered := bufio.NewReader(resp.Body)
