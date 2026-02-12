@@ -41,7 +41,6 @@ vttablet \
 `$alias` needs to be of the form: `<cell>-id`, and the cell should match one of the local cells that was created in the topology. The id can be left padded with zeroes: `cell-100` and `cell-000000100` are synonymous.
 
 Flags:
-      --alsologtostderr                                                  log to standard error as well as files
       --app-idle-timeout duration                                        Idle timeout for app connections (default 1m0s)
       --app-pool-size int                                                Size of the connection pool for app connections (default 40)
       --azblob-backup-account-key-file string                            Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path).
@@ -222,10 +221,7 @@ Flags:
       --log-queries                                                      Enable query logging to syslog.
       --log-queries-to-file string                                       Enable query logging to the specified file
       --log-rotate-max-size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
-      --log-structured                                                   enable structured logging
-      --log_backtrace_at traceLocations                                  when logging hits line file:N, emit a stack trace
-      --log_dir string                                                   If non-empty, write log files in this directory
-      --logtostderr                                                      log to standard error instead of files
+      --log-structured                                                   enable structured logging (default true)
       --manifest-external-decompressor string                            command with arguments to store in the backup manifest when compressing a backup with an external compression engine.
       --max-concurrent-online-ddl int                                    Maximum number of online DDL changes that may run concurrently (default 256)
       --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
@@ -353,7 +349,6 @@ Flags:
       --stats-emit-period duration                                       Interval between emitting stats to all registered backends (default 1m0s)
       --statsd-address string                                            Address for statsd client
       --statsd-sample-rate float                                         Sample rate for statsd metrics (default 1)
-      --stderrthreshold severityFlag                                     logs at or above this threshold go to stderr (default 1)
       --stream-health-buffer-size uint                                   max streaming health entries to buffer per streaming health client (default 20)
       --table-acl-config string                                          path to table access checker config file; send SIGHUP to reload this file
       --table-acl-config-reload-interval duration                        Ticker to reload ACLs. Duration flag, format e.g.: 30s. Default: do not reload
@@ -418,9 +413,7 @@ Flags:
       --tx-throttler-topo-refresh-interval duration                      The rate that the transaction throttler will refresh the topology to find cells. (default 5m0s)
       --unhealthy-threshold duration                                     replication lag after which a replica is considered unhealthy (default 2h0m0s)
       --unmanaged                                                        Indicates an unmanaged tablet, i.e. using an external mysql-compatible database
-      --v Level                                                          log level for V logs
   -v, --version                                                          print binary version
-      --vmodule vModuleFlag                                              comma-separated list of pattern=N settings for file-filtered logging
       --vreplication-copy-phase-duration duration                        Duration for each copy phase loop (before running the next catchup: default 1h) (default 1h0m0s)
       --vreplication-copy-phase-max-innodb-history-list-length int       The maximum InnoDB transaction history that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet (default 10000000)
       --vreplication-copy-phase-max-mysql-replication-lag int            The maximum MySQL replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet (default 43200)

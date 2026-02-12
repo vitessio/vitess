@@ -38,7 +38,6 @@ vtexplain -- -shards 128 --vschema-file vschema.json --schema-file schema.sql --
 
 
 Flags:
-      --alsologtostderr                                             log to standard error as well as files
       --batch-interval duration                                     Interval between logical time slots. (default 10ms)
       --config-file string                                          Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
       --config-file-not-found-handling ConfigFileNotFoundHandling   Behavior when a config file is not found. (Options: error, exit, ignore, warn) (default warn)
@@ -57,10 +56,7 @@ Flags:
       --log-err-stacks                                              log stack traces for errors
       --log-level string                                            minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
       --log-rotate-max-size uint                                    size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
-      --log-structured                                              enable structured logging
-      --log_backtrace_at traceLocations                             when logging hits line file:N, emit a stack trace
-      --log_dir string                                              If non-empty, write log files in this directory
-      --logtostderr                                                 log to standard error instead of files
+      --log-structured                                              enable structured logging (default true)
       --mysql-server-version string                                 MySQL server version to advertise. (default "8.4.6-Vitess")
       --normalize                                                   Whether to enable vtgate normalization
       --output-mode string                                          Output in human-friendly text or json (default "text")
@@ -77,9 +73,6 @@ Flags:
       --sql-file string                                             Identifies the file that contains the SQL commands to analyze
       --sql-max-length-errors int                                   truncate queries in error logs to the given length (default unlimited)
       --sql-max-length-ui int                                       truncate queries in debug UIs to the given length (default 512) (default 512)
-      --stderrthreshold severityFlag                                logs at or above this threshold go to stderr (default 1)
-      --v Level                                                     log level for V logs
   -v, --version                                                     print binary version
-      --vmodule vModuleFlag                                         comma-separated list of pattern=N settings for file-filtered logging
       --vschema string                                              Identifies the VTGate routing schema
       --vschema-file string                                         Identifies the VTGate routing schema file

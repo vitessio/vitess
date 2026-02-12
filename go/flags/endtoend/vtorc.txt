@@ -17,7 +17,6 @@ vtorc \
 Flags:
       --allow-emergency-reparent                                    Whether VTOrc should be allowed to run emergency reparent operation when it detects a dead primary (default true)
       --allow-recovery                                              Whether VTOrc should be allowed to run recovery actions (default true)
-      --alsologtostderr                                             log to standard error as well as files
       --audit-file-location string                                  File location where the audit logs are to be stored
       --audit-purge-duration duration                               Duration for which audit logs are held before being purged. Should be in multiples of days (default 168h0m0s)
       --audit-to-backend                                            Whether to store the audit log in the VTOrc database
@@ -58,10 +57,7 @@ Flags:
       --log-err-stacks                                              log stack traces for errors
       --log-level string                                            minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
       --log-rotate-max-size uint                                    size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
-      --log-structured                                              enable structured logging
-      --log_backtrace_at traceLocations                             when logging hits line file:N, emit a stack trace
-      --log_dir string                                              If non-empty, write log files in this directory
-      --logtostderr                                                 log to standard error instead of files
+      --log-structured                                              enable structured logging (default true)
       --max-stack-size int                                          configure the maximum stack size in bytes (default 67108864)
       --onclose-timeout duration                                    wait no more than this for OnClose handlers before stopping (default 10s)
       --onterm-timeout duration                                     wait no more than this for OnTermSync handlers before stopping (default 10s)
@@ -83,7 +79,6 @@ Flags:
       --stats-common-tags strings                                   Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
       --stats-drop-variables string                                 Variables to be dropped from the list of exported variables.
       --stats-emit-period duration                                  Interval between emitting stats to all registered backends (default 1m0s)
-      --stderrthreshold severityFlag                                logs at or above this threshold go to stderr (default 1)
       --table-refresh-interval int                                  interval in milliseconds to refresh tables in status page with refreshRequired class
       --tablet-manager-grpc-ca string                               the server ca to use to validate servers when connecting
       --tablet-manager-grpc-cert string                             the cert to use to connect
@@ -113,7 +108,5 @@ Flags:
       --topo-zk-tls-ca string                                       the server ca to use to validate servers when connecting to the zk topo server
       --topo-zk-tls-cert string                                     the cert to use to connect to the zk topo server, requires topo-zk-tls-key, enables TLS
       --topo-zk-tls-key string                                      the key to use to connect to the zk topo server, enables TLS
-      --v Level                                                     log level for V logs
   -v, --version                                                     print binary version
-      --vmodule vModuleFlag                                         comma-separated list of pattern=N settings for file-filtered logging
       --wait-replicas-timeout duration                              Duration for which to wait for replica's to respond when issuing RPCs (default 30s)
