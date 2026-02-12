@@ -262,6 +262,7 @@ func ContinuousDiscovery() {
 	var recoveryEntrance int64
 	var snapshotTopologiesTick <-chan time.Time
 	if config.GetSnapshotTopologyInterval() > 0 {
+		log.Warning("--snapshot-topology-interval is deprecated and will be removed in v25+")
 		snapshotTopologiesTick = time.Tick(config.GetSnapshotTopologyInterval())
 	}
 

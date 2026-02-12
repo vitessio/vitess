@@ -45,6 +45,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -52,6 +53,7 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -79,9 +81,8 @@ For example:
 // Flags
 var (
 	flavor           = flag.String("flavor", "mysql80", "comma-separated bootstrap flavor(s) to run against (when using Docker mode). Available flavors: all,"+flavors)
-	bootstrapVersion = flag.String("bootstrap-version", "50", "the version identifier to use for the docker images")
+	bootstrapVersion = flag.String("bootstrap-version", "53", "the version identifier to use for the docker images")
 	runCount         = flag.Int("runs", 1, "run each test this many times")
-	retryMax         = flag.Int("retry", 3, "max number of retries, to detect flaky tests")
 	logPass          = flag.Bool("log-pass", false, "log test output even if it passes")
 	timeout          = flag.Duration("timeout", 30*time.Minute, "timeout for each test")
 	pull             = flag.Bool("pull", true, "re-pull the bootstrap image, in case it's been updated")
@@ -124,18 +125,16 @@ type Config struct {
 
 // Test is an entry from the test/config.json file.
 type Test struct {
-	File          string
-	Args, Command []string
+	File     string
+	Args     []string
+	Command  []string
+	Packages []string
 
 	// Manual means it won't be run unless explicitly specified.
 	Manual bool
 
 	// Shard is used to split tests among workers.
 	Shard string
-
-	// RetryMax is the maximum number of times a test will be retried.
-	// If 0, flag *retryMax is used.
-	RetryMax int
 
 	// Tags is a list of tags that can be used to filter tests.
 	Tags []string
@@ -149,21 +148,11 @@ type Test struct {
 }
 
 func (t *Test) hasTag(want string) bool {
-	for _, got := range t.Tags {
-		if got == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(t.Tags, want)
 }
 
 func (t *Test) hasAnyTag(want []string) bool {
-	for _, tag := range want {
-		if t.hasTag(tag) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(want, t.hasTag)
 }
 
 // run executes a single try.
@@ -176,9 +165,15 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 		t.pass++
 		return nil, nil
 	}
+
+	junitOutput := fmt.Sprintf("_test/junit/report-%s-%d.xml", t.name, t.runIndex+1)
+	if *docker {
+		junitOutput = path.Join("/tmp/src", junitOutput)
+	}
+
 	testCmd := t.Command
 	if len(testCmd) == 0 {
-		if strings.Contains(fmt.Sprintf("%v", t.File), ".go") {
+		if strings.Contains(t.File, ".go") {
 			testCmd = []string{"tools/e2e_go_test.sh"}
 			testCmd = append(testCmd, t.Args...)
 			if *keepData {
@@ -222,6 +217,8 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 		// Disable gRPC server GOAWAY/"too_many_pings" errors. Context:
 		// https://github.com/grpc/grpc/blob/master/doc/keepalive.md
 		"GRPC_ARG_HTTP2_MAX_PINGS_WITHOUT_DATA": "0",
+		"JUNIT_OUTPUT":                          junitOutput,
+		"PACKAGES":                              strings.Join(t.Packages, " "),
 		"VTROOT":                                "/vt/src/vitess.io/vitess",
 		"VTDATAROOT":                            dataDir,
 		"VTPORTSTART":                           strconv.FormatInt(int64(getPortStart(100)), 10),
@@ -255,7 +252,7 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 		}
 	case <-timer.C:
 		t.logf("timeout exceeded")
-		cmd.Process.Signal(syscall.SIGINT)
+		_ = cmd.Process.Signal(syscall.SIGINT)
 		t.fail++
 		runErr = <-done
 	}
@@ -296,9 +293,7 @@ func loadConfig() (*Config, error) {
 		if config2 == nil {
 			log.Fatalf("could not load config file: %s", configFile)
 		}
-		for key, val := range config2.Tests {
-			config.Tests[key] = val
-		}
+		maps.Copy(config.Tests, config2.Tests)
 	}
 	return config, nil
 }
@@ -337,7 +332,13 @@ func main() {
 	if err := os.MkdirAll(outDir, os.FileMode(0o755)); err != nil {
 		log.Fatalf("Can't create output directory: %v", err)
 	}
-	logFile, err := os.OpenFile(path.Join(outDir, "test.log"), os.O_RDWR|os.O_CREATE, 0o644)
+
+	junitDir := path.Join("_test", "junit")
+	if err := os.MkdirAll(junitDir, os.FileMode(0o755)); err != nil {
+		log.Fatalf("Can't create junit directory: %v", err)
+	}
+
+	logFile, err := os.OpenFile(path.Join(outDir, "test.log"), os.O_RDWR|os.O_CREATE, 0o0644)
 	if err != nil {
 		log.Fatalf("Can't create log file: %v", err)
 	}
@@ -440,7 +441,7 @@ func main() {
 			command.Env = append(os.Environ(), "NOVTADMINBUILD=1")
 		}
 		if *buildTag != "" {
-			command.Env = append(command.Env, fmt.Sprintf(`EXTRA_BUILD_TAGS=%s`, *buildTag))
+			command.Env = append(command.Env, "EXTRA_BUILD_TAGS="+*buildTag)
 		}
 		if out, err := command.CombinedOutput(); err != nil {
 			log.Fatalf("make build failed; exit code: %d, error: %v\n%s",
@@ -485,96 +486,67 @@ func main() {
 
 	// Start the requested number of parallel runners.
 	for i := 0; i < *parallel; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			for test := range next {
-				tryMax := *retryMax
-				if test.RetryMax != 0 {
-					tryMax = test.RetryMax
+				select {
+				case <-stop:
+					test.logf("cancelled")
+					return
+				default:
 				}
-				for try := 1; ; try++ {
-					select {
-					case <-stop:
-						test.logf("cancelled")
-						return
-					default:
-					}
 
-					if try > tryMax {
-						// Every try failed.
-						test.logf("retry limit exceeded")
-						mu.Lock()
-						failed++
-						mu.Unlock()
-						break
-					}
+				test.logf("running...")
 
-					test.logf("running (try %v/%v)...", try, tryMax)
-
-					// Make a unique VTDATAROOT.
-					dataDir, err := os.MkdirTemp(vtDataRoot, "vt_")
-					if err != nil {
-						test.logf("Failed to create temporary subdir in VTDATAROOT: %v", vtDataRoot)
-						mu.Lock()
-						failed++
-						mu.Unlock()
-						break
-					}
-
-					// Run the test.
-					start := time.Now()
-					output, err := test.run(vtRoot, dataDir)
-					duration := time.Since(start)
-
-					// Save/print test output.
-					if err != nil || *logPass {
-						if *printLog && !*follow {
-							test.logf("%s\n", output)
-						}
-						outFile := fmt.Sprintf("%v.%v-%v.%v.log", test.flavor, test.name, test.runIndex+1, try)
-						outFilePath := path.Join(outDir, outFile)
-						test.logf("saving test output to %v", outFilePath)
-						if fileErr := os.WriteFile(outFilePath, output, os.FileMode(0o644)); fileErr != nil {
-							test.logf("WriteFile error: %v", fileErr)
-						}
-					}
-
-					// Clean up the unique VTDATAROOT.
-					if !*keepData {
-						if err := os.RemoveAll(dataDir); err != nil {
-							test.logf("WARNING: can't remove temporary VTDATAROOT: %v", err)
-						}
-					}
-
-					if err != nil {
-						// This try failed.
-						test.logf("FAILED (try %v/%v) in %v: %v", try, tryMax, round(duration), err)
-						mu.Lock()
-						testFailed(test.name)
-						mu.Unlock()
-						continue
-					}
-
+				// Make a unique VTDATAROOT.
+				dataDir, err := os.MkdirTemp(vtDataRoot, "vt_")
+				if err != nil {
+					test.logf("Failed to create temporary subdir in VTDATAROOT: %v", vtDataRoot)
 					mu.Lock()
-					testPassed(test.name, duration)
-
-					if try == 1 {
-						// Passed on the first try.
-						test.logf("PASSED in %v", round(duration))
-						passed++
-					} else {
-						// Passed, but not on the first try.
-						test.logf("FLAKY (1/%v passed in %v)", try, round(duration))
-						flaky++
-						testFlaked(test.name, try)
-					}
+					failed++
 					mu.Unlock()
-					break
+					continue
 				}
+
+				// Run the test.
+				start := time.Now()
+				output, err := test.run(vtRoot, dataDir)
+				duration := time.Since(start)
+
+				// Save/print test output.
+				if err != nil || *logPass {
+					if *printLog && !*follow {
+						test.logf("%s\n", output)
+					}
+					outFile := fmt.Sprintf("%v.%v-%v.log", test.flavor, test.name, test.runIndex+1)
+					outFilePath := path.Join(outDir, outFile)
+					test.logf("saving test output to %v", outFilePath)
+					if fileErr := os.WriteFile(outFilePath, output, os.FileMode(0o644)); fileErr != nil {
+						test.logf("WriteFile error: %v", fileErr)
+					}
+				}
+
+				// Clean up the unique VTDATAROOT.
+				if !*keepData {
+					if err := os.RemoveAll(dataDir); err != nil {
+						test.logf("WARNING: can't remove temporary VTDATAROOT: %v", err)
+					}
+				}
+
+				if err != nil {
+					test.logf("FAILED in %v: %v", round(duration), err)
+					mu.Lock()
+					testFailed(test.name)
+					mu.Unlock()
+					continue
+				}
+
+				mu.Lock()
+				testPassed(test.name, duration)
+				test.logf("PASSED in %v", round(duration))
+				passed++
+				mu.Unlock()
 			}
-		}()
+		})
 	}
 
 	// Close the done channel when all the runners stop.

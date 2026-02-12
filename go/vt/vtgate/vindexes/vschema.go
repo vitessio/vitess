@@ -28,7 +28,6 @@ import (
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -262,7 +261,7 @@ func (col *Column) ToEvalengineType(collationEnv *collations.Environment) evalen
 	} else {
 		collation = collations.CollationForType(col.Type, collationEnv.DefaultConnectionCharset())
 	}
-	return evalengine.NewTypeEx(col.Type, collation, col.Nullable, col.Size, col.Scale, ptr.Of(evalengine.EnumSetValues(col.Values)))
+	return evalengine.NewTypeEx(col.Type, collation, col.Nullable, col.Size, col.Scale, new(evalengine.EnumSetValues(col.Values)))
 }
 
 // KeyspaceSchema contains the schema(table) for a keyspace.

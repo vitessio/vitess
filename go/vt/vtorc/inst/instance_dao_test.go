@@ -888,6 +888,29 @@ func TestExpireTableData(t *testing.T) {
 }
 
 func TestDetectErrantGTIDs(t *testing.T) {
+	keyspaceName := "ks"
+	shardName := "0"
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone-1",
+			Uid:  100,
+		},
+		Keyspace: keyspaceName,
+		Shard:    shardName,
+	}
+	primaryTablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone-1",
+			Uid:  101,
+		},
+		Keyspace: keyspaceName,
+		Shard:    shardName,
+		Type:     topodatapb.TabletType_PRIMARY,
+
+		MysqlHostname: "primary-host",
+		MysqlPort:     6714,
+	}
+
 	tests := []struct {
 		name            string
 		instance        *Instance
@@ -938,6 +961,8 @@ func TestDetectErrantGTIDs(t *testing.T) {
 			primaryInstance: &Instance{
 				SourceHost:      "",
 				ExecutedGtidSet: "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10589,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-341",
+				Hostname:        primaryTablet.MysqlHostname,
+				Port:            int(primaryTablet.MysqlPort),
 			},
 			wantErrantGTID: "316d193c-70e5-11e5-adb2-ecf4bb2262ff:342",
 		},
@@ -955,24 +980,6 @@ func TestDetectErrantGTIDs(t *testing.T) {
 		},
 	}
 
-	keyspaceName := "ks"
-	shardName := "0"
-	tablet := &topodatapb.Tablet{
-		Alias: &topodatapb.TabletAlias{
-			Cell: "zone-1",
-			Uid:  100,
-		},
-		Keyspace: keyspaceName,
-		Shard:    shardName,
-	}
-	primaryTablet := &topodatapb.Tablet{
-		Alias: &topodatapb.TabletAlias{
-			Cell: "zone-1",
-			Uid:  101,
-		},
-		Keyspace: keyspaceName,
-		Shard:    shardName,
-	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
@@ -989,6 +996,7 @@ func TestDetectErrantGTIDs(t *testing.T) {
 
 			if tt.primaryInstance != nil {
 				tt.primaryInstance.InstanceAlias = topoproto.TabletAliasString(primaryTablet.Alias)
+
 				err = SaveTablet(primaryTablet)
 				require.NoError(t, err)
 				err = WriteInstance(tt.primaryInstance, true, nil)
@@ -1005,6 +1013,109 @@ func TestDetectErrantGTIDs(t *testing.T) {
 			require.EqualValues(t, tt.wantErrantGTID, tt.instance.GtidErrant)
 		})
 	}
+}
+
+// TestDetectErrantGTIDsWithWrongPrimarySource ensures that errant GTIDs are
+// detected by comparing against the shard primary when a replica is pointed at
+// a different source.
+func TestDetectErrantGTIDsWithWrongPrimarySource(t *testing.T) {
+	defer func() {
+		db.ClearVTOrcDatabase()
+	}()
+	db.ClearVTOrcDatabase()
+
+	keyspaceName := "ks"
+	shardName := "0"
+
+	primaryUUID := "a5ce8e8a-4e56-11ef-9f7d-92339a7d9f6c"
+	wrongPrimaryUUID := "bb1db5f6-4e56-11ef-8bda-3ae65c7f7f5e"
+	replicaUUID := "cc946b58-4e56-11ef-9e6f-3e527c1a9e9d"
+
+	primaryTablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone-1",
+			Uid:  101,
+		},
+		Keyspace: keyspaceName,
+		Shard:    shardName,
+		Type:     topodatapb.TabletType_PRIMARY,
+
+		MysqlHostname: "primary-host",
+		MysqlPort:     6714,
+	}
+
+	replicaTablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone-1",
+			Uid:  100,
+		},
+		Keyspace: keyspaceName,
+		Shard:    shardName,
+	}
+
+	err := SaveShard(topo.NewShardInfo(keyspaceName, shardName, &topodatapb.Shard{
+		PrimaryAlias: primaryTablet.Alias,
+	}, nil))
+	require.NoError(t, err)
+
+	err = SaveTablet(primaryTablet)
+	require.NoError(t, err)
+
+	// Create the real shard primary instance and give it a GTID set that does
+	// not include the replica UUID. This represents the authoritative primary.
+	primaryInstance := &Instance{
+		InstanceAlias:   topoproto.TabletAliasString(primaryTablet.Alias),
+		Hostname:        "primary-host",
+		Port:            6714,
+		SourceHost:      "",
+		ExecutedGtidSet: primaryUUID + ":1-10",
+		ServerUUID:      primaryUUID,
+	}
+
+	err = WriteInstance(primaryInstance, true, nil)
+	require.NoError(t, err)
+
+	// Create a wrong primary instance that contains the replica UUID in its
+	// executed GTID set. This masks errant GTIDs if the replica uses it for
+	// comparison
+	wrongPrimaryInstance := &Instance{
+		InstanceAlias:   "zone-1-0000000102",
+		Hostname:        "wrong-primary",
+		Port:            6720,
+		SourceHost:      "",
+		ExecutedGtidSet: fmt.Sprintf("%s:1-10,%s:1-5", wrongPrimaryUUID, replicaUUID),
+		ServerUUID:      wrongPrimaryUUID,
+		AncestryUUID:    wrongPrimaryUUID,
+	}
+
+	err = WriteInstance(wrongPrimaryInstance, true, nil)
+	require.NoError(t, err)
+
+	// Create a replica instance that is pointed at the wrong primary. The replica
+	// contains errant GTIDs that should be caught.
+	replicaInstance := &Instance{
+		InstanceAlias:   topoproto.TabletAliasString(replicaTablet.Alias),
+		Hostname:        "replica-host",
+		Port:            6711,
+		SourceHost:      wrongPrimaryInstance.Hostname,
+		SourcePort:      wrongPrimaryInstance.Port,
+		SourceUUID:      wrongPrimaryInstance.ServerUUID,
+		ExecutedGtidSet: fmt.Sprintf("%s:1-10,%s:1-5", wrongPrimaryUUID, replicaUUID),
+		ServerUUID:      replicaUUID,
+	}
+
+	err = ReadInstanceClusterAttributes(replicaInstance)
+	require.NoError(t, err)
+	require.Equal(t, wrongPrimaryInstance.ExecutedGtidSet, replicaInstance.primaryExecutedGtidSet)
+	require.Equal(t, wrongPrimaryInstance.AncestryUUID, replicaInstance.AncestryUUID)
+
+	// Run errant GTID detection. We should find some.
+	err = detectErrantGTIDs(replicaInstance, replicaTablet)
+	require.NoError(t, err)
+
+	// The replica's own UUID entries should be reported as errant because the
+	// real shard primary does not include them.
+	require.Equal(t, replicaUUID+":1-5", replicaInstance.GtidErrant)
 }
 
 // TestPrimaryErrantGTIDs tests that we don't run Errant GTID detection on the primary tablet itself!

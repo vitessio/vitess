@@ -24,7 +24,7 @@ jobs:
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+      uses: step-security/harden-runner@e3f713f2d8f53843e71c69a996d56f51aa9adfb9 # v2.14.1
       with:
         egress-policy: audit
 
@@ -87,6 +87,10 @@ jobs:
       with:
         flavor: mysql-8.4
 
+    - name: Setup Percona Apt repository
+      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
+      uses: ./.github/actions/setup-percona-repo
+
     - name: Get base dependencies
       timeout-minutes: 10
       if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
@@ -98,9 +102,6 @@ jobs:
         
         sudo service etcd stop
 
-        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo apt-get install -y gnupg2
-        sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
         sudo percona-release enable-only tools
         sudo apt-get update
         sudo apt-get install -y percona-xtrabackup-80

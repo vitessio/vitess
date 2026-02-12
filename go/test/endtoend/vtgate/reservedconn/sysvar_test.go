@@ -191,6 +191,35 @@ func TestSetSystemVariableAndThenSuccessfulAutocommitDML(t *testing.T) {
 	utils.AssertMatches(t, conn, `select @@sql_safe_updates`, `[[INT64(1)]]`)
 }
 
+// This test ensures that when autocommit is disabled, `SET` commands do not
+// cause an implicit transaction to be started.
+//
+// We test this via `set session transaction isolation level` because
+// changing the session transaction isolation level affects only the next
+// transaction that's started.
+func TestSetSystemVariableWithAutocommitDisabled(t *testing.T) {
+	conn1, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn1.Close()
+
+	conn2, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn2.Close()
+
+	utils.Exec(t, conn1, "delete from test")
+	utils.Exec(t, conn1, "delete from test_vdx")
+
+	utils.Exec(t, conn1, "set autocommit = 0")
+
+	utils.Exec(t, conn1, "set session transaction isolation level read uncommitted")
+	utils.AssertMatches(t, conn1, "select @@transaction_isolation", `[[VARCHAR("READ-UNCOMMITTED")]]`)
+
+	utils.Exec(t, conn2, "begin")
+	utils.Exec(t, conn2, "insert into test (id, val1) values (80, null)")
+
+	utils.AssertMatches(t, conn1, "select id from test where id = 80", `[[INT64(80)]]`)
+}
+
 func TestStartTxAndSetSystemVariableAndThenSuccessfulCommit(t *testing.T) {
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
@@ -414,42 +443,74 @@ func checkOltpAndOlapInterchangingTx(t *testing.T, conn *mysql.Conn) {
 }
 
 func TestSysVarTxIsolation(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
+	t.Run("returns the default isolation level if unchanged", func(t *testing.T) {
+		conn, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(t, err)
+		defer conn.Close()
 
-	// will run every check twice to see that the isolation level is set for all the queries in the session and
+		utils.Exec(t, conn, "delete from test")
+		utils.Exec(t, conn, "delete from test_vdx")
 
-	// default from mysql
-	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("REPEATABLE-READ")]]`)
-	// ensuring it goes to mysql
-	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `REPEATABLE-READ`)
-	// second run, ensuring it has the same value.
-	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `REPEATABLE-READ`)
+		// default from mysql
+		utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("REPEATABLE-READ")]]`)
+		// ensuring it goes to mysql
+		utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `REPEATABLE-READ`)
+		// second run, ensuring it has the same value.
+		utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `REPEATABLE-READ`)
 
-	// setting to different value.
-	utils.Exec(t, conn, "set @@transaction_isolation = 'read-committed'")
-	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-COMMITTED")]]`)
-	// ensuring it goes to mysql
-	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `READ-COMMITTED`)
-	// second run, to ensuring the setting is applied on the session and not just on next query after settings.
-	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `READ-COMMITTED`)
+		// Switch to shard targeting
+		utils.Exec(t, conn, "use `"+keyspaceName+":-80`")
 
-	// changing setting to different value.
-	utils.Exec(t, conn, "set session transaction isolation level read uncommitted")
-	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-UNCOMMITTED")]]`)
-	// ensuring it goes to mysql
-	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `READ-UNCOMMITTED`)
-	// second run, to ensuring the setting is applied on the session and not just on next query after settings.
-	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `READ-UNCOMMITTED`)
+		utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("REPEATABLE-READ")]]`)
+		utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `REPEATABLE-READ`)
+		utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `REPEATABLE-READ`)
+	})
 
-	// changing setting to different value.
-	utils.Exec(t, conn, "set transaction isolation level serializable")
-	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("SERIALIZABLE")]]`)
-	// ensuring it goes to mysql
-	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `SERIALIZABLE`)
-	// second run, to ensuring the setting is applied on the session and not just on next query after settings.
-	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `SERIALIZABLE`)
+	t.Run("allows changing the isolation level via special syntax", func(t *testing.T) {
+		conn, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(t, err)
+		defer conn.Close()
+
+		utils.Exec(t, conn, "delete from test")
+		utils.Exec(t, conn, "delete from test_vdx")
+
+		// setting to different value.
+		utils.Exec(t, conn, "set session transaction isolation level read committed")
+
+		utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-COMMITTED")]]`)
+		utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `READ-COMMITTED`)
+		utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `READ-COMMITTED`)
+
+		// Switch to shard targeting
+		utils.Exec(t, conn, "use `"+keyspaceName+":-80`")
+		utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-COMMITTED")]]`)
+
+		utils.Exec(t, conn, "set session transaction isolation level read uncommitted")
+		utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-UNCOMMITTED")]]`)
+	})
+
+	t.Run("allows changing the isolation level via session variable", func(t *testing.T) {
+		conn, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(t, err)
+		defer conn.Close()
+
+		utils.Exec(t, conn, "delete from test")
+		utils.Exec(t, conn, "delete from test_vdx")
+
+		// setting to different value.
+		utils.Exec(t, conn, "set @@session.transaction_isolation = 'read-committed'")
+
+		utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-COMMITTED")]]`)
+		utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `READ-COMMITTED`)
+		utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `READ-COMMITTED`)
+
+		// Switch to shard targeting
+		utils.Exec(t, conn, "use `"+keyspaceName+":-80`")
+		utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-COMMITTED")]]`)
+
+		utils.Exec(t, conn, "set @@session.transaction_isolation = 'read-uncommitted'")
+		utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-UNCOMMITTED")]]`)
+	})
 }
 
 // TestSysVarInnodbWaitTimeout tests the innodb_lock_wait_timeout system variable
@@ -482,4 +543,339 @@ func TestSysVarInnodbWaitTimeout(t *testing.T) {
 	utils.AssertContains(t, conn, "select @@innodb_lock_wait_timeout, connection_id()", `INT64(240)`)
 	// second run, to ensuring the setting is applied on the session and not just on next query after settings.
 	utils.AssertContains(t, conn, "select @@innodb_lock_wait_timeout, connection_id()", `INT64(240)`)
+}
+
+// TestImplicitTxOnAutocommitOff verifies that vtgate only starts implicit
+// transactions for statements that access real table data when autocommit=0,
+// matching MySQL's behavior.
+func TestImplicitTxOnAutocommitOff(t *testing.T) {
+	tests := []struct {
+		name     string
+		query    string
+		startsTx bool
+	}{
+		{
+			name:     "SELECT from real table starts tx",
+			query:    "select id from test where id = 1",
+			startsTx: true,
+		},
+		{
+			name:     "SELECT @@variable does not start tx",
+			query:    "select @@autocommit",
+			startsTx: false,
+		},
+		{
+			name:     "SELECT 1 does not start tx",
+			query:    "select 1",
+			startsTx: false,
+		},
+		{
+			name:     "SELECT from dual does not start tx",
+			query:    "select 1 from dual",
+			startsTx: false,
+		},
+		{
+			name:     "INSERT starts tx",
+			query:    "insert into test (id, val1) values (999, null)",
+			startsTx: true,
+		},
+		{
+			name:     "UPDATE starts tx",
+			query:    "update test set val1 = 'x' where id = 999",
+			startsTx: true,
+		},
+		{
+			name:     "DELETE starts tx",
+			query:    "delete from test where id = 999",
+			startsTx: true,
+		},
+		{
+			name:     "SET variable does not start tx",
+			query:    "set sql_safe_updates = 1",
+			startsTx: false,
+		},
+		{
+			name:     "COMMIT does not start tx",
+			query:    "commit",
+			startsTx: false,
+		},
+		{
+			name:     "ROLLBACK does not start tx",
+			query:    "rollback",
+			startsTx: false,
+		},
+		// SHOW commands that start implicit transactions (access information_schema / data dictionaries):
+		{
+			name:     "SHOW TABLES starts tx",
+			query:    "show tables",
+			startsTx: true,
+		},
+		{
+			name:     "SHOW DATABASES starts tx",
+			query:    "show databases",
+			startsTx: true,
+		},
+		{
+			name:     "SHOW COLUMNS starts tx",
+			query:    "show columns from test",
+			startsTx: true,
+		},
+		{
+			name:     "SHOW INDEX starts tx",
+			query:    "show index from test",
+			startsTx: true,
+		},
+		{
+			name:     "SHOW TABLE STATUS starts tx",
+			query:    "show table status",
+			startsTx: true,
+		},
+		{
+			name:     "SHOW TRIGGERS starts tx",
+			query:    "show triggers",
+			startsTx: true,
+		},
+		{
+			name:     "SHOW CHARSET starts tx",
+			query:    "show charset",
+			startsTx: true,
+		},
+		{
+			name:     "SHOW COLLATION starts tx",
+			query:    "show collation",
+			startsTx: true,
+		},
+		{
+			name:     "SHOW FUNCTION STATUS starts tx",
+			query:    "show function status",
+			startsTx: true,
+		},
+		{
+			name:     "SHOW PROCEDURE STATUS starts tx",
+			query:    "show procedure status",
+			startsTx: true,
+		},
+		// SHOW commands that do NOT start implicit transactions (read server state only):
+		{
+			name:     "SHOW VARIABLES does not start tx",
+			query:    "show variables like 'version'",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW SESSION VARIABLES does not start tx",
+			query:    "show session variables like 'version'",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW GLOBAL VARIABLES does not start tx",
+			query:    "show global variables like 'version'",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW STATUS does not start tx",
+			query:    "show status like 'Uptime'",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW GLOBAL STATUS does not start tx",
+			query:    "show global status like 'Uptime'",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW WARNINGS does not start tx",
+			query:    "show warnings",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW ENGINES does not start tx",
+			query:    "show engines",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW PLUGINS does not start tx",
+			query:    "show plugins",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW PRIVILEGES does not start tx",
+			query:    "show privileges",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW OPEN TABLES does not start tx",
+			query:    "show open tables",
+			startsTx: false,
+		},
+		// ShowCreate commands do not start implicit transactions.
+		{
+			name:     "SHOW CREATE TABLE does not start tx",
+			query:    "show create table test",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW CREATE DATABASE does not start tx",
+			query:    "show create database " + keyspaceName,
+			startsTx: false,
+		},
+		// ShowOther commands are sent to MySQL as-is and do not start implicit transactions.
+		{
+			name:     "SHOW PROCESSLIST does not start tx",
+			query:    "show processlist",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW BINARY LOGS does not start tx",
+			query:    "show binary logs",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW GRANTS does not start tx",
+			query:    "show grants",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW ERRORS does not start tx",
+			query:    "show errors",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW EVENTS does not start tx",
+			query:    "show events",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW PROFILES does not start tx",
+			query:    "show profiles",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW REPLICA STATUS does not start tx",
+			query:    "show replica status",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW ENGINE INNODB STATUS does not start tx",
+			query:    "show engine innodb status",
+			startsTx: false,
+		},
+		// Vitess-specific SHOW commands are handled internally by vtgate
+		// and should not start implicit transactions.
+		{
+			name:     "SHOW VITESS_TABLETS does not start tx",
+			query:    "show vitess_tablets",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW VITESS_SHARDS does not start tx",
+			query:    "show vitess_shards",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW VITESS_TARGET does not start tx",
+			query:    "show vitess_target",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW VSCHEMA TABLES does not start tx",
+			query:    "show vschema tables",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW VSCHEMA KEYSPACES does not start tx",
+			query:    "show vschema keyspaces",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW VSCHEMA VINDEXES does not start tx",
+			query:    "show vschema vindexes",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW KEYSPACES does not start tx",
+			query:    "show keyspaces",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW VITESS_MIGRATIONS does not start tx",
+			query:    "show vitess_migrations",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW VITESS_REPLICATION_STATUS does not start tx",
+			query:    "show vitess_replication_status",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW GLOBAL GTID_EXECUTED does not start tx",
+			query:    "show global gtid_executed",
+			startsTx: false,
+		},
+		{
+			name:     "SHOW GLOBAL VGTID_EXECUTED does not start tx",
+			query:    "show global vgtid_executed",
+			startsTx: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			conn, err := mysql.Connect(context.Background(), &vtParams)
+			require.NoError(t, err)
+			defer conn.Close()
+
+			utils.Exec(t, conn, "delete from test")
+			utils.Exec(t, conn, "delete from test_vdx")
+
+			utils.Exec(t, conn, "set autocommit = 0")
+
+			result := utils.Exec(t, conn, tc.query)
+
+			inTx := result.StatusFlags&mysql.ServerStatusInTrans != 0
+			if tc.startsTx {
+				assert.True(t, inTx, "expected %q to start an implicit transaction", tc.query)
+			} else {
+				assert.False(t, inTx, "expected %q to NOT start an implicit transaction", tc.query)
+			}
+		})
+	}
+
+	t.Run("ROLLBACK TO SAVEPOINT returns an error when no transaction has been started", func(t *testing.T) {
+		conn, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(t, err)
+		defer conn.Close()
+
+		utils.Exec(t, conn, "set autocommit = 0")
+
+		_, err = utils.ExecAllowError(t, conn, "ROLLBACK TO SAVEPOINT sp1")
+		require.Error(t, err)
+		sqlErr, ok := err.(*sqlerror.SQLError)
+		require.True(t, ok, "not a mysql error: %T", err)
+		assert.Equal(t, sqlerror.ERSPDoesNotExist, sqlErr.Number())
+		assert.Equal(t, sqlerror.SSClientError, sqlErr.SQLState())
+		assert.Contains(t, sqlErr.Error(), "SAVEPOINT does not exist: ROLLBACK TO SAVEPOINT sp1 (errno 1305) (sqlstate 42000)")
+
+		result := utils.Exec(t, conn, "select 1")
+		inTx := result.StatusFlags&mysql.ServerStatusInTrans != 0
+		assert.False(t, inTx, "expected ROLLBACK TO SAVEPOINT to not start a transaction")
+	})
+
+	t.Run("RELEASE SAVEPOINT returns an error when no transaction has been started", func(t *testing.T) {
+		conn, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(t, err)
+		defer conn.Close()
+
+		utils.Exec(t, conn, "set autocommit = 0")
+
+		_, err = utils.ExecAllowError(t, conn, "RELEASE SAVEPOINT sp1")
+		require.Error(t, err)
+		sqlErr, ok := err.(*sqlerror.SQLError)
+		require.True(t, ok, "not a mysql error: %T", err)
+		assert.Equal(t, sqlerror.ERSPDoesNotExist, sqlErr.Number())
+		assert.Equal(t, sqlerror.SSClientError, sqlErr.SQLState())
+		assert.Contains(t, sqlErr.Error(), "SAVEPOINT does not exist: RELEASE SAVEPOINT sp1 (errno 1305) (sqlstate 42000)")
+
+		result := utils.Exec(t, conn, "select 1")
+		inTx := result.StatusFlags&mysql.ServerStatusInTrans != 0
+		assert.False(t, inTx, "expected RELEASE SAVEPOINT to not start a transaction")
+	})
 }

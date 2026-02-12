@@ -55,6 +55,7 @@
     <dependency>
       <groupId>io.grpc</groupId>
       <artifactId>grpc-inprocess</artifactId>
+      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>io.netty</groupId>
@@ -83,7 +84,17 @@
     <dependency>
       <groupId>io.opentracing.contrib</groupId>
       <artifactId>opentracing-grpc</artifactId>
-      <version>0.0.12</version>
+      <version>0.2.3</version>
+    </dependency>
+    <dependency>
+      <groupId>io.opentracing</groupId>
+      <artifactId>opentracing-noop</artifactId>
+      <version>0.33.0</version>
+    </dependency>
+    <dependency>
+      <groupId>io.opentracing</groupId>
+      <artifactId>opentracing-api</artifactId>
+      <version>0.33.0</version>
     </dependency>
 
     <!-- Dependencies with limited scope. -->
@@ -99,14 +110,14 @@
       <extension>
         <groupId>kr.motd.maven</groupId>
         <artifactId>os-maven-plugin</artifactId>
-        <version>1.2.3.Final</version>
+        <version>1.7.1</version>
       </extension>
     </extensions>
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-        <version>2.22.1</version>
+        <version>3.5.4</version>
         <configuration>
           <!-- <argLine>${surefireArgLine}</argLine> -->
 		  <useManifestOnlyJar>false</useManifestOnlyJar>

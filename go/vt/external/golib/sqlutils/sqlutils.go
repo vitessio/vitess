@@ -135,6 +135,11 @@ func (rm *RowMap) GetTime(key string) time.Time {
 	if t, err := time.Parse(DateTimeFormat, rm.GetString(key)); err == nil {
 		return t
 	}
+
+	if t, err := time.Parse(time.RFC3339Nano, rm.GetString(key)); err == nil {
+		return t
+	}
+
 	return time.Time{}
 }
 
