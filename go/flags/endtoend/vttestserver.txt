@@ -86,7 +86,7 @@ Flags:
       --log-err-stacks                                                   log stack traces for errors
       --log-level string                                                 minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
       --log-rotate-max-size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
-      --log-structured                                                   enable structured logging (default true)
+      --log-structured                                                   enable structured JSON logging (default true)
       --manifest-external-decompressor string                            command with arguments to store in the backup manifest when compressing a backup with an external compression engine.
       --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
       --max-table-shard-size int                                         The maximum number of initial rows in a table shard. Ignored if--initialize-with-random-data is false. The actual number is chosen randomly (default 10000)

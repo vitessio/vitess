@@ -56,7 +56,7 @@ Flags:
       --log-err-stacks                                              log stack traces for errors
       --log-level string                                            minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
       --log-rotate-max-size uint                                    size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
-      --log-structured                                              enable structured logging (default true)
+      --log-structured                                              enable structured JSON logging (default true)
       --mysql-server-version string                                 MySQL server version to advertise. (default "8.4.6-Vitess")
       --normalize                                                   Whether to enable vtgate normalization
       --output-mode string                                          Output in human-friendly text or json (default "text")

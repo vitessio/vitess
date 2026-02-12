@@ -167,7 +167,7 @@ Flags:
       --log-err-stacks                                              log stack traces for errors
       --log-level string                                            minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
       --log-rotate-max-size uint                                    size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
-      --log-structured                                              enable structured logging (default true)
+      --log-structured                                              enable structured JSON logging (default true)
       --manifest-external-decompressor string                       command with arguments to store in the backup manifest when compressing a backup with an external compression engine.
       --min-backup-interval duration                                Only take a new backup if it's been at least this long since the most recent backup.
       --min-retention-count int                                     Always keep at least this many of the most recent backups in this backup storage location, even if some are older than the min_retention_time. This must be at least 1 since a backup must always exist to allow new backups to be made (default 1)

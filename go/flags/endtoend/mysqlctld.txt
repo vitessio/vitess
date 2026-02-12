@@ -95,7 +95,7 @@ Flags:
       --log-err-stacks                                                   log stack traces for errors
       --log-level string                                                 minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
       --log-rotate-max-size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
-      --log-structured                                                   enable structured logging (default true)
+      --log-structured                                                   enable structured JSON logging (default true)
       --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
       --mysql-port int                                                   MySQL port (default 3306)
       --mysql-server-version string                                      MySQL server version to advertise. (default "8.4.6-Vitess")
