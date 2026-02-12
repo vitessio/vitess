@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/ptr"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
@@ -156,10 +155,10 @@ func TestExecutorSet(t *testing.T) {
 		err: "incorrect argument type to variable 'workload': INT64",
 	}, {
 		in:  "set tx_isolation = 'read-committed'",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, SystemVariables: map[string]string{"tx_isolation": "'READ-COMMITTED'"}},
 	}, {
 		in:  "set transaction_isolation = 'read-committed'",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, SystemVariables: map[string]string{"transaction_isolation": "'READ-COMMITTED'"}},
 	}, {
 		in:  "set transaction_mode = 'twopc', autocommit=1",
 		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
@@ -207,37 +206,34 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set tx_read_only = 2",
-		err: "variable 'tx_read_only' can't be set to the value: 2 is not a boolean",
+		out: &vtgatepb.Session{Autocommit: true, SystemVariables: map[string]string{"tx_read_only": "2"}},
 	}, {
 		in:  "set transaction_read_only = 2",
-		err: "variable 'transaction_read_only' can't be set to the value: 2 is not a boolean",
+		out: &vtgatepb.Session{Autocommit: true, SystemVariables: map[string]string{"transaction_read_only": "2"}},
 	}, {
 		in:  "set session transaction isolation level repeatable read",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, SystemVariables: map[string]string{"transaction_isolation": "'REPEATABLE-READ'"}},
 	}, {
 		in:  "set session transaction isolation level read committed",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, SystemVariables: map[string]string{"transaction_isolation": "'READ-COMMITTED'"}},
 	}, {
 		in:  "set session transaction isolation level read uncommitted",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, SystemVariables: map[string]string{"transaction_isolation": "'READ-UNCOMMITTED'"}},
 	}, {
 		in:  "set session transaction isolation level serializable",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, SystemVariables: map[string]string{"transaction_isolation": "'SERIALIZABLE'"}},
 	}, {
-		in: "set transaction isolation level serializable",
-		out: &vtgatepb.Session{
-			Autocommit: true,
-			Warnings:   []*querypb.QueryWarning{{Code: uint32(sqlerror.ERNotSupportedYet), Message: "converted 'next transaction' scope to 'session' scope"}},
-		},
+		in:  "set transaction isolation level serializable",
+		out: &vtgatepb.Session{Autocommit: true, SystemVariables: map[string]string{"transaction_isolation": "'SERIALIZABLE'"}},
 	}, {
 		in:  "set transaction read only",
-		out: &vtgatepb.Session{Autocommit: true, Warnings: []*querypb.QueryWarning{{Code: uint32(sqlerror.ERNotSupportedYet), Message: "converted 'next transaction' scope to 'session' scope"}}},
+		out: &vtgatepb.Session{Autocommit: true, SystemVariables: map[string]string{"transaction_read_only": "1"}},
 	}, {
 		in:  "set transaction read write",
-		out: &vtgatepb.Session{Autocommit: true, Warnings: []*querypb.QueryWarning{{Code: uint32(sqlerror.ERNotSupportedYet), Message: "converted 'next transaction' scope to 'session' scope"}}},
+		out: &vtgatepb.Session{Autocommit: true, SystemVariables: map[string]string{"transaction_read_only": "0"}},
 	}, {
 		in:  "set session transaction read write",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, SystemVariables: map[string]string{"transaction_read_only": "0"}},
 	}, {
 		in:  "set @@enable_system_settings = on",
 		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: true},
@@ -370,8 +366,13 @@ func TestExecutorSetOp(t *testing.T) {
 		result: returnNoResult("client_found_rows", "int64"),
 	}, {
 		in:      "set tx_isolation = 'read-committed'",
-		sysVars: map[string]string{"tx_isolation": "'read-committed'"},
-		result:  returnResult("tx_isolation", "varchar", "read-committed"),
+		sysVars: map[string]string{"tx_isolation": "'READ-COMMITTED'"},
+	}, {
+		in:      "set transaction_read_only = 1",
+		sysVars: map[string]string{"transaction_read_only": "1"},
+	}, {
+		in:      "set tx_read_only = 1",
+		sysVars: map[string]string{"tx_read_only": "1"},
 	}, {
 		in:      "set @@innodb_lock_wait_timeout=120",
 		sysVars: map[string]string{"innodb_lock_wait_timeout": "120"},

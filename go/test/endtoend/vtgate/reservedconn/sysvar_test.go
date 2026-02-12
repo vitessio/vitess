@@ -423,15 +423,10 @@ func TestSysVarTxIsolation(t *testing.T) {
 		utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("REPEATABLE-READ")]]`)
 		// ensuring it goes to mysql
 		utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `REPEATABLE-READ`)
-		// second run, ensuring it has the same value.
-		utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `REPEATABLE-READ`)
 
 		// Switch to shard targeting
 		utils.Exec(t, conn, "use `"+keyspaceName+":-80`")
-
 		utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("REPEATABLE-READ")]]`)
-		utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `REPEATABLE-READ`)
-		utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `REPEATABLE-READ`)
 	})
 
 	t.Run("allows changing the isolation level via special syntax", func(t *testing.T) {
@@ -439,14 +434,14 @@ func TestSysVarTxIsolation(t *testing.T) {
 		require.NoError(t, err)
 		defer conn.Close()
 
-		// setting to different value.
+		// Setting isolation level no longer creates a reserved connection.
+		// The value is stored in the session and applied at BEGIN time.
 		utils.Exec(t, conn, "set session transaction isolation level read committed")
 
+		// Vtgate returns the stored session value
 		utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-COMMITTED")]]`)
-		utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `READ-COMMITTED`)
-		utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `READ-COMMITTED`)
 
-		// Switch to shard targeting
+		// Switch to shard targeting - vtgate still returns the stored value
 		utils.Exec(t, conn, "use `"+keyspaceName+":-80`")
 		utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-COMMITTED")]]`)
 
@@ -459,19 +454,69 @@ func TestSysVarTxIsolation(t *testing.T) {
 		require.NoError(t, err)
 		defer conn.Close()
 
-		// setting to different value.
+		// Setting isolation level no longer creates a reserved connection.
 		utils.Exec(t, conn, "set @@session.transaction_isolation = 'read-committed'")
 
+		// Vtgate returns the stored session value
 		utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-COMMITTED")]]`)
-		utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `READ-COMMITTED`)
-		utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `READ-COMMITTED`)
 
-		// Switch to shard targeting
+		// Switch to shard targeting - vtgate still returns the stored value
 		utils.Exec(t, conn, "use `"+keyspaceName+":-80`")
 		utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-COMMITTED")]]`)
 
 		utils.Exec(t, conn, "set @@session.transaction_isolation = 'read-uncommitted'")
 		utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-UNCOMMITTED")]]`)
+	})
+}
+
+func TestSysVarTxReadOnly(t *testing.T) {
+	t.Run("transaction_read_only", func(t *testing.T) {
+		conn, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(t, err)
+		defer conn.Close()
+
+		// default is 0
+		utils.AssertMatches(t, conn, "select @@transaction_read_only", `[[INT64(0)]]`)
+
+		// set to 1
+		utils.Exec(t, conn, "set transaction_read_only = 1")
+		utils.AssertMatches(t, conn, "select @@transaction_read_only", `[[INT64(1)]]`)
+		// persists across queries
+		utils.AssertContains(t, conn, "select @@transaction_read_only, connection_id()", `INT64(1)`)
+
+		// set back to 0
+		utils.Exec(t, conn, "set transaction_read_only = 0")
+		utils.AssertMatches(t, conn, "select @@transaction_read_only", `[[INT64(0)]]`)
+	})
+
+	t.Run("transaction_read_only invalid value", func(t *testing.T) {
+		conn, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(t, err)
+		defer conn.Close()
+
+		// Start a transaction to establish shard sessions so the SET is forwarded to MySQL.
+		utils.Exec(t, conn, "begin")
+		utils.Exec(t, conn, "select id from test limit 1")
+		_, err = utils.ExecAllowError(t, conn, "set transaction_read_only = 2")
+		require.Error(t, err)
+		utils.Exec(t, conn, "rollback")
+	})
+
+	t.Run("tx_read_only", func(t *testing.T) {
+		conn, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(t, err)
+		defer conn.Close()
+
+		// tx_read_only was removed in MySQL 8.0, so SET will fail on 8.0+.
+		// We just verify vtgate forwards it and surfaces the MySQL error.
+		_, err = utils.ExecAllowError(t, conn, "set tx_read_only = 1")
+		if err != nil {
+			// MySQL 8.0+: unknown system variable
+			assert.Contains(t, err.Error(), "tx_read_only")
+		} else {
+			// MySQL 5.7: should work
+			utils.AssertMatches(t, conn, "select @@tx_read_only", `[[INT64(1)]]`)
+		}
 	})
 }
 

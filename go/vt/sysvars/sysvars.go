@@ -69,8 +69,6 @@ var (
 	Socket                      = SystemVariable{Name: "socket", Default: off}
 	SQLSelectLimit              = SystemVariable{Name: "sql_select_limit", Default: off, SupportSetVar: true}
 	TransactionMode             = SystemVariable{Name: "transaction_mode", IdentifierAsString: true}
-	TransactionReadOnly         = SystemVariable{Name: "transaction_read_only", IsBoolean: true, Default: off}
-	TxReadOnly                  = SystemVariable{Name: "tx_read_only", IsBoolean: true, Default: off}
 	Workload                    = SystemVariable{Name: "workload", IdentifierAsString: true}
 	QueryTimeout                = SystemVariable{Name: "query_timeout"}
 	TransactionTimeout          = SystemVariable{Name: "transaction_timeout"}
@@ -95,8 +93,6 @@ var (
 		Autocommit,
 		ClientFoundRows,
 		SkipQueryPlanCache,
-		TxReadOnly,
-		TransactionReadOnly,
 		SQLSelectLimit,
 		TransactionMode,
 		DDLStrategy,
@@ -229,9 +225,7 @@ var (
 		{Name: "sql_warnings", IsBoolean: true},
 		{Name: "time_zone"},
 		{Name: "tmp_table_size", SupportSetVar: true},
-		{Name: "transaction_isolation", Case: SCUpper},
 		{Name: "transaction_prealloc_size"},
-		{Name: "tx_isolation", Case: SCUpper},
 		{Name: "unique_checks", IsBoolean: true, SupportSetVar: true},
 		{Name: "updatable_views_with_limit", IsBoolean: true, SupportSetVar: true},
 	}
@@ -288,6 +282,12 @@ func init() {
 			AllSystemVariables[v.Name] = v
 		}
 	}
+	// These variables are handled by custom planning functions (not UseReservedConn),
+	// but still need to be in AllSystemVariables for metadata lookups.
+	AllSystemVariables["transaction_isolation"] = SystemVariable{Name: "transaction_isolation", Case: SCUpper}
+	AllSystemVariables["tx_isolation"] = SystemVariable{Name: "tx_isolation", Case: SCUpper}
+	AllSystemVariables["transaction_read_only"] = SystemVariable{Name: "transaction_read_only", IsBoolean: true}
+	AllSystemVariables["tx_read_only"] = SystemVariable{Name: "tx_read_only", IsBoolean: true}
 }
 
 func SupportsSetVar(name string) bool {

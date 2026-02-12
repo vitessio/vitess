@@ -231,6 +231,18 @@ func (t *noopVCursor) GetSessionUUID() string {
 	panic("implement me")
 }
 
+func (t *noopVCursor) SetSessionIsolationLevel(querypb.ExecuteOptions_TransactionIsolation) {
+}
+
+func (t *noopVCursor) SetNextTxIsolationLevel(querypb.ExecuteOptions_TransactionIsolation) {
+}
+
+func (t *noopVCursor) SetSessionReadOnly(bool) {
+}
+
+func (t *noopVCursor) SetNextTxReadOnly(bool) {
+}
+
 func (t *noopVCursor) SetReadAfterWriteGTID(s string) {
 	panic("implement me")
 }

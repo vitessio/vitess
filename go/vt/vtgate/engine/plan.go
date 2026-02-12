@@ -194,7 +194,7 @@ func getPlanTypeForSet(prim *Set) (pt PlanType) {
 
 func getPlanTypeForSetOp(op SetOp) PlanType {
 	switch op.(type) {
-	case *UserDefinedVariable, *SysVarIgnore, *SysVarSetAware:
+	case *UserDefinedVariable, *SysVarIgnore, *SysVarSetAware, *SysVarSetIsolationLevel, *SysVarSetReadOnly:
 		return PlanLocal
 	case *SysVarCheckAndIgnore:
 		return PlanPassthrough

@@ -121,6 +121,22 @@ func (txc *TxConn) Begin(ctx context.Context, session *econtext.SafeSession, txA
 			options.TransactionAccessMode = append(options.TransactionAccessMode, accessMode)
 		}
 	}
+
+	// Apply stored isolation level (session or next-tx) to execute options
+	if isolationLevel := session.IsolationLevelForBegin(); isolationLevel != querypb.ExecuteOptions_DEFAULT {
+		options := session.GetOrCreateOptions()
+		options.TransactionIsolation = isolationLevel
+	}
+
+	// Apply stored read-only mode, but only if no explicit txAccessModes were provided
+	// (START TRANSACTION READ ONLY/READ WRITE takes precedence)
+	if len(txAccessModes) == 0 {
+		if readOnly := session.ReadOnlyForBegin(); readOnly != nil && *readOnly {
+			options := session.GetOrCreateOptions()
+			options.TransactionAccessMode = append(options.TransactionAccessMode, querypb.ExecuteOptions_READ_ONLY)
+		}
+	}
+
 	session.Session.InTransaction = true
 	return nil
 }

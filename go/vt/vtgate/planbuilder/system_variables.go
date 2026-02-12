@@ -81,6 +81,12 @@ func (pc *sysvarPlanCache) init(env *vtenv.Environment) {
 		pc.initForSettings(sysvars.CheckAndIgnore, buildSetOpCheckAndIgnore)
 		pc.initForSettings(sysvars.NotSupported, buildNotSupported)
 		pc.initForSettings(sysvars.VitessAware, buildSetOpVitessAware)
+
+		// Custom planning functions for transaction settings that avoid reserved connections.
+		pc.funcs["transaction_isolation"] = buildSetOpIsolationLevel()
+		pc.funcs["tx_isolation"] = buildSetOpIsolationLevel()
+		pc.funcs["transaction_read_only"] = buildSetOpTransactionReadOnly()
+		pc.funcs["tx_read_only"] = buildSetOpTransactionReadOnly()
 	})
 }
 

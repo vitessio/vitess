@@ -201,6 +201,11 @@ type (
 		GetSystemVariables(func(k string, v string))
 		HasSystemVariables() bool
 
+		SetSessionIsolationLevel(querypb.ExecuteOptions_TransactionIsolation)
+		SetNextTxIsolationLevel(querypb.ExecuteOptions_TransactionIsolation)
+		SetSessionReadOnly(bool)
+		SetNextTxReadOnly(bool)
+
 		// SetReadAfterWriteGTID sets the GTID that the user expects a replica to have caught up with before answering a query
 		SetReadAfterWriteGTID(string)
 		SetReadAfterWriteTimeout(float64)

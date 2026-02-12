@@ -94,6 +94,22 @@ type (
 	VitessMetadata struct {
 		Name, Value string
 	}
+
+	// SysVarSetIsolationLevel handles SET transaction_isolation / tx_isolation.
+	// It stores the value in the session and applies it at BEGIN time, avoiding reserved connections.
+	SysVarSetIsolationLevel struct {
+		Name     string
+		Expr     string
+		IsNextTx bool
+	}
+
+	// SysVarSetReadOnly handles SET transaction_read_only / tx_read_only.
+	// It stores the value in the session and applies it at BEGIN time, avoiding reserved connections.
+	SysVarSetReadOnly struct {
+		Name     string
+		Expr     string
+		IsNextTx bool
+	}
 )
 
 var unsupportedSQLModes = []string{"ANSI_QUOTES", "NO_BACKSLASH_ESCAPES", "PIPES_AS_CONCAT", "REAL_AS_FLOAT"}
@@ -412,11 +428,6 @@ func (svss *SysVarSetAware) Execute(ctx context.Context, vcursor VCursor, env *e
 		err = svss.setBoolSysVar(ctx, env, vcursor.Session().SetClientFoundRows)
 	case sysvars.SkipQueryPlanCache.Name:
 		err = svss.setBoolSysVar(ctx, env, vcursor.Session().SetSkipQueryPlanCache)
-	case sysvars.TxReadOnly.Name,
-		sysvars.TransactionReadOnly.Name:
-		// TODO (4127): This is a dangerous NOP.
-		noop := func(context.Context, bool) error { return nil }
-		err = svss.setBoolSysVar(ctx, env, noop)
 	case sysvars.SQLSelectLimit.Name:
 		intValue, err := svss.evalAsInt64(env, vcursor)
 		if err != nil {
@@ -578,6 +589,84 @@ func (svss *SysVarSetAware) setBoolSysVar(ctx context.Context, env *evalengine.E
 // VariableName implements the SetOp interface method
 func (svss *SysVarSetAware) VariableName() string {
 	return svss.Name
+}
+
+var _ SetOp = (*SysVarSetIsolationLevel)(nil)
+
+// isolationLevelMap maps MySQL isolation level strings to proto enum values.
+var isolationLevelMap = map[string]querypb.ExecuteOptions_TransactionIsolation{
+	"REPEATABLE-READ":  querypb.ExecuteOptions_REPEATABLE_READ,
+	"READ-COMMITTED":   querypb.ExecuteOptions_READ_COMMITTED,
+	"READ-UNCOMMITTED": querypb.ExecuteOptions_READ_UNCOMMITTED,
+	"SERIALIZABLE":     querypb.ExecuteOptions_SERIALIZABLE,
+}
+
+// MarshalJSON provides the type to SetOp for plan json
+func (svil *SysVarSetIsolationLevel) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Type string
+		SysVarSetIsolationLevel
+	}{
+		Type:                    "SysVarSetIsolationLevel",
+		SysVarSetIsolationLevel: *svil,
+	})
+}
+
+// VariableName implements the SetOp interface method
+func (svil *SysVarSetIsolationLevel) VariableName() string {
+	return svil.Name
+}
+
+// Execute implements the SetOp interface method
+func (svil *SysVarSetIsolationLevel) Execute(_ context.Context, vcursor VCursor, _ *evalengine.ExpressionEnv) error {
+	// Strip quotes from the expression value
+	val := strings.Trim(svil.Expr, "'\"")
+	val = strings.ToUpper(val)
+
+	level, ok := isolationLevelMap[val]
+	if !ok {
+		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "Variable 'transaction_isolation' can't be set to the value of '%s'", val)
+	}
+
+	vcursor.Session().SetSysVar(svil.Name, svil.Expr)
+	if svil.IsNextTx {
+		vcursor.Session().SetNextTxIsolationLevel(level)
+	} else {
+		vcursor.Session().SetSessionIsolationLevel(level)
+	}
+	return nil
+}
+
+var _ SetOp = (*SysVarSetReadOnly)(nil)
+
+// MarshalJSON provides the type to SetOp for plan json
+func (svro *SysVarSetReadOnly) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Type string
+		SysVarSetReadOnly
+	}{
+		Type:              "SysVarSetReadOnly",
+		SysVarSetReadOnly: *svro,
+	})
+}
+
+// VariableName implements the SetOp interface method
+func (svro *SysVarSetReadOnly) VariableName() string {
+	return svro.Name
+}
+
+// Execute implements the SetOp interface method
+func (svro *SysVarSetReadOnly) Execute(_ context.Context, vcursor VCursor, _ *evalengine.ExpressionEnv) error {
+	val := strings.TrimSpace(svro.Expr)
+	readOnly := val == "1" || strings.EqualFold(val, "on") || strings.EqualFold(val, "true")
+
+	vcursor.Session().SetSysVar(svro.Name, svro.Expr)
+	if svro.IsNextTx {
+		vcursor.Session().SetNextTxReadOnly(readOnly)
+	} else {
+		vcursor.Session().SetSessionReadOnly(readOnly)
+	}
+	return nil
 }
 
 var _ SetOp = (*VitessMetadata)(nil)

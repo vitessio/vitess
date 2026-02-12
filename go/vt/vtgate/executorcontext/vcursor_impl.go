@@ -1074,6 +1074,22 @@ func (vc *VCursorImpl) SetSysVar(name string, expr string) {
 	vc.SafeSession.SetSystemVariable(name, expr)
 }
 
+func (vc *VCursorImpl) SetSessionIsolationLevel(level querypb.ExecuteOptions_TransactionIsolation) {
+	vc.SafeSession.SetSessionIsolationLevel(level)
+}
+
+func (vc *VCursorImpl) SetNextTxIsolationLevel(level querypb.ExecuteOptions_TransactionIsolation) {
+	vc.SafeSession.SetNextTxIsolationLevel(level)
+}
+
+func (vc *VCursorImpl) SetSessionReadOnly(val bool) {
+	vc.SafeSession.SetSessionReadOnly(val)
+}
+
+func (vc *VCursorImpl) SetNextTxReadOnly(val bool) {
+	vc.SafeSession.SetNextTxReadOnly(val)
+}
+
 func (vc *VCursorImpl) CheckForReservedConnection(setVarComment string, stmt sqlparser.Statement) {
 	if setVarComment == "" {
 		return

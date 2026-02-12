@@ -553,7 +553,7 @@
     "plan": "VT03010: variable 'socket' is a read only variable"
   },
   {
-    "comment": "set transaction read only",
+    "comment": "set transaction read only (session scope)",
     "query": "set session transaction read only",
     "plan": {
       "Type": "Local",
@@ -563,9 +563,10 @@
         "OperatorType": "Set",
         "Ops": [
           {
-            "Type": "SysVarAware",
+            "Type": "SysVarSetReadOnly",
             "Name": "transaction_read_only",
-            "Expr": "1"
+            "Expr": "1",
+            "IsNextTx": false
           }
         ],
         "Inputs": [
@@ -577,24 +578,145 @@
     }
   },
   {
-    "comment": "set transaction isolation level",
+    "comment": "set transaction_read_only session variable",
+    "query": "set transaction_read_only = 1",
+    "plan": {
+      "Type": "Local",
+      "QueryType": "SET",
+      "Original": "set transaction_read_only = 1",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarSetReadOnly",
+            "Name": "transaction_read_only",
+            "Expr": "1",
+            "IsNextTx": false
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "set tx_read_only deprecated alias",
+    "query": "set tx_read_only = 1",
+    "plan": {
+      "Type": "Local",
+      "QueryType": "SET",
+      "Original": "set tx_read_only = 1",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarSetReadOnly",
+            "Name": "tx_read_only",
+            "Expr": "1",
+            "IsNextTx": false
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "set transaction read write (session scope)",
+    "query": "set session transaction read write",
+    "plan": {
+      "Type": "Local",
+      "QueryType": "SET",
+      "Original": "set session transaction read write",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarSetReadOnly",
+            "Name": "transaction_read_only",
+            "Expr": "0",
+            "IsNextTx": false
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "set transaction read only (next-tx scope)",
+    "query": "set transaction read only",
+    "plan": {
+      "Type": "Local",
+      "QueryType": "SET",
+      "Original": "set transaction read only",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarSetReadOnly",
+            "Name": "transaction_read_only",
+            "Expr": "1",
+            "IsNextTx": true
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "set transaction isolation level (next-tx scope)",
     "query": "set transaction isolation level read committed",
     "plan": {
-      "Type": "MultiShard",
+      "Type": "Local",
       "QueryType": "SET",
       "Original": "set transaction isolation level read committed",
       "Instructions": {
         "OperatorType": "Set",
         "Ops": [
           {
-            "Type": "SysVarSet",
+            "Type": "SysVarSetIsolationLevel",
             "Name": "transaction_isolation",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
             "Expr": "'READ-COMMITTED'",
-            "SupportSetVar": false
+            "IsNextTx": true
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "set session transaction isolation level",
+    "query": "set session transaction isolation level read committed",
+    "plan": {
+      "Type": "Local",
+      "QueryType": "SET",
+      "Original": "set session transaction isolation level read committed",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarSetIsolationLevel",
+            "Name": "transaction_isolation",
+            "Expr": "'READ-COMMITTED'",
+            "IsNextTx": false
           }
         ],
         "Inputs": [

@@ -70,6 +70,17 @@ type (
 		// Note: This is stored in the Go wrapper, not in the protobuf Session.
 		targetTabletAlias *topodatapb.TabletAlias
 
+		// sessionIsolationLevel stores the session-level isolation level (persistent across transactions).
+		sessionIsolationLevel querypb.ExecuteOptions_TransactionIsolation
+		// nextTxIsolationLevel stores the next-transaction-only isolation level (cleared after BEGIN).
+		nextTxIsolationLevel querypb.ExecuteOptions_TransactionIsolation
+
+		// sessionReadOnly stores the session-level read-only mode (persistent across transactions).
+		sessionReadOnly bool
+		// nextTxReadOnly stores the next-transaction-only read-only mode (cleared after BEGIN).
+		// nil = not set, non-nil = explicitly set (false means READ WRITE override).
+		nextTxReadOnly *bool
+
 		*vtgatepb.Session
 	}
 
@@ -207,6 +218,8 @@ func (session *SafeSession) resetCommonLocked() {
 	if session.Options != nil {
 		session.Options.TransactionAccessMode = nil
 	}
+	session.nextTxIsolationLevel = querypb.ExecuteOptions_DEFAULT
+	session.nextTxReadOnly = nil
 }
 
 // NewAutocommitSession returns a SafeSession based on the original
@@ -1163,4 +1176,57 @@ func (session *SafeSession) GetTargetTabletAlias() *topodatapb.TabletAlias {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	return session.targetTabletAlias
+}
+
+// SetSessionIsolationLevel sets the persistent session-level isolation level.
+func (session *SafeSession) SetSessionIsolationLevel(level querypb.ExecuteOptions_TransactionIsolation) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.sessionIsolationLevel = level
+}
+
+// SetNextTxIsolationLevel sets the next-transaction-only isolation level.
+func (session *SafeSession) SetNextTxIsolationLevel(level querypb.ExecuteOptions_TransactionIsolation) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.nextTxIsolationLevel = level
+}
+
+// IsolationLevelForBegin returns the isolation level to use for the next BEGIN.
+// Next-tx takes priority over session-level. Returns DEFAULT if neither is set.
+func (session *SafeSession) IsolationLevelForBegin() querypb.ExecuteOptions_TransactionIsolation {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.nextTxIsolationLevel != querypb.ExecuteOptions_DEFAULT {
+		return session.nextTxIsolationLevel
+	}
+	return session.sessionIsolationLevel
+}
+
+// SetSessionReadOnly sets the persistent session-level read-only mode.
+func (session *SafeSession) SetSessionReadOnly(val bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.sessionReadOnly = val
+}
+
+// SetNextTxReadOnly sets the next-transaction-only read-only mode.
+func (session *SafeSession) SetNextTxReadOnly(val bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.nextTxReadOnly = &val
+}
+
+// ReadOnlyForBegin returns the read-only mode to use for the next BEGIN.
+// Next-tx takes priority over session-level. Returns nil if neither is set.
+func (session *SafeSession) ReadOnlyForBegin() *bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.nextTxReadOnly != nil {
+		return session.nextTxReadOnly
+	}
+	if session.sessionReadOnly {
+		return &session.sessionReadOnly
+	}
+	return nil
 }

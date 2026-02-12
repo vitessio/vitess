@@ -89,10 +89,11 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 			}
 			setOps = append(setOps, setOp)
 			if expr.Var.Scope == sqlparser.NextTxScope {
-				// This is to keep the backward compatibility.
-				// 'transaction_isolation' was added as a reserved connection system variable, so it used to change the setting at session level already.
-				// logging warning now to
-				vschema.PlannerWarning("converted 'next transaction' scope to 'session' scope")
+				name := expr.Var.Name.Lowered()
+				if name != "transaction_isolation" && name != "tx_isolation" &&
+					name != "transaction_read_only" && name != "tx_read_only" {
+					vschema.PlannerWarning("converted 'next transaction' scope to 'session' scope")
+				}
 			}
 		case sqlparser.VitessMetadataScope:
 			value, err := getValueFor(expr)
@@ -230,6 +231,35 @@ func buildSetOpVitessAware(s setting) planFunc {
 		return &engine.SysVarSetAware{
 			Name: astExpr.Var.Name.Lowered(),
 			Expr: runtimeExpr,
+		}, nil
+	}
+}
+
+func buildSetOpIsolationLevel() planFunc {
+	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, _ *expressionConverter) (engine.SetOp, error) {
+		value, err := extractValue(expr, false)
+		if err != nil {
+			return nil, err
+		}
+		value = provideAppliedCase(value, sysvars.SCUpper)
+		return &engine.SysVarSetIsolationLevel{
+			Name:     expr.Var.Name.Lowered(),
+			Expr:     value,
+			IsNextTx: expr.Var.Scope == sqlparser.NextTxScope,
+		}, nil
+	}
+}
+
+func buildSetOpTransactionReadOnly() planFunc {
+	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, _ *expressionConverter) (engine.SetOp, error) {
+		value, err := extractValue(expr, true)
+		if err != nil {
+			return nil, err
+		}
+		return &engine.SysVarSetReadOnly{
+			Name:     expr.Var.Name.Lowered(),
+			Expr:     value,
+			IsNextTx: expr.Var.Scope == sqlparser.NextTxScope,
 		}, nil
 	}
 }
