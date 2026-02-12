@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -466,6 +467,7 @@ func TestVSchemaRoutingRules(t *testing.T) {
 				Error: errors.New("table t2 not found"),
 			},
 		},
+		ViewRoutingRules: map[string]*ViewRoutingRule{},
 		globalTables: map[string]Table{
 			"t1": t1,
 			"t2": t2,
@@ -497,4 +499,98 @@ func TestVSchemaRoutingRules(t *testing.T) {
 	gotb, _ := json.MarshalIndent(got, "", "  ")
 	wantb, _ := json.MarshalIndent(want, "", "  ")
 	assert.Equal(t, string(wantb), string(gotb), string(gotb))
+}
+
+// TestRebuildRoutingRulesRejectsDuplicateViewRules verifies that duplicate routing rules targeting
+// views are detected across both RoutingRules and ViewRoutingRules maps, producing a duplicate
+// error in RoutingRules and leaving no stale entry in ViewRoutingRules.
+func TestRebuildRoutingRulesRejectsDuplicateViewRules(t *testing.T) {
+	parser := sqlparser.NewTestParser()
+	source := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"target_ks": {},
+		},
+		RoutingRules: &vschemapb.RoutingRules{
+			Rules: []*vschemapb.RoutingRule{
+				{
+					FromTable: "dup_view",
+					ToTables:  []string{"target_ks.v1"},
+				},
+				{
+					FromTable: "dup_view",
+					ToTables:  []string{"target_ks.v1"},
+				},
+			},
+		},
+	}
+
+	vs := BuildVSchema(source, parser)
+
+	stmt, err := parser.Parse("select 1 from t1")
+	require.NoError(t, err)
+	vs.Keyspaces["target_ks"].Views = map[string]*View{
+		"v1": {
+			Name:      "v1",
+			Keyspace:  vs.Keyspaces["target_ks"].Keyspace,
+			Statement: stmt.(sqlparser.TableStatement),
+		},
+	}
+
+	RebuildRoutingRules(source, vs, parser)
+
+	rr, ok := vs.RoutingRules["dup_view"]
+	require.True(t, ok, "duplicate view rule should be rejected")
+	require.ErrorContains(t, rr.Error, "duplicate rule for entry dup_view")
+	assert.NotContains(t, vs.ViewRoutingRules, "dup_view")
+}
+
+// TestFindRoutedViewQualifiedLookupIgnoresUnqualifiedRules verifies that when a query is already
+// qualified with a keyspace (e.g. source_ks.v1), an unqualified view routing rule (e.g. "v1")
+// does not match. This mirrors FindRoutedTable, which only checks fully-qualified keys.
+func TestFindRoutedViewQualifiedLookupIgnoresUnqualifiedRules(t *testing.T) {
+	parser := sqlparser.NewTestParser()
+	source := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"source_ks": {},
+			"target_ks": {},
+		},
+	}
+
+	vs := BuildVSchema(source, parser)
+
+	mustParseView := func(query string) sqlparser.TableStatement {
+		stmt, err := parser.Parse(query)
+		require.NoError(t, err)
+		return stmt.(sqlparser.TableStatement)
+	}
+
+	sourceView := mustParseView("select 1 from source_tbl")
+	targetView := mustParseView("select 1 from target_tbl")
+
+	vs.Keyspaces["source_ks"].Views = map[string]*View{
+		"v1": {
+			Name:      "v1",
+			Keyspace:  vs.Keyspaces["source_ks"].Keyspace,
+			Statement: sourceView,
+		},
+	}
+	vs.Keyspaces["target_ks"].Views = map[string]*View{
+		"v1": {
+			Name:      "v1",
+			Keyspace:  vs.Keyspaces["target_ks"].Keyspace,
+			Statement: targetView,
+		},
+	}
+
+	vs.ViewRoutingRules = map[string]*ViewRoutingRule{
+		"v1": {
+			TargetKeyspace: "target_ks",
+			TargetViewName: "v1",
+		},
+	}
+
+	view, routedName := vs.FindRoutedView("source_ks", "v1", topodatapb.TabletType_PRIMARY)
+	require.NotNil(t, view)
+	require.Nil(t, routedName, "qualified lookup should not match unqualified view rule")
+	assert.Equal(t, sqlparser.String(sourceView), sqlparser.String(view))
 }
