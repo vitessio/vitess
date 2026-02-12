@@ -43,6 +43,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
+	tmtypes "github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	transport "github.com/aws/smithy-go/endpoints"
@@ -141,18 +143,9 @@ func newEndpointResolver() *endpointResolver {
 	}
 }
 
-type iClient interface {
-	manager.UploadAPIClient
-	manager.DownloadAPIClient
-}
-
-type clientWrapper struct {
-	*s3.Client
-}
-
 // S3BackupHandle implements the backupstorage.BackupHandle interface.
 type S3BackupHandle struct {
-	client    iClient
+	client    transfermanager.S3APIClient
 	bs        *S3BackupStorage
 	dir       string
 	name      string
@@ -194,12 +187,11 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 
 func (bh *S3BackupHandle) handleAddFile(ctx context.Context, filename string, partSizeBytes int64, reader io.Reader, closer func(error)) {
 	bh.waitGroup.Go(func() {
-		uploader := manager.NewUploader(bh.client, func(u *manager.Uploader) {
-			u.PartSize = partSizeBytes
+		manager := transfermanager.New(bh.client, func(o *transfermanager.Options) {
+			o.PartSizeBytes = partSizeBytes
 		})
 		object := objName(bh.dir, bh.name, filename)
-		sendStats := bh.bs.params.Stats.Scope(stats.Operation("AWS:Request:Send"))
-		_, err := uploader.Upload(ctx, &s3.PutObjectInput{
+		_, err := manager.UploadObject(ctx, &transfermanager.UploadObjectInput{
 			Bucket:               &bucket,
 			Key:                  &object,
 			Body:                 reader,
@@ -207,17 +199,6 @@ func (bh *S3BackupHandle) handleAddFile(ctx context.Context, filename string, pa
 			SSECustomerAlgorithm: bh.bs.s3SSE.customerAlg,
 			SSECustomerKey:       bh.bs.s3SSE.customerKey,
 			SSECustomerKeyMD5:    bh.bs.s3SSE.customerMd5,
-		}, func(u *manager.Uploader) {
-			u.ClientOptions = append(u.ClientOptions, func(o *s3.Options) {
-				o.APIOptions = append(o.APIOptions, func(stack *middleware.Stack) error {
-					return stack.Finalize.Add(middleware.FinalizeMiddlewareFunc("CompleteAttemptMiddleware", func(ctx context.Context, input middleware.FinalizeInput, next middleware.FinalizeHandler) (middleware.FinalizeOutput, middleware.Metadata, error) {
-						start := time.Now()
-						output, metadata, err := next.HandleFinalize(ctx, input)
-						sendStats.TimedIncrement(time.Since(start))
-						return output, metadata, err
-					}), middleware.Before)
-				})
-			})
 		})
 		if err != nil {
 			closer(err)
@@ -301,7 +282,7 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 var _ backupstorage.BackupHandle = (*S3BackupHandle)(nil)
 
 type S3ServerSideEncryption struct {
-	awsAlg      types.ServerSideEncryption
+	awsAlg      tmtypes.ServerSideEncryption
 	customerAlg *string
 	customerKey *string
 	customerMd5 *string
@@ -328,7 +309,7 @@ func (s3ServerSideEncryption *S3ServerSideEncryption) init() error {
 		s3ServerSideEncryption.customerKey = aws.String(string(decodedKey))
 		s3ServerSideEncryption.customerMd5 = aws.String(base64.StdEncoding.EncodeToString(md5Hash[:]))
 	} else if sse != "" {
-		s3ServerSideEncryption.awsAlg = types.ServerSideEncryption(sse)
+		s3ServerSideEncryption.awsAlg = tmtypes.ServerSideEncryption(sse)
 	}
 	return nil
 }
@@ -405,7 +386,7 @@ func (bs *S3BackupStorage) ListBackups(ctx context.Context, dir string) ([]backu
 	result := make([]backupstorage.BackupHandle, 0, len(subdirs))
 	for _, subdir := range subdirs {
 		result = append(result, &S3BackupHandle{
-			client:   &clientWrapper{Client: c},
+			client:   c,
 			bs:       bs,
 			dir:      dir,
 			name:     subdir,
@@ -424,7 +405,7 @@ func (bs *S3BackupStorage) StartBackup(ctx context.Context, dir, name string) (b
 	}
 
 	return &S3BackupHandle{
-		client:   &clientWrapper{Client: c},
+		client:   c,
 		bs:       bs,
 		dir:      dir,
 		name:     name,
@@ -538,6 +519,17 @@ func (bs *S3BackupStorage) client() (*s3.Client, error) {
 						}),
 					}
 				}
+			},
+			func(o *s3.Options) {
+				sendStats := bs.params.Stats.Scope(stats.Operation("AWS:Request:Send"))
+				o.APIOptions = append(o.APIOptions, func(stack *middleware.Stack) error {
+					return stack.Finalize.Add(middleware.FinalizeMiddlewareFunc("CompleteAttemptMiddleware", func(ctx context.Context, input middleware.FinalizeInput, next middleware.FinalizeHandler) (middleware.FinalizeOutput, middleware.Metadata, error) {
+						start := time.Now()
+						output, metadata, err := next.HandleFinalize(ctx, input)
+						sendStats.TimedIncrement(time.Since(start))
+						return output, metadata, err
+					}), middleware.Before)
+				})
 			},
 		}
 		if endpoint != "" {
