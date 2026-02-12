@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -207,6 +208,104 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 	// subtract 10 from the total rows found in the 3 tables.
 	wantTotalRows := insertedRows1 + insertedRows2 + insertedRows3 - 10
 	assert.Equal(t, wantTotalRows, numRowEvents)
+}
+
+func TestVStreamLaggingDDLRowEvents(t *testing.T) {
+	oldArgs := slices.Clone(extraVTTabletArgs)
+	extraVTTabletArgs = append(extraVTTabletArgs,
+		utils.GetFlagVariantForTests("--track-schema-versions")+"=true",
+		utils.GetFlagVariantForTests("--watch-replication-stream")+"=true",
+	)
+	defer func() {
+		extraVTTabletArgs = oldArgs
+	}()
+
+	vc = NewVitessCluster(t, nil)
+	defer vc.TearDown()
+
+	oldDefaultReplicas := defaultReplicas
+	oldDefaultRdonly := defaultRdonly
+	defaultReplicas = 0
+	defaultRdonly = 0
+	defer func() {
+		defaultReplicas = oldDefaultReplicas
+		defaultRdonly = oldDefaultRdonly
+	}()
+
+	defaultCell := vc.Cells[vc.CellNames[0]]
+	vc.AddKeyspace(t, []*Cell{defaultCell}, defaultSourceKs, "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
+	verifyClusterHealth(t, vc)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Minute)
+	defer cancel()
+	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
+	require.NoError(t, err)
+	defer vstreamConn.Close()
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "loadtest",
+			Filter: "select * from loadtest",
+		}},
+		FieldEventMode: binlogdatapb.Filter_BEST_EFFORT,
+	}
+	startVGTID := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: defaultSourceKs,
+			Shard:    "0",
+			Gtid:     "",
+		}},
+	}
+
+	reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, startVGTID, filter, nil)
+	require.NoError(t, err)
+	var resumeVGTID *binlogdatapb.VGtid
+	for resumeVGTID == nil {
+		evs, err := reader.Recv()
+		require.NoError(t, err)
+		for _, ev := range evs {
+			if ev.Type == binlogdatapb.VEventType_VGTID {
+				resumeVGTID = ev.Vgtid
+				break
+			}
+		}
+	}
+
+	vtgateConn := vc.GetVTGateConn(t)
+	defer vtgateConn.Close()
+	_, err = vtgateConn.ExecuteFetch("use `"+defaultSourceKs+"`", 1000, false)
+	require.NoError(t, err)
+	_, err = vtgateConn.ExecuteFetch("alter table loadtest add column age int default 1 after id", 1000, false)
+	require.NoError(t, err)
+	_, err = vtgateConn.ExecuteFetch("insert into loadtest (id, name) values (2001, 'cust1'), (2002, 'cust2'), (2003, 'cust3')", 1000, false)
+	require.NoError(t, err)
+	_, err = vtgateConn.ExecuteFetch("alter table loadtest drop column age", 1000, false)
+	require.NoError(t, err)
+
+	streamCtx, streamCancel := context.WithTimeout(t.Context(), 5*time.Minute)
+	defer streamCancel()
+	rowEvents := 0
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		reader, err = vstreamConn.VStream(streamCtx, topodatapb.TabletType_PRIMARY, resumeVGTID, filter, nil)
+		require.NoError(c, err)
+	}, 30*time.Second, 500*time.Millisecond)
+	deadline := time.Now().Add(2 * time.Minute)
+	for rowEvents < 3 {
+		if time.Now().After(deadline) {
+			require.FailNowf(t, "timed out waiting for row events", "row events seen: %d", rowEvents)
+		}
+		evs, err := reader.Recv()
+		if err != nil {
+			require.NotContains(t, err.Error(), "cannot determine table columns")
+			require.NotContains(t, err.Error(), "failed to build table replication plan")
+			require.NoError(t, err)
+		}
+		for _, ev := range evs {
+			if ev.Type == binlogdatapb.VEventType_ROW && strings.HasSuffix(ev.RowEvent.TableName, ".loadtest") {
+				rowEvents += len(ev.RowEvent.RowChanges)
+			}
+		}
+	}
 }
 
 // Validates that we have a working VStream API

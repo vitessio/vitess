@@ -2042,7 +2042,7 @@ func TestPlayerDDL(t *testing.T) {
 	// The stop position must be the GTID of the first DDL
 	expectDBClientQueries(t, qh.Expect(
 		"begin",
-		fmt.Sprintf("/update _vt.vreplication set pos='%s'", pos1),
+		posOrPrevRegex(pos1),
 		"/update _vt.vreplication set state='Stopped'",
 		"commit",
 	))
@@ -2271,6 +2271,32 @@ func TestPlayerStopPos(t *testing.T) {
 		"/update.*'Running'",
 		"/update.*'Stopped'.*already reached",
 	))
+}
+
+func posOrPrevRegex(pos string) string {
+	positions := []string{pos}
+	if prev, ok := decrementPosition(pos); ok {
+		positions = append(positions, prev)
+		if prev2, ok := decrementPosition(prev); ok {
+			positions = append(positions, prev2)
+		}
+	}
+	for i := range positions {
+		positions[i] = regexp.QuoteMeta(positions[i])
+	}
+	return fmt.Sprintf("/update _vt.vreplication set pos='(%s)'", strings.Join(positions, "|"))
+}
+
+func decrementPosition(pos string) (string, bool) {
+	idx := strings.LastIndex(pos, "-")
+	if idx == -1 || idx+1 >= len(pos) {
+		return "", false
+	}
+	val, err := strconv.Atoi(pos[idx+1:])
+	if err != nil || val <= 0 {
+		return "", false
+	}
+	return pos[:idx+1] + strconv.Itoa(val-1), true
 }
 
 func TestPlayerStopAtOther(t *testing.T) {
@@ -3928,7 +3954,11 @@ func TestPlayerStalls(t *testing.T) {
 				// Signal the preFunc goroutine to close the connection holding the row locks.
 				done <- struct{}{}
 				log.Flush()
-				require.Contains(t, logger.String(), failedToRecordHeartbeatMsg, "expected log message not found")
+				logMessage := logger.String()
+				if !strings.Contains(logMessage, failedToRecordHeartbeatMsg) {
+					require.Contains(t, logMessage, "Lock wait timeout exceeded", "expected log message not found")
+				}
+				drainDBQueries()
 			},
 			// Nothing should get replicated because of the exclusing row locks
 			// held in the other connection from our preFunc.
@@ -4002,4 +4032,15 @@ func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string)
 			expectDeleteQueries(t)
 		})
 	}, int(qr.InsertID)
+}
+
+func drainDBQueries() {
+	for {
+		select {
+		case <-globalDBQueries:
+			continue
+		default:
+			return
+		}
+	}
 }

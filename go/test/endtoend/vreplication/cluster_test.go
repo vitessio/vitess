@@ -908,6 +908,27 @@ func (vc *VitessCluster) getPrimaryTablet(t *testing.T, ksName, shardName string
 	return nil
 }
 
+func (vc *VitessCluster) getPrimaryTabletInfo(t *testing.T, ksName, shardName string) *Tablet {
+	for _, cell := range vc.Cells {
+		keyspace := cell.Keyspaces[ksName]
+		if keyspace == nil {
+			continue
+		}
+		for _, shard := range keyspace.Shards {
+			if shard.Name != shardName {
+				continue
+			}
+			for _, tablet := range shard.Tablets {
+				if tablet.Vttablet.IsPrimary {
+					return tablet
+				}
+			}
+		}
+	}
+	require.FailNow(t, "no primary found", "keyspace %s, shard %s", ksName, shardName)
+	return nil
+}
+
 func (vc *VitessCluster) GetVTGateConn(t *testing.T) *mysql.Conn {
 	return getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 }

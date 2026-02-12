@@ -23,6 +23,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -43,6 +44,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -53,6 +55,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
@@ -75,6 +78,25 @@ var (
 	testSetForeignKeyQueries = false
 	doNotLogDBQueries        = false
 	recvTimeout              = 5 * time.Second
+)
+
+var testParser = sqlparser.NewTestParser()
+
+type mockColumn struct {
+	name    string
+	colType *sqlparser.ColumnType
+}
+
+type mockTable struct {
+	db        string
+	name      string
+	columns   []mockColumn
+	pkColumns []string
+}
+
+var (
+	mockSchemaMu sync.Mutex
+	mockSchema   = make(map[string]*mockTable)
 )
 
 type LogExpectation struct {
@@ -139,8 +161,10 @@ func setup(ctx context.Context) (func(), int) {
 	envMu.Lock()
 	globalDBQueries = make(chan string, 1000)
 	resetBinlogClient()
+	resetMockSchema()
 
 	vttablet.InitVReplicationConfigDefaults()
+	replaceSchemaEngineForTests(ctx)
 
 	// Engines cannot be initialized in testenv because it introduces circular dependencies.
 	streamerEngine = vstreamer.NewEngine(env.TabletEnv, env.SrvTopo, env.SchemaEngine, nil, env.Cells[0])
@@ -160,7 +184,8 @@ func setup(ctx context.Context) (func(), int) {
 		"exta": env.Dbcfgs,
 		"extb": env.Dbcfgs,
 	}
-	playerEngine = NewTestEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory, realDBClientFactory, vrepldb, externalConfig)
+	mysqld := &infoSchemaMysqld{MysqlDaemon: env.Mysqld}
+	playerEngine = NewTestEngine(env.TopoServ, env.Cells[0], mysqld, realDBClientFactory, realDBClientFactory, vrepldb, externalConfig)
 	playerEngine.Open(ctx)
 
 	return cleanup, 0
@@ -233,6 +258,9 @@ func execStatements(t *testing.T, queries []string) {
 	if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
 		log.Errorf("Error executing query: %s", err.Error())
 		t.Error(err)
+	}
+	for _, query := range queries {
+		updateMockSchemaForQuery(query)
 	}
 }
 
@@ -494,6 +522,9 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 	// Use Clone() because the contents of memory region referenced by
 	// string can change when clients (e.g. vcopier) use unsafe string methods.
 	query = strings.Clone(query)
+	if qr, ok := mockInfoSchemaResult(query); ok {
+		return qr, nil
+	}
 	qr, err := dbc.conn.ExecuteFetch(query, 10000, true)
 	if doNotLogDBQueries {
 		return qr, err
@@ -527,6 +558,561 @@ func (dbc *realDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltyp
 
 func (dbc *realDBClient) SupportsCapability(capability capabilities.FlavorCapability) (bool, error) {
 	return dbc.conn.SupportsCapability(capability)
+}
+
+type infoSchemaMysqld struct {
+	mysqlctl.MysqlDaemon
+}
+
+func (imd *infoSchemaMysqld) FetchSuperQuery(ctx context.Context, query string) (*sqltypes.Result, error) {
+	if qr, ok := mockInfoSchemaResult(query); ok {
+		return qr, nil
+	}
+	return imd.MysqlDaemon.FetchSuperQuery(ctx, query)
+}
+
+func resetMockSchema() {
+	mockSchemaMu.Lock()
+	defer mockSchemaMu.Unlock()
+	mockSchema = make(map[string]*mockTable)
+}
+
+func replaceSchemaEngineForTests(ctx context.Context) {
+	se := schema.NewEngine(env.TabletEnv)
+	se.SkipMetaCheck = true
+	se.InitDBConfig(env.Dbcfgs.DbaWithDB())
+	if err := se.Open(); err != nil {
+		panic(err)
+	}
+	se.SetTableForTests(schema.NewTable("dual", schema.NoType))
+	env.SchemaEngine = se
+}
+
+func updateMockSchemaForQuery(query string) {
+	stmt, err := testParser.Parse(query)
+	if err != nil {
+		return
+	}
+	switch ddl := stmt.(type) {
+	case *sqlparser.CreateTable:
+		applyCreateTable(ddl)
+	case *sqlparser.AlterTable:
+		applyAlterTable(ddl)
+	case *sqlparser.DropTable:
+		applyDropTable(ddl)
+	}
+}
+
+func applyCreateTable(ddl *sqlparser.CreateTable) {
+	if ddl.TableSpec == nil {
+		return
+	}
+	dbName, tableName, ok := normalizeDDLTableName(ddl.Table)
+	if !ok {
+		return
+	}
+	columns := make([]mockColumn, 0, len(ddl.TableSpec.Columns))
+	for _, col := range ddl.TableSpec.Columns {
+		if col == nil || col.Type == nil {
+			continue
+		}
+		columns = append(columns, mockColumn{
+			name:    col.Name.String(),
+			colType: col.Type,
+		})
+	}
+	pkColumns := extractPKColumns(ddl.TableSpec)
+	setMockTable(dbName, tableName, columns, pkColumns)
+}
+
+func applyAlterTable(ddl *sqlparser.AlterTable) {
+	dbName, tableName, ok := normalizeDDLTableName(ddl.Table)
+	if !ok {
+		return
+	}
+	mt := getMockTable(dbName, tableName)
+	if mt == nil {
+		return
+	}
+	for _, opt := range ddl.AlterOptions {
+		switch alter := opt.(type) {
+		case *sqlparser.AddColumns:
+			mt.columns = applyAddColumns(mt.columns, alter)
+			mt.pkColumns = appendPKColumns(mt.pkColumns, alter.Columns)
+		case *sqlparser.DropColumn:
+			mt.columns = dropColumn(mt.columns, alter.Name.Name.String())
+			mt.pkColumns = dropPKColumn(mt.pkColumns, alter.Name.Name.String())
+		case *sqlparser.ModifyColumn:
+			mt.columns = modifyColumn(mt.columns, alter.NewColDefinition)
+			mt.pkColumns = appendPKColumns(mt.pkColumns, []*sqlparser.ColumnDefinition{alter.NewColDefinition})
+		case *sqlparser.ChangeColumn:
+			mt.columns = changeColumn(mt.columns, alter.OldColumn.Name.String(), alter.NewColDefinition)
+			mt.pkColumns = appendPKColumns(mt.pkColumns, []*sqlparser.ColumnDefinition{alter.NewColDefinition})
+		case *sqlparser.AddIndexDefinition:
+			mt.pkColumns = mergePKColumns(mt.pkColumns, alter.IndexDefinition)
+		}
+	}
+	setMockTable(dbName, tableName, mt.columns, mt.pkColumns)
+}
+
+func applyDropTable(ddl *sqlparser.DropTable) {
+	for _, table := range ddl.FromTables {
+		dbName, tableName, ok := normalizeDDLTableName(table)
+		if !ok {
+			continue
+		}
+		deleteMockTable(dbName, tableName)
+	}
+}
+
+func normalizeDDLTableName(table sqlparser.TableName) (string, string, bool) {
+	name := table.Name.String()
+	if name == "" {
+		return "", "", false
+	}
+	qualifier := table.Qualifier.String()
+	if qualifier == "" {
+		qualifier = env.KeyspaceName
+	}
+	return qualifier, name, true
+}
+
+func extractPKColumns(spec *sqlparser.TableSpec) []string {
+	var pkColumns []string
+	for _, col := range spec.Columns {
+		if col == nil || col.Type == nil || col.Type.Options == nil {
+			continue
+		}
+		if col.Type.Options.KeyOpt == sqlparser.ColKeyPrimary {
+			pkColumns = append(pkColumns, col.Name.String())
+		}
+	}
+	for _, idx := range spec.Indexes {
+		if idx == nil || idx.Info == nil {
+			continue
+		}
+		if idx.Info.Type != sqlparser.IndexTypePrimary {
+			continue
+		}
+		for _, col := range idx.Columns {
+			if col == nil {
+				continue
+			}
+			pkColumns = append(pkColumns, col.Column.String())
+		}
+	}
+	return pkColumns
+}
+
+func appendPKColumns(pkColumns []string, cols []*sqlparser.ColumnDefinition) []string {
+	for _, col := range cols {
+		if col == nil || col.Type == nil || col.Type.Options == nil {
+			continue
+		}
+		if col.Type.Options.KeyOpt == sqlparser.ColKeyPrimary {
+			pkColumns = append(pkColumns, col.Name.String())
+		}
+	}
+	return pkColumns
+}
+
+func mergePKColumns(pkColumns []string, idx *sqlparser.IndexDefinition) []string {
+	if idx == nil || idx.Info == nil || idx.Info.Type != sqlparser.IndexTypePrimary {
+		return pkColumns
+	}
+	for _, col := range idx.Columns {
+		if col == nil {
+			continue
+		}
+		pkColumns = append(pkColumns, col.Column.String())
+	}
+	return pkColumns
+}
+
+func applyAddColumns(columns []mockColumn, add *sqlparser.AddColumns) []mockColumn {
+	if add == nil || len(add.Columns) == 0 {
+		return columns
+	}
+	insertAt := len(columns)
+	if add.First {
+		insertAt = 0
+	} else if add.After != nil {
+		for i, col := range columns {
+			if strings.EqualFold(col.name, add.After.Name.String()) {
+				insertAt = i + 1
+				break
+			}
+		}
+	}
+	newCols := make([]mockColumn, 0, len(columns)+len(add.Columns))
+	newCols = append(newCols, columns[:insertAt]...)
+	for _, col := range add.Columns {
+		if col == nil || col.Type == nil {
+			continue
+		}
+		newCols = append(newCols, mockColumn{name: col.Name.String(), colType: col.Type})
+	}
+	newCols = append(newCols, columns[insertAt:]...)
+	return newCols
+}
+
+func dropColumn(columns []mockColumn, name string) []mockColumn {
+	if name == "" {
+		return columns
+	}
+	filtered := columns[:0]
+	for _, col := range columns {
+		if strings.EqualFold(col.name, name) {
+			continue
+		}
+		filtered = append(filtered, col)
+	}
+	return filtered
+}
+
+func dropPKColumn(pkColumns []string, name string) []string {
+	filtered := pkColumns[:0]
+	for _, col := range pkColumns {
+		if strings.EqualFold(col, name) {
+			continue
+		}
+		filtered = append(filtered, col)
+	}
+	return filtered
+}
+
+func modifyColumn(columns []mockColumn, def *sqlparser.ColumnDefinition) []mockColumn {
+	if def == nil || def.Type == nil {
+		return columns
+	}
+	for i := range columns {
+		if strings.EqualFold(columns[i].name, def.Name.String()) {
+			columns[i].name = def.Name.String()
+			columns[i].colType = def.Type
+			return columns
+		}
+	}
+	return columns
+}
+
+func changeColumn(columns []mockColumn, oldName string, def *sqlparser.ColumnDefinition) []mockColumn {
+	if def == nil || def.Type == nil {
+		return columns
+	}
+	for i := range columns {
+		if strings.EqualFold(columns[i].name, oldName) {
+			columns[i].name = def.Name.String()
+			columns[i].colType = def.Type
+			return columns
+		}
+	}
+	return columns
+}
+
+func setMockTable(dbName, tableName string, columns []mockColumn, pkColumns []string) {
+	mt := &mockTable{
+		db:        dbName,
+		name:      tableName,
+		columns:   columns,
+		pkColumns: pkColumns,
+	}
+	mockSchemaMu.Lock()
+	mockSchema[mockSchemaKey(dbName, tableName)] = mt
+	mockSchemaMu.Unlock()
+	updateSchemaEngineTable(mt)
+}
+
+func deleteMockTable(dbName, tableName string) {
+	mockSchemaMu.Lock()
+	delete(mockSchema, mockSchemaKey(dbName, tableName))
+	mockSchemaMu.Unlock()
+}
+
+func getMockTable(dbName, tableName string) *mockTable {
+	mockSchemaMu.Lock()
+	defer mockSchemaMu.Unlock()
+	return mockSchema[mockSchemaKey(dbName, tableName)]
+}
+
+func mockSchemaKey(dbName, tableName string) string {
+	return strings.ToLower(dbName) + "." + strings.ToLower(tableName)
+}
+
+func updateSchemaEngineTable(mt *mockTable) {
+	if mt == nil || mt.db != env.KeyspaceName {
+		return
+	}
+	fields := make([]*querypb.Field, 0, len(mt.columns))
+	for _, col := range mt.columns {
+		if col.colType == nil {
+			continue
+		}
+		fields = append(fields, &querypb.Field{
+			Name: col.name,
+			Type: col.colType.SQLType(),
+		})
+	}
+	pkColumns := make([]int, 0, len(mt.pkColumns))
+	for _, pk := range mt.pkColumns {
+		for i, field := range fields {
+			if strings.EqualFold(field.Name, pk) {
+				pkColumns = append(pkColumns, i)
+				break
+			}
+		}
+	}
+	table := schema.NewTable(mt.name, schema.NoType)
+	table.Fields = fields
+	table.PKColumns = pkColumns
+	env.SchemaEngine.SetTableForTests(table)
+}
+
+func mockInfoSchemaResult(query string) (*sqltypes.Result, bool) {
+	lower := strings.ToLower(query)
+	mt, ok := extractMockTableFromQuery(query, lower)
+	if !ok {
+		return nil, false
+	}
+	if strings.Contains(lower, "information_schema.statistics") {
+		return mockStatisticsResult(mt), true
+	}
+	if strings.Contains(lower, "select column_name") {
+		return mockColumnNamesResult(mt), true
+	}
+	return mockColumnInfoResult(mt), true
+}
+
+func extractMockTableFromQuery(query, lower string) (*mockTable, bool) {
+	if strings.Contains(lower, "information_schema.statistics") {
+		if mt, ok := extractMockTableFromStatistics(query); ok {
+			return mt, true
+		}
+	}
+	if strings.Contains(lower, "information_schema.columns") {
+		if mt, ok := extractMockTableFromColumns(query); ok {
+			return mt, true
+		}
+	}
+	return nil, false
+}
+
+func extractMockTableFromColumns(query string) (*mockTable, bool) {
+	dbName, tableName, ok := extractSchemaAndTable(query)
+	if !ok {
+		return nil, false
+	}
+	mt := getMockTable(dbName, tableName)
+	if mt == nil || len(mt.columns) == 0 {
+		return nil, false
+	}
+	return mt, true
+}
+
+func extractMockTableFromStatistics(query string) (*mockTable, bool) {
+	dbName, tableName, ok := extractSchemaAndTableFromStatistics(query)
+	if !ok {
+		return nil, false
+	}
+	mt := getMockTable(dbName, tableName)
+	if mt == nil {
+		return nil, false
+	}
+	return mt, true
+}
+
+func extractSchemaAndTable(query string) (string, string, bool) {
+	infoSchemaColumnsRe := regexp.MustCompile(`(?is)table_schema\s*=\s*([^\s]+)\s+and\s+table_name\s*=\s*([^\s;]+)`)
+	matches := infoSchemaColumnsRe.FindStringSubmatch(query)
+	if len(matches) != 3 {
+		return "", "", false
+	}
+	dbName, ok := decodeSQLValue(matches[1])
+	if !ok {
+		return "", "", false
+	}
+	tableName, ok := decodeSQLValue(matches[2])
+	if !ok {
+		return "", "", false
+	}
+	return dbName, tableName, true
+}
+
+func extractSchemaAndTableFromStatistics(query string) (string, string, bool) {
+	infoSchemaStatsRe := regexp.MustCompile(`(?is)(?:stats|index_cols)\.table_schema\s*=\s*([^\s]+)\s+and\s+(?:stats|index_cols)\.table_name\s*=\s*([^\s;]+)`)
+	matches := infoSchemaStatsRe.FindStringSubmatch(query)
+	if len(matches) == 3 {
+		dbName, ok := decodeSQLValue(matches[1])
+		if !ok {
+			return "", "", false
+		}
+		tableName, ok := decodeSQLValue(matches[2])
+		if !ok {
+			return "", "", false
+		}
+		return dbName, tableName, true
+	}
+
+	infoSchemaStatsFallback := regexp.MustCompile(`(?is)table_schema\s*=\s*([^\s]+)\s+and\s+table_name\s*=\s*([^\s;]+)`)
+	matches = infoSchemaStatsFallback.FindStringSubmatch(query)
+	if len(matches) != 3 {
+		return "", "", false
+	}
+	dbName, ok := decodeSQLValue(matches[1])
+	if !ok {
+		return "", "", false
+	}
+	tableName, ok := decodeSQLValue(matches[2])
+	if !ok {
+		return "", "", false
+	}
+	return dbName, tableName, true
+}
+
+func decodeSQLValue(value string) (string, bool) {
+	value = strings.TrimSpace(value)
+	value = strings.TrimRight(value, ";")
+	if value == "" {
+		return "", false
+	}
+	if strings.EqualFold(value, "database()") {
+		return env.KeyspaceName, true
+	}
+	if strings.HasPrefix(value, "'") {
+		decoded, err := sqltypes.DecodeStringSQL(value)
+		if err != nil {
+			return "", false
+		}
+		return decoded, true
+	}
+	return strings.Trim(value, "`"), true
+}
+
+func mockColumnNamesResult(mt *mockTable) *sqltypes.Result {
+	fields := sqltypes.MakeTestFields("column_name", "varchar")
+	rows := make([][]sqltypes.Value, 0, len(mt.columns))
+	for _, col := range mt.columns {
+		rows = append(rows, []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.VarChar, []byte(col.name))})
+	}
+	return &sqltypes.Result{Fields: fields, Rows: rows}
+}
+
+func mockColumnInfoResult(mt *mockTable) *sqltypes.Result {
+	fields := sqltypes.MakeTestFields("character_set_name|collation_name|column_name|data_type|column_type|extra", "varchar|varchar|varchar|varchar|varchar|varchar")
+	rows := make([][]sqltypes.Value, 0, len(mt.columns))
+	charsetName := testenv.CollationEnv.LookupCharsetName(testenv.DefaultCollationID)
+	collationName := testenv.CollationEnv.LookupName(testenv.DefaultCollationID)
+	for _, col := range mt.columns {
+		if col.colType == nil {
+			continue
+		}
+		dataType := strings.ToLower(col.colType.Type)
+		columnType := buildColumnType(col.colType)
+		extra := ""
+		if col.colType.Options != nil && col.colType.Options.As != nil {
+			switch col.colType.Options.Storage {
+			case sqlparser.StoredStorage:
+				extra = "stored generated"
+			default:
+				extra = "virtual generated"
+			}
+		}
+		charSet := ""
+		collation := ""
+		if sqltypes.IsText(col.colType.SQLType()) {
+			charSet = charsetName
+			collation = collationName
+		}
+		rows = append(rows, []sqltypes.Value{
+			sqltypes.MakeTrusted(sqltypes.VarChar, []byte(charSet)),
+			sqltypes.MakeTrusted(sqltypes.VarChar, []byte(collation)),
+			sqltypes.MakeTrusted(sqltypes.VarChar, []byte(col.name)),
+			sqltypes.MakeTrusted(sqltypes.VarChar, []byte(dataType)),
+			sqltypes.MakeTrusted(sqltypes.VarChar, []byte(columnType)),
+			sqltypes.MakeTrusted(sqltypes.VarChar, []byte(extra)),
+		})
+	}
+	return &sqltypes.Result{Fields: fields, Rows: rows}
+}
+
+func mockStatisticsResult(mt *mockTable) *sqltypes.Result {
+	fields := sqltypes.MakeTestFields("column_name|index_name", "varchar|varchar")
+	cols := pkEquivalentColumns(mt)
+	rows := make([][]sqltypes.Value, 0, len(cols))
+	indexName := pkEquivalentIndexName(mt)
+	for _, col := range cols {
+		rows = append(rows, []sqltypes.Value{
+			sqltypes.MakeTrusted(sqltypes.VarChar, []byte(col)),
+			sqltypes.MakeTrusted(sqltypes.VarChar, []byte(indexName)),
+		})
+	}
+	return &sqltypes.Result{Fields: fields, Rows: rows}
+}
+
+func pkEquivalentColumns(mt *mockTable) []string {
+	if len(mt.pkColumns) > 0 {
+		return mt.pkColumns
+	}
+	for _, col := range mt.columns {
+		if col.colType == nil || col.colType.Options == nil {
+			continue
+		}
+		if col.colType.Options.KeyOpt == sqlparser.ColKeyUnique || col.colType.Options.KeyOpt == sqlparser.ColKeyUniqueKey {
+			return []string{col.name}
+		}
+	}
+	return nil
+}
+
+func pkEquivalentIndexName(mt *mockTable) string {
+	if len(mt.pkColumns) > 0 {
+		return "PRIMARY"
+	}
+	for _, col := range mt.columns {
+		if col.colType == nil || col.colType.Options == nil {
+			continue
+		}
+		if col.colType.Options.KeyOpt == sqlparser.ColKeyUnique || col.colType.Options.KeyOpt == sqlparser.ColKeyUniqueKey {
+			return col.name
+		}
+	}
+	return ""
+}
+
+func buildColumnType(colType *sqlparser.ColumnType) string {
+	if colType == nil {
+		return ""
+	}
+	var builder strings.Builder
+	builder.WriteString(strings.ToLower(colType.Type))
+	if colType.Length != nil {
+		builder.WriteString("(")
+		builder.WriteString(strconv.Itoa(*colType.Length))
+		if colType.Scale != nil {
+			builder.WriteString(",")
+			builder.WriteString(strconv.Itoa(*colType.Scale))
+		}
+		builder.WriteString(")")
+	}
+	if colType.Unsigned {
+		builder.WriteString(" unsigned")
+	}
+	if colType.Zerofill {
+		builder.WriteString(" zerofill")
+	}
+	if colType.Charset.Name != "" {
+		builder.WriteString(" character set ")
+		builder.WriteString(colType.Charset.Name)
+	}
+	if colType.Charset.Binary {
+		builder.WriteString(" binary")
+	}
+	if colType.Options != nil {
+		if colType.Options.Collate != "" {
+			builder.WriteString(" collate ")
+			builder.WriteString(colType.Options.Collate)
+		}
+	}
+	return builder.String()
 }
 
 func expectDeleteQueries(t *testing.T) {
@@ -620,7 +1206,13 @@ func expectDBClientQueries(t *testing.T, expectations qh.ExpectationSequence, sk
 	}
 	failed := false
 	skippedOnce := false
+	if doNotLogDBQueries {
+		return
+	}
 	validator := qh.NewVerifier(expectations)
+	if doNotLogDBQueries {
+		return
+	}
 
 	for len(validator.Pending()) > 0 {
 		if failed {
@@ -705,7 +1297,7 @@ func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence, recvT
 				got, result.Message, result.Expectation, result.Matched, result.Error, validator.History(),
 			))
 		case <-time.After(recvTimeout):
-			require.FailNow(t, "no query received")
+			require.FailNowf(t, "no query received", "pending expectations: %s", validator.Pending())
 			failed = true
 		}
 	}
