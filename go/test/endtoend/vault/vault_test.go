@@ -98,8 +98,8 @@ var (
 	mysqlctlArg = []string{
 		vtutils.GetFlagVariantForTests("--db-dba-password"), mysqlPassword,
 	}
-	vttabletLogFileName = "vttablet.INFO"
-	tokenRenewalString  = "Vault client status: token renewed"
+	vttabletLogFileNameSuffix = "-vttablet-stderr.txt"
+	tokenRenewalString        = "Vault client status: token renewed"
 )
 
 func TestVaultAuth(t *testing.T) {
@@ -149,7 +149,7 @@ func TestVaultAuth(t *testing.T) {
 	time.Sleep(30 * time.Second)
 	// Check the log for the Vault token renewal message
 	//   If we don't see it, that is a test failure
-	logContents, _ := os.ReadFile(path.Join(clusterInstance.TmpDirectory, vttabletLogFileName))
+	logContents, _ := os.ReadFile(path.Join(clusterInstance.TmpDirectory, primary.VttabletProcess.TabletPath+vttabletLogFileNameSuffix))
 	require.True(t, bytes.Contains(logContents, []byte(tokenRenewalString)))
 }
 
