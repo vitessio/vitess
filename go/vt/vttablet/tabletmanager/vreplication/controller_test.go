@@ -410,12 +410,18 @@ func TestControllerBinlogPurgedRetryStuckOnSameTablet(t *testing.T) {
 
 	resetBinlogClient()
 
+	// Add a second cell.
+	ctx := context.Background()
+	err := env.AddCell(ctx, "cell2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// The default tablet picker preference is PreferLocalWithAlias, so we
 	// create a cell alias with both our cells in it. This allows us to test if
 	// the controller properly tries multiple cells within the alias.
-	ctx := context.Background()
-	err := env.TopoServ.CreateCellsAlias(ctx, "region1", &topodatapb.CellsAlias{
-		Cells: []string{env.Cells[0], env.Cells[1]},
+	err = env.TopoServ.CreateCellsAlias(ctx, "region1", &topodatapb.CellsAlias{
+		Cells: []string{"cell1", "cell2"},
 	})
 	if err != nil {
 		t.Fatal(err)
