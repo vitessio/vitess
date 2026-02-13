@@ -888,9 +888,10 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 	tablet := tenv.addTablet(t, tabletUID, keyspace, shard)
 	defer tenv.deleteTablet(tablet.tablet)
 
-	parsed := sqlparser.BuildParsedQuery(sqlSelectVReplicationWorkflowConfig, sidecar.GetIdentifier(), ":wf")
+	parsed := sqlparser.BuildParsedQuery(sqlSelectVReplicationWorkflowConfig, sidecar.GetIdentifier(), ":wf", ":db")
 	bindVars := map[string]*querypb.BindVariable{
 		"wf": sqltypes.StringBindVariable(workflow),
+		"db": sqltypes.StringBindVariable(tenv.dbName),
 	}
 	selectQuery, err := parsed.GenerateQuery(bindVars, nil)
 	require.NoError(t, err)
