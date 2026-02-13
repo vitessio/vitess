@@ -49,6 +49,17 @@ var (
 	ErrorDepth = func(depth int, msg string, attrs ...slog.Attr) { log(slog.LevelError, depth+1, msg, attrs...) }
 )
 
+// init is used to initialize structured logging to true and set up a default logger.
+// This is to workaround situations (like testing) where there is no explicit [Init] call
+// that enables structured logging. This should be removed once structured logging is
+// the only option.
+func init() {
+	// We create a JSON logger here. Alternatively, we can identify if we're running in tests
+	// and set a more human-readable format such as [slog.TextHandler] or others.
+	logger.Store(newLogger(slog.LevelInfo))
+	structured.Store(true)
+}
+
 // log is a helper that logs with glog or slog depending on the configured flags.
 func log(level slog.Level, depth int, msg string, attrs ...slog.Attr) {
 	if !structured.Load() {

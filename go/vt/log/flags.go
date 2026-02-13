@@ -50,6 +50,7 @@ func RegisterFlags(fs *pflag.FlagSet) {
 func Init(fs *pflag.FlagSet) error {
 	if !logStructured {
 		fmt.Fprintln(os.Stderr, "WARNING: glog is deprecated and will be removed in v25")
+		structured.Store(false)
 		return nil
 	}
 
@@ -67,11 +68,16 @@ func Init(fs *pflag.FlagSet) error {
 		return fmt.Errorf("log: invalid --log-level %q: %w", logLevel, err)
 	}
 
-	l := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{AddSource: true, Level: level}))
+	l := newLogger(level)
 	logger.Store(l)
 	structured.Store(true)
 
 	return nil
+}
+
+// newLogger creates a new logger.
+func newLogger(level slog.Level) *slog.Logger {
+	return slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{AddSource: true, Level: level}))
 }
 
 type logRotateMaxSize struct {
