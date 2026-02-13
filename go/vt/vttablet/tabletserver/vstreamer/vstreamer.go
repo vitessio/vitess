@@ -101,6 +101,8 @@ type vstreamer struct {
 	vse     *Engine
 	options *binlogdatapb.VStreamOptions
 	config  *vttablet.VReplicationConfig
+
+	eventTypesToStream map[binlogdatapb.VEventType]bool
 }
 
 // streamerPlan extends the original plan to also include
@@ -200,6 +202,12 @@ func (vs *vstreamer) Stream() error {
 		return vterrors.Wrapf(err, "failed to determine starting position")
 	}
 	vs.pos = pos
+	if vs.options != nil && len(vs.options.IncludedEventTypes) > 0 {
+		vs.eventTypesToStream = make(map[binlogdatapb.VEventType]bool, len(vs.options.IncludedEventTypes))
+		for _, eventType := range vs.options.IncludedEventTypes {
+			vs.eventTypesToStream[eventType] = true
+		}
+	}
 	return vs.replicate(ctx)
 }
 
@@ -249,6 +257,10 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	bufferAndTransmit := func(vevent *binlogdatapb.VEvent) error {
 		vevent.Keyspace = vs.vse.keyspace
 		vevent.Shard = vs.vse.shard
+
+		if vs.eventTypesToStream != nil && !vs.eventTypesToStream[vevent.Type] {
+			return nil
+		}
 
 		switch vevent.Type {
 		case binlogdatapb.VEventType_PREVIOUS_GTIDS:
@@ -493,17 +505,30 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		return nil, fmt.Errorf("can't strip checksum from binlog event: %v, event data: %#v", err, ev)
 	}
 
+	shouldSend := func(evType binlogdatapb.VEventType) bool {
+		if vs.eventTypesToStream != nil && !vs.eventTypesToStream[evType] {
+			return false
+		}
+		return true
+	}
+
 	timeNowUnixNano := time.Now().UnixNano()
 	var vevents []*binlogdatapb.VEvent
 	switch {
 	case ev.IsRotate(), ev.IsStop():
 		vs.eventGTID = nil
 	case ev.IsPreviousGTIDs():
+		if !shouldSend(binlogdatapb.VEventType_PREVIOUS_GTIDS) {
+			return nil, nil
+		}
 		vevents = append(vevents, &binlogdatapb.VEvent{
 			Type: binlogdatapb.VEventType_PREVIOUS_GTIDS,
 		})
 		vs.eventGTID = nil
 	case ev.IsGTID():
+		if !shouldSend(binlogdatapb.VEventType_GTID) {
+			return nil, nil
+		}
 		gtid, hasBegin, commitParent, sequenceNumber, err := ev.GTID(vs.format)
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "failed to get GTID from binlog event: %#v", ev)
@@ -520,12 +545,17 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		vs.sequenceNumber = sequenceNumber
 		vs.eventGTID = gtid
 	case ev.IsXID():
-		vevents = append(vevents, &binlogdatapb.VEvent{
-			Type: binlogdatapb.VEventType_GTID,
-			Gtid: replication.EncodePosition(vs.pos),
-		}, &binlogdatapb.VEvent{
-			Type: binlogdatapb.VEventType_COMMIT,
-		})
+		if shouldSend(binlogdatapb.VEventType_GTID) {
+			vevents = append(vevents, &binlogdatapb.VEvent{
+				Type: binlogdatapb.VEventType_GTID,
+				Gtid: replication.EncodePosition(vs.pos),
+			})
+		}
+		if shouldSend(binlogdatapb.VEventType_COMMIT) {
+			vevents = append(vevents, &binlogdatapb.VEvent{
+				Type: binlogdatapb.VEventType_COMMIT,
+			})
+		}
 	case ev.IsQuery():
 		q, err := ev.Query(vs.format)
 		if err != nil {
@@ -535,6 +565,9 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		// could be using SBR. Vitess itself will never run into cases where it needs to consume non rbr statements.
 		switch cat := sqlparser.Preview(q.SQL); cat {
 		case sqlparser.StmtInsert:
+			if !shouldSend(binlogdatapb.VEventType_INSERT) {
+				return nil, nil
+			}
 			mustSend := mustSendStmt(q, vs.cp.DBName())
 			if mustSend {
 				vevents = append(vevents, &binlogdatapb.VEvent{
@@ -543,6 +576,9 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 				})
 			}
 		case sqlparser.StmtUpdate:
+			if !shouldSend(binlogdatapb.VEventType_UPDATE) {
+				return nil, nil
+			}
 			mustSend := mustSendStmt(q, vs.cp.DBName())
 			if mustSend {
 				vevents = append(vevents, &binlogdatapb.VEvent{
@@ -551,6 +587,9 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 				})
 			}
 		case sqlparser.StmtDelete:
+			if !shouldSend(binlogdatapb.VEventType_DELETE) {
+				return nil, nil
+			}
 			mustSend := mustSendStmt(q, vs.cp.DBName())
 			if mustSend {
 				vevents = append(vevents, &binlogdatapb.VEvent{
@@ -559,6 +598,9 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 				})
 			}
 		case sqlparser.StmtReplace:
+			if !shouldSend(binlogdatapb.VEventType_REPLACE) {
+				return nil, nil
+			}
 			mustSend := mustSendStmt(q, vs.cp.DBName())
 			if mustSend {
 				vevents = append(vevents, &binlogdatapb.VEvent{
@@ -567,14 +609,23 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 				})
 			}
 		case sqlparser.StmtBegin:
+			if !shouldSend(binlogdatapb.VEventType_BEGIN) {
+				return nil, nil
+			}
 			vevents = append(vevents, &binlogdatapb.VEvent{
 				Type: binlogdatapb.VEventType_BEGIN,
 			})
 		case sqlparser.StmtCommit:
+			if !shouldSend(binlogdatapb.VEventType_COMMIT) {
+				return nil, nil
+			}
 			vevents = append(vevents, &binlogdatapb.VEvent{
 				Type: binlogdatapb.VEventType_COMMIT,
 			})
 		case sqlparser.StmtDDL:
+			if !shouldSend(binlogdatapb.VEventType_DDL) {
+				return nil, nil
+			}
 			if mustSendDDL(q, vs.cp.DBName(), vs.filter, vs.vse.env.Environment().Parser()) {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_GTID,
@@ -615,16 +666,24 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 			// 1) DBA statements like REPAIR that can be ignored.
 			// 2) Privilege-altering statements like GRANT/REVOKE
 			//    that we want to keep out of the stream for now.
-			vevents = append(vevents, &binlogdatapb.VEvent{
-				Type: binlogdatapb.VEventType_GTID,
-				Gtid: replication.EncodePosition(vs.pos),
-			}, &binlogdatapb.VEvent{
-				Type: binlogdatapb.VEventType_OTHER,
-			})
+			if shouldSend(binlogdatapb.VEventType_GTID) {
+				vevents = append(vevents, &binlogdatapb.VEvent{
+					Type: binlogdatapb.VEventType_GTID,
+					Gtid: replication.EncodePosition(vs.pos),
+				})
+			}
+			if shouldSend(binlogdatapb.VEventType_OTHER) {
+				vevents = append(vevents, &binlogdatapb.VEvent{
+					Type: binlogdatapb.VEventType_OTHER,
+				})
+			}
 		default:
 			return nil, fmt.Errorf("unexpected statement type %s in row-based replication: %q", cat, q.SQL)
 		}
 	case ev.IsTableMap():
+		if !shouldSend(binlogdatapb.VEventType_ROW) {
+			return nil, nil
+		}
 		// This is very frequent. It precedes every row event.
 		// If it's the first time for a table, we generate a FIELD
 		// event, and also cache the plan. Subsequent TableMap events
@@ -680,6 +739,9 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 			vevents = append(vevents, vevent)
 		}
 	case ev.IsWriteRows() || ev.IsDeleteRows() || ev.IsUpdateRows() || ev.IsPartialUpdateRows():
+		if !shouldSend(binlogdatapb.VEventType_ROW) {
+			return nil, nil
+		}
 		// The existence of before and after images can be used to
 		// identify statement types. It's also possible that the
 		// before and after images end up going to different shards.
@@ -712,6 +774,9 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 			return nil, err
 		}
 	case ev.IsTransactionPayload():
+		// We always need to process these, no matter what event types we may be limiting the stream to. That is because
+		// the transaction payload event contains various types of internal events and we may be streaming any subset of
+		// those internal event types.
 		if !vs.pos.MatchesFlavor(replication.Mysql56FlavorID) {
 			return nil, fmt.Errorf("compressed transaction payload events are not supported with database flavor %s",
 				vs.vse.env.Config().DB.Flavor)

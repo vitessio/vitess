@@ -37,13 +37,13 @@ import (
 )
 
 // VStreamer defines the functions of VStreamer
-// that the replicationWatcher needs.
+// that the schema tracker needs.
 type VStreamer interface {
 	Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter,
 		throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions) error
 }
 
-// Tracker watches the replication and saves the latest schema into the schema_version table when a DDL is encountered.
+// Tracker watches the replication stream and saves the latest schema into the schema_version table when a DDL is encountered.
 type Tracker struct {
 	enabled bool
 
@@ -127,12 +127,30 @@ func (tr *Tracker) process(ctx context.Context) {
 		}},
 	}
 
-	var gtid string
+	gtid := "current"
+	prevGtid := ""
+	restorePreviousGTID := func() {
+		if prevGtid != "" && gtid != "current" {
+			gtid = prevGtid
+		}
+	}
+	options := &binlogdatapb.VStreamOptions{
+		// We only want GTID and DDL events streamed to us.
+		IncludedEventTypes: []binlogdatapb.VEventType{
+			binlogdatapb.VEventType_GTID,
+			binlogdatapb.VEventType_DDL,
+		},
+	}
 	for {
-		err := tr.vs.Stream(ctx, "current", nil, filter, throttlerapp.SchemaTrackerName, func(events []*binlogdatapb.VEvent) error {
+		err := tr.vs.Stream(ctx, gtid, nil, filter, throttlerapp.SchemaTrackerName, func(events []*binlogdatapb.VEvent) error {
 			for _, event := range events {
 				if event.Type == binlogdatapb.VEventType_GTID {
+					prevGtid = gtid
 					gtid = event.Gtid
+					continue
+				}
+				if event.Statement != "" {
+					log.Errorf("DEBUG: Received event in schema tracker: type %v, gtid %s, ddl %s", event.Type, gtid, event.Statement)
 				}
 				if event.Type == binlogdatapb.VEventType_DDL &&
 					MustReloadSchemaOnDDL(event.Statement, tr.engine.cp.DBName(), tr.env.Environment().Parser()) {
@@ -140,18 +158,21 @@ func (tr *Tracker) process(ctx context.Context) {
 						tr.env.Stats().ErrorCounters.Add(vtrpcpb.Code_INTERNAL.String(), 1)
 						log.Errorf("Error updating schema: %s for ddl %s, gtid %s",
 							tr.env.Environment().Parser().TruncateForLog(err.Error()), event.Statement, gtid)
+						restorePreviousGTID()
 					}
 				}
 			}
 			return nil
-		}, nil)
+		}, options)
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(5 * time.Second):
+		default:
+			if err != nil {
+				restorePreviousGTID()
+				log.Errorf("DEBUG: Schema Tracker's vstream ended: %v, retrying in 5 seconds", err)
+			}
 		}
-		log.Infof("Tracker's vStream ended: %v, retrying in 5 seconds", err)
-		time.Sleep(5 * time.Second)
 	}
 }
 

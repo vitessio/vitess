@@ -511,6 +511,7 @@ message VStreamOptions {
   // Don't add any additional timeouts to the stream. For example the
   // row streamer should not add a MAX_EXECUTION_TIME query hint.
   bool no_timeouts = 4;
+  repeated VEventType included_event_types = 5;
 }
 
 // VStreamRequest is the payload for VStreamer

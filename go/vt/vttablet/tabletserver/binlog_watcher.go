@@ -53,7 +53,7 @@ func NewBinlogWatcher(env tabletenv.Env, vs VStreamer, config *tabletenv.TabletC
 	return &BinlogWatcher{
 		env:              env,
 		vs:               vs,
-		watchReplication: config.WatchReplication || config.TrackSchemaVersions,
+		watchReplication: config.WatchReplication,
 	}
 }
 

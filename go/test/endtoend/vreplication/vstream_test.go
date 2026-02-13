@@ -213,8 +213,8 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 func TestVStreamLaggingDDLRowEvents(t *testing.T) {
 	oldArgs := slices.Clone(extraVTTabletArgs)
 	extraVTTabletArgs = append(extraVTTabletArgs,
-		utils.GetFlagVariantForTests("--track-schema-versions")+"=true",
-		utils.GetFlagVariantForTests("--watch-replication-stream")+"=true",
+		utils.GetFlagVariantForTests("--track-schema-versions"),
+		utils.GetFlagVariantForTests("--watch-replication-stream"),
 	)
 	defer func() {
 		extraVTTabletArgs = oldArgs
@@ -247,7 +247,7 @@ func TestVStreamLaggingDDLRowEvents(t *testing.T) {
 			Match:  "loadtest",
 			Filter: "select * from loadtest",
 		}},
-		FieldEventMode: binlogdatapb.Filter_BEST_EFFORT,
+		FieldEventMode: binlogdatapb.Filter_ERR_ON_MISMATCH,
 	}
 	startVGTID := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
@@ -285,21 +285,19 @@ func TestVStreamLaggingDDLRowEvents(t *testing.T) {
 	streamCtx, streamCancel := context.WithTimeout(t.Context(), 5*time.Minute)
 	defer streamCancel()
 	rowEvents := 0
+	// We use eventually here as it's still possible that the schema tracker's stream encounters an error and
+	// pauses for a few seconds before restarting.
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		reader, err = vstreamConn.VStream(streamCtx, topodatapb.TabletType_PRIMARY, resumeVGTID, filter, nil)
 		require.NoError(c, err)
 	}, 30*time.Second, 500*time.Millisecond)
-	deadline := time.Now().Add(2 * time.Minute)
+	deadline := time.Now().Add(1 * time.Minute)
 	for rowEvents < 3 {
 		if time.Now().After(deadline) {
 			require.FailNowf(t, "timed out waiting for row events", "row events seen: %d", rowEvents)
 		}
 		evs, err := reader.Recv()
-		if err != nil {
-			require.NotContains(t, err.Error(), "cannot determine table columns")
-			require.NotContains(t, err.Error(), "failed to build table replication plan")
-			require.NoError(t, err)
-		}
+		require.NoError(t, err)
 		for _, ev := range evs {
 			if ev.Type == binlogdatapb.VEventType_ROW && strings.HasSuffix(ev.RowEvent.TableName, ".loadtest") {
 				rowEvents += len(ev.RowEvent.RowChanges)
