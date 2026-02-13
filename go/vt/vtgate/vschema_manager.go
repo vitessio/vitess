@@ -205,6 +205,9 @@ func (vm *VSchemaManager) buildAndEnhanceVSchema(v *vschemapb.SrvVSchema) *vinde
 		// We need to skip if already present, to handle the case where MoveTables has switched traffic
 		// and removed the source vschema but not from the source database because user asked to --keep-data
 		vindexes.AddAdditionalGlobalTables(v, vschema)
+
+		// Since views may have changed, we need to rebuild routing rules so that views are properly considered.
+		vindexes.RebuildRoutingRules(v, vschema, vm.parser)
 	}
 	return vschema
 }
