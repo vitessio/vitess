@@ -610,6 +610,299 @@ func TestMemorySortMaxMemoryRows(t *testing.T) {
 	}
 }
 
+// spillSortVCursor wraps noopVCursor with spill-to-disk sort enabled.
+type spillSortVCursor struct {
+	noopVCursor
+	sortBufferSize int64
+}
+
+func (s *spillSortVCursor) SortBufferSize() int64 { return s.sortBufferSize }
+
+func (s *spillSortVCursor) SortTmpDir() string { return "" }
+
+// collectStreamRows collects all rows from a streaming result set into a single Result.
+// The spill sort path emits one row per callback, so this normalizes for comparison.
+func collectStreamRows(results []*sqltypes.Result) *sqltypes.Result {
+	out := &sqltypes.Result{}
+	for _, r := range results {
+		if len(r.Fields) > 0 {
+			out.Fields = r.Fields
+		}
+		out.Rows = append(out.Rows, r.Rows...)
+	}
+	return out
+}
+
+func TestMemorySortSpillSort(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"c1|c2",
+		"varbinary|decimal",
+	)
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			fields,
+			"a|1",
+			"g|2",
+			"a|1",
+			"c|4",
+			"c|3",
+		)},
+	}
+
+	ms := &MemorySort{
+		OrderBy: []evalengine.OrderByParams{{
+			WeightStringCol: -1,
+			Col:             1,
+		}},
+		Input: fp,
+	}
+
+	// Use a tiny buffer to force spilling
+	vc := &spillSortVCursor{sortBufferSize: 50}
+
+	var results []*sqltypes.Result
+	err := ms.TryStreamExecute(context.Background(), vc, nil, true, func(qr *sqltypes.Result) error {
+		results = append(results, qr)
+		return nil
+	})
+	require.NoError(t, err)
+
+	got := collectStreamRows(results)
+	wantResult := sqltypes.MakeTestResult(
+		fields,
+		"a|1",
+		"a|1",
+		"g|2",
+		"c|3",
+		"c|4",
+	)
+	utils.MustMatch(t, wantResult, got)
+}
+
+func TestMemorySortSpillSortNoSpillWithLargeBuffer(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"c1|c2",
+		"varbinary|decimal",
+	)
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			fields,
+			"a|1",
+			"g|2",
+			"a|1",
+			"c|4",
+			"c|3",
+		)},
+	}
+
+	ms := &MemorySort{
+		OrderBy: []evalengine.OrderByParams{{
+			WeightStringCol: -1,
+			Col:             1,
+		}},
+		Input: fp,
+	}
+
+	// Large buffer means no spill
+	vc := &spillSortVCursor{sortBufferSize: 1024 * 1024}
+
+	var results []*sqltypes.Result
+	err := ms.TryStreamExecute(context.Background(), vc, nil, true, func(qr *sqltypes.Result) error {
+		results = append(results, qr)
+		return nil
+	})
+	require.NoError(t, err)
+
+	got := collectStreamRows(results)
+	wantResult := sqltypes.MakeTestResult(
+		fields,
+		"a|1",
+		"a|1",
+		"g|2",
+		"c|3",
+		"c|4",
+	)
+	utils.MustMatch(t, wantResult, got)
+}
+
+func TestMemorySortSpillSortWithLimit(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"c1|c2",
+		"varbinary|decimal",
+	)
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			fields,
+			"a|1",
+			"g|2",
+			"a|1",
+			"c|4",
+			"c|3",
+		)},
+	}
+
+	ms := &MemorySort{
+		OrderBy: []evalengine.OrderByParams{{
+			WeightStringCol: -1,
+			Col:             1,
+		}},
+		Input:      fp,
+		UpperLimit: evalengine.NewBindVar("__upper_limit", evalengine.NewType(sqltypes.Int64, collations.CollationBinaryID)),
+	}
+
+	vc := &spillSortVCursor{sortBufferSize: 50}
+	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
+
+	var results []*sqltypes.Result
+	err := ms.TryStreamExecute(context.Background(), vc, bv, true, func(qr *sqltypes.Result) error {
+		results = append(results, qr)
+		return nil
+	})
+	require.NoError(t, err)
+
+	got := collectStreamRows(results)
+	wantResult := sqltypes.MakeTestResult(
+		fields,
+		"a|1",
+		"a|1",
+		"g|2",
+	)
+	utils.MustMatch(t, wantResult, got)
+}
+
+func TestMemorySortSpillSortWithTruncate(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"c1|c2|c3",
+		"varbinary|decimal|int64",
+	)
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			fields,
+			"a|1|1",
+			"g|2|1",
+			"a|1|1",
+			"c|4|1",
+			"c|3|1",
+		)},
+	}
+
+	ms := &MemorySort{
+		OrderBy: []evalengine.OrderByParams{{
+			WeightStringCol: -1,
+			Col:             1,
+		}},
+		Input:               fp,
+		TruncateColumnCount: 2,
+	}
+
+	vc := &spillSortVCursor{sortBufferSize: 50}
+
+	var results []*sqltypes.Result
+	err := ms.TryStreamExecute(context.Background(), vc, nil, true, func(qr *sqltypes.Result) error {
+		results = append(results, qr)
+		return nil
+	})
+	require.NoError(t, err)
+
+	got := collectStreamRows(results)
+	wantResult := sqltypes.MakeTestResult(
+		fields[:2],
+		"a|1",
+		"a|1",
+		"g|2",
+		"c|3",
+		"c|4",
+	)
+	utils.MustMatch(t, wantResult, got)
+}
+
+func TestMemorySortSpillSortFallbackWhenDisabled(t *testing.T) {
+	// SortBufferSize == 0 should fall back to the old in-memory behavior,
+	// including the maxMemoryRows check.
+	saveMax := testMaxMemoryRows
+	testMaxMemoryRows = 3
+	defer func() { testMaxMemoryRows = saveMax }()
+
+	fields := sqltypes.MakeTestFields(
+		"c1|c2",
+		"varbinary|decimal",
+	)
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			fields,
+			"a|1",
+			"b|2",
+			"a|1",
+			"c|4",
+			"c|3",
+		)},
+	}
+
+	ms := &MemorySort{
+		OrderBy: []evalengine.OrderByParams{{
+			WeightStringCol: -1,
+			Col:             1,
+		}},
+		Input: fp,
+	}
+
+	// noopVCursor returns SortBufferSize() == 0
+	err := ms.TryStreamExecute(context.Background(), &noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
+		return nil
+	})
+	require.EqualError(t, err, "in-memory row count exceeded allowed limit of 3")
+}
+
+func TestMemorySortSpillSortBypassesMaxMemoryRows(t *testing.T) {
+	// When spill sort is enabled, maxMemoryRows should NOT limit streaming.
+	saveMax := testMaxMemoryRows
+	testMaxMemoryRows = 3
+	defer func() { testMaxMemoryRows = saveMax }()
+
+	fields := sqltypes.MakeTestFields(
+		"c1|c2",
+		"varbinary|decimal",
+	)
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			fields,
+			"a|1",
+			"g|2",
+			"a|1",
+			"c|4",
+			"c|3",
+		)},
+	}
+
+	ms := &MemorySort{
+		OrderBy: []evalengine.OrderByParams{{
+			WeightStringCol: -1,
+			Col:             1,
+		}},
+		Input: fp,
+	}
+
+	vc := &spillSortVCursor{sortBufferSize: 50}
+
+	var results []*sqltypes.Result
+	err := ms.TryStreamExecute(context.Background(), vc, nil, true, func(qr *sqltypes.Result) error {
+		results = append(results, qr)
+		return nil
+	})
+	require.NoError(t, err)
+
+	got := collectStreamRows(results)
+	wantResult := sqltypes.MakeTestResult(
+		fields,
+		"a|1",
+		"a|1",
+		"g|2",
+		"c|3",
+		"c|4",
+	)
+	utils.MustMatch(t, wantResult, got)
+}
+
 func TestMemorySortExecuteNoVarChar(t *testing.T) {
 	fields := sqltypes.MakeTestFields(
 		"c1|c2",

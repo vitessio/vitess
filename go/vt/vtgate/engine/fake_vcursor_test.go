@@ -363,6 +363,14 @@ func (t *noopVCursor) MaxMemoryRows() int {
 	return testMaxMemoryRows
 }
 
+func (t *noopVCursor) SortBufferSize() int64 {
+	return 0
+}
+
+func (t *noopVCursor) SortTmpDir() string {
+	return ""
+}
+
 func (t *noopVCursor) ExceedsMaxMemoryRows(numRows int) bool {
 	return !testIgnoreMaxMemoryRows && numRows > testMaxMemoryRows
 }
