@@ -36,9 +36,11 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/utils"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
@@ -256,13 +258,12 @@ func refreshTabletsUsing(ctx context.Context, loader func(tabletAlias string), f
 	}
 
 	if len(cellsToWatch) > 0 {
-		var filteredCells []string
-		for _, cell := range cells {
-			if slices.Contains(cellsToWatch, cell) {
-				filteredCells = append(filteredCells, cell)
+		for _, cellToWatch := range cellsToWatch {
+			if !slices.Contains(cells, cellToWatch) {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cell %v does not exist in the topo", cellToWatch)
 			}
 		}
-		cells = filteredCells
+		cells = cellsToWatch
 	}
 
 	// Get all tablets from all cells.

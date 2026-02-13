@@ -1046,3 +1046,33 @@ func TestRefreshTabletsInKeyspaceShardCellsToWatch(t *testing.T) {
 	_, err = inst.ReadTablet(topoproto.TabletAliasString(tabCell2.Alias))
 	assert.Error(t, err)
 }
+
+// TestRefreshTabletsUsingCellsToWatch_InvalidCell verifies that refreshTabletsUsing
+// returns an error when cellsToWatch contains a cell that does not exist in the topo.
+func TestRefreshTabletsUsingCellsToWatch_InvalidCell(t *testing.T) {
+	oldTs := ts
+	oldCellsToWatch := cellsToWatch
+	oldClustersToWatch := clustersToWatch
+	oldShardsToWatch := shardsToWatch
+	defer func() {
+		ts = oldTs
+		cellsToWatch = oldCellsToWatch
+		clustersToWatch = oldClustersToWatch
+		shardsToWatch = oldShardsToWatch
+		db.ClearVTOrcDatabase()
+	}()
+
+	ctx := t.Context()
+
+	ts = memorytopo.NewServer(ctx, cell1)
+	_, err := ts.GetOrCreateShard(context.Background(), keyspace, shard)
+	require.NoError(t, err)
+
+	clustersToWatch = nil
+	shardsToWatch = make(map[string][]*topodatapb.KeyRange)
+	cellsToWatch = []string{"nonexistent-cell"}
+
+	err = refreshTabletsUsing(ctx, func(tabletAlias string) {}, true)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "does not exist in the topo")
+}
