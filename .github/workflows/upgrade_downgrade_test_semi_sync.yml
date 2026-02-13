@@ -88,10 +88,15 @@ jobs:
 
           sudo service etcd stop
           
+<<<<<<< HEAD
           wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
           sudo apt-get install -y gnupg2
           sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
           sudo percona-release enable-only tools
+=======
+          sudo percona-release enable tools
+          sudo percona-release setup pxb-80
+>>>>>>> 46ad2b29b0 (CI: Fix workflows that install xtrabackup (#19383))
           sudo apt-get update
           sudo apt-get install -y percona-xtrabackup-80
 
