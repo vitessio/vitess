@@ -149,9 +149,6 @@ func (tr *Tracker) process(ctx context.Context) {
 					gtid = event.Gtid
 					continue
 				}
-				if event.Statement != "" {
-					log.Errorf("DEBUG: Received event in schema tracker: type %v, gtid %s, ddl %s", event.Type, gtid, event.Statement)
-				}
 				if event.Type == binlogdatapb.VEventType_DDL &&
 					MustReloadSchemaOnDDL(event.Statement, tr.engine.cp.DBName(), tr.env.Environment().Parser()) {
 					if err := tr.schemaUpdated(gtid, event.Statement, event.Timestamp); err != nil {
@@ -170,7 +167,7 @@ func (tr *Tracker) process(ctx context.Context) {
 		default:
 			if err != nil {
 				restorePreviousGTID()
-				log.Errorf("DEBUG: Schema Tracker's vstream ended: %v, retrying in 5 seconds", err)
+				log.Warningf("Schema Version Tracker's vstream ended: %v, retrying in 5 seconds...", err)
 			}
 		}
 	}
