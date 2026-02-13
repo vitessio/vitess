@@ -428,15 +428,19 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 	tabletAliasString := topoproto.TabletAliasString(participant.tablet.Alias)
 	log.Infof("streamOneShard Start for vdiff %s on %s using query: %s", td.wd.ct.uuid, tabletAliasString, query)
 	td.wgShardStreamers.Add(1)
+	resultch := participant.result
 
 	defer func() {
 		log.Infof("streamOneShard for vdiff %s End on %s (err: %v)", td.wd.ct.uuid, tabletAliasString, participant.err)
-		select {
-		case <-ctx.Done():
-		default:
-			close(participant.result)
+
+		if resultch != nil {
+			close(resultch)
+		}
+
+		if gtidch != nil {
 			close(gtidch)
 		}
+
 		td.wgShardStreamers.Done()
 	}()
 
@@ -489,7 +493,7 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 				result.Fields = nil
 			}
 			select {
-			case participant.result <- result:
+			case resultch <- result:
 			case <-ctx.Done():
 				return vterrors.Wrap(ctx.Err(), "VStreamRows")
 			case <-td.wd.ct.done:

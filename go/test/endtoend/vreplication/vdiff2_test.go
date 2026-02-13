@@ -640,3 +640,67 @@ func testCLICreateWait(t *testing.T, ksWorkflow string, cells string) {
 		}
 	})
 }
+
+// TestVDiffStopWhileBlockedOnMDL asserts that "vdiff stop" completes promptly
+// when the VDiff is blocked waiting for a table metadata lock.
+func TestVDiffStopWhileBlockedOnMDL(t *testing.T) {
+	originalReplicas := defaultReplicas
+	originalRdonly := defaultRdonly
+	defaultReplicas = 0
+	defaultRdonly = 0
+	defer func() {
+		defaultReplicas = originalReplicas
+		defaultRdonly = originalRdonly
+	}()
+
+	vc = setupMinimalCluster(t)
+	workflow := "mdl_stop_test"
+	defer func() {
+		_, _ = vc.VtctldClient.ExecuteCommandWithOutput("--action-timeout=30s", "VDiff", "--workflow", workflow, "--target-keyspace", defaultTargetKs, "delete", "all")
+		vc.TearDown()
+	}()
+
+	// Set up target keyspace and start a MoveTables workflow for the customer table.
+	targetTabs := setupMinimalTargetKeyspace(t)
+	require.NotNil(t, sourceTab)
+	require.NotNil(t, targetTabs["-80"])
+	require.NotNil(t, targetTabs["80-"])
+
+	moveTablesAction(t, "Create", "zone1", workflow, defaultSourceKs, defaultTargetKs, "customer")
+	for _, shard := range []string{"-80", "80-"} {
+		catchup(t, targetTabs[shard], workflow, "MoveTables")
+	}
+
+	// Open a transaction on the source that holds a metadata lock on the
+	// customer table. This prevents VDiff's LOCK TABLES READ from proceeding.
+	lockConn, err := sourceTab.TabletConn(defaultSourceKs, true)
+	require.NoError(t, err)
+	txOpen := false
+	defer func() {
+		if txOpen {
+			_, _ = lockConn.ExecuteFetch("rollback", 1, false)
+		}
+		lockConn.Close()
+	}()
+
+	_, err = lockConn.ExecuteFetch("begin", 1, false)
+	require.NoError(t, err)
+	txOpen = true
+	_, err = lockConn.ExecuteFetch("update customer set name = concat(name, '_mdl') where cid = 1", 1, false)
+	require.NoError(t, err)
+
+	// Start a VDiff. It will block during initialization waiting for the MDL.
+	ksWorkflow := fmt.Sprintf("%s.%s", defaultTargetKs, workflow)
+	uuid, _ := performVDiff2Action(t, ksWorkflow, "zone1", "create", "", false)
+
+	// Stop should complete and not time out despite the VDiff being blocked on the MDL.
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput(
+		"--action-timeout=5s",
+		"VDiff",
+		"--workflow", workflow,
+		"--target-keyspace", defaultTargetKs,
+		"stop",
+		uuid,
+	)
+	require.NoError(t, err, "vdiff stop should not time out while waiting on MDL; output: %s", output)
+}
