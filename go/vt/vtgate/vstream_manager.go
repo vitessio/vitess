@@ -28,7 +28,6 @@ import (
 
 	"golang.org/x/exp/maps"
 
-	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
@@ -984,48 +983,17 @@ func extractRowTableName(ev *binlogdatapb.VEvent) *string {
 // A tablet should be ignored upon retry if it's likely another tablet will not
 // produce the same error.
 func (vs *vstream) shouldRetry(err error) (retry bool, ignoreTablet bool) {
-	errCode := vterrors.Code(err)
-	// In this context, where we will run the tablet picker again on retry, these
-	// codes indicate that it's worth a retry as the error is likely a transient
-	// one with a tablet or within the shard.
-	if errCode == vtrpcpb.Code_FAILED_PRECONDITION || errCode == vtrpcpb.Code_UNAVAILABLE {
+	action := discovery.ShouldRetryTabletError(err)
+	switch action {
+	case discovery.TabletErrorActionRetry:
+		return true, false
+	case discovery.TabletErrorActionIgnoreTablet:
+		return true, true
+	case discovery.TabletErrorActionFail:
+		return false, false
+	default:
 		return true, false
 	}
-	// This typically indicates that the user provided invalid arguments for the
-	// VStream so we should not retry.
-	if errCode == vtrpcpb.Code_INVALID_ARGUMENT {
-		// But if there is a GTIDSet Mismatch on the tablet, omit that tablet from
-		// the candidate list in the TabletPicker and retry. The argument was invalid
-		// *for that specific *tablet* but it's not generally invalid.
-		if strings.Contains(err.Error(), "GTIDSet Mismatch") {
-			return true, true
-		}
-		return false, false
-	}
-	// Internal errors such as not having all journaling partipants require a new
-	// VStream.
-	if errCode == vtrpcpb.Code_INTERNAL {
-		return false, false
-	}
-	// Handle binary log purging errors by retrying with a different tablet.
-	// This occurs when a tablet doesn't have the requested GTID because the
-	// source purged the required binary logs. Another tablet might still have
-	// the logs, so we ignore this tablet and retry.
-	if errCode == vtrpcpb.Code_UNKNOWN {
-		sqlErr := sqlerror.NewSQLErrorFromError(err)
-		if sqlError, ok := sqlErr.(*sqlerror.SQLError); ok {
-			switch sqlError.Number() {
-			case sqlerror.ERMasterFatalReadingBinlog, // 1236
-				sqlerror.ERSourceHasPurgedRequiredGtids: // 1789
-				return true, true
-			}
-		}
-	}
-
-	// For anything else, if this is an ephemeral SQL error -- such as a
-	// MAX_EXECUTION_TIME SQL error during the copy phase -- or any other
-	// type of non-SQL error, then retry.
-	return sqlerror.IsEphemeralError(err), false
 }
 
 // sendAll sends a group of events together while holding the lock.

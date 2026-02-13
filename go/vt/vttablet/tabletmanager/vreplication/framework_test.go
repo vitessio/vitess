@@ -249,9 +249,13 @@ func execConnStatements(t *testing.T, conn *dbconnpool.DBConnection, queries []s
 // Topos and tablets
 
 func addTablet(id int) *topodatapb.Tablet {
+	return addTabletWithCell(id, env.Cells[0])
+}
+
+func addTabletWithCell(id int, cell string) *topodatapb.Tablet {
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
-			Cell: env.Cells[0],
+			Cell: cell,
 			Uid:  uint32(id),
 		},
 		Keyspace: env.KeyspaceName,
@@ -318,6 +322,9 @@ func (ftc *fakeTabletConn) StreamHealth(ctx context.Context, callback func(*quer
 // vstreamHook allows you to do work just before calling VStream.
 var vstreamHook func(ctx context.Context)
 
+// vstreamErrorsByTablet allows injecting errors per tablet UID.
+var vstreamErrorsByTablet map[uint32]error
+
 // VStream directly calls into the pre-initialized engine.
 func (ftc *fakeTabletConn) VStream(ctx context.Context, request *binlogdatapb.VStreamRequest, send func([]*binlogdatapb.VEvent) error) error {
 	if request.Target.Keyspace != "vttest" {
@@ -326,6 +333,11 @@ func (ftc *fakeTabletConn) VStream(ctx context.Context, request *binlogdatapb.VS
 	}
 	if vstreamHook != nil {
 		vstreamHook(ctx)
+	}
+	if vstreamErrorsByTablet != nil {
+		if err, ok := vstreamErrorsByTablet[ftc.tablet.Alias.Uid]; ok {
+			return err
+		}
 	}
 	return streamerEngine.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, throttlerapp.VStreamerName, send, nil)
 }
@@ -373,8 +385,17 @@ type fakeBinlogClient struct {
 	lastCharset  *binlogdatapb.Charset
 }
 
+// fakeBinlogClientErrorsByTablet allows injecting errors per tablet UID for binlog client.
+var fakeBinlogClientErrorsByTablet map[uint32]error
+
+// fakeBinlogClientCallback is called when a tablet is dialed.
+var fakeBinlogClientCallback func(tablet *topodatapb.Tablet)
+
 func (fbc *fakeBinlogClient) Dial(ctx context.Context, tablet *topodatapb.Tablet) error {
 	fbc.lastTablet = tablet
+	if fakeBinlogClientCallback != nil {
+		fakeBinlogClientCallback(tablet)
+	}
 	return nil
 }
 
@@ -385,6 +406,11 @@ func (fbc *fakeBinlogClient) StreamTables(ctx context.Context, position string, 
 	fbc.lastPos = position
 	fbc.lastTables = tables
 	fbc.lastCharset = charset
+	if fakeBinlogClientErrorsByTablet != nil {
+		if err, ok := fakeBinlogClientErrorsByTablet[fbc.lastTablet.Alias.Uid]; ok {
+			return nil, err
+		}
+	}
 	return &btStream{ctx: ctx}, nil
 }
 
@@ -392,6 +418,11 @@ func (fbc *fakeBinlogClient) StreamKeyRange(ctx context.Context, position string
 	fbc.lastPos = position
 	fbc.lastKeyRange = keyRange
 	fbc.lastCharset = charset
+	if fakeBinlogClientErrorsByTablet != nil {
+		if err, ok := fakeBinlogClientErrorsByTablet[fbc.lastTablet.Alias.Uid]; ok {
+			return nil, err
+		}
+	}
 	return &btStream{ctx: ctx}, nil
 }
 

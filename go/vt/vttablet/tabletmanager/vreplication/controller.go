@@ -62,11 +62,10 @@ type controller struct {
 	mysqld          mysqlctl.MysqlDaemon
 	blpStats        *binlogplayer.Stats
 
-	id           int32
-	workflow     string
-	source       *binlogdatapb.BinlogSource
-	stopPos      string
-	tabletPicker *discovery.TabletPicker
+	id       int32
+	workflow string
+	source   *binlogdatapb.BinlogSource
+	stopPos  string
 
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -76,6 +75,18 @@ type controller struct {
 
 	lastWorkflowError *vterrors.LastError
 	WorkflowConfig    *vttablet.VReplicationConfig
+
+	// Used to ignore tablets with non-transient errors.
+	ignoreTablets []*topodatapb.TabletAlias
+
+	// Stores the last picked tablet so that it can be ignored if a non-transient error occurs.
+	lastPickedTablet *topodatapb.TabletAlias
+
+	// Tablet picker parameters used when creating a tablet picker with ignoreTablets.
+	tpTs             *topo.Server
+	tpCells          []string
+	tpTabletTypesStr string
+	tpOptions        discovery.TabletPickerOptions
 }
 
 func processWorkflowOptions(params map[string]string) (*vttablet.VReplicationConfig, error) {
@@ -159,11 +170,12 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 				return nil, err
 			}
 		}
-		tp, err := discovery.NewTabletPicker(ctx, sourceTopo, cells, ct.vre.cell, ct.source.Keyspace, ct.source.Shard, tabletTypesStr, tpo)
-		if err != nil {
-			return nil, err
-		}
-		ct.tabletPicker = tp
+
+		// Store tablet picker params so we can create a picker with ignoreTablets in pickSourceTablet.
+		ct.tpTs = sourceTopo
+		ct.tpCells = cells
+		ct.tpTabletTypesStr = tabletTypesStr
+		ct.tpOptions = tpo
 	}
 
 	ctx, ct.cancel = context.WithCancel(ctx)
@@ -191,6 +203,17 @@ func (ct *controller) run(ctx context.Context) {
 			log.Warningf("context canceled: %s", err.Error())
 			return
 		default:
+		}
+
+		// Check if we should ignore this tablet and try another one.
+		action := discovery.ShouldRetryTabletError(err)
+		if action == discovery.TabletErrorActionIgnoreTablet && ct.lastPickedTablet != nil {
+			ct.ignoreTablets = append(ct.ignoreTablets, ct.lastPickedTablet)
+			log.Infof("stream %v: adding tablet %v to ignore list due to error: %v", ct.id, ct.lastPickedTablet, err)
+		} else if action == discovery.TabletErrorActionFail {
+			// Don't retry for unrecoverable errors.
+			log.Errorf("stream %v: unrecoverable error, stopping: %v", ct.id, err)
+			return
 		}
 
 		ct.blpStats.ErrorCounts.Add([]string{"Stream Error"}, 1)
@@ -342,11 +365,24 @@ func (ct *controller) pickSourceTablet(ctx context.Context, dbClient binlogplaye
 	if ct.source.GetExternalMysql() != "" {
 		return nil, nil
 	}
+	if ct.tpTs == nil {
+		return nil, fmt.Errorf("no tablet picker configured for stream %d", ct.id)
+	}
 	log.Infof("Trying to find an eligible source tablet for vreplication stream id %d for workflow: %s",
 		ct.id, ct.workflow)
+
+	// Create a fresh tablet picker with the current ignoreTablets list.
+	tp, err := discovery.NewTabletPicker(ctx, ct.tpTs, ct.tpCells, ct.vre.cell,
+		ct.source.Keyspace, ct.source.Shard, ct.tpTabletTypesStr, ct.tpOptions, ct.ignoreTablets...)
+	if err != nil {
+		ct.blpStats.ErrorCounts.Add([]string{"No Source Tablet Found"}, 1)
+		ct.setMessage(dbClient, "Error creating tablet picker: "+err.Error())
+		return nil, err
+	}
+
 	tpCtx, tpCancel := context.WithTimeout(ctx, discovery.GetTabletPickerRetryDelay()*tabletPickerRetries)
 	defer tpCancel()
-	tablet, err := ct.tabletPicker.PickForStreaming(tpCtx)
+	tablet, err := tp.PickForStreaming(tpCtx)
 	if err != nil {
 		select {
 		case <-ctx.Done():
@@ -360,6 +396,7 @@ func (ct *controller) pickSourceTablet(ctx context.Context, dbClient binlogplaye
 	log.Infof("Found eligible source tablet %s for vreplication stream id %d for workflow %s",
 		tablet.Alias.String(), ct.id, ct.workflow)
 	ct.sourceTablet.Store(tablet.Alias)
+	ct.lastPickedTablet = tablet.Alias
 	return tablet, err
 }
 

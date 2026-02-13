@@ -996,6 +996,13 @@ func TestVStreamRetriableErrors(t *testing.T) {
 			shouldRetry:  true,
 			ignoreTablet: true,
 		},
+		{
+			name:         "non-ephemeral sql error",
+			code:         vtrpcpb.Code_UNKNOWN,
+			msg:          "vttablet: rpc error: code = Unknown desc = Duplicate entry '1' for key 'PRIMARY' (errno 1062) (sqlstate 23000)",
+			shouldRetry:  false,
+			ignoreTablet: false,
+		},
 	}
 
 	commit := []*binlogdatapb.VEvent{
