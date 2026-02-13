@@ -1766,10 +1766,11 @@ func TestWaitForCatchUp(t *testing.T) {
 
 func TestRestrictValidCandidates(t *testing.T) {
 	tests := []struct {
-		name            string
-		validCandidates map[string]*RelayLogPositions
-		tabletMap       map[string]*topo.TabletInfo
-		result          map[string]*RelayLogPositions
+		name             string
+		validCandidates  map[string]*RelayLogPositions
+		tabletMap        map[string]*topo.TabletInfo
+		candidateInfoMap map[string]*CandidateInfo
+		result           map[string]*RelayLogPositions
 	}{
 		{
 			name: "remove invalid tablets",
@@ -1837,17 +1838,105 @@ func TestRestrictValidCandidates(t *testing.T) {
 					},
 				},
 			},
+			candidateInfoMap: map[string]*CandidateInfo{
+				"zone1-0000000100": {IsGTIDBased: true},
+				"zone1-0000000101": {IsGTIDBased: true},
+				"zone1-0000000102": {IsGTIDBased: true},
+				"zone1-0000000103": {IsGTIDBased: true},
+				"zone1-0000000104": {IsGTIDBased: true},
+				"zone1-0000000105": {IsGTIDBased: true},
+			},
 			result: map[string]*RelayLogPositions{
 				"zone1-0000000100": {},
 				"zone1-0000000101": {},
 				"zone1-0000000104": {},
 			},
 		},
+		{
+			name: "remove invalid tablets with file-based async replica",
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {},
+				"zone1-0000000101": {},
+				"zone1-0000000102": {},
+				"zone1-0000000103": {},
+				"zone1-0000000104": {},
+				"zone1-0000000105": {},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_RDONLY,
+					},
+				},
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_RESTORE,
+					},
+				},
+				"zone1-0000000103": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+						Type: topodatapb.TabletType_DRAINED,
+					},
+				},
+				"zone1-0000000104": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  104,
+						},
+						Type: topodatapb.TabletType_SPARE,
+					},
+				},
+				"zone1-0000000105": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+						Type: topodatapb.TabletType_BACKUP,
+					},
+				},
+			},
+			candidateInfoMap: map[string]*CandidateInfo{
+				"zone1-0000000100": {IsGTIDBased: true},
+				"zone1-0000000101": {IsGTIDBased: true},
+				"zone1-0000000102": {IsGTIDBased: true},
+				"zone1-0000000103": {IsGTIDBased: true},
+				"zone1-0000000104": {IsGTIDBased: false}, // file-based
+				"zone1-0000000105": {IsGTIDBased: true},
+			},
+			result: map[string]*RelayLogPositions{
+				"zone1-0000000100": {},
+				"zone1-0000000101": {},
+			},
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			res, err := restrictValidCandidates(test.validCandidates, test.tabletMap)
+			logger := logutil.NewMemoryLogger()
+			res, err := restrictValidCandidates(test.validCandidates, test.tabletMap, test.candidateInfoMap, logger)
 			assert.NoError(t, err)
 			assert.Equal(t, res, test.result)
 		})
@@ -2116,4 +2205,40 @@ func TestGetBackupCandidates(t *testing.T) {
 			require.EqualValues(t, tt.expected, res)
 		})
 	}
+}
+
+func TestIsGTIDBasedShard(t *testing.T) {
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000100": {
+			Tablet: &topodatapb.Tablet{
+				Type: topodatapb.TabletType_PRIMARY,
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+		},
+		"zone1-0000000101": {
+			Tablet: &topodatapb.Tablet{
+				Type: topodatapb.TabletType_REPLICA,
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			},
+		},
+	}
+	candidateInfoMap := map[string]*CandidateInfo{
+		"zone1-0000000100": {IsGTIDBased: true},
+		"zone1-0000000101": {IsGTIDBased: true},
+	}
+
+	// success
+	require.True(t, isGTIDBasedShard(tabletMap, candidateInfoMap))
+
+	// incorrect tablet types
+	for _, ti := range tabletMap {
+		ti.Type = topodatapb.TabletType_DRAINED
+	}
+	require.False(t, isGTIDBasedShard(tabletMap, candidateInfoMap))
 }

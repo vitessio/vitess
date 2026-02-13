@@ -116,6 +116,9 @@ type FakeMysqlDaemon struct {
 	// CurrentSourcePort is returned by ReplicationStatus.
 	CurrentSourcePort int32
 
+	// CurrentSourceUUID is returned by ReplicationStatus.
+	CurrentSourceUUID replication.SID
+
 	// ReplicationLagSeconds is returned by ReplicationStatus.
 	ReplicationLagSeconds uint32
 
@@ -340,6 +343,7 @@ func (fmd *FakeMysqlDaemon) ReplicationStatus(ctx context.Context) (replication.
 		SQLState:   replication.ReplicationStatusToState(strconv.FormatBool(fmd.Replicating)),
 		SourceHost: fmd.CurrentSourceHost,
 		SourcePort: fmd.CurrentSourcePort,
+		SourceUUID: fmd.CurrentSourceUUID,
 	}, nil
 }
 

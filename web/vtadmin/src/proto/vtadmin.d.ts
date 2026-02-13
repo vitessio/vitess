@@ -32172,6 +32172,9 @@ export namespace tabletmanagerdata {
 
         /** StopReplicationAndGetStatusRequest stop_replication_mode */
         stop_replication_mode?: (replicationdata.StopReplicationMode|null);
+
+        /** StopReplicationAndGetStatusRequest capability */
+        capability?: (replicationdata.Capability|null);
     }
 
     /** Represents a StopReplicationAndGetStatusRequest. */
@@ -32185,6 +32188,9 @@ export namespace tabletmanagerdata {
 
         /** StopReplicationAndGetStatusRequest stop_replication_mode. */
         public stop_replication_mode: replicationdata.StopReplicationMode;
+
+        /** StopReplicationAndGetStatusRequest capability. */
+        public capability: replicationdata.Capability;
 
         /**
          * Creates a new StopReplicationAndGetStatusRequest instance using the specified properties.
@@ -50020,6 +50026,12 @@ export namespace query {
 
 /** Namespace replicationdata. */
 export namespace replicationdata {
+
+    /** Capability enum. */
+    enum Capability {
+        DEFAULT = 0,
+        MYSQLGTID = 1
+    }
 
     /** Properties of a Status. */
     interface IStatus {

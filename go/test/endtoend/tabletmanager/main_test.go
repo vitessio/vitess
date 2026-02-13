@@ -202,9 +202,9 @@ func tmcFullStatus(ctx context.Context, tabletGrpcPort int) (*replicationdatapb.
 	return tmClient.FullStatus(ctx, vtablet)
 }
 
-func tmcStopReplicationAndGetStatus(ctx context.Context, tabletGrpcPort int, mode replicationdatapb.StopReplicationMode) (*replicationdatapb.StopReplicationStatus, error) {
+func tmcStopReplicationAndGetStatus(ctx context.Context, tabletGrpcPort int, mode replicationdatapb.StopReplicationMode, capability replicationdatapb.Capability) (*replicationdatapb.StopReplicationStatus, error) {
 	vtablet := getTablet(tabletGrpcPort)
-	return tmClient.StopReplicationAndGetStatus(ctx, vtablet, mode)
+	return tmClient.StopReplicationAndGetStatus(ctx, vtablet, mode, capability)
 }
 
 func getTablet(tabletGrpcPort int) *tabletpb.Tablet {
