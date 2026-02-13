@@ -39,6 +39,53 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// Capability represents the replication functionality a tablet supports.
+type Capability int32
+
+const (
+	Capability_DEFAULT   Capability = 0
+	Capability_MYSQLGTID Capability = 1
+)
+
+// Enum value maps for Capability.
+var (
+	Capability_name = map[int32]string{
+		0: "DEFAULT",
+		1: "MYSQLGTID",
+	}
+	Capability_value = map[string]int32{
+		"DEFAULT":   0,
+		"MYSQLGTID": 1,
+	}
+)
+
+func (x Capability) Enum() *Capability {
+	p := new(Capability)
+	*p = x
+	return p
+}
+
+func (x Capability) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (Capability) Descriptor() protoreflect.EnumDescriptor {
+	return file_replicationdata_proto_enumTypes[0].Descriptor()
+}
+
+func (Capability) Type() protoreflect.EnumType {
+	return &file_replicationdata_proto_enumTypes[0]
+}
+
+func (x Capability) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use Capability.Descriptor instead.
+func (Capability) EnumDescriptor() ([]byte, []int) {
+	return file_replicationdata_proto_rawDescGZIP(), []int{0}
+}
+
 // StopReplicationMode is used to provide controls over how replication is stopped.
 type StopReplicationMode int32
 
@@ -70,11 +117,11 @@ func (x StopReplicationMode) String() string {
 }
 
 func (StopReplicationMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_replicationdata_proto_enumTypes[0].Descriptor()
+	return file_replicationdata_proto_enumTypes[1].Descriptor()
 }
 
 func (StopReplicationMode) Type() protoreflect.EnumType {
-	return &file_replicationdata_proto_enumTypes[0]
+	return &file_replicationdata_proto_enumTypes[1]
 }
 
 func (x StopReplicationMode) Number() protoreflect.EnumNumber {
@@ -83,7 +130,7 @@ func (x StopReplicationMode) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use StopReplicationMode.Descriptor instead.
 func (StopReplicationMode) EnumDescriptor() ([]byte, []int) {
-	return file_replicationdata_proto_rawDescGZIP(), []int{0}
+	return file_replicationdata_proto_rawDescGZIP(), []int{1}
 }
 
 // Status is the replication status for MySQL/MariaDB/File-based. Returned by a
@@ -829,7 +876,11 @@ const file_replicationdata_proto_rawDesc = "" +
 	"\fdisk_stalled\x18\x17 \x01(\bR\vdiskStalled\x12*\n" +
 	"\x11semi_sync_blocked\x18\x18 \x01(\bR\x0fsemiSyncBlocked\x125\n" +
 	"\vtablet_type\x18\x19 \x01(\x0e2\x14.topodata.TabletTypeR\n" +
-	"tabletType*;\n" +
+	"tabletType*(\n" +
+	"\n" +
+	"Capability\x12\v\n" +
+	"\aDEFAULT\x10\x00\x12\r\n" +
+	"\tMYSQLGTID\x10\x01*;\n" +
 	"\x13StopReplicationMode\x12\x12\n" +
 	"\x0eIOANDSQLTHREAD\x10\x00\x12\x10\n" +
 	"\fIOTHREADONLY\x10\x01B.Z,vitess.io/vitess/go/vt/proto/replicationdatab\x06proto3"
@@ -846,24 +897,25 @@ func file_replicationdata_proto_rawDescGZIP() []byte {
 	return file_replicationdata_proto_rawDescData
 }
 
-var file_replicationdata_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_replicationdata_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
 var file_replicationdata_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_replicationdata_proto_goTypes = []any{
-	(StopReplicationMode)(0),      // 0: replicationdata.StopReplicationMode
-	(*Status)(nil),                // 1: replicationdata.Status
-	(*Configuration)(nil),         // 2: replicationdata.Configuration
-	(*StopReplicationStatus)(nil), // 3: replicationdata.StopReplicationStatus
-	(*PrimaryStatus)(nil),         // 4: replicationdata.PrimaryStatus
-	(*FullStatus)(nil),            // 5: replicationdata.FullStatus
-	(topodata.TabletType)(0),      // 6: topodata.TabletType
+	(Capability)(0),               // 0: replicationdata.Capability
+	(StopReplicationMode)(0),      // 1: replicationdata.StopReplicationMode
+	(*Status)(nil),                // 2: replicationdata.Status
+	(*Configuration)(nil),         // 3: replicationdata.Configuration
+	(*StopReplicationStatus)(nil), // 4: replicationdata.StopReplicationStatus
+	(*PrimaryStatus)(nil),         // 5: replicationdata.PrimaryStatus
+	(*FullStatus)(nil),            // 6: replicationdata.FullStatus
+	(topodata.TabletType)(0),      // 7: topodata.TabletType
 }
 var file_replicationdata_proto_depIdxs = []int32{
-	1, // 0: replicationdata.StopReplicationStatus.before:type_name -> replicationdata.Status
-	1, // 1: replicationdata.StopReplicationStatus.after:type_name -> replicationdata.Status
-	1, // 2: replicationdata.FullStatus.replication_status:type_name -> replicationdata.Status
-	4, // 3: replicationdata.FullStatus.primary_status:type_name -> replicationdata.PrimaryStatus
-	2, // 4: replicationdata.FullStatus.replication_configuration:type_name -> replicationdata.Configuration
-	6, // 5: replicationdata.FullStatus.tablet_type:type_name -> topodata.TabletType
+	2, // 0: replicationdata.StopReplicationStatus.before:type_name -> replicationdata.Status
+	2, // 1: replicationdata.StopReplicationStatus.after:type_name -> replicationdata.Status
+	2, // 2: replicationdata.FullStatus.replication_status:type_name -> replicationdata.Status
+	5, // 3: replicationdata.FullStatus.primary_status:type_name -> replicationdata.PrimaryStatus
+	3, // 4: replicationdata.FullStatus.replication_configuration:type_name -> replicationdata.Configuration
+	7, // 5: replicationdata.FullStatus.tablet_type:type_name -> topodata.TabletType
 	6, // [6:6] is the sub-list for method output_type
 	6, // [6:6] is the sub-list for method input_type
 	6, // [6:6] is the sub-list for extension type_name
@@ -881,7 +933,7 @@ func file_replicationdata_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_replicationdata_proto_rawDesc), len(file_replicationdata_proto_rawDesc)),
-			NumEnums:      1,
+			NumEnums:      2,
 			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
