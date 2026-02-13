@@ -31,7 +31,6 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/netutil"
-	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/tb"
@@ -125,7 +124,7 @@ type Handler interface {
 	ComBinlogDump(c *Conn, logFile string, binlogPos uint32) error
 
 	// ComBinlogDumpGTID is called when a connection receives a ComBinlogDumpGTID request
-	ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error
+	ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet, nonBlock bool) error
 
 	// WarningCount is called at the end of each query to obtain
 	// the value to be returned to the client in the EOF packet.
@@ -462,6 +461,16 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		defer connCountByTLSVer.Add(versionNoTLS, -1)
 	}
 
+	// Check if username contains a target override (format: user|target).
+	// This allows replication clients to specify the target tablet in the username.
+	// The target string format is "keyspace:shard@type|alias" (e.g., "commerce:-80@replica|zone1-100").
+	// Note: We use strings.Index to find only the FIRST "|" since the target string itself
+	// may contain "|" to separate tablet type from alias.
+	if idx := strings.Index(user, "|"); idx != -1 {
+		c.schemaName = user[idx+1:]
+		user = user[:idx]
+	}
+
 	// See what auth method the AuthServer wants to use for that user.
 	negotiatedAuthMethod, err := negotiateAuthMethod(c, l.authServer, user, clientAuthMethod)
 
@@ -529,9 +538,11 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		defer connCountPerUser.Add(c.User, -1)
 	}
 
-	// Set initial db name.
+	// Set initial db name (or target string for binlog replication).
+	// Note: We use the raw schemaName without escaping because it may contain
+	// a target string with special characters (e.g., "keyspace:shard@type|alias").
 	if c.schemaName != "" {
-		err = l.handler.ComQuery(c, "use "+sqlescape.EscapeID(c.schemaName), func(result *sqltypes.Result) error {
+		err = l.handler.ComQuery(c, "use `"+c.schemaName+"`", func(result *sqltypes.Result) error {
 			return nil
 		})
 		if err != nil {

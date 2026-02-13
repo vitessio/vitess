@@ -549,7 +549,7 @@ func (h *mockDonorHandler) ComBinlogDump(c *mysql.Conn, logFile string, binlogPo
 	return errors.New("ComBinlogDump not implemented")
 }
 
-func (h *mockDonorHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error {
+func (h *mockDonorHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet, nonblock bool) error {
 	return errors.New("ComBinlogDumpGTID not implemented")
 }
 

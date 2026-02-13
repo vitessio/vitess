@@ -120,6 +120,15 @@ var (
 		},
 	)
 
+	enableBinlogDump = viperutil.Configure(
+		"enable_binlog_dump",
+		viperutil.Options[bool]{
+			FlagName: "enable-binlog-dump",
+			Default:  false,
+			Dynamic:  true,
+		},
+	)
+
 	transactionMode = viperutil.Configure(
 		"transaction_mode",
 		viperutil.Options[vtgatepb.TransactionMode]{
@@ -194,6 +203,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &foreignKeyMode, "foreign-key-mode", foreignKeyMode, "This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow")
 	fs.Bool("enable-online-ddl", enableOnlineDDL.Default(), "Allow users to submit, review and control Online DDL")
 	fs.Bool("enable-direct-ddl", enableDirectDDL.Default(), "Allow users to submit direct DDL statements")
+	fs.Bool("enable-binlog-dump", enableBinlogDump.Default(), "Allow users to perform binlog dump operations for CDC/replication")
 	utils.SetFlagBoolVar(fs, &enableSchemaChangeSignal, "schema-change-signal", enableSchemaChangeSignal, "Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work")
 	fs.IntVar(&queryTimeout, "query-timeout", queryTimeout, "Sets the default query timeout (in ms). Can be overridden by session variable (query_timeout) or comment directive (QUERY_TIMEOUT_MS)")
 	utils.SetFlagStringVar(fs, &queryLogToFile, "log-queries-to-file", queryLogToFile, "Enable query logging to the specified file")
@@ -209,6 +219,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	viperutil.BindFlags(fs,
 		enableOnlineDDL,
 		enableDirectDDL,
+		enableBinlogDump,
 		transactionMode,
 	)
 }
