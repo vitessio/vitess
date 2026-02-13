@@ -634,6 +634,7 @@ func applyAlterTable(ddl *sqlparser.AlterTable) {
 	if mt == nil {
 		return
 	}
+	mockSchemaMu.Lock()
 	for _, opt := range ddl.AlterOptions {
 		switch alter := opt.(type) {
 		case *sqlparser.AddColumns:
@@ -652,6 +653,7 @@ func applyAlterTable(ddl *sqlparser.AlterTable) {
 			mt.pkColumns = mergePKColumns(mt.pkColumns, alter.IndexDefinition)
 		}
 	}
+	mockSchemaMu.Unlock()
 	setMockTable(dbName, tableName, mt.columns, mt.pkColumns)
 }
 
@@ -1210,9 +1212,6 @@ func expectDBClientQueries(t *testing.T, expectations qh.ExpectationSequence, sk
 		return
 	}
 	validator := qh.NewVerifier(expectations)
-	if doNotLogDBQueries {
-		return
-	}
 
 	for len(validator.Pending()) > 0 {
 		if failed {

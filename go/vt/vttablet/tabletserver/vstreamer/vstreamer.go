@@ -526,14 +526,11 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		})
 		vs.eventGTID = nil
 	case ev.IsGTID():
-		if !shouldSend(binlogdatapb.VEventType_GTID) {
-			return nil, nil
-		}
 		gtid, hasBegin, commitParent, sequenceNumber, err := ev.GTID(vs.format)
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "failed to get GTID from binlog event: %#v", ev)
 		}
-		if hasBegin {
+		if hasBegin && shouldSend(binlogdatapb.VEventType_GTID) {
 			vevents = append(vevents, &binlogdatapb.VEvent{
 				Type:           binlogdatapb.VEventType_BEGIN,
 				CommitParent:   commitParent,
@@ -681,7 +678,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 			return nil, fmt.Errorf("unexpected statement type %s in row-based replication: %q", cat, q.SQL)
 		}
 	case ev.IsTableMap():
-		if !shouldSend(binlogdatapb.VEventType_ROW) {
+		if !shouldSend(binlogdatapb.VEventType_ROW) && !shouldSend(binlogdatapb.VEventType_FIELD) {
 			return nil, nil
 		}
 		// This is very frequent. It precedes every row event.

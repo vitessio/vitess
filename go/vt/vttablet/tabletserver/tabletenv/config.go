@@ -159,7 +159,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&currentConfig.TruncateErrorLen, "queryserver-config-truncate-error-len", defaultConfig.TruncateErrorLen, "truncate errors sent to client if they are longer than this value (0 means do not truncate)")
 	fs.BoolVar(&currentConfig.AnnotateQueries, "queryserver-config-annotate-queries", defaultConfig.AnnotateQueries, "prefix queries to MySQL backend with comment indicating vtgate principal (user) and target tablet type")
 	utils.SetFlagBoolVar(fs, &currentConfig.WatchReplication, "watch-replication-stream", false, "(Deprecated and ignored) When enabled, vttablet will stream the MySQL replication stream from the local server, and use it to update schema when it sees a DDL.")
-	fs.MarkDeprecated("watch-replication-stream", "please use --track-schema-versions instead, --watch-replication-stream is ignored and will be removed in v25")
+	_ = fs.MarkDeprecated("watch-replication-stream", "please use --track-schema-versions instead, --watch-replication-stream is ignored and will be removed in v25")
 	utils.SetFlagBoolVar(fs, &currentConfig.TrackSchemaVersions, "track-schema-versions", false, "When enabled, vttablet will store versions of schemas at each position that a DDL is applied and allow retrieval of the schema corresponding to a position")
 	fs.Int64Var(&currentConfig.SchemaVersionMaxAgeSeconds, "schema-version-max-age-seconds", 0, "max age of schema version records to kept in memory by the vreplication historian")
 
