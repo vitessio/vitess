@@ -210,6 +210,9 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 	assert.Equal(t, wantTotalRows, numRowEvents)
 }
 
+// TestVStreamLaggingDDLRowEvents confirms that when the schema historian is enabled via the --track-schema-versions flag, we don't
+// fail to handle older ROW events in the VStream that were created prior to a DDL which modified the table structure and thus
+// impacted the binlog event field number to table column mapping.
 func TestVStreamLaggingDDLRowEvents(t *testing.T) {
 	oldArgs := slices.Clone(extraVTTabletArgs)
 	extraVTTabletArgs = append(extraVTTabletArgs,
