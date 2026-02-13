@@ -28,14 +28,14 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
-
-	"vitess.io/vitess/go/vt/log"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var testNow = time.Now()
@@ -78,7 +78,6 @@ func TestStateManagerServePrimary(t *testing.T) {
 	assert.Equal(t, false, sm.lameduck)
 	assert.Equal(t, testNow, sm.ptsTimestamp)
 
-	verifySubcomponent(t, 1, sm.watcher, testStateClosed)
 	verifySubcomponent(t, 2, sm.se, testStateOpen)
 	verifySubcomponent(t, 3, sm.vstreamer, testStateOpen)
 	verifySubcomponent(t, 4, sm.qe, testStateOpen)
@@ -117,7 +116,6 @@ func TestStateManagerServeNonPrimary(t *testing.T) {
 	verifySubcomponent(t, 8, sm.txThrottler, testStateOpen)
 	verifySubcomponent(t, 9, sm.te, testStateNonPrimary)
 	verifySubcomponent(t, 10, sm.rt, testStateNonPrimary)
-	verifySubcomponent(t, 11, sm.watcher, testStateOpen)
 	verifySubcomponent(t, 12, sm.throttler, testStateOpen)
 
 	assert.Equal(t, topodatapb.TabletType_REPLICA, sm.target.TabletType)
@@ -138,7 +136,6 @@ func TestStateManagerUnservePrimary(t *testing.T) {
 	verifySubcomponent(t, 6, sm.te, testStateClosed)
 
 	verifySubcomponent(t, 7, sm.tracker, testStateClosed)
-	verifySubcomponent(t, 8, sm.watcher, testStateClosed)
 	verifySubcomponent(t, 9, sm.se, testStateOpen)
 	verifySubcomponent(t, 10, sm.vstreamer, testStateOpen)
 	verifySubcomponent(t, 11, sm.qe, testStateOpen)
@@ -204,7 +201,6 @@ func TestStateManagerUnserveNonPrimary(t *testing.T) {
 	verifySubcomponent(t, 11, sm.txThrottler, testStateOpen)
 
 	verifySubcomponent(t, 12, sm.rt, testStateNonPrimary)
-	verifySubcomponent(t, 13, sm.watcher, testStateOpen)
 
 	assert.Equal(t, topodatapb.TabletType_RDONLY, sm.target.TabletType)
 	assert.Equal(t, StateNotServing, sm.state)
@@ -226,7 +222,6 @@ func TestStateManagerClose(t *testing.T) {
 
 	verifySubcomponent(t, 8, sm.txThrottler, testStateClosed)
 	verifySubcomponent(t, 9, sm.qe, testStateClosed)
-	verifySubcomponent(t, 10, sm.watcher, testStateClosed)
 	verifySubcomponent(t, 11, sm.vstreamer, testStateClosed)
 	verifySubcomponent(t, 12, sm.rt, testStateClosed)
 	verifySubcomponent(t, 13, sm.se, testStateClosed)
@@ -281,43 +276,6 @@ func TestStateManagerGracePeriod(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_UNKNOWN, alsoAllow())
 }
 
-// testWatcher is used as a hook to invoke another transition
-type testWatcher struct {
-	t  *testing.T
-	sm *stateManager
-	wg sync.WaitGroup
-}
-
-func (te *testWatcher) Open() {
-}
-
-func (te *testWatcher) Close() {
-	te.wg.Go(func() {
-		err := te.sm.SetServingType(topodatapb.TabletType_RDONLY, testNow, StateNotServing, "")
-		assert.NoError(te.t, err)
-	})
-}
-
-func TestStateManagerSetServingTypeRace(t *testing.T) {
-	// We don't call StopService because that in turn
-	// will call Close again on testWatcher.
-	sm := newTestStateManager()
-	te := &testWatcher{
-		t:  t,
-		sm: sm,
-	}
-	sm.watcher = te
-	err := sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
-	require.NoError(t, err)
-
-	// Ensure the next call waits and then succeeds.
-	te.wg.Wait()
-
-	// End state should be the final desired state.
-	assert.Equal(t, topodatapb.TabletType_RDONLY, sm.target.TabletType)
-	assert.Equal(t, StateNotServing, sm.state)
-}
-
 func TestStateManagerSetServingTypeNoChange(t *testing.T) {
 	log.Infof("starting")
 	sm := newTestStateManager()
@@ -340,7 +298,6 @@ func TestStateManagerSetServingTypeNoChange(t *testing.T) {
 	verifySubcomponent(t, 8, sm.txThrottler, testStateOpen)
 	verifySubcomponent(t, 9, sm.te, testStateNonPrimary)
 	verifySubcomponent(t, 10, sm.rt, testStateNonPrimary)
-	verifySubcomponent(t, 11, sm.watcher, testStateOpen)
 	verifySubcomponent(t, 12, sm.throttler, testStateOpen)
 
 	assert.Equal(t, topodatapb.TabletType_REPLICA, sm.target.TabletType)
@@ -807,7 +764,6 @@ func newTestStateManager() *stateManager {
 		rt:                &testReplTracker{lag: 1 * time.Second},
 		vstreamer:         &testSubcomponent{},
 		tracker:           &testSubcomponent{},
-		watcher:           &testSubcomponent{},
 		qe:                &testQueryEngine{},
 		txThrottler:       &testTxThrottler{},
 		te:                &testTxEngine{},
