@@ -339,6 +339,7 @@ func (e *Executor) StreamExecute(
 				// the framework currently sends all results as one packet.
 				byteCount := 0
 				if len(qr.Fields) > 0 {
+					result.Fields = qr.Fields
 					if err := callback(qr.Metadata()); err != nil {
 						return err
 					}
