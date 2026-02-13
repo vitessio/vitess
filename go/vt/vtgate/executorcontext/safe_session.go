@@ -419,6 +419,31 @@ func (session *SafeSession) InTransaction() bool {
 	return session.Session.InTransaction
 }
 
+// We take and return a snapshot of PreSessions, ShardSessions, and PostSessions
+// because multiple goroutines might access or mutate these slices at the same time,
+// which can lead to a race condition. This snapshot is used by Rollback/Release
+// so they can safely work on a stable copy without holding the lock.
+
+func (session *SafeSession) GetShardSessionsForCleanup() []*vtgatepb.Session_ShardSession {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return append(append(append([]*vtgatepb.Session_ShardSession{}, session.PreSessions...), session.ShardSessions...), session.PostSessions...)
+}
+
+// Returns a snapshot of all shard sessions (including LockSession)
+// for use in ReleaseAll, so it can safely operate without worrying
+// about other goroutines mutating the session at the same time.
+
+func (session *SafeSession) GetShardSessionsForReleaseAll() []*vtgatepb.Session_ShardSession {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	all := append(append(append([]*vtgatepb.Session_ShardSession{}, session.PreSessions...), session.ShardSessions...), session.PostSessions...)
+	if session.LockSession != nil {
+		all = append(all, session.LockSession)
+	}
+	return all
+}
+
 // FindAndChangeSessionIfInSingleTxMode retrieves the ShardSession matching the given keyspace, shard, and tablet type.
 // It performs additional checks and may modify the ShardSession in specific cases for single-mode transactions.
 //

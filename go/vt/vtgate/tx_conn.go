@@ -415,8 +415,7 @@ func (txc *TxConn) Rollback(ctx context.Context, session *econtext.SafeSession) 
 	}
 	defer session.ResetTx()
 
-	allsessions := append(session.PreSessions, session.ShardSessions...)
-	allsessions = append(allsessions, session.PostSessions...)
+	allsessions := session.GetShardSessionsForCleanup()
 
 	err := txc.runSessions(ctx, allsessions, session.GetLogger(), func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *econtext.ExecuteLogger) error {
 		if s.TransactionId == 0 {
@@ -451,8 +450,7 @@ func (txc *TxConn) Release(ctx context.Context, session *econtext.SafeSession) e
 	}
 	defer session.Reset()
 
-	allsessions := append(session.PreSessions, session.ShardSessions...)
-	allsessions = append(allsessions, session.PostSessions...)
+	allsessions := session.GetShardSessionsForCleanup()
 
 	return txc.runSessions(ctx, allsessions, session.GetLogger(), func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *econtext.ExecuteLogger) error {
 		if s.ReservedId == 0 && s.TransactionId == 0 {
@@ -498,11 +496,7 @@ func (txc *TxConn) ReleaseAll(ctx context.Context, session *econtext.SafeSession
 	}
 	defer session.ResetAll()
 
-	allsessions := append(session.PreSessions, session.ShardSessions...)
-	allsessions = append(allsessions, session.PostSessions...)
-	if session.LockSession != nil {
-		allsessions = append(allsessions, session.LockSession)
-	}
+	allsessions := session.GetShardSessionsForReleaseAll()
 
 	return txc.runSessions(ctx, allsessions, session.GetLogger(), func(ctx context.Context, s *vtgatepb.Session_ShardSession, loggging *econtext.ExecuteLogger) error {
 		if s.ReservedId == 0 && s.TransactionId == 0 {
