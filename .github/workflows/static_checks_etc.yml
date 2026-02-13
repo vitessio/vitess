@@ -188,7 +188,7 @@ jobs:
           install-mode: "goinstall"
           skip-cache: true
           working-directory: go
-          version: v2.8.0
+          version: v2.9.0
 
       - name: Run go mod tidy
         if: steps.changes.outputs.go_files == 'true'
