@@ -153,6 +153,7 @@ jobs:
         if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'xtrabackup')
         run: |
           sudo percona-release setup pdps8.0
+          sudo percona-release setup pxb-80
           sudo apt-get -qq update
           sudo apt-get -qq install -y percona-server-server percona-server-client
           sudo service mysql stop
