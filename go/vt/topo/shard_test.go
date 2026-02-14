@@ -106,17 +106,22 @@ func lockedKeyspaceContext(keyspace string) context.Context {
 }
 
 func addToDenyList(ctx context.Context, si *ShardInfo, tabletType topodatapb.TabletType, cells, tables []string) error {
-	if err := si.UpdateDeniedTables(ctx, tabletType, cells, false, tables); err != nil {
-		return err
-	}
-	return nil
+	return si.UpdateDeniedTables(ctx, UpdateDeniedTablesOpts{
+		AllowCreate: true,
+		Cells:       cells,
+		Tables:      tables,
+		TabletType:  tabletType,
+	})
 }
 
 func removeFromDenyList(ctx context.Context, si *ShardInfo, tabletType topodatapb.TabletType, cells, tables []string) error {
-	if err := si.UpdateDeniedTables(ctx, tabletType, cells, true, tables); err != nil {
-		return err
-	}
-	return nil
+	return si.UpdateDeniedTables(ctx, UpdateDeniedTablesOpts{
+		AllowCreate: true,
+		Cells:       cells,
+		Remove:      true,
+		Tables:      tables,
+		TabletType:  tabletType,
+	})
 }
 
 func validateDenyList(t *testing.T, si *ShardInfo, tabletType topodatapb.TabletType, cells, tables []string) {
@@ -285,7 +290,13 @@ func TestUpdateSourceDeniedTables(t *testing.T) {
 			}
 			var err error
 			if tcase.tables != nil || tcase.cells != nil {
-				err = si.UpdateDeniedTables(tcase.ctx, tcase.tabletType, tcase.cells, tcase.remove, tcase.tables)
+				err = si.UpdateDeniedTables(tcase.ctx, UpdateDeniedTablesOpts{
+					AllowCreate: true,
+					Cells:       tcase.cells,
+					Remove:      tcase.remove,
+					Tables:      tcase.tables,
+					TabletType:  tcase.tabletType,
+				})
 			}
 			if tcase.wantError != "" {
 				require.Error(t, err)

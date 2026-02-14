@@ -3966,7 +3966,13 @@ func (s *VtctldServer) SetShardTabletControl(ctx context.Context, req *vtctldata
 	defer unlock(&err)
 
 	si, err := s.ts.UpdateShardFields(ctx, req.Keyspace, req.Shard, func(si *topo.ShardInfo) error {
-		return si.UpdateDeniedTables(ctx, req.TabletType, req.Cells, req.Remove, req.DeniedTables)
+		return si.UpdateDeniedTables(ctx, topo.UpdateDeniedTablesOpts{
+			AllowCreate: true,
+			Cells:       req.Cells,
+			Remove:      req.Remove,
+			Tables:      req.DeniedTables,
+			TabletType:  req.TabletType,
+		})
 	})
 
 	switch {
