@@ -187,18 +187,13 @@ func TestValidateVReplicationPermissions_FailsIfUserCantLogin(t *testing.T) {
 	})
 
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		_, err := mysql.Connect(t.Context(), &mysql.ConnParams{
-			Uname:      "vt_filtered",
-			DbName:     primaryTabletParams.DbName,
-			UnixSocket: primaryTabletParams.UnixSocket,
-		})
+		ictx, icancel := context.WithTimeout(t.Context(), vreplicationPermissionTimeout)
+		defer icancel()
+		req := &tmdatapb.ValidateVReplicationPermissionsRequest{}
+		_, err = tmClient.ValidateVReplicationPermissions(ictx, tablet, req)
+
+		// This is an unexpected error, so we receive an error back.
 		require.Error(c, err)
+		require.Contains(c, err.Error(), "Access denied for user 'vt_filtered'@'localhost'")
 	}, vreplicationPermissionTimeout*2, 200*time.Millisecond)
-
-	req := &tmdatapb.ValidateVReplicationPermissionsRequest{}
-	_, err = tmClient.ValidateVReplicationPermissions(t.Context(), tablet, req)
-
-	// This is an unexpected error, so we receive an error back
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Access denied for user 'vt_filtered'@'localhost'")
 }
