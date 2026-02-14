@@ -1131,7 +1131,6 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 	receivedResult := false
 	// sendFinished is set if the response should just be an OK packet.
 	sendFinished := false
-
 	prepare := c.PrepareData[stmtID]
 	err = handler.ComStmtExecute(c, prepare, func(qr *sqltypes.Result) error {
 		if sendFinished {
@@ -1159,6 +1158,7 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 				return err
 			}
 		}
+
 		return c.writeBinaryRows(qr)
 	})
 
