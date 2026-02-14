@@ -198,6 +198,7 @@ func FuzzHandleNextCommand(data []byte) int {
 		queryPacket: data,
 	}, DefaultFlushDelay, 0, false)
 	sConn.PrepareData = map[uint32]*PrepareData{}
+	sConn.cursorStates = map[uint32]*CursorState{}
 
 	handler := &fuzztestRun{}
 	_ = sConn.handleNextCommand(handler)
