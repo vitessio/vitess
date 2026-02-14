@@ -18,6 +18,7 @@ package zkctl
 
 import (
 	"fmt"
+	"time"
 
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/log"
@@ -34,10 +35,19 @@ func StartLocalZk(id, port int) (*Zkd, string) {
 	zkConfig := MakeZkConfigFromString(zkCfg, uint32(id))
 	zkd := NewZkd(zkConfig)
 
-	// Init & start zk.
-	if err := zkd.Init(); err != nil {
-		log.Exitf("zkd.Init(%d, %d) failed: %v", id, port, err)
+	// Init & start ZK.
+	retryTimer := time.NewTimer(10 * time.Minute)
+	defer retryTimer.Stop()
+	var err error
+	for {
+		if err = zkd.Init(); err == nil {
+			return zkd, fmt.Sprintf("%v:%v", hostname, port+2)
+		}
+		select {
+		case <-retryTimer.C:
+			log.Exitf("zkd.Init(%d, %d) failed: %v", id, port, err)
+		default:
+			time.Sleep(1 * time.Second)
+		}
 	}
-
-	return zkd, fmt.Sprintf("%v:%v", hostname, port+2)
 }
