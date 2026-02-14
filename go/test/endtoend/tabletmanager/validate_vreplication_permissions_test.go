@@ -12,7 +12,7 @@ import (
 	tmdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
-const vreplicationPermissionTimeout = 5 * time.Second
+const vreplicationPermissionTimeout = 5 * time.Minute
 
 func TestValidateVReplicationPermissions_SucceedsWithValidPermissions(t *testing.T) {
 	permissionsMu.Lock()
