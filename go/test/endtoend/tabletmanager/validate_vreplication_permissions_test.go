@@ -12,7 +12,7 @@ import (
 	tmdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
-const vreplicationPermissionTimeout = 5 * time.Minute
+const vreplicationPermissionTimeout = 5 * time.Second
 
 func TestValidateVReplicationPermissions_SucceedsWithValidPermissions(t *testing.T) {
 	permissionsMu.Lock()
@@ -30,8 +30,7 @@ func TestValidateVReplicationPermissions_FailsWithoutSelectPermissions(t *testin
 	tablet := getTablet(primaryTablet.GrpcPort)
 
 	// Revoke SELECT permission on the _vt.vreplication table
-	ctx, cancel := context.WithTimeout(t.Context(), vreplicationPermissionTimeout)
-	defer cancel()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &primaryTabletParams)
 	require.NoError(t, err)
 	t.Cleanup(func() { conn.Close() })
@@ -57,7 +56,7 @@ func TestValidateVReplicationPermissions_FailsWithoutSelectPermissions(t *testin
 		require.NoError(c, err)
 		require.NotNil(c, res)
 		require.False(c, res.Ok)
-	}, 10*time.Second, 200*time.Millisecond)
+	}, vreplicationPermissionTimeout*2, 200*time.Millisecond)
 }
 
 func TestValidateVReplicationPermissions_FailsWithoutInsertPermissions(t *testing.T) {
@@ -66,8 +65,7 @@ func TestValidateVReplicationPermissions_FailsWithoutInsertPermissions(t *testin
 	tablet := getTablet(primaryTablet.GrpcPort)
 
 	// Revoke INSERT permission on the _vt.vreplication table
-	ctx, cancel := context.WithTimeout(t.Context(), vreplicationPermissionTimeout)
-	defer cancel()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &primaryTabletParams)
 	require.NoError(t, err)
 	t.Cleanup(func() { conn.Close() })
@@ -93,7 +91,7 @@ func TestValidateVReplicationPermissions_FailsWithoutInsertPermissions(t *testin
 		require.NoError(c, err)
 		require.NotNil(c, res)
 		require.False(c, res.Ok)
-	}, 10*time.Second, 200*time.Millisecond)
+	}, vreplicationPermissionTimeout*2, 200*time.Millisecond)
 }
 
 func TestValidateVReplicationPermissions_FailsWithoutUpdatePermissions(t *testing.T) {
@@ -102,8 +100,7 @@ func TestValidateVReplicationPermissions_FailsWithoutUpdatePermissions(t *testin
 	tablet := getTablet(primaryTablet.GrpcPort)
 
 	// Revoke UPDATE permission on the _vt.vreplication table
-	ctx, cancel := context.WithTimeout(t.Context(), vreplicationPermissionTimeout)
-	defer cancel()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &primaryTabletParams)
 	require.NoError(t, err)
 	t.Cleanup(func() { conn.Close() })
@@ -123,13 +120,13 @@ func TestValidateVReplicationPermissions_FailsWithoutUpdatePermissions(t *testin
 	req := &tmdatapb.ValidateVReplicationPermissionsRequest{}
 	var res *tmdatapb.ValidateVReplicationPermissionsResponse
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		ctx, cancel := context.WithTimeout(t.Context(), vreplicationPermissionTimeout)
-		defer cancel()
-		res, err = tmClient.ValidateVReplicationPermissions(ctx, tablet, req)
+		ictx, icancel := context.WithTimeout(t.Context(), vreplicationPermissionTimeout)
+		defer icancel()
+		res, err = tmClient.ValidateVReplicationPermissions(ictx, tablet, req)
 		require.NoError(c, err)
 		require.NotNil(c, res)
 		require.False(c, res.Ok)
-	}, 10*time.Second, 200*time.Millisecond)
+	}, vreplicationPermissionTimeout*2, 200*time.Millisecond)
 }
 
 func TestValidateVReplicationPermissions_FailsWithoutDeletePermissions(t *testing.T) {
@@ -138,8 +135,7 @@ func TestValidateVReplicationPermissions_FailsWithoutDeletePermissions(t *testin
 	tablet := getTablet(primaryTablet.GrpcPort)
 
 	// Revoke DELETE permission on the _vt.vreplication table
-	ctx, cancel := context.WithTimeout(t.Context(), vreplicationPermissionTimeout)
-	defer cancel()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &primaryTabletParams)
 	require.NoError(t, err)
 	t.Cleanup(func() { conn.Close() })
@@ -165,7 +161,7 @@ func TestValidateVReplicationPermissions_FailsWithoutDeletePermissions(t *testin
 		require.NoError(c, err)
 		require.NotNil(c, res)
 		require.False(c, res.Ok)
-	}, 10*time.Second, 200*time.Millisecond)
+	}, vreplicationPermissionTimeout*2, 200*time.Millisecond)
 }
 
 func TestValidateVReplicationPermissions_FailsIfUserCantLogin(t *testing.T) {
@@ -181,25 +177,23 @@ func TestValidateVReplicationPermissions_FailsIfUserCantLogin(t *testing.T) {
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		_, err = conn.ExecuteFetch("alter user 'vt_filtered'@'localhost' account lock", 0, false)
 		require.NoError(c, err)
-	}, 10*time.Second, 200*time.Millisecond)
+	}, vreplicationPermissionTimeout*2, 200*time.Millisecond)
 	t.Cleanup(func() {
 		// Restore the permission for other tests
 		require.EventuallyWithT(t, func(c *assert.CollectT) {
 			_, err = conn.ExecuteFetch("alter user 'vt_filtered'@'localhost' account unlock", 0, false)
 			require.NoError(c, err)
-		}, 10*time.Second, 200*time.Millisecond)
+		}, vreplicationPermissionTimeout*2, 200*time.Millisecond)
 	})
 
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		ctx, cancel := context.WithTimeout(t.Context(), vreplicationPermissionTimeout)
-		defer cancel()
-		_, err := mysql.Connect(ctx, &mysql.ConnParams{
+		_, err := mysql.Connect(t.Context(), &mysql.ConnParams{
 			Uname:      "vt_filtered",
 			DbName:     primaryTabletParams.DbName,
 			UnixSocket: primaryTabletParams.UnixSocket,
 		})
 		require.Error(c, err)
-	}, 10*time.Second, 200*time.Millisecond)
+	}, vreplicationPermissionTimeout*2, 200*time.Millisecond)
 
 	req := &tmdatapb.ValidateVReplicationPermissionsRequest{}
 	_, err = tmClient.ValidateVReplicationPermissions(t.Context(), tablet, req)
