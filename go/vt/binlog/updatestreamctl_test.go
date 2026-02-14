@@ -120,16 +120,13 @@ func TestUpdateStreamImpl_EnableDisableConcurrent(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Test concurrent enable/disable
-	for i := 0; i < 10; i++ {
-		wg.Add(2)
-		go func() {
-			defer wg.Done()
+	for range 10 {
+		wg.Go(func() {
 			us.Enable()
-		}()
-		go func() {
-			defer wg.Done()
+		})
+		wg.Go(func() {
 			us.Disable()
-		}()
+		})
 	}
 	wg.Wait()
 
@@ -230,14 +227,12 @@ func TestStreamList_Concurrent(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Concurrent adds
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 10 {
+		wg.Go(func() {
 			idx := sl.Add(func() {})
 			// Concurrent delete
 			sl.Delete(idx)
-		}()
+		})
 	}
 	wg.Wait()
 }
@@ -516,7 +511,7 @@ func TestUpdateStreamImpl_MultipleEnableDisableCycles(t *testing.T) {
 	us.InitDBConfig(dbcfgs)
 
 	// Multiple cycles
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		us.Enable()
 		assert.True(t, us.IsEnabled())
 
