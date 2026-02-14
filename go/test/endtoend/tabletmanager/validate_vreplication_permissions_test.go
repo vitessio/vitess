@@ -51,9 +51,9 @@ func TestValidateVReplicationPermissions_FailsWithoutSelectPermissions(t *testin
 	req := &tmdatapb.ValidateVReplicationPermissionsRequest{}
 	var res *tmdatapb.ValidateVReplicationPermissionsResponse
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		ctx, cancel = context.WithTimeout(t.Context(), vreplicationPermissionTimeout)
-		defer cancel()
-		res, err = tmClient.ValidateVReplicationPermissions(ctx, tablet, req)
+		ictx, icancel := context.WithTimeout(t.Context(), vreplicationPermissionTimeout)
+		defer icancel()
+		res, err = tmClient.ValidateVReplicationPermissions(ictx, tablet, req)
 		require.NoError(c, err)
 		require.NotNil(c, res)
 		require.False(c, res.Ok)
@@ -87,9 +87,9 @@ func TestValidateVReplicationPermissions_FailsWithoutInsertPermissions(t *testin
 	req := &tmdatapb.ValidateVReplicationPermissionsRequest{}
 	var res *tmdatapb.ValidateVReplicationPermissionsResponse
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		ctx, cancel = context.WithTimeout(t.Context(), vreplicationPermissionTimeout)
-		defer cancel()
-		res, err = tmClient.ValidateVReplicationPermissions(ctx, tablet, req)
+		ictx, icancel := context.WithTimeout(t.Context(), vreplicationPermissionTimeout)
+		defer icancel()
+		res, err = tmClient.ValidateVReplicationPermissions(ictx, tablet, req)
 		require.NoError(c, err)
 		require.NotNil(c, res)
 		require.False(c, res.Ok)
@@ -123,7 +123,7 @@ func TestValidateVReplicationPermissions_FailsWithoutUpdatePermissions(t *testin
 	req := &tmdatapb.ValidateVReplicationPermissionsRequest{}
 	var res *tmdatapb.ValidateVReplicationPermissionsResponse
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		ctx, cancel = context.WithTimeout(t.Context(), vreplicationPermissionTimeout)
+		ctx, cancel := context.WithTimeout(t.Context(), vreplicationPermissionTimeout)
 		defer cancel()
 		res, err = tmClient.ValidateVReplicationPermissions(ctx, tablet, req)
 		require.NoError(c, err)
@@ -159,9 +159,9 @@ func TestValidateVReplicationPermissions_FailsWithoutDeletePermissions(t *testin
 	req := &tmdatapb.ValidateVReplicationPermissionsRequest{}
 	var res *tmdatapb.ValidateVReplicationPermissionsResponse
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		ctx, cancel = context.WithTimeout(t.Context(), vreplicationPermissionTimeout)
-		defer cancel()
-		res, err = tmClient.ValidateVReplicationPermissions(ctx, tablet, req)
+		ictx, icancel := context.WithTimeout(t.Context(), vreplicationPermissionTimeout)
+		defer icancel()
+		res, err = tmClient.ValidateVReplicationPermissions(ictx, tablet, req)
 		require.NoError(c, err)
 		require.NotNil(c, res)
 		require.False(c, res.Ok)
