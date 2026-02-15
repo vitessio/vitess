@@ -22,8 +22,10 @@ import (
 	"os"
 	"strconv"
 	"sync/atomic"
+	"time"
 
 	"github.com/golang/glog"
+	"github.com/lmittmann/tint"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/utils"
@@ -75,8 +77,14 @@ func Init(fs *pflag.FlagSet) error {
 	return nil
 }
 
-// newLogger creates a new logger.
+// newLogger creates a new logger. In CI environments, detected through the CI
+// environment variable, a human-readable handler is used so that logs are easy
+// to read in CI output. Otherwise, a JSON handler is used.
 func newLogger(level slog.Level) *slog.Logger {
+	if os.Getenv("CI") != "" {
+		return slog.New(tint.NewHandler(os.Stderr, &tint.Options{AddSource: true, Level: level, TimeFormat: time.Kitchen}))
+	}
+
 	return slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{AddSource: true, Level: level}))
 }
 
