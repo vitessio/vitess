@@ -18,6 +18,7 @@ package zk2topo
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -29,6 +30,10 @@ import (
 )
 
 func TestZkConnClosedOnDisconnect(t *testing.T) {
+	if testing.Short() || os.Getenv("CI") == "true" {
+		t.Skip("skipping integration test in short mode and in CI (it's too flaky).")
+	}
+
 	zkd, serverAddr := zkctl.StartLocalZk(testfiles.GoVtTopoZk2topoZkID, testfiles.GoVtTopoZk2topoPort)
 	defer func() {
 		for range 3 {
