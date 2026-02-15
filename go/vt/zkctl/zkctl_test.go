@@ -19,6 +19,7 @@ package zkctl
 import (
 	"fmt"
 	"math/rand/v2"
+	"os"
 	"testing"
 	"time"
 
@@ -30,7 +31,7 @@ import (
 // so some manual cleanup may be required.
 
 func TestLifeCycle(t *testing.T) {
-	if testing.Short() {
+	if testing.Short() || os.Getenv("CI") == "true" {
 		t.Skip("skipping integration test in short mode.")
 	}
 
