@@ -150,7 +150,7 @@ func TestTwoPCFuzzTest(t *testing.T) {
 			// Verify that all the transactions run were actually atomic and no data issues have occurred.
 			fz.verifyTransactionsWereAtomic(t)
 
-			log.Errorf("Verification complete. All good!")
+			log.Error("Verification complete. All good!")
 		})
 	}
 }
@@ -451,10 +451,10 @@ func prs(t *testing.T) {
 	shard := shards[rand.IntN(len(shards))]
 	vttablets := shard.Vttablets
 	newPrimary := vttablets[rand.IntN(len(vttablets))]
-	log.Errorf("Running PRS for - %v/%v with new primary - %v", keyspaceName, shard.Name, newPrimary.Alias)
+	log.Error(fmt.Sprintf("Running PRS for - %v/%v with new primary - %v", keyspaceName, shard.Name, newPrimary.Alias))
 	err := clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shard.Name, newPrimary.Alias)
 	if err != nil {
-		log.Errorf("error running PRS - %v", err)
+		log.Error(fmt.Sprintf("error running PRS - %v", err))
 	}
 }
 
@@ -463,10 +463,10 @@ func ers(t *testing.T) {
 	shard := shards[rand.IntN(len(shards))]
 	vttablets := shard.Vttablets
 	newPrimary := vttablets[rand.IntN(len(vttablets))]
-	log.Errorf("Running ERS for - %v/%v with new primary - %v", keyspaceName, shard.Name, newPrimary.Alias)
+	log.Error(fmt.Sprintf("Running ERS for - %v/%v with new primary - %v", keyspaceName, shard.Name, newPrimary.Alias))
 	_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("EmergencyReparentShard", fmt.Sprintf("%s/%s", keyspaceName, shard.Name), "--new-primary", newPrimary.Alias)
 	if err != nil {
-		log.Errorf("error running ERS - %v", err)
+		log.Error(fmt.Sprintf("error running ERS - %v", err))
 	}
 }
 
@@ -475,10 +475,10 @@ func vttabletRestarts(t *testing.T) {
 	shard := shards[rand.IntN(len(shards))]
 	vttablets := shard.Vttablets
 	tablet := vttablets[rand.IntN(len(vttablets))]
-	log.Errorf("Restarting vttablet for - %v/%v - %v", keyspaceName, shard.Name, tablet.Alias)
+	log.Error(fmt.Sprintf("Restarting vttablet for - %v/%v - %v", keyspaceName, shard.Name, tablet.Alias))
 	err := tablet.VttabletProcess.TearDown()
 	if err != nil {
-		log.Errorf("error stopping vttablet - %v", err)
+		log.Error(fmt.Sprintf("error stopping vttablet - %v", err))
 		return
 	}
 	tablet.VttabletProcess.ServingStatus = "SERVING"
@@ -489,7 +489,7 @@ func vttabletRestarts(t *testing.T) {
 		}
 		// Sometimes vttablets fail to connect to the topo server due to a minor blip there.
 		// We don't want to fail the test, so we retry setting up the vttablet.
-		log.Errorf("error restarting vttablet - %v", err)
+		log.Error(fmt.Sprintf("error restarting vttablet - %v", err))
 		time.Sleep(1 * time.Second)
 	}
 }
@@ -533,12 +533,12 @@ func moveTablesFuzzer(t *testing.T) {
 		err := clusterInstance.VtctldClientProcess.ApplyVSchema(keyspaceName, VSchema)
 		require.NoError(t, err)
 	}
-	log.Errorf("MoveTables from - %v to %v", srcKeyspace, targetKeyspace)
+	log.Error(fmt.Sprintf("MoveTables from - %v to %v", srcKeyspace, targetKeyspace))
 	mtw := cluster.NewMoveTables(t, clusterInstance, workflow, targetKeyspace, srcKeyspace, "twopc_fuzzer_update", []string{topodatapb.TabletType_REPLICA.String()})
 	// Initiate MoveTables for twopc_fuzzer_update.
 	output, err := mtw.Create()
 	if err != nil {
-		log.Errorf("error creating MoveTables - %v, output - %v", err, output)
+		log.Error(fmt.Sprintf("error creating MoveTables - %v, output - %v", err, output))
 		return
 	}
 	moveTablesCount++
@@ -562,7 +562,7 @@ func reshardFuzzer(t *testing.T) {
 		srcShards = "40-80,80-"
 		targetShards = "40-"
 	}
-	log.Errorf("Reshard from - \"%v\" to \"%v\"", srcShards, targetShards)
+	log.Error(fmt.Sprintf("Reshard from - \"%v\" to \"%v\"", srcShards, targetShards))
 	twopcutil.AddShards(t, clusterInstance, keyspaceName, strings.Split(targetShards, ","))
 	err := twopcutil.RunReshard(t, clusterInstance, "TestTwoPCFuzzTest", keyspaceName, srcShards, targetShards)
 	require.NoError(t, err)
@@ -573,7 +573,7 @@ func mysqlRestarts(t *testing.T) {
 	shard := shards[rand.IntN(len(shards))]
 	vttablets := shard.Vttablets
 	tablet := vttablets[rand.IntN(len(vttablets))]
-	log.Errorf("Restarting MySQL for - %v/%v tablet - %v", keyspaceName, shard.Name, tablet.Alias)
+	log.Error(fmt.Sprintf("Restarting MySQL for - %v/%v tablet - %v", keyspaceName, shard.Name, tablet.Alias))
 	pidFile := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.pid", tablet.TabletUID))
 	pidBytes, err := os.ReadFile(pidFile)
 	if err != nil {
@@ -583,11 +583,11 @@ func mysqlRestarts(t *testing.T) {
 	}
 	pid, err := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
 	if err != nil {
-		log.Errorf("Error in conversion to integer: %v", err)
+		log.Error(fmt.Sprintf("Error in conversion to integer: %v", err))
 		return
 	}
 	err = syscallutil.Kill(pid, syscall.SIGKILL)
 	if err != nil {
-		log.Errorf("Error in killing process: %v", err)
+		log.Error(fmt.Sprintf("Error in killing process: %v", err))
 	}
 }

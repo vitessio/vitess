@@ -159,7 +159,7 @@ func TestMain(m *testing.M) {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			// log error
 			if err := cluster.TearDown(); err != nil {
-				log.Errorf("cluster.TearDown() did not work: ", err)
+				log.Error(fmt.Sprintf("cluster.TearDown() did not work: %v", err))
 			}
 			return 1
 		}

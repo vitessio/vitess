@@ -17,6 +17,7 @@ limitations under the License.
 package trace
 
 import (
+	"fmt"
 	"io"
 
 	"github.com/opentracing/opentracing-go"
@@ -102,17 +103,17 @@ func newJagerTracerFromEnv(serviceName string) (tracingService, io.Closer, error
 	if host := agentHost.Get(); host != "" {
 		cfg.Reporter.LocalAgentHostPort = host
 	}
-	log.Infof("Tracing to: %v as %v", cfg.Reporter.LocalAgentHostPort, cfg.ServiceName)
+	log.Info(fmt.Sprintf("Tracing to: %v as %v", cfg.Reporter.LocalAgentHostPort, cfg.ServiceName))
 
 	cfg.Sampler.Param = samplingRate.Get()
 	cfg.Sampler.Type = samplingType.Get()
-	log.Infof("Tracing sampler type %v (param: %v)", cfg.Sampler.Type, cfg.Sampler.Param)
+	log.Info(fmt.Sprintf("Tracing sampler type %v (param: %v)", cfg.Sampler.Type, cfg.Sampler.Param))
 
 	var opts []config.Option
 	if enableLogging.Get() {
 		opts = append(opts, config.Logger(&traceLogger{}))
 	} else if cfg.Reporter.LogSpans {
-		log.Warningf("JAEGER_REPORTER_LOG_SPANS was set, but --tracing-enable-logging was not; spans will not be logged")
+		log.Warn("JAEGER_REPORTER_LOG_SPANS was set, but --tracing-enable-logging was not; spans will not be logged")
 	}
 
 	tracer, closer, err := cfg.NewTracer(opts...)

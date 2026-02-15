@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -1685,24 +1686,18 @@ type testLogger struct {
 	logsMu sync.Mutex
 	logs   []string
 
-	savedInfof  func(format string, args ...any)
-	savedInfo   func(args ...any)
-	savedErrorf func(format string, args ...any)
-	savedError  func(args ...any)
+	savedInfo  func(msg string, attrs ...slog.Attr)
+	savedError func(msg string, attrs ...slog.Attr)
 }
 
 func newTestLogger() *testLogger {
 	tl := &testLogger{
-		savedInfof:  log.Infof,
-		savedInfo:   log.Info,
-		savedErrorf: log.Errorf,
-		savedError:  log.Error,
+		savedInfo:  log.Info,
+		savedError: log.Error,
 	}
 	tl.logsMu.Lock()
 	defer tl.logsMu.Unlock()
-	log.Infof = tl.recordInfof
 	log.Info = tl.recordInfo
-	log.Errorf = tl.recordErrorf
 	log.Error = tl.recordError
 	return tl
 }
@@ -1710,42 +1705,22 @@ func newTestLogger() *testLogger {
 func (tl *testLogger) Close() {
 	tl.logsMu.Lock()
 	defer tl.logsMu.Unlock()
-	log.Infof = tl.savedInfof
 	log.Info = tl.savedInfo
-	log.Errorf = tl.savedErrorf
 	log.Error = tl.savedError
 }
 
-func (tl *testLogger) recordInfof(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
+func (tl *testLogger) recordInfo(msg string, attrs ...slog.Attr) {
 	tl.logsMu.Lock()
 	defer tl.logsMu.Unlock()
 	tl.logs = append(tl.logs, msg)
-	tl.savedInfof(msg)
+	tl.savedInfo(msg, attrs...)
 }
 
-func (tl *testLogger) recordInfo(args ...any) {
-	msg := fmt.Sprint(args...)
+func (tl *testLogger) recordError(msg string, attrs ...slog.Attr) {
 	tl.logsMu.Lock()
 	defer tl.logsMu.Unlock()
 	tl.logs = append(tl.logs, msg)
-	tl.savedInfo(msg)
-}
-
-func (tl *testLogger) recordErrorf(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	tl.logs = append(tl.logs, msg)
-	tl.savedErrorf(msg)
-}
-
-func (tl *testLogger) recordError(args ...any) {
-	msg := fmt.Sprint(args...)
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	tl.logs = append(tl.logs, msg)
-	tl.savedError(msg)
+	tl.savedError(msg, attrs...)
 }
 
 func (tl *testLogger) getLog(i int) string {
