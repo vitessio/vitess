@@ -427,7 +427,12 @@ func (session *SafeSession) InTransaction() bool {
 func (session *SafeSession) GetShardSessionsForCleanup() []*vtgatepb.Session_ShardSession {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	return append(append(append([]*vtgatepb.Session_ShardSession{}, session.PreSessions...), session.ShardSessions...), session.PostSessions...)
+	totalSize := len(session.PreSessions) + len(session.ShardSessions) + len(session.PostSessions)
+	shardSessions := make([]*vtgatepb.Session_ShardSession, 0, totalSize)
+	shardSessions = append(shardSessions, session.PreSessions...)
+	shardSessions = append(shardSessions, session.ShardSessions...)
+	shardSessions = append(shardSessions, session.PostSessions...)
+	return shardSessions
 }
 
 // Returns a snapshot of all shard sessions (including LockSession)
@@ -437,11 +442,19 @@ func (session *SafeSession) GetShardSessionsForCleanup() []*vtgatepb.Session_Sha
 func (session *SafeSession) GetShardSessionsForReleaseAll() []*vtgatepb.Session_ShardSession {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	all := append(append(append([]*vtgatepb.Session_ShardSession{}, session.PreSessions...), session.ShardSessions...), session.PostSessions...)
+	baseSize := len(session.PreSessions) + len(session.ShardSessions) + len(session.PostSessions)
+	totalSize := baseSize
 	if session.LockSession != nil {
-		all = append(all, session.LockSession)
+		totalSize = baseSize + 1
 	}
-	return all
+	allShardSessions := make([]*vtgatepb.Session_ShardSession, 0, totalSize)
+	allShardSessions = append(allShardSessions, session.PreSessions...)
+	allShardSessions = append(allShardSessions, session.ShardSessions...)
+	allShardSessions = append(allShardSessions, session.PostSessions...)
+	if session.LockSession != nil {
+		allShardSessions = append(allShardSessions, session.LockSession)
+	}
+	return allShardSessions
 }
 
 // FindAndChangeSessionIfInSingleTxMode retrieves the ShardSession matching the given keyspace, shard, and tablet type.
