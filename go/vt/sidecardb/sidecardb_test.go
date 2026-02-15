@@ -231,10 +231,33 @@ func TestAlterTableAlgorithm(t *testing.T) {
 
 	copyAlgo := sqlparser.AlgorithmValue("COPY")
 
-	t.Run("omitted on MySQL >= 8.0.32", func(t *testing.T) {
-		si := &schemaInit{
-			env: vtenv.NewTestEnv(), // default version is 8.4.6
+	newSchemaInit := func(t *testing.T, envVersion, serverVersion string) *schemaInit {
+		t.Helper()
+
+		env, err := vtenv.New(vtenv.Options{MySQLServerVersion: envVersion})
+		require.NoError(t, err)
+
+		versionResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"@@version",
+			"varchar"),
+			serverVersion,
+		)
+
+		exec := func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
+			if strings.EqualFold(query, sidecarVersionQuery) {
+				return versionResult, nil
+			}
+			return nil, errors.New("unexpected query: " + query)
 		}
+
+		return &schemaInit{
+			env:  env,
+			exec: exec,
+		}
+	}
+
+	t.Run("omitted on MySQL >= 8.0.32", func(t *testing.T) {
+		si := newSchemaInit(t, "8.0.31", "8.0.32")
 
 		for _, tc := range testCases {
 			t.Run(tc.testName, func(t *testing.T) {
@@ -246,6 +269,7 @@ func TestAlterTableAlgorithm(t *testing.T) {
 
 				alterTable, ok := stmt.(*sqlparser.AlterTable)
 				require.True(t, ok)
+				require.NotNil(t, alterTable)
 
 				for _, opt := range alterTable.AlterOptions {
 					_, isAlgo := opt.(sqlparser.AlgorithmValue)
@@ -256,10 +280,7 @@ func TestAlterTableAlgorithm(t *testing.T) {
 	})
 
 	t.Run("COPY on MySQL < 8.0.32", func(t *testing.T) {
-		env, err := vtenv.New(vtenv.Options{MySQLServerVersion: "8.0.31"})
-		require.NoError(t, err)
-
-		si := &schemaInit{env: env}
+		si := newSchemaInit(t, "8.4.6", "8.0.31")
 
 		for _, tc := range testCases {
 			t.Run(tc.testName, func(t *testing.T) {
@@ -271,7 +292,7 @@ func TestAlterTableAlgorithm(t *testing.T) {
 
 				alterTable, ok := stmt.(*sqlparser.AlterTable)
 				require.True(t, ok)
-
+				require.NotNil(t, alterTable)
 				var found sqlparser.AlterOption
 				for _, opt := range alterTable.AlterOptions {
 					if _, ok := opt.(sqlparser.AlgorithmValue); ok {
