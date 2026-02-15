@@ -432,7 +432,12 @@ func (si *schemaInit) serverVersionString() string {
 // the bug is fixed and we omit the clause, letting MySQL choose the most
 // efficient algorithm.
 func (si *schemaInit) alterTableAlgorithmStrategy() int {
-	capableOf := mysql.ServerVersionCapableOf(si.serverVersionString())
+	version := si.serverVersionString()
+	if version == "" {
+		return schemadiff.AlterTableAlgorithmStrategyCopy
+	}
+
+	capableOf := mysql.ServerVersionCapableOf(version)
 	if capableOf == nil {
 		return schemadiff.AlterTableAlgorithmStrategyCopy
 	}
