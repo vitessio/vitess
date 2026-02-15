@@ -309,7 +309,7 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 			instance.SecondsBehindPrimary.Int64 = int64(fs.ReplicationStatus.ReplicationLagSeconds)
 		}
 		if instance.SecondsBehindPrimary.Valid && instance.SecondsBehindPrimary.Int64 < 0 {
-			log.Warningf("Alias: %+v, instance.SecondsBehindPrimary < 0 [%+v], correcting to 0", tabletAlias, instance.SecondsBehindPrimary.Int64)
+			log.Warn(fmt.Sprintf("Alias: %+v, instance.SecondsBehindPrimary < 0 [%+v], correcting to 0", tabletAlias, instance.SecondsBehindPrimary.Int64))
 			instance.SecondsBehindPrimary.Int64 = 0
 		}
 		// And until told otherwise:
@@ -529,7 +529,7 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 		return nil
 	})
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return err
 	}
 
@@ -666,7 +666,7 @@ func readInstancesByCondition(condition string, args []any, sort string) ([](*In
 			return nil
 		})
 		if err != nil {
-			log.Error(err)
+			log.Error(err.Error())
 			return instances, err
 		}
 		return instances, err
@@ -745,7 +745,7 @@ func GetKeyspaceShardName(tabletAlias string) (keyspace string, shard string, er
 		return nil
 	})
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 	}
 	return keyspace, shard, err
 }
@@ -793,7 +793,7 @@ func ReadOutdatedInstanceKeys() ([]string, error) {
 		return nil
 	})
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 	}
 	return res, err
 }
@@ -995,7 +995,7 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 	sql, err := mkInsert("database_instance", columns, values, len(instances), insertIgnore)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to build query: %v", err)
-		log.Errorf(errMsg)
+		log.Error(errMsg)
 		return sql, args, errors.New(errMsg)
 	}
 
@@ -1027,7 +1027,7 @@ func writeManyInstances(instances []*Instance, instanceWasActuallyFound bool, up
 // WriteInstance stores an instance in the vtorc backend
 func WriteInstance(instance *Instance, instanceWasActuallyFound bool, lastError error) error {
 	if lastError != nil {
-		log.Infof("writeInstance: will not update database_instance due to error: %+v", lastError)
+		log.Info(fmt.Sprintf("writeInstance: will not update database_instance due to error: %+v", lastError))
 		return nil
 	}
 	return writeManyInstances([]*Instance{instance}, instanceWasActuallyFound, true)
@@ -1050,7 +1050,7 @@ func UpdateInstanceLastChecked(tabletAlias string, partialSuccess bool, stalledD
 			tabletAlias,
 		)
 		if err != nil {
-			log.Error(err)
+			log.Error(err.Error())
 		}
 		return err
 	}
@@ -1076,7 +1076,7 @@ func UpdateInstanceLastAttemptedCheck(tabletAlias string) error {
 			tabletAlias,
 		)
 		if err != nil {
-			log.Error(err)
+			log.Error(err.Error())
 		}
 		return err
 	}
@@ -1093,11 +1093,11 @@ func InstanceIsForgotten(tabletAlias string) bool {
 func ForgetInstance(tabletAlias string) error {
 	if tabletAlias == "" {
 		errMsg := "ForgetInstance(): empty tabletAlias"
-		log.Errorf(errMsg)
+		log.Error(errMsg)
 		return errors.New(errMsg)
 	}
 	forgetAliases.Set(tabletAlias, true, cache.DefaultExpiration)
-	log.Infof("Forgetting: %v", tabletAlias)
+	log.Info(fmt.Sprintf("Forgetting: %v", tabletAlias))
 
 	// Remove this tablet from errant GTID count metric.
 	currentErrantGTIDCount.Reset(tabletAlias)
@@ -1111,7 +1111,7 @@ func ForgetInstance(tabletAlias string) error {
 		tabletAlias,
 	)
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return err
 	}
 
@@ -1124,13 +1124,13 @@ func ForgetInstance(tabletAlias string) error {
 		tabletAlias,
 	)
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return err
 	}
 	// Get the number of rows affected. If they are zero, then we tried to forget an instance that doesn't exist.
 	rows, err := sqlResult.RowsAffected()
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return err
 	}
 	if rows == 0 {
@@ -1152,12 +1152,12 @@ func ForgetLongUnseenInstances() error {
 		config.UnseenInstanceForgetHours,
 	)
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return err
 	}
 	rows, err := sqlResult.RowsAffected()
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return err
 	}
 	if rows > 0 {
@@ -1191,7 +1191,7 @@ func SnapshotTopologies() error {
 			`,
 		)
 		if err != nil {
-			log.Error(err)
+			log.Error(err.Error())
 			return err
 		}
 
@@ -1211,7 +1211,7 @@ func ExpireStaleInstanceBinlogCoordinates() error {
 			expireSeconds,
 		)
 		if err != nil {
-			log.Error(err)
+			log.Error(err.Error())
 		}
 		return err
 	}

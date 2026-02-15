@@ -74,7 +74,7 @@ func newRegionJSON(name string, m map[string]string) (Vindex, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("Loaded Region map from: %s", rmPath)
+	log.Info("Loaded Region map from: " + rmPath)
 	err = json.Unmarshal(data, &rmap)
 	if err != nil {
 		return nil, err

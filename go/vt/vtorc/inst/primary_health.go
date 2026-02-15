@@ -71,7 +71,7 @@ func IsPrimaryHealthCheckUnhealthy(tabletAlias string) bool {
 		go func() {
 			persisted, err := readPrimaryHealthState(tabletAlias)
 			if err != nil {
-				log.Warningf("failed to read primary health state for %s: %v", tabletAlias, err)
+				log.Warn(fmt.Sprintf("failed to read primary health state for %s: %v", tabletAlias, err))
 				return
 			}
 			if persisted == nil {
@@ -114,7 +114,7 @@ func IsPrimaryHealthCheckUnhealthy(tabletAlias string) bool {
 	if evict {
 		go func() {
 			if err := deletePrimaryHealthState(tabletAlias); err != nil {
-				log.Warningf("failed to delete primary health state for %s: %v", tabletAlias, err)
+				log.Warn(fmt.Sprintf("failed to delete primary health state for %s: %v", tabletAlias, err))
 			}
 		}()
 		return false
@@ -149,12 +149,12 @@ func recordPrimaryHealthCheckAt(tabletAlias string, success bool, now time.Time)
 
 	if evict {
 		if err := deletePrimaryHealthState(tabletAlias); err != nil {
-			log.Warningf("failed to delete primary health state for %s: %v", tabletAlias, err)
+			log.Warn(fmt.Sprintf("failed to delete primary health state for %s: %v", tabletAlias, err))
 		}
 		return
 	}
 	if err := writePrimaryHealthState(tabletAlias, stateCopy); err != nil {
-		log.Warningf("failed to write primary health state for %s: %v", tabletAlias, err)
+		log.Warn(fmt.Sprintf("failed to write primary health state for %s: %v", tabletAlias, err))
 	}
 }
 

@@ -54,7 +54,6 @@ type MysqlctlProcess struct {
 // InitDb executes mysqlctl command to add cell info
 func (mysqlctl *MysqlctlProcess) InitDb() (err error) {
 	args := []string{
-		"--log_dir", mysqlctl.LogDirectory,
 		// todo: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--tablet_uid", strconv.Itoa(mysqlctl.TabletUID),
 		"--mysql_port", strconv.Itoa(mysqlctl.MySQLPort),
@@ -102,7 +101,6 @@ func (mysqlctl *MysqlctlProcess) startProcess(init bool) (*exec.Cmd, error) {
 	tmpProcess := exec.Command(
 		mysqlctl.Binary,
 		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--log_dir", mysqlctl.LogDirectory,
 		"--tablet_uid", strconv.Itoa(mysqlctl.TabletUID),
 		"--mysql_port", strconv.Itoa(mysqlctl.MySQLPort),
 	)
@@ -136,7 +134,7 @@ func (mysqlctl *MysqlctlProcess) startProcess(init bool) (*exec.Cmd, error) {
 			extraMyCNF := path.Join(sslPath, "ssl.cnf")
 			fout, err := os.Create(extraMyCNF)
 			if err != nil {
-				log.Error(err)
+				log.Error(fmt.Sprint(err))
 				return nil, err
 			}
 
@@ -168,15 +166,15 @@ ssl_key={{.ServerKey}}
 	}
 	tmpProcess.Env = append(tmpProcess.Env, os.Environ()...)
 	tmpProcess.Env = append(tmpProcess.Env, DefaultVttestEnv)
-	log.Infof("Starting mysqlctl with command: %v", tmpProcess.Args)
+	log.Info(fmt.Sprintf("Starting mysqlctl with command: %v", tmpProcess.Args))
 	return tmpProcess, tmpProcess.Start()
 }
 
 // Stop executes mysqlctl command to stop mysql instance and kills the mysql instance
 // if it doesn't shutdown in 30 seconds.
 func (mysqlctl *MysqlctlProcess) Stop() (err error) {
-	log.Infof("Shutting down MySQL: %d", mysqlctl.TabletUID)
-	defer log.Infof("MySQL shutdown complete: %d", mysqlctl.TabletUID)
+	log.Info(fmt.Sprintf("Shutting down MySQL: %d", mysqlctl.TabletUID))
+	defer log.Info(fmt.Sprintf("MySQL shutdown complete: %d", mysqlctl.TabletUID))
 	tmpProcess, err := mysqlctl.StopProcess()
 	if err != nil {
 		return err
@@ -232,7 +230,6 @@ func (mysqlctl *MysqlctlProcess) StopProcess() (*exec.Cmd, error) {
 	tmpProcess := exec.Command(
 		mysqlctl.Binary,
 		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--log_dir", mysqlctl.LogDirectory,
 		"--tablet_uid", strconv.Itoa(mysqlctl.TabletUID),
 	)
 	if *isCoverage {
@@ -268,7 +265,7 @@ func MysqlCtlProcessInstanceOptionalInit(tabletUID int, mySQLPort int, tmpDirect
 
 	version, err := GetMajorVersion("mysqlctl")
 	if err != nil {
-		log.Warningf("failed to get major mysqlctl version; backwards-compatibility for CLI changes may not work: %s", err)
+		log.Warn(fmt.Sprintf("failed to get major mysqlctl version; backwards-compatibility for CLI changes may not work: %s", err))
 	}
 	mysqlctl := &MysqlctlProcess{
 		Name:         "mysqlctl",

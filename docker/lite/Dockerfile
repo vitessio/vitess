@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # Build the Vitess Go binaries
-FROM --platform=linux/amd64 golang:1.25.7-bookworm@sha256:db60aab8dc5b066b5018f1bcad7e70b688f31e2fa3427c1623585b680557f975 AS go-builder
+FROM --platform=linux/amd64 golang:1.26.0-bookworm@sha256:eae3cdfa040d0786510a5959d36a836978724d03b34a166ba2e0e198baac9196 AS go-builder
 
 # Allows docker builds to set the BUILD_NUMBER
 ARG BUILD_NUMBER
@@ -44,7 +44,7 @@ COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
 RUN make install PREFIX=/vt/install NOVTADMINBUILD=1
 
 # Build vtadmin separately.
-FROM --platform=linux/amd64 node:22-bookworm-slim@sha256:f86be15afa9a8277608e141ce2a8aa55d3d9c40845921b8511f4fb7897be2554 AS vtadmin-builder
+FROM --platform=linux/amd64 node:25-bookworm-slim@sha256:3746b7c78e343062cbad1a1a9f22e582e2aaeda5b183b7050b5831e22f988730 AS vtadmin-builder
 
 WORKDIR /vt/web/vtadmin
 
