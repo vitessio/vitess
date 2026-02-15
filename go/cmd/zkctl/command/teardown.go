@@ -29,9 +29,10 @@ var Teardown = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		var err error
 		for range 3 {
-			if err = zkd.Teardown(); err != nil {
-				time.Sleep(1 * time.Second)
+			if err = zkd.Teardown(); err == nil {
+				break
 			}
+			time.Sleep(1 * time.Second)
 		}
 		return err
 	},

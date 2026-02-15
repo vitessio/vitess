@@ -219,7 +219,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	turnOnTxEngine()
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		require.Empty(c, tsv.te.preparedPool.conns, "tsv.te.preparedPool.conns")
-	}, 5*time.Second, 1*time.Millisecond, "prepared transactions should be empty initially")
+	}, 5*time.Second, 10*time.Millisecond, "prepared transactions should be empty initially")
 	turnOffTxEngine()
 
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
@@ -241,7 +241,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	turnOnTxEngine()
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		require.EqualValues(c, 1, len(tsv.te.preparedPool.conns), "len(tsv.te.preparedPool.conns)")
-	}, 5*time.Second, 1*time.Millisecond, "prepared transactions should be loaded from redo log")
+	}, 5*time.Second, 10*time.Millisecond, "prepared transactions should be loaded from redo log")
 	got := tsv.te.preparedPool.conns["dtid0"].TxProperties().Queries
 	want := []tx.Query{{
 		Sql:    "update test_table set `name` = 2 where pk = 1 limit 10001",
@@ -251,7 +251,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	turnOffTxEngine()
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		require.Empty(c, tsv.te.preparedPool.conns, "tsv.te.preparedPool.conns")
-	}, 5*time.Second, 1*time.Millisecond, "prepared transactions should be cleared when transaction engine is turned off")
+	}, 5*time.Second, 10*time.Millisecond, "prepared transactions should be cleared when transaction engine is turned off")
 
 	tsv.te.txPool.scp.lastID.Store(1)
 	// Ensure we continue past errors.
@@ -286,7 +286,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	turnOnTxEngine()
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		require.EqualValues(c, 1, len(tsv.te.preparedPool.conns), "len(tsv.te.preparedPool.conns)")
-	}, 5*time.Second, 1*time.Millisecond, "only valid prepared transactions should be loaded from redo log")
+	}, 5*time.Second, 10*time.Millisecond, "only valid prepared transactions should be loaded from redo log")
 	got = tsv.te.preparedPool.conns["a:b:10"].TxProperties().Queries
 	want = []tx.Query{{
 		Sql:    "update test_table set `name` = 2 where pk = 1 limit 10001",
@@ -301,11 +301,11 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	// Verify last id got adjusted.
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		require.EqualValues(c, 20, tsv.te.txPool.scp.lastID.Load(), "tsv.te.txPool.lastID.Get()")
-	}, 5*time.Second, 1*time.Millisecond, "lastID should be adjusted to the max id in redo log")
+	}, 5*time.Second, 10*time.Millisecond, "lastID should be adjusted to the max id in redo log")
 	turnOffTxEngine()
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		require.Empty(c, tsv.te.preparedPool.conns, "tsv.te.preparedPool.conns")
-	}, 5*time.Second, 1*time.Millisecond, "prepared transactions should be cleared when transaction engine is turned off")
+	}, 5*time.Second, 10*time.Millisecond, "prepared transactions should be cleared when transaction engine is turned off")
 }
 
 func TestTabletServerCreateTransaction(t *testing.T) {

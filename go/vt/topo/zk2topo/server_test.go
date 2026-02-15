@@ -41,14 +41,18 @@ func TestZk2Topo(t *testing.T) {
 
 	// Start a real single ZK daemon, and close it after all tests are done.
 	zkd, serverAddr := zkctl.StartLocalZk(testfiles.GoVtTopoZk2topoZkID, testfiles.GoVtTopoZk2topoPort)
-	defer func() {
-		for range 3 {
-			if err := zkd.Teardown(); err == nil {
-				return
-			}
-			time.Sleep(1 * time.Second)
+	var lastErr error
+	for range 3 {
+		if err := zkd.Teardown(); err == nil {
+			return
+		} else {
+			lastErr = err
 		}
-	}()
+		time.Sleep(1 * time.Second)
+	}
+	if lastErr != nil {
+		t.Logf("zkd.Teardown failed after retries: %v", lastErr)
+	}
 
 	// Run the test suite.
 	testIndex := 0

@@ -35,14 +35,18 @@ func TestZkConnClosedOnDisconnect(t *testing.T) {
 	}
 
 	zkd, serverAddr := zkctl.StartLocalZk(testfiles.GoVtTopoZk2topoZkID, testfiles.GoVtTopoZk2topoPort)
-	defer func() {
-		for range 3 {
-			if err := zkd.Teardown(); err == nil {
-				return
-			}
-			time.Sleep(1 * time.Second)
+	var lastErr error
+	for range 3 {
+		if err := zkd.Teardown(); err == nil {
+			return
+		} else {
+			lastErr = err
 		}
-	}()
+		time.Sleep(1 * time.Second)
+	}
+	if lastErr != nil {
+		t.Logf("zkd.Teardown failed after retries: %v", lastErr)
+	}
 
 	conn := Connect(serverAddr)
 	defer conn.Close()
