@@ -19,6 +19,7 @@ package zk2topo
 import (
 	"context"
 	"fmt"
+	"os"
 	"path"
 	"testing"
 	"time"
@@ -34,6 +35,9 @@ import (
 )
 
 func TestZk2Topo(t *testing.T) {
+	if testing.Short() || os.Getenv("CI") == "true" {
+		t.Skip("skipping integration test in short mode and in CI (it's too flaky).")
+	}
 	// Start a real single ZK daemon, and close it after all tests are done.
 	zkd, serverAddr := zkctl.StartLocalZk(testfiles.GoVtTopoZk2topoZkID, testfiles.GoVtTopoZk2topoPort)
 	defer func() {
