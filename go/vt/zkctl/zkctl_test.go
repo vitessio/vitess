@@ -32,7 +32,7 @@ import (
 
 func TestLifeCycle(t *testing.T) {
 	if testing.Short() || os.Getenv("CI") == "true" {
-		t.Skip("skipping integration test in short mode.")
+		t.Skip("skipping integration test in short mode and in CI (it's too flaky).")
 	}
 
 	leaderPort := 2888 + rand.IntN(100)
@@ -63,7 +63,7 @@ func TestLifeCycle(t *testing.T) {
 		}
 		select {
 		case <-retryTimer.C:
-			require.FailNow(t, "timeout waiting for Zkd.Init() to succeed: %v", err)
+			require.FailNow(t, "timeout waiting for Zkd.Init() to succeed: ", err)
 		default:
 			time.Sleep(1 * time.Second)
 		}
@@ -75,7 +75,7 @@ func TestLifeCycle(t *testing.T) {
 		}
 		select {
 		case <-retryTimer.C:
-			require.FailNow(t, "timeout waiting for Zkd.Shutdown() to succeed: %v", err)
+			require.FailNow(t, "timeout waiting for Zkd.Shutdown() to succeed: ", err)
 		default:
 			time.Sleep(1 * time.Second)
 		}
@@ -87,7 +87,7 @@ func TestLifeCycle(t *testing.T) {
 		}
 		select {
 		case <-retryTimer.C:
-			require.FailNow(t, "timeout waiting for Zkd.Start() to succeed: %v", err)
+			require.FailNow(t, "timeout waiting for Zkd.Start() to succeed: ", err)
 		default:
 			time.Sleep(1 * time.Second)
 		}
@@ -99,7 +99,7 @@ func TestLifeCycle(t *testing.T) {
 		}
 		select {
 		case <-retryTimer.C:
-			require.FailNow(t, "timeout waiting for Zkd.Teardown() to succeed: %v", err)
+			require.FailNow(t, "timeout waiting for Zkd.Teardown() to succeed: ", err)
 		default:
 			time.Sleep(1 * time.Second)
 		}

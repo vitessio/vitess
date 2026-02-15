@@ -30,7 +30,14 @@ import (
 
 func TestZkConnClosedOnDisconnect(t *testing.T) {
 	zkd, serverAddr := zkctl.StartLocalZk(testfiles.GoVtTopoZk2topoZkID, testfiles.GoVtTopoZk2topoPort)
-	defer zkd.Teardown()
+	defer func() {
+		for range 3 {
+			if err := zkd.Teardown(); err == nil {
+				return
+			}
+			time.Sleep(1 * time.Second)
+		}
+	}()
 
 	conn := Connect(serverAddr)
 	defer conn.Close()

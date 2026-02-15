@@ -40,7 +40,7 @@ func StartLocalZk(id, port int) (*Zkd, string) {
 	defer retryTimer.Stop()
 	var err error
 	for {
-		if err = zkd.Init(); err == nil {
+		if err = zkd.Init(); err == nil || err.Error() == "zk already inited" {
 			return zkd, fmt.Sprintf("%v:%v", hostname, port+2)
 		}
 		select {
