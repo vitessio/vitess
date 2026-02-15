@@ -3414,8 +3414,11 @@ func TestPlayerBatchMode(t *testing.T) {
 	maxAllowedPacket := 1024
 	oldVreplicationExperimentalFlags := vttablet.DefaultVReplicationConfig.ExperimentalFlags
 	vttablet.DefaultVReplicationConfig.ExperimentalFlags = vttablet.VReplicationExperimentalFlagVPlayerBatching
+	oldHeartbeatUpdateInterval := vttablet.DefaultVReplicationConfig.HeartbeatUpdateInterval
+	vttablet.DefaultVReplicationConfig.HeartbeatUpdateInterval = int(30 * time.Minute)
 	defer func() {
 		vttablet.DefaultVReplicationConfig.ExperimentalFlags = oldVreplicationExperimentalFlags
+		vttablet.DefaultVReplicationConfig.HeartbeatUpdateInterval = oldHeartbeatUpdateInterval
 	}()
 
 	defer deleteTablet(addTablet(100))
