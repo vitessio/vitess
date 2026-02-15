@@ -18,9 +18,13 @@ package zkctl
 
 import (
 	"fmt"
+<<<<<<< HEAD
+=======
+	"log"
+	"time"
+>>>>>>> f6d3ce2f9b (CI: Deflake Code Coverage workflow (#19388))
 
 	"vitess.io/vitess/go/netutil"
-	"vitess.io/vitess/go/vt/log"
 )
 
 // StartLocalZk is a helper method to create a local ZK process.  Used
@@ -34,10 +38,25 @@ func StartLocalZk(id, port int) (*Zkd, string) {
 	zkConfig := MakeZkConfigFromString(zkCfg, uint32(id))
 	zkd := NewZkd(zkConfig)
 
+<<<<<<< HEAD
 	// Init & start zk.
 	if err := zkd.Init(); err != nil {
 		log.Exitf("zkd.Init(%d, %d) failed: %v", id, port, err)
+=======
+	// Init & start ZK.
+	retryTimer := time.NewTimer(10 * time.Minute)
+	defer retryTimer.Stop()
+	var err error
+	for {
+		if err = zkd.Init(); err == nil || err.Error() == "zk already inited" {
+			return zkd, fmt.Sprintf("%v:%v", hostname, port+2)
+		}
+		select {
+		case <-retryTimer.C:
+			log.Fatalf("zkd.Init(%d, %d) failed: %v", id, port, err)
+		default:
+			time.Sleep(1 * time.Second)
+		}
+>>>>>>> f6d3ce2f9b (CI: Deflake Code Coverage workflow (#19388))
 	}
-
-	return zkd, fmt.Sprintf("%v:%v", hostname, port+2)
 }
