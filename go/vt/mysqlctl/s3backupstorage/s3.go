@@ -303,7 +303,7 @@ func (s3ServerSideEncryption *S3ServerSideEncryption) init() error {
 		sseCustomerKeyFile := after
 		base64CodedKey, err := os.ReadFile(sseCustomerKeyFile)
 		if err != nil {
-			log.Errorf(err.Error())
+			log.Error(err.Error())
 			return err
 		}
 
@@ -350,7 +350,7 @@ func newS3BackupStorage() *S3BackupStorage {
 
 // ListBackups is part of the backupstorage.BackupStorage interface.
 func (bs *S3BackupStorage) ListBackups(ctx context.Context, dir string) ([]backupstorage.BackupHandle, error) {
-	log.Infof("ListBackups: [s3] dir: %v, bucket: %v", dir, bucket)
+	log.Info(fmt.Sprintf("ListBackups: [s3] dir: %v, bucket: %v", dir, bucket))
 	c, err := bs.client()
 	if err != nil {
 		return nil, err
@@ -362,7 +362,7 @@ func (bs *S3BackupStorage) ListBackups(ctx context.Context, dir string) ([]backu
 	} else {
 		searchPrefix = objName(dir, "")
 	}
-	log.Infof("objName: %s", searchPrefix)
+	log.Info("objName: " + searchPrefix)
 
 	query := &s3.ListObjectsV2Input{
 		Bucket:    &bucket,
@@ -406,7 +406,7 @@ func (bs *S3BackupStorage) ListBackups(ctx context.Context, dir string) ([]backu
 
 // StartBackup is part of the backupstorage.BackupStorage interface.
 func (bs *S3BackupStorage) StartBackup(ctx context.Context, dir, name string) (backupstorage.BackupHandle, error) {
-	log.Infof("StartBackup: [s3] dir: %v, name: %v, bucket: %v", dir, name, bucket)
+	log.Info(fmt.Sprintf("StartBackup: [s3] dir: %v, name: %v, bucket: %v", dir, name, bucket))
 	c, err := bs.client()
 	if err != nil {
 		return nil, err
@@ -423,7 +423,7 @@ func (bs *S3BackupStorage) StartBackup(ctx context.Context, dir, name string) (b
 
 // RemoveBackup is part of the backupstorage.BackupStorage interface.
 func (bs *S3BackupStorage) RemoveBackup(ctx context.Context, dir, name string) error {
-	log.Infof("RemoveBackup: [s3] dir: %v, name: %v, bucket: %v", dir, name, bucket)
+	log.Info(fmt.Sprintf("RemoveBackup: [s3] dir: %v, name: %v, bucket: %v", dir, name, bucket))
 
 	c, err := bs.client()
 	if err != nil {

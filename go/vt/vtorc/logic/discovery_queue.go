@@ -26,6 +26,7 @@ push() operation never blocks while pop() blocks on an empty queue.
 package logic
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -94,7 +95,7 @@ func (q *DiscoveryQueue) Consume() string {
 
 	timeOnQueue := time.Since(item.PushedAt)
 	if timeOnQueue > config.GetInstancePollTime() {
-		log.Warningf("key %v spent %.4fs waiting on a discovery queue", item.Key, timeOnQueue.Seconds())
+		log.Warn(fmt.Sprintf("key %v spent %.4fs waiting on a discovery queue", item.Key, timeOnQueue.Seconds()))
 	}
 
 	return item.Key

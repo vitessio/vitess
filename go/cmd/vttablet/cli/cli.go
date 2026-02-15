@@ -206,7 +206,7 @@ func initConfig(tabletAlias *topodatapb.TabletAlias, collationEnv *collations.En
 		}
 	}
 	gotBytes, _ := yaml2.Marshal(config)
-	log.Infof("Loaded config file %s successfully:\n%s", tabletConfig, gotBytes)
+	log.Info(fmt.Sprintf("Loaded config file %s successfully:\n%s", tabletConfig, gotBytes))
 
 	var (
 		mycnf      *mysqlctl.Mycnf
