@@ -397,7 +397,7 @@ func clusterSetUp(t *testing.T) (int, error) {
 }
 
 func createIntermediateCA(ca string, serial string, name string, commonName string) error {
-	log.Infof("Creating intermediate signed cert and key %s", commonName)
+	log.Info("Creating intermediate signed cert and key " + commonName)
 	tmpProcess := exec.Command(
 		"vttlstest",
 		"CreateIntermediateCA",
@@ -410,7 +410,7 @@ func createIntermediateCA(ca string, serial string, name string, commonName stri
 }
 
 func createSignedCert(ca string, serial string, name string, commonName string) error {
-	log.Infof("Creating signed cert and key %s", commonName)
+	log.Info("Creating signed cert and key " + commonName)
 	tmpProcess := exec.Command(
 		"vttlstest",
 		"CreateSignedCert",

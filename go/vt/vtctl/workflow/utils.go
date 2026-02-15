@@ -83,7 +83,7 @@ func getTablesAndViewsInKeyspace(ctx context.Context, ts *topo.Server, tmc tmcli
 	if err != nil {
 		return nil, nil, err
 	}
-	log.Infof("got table schemas: %+v from source primary %v.", schema, primary)
+	log.Info(fmt.Sprintf("got table schemas: %+v from source primary %v.", schema, primary))
 
 	tables = make(map[string]*tabletmanagerdatapb.TableDefinition)
 	views = make(map[string]*tabletmanagerdatapb.TableDefinition)
@@ -163,7 +163,7 @@ func createDefaultShardRoutingRules(ctx context.Context, ms *vtctldatapb.Materia
 		if srr[fromSource] == "" && srr[fromTarget] == "" {
 			srr[fromTarget] = ms.SourceKeyspace
 			changed = true
-			log.Infof("Added default shard routing rule from %q to %q", fromTarget, fromSource)
+			log.Info(fmt.Sprintf("Added default shard routing rule from %q to %q", fromTarget, fromSource))
 		}
 	}
 	if changed {

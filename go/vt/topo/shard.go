@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"path"
 	"slices"
 	"sort"
@@ -414,7 +415,7 @@ func (si *ShardInfo) UpdateDeniedTables(ctx context.Context, tabletType topodata
 		if remove {
 			// We tried to remove something that doesn't exist, log a warning.
 			// But we know that our work is done.
-			log.Warningf("Trying to remove TabletControl.DeniedTables for missing type %v in shard %v/%v", tabletType, si.keyspace, si.shardName)
+			log.Warn(fmt.Sprintf("Trying to remove TabletControl.DeniedTables for missing type %v in shard %v/%v", tabletType, si.keyspace, si.shardName))
 			return nil
 		}
 
@@ -458,7 +459,7 @@ func (si *ShardInfo) updatePrimaryTabletControl(tc *topodatapb.Shard_TabletContr
 	if remove {
 		if len(newTables) != 0 {
 			// These tables did not exist in the denied list so we don't need to remove them.
-			log.Warningf("%s:%s", dlTablesNotPresent, strings.Join(newTables, ","))
+			log.Warn(fmt.Sprintf("%s:%s", dlTablesNotPresent, strings.Join(newTables, ",")))
 		}
 		var newDenyList []string
 		if len(tables) != 0 { // legacy uses
@@ -478,7 +479,7 @@ func (si *ShardInfo) updatePrimaryTabletControl(tc *topodatapb.Shard_TabletContr
 	if len(newTables) != len(tables) {
 		// Some of the tables already existed in the DeniedTables list so we don't
 		// need to add them.
-		log.Warningf("%s:%s", dlTablesAlreadyPresent, strings.Join(tables, ","))
+		log.Warn(fmt.Sprintf("%s:%s", dlTablesAlreadyPresent, strings.Join(tables, ",")))
 		// We do need to merge the lists, however.
 		tables = append(tables, newTables...)
 		tc.DeniedTables = append(tc.DeniedTables, tables...)
@@ -599,7 +600,7 @@ func (ts *Server) FindAllTabletAliasesInShardByCell(ctx context.Context, keyspac
 	wg.Wait()
 	err = nil
 	if rec.HasErrors() {
-		log.Warningf("FindAllTabletAliasesInShard(%v,%v): got partial result: %v", keyspace, shard, rec.Error())
+		log.Warn(fmt.Sprintf("FindAllTabletAliasesInShard(%v,%v): got partial result: %v", keyspace, shard, rec.Error()))
 		err = NewError(PartialResult, shard)
 	}
 

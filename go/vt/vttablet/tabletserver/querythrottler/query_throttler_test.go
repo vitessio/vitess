@@ -248,16 +248,14 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 			iqt.stats.requestsTotal.ResetAll()
 			iqt.stats.requestsThrottled.ResetAll()
 
-			// Capture log output
+			// Capture log output.
 			logCapture := &testLogCapture{}
-			originalLogWarningf := log.Warningf
+			originalLogWarn := log.Warn
 			defer func() {
-				// Restore original logging function
-				log.Warningf = originalLogWarningf
+				log.Warn = originalLogWarn
 			}()
 
-			// Mock log.Warningf to capture output
-			log.Warningf = logCapture.captureLog
+			log.Warn = logCapture.captureLog
 
 			// Test the enforcement
 			err := iqt.Throttle(

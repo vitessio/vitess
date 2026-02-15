@@ -488,7 +488,7 @@ func (ts *trafficSwitcher) dropSourceDeniedTables(ctx context.Context) error {
 			msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s source shard (%v):\n  %v",
 				source.GetShard().Keyspace(), source.GetShard().ShardName(), err, partialDetails)
 			if ts.force {
-				log.Warning(msg)
+				log.Warn(msg)
 				return nil
 			} else {
 				return errors.New(msg)
@@ -512,7 +512,7 @@ func (ts *trafficSwitcher) dropTargetDeniedTables(ctx context.Context) error {
 			msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s target shard (%v):\n  %v",
 				target.GetShard().Keyspace(), target.GetShard().ShardName(), err, partialDetails)
 			if ts.force {
-				log.Warning(msg)
+				log.Warn(msg)
 				return nil
 			} else {
 				return errors.New(msg)
@@ -1182,7 +1182,7 @@ func (ts *trafficSwitcher) switchDeniedTables(ctx context.Context, backward bool
 				msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s source shard (%v):\n  %v",
 					source.GetShard().Keyspace(), source.GetShard().ShardName(), err, partialDetails)
 				if ts.force {
-					log.Warning(msg)
+					log.Warn(msg)
 					return nil
 				} else {
 					return errors.New(msg)
@@ -1205,7 +1205,7 @@ func (ts *trafficSwitcher) switchDeniedTables(ctx context.Context, backward bool
 				msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s target shard (%v):\n  %v",
 					target.GetShard().Keyspace(), target.GetShard().ShardName(), err, partialDetails)
 				if ts.force {
-					log.Warning(msg)
+					log.Warn(msg)
 					return nil
 				} else {
 					return errors.New(msg)

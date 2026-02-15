@@ -9,6 +9,8 @@
         - [View Routing Rules](#view-routing-rules)
         - [Tablet targeting via USE statement](#tablet-targeting)
 - **[Minor Changes](#minor-changes)**
+    - **[Logging](#minor-changes-logging)**
+        - [Structured logging](#structured-logging)
     - **[VReplication](#minor-changes-vreplication)**
         - [`--shards` flag for MoveTables/Reshard start and stop](#vreplication-shards-flag-start-stop)
     - **[VTGate](#minor-changes-vtgate)**
@@ -88,6 +90,14 @@ Once set, all subsequent queries in the session route to the specified tablet un
 Note: A shard must be specified when using tablet targeting. Like shard targeting, this bypasses vindex-based routing, so use with care.
 
 ## <a id="minor-changes"/>Minor Changes</a>
+
+### <a id="minor-changes-logging"/>Logging</a>
+
+#### <a id="structured-logging"/>Structured logging</a>
+
+Vitess now uses structured JSON logging by default. Log output is emitted as JSON to stderr. To configure the minimum log level, pass `--log-level` (one of `debug`, `info`, `warn`, `error`; default `info`). To revert to the previous `glog` backend, pass `--log-structured=false`.
+
+`glog` is deprecated as of v24 and will be removed in v25.
 
 ### <a id="minor-changes-vreplication"/>VReplication</a>
 
