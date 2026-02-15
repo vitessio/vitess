@@ -21,6 +21,7 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -407,18 +408,18 @@ func (si *schemaInit) serverVersionString() string {
 
 	rs, err := si.exec(si.ctx, sidecarVersionQuery, 1, false)
 	if err != nil {
-		log.Warningf("Error getting MySQL version during sidecar database initialization: %+v", err)
+		log.Warn("Error getting MySQL version during sidecar database initialization", slog.Any("error", err))
 		return ""
 	}
 
 	if len(rs.Rows) != 1 || len(rs.Rows[0]) == 0 {
-		log.Warningf("Invalid results for SidecarDB query %q as it produced %d rows", sidecarVersionQuery, len(rs.Rows))
+		log.Warn("Invalid results for SidecarDB version query", slog.String("query", sidecarVersionQuery), slog.Int("rows", len(rs.Rows)))
 		return ""
 	}
 
 	si.serverVersion = rs.Rows[0][0].ToString()
 	if si.serverVersion == "" {
-		log.Warningf("MySQL version query returned empty result during sidecar database initialization")
+		log.Warn("MySQL version query returned empty result during sidecar database initialization")
 	}
 
 	return si.serverVersion
