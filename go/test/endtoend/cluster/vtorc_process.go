@@ -96,12 +96,12 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	timeNow := time.Now().UnixNano()
 	err = os.MkdirAll(orc.LogDir, 0o755)
 	if err != nil {
-		log.Errorf("cannot create log directory for vtorc: %v", err)
+		log.Error(fmt.Sprintf("cannot create log directory for vtorc: %v", err))
 		return err
 	}
 	configFile, err := os.Create(path.Join(orc.LogDir, fmt.Sprintf("orc-config-%d.json", timeNow)))
 	if err != nil {
-		log.Errorf("cannot create config file for vtorc: %v", err)
+		log.Error(fmt.Sprintf("cannot create config file for vtorc: %v", err))
 		return err
 	}
 	orc.ConfigPath = configFile.Name()
@@ -110,7 +110,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	if !orc.NoOverride {
 		orc.Config.addValuesToCheckOverride()
 	}
-	log.Errorf("configuration - %v", orc.Config.ToJSONString())
+	log.Error(fmt.Sprintf("configuration - %v", orc.Config.ToJSONString()))
 	_, err = configFile.WriteString(orc.Config.ToJSONString())
 	if err != nil {
 		return err
@@ -122,7 +122,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 
 	/* minimal command line arguments:
 	$ vtorc --topo-implementation etcd2 --topo-global-server-address localhost:2379 --topo-global-root /vitess/global
-	--config config/vtorc/default.json --alsologtostderr
+	--config config/vtorc/default.json
 	*/
 	flags := map[string]string{
 		"--cell":                       orc.Cell,
@@ -157,14 +157,13 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	}
 
 	orc.proc.Args = append(orc.proc.Args, orc.ExtraArgs...)
-	orc.proc.Args = append(orc.proc.Args, "--alsologtostderr")
 
 	if orc.LogFileName == "" {
 		orc.LogFileName = fmt.Sprintf("vtorc-stderr-%d.txt", timeNow)
 	}
 	errFile, err := os.Create(path.Join(orc.LogDir, orc.LogFileName))
 	if err != nil {
-		log.Errorf("cannot create error log file for vtorc: %v", err)
+		log.Error(fmt.Sprintf("cannot create error log file for vtorc: %v", err))
 		return err
 	}
 	orc.proc.Stderr = errFile
@@ -172,7 +171,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	orc.proc.Env = append(orc.proc.Env, os.Environ()...)
 	orc.proc.Env = append(orc.proc.Env, DefaultVttestEnv)
 
-	log.Infof("Running vtorc with command: %v", strings.Join(orc.proc.Args, " "))
+	log.Info(fmt.Sprintf("Running vtorc with command: %v", strings.Join(orc.proc.Args, " ")))
 
 	err = orc.proc.Start()
 	if err != nil {

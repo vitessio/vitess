@@ -17,6 +17,7 @@ limitations under the License.
 package binlog
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 
@@ -44,7 +45,7 @@ func tablesFilterFunc(tables []string, callback func(*binlogdatapb.BinlogTransac
 			case binlogdatapb.BinlogTransaction_Statement_BL_SET:
 				filtered = append(filtered, statement.Statement)
 			case binlogdatapb.BinlogTransaction_Statement_BL_DDL:
-				log.Warningf("Not forwarding DDL: %s", statement.Statement.Sql)
+				log.Warn(fmt.Sprintf("Not forwarding DDL: %s", statement.Statement.Sql))
 				continue
 			case binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
 				binlogdatapb.BinlogTransaction_Statement_BL_UPDATE,
@@ -58,14 +59,14 @@ func tablesFilterFunc(tables []string, callback func(*binlogdatapb.BinlogTransac
 					tableIndex := strings.LastIndex(sql, streamComment)
 					if tableIndex == -1 {
 						updateStreamErrors.Add("TablesStream", 1)
-						log.Errorf("Error parsing table name: %s", sql)
+						log.Error("Error parsing table name: " + sql)
 						continue
 					}
 					tableStart := tableIndex + len(streamComment)
 					tableEnd := strings.Index(sql[tableStart:], space)
 					if tableEnd == -1 {
 						updateStreamErrors.Add("TablesStream", 1)
-						log.Errorf("Error parsing table name: %s", sql)
+						log.Error("Error parsing table name: " + sql)
 						continue
 					}
 					tableName = sql[tableStart : tableStart+tableEnd]
@@ -76,7 +77,7 @@ func tablesFilterFunc(tables []string, callback func(*binlogdatapb.BinlogTransac
 				}
 			case binlogdatapb.BinlogTransaction_Statement_BL_UNRECOGNIZED:
 				updateStreamErrors.Add("TablesStream", 1)
-				log.Errorf("Error parsing table name: %s", string(statement.Statement.Sql))
+				log.Error("Error parsing table name: " + string(statement.Statement.Sql))
 				continue
 			}
 		}

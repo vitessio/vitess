@@ -527,12 +527,12 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 
 			_, errs := replicaVCursor.ExecuteMultiShard(ctx, route, rss, queries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
 			if len(errs) > 0 {
-				log.Warningf("Failed to execute warming replica read: %v", errs)
+				log.Warn(fmt.Sprintf("Failed to execute warming replica read: %v", errs))
 			} else {
 				replicaWarmingReadsMirrored.Add([]string{route.Keyspace.Name}, 1)
 			}
 		}(replicaVCursor)
 	default:
-		log.Warning("Failed to execute warming replica read as pool is full")
+		log.Warn("Failed to execute warming replica read as pool is full")
 	}
 }
