@@ -86,7 +86,7 @@ func main() {
 
 	// We can't do much without a --server flag
 	if server == "" {
-		log.Error(errors.New("please specify --server <vtctld_host:vtctld_port> to specify the vtctld server to connect to"))
+		log.Error(fmt.Sprint(errors.New("please specify --server <vtctld_host:vtctld_port> to specify the vtctld server to connect to")))
 		os.Exit(1)
 	}
 
@@ -105,7 +105,7 @@ func main() {
 
 		errStr := strings.ReplaceAll(err.Error(), "remote error: ", "")
 		fmt.Printf("%s Error: %s\n", args[0], errStr)
-		log.Error(err)
+		log.Error(fmt.Sprint(err))
 		os.Exit(1)
 	}
 }

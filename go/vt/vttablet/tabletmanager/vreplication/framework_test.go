@@ -127,7 +127,7 @@ func setFlag(flagName, flagValue string) {
 
 	if err := pflag.Set(flagName, flagValue); err != nil {
 		msg := "failed to set flag %q to %q: %v"
-		log.Errorf(msg, flagName, flagValue, err)
+		log.Error(fmt.Sprintf(msg, flagName, flagValue, err))
 	}
 }
 
@@ -256,7 +256,7 @@ func primaryPosition(t *testing.T) string {
 func execStatements(t *testing.T, queries []string) {
 	t.Helper()
 	if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
-		log.Errorf("Error executing query: %s", err.Error())
+		log.Error("Error executing query: " + err.Error())
 		t.Error(err)
 	}
 	for _, query := range queries {
@@ -1361,7 +1361,7 @@ func customExpectData(t *testing.T, table string, values [][]string, exec func(c
 			if err == nil {
 				return
 			}
-			log.Errorf("data mismatch: %v, retrying", err)
+			log.Error(fmt.Sprintf("data mismatch: %v, retrying", err))
 			time.Sleep(tick)
 		}
 	}

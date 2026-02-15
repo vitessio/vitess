@@ -19,6 +19,7 @@ package tabletserver
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -277,7 +278,7 @@ func TestStateManagerGracePeriod(t *testing.T) {
 }
 
 func TestStateManagerSetServingTypeNoChange(t *testing.T) {
-	log.Infof("starting")
+	log.Info("starting")
 	sm := newTestStateManager()
 	defer sm.StopService()
 	err := sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
@@ -777,7 +778,7 @@ func newTestStateManager() *stateManager {
 	}
 	sm.Init(env, &querypb.Target{})
 	sm.hs.InitDBConfig(&querypb.Target{})
-	log.Infof("returning sm: %p", sm)
+	log.Info(fmt.Sprintf("returning sm: %p", sm))
 	return sm
 }
 

@@ -157,7 +157,7 @@ func waitForMinio(client *minio.Client) {
 		}
 		time.Sleep(1 * time.Second)
 	}
-	log.Fatalf("MinIO server did not become ready in time")
+	log.Fatal("MinIO server did not become ready in time")
 }
 
 func checkEnvForS3(t *testing.T) {

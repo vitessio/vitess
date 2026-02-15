@@ -372,7 +372,7 @@ func getVtctldGRPCURL() string {
 
 func applyShardRoutingRules(t *testing.T, rules string) {
 	output, err := osExec(t, "vtctldclient", []string{"--server", getVtctldGRPCURL(), "ApplyShardRoutingRules", "--rules", rules})
-	log.Infof("ApplyShardRoutingRules err: %+v, output: %+v", err, output)
+	log.Info(fmt.Sprintf("ApplyShardRoutingRules err: %+v, output: %+v", err, output))
 	require.NoError(t, err, output)
 	require.NotNil(t, output)
 }

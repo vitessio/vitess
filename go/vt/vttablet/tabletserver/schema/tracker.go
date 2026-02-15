@@ -19,6 +19,7 @@ package schema
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -117,7 +118,7 @@ func (tr *Tracker) process(ctx context.Context) {
 	defer tr.env.LogError()
 	defer tr.wg.Done()
 	if err := tr.possiblyInsertInitialSchema(ctx); err != nil {
-		log.Errorf("error inserting initial schema: %v", err)
+		log.Error(fmt.Sprintf("error inserting initial schema: %v", err))
 		return
 	}
 
@@ -153,8 +154,8 @@ func (tr *Tracker) process(ctx context.Context) {
 					MustReloadSchemaOnDDL(event.Statement, tr.engine.cp.DBName(), tr.env.Environment().Parser()) {
 					if err := tr.schemaUpdated(gtid, event.Statement, event.Timestamp); err != nil {
 						tr.env.Stats().ErrorCounters.Add(vtrpcpb.Code_INTERNAL.String(), 1)
-						log.Errorf("Error updating schema: %s for ddl %s, gtid %s",
-							tr.env.Environment().Parser().TruncateForLog(err.Error()), event.Statement, gtid)
+						log.Error(fmt.Sprintf("Error updating schema: %s for ddl %s, gtid %s",
+							tr.env.Environment().Parser().TruncateForLog(err.Error()), event.Statement, gtid))
 						restorePreviousGTID()
 					}
 				}
@@ -167,7 +168,7 @@ func (tr *Tracker) process(ctx context.Context) {
 		default:
 			if err != nil {
 				restorePreviousGTID()
-				log.Warningf("Schema Version Tracker's vstream ended with an error: %v, retrying in 5 seconds...", err)
+				log.Warn(fmt.Sprintf("Schema Version Tracker's vstream ended with an error: %v, retrying in 5 seconds...", err))
 				time.Sleep(5 * time.Second)
 			}
 		}
@@ -222,13 +223,13 @@ func (tr *Tracker) possiblyInsertInitialSchema(ctx context.Context) error {
 		return err
 	}
 	gtid := replication.EncodePosition(pos)
-	log.Infof("Saving initial schema for gtid %s", gtid)
+	log.Info("Saving initial schema for gtid " + gtid)
 
 	return tr.saveCurrentSchemaToDb(ctx, gtid, ddl, timestamp)
 }
 
 func (tr *Tracker) schemaUpdated(gtid string, ddl string, timestamp int64) error {
-	log.Infof("Processing schemaUpdated event for gtid %s, ddl %s", gtid, ddl)
+	log.Info(fmt.Sprintf("Processing schemaUpdated event for gtid %s, ddl %s", gtid, ddl))
 	if gtid == "" || ddl == "" {
 		return errors.New("got invalid gtid or ddl in schemaUpdated")
 	}

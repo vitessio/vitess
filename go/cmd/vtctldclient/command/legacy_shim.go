@@ -92,7 +92,7 @@ func runLegacyCommand(ctx context.Context, args []string) error {
 
 		errStr := strings.ReplaceAll(err.Error(), "remote error: ", "")
 		fmt.Printf("%s Error: %s\n", flag.Arg(0), errStr)
-		log.Error(err)
+		log.Error(fmt.Sprint(err))
 	}
 
 	return err

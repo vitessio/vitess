@@ -21,6 +21,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -156,7 +157,8 @@ func createExecutorEnvCallback(t testing.TB, eConfig ExecutorConfig, eachShard f
 		return ki.SidecarDbName, nil
 	})
 	if !created {
-		log.Fatal("Failed to [re]create a sidecar database identifier cache!")
+		log.Error("Failed to [re]create a sidecar database identifier cache!")
+		os.Exit(1)
 	}
 
 	resolver := newTestResolver(ctx, hc, serv, cell)
