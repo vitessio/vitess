@@ -19,6 +19,7 @@ package workflow
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"golang.org/x/exp/maps"
@@ -246,7 +247,7 @@ func (mz *materializer) deployViews(ctx context.Context, views []string) error {
 			return fmt.Errorf("deploy views: failed to build views ddl: %w", err)
 		}
 
-		log.Infof("deploy views: applying schema %q", sql)
+		log.Info("deploy views: applying schema", slog.String("sql", sql))
 
 		// Apply the DDLs on the tablet.
 		sc := &tmutils.SchemaChange{SQL: sql, Force: false, AllowReplication: true, SQLMode: vreplication.SQLMode}
