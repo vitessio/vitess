@@ -54,7 +54,6 @@ type MysqlctldProcess struct {
 func (mysqlctld *MysqlctldProcess) InitDb() (err error) {
 	args := []string{
 		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--log_dir", mysqlctld.LogDirectory,
 		"--tablet_uid", strconv.Itoa(mysqlctld.TabletUID),
 		"--mysql_port", strconv.Itoa(mysqlctld.MySQLPort),
 		"--init_db_sql_file", mysqlctld.InitDBFile,
@@ -77,7 +76,6 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 	_ = createDirectory(mysqlctld.LogDirectory, 0o700)
 	args := []string{
 		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--log_dir", mysqlctld.LogDirectory,
 		"--tablet_uid", strconv.Itoa(mysqlctld.TabletUID),
 		"--mysql_port", strconv.Itoa(mysqlctld.MySQLPort),
 	}
@@ -100,12 +98,12 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 
 	err := os.MkdirAll(mysqlctld.LogDirectory, 0o755)
 	if err != nil {
-		log.Errorf("Failed to create directory for mysqlctld logs: %v", err)
+		log.Error(fmt.Sprintf("Failed to create directory for mysqlctld logs: %v", err))
 		return err
 	}
 	errFile, err := os.Create(path.Join(mysqlctld.LogDirectory, "mysqlctld-stderr.txt"))
 	if err != nil {
-		log.Errorf("Failed to create directory for mysqlctld stderr: %v", err)
+		log.Error(fmt.Sprintf("Failed to create directory for mysqlctld stderr: %v", err))
 	}
 	tempProcess.Stderr = errFile
 
@@ -115,7 +113,7 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 	tempProcess.Stderr = os.Stderr
 	mysqlctld.ErrorLog = errFile.Name()
 
-	log.Infof("%v", strings.Join(tempProcess.Args, " "))
+	log.Info(strings.Join(tempProcess.Args, " "))
 
 	err = tempProcess.Start()
 	if err != nil {
@@ -130,9 +128,9 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 		if !mysqlctld.exitSignalReceived {
 			errBytes, ferr := os.ReadFile(mysqlctld.ErrorLog)
 			if ferr == nil {
-				log.Errorf("mysqlctld error log contents:\n%s", string(errBytes))
+				log.Error("mysqlctld error log contents:\n" + string(errBytes))
 			} else {
-				log.Errorf("Failed to read the mysqlctld error log file %q: %v", mysqlctld.ErrorLog, ferr)
+				log.Error(fmt.Sprintf("Failed to read the mysqlctld error log file %q: %v", mysqlctld.ErrorLog, ferr))
 			}
 			fmt.Printf("mysqlctld stopped unexpectedly, tabletUID %v, mysql port %v, PID %v\n", mysqlctld.TabletUID, mysqlctld.MySQLPort, mysqlctld.process.Process.Pid)
 		}

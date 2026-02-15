@@ -19,6 +19,7 @@ package vreplication
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math"
 	"os"
 	"regexp"
@@ -586,11 +587,13 @@ func TestPlayerStatementModeWithFilterAndErrorHandling(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	// We want to check for the expected log message.
-	ole := log.Errorf
+	ole := log.Error
 	logger := logutil.NewMemoryLogger()
-	log.Errorf = logger.Errorf
+	log.Error = func(msg string, _ ...slog.Attr) {
+		logger.Errorf("%s", msg)
+	}
 	defer func() {
-		log.Errorf = ole
+		log.Error = ole
 	}()
 
 	execStatements(t, []string{
@@ -2049,8 +2052,7 @@ func TestPlayerDDL(t *testing.T) {
 	pos2b := primaryPosition(t)
 	execStatements(t, []string{"alter table t1 drop column val"})
 	pos2 := primaryPosition(t)
-	log.Errorf("Expected log:: TestPlayerDDL Positions are: before first alter %v, after first alter %v, before second alter %v, after second alter %v",
-		pos0, pos1, pos2b, pos2) // For debugging only: to check what are the positions when test works and if/when it fails
+	log.Error(fmt.Sprintf("Expected log:: TestPlayerDDL Positions are: before first alter %v, after first alter %v, before second alter %v, after second alter %v", pos0, pos1, pos2b, pos2)) // For debugging only: to check what are the positions when test works and if/when it fails
 	// Restart vreplication
 	if _, err := playerEngine.Exec(fmt.Sprintf(`update _vt.vreplication set state = 'Running', message='' where id=%d`, id)); err != nil {
 		t.Fatal(err)
@@ -3815,16 +3817,18 @@ func TestPlayerStalls(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	// We want to check for the expected log messages.
-	ole := log.Errorf
+	ole := log.Error
 	logger := logutil.NewMemoryLogger()
-	log.Errorf = logger.Errorf
+	log.Error = func(msg string, _ ...slog.Attr) {
+		logger.Errorf("%s", msg)
+	}
 
 	oldMinimumHeartbeatUpdateInterval := vreplicationMinimumHeartbeatUpdateInterval
 	oldProgressDeadline := vplayerProgressDeadline
 	oldRelayLogMaxItems := vttablet.DefaultVReplicationConfig.RelayLogMaxItems
 	oldRetryDelay := vttablet.DefaultVReplicationConfig.RetryDelay
 	defer func() {
-		log.Errorf = ole
+		log.Error = ole
 		vreplicationMinimumHeartbeatUpdateInterval = oldMinimumHeartbeatUpdateInterval
 		vplayerProgressDeadline = oldProgressDeadline
 		vttablet.DefaultVReplicationConfig.RelayLogMaxItems = oldRelayLogMaxItems

@@ -99,7 +99,7 @@ func execQueryWithRetry(t *testing.T, conn *mysql.Conn, query string, timeout ti
 			require.FailNow(t, fmt.Sprintf("query %q did not succeed before the timeout of %s; last seen result: %v",
 				query, timeout, qr))
 		case <-ticker.C:
-			log.Infof("query %q failed with error %v, retrying in %ds", query, err, defaultTick)
+			log.Info(fmt.Sprintf("query %q failed with error %v, retrying in %ds", query, err, defaultTick))
 		}
 	}
 }
@@ -107,7 +107,7 @@ func execQueryWithRetry(t *testing.T, conn *mysql.Conn, query string, timeout ti
 func execQuery(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	qr, err := conn.ExecuteFetch(query, 1000, false)
 	if err != nil {
-		log.Errorf("Error executing query: %s: %v", query, err)
+		log.Error(fmt.Sprintf("Error executing query: %s: %v", query, err))
 	}
 	require.NoError(t, err)
 	return qr
@@ -265,7 +265,7 @@ func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, da
 		got := row.AsInt64("c", 0)
 		require.LessOrEqual(t, got, want)
 		if got == want {
-			log.Infof("waitForRowCountInTablet: found %d rows in table %s on tablet %s", want, table, vttablet.Name)
+			log.Info(fmt.Sprintf("waitForRowCountInTablet: found %d rows in table %s on tablet %s", want, table, vttablet.Name))
 			return
 		}
 		select {
@@ -358,7 +358,7 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 	done := false
 	timer := time.NewTimer(workflowStateTimeout)
 	defer timer.Stop()
-	log.Infof("Waiting for workflow %q to fully reach %q state", ksWorkflow, wantState)
+	log.Info(fmt.Sprintf("Waiting for workflow %q to fully reach %q state", ksWorkflow, wantState))
 	for {
 		output, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", keyspace, "show", "--workflow", workflow, "--compact", "--include-logs=false")
 		require.NoError(t, err, output)
@@ -394,7 +394,7 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 			return true
 		})
 		if done {
-			log.Infof("Workflow %q has fully reached the desired state of %q", ksWorkflow, wantState)
+			log.Info(fmt.Sprintf("Workflow %q has fully reached the desired state of %q", ksWorkflow, wantState))
 			return
 		}
 		select {
@@ -644,7 +644,7 @@ func getDebugVar(t *testing.T, port int, varPath []string) (string, error) {
 	var val []byte
 	var err error
 	url := fmt.Sprintf("http://localhost:%d/debug/vars", port)
-	log.Infof("url: %s, varPath: %s", url, strings.Join(varPath, ":"))
+	log.Info(fmt.Sprintf("url: %s, varPath: %s", url, strings.Join(varPath, ":")))
 	body := getHTTPBody(t, url)
 	val, _, _, err = jsonparser.Get(body, varPath...)
 	require.NoError(t, err)
@@ -686,7 +686,7 @@ func confirmWorkflowHasCopiedNoData(t *testing.T, defaultTargetKs, workflow stri
 // compact, and easy to compare results for tests.
 func getShardRoutingRules(t *testing.T) string {
 	output, err := osExec(t, "vtctldclient", []string{"--server", getVtctldGRPCURL(), "GetShardRoutingRules"})
-	log.Infof("GetShardRoutingRules err: %+v, output: %+v", err, output)
+	log.Info(fmt.Sprintf("GetShardRoutingRules err: %+v, output: %+v", err, output))
 	require.Nilf(t, err, output)
 	require.NotNil(t, output)
 
@@ -829,7 +829,7 @@ func (lg *loadGenerator) stop() {
 	// Wait for buffering to stop and additional records to be inserted by start
 	// after traffic is switched.
 	time.Sleep(loadTestBufferingWindowDuration * 2)
-	log.Infof("Canceling load")
+	log.Info("Canceling load")
 	lg.cancel()
 	lg.wg.Wait()
 }
@@ -840,22 +840,20 @@ func (lg *loadGenerator) start() {
 	var connectionCount atomic.Int64
 
 	var id int64
-	log.Infof("loadGenerator: starting")
+	log.Info("loadGenerator: starting")
 	queryTemplate := "insert into loadtest(id, name) values (%d, 'name-%d')"
 	var totalQueries, successfulQueries int64
 	var deniedErrors, ambiguousErrors, reshardedErrors, tableNotFoundErrors, otherErrors int64
 	lg.wg.Add(1)
 	defer func() {
 		defer lg.wg.Done()
-		log.Infof("loadGenerator: totalQueries: %d, successfulQueries: %d, deniedErrors: %d, ambiguousErrors: %d, reshardedErrors: %d, tableNotFoundErrors: %d, otherErrors: %d",
-			totalQueries, successfulQueries, deniedErrors, ambiguousErrors, reshardedErrors, tableNotFoundErrors, otherErrors)
+		log.Info(fmt.Sprintf("loadGenerator: totalQueries: %d, successfulQueries: %d, deniedErrors: %d, ambiguousErrors: %d, reshardedErrors: %d, tableNotFoundErrors: %d, otherErrors: %d", totalQueries, successfulQueries, deniedErrors, ambiguousErrors, reshardedErrors, tableNotFoundErrors, otherErrors))
 	}()
 	for {
 		select {
 		case <-lg.ctx.Done():
-			log.Infof("loadGenerator: context cancelled")
-			log.Infof("loadGenerator: deniedErrors: %d, ambiguousErrors: %d, reshardedErrors: %d, tableNotFoundErrors: %d, otherErrors: %d",
-				deniedErrors, ambiguousErrors, reshardedErrors, tableNotFoundErrors, otherErrors)
+			log.Info("loadGenerator: context cancelled")
+			log.Info(fmt.Sprintf("loadGenerator: deniedErrors: %d, ambiguousErrors: %d, reshardedErrors: %d, tableNotFoundErrors: %d, otherErrors: %d", deniedErrors, ambiguousErrors, reshardedErrors, tableNotFoundErrors, otherErrors))
 			require.Equal(t, int64(0), deniedErrors)
 			require.Equal(t, int64(0), otherErrors)
 			require.Equal(t, int64(0), reshardedErrors)
@@ -939,12 +937,12 @@ func (lg *loadGenerator) waitForCount(want int64) {
 func appendToQueryLog(msg string) {
 	file, err := os.OpenFile(queryLog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
-		log.Errorf("Error opening query log file: %v", err)
+		log.Error(fmt.Sprintf("Error opening query log file: %v", err))
 		return
 	}
 	defer file.Close()
 	if _, err := file.WriteString(msg + "\n"); err != nil {
-		log.Errorf("Error writing to query log file: %v", err)
+		log.Error(fmt.Sprintf("Error writing to query log file: %v", err))
 	}
 }
 
