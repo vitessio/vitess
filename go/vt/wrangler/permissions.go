@@ -44,14 +44,14 @@ func (wr *Wrangler) GetPermissions(ctx context.Context, tabletAlias *topodatapb.
 // diffPermissions is a helper method to asynchronously diff a permissions
 func (wr *Wrangler) diffPermissions(ctx context.Context, primaryPermissions *tabletmanagerdatapb.Permissions, primaryAlias *topodatapb.TabletAlias, alias *topodatapb.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
-	log.Infof("Gathering permissions for %v", topoproto.TabletAliasString(alias))
+	log.Info(fmt.Sprintf("Gathering permissions for %v", topoproto.TabletAliasString(alias)))
 	replicaPermissions, err := wr.GetPermissions(ctx, alias)
 	if err != nil {
 		er.RecordError(err)
 		return
 	}
 
-	log.Infof("Diffing permissions for %v", topoproto.TabletAliasString(alias))
+	log.Info(fmt.Sprintf("Diffing permissions for %v", topoproto.TabletAliasString(alias)))
 	tmutils.DiffPermissions(topoproto.TabletAliasString(primaryAlias), primaryPermissions, topoproto.TabletAliasString(alias), replicaPermissions, er)
 }
 
@@ -67,7 +67,7 @@ func (wr *Wrangler) ValidatePermissionsShard(ctx context.Context, keyspace, shar
 	if !si.HasPrimary() {
 		return fmt.Errorf("no primary in shard %v/%v", keyspace, shard)
 	}
-	log.Infof("Gathering permissions for primary %v", topoproto.TabletAliasString(si.PrimaryAlias))
+	log.Info(fmt.Sprintf("Gathering permissions for primary %v", topoproto.TabletAliasString(si.PrimaryAlias)))
 	primaryPermissions, err := wr.GetPermissions(ctx, si.PrimaryAlias)
 	if err != nil {
 		return err
@@ -124,7 +124,7 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(ctx context.Context, keyspace st
 		return fmt.Errorf("no primary in shard %v/%v", keyspace, shards[0])
 	}
 	referenceAlias := si.PrimaryAlias
-	log.Infof("Gathering permissions for reference primary %v", topoproto.TabletAliasString(referenceAlias))
+	log.Info(fmt.Sprintf("Gathering permissions for reference primary %v", topoproto.TabletAliasString(referenceAlias)))
 	referencePermissions, err := wr.GetPermissions(ctx, si.PrimaryAlias)
 	if err != nil {
 		return err

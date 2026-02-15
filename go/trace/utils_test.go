@@ -18,19 +18,25 @@ package trace
 
 import (
 	"errors"
+	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/log"
 )
 
 func TestLogErrorsWhenClosing(t *testing.T) {
+	original := log.Error
+	t.Cleanup(func() { log.Error = original })
+
+	var logMessage string
+	log.Error = func(msg string, _ ...slog.Attr) {
+		logMessage = msg
+	}
 	logFunc := LogErrorsWhenClosing(&fakeCloser{})
-
-	got := captureOutput(t, func() {
-		logFunc()
-	}, false)
-
-	require.Contains(t, string(got), "test error")
+	logFunc()
+	require.Contains(t, logMessage, "test error")
 }
 
 type fakeCloser struct{}

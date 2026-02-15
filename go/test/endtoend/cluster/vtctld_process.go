@@ -68,7 +68,6 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 		"--service_map", vtctld.ServiceMap,
 		"--backup_storage_implementation", vtctld.BackupStorageImplementation,
 		vtutils.GetFlagVariantForTestsByVersion("--file-backup-storage-root", vtctldVer), vtctld.FileBackupStorageRoot,
-		"--log_dir", vtctld.LogDir,
 		"--port", strconv.Itoa(vtctld.Port),
 		"--grpc_port", strconv.Itoa(vtctld.GrpcPort),
 		"--bind-address", "127.0.0.1",
@@ -82,12 +81,12 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 
 	err = os.MkdirAll(vtctld.LogDir, 0o755)
 	if err != nil {
-		log.Errorf("cannot create log directory for vtctld: %v", err)
+		log.Error(fmt.Sprintf("cannot create log directory for vtctld: %v", err))
 		return err
 	}
 	errFile, err := os.Create(path.Join(vtctld.LogDir, "vtctld-stderr.txt"))
 	if err != nil {
-		log.Errorf("cannot create error log file for vtctld: %v", err)
+		log.Error(fmt.Sprintf("cannot create error log file for vtctld: %v", err))
 		return err
 	}
 	vtctld.proc.Stderr = errFile
@@ -96,7 +95,7 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 	vtctld.proc.Env = append(vtctld.proc.Env, os.Environ()...)
 	vtctld.proc.Env = append(vtctld.proc.Env, DefaultVttestEnv)
 
-	log.Infof("Starting vtctld with command: %v", strings.Join(vtctld.proc.Args, " "))
+	log.Info(fmt.Sprintf("Starting vtctld with command: %v", strings.Join(vtctld.proc.Args, " ")))
 
 	err = vtctld.proc.Start()
 	if err != nil {
@@ -118,9 +117,9 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 		case err := <-vtctld.exit:
 			errBytes, ferr := os.ReadFile(vtctld.ErrorLog)
 			if ferr == nil {
-				log.Errorf("vtctld error log contents:\n%s", string(errBytes))
+				log.Error("vtctld error log contents:\n" + string(errBytes))
 			} else {
-				log.Errorf("Failed to read the vtctld error log file %q: %v", vtctld.ErrorLog, ferr)
+				log.Error(fmt.Sprintf("Failed to read the vtctld error log file %q: %v", vtctld.ErrorLog, ferr))
 			}
 			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vtctld.Name, err)
 		default:
