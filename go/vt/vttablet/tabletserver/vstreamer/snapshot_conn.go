@@ -37,6 +37,9 @@ import (
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 )
 
+// snapshotLockWaitTimeout is the lock_wait_timeout to use when attempting to start a snapshot.
+const snapshotLockWaitTimeout = 30 * time.Second
+
 // snapshotConn is wrapper on mysql.Conn capable of
 // reading a table along with a GTID snapshot.
 type snapshotConn struct {
@@ -109,6 +112,12 @@ func (conn *snapshotConn) startSnapshot(ctx context.Context, table string) (gtid
 	}()
 
 	tableName := sqlparser.String(sqlparser.NewIdentifierCS(table))
+
+	// Avoid waiting indefinitely when table metadata locks are held by another transaction.
+	lockWaitTimeoutSeconds := int(snapshotLockWaitTimeout.Seconds())
+	if _, err := lockConn.ExecuteFetch(fmt.Sprintf("set session lock_wait_timeout = %d", lockWaitTimeoutSeconds), 1, false); err != nil {
+		return "", fmt.Errorf("startSnapshot: failed to set session lock_wait_timeout = %d for table %s: %w", lockWaitTimeoutSeconds, tableName, err)
+	}
 
 	if _, err := lockConn.ExecuteFetch(fmt.Sprintf("lock tables %s read", tableName), 1, false); err != nil {
 		log.Warningf("Error locking table %s to read: %v", tableName, err)
