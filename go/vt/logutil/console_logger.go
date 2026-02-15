@@ -72,7 +72,7 @@ func (cl *ConsoleLogger) InfoDepth(depth int, s string) {
 
 // WarningDepth is part of the Logger interface.
 func (cl *ConsoleLogger) WarningDepth(depth int, s string) {
-	log.WarningDepth(1+depth, s)
+	log.WarnDepth(1+depth, s)
 }
 
 // ErrorDepth is part of the Logger interface.

@@ -17,6 +17,9 @@ limitations under the License.
 package main
 
 import (
+	"fmt"
+	"os"
+
 	"vitess.io/vitess/go/cmd/vtgate/cli"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/utils"
@@ -25,6 +28,7 @@ import (
 func main() {
 	cli.Main.SetGlobalNormalizationFunc(utils.NormalizeUnderscoresToDashes)
 	if err := cli.Main.Execute(); err != nil {
-		log.Exit(err)
+		log.Error(fmt.Sprint(err))
+		os.Exit(1)
 	}
 }

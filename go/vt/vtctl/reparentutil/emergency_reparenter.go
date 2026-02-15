@@ -858,7 +858,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 			return nil, err
 		}
 		if errantGTIDs != nil {
-			log.Errorf("skipping %v with GTIDSet:%v because we detected errant GTIDs - %v", candidate, afterStatus.RelayLogPosition.GTIDSet, errantGTIDs)
+			log.Error(fmt.Sprintf("skipping %v with GTIDSet:%v because we detected errant GTIDs - %v", candidate, afterStatus.RelayLogPosition.GTIDSet, errantGTIDs))
 			continue
 		}
 		maxLenPositions = append(maxLenPositions, candidatePositions.Combined)
@@ -892,7 +892,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 			return nil, err
 		}
 		if errantGTIDs != nil {
-			log.Errorf("skipping %v with GTIDSet:%v because we detected errant GTIDs - %v", alias, validCandidates[alias], errantGTIDs)
+			log.Error(fmt.Sprintf("skipping %v with GTIDSet:%v because we detected errant GTIDs - %v", alias, validCandidates[alias], errantGTIDs))
 			continue
 		}
 		updatedValidCandidates[alias] = validCandidates[alias]
