@@ -610,7 +610,7 @@ func (vc *VCursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
 		return nil, errNoDbAvailable
 	}
 
-	keyspaces := vc.getSortedServingKeyspaces()
+	keyspaces := vc.filterKeyspacesByTabletType(vc.getSortedServingKeyspaces())
 
 	// Look for any sharded keyspace if present, otherwise take the first keyspace,
 	// sorted alphabetically
@@ -620,6 +620,34 @@ func (vc *VCursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
 		}
 	}
 	return keyspaces[0], nil
+}
+
+// canResolveKeyspace checks whether the given keyspace has a partition for the
+// current tablet type by attempting a lightweight resolve through the resolver.
+func (vc *VCursorImpl) canResolveKeyspace(ksName string) bool {
+	if vc.resolver == nil {
+		return true
+	}
+	_, _, err := vc.resolver.ResolveDestinations(
+		context.Background(), ksName, vc.tabletType,
+		nil, []key.ShardDestination{key.DestinationAnyShard{}},
+	)
+	return err == nil
+}
+
+// filterKeyspacesByTabletType returns keyspaces that can serve vc.tabletType.
+// Falls back to the original list if no keyspaces pass the filter (backwards compat).
+func (vc *VCursorImpl) filterKeyspacesByTabletType(keyspaces []*vindexes.Keyspace) []*vindexes.Keyspace {
+	var filtered []*vindexes.Keyspace
+	for _, ks := range keyspaces {
+		if vc.canResolveKeyspace(ks.Name) {
+			filtered = append(filtered, ks)
+		}
+	}
+	if len(filtered) > 0 {
+		return filtered
+	}
+	return keyspaces
 }
 
 // getSortedServingKeyspaces gets the sorted serving keyspaces
@@ -651,7 +679,7 @@ func (vc *VCursorImpl) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
 	if len(vc.vschema.Keyspaces) == 0 {
 		return nil, errNoDbAvailable
 	}
-	keyspaces := vc.getSortedServingKeyspaces()
+	keyspaces := vc.filterKeyspacesByTabletType(vc.getSortedServingKeyspaces())
 
 	return keyspaces[0], nil
 }
