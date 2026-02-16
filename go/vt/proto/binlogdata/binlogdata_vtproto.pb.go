@@ -602,10 +602,10 @@ func (m *VStreamOptions) CloneVT() *VStreamOptions {
 		copy(tmpContainer, rhs)
 		r.TablesToCopy = tmpContainer
 	}
-	if rhs := m.IncludedEventTypes; rhs != nil {
+	if rhs := m.EventTypes; rhs != nil {
 		tmpContainer := make([]VEventType, len(rhs))
 		copy(tmpContainer, rhs)
-		r.IncludedEventTypes = tmpContainer
+		r.EventTypes = tmpContainer
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -2494,14 +2494,14 @@ func (m *VStreamOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.IncludedEventTypes) > 0 {
+	if len(m.EventTypes) > 0 {
 		var pksize2 int
-		for _, num := range m.IncludedEventTypes {
+		for _, num := range m.EventTypes {
 			pksize2 += protohelpers.SizeOfVarint(uint64(num))
 		}
 		i -= pksize2
 		j1 := i
-		for _, num1 := range m.IncludedEventTypes {
+		for _, num1 := range m.EventTypes {
 			num := uint64(num1)
 			for num >= 1<<7 {
 				dAtA[j1] = uint8(uint64(num)&0x7f | 0x80)
@@ -4058,9 +4058,9 @@ func (m *VStreamOptions) SizeVT() (n int) {
 	if m.NoTimeouts {
 		n += 2
 	}
-	if len(m.IncludedEventTypes) > 0 {
+	if len(m.EventTypes) > 0 {
 		l = 0
-		for _, e := range m.IncludedEventTypes {
+		for _, e := range m.EventTypes {
 			l += protohelpers.SizeOfVarint(uint64(e))
 		}
 		n += 1 + protohelpers.SizeOfVarint(uint64(l)) + l
@@ -9007,7 +9007,7 @@ func (m *VStreamOptions) UnmarshalVT(dAtA []byte) error {
 						break
 					}
 				}
-				m.IncludedEventTypes = append(m.IncludedEventTypes, v)
+				m.EventTypes = append(m.EventTypes, v)
 			} else if wireType == 2 {
 				var packedLen int
 				for shift := uint(0); ; shift += 7 {
@@ -9035,8 +9035,8 @@ func (m *VStreamOptions) UnmarshalVT(dAtA []byte) error {
 					return io.ErrUnexpectedEOF
 				}
 				var elementCount int
-				if elementCount != 0 && len(m.IncludedEventTypes) == 0 {
-					m.IncludedEventTypes = make([]VEventType, 0, elementCount)
+				if elementCount != 0 && len(m.EventTypes) == 0 {
+					m.EventTypes = make([]VEventType, 0, elementCount)
 				}
 				for iNdEx < postIndex {
 					var v VEventType
@@ -9054,10 +9054,10 @@ func (m *VStreamOptions) UnmarshalVT(dAtA []byte) error {
 							break
 						}
 					}
-					m.IncludedEventTypes = append(m.IncludedEventTypes, v)
+					m.EventTypes = append(m.EventTypes, v)
 				}
 			} else {
-				return fmt.Errorf("proto: wrong wireType = %d for field IncludedEventTypes", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field EventTypes", wireType)
 			}
 		default:
 			iNdEx = preIndex

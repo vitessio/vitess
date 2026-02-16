@@ -2188,10 +2188,11 @@ type VStreamOptions struct {
 	TablesToCopy []string `protobuf:"bytes,3,rep,name=tables_to_copy,json=tablesToCopy,proto3" json:"tables_to_copy,omitempty"`
 	// Don't add any additional timeouts to the stream. For example the
 	// row streamer should not add a MAX_EXECUTION_TIME query hint.
-	NoTimeouts         bool         `protobuf:"varint,4,opt,name=no_timeouts,json=noTimeouts,proto3" json:"no_timeouts,omitempty"`
-	IncludedEventTypes []VEventType `protobuf:"varint,5,rep,packed,name=included_event_types,json=includedEventTypes,proto3,enum=binlogdata.VEventType" json:"included_event_types,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	NoTimeouts bool `protobuf:"varint,4,opt,name=no_timeouts,json=noTimeouts,proto3" json:"no_timeouts,omitempty"`
+	// Only stream events for these types. If not provided, the default behavior is to send all event types.
+	EventTypes    []VEventType `protobuf:"varint,5,rep,packed,name=event_types,json=eventTypes,proto3,enum=binlogdata.VEventType" json:"event_types,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *VStreamOptions) Reset() {
@@ -2252,9 +2253,9 @@ func (x *VStreamOptions) GetNoTimeouts() bool {
 	return false
 }
 
-func (x *VStreamOptions) GetIncludedEventTypes() []VEventType {
+func (x *VStreamOptions) GetEventTypes() []VEventType {
 	if x != nil {
-		return x.IncludedEventTypes
+		return x.EventTypes
 	}
 	return nil
 }
@@ -3259,14 +3260,15 @@ const file_binlogdata_proto_rawDesc = "" +
 	"\vp_k_columns\x18\x03 \x03(\x03R\tpKColumns\x12#\n" +
 	"\x0ep_k_index_name\x18\x04 \x01(\tR\vpKIndexName\"A\n" +
 	"\rMinimalSchema\x120\n" +
-	"\x06tables\x18\x01 \x03(\v2\x18.binlogdata.MinimalTableR\x06tables\"\xea\x02\n" +
+	"\x06tables\x18\x01 \x03(\v2\x18.binlogdata.MinimalTableR\x06tables\"\xd9\x02\n" +
 	"\x0eVStreamOptions\x12'\n" +
 	"\x0finternal_tables\x18\x01 \x03(\tR\x0einternalTables\x12Z\n" +
 	"\x10config_overrides\x18\x02 \x03(\v2/.binlogdata.VStreamOptions.ConfigOverridesEntryR\x0fconfigOverrides\x12$\n" +
 	"\x0etables_to_copy\x18\x03 \x03(\tR\ftablesToCopy\x12\x1f\n" +
 	"\vno_timeouts\x18\x04 \x01(\bR\n" +
-	"noTimeouts\x12H\n" +
-	"\x14included_event_types\x18\x05 \x03(\x0e2\x16.binlogdata.VEventTypeR\x12includedEventTypes\x1aB\n" +
+	"noTimeouts\x127\n" +
+	"\vevent_types\x18\x05 \x03(\x0e2\x16.binlogdata.VEventTypeR\n" +
+	"eventTypes\x1aB\n" +
 	"\x14ConfigOverridesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xfd\x02\n" +
@@ -3500,7 +3502,7 @@ var file_binlogdata_proto_depIdxs = []int32{
 	49, // 33: binlogdata.MinimalTable.fields:type_name -> query.Field
 	26, // 34: binlogdata.MinimalSchema.tables:type_name -> binlogdata.MinimalTable
 	44, // 35: binlogdata.VStreamOptions.config_overrides:type_name -> binlogdata.VStreamOptions.ConfigOverridesEntry
-	4,  // 36: binlogdata.VStreamOptions.included_event_types:type_name -> binlogdata.VEventType
+	4,  // 36: binlogdata.VStreamOptions.event_types:type_name -> binlogdata.VEventType
 	50, // 37: binlogdata.VStreamRequest.effective_caller_id:type_name -> vtrpc.CallerID
 	51, // 38: binlogdata.VStreamRequest.immediate_caller_id:type_name -> query.VTGateCallerID
 	52, // 39: binlogdata.VStreamRequest.target:type_name -> query.Target

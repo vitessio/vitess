@@ -137,7 +137,7 @@ func (tr *Tracker) process(ctx context.Context) {
 	}
 	options := &binlogdatapb.VStreamOptions{
 		// We only want GTID and DDL events streamed to us.
-		IncludedEventTypes: []binlogdatapb.VEventType{
+		EventTypes: []binlogdatapb.VEventType{
 			binlogdatapb.VEventType_GTID,
 			binlogdatapb.VEventType_DDL,
 		},

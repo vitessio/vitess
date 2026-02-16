@@ -202,9 +202,9 @@ func (vs *vstreamer) Stream() error {
 		return vterrors.Wrapf(err, "failed to determine starting position")
 	}
 	vs.pos = pos
-	if vs.options != nil && len(vs.options.IncludedEventTypes) > 0 {
-		vs.eventTypesToStream = make(map[binlogdatapb.VEventType]bool, len(vs.options.IncludedEventTypes))
-		for _, eventType := range vs.options.IncludedEventTypes {
+	if vs.options != nil && len(vs.options.EventTypes) > 0 {
+		vs.eventTypesToStream = make(map[binlogdatapb.VEventType]bool, len(vs.options.EventTypes))
+		for _, eventType := range vs.options.EventTypes {
 			vs.eventTypesToStream[eventType] = true
 		}
 	}
