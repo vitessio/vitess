@@ -427,12 +427,8 @@ func (session *SafeSession) InTransaction() bool {
 func (session *SafeSession) GetShardSessionsForCleanup() []*vtgatepb.Session_ShardSession {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	totalSize := len(session.PreSessions) + len(session.ShardSessions) + len(session.PostSessions)
-	shardSessions := make([]*vtgatepb.Session_ShardSession, 0, totalSize)
-	shardSessions = append(shardSessions, session.PreSessions...)
-	shardSessions = append(shardSessions, session.ShardSessions...)
-	shardSessions = append(shardSessions, session.PostSessions...)
-	return shardSessions
+
+	return slices.Concat(session.PreSessions, session.ShardSessions, session.PostSession)
 }
 
 // Returns a snapshot of all shard sessions (including LockSession)
