@@ -219,7 +219,6 @@ func TestVStreamLaggingDDLRowEvents(t *testing.T) {
 	oldArgs := slices.Clone(extraVTTabletArgs)
 	extraVTTabletArgs = append(extraVTTabletArgs,
 		utils.GetFlagVariantForTests("--track-schema-versions"),
-		utils.GetFlagVariantForTests("--watch-replication-stream"),
 	)
 	defer func() {
 		extraVTTabletArgs = oldArgs
