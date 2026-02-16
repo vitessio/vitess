@@ -19,6 +19,7 @@ package executorcontext
 import (
 	"fmt"
 	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -427,7 +428,7 @@ func (session *SafeSession) InTransaction() bool {
 func (session *SafeSession) GetShardSessionsForCleanup() []*vtgatepb.Session_ShardSession {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	return slices.Concat(session.PreSessions, session.ShardSessions, session.PostSession)
+	return slices.Concat(session.PreSessions, session.ShardSessions, session.PostSessions)
 }
 
 // Returns a snapshot of all shard sessions (including LockSession)
@@ -437,11 +438,12 @@ func (session *SafeSession) GetShardSessionsForCleanup() []*vtgatepb.Session_Sha
 func (session *SafeSession) GetShardSessionsForReleaseAll() []*vtgatepb.Session_ShardSession {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	var lockSessions []*vtgatepb.Session_ShardSession
+
+	allSessions := slices.Concat(session.PreSessions, session.ShardSessions, session.PostSessions)
 	if session.LockSession != nil {
-		lockSessions = []*vtgatepb.Session_ShardSession{session.LockSession}
+		return append(allSessions, session.LockSession)
 	}
-	return slices.Concat(session.PreSessions, session.ShardSessions, session.PostSessions, lockSessions)
+	return allSessions
 }
 
 // FindAndChangeSessionIfInSingleTxMode retrieves the ShardSession matching the given keyspace, shard, and tablet type.
