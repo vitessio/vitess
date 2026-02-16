@@ -1547,11 +1547,41 @@ func generateSortedStreams(k, n int) [][]sqltypes.Row {
 	return streams
 }
 
+// heapMerger is the old heap-based implementation, kept here for benchmarking comparison.
+type heapMerger struct {
+	cmp  Comparison
+	rows []mergeRow
+	less func(a, b mergeRow) bool
+}
+
+func (h *heapMerger) Push(row sqltypes.Row, source int) {
+	h.rows = append(h.rows, mergeRow{row, source})
+}
+
+func (h *heapMerger) Init() {
+	h.less = func(a, b mergeRow) bool {
+		return h.cmp.Less(a.row, b.row)
+	}
+	heapify(h.rows, h.less)
+}
+
+func (h *heapMerger) Pop() (sqltypes.Row, int) {
+	x := h.rows[0]
+	h.rows[0] = h.rows[len(h.rows)-1]
+	h.rows = h.rows[:len(h.rows)-1]
+	down(h.rows, 0, h.less)
+	return x.row, x.source
+}
+
+func (h *heapMerger) Len() int {
+	return len(h.rows)
+}
+
 func BenchmarkMerger(b *testing.B) {
 	cmp := Comparison{{Col: 0, Type: NewType(sqltypes.Int64, collations.CollationBinaryID)}}
 
 	for _, k := range []int{4, 8, 16, 64} {
-		b.Run(strconv.Itoa(k), func(b *testing.B) {
+		b.Run("loser/"+strconv.Itoa(k), func(b *testing.B) {
 			const rowsPerStream = 1000
 			streams := generateSortedStreams(k, rowsPerStream)
 
@@ -1574,6 +1604,34 @@ func BenchmarkMerger(b *testing.B) {
 						cursors[src]++
 					} else {
 						m.Pop()
+					}
+				}
+			}
+		})
+
+		b.Run("heap/"+strconv.Itoa(k), func(b *testing.B) {
+			const rowsPerStream = 1000
+			streams := generateSortedStreams(k, rowsPerStream)
+
+			b.ReportAllocs()
+			b.ResetTimer()
+
+			for b.Loop() {
+				h := &heapMerger{cmp: cmp}
+				cursors := make([]int, k)
+				for i := range k {
+					h.Push(streams[i][0], i)
+					cursors[i] = 1
+				}
+				h.Init()
+
+				for h.Len() > 0 {
+					row, src := h.Pop()
+					_ = row
+					if cursors[src] < len(streams[src]) {
+						h.Push(streams[src][cursors[src]], src)
+						up(h.rows, len(h.rows)-1, h.less)
+						cursors[src]++
 					}
 				}
 			}
