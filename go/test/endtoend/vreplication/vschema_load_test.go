@@ -57,11 +57,11 @@ func TestVSchemaChangesUnderLoad(t *testing.T) {
 	insertData := func() {
 		timer := time.NewTimer(extendedTimeout)
 		defer timer.Stop()
-		log.Infof("Inserting data into customer")
+		log.Info("Inserting data into customer")
 		cid := startCid
 		for {
 			if !initialDataInserted && cid > warmupRowCount {
-				log.Infof("Done inserting initial data into customer")
+				log.Info("Done inserting initial data into customer")
 				initialDataInserted = true
 				ch <- true
 			}
@@ -72,14 +72,14 @@ func TestVSchemaChangesUnderLoad(t *testing.T) {
 			_, _ = vtgateConn.ExecuteFetch(query, 10000, false)
 			select {
 			case <-timer.C:
-				log.Infof("Done inserting data into customer")
+				log.Info("Done inserting data into customer")
 				return
 			default:
 			}
 		}
 	}
 	go func() {
-		log.Infof("Starting to vstream from replica")
+		log.Info("Starting to vstream from replica")
 		vgtid := &binlogdatapb.VGtid{
 			ShardGtids: []*binlogdatapb.ShardGtid{{
 				Keyspace: "product",
@@ -106,9 +106,9 @@ func TestVSchemaChangesUnderLoad(t *testing.T) {
 		require.NoError(t, err)
 		_, err = reader.Recv()
 		require.NoError(t, err)
-		log.Infof("About to sleep in vstreaming to block the vstream Recv() channel")
+		log.Info("About to sleep in vstreaming to block the vstream Recv() channel")
 		time.Sleep(extendedTimeout)
-		log.Infof("Done vstreaming")
+		log.Info("Done vstreaming")
 	}()
 
 	go insertData()
@@ -118,10 +118,10 @@ func TestVSchemaChangesUnderLoad(t *testing.T) {
 		numApplyVSchema := 0
 		timer := time.NewTimer(extendedTimeout)
 		defer timer.Stop()
-		log.Infof("Started ApplyVSchema")
+		log.Info("Started ApplyVSchema")
 		for {
 			if err := vc.VtctldClient.ExecuteCommand("ApplyVSchema", "--vschema={}", "product"); err != nil {
-				log.Errorf("ApplyVSchema command failed with %+v\n", err)
+				log.Error(fmt.Sprintf("ApplyVSchema command failed with %+v\n", err))
 				return
 			}
 			numApplyVSchema++
@@ -130,7 +130,7 @@ func TestVSchemaChangesUnderLoad(t *testing.T) {
 			}
 			select {
 			case <-timer.C:
-				log.Infof("Done ApplyVSchema")
+				log.Info("Done ApplyVSchema")
 				ch <- true
 				return
 			default:
