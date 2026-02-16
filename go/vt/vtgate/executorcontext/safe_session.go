@@ -427,7 +427,6 @@ func (session *SafeSession) InTransaction() bool {
 func (session *SafeSession) GetShardSessionsForCleanup() []*vtgatepb.Session_ShardSession {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-
 	return slices.Concat(session.PreSessions, session.ShardSessions, session.PostSession)
 }
 
@@ -438,7 +437,6 @@ func (session *SafeSession) GetShardSessionsForCleanup() []*vtgatepb.Session_Sha
 func (session *SafeSession) GetShardSessionsForReleaseAll() []*vtgatepb.Session_ShardSession {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-
 	var lockSessions []*vtgatepb.Session_ShardSession
 	if session.LockSession != nil {
 		lockSessions = []*vtgatepb.Session_ShardSession{session.LockSession}
