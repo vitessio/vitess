@@ -209,10 +209,10 @@ func (ct *controller) run(ctx context.Context) {
 		action := discovery.ShouldRetryTabletError(err)
 		if action == discovery.TabletErrorActionIgnoreTablet && ct.lastPickedTablet != nil {
 			ct.ignoreTablets = append(ct.ignoreTablets, ct.lastPickedTablet)
-			log.Infof("stream %v: adding tablet %v to ignore list due to error: %v", ct.id, ct.lastPickedTablet, err)
+			log.Info(fmt.Sprintf("stream %v: adding tablet %v to ignore list due to error: %v", ct.id, ct.lastPickedTablet, err))
 		} else if action == discovery.TabletErrorActionFail {
 			// Don't retry for unrecoverable errors.
-			log.Errorf("stream %v: unrecoverable error, stopping: %v", ct.id, err)
+			log.Error(fmt.Sprintf("stream %v: unrecoverable error, stopping: %v", ct.id, err))
 			return
 		}
 
