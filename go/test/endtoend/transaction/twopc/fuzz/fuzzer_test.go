@@ -277,7 +277,7 @@ func (fz *fuzzer) runFuzzerThread(t *testing.T, threadId int) {
 			return
 		}
 		// Run an atomic transaction
-		fz.generateAndExecuteTransaction(threadId)
+		fz.generateAndExecuteTransaction(t, threadId)
 	}
 }
 
@@ -305,16 +305,15 @@ func (fz *fuzzer) initialize(t *testing.T, conn *mysql.Conn) {
 }
 
 // generateAndExecuteTransaction generates the queries of the transaction and then executes them.
-func (fz *fuzzer) generateAndExecuteTransaction(threadId int) {
+func (fz *fuzzer) generateAndExecuteTransaction(t *testing.T, threadId int) {
 	// Create a connection to the vtgate to run transactions.
 	ctx, cancel := context.WithTimeout(context.Background(), vtgateQueryTimeout)
 	defer cancel()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		return
-	}
+	require.NoError(t, err)
 	defer conn.Close()
-	_, _ = conn.ExecuteFetch(fmt.Sprintf("set @@query_timeout = %d", vtgateQueryTimeout.Milliseconds()), 0, false)
+	_, err = conn.ExecuteFetch(fmt.Sprintf("set @@query_timeout = %d", vtgateQueryTimeout.Milliseconds()), 0, false)
+	require.NoError(t, err)
 	// randomly generate an update set to use and the value to increment it by.
 	updateSetVal := rand.IntN(fz.updateSets)
 	incrementVal := rand.Int32()
@@ -331,13 +330,15 @@ func (fz *fuzzer) generateAndExecuteTransaction(threadId int) {
 	finalCommand := "commit"
 	for _, query := range queries {
 		_, err := conn.ExecuteFetch(query, 0, false)
+		require.NoError(t, err)
 		// If any command fails because of deadlocks or timeout or whatever, then we need to rollback the transaction.
 		if err != nil {
 			finalCommand = "rollback"
 			break
 		}
 	}
-	_, _ = conn.ExecuteFetch(finalCommand, 0, false)
+	_, err = conn.ExecuteFetch(finalCommand, 0, false)
+	require.NoError(t, err)
 }
 
 func getUpdateQuery(incrementVal int32, id int) string {
