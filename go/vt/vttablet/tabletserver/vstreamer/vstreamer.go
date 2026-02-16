@@ -530,7 +530,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "failed to get GTID from binlog event: %#v", ev)
 		}
-		if hasBegin && shouldSend(binlogdatapb.VEventType_GTID) {
+		if hasBegin && shouldSend(binlogdatapb.VEventType_BEGIN) {
 			vevents = append(vevents, &binlogdatapb.VEvent{
 				Type:           binlogdatapb.VEventType_BEGIN,
 				CommitParent:   commitParent,
