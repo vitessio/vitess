@@ -82,21 +82,16 @@ jobs:
       run: |
         sudo DEBIAN_FRONTEND="noninteractive" apt-get update
 
-        sudo percona-release setup pxb-80
-
         # Install everything else we need, and configure
         sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget grep
 
         sudo service etcd stop
 
-<<<<<<< HEAD
         wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo apt-get install -y gnupg2
-        sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo percona-release enable-only tools
-=======
         sudo apt-get install -y gnupg2 lz4
->>>>>>> 46ad2b29b0 (CI: Fix workflows that install xtrabackup (#19383))
+        sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+        sudo percona-release enable tools
+        sudo percona-release setup pxb-80
         sudo apt-get update
         sudo apt-get install -y percona-xtrabackup-80
 
