@@ -330,7 +330,6 @@ func (fz *fuzzer) generateAndExecuteTransaction(t *testing.T, threadId int) {
 	finalCommand := "commit"
 	for _, query := range queries {
 		_, err := conn.ExecuteFetch(query, 0, false)
-		require.NoError(t, err)
 		// If any command fails because of deadlocks or timeout or whatever, then we need to rollback the transaction.
 		if err != nil {
 			finalCommand = "rollback"
