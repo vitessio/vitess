@@ -25,6 +25,7 @@ source ./dev.env
 
 BUILD_JAVA=${BUILD_JAVA:-1}
 BUILD_CONSUL=${BUILD_CONSUL:-1}
+BUILD_PROTOC=${BUILD_PROTOC:-1}
 
 VITESS_RESOURCES_DOWNLOAD_BASE_URL="https://github.com/vitessio/vitess-resources/releases/download"
 VITESS_RESOURCES_RELEASE="v4.0"
@@ -308,7 +309,9 @@ install_all() {
 	echo "##local system details..."
 	echo "##platform: $(uname) target:$(get_arch) OS: $OSTYPE"
 	# protoc
-	install_dep "protoc" "$PROTOC_VER" "$VTROOT/dist/vt-protoc-$PROTOC_VER" install_protoc
+	if [ "$BUILD_PROTOC" == 1 ]; then
+		install_dep "protoc" "$PROTOC_VER" "$VTROOT/dist/vt-protoc-$PROTOC_VER" install_protoc
+	fi
 
 	# zk
 	if [ "$BUILD_JAVA" == 1 ]; then

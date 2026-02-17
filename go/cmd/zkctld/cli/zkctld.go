@@ -71,25 +71,25 @@ func run(cmd *cobra.Command, args []string) error {
 	zkd := zkctl.NewZkd(zkConfig)
 
 	if zkd.Inited() {
-		log.Infof("already initialized, starting without init...")
+		log.Info("already initialized, starting without init...")
 		if err := zkd.Start(); err != nil {
 			return fmt.Errorf("failed start: %v", err)
 		}
 	} else {
-		log.Infof("initializing...")
+		log.Info("initializing...")
 		if err := zkd.Init(); err != nil {
 			return fmt.Errorf("failed init: %v", err)
 		}
 	}
 
-	log.Infof("waiting for signal or server shutdown...")
+	log.Info("waiting for signal or server shutdown...")
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	select {
 	case <-zkd.Done():
-		log.Infof("server shut down on its own")
+		log.Info("server shut down on its own")
 	case <-sig:
-		log.Infof("signal received, shutting down server")
+		log.Info("signal received, shutting down server")
 
 		// Action to perform if there is an error
 		if err := zkd.Shutdown(); err != nil {

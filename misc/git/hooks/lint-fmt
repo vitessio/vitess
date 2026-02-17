@@ -14,7 +14,7 @@
 # limitations under the License.
 
 # Required version of golangci-lint
-REQUIRED_VERSION="v2.8.0" # https://github.com/golangci/golangci-lint/releases/tag/v2.8.0
+REQUIRED_VERSION="v2.9.0" # https://github.com/golangci/golangci-lint/releases/tag/v2.9.0
 
 # Function to compare versions in pure Bash
 version_greater_or_equal() {
@@ -24,15 +24,15 @@ version_greater_or_equal() {
   local ver2=($2)
 
   # Fill empty fields in ver1 with zeros
-  for ((i=${#ver1[@]}; i<${#ver2[@]}; i++)); do
+  for ((i = ${#ver1[@]}; i < ${#ver2[@]}; i++)); do
     ver1[i]=0
   done
   # Fill empty fields in ver2 with zeros
-  for ((i=${#ver2[@]}; i<${#ver1[@]}; i++)); do
+  for ((i = ${#ver2[@]}; i < ${#ver1[@]}; i++)); do
     ver2[i]=0
   done
 
-  for ((i=0; i<${#ver1[@]}; i++)); do
+  for ((i = 0; i < ${#ver1[@]}; i++)); do
     if ((10#${ver1[i]} > 10#${ver2[i]})); then
       return 0
     elif ((10#${ver1[i]} < 10#${ver2[i]})); then
@@ -56,6 +56,16 @@ else
   fi
 fi
 
-# Lint only new issues in staged changes
+# Lint only changed packages.
+changed_pkgs=$(git diff --cached --name-only --diff-filter=ACM -- '*.go' \
+  | xargs -n1 dirname \
+  | sort -u \
+  | sed 's|$|/...|')
+
+if [ -z "$changed_pkgs" ]; then
+  echo "No staged .go files, skipping lint."
+  exit 0
+fi
+
 echo "Linting staged changes..."
-golangci-lint run --new-from-rev=HEAD
+golangci-lint run --new-from-rev=HEAD "$changed_pkgs"

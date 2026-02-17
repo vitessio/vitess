@@ -31,6 +31,7 @@ jobs:
           - platform: mysql57
             evalengine: "0"
             flavor: mysql-5.7
+            java: true
 
           - platform: mysql57
             evalengine: "1"
@@ -40,6 +41,7 @@ jobs:
           - platform: mysql80
             evalengine: "0"
             flavor: mysql-8.0
+            java: true
 
           - platform: mysql80
             evalengine: "1"
@@ -49,6 +51,7 @@ jobs:
           - platform: mysql84
             evalengine: "0"
             flavor: mysql-8.4
+            java: true
 
           - platform: mysql84
             evalengine: "1"
@@ -58,6 +61,7 @@ jobs:
           - platform: mysql80
             evalengine: "0"
             flavor: mysql-8.0
+            java: true
             race: true
 
           - platform: mysql80
@@ -130,11 +134,7 @@ jobs:
         if: steps.changes.outputs.unit_tests == 'true'
         run: |
           export DEBIAN_FRONTEND="noninteractive"
-          sudo apt-get install -y make unzip g++ curl git wget ant openjdk-11-jdk
-
-          mkdir -p dist bin
-          curl --max-time 10 --retry 3 --retry-max-time 45 -s -L https://github.com/coreos/etcd/releases/download/v3.5.25/etcd-v3.5.25-linux-amd64.tar.gz | tar -zxC dist
-          mv dist/etcd-v3.5.25-linux-amd64/{etcd,etcdctl} bin/
+          sudo apt-get install -y make unzip g++ curl git wget ${{ matrix.java && 'ant default-jre-headless' || '' }}
 
           go mod download
           go install golang.org/x/tools/cmd/goimports@v0.39.0
@@ -142,7 +142,7 @@ jobs:
       - name: Run make tools
         if: steps.changes.outputs.unit_tests == 'true'
         run: |
-          make tools
+          make BUILD_JAVA=${{ matrix.java && '1' || '0' }} BUILD_PROTOC=0 tools
 
       - name: Setup launchable dependencies
         if: |
