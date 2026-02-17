@@ -106,19 +106,19 @@ import { formatAlias } from '../util/tablets';
  * useBackups is a query hook that fetches all backups across every cluster.
  */
 export const useBackups = (options?: UseQueryOptions<pb.ClusterBackup[], Error> | undefined) =>
-    useQuery(['backups'], fetchBackups, options);
+    useQuery({ queryKey: ['backups'], queryFn: fetchBackups, ...options });
 
 /**
  * useClusters is a query hook that fetches all clusters VTAdmin is configured to discover.
  */
 export const useClusters = (options?: UseQueryOptions<pb.Cluster[], Error> | undefined) =>
-    useQuery(['clusters'], fetchClusters, options);
+    useQuery({ queryKey: ['clusters'], queryFn: fetchClusters, ...options });
 
 /**
  * useGates is a query hook that fetches all VTGates across every cluster.
  */
 export const useGates = (options?: UseQueryOptions<pb.VTGate[], Error> | undefined) =>
-    useQuery(['gates'], fetchGates, options);
+    useQuery({ queryKey: ['gates'], queryFn: fetchGates, ...options });
 
 /**
  * useKeyspace is a query hook that fetches a single keyspace by name.
@@ -128,7 +128,9 @@ export const useKeyspace = (
     options?: UseQueryOptions<pb.Keyspace, Error>
 ) => {
     const queryClient = useQueryClient();
-    return useQuery(['keyspace', params], () => fetchKeyspace(params), {
+    return useQuery({
+        queryKey: ['keyspace', params],
+        queryFn: () => fetchKeyspace(params),
         initialData: () => {
             const keyspaces = queryClient.getQueryData<pb.Keyspace[]>('keyspaces');
             return (keyspaces || []).find(
@@ -158,32 +160,34 @@ export const useCreateKeyspace = (
  * useKeyspaces is a query hook that fetches all keyspaces across every cluster.
  */
 export const useKeyspaces = (options?: UseQueryOptions<pb.Keyspace[], Error> | undefined) =>
-    useQuery(['keyspaces'], fetchKeyspaces, options);
+    useQuery({ queryKey: ['keyspaces'], queryFn: fetchKeyspaces, ...options });
 
 /**
  * useSchemas is a query hook that fetches all schemas across every cluster.
  */
 export const useSchemas = (options?: UseQueryOptions<pb.Schema[], Error> | undefined) =>
-    useQuery(['schemas'], fetchSchemas, options);
+    useQuery({ queryKey: ['schemas'], queryFn: fetchSchemas, ...options });
 
 /**
  * useTablets is a query hook that fetches all tablets across every cluster.
  */
 export const useTablets = (options?: UseQueryOptions<pb.Tablet[], Error> | undefined) =>
-    useQuery(['tablets'], fetchTablets, options);
+    useQuery({ queryKey: ['tablets'], queryFn: fetchTablets, ...options });
 
 /**
  * useVtctlds is a query hook that fetches all vtctlds across every cluster.
  */
 export const useVtctlds = (options?: UseQueryOptions<pb.Vtctld[], Error> | undefined) =>
-    useQuery(['vtctlds'], fetchVtctlds, options);
+    useQuery({ queryKey: ['vtctlds'], queryFn: fetchVtctlds, ...options });
 
 /**
  * useTablet is a query hook that fetches a single tablet by alias.
  */
 export const useTablet = (params: Parameters<typeof fetchTablet>[0], options?: UseQueryOptions<pb.Tablet, Error>) => {
     const queryClient = useQueryClient();
-    return useQuery(['tablet', params], () => fetchTablet(params), {
+    return useQuery({
+        queryKey: ['tablet', params],
+        queryFn: () => fetchTablet(params),
         initialData: () => {
             const tablets = queryClient.getQueryData<pb.Tablet[]>('tablets');
             return (tablets || []).find(
@@ -263,7 +267,7 @@ export const useSetReadWrite = (
 export const useShardReplicationPositions = (
     params: Parameters<typeof fetchShardReplicationPositions>[0],
     options?: UseQueryOptions<pb.GetShardReplicationPositionsResponse, Error> | undefined
-) => useQuery(['shard_replication_positions', params], () => fetchShardReplicationPositions(params), options);
+) => useQuery({ queryKey: ['shard_replication_positions', params], queryFn: () => fetchShardReplicationPositions(params), ...options });
 
 /**
  * useStartReplication starts replication on the specified tablet.
@@ -302,7 +306,7 @@ export const usePingTablet = (
     params: Parameters<typeof pingTablet>[0],
     options?: UseQueryOptions<pb.PingTabletResponse, Error>
 ) => {
-    return useQuery(['ping-tablet', params], () => pingTablet(params), options);
+    return useQuery({ queryKey: ['ping-tablet', params], queryFn: () => pingTablet(params), ...options });
 };
 
 /**
@@ -312,7 +316,7 @@ export const useRefreshState = (
     params: Parameters<typeof refreshState>[0],
     options?: UseQueryOptions<pb.RefreshStateResponse, Error>
 ) => {
-    return useQuery(['refresh-state', params], () => refreshState(params), options);
+    return useQuery({ queryKey: ['refresh-state', params], queryFn: () => refreshState(params), ...options });
 };
 
 /**
@@ -322,7 +326,7 @@ export const useHealthCheck = (
     params: Parameters<typeof runHealthCheck>[0],
     options?: UseQueryOptions<pb.RunHealthCheckResponse, Error>
 ) => {
-    return useQuery(['run-health-check', params], () => runHealthCheck(params), options);
+    return useQuery({ queryKey: ['run-health-check', params], queryFn: () => runHealthCheck(params), ...options });
 };
 
 export const useExperimentalTabletDebugVars = (
@@ -356,29 +360,32 @@ export const useManyExperimentalTabletDebugVars = (
  * useWorkflowsResponse is a query hook that fetches all workflows (by cluster) across every cluster.
  */
 export const useWorkflowsResponse = (options?: UseQueryOptions<pb.GetWorkflowsResponse, Error> | undefined) =>
-    useQuery(['workflows'], fetchWorkflows, options);
+    useQuery({ queryKey: ['workflows'], queryFn: fetchWorkflows, ...options });
 
 /**
  * useWorkflows is a helper hook for when a flattened list of workflows
  * (across all clusters) is required. Under the hood, this call uses the
  * useWorkflowsResponse hook and therefore uses the same query cache.
  */
-export const useWorkflows = (...args: Parameters<typeof useWorkflowsResponse>) => {
-    const { data, ...query } = useWorkflowsResponse(...args);
+export const useWorkflows = (options?: Omit<UseQueryOptions<pb.GetWorkflowsResponse, Error>, 'queryKey' | 'queryFn' | 'select'>) => {
+    return useQuery({
+        queryKey: ['workflows'],
+        queryFn: fetchWorkflows,
+        select: (data: pb.GetWorkflowsResponse) => {
+            if (!data?.workflows_by_cluster) {
+                return undefined;
+            }
 
-    if (!data?.workflows_by_cluster) {
-        return { data: undefined, ...query };
-    }
-
-    const workflows = Object.entries(data.workflows_by_cluster).reduce(
-        (acc: pb.Workflow[], [clusterID, { workflows }]) => {
-            (workflows || []).forEach((w) => acc.push(pb.Workflow.create(w)));
-            return acc;
+            return Object.entries(data.workflows_by_cluster).reduce(
+                (acc: pb.Workflow[], [clusterID, { workflows }]) => {
+                    (workflows || []).forEach((w) => acc.push(pb.Workflow.create(w)));
+                    return acc;
+                },
+                []
+            );
         },
-        []
-    );
-
-    return { data: workflows, ...query };
+        ...options,
+    });
 };
 
 /**
@@ -386,7 +393,9 @@ export const useWorkflows = (...args: Parameters<typeof useWorkflowsResponse>) =
  */
 export const useSchema = (params: FetchSchemaParams, options?: UseQueryOptions<pb.Schema, Error> | undefined) => {
     const queryClient = useQueryClient();
-    return useQuery(['schema', params], () => fetchSchema(params), {
+    return useQuery({
+        queryKey: ['schema', params],
+        queryFn: () => fetchSchema(params),
         initialData: () => {
             const schemas = queryClient.getQueryData<pb.Schema[]>('schemas');
             return (schemas || []).find(
@@ -449,7 +458,7 @@ export const useValidateVersionKeyspace = (
  * useVSchema is a query hook that fetches a single vschema definition for the given parameters.
  */
 export const useVSchema = (params: FetchVSchemaParams, options?: UseQueryOptions<pb.VSchema, Error> | undefined) => {
-    return useQuery(['vschema', params], () => fetchVSchema(params));
+    return useQuery({ queryKey: ['vschema', params], queryFn: () => fetchVSchema(params), ...options });
 };
 
 /**
@@ -459,7 +468,7 @@ export const useTransactions = (
     params: FetchTransactionsParams,
     options?: UseQueryOptions<vtctldata.GetUnresolvedTransactionsResponse, Error> | undefined
 ) => {
-    return useQuery(['transactions', params], () => fetchTransactions(params), { ...options });
+    return useQuery({ queryKey: ['transactions', params], queryFn: () => fetchTransactions(params), ...options });
 };
 
 /**
@@ -469,7 +478,7 @@ export const useTransaction = (
     params: FetchTransactionParams,
     options?: UseQueryOptions<vtctldata.GetTransactionInfoResponse, Error> | undefined
 ) => {
-    return useQuery(['transaction', params], () => fetchTransaction(params), { ...options });
+    return useQuery({ queryKey: ['transaction', params], queryFn: () => fetchTransaction(params), ...options });
 };
 
 /**
@@ -491,14 +500,14 @@ export const useVTExplain = (
     params: Parameters<typeof fetchVTExplain>[0],
     options?: UseQueryOptions<pb.VTExplainResponse, Error> | undefined
 ) => {
-    return useQuery(['vtexplain', params], () => fetchVTExplain(params), { ...options });
+    return useQuery({ queryKey: ['vtexplain', params], queryFn: () => fetchVTExplain(params), ...options });
 };
 
 export const useVExplain = (
     params: Parameters<typeof fetchVExplain>[0],
     options?: UseQueryOptions<pb.VExplainResponse, Error> | undefined
 ) => {
-    return useQuery(['vexplain', params], () => fetchVExplain(params), { ...options });
+    return useQuery({ queryKey: ['vexplain', params], queryFn: () => fetchVExplain(params), ...options });
 };
 
 /**
@@ -509,7 +518,9 @@ export const useWorkflow = (
     options?: UseQueryOptions<pb.Workflow, Error> | undefined
 ) => {
     const queryClient = useQueryClient();
-    return useQuery(['workflow', params], () => fetchWorkflow(params), {
+    return useQuery({
+        queryKey: ['workflow', params],
+        queryFn: () => fetchWorkflow(params),
         // If the workflow already exists in the cache from a previous fetchWorkflows call,
         // then use that for the initial data.
         //
@@ -548,7 +559,7 @@ export const useWorkflowStatus = (
     params: Parameters<typeof fetchWorkflowStatus>[0],
     options?: UseQueryOptions<vtctldata.WorkflowStatusResponse, Error> | undefined
 ) => {
-    return useQuery(['workflow_status', params], () => fetchWorkflowStatus(params), options);
+    return useQuery({ queryKey: ['workflow_status', params], queryFn: () => fetchWorkflowStatus(params), ...options });
 };
 
 /**
@@ -821,7 +832,7 @@ export const useTopologyPath = (
     params: GetTopologyPathParams,
     options?: UseQueryOptions<vtctldata.GetTopologyPathResponse, Error> | undefined
 ) => {
-    return useQuery(['topology-path', params], () => getTopologyPath(params), options);
+    return useQuery({ queryKey: ['topology-path', params], queryFn: () => getTopologyPath(params), ...options });
 };
 /**
  * useValidate is a mutate hook that validates that all nodes reachable from the global replication graph,
@@ -861,7 +872,7 @@ export const useValidateShard = (
 export const useGetFullStatus = (
     params: GetFullStatusParams,
     options?: UseQueryOptions<vtctldata.GetFullStatusResponse, Error> | undefined
-) => useQuery(['full-status', params], () => getFullStatus(params), options);
+) => useQuery({ queryKey: ['full-status', params], queryFn: () => getFullStatus(params), ...options });
 
 /**
  * useValidateVersionShard is a mutate hook that validates that the version on the primary matches all of the replicas.
@@ -900,7 +911,7 @@ export const useShowVDiff = (
     params: ShowVDiffParams,
     options?: UseQueryOptions<pb.VDiffShowResponse, Error> | undefined
 ) => {
-    return useQuery(['vdiff_show', params], () => showVDiff(params), { ...options });
+    return useQuery({ queryKey: ['vdiff_show', params], queryFn: () => showVDiff(params), ...options });
 };
 
 /**
@@ -910,7 +921,7 @@ export const useSchemaMigrations = (
     request: pb.IGetSchemaMigrationsRequest,
     options?: UseQueryOptions<pb.GetSchemaMigrationsResponse, Error> | undefined
 ) => {
-    return useQuery(['migrations', request], () => fetchSchemaMigrations(request), { ...options });
+    return useQuery({ queryKey: ['migrations', request], queryFn: () => fetchSchemaMigrations(request), ...options });
 };
 
 /**

@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { fireEvent, render, renderHook, screen, within } from '@testing-library/react';
+import { fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { QueryErrorPlaceholder } from './QueryErrorPlaceholder';
@@ -44,7 +44,7 @@ describe('QueryErrorPlaceholder', () => {
         const errorMessage = 'nope';
         (httpAPI.fetchClusters as any).mockRejectedValueOnce(new Error(errorMessage));
 
-        const { result, waitFor } = queryHelper();
+        const { result } = queryHelper();
         await waitFor(() => result.current.isError);
 
         render(<QueryErrorPlaceholder query={result.current} />);
@@ -64,7 +64,7 @@ describe('QueryErrorPlaceholder', () => {
 
         expect((httpAPI.fetchClusters as any).mock.calls.length).toEqual(0);
 
-        const { result, waitFor } = queryHelper();
+        const { result } = queryHelper();
         await waitFor(() => result.current.isError);
 
         render(<QueryErrorPlaceholder query={result.current} />);
@@ -84,7 +84,7 @@ describe('QueryErrorPlaceholder', () => {
 
     it('does not render when no error', async () => {
         (httpAPI.fetchClusters as any).mockResolvedValueOnce({ clusters: [] });
-        const { result, waitFor } = queryHelper();
+        const { result } = queryHelper();
 
         render(<QueryErrorPlaceholder query={result.current} />);
 
@@ -96,7 +96,7 @@ describe('QueryErrorPlaceholder', () => {
 
     it('does not render when loading', async () => {
         (httpAPI.fetchClusters as any).mockRejectedValueOnce(new Error());
-        const { result, waitFor } = queryHelper();
+        const { result } = queryHelper();
 
         const { rerender } = render(<QueryErrorPlaceholder query={result.current} />);
         await waitFor(() => result.current.isLoading);

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import React from 'react';
-import { renderHook } from '@testing-library/react';
+import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import * as api from './api';
@@ -57,17 +57,19 @@ describe('useWorkflows', () => {
         },
     ];
 
-    const queryClient = new QueryClient();
-    const wrapper: React.FunctionComponent = ({ children }) => (
-        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    );
-
     test.each(tests.map(Object.values))(
         '%s',
         async (name: string, response: pb.GetWorkflowsResponse | undefined, expected: pb.Workflow[] | undefined) => {
+            const queryClient = new QueryClient({
+                defaultOptions: { queries: { retry: false } },
+            });
+            const wrapper: React.FunctionComponent = ({ children }) => (
+                <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+            );
+
             (httpAPI.fetchWorkflows as any).mockResolvedValueOnce(response);
 
-            const { result, waitFor } = renderHook(() => api.useWorkflows(), { wrapper });
+            const { result } = renderHook(() => api.useWorkflows(), { wrapper });
 
             // Check that our query helper handles when the query is still in flight
             expect(result.current.data).toBeUndefined();
@@ -99,7 +101,7 @@ describe('useWorkflow', () => {
 
         (httpAPI.fetchWorkflow as any).mockResolvedValueOnce(fetchWorkflowResponse);
 
-        const { result, waitFor } = renderHook(
+        const { result } = renderHook(
             () =>
                 api.useWorkflow({
                     clusterID: 'cluster1',
@@ -177,10 +179,10 @@ describe('useWorkflow', () => {
         // Execute a useWorkflows query to populate the query cache.
         // eslint-disable-next-line testing-library/render-result-naming-convention
         const useWorkflowsCall = renderHook(() => api.useWorkflows(), { wrapper });
-        await useWorkflowsCall.waitFor(() => useWorkflowsCall.result.current.isSuccess);
+        await waitFor(() => useWorkflowsCall.result.current.isSuccess);
 
         // Next, execute the useWorkflow query we *actually* want to inspect.
-        const { result, waitFor } = renderHook(
+        const { result } = renderHook(
             () =>
                 api.useWorkflow(
                     {
