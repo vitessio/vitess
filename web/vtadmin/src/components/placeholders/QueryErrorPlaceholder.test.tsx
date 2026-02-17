@@ -13,8 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { fireEvent, render, screen, within } from '@testing-library/react';
-import { renderHook } from '@testing-library/react-hooks';
+import { fireEvent, render, renderHook, screen, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from 'react-query';
 
 import { QueryErrorPlaceholder } from './QueryErrorPlaceholder';

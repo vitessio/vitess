@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 import React from 'react';
+import { renderHook } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from 'react-query';
-import { renderHook } from '@testing-library/react-hooks';
 
 import * as api from './api';
 import * as httpAPI from '../api/http';

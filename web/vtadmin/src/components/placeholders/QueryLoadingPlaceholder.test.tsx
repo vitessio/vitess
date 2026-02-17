@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-import { render, screen } from '@testing-library/react';
-import { renderHook } from '@testing-library/react-hooks';
+import { render, renderHook, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from 'react-query';
 
 import * as httpAPI from '../../api/http';
