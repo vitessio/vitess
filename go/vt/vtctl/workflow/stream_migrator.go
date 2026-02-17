@@ -702,7 +702,7 @@ func (sm *StreamMigrator) stopSourceStreams(ctx context.Context) error {
 		eg, egCtx := errgroup.WithContext(ctx)
 		for _, vrs := range tabletStreams {
 			if vrs.BinlogSource == nil { // Should never happen
-				return fmt.Errorf("no binlog source is defined for materialization workflow %s", vrs.Workflow)
+				return fmt.Errorf("no binlog source is defined for workflow %s", vrs.Workflow)
 			}
 			if vrs.WorkflowType == binlogdatapb.VReplicationWorkflowType_Materialize && vrs.BinlogSource.Keyspace == sm.ts.TargetKeyspaceName() {
 				eg.Go(func() error {
