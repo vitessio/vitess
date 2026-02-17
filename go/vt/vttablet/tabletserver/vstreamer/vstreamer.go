@@ -258,7 +258,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		vevent.Keyspace = vs.vse.keyspace
 		vevent.Shard = vs.vse.shard
 
-		shouldBufferEvent := func(vevent *binlogdatapb.VEvent) bool {
+		shouldBuffer := func(vevent *binlogdatapb.VEvent) bool {
 			if vs.eventTypesToStream != nil && !vs.eventTypesToStream[vevent.Type] {
 				return false
 			}
@@ -276,7 +276,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			// We never have to send GTID, BEGIN, FIELD events on their own.
 			// A JOURNAL event is always preceded by a BEGIN and followed by a COMMIT.
 			// So, we don't have to send it right away.
-			if shouldBufferEvent(vevent) {
+			if shouldBuffer(vevent) {
 				bufferedEvents = append(bufferedEvents, vevent)
 			}
 		case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER,
@@ -285,7 +285,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			// Although unlikely, it's possible to get a HEARTBEAT in the middle
 			// of a transaction. If so, we still send the partial transaction along
 			// with the heartbeat.
-			if shouldBufferEvent(vevent) {
+			if shouldBuffer(vevent) {
 				bufferedEvents = append(bufferedEvents, vevent)
 			}
 			vevents := bufferedEvents
@@ -293,7 +293,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			curSize = 0
 			return vs.send(vevents)
 		case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE, binlogdatapb.VEventType_REPLACE:
-			if !shouldBufferEvent(vevent) {
+			if !shouldBuffer(vevent) {
 				return nil
 			}
 			newSize := len(vevent.GetDml())
@@ -307,7 +307,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			curSize += newSize
 			bufferedEvents = append(bufferedEvents, vevent)
 		case binlogdatapb.VEventType_ROW:
-			if !shouldBufferEvent(vevent) {
+			if !shouldBuffer(vevent) {
 				return nil
 			}
 			// ROW events happen inside transactions. So, we can chunk them.
