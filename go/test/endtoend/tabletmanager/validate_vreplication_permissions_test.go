@@ -50,7 +50,7 @@ func TestValidateVReplicationPermissions_FailsWithoutSelectPermissions(t *testin
 	req := &tmdatapb.ValidateVReplicationPermissionsRequest{}
 	var res *tmdatapb.ValidateVReplicationPermissionsResponse
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		ictx, icancel := context.WithTimeout(t.Context(), vreplicationPermissionTimeout)
+		ictx, icancel := context.WithTimeout(ctx, vreplicationPermissionTimeout)
 		defer icancel()
 		res, err = tmClient.ValidateVReplicationPermissions(ictx, tablet, req)
 		require.NoError(c, err)
@@ -85,7 +85,7 @@ func TestValidateVReplicationPermissions_FailsWithoutInsertPermissions(t *testin
 	req := &tmdatapb.ValidateVReplicationPermissionsRequest{}
 	var res *tmdatapb.ValidateVReplicationPermissionsResponse
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		ictx, icancel := context.WithTimeout(t.Context(), vreplicationPermissionTimeout)
+		ictx, icancel := context.WithTimeout(ctx, vreplicationPermissionTimeout)
 		defer icancel()
 		res, err = tmClient.ValidateVReplicationPermissions(ictx, tablet, req)
 		require.NoError(c, err)
@@ -120,7 +120,7 @@ func TestValidateVReplicationPermissions_FailsWithoutUpdatePermissions(t *testin
 	req := &tmdatapb.ValidateVReplicationPermissionsRequest{}
 	var res *tmdatapb.ValidateVReplicationPermissionsResponse
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		ictx, icancel := context.WithTimeout(t.Context(), vreplicationPermissionTimeout)
+		ictx, icancel := context.WithTimeout(ctx, vreplicationPermissionTimeout)
 		defer icancel()
 		res, err = tmClient.ValidateVReplicationPermissions(ictx, tablet, req)
 		require.NoError(c, err)
@@ -155,7 +155,7 @@ func TestValidateVReplicationPermissions_FailsWithoutDeletePermissions(t *testin
 	req := &tmdatapb.ValidateVReplicationPermissionsRequest{}
 	var res *tmdatapb.ValidateVReplicationPermissionsResponse
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		ictx, icancel := context.WithTimeout(t.Context(), vreplicationPermissionTimeout)
+		ictx, icancel := context.WithTimeout(ctx, vreplicationPermissionTimeout)
 		defer icancel()
 		res, err = tmClient.ValidateVReplicationPermissions(ictx, tablet, req)
 		require.NoError(c, err)
@@ -169,8 +169,9 @@ func TestValidateVReplicationPermissions_FailsIfUserCantLogin(t *testing.T) {
 	defer permissionsMu.Unlock()
 	tablet := getTablet(primaryTablet.GrpcPort)
 
+	ctx := t.Context()
 	// Lock the user account to simulate some other error
-	conn, err := mysql.Connect(t.Context(), &primaryTabletParams)
+	conn, err := mysql.Connect(ctx, &primaryTabletParams)
 	require.NoError(t, err)
 	t.Cleanup(func() { conn.Close() })
 
@@ -187,7 +188,7 @@ func TestValidateVReplicationPermissions_FailsIfUserCantLogin(t *testing.T) {
 	})
 
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		ictx, icancel := context.WithTimeout(t.Context(), vreplicationPermissionTimeout)
+		ictx, icancel := context.WithTimeout(ctx, vreplicationPermissionTimeout)
 		defer icancel()
 		req := &tmdatapb.ValidateVReplicationPermissionsRequest{}
 		_, err = tmClient.ValidateVReplicationPermissions(ictx, tablet, req)
