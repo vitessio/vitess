@@ -235,10 +235,15 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return err
 	}
 
-	// Run errant GTID detection.
-	validCandidates, err = erp.findErrantGTIDs(ctx, validCandidates, stoppedReplicationSnapshot.statusMap, tabletMap, opts.WaitReplicasTimeout)
-	if err != nil {
-		return err
+	// Run errant GTID detection only if we have non-zero relay log positions.
+	// For fresh clusters with no replication history, all positions will be zero and we skip this step.
+	if hasNonZeroRelayLogPositions(validCandidates) {
+		validCandidates, err = erp.findErrantGTIDs(ctx, validCandidates, stoppedReplicationSnapshot.statusMap, tabletMap, opts.WaitReplicasTimeout)
+		if err != nil {
+			return err
+		}
+	} else {
+		erp.logger.Infof("Skipping errant GTID detection because all candidates have zero relay log positions (likely a fresh cluster initialization)")
 	}
 
 	// Find the intermediate source for replication that we want other tablets to replicate from.
@@ -781,6 +786,18 @@ func (erp *EmergencyReparenter) filterValidCandidates(validTablets []*topodatapb
 	}
 
 	return notPreferredValidTablets, nil
+}
+
+// hasNonZeroRelayLogPositions checks if any candidate has non-zero relay log positions.
+// Returns false if all candidates have zero positions, which is typical for fresh clusters
+// that have never had replication set up.
+func hasNonZeroRelayLogPositions(validCandidates map[string]*RelayLogPositions) bool {
+	for _, position := range validCandidates {
+		if !position.IsZero() {
+			return true
+		}
+	}
+	return false
 }
 
 // findErrantGTIDs tries to find errant GTIDs for the valid candidates and returns the updated list of valid candidates.
