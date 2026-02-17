@@ -355,7 +355,7 @@ func restrictValidCandidates(validCandidates map[string]*RelayLogPositions, tabl
 		// it is safe to continue, as the file-based replica may contain the most up-to-date changes.
 		if !candidateInfo.IsGTIDBased {
 			if candidateInfo.IsSemiSyncReplica {
-				return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "candidate %v is a file-based replicas with semi-sync enabled. file-based replicas with semi-sync are unsupported in a majority GTID-based shard", candidate)
+				return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "candidate %v is a file-based replica with semi-sync enabled. file-based replicas with semi-sync are unsupported in a majority GTID-based shard", candidate)
 			}
 			logger.Warningf("tablet %s is a member of a GTID-based shard, but it does not have GTID-based positions. This tablet may receive an errant transaction post-reparenting. Skipping", candidate)
 			continue
