@@ -83,7 +83,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        branch: [ latest, mysql80, mysql84, percona80 ]
+        branch: [ latest, mysql80, mysql84, percona80, percona84 ]
 
     steps:
       - name: Check out code

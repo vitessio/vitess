@@ -65,8 +65,6 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 		"--topo-implementation":        vtbackup.TopoImplementation,
 		"--topo-global-server-address": vtbackup.TopoGlobalAddress,
 		"--topo-global-root":           vtbackup.TopoGlobalRoot,
-		"--log_dir":                    vtbackup.LogDir,
-
 		// initDBfile is required to run vtbackup
 		"--mysql-port":       strconv.Itoa(vtbackup.MysqlPort),
 		"--init-db-sql-file": vtbackup.initDBfile,
@@ -104,7 +102,7 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 
 	vtbackup.proc.Env = append(vtbackup.proc.Env, os.Environ()...)
 	vtbackup.proc.Env = append(vtbackup.proc.Env, DefaultVttestEnv)
-	log.Infof("Running vtbackup with args: %v", strings.Join(vtbackup.proc.Args, " "))
+	log.Info(fmt.Sprintf("Running vtbackup with args: %v", strings.Join(vtbackup.proc.Args, " ")))
 
 	err = vtbackup.proc.Run()
 	if err != nil {

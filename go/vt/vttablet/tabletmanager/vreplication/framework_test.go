@@ -105,7 +105,7 @@ func setFlag(flagName, flagValue string) {
 
 	if err := pflag.Set(flagName, flagValue); err != nil {
 		msg := "failed to set flag %q to %q: %v"
-		log.Errorf(msg, flagName, flagValue, err)
+		log.Error(fmt.Sprintf(msg, flagName, flagValue, err))
 	}
 }
 
@@ -231,7 +231,7 @@ func primaryPosition(t *testing.T) string {
 func execStatements(t *testing.T, queries []string) {
 	t.Helper()
 	if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
-		log.Errorf("Error executing query: %s", err.Error())
+		log.Error("Error executing query: " + err.Error())
 		t.Error(err)
 	}
 }
@@ -580,7 +580,7 @@ func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan *V
 			}
 
 			if !match {
-				t.Errorf("log:\n%q, does not match log %d:\n%q", got, i, log)
+				t.Errorf("log:\n%v, does not match log %d:\n%q", got, i, log)
 			}
 		case <-time.After(5 * time.Second):
 			t.Errorf("no logs received, expecting %s", log)
@@ -770,7 +770,7 @@ func customExpectData(t *testing.T, table string, values [][]string, exec func(c
 			if err == nil {
 				return
 			}
-			log.Errorf("data mismatch: %v, retrying", err)
+			log.Error(fmt.Sprintf("data mismatch: %v, retrying", err))
 			time.Sleep(tick)
 		}
 	}

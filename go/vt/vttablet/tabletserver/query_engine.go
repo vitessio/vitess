@@ -237,8 +237,7 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	qe.consolidatorMode.Store(config.Consolidator)
 	qe.consolidator = sync2.NewConsolidator()
 	if config.ConsolidatorStreamTotalSize > 0 && config.ConsolidatorStreamQuerySize > 0 {
-		log.Infof("Stream consolidator is enabled with query size set to %d and total size set to %d.",
-			config.ConsolidatorStreamQuerySize, config.ConsolidatorStreamTotalSize)
+		log.Info(fmt.Sprintf("Stream consolidator is enabled with query size set to %d and total size set to %d.", config.ConsolidatorStreamQuerySize, config.ConsolidatorStreamTotalSize))
 		qe.streamConsolidator = NewStreamConsolidator(config.ConsolidatorStreamTotalSize, config.ConsolidatorStreamQuerySize, returnStreamResult)
 	} else {
 		log.Info("Stream consolidator is not enabled.")
@@ -253,13 +252,13 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	if config.TableACLExemptACL != "" {
 		if f, err := tableacl.GetCurrentACLFactory(); err == nil {
 			if exemptACL, err := f.New([]string{config.TableACLExemptACL}); err == nil {
-				log.Infof("Setting Table ACL exempt rule for %v", config.TableACLExemptACL)
+				log.Info(fmt.Sprintf("Setting Table ACL exempt rule for %v", config.TableACLExemptACL))
 				qe.exemptACL = exemptACL
 			} else {
-				log.Infof("Cannot build exempt ACL for table ACL: %v", err)
+				log.Info(fmt.Sprintf("Cannot build exempt ACL for table ACL: %v", err))
 			}
 		} else {
-			log.Infof("Cannot get current ACL Factory: %v", err)
+			log.Info(fmt.Sprintf("Cannot get current ACL Factory: %v", err))
 		}
 	}
 

@@ -18,6 +18,7 @@ package logutil
 
 import (
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -46,12 +47,12 @@ func NewThrottledLogger(name string, maxInterval time.Duration) *ThrottledLogger
 	}
 }
 
-type logFunc func(int, ...any)
+type logFunc func(int, string, ...slog.Attr)
 
 var (
-	infoDepth    = log.InfoDepth
-	warningDepth = log.WarningDepth
-	errorDepth   = log.ErrorDepth
+	infoDepth  = log.InfoDepth
+	warnDepth  = log.WarnDepth
+	errorDepth = log.ErrorDepth
 )
 
 // GetLastLogTime gets the last log time for the throttled logger.
@@ -64,12 +65,14 @@ func (tl *ThrottledLogger) log(logF logFunc, format string, v ...any) {
 
 	tl.mu.Lock()
 	defer tl.mu.Unlock()
+
 	logWaitTime := tl.maxInterval - (now.Sub(tl.lastlogTime))
 	if logWaitTime < 0 {
 		tl.lastlogTime = now
 		logF(2, fmt.Sprintf(tl.name+": "+format, v...))
 		return
 	}
+
 	// If this is the first message to be skipped, start a goroutine
 	// to log and reset skippedCount
 	if tl.skippedCount == 0 {
@@ -83,6 +86,7 @@ func (tl *ThrottledLogger) log(logF logFunc, format string, v ...any) {
 			tl.skippedCount = 0
 		}(logWaitTime)
 	}
+
 	tl.skippedCount++
 }
 
@@ -93,7 +97,7 @@ func (tl *ThrottledLogger) Infof(format string, v ...any) {
 
 // Warningf logs a warning if not throttled.
 func (tl *ThrottledLogger) Warningf(format string, v ...any) {
-	tl.log(warningDepth, format, v...)
+	tl.log(warnDepth, format, v...)
 }
 
 // Errorf logs an error if not throttled.
