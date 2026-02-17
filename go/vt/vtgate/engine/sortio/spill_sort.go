@@ -259,8 +259,8 @@ func (ss *SpillSorter) makeReaders(runs []Run) []*RunReader {
 	return readers
 }
 
-func (ss *SpillSorter) buildLoserTree(readers []*RunReader) (*loserTree, error) {
-	entries := make([]mergeEntry, 0, len(readers))
+func (ss *SpillSorter) buildMerger(readers []*RunReader) (*evalengine.Merger, error) {
+	merge := &evalengine.Merger{Compare: ss.cmp}
 	for i, rr := range readers {
 		row, err := rr.Next()
 		if err == io.EOF {
@@ -269,15 +269,16 @@ func (ss *SpillSorter) buildLoserTree(readers []*RunReader) (*loserTree, error) 
 		if err != nil {
 			return nil, err
 		}
-		entries = append(entries, mergeEntry{row: row, source: i})
+		merge.Push(row, i)
 	}
-	return newLoserTree(entries, ss.cmp.Less), nil
+	merge.Init()
+	return merge, nil
 }
 
 func (ss *SpillSorter) mergeToFile(ctx context.Context, runs []Run, outFile *TempFile) (Run, error) {
 	readers := ss.makeReaders(runs)
 
-	tree, err := ss.buildLoserTree(readers)
+	merge, err := ss.buildMerger(readers)
 	if err != nil {
 		return Run{}, err
 	}
@@ -285,12 +286,12 @@ func (ss *SpillSorter) mergeToFile(ctx context.Context, runs []Run, outFile *Tem
 	startOffset := outFile.offset
 	rowCount := 0
 
-	for tree.Len() > 0 {
+	for merge.Len() > 0 {
 		if err := ctx.Err(); err != nil {
 			return Run{}, err
 		}
 
-		row, source := tree.Winner()
+		row, source := merge.Peek()
 
 		ss.encodeBuf.Reset()
 		ss.codec.Encode(&ss.encodeBuf, row)
@@ -302,13 +303,13 @@ func (ss *SpillSorter) mergeToFile(ctx context.Context, runs []Run, outFile *Tem
 		// Get next row from the same source
 		nextRow, err := readers[source].Next()
 		if err == io.EOF {
-			tree.Remove()
+			merge.Pop()
 			continue
 		}
 		if err != nil {
 			return Run{}, err
 		}
-		tree.Replace(nextRow)
+		merge.ReplaceMin(nextRow, source)
 	}
 
 	return Run{
@@ -348,17 +349,17 @@ func (ss *SpillSorter) mergeToCallback(ctx context.Context, runs []Run, callback
 
 	readers := ss.makeReaders(runs)
 
-	tree, err := ss.buildLoserTree(readers)
+	merge, err := ss.buildMerger(readers)
 	if err != nil {
 		return err
 	}
 
-	for tree.Len() > 0 {
+	for merge.Len() > 0 {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 
-		row, source := tree.Winner()
+		row, source := merge.Peek()
 		if err := callback(row); err != nil {
 			if err == io.EOF {
 				return nil
@@ -368,13 +369,13 @@ func (ss *SpillSorter) mergeToCallback(ctx context.Context, runs []Run, callback
 
 		nextRow, err := readers[source].Next()
 		if err == io.EOF {
-			tree.Remove()
+			merge.Pop()
 			continue
 		}
 		if err != nil {
 			return err
 		}
-		tree.Replace(nextRow)
+		merge.ReplaceMin(nextRow, source)
 	}
 
 	return nil

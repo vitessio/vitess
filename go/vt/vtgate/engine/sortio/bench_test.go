@@ -47,6 +47,10 @@ func benchComparison() evalengine.Comparison {
 	}
 }
 
+func intRow(v int64) sqltypes.Row {
+	return sqltypes.Row{sqltypes.NewInt64(v)}
+}
+
 func benchRow(id int64) sqltypes.Row {
 	return sqltypes.Row{
 		sqltypes.NewInt64(id),
@@ -270,9 +274,9 @@ func TestSort10MB_PeakMemory(t *testing.T) {
 	}
 }
 
-// BenchmarkMerge_Heap benchmarks the evalengine.Merger (binary heap) for K-way merging.
+// BenchmarkMerge_Merger benchmarks evalengine.Merger for K-way merging.
 // K=15 sources each with N/K sorted rows are merged to isolate merge overhead.
-func BenchmarkMerge_Heap(b *testing.B) {
+func BenchmarkMerge_Merger(b *testing.B) {
 	k := FinalMergeWay // 15
 	n := 200_000
 	cmp := benchComparison()
@@ -290,41 +294,12 @@ func BenchmarkMerge_Heap(b *testing.B) {
 		merger.Init()
 
 		for merger.Len() > 0 {
-			_, source := merger.Pop()
+			_, source := merger.Peek()
 			if pos[source] < len(sources[source]) {
-				merger.Push(intRow(sources[source][pos[source]]), source)
-				pos[source]++
-			}
-		}
-	}
-}
-
-// BenchmarkMerge_LoserTree benchmarks the loserTree for K-way merging.
-// Same setup as BenchmarkMerge_Heap for direct comparison.
-func BenchmarkMerge_LoserTree(b *testing.B) {
-	k := FinalMergeWay // 15
-	n := 200_000
-	cmp := benchComparison()
-
-	// Build K sorted sources
-	sources := makeSortedSources(k, n)
-
-	for b.Loop() {
-		entries := make([]mergeEntry, k)
-		pos := make([]int, k)
-		for i := range k {
-			entries[i] = mergeEntry{row: intRow(sources[i][0]), source: i}
-			pos[i] = 1
-		}
-		tree := newLoserTree(entries, cmp.Less)
-
-		for tree.Len() > 0 {
-			_, source := tree.Winner()
-			if pos[source] < len(sources[source]) {
-				tree.Replace(intRow(sources[source][pos[source]]))
+				merger.ReplaceMin(intRow(sources[source][pos[source]]), source)
 				pos[source]++
 			} else {
-				tree.Remove()
+				merger.Pop()
 			}
 		}
 	}
