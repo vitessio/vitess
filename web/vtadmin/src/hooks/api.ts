@@ -144,11 +144,14 @@ export const useKeyspace = (
  */
 export const useCreateKeyspace = (
     params: Parameters<typeof createKeyspace>[0],
-    options: UseMutationOptions<Awaited<ReturnType<typeof createKeyspace>>, Error>
+    options?: UseMutationOptions<Awaited<ReturnType<typeof createKeyspace>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof createKeyspace>>, Error>(() => {
-        return createKeyspace(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof createKeyspace>>, Error>({
+        mutationFn: () => {
+            return createKeyspace(params);
+        },
+        ...options
+    });
 };
 
 /**
@@ -197,11 +200,14 @@ export const useTablet = (params: Parameters<typeof fetchTablet>[0], options?: U
  */
 export const useDeleteTablet = (
     params: Parameters<typeof deleteTablet>[0],
-    options: UseMutationOptions<Awaited<ReturnType<typeof deleteTablet>>, Error>
+    options?: UseMutationOptions<Awaited<ReturnType<typeof deleteTablet>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof deleteTablet>>, Error>(() => {
-        return deleteTablet(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof deleteTablet>>, Error>({
+        mutationFn: () => {
+            return deleteTablet(params);
+        },
+        ...options
+    });
 };
 
 /**
@@ -210,11 +216,14 @@ export const useDeleteTablet = (
  */
 export const useRefreshTabletReplicationSource = (
     params: Parameters<typeof refreshTabletReplicationSource>[0],
-    options: UseMutationOptions<Awaited<ReturnType<typeof refreshTabletReplicationSource>>, Error>
+    options?: UseMutationOptions<Awaited<ReturnType<typeof refreshTabletReplicationSource>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof refreshTabletReplicationSource>>, Error>(() => {
-        return refreshTabletReplicationSource(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof refreshTabletReplicationSource>>, Error>({
+        mutationFn: () => {
+            return refreshTabletReplicationSource(params);
+        },
+        ...options
+    });
 };
 
 /**
@@ -222,11 +231,14 @@ export const useRefreshTabletReplicationSource = (
  */
 export const useSetReadOnly = (
     params: Parameters<typeof setReadOnly>[0],
-    options: UseMutationOptions<Awaited<ReturnType<typeof setReadOnly>>, Error>
+    options?: UseMutationOptions<Awaited<ReturnType<typeof setReadOnly>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof setReadOnly>>, Error>(() => {
-        return setReadOnly(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof setReadOnly>>, Error>({
+        mutationFn: () => {
+            return setReadOnly(params);
+        },
+        ...options
+    });
 };
 
 /**
@@ -234,11 +246,14 @@ export const useSetReadOnly = (
  */
 export const useSetReadWrite = (
     params: Parameters<typeof setReadWrite>[0],
-    options: UseMutationOptions<Awaited<ReturnType<typeof setReadWrite>>, Error>
+    options?: UseMutationOptions<Awaited<ReturnType<typeof setReadWrite>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof setReadWrite>>, Error>(() => {
-        return setReadWrite(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof setReadWrite>>, Error>({
+        mutationFn: () => {
+            return setReadWrite(params);
+        },
+        ...options
+    });
 };
 
 /**
@@ -255,11 +270,14 @@ export const useShardReplicationPositions = (
  */
 export const useStartReplication = (
     params: Parameters<typeof startReplication>[0],
-    options: UseMutationOptions<Awaited<ReturnType<typeof startReplication>>, Error>
+    options?: UseMutationOptions<Awaited<ReturnType<typeof startReplication>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof startReplication>>, Error>(() => {
-        return startReplication(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof startReplication>>, Error>({
+        mutationFn: () => {
+            return startReplication(params);
+        },
+        ...options
+    });
 };
 
 /**
@@ -267,11 +285,14 @@ export const useStartReplication = (
  */
 export const useStopReplication = (
     params: Parameters<typeof stopReplication>[0],
-    options: UseMutationOptions<Awaited<ReturnType<typeof stopReplication>>, Error>
+    options?: UseMutationOptions<Awaited<ReturnType<typeof stopReplication>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof stopReplication>>, Error>(() => {
-        return stopReplication(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof stopReplication>>, Error>({
+        mutationFn: () => {
+            return stopReplication(params);
+        },
+        ...options
+    });
 };
 
 /**
@@ -386,9 +407,12 @@ export const useValidateKeyspace = (
     params: ValidateKeyspaceParams,
     options?: UseMutationOptions<Awaited<ReturnType<typeof validateKeyspace>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof validateKeyspace>>, Error>(() => {
-        return validateKeyspace(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof validateKeyspace>>, Error>({
+        mutationFn: () => {
+            return validateKeyspace(params);
+        },
+        ...options
+    });
 };
 
 /**
@@ -398,9 +422,12 @@ export const useValidateSchemaKeyspace = (
     params: ValidateSchemaKeyspaceParams,
     options?: UseMutationOptions<Awaited<ReturnType<typeof validateSchemaKeyspace>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof validateSchemaKeyspace>>, Error>(() => {
-        return validateSchemaKeyspace(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof validateSchemaKeyspace>>, Error>({
+        mutationFn: () => {
+            return validateSchemaKeyspace(params);
+        },
+        ...options
+    });
 };
 
 /**
@@ -410,9 +437,12 @@ export const useValidateVersionKeyspace = (
     params: ValidateVersionKeyspaceParams,
     options?: UseMutationOptions<Awaited<ReturnType<typeof validateVersionKeyspace>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof validateVersionKeyspace>>, Error>(() => {
-        return validateVersionKeyspace(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof validateVersionKeyspace>>, Error>({
+        mutationFn: () => {
+            return validateVersionKeyspace(params);
+        },
+        ...options
+    });
 };
 
 /**
@@ -449,9 +479,12 @@ export const useConcludeTransaction = (
     params: Parameters<typeof concludeTransaction>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof concludeTransaction>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof concludeTransaction>>, Error>(() => {
-        return concludeTransaction(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof concludeTransaction>>, Error>({
+        mutationFn: () => {
+            return concludeTransaction(params);
+        },
+        ...options
+    });
 };
 
 export const useVTExplain = (
@@ -523,11 +556,14 @@ export const useWorkflowStatus = (
  */
 export const useCreateMaterialize = (
     params: Parameters<typeof createMaterialize>[0],
-    options: UseMutationOptions<Awaited<ReturnType<typeof createMaterialize>>, Error>
+    options?: UseMutationOptions<Awaited<ReturnType<typeof createMaterialize>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof createMaterialize>>, Error>(() => {
-        return createMaterialize(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof createMaterialize>>, Error>({
+        mutationFn: () => {
+            return createMaterialize(params);
+        },
+        ...options
+    });
 };
 
 /**
@@ -535,11 +571,14 @@ export const useCreateMaterialize = (
  */
 export const useCreateMoveTables = (
     params: Parameters<typeof createMoveTables>[0],
-    options: UseMutationOptions<Awaited<ReturnType<typeof createMoveTables>>, Error>
+    options?: UseMutationOptions<Awaited<ReturnType<typeof createMoveTables>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof createMoveTables>>, Error>(() => {
-        return createMoveTables(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof createMoveTables>>, Error>({
+        mutationFn: () => {
+            return createMoveTables(params);
+        },
+        ...options
+    });
 };
 
 /**
@@ -547,11 +586,14 @@ export const useCreateMoveTables = (
  */
 export const useCreateReshard = (
     params: Parameters<typeof createReshard>[0],
-    options: UseMutationOptions<Awaited<ReturnType<typeof createReshard>>, Error>
+    options?: UseMutationOptions<Awaited<ReturnType<typeof createReshard>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof createReshard>>, Error>(() => {
-        return createReshard(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof createReshard>>, Error>({
+        mutationFn: () => {
+            return createReshard(params);
+        },
+        ...options
+    });
 };
 
 /**
@@ -561,9 +603,12 @@ export const useStartWorkflow = (
     params: Parameters<typeof startWorkflow>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof startWorkflow>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof startWorkflow>>, Error>(() => {
-        return startWorkflow(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof startWorkflow>>, Error>({
+        mutationFn: () => {
+            return startWorkflow(params);
+        },
+        ...options
+    });
 };
 
 /**
@@ -573,9 +618,12 @@ export const useStopWorkflow = (
     params: Parameters<typeof stopWorkflow>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof stopWorkflow>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof stopWorkflow>>, Error>(() => {
-        return stopWorkflow(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof stopWorkflow>>, Error>({
+        mutationFn: () => {
+            return stopWorkflow(params);
+        },
+        ...options
+    });
 };
 
 /**
@@ -585,9 +633,12 @@ export const useCompleteMoveTables = (
     params: Parameters<typeof completeMoveTables>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof completeMoveTables>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof completeMoveTables>>, Error>(() => {
-        return completeMoveTables(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof completeMoveTables>>, Error>({
+        mutationFn: () => {
+            return completeMoveTables(params);
+        },
+        ...options
+    });
 };
 
 /**
@@ -597,9 +648,12 @@ export const useWorkflowSwitchTraffic = (
     params: Parameters<typeof workflowSwitchTraffic>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof workflowSwitchTraffic>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof workflowSwitchTraffic>>, Error>(() => {
-        return workflowSwitchTraffic(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof workflowSwitchTraffic>>, Error>({
+        mutationFn: () => {
+            return workflowSwitchTraffic(params);
+        },
+        ...options
+    });
 };
 
 /**
@@ -609,9 +663,12 @@ export const useWorkflowDelete = (
     params: Parameters<typeof workflowDelete>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof workflowDelete>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof workflowDelete>>, Error>(() => {
-        return workflowDelete(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof workflowDelete>>, Error>({
+        mutationFn: () => {
+            return workflowDelete(params);
+        },
+        ...options
+    });
 };
 
 /**
@@ -622,9 +679,12 @@ export const useReloadSchema = (
     params: Parameters<typeof reloadSchema>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof reloadSchema>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof reloadSchema>>, Error>(() => {
-        return reloadSchema(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof reloadSchema>>, Error>({
+        mutationFn: () => {
+            return reloadSchema(params);
+        },
+        ...options
+    });
 };
 
 /**
@@ -634,9 +694,12 @@ export const useDeleteShard = (
     params: Parameters<typeof deleteShard>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof deleteShard>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof deleteShard>>, Error>(() => {
-        return deleteShard(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof deleteShard>>, Error>({
+        mutationFn: () => {
+            return deleteShard(params);
+        },
+        ...options
+    });
 };
 
 /*
@@ -647,9 +710,12 @@ export const useRebuildKeyspaceGraph = (
     params: Parameters<typeof rebuildKeyspaceGraph>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof rebuildKeyspaceGraph>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof rebuildKeyspaceGraph>>, Error>(() => {
-        return rebuildKeyspaceGraph(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof rebuildKeyspaceGraph>>, Error>({
+        mutationFn: () => {
+            return rebuildKeyspaceGraph(params);
+        },
+        ...options
+    });
 };
 
 /**
@@ -659,9 +725,12 @@ export const useReloadSchemaShard = (
     params: Parameters<typeof reloadSchemaShard>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof reloadSchemaShard>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof reloadSchemaShard>>, Error>(() => {
-        return reloadSchemaShard(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof reloadSchemaShard>>, Error>({
+        mutationFn: () => {
+            return reloadSchemaShard(params);
+        },
+        ...options
+    });
 };
 
 /**
@@ -673,9 +742,12 @@ export const useTabletExternallyPromoted = (
     params: Parameters<typeof tabletExternallyPromoted>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof tabletExternallyPromoted>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof tabletExternallyPromoted>>, Error>(() => {
-        return tabletExternallyPromoted(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof tabletExternallyPromoted>>, Error>({
+        mutationFn: () => {
+            return tabletExternallyPromoted(params);
+        },
+        ...options
+    });
 };
 
 /**
@@ -687,9 +759,12 @@ export const usePlannedFailoverShard = (
     params: Parameters<typeof plannedFailoverShard>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof plannedFailoverShard>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof plannedFailoverShard>>, Error>(() => {
-        return plannedFailoverShard(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof plannedFailoverShard>>, Error>({
+        mutationFn: () => {
+            return plannedFailoverShard(params);
+        },
+        ...options
+    });
 };
 
 /**
@@ -701,9 +776,12 @@ export const useEmergencyFailoverShard = (
     params: Parameters<typeof emergencyFailoverShard>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof emergencyFailoverShard>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof emergencyFailoverShard>>, Error>(() => {
-        return emergencyFailoverShard(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof emergencyFailoverShard>>, Error>({
+        mutationFn: () => {
+            return emergencyFailoverShard(params);
+        },
+        ...options
+    });
 };
 
 /**
@@ -713,9 +791,12 @@ export const useRemoveKeyspaceCell = (
     params: Parameters<typeof removeKeyspaceCell>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof removeKeyspaceCell>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof removeKeyspaceCell>>, Error>(() => {
-        return removeKeyspaceCell(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof removeKeyspaceCell>>, Error>({
+        mutationFn: () => {
+            return removeKeyspaceCell(params);
+        },
+        ...options
+    });
 };
 
 /**
@@ -725,9 +806,12 @@ export const useCreateShard = (
     params: Parameters<typeof createShard>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof createShard>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof createShard>>, Error>(() => {
-        return createShard(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof createShard>>, Error>({
+        mutationFn: () => {
+            return createShard(params);
+        },
+        ...options
+    });
 };
 
 /**
@@ -747,9 +831,12 @@ export const useValidate = (
     params: Parameters<typeof validate>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof validate>>, Error, ValidateParams>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof validate>>, Error, ValidateParams>(() => {
-        return validate(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof validate>>, Error, ValidateParams>({
+        mutationFn: () => {
+            return validate(params);
+        },
+        ...options
+    });
 };
 
 /**
@@ -760,9 +847,12 @@ export const useValidateShard = (
     params: Parameters<typeof validateShard>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof validateShard>>, Error, ValidateShardParams>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof validateShard>>, Error, ValidateShardParams>(() => {
-        return validateShard(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof validateShard>>, Error, ValidateShardParams>({
+        mutationFn: () => {
+            return validateShard(params);
+        },
+        ...options
+    });
 };
 
 /**
@@ -780,9 +870,12 @@ export const useValidateVersionShard = (
     params: Parameters<typeof validateVersionShard>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof validateVersionShard>>, Error, ValidateVersionShardParams>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof validateVersionShard>>, Error, ValidateVersionShardParams>(() => {
-        return validateVersionShard(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof validateVersionShard>>, Error, ValidateVersionShardParams>({
+        mutationFn: () => {
+            return validateVersionShard(params);
+        },
+        ...options
+    });
 };
 
 /**
@@ -792,9 +885,12 @@ export const useCreateVDiff = (
     params: Parameters<typeof createVDiff>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof createVDiff>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof createVDiff>>, Error>(() => {
-        return createVDiff(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof createVDiff>>, Error>({
+        mutationFn: () => {
+            return createVDiff(params);
+        },
+        ...options
+    });
 };
 
 /**
@@ -822,9 +918,12 @@ export const useSchemaMigrations = (
  */
 export const useApplySchema = (
     params: Parameters<typeof applySchema>[0],
-    options: UseMutationOptions<Awaited<ReturnType<typeof applySchema>>, Error>
+    options?: UseMutationOptions<Awaited<ReturnType<typeof applySchema>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof applySchema>>, Error>(() => {
-        return applySchema(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof applySchema>>, Error>({
+        mutationFn: () => {
+            return applySchema(params);
+        },
+        ...options
+    });
 };

@@ -33,7 +33,9 @@ describe('ActionPanel', () => {
      * provides such a function and should be `render`ed in the context QueryClientProvider.
      */
     const Wrapper: React.FC<ActionPanelProps & { url: string }> = (props) => {
-        const mutation = useMutation(() => fetch(new URL(props['url']), { method: 'post' }));
+        const mutation = useMutation({
+            mutationFn: () => fetch(new URL(props['url']), { method: 'post' })
+        });
         return <ActionPanel {...props} mutation={mutation as any} />;
     };
 
