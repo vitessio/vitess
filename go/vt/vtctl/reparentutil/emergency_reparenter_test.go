@@ -6177,3 +6177,63 @@ func TestEmergencyReparenter_FileBasedReplicaIgnored(t *testing.T) {
 		})
 	}
 }
+
+func Test_hasNonZeroRelayLogPositions(t *testing.T) {
+	sid1 := replication.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	gtid1 := replication.Mysql56GTID{
+		Server:   sid1,
+		Sequence: 1,
+	}
+
+	// Create a non-zero position
+	nonZeroPosition := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	nonZeroPosition.Combined.GTIDSet = nonZeroPosition.Combined.GTIDSet.AddGTID(gtid1)
+
+	tests := []struct {
+		name            string
+		validCandidates map[string]*RelayLogPositions
+		expectedResult  bool
+	}{
+		{
+			name: "all zero positions",
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {},
+				"zone1-0000000101": {},
+				"zone1-0000000102": {},
+			},
+			expectedResult: false,
+		},
+		{
+			name: "one non-zero position",
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {},
+				"zone1-0000000101": nonZeroPosition,
+				"zone1-0000000102": {},
+			},
+			expectedResult: true,
+		},
+		{
+			name: "all non-zero positions",
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": nonZeroPosition,
+				"zone1-0000000101": nonZeroPosition,
+				"zone1-0000000102": nonZeroPosition,
+			},
+			expectedResult: true,
+		},
+		{
+			name:            "empty candidates map",
+			validCandidates: map[string]*RelayLogPositions{},
+			expectedResult:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := hasNonZeroRelayLogPositions(tt.validCandidates)
+			assert.Equal(t, tt.expectedResult, result)
+		})
+	}
+}

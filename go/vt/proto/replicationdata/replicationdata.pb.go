@@ -43,7 +43,9 @@ const (
 type Capability int32
 
 const (
-	Capability_ANY       Capability = 0
+	// ANY reflects a tablet with any replication capability.
+	Capability_ANY Capability = 0
+	// MYSQLGTID reflects a tablet with MySQL GTID-based replication.
 	Capability_MYSQLGTID Capability = 1
 )
 
