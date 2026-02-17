@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"sync"
 	"testing"
 	"time"
 
@@ -40,6 +41,7 @@ var (
 	primaryTablet                    cluster.Vttablet
 	replicaTablet                    cluster.Vttablet
 	rdonlyTablet                     cluster.Vttablet
+	permissionsMu                    sync.Mutex
 	hostname                         = "localhost"
 	keyspaceName                     = "ks"
 	shardName                        = "0"
