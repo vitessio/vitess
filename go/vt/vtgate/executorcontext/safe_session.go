@@ -438,18 +438,11 @@ func (session *SafeSession) GetShardSessionsForCleanup() []*vtgatepb.Session_Sha
 func (session *SafeSession) GetShardSessionsForReleaseAll() []*vtgatepb.Session_ShardSession {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-
 	var lockSessions []*vtgatepb.Session_ShardSession
 	if session.LockSession != nil {
 		lockSessions = []*vtgatepb.Session_ShardSession{session.LockSession}
 	}
-
-	return slices.Concat(
-		session.PreSessions,
-		session.ShardSessions,
-		session.PostSessions,
-		lockSessions,
-	)
+	return slices.Concat(session.PreSessions, session.ShardSessions, session.PostSessions, lockSessions)
 }
 
 
