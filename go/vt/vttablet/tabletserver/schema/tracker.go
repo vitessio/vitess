@@ -168,9 +168,9 @@ func (tr *Tracker) process(ctx context.Context) {
 		default:
 			if err != nil {
 				restorePreviousGTID()
-				log.Warn(fmt.Sprintf("Schema Version Tracker's vstream ended with an error: %v, retrying in 5 seconds...", err))
-				time.Sleep(5 * time.Second)
 			}
+			log.Warn(fmt.Sprintf("Schema Version Tracker's vstream ended (error: %v), retrying in 5 seconds...", err))
+			time.Sleep(5 * time.Second)
 		}
 	}
 }
