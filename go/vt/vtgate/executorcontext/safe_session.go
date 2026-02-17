@@ -439,12 +439,19 @@ func (session *SafeSession) GetShardSessionsForReleaseAll() []*vtgatepb.Session_
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
-    lockSessions := make([]*vtgatepb.Session_ShardSession, 0, 1)
+	var lockSessions []*vtgatepb.Session_ShardSession
 	if session.LockSession != nil {
-		lockSessions = append(lockSessions, session.LockSession)
+		lockSessions = []*vtgatepb.Session_ShardSession{session.LockSession}
 	}
-	return slices.Concat(session.PreSessions, session.ShardSessions, session.PostSessions, lockSessions)
+
+	return slices.Concat(
+		session.PreSessions,
+		session.ShardSessions,
+		session.PostSessions,
+		lockSessions,
+	)
 }
+
 
 // FindAndChangeSessionIfInSingleTxMode retrieves the ShardSession matching the given keyspace, shard, and tablet type.
 // It performs additional checks and may modify the ShardSession in specific cases for single-mode transactions.
