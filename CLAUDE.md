@@ -339,3 +339,53 @@ Before considering any work "done":
 - [ ] We're both happy with it
 
 Remember: We're crafting software, not just making it work. Every line of code is an opportunity to make the system better.
+
+## :book: Vitess Terminology & Abbreviations
+
+### Common Operations
+- **ERS** - EmergencyReparentShard - Failover operation when primary is down
+- **PRS** - PlannedReparentShard - Graceful primary handoff (planned maintenance)
+
+### Core Components
+- **VTGate** - Vitess Gateway, the stateless query router/proxy layer
+- **VTTablet** - Vitess Tablet, wraps and manages a MySQL instance
+- **VTAdmin** - Web UI for managing Vitess clusters
+- **VTCtld** - Vitess control daemon, handles topology operations
+- **VTOrc** - Vitess Orchestrator, automated failure detection and recovery
+- **TMC** or **tmclient** - TabletManagerClient, RPC client for talking to tablets
+- **Topo** - Topology service (etcd, ZooKeeper, Consul) storing cluster metadata
+
+### Replication & Data Concepts
+- **GTID** - Global Transaction Identifier, MySQL's replication position tracking
+- **Semi-sync** - MySQL's semi-synchronous replication, ensures durability by waiting for replica acks
+- **Errant GTID** - A MySQL transaction on a replica that the primary doesn't have (corruption risk)
+- **Binlog** - The MySQL binary log, used as a source of changes for replication
+- **Relay log** - MySQL's log of replicated transactions not yet applied
+- **File-based replication** - Legacy MySQL replication using binlog file positions (not GTIDs)
+- **Durability policy** - Configuration for semi-sync behavior (none, semi-sync, cross-cell)
+
+### Topology Concepts
+- **Keyspace** - Logical database, contains one or more shards
+- **Shard** - Horizontal partition of data (e.g., "-80", "80-")
+- **Cell** - Failure domain, typically a datacenter or availability zone
+- **Tablet** - A MySQL instance + VTTablet process
+- **Tablet type** - Role: PRIMARY, REPLICA, RDONLY, DRAINED, BACKUP, RESTORE, SPARE
+
+### VReplication
+- **VReplication** - Vitess's replication system for resharding, materialization, MoveTables
+- **Workflow** - A VReplication task (reshard, MoveTables, Materialize, etc.)
+- **VStream** - Streaming API for change data capture (CDC)
+
+### Reparenting Terms
+- **Candidate** - Replica eligible to become the new primary
+- **Intermediate source** - Most advanced replica during ERS, may not be the final primary
+- **Reparent journal** - Record of reparent events written to `_vt.reparent_journal`
+- **Tolerable replication lag** - Maximum lag allowed for a replica to be promotion candidate
+
+### Common Patterns
+When discussing code:
+- "Reparent" = changing which tablet is the primary
+- "Demote" = making a primary become a replica
+- "Promote" = making a replica become the primary
+- "Acker" = semi-sync replica that acknowledges transactions
+- "Caught up" = replica has applied all relay log transactions
