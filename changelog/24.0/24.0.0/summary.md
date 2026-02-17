@@ -6,8 +6,11 @@
 - **[Major Changes](#major-changes)**
     - **[New Support](#new-support)**
         - [Window function pushdown for sharded keyspaces](#window-function-pushdown)
+        - [View Routing Rules](#view-routing-rules)
         - [Tablet targeting via USE statement](#tablet-targeting)
 - **[Minor Changes](#minor-changes)**
+    - **[Logging](#minor-changes-logging)**
+        - [Structured logging](#structured-logging)
     - **[VReplication](#minor-changes-vreplication)**
         - [`--shards` flag for MoveTables/Reshard start and stop](#vreplication-shards-flag-start-stop)
     - **[VTGate](#minor-changes-vtgate)**
@@ -39,6 +42,35 @@ Previously, all window function queries required single-shard routing, which lim
 
 For examples and more details, see the [documentation](https://vitess.io/docs/24.0/reference/compatibility/mysql-compatibility/#window-functions).
 
+#### <a id="view-routing-rules"/>View Routing Rules</a>
+
+Vitess now supports routing rules for views, and can be applied the same as tables with `vtctldclient ApplyRoutingRules`. When a view routing rule is active, VTGate rewrites queries that reference the source view to use the target view's definition instead. For example, given this routing rule:
+
+```json
+{
+  "rules": [
+    {
+      "from_table": "source_ks.my_view",
+      "to_tables": ["target_ks.my_view"]
+    }
+  ]
+}
+```
+
+And this view definition:
+
+```sql
+CREATE VIEW target_ks.my_view AS SELECT id, name FROM user;
+```
+
+A query like `SELECT * FROM source_ks.my_view` would be internally rewritten to:
+
+```sql
+SELECT * FROM (SELECT id, name FROM target_ks.user) AS my_view;
+```
+
+View routing rules require the schema tracker to monitor views, which means VTGate must be started with the `--enable-views` flag and VTTablet with the `--queryserver-enable-views` flag. The target view must exist in the specified keyspace for the routing rule to function correctly. For more details, see the [Schema Routing Rules documentation](https://vitess.io/docs/24.0/reference/features/schema-routing-rules/).
+
 #### <a id="tablet-targeting"/>Tablet targeting via USE statement</a>
 
 VTGate now supports routing queries to a specific tablet by alias using an extended `USE` statement syntax:
@@ -58,6 +90,14 @@ Once set, all subsequent queries in the session route to the specified tablet un
 Note: A shard must be specified when using tablet targeting. Like shard targeting, this bypasses vindex-based routing, so use with care.
 
 ## <a id="minor-changes"/>Minor Changes</a>
+
+### <a id="minor-changes-logging"/>Logging</a>
+
+#### <a id="structured-logging"/>Structured logging</a>
+
+Vitess now uses structured JSON logging by default. Log output is emitted as JSON to stderr. To configure the minimum log level, pass `--log-level` (one of `debug`, `info`, `warn`, `error`; default `info`). To revert to the previous `glog` backend, pass `--log-structured=false`.
+
+`glog` is deprecated as of v24 and will be removed in v25.
 
 ### <a id="minor-changes-vreplication"/>VReplication</a>
 
