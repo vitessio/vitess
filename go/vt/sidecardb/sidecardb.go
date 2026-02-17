@@ -420,7 +420,7 @@ func (si *schemaInit) serverVersionString() string {
 
 	si.serverVersion = rs.Rows[0][0].ToString()
 	if si.serverVersion == "" {
-		log.Warningf("MySQL version query returned empty result during sidecar database initialization")
+		log.Warning("MySQL version query returned empty result during sidecar database initialization")
 	}
 
 	return si.serverVersion
