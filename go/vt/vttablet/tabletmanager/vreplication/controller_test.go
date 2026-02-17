@@ -20,9 +20,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
@@ -31,11 +34,13 @@ import (
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -403,101 +408,273 @@ func TestControllerStopPosition(t *testing.T) {
 	expectFBCRequest(t, wantTablet, testPos, nil, &topodatapb.KeyRange{End: []byte{0x80}})
 }
 
-func TestControllerBinlogPurgedRetryStuckOnSameTablet(t *testing.T) {
-	savedDelay := vttablet.DefaultVReplicationConfig.RetryDelay
-	defer func() { vttablet.DefaultVReplicationConfig.RetryDelay = savedDelay }()
-	vttablet.DefaultVReplicationConfig.RetryDelay = 10 * time.Millisecond
-
-	resetBinlogClient()
-
-	// Add a second cell.
-	ctx := context.Background()
-	err := env.AddCell(ctx, "cell2")
-	if err != nil {
-		t.Fatal(err)
+// Test how tablet picker errors are handled.
+func TestControllerTabletPickerErrors(t *testing.T) {
+	type testCase struct {
+		name              string
+		tabletTypesStr    string
+		setupFunc         func()
+		expectRetry       bool
+		expectedErrSubstr string
 	}
 
-	// The default tablet picker preference is PreferLocalWithAlias, so we
-	// create a cell alias with both our cells in it. This allows us to test if
-	// the controller properly tries multiple cells within the alias.
-	err = env.TopoServ.CreateCellsAlias(ctx, "region1", &topodatapb.CellsAlias{
-		Cells: []string{"cell1", "cell2"},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer env.TopoServ.DeleteCellsAlias(ctx, "region1")
-
-	// Tablet 100 in local cell (cell1) - will be picked first due to cell preference.
-	tablet1 := addTabletWithCell(100, env.Cells[0])
-	// Tablet 200 in remote cell (cell2) - will be picked after 100 is ignored.
-	tablet2 := addTabletWithCell(200, env.Cells[1])
-	defer deleteTablet(tablet1)
-	defer deleteTablet(tablet2)
-
-	params := map[string]string{
-		"id":     "1",
-		"state":  binlogdatapb.VReplicationWorkflowState_Running.String(),
-		"source": fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
-		// Set cell blank, the default of workflows, to ensure it can fall back to other cells in the alias.
-		"cell":         "",
-		"tablet_types": "replica",
-		"options":      "{}",
+	tcases := []testCase{
+		{
+			name:              "canceled context from picker timeout",
+			tabletTypesStr:    "replica",
+			setupFunc:         func() { /* don't add any tablets, so tablet picker times out */ },
+			expectRetry:       true, // tablet picker errors should always retry
+			expectedErrSubstr: "context has expired",
+		},
+		{
+			name:              "failed precondition from invalid tablet type",
+			tabletTypesStr:    "invalid_tablet_type",
+			setupFunc:         func() { /* tablet type parsing will fail, so no need to register tablets */ },
+			expectRetry:       true, // tablet picker errors should always retry
+			expectedErrSubstr: "failed to parse list of tablet types",
+		},
 	}
 
-	pickedTablets := []uint32{}
-	var mu sync.Mutex
+	for _, tc := range tcases {
+		t.Run(tc.name, func(t *testing.T) {
+			savedDelay := vttablet.DefaultVReplicationConfig.RetryDelay
+			defer func() { vttablet.DefaultVReplicationConfig.RetryDelay = savedDelay }()
+			vttablet.DefaultVReplicationConfig.RetryDelay = 10 * time.Millisecond
 
-	oldErrors := fakeBinlogClientErrorsByTablet
-	defer func() { fakeBinlogClientErrorsByTablet = oldErrors }()
-	// Only tablet 100 returns error; tablet 200 will succeed
-	fakeBinlogClientErrorsByTablet = map[uint32]error{
-		100: errors.New("vttablet: rpc error: code = Unknown desc = Cannot replicate because the source purged required binary logs (errno 1236) (sqlstate HY000)"),
+			savedPickerDelay := discovery.GetTabletPickerRetryDelay()
+			defer discovery.SetTabletPickerRetryDelay(savedPickerDelay)
+			discovery.SetTabletPickerRetryDelay(10 * time.Millisecond)
+
+			resetBinlogClient()
+
+			if tc.setupFunc != nil {
+				tc.setupFunc()
+			}
+
+			params := map[string]string{
+				"id":           "1",
+				"state":        binlogdatapb.VReplicationWorkflowState_Running.String(),
+				"source":       fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
+				"cell":         env.Cells[0],
+				"tablet_types": tc.tabletTypesStr,
+				"options":      "{}",
+			}
+
+			dbClient := binlogplayer.NewMockDBClient(t)
+			dbClient.AddInvariant("update _vt.vreplication set message=", testDMLResponse)
+			dbClient.AddInvariant("update _vt.vreplication set state=", testDMLResponse)
+
+			dbClientFactory := func() binlogplayer.DBClient { return dbClient }
+			mysqld := &mysqlctl.FakeMysqlDaemon{}
+			mysqld.MysqlPort.Store(3306)
+			vre := NewTestEngine(nil, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
+
+			// We use blpStats to ensure that we triggered the expected error.
+			blpStats := binlogplayer.NewStats()
+			defer blpStats.Stop()
+
+			ct, err := newController(t.Context(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], blpStats, vre, defaultTabletPickerOptions)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			select {
+			case <-ct.done:
+				if tc.expectRetry {
+					t.Fatalf("Controller stopped unexpectedly, expected it to keep retrying")
+				}
+			case <-time.After(500 * time.Millisecond):
+				ct.Stop(true)
+
+				records := blpStats.History.Records()
+				var foundExpectedErr bool
+				var lastMsg string
+				for _, rec := range records {
+					if r, ok := rec.(*binlogplayer.StatsHistoryRecord); ok {
+						lastMsg = r.Message
+						if strings.Contains(r.Message, tc.expectedErrSubstr) {
+							foundExpectedErr = true
+							break
+						}
+					}
+				}
+
+				if !foundExpectedErr {
+					t.Fatalf("Expected error containing %q in history, but last message was: %s", tc.expectedErrSubstr, lastMsg)
+				}
+
+				if !tc.expectRetry {
+					t.Fatalf("Expected controller to fail immediately, but it kept retrying. Last error: %s", lastMsg)
+				}
+			}
+		})
+	}
+}
+
+// Test how replication errors are handled.
+func TestControllerReplicationErrors(t *testing.T) {
+	type testCase struct {
+		name         string
+		code         vtrpcpb.Code
+		msg          string
+		shouldRetry  bool
+		ignoreTablet bool
 	}
 
-	oldCallback := fakeBinlogClientCallback
-	defer func() { fakeBinlogClientCallback = oldCallback }()
-	fakeBinlogClientCallback = func(tablet *topodatapb.Tablet) {
-		mu.Lock()
-		defer mu.Unlock()
-		pickedTablets = append(pickedTablets, tablet.Alias.Uid)
+	tcases := []testCase{
+		{
+			name:         "failed precondition",
+			code:         vtrpcpb.Code_FAILED_PRECONDITION,
+			msg:          "",
+			shouldRetry:  true,
+			ignoreTablet: false,
+		},
+		{
+			name:         "gtid mismatch",
+			code:         vtrpcpb.Code_INVALID_ARGUMENT,
+			msg:          "GTIDSet Mismatch aa",
+			shouldRetry:  true,
+			ignoreTablet: true,
+		},
+		{
+			name:         "unavailable",
+			code:         vtrpcpb.Code_UNAVAILABLE,
+			msg:          "",
+			shouldRetry:  true,
+			ignoreTablet: false,
+		},
+		{
+			name:         "invalid argument",
+			code:         vtrpcpb.Code_INVALID_ARGUMENT,
+			msg:          "final error",
+			shouldRetry:  false,
+			ignoreTablet: false,
+		},
+		{
+			name:         "query interrupted",
+			code:         vtrpcpb.Code_UNKNOWN,
+			msg:          "vttablet: rpc error: code = Unknown desc = Query execution was interrupted, maximum statement execution time exceeded (errno 3024) (sqlstate HY000)",
+			shouldRetry:  true,
+			ignoreTablet: false,
+		},
+		{
+			name:         "binary log purged",
+			code:         vtrpcpb.Code_UNKNOWN,
+			msg:          "vttablet: rpc error: code = Unknown desc = stream (at source tablet) error @ 013c5ddc-dd89-11ed-b3a1-125a006436b9:1-305627274: Cannot replicate because the source purged required binary logs (errno 1236) (sqlstate HY000)",
+			shouldRetry:  true,
+			ignoreTablet: true,
+		},
+		{
+			name:         "source purged required gtids",
+			code:         vtrpcpb.Code_UNKNOWN,
+			msg:          "vttablet: rpc error: code = Unknown desc = Cannot replicate because the source purged required binary logs. Missing transactions are: 013c5ddc-dd89-11ed-b3a1-125a006436b9:305627275-305627280 (errno 1789) (sqlstate HY000)",
+			shouldRetry:  true,
+			ignoreTablet: true,
+		},
+		{
+			name:         "non-ephemeral sql error",
+			code:         vtrpcpb.Code_UNKNOWN,
+			msg:          "vttablet: rpc error: code = Unknown desc = Duplicate entry '1' for key 'PRIMARY' (errno 1062) (sqlstate 23000)",
+			shouldRetry:  false,
+			ignoreTablet: false,
+		},
 	}
 
-	dbClient := binlogplayer.NewMockDBClient(t)
-	// Allow any sequence of queries, we only care about the tablet picking behavior
-	dbClient.AddInvariant("update _vt.vreplication set message=", testDMLResponse)
-	dbClient.AddInvariant("update _vt.vreplication set state=", testDMLResponse)
-	dbClient.AddInvariant("select pos", testSettingsResponse)
-	dbClient.AddInvariant("begin", testDMLResponse)
-	dbClient.AddInvariant("insert into t", testDMLResponse)
-	dbClient.AddInvariant("update _vt.vreplication set pos=", testDMLResponse)
-	dbClient.AddInvariant("commit", testDMLResponse)
+	for _, tc := range tcases {
+		t.Run(tc.name, func(t *testing.T) {
+			savedDelay := vttablet.DefaultVReplicationConfig.RetryDelay
+			defer func() { vttablet.DefaultVReplicationConfig.RetryDelay = savedDelay }()
+			vttablet.DefaultVReplicationConfig.RetryDelay = 10 * time.Millisecond
 
-	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	mysqld := &mysqlctl.FakeMysqlDaemon{}
-	mysqld.MysqlPort.Store(3306)
-	vre := NewTestEngine(nil, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
+			resetBinlogClient()
 
-	defer setTabletTypesStr("replica")()
+			ctx := t.Context()
+			err := env.AddCell(ctx, "cell2")
+			if err != nil {
+				t.Fatal(err)
+			}
 
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
-	if err != nil {
-		t.Fatal(err)
+			err = env.TopoServ.CreateCellsAlias(ctx, "region1", &topodatapb.CellsAlias{
+				Cells: []string{"cell1", "cell2"},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer env.TopoServ.DeleteCellsAlias(ctx, "region1")
+
+			tablet1 := addTabletWithCell(100, env.Cells[0])
+			tablet2 := addTabletWithCell(200, env.Cells[1])
+			defer deleteTablet(tablet1)
+			defer deleteTablet(tablet2)
+
+			params := map[string]string{
+				"id":           "1",
+				"state":        binlogdatapb.VReplicationWorkflowState_Running.String(),
+				"source":       fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
+				"cell":         "",
+				"tablet_types": "replica",
+				"options":      "{}",
+			}
+
+			pickedTablets := []uint32{}
+			var mu sync.Mutex
+
+			oldErrors := fakeBinlogClientErrorsByTablet
+			defer func() { fakeBinlogClientErrorsByTablet = oldErrors }()
+			fakeBinlogClientErrorsByTablet = map[uint32]error{
+				100: vterrors.New(tc.code, tc.msg),
+			}
+
+			oldCallback := fakeBinlogClientCallback
+			defer func() { fakeBinlogClientCallback = oldCallback }()
+			fakeBinlogClientCallback = func(tablet *topodatapb.Tablet) {
+				mu.Lock()
+				defer mu.Unlock()
+				pickedTablets = append(pickedTablets, tablet.Alias.Uid)
+			}
+
+			dbClient := binlogplayer.NewMockDBClient(t)
+			dbClient.AddInvariant("update _vt.vreplication set message=", testDMLResponse)
+			dbClient.AddInvariant("update _vt.vreplication set state=", testDMLResponse)
+			dbClient.AddInvariant("select pos", testSettingsResponse)
+			dbClient.AddInvariant("begin", testDMLResponse)
+			dbClient.AddInvariant("insert into t", testDMLResponse)
+			dbClient.AddInvariant("update _vt.vreplication set pos=", testDMLResponse)
+			dbClient.AddInvariant("commit", testDMLResponse)
+
+			dbClientFactory := func() binlogplayer.DBClient { return dbClient }
+			mysqld := &mysqlctl.FakeMysqlDaemon{}
+			mysqld.MysqlPort.Store(3306)
+			vre := NewTestEngine(nil, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
+
+			defer setTabletTypesStr("replica")()
+
+			ct, err := newController(t.Context(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
+			require.NoError(t, err)
+
+			expectedPicks := 2
+			if !tc.shouldRetry && !tc.ignoreTablet {
+				// For TabletErrorActionFail, we will only pick one tablet and stop.
+				expectedPicks = 1
+			}
+			require.Eventually(t, func() bool {
+				mu.Lock()
+				defer mu.Unlock()
+				return len(pickedTablets) >= expectedPicks
+			}, 500*time.Millisecond, 10*time.Millisecond)
+
+			ct.Stop(true)
+
+			mu.Lock()
+			defer mu.Unlock()
+
+			if tc.ignoreTablet {
+				require.Equal(t, []uint32{100, 200}, pickedTablets[:2])
+			} else if tc.shouldRetry {
+				require.Equal(t, []uint32{100, 100}, pickedTablets[:2])
+			} else {
+				require.Equal(t, []uint32{100}, pickedTablets)
+			}
+		})
 	}
-
-	// Wait for the controller to process
-	time.Sleep(200 * time.Millisecond)
-	ct.Stop(true)
-
-	mu.Lock()
-	defer mu.Unlock()
-
-	// The sequence is [100, 200] because 100 is picked first (local cell preference),
-	// fails with binlog purged error, gets added to ignore list, then 200 is picked.
-	expected := []uint32{100, 200}
-	if fmt.Sprintf("%v", pickedTablets) != fmt.Sprintf("%v", expected) {
-		t.Fatalf("Expected tablet picker order %v, got: %v", expected, pickedTablets)
-	}
-
-	t.Logf("Controller correctly ignored tablet 100 after binlog purged error and picked tablet 200: %v", pickedTablets)
 }
