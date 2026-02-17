@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sets"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -93,6 +94,9 @@ func TestEmergencyReparentShard(t *testing.T) {
 	newPrimary.FakeMysqlDaemon.PromoteResult = replication.Position{
 		GTIDSet: oldPrimaryPos,
 	}
+	newPrimary.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
+		"SELECT COUNT(*) FROM _vt.reparent_journal": sqltypes.MakeTestResult(sqltypes.MakeTestFields("COUNT(*)", "int64"), "1"),
+	}
 	newPrimary.StartActionLoop(t, wr)
 	defer newPrimary.StopActionLoop(t)
 
@@ -130,6 +134,9 @@ func TestEmergencyReparentShard(t *testing.T) {
 		"FAKE SET SOURCE",
 		"START REPLICA",
 	}
+	goodReplica1.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
+		"SELECT COUNT(*) FROM _vt.reparent_journal": sqltypes.MakeTestResult(sqltypes.MakeTestFields("COUNT(*)", "int64"), "1"),
+	}
 	goodReplica1.StartActionLoop(t, wr)
 	defer goodReplica1.StopActionLoop(t)
 
@@ -152,7 +159,13 @@ func TestEmergencyReparentShard(t *testing.T) {
 		"STOP REPLICA",
 		"FAKE SET SOURCE",
 		"START REPLICA",
+		"STOP REPLICA IO_THREAD",
+		"STOP REPLICA",
 		"FAKE SET SOURCE",
+		"START REPLICA",
+	}
+	goodReplica2.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
+		"SELECT COUNT(*) FROM _vt.reparent_journal": sqltypes.MakeTestResult(sqltypes.MakeTestFields("COUNT(*)", "int64"), "1"),
 	}
 	goodReplica2.StartActionLoop(t, wr)
 	defer goodReplica2.StopActionLoop(t)
@@ -220,6 +233,20 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 		"START REPLICA",
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, primary_alias, replication_position) VALUES",
 	}
+	// After catching up to moreAdvancedReplica, newPrimary will have position 1-457
+	moreAdvancedReplicaPos, err := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-457")
+	require.NoError(t, err)
+	newPrimary.FakeMysqlDaemon.PromoteResult = replication.Position{
+		GTIDSet: moreAdvancedReplicaPos,
+	}
+	// Update the current position to reflect the caught-up state
+	// This simulates what happens after replication catches up
+	newPrimary.FakeMysqlDaemon.SetPrimaryPositionLocked(replication.Position{
+		GTIDSet: moreAdvancedReplicaPos,
+	})
+	newPrimary.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
+		"SELECT COUNT(*) FROM _vt.reparent_journal": sqltypes.MakeTestResult(sqltypes.MakeTestFields("COUNT(*)", "int64"), "1"),
+	}
 	newPrimary.StartActionLoop(t, wr)
 	defer newPrimary.StopActionLoop(t)
 
@@ -252,6 +279,9 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 		"STOP REPLICA",
 		"FAKE SET SOURCE",
 		"START REPLICA",
+	}
+	moreAdvancedReplica.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
+		"SELECT COUNT(*) FROM _vt.reparent_journal": sqltypes.MakeTestResult(sqltypes.MakeTestFields("COUNT(*)", "int64"), "1"),
 	}
 	moreAdvancedReplica.StartActionLoop(t, wr)
 	defer moreAdvancedReplica.StopActionLoop(t)
