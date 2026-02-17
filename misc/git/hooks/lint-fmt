@@ -68,4 +68,4 @@ if [ -z "$changed_pkgs" ]; then
 fi
 
 echo "Linting staged changes..."
-golangci-lint run --new-from-rev=HEAD "$changed_pkgs"
+golangci-lint run --new-from-rev=HEAD $changed_pkgs
