@@ -409,18 +409,18 @@ func (si *schemaInit) serverVersionString() string {
 
 	rs, err := si.exec(si.ctx, sidecarVersionQuery, 1, false)
 	if err != nil {
-		log.Warn("Error getting MySQL version during sidecar database initialization", slog.Any("error", err))
+		log.Warningf("Error getting MySQL version during sidecar database initialization %s", slog.Any("error", err))
 		return ""
 	}
 
 	if len(rs.Rows) != 1 || len(rs.Rows[0]) == 0 {
-		log.Warn("Invalid results for SidecarDB version query", slog.String("query", sidecarVersionQuery), slog.Int("rows", len(rs.Rows)))
+		log.Warningf("Invalid results for SidecarDB version query %s %s", slog.String("query", sidecarVersionQuery), slog.Int("rows", len(rs.Rows)))
 		return ""
 	}
 
 	si.serverVersion = rs.Rows[0][0].ToString()
 	if si.serverVersion == "" {
-		log.Warn("MySQL version query returned empty result during sidecar database initialization")
+		log.Warningf("MySQL version query returned empty result during sidecar database initialization")
 	}
 
 	return si.serverVersion
