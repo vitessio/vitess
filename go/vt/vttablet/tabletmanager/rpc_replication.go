@@ -1035,25 +1035,32 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 	}
 	before := replication.ReplicationStatusToProto(rs)
 
-	// Check replication capability so we don't stop replication needlessly.
-	switch capability {
-	case replicationdatapb.Capability_MYSQLGTID:
-		if before.RelayLogPosition == "" {
-			return StopReplicationAndGetStatusResponse{}, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "tablet does not support MySQL GTID")
-		}
-		pos, err := replication.DecodePosition(before.RelayLogPosition)
-		if err != nil {
-			return StopReplicationAndGetStatusResponse{}, vterrors.Wrap(err, "failed to decode relay log position")
-		}
-		if _, ok := pos.GTIDSet.(replication.Mysql56GTIDSet); !ok {
-			return StopReplicationAndGetStatusResponse{}, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "tablet does not support MySQL GTID")
-		}
-	}
-
 	// Get semi-sync state before replication is stopped.
 	before.SemiSyncPrimaryEnabled, before.SemiSyncReplicaEnabled = tm.MysqlDaemon.SemiSyncEnabled(ctx)
 	before.SemiSyncPrimaryStatus, before.SemiSyncReplicaStatus = tm.MysqlDaemon.SemiSyncStatus(ctx)
 	before.BackupRunning = tm.IsBackupRunning()
+
+	// Check replication capability so we don't stop replication needlessly.
+	switch capability {
+	case replicationdatapb.Capability_MYSQLGTID:
+		status := &replicationdatapb.StopReplicationStatus{Before: before}
+		if before.RelayLogPosition == "" {
+			return StopReplicationAndGetStatusResponse{
+				Status: status,
+			}, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "tablet does not support MySQL GTID")
+		}
+		pos, err := replication.DecodePosition(before.RelayLogPosition)
+		if err != nil {
+			return StopReplicationAndGetStatusResponse{
+				Status: status,
+			}, vterrors.Wrap(err, "failed to decode relay log position")
+		}
+		if _, ok := pos.GTIDSet.(replication.Mysql56GTIDSet); !ok {
+			return StopReplicationAndGetStatusResponse{
+				Status: status,
+			}, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "tablet does not support MySQL GTID")
+		}
+	}
 
 	if stopReplicationMode == replicationdatapb.StopReplicationMode_IOTHREADONLY {
 		if !rs.IOHealthy() {
