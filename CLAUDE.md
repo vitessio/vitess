@@ -334,7 +334,6 @@ Me: "Now let's optimize without breaking functionality"
 Before considering any work "done":
 - [ ] Tests pass and cover the feature
 - [ ] Code is clean and readable
-    - [ ] Code passes the `go fmt` formatter
     - [ ] Code passes the `gofumpt` formatter
 - [ ] Edge cases are handled
 - [ ] Performance is acceptable
