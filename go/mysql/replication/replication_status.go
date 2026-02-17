@@ -368,7 +368,7 @@ func ParseReplicationStatus(fields map[string]string, replica bool) ReplicationS
 	if file != "" && executedPosStr != "" {
 		status.FilePosition.GTIDSet, err = ParseFilePosGTIDSet(fmt.Sprintf("%s:%s", file, executedPosStr))
 		if err != nil {
-			log.Warningf("Error parsing GTID set %s:%s: %v", file, executedPosStr, err)
+			log.Warn(fmt.Sprintf("Error parsing GTID set %s:%s: %v", file, executedPosStr, err))
 		}
 	}
 
@@ -377,7 +377,7 @@ func ParseReplicationStatus(fields map[string]string, replica bool) ReplicationS
 	if file != "" && readPosStr != "" {
 		status.RelayLogSourceBinlogEquivalentPosition.GTIDSet, err = ParseFilePosGTIDSet(fmt.Sprintf("%s:%s", file, readPosStr))
 		if err != nil {
-			log.Warningf("Error parsing GTID set %s:%s: %v", file, readPosStr, err)
+			log.Warn(fmt.Sprintf("Error parsing GTID set %s:%s: %v", file, readPosStr, err))
 		}
 	}
 
@@ -386,7 +386,7 @@ func ParseReplicationStatus(fields map[string]string, replica bool) ReplicationS
 	if file != "" && relayPosStr != "" {
 		status.RelayLogFilePosition.GTIDSet, err = ParseFilePosGTIDSet(fmt.Sprintf("%s:%s", file, relayPosStr))
 		if err != nil {
-			log.Warningf("Error parsing GTID set %s:%s: %v", file, relayPosStr, err)
+			log.Warn(fmt.Sprintf("Error parsing GTID set %s:%s: %v", file, relayPosStr, err))
 		}
 	}
 	return status

@@ -18,10 +18,13 @@ package trace
 
 import (
 	"io"
+	"log/slog"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"vitess.io/vitess/go/vt/log"
 )
 
 // If captureStdout is false, it will capture the outut of
@@ -57,16 +60,18 @@ func captureOutput(t *testing.T, f func(), captureStdout bool) string {
 
 func TestLoggerLogAndError(t *testing.T) {
 	logger := traceLogger{}
+	original := log.Error
+	t.Cleanup(func() { log.Error = original })
 
+	var logMessage string
+	log.Error = func(msg string, _ ...slog.Attr) {
+		logMessage = msg
+	}
 	// Test Error() output
-	output := captureOutput(t, func() {
-		logger.Error("This is an error message")
-	}, false)
-	assert.Contains(t, output, "This is an error message")
-
+	logger.Error("This is an error message")
+	assert.Contains(t, logMessage, "This is an error message")
 	// Test Log() output
-	output = captureOutput(t, func() {
-		logger.Log("This is an log message")
-	}, false)
-	assert.Contains(t, output, "This is an log message")
+	logMessage = ""
+	logger.Log("This is an log message")
+	assert.Contains(t, logMessage, "This is an log message")
 }

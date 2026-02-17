@@ -18,6 +18,7 @@ package reparentutil
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -197,7 +198,7 @@ func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.Tab
 	if err != nil {
 		return err
 	}
-	log.Infof("Getting a new durability policy for %v", durabilityName)
+	log.Info(fmt.Sprintf("Getting a new durability policy for %v", durabilityName))
 	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return err
