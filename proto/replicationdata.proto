@@ -25,7 +25,7 @@ import "topodata.proto";
 
 // Capability represents the replication functionality a tablet supports.
 enum Capability {
-  DEFAULT = 0;
+  ANY = 0;
   MYSQLGTID = 1;
 }
 

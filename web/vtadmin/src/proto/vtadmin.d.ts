@@ -50029,7 +50029,7 @@ export namespace replicationdata {
 
     /** Capability enum. */
     enum Capability {
-        DEFAULT = 0,
+        ANY = 0,
         MYSQLGTID = 1
     }
 

@@ -43,18 +43,18 @@ const (
 type Capability int32
 
 const (
-	Capability_DEFAULT   Capability = 0
+	Capability_ANY       Capability = 0
 	Capability_MYSQLGTID Capability = 1
 )
 
 // Enum value maps for Capability.
 var (
 	Capability_name = map[int32]string{
-		0: "DEFAULT",
+		0: "ANY",
 		1: "MYSQLGTID",
 	}
 	Capability_value = map[string]int32{
-		"DEFAULT":   0,
+		"ANY":       0,
 		"MYSQLGTID": 1,
 	}
 )
@@ -876,10 +876,10 @@ const file_replicationdata_proto_rawDesc = "" +
 	"\fdisk_stalled\x18\x17 \x01(\bR\vdiskStalled\x12*\n" +
 	"\x11semi_sync_blocked\x18\x18 \x01(\bR\x0fsemiSyncBlocked\x125\n" +
 	"\vtablet_type\x18\x19 \x01(\x0e2\x14.topodata.TabletTypeR\n" +
-	"tabletType*(\n" +
+	"tabletType*$\n" +
 	"\n" +
-	"Capability\x12\v\n" +
-	"\aDEFAULT\x10\x00\x12\r\n" +
+	"Capability\x12\a\n" +
+	"\x03ANY\x10\x00\x12\r\n" +
 	"\tMYSQLGTID\x10\x01*;\n" +
 	"\x13StopReplicationMode\x12\x12\n" +
 	"\x0eIOANDSQLTHREAD\x10\x00\x12\x10\n" +
