@@ -215,7 +215,9 @@ func TestValidateSchema(t *testing.T) {
 	}
 }
 
-// TestAlterTableAlgorithm confirms that we use ALGORITHM=COPY during alter tables
+// TestAlterTableAlgorithm confirms that ALTER TABLE statements use
+// ALGORITHM=COPY on MySQL < 8.0.32 (to work around a MySQL bug in the
+// INSTANT DDL redo log format) and omit the clause on MySQL >= 8.0.32.
 func TestAlterTableAlgorithm(t *testing.T) {
 	type testCase struct {
 		testName      string
@@ -227,28 +229,81 @@ func TestAlterTableAlgorithm(t *testing.T) {
 		{"add column", "t1", "create table if not exists _vt.t1(i int)", "create table if not exists _vt.t1(i int, i1 int)"},
 		{"modify column", "t1", "create table if not exists _vt.t1(i int)", "create table if not exists _vt.t(i float)"},
 	}
-	si := &schemaInit{
-		env: vtenv.NewTestEnv(),
-	}
+
 	copyAlgo := sqlparser.AlgorithmValue("COPY")
-	for _, tc := range testCases {
-		t.Run(tc.testName, func(t *testing.T) {
-			diff, err := si.findTableSchemaDiff(tc.tableName, tc.currentSchema, tc.desiredSchema)
-			require.NoError(t, err)
-			stmt, err := si.env.Parser().Parse(diff)
-			require.NoError(t, err)
-			alterTable, ok := stmt.(*sqlparser.AlterTable)
-			require.True(t, ok)
-			require.NotNil(t, alterTable)
-			var alterAlgo sqlparser.AlterOption
-			for i, opt := range alterTable.AlterOptions {
-				if _, ok := opt.(sqlparser.AlgorithmValue); ok {
-					alterAlgo = alterTable.AlterOptions[i]
-				}
+
+	newSchemaInit := func(t *testing.T, envVersion, serverVersion string) *schemaInit {
+		t.Helper()
+
+		env, err := vtenv.New(vtenv.Options{MySQLServerVersion: envVersion})
+		require.NoError(t, err)
+
+		versionResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"@@version",
+			"varchar"),
+			serverVersion,
+		)
+
+		exec := func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
+			if strings.EqualFold(query, sidecarVersionQuery) {
+				return versionResult, nil
 			}
-			require.Equal(t, copyAlgo, alterAlgo)
-		})
+			return nil, errors.New("unexpected query: " + query)
+		}
+
+		return &schemaInit{
+			env:  env,
+			exec: exec,
+		}
 	}
+
+	t.Run("omitted on MySQL >= 8.0.32", func(t *testing.T) {
+		si := newSchemaInit(t, "8.0.31", "8.0.32")
+
+		for _, tc := range testCases {
+			t.Run(tc.testName, func(t *testing.T) {
+				diff, err := si.findTableSchemaDiff(tc.tableName, tc.currentSchema, tc.desiredSchema)
+				require.NoError(t, err)
+
+				stmt, err := si.env.Parser().Parse(diff)
+				require.NoError(t, err)
+
+				alterTable, ok := stmt.(*sqlparser.AlterTable)
+				require.True(t, ok)
+				require.NotNil(t, alterTable)
+
+				for _, opt := range alterTable.AlterOptions {
+					_, isAlgo := opt.(sqlparser.AlgorithmValue)
+					require.False(t, isAlgo, "expected no ALGORITHM hint on MySQL >= 8.0.32")
+				}
+			})
+		}
+	})
+
+	t.Run("COPY on MySQL < 8.0.32", func(t *testing.T) {
+		si := newSchemaInit(t, "8.4.6", "8.0.31")
+
+		for _, tc := range testCases {
+			t.Run(tc.testName, func(t *testing.T) {
+				diff, err := si.findTableSchemaDiff(tc.tableName, tc.currentSchema, tc.desiredSchema)
+				require.NoError(t, err)
+
+				stmt, err := si.env.Parser().Parse(diff)
+				require.NoError(t, err)
+
+				alterTable, ok := stmt.(*sqlparser.AlterTable)
+				require.True(t, ok)
+				require.NotNil(t, alterTable)
+				var found sqlparser.AlterOption
+				for _, opt := range alterTable.AlterOptions {
+					if _, ok := opt.(sqlparser.AlgorithmValue); ok {
+						found = opt
+					}
+				}
+				require.Equal(t, copyAlgo, found, "expected ALGORITHM=COPY on MySQL < 8.0.32")
+			})
+		}
+	})
 }
 
 // TestTableSchemaDiff ensures that the diff produced by schemaInit.findTableSchemaDiff
@@ -272,7 +327,7 @@ func TestTableSchemaDiff(t *testing.T) {
 			table:         "t1",
 			oldSchema:     "create table if not exists _vt.t1(i int) charset=utf8mb4",
 			newSchema:     "create table if not exists _vt.t(i int) charset=utf8mb3",
-			expectedAlter: "alter table _vt.t1 charset utf8mb3, algorithm = copy",
+			expectedAlter: "alter table _vt.t1 charset utf8mb3",
 		},
 		{
 			name:         "empty charset",
@@ -286,35 +341,35 @@ func TestTableSchemaDiff(t *testing.T) {
 			table:         "t1",
 			oldSchema:     "create table if not exists _vt.t1(i int) engine=myisam",
 			newSchema:     "create table if not exists _vt.t(i int) engine=innodb",
-			expectedAlter: "alter table _vt.t1 engine innodb, algorithm = copy",
+			expectedAlter: "alter table _vt.t1 engine innodb",
 		},
 		{
 			name:          "add, modify, transfer PK",
 			table:         "t1",
 			oldSchema:     "create table _vt.t1 (i int primary key, i1 varchar(10)) charset utf8mb4",
 			newSchema:     "create table _vt.t1 (i int, i1 varchar(20) character set utf8mb3 collate utf8mb3_bin, i2 int, primary key (i2)) charset utf8mb4",
-			expectedAlter: "alter table _vt.t1 drop primary key, modify column i1 varchar(20) character set utf8mb3 collate utf8mb3_bin, add column i2 int, add primary key (i2), algorithm = copy",
+			expectedAlter: "alter table _vt.t1 drop primary key, modify column i1 varchar(20) character set utf8mb3 collate utf8mb3_bin, add column i2 int, add primary key (i2)",
 		},
 		{
 			name:          "modify visibility and add comment",
 			table:         "t1",
 			oldSchema:     "create table if not exists _vt.t1(c1 int, c2 int, c3 varchar(100)) charset utf8mb4",
 			newSchema:     "create table if not exists _vt.t1(c1 int, c2 int, c3 varchar(100) invisible comment 'hoping to drop') charset utf8mb4",
-			expectedAlter: "alter table _vt.t1 modify column c3 varchar(100) comment 'hoping to drop' invisible, algorithm = copy",
+			expectedAlter: "alter table _vt.t1 modify column c3 varchar(100) comment 'hoping to drop' invisible",
 		},
 		{
 			name:          "add PK and remove index",
 			table:         "t1",
 			oldSchema:     "create table if not exists _vt.t1(c1 int, c2 int, c3 varchar(100), key (c2)) charset utf8mb4",
 			newSchema:     "create table if not exists _vt.t1(c1 int primary key, c2 int, c3 varchar(100)) charset utf8mb4",
-			expectedAlter: "alter table _vt.t1 drop key c2, add primary key (c1), algorithm = copy",
+			expectedAlter: "alter table _vt.t1 drop key c2, add primary key (c1)",
 		},
 		{
 			name:          "add generated col",
 			table:         "t1",
 			oldSchema:     "create table if not exists _vt.t1(c1 int primary key) charset utf8mb4",
 			newSchema:     "create table if not exists _vt.t1(c1 int primary key, c2 varchar(10) generated always as ('hello')) charset utf8mb4",
-			expectedAlter: "alter table _vt.t1 add column c2 varchar(10) as ('hello') virtual, algorithm = copy",
+			expectedAlter: "alter table _vt.t1 add column c2 varchar(10) as ('hello') virtual",
 		},
 	}
 
