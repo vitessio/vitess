@@ -24,6 +24,8 @@
         - [QueryThrottler Event-Driven Configuration Updates](#vttablet-querythrottler-config-watch)
         - [New `in_order_completion_pending_count` field in OnlineDDL outputs](#vttablet-onlineddl-in-order-completion-count)
         - [Tablet Shutdown Tracking and Connection Validation](#vttablet-tablet-shutdown-validation)
+    - **[Cluster Management](#minor-changes-cluster-management)**
+        - [EmergencyReparentShard File-Based Replica Filtering](#ers-file-based-replica-filtering)
     - **[VTOrc](#minor-changes-vtorc)**
         - [New `--cell` Flag](#vtorc-cell-flag)
         - [Improved VTOrc Discovery Logging](#vtorc-improved-discovery-logging)
@@ -191,6 +193,20 @@ Vitess now tracks when tablets cleanly shut down and validates tablet records be
 **Connection Validation**: When a tablet record has `tablet_shutdown_time` set, Vitess components will skip connection attempts and return an error indicating the tablet is shutdown. VTOrc will now skip polling tablets that have `tablet_shutdown_time` set. For tablets that shutdown uncleanly (crashed, killed, etc.), the field remains `nil` and the pre-v24 behavior is preserved (connection attempt with error logging).
 
 **Note**: This is a best-effort mechanism. Tablets that are killed or crash may not have the opportunity to set this field, in which case components will continue to attempt connections as they did in v23 and earlier.
+
+### <a id="minor-changes-cluster-management"/>Cluster Management</a>
+
+#### <a id="ers-file-based-replica-filtering"/>EmergencyReparentShard File-Based Replica Filtering</a>
+
+`EmergencyReparentShard` (ERS) now supports mixed replication environments with file-based replicas. Previously, ERS failed when encountering tablets without GTID positions. Now, file-based replicas are automatically skipped during candidate selection, allowing emergency failover to proceed.
+
+- File-based replicas (using file or MariaDB position-based replication instead of MySQL GTIDs) are skipped during ERS candidate selection
+- File-based replicas no longer stop replication when they won't be considered as candidates
+- Errant GTID detection now runs on all GTID-based shards
+
+**Note:** If a file-based replica is configured as a semi-sync acker, ERS will fail with an error rather than skip it. This prevents potential data loss, since a semi-sync acker might contain writes that haven't been acknowledged elsewhere.
+
+**Use Case:** Operators who maintain file-based replicas alongside GTID-based replicas in the same shard—for example, replicas dedicated to backups, analytics, or other background workloads. These replicas no longer block emergency failover as long as they aren't semi-sync ackers.
 
 ### <a id="minor-changes-vtorc"/>VTOrc</a>
 
