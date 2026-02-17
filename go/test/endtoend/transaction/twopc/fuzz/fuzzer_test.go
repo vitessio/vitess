@@ -337,7 +337,11 @@ func (fz *fuzzer) generateAndExecuteTransaction(t *testing.T, threadId int) {
 		}
 	}
 	_, err = conn.ExecuteFetch(finalCommand, 0, false)
-	require.NoError(t, err)
+	// We don't care about the following case of errors here as the transaction is aborted, which is what we ultimately wanted:
+	// target: ks.80-.primary: vttablet: rpc error: code = Aborted desc = transaction 1771351525769549550: in use: for query (CallerID: userData1) (errno 1317) (sqlstate 70100) during query: rollback
+	if finalCommand != "rollback" {
+		require.NoError(t, err)
+	}
 }
 
 func getUpdateQuery(incrementVal int32, id int) string {
