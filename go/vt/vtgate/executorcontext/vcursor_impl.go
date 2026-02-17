@@ -595,8 +595,18 @@ func (vc *VCursorImpl) SelectedKeyspace() (*vindexes.Keyspace, error) {
 	return ks.Keyspace, nil
 }
 
-var errNoDbAvailable = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "no database available")
+var (
+	errNoDbAvailable = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "no database available")
 
+	// anyShardDestination is reused across canResolveKeyspace calls to avoid
+	// allocating a new slice on every invocation.
+	anyShardDestination = []key.ShardDestination{key.DestinationAnyShard{}}
+)
+
+// AnyKeyspace returns a keyspace to use when no specific keyspace is selected.
+// It filters out keyspaces that do not serve vc.tabletType (e.g. skips PRIMARY-only
+// keyspaces for @replica queries), then prefers a sharded keyspace over unsharded.
+// Falls back to the unfiltered list when the resolver is nil or no keyspace matches.
 func (vc *VCursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
 	keyspace, err := vc.SelectedKeyspace()
 	if err == nil {
@@ -622,22 +632,27 @@ func (vc *VCursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
 	return keyspaces[0], nil
 }
 
-// canResolveKeyspace checks whether the given keyspace has a partition for the
-// current tablet type by attempting a lightweight resolve through the resolver.
+// canResolveKeyspace checks whether the given keyspace has a SrvKeyspace partition
+// for vc.tabletType. Uses ResolveDestinations which reads cached SrvKeyspace data,
+// following the same code path as explicit keyspace routing (Resolver.GetKeyspaceShards).
 func (vc *VCursorImpl) canResolveKeyspace(ksName string) bool {
 	if vc.resolver == nil {
 		return true
 	}
 	_, _, err := vc.resolver.ResolveDestinations(
 		context.Background(), ksName, vc.tabletType,
-		nil, []key.ShardDestination{key.DestinationAnyShard{}},
+		nil, anyShardDestination,
 	)
 	return err == nil
 }
 
-// filterKeyspacesByTabletType returns keyspaces that can serve vc.tabletType.
-// Falls back to the original list if no keyspaces pass the filter (backwards compat).
+// filterKeyspacesByTabletType filters keyspaces to those that can serve vc.tabletType.
+// Returns the original list unchanged when the resolver is nil (no filtering possible)
+// or when no keyspaces pass the filter (backwards compatibility).
 func (vc *VCursorImpl) filterKeyspacesByTabletType(keyspaces []*vindexes.Keyspace) []*vindexes.Keyspace {
+	if vc.resolver == nil {
+		return keyspaces
+	}
 	var filtered []*vindexes.Keyspace
 	for _, ks := range keyspaces {
 		if vc.canResolveKeyspace(ks.Name) {
@@ -650,7 +665,7 @@ func (vc *VCursorImpl) filterKeyspacesByTabletType(keyspaces []*vindexes.Keyspac
 	return keyspaces
 }
 
-// getSortedServingKeyspaces gets the sorted serving keyspaces
+// getSortedServingKeyspaces returns serving keyspaces sorted alphabetically by name.
 func (vc *VCursorImpl) getSortedServingKeyspaces() []*vindexes.Keyspace {
 	var keyspaces []*vindexes.Keyspace
 
@@ -675,6 +690,8 @@ func (vc *VCursorImpl) getSortedServingKeyspaces() []*vindexes.Keyspace {
 	return keyspaces
 }
 
+// FirstSortedKeyspace returns the alphabetically first serving keyspace that can
+// serve vc.tabletType, falling back to the first serving keyspace if none match.
 func (vc *VCursorImpl) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
 	if len(vc.vschema.Keyspaces) == 0 {
 		return nil, errNoDbAvailable
