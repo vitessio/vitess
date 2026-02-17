@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	"vitess.io/vitess/go/mysql"
@@ -45,6 +46,7 @@ import (
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestNewEmergencyReparenter(t *testing.T) {
@@ -5848,6 +5850,330 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			winningPrimary, _, err := ers.findMostAdvanced(candidates, tt.tabletMap, EmergencyReparentOptions{durability: dp})
 			require.NoError(t, err)
 			require.True(t, slices.Contains(tt.wantMostAdvancedPossible, winningPrimary.Hostname), winningPrimary.Hostname)
+		})
+	}
+}
+
+func TestEmergencyReparenter_FileBasedReplicaIgnored(t *testing.T) {
+	tests := []struct {
+		name                 string
+		durability           string
+		emergencyReparentOps EmergencyReparentOptions
+		tmc                  *testutil.TabletManagerClient
+		cells                []string
+		keyspace             string
+		shard                string
+		shards               []*vtctldatapb.Shard
+		tablets              []*topodatapb.Tablet
+		shouldErr            bool
+		expectedNewPrimary   string
+	}{
+		{
+			name:                 "file-based replica ignored in GTID-based shard",
+			durability:           policy.DurabilityNone,
+			emergencyReparentOps: EmergencyReparentOptions{},
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000102": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000102": {
+						Result: "ok",
+						Error:  nil,
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000101": nil,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{
+								IoState:          int32(replication.ReplicationStateRunning),
+								SqlState:         int32(replication.ReplicationStateRunning),
+								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+							},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{
+								IoState:          int32(replication.ReplicationStateRunning),
+								SqlState:         int32(replication.ReplicationStateRunning),
+								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+							},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+							},
+						},
+					},
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{
+								IoState:          int32(replication.ReplicationStateRunning),
+								SqlState:         int32(replication.ReplicationStateRunning),
+								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
+							},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
+							},
+						},
+					},
+					// File-based replica - returns error and should be ignored
+					"zone1-0000000103": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{},
+							After:  &replicationdatapb.Status{},
+						},
+						Error: vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "tablet does not support MySQL GTID"),
+					},
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+					},
+					"zone1-0000000101": {
+						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+					},
+					"zone1-0000000102": {
+						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26": nil,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "most up-to-date position, wins election",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  103,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "file-based-replica",
+				},
+			},
+			keyspace:           "testkeyspace",
+			shard:              "-",
+			cells:              []string{"zone1"},
+			shouldErr:          false,
+			expectedNewPrimary: "zone1-0000000100", // Note: In this test configuration, tablet 100 is selected
+		},
+		{
+			name:                 "file-based replica with semi-sync fails ERS",
+			durability:           policy.DurabilityNone,
+			emergencyReparentOps: EmergencyReparentOptions{},
+			tmc: &testutil.TabletManagerClient{
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{
+								IoState:          int32(replication.ReplicationStateRunning),
+								SqlState:         int32(replication.ReplicationStateRunning),
+								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+							},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{
+								IoState:          int32(replication.ReplicationStateRunning),
+								SqlState:         int32(replication.ReplicationStateRunning),
+								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+							},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+							},
+						},
+					},
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{
+								IoState:          int32(replication.ReplicationStateRunning),
+								SqlState:         int32(replication.ReplicationStateRunning),
+								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
+							},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
+							},
+						},
+					},
+					// File-based replica with semi-sync enabled - should cause ERS to fail
+					"zone1-0000000103": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{
+								// Semi-sync acker: both enabled and status are true
+								SemiSyncReplicaEnabled: true,
+								SemiSyncReplicaStatus:  true,
+							},
+							After: &replicationdatapb.Status{},
+						},
+						Error: vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "tablet does not support MySQL GTID"),
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  103,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "file-based-semi-sync-replica",
+				},
+			},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			cells:     []string{"zone1"},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+
+			logger := logutil.NewMemoryLogger()
+			ev := &events.Reparent{}
+
+			for i, tablet := range tt.tablets {
+				if tablet.Type == topodatapb.TabletType_UNKNOWN {
+					tablet.Type = topodatapb.TabletType_REPLICA
+				}
+				tt.tablets[i] = tablet
+			}
+
+			ts := memorytopo.NewServer(ctx, tt.cells...)
+			defer ts.Close()
+			testutil.AddShards(ctx, t, ts, tt.shards...)
+			testutil.AddTablets(ctx, t, ts, nil, tt.tablets...)
+			reparenttestutil.SetKeyspaceDurability(ctx, t, ts, tt.keyspace, tt.durability)
+
+			lctx, unlock, lerr := ts.LockShard(ctx, tt.keyspace, tt.shard, "test lock")
+			require.NoError(t, lerr, "could not lock %s/%s for testing", tt.keyspace, tt.shard)
+
+			defer func() {
+				unlock(&lerr)
+				require.NoError(t, lerr, "could not unlock %s/%s after test", tt.keyspace, tt.shard)
+			}()
+
+			ctx = lctx
+
+			erp := NewEmergencyReparenter(ts, tt.tmc, logger)
+
+			err := erp.reparentShardLocked(ctx, ev, tt.keyspace, tt.shard, tt.emergencyReparentOps)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+
+			// Verify the correct tablet was promoted
+			si, err := ts.GetShard(ctx, tt.keyspace, tt.shard)
+			require.NoError(t, err)
+			require.NotNil(t, si.PrimaryAlias)
+			require.Equal(t, tt.expectedNewPrimary, topoproto.TabletAliasString(si.PrimaryAlias))
 		})
 	}
 }
