@@ -38,13 +38,13 @@ func TestValidateVReplicationPermissions_FailsWithoutSelectPermissions(t *testin
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		_, err = conn.ExecuteFetch("revoke select on *.* from vt_filtered@localhost", 0, false)
 		require.NoError(c, err)
-	}, 10*time.Second, 200*time.Millisecond)
+	}, vreplicationPermissionTimeout*3, 200*time.Millisecond)
 	t.Cleanup(func() {
 		// Restore the permission for other tests
 		require.EventuallyWithT(t, func(c *assert.CollectT) {
 			_, err = conn.ExecuteFetch("grant select on *.* to vt_filtered@localhost", 0, false)
 			require.NoError(c, err)
-		}, 10*time.Second, 200*time.Millisecond)
+		}, vreplicationPermissionTimeout*3, 200*time.Millisecond)
 	})
 
 	req := &tmdatapb.ValidateVReplicationPermissionsRequest{}
@@ -56,7 +56,7 @@ func TestValidateVReplicationPermissions_FailsWithoutSelectPermissions(t *testin
 		require.NoError(c, err)
 		require.NotNil(c, res)
 		require.False(c, res.Ok)
-	}, vreplicationPermissionTimeout*2, 200*time.Millisecond)
+	}, vreplicationPermissionTimeout*3, 200*time.Millisecond)
 }
 
 func TestValidateVReplicationPermissions_FailsWithoutInsertPermissions(t *testing.T) {
@@ -73,13 +73,13 @@ func TestValidateVReplicationPermissions_FailsWithoutInsertPermissions(t *testin
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		_, err = conn.ExecuteFetch("revoke insert on *.* from vt_filtered@localhost", 0, false)
 		require.NoError(c, err)
-	}, 10*time.Second, 200*time.Millisecond)
+	}, vreplicationPermissionTimeout*3, 200*time.Millisecond)
 	t.Cleanup(func() {
 		// Restore the permission for other tests
 		require.EventuallyWithT(t, func(c *assert.CollectT) {
 			_, err = conn.ExecuteFetch("grant insert on *.* to vt_filtered@localhost", 0, false)
 			require.NoError(c, err)
-		}, 10*time.Second, 200*time.Millisecond)
+		}, vreplicationPermissionTimeout*3, 200*time.Millisecond)
 	})
 
 	req := &tmdatapb.ValidateVReplicationPermissionsRequest{}
@@ -91,7 +91,7 @@ func TestValidateVReplicationPermissions_FailsWithoutInsertPermissions(t *testin
 		require.NoError(c, err)
 		require.NotNil(c, res)
 		require.False(c, res.Ok)
-	}, vreplicationPermissionTimeout*2, 200*time.Millisecond)
+	}, vreplicationPermissionTimeout*3, 200*time.Millisecond)
 }
 
 func TestValidateVReplicationPermissions_FailsWithoutUpdatePermissions(t *testing.T) {
@@ -108,13 +108,13 @@ func TestValidateVReplicationPermissions_FailsWithoutUpdatePermissions(t *testin
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		_, err = conn.ExecuteFetch("revoke update on *.* from vt_filtered@localhost", 0, false)
 		require.NoError(c, err)
-	}, 10*time.Second, 200*time.Millisecond)
+	}, vreplicationPermissionTimeout*3, 200*time.Millisecond)
 	t.Cleanup(func() {
 		// Restore the permission for other tests
 		require.EventuallyWithT(t, func(c *assert.CollectT) {
 			_, err = conn.ExecuteFetch("grant update on *.* to vt_filtered@localhost", 0, false)
 			require.NoError(c, err)
-		}, 10*time.Second, 200*time.Millisecond)
+		}, vreplicationPermissionTimeout*3, 200*time.Millisecond)
 	})
 
 	req := &tmdatapb.ValidateVReplicationPermissionsRequest{}
@@ -126,7 +126,7 @@ func TestValidateVReplicationPermissions_FailsWithoutUpdatePermissions(t *testin
 		require.NoError(c, err)
 		require.NotNil(c, res)
 		require.False(c, res.Ok)
-	}, vreplicationPermissionTimeout*2, 200*time.Millisecond)
+	}, vreplicationPermissionTimeout*3, 200*time.Millisecond)
 }
 
 func TestValidateVReplicationPermissions_FailsWithoutDeletePermissions(t *testing.T) {
@@ -143,13 +143,13 @@ func TestValidateVReplicationPermissions_FailsWithoutDeletePermissions(t *testin
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		_, err = conn.ExecuteFetch("revoke delete on *.* from vt_filtered@localhost", 0, false)
 		require.NoError(c, err)
-	}, 10*time.Second, 200*time.Millisecond)
+	}, vreplicationPermissionTimeout*3, 200*time.Millisecond)
 	t.Cleanup(func() {
 		// Restore the permission for other tests
 		require.EventuallyWithT(t, func(c *assert.CollectT) {
 			_, err = conn.ExecuteFetch("grant delete on *.* to vt_filtered@localhost", 0, false)
 			require.NoError(c, err)
-		}, 10*time.Second, 200*time.Millisecond)
+		}, vreplicationPermissionTimeout*3, 200*time.Millisecond)
 	})
 
 	req := &tmdatapb.ValidateVReplicationPermissionsRequest{}
@@ -161,7 +161,7 @@ func TestValidateVReplicationPermissions_FailsWithoutDeletePermissions(t *testin
 		require.NoError(c, err)
 		require.NotNil(c, res)
 		require.False(c, res.Ok)
-	}, vreplicationPermissionTimeout*2, 200*time.Millisecond)
+	}, vreplicationPermissionTimeout*3, 200*time.Millisecond)
 }
 
 func TestValidateVReplicationPermissions_FailsIfUserCantLogin(t *testing.T) {
@@ -177,13 +177,13 @@ func TestValidateVReplicationPermissions_FailsIfUserCantLogin(t *testing.T) {
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		_, err = conn.ExecuteFetch("alter user 'vt_filtered'@'localhost' account lock", 0, false)
 		require.NoError(c, err)
-	}, vreplicationPermissionTimeout*2, 200*time.Millisecond)
+	}, vreplicationPermissionTimeout*3, 200*time.Millisecond)
 	t.Cleanup(func() {
 		// Restore the permission for other tests
 		require.EventuallyWithT(t, func(c *assert.CollectT) {
 			_, err = conn.ExecuteFetch("alter user 'vt_filtered'@'localhost' account unlock", 0, false)
 			require.NoError(c, err)
-		}, vreplicationPermissionTimeout*2, 200*time.Millisecond)
+		}, vreplicationPermissionTimeout*3, 200*time.Millisecond)
 	})
 
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -195,5 +195,5 @@ func TestValidateVReplicationPermissions_FailsIfUserCantLogin(t *testing.T) {
 		// This is an unexpected error, so we receive an error back.
 		require.Error(c, err)
 		require.Contains(c, err.Error(), "Access denied for user 'vt_filtered'@'localhost'")
-	}, vreplicationPermissionTimeout*2, 200*time.Millisecond)
+	}, vreplicationPermissionTimeout*3, 200*time.Millisecond)
 }
