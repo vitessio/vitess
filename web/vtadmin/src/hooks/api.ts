@@ -21,7 +21,7 @@ import {
     useQueryClient,
     UseQueryOptions,
     UseQueryResult,
-} from 'react-query';
+} from '@tanstack/react-query';
 import {
     fetchBackups,
     fetchClusters,

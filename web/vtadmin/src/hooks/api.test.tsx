@@ -15,7 +15,7 @@
  */
 import React from 'react';
 import { renderHook } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from 'react-query';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import * as api from './api';
 import * as httpAPI from '../api/http';

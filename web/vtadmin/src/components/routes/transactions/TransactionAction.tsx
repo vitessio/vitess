@@ -1,7 +1,7 @@
 import React from 'react';
 import { Icon, Icons } from '../../Icon';
 import Dialog from '../../dialog/Dialog';
-import { UseMutationResult } from 'react-query';
+import { UseMutationResult } from '@tanstack/react-query';
 
 interface TransactionActionProps {
     isOpen: boolean;

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import { useState } from 'react';
-import { useQueryClient } from 'react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { Link, useHistory } from 'react-router-dom';
 
 import { useClusters, useCreateKeyspace } from '../../../hooks/api';

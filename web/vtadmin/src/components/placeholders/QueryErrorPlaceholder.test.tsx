@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import { fireEvent, render, renderHook, screen, within } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from 'react-query';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { QueryErrorPlaceholder } from './QueryErrorPlaceholder';
 import * as httpAPI from '../../api/http';
