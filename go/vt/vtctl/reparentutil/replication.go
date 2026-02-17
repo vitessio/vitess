@@ -18,6 +18,7 @@ package reparentutil
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -284,6 +285,13 @@ func stopReplicationAndBuildStatusMaps(
 				res.reachableTablets = append(res.reachableTablets, tabletInfo.Tablet)
 				m.Unlock()
 			} else {
+				// Check if this is a file-based replica that doesn't support MySQL GTID
+				if vterrors.Code(err) == vtrpc.Code_FAILED_PRECONDITION &&
+					strings.Contains(err.Error(), "does not support MySQL GTID") {
+					logger.Warningf("tablet %v does not support MySQL GTID (likely a file-based replica); skipping for emergency reparent candidate selection", alias)
+					err = nil // Don't treat this as a fatal error
+					return
+				}
 				logger.Warningf("failed to get replication status from %v: %v", alias, err)
 				err = vterrors.Wrapf(err, "error when getting replication status for alias %v: %v", alias, err)
 			}
