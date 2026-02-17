@@ -567,8 +567,13 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
 	}
 	dr.TableName = td.table.Name
 
-	sourceExecutor := newPrimitiveExecutor(ctx, td.sourcePrimitive, "source")
-	targetExecutor := newPrimitiveExecutor(ctx, td.targetPrimitive, "target")
+	// Scope executor goroutines to this single diff attempt, rather
+	// than surviving until the controller context is canceled.
+	execCtx, cancelExec := context.WithCancel(ctx)
+	defer cancelExec()
+
+	sourceExecutor := newPrimitiveExecutor(execCtx, td.sourcePrimitive, "source")
+	targetExecutor := newPrimitiveExecutor(execCtx, td.targetPrimitive, "target")
 	var sourceRow, lastProcessedRow, targetRow []sqltypes.Value
 	advanceSource := true
 	advanceTarget := true
