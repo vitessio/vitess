@@ -958,7 +958,7 @@ func TestVStreamRetriableErrors(t *testing.T) {
 		{
 			name:         "gtid mismatch",
 			code:         vtrpcpb.Code_INVALID_ARGUMENT,
-			msg:          "GTIDSet Mismatch aa",
+			msg:          vterrors.GTIDSetMismatch + " aa",
 			shouldRetry:  true,
 			ignoreTablet: true,
 		},

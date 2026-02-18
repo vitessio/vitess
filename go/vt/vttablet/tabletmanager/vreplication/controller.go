@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
@@ -185,9 +186,14 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	return ct, nil
 }
 
+// Returns the shared prefix for log messages in the controller, includes workflow and stream ID.
+func (ct *controller) logPrefix() string {
+	return fmt.Sprintf("workflow %v, stream %v:", ct.workflow, ct.id)
+}
+
 func (ct *controller) run(ctx context.Context) {
 	defer func() {
-		log.Info(fmt.Sprintf("stream %v: stopped", ct.id))
+		log.Info(ct.logPrefix() + " stopped")
 		close(ct.done)
 	}()
 
@@ -200,7 +206,7 @@ func (ct *controller) run(ctx context.Context) {
 		// Sometimes, canceled contexts get wrapped as errors.
 		select {
 		case <-ctx.Done():
-			log.Warn("context canceled: " + err.Error())
+			log.Warn(fmt.Sprintf("%s context canceled: %v", ct.logPrefix(), err))
 			return
 		default:
 		}
@@ -209,18 +215,19 @@ func (ct *controller) run(ctx context.Context) {
 		action := discovery.ShouldRetryTabletError(err)
 		if action == discovery.TabletErrorActionIgnoreTablet && ct.lastPickedTablet != nil {
 			ct.ignoreTablets = append(ct.ignoreTablets, ct.lastPickedTablet)
-			log.Info(fmt.Sprintf("stream %v: adding tablet %v to ignore list due to error: %v", ct.id, ct.lastPickedTablet, err))
+			log.Info(fmt.Sprintf("%s adding tablet %v to ignore list due to error: %v",
+				ct.logPrefix(), topoproto.TabletAliasString(ct.lastPickedTablet), err))
 		} else if action == discovery.TabletErrorActionFail {
 			// Retry for unrecoverable errors since some other process may change the state leading to this error.
-			log.Warn(fmt.Sprintf("stream %v: potentially unrecoverable error, will retry: %v", ct.id, err))
+			log.Warn(fmt.Sprintf("%s potentially unrecoverable error, will retry: %v", ct.logPrefix(), err))
 		}
 
 		ct.blpStats.ErrorCounts.Add([]string{"Stream Error"}, 1)
-		binlogplayer.LogError(fmt.Sprintf("error in stream %v, will retry after %v", ct.id, ct.WorkflowConfig.RetryDelay), err)
+		binlogplayer.LogError(fmt.Sprintf("%s error, will retry after %v", ct.logPrefix(), ct.WorkflowConfig.RetryDelay), err)
 		timer := time.NewTimer(ct.WorkflowConfig.RetryDelay)
 		select {
 		case <-ctx.Done():
-			log.Warn("context canceled: " + err.Error())
+			log.Warn(fmt.Sprintf("%s context canceled: %v", ct.logPrefix(), err))
 			timer.Stop()
 			return
 		case <-timer.C:
@@ -365,7 +372,7 @@ func (ct *controller) pickSourceTablet(ctx context.Context, dbClient binlogplaye
 		return nil, nil
 	}
 	if ct.tpTs == nil {
-		return nil, fmt.Errorf("no tablet picker configured for stream %d", ct.id)
+		return nil, fmt.Errorf("no tablet picker configured for %s/%s", ct.source.Keyspace, ct.source.Shard)
 	}
 	log.Info(fmt.Sprintf("Trying to find an eligible source tablet for vreplication stream id %d for workflow: %s",
 		ct.id, ct.workflow))

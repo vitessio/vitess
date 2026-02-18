@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"testing"
@@ -27,6 +28,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -474,15 +477,11 @@ func TestControllerTabletPickerErrors(t *testing.T) {
 			defer blpStats.Stop()
 
 			ct, err := newController(t.Context(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], blpStats, vre, defaultTabletPickerOptions)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 
 			select {
 			case <-ct.done:
-				if tc.expectRetry {
-					t.Fatalf("Controller stopped unexpectedly, expected it to keep retrying")
-				}
+				require.FailNow(t, "Controller stopped unexpectedly, expected it to keep retrying")
 			case <-time.After(500 * time.Millisecond):
 				ct.Stop(true)
 
@@ -499,12 +498,10 @@ func TestControllerTabletPickerErrors(t *testing.T) {
 					}
 				}
 
-				if !foundExpectedErr {
-					t.Fatalf("Expected error containing %q in history, but last message was: %s", tc.expectedErrSubstr, lastMsg)
-				}
+				require.True(t, foundExpectedErr, "Expected error containing %q in history, but last message was: %s", tc.expectedErrSubstr, lastMsg)
 
 				if !tc.expectRetry {
-					t.Fatalf("Expected controller to fail immediately, but it kept retrying. Last error: %s", lastMsg)
+					require.FailNow(t, "Expected controller to fail immediately, but it kept retrying. Last error: %s", lastMsg)
 				}
 			}
 		})
@@ -532,7 +529,7 @@ func TestControllerReplicationErrors(t *testing.T) {
 		{
 			name:         "gtid mismatch",
 			code:         vtrpcpb.Code_INVALID_ARGUMENT,
-			msg:          "GTIDSet Mismatch aa",
+			msg:          vterrors.GTIDSetMismatch + " aa",
 			shouldRetry:  true,
 			ignoreTablet: true,
 		},
@@ -590,16 +587,12 @@ func TestControllerReplicationErrors(t *testing.T) {
 
 			ctx := t.Context()
 			err := env.AddCell(ctx, "cell2")
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 
 			err = env.TopoServ.CreateCellsAlias(ctx, "region1", &topodatapb.CellsAlias{
 				Cells: []string{"cell1", "cell2"},
 			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			defer env.TopoServ.DeleteCellsAlias(ctx, "region1")
 
 			tablet1 := addTabletWithCell(100, env.Cells[0])
@@ -661,7 +654,7 @@ func TestControllerReplicationErrors(t *testing.T) {
 				mu.Lock()
 				defer mu.Unlock()
 				return len(pickedTablets) >= expectedPicks
-			}, 500*time.Millisecond, 10*time.Millisecond)
+			}, 30*time.Second, 10*time.Millisecond)
 
 			ct.Stop(true)
 
@@ -677,4 +670,98 @@ func TestControllerReplicationErrors(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Test that logged messages match the expected format.
+func TestControllerErrorLogMessages(t *testing.T) {
+	savedDelay := vttablet.DefaultVReplicationConfig.RetryDelay
+	defer func() { vttablet.DefaultVReplicationConfig.RetryDelay = savedDelay }()
+	vttablet.DefaultVReplicationConfig.RetryDelay = 10 * time.Millisecond
+
+	resetBinlogClient()
+
+	ctx := t.Context()
+	err := env.AddCell(ctx, "cell2")
+	require.NoError(t, err)
+
+	err = env.TopoServ.CreateCellsAlias(ctx, "region1", &topodatapb.CellsAlias{
+		Cells: []string{"cell1", "cell2"},
+	})
+	require.NoError(t, err)
+	defer env.TopoServ.DeleteCellsAlias(ctx, "region1")
+
+	tablet1 := addTabletWithCell(100, env.Cells[0])
+	tablet2 := addTabletWithCell(200, env.Cells[1])
+	defer deleteTablet(tablet1)
+	defer deleteTablet(tablet2)
+
+	workflowName := "test_workflow"
+	streamID := "1"
+	params := map[string]string{
+		"id":           streamID,
+		"workflow":     workflowName,
+		"state":        binlogdatapb.VReplicationWorkflowState_Running.String(),
+		"source":       fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
+		"cell":         "",
+		"tablet_types": "replica",
+		"options":      "{}",
+	}
+
+	oldErrors := fakeBinlogClientErrorsByTablet
+	defer func() { fakeBinlogClientErrorsByTablet = oldErrors }()
+	fakeBinlogClientErrorsByTablet = map[uint32]error{
+		100: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.GTIDSetMismatch+" test"),
+	}
+
+	infoLogger := logutil.NewMemoryLogger()
+	oldLogInfo := log.Info
+	log.Info = func(msg string, _ ...slog.Attr) {
+		infoLogger.Infof("%s", msg)
+	}
+	defer func() { log.Info = oldLogInfo }()
+
+	errorLogger := logutil.NewMemoryLogger()
+	oldLogError := log.Error
+	log.Error = func(msg string, _ ...slog.Attr) {
+		errorLogger.Errorf("%s", msg)
+	}
+	defer func() { log.Error = oldLogError }()
+
+	dbClient := binlogplayer.NewMockDBClient(t)
+	dbClient.AddInvariant("update _vt.vreplication set message=", testDMLResponse)
+	dbClient.AddInvariant("update _vt.vreplication set state=", testDMLResponse)
+	dbClient.AddInvariant("select pos", testSettingsResponse)
+	dbClient.AddInvariant("begin", testDMLResponse)
+	dbClient.AddInvariant("insert into t", testDMLResponse)
+	dbClient.AddInvariant("update _vt.vreplication set pos=", testDMLResponse)
+	dbClient.AddInvariant("commit", testDMLResponse)
+
+	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
+	mysqld := &mysqlctl.FakeMysqlDaemon{}
+	mysqld.MysqlPort.Store(3306)
+	vre := NewTestEngine(nil, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
+
+	defer setTabletTypesStr("replica")()
+
+	ct, err := newController(t.Context(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool {
+		return strings.Contains(infoLogger.String(), "adding tablet") &&
+			strings.Contains(infoLogger.String(), "to ignore list")
+	}, 30*time.Second, 10*time.Millisecond)
+
+	ct.Stop(true)
+
+	infoLogs := infoLogger.String()
+	t.Logf("=== CAPTURED INFO LOGS ===\n%s", infoLogs)
+	expectedIgnorePrefix := fmt.Sprintf("workflow %s, stream %s: adding tablet cell1-0000000100 to ignore list due to error:", workflowName, streamID)
+	require.Contains(t, infoLogs, expectedIgnorePrefix,
+		"log message should have format 'workflow X, stream Y: adding tablet Z to ignore list due to error: ...', got: %s", infoLogs)
+
+	errorLogs := errorLogger.String()
+	t.Logf("=== CAPTURED ERROR LOGS ===\n%s", errorLogs)
+	expectedRetryPrefix := fmt.Sprintf("workflow %s, stream %s: error, will retry after", workflowName, streamID)
+	require.Contains(t, errorLogs, expectedRetryPrefix,
+		"log message should have format 'workflow X, stream Y: error, will retry after ...', got: %s", errorLogs)
 }

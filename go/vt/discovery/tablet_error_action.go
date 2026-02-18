@@ -51,7 +51,7 @@ func ShouldRetryTabletError(err error) TabletErrorAction {
 
 	// INVALID_ARGUMENT typically means bad user input, but GTIDSet Mismatch is tablet-specific.
 	if errCode == vtrpcpb.Code_INVALID_ARGUMENT {
-		if strings.Contains(err.Error(), "GTIDSet Mismatch") {
+		if strings.Contains(err.Error(), vterrors.GTIDSetMismatch) {
 			return TabletErrorActionIgnoreTablet
 		}
 		return TabletErrorActionFail
