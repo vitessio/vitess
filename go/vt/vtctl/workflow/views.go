@@ -62,26 +62,36 @@ type resolveViewsOptions struct {
 // all the views given in `IncludeViews` were excluded by `ExcludeViews`, or if a table that a view references is not included
 // in the MoveTables.
 func (s *Server) resolveViews(opts resolveViewsOptions) ([]string, error) {
-	includedViews := make(map[string]*tabletmanagerdatapb.TableDefinition)
+	var includedViews map[string]*tabletmanagerdatapb.TableDefinition
 
+	switch {
 	// If a specific set of views was requested, validate that they exist in the source
 	// keyspace and use those.
-	if len(opts.req.IncludeViews) > 0 {
-		if err := includeViews(opts, includedViews); err != nil {
+	case len(opts.req.IncludeViews) > 0:
+		views, err := includeViews(opts)
+		if err != nil {
 			return nil, err
 		}
-	} else if opts.req.AllViews {
+
+		includedViews = views
+
+	// All views were requested, move all of them.
+	case opts.req.AllViews:
 		includedViews = opts.sourceViews
-	} else {
-		// No request to move views, ignore.
+
+	// No request to move views, ignore.
+	default:
 		return nil, nil
 	}
 
 	// If a specific set of views was requested to be excluded, validate them and filter them out.
 	if len(opts.req.ExcludeViews) > 0 {
-		if err := excludeViews(opts, includedViews); err != nil {
+		views, err := excludeViews(opts, includedViews)
+		if err != nil {
 			return nil, err
 		}
+
+		includedViews = views
 	}
 
 	if opts.skipViewValidation {
@@ -154,10 +164,11 @@ func (s *Server) validateViewReferences(views map[string]*tabletmanagerdatapb.Ta
 	return nil
 }
 
-// includeViews adds the views in IncludeViews to views.
-func includeViews(opts resolveViewsOptions, views map[string]*tabletmanagerdatapb.TableDefinition) error {
+// includeViews returns the views to include in the MoveTables.
+func includeViews(opts resolveViewsOptions) (map[string]*tabletmanagerdatapb.TableDefinition, error) {
 	var missingViews []string
 
+	views := make(map[string]*tabletmanagerdatapb.TableDefinition, len(opts.req.IncludeViews))
 	for _, viewName := range opts.req.IncludeViews {
 		viewDefinition, exists := opts.sourceViews[viewName]
 		if !exists {
@@ -171,14 +182,14 @@ func includeViews(opts resolveViewsOptions, views map[string]*tabletmanagerdatap
 
 	// Return an error if we found any views that don't exist in the source keyspace.
 	if len(missingViews) > 0 {
-		return fmt.Errorf("%w %q: %q", errViewsNotFound, opts.req.SourceKeyspace, strings.Join(missingViews, ","))
+		return nil, fmt.Errorf("%w %q: %q", errViewsNotFound, opts.req.SourceKeyspace, strings.Join(missingViews, ","))
 	}
 
-	return nil
+	return views, nil
 }
 
 // excludeViews excludes the views in ExcludeViews from views.
-func excludeViews(opts resolveViewsOptions, views map[string]*tabletmanagerdatapb.TableDefinition) error {
+func excludeViews(opts resolveViewsOptions, views map[string]*tabletmanagerdatapb.TableDefinition) (map[string]*tabletmanagerdatapb.TableDefinition, error) {
 	var missingViews []string
 
 	for _, viewName := range opts.req.ExcludeViews {
@@ -194,15 +205,15 @@ func excludeViews(opts resolveViewsOptions, views map[string]*tabletmanagerdatap
 
 	// Return an error if we found any views that don't exist in the source keyspace.
 	if len(missingViews) > 0 {
-		return fmt.Errorf("%w %q: %q", errViewsNotFound, opts.req.SourceKeyspace, strings.Join(missingViews, ","))
+		return nil, fmt.Errorf("%w %q: %q", errViewsNotFound, opts.req.SourceKeyspace, strings.Join(missingViews, ","))
 	}
 
 	// Make sure we didn't exclude all views.
 	if len(views) == 0 {
-		return errNoViewsToMove
+		return nil, errNoViewsToMove
 	}
 
-	return nil
+	return views, nil
 }
 
 // deployViews creates the materializer's views on the target keyspace.
