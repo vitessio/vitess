@@ -26,7 +26,7 @@ Always rebuild after code changes so tests run against up-to-date binaries.
 
 ```bash
 source build.env
-go test -run TestName -v -count=1 -timeout 10m ./go/test/endtoend/<test-dir>/...
+go test -count=1 -timeout 10m -run ^TestName$ vitess.io/vitess/go/test/endtoend/<pkg>
 ```
 
 Use `-timeout` generously. End-to-end tests start entire clusters (etcd, MySQL, vttablet, vtgate) and can take minutes. Default 10m is safe for most tests. `-count=1` disables caching, which is essential since these tests have side effects.
@@ -34,7 +34,7 @@ Use `-timeout` generously. End-to-end tests start entire clusters (etcd, MySQL, 
 To run a specific subtest:
 
 ```bash
-go test -run TestParent/SubTest -v -count=1 -timeout 10m ./go/test/endtoend/<test-dir>/...
+go test -count=1 -timeout 10m -run ^TestParent/SubTest$ vitess.io/vitess/go/test/endtoend/<pkg>
 ```
 
 ## VTDATAROOT
@@ -75,7 +75,7 @@ Look for `*-stderr.txt` files and glog files (`*.INFO`, `*.WARNING`, `*.ERROR`).
 Stale data in `VTDATAROOT` causes test failures: port conflicts, leftover MySQL data, stale socket files. Clear it between runs:
 
 ```bash
-rm -rf $VTDATAROOT/*
+rm -rf $VTDATAROOT/vtroot_*
 ```
 
 Do this before re-running tests that failed, especially if the previous run did not tear down cleanly (crash, timeout, ctrl-c).
@@ -86,7 +86,7 @@ Each end-to-end test package starts a `cluster.LocalProcessCluster` (topo, vtctl
 
 ## Debugging failures
 
-1. Clear VTDATAROOT: `rm -rf $VTDATAROOT/*`
+1. Clear VTDATAROOT: `rm -rf $VTDATAROOT/vtroot_*`
 2. Rebuild binaries: `make build`
 3. Run the failing test with `-v`
 4. On failure, read logs from `$VTDATAROOT/vtroot_*/tmp_*/`
