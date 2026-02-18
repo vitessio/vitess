@@ -670,12 +670,12 @@ func ValidateAndEditAlterTableStatement(originalTableName string, baseUUID strin
 		switch node := node.(type) {
 		case *sqlparser.DropKey:
 			if node.Type == sqlparser.CheckKeyType || node.Type == sqlparser.ForeignKeyType || node.Type == sqlparser.ConstraintType {
-				// drop a check or a foreign key constraint
-				mappedName, ok := constraintMap[node.Name.String()]
-				if !ok {
+				// drop a check, foreign key, or a named constraint.
+				if mappedName, ok := constraintMap[node.Name.String()]; ok {
+					node.Name = sqlparser.NewIdentifierCI(mappedName)
+				} else if node.Type != sqlparser.ConstraintType {
 					return false, fmt.Errorf("Found DROP CONSTRAINT: %v, but could not find constraint name in map", sqlparser.CanonicalString(node))
 				}
-				node.Name = sqlparser.NewIdentifierCI(mappedName)
 			}
 		case *sqlparser.AddConstraintDefinition:
 			oldName := node.ConstraintDefinition.Name.String()

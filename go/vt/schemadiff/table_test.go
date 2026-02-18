@@ -3062,6 +3062,18 @@ func TestValidate(t *testing.T) {
 			alter: "alter table t drop constraint f",
 			to:    "create table t (id int primary key, i int, key i_idx (i))",
 		},
+		{
+			name:  "drop constraint named unique key",
+			from:  "create table t (id int primary key, name varchar(50), constraint uk_name unique (name))",
+			alter: "alter table t drop constraint uk_name",
+			to:    "create table t (id int primary key, name varchar(50))",
+		},
+		{
+			name:  "drop constraint named primary key",
+			from:  "create table t (id int, constraint pk_name primary key (id))",
+			alter: "alter table t drop constraint pk_name",
+			to:    "create table t (id int)",
+		},
 	}
 	hints := DiffHints{}
 	env := NewTestEnv()
