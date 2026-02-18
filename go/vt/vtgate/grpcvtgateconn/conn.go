@@ -238,6 +238,13 @@ func (a *streamExecuteMultiAdapter) Recv() (*sqltypes.Result, bool, error) {
 		// we reach here, only when it is the last packet.
 		// as in the last packet we receive the session and there is no result
 	}
+
+	// When a new result set starts, clear cached fields from the previous
+	// result set.
+	if newResult {
+		a.fields = nil
+	}
+
 	if err != nil {
 		return nil, newResult, err
 	}
