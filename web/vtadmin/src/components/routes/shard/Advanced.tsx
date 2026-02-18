@@ -14,7 +14,7 @@ import {
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
 import ActionPanel from '../../ActionPanel';
 import { success, warn } from '../../Snackbar';
-import { UseMutationResult } from 'react-query';
+import { UseMutationResult } from '@tanstack/react-query';
 import Toggle from '../../toggle/Toggle';
 import { Label } from '../../inputs/Label';
 import { TextInput } from '../../TextInput';

@@ -151,8 +151,6 @@ func (vtp *VtProcess) WaitStart() (err error) {
 		vtp.Binary,
 		"--port", strconv.Itoa(vtp.Port),
 		"--bind-address", vtp.BindAddress,
-		"--log_dir", vtp.LogDirectory,
-		"--alsologtostderr",
 	)
 
 	if vtp.PortGrpc != 0 {
@@ -173,7 +171,7 @@ func (vtp *VtProcess) WaitStart() (err error) {
 		vtp.proc.Stdout = os.Stdout
 	}
 
-	log.Infof("%v %v", strings.Join(vtp.proc.Args, " "))
+	log.Info(strings.Join(vtp.proc.Args, " "))
 	err = vtp.proc.Start()
 	if err != nil {
 		return

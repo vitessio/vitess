@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -217,7 +218,9 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{})
 	turnOnTxEngine()
-	assert.Empty(t, tsv.te.preparedPool.conns, "tsv.te.preparedPool.conns")
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		require.Empty(c, tsv.te.preparedPool.conns, "tsv.te.preparedPool.conns")
+	}, 5*time.Second, 10*time.Millisecond, "prepared transactions should be empty initially")
 	turnOffTxEngine()
 
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
@@ -237,7 +240,9 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 		}},
 	})
 	turnOnTxEngine()
-	assert.EqualValues(t, 1, len(tsv.te.preparedPool.conns), "len(tsv.te.preparedPool.conns)")
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		require.EqualValues(c, 1, len(tsv.te.preparedPool.conns), "len(tsv.te.preparedPool.conns)")
+	}, 5*time.Second, 10*time.Millisecond, "prepared transactions should be loaded from redo log")
 	got := tsv.te.preparedPool.conns["dtid0"].TxProperties().Queries
 	want := []tx.Query{{
 		Sql:    "update test_table set `name` = 2 where pk = 1 limit 10001",
@@ -245,7 +250,9 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	}}
 	utils.MustMatch(t, want, got, "Prepared queries")
 	turnOffTxEngine()
-	assert.Empty(t, tsv.te.preparedPool.conns, "tsv.te.preparedPool.conns")
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		require.Empty(c, tsv.te.preparedPool.conns, "tsv.te.preparedPool.conns")
+	}, 5*time.Second, 10*time.Millisecond, "prepared transactions should be cleared when transaction engine is turned off")
 
 	tsv.te.txPool.scp.lastID.Store(1)
 	// Ensure we continue past errors.
@@ -278,7 +285,9 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 		}},
 	})
 	turnOnTxEngine()
-	assert.EqualValues(t, 1, len(tsv.te.preparedPool.conns), "len(tsv.te.preparedPool.conns)")
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		require.EqualValues(c, 1, len(tsv.te.preparedPool.conns), "len(tsv.te.preparedPool.conns)")
+	}, 5*time.Second, 10*time.Millisecond, "only valid prepared transactions should be loaded from redo log")
 	got = tsv.te.preparedPool.conns["a:b:10"].TxProperties().Queries
 	want = []tx.Query{{
 		Sql:    "update test_table set `name` = 2 where pk = 1 limit 10001",
@@ -291,9 +300,13 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	}
 	utils.MustMatch(t, tsv.te.preparedPool.reserved, wantFailed, fmt.Sprintf("Failed dtids: %v, want %v", tsv.te.preparedPool.reserved, wantFailed))
 	// Verify last id got adjusted.
-	assert.EqualValues(t, 20, tsv.te.txPool.scp.lastID.Load(), "tsv.te.txPool.lastID.Get()")
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		require.EqualValues(c, 20, tsv.te.txPool.scp.lastID.Load(), "tsv.te.txPool.lastID.Get()")
+	}, 5*time.Second, 10*time.Millisecond, "lastID should be adjusted to the max id in redo log")
 	turnOffTxEngine()
-	assert.Empty(t, tsv.te.preparedPool.conns, "tsv.te.preparedPool.conns")
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		require.Empty(c, tsv.te.preparedPool.conns, "tsv.te.preparedPool.conns")
+	}, 5*time.Second, 10*time.Millisecond, "prepared transactions should be cleared when transaction engine is turned off")
 }
 
 func TestTabletServerCreateTransaction(t *testing.T) {
@@ -1685,24 +1698,18 @@ type testLogger struct {
 	logsMu sync.Mutex
 	logs   []string
 
-	savedInfof  func(format string, args ...any)
-	savedInfo   func(args ...any)
-	savedErrorf func(format string, args ...any)
-	savedError  func(args ...any)
+	savedInfo  func(msg string, attrs ...slog.Attr)
+	savedError func(msg string, attrs ...slog.Attr)
 }
 
 func newTestLogger() *testLogger {
 	tl := &testLogger{
-		savedInfof:  log.Infof,
-		savedInfo:   log.Info,
-		savedErrorf: log.Errorf,
-		savedError:  log.Error,
+		savedInfo:  log.Info,
+		savedError: log.Error,
 	}
 	tl.logsMu.Lock()
 	defer tl.logsMu.Unlock()
-	log.Infof = tl.recordInfof
 	log.Info = tl.recordInfo
-	log.Errorf = tl.recordErrorf
 	log.Error = tl.recordError
 	return tl
 }
@@ -1710,42 +1717,22 @@ func newTestLogger() *testLogger {
 func (tl *testLogger) Close() {
 	tl.logsMu.Lock()
 	defer tl.logsMu.Unlock()
-	log.Infof = tl.savedInfof
 	log.Info = tl.savedInfo
-	log.Errorf = tl.savedErrorf
 	log.Error = tl.savedError
 }
 
-func (tl *testLogger) recordInfof(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
+func (tl *testLogger) recordInfo(msg string, attrs ...slog.Attr) {
 	tl.logsMu.Lock()
 	defer tl.logsMu.Unlock()
 	tl.logs = append(tl.logs, msg)
-	tl.savedInfof(msg)
+	tl.savedInfo(msg, attrs...)
 }
 
-func (tl *testLogger) recordInfo(args ...any) {
-	msg := fmt.Sprint(args...)
+func (tl *testLogger) recordError(msg string, attrs ...slog.Attr) {
 	tl.logsMu.Lock()
 	defer tl.logsMu.Unlock()
 	tl.logs = append(tl.logs, msg)
-	tl.savedInfo(msg)
-}
-
-func (tl *testLogger) recordErrorf(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	tl.logs = append(tl.logs, msg)
-	tl.savedErrorf(msg)
-}
-
-func (tl *testLogger) recordError(args ...any) {
-	msg := fmt.Sprint(args...)
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	tl.logs = append(tl.logs, msg)
-	tl.savedError(msg)
+	tl.savedError(msg, attrs...)
 }
 
 func (tl *testLogger) getLog(i int) string {
