@@ -211,9 +211,8 @@ func (ct *controller) run(ctx context.Context) {
 			ct.ignoreTablets = append(ct.ignoreTablets, ct.lastPickedTablet)
 			log.Info(fmt.Sprintf("stream %v: adding tablet %v to ignore list due to error: %v", ct.id, ct.lastPickedTablet, err))
 		} else if action == discovery.TabletErrorActionFail {
-			// Don't retry for unrecoverable errors.
-			log.Error(fmt.Sprintf("stream %v: unrecoverable error, stopping: %v", ct.id, err))
-			return
+			// Retry for unrecoverable errors since some other process may change the state leading to this error.
+			log.Warn(fmt.Sprintf("stream %v: potentially unrecoverable error, will retry: %v", ct.id, err))
 		}
 
 		ct.blpStats.ErrorCounts.Add([]string{"Stream Error"}, 1)

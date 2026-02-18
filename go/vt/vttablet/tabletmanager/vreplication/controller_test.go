@@ -547,7 +547,7 @@ func TestControllerReplicationErrors(t *testing.T) {
 			name:         "invalid argument",
 			code:         vtrpcpb.Code_INVALID_ARGUMENT,
 			msg:          "final error",
-			shouldRetry:  false,
+			shouldRetry:  true, // Although this is a non-ephemeral error, in vreplication controller we will still retry.
 			ignoreTablet: false,
 		},
 		{
@@ -575,7 +575,7 @@ func TestControllerReplicationErrors(t *testing.T) {
 			name:         "non-ephemeral sql error",
 			code:         vtrpcpb.Code_UNKNOWN,
 			msg:          "vttablet: rpc error: code = Unknown desc = Duplicate entry '1' for key 'PRIMARY' (errno 1062) (sqlstate 23000)",
-			shouldRetry:  false,
+			shouldRetry:  true, // Although this is a non-ephemeral error, in vreplication controller we will still retry.
 			ignoreTablet: false,
 		},
 	}
