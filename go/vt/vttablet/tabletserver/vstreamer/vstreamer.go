@@ -633,25 +633,24 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 				Type: binlogdatapb.VEventType_COMMIT,
 			})
 		case sqlparser.StmtDDL:
-			if !shouldSend(binlogdatapb.VEventType_DDL) {
-				return nil, nil
-			}
-			if mustSendDDL(q, vs.cp.DBName(), vs.filter, vs.vse.env.Environment().Parser()) {
-				vevents = append(vevents, &binlogdatapb.VEvent{
-					Type: binlogdatapb.VEventType_GTID,
-					Gtid: replication.EncodePosition(vs.pos),
-				}, &binlogdatapb.VEvent{
-					Type:      binlogdatapb.VEventType_DDL,
-					Statement: q.SQL,
-				})
-			} else {
-				// If the DDL need not be sent, send a dummy OTHER event.
-				vevents = append(vevents, &binlogdatapb.VEvent{
-					Type: binlogdatapb.VEventType_GTID,
-					Gtid: replication.EncodePosition(vs.pos),
-				}, &binlogdatapb.VEvent{
-					Type: binlogdatapb.VEventType_OTHER,
-				})
+			if shouldSend(binlogdatapb.VEventType_DDL) {
+				if mustSendDDL(q, vs.cp.DBName(), vs.filter, vs.vse.env.Environment().Parser()) {
+					vevents = append(vevents, &binlogdatapb.VEvent{
+						Type: binlogdatapb.VEventType_GTID,
+						Gtid: replication.EncodePosition(vs.pos),
+					}, &binlogdatapb.VEvent{
+						Type:      binlogdatapb.VEventType_DDL,
+						Statement: q.SQL,
+					})
+				} else {
+					// If the DDL need not be sent, send a dummy OTHER event.
+					vevents = append(vevents, &binlogdatapb.VEvent{
+						Type: binlogdatapb.VEventType_GTID,
+						Gtid: replication.EncodePosition(vs.pos),
+					}, &binlogdatapb.VEvent{
+						Type: binlogdatapb.VEventType_OTHER,
+					})
+				}
 			}
 			if schema.MustReloadSchemaOnDDL(q.SQL, vs.cp.DBName(), vs.vse.env.Environment().Parser()) {
 				if err := vs.se.ReloadAt(vs.ctx, vs.pos); err != nil {
