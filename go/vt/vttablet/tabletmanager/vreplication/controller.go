@@ -135,7 +135,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	}
 	ct.id = int32(id)
 	ct.workflow = params["workflow"]
-	log.Info(fmt.Sprintf("creating controller with id: %v, name: %v, cell: %v, tabletTypes: %v", ct.id, ct.workflow, cell, tabletTypesStr))
+	log.Info(fmt.Sprintf("%s creating controller, cell: %v, tabletTypes: %v", ct.logPrefix(), cell, tabletTypesStr))
 
 	ct.lastWorkflowError = vterrors.NewLastError(fmt.Sprintf("VReplication controller %d for workflow %q", ct.id, ct.workflow), workflowConfig.MaxTimeToRetryError)
 
@@ -271,7 +271,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 	defer func() {
 		ct.sourceTablet.Store(&topodatapb.TabletAlias{})
 		if x := recover(); x != nil {
-			log.Error(fmt.Sprintf("stream %v: caught panic: %v\n%s", ct.id, x, tb.Stack(4)))
+			log.Error(fmt.Sprintf("%s caught panic: %v\n%s", ct.logPrefix(), x, tb.Stack(4)))
 			err = fmt.Errorf("panic: %v", x)
 		}
 	}()
@@ -343,7 +343,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 				log.Error(fmt.Sprintf("INTERNAL: unable to setState() in controller: %v. Could not set error text to: %v.", errSetState, err))
 				return err // yes, err and not errSetState.
 			}
-			log.Error(fmt.Sprintf("vreplication stream %d going into error state due to %+v", ct.id, err))
+			log.Error(fmt.Sprintf("%s going into error state due to %+v", ct.logPrefix(), err))
 			return nil // this will cause vreplicate to quit the workflow
 		}
 		return err
@@ -374,8 +374,7 @@ func (ct *controller) pickSourceTablet(ctx context.Context, dbClient binlogplaye
 	if ct.tpTs == nil {
 		return nil, fmt.Errorf("no tablet picker configured for %s/%s", ct.source.Keyspace, ct.source.Shard)
 	}
-	log.Info(fmt.Sprintf("Trying to find an eligible source tablet for vreplication stream id %d for workflow: %s",
-		ct.id, ct.workflow))
+	log.Info(fmt.Sprintf("%s trying to find an eligible source tablet in %s/%s", ct.logPrefix(), ct.source.Keyspace, ct.source.Shard))
 
 	// Create a fresh tablet picker with the current ignoreTablets list.
 	tp, err := discovery.NewTabletPicker(ctx, ct.tpTs, ct.tpCells, ct.vre.cell,
@@ -399,7 +398,7 @@ func (ct *controller) pickSourceTablet(ctx context.Context, dbClient binlogplaye
 		return tablet, err
 	}
 	ct.setMessage(dbClient, "Picked source tablet: "+tablet.Alias.String())
-	log.Info(fmt.Sprintf("Found eligible source tablet %s for vreplication stream id %d for workflow %s", tablet.Alias.String(), ct.id, ct.workflow))
+	log.Info(fmt.Sprintf("%s found eligible source tablet %s", ct.logPrefix(), tablet.Alias.String()))
 	ct.sourceTablet.Store(tablet.Alias)
 	ct.lastPickedTablet = tablet.Alias
 	return tablet, err
