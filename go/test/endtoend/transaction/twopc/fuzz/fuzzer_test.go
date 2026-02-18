@@ -501,15 +501,11 @@ func vttabletRestarts(t *testing.T) {
 		}
 		// Sometimes vttablets fail to connect to the topo server due to a minor blip there.
 		// We don't want to fail the test, so we retry setting up the vttablet.
-<<<<<<< HEAD
 		log.Errorf("error restarting vttablet - %v", err)
-=======
-		log.Error(fmt.Sprintf("error restarting vttablet - %v", err))
 		if time.Now().After(deadline) {
-			log.Error(fmt.Sprintf("giving up restarting vttablet after timeout: %v", tablet.Alias))
+			log.Errorf("giving up restarting vttablet after timeout: %v", tablet.Alias)
 			return
 		}
->>>>>>> d0a96f1576 (CI: Deflake two flaky tests (#19364))
 		time.Sleep(1 * time.Second)
 	}
 }
