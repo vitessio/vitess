@@ -273,7 +273,6 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 
 					// At this point we know that we kicked off the expected retry so we can short circuit the vdiff.
 					shortCircuitTestAfterQuery("update _vt.vdiff set state = 'started', last_error = left('', 1024) , started_at = utc_timestamp() where id = "+id, vdiffenv.dbClient)
-
 				}
 			}
 
