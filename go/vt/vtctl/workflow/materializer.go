@@ -145,6 +145,7 @@ func (mz *materializer) createWorkflowStreams(req *tabletmanagerdatapb.CreateVRe
 		return err
 	}
 
+	// Create views on the target keyspace.
 	if err := mz.deployViews(mz.ctx, mz.ms.GetViews()); err != nil {
 		return err
 	}

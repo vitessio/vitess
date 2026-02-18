@@ -89,13 +89,13 @@ var (
 	// to be moved.
 	errNoViewsToMove = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no views to move")
 
-	// errViewMissingTable is returned when a MoveTables request includes a view that references a
-	// table not being moved and not already on the target.
-	errViewMissingTable = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "view references table not being moved")
-
 	// errViewsNotFound is returned when views specified in a MoveTables request do not exist in the
 	// source keyspace.
 	errViewsNotFound = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "views not found in source keyspace")
+
+	// errViewMissingTable is returned when a MoveTables request includes a view that references a
+	// table not being moved and not already on the target.
+	errViewMissingTable = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "view references table not being moved")
 )
 
 // tableCopyProgress stores the row counts and disk sizes of the source and target tables
@@ -1126,14 +1126,15 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		return nil, err
 	}
 
-	// Fetch existing tables on the target for view validation. Views may reference tables that
-	// already exist on the target from a previous migration.
+	// Fetch existing tables on the target for view validation. Views that are being moved may reference tables that
+	// already exist on the target (from a previous MoveTables for example).
 	targetTablesMap, _, err := getTablesAndViewsInKeyspace(ctx, sourceTopo, s.tmc, targetKeyspace)
 	if err != nil {
 		return nil, err
 	}
 	targetTables := maps.Keys(targetTablesMap)
 
+	// Validate and build the list of tables to move.
 	tables, err := s.resolveTables(req, sourceKeyspace, ksTables)
 	if err != nil {
 		return nil, err
@@ -1143,6 +1144,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	// Combine tables being moved with tables already on the target for view validation.
 	targetTables = append(targetTables, tables...)
 
+	// Validate and build the list of views to move.
 	views, err := s.resolveViews(resolveViewsOptions{
 		req:                req,
 		sourceViews:        ksViews,
@@ -1154,7 +1156,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	}
 	s.Logger().Infof("Found views to move: %s", strings.Join(views, ","))
 
-	// Persist views in workflow options so they can be retrieved during Complete (for renaming/dropping).
+	// Persist views in workflow options so they can be retrieved during completion (for renaming/dropping).
 	if len(views) > 0 {
 		if req.WorkflowOptions == nil {
 			req.WorkflowOptions = &vtctldatapb.WorkflowOptions{}
@@ -1484,6 +1486,7 @@ func (s *Server) setupInitialRoutingRules(ctx context.Context, req *vtctldatapb.
 		}
 	}
 
+	// Set up view routing rules.
 	for _, view := range views {
 		for _, ks := range []string{globalTableQualifier, targetKeyspace, sourceKeyspace} {
 			routeTableToSource(ks, view)

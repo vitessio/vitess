@@ -231,6 +231,7 @@ func (mz *materializer) deployViews(ctx context.Context, views []string) error {
 		viewsToCreate := make(map[string]struct{})
 		for _, view := range views {
 			if _, exists := targetViewSet[view]; exists {
+				log.Info("deploy views: view already exists on target, skipping", slog.String("view", view))
 				continue
 			}
 
