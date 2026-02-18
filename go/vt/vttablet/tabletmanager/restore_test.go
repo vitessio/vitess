@@ -58,11 +58,11 @@ func setupHookDir(t *testing.T) (outputFile string) {
 	t.Setenv("VTROOT", vtroot)
 
 	hookDir := filepath.Join(vtroot, "vthook")
-	require.NoError(t, os.MkdirAll(hookDir, 0755))
+	require.NoError(t, os.MkdirAll(hookDir, 0o755))
 
 	outputFile = filepath.Join(vtroot, "hook_env_output")
 	hookScript := filepath.Join(hookDir, "vttablet_restore_done")
-	require.NoError(t, os.WriteFile(hookScript, []byte("#!/bin/bash\nenv > "+outputFile+"\n"), 0755))
+	require.NoError(t, os.WriteFile(hookScript, []byte("#!/bin/bash\nenv > "+outputFile+"\n"), 0o755))
 
 	return outputFile
 }
