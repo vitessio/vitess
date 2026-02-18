@@ -212,7 +212,7 @@ func resetBinlogClient() {
 // has verified the necessary behavior.
 func shortCircuitTestAfterQuery(query string, dbClient *binlogplayer.MockDBClient) {
 	dbClient.ExpectRequest(query, singleRowAffected, errors.New("Short circuiting test"))
-	dbClient.ExpectRequest("update _vt.vdiff set state = 'error', last_error = left('Short circuiting test', 1024)  where id = 1", singleRowAffected, nil)
+	dbClient.ExpectRequest("update _vt.vdiff set state = 'error', last_error = left('Short circuiting test', 1024)  where id = 1 and db_name = "+encodeString(vdiffDBName), singleRowAffected, nil)
 	dbClient.ExpectRequest("insert into _vt.vdiff_log(vdiff_id, message) values (1, 'State changed to: error')", singleRowAffected, nil)
 	dbClient.ExpectRequest("insert into _vt.vdiff_log(vdiff_id, message) values (1, 'Error: Short circuiting test')", singleRowAffected, nil)
 }
@@ -614,7 +614,7 @@ func newTestVDiffEnv(t *testing.T) *testVDiffEnv {
 	// vdiff.restartTargets
 	vdiffenv.tmc.setVRResults(primary.tablet, fmt.Sprintf("update _vt.vreplication set state='Running', message='', stop_pos='' where db_name='%s' and workflow='%s'", vdiffDBName, vdiffenv.workflow), singleRowAffected)
 
-	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where state in ('started','pending')", noResults, nil)
+	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where state in ('started','pending') and db_name = "+encodeString(vdiffDBName), noResults, nil)
 	vdiffenv.vde.Open(context.Background(), vdiffenv.vre)
 	assert.True(t, vdiffenv.vde.IsOpen())
 	assert.Equal(t, 0, len(vdiffenv.vde.controllers))
@@ -679,7 +679,7 @@ func (tvde *testVDiffEnv) createController(t *testing.T, id int) *controller {
 	),
 		fmt.Sprintf("%d|%s|%s|%s|%s|%s|%s|%s|", id, uuid.New(), tvde.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, PendingState, optionsJS),
 	)
-	tvde.dbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vdiff where id = %d", id), noResults, nil)
+	tvde.dbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vdiff where id = %d and db_name = %s", id, encodeString(vdiffDBName)), noResults, nil)
 	ct := tvde.newController(t, controllerQR)
 	ct.sources = map[string]*migrationSource{
 		tstenv.ShardName: {
