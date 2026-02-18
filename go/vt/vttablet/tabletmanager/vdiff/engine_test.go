@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -90,12 +89,8 @@ func TestEngineOpen(t *testing.T) {
 			vdenv.vde.Open(context.Background(), vdiffenv.vre)
 			defer vdenv.vde.Close()
 			assert.True(t, vdenv.vde.IsOpen())
+			assert.Equal(t, 1, len(vdenv.vde.controllers))
 			vdenv.dbClient.Wait()
-			assert.Eventually(t, func() bool {
-				vdenv.vde.mu.Lock()
-				defer vdenv.vde.mu.Unlock()
-				return len(vdenv.vde.controllers) == 0
-			}, time.Second, 10*time.Millisecond)
 		})
 	}
 }
@@ -213,6 +208,7 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 	vdenv := newTestVDiffEnv(t)
 	defer vdenv.close()
 	UUID := uuid.New().String()
+	expectedControllerCnt := 0
 	tests := []struct {
 		name              string
 		retryQueryResults *sqltypes.Result
@@ -275,17 +271,14 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 
 					// At this point we know that we kicked off the expected retry so we can short circuit the vdiff.
 					shortCircuitTestAfterQuery("update _vt.vdiff set state = 'started', last_error = left('', 1024) , started_at = utc_timestamp() where id = "+id, vdiffenv.dbClient)
+					expectedControllerCnt++
 				}
 			}
 
 			err := vdiffenv.vde.retryVDiffs(vdiffenv.vde.ctx)
 			assert.NoError(t, err)
+			assert.Equal(t, expectedControllerCnt, len(vdiffenv.vde.controllers))
 			vdiffenv.dbClient.Wait()
-			assert.Eventually(t, func() bool {
-				vdiffenv.vde.mu.Lock()
-				defer vdiffenv.vde.mu.Unlock()
-				return len(vdiffenv.vde.controllers) == 0
-			}, time.Second, 10*time.Millisecond)
 		})
 	}
 }

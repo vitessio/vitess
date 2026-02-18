@@ -400,21 +400,3 @@ func (vde *Engine) resetControllers() {
 	}
 	vde.controllers = make(map[int64]*controller)
 }
-
-// removeController removes a finished controller from engine and stats maps.
-func (vde *Engine) removeController(controllerID int64, ct *controller) {
-	// Only delete if the current entry is the same pointer, so that an old
-	// controller exiting does not remove a newer replacement.
-
-	vde.mu.Lock()
-	if currentController, ok := vde.controllers[controllerID]; ok && currentController == ct {
-		delete(vde.controllers, controllerID)
-	}
-	vde.mu.Unlock()
-
-	globalStats.mu.Lock()
-	if currentController, ok := globalStats.controllers[controllerID]; ok && currentController == ct {
-		delete(globalStats.controllers, controllerID)
-	}
-	globalStats.mu.Unlock()
-}

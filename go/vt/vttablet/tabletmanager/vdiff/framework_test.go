@@ -456,9 +456,6 @@ func newFakeTMClient() *fakeTMClient {
 	}
 }
 
-// Close satisfies the TabletManagerClient interface.
-func (tmc *fakeTMClient) Close() {}
-
 func (tmc *fakeTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	return tmc.schema, nil
 }

@@ -116,18 +116,12 @@ func (ct *controller) Stop() {
 func (ct *controller) run(ctx context.Context) {
 	defer func() {
 		log.Info("Run finished for vdiff " + ct.uuid)
-
 		// Unblock Stop() callers waiting on <-ct.done.
 		close(ct.done)
-
 		// Release gRPC connections held by this controller's tablet manager client.
 		if ct.tmc != nil {
 			ct.tmc.Close()
 		}
-
-		// Remove this controller from the engine and stats maps so that
-		// completed/errored controllers do not accumulate.
-		ct.vde.removeController(ct.id, ct)
 	}()
 
 	dbClient := ct.vde.dbClientFactoryFiltered()
