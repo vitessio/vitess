@@ -92,6 +92,8 @@ func TestEngineOpen(t *testing.T) {
 			assert.True(t, vdenv.vde.IsOpen())
 			vdenv.dbClient.Wait()
 			assert.Eventually(t, func() bool {
+				vdenv.vde.mu.Lock()
+				defer vdenv.vde.mu.Unlock()
 				return len(vdenv.vde.controllers) == 0
 			}, time.Second, 10*time.Millisecond)
 		})
@@ -280,6 +282,8 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 			assert.NoError(t, err)
 			vdiffenv.dbClient.Wait()
 			assert.Eventually(t, func() bool {
+				vdiffenv.vde.mu.Lock()
+				defer vdiffenv.vde.mu.Unlock()
 				return len(vdiffenv.vde.controllers) == 0
 			}, time.Second, 10*time.Millisecond)
 		})
