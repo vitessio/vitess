@@ -2298,8 +2298,10 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 				// If not found in Constraints, check TableSpec.Indexes for named UNIQUE/PRIMARY KEY constraints
 				if !found {
 					for i, index := range c.TableSpec.Indexes {
-						// Check if this index has a ConstraintName that matches
-						if index.Info.ConstraintName.String() != "" && strings.EqualFold(index.Info.ConstraintName.String(), opt.Name.String()) {
+						// Only match UNIQUE or PRIMARY KEY indexes with matching ConstraintName
+						if index.Info.ConstraintName.String() != "" &&
+							(index.Info.Type == sqlparser.IndexTypeUnique || index.Info.Type == sqlparser.IndexTypePrimary) &&
+							strings.EqualFold(index.Info.ConstraintName.String(), opt.Name.String()) {
 							found = true
 							c.TableSpec.Indexes = append(c.TableSpec.Indexes[0:i], c.TableSpec.Indexes[i+1:]...)
 							break

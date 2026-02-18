@@ -1088,6 +1088,32 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 				"test_ibfk": "test_ibfk_2wtivm6zk4lthpz14g9uoyaqk",
 			},
 		},
+		{
+			name: "table with named UNIQUE constraint",
+			query: `
+				create table onlineddl_test (
+						id int auto_increment,
+						name varchar(50),
+						primary key(id),
+						constraint uk_name unique (name)
+					)
+				`,
+			countConstraints:    1,
+			expectConstraintMap: map[string]string{"uk_name": "uk_name_"},
+		},
+		{
+			name: "table with UNIQUE KEY syntax (no constraint keyword)",
+			query: `
+				create table onlineddl_test (
+						id int auto_increment,
+						name varchar(50),
+						primary key(id),
+						unique key uk_name (name)
+					)
+				`,
+			countConstraints:    0,
+			expectConstraintMap: map[string]string{},
+		},
 	}
 	env := NewTestEnv()
 	for _, tc := range tt {
@@ -1112,6 +1138,11 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 				switch node := node.(type) {
 				case *sqlparser.ConstraintDefinition:
 					uniqueConstraintNames[node.Name.String()] = true
+				case *sqlparser.IndexDefinition:
+					// Also count named UNIQUE/PRIMARY KEY constraints stored in IndexInfo.ConstraintName
+					if node.Info.ConstraintName.String() != "" {
+						uniqueConstraintNames[node.Info.ConstraintName.String()] = true
+					}
 				}
 				return true, nil
 			}, createTable)
@@ -1225,6 +1256,10 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 		{
 			alter:  "alter table t drop constraint uk_name",
 			expect: []string{"alter table t drop constraint uk_name"},
+		},
+		{
+			alter:  "alter table t drop constraint PRIMARY",
+			expect: []string{"alter table t drop primary key"},
 		},
 	}
 

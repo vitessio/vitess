@@ -21,11 +21,9 @@ import (
 	"fmt"
 	"math"
 	"sort"
-	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/capabilities"
-	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -653,33 +651,9 @@ func ValidateAndEditCreateTableStatement(originalTableName string, baseUUID stri
 			// Handle named UNIQUE/PRIMARY KEY constraints stored in IndexInfo.ConstraintName
 			if node.Info.ConstraintName.String() != "" {
 				oldName := node.Info.ConstraintName.String()
-				// For UNIQUE/PRIMARY KEY constraints, we generate a new constraint name.
-				// We use the index definition as the seed and determine the constraint type indicator.
-				seed := sqlparser.CanonicalString(node)
-				var constraintIndicator string
-				if node.Info.Type == sqlparser.IndexTypePrimary {
-					constraintIndicator = "pk"
-				} else if node.Info.Type == sqlparser.IndexTypeUnique {
-					constraintIndicator = "uk"
-				} else {
-					constraintIndicator = "idx"
-				}
-				// Generate hash similar to newConstraintName
-				hash := textutil.UUIDv5Base36(baseUUID, originalTableName, seed)
-				for i := 1; hashExists[hash]; i++ {
-					hash = textutil.UUIDv5Base36(baseUUID, originalTableName, seed, strconv.Itoa(i))
-				}
-				hashExists[hash] = true
-				suffix := "_" + hash
-				maxAllowedNameLength := maxConstraintNameLength - len(suffix)
-				newName := ExtractConstraintOriginalName(originalTableName, oldName)
-				if newName == "" {
-					newName = constraintIndicator
-				}
-				if len(newName) > maxAllowedNameLength {
-					newName = newName[0:maxAllowedNameLength]
-				}
-				newName = newName + suffix
+				// For CREATE TABLE, named UNIQUE/PRIMARY KEY constraints should just append "_" suffix
+				// (hash suffixing is only for specific OnlineDDL flows, not regular CREATE TABLE)
+				newName := oldName + "_"
 				node.Info.ConstraintName = sqlparser.NewIdentifierCI(newName)
 				constraintMap[oldName] = newName
 			}
@@ -714,8 +688,12 @@ func ValidateAndEditAlterTableStatement(originalTableName string, baseUUID strin
 				node.Name = sqlparser.NewIdentifierCI(mappedName)
 			} else if node.Type == sqlparser.ConstraintType {
 				// DROP CONSTRAINT can refer to FK/CHECK (in constraintMap) or named UNIQUE/PRIMARY (in indexes, not in constraintMap)
-				// Only remap if found in constraintMap; otherwise leave unchanged (it's a named UNIQUE/PRIMARY constraint)
-				if mappedName, ok := constraintMap[node.Name.String()]; ok {
+				// Special case: DROP CONSTRAINT PRIMARY should be converted to DROP PRIMARY KEY
+				if strings.EqualFold(node.Name.String(), "PRIMARY") {
+					node.Type = sqlparser.PrimaryKeyType
+					node.Name = sqlparser.NewIdentifierCI("")
+				} else if mappedName, ok := constraintMap[node.Name.String()]; ok {
+					// Only remap if found in constraintMap; otherwise leave unchanged (it's a named UNIQUE/PRIMARY constraint)
 					node.Name = sqlparser.NewIdentifierCI(mappedName)
 				}
 			}
