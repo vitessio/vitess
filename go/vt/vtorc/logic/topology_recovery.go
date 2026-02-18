@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -969,22 +970,26 @@ func CheckAndRecover() {
 		return
 	}
 
+	analysisByShard := inst.GroupDetectionAnalysesByShard(detectionAnalysis)
+
 	// Regardless of if the problem is solved or not we want to monitor active
 	// issues, we use a map of labels and set a counter to `1` for each problem
 	// then we reset any counter that is not present in the current analysis.
 	active := make(map[string]struct{})
-	for _, e := range detectionAnalysis {
-		if e.Analysis != inst.NoProblem {
-			names := [...]string{
-				string(e.Analysis),
-				e.AnalyzedInstanceAlias,
-				e.AnalyzedKeyspace,
-				e.AnalyzedShard,
-			}
+	for _, shardAnalyses := range analysisByShard {
+		for _, e := range shardAnalyses {
+			if e.Analysis != inst.NoProblem {
+				names := [...]string{
+					string(e.Analysis),
+					e.AnalyzedInstanceAlias,
+					e.AnalyzedKeyspace,
+					e.AnalyzedShard,
+				}
 
-			key := detectedProblems.GetLabelName(names[:]...)
-			active[key] = struct{}{}
-			detectedProblems.Set(names[:], 1)
+				key := detectedProblems.GetLabelName(names[:]...)
+				active[key] = struct{}{}
+				detectedProblems.Set(names[:], 1)
+			}
 		}
 	}
 
@@ -995,14 +1000,32 @@ func CheckAndRecover() {
 		}
 	}
 
-	// intentionally iterating entries in random order
-	for _, j := range rand.Perm(len(detectionAnalysis)) {
-		analysisEntry := detectionAnalysis[j]
-
+	// Go map iteration is random, so each shard is processed in random order.
+	// Within each shard, analyses are sorted by priority. Problems that require
+	// ordered execution (shard-wide actions or those with Before/After dependencies)
+	// run sequentially first, then independent problems fan out concurrently.
+	for _, shardAnalyses := range analysisByShard {
 		go func() {
-			if err := executeCheckAndRecoverFunction(analysisEntry); err != nil {
-				log.Error(fmt.Sprint(err))
+			var concurrent []*inst.DetectionAnalysis
+			for _, analysisEntry := range shardAnalyses {
+				problem := inst.GetDetectionAnalysisProblem(analysisEntry.Analysis)
+				if problem != nil && problem.RequiresOrderedExecution() {
+					if err := executeCheckAndRecoverFunction(analysisEntry); err != nil {
+						log.Error(fmt.Sprint(err))
+					}
+				} else {
+					concurrent = append(concurrent, analysisEntry)
+				}
 			}
+			var wg sync.WaitGroup
+			for _, analysisEntry := range concurrent {
+				wg.Go(func() {
+					if err := executeCheckAndRecoverFunction(analysisEntry); err != nil {
+						log.Error(fmt.Sprint(err))
+					}
+				})
+			}
+			wg.Wait()
 		}()
 	}
 }
