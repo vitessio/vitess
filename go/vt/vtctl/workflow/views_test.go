@@ -293,10 +293,11 @@ func TestResolveViews(t *testing.T) {
 	}
 
 	tests := []struct {
-		name        string
-		opts        func() resolveViewsOptions
-		expected    []string
-		expectedErr error
+		name                string
+		opts                func() resolveViewsOptions
+		expected            []string
+		expectedErr         error
+		expectedErrContains []string
 	}{
 		{
 			name: "no options passed returns no views",
@@ -439,6 +440,24 @@ func TestResolveViews(t *testing.T) {
 			},
 			expectedErr: errViewMissingTable,
 		},
+		{
+			name: "multiple views with missing table references",
+			opts: func() resolveViewsOptions {
+				return resolveViewsOptions{
+					req: &vtctldatapb.MoveTablesCreateRequest{
+						SourceKeyspace: sourceKs,
+						IncludeViews:   []string{"view2", "view3"},
+					},
+					sourceViews:  newSourceViews(),
+					targetTables: []string{},
+				}
+			},
+			expectedErr: errViewMissingTable,
+			expectedErrContains: []string{
+				`view "view2" is missing table(s) "t2"`,
+				`view "view3" is missing table(s) "t3"`,
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -447,6 +466,9 @@ func TestResolveViews(t *testing.T) {
 
 			if tc.expectedErr != nil {
 				require.ErrorIs(t, err, tc.expectedErr)
+				for _, msg := range tc.expectedErrContains {
+					require.ErrorContains(t, err, msg)
+				}
 				return
 			}
 

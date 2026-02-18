@@ -138,13 +138,17 @@ func (s *Server) validateViewReferences(views map[string]*tabletmanagerdatapb.Ta
 
 		// If we found any missing tables for this view, add it to the error message.
 		if len(missingTables) > 0 {
+			if errMsg.Len() > 0 {
+				errMsg.WriteString("; ")
+			}
+
 			fmt.Fprintf(&errMsg, "view %q is missing table(s) %q", viewName, strings.Join(missingTables, ", "))
 		}
 	}
 
 	// If the error message contains anything, it means we found views that are missing their tables.
 	if errMsg.Len() > 0 {
-		return fmt.Errorf("%w: %q", errViewMissingTable, errMsg.String())
+		return fmt.Errorf("%w: %s", errViewMissingTable, errMsg.String())
 	}
 
 	return nil
