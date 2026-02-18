@@ -58,7 +58,7 @@ export const CreateKeyspace = () => {
         },
         {
             onSuccess: (res) => {
-                queryClient.invalidateQueries('keyspaces');
+                queryClient.invalidateQueries({ queryKey: ['keyspaces'] });
                 success(`Created keyspace ${res?.keyspace?.keyspace?.name}`, { autoClose: 1600 });
                 history.push(`/keyspace/${res?.keyspace?.cluster?.id}/${res?.keyspace?.keyspace?.name}`);
             },

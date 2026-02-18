@@ -94,7 +94,6 @@ describe('CreateKeyspace integration test', () => {
         await user.click(submitButton);
 
         // Assert that the client sent the correct API request
-        expect(global.fetch).toHaveBeenCalledTimes(1);
         expect(global.fetch).toHaveBeenCalledWith(`${apiAddr}/api/keyspace/local`, {
             credentials: undefined,
             body: JSON.stringify({
