@@ -344,7 +344,7 @@ func shouldExclude(table string, excludes map[string]struct{}) bool {
 	}
 
 	_, ok := excludes[table]
-	return !ok
+	return ok
 }
 
 // getMigrationID produces a reproducible hash based on the input parameters.
