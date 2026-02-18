@@ -29,12 +29,13 @@ import (
 
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type servingState int64
@@ -121,7 +122,6 @@ type stateManager struct {
 	rt          replTracker
 	vstreamer   subComponent
 	tracker     subComponent
-	watcher     subComponent
 	qe          queryEngine
 	txThrottler txThrottler
 	te          txEngine
@@ -455,9 +455,6 @@ func (sm *stateManager) verifyTargetLocked(ctx context.Context, target *querypb.
 }
 
 func (sm *stateManager) servePrimary() error {
-	sm.watcher.Close()
-	log.Info("servePrimary: binlog watcher closed")
-
 	if err := sm.connect(topodatapb.TabletType_PRIMARY, true); err != nil {
 		return err
 	}
@@ -485,8 +482,6 @@ func (sm *stateManager) servePrimary() error {
 
 func (sm *stateManager) unservePrimary() error {
 	sm.unserveCommon()
-
-	sm.watcher.Close()
 
 	if err := sm.connect(topodatapb.TabletType_PRIMARY, false); err != nil {
 		return err
@@ -518,7 +513,6 @@ func (sm *stateManager) serveNonPrimary(wantTabletType topodatapb.TabletType) er
 
 	sm.te.AcceptReadOnly()
 	sm.rt.MakeNonPrimary()
-	sm.watcher.Open()
 	sm.throttler.Open()
 	sm.qThrottler.Open()
 	sm.setState(wantTabletType, StateServing)
@@ -536,7 +530,6 @@ func (sm *stateManager) unserveNonPrimary(wantTabletType topodatapb.TabletType) 
 	}
 
 	sm.rt.MakeNonPrimary()
-	sm.watcher.Open()
 	sm.setState(wantTabletType, StateNotServing)
 	return nil
 }
@@ -642,7 +635,6 @@ func (sm *stateManager) closeAll() {
 	sm.unserveCommon()
 	sm.txThrottler.Close()
 	sm.qe.Close()
-	sm.watcher.Close()
 	sm.vstreamer.Close()
 	sm.rt.Close()
 	sm.se.Close()
