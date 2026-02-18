@@ -34,7 +34,7 @@ import { DataFilter } from '../dataTable/DataFilter';
 import { Tooltip } from '../tooltip/Tooltip';
 import { KeyspaceLink } from '../links/KeyspaceLink';
 import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder';
-import { UseQueryResult } from 'react-query';
+import { UseQueryResult } from '@tanstack/react-query';
 import { ReadOnlyGate } from '../ReadOnlyGate';
 import Dropdown from '../dropdown/Dropdown';
 import MenuItem from '../dropdown/MenuItem';

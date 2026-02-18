@@ -1,7 +1,6 @@
 {
 	"extends": [
-		"stylelint-config-standard-scss",
-		"stylelint-config-prettier"
+		"stylelint-config-standard-scss"
 	],
 	"rules": {
 		"alpha-value-notation": "number",
