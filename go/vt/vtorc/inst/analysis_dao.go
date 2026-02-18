@@ -447,7 +447,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			//
 		case a.IsClusterPrimary && !a.LastCheckValid && a.PrimaryHealthUnhealthy:
 			a.Analysis = IncapacitatedPrimary
-			a.Description = "Primary is consistently timing out on health checks and is incapacitated"
+			a.Description = "Primary is consistently timing out on health checks and may be incapacitated"
 			ca.hasShardWideAction = true
 			//
 		case a.IsClusterPrimary && !a.IsPrimary:
