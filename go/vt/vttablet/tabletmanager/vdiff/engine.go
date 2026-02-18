@@ -290,7 +290,11 @@ func (vde *Engine) getVDiffsToRun(ctx context.Context) (*sqltypes.Result, error)
 
 	// We have to use ExecIgnore here so as not to block quick tablet state
 	// transitions from primary to non-primary when starting the engine
-	qr, err := dbClient.ExecuteFetch(sqlGetVDiffsToRun, -1)
+	query, err := sqlparser.ParseAndBind(sqlGetVDiffsToRun, sqltypes.StringBindVariable(vde.dbName))
+	if err != nil {
+		return nil, err
+	}
+	qr, err := dbClient.ExecuteFetch(query, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -301,7 +305,11 @@ func (vde *Engine) getVDiffsToRun(ctx context.Context) (*sqltypes.Result, error)
 }
 
 func (vde *Engine) getVDiffsToRetry(ctx context.Context, dbClient binlogplayer.DBClient) (*sqltypes.Result, error) {
-	qr, err := dbClient.ExecuteFetch(sqlGetVDiffsToRetry, -1)
+	query, err := sqlparser.ParseAndBind(sqlGetVDiffsToRetry, sqltypes.StringBindVariable(vde.dbName))
+	if err != nil {
+		return nil, err
+	}
+	qr, err := dbClient.ExecuteFetch(query, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -312,7 +320,7 @@ func (vde *Engine) getVDiffsToRetry(ctx context.Context, dbClient binlogplayer.D
 }
 
 func (vde *Engine) getVDiffByID(ctx context.Context, dbClient binlogplayer.DBClient, id int64) (*sqltypes.Result, error) {
-	query, err := sqlparser.ParseAndBind(sqlGetVDiffByID, sqltypes.Int64BindVariable(id))
+	query, err := sqlparser.ParseAndBind(sqlGetVDiffByID, sqltypes.Int64BindVariable(id), sqltypes.StringBindVariable(vde.dbName))
 	if err != nil {
 		return nil, err
 	}
@@ -359,7 +367,7 @@ func (vde *Engine) retryVDiffs(ctx context.Context) error {
 			return err
 		}
 		log.Info(fmt.Sprintf("Retrying vdiff %s that had an ephemeral error of '%v'", uuid, lastError))
-		query, err := sqlparser.ParseAndBind(sqlRetryVDiff, sqltypes.Int64BindVariable(id))
+		query, err := sqlparser.ParseAndBind(sqlRetryVDiff, sqltypes.Int64BindVariable(id), sqltypes.StringBindVariable(vde.dbName))
 		if err != nil {
 			return err
 		}
