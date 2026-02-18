@@ -259,7 +259,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 		// rows for each second in the diff duration, depending on the test host vCPU count.
 		perSecondCount := int64(math.Min(float64(perVCpuCount*int64(runtime.NumCPU())), 1000000))
 		totalRowsToCreate := seconds * perSecondCount
-		log.Infof("Test host has %d vCPUs. Generating %d rows in the customer table to test --max-diff-duration", runtime.NumCPU(), totalRowsToCreate)
+		log.Info(fmt.Sprintf("Test host has %d vCPUs. Generating %d rows in the customer table to test --max-diff-duration", runtime.NumCPU(), totalRowsToCreate))
 		for i := int64(0); i < totalRowsToCreate; i += chunkSize {
 			generateMoreCustomers(t, tc.sourceKs, chunkSize)
 		}
@@ -356,7 +356,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 	checkVDiffCountStat(t, statsTablet, tc.vdiffCount)
 
 	// Confirm that VDiff queries did not use MAX_EXECUTION_TIME query hints using the logs.
-	grepCmd := fmt.Sprintf("grep 'Streaming rows for query:' %s | grep -c -v MAX_EXECUTION_TIME", path.Join(vc.ClusterConfig.tmpDir, "vttablet*INFO*"))
+	grepCmd := fmt.Sprintf("grep 'Streaming rows for query:' %s | grep -c -v MAX_EXECUTION_TIME", path.Join(vc.ClusterConfig.tmpDir, "*-vttablet-stderr.txt"))
 	out, err := exec.Command("bash", "-c", grepCmd).Output()
 	require.NoError(t, err)
 	logcnt, err := strconv.Atoi(strings.TrimSpace(string(out)))
