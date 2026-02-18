@@ -132,7 +132,7 @@ export const useKeyspace = (
         queryKey: ['keyspace', params],
         queryFn: () => fetchKeyspace(params),
         initialData: () => {
-            const keyspaces = queryClient.getQueryData<pb.Keyspace[]>('keyspaces');
+            const keyspaces = queryClient.getQueryData<pb.Keyspace[]>(['keyspaces']);
             return (keyspaces || []).find(
                 (k) => k.cluster?.id === params.clusterID && k.keyspace?.name === params.name
             );
@@ -152,7 +152,7 @@ export const useCreateKeyspace = (
         mutationFn: () => {
             return createKeyspace(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -189,7 +189,7 @@ export const useTablet = (params: Parameters<typeof fetchTablet>[0], options?: U
         queryKey: ['tablet', params],
         queryFn: () => fetchTablet(params),
         initialData: () => {
-            const tablets = queryClient.getQueryData<pb.Tablet[]>('tablets');
+            const tablets = queryClient.getQueryData<pb.Tablet[]>(['tablets']);
             return (tablets || []).find(
                 (t) => t.cluster?.id === params.clusterID && formatAlias(t.tablet?.alias) === params.alias
             );
@@ -210,7 +210,7 @@ export const useDeleteTablet = (
         mutationFn: () => {
             return deleteTablet(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -226,7 +226,7 @@ export const useRefreshTabletReplicationSource = (
         mutationFn: () => {
             return refreshTabletReplicationSource(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -241,7 +241,7 @@ export const useSetReadOnly = (
         mutationFn: () => {
             return setReadOnly(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -256,7 +256,7 @@ export const useSetReadWrite = (
         mutationFn: () => {
             return setReadWrite(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -267,7 +267,12 @@ export const useSetReadWrite = (
 export const useShardReplicationPositions = (
     params: Parameters<typeof fetchShardReplicationPositions>[0],
     options?: UseQueryOptions<pb.GetShardReplicationPositionsResponse, Error> | undefined
-) => useQuery({ queryKey: ['shard_replication_positions', params], queryFn: () => fetchShardReplicationPositions(params), ...options });
+) =>
+    useQuery({
+        queryKey: ['shard_replication_positions', params],
+        queryFn: () => fetchShardReplicationPositions(params),
+        ...options,
+    });
 
 /**
  * useStartReplication starts replication on the specified tablet.
@@ -280,7 +285,7 @@ export const useStartReplication = (
         mutationFn: () => {
             return startReplication(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -295,7 +300,7 @@ export const useStopReplication = (
         mutationFn: () => {
             return stopReplication(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -333,11 +338,11 @@ export const useExperimentalTabletDebugVars = (
     params: FetchTabletParams,
     options?: UseQueryOptions<TabletDebugVarsResponse, Error>
 ) => {
-    return useQuery(
-        ['experimental/tablet/debug/vars', params],
-        () => fetchExperimentalTabletDebugVars(params),
-        options
-    );
+    return useQuery({
+        queryKey: ['experimental/tablet/debug/vars', params],
+        queryFn: () => fetchExperimentalTabletDebugVars(params),
+        ...options,
+    });
 };
 
 // Future enhancement: add vtadmin-api endpoint to fetch /debug/vars
@@ -353,7 +358,7 @@ export const useManyExperimentalTabletDebugVars = (
         queryFn: () => fetchExperimentalTabletDebugVars(p),
         ...(defaultOptions as any),
     }));
-    return useQueries(queries) as UseQueryResult<TabletDebugVarsResponse, Error>[];
+    return useQueries({ queries }) as UseQueryResult<TabletDebugVarsResponse, Error>[];
 };
 
 /**
@@ -367,7 +372,9 @@ export const useWorkflowsResponse = (options?: UseQueryOptions<pb.GetWorkflowsRe
  * (across all clusters) is required. Under the hood, this call uses the
  * useWorkflowsResponse hook and therefore uses the same query cache.
  */
-export const useWorkflows = (options?: Omit<UseQueryOptions<pb.GetWorkflowsResponse, Error>, 'queryKey' | 'queryFn' | 'select'>) => {
+export const useWorkflows = (
+    options?: Omit<UseQueryOptions<pb.GetWorkflowsResponse, Error>, 'queryKey' | 'queryFn' | 'select'>
+) => {
     return useQuery({
         queryKey: ['workflows'],
         queryFn: fetchWorkflows,
@@ -397,7 +404,7 @@ export const useSchema = (params: FetchSchemaParams, options?: UseQueryOptions<p
         queryKey: ['schema', params],
         queryFn: () => fetchSchema(params),
         initialData: () => {
-            const schemas = queryClient.getQueryData<pb.Schema[]>('schemas');
+            const schemas = queryClient.getQueryData<pb.Schema[]>(['schemas']);
             return (schemas || []).find(
                 (s: pb.Schema) =>
                     s.cluster?.id === params.clusterID &&
@@ -420,7 +427,7 @@ export const useValidateKeyspace = (
         mutationFn: () => {
             return validateKeyspace(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -435,7 +442,7 @@ export const useValidateSchemaKeyspace = (
         mutationFn: () => {
             return validateSchemaKeyspace(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -450,7 +457,7 @@ export const useValidateVersionKeyspace = (
         mutationFn: () => {
             return validateVersionKeyspace(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -492,7 +499,7 @@ export const useConcludeTransaction = (
         mutationFn: () => {
             return concludeTransaction(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -533,7 +540,7 @@ export const useWorkflow = (
         //
         // See https://react-query.tanstack.com/guides/initial-query-data for more context on how initialData works.
         initialData: () => {
-            const workflows = queryClient.getQueryData<pb.GetWorkflowsResponse>('workflows');
+            const workflows = queryClient.getQueryData<pb.GetWorkflowsResponse>(['workflows']);
             const cw = workflows?.workflows_by_cluster[params.clusterID];
             if (!cw) return undefined;
 
@@ -573,7 +580,7 @@ export const useCreateMaterialize = (
         mutationFn: () => {
             return createMaterialize(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -588,7 +595,7 @@ export const useCreateMoveTables = (
         mutationFn: () => {
             return createMoveTables(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -603,7 +610,7 @@ export const useCreateReshard = (
         mutationFn: () => {
             return createReshard(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -618,7 +625,7 @@ export const useStartWorkflow = (
         mutationFn: () => {
             return startWorkflow(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -633,7 +640,7 @@ export const useStopWorkflow = (
         mutationFn: () => {
             return stopWorkflow(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -648,7 +655,7 @@ export const useCompleteMoveTables = (
         mutationFn: () => {
             return completeMoveTables(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -663,7 +670,7 @@ export const useWorkflowSwitchTraffic = (
         mutationFn: () => {
             return workflowSwitchTraffic(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -678,7 +685,7 @@ export const useWorkflowDelete = (
         mutationFn: () => {
             return workflowDelete(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -694,7 +701,7 @@ export const useReloadSchema = (
         mutationFn: () => {
             return reloadSchema(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -709,7 +716,7 @@ export const useDeleteShard = (
         mutationFn: () => {
             return deleteShard(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -725,7 +732,7 @@ export const useRebuildKeyspaceGraph = (
         mutationFn: () => {
             return rebuildKeyspaceGraph(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -740,7 +747,7 @@ export const useReloadSchemaShard = (
         mutationFn: () => {
             return reloadSchemaShard(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -757,7 +764,7 @@ export const useTabletExternallyPromoted = (
         mutationFn: () => {
             return tabletExternallyPromoted(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -774,7 +781,7 @@ export const usePlannedFailoverShard = (
         mutationFn: () => {
             return plannedFailoverShard(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -791,7 +798,7 @@ export const useEmergencyFailoverShard = (
         mutationFn: () => {
             return emergencyFailoverShard(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -806,7 +813,7 @@ export const useRemoveKeyspaceCell = (
         mutationFn: () => {
             return removeKeyspaceCell(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -821,7 +828,7 @@ export const useCreateShard = (
         mutationFn: () => {
             return createShard(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -846,7 +853,7 @@ export const useValidate = (
         mutationFn: () => {
             return validate(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -862,7 +869,7 @@ export const useValidateShard = (
         mutationFn: () => {
             return validateShard(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -885,7 +892,7 @@ export const useValidateVersionShard = (
         mutationFn: () => {
             return validateVersionShard(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -900,7 +907,7 @@ export const useCreateVDiff = (
         mutationFn: () => {
             return createVDiff(params);
         },
-        ...options
+        ...options,
     });
 };
 
@@ -935,6 +942,6 @@ export const useApplySchema = (
         mutationFn: () => {
             return applySchema(params);
         },
-        ...options
+        ...options,
     });
 };

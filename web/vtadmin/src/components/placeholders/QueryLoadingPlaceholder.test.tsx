@@ -48,13 +48,12 @@ describe('QueryLoadingPlaceholder', () => {
 
         const { rerender } = render(<QueryLoadingPlaceholder query={result.current} />);
 
-        await waitFor(() => result.current.isLoading);
-
+        // Initially the query should be loading
         let placeholder = screen.queryByRole('status');
         expect(placeholder).not.toBeNull();
         expect(placeholder?.textContent).toEqual('Loading...');
 
-        await waitFor(() => result.current.isSuccess);
+        await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
         rerender(<QueryLoadingPlaceholder query={result.current} />);
         placeholder = screen.queryByRole('status');

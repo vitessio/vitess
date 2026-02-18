@@ -45,7 +45,7 @@ describe('QueryErrorPlaceholder', () => {
         (httpAPI.fetchClusters as any).mockRejectedValueOnce(new Error(errorMessage));
 
         const { result } = queryHelper();
-        await waitFor(() => result.current.isError);
+        await waitFor(() => expect(result.current.isError).toBe(true));
 
         render(<QueryErrorPlaceholder query={result.current} />);
 
@@ -65,7 +65,7 @@ describe('QueryErrorPlaceholder', () => {
         expect((httpAPI.fetchClusters as any).mock.calls.length).toEqual(0);
 
         const { result } = queryHelper();
-        await waitFor(() => result.current.isError);
+        await waitFor(() => expect(result.current.isError).toBe(true));
 
         render(<QueryErrorPlaceholder query={result.current} />);
 
@@ -78,8 +78,7 @@ describe('QueryErrorPlaceholder', () => {
 
         fireEvent.click(button);
 
-        await waitFor(() => result.current.isFetching);
-        expect((httpAPI.fetchClusters as any).mock.calls.length).toEqual(2);
+        await waitFor(() => expect((httpAPI.fetchClusters as any).mock.calls.length).toEqual(2));
     });
 
     it('does not render when no error', async () => {
@@ -88,7 +87,7 @@ describe('QueryErrorPlaceholder', () => {
 
         render(<QueryErrorPlaceholder query={result.current} />);
 
-        await waitFor(() => result.current.isSuccess);
+        await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
         const placeholder = screen.queryByRole('status');
         expect(placeholder).toBeNull();
@@ -98,13 +97,13 @@ describe('QueryErrorPlaceholder', () => {
         (httpAPI.fetchClusters as any).mockRejectedValueOnce(new Error());
         const { result } = queryHelper();
 
+        // Initially the query is pending/loading, so the error placeholder should not render
         const { rerender } = render(<QueryErrorPlaceholder query={result.current} />);
-        await waitFor(() => result.current.isLoading);
-
         let placeholder = screen.queryByRole('status');
         expect(placeholder).toBeNull();
 
-        await waitFor(() => !result.current.isLoading);
+        // Wait for the error state
+        await waitFor(() => expect(result.current.isError).toBe(true));
 
         rerender(<QueryErrorPlaceholder query={result.current} />);
         placeholder = screen.queryByRole('status');

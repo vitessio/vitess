@@ -71,7 +71,7 @@ export const CreateKeyspace = () => {
     }
 
     const isValid = !!selectedCluster && !!formData.keyspaceName;
-    const isDisabled = !isValid || mutation.isLoading;
+    const isDisabled = !isValid || mutation.isPending;
 
     const onSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
         e.preventDefault();
@@ -117,13 +117,13 @@ export const CreateKeyspace = () => {
                         />
                     </Label>
 
-                    {mutation.isError && !mutation.isLoading && (
+                    {mutation.isError && !mutation.isPending && (
                         <FormError error={mutation.error} title="Couldn't create keyspace. Please try again." />
                     )}
 
                     <div className="my-12">
                         <button className="btn" disabled={isDisabled} type="submit">
-                            {mutation.isLoading ? 'Creating Keyspace...' : 'Create Keyspace'}
+                            {mutation.isPending ? 'Creating Keyspace...' : 'Create Keyspace'}
                         </button>
                     </div>
                 </form>

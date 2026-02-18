@@ -104,7 +104,7 @@ describe('CreateKeyspace integration test', () => {
         });
 
         // Validate form UI loading state, while the API request is "in flight"
-        expect(submitButton).toHaveTextContent('Creating Keyspace...');
+        await waitFor(() => expect(submitButton).toHaveTextContent('Creating Keyspace...'));
         expect(submitButton).toHaveAttribute('disabled');
 
         // Wait for the API request to complete

@@ -76,7 +76,7 @@ describe('useWorkflows', () => {
 
             // "Wait" for the underlying fetch request to resolve (scare-quotes because,
             // in practice, we're not "waiting" for anything since the response is mocked.)
-            await waitFor(() => result.current.isSuccess);
+            await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
             expect(result.current.data).toEqual(expected);
         }
@@ -85,7 +85,9 @@ describe('useWorkflows', () => {
 
 describe('useWorkflow', () => {
     it('fetches data if no cached data exists', async () => {
-        const queryClient = new QueryClient();
+        const queryClient = new QueryClient({
+            defaultOptions: { queries: { retry: false } },
+        });
         const wrapper: React.FunctionComponent = ({ children }) => (
             <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
         );
@@ -113,7 +115,7 @@ describe('useWorkflow', () => {
 
         expect(result.current.data).toBeUndefined();
 
-        await waitFor(() => result.current.isSuccess);
+        await waitFor(() => expect(result.current.isSuccess).toBe(true));
         expect(result.current.data).toEqual(fetchWorkflowResponse);
     });
 
@@ -121,7 +123,9 @@ describe('useWorkflow', () => {
     // to a component that fetches a single workflow.
     it('uses cached data as initialData', async () => {
         httpAPI.fetchWorkflow.mockReset();
-        const queryClient = new QueryClient();
+        const queryClient = new QueryClient({
+            defaultOptions: { queries: { retry: false } },
+        });
         const wrapper: React.FunctionComponent = ({ children }) => (
             <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
         );
@@ -176,10 +180,10 @@ describe('useWorkflow', () => {
             })
         );
 
-        // Execute a useWorkflows query to populate the query cache.
+        // Execute a useWorkflowsResponse query to populate the query cache with the raw response.
         // eslint-disable-next-line testing-library/render-result-naming-convention
-        const useWorkflowsCall = renderHook(() => api.useWorkflows(), { wrapper });
-        await waitFor(() => useWorkflowsCall.result.current.isSuccess);
+        const useWorkflowsCall = renderHook(() => api.useWorkflowsResponse(), { wrapper });
+        await waitFor(() => expect(useWorkflowsCall.result.current.isSuccess).toBe(true));
 
         // Next, execute the useWorkflow query we *actually* want to inspect.
         const { result } = renderHook(
@@ -217,7 +221,7 @@ describe('useWorkflow', () => {
 
         // Then, we resolve the API call, with updated data (in this case max_v_replication_lag)
         // so we can check that the cache is updated.
-        await waitFor(() => !result.current.isFetching && result.current.isSuccess);
+        await waitFor(() => expect(result.current.isFetching).toBe(false));
         expect(result.current.data).toEqual(
             pb.Workflow.create({
                 cluster: { name: 'cluster1', id: 'cluster1' },

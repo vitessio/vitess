@@ -60,7 +60,7 @@ const ActionPanel: React.FC<ActionPanelProps> = ({
     const requiresConfirmation = typeof confirmationValue === 'string' && !!confirmationValue;
 
     const isDisabled =
-        !!disabled || mutation.isLoading || (requiresConfirmation && typedConfirmation !== confirmationValue);
+        !!disabled || mutation.isPending || (requiresConfirmation && typedConfirmation !== confirmationValue);
     return (
         <div
             className={`p-9 pb-12 last:border-b border ${
@@ -112,7 +112,7 @@ const ActionPanel: React.FC<ActionPanelProps> = ({
                     setTypedConfirmation('');
                 }}
             >
-                {mutation.isLoading ? loadingText : loadedText}
+                {mutation.isPending ? loadingText : loadedText}
             </button>
         </div>
     );

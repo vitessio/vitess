@@ -34,7 +34,7 @@ describe('ActionPanel', () => {
      */
     const Wrapper: React.FC<ActionPanelProps & { url: string }> = (props) => {
         const mutation = useMutation({
-            mutationFn: () => fetch(new URL(props['url']), { method: 'post' })
+            mutationFn: () => fetch(new URL(props['url']), { method: 'post' }),
         });
         return <ActionPanel {...props} mutation={mutation as any} />;
     };
@@ -76,7 +76,7 @@ describe('ActionPanel', () => {
         await user.click(button);
 
         // Validate form while API request is in flight
-        expect(button).toHaveTextContent('Doing Action...');
+        await waitFor(() => expect(button).toHaveTextContent('Doing Action...'));
 
         expect(global.fetch).toHaveBeenCalledTimes(1);
         expect(global.fetch).toHaveBeenCalledWith(new URL(url), { method: 'post' });
