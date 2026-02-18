@@ -83,11 +83,7 @@ func TestBuildSummary(t *testing.T) {
 				Lengths: func() []int64 {
 					lengths := make([]int64, len(row))
 					for i, v := range row {
-						if v == "" {
-							lengths[i] = 0
-						} else {
-							lengths[i] = int64(len(v))
-						}
+						lengths[i] = int64(len(v))
 					}
 					return lengths
 				}(),
