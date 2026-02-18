@@ -65,7 +65,7 @@ const (
 	// Delete VReplication records for the given workflow.
 	sqlDeleteVReplicationWorkflow = "delete from %s.vreplication where workflow = %a and db_name = %a"
 	// Retrieve the current configuration values for a workflow's vreplication stream(s).
-	sqlSelectVReplicationWorkflowConfig = "select id, source, cell, tablet_types, state, message from %s.vreplication where workflow = %a"
+	sqlSelectVReplicationWorkflowConfig = "select id, source, cell, tablet_types, state, message from %s.vreplication where workflow = %a and db_name = %a"
 	// Update the configuration values for a workflow's vreplication stream.
 	sqlUpdateVReplicationWorkflowStreamConfig = "update %s.vreplication set state = %a, source = %a, cell = %a, tablet_types = %a, message = %a %s where id = %a"
 	// Update field values for multiple workflows. The final format specifier is
@@ -542,8 +542,9 @@ func isStreamCopying(tm *TabletManager, id int64) (bool, error) {
 func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse, error) {
 	bindVars := map[string]*querypb.BindVariable{
 		"wf": sqltypes.StringBindVariable(req.Workflow),
+		"db": sqltypes.StringBindVariable(tm.DBConfigs.DBName),
 	}
-	parsed := sqlparser.BuildParsedQuery(sqlSelectVReplicationWorkflowConfig, sidecar.GetIdentifier(), ":wf")
+	parsed := sqlparser.BuildParsedQuery(sqlSelectVReplicationWorkflowConfig, sidecar.GetIdentifier(), ":wf", ":db")
 	stmt, err := parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return nil, err
