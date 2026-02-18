@@ -24,7 +24,8 @@ import { WorkspaceTitle } from '../../layout/WorkspaceTitle';
 import { Link, useParams } from 'react-router-dom';
 import { generateGraph, TopologyCell, TopologyCellChild } from './Nodes';
 
-import ReactFlow, {
+import {
+    ReactFlow,
     addEdge,
     MiniMap,
     Controls,
@@ -32,7 +33,8 @@ import ReactFlow, {
     useNodesState,
     useEdgesState,
     Connection,
-} from 'react-flow-renderer';
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
 import { getTopologyPath } from '../../../api/http';
 
 export const ClusterTopology = () => {
