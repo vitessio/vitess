@@ -119,9 +119,7 @@ func (ct *controller) run(ctx context.Context) {
 		// Unblock Stop() callers waiting on <-ct.done.
 		close(ct.done)
 		// Release gRPC connections held by this controller's tablet manager client.
-		if ct.tmc != nil {
-			ct.tmc.Close()
-		}
+		ct.tmc.Close()
 	}()
 
 	dbClient := ct.vde.dbClientFactoryFiltered()

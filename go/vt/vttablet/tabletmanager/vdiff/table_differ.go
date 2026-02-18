@@ -428,13 +428,8 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 	defer func() {
 		log.Info(fmt.Sprintf("streamOneShard for vdiff %s End on %s (err: %v)", td.wd.ct.uuid, tabletAliasString, participant.err))
 
-		if resultch != nil {
-			close(resultch)
-		}
-
-		if gtidch != nil {
-			close(gtidch)
-		}
+		close(resultch)
+		close(gtidch)
 
 		td.wgShardStreamers.Done()
 	}()
