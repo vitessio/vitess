@@ -21,7 +21,7 @@ import {
     useQueryClient,
     UseQueryOptions,
     UseQueryResult,
-} from 'react-query';
+} from '@tanstack/react-query';
 import {
     fetchBackups,
     fetchClusters,
@@ -106,19 +106,19 @@ import { formatAlias } from '../util/tablets';
  * useBackups is a query hook that fetches all backups across every cluster.
  */
 export const useBackups = (options?: UseQueryOptions<pb.ClusterBackup[], Error> | undefined) =>
-    useQuery(['backups'], fetchBackups, options);
+    useQuery({ queryKey: ['backups'], queryFn: fetchBackups, ...options });
 
 /**
  * useClusters is a query hook that fetches all clusters VTAdmin is configured to discover.
  */
 export const useClusters = (options?: UseQueryOptions<pb.Cluster[], Error> | undefined) =>
-    useQuery(['clusters'], fetchClusters, options);
+    useQuery({ queryKey: ['clusters'], queryFn: fetchClusters, ...options });
 
 /**
  * useGates is a query hook that fetches all VTGates across every cluster.
  */
 export const useGates = (options?: UseQueryOptions<pb.VTGate[], Error> | undefined) =>
-    useQuery(['gates'], fetchGates, options);
+    useQuery({ queryKey: ['gates'], queryFn: fetchGates, ...options });
 
 /**
  * useKeyspace is a query hook that fetches a single keyspace by name.
@@ -128,9 +128,11 @@ export const useKeyspace = (
     options?: UseQueryOptions<pb.Keyspace, Error>
 ) => {
     const queryClient = useQueryClient();
-    return useQuery(['keyspace', params], () => fetchKeyspace(params), {
+    return useQuery({
+        queryKey: ['keyspace', params],
+        queryFn: () => fetchKeyspace(params),
         initialData: () => {
-            const keyspaces = queryClient.getQueryData<pb.Keyspace[]>('keyspaces');
+            const keyspaces = queryClient.getQueryData<pb.Keyspace[]>(['keyspaces']);
             return (keyspaces || []).find(
                 (k) => k.cluster?.id === params.clusterID && k.keyspace?.name === params.name
             );
@@ -144,45 +146,50 @@ export const useKeyspace = (
  */
 export const useCreateKeyspace = (
     params: Parameters<typeof createKeyspace>[0],
-    options: UseMutationOptions<Awaited<ReturnType<typeof createKeyspace>>, Error>
+    options?: UseMutationOptions<Awaited<ReturnType<typeof createKeyspace>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof createKeyspace>>, Error>(() => {
-        return createKeyspace(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof createKeyspace>>, Error>({
+        mutationFn: () => {
+            return createKeyspace(params);
+        },
+        ...options,
+    });
 };
 
 /**
  * useKeyspaces is a query hook that fetches all keyspaces across every cluster.
  */
 export const useKeyspaces = (options?: UseQueryOptions<pb.Keyspace[], Error> | undefined) =>
-    useQuery(['keyspaces'], fetchKeyspaces, options);
+    useQuery({ queryKey: ['keyspaces'], queryFn: fetchKeyspaces, ...options });
 
 /**
  * useSchemas is a query hook that fetches all schemas across every cluster.
  */
 export const useSchemas = (options?: UseQueryOptions<pb.Schema[], Error> | undefined) =>
-    useQuery(['schemas'], fetchSchemas, options);
+    useQuery({ queryKey: ['schemas'], queryFn: fetchSchemas, ...options });
 
 /**
  * useTablets is a query hook that fetches all tablets across every cluster.
  */
 export const useTablets = (options?: UseQueryOptions<pb.Tablet[], Error> | undefined) =>
-    useQuery(['tablets'], fetchTablets, options);
+    useQuery({ queryKey: ['tablets'], queryFn: fetchTablets, ...options });
 
 /**
  * useVtctlds is a query hook that fetches all vtctlds across every cluster.
  */
 export const useVtctlds = (options?: UseQueryOptions<pb.Vtctld[], Error> | undefined) =>
-    useQuery(['vtctlds'], fetchVtctlds, options);
+    useQuery({ queryKey: ['vtctlds'], queryFn: fetchVtctlds, ...options });
 
 /**
  * useTablet is a query hook that fetches a single tablet by alias.
  */
 export const useTablet = (params: Parameters<typeof fetchTablet>[0], options?: UseQueryOptions<pb.Tablet, Error>) => {
     const queryClient = useQueryClient();
-    return useQuery(['tablet', params], () => fetchTablet(params), {
+    return useQuery({
+        queryKey: ['tablet', params],
+        queryFn: () => fetchTablet(params),
         initialData: () => {
-            const tablets = queryClient.getQueryData<pb.Tablet[]>('tablets');
+            const tablets = queryClient.getQueryData<pb.Tablet[]>(['tablets']);
             return (tablets || []).find(
                 (t) => t.cluster?.id === params.clusterID && formatAlias(t.tablet?.alias) === params.alias
             );
@@ -197,11 +204,14 @@ export const useTablet = (params: Parameters<typeof fetchTablet>[0], options?: U
  */
 export const useDeleteTablet = (
     params: Parameters<typeof deleteTablet>[0],
-    options: UseMutationOptions<Awaited<ReturnType<typeof deleteTablet>>, Error>
+    options?: UseMutationOptions<Awaited<ReturnType<typeof deleteTablet>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof deleteTablet>>, Error>(() => {
-        return deleteTablet(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof deleteTablet>>, Error>({
+        mutationFn: () => {
+            return deleteTablet(params);
+        },
+        ...options,
+    });
 };
 
 /**
@@ -210,11 +220,14 @@ export const useDeleteTablet = (
  */
 export const useRefreshTabletReplicationSource = (
     params: Parameters<typeof refreshTabletReplicationSource>[0],
-    options: UseMutationOptions<Awaited<ReturnType<typeof refreshTabletReplicationSource>>, Error>
+    options?: UseMutationOptions<Awaited<ReturnType<typeof refreshTabletReplicationSource>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof refreshTabletReplicationSource>>, Error>(() => {
-        return refreshTabletReplicationSource(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof refreshTabletReplicationSource>>, Error>({
+        mutationFn: () => {
+            return refreshTabletReplicationSource(params);
+        },
+        ...options,
+    });
 };
 
 /**
@@ -222,11 +235,14 @@ export const useRefreshTabletReplicationSource = (
  */
 export const useSetReadOnly = (
     params: Parameters<typeof setReadOnly>[0],
-    options: UseMutationOptions<Awaited<ReturnType<typeof setReadOnly>>, Error>
+    options?: UseMutationOptions<Awaited<ReturnType<typeof setReadOnly>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof setReadOnly>>, Error>(() => {
-        return setReadOnly(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof setReadOnly>>, Error>({
+        mutationFn: () => {
+            return setReadOnly(params);
+        },
+        ...options,
+    });
 };
 
 /**
@@ -234,11 +250,14 @@ export const useSetReadOnly = (
  */
 export const useSetReadWrite = (
     params: Parameters<typeof setReadWrite>[0],
-    options: UseMutationOptions<Awaited<ReturnType<typeof setReadWrite>>, Error>
+    options?: UseMutationOptions<Awaited<ReturnType<typeof setReadWrite>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof setReadWrite>>, Error>(() => {
-        return setReadWrite(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof setReadWrite>>, Error>({
+        mutationFn: () => {
+            return setReadWrite(params);
+        },
+        ...options,
+    });
 };
 
 /**
@@ -248,18 +267,26 @@ export const useSetReadWrite = (
 export const useShardReplicationPositions = (
     params: Parameters<typeof fetchShardReplicationPositions>[0],
     options?: UseQueryOptions<pb.GetShardReplicationPositionsResponse, Error> | undefined
-) => useQuery(['shard_replication_positions', params], () => fetchShardReplicationPositions(params), options);
+) =>
+    useQuery({
+        queryKey: ['shard_replication_positions', params],
+        queryFn: () => fetchShardReplicationPositions(params),
+        ...options,
+    });
 
 /**
  * useStartReplication starts replication on the specified tablet.
  */
 export const useStartReplication = (
     params: Parameters<typeof startReplication>[0],
-    options: UseMutationOptions<Awaited<ReturnType<typeof startReplication>>, Error>
+    options?: UseMutationOptions<Awaited<ReturnType<typeof startReplication>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof startReplication>>, Error>(() => {
-        return startReplication(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof startReplication>>, Error>({
+        mutationFn: () => {
+            return startReplication(params);
+        },
+        ...options,
+    });
 };
 
 /**
@@ -267,11 +294,14 @@ export const useStartReplication = (
  */
 export const useStopReplication = (
     params: Parameters<typeof stopReplication>[0],
-    options: UseMutationOptions<Awaited<ReturnType<typeof stopReplication>>, Error>
+    options?: UseMutationOptions<Awaited<ReturnType<typeof stopReplication>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof stopReplication>>, Error>(() => {
-        return stopReplication(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof stopReplication>>, Error>({
+        mutationFn: () => {
+            return stopReplication(params);
+        },
+        ...options,
+    });
 };
 
 /**
@@ -281,7 +311,7 @@ export const usePingTablet = (
     params: Parameters<typeof pingTablet>[0],
     options?: UseQueryOptions<pb.PingTabletResponse, Error>
 ) => {
-    return useQuery(['ping-tablet', params], () => pingTablet(params), options);
+    return useQuery({ queryKey: ['ping-tablet', params], queryFn: () => pingTablet(params), ...options });
 };
 
 /**
@@ -291,7 +321,7 @@ export const useRefreshState = (
     params: Parameters<typeof refreshState>[0],
     options?: UseQueryOptions<pb.RefreshStateResponse, Error>
 ) => {
-    return useQuery(['refresh-state', params], () => refreshState(params), options);
+    return useQuery({ queryKey: ['refresh-state', params], queryFn: () => refreshState(params), ...options });
 };
 
 /**
@@ -301,18 +331,18 @@ export const useHealthCheck = (
     params: Parameters<typeof runHealthCheck>[0],
     options?: UseQueryOptions<pb.RunHealthCheckResponse, Error>
 ) => {
-    return useQuery(['run-health-check', params], () => runHealthCheck(params), options);
+    return useQuery({ queryKey: ['run-health-check', params], queryFn: () => runHealthCheck(params), ...options });
 };
 
 export const useExperimentalTabletDebugVars = (
     params: FetchTabletParams,
     options?: UseQueryOptions<TabletDebugVarsResponse, Error>
 ) => {
-    return useQuery(
-        ['experimental/tablet/debug/vars', params],
-        () => fetchExperimentalTabletDebugVars(params),
-        options
-    );
+    return useQuery({
+        queryKey: ['experimental/tablet/debug/vars', params],
+        queryFn: () => fetchExperimentalTabletDebugVars(params),
+        ...options,
+    });
 };
 
 // Future enhancement: add vtadmin-api endpoint to fetch /debug/vars
@@ -328,36 +358,41 @@ export const useManyExperimentalTabletDebugVars = (
         queryFn: () => fetchExperimentalTabletDebugVars(p),
         ...(defaultOptions as any),
     }));
-    return useQueries(queries) as UseQueryResult<TabletDebugVarsResponse, Error>[];
+    return useQueries({ queries }) as UseQueryResult<TabletDebugVarsResponse, Error>[];
 };
 
 /**
  * useWorkflowsResponse is a query hook that fetches all workflows (by cluster) across every cluster.
  */
 export const useWorkflowsResponse = (options?: UseQueryOptions<pb.GetWorkflowsResponse, Error> | undefined) =>
-    useQuery(['workflows'], fetchWorkflows, options);
+    useQuery({ queryKey: ['workflows'], queryFn: fetchWorkflows, ...options });
 
 /**
  * useWorkflows is a helper hook for when a flattened list of workflows
  * (across all clusters) is required. Under the hood, this call uses the
  * useWorkflowsResponse hook and therefore uses the same query cache.
  */
-export const useWorkflows = (...args: Parameters<typeof useWorkflowsResponse>) => {
-    const { data, ...query } = useWorkflowsResponse(...args);
+export const useWorkflows = (
+    options?: Omit<UseQueryOptions<pb.GetWorkflowsResponse, Error>, 'queryKey' | 'queryFn' | 'select'>
+) => {
+    return useQuery({
+        queryKey: ['workflows'],
+        queryFn: fetchWorkflows,
+        select: (data: pb.GetWorkflowsResponse) => {
+            if (!data?.workflows_by_cluster) {
+                return undefined;
+            }
 
-    if (!data?.workflows_by_cluster) {
-        return { data: undefined, ...query };
-    }
-
-    const workflows = Object.entries(data.workflows_by_cluster).reduce(
-        (acc: pb.Workflow[], [clusterID, { workflows }]) => {
-            (workflows || []).forEach((w) => acc.push(pb.Workflow.create(w)));
-            return acc;
+            return Object.entries(data.workflows_by_cluster).reduce(
+                (acc: pb.Workflow[], [clusterID, { workflows }]) => {
+                    (workflows || []).forEach((w) => acc.push(pb.Workflow.create(w)));
+                    return acc;
+                },
+                []
+            );
         },
-        []
-    );
-
-    return { data: workflows, ...query };
+        ...options,
+    });
 };
 
 /**
@@ -365,9 +400,11 @@ export const useWorkflows = (...args: Parameters<typeof useWorkflowsResponse>) =
  */
 export const useSchema = (params: FetchSchemaParams, options?: UseQueryOptions<pb.Schema, Error> | undefined) => {
     const queryClient = useQueryClient();
-    return useQuery(['schema', params], () => fetchSchema(params), {
+    return useQuery({
+        queryKey: ['schema', params],
+        queryFn: () => fetchSchema(params),
         initialData: () => {
-            const schemas = queryClient.getQueryData<pb.Schema[]>('schemas');
+            const schemas = queryClient.getQueryData<pb.Schema[]>(['schemas']);
             return (schemas || []).find(
                 (s: pb.Schema) =>
                     s.cluster?.id === params.clusterID &&
@@ -386,9 +423,12 @@ export const useValidateKeyspace = (
     params: ValidateKeyspaceParams,
     options?: UseMutationOptions<Awaited<ReturnType<typeof validateKeyspace>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof validateKeyspace>>, Error>(() => {
-        return validateKeyspace(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof validateKeyspace>>, Error>({
+        mutationFn: () => {
+            return validateKeyspace(params);
+        },
+        ...options,
+    });
 };
 
 /**
@@ -398,9 +438,12 @@ export const useValidateSchemaKeyspace = (
     params: ValidateSchemaKeyspaceParams,
     options?: UseMutationOptions<Awaited<ReturnType<typeof validateSchemaKeyspace>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof validateSchemaKeyspace>>, Error>(() => {
-        return validateSchemaKeyspace(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof validateSchemaKeyspace>>, Error>({
+        mutationFn: () => {
+            return validateSchemaKeyspace(params);
+        },
+        ...options,
+    });
 };
 
 /**
@@ -410,16 +453,19 @@ export const useValidateVersionKeyspace = (
     params: ValidateVersionKeyspaceParams,
     options?: UseMutationOptions<Awaited<ReturnType<typeof validateVersionKeyspace>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof validateVersionKeyspace>>, Error>(() => {
-        return validateVersionKeyspace(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof validateVersionKeyspace>>, Error>({
+        mutationFn: () => {
+            return validateVersionKeyspace(params);
+        },
+        ...options,
+    });
 };
 
 /**
  * useVSchema is a query hook that fetches a single vschema definition for the given parameters.
  */
 export const useVSchema = (params: FetchVSchemaParams, options?: UseQueryOptions<pb.VSchema, Error> | undefined) => {
-    return useQuery(['vschema', params], () => fetchVSchema(params));
+    return useQuery({ queryKey: ['vschema', params], queryFn: () => fetchVSchema(params), ...options });
 };
 
 /**
@@ -429,7 +475,7 @@ export const useTransactions = (
     params: FetchTransactionsParams,
     options?: UseQueryOptions<vtctldata.GetUnresolvedTransactionsResponse, Error> | undefined
 ) => {
-    return useQuery(['transactions', params], () => fetchTransactions(params), { ...options });
+    return useQuery({ queryKey: ['transactions', params], queryFn: () => fetchTransactions(params), ...options });
 };
 
 /**
@@ -439,7 +485,7 @@ export const useTransaction = (
     params: FetchTransactionParams,
     options?: UseQueryOptions<vtctldata.GetTransactionInfoResponse, Error> | undefined
 ) => {
-    return useQuery(['transaction', params], () => fetchTransaction(params), { ...options });
+    return useQuery({ queryKey: ['transaction', params], queryFn: () => fetchTransaction(params), ...options });
 };
 
 /**
@@ -449,23 +495,26 @@ export const useConcludeTransaction = (
     params: Parameters<typeof concludeTransaction>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof concludeTransaction>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof concludeTransaction>>, Error>(() => {
-        return concludeTransaction(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof concludeTransaction>>, Error>({
+        mutationFn: () => {
+            return concludeTransaction(params);
+        },
+        ...options,
+    });
 };
 
 export const useVTExplain = (
     params: Parameters<typeof fetchVTExplain>[0],
     options?: UseQueryOptions<pb.VTExplainResponse, Error> | undefined
 ) => {
-    return useQuery(['vtexplain', params], () => fetchVTExplain(params), { ...options });
+    return useQuery({ queryKey: ['vtexplain', params], queryFn: () => fetchVTExplain(params), ...options });
 };
 
 export const useVExplain = (
     params: Parameters<typeof fetchVExplain>[0],
     options?: UseQueryOptions<pb.VExplainResponse, Error> | undefined
 ) => {
-    return useQuery(['vexplain', params], () => fetchVExplain(params), { ...options });
+    return useQuery({ queryKey: ['vexplain', params], queryFn: () => fetchVExplain(params), ...options });
 };
 
 /**
@@ -476,7 +525,9 @@ export const useWorkflow = (
     options?: UseQueryOptions<pb.Workflow, Error> | undefined
 ) => {
     const queryClient = useQueryClient();
-    return useQuery(['workflow', params], () => fetchWorkflow(params), {
+    return useQuery({
+        queryKey: ['workflow', params],
+        queryFn: () => fetchWorkflow(params),
         // If the workflow already exists in the cache from a previous fetchWorkflows call,
         // then use that for the initial data.
         //
@@ -489,7 +540,7 @@ export const useWorkflow = (
         //
         // See https://react-query.tanstack.com/guides/initial-query-data for more context on how initialData works.
         initialData: () => {
-            const workflows = queryClient.getQueryData<pb.GetWorkflowsResponse>('workflows');
+            const workflows = queryClient.getQueryData<pb.GetWorkflowsResponse>(['workflows']);
             const cw = workflows?.workflows_by_cluster[params.clusterID];
             if (!cw) return undefined;
 
@@ -515,7 +566,7 @@ export const useWorkflowStatus = (
     params: Parameters<typeof fetchWorkflowStatus>[0],
     options?: UseQueryOptions<vtctldata.WorkflowStatusResponse, Error> | undefined
 ) => {
-    return useQuery(['workflow_status', params], () => fetchWorkflowStatus(params), options);
+    return useQuery({ queryKey: ['workflow_status', params], queryFn: () => fetchWorkflowStatus(params), ...options });
 };
 
 /**
@@ -523,11 +574,14 @@ export const useWorkflowStatus = (
  */
 export const useCreateMaterialize = (
     params: Parameters<typeof createMaterialize>[0],
-    options: UseMutationOptions<Awaited<ReturnType<typeof createMaterialize>>, Error>
+    options?: UseMutationOptions<Awaited<ReturnType<typeof createMaterialize>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof createMaterialize>>, Error>(() => {
-        return createMaterialize(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof createMaterialize>>, Error>({
+        mutationFn: () => {
+            return createMaterialize(params);
+        },
+        ...options,
+    });
 };
 
 /**
@@ -535,11 +589,14 @@ export const useCreateMaterialize = (
  */
 export const useCreateMoveTables = (
     params: Parameters<typeof createMoveTables>[0],
-    options: UseMutationOptions<Awaited<ReturnType<typeof createMoveTables>>, Error>
+    options?: UseMutationOptions<Awaited<ReturnType<typeof createMoveTables>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof createMoveTables>>, Error>(() => {
-        return createMoveTables(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof createMoveTables>>, Error>({
+        mutationFn: () => {
+            return createMoveTables(params);
+        },
+        ...options,
+    });
 };
 
 /**
@@ -547,11 +604,14 @@ export const useCreateMoveTables = (
  */
 export const useCreateReshard = (
     params: Parameters<typeof createReshard>[0],
-    options: UseMutationOptions<Awaited<ReturnType<typeof createReshard>>, Error>
+    options?: UseMutationOptions<Awaited<ReturnType<typeof createReshard>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof createReshard>>, Error>(() => {
-        return createReshard(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof createReshard>>, Error>({
+        mutationFn: () => {
+            return createReshard(params);
+        },
+        ...options,
+    });
 };
 
 /**
@@ -561,9 +621,12 @@ export const useStartWorkflow = (
     params: Parameters<typeof startWorkflow>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof startWorkflow>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof startWorkflow>>, Error>(() => {
-        return startWorkflow(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof startWorkflow>>, Error>({
+        mutationFn: () => {
+            return startWorkflow(params);
+        },
+        ...options,
+    });
 };
 
 /**
@@ -573,9 +636,12 @@ export const useStopWorkflow = (
     params: Parameters<typeof stopWorkflow>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof stopWorkflow>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof stopWorkflow>>, Error>(() => {
-        return stopWorkflow(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof stopWorkflow>>, Error>({
+        mutationFn: () => {
+            return stopWorkflow(params);
+        },
+        ...options,
+    });
 };
 
 /**
@@ -585,9 +651,12 @@ export const useCompleteMoveTables = (
     params: Parameters<typeof completeMoveTables>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof completeMoveTables>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof completeMoveTables>>, Error>(() => {
-        return completeMoveTables(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof completeMoveTables>>, Error>({
+        mutationFn: () => {
+            return completeMoveTables(params);
+        },
+        ...options,
+    });
 };
 
 /**
@@ -597,9 +666,12 @@ export const useWorkflowSwitchTraffic = (
     params: Parameters<typeof workflowSwitchTraffic>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof workflowSwitchTraffic>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof workflowSwitchTraffic>>, Error>(() => {
-        return workflowSwitchTraffic(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof workflowSwitchTraffic>>, Error>({
+        mutationFn: () => {
+            return workflowSwitchTraffic(params);
+        },
+        ...options,
+    });
 };
 
 /**
@@ -609,9 +681,12 @@ export const useWorkflowDelete = (
     params: Parameters<typeof workflowDelete>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof workflowDelete>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof workflowDelete>>, Error>(() => {
-        return workflowDelete(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof workflowDelete>>, Error>({
+        mutationFn: () => {
+            return workflowDelete(params);
+        },
+        ...options,
+    });
 };
 
 /**
@@ -622,9 +697,12 @@ export const useReloadSchema = (
     params: Parameters<typeof reloadSchema>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof reloadSchema>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof reloadSchema>>, Error>(() => {
-        return reloadSchema(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof reloadSchema>>, Error>({
+        mutationFn: () => {
+            return reloadSchema(params);
+        },
+        ...options,
+    });
 };
 
 /**
@@ -634,9 +712,12 @@ export const useDeleteShard = (
     params: Parameters<typeof deleteShard>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof deleteShard>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof deleteShard>>, Error>(() => {
-        return deleteShard(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof deleteShard>>, Error>({
+        mutationFn: () => {
+            return deleteShard(params);
+        },
+        ...options,
+    });
 };
 
 /*
@@ -647,9 +728,12 @@ export const useRebuildKeyspaceGraph = (
     params: Parameters<typeof rebuildKeyspaceGraph>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof rebuildKeyspaceGraph>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof rebuildKeyspaceGraph>>, Error>(() => {
-        return rebuildKeyspaceGraph(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof rebuildKeyspaceGraph>>, Error>({
+        mutationFn: () => {
+            return rebuildKeyspaceGraph(params);
+        },
+        ...options,
+    });
 };
 
 /**
@@ -659,9 +743,12 @@ export const useReloadSchemaShard = (
     params: Parameters<typeof reloadSchemaShard>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof reloadSchemaShard>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof reloadSchemaShard>>, Error>(() => {
-        return reloadSchemaShard(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof reloadSchemaShard>>, Error>({
+        mutationFn: () => {
+            return reloadSchemaShard(params);
+        },
+        ...options,
+    });
 };
 
 /**
@@ -673,9 +760,12 @@ export const useTabletExternallyPromoted = (
     params: Parameters<typeof tabletExternallyPromoted>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof tabletExternallyPromoted>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof tabletExternallyPromoted>>, Error>(() => {
-        return tabletExternallyPromoted(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof tabletExternallyPromoted>>, Error>({
+        mutationFn: () => {
+            return tabletExternallyPromoted(params);
+        },
+        ...options,
+    });
 };
 
 /**
@@ -687,9 +777,12 @@ export const usePlannedFailoverShard = (
     params: Parameters<typeof plannedFailoverShard>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof plannedFailoverShard>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof plannedFailoverShard>>, Error>(() => {
-        return plannedFailoverShard(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof plannedFailoverShard>>, Error>({
+        mutationFn: () => {
+            return plannedFailoverShard(params);
+        },
+        ...options,
+    });
 };
 
 /**
@@ -701,9 +794,12 @@ export const useEmergencyFailoverShard = (
     params: Parameters<typeof emergencyFailoverShard>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof emergencyFailoverShard>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof emergencyFailoverShard>>, Error>(() => {
-        return emergencyFailoverShard(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof emergencyFailoverShard>>, Error>({
+        mutationFn: () => {
+            return emergencyFailoverShard(params);
+        },
+        ...options,
+    });
 };
 
 /**
@@ -713,9 +809,12 @@ export const useRemoveKeyspaceCell = (
     params: Parameters<typeof removeKeyspaceCell>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof removeKeyspaceCell>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof removeKeyspaceCell>>, Error>(() => {
-        return removeKeyspaceCell(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof removeKeyspaceCell>>, Error>({
+        mutationFn: () => {
+            return removeKeyspaceCell(params);
+        },
+        ...options,
+    });
 };
 
 /**
@@ -725,9 +824,12 @@ export const useCreateShard = (
     params: Parameters<typeof createShard>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof createShard>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof createShard>>, Error>(() => {
-        return createShard(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof createShard>>, Error>({
+        mutationFn: () => {
+            return createShard(params);
+        },
+        ...options,
+    });
 };
 
 /**
@@ -737,7 +839,7 @@ export const useTopologyPath = (
     params: GetTopologyPathParams,
     options?: UseQueryOptions<vtctldata.GetTopologyPathResponse, Error> | undefined
 ) => {
-    return useQuery(['topology-path', params], () => getTopologyPath(params), options);
+    return useQuery({ queryKey: ['topology-path', params], queryFn: () => getTopologyPath(params), ...options });
 };
 /**
  * useValidate is a mutate hook that validates that all nodes reachable from the global replication graph,
@@ -747,9 +849,12 @@ export const useValidate = (
     params: Parameters<typeof validate>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof validate>>, Error, ValidateParams>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof validate>>, Error, ValidateParams>(() => {
-        return validate(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof validate>>, Error, ValidateParams>({
+        mutationFn: () => {
+            return validate(params);
+        },
+        ...options,
+    });
 };
 
 /**
@@ -760,9 +865,12 @@ export const useValidateShard = (
     params: Parameters<typeof validateShard>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof validateShard>>, Error, ValidateShardParams>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof validateShard>>, Error, ValidateShardParams>(() => {
-        return validateShard(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof validateShard>>, Error, ValidateShardParams>({
+        mutationFn: () => {
+            return validateShard(params);
+        },
+        ...options,
+    });
 };
 
 /**
@@ -771,7 +879,7 @@ export const useValidateShard = (
 export const useGetFullStatus = (
     params: GetFullStatusParams,
     options?: UseQueryOptions<vtctldata.GetFullStatusResponse, Error> | undefined
-) => useQuery(['full-status', params], () => getFullStatus(params), options);
+) => useQuery({ queryKey: ['full-status', params], queryFn: () => getFullStatus(params), ...options });
 
 /**
  * useValidateVersionShard is a mutate hook that validates that the version on the primary matches all of the replicas.
@@ -780,9 +888,12 @@ export const useValidateVersionShard = (
     params: Parameters<typeof validateVersionShard>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof validateVersionShard>>, Error, ValidateVersionShardParams>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof validateVersionShard>>, Error, ValidateVersionShardParams>(() => {
-        return validateVersionShard(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof validateVersionShard>>, Error, ValidateVersionShardParams>({
+        mutationFn: () => {
+            return validateVersionShard(params);
+        },
+        ...options,
+    });
 };
 
 /**
@@ -792,9 +903,12 @@ export const useCreateVDiff = (
     params: Parameters<typeof createVDiff>[0],
     options?: UseMutationOptions<Awaited<ReturnType<typeof createVDiff>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof createVDiff>>, Error>(() => {
-        return createVDiff(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof createVDiff>>, Error>({
+        mutationFn: () => {
+            return createVDiff(params);
+        },
+        ...options,
+    });
 };
 
 /**
@@ -804,7 +918,7 @@ export const useShowVDiff = (
     params: ShowVDiffParams,
     options?: UseQueryOptions<pb.VDiffShowResponse, Error> | undefined
 ) => {
-    return useQuery(['vdiff_show', params], () => showVDiff(params), { ...options });
+    return useQuery({ queryKey: ['vdiff_show', params], queryFn: () => showVDiff(params), ...options });
 };
 
 /**
@@ -814,7 +928,7 @@ export const useSchemaMigrations = (
     request: pb.IGetSchemaMigrationsRequest,
     options?: UseQueryOptions<pb.GetSchemaMigrationsResponse, Error> | undefined
 ) => {
-    return useQuery(['migrations', request], () => fetchSchemaMigrations(request), { ...options });
+    return useQuery({ queryKey: ['migrations', request], queryFn: () => fetchSchemaMigrations(request), ...options });
 };
 
 /**
@@ -822,9 +936,12 @@ export const useSchemaMigrations = (
  */
 export const useApplySchema = (
     params: Parameters<typeof applySchema>[0],
-    options: UseMutationOptions<Awaited<ReturnType<typeof applySchema>>, Error>
+    options?: UseMutationOptions<Awaited<ReturnType<typeof applySchema>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof applySchema>>, Error>(() => {
-        return applySchema(params);
-    }, options);
+    return useMutation<Awaited<ReturnType<typeof applySchema>>, Error>({
+        mutationFn: () => {
+            return applySchema(params);
+        },
+        ...options,
+    });
 };
