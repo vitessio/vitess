@@ -18,7 +18,7 @@ import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { QueryClient, QueryClientProvider } from 'react-query';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Advanced } from './Advanced';
 import { vtadmin } from '../../../proto/vtadmin';
 import { describe, it, expect, vi } from 'vitest';
