@@ -38,16 +38,19 @@ export const initialize = () => {
  */
 export const notify = (error: Error, metadata?: object) => {
     const env = sanitizeEnv();
-    const errorMetadata = Object.getOwnPropertyNames(error).reduce((acc, propertyName) => {
-        // Only annotate the `metadata` object with properties beyond the standard instance
-        // properties. (Bugsnag, for example, does not log additional `Error` properties:
-        // they have to be logged as additional metadata.)
-        if (propertyName !== 'stack' && propertyName !== 'message') {
-            acc[propertyName] = (error as any)[propertyName];
-        }
+    const errorMetadata = Object.getOwnPropertyNames(error).reduce(
+        (acc, propertyName) => {
+            // Only annotate the `metadata` object with properties beyond the standard instance
+            // properties. (Bugsnag, for example, does not log additional `Error` properties:
+            // they have to be logged as additional metadata.)
+            if (propertyName !== 'stack' && propertyName !== 'message') {
+                acc[propertyName] = (error as any)[propertyName];
+            }
 
-        return acc;
-    }, {} as { [k: string]: any });
+            return acc;
+        },
+        {} as { [k: string]: any }
+    );
 
     getHandlers().forEach((h) =>
         h.notify(error, env, {

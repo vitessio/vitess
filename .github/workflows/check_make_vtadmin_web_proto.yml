@@ -52,6 +52,8 @@ jobs:
             - 'proto/*.proto'
             - 'web/vtadmin/src/proto/**'
             - '.github/workflows/check_make_vtadmin_web_proto.yml'
+            - 'web/vtadmin/package.json'
+            - 'web/vtadmin/package-lock.json'
 
     - name: Set up Go
       uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0

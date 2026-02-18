@@ -133,7 +133,7 @@ export const CreateMoveTables = () => {
         !!formData.workflow &&
         !!formData.onDDL;
 
-    const isDisabled = !isValid || mutation.isLoading;
+    const isDisabled = !isValid || mutation.isPending;
 
     const onSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
         e.preventDefault();
@@ -316,12 +316,12 @@ export const CreateMoveTables = () => {
 
                     <div className="my-8">
                         <button className="btn" disabled={isDisabled} type="submit">
-                            {mutation.isLoading ? 'Creating Workflow...' : 'Create Workflow'}
+                            {mutation.isPending ? 'Creating Workflow...' : 'Create Workflow'}
                         </button>
                     </div>
                 </form>
 
-                {mutation.isError && !mutation.isLoading && (
+                {mutation.isError && !mutation.isPending && (
                     <ErrorDialog
                         errorDescription={mutation.error.message}
                         errorTitle="Error Creating Workflow"
